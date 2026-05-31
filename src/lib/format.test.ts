@@ -22,7 +22,7 @@ describe('formatDuration', () => {
   });
 
   it('reports unavailable for null/invalid', () => {
-    expect(formatDuration(null)).toBe('durée indisponible');
-    expect(formatDuration(NaN)).toBe('durée indisponible');
+    expect(formatDuration(null)).toBe('duration unavailable');
+    expect(formatDuration(NaN)).toBe('duration unavailable');
   });
 });
