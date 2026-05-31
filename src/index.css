@@ -505,6 +505,54 @@ h2::before {
   aspect-ratio: 16 / 9;
 }
 
+.card-video.placeholder.missing {
+  flex-direction: column;
+  gap: 0.85rem;
+  background: var(--paper-2);
+}
+
+/* Invite to complete a missing slot — vermilion, quiet */
+.add-btn {
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.82rem;
+  transition: background 0.2s var(--ease), transform 0.2s var(--ease);
+}
+
+.add-btn:hover {
+  background: var(--accent);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+/* Reversible "names don't match" warning */
+.mismatch {
+  margin: 0;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius);
+  background: var(--accent-wash);
+  border: 1px solid var(--line-strong);
+  color: var(--accent-ink);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.mismatch code {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--ink);
+  word-break: break-all;
+}
+
+.notice.mismatch {
+  font-family: inherit;
+}
+
 .card-body {
   padding: 1.1rem 1.2rem 1.2rem;
   display: flex;

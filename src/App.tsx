@@ -2,7 +2,12 @@ import { useState } from 'react';
 import FolderDrop from './components/FolderDrop';
 import Gallery from './components/Gallery';
 import DetailView from './components/DetailView';
-import { pairFiles, type MediaPair } from './lib/pair-files';
+import {
+  attachToPair,
+  detachFromPair,
+  pairFiles,
+  type MediaPair,
+} from './lib/pair-files';
 
 const REPO_URL = 'https://github.com/CostardRouge/dji-flight-data';
 
@@ -26,14 +31,30 @@ const STEPS = [
 
 export default function App() {
   const [pairs, setPairs] = useState<MediaPair[]>([]);
-  const [selected, setSelected] = useState<MediaPair | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   function handleFiles(files: File[]) {
     setPairs(pairFiles(files));
-    setSelected(null);
+    setSelectedId(null);
     setLoaded(true);
   }
+
+  // Replace one pair in place (matched by id). Used by attach and detach so the
+  // change shows in the gallery and, if it's the open one, the detail view.
+  function updatePair(id: string, fn: (p: MediaPair) => MediaPair) {
+    setPairs((prev) => prev.map((p) => (p.id === id ? fn(p) : p)));
+  }
+
+  function handleAttach(pair: MediaPair, file: File) {
+    updatePair(pair.id, (p) => attachToPair(p, file));
+  }
+
+  function handleDetach(pair: MediaPair, kind: 'video' | 'srt') {
+    updatePair(pair.id, (p) => detachFromPair(p, kind));
+  }
+
+  const selected = pairs.find((p) => p.id === selectedId) ?? null;
 
   return (
     <div className="app">
@@ -62,7 +83,12 @@ export default function App() {
       </header>
 
       {selected ? (
-        <DetailView pair={selected} onBack={() => setSelected(null)} />
+        <DetailView
+          pair={selected}
+          onBack={() => setSelectedId(null)}
+          onAttach={handleAttach}
+          onDetach={handleDetach}
+        />
       ) : (
         <>
           <section className="hero">
@@ -103,7 +129,12 @@ export default function App() {
                   {pairs.length} clip{pairs.length === 1 ? '' : 's'}
                 </p>
               </div>
-              <Gallery pairs={pairs} onOpen={setSelected} />
+              <Gallery
+                pairs={pairs}
+                onOpen={(p) => setSelectedId(p.id)}
+                onAttach={handleAttach}
+                onDetach={handleDetach}
+              />
             </section>
           )}
         </>
