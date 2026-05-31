@@ -15,10 +15,27 @@ upload, no server.**
 ## Usage
 
 1. Open the app.
-2. Select a `.mp4` video file.
-3. Select the matching `.srt` telemetry file.
-4. Play the video — the Flight and Camera panels update in sync with the
-   displayed frame.
+2. Point it at a folder from your DJI memory card (drag-and-drop, or "choose a
+   folder"). Videos are paired with their `.srt` siblings automatically.
+3. Browse the gallery — each card plays its video inline and shows a quick
+   summary (size, duration, telemetry overview).
+4. Click **"Open with telemetry"** on a card for the detailed view: the video
+   plus Flight and Camera panels that update in sync with the displayed frame.
+
+### Choosing files — three access paths
+
+All three converge on the same client-side pipeline; nothing is ever uploaded.
+
+| Path | When | Browser support |
+| --- | --- | --- |
+| Native directory picker (`showDirectoryPicker`) | preferred | Chromium |
+| `<input webkitdirectory>` folder dialog | fallback | Firefox, Safari, all |
+| Drag-and-drop a folder or files | UX convenience | all |
+
+Listing a folder is **instant even for dozens of multi-GB videos**: a `File` is
+a lazy reference to the file on disk, so no video bytes are read just to list
+them. The small `.srt` text files are read lazily (per card, as it scrolls into
+view) to build the telemetry summary.
 
 ### Online
 
@@ -41,28 +58,45 @@ npm run preview    # serve the production build locally
 Recent DJI drones often record in **HEVC / H.265**, which not every browser
 decodes natively (Chrome's support is inconsistent depending on the OS; Safari
 handles it best). **If the telemetry loads but the video stays black, that's the
-codec, not a bug.** Options:
+codec, not a bug.** In the gallery this surfaces as:
 
-- Try a different browser (Safari is the most reliable for HEVC).
-- Transcode the clip to H.264, e.g. `ffmpeg -i in.mp4 -c:v libx264 out.mp4`.
+- A "playback unavailable (codec not supported)" placeholder instead of the
+  inline video.
+- "duration unavailable" on the card.
+- **Telemetry still works fully** — the `.srt` is plain text, so the summary and
+  the detailed synced view are unaffected even when the video can't decode.
 
-The app shows a notice if video playback fails.
+Options: try a different browser (Safari is the most reliable for HEVC), or
+transcode to H.264, e.g. `ffmpeg -i in.mp4 -c:v libx264 out.mp4`.
+
+Guaranteed decoding (and real thumbnails) will come with a future native app
+(Tauri) bundling ffmpeg — at which point only the file-access layer changes.
 
 ## Architecture
 
-The SRT parser is a **pure, dependency-free, DOM-free module** so it can be
-reused as-is in other contexts (Node, a worker, a Next.js project). All business
-logic (parsing, cue lookup) is decoupled from React and the DOM.
+All business logic lives in `lib/` as **pure, dependency-free, DOM-free
+modules** so it can be reused as-is in other contexts (Node, a worker, a Next.js
+project, a future native app). The **only** brick that changes for a native
+shell is `sources/file-sources.ts` — everything else is reused unchanged.
 
 ```
 src/
-├── lib/
-│   ├── srt-parser.ts   # pure SRT → Cue[] parser, zero deps, zero DOM
-│   ├── find-cue.ts     # binary search for the active cue at time t
-│   └── *.test.ts       # unit tests (Vitest)
+├── lib/                       # pure: zero DOM, zero React
+│   ├── srt-parser.ts          # SRT → Cue[] parser
+│   ├── find-cue.ts            # binary search for the active cue at time t
+│   ├── pair-files.ts          # pair videos with their .srt siblings
+│   ├── telemetry-summary.ts   # summary (cue count, alt range, …) from Cue[]
+│   ├── format.ts              # byte/duration formatting
+│   └── *.test.ts              # unit tests (Vitest)
+├── sources/
+│   └── file-sources.ts        # the 3 access paths behind a Promise<File[]>
 ├── components/
-│   └── TelemetryPlayer.tsx   # <video> + frame sync + telemetry panels
-├── App.tsx             # file inputs + assembly
+│   ├── TelemetryPlayer.tsx    # <video> + frame sync + telemetry panels
+│   ├── Gallery.tsx            # grid of cards
+│   ├── VideoCard.tsx          # one card: inline <video> + lazy mini-summary
+│   ├── DetailView.tsx         # one pair → object URL + parsed cues → player
+│   └── FolderDrop.tsx         # picker + drag-and-drop UI
+├── App.tsx                    # gallery ⇄ detail orchestration
 └── main.tsx
 ```
 
@@ -83,7 +117,13 @@ src/
 - **Minimal re-renders.** React state updates only when the active cue actually
   changes, not on every frame.
 - **No memory leaks.** Object URLs created for the video are revoked when the
-  file changes or the component unmounts.
+  file changes or the component unmounts — never 50 URLs held open at once.
+- **Lazy gallery.** Each card uses an `IntersectionObserver`; the video object
+  URL, duration, and SRT parse only happen once the card scrolls into view. The
+  initial render shows just the instant fields (name, size).
+- **Pairing is pure and tested.** `pairFiles` groups by base name
+  case-insensitively, includes videos without an SRT (`srt: null`), drops orphan
+  SRTs, and ignores junk (`.LRF`, `.THM`, hidden files).
 
 ### Other telemetry formats
 
