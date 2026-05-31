@@ -28,6 +28,21 @@ upload, no server.**
    large video plus the full Flight and Camera panels, synced to the displayed
    frame.
 
+### Completing incomplete pairs
+
+Loose files are welcome too — a `.mp4` with no `.srt`, or an `.srt` with no
+video. Both appear in the gallery:
+
+- A video with no telemetry shows an **"Add telemetry"** action.
+- A telemetry file with no video shows an **"Add video"** action (its readout is
+  already visible — the `.srt` is readable on its own).
+
+The same actions appear in the full view. When you manually attach a file whose
+name doesn't match the card (e.g. you pick `DJI_0099.SRT` for a `DJI_0001`
+video), it is **attached anyway** — no friction — but a small, reversible
+"names don't match" warning appears so an honest mistake doesn't go unnoticed.
+Click **Remove** to undo.
+
 ### Choosing files — access paths
 
 All converge on the same client-side pipeline; nothing is ever uploaded.
@@ -96,7 +111,7 @@ src/
 │   ├── format.ts              # byte/duration formatting
 │   └── *.test.ts              # unit tests (Vitest)
 ├── sources/
-│   └── file-sources.ts        # access paths (files, folder, drop) → Promise<File[]>
+│   └── file-sources.ts        # access paths (files, folder, drop, single-pick)
 ├── hooks/
 │   └── use-active-cue.ts      # follow the displayed frame → active Cue (shared)
 ├── components/
@@ -142,8 +157,10 @@ same engine whether you are scanning the gallery or studying one clip.
   `requestVideoFrameCallback` only fires while a video is actually playing, so
   idle cards cost nothing.
 - **Pairing is pure and tested.** `pairFiles` groups by base name
-  case-insensitively, includes videos without an SRT (`srt: null`), drops orphan
-  SRTs, and ignores junk (`.LRF`, `.THM`, hidden files).
+  case-insensitively and keeps any group that has a video *or* an SRT — so loose
+  files of either kind appear, ready to be completed. Junk (`.LRF`, `.THM`,
+  hidden files) is ignored. `attachToPair` / `detachFromPair` add or undo a
+  manually-chosen file and flag a name mismatch without blocking it.
 
 ### Other telemetry formats
 

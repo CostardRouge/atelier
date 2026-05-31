@@ -153,6 +153,41 @@ export function pickFiles(): Promise<File[]> {
   });
 }
 
+/** Accept strings for the two single-slot pickers, kept in one place. */
+export const VIDEO_ACCEPT = 'video/*,.mp4,.mov';
+export const SRT_ACCEPT = '.srt,text/plain';
+
+/**
+ * Pick a single file (used to complete a pair's missing video or SRT slot).
+ * Resolves with the chosen file, or null if the dialog is dismissed.
+ *
+ * @param accept The input's `accept` attribute, e.g. SRT_ACCEPT.
+ */
+export function pickFile(accept: string): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = accept;
+
+    let settled = false;
+    const finish = (file: File | null) => {
+      if (settled) return;
+      settled = true;
+      resolve(file);
+    };
+
+    input.onchange = () => finish(input.files?.[0] ?? null);
+    // No reliable cancel event — resolve null once focus returns without a pick.
+    window.addEventListener(
+      'focus',
+      () => setTimeout(() => finish(null), 300),
+      { once: true },
+    );
+
+    input.click();
+  });
+}
+
 /** Recursively read a dropped drag-and-drop entry into files. */
 function readDropEntry(entry: FsEntry): Promise<File[]> {
   if (entry.isFile && entry.file) {
