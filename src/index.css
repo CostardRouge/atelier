@@ -94,12 +94,36 @@ body::after {
   font-weight: 400;
 }
 
+.masthead-right {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
 .masthead .edition {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.7rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+.gh-link {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  transition: color 0.2s var(--ease), transform 0.2s var(--ease);
+}
+
+.gh-link:hover {
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 480px) {
+  .masthead .edition {
+    display: none;
+  }
 }
 
 /* ---------- Hero ---------- */
@@ -760,4 +784,15 @@ footer code {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.9em;
   color: var(--ink-soft);
+}
+
+.foot-link {
+  color: var(--accent-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 600;
+}
+
+.foot-link:hover {
+  color: var(--accent);
 }
