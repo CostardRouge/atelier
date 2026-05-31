@@ -101,7 +101,7 @@ export default function VideoCard({ pair, onOpen }: VideoCardProps) {
       ) : (
         <div className="card-video placeholder">
           {videoError
-            ? 'Lecture indisponible (codec non supporté par le navigateur)'
+            ? 'Playback unavailable (codec not supported by this browser)'
             : '…'}
         </div>
       )}
@@ -112,10 +112,10 @@ export default function VideoCard({ pair, onOpen }: VideoCardProps) {
         </h3>
 
         <dl className="card-meta">
-          <dt>Taille</dt>
+          <dt>Size</dt>
           <dd>{formatBytes(pair.video.size)}</dd>
 
-          <dt>Durée</dt>
+          <dt>Duration</dt>
           <dd>
             {duration === undefined ? '…' : formatDuration(duration)}
           </dd>
@@ -123,44 +123,44 @@ export default function VideoCard({ pair, onOpen }: VideoCardProps) {
           {pair.srt ? (
             summary === undefined ? (
               <>
-                <dt>Télémétrie</dt>
+                <dt>Telemetry</dt>
                 <dd>…</dd>
               </>
             ) : summary ? (
               <>
                 <dt>Frames</dt>
                 <dd>{summary.cueCount}</dd>
-                <dt>Altitude rel.</dt>
+                <dt>Rel. altitude</dt>
                 <dd>
                   {summary.relAltMin !== null && summary.relAltMax !== null
                     ? `${summary.relAltMin.toFixed(1)}–${summary.relAltMax.toFixed(1)} m`
                     : '—'}
                 </dd>
-                <dt>Départ</dt>
+                <dt>Start</dt>
                 <dd>
                   {summary.startLatitude && summary.startLongitude
                     ? `${summary.startLatitude}, ${summary.startLongitude}`
                     : '—'}
                 </dd>
-                <dt>Profil</dt>
+                <dt>Profile</dt>
                 <dd>{summary.colorProfile ?? '—'}</dd>
               </>
             ) : (
               <>
-                <dt>Télémétrie</dt>
-                <dd className="empty">illisible</dd>
+                <dt>Telemetry</dt>
+                <dd className="empty">unreadable</dd>
               </>
             )
           ) : (
             <>
-              <dt>Télémétrie</dt>
-              <dd className="empty">aucun .srt</dd>
+              <dt>Telemetry</dt>
+              <dd className="empty">no .srt</dd>
             </>
           )}
         </dl>
 
         <button className="open-btn" onClick={() => onOpen(pair)}>
-          {pair.srt ? 'Ouvrir avec télémétrie' : 'Ouvrir la vidéo'}
+          {pair.srt ? 'Open with telemetry' : 'Open video'}
         </button>
       </div>
     </div>

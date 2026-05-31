@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { formatBytes, formatDuration } from './format';
 
 describe('formatBytes', () => {
-  it('formats bytes, Ko, Mo, Go', () => {
-    expect(formatBytes(512)).toBe('512 o');
-    expect(formatBytes(1500)).toBe('1.5 Ko');
-    expect(formatBytes(2_500_000)).toBe('2.5 Mo');
-    expect(formatBytes(3_200_000_000)).toBe('3.2 Go');
+  it('formats bytes, KB, MB, GB', () => {
+    expect(formatBytes(512)).toBe('512 B');
+    expect(formatBytes(1500)).toBe('1.5 KB');
+    expect(formatBytes(2_500_000)).toBe('2.5 MB');
+    expect(formatBytes(3_200_000_000)).toBe('3.2 GB');
   });
 
   it('handles invalid input', () => {
