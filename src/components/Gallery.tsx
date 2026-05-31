@@ -23,8 +23,8 @@ export default function Gallery({ pairs, onOpen }: GalleryProps) {
 
   return (
     <div className="gallery">
-      {pairs.map((pair) => (
-        <VideoCard key={pair.baseName} pair={pair} onOpen={onOpen} />
+      {pairs.map((pair, i) => (
+        <VideoCard key={pair.baseName} pair={pair} onOpen={onOpen} index={i} />
       ))}
     </div>
   );
