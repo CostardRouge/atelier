@@ -121,6 +121,38 @@ export async function pickDirectory(): Promise<File[]> {
   return pickViaInput();
 }
 
+/**
+ * Pick individual files (one or more `.mp4`/`.mov` plus their `.srt`) via a
+ * plain `<input type="file" multiple>` — no `webkitdirectory`. For users who
+ * just want to load a single clip and its telemetry without a whole folder.
+ * Resolves with the chosen files, or `[]` if the dialog is dismissed.
+ */
+export function pickFiles(): Promise<File[]> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.accept = 'video/*,.mp4,.mov,.srt,text/plain';
+
+    let settled = false;
+    const finish = (files: File[]) => {
+      if (settled) return;
+      settled = true;
+      resolve(files);
+    };
+
+    input.onchange = () => finish(Array.from(input.files ?? []));
+    // No reliable cancel event — resolve empty once focus returns without a change.
+    window.addEventListener(
+      'focus',
+      () => setTimeout(() => finish([]), 300),
+      { once: true },
+    );
+
+    input.click();
+  });
+}
+
 /** Recursively read a dropped drag-and-drop entry into files. */
 function readDropEntry(entry: FsEntry): Promise<File[]> {
   if (entry.isFile && entry.file) {

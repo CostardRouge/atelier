@@ -15,21 +15,28 @@ upload, no server.**
 ## Usage
 
 1. Open the app.
-2. Point it at a folder from your DJI memory card (drag-and-drop, or "choose a
-   folder"). Videos are paired with their `.srt` siblings automatically.
-3. Browse the gallery — each card plays its video inline and shows a quick
-   summary (size, duration, telemetry overview).
-4. Click **"Open with telemetry"** on a card for the detailed view: the video
-   plus Flight and Camera panels that update in sync with the displayed frame.
+2. Give it your footage — two ways in, your choice:
+   - **Just the files**: a single `.mp4` and its `.srt`. Click the drop zone (or
+     "Choose files") and select them.
+   - **A whole folder** from your DJI memory card ("choose a folder").
+   - Or **drag** either onto the drop zone. Videos are paired with their `.srt`
+     siblings automatically.
+3. Browse the gallery — each card plays its video inline **with its telemetry
+   running live**: an altitude badge on the frame plus a readout (altitude, GPS,
+   exposure) that follows playback. No click required to see the data.
+4. Click **"Open full view"** on a card for the dedicated single-clip page: the
+   large video plus the full Flight and Camera panels, synced to the displayed
+   frame.
 
-### Choosing files — three access paths
+### Choosing files — access paths
 
-All three converge on the same client-side pipeline; nothing is ever uploaded.
+All converge on the same client-side pipeline; nothing is ever uploaded.
 
 | Path | When | Browser support |
 | --- | --- | --- |
-| Native directory picker (`showDirectoryPicker`) | preferred | Chromium |
-| `<input webkitdirectory>` folder dialog | fallback | Firefox, Safari, all |
+| Individual file picker (`<input multiple>`) | one clip + its `.srt` | all |
+| Native directory picker (`showDirectoryPicker`) | a folder, preferred | Chromium |
+| `<input webkitdirectory>` folder dialog | a folder, fallback | Firefox, Safari, all |
 | Drag-and-drop a folder or files | UX convenience | all |
 
 Listing a folder is **instant even for dozens of multi-GB videos**: a `File` is
@@ -89,16 +96,24 @@ src/
 │   ├── format.ts              # byte/duration formatting
 │   └── *.test.ts              # unit tests (Vitest)
 ├── sources/
-│   └── file-sources.ts        # the 3 access paths behind a Promise<File[]>
+│   └── file-sources.ts        # access paths (files, folder, drop) → Promise<File[]>
+├── hooks/
+│   └── use-active-cue.ts      # follow the displayed frame → active Cue (shared)
 ├── components/
-│   ├── TelemetryPlayer.tsx    # <video> + frame sync + telemetry panels
+│   ├── telemetry-view.tsx     # shared readout: TelemetryPanels + LiveTelemetry
+│   ├── TelemetryPlayer.tsx    # <video> + useActiveCue + full panels (detail page)
 │   ├── Gallery.tsx            # grid of cards
-│   ├── VideoCard.tsx          # one card: inline <video> + lazy mini-summary
+│   ├── VideoCard.tsx          # one card: inline <video> + live telemetry readout
 │   ├── DetailView.tsx         # one pair → object URL + parsed cues → player
-│   └── FolderDrop.tsx         # picker + drag-and-drop UI
+│   └── FolderDrop.tsx         # files / folder picker + drag-and-drop UI
 ├── App.tsx                    # gallery ⇄ detail orchestration
 └── main.tsx
 ```
+
+The frame-sync logic lives in exactly one place — the `useActiveCue` hook — and
+the telemetry readout UI in `telemetry-view.tsx`. Both the inline gallery cards
+and the full detail player consume them, so the live-telemetry feature is the
+same engine whether you are scanning the gallery or studying one clip.
 
 ### Notable implementation details
 
@@ -108,19 +123,24 @@ src/
   field", the parser extracts the inner content of *all* brackets, joins it, and
   sweeps with a global `key: value` regex — handling both shapes uniformly.
   This is covered by an anti-regression test.
-- **Frame-accurate sync.** Uses `video.requestVideoFrameCallback()` and reads
-  `metadata.mediaTime` (the exact presentation time of the displayed frame),
-  falling back to the `timeupdate` event + `video.currentTime` on browsers that
-  don't support it.
+- **Frame-accurate sync, shared once.** The `useActiveCue` hook uses
+  `video.requestVideoFrameCallback()` and reads `metadata.mediaTime` (the exact
+  presentation time of the displayed frame), falling back to the `timeupdate`
+  event + `video.currentTime` on browsers that don't support it. Both the gallery
+  cards and the detail player use this one hook — the live readout is identical
+  everywhere.
 - **Efficient cue lookup.** A 5-minute 60 fps clip is ~18 000 cues, so lookups
   use binary search (last cue with `start <= t`), never a linear scan.
 - **Minimal re-renders.** React state updates only when the active cue actually
   changes, not on every frame.
 - **No memory leaks.** Object URLs created for the video are revoked when the
   file changes or the component unmounts — never 50 URLs held open at once.
-- **Lazy gallery.** Each card uses an `IntersectionObserver`; the video object
-  URL, duration, and SRT parse only happen once the card scrolls into view. The
-  initial render shows just the instant fields (name, size).
+- **Lazy gallery, live telemetry.** Each card uses an `IntersectionObserver`;
+  the video object URL, duration, and SRT parse only happen once the card scrolls
+  into view. The initial render shows just the instant fields (name, size). Once
+  visible, the parsed cues feed the inline live readout — and
+  `requestVideoFrameCallback` only fires while a video is actually playing, so
+  idle cards cost nothing.
 - **Pairing is pure and tested.** `pairFiles` groups by base name
   case-insensitively, includes videos without an SRT (`srt: null`), drops orphan
   SRTs, and ignores junk (`.LRF`, `.THM`, hidden files).
