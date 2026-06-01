@@ -71,37 +71,54 @@ async function pickViaFsApi(): Promise<File[]> {
 }
 
 /**
+ * Drive a transient `<input type="file">`: resolve with its `FileList` when the
+ * user picks, or `null` when they dismiss.
+ *
+ * Uses the native `cancel` event (Chrome 113+, Firefox, Safari 16.4+) instead
+ * of the old focus/timeout guess. That guess raced the `change` event and, when
+ * the page was busy (e.g. a video playing in LUT Studio), fired first — so a
+ * real selection was discarded and the pick silently did nothing. A successful
+ * pick now always resolves via `change`, regardless of how busy the page is.
+ */
+function runFilePicker(
+  configure: (input: HTMLInputElement) => void,
+): Promise<FileList | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    configure(input);
+    // Attached but out of layout, so events fire reliably across browsers.
+    input.style.position = 'fixed';
+    input.style.left = '-9999px';
+    document.body.appendChild(input);
+
+    let settled = false;
+    const finish = (files: FileList | null) => {
+      if (settled) return;
+      settled = true;
+      input.remove();
+      resolve(files);
+    };
+
+    input.addEventListener('change', () => finish(input.files), { once: true });
+    input.addEventListener('cancel', () => finish(null), { once: true });
+    input.click();
+  });
+}
+
+/**
  * Fallback (Firefox, Safari): a hidden `<input webkitdirectory>` that lets the
  * user choose a folder. Resolves with the contained files, or `[]` if the
  * dialog is dismissed without a selection.
  */
-function pickViaInput(): Promise<File[]> {
-  return new Promise((resolve) => {
-    const input = document.createElement('input');
-    input.type = 'file';
+async function pickViaInput(): Promise<File[]> {
+  const files = await runFilePicker((input) => {
     input.multiple = true;
     // `webkitdirectory` is non-standard but widely supported for folder picks.
     (input as HTMLInputElement & { webkitdirectory: boolean }).webkitdirectory =
       true;
-
-    let settled = false;
-    const finish = (files: File[]) => {
-      if (settled) return;
-      settled = true;
-      resolve(files);
-    };
-
-    input.onchange = () => finish(Array.from(input.files ?? []));
-    // If the dialog is cancelled there is no reliable event; resolve empty when
-    // focus returns to the window without a change firing.
-    window.addEventListener(
-      'focus',
-      () => setTimeout(() => finish([]), 300),
-      { once: true },
-    );
-
-    input.click();
   });
+  return files ? Array.from(files) : [];
 }
 
 /**
@@ -127,30 +144,12 @@ export async function pickDirectory(): Promise<File[]> {
  * just want to load a single clip and its telemetry without a whole folder.
  * Resolves with the chosen files, or `[]` if the dialog is dismissed.
  */
-export function pickFiles(): Promise<File[]> {
-  return new Promise((resolve) => {
-    const input = document.createElement('input');
-    input.type = 'file';
+export async function pickFiles(): Promise<File[]> {
+  const files = await runFilePicker((input) => {
     input.multiple = true;
     input.accept = 'video/*,.mp4,.mov,.srt,text/plain';
-
-    let settled = false;
-    const finish = (files: File[]) => {
-      if (settled) return;
-      settled = true;
-      resolve(files);
-    };
-
-    input.onchange = () => finish(Array.from(input.files ?? []));
-    // No reliable cancel event — resolve empty once focus returns without a change.
-    window.addEventListener(
-      'focus',
-      () => setTimeout(() => finish([]), 300),
-      { once: true },
-    );
-
-    input.click();
   });
+  return files ? Array.from(files) : [];
 }
 
 /** Accept strings for the single-slot pickers, kept in one place. */
@@ -164,29 +163,11 @@ export const CUBE_ACCEPT = '.cube';
  *
  * @param accept The input's `accept` attribute, e.g. SRT_ACCEPT.
  */
-export function pickFile(accept: string): Promise<File | null> {
-  return new Promise((resolve) => {
-    const input = document.createElement('input');
-    input.type = 'file';
+export async function pickFile(accept: string): Promise<File | null> {
+  const files = await runFilePicker((input) => {
     input.accept = accept;
-
-    let settled = false;
-    const finish = (file: File | null) => {
-      if (settled) return;
-      settled = true;
-      resolve(file);
-    };
-
-    input.onchange = () => finish(input.files?.[0] ?? null);
-    // No reliable cancel event — resolve null once focus returns without a pick.
-    window.addEventListener(
-      'focus',
-      () => setTimeout(() => finish(null), 300),
-      { once: true },
-    );
-
-    input.click();
   });
+  return files?.[0] ?? null;
 }
 
 /** Recursively read a dropped drag-and-drop entry into files. */
