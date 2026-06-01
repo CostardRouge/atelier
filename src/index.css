@@ -126,6 +126,39 @@ body::after {
   }
 }
 
+/* Section tabs */
+.nav {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.nav button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+  padding: 0.32rem 0.85rem;
+  border-radius: 999px;
+  transition: color 0.2s var(--ease), background 0.2s var(--ease);
+}
+
+.nav button:hover {
+  color: var(--ink);
+}
+
+.nav button.active {
+  color: var(--paper);
+  background: var(--ink);
+}
+
 /* ---------- Hero ---------- */
 
 .hero {
@@ -783,6 +816,140 @@ dd.empty {
   font-size: 1.15rem;
   font-weight: 600;
   color: var(--accent-ink);
+}
+
+/* ---------- LUT Studio ---------- */
+
+.lut-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1.1rem;
+}
+
+.lut-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.lut-select select {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
+}
+
+.lut-compare {
+  margin-left: auto;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  color: var(--ink-soft);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  transition: border-color 0.2s var(--ease), color 0.2s var(--ease);
+}
+
+.lut-compare[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.lut-compare:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.lut-stage {
+  position: relative;
+  background: #100f0d;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.lut-canvas {
+  display: block;
+  width: 100%;
+  max-height: 64vh;
+  object-fit: contain;
+  background: #100f0d;
+}
+
+/* Offscreen decoder/audio source — kept rendered (never display:none) so the
+   browser keeps producing frames, but invisible behind the canvas. */
+.lut-source {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  left: 0;
+  bottom: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.lut-transport {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-top: 0.9rem;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.lut-play {
+  flex: none;
+  width: 2.2rem;
+  height: 2.2rem;
+  border: none;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--paper);
+  cursor: pointer;
+  font-size: 0.8rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s var(--ease);
+}
+
+.lut-play:hover {
+  background: var(--accent);
+}
+
+.lut-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  flex: none;
+  min-width: 3.2ch;
+  text-align: center;
+}
+
+.lut-scrub {
+  flex: 1;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 /* ---------- Notices ---------- */

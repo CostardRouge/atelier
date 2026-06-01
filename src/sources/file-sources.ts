@@ -153,9 +153,10 @@ export function pickFiles(): Promise<File[]> {
   });
 }
 
-/** Accept strings for the two single-slot pickers, kept in one place. */
+/** Accept strings for the single-slot pickers, kept in one place. */
 export const VIDEO_ACCEPT = 'video/*,.mp4,.mov';
 export const SRT_ACCEPT = '.srt,text/plain';
+export const CUBE_ACCEPT = '.cube';
 
 /**
  * Pick a single file (used to complete a pair's missing video or SRT slot).

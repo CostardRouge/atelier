@@ -2,6 +2,7 @@ import { useState } from 'react';
 import FolderDrop from './components/FolderDrop';
 import Gallery from './components/Gallery';
 import DetailView from './components/DetailView';
+import LutStudio from './components/LutStudio';
 import {
   attachToPair,
   detachFromPair,
@@ -29,10 +30,13 @@ const STEPS = [
   },
 ];
 
+type View = 'telemetry' | 'lut';
+
 export default function App() {
   const [pairs, setPairs] = useState<MediaPair[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [view, setView] = useState<View>('telemetry');
 
   function handleFiles(files: File[]) {
     setPairs(pairFiles(files));
@@ -63,6 +67,24 @@ export default function App() {
           Flight <b>Studio</b>
         </span>
         <div className="masthead-right">
+          <nav className="nav" aria-label="Sections">
+            <button
+              type="button"
+              className={view === 'telemetry' ? 'active' : undefined}
+              aria-current={view === 'telemetry' ? 'page' : undefined}
+              onClick={() => setView('telemetry')}
+            >
+              Telemetry
+            </button>
+            <button
+              type="button"
+              className={view === 'lut' ? 'active' : undefined}
+              aria-current={view === 'lut' ? 'page' : undefined}
+              onClick={() => setView('lut')}
+            >
+              LUT Studio
+            </button>
+          </nav>
           <span className="edition">DJI · SRT telemetry</span>
           <a
             className="gh-link"
@@ -82,7 +104,9 @@ export default function App() {
         </div>
       </header>
 
-      {selected ? (
+      {view === 'lut' ? (
+        <LutStudio />
+      ) : selected ? (
         <DetailView
           pair={selected}
           onBack={() => setSelectedId(null)}
