@@ -51,8 +51,8 @@ void main() {
 export interface LutRenderer {
   /** Replace the active LUT, or pass null to render the video ungraded. */
   setLut(lut: CubeLut | null): void;
-  /** Upload the current video frame and draw (graded if a LUT is set). */
-  draw(video: HTMLVideoElement): void;
+  /** Upload the given frame source and draw (graded if a LUT is set). */
+  draw(source: TexImageSource): void;
   /** Resize the drawing buffer to match the source resolution. */
   resize(width: number, height: number): void;
   /** Release all GL resources. */
@@ -74,10 +74,19 @@ function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLSh
 
 /**
  * Create a renderer for the given canvas, or return null if WebGL2 is
- * unavailable (caller should fall back to a plain message).
+ * unavailable (caller should fall back to a plain message). Accepts an
+ * `OffscreenCanvas` too, so the same code grades the live preview and the
+ * frame-by-frame export pass.
  */
-export function createLutRenderer(canvas: HTMLCanvasElement): LutRenderer | null {
-  const gl = canvas.getContext('webgl2', { premultipliedAlpha: false });
+export function createLutRenderer(
+  canvas: HTMLCanvasElement | OffscreenCanvas,
+): LutRenderer | null {
+  // `preserveDrawingBuffer` lets the export read each rendered frame back into
+  // a VideoFrame after drawing; harmless for the live preview.
+  const gl = canvas.getContext('webgl2', {
+    premultipliedAlpha: false,
+    preserveDrawingBuffer: true,
+  }) as WebGL2RenderingContext | null;
   if (!gl) return null;
 
   const vert = compile(gl, gl.VERTEX_SHADER, VERT_SRC);
@@ -187,14 +196,14 @@ export function createLutRenderer(canvas: HTMLCanvasElement): LutRenderer | null
       }
     },
 
-    draw(video) {
+    draw(source) {
       gl.useProgram(program);
       gl.bindVertexArray(vao);
 
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, videoTex);
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
 
       if (hasLut && lutTex) {
         gl.activeTexture(gl.TEXTURE1);

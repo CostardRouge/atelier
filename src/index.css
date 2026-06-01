@@ -952,6 +952,44 @@ dd.empty {
   cursor: pointer;
 }
 
+.lut-export.open-btn {
+  margin-top: 0;
+  padding: 0.5rem 1.1rem;
+  font-size: 0.82rem;
+}
+
+.lut-export-status {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-top: 0.9rem;
+}
+
+.lut-export-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  flex: none;
+  min-width: 11ch;
+}
+
+.lut-export-bar {
+  flex: 1;
+  height: 8px;
+  accent-color: var(--accent);
+}
+
+.lut-export-bar::-webkit-progress-bar {
+  background: var(--paper-2);
+  border-radius: 999px;
+}
+
+.lut-export-bar::-webkit-progress-value {
+  background: var(--accent);
+  border-radius: 999px;
+}
+
 /* ---------- Notices ---------- */
 
 .notice {

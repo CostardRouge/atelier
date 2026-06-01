@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { parseCube, type CubeLut } from '../lib/cube-parser';
 import { formatDuration } from '../lib/format';
 import { BUILTIN_LUTS } from '../lut/builtin-luts';
+import { exportGradedVideo, isExportSupported } from '../lut/export-video';
 import { useLutPreview } from '../hooks/use-lut-preview';
 import { CUBE_ACCEPT, VIDEO_ACCEPT, pickFile } from '../sources/file-sources';
 
@@ -17,6 +18,7 @@ export default function LutStudio() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoName, setVideoName] = useState<string | null>(null);
   const [videoError, setVideoError] = useState(false);
@@ -33,6 +35,14 @@ export default function LutStudio() {
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
+
+  // Export state.
+  const [exporting, setExporting] = useState(false);
+  const [exportPhase, setExportPhase] = useState<string | null>(null);
+  const [exportRatio, setExportRatio] = useState<number | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const exportAbort = useRef<AbortController | null>(null);
+  const exportSupported = isExportSupported();
 
   const { supported } = useLutPreview(videoRef, canvasRef, lut, bypass, videoUrl);
 
@@ -69,9 +79,11 @@ export default function LutStudio() {
   async function chooseVideo() {
     const file = await pickFile(VIDEO_ACCEPT);
     if (!file) return;
+    setVideoFile(file);
     setVideoUrl(URL.createObjectURL(file)); // previous URL revoked by the effect
     setVideoName(file.name);
     setVideoError(false);
+    setExportError(null);
     setTime(0);
     setPlaying(false);
   }
@@ -134,6 +146,57 @@ export default function LutStudio() {
     if (v) v.currentTime = value;
   }
 
+  async function handleExport() {
+    if (!videoFile || exporting) return;
+    setExporting(true);
+    setExportError(null);
+    setExportRatio(null);
+    const controller = new AbortController();
+    exportAbort.current = controller;
+    try {
+      const blob = await exportGradedVideo(
+        videoFile,
+        lut,
+        (p) => {
+          setExportPhase(p.phase);
+          setExportRatio(p.ratio);
+        },
+        controller.signal,
+      );
+      const base = (videoName ?? 'video').replace(/\.[^.]+$/, '');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${base}-graded.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        setExportError((err as Error).message || 'Export failed.');
+      }
+    } finally {
+      setExporting(false);
+      setExportPhase(null);
+      setExportRatio(null);
+      exportAbort.current = null;
+    }
+  }
+
+  function cancelExport() {
+    exportAbort.current?.abort();
+  }
+
+  const exportLabel =
+    exportPhase === 'encoding' && exportRatio != null
+      ? `Encoding ${Math.round(exportRatio * 100)}%`
+      : exportPhase === 'demuxing'
+        ? 'Reading…'
+        : exportPhase === 'finalizing'
+          ? 'Finalizing…'
+          : 'Working…';
+
   return (
     <section aria-label="LUT Studio">
       <div className="collection-head">
@@ -177,6 +240,26 @@ export default function LutStudio() {
         >
           Viewing: {bypass || !lut ? 'Original' : 'Graded'}
         </button>
+
+        {exporting ? (
+          <button type="button" className="link-btn" onClick={cancelExport}>
+            Cancel
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="open-btn lut-export"
+            onClick={handleExport}
+            disabled={!videoUrl || !exportSupported}
+            title={
+              exportSupported
+                ? 'Render a graded copy as an MP4 (H.264)'
+                : 'WebCodecs export is not available in this browser'
+            }
+          >
+            Export MP4
+          </button>
+        )}
       </div>
 
       {videoName && <p className="card-caption">{videoName}</p>}
@@ -222,6 +305,27 @@ export default function LutStudio() {
           <span className="lut-time">{formatDuration(duration)}</span>
         </div>
       )}
+
+      {exporting && (
+        <div className="lut-export-status" role="status">
+          <span className="lut-export-label">{exportLabel}</span>
+          <progress
+            className="lut-export-bar"
+            value={exportRatio ?? undefined}
+            max={1}
+          />
+        </div>
+      )}
+
+      {videoUrl && !exportSupported && (
+        <p className="notice">
+          Export needs <strong>WebCodecs</strong>, which this browser doesn't
+          expose — the preview still works. Try a recent Chrome or Edge. (You
+          can also keep grading with your existing Mac workflow.)
+        </p>
+      )}
+
+      {exportError && <p className="notice">Export failed: {exportError}</p>}
 
       {!supported && (
         <p className="notice">
