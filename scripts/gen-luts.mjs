@@ -15,7 +15,15 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const OUT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'luts');
+// The starter looks live under `luts/classic/`; the picker groups them by
+// folder, and user-supplied looks go in sibling folders (apple/, dji/, …).
+const OUT_DIR = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '..',
+  'public',
+  'luts',
+  'classic',
+);
 
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
 
