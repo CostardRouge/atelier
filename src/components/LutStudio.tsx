@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { parseCube, type CubeLut } from '../lib/cube-parser';
 import { formatDuration } from '../lib/format';
-import { BUILTIN_LUTS } from '../lut/builtin-luts';
+import { BUILTIN_LUTS, LUT_GROUPS, UNGROUPED_LUTS } from '../lut/builtin-luts';
 import { isExportSupported } from '../lut/export-video';
 import { runBatchExport } from '../lut/batch-export';
 import { clipId, type Clip } from '../lut/clip';
@@ -432,10 +432,19 @@ export default function LutStudio() {
                 disabled={busy}
               >
                 <option value="none">No LUT (original)</option>
-                {BUILTIN_LUTS.map((l) => (
+                {UNGROUPED_LUTS.map((l) => (
                   <option key={l.id} value={l.id}>
                     {l.name}
                   </option>
+                ))}
+                {LUT_GROUPS.map((g) => (
+                  <optgroup key={g.label} label={g.label}>
+                    {g.luts.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.name}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
                 {customName && <option value="custom">{customName} (uploaded)</option>}
               </select>
