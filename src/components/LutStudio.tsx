@@ -14,9 +14,22 @@ import { CUBE_ACCEPT, VIDEO_ACCEPT, pickFile } from '../sources/file-sources';
  * controls drive that same element. Nothing uploads — files stay on the
  * machine, same as the telemetry side.
  */
+
+/** Precise current-position readout: `M:SS.cs` (centiseconds). */
+function formatTimecode(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00.00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  const cs = Math.floor((seconds % 1) * 100);
+  return `${m}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
+}
+
 export default function LutStudio() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // True while the user is dragging the scrubber, so the `timeupdate` event
+  // doesn't fight the drag by resetting the thumb to the playhead.
+  const scrubbingRef = useRef(false);
 
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -60,7 +73,11 @@ export default function LutStudio() {
     if (!v) return;
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
-    const onTime = () => setTime(v.currentTime);
+    const onTime = () => {
+      // While scrubbing, the optimistic value set in `handleScrub` is the
+      // source of truth — don't let playback's timeupdate yank it back.
+      if (!scrubbingRef.current) setTime(v.currentTime);
+    };
     const onMeta = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
     v.addEventListener('play', onPlay);
     v.addEventListener('pause', onPause);
@@ -141,7 +158,10 @@ export default function LutStudio() {
     else v.pause();
   }
 
-  function seek(value: number) {
+  // Optimistically move the thumb AND seek the video live, so the slider
+  // tracks the cursor exactly and the preview frame updates as you drag.
+  function handleScrub(value: number) {
+    setTime(value);
     const v = videoRef.current;
     if (v) v.currentTime = value;
   }
@@ -291,15 +311,29 @@ export default function LutStudio() {
           >
             {playing ? '❚❚' : '▶'}
           </button>
-          <span className="lut-time">{formatDuration(time)}</span>
+          <span className="lut-time" title="Current position">
+            {formatTimecode(time)}
+          </span>
           <input
             type="range"
             className="lut-scrub"
             min={0}
             max={duration || 0}
-            step={0.01}
+            step={0.001}
             value={Math.min(time, duration || 0)}
-            onChange={(e) => seek(Number(e.target.value))}
+            onPointerDown={() => {
+              scrubbingRef.current = true;
+            }}
+            onPointerUp={() => {
+              scrubbingRef.current = false;
+            }}
+            onPointerCancel={() => {
+              scrubbingRef.current = false;
+            }}
+            onBlur={() => {
+              scrubbingRef.current = false;
+            }}
+            onChange={(e) => handleScrub(Number(e.target.value))}
             aria-label="Seek"
           />
           <span className="lut-time">{formatDuration(duration)}</span>
