@@ -2,18 +2,24 @@ import { useEffect, useRef, useState } from 'react';
 import { parseCube, type CubeLut } from '../lib/cube-parser';
 import { formatDuration } from '../lib/format';
 import { BUILTIN_LUTS } from '../lut/builtin-luts';
-import { exportGradedVideo, isExportSupported } from '../lut/export-video';
+import { isExportSupported } from '../lut/export-video';
+import { runBatchExport } from '../lut/batch-export';
+import { clipId, type Clip } from '../lut/clip';
+import {
+  filterVideos,
+  loadClipMeta,
+  probeContainer,
+  type ContainerInfo,
+} from '../lut/video-metadata';
 import { useLutPreview } from '../hooks/use-lut-preview';
-import { CUBE_ACCEPT, VIDEO_ACCEPT, pickFile } from '../sources/file-sources';
-
-/**
- * LUT Studio — preview a `.cube` colour grade on a video in real time.
- *
- * The `<video>` (kept offscreen, never `display:none` so it keeps decoding)
- * feeds frames to a WebGL2 canvas via {@link useLutPreview}; custom transport
- * controls drive that same element. Nothing uploads — files stay on the
- * machine, same as the telemetry side.
- */
+import {
+  CUBE_ACCEPT,
+  filesFromDataTransfer,
+  pickDirectory,
+  pickFile,
+  pickFiles,
+} from '../sources/file-sources';
+import ClipList from './ClipList';
 
 /** Precise current-position readout: `M:SS.cs` (centiseconds). */
 function formatTimecode(seconds: number): string {
@@ -24,17 +30,32 @@ function formatTimecode(seconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
 }
 
+/** Max number of clip thumbnails/metadata to read at once. */
+const META_CONCURRENCY = 3;
+
+/**
+ * LUT Studio — a collection of videos, graded through a `.cube` LUT.
+ *
+ * Left column: the clip list (thumbnail + summary + export checkbox). Right
+ * pane: the real-time WebGL preview of the *active* clip with the look picker.
+ * Bottom bar: batch-export the checked clips (sequential, one encoder at a
+ * time). Only the active clip is ever decoded for preview; nothing uploads.
+ */
 export default function LutStudio() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  // True while the user is dragging the scrubber, so the `timeupdate` event
-  // doesn't fight the drag by resetting the thumb to the playhead.
+  // True while dragging the scrubber, so `timeupdate` doesn't fight the drag.
   const scrubbingRef = useRef(false);
 
-  const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [videoName, setVideoName] = useState<string | null>(null);
-  const [videoError, setVideoError] = useState(false);
+  const [clips, setClips] = useState<Clip[]>([]);
+  const clipsRef = useRef(clips);
+  clipsRef.current = clips;
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeUrl, setActiveUrl] = useState<string | null>(null);
+  const [activeError, setActiveError] = useState(false);
+  const [activeInfo, setActiveInfo] = useState<ContainerInfo>({});
+  const [importing, setImporting] = useState(false);
+  const [dragging, setDragging] = useState(false);
 
   const [lut, setLut] = useState<CubeLut | null>(null);
   const [selected, setSelected] = useState('none'); // 'none' | builtin id | 'custom'
@@ -49,23 +70,137 @@ export default function LutStudio() {
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
 
-  // Export state.
+  // Batch export state.
   const [exporting, setExporting] = useState(false);
-  const [exportPhase, setExportPhase] = useState<string | null>(null);
-  const [exportRatio, setExportRatio] = useState<number | null>(null);
-  const [exportError, setExportError] = useState<string | null>(null);
+  const [batchTotal, setBatchTotal] = useState(0);
   const exportAbort = useRef<AbortController | null>(null);
   const exportSupported = isExportSupported();
 
-  const { supported } = useLutPreview(videoRef, canvasRef, lut, bypass, videoUrl);
+  const metaProcessing = useRef<Set<string>>(new Set());
 
-  // Revoke the previous object URL when the source changes or on unmount.
-  useEffect(
-    () => () => {
-      if (videoUrl) URL.revokeObjectURL(videoUrl);
-    },
-    [videoUrl],
-  );
+  const { supported } = useLutPreview(videoRef, canvasRef, lut, bypass, activeUrl);
+
+  const activeClip = clips.find((c) => c.id === activeId) ?? null;
+
+  // --- clip helpers -------------------------------------------------------
+
+  function updateClip(id: string, fn: (c: Clip) => Clip) {
+    setClips((prev) => prev.map((c) => (c.id === id ? fn(c) : c)));
+  }
+
+  function addFiles(files: File[]) {
+    const videos = filterVideos(files);
+    if (videos.length === 0) return;
+    setClips((prev) => {
+      const seen = new Set(prev.map((c) => c.id));
+      const additions: Clip[] = [];
+      for (const file of videos) {
+        const id = clipId(file);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        additions.push({
+          id,
+          file,
+          name: file.name,
+          size: file.size,
+          metaStatus: 'pending',
+          exportSelected: true,
+          exportStatus: 'idle',
+          exportRatio: null,
+        });
+      }
+      return additions.length ? [...prev, ...additions] : prev;
+    });
+  }
+
+  async function runImport(pick: () => Promise<File[]>) {
+    setImporting(true);
+    try {
+      addFiles(await pick());
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragging(false);
+    setImporting(true);
+    try {
+      addFiles(await filesFromDataTransfer(e.dataTransfer));
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  function removeClip(id: string) {
+    const target = clipsRef.current.find((c) => c.id === id);
+    if (target?.thumbUrl) URL.revokeObjectURL(target.thumbUrl);
+    setClips((prev) => prev.filter((c) => c.id !== id));
+    setActiveId((prev) => {
+      if (prev !== id) return prev;
+      const remaining = clipsRef.current.filter((c) => c.id !== id);
+      return remaining[0]?.id ?? null;
+    });
+  }
+
+  function toggleAll(checked: boolean) {
+    setClips((prev) => prev.map((c) => ({ ...c, exportSelected: checked })));
+  }
+
+  // --- effects ------------------------------------------------------------
+
+  // Pick a default active clip whenever there's a list but nothing selected.
+  useEffect(() => {
+    if (activeId === null && clips.length > 0) setActiveId(clips[0].id);
+  }, [clips, activeId]);
+
+  // Lazily read metadata + thumbnails for pending clips, a few at a time.
+  useEffect(() => {
+    const free = META_CONCURRENCY - metaProcessing.current.size;
+    if (free <= 0) return;
+    const pending = clips.filter(
+      (c) => c.metaStatus === 'pending' && !metaProcessing.current.has(c.id),
+    );
+    for (const clip of pending.slice(0, free)) {
+      metaProcessing.current.add(clip.id);
+      loadClipMeta(clip.file)
+        .then((meta) =>
+          updateClip(clip.id, (c) => ({ ...c, ...meta, metaStatus: 'ready' })),
+        )
+        .catch(() => updateClip(clip.id, (c) => ({ ...c, metaStatus: 'error' })))
+        .finally(() => metaProcessing.current.delete(clip.id));
+    }
+  }, [clips]);
+
+  // Swap the preview source when the active clip changes.
+  useEffect(() => {
+    const clip = clipsRef.current.find((c) => c.id === activeId);
+    if (!clip) {
+      setActiveUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(clip.file);
+    setActiveUrl(url);
+    setActiveError(false);
+    setActiveInfo({});
+    setTime(0);
+    setPlaying(false);
+    return () => URL.revokeObjectURL(url);
+  }, [activeId]);
+
+  // Probe the active clip's container for codec + fps (best-effort).
+  useEffect(() => {
+    const clip = clipsRef.current.find((c) => c.id === activeId);
+    if (!clip) return;
+    let cancelled = false;
+    probeContainer(clip.file).then((info) => {
+      if (!cancelled) setActiveInfo(info);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeId]);
 
   // Keep transport state in sync with the element.
   useEffect(() => {
@@ -74,8 +209,6 @@ export default function LutStudio() {
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
     const onTime = () => {
-      // While scrubbing, the optimistic value set in `handleScrub` is the
-      // source of truth — don't let playback's timeupdate yank it back.
       if (!scrubbingRef.current) setTime(v.currentTime);
     };
     const onMeta = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
@@ -91,19 +224,19 @@ export default function LutStudio() {
       v.removeEventListener('timeupdate', onTime);
       v.removeEventListener('loadedmetadata', onMeta);
     };
-  }, [videoUrl]);
+  }, [activeUrl]);
 
-  async function chooseVideo() {
-    const file = await pickFile(VIDEO_ACCEPT);
-    if (!file) return;
-    setVideoFile(file);
-    setVideoUrl(URL.createObjectURL(file)); // previous URL revoked by the effect
-    setVideoName(file.name);
-    setVideoError(false);
-    setExportError(null);
-    setTime(0);
-    setPlaying(false);
-  }
+  // Revoke all thumbnails on unmount.
+  useEffect(
+    () => () => {
+      for (const clip of clipsRef.current) {
+        if (clip.thumbUrl) URL.revokeObjectURL(clip.thumbUrl);
+      }
+    },
+    [],
+  );
+
+  // --- look picker --------------------------------------------------------
 
   async function applySelection(value: string) {
     setSelected(value);
@@ -121,8 +254,7 @@ export default function LutStudio() {
     setBusy(true);
     try {
       const res = await fetch(entry.url);
-      const text = await res.text();
-      const parsed = parseCube(text);
+      const parsed = parseCube(await res.text());
       if (!parsed) {
         setCubeError(`Could not parse ${entry.name}.`);
         setLut(null);
@@ -151,6 +283,8 @@ export default function LutStudio() {
     setSelected('custom');
   }
 
+  // --- transport ----------------------------------------------------------
+
   function togglePlay() {
     const v = videoRef.current;
     if (!v) return;
@@ -158,48 +292,49 @@ export default function LutStudio() {
     else v.pause();
   }
 
-  // Optimistically move the thumb AND seek the video live, so the slider
-  // tracks the cursor exactly and the preview frame updates as you drag.
   function handleScrub(value: number) {
     setTime(value);
     const v = videoRef.current;
     if (v) v.currentTime = value;
   }
 
+  // --- export -------------------------------------------------------------
+
   async function handleExport() {
-    if (!videoFile || exporting) return;
+    const queue = clips.filter((c) => c.exportSelected);
+    if (queue.length === 0 || exporting) return;
     setExporting(true);
-    setExportError(null);
-    setExportRatio(null);
+    setBatchTotal(queue.length);
+    setClips((prev) =>
+      prev.map((c) =>
+        c.exportSelected
+          ? { ...c, exportStatus: 'queued', exportRatio: null, exportError: undefined }
+          : c,
+      ),
+    );
     const controller = new AbortController();
     exportAbort.current = controller;
     try {
-      const blob = await exportGradedVideo(
-        videoFile,
+      await runBatchExport(
+        queue.map((c) => ({ id: c.id, file: c.file, name: c.name })),
         lut,
-        (p) => {
-          setExportPhase(p.phase);
-          setExportRatio(p.ratio);
+        {
+          onStart: (id) =>
+            updateClip(id, (c) => ({ ...c, exportStatus: 'exporting', exportRatio: null })),
+          onProgress: (id, p) =>
+            updateClip(id, (c) => ({
+              ...c,
+              exportRatio: p.phase === 'encoding' ? p.ratio : c.exportRatio,
+            })),
+          onDone: (id) =>
+            updateClip(id, (c) => ({ ...c, exportStatus: 'done', exportRatio: 1 })),
+          onError: (id, message) =>
+            updateClip(id, (c) => ({ ...c, exportStatus: 'error', exportError: message })),
         },
         controller.signal,
       );
-      const base = (videoName ?? 'video').replace(/\.[^.]+$/, '');
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${base}-graded.mp4`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
-    } catch (err) {
-      if ((err as Error).name !== 'AbortError') {
-        setExportError((err as Error).message || 'Export failed.');
-      }
     } finally {
       setExporting(false);
-      setExportPhase(null);
-      setExportRatio(null);
       exportAbort.current = null;
     }
   }
@@ -208,175 +343,239 @@ export default function LutStudio() {
     exportAbort.current?.abort();
   }
 
-  const exportLabel =
-    exportPhase === 'encoding' && exportRatio != null
-      ? `Encoding ${Math.round(exportRatio * 100)}%`
-      : exportPhase === 'demuxing'
-        ? 'Reading…'
-        : exportPhase === 'finalizing'
-          ? 'Finalizing…'
-          : 'Working…';
+  // --- derived ------------------------------------------------------------
+
+  const selectedCount = clips.filter((c) => c.exportSelected).length;
+  const doneCount = clips.filter((c) => c.exportStatus === 'done').length;
+  const exportingClip = clips.find((c) => c.exportStatus === 'exporting');
+  const overallRatio = batchTotal
+    ? (doneCount + (exportingClip?.exportRatio ?? 0)) / batchTotal
+    : 0;
+
+  const activeRes =
+    activeClip?.width && activeClip?.height
+      ? `${activeClip.width}×${activeClip.height}`
+      : null;
+  const activeDetail = [
+    activeRes,
+    activeInfo.codec,
+    activeInfo.fps ? `${activeInfo.fps} fps` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
-    <section aria-label="LUT Studio">
+    <section className="lut-studio-page" aria-label="LUT Studio">
       <div className="collection-head">
         <span className="title">LUT Studio</span>
-        <p className="count">Real-time preview · nothing uploads</p>
+        <p className="count">
+          {clips.length} clip{clips.length === 1 ? '' : 's'} · real-time preview,
+          nothing uploads
+        </p>
       </div>
 
-      <div className="lut-toolbar">
-        <button type="button" className="add-btn" onClick={chooseVideo}>
-          {videoName ? 'Change video' : 'Choose video'}
-        </button>
+      <div
+        className={`lut-layout${dragging ? ' dragging' : ''}`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={handleDrop}
+      >
+        <aside className="lut-aside">
+          <div className="lut-import">
+            <button
+              type="button"
+              className="add-btn"
+              onClick={() => runImport(pickFiles)}
+              disabled={importing}
+            >
+              {importing ? 'Opening…' : 'Add videos'}
+            </button>
+            <button
+              type="button"
+              className="link-btn"
+              onClick={() => runImport(pickDirectory)}
+              disabled={importing}
+            >
+              or a folder
+            </button>
+          </div>
 
-        <label className="lut-select">
-          <span>Look</span>
-          <select
-            value={selected}
-            onChange={(e) => applySelection(e.target.value)}
-            disabled={busy}
-          >
-            <option value="none">No LUT (original)</option>
-            {BUILTIN_LUTS.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-            {customName && <option value="custom">{customName} (uploaded)</option>}
-          </select>
-        </label>
+          {clips.length === 0 ? (
+            <p className="lut-empty-hint">
+              Add clips or drag them here. Pick one to preview a look; check the
+              ones you want to export.
+            </p>
+          ) : (
+            <ClipList
+              clips={clips}
+              activeId={activeId}
+              onSelect={setActiveId}
+              onToggleExport={(id) =>
+                updateClip(id, (c) => ({ ...c, exportSelected: !c.exportSelected }))
+              }
+              onRemove={removeClip}
+              onToggleAll={toggleAll}
+            />
+          )}
+        </aside>
 
-        <button type="button" className="link-btn" onClick={uploadCube}>
-          Upload .cube
-        </button>
+        <div className="lut-main">
+          <div className="lut-toolbar">
+            <label className="lut-select">
+              <span>Look</span>
+              <select
+                value={selected}
+                onChange={(e) => applySelection(e.target.value)}
+                disabled={busy}
+              >
+                <option value="none">No LUT (original)</option>
+                {BUILTIN_LUTS.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+                {customName && <option value="custom">{customName} (uploaded)</option>}
+              </select>
+            </label>
 
-        <button
-          type="button"
-          className="lut-compare"
-          onClick={() => setBypass((b) => !b)}
-          disabled={!lut}
-          aria-pressed={bypass}
-          title="Toggle between the graded and original image"
-        >
-          Viewing: {bypass || !lut ? 'Original' : 'Graded'}
-        </button>
+            <button type="button" className="link-btn" onClick={uploadCube}>
+              Upload .cube
+            </button>
 
+            <button
+              type="button"
+              className="lut-compare"
+              onClick={() => setBypass((b) => !b)}
+              disabled={!lut}
+              aria-pressed={bypass}
+              title="Toggle between the graded and original image"
+            >
+              Viewing: {bypass || !lut ? 'Original' : 'Graded'}
+            </button>
+          </div>
+
+          {activeClip && (
+            <p className="lut-active-detail" title={activeClip.name}>
+              <span className="lut-active-name">{activeClip.name}</span>
+              {activeDetail && <span className="lut-active-specs">{activeDetail}</span>}
+            </p>
+          )}
+
+          <div className="lut-stage">
+            {activeUrl ? (
+              <canvas ref={canvasRef} className="lut-canvas" />
+            ) : (
+              <div className="placeholder">
+                {clips.length === 0
+                  ? 'Add videos to begin.'
+                  : 'Select a clip to preview.'}
+              </div>
+            )}
+            {/* Offscreen decoder + audio source. Kept rendered (not
+                display:none) so the browser keeps producing frames. */}
+            <video
+              ref={videoRef}
+              src={activeUrl ?? undefined}
+              className="lut-source"
+              playsInline
+              onError={() => setActiveError(true)}
+            />
+          </div>
+
+          {activeUrl && (
+            <div className="lut-transport">
+              <button
+                type="button"
+                className="lut-play"
+                onClick={togglePlay}
+                aria-label={playing ? 'Pause' : 'Play'}
+              >
+                {playing ? '❚❚' : '▶'}
+              </button>
+              <span className="lut-time" title="Current position">
+                {formatTimecode(time)}
+              </span>
+              <input
+                type="range"
+                className="lut-scrub"
+                min={0}
+                max={duration || 0}
+                step={0.001}
+                value={Math.min(time, duration || 0)}
+                onPointerDown={() => {
+                  scrubbingRef.current = true;
+                }}
+                onPointerUp={() => {
+                  scrubbingRef.current = false;
+                }}
+                onPointerCancel={() => {
+                  scrubbingRef.current = false;
+                }}
+                onBlur={() => {
+                  scrubbingRef.current = false;
+                }}
+                onChange={(e) => handleScrub(Number(e.target.value))}
+                aria-label="Seek"
+              />
+              <span className="lut-time">{formatDuration(duration)}</span>
+            </div>
+          )}
+
+          {!supported && (
+            <p className="notice">
+              Your browser doesn't expose <strong>WebGL2</strong>, which the LUT
+              preview needs. Try a recent Chrome, Edge, Firefox or Safari.
+            </p>
+          )}
+
+          {activeError && (
+            <p className="notice">
+              This clip failed to decode. DJI footage is often HEVC/H.265, which
+              not every browser plays natively — try Safari (best HEVC support)
+              or transcode to H.264.
+            </p>
+          )}
+
+          {cubeError && <p className="notice">{cubeError}</p>}
+        </div>
+      </div>
+
+      <div className="lut-footer">
         {exporting ? (
-          <button type="button" className="link-btn" onClick={cancelExport}>
-            Cancel
-          </button>
+          <>
+            <div className="lut-export-status" role="status">
+              <span className="lut-export-label">
+                Exporting {Math.min(doneCount + 1, batchTotal)}/{batchTotal}
+              </span>
+              <progress className="lut-export-bar" value={overallRatio} max={1} />
+            </div>
+            <button type="button" className="link-btn" onClick={cancelExport}>
+              Cancel
+            </button>
+          </>
         ) : (
-          <button
-            type="button"
-            className="open-btn lut-export"
-            onClick={handleExport}
-            disabled={!videoUrl || !exportSupported}
-            title={
-              exportSupported
-                ? 'Render a graded copy as an MP4 (H.264)'
-                : 'WebCodecs export is not available in this browser'
-            }
-          >
-            Export MP4
-          </button>
+          <>
+            {!exportSupported && clips.length > 0 && (
+              <span className="lut-export-note">
+                Export needs WebCodecs (try Chrome/Edge) — preview works
+                everywhere.
+              </span>
+            )}
+            <button
+              type="button"
+              className="open-btn lut-export"
+              onClick={handleExport}
+              disabled={selectedCount === 0 || !exportSupported}
+              title="Render graded copies of the checked clips (H.264 MP4)"
+            >
+              Export {selectedCount || ''} MP4{selectedCount === 1 ? '' : 's'}
+            </button>
+          </>
         )}
       </div>
-
-      {videoName && <p className="card-caption">{videoName}</p>}
-
-      <div className="lut-stage">
-        {videoUrl ? (
-          <canvas ref={canvasRef} className="lut-canvas" />
-        ) : (
-          <div className="placeholder">Choose a video to begin.</div>
-        )}
-        {/* Offscreen decoder + audio source. Kept rendered (not display:none) so
-            the browser keeps producing frames for the canvas. */}
-        <video
-          ref={videoRef}
-          src={videoUrl ?? undefined}
-          className="lut-source"
-          playsInline
-          onError={() => setVideoError(true)}
-        />
-      </div>
-
-      {videoUrl && (
-        <div className="lut-transport">
-          <button
-            type="button"
-            className="lut-play"
-            onClick={togglePlay}
-            aria-label={playing ? 'Pause' : 'Play'}
-          >
-            {playing ? '❚❚' : '▶'}
-          </button>
-          <span className="lut-time" title="Current position">
-            {formatTimecode(time)}
-          </span>
-          <input
-            type="range"
-            className="lut-scrub"
-            min={0}
-            max={duration || 0}
-            step={0.001}
-            value={Math.min(time, duration || 0)}
-            onPointerDown={() => {
-              scrubbingRef.current = true;
-            }}
-            onPointerUp={() => {
-              scrubbingRef.current = false;
-            }}
-            onPointerCancel={() => {
-              scrubbingRef.current = false;
-            }}
-            onBlur={() => {
-              scrubbingRef.current = false;
-            }}
-            onChange={(e) => handleScrub(Number(e.target.value))}
-            aria-label="Seek"
-          />
-          <span className="lut-time">{formatDuration(duration)}</span>
-        </div>
-      )}
-
-      {exporting && (
-        <div className="lut-export-status" role="status">
-          <span className="lut-export-label">{exportLabel}</span>
-          <progress
-            className="lut-export-bar"
-            value={exportRatio ?? undefined}
-            max={1}
-          />
-        </div>
-      )}
-
-      {videoUrl && !exportSupported && (
-        <p className="notice">
-          Export needs <strong>WebCodecs</strong>, which this browser doesn't
-          expose — the preview still works. Try a recent Chrome or Edge. (You
-          can also keep grading with your existing Mac workflow.)
-        </p>
-      )}
-
-      {exportError && <p className="notice">Export failed: {exportError}</p>}
-
-      {!supported && (
-        <p className="notice">
-          Your browser doesn't expose <strong>WebGL2</strong>, which the LUT
-          preview needs. Try a recent Chrome, Edge, Firefox or Safari.
-        </p>
-      )}
-
-      {videoError && (
-        <p className="notice">
-          The video failed to decode. DJI clips are often HEVC/H.265, which not
-          every browser plays natively — try Safari (best HEVC support) or
-          transcode the clip to H.264.
-        </p>
-      )}
-
-      {cubeError && <p className="notice">{cubeError}</p>}
     </section>
   );
 }

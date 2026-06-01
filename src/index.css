@@ -990,6 +990,266 @@ dd.empty {
   border-radius: 999px;
 }
 
+/* ---------- LUT Studio — collection layout ---------- */
+
+.lut-studio-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.lut-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 26%) 1fr;
+  gap: 1.5rem;
+  align-items: start;
+  border-radius: var(--radius-lg);
+}
+
+.lut-layout.dragging {
+  outline: 2px dashed var(--accent);
+  outline-offset: 8px;
+}
+
+@media (max-width: 820px) {
+  .lut-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lut-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.lut-import {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.lut-empty-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--muted);
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--radius);
+  padding: 1rem;
+  background: var(--surface);
+}
+
+.lut-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.lut-active-detail {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  margin: 0;
+  min-width: 0;
+}
+
+.lut-active-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lut-active-specs {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  flex: none;
+}
+
+/* ---------- LUT Studio — clip list ---------- */
+
+.clip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.clip-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.clip-all {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.clip-all input {
+  accent-color: var(--accent);
+}
+
+.clip-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 64vh;
+  overflow-y: auto;
+}
+
+.clip-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.2s var(--ease), background 0.2s var(--ease);
+}
+
+.clip-row:hover {
+  border-color: var(--line-strong);
+}
+
+.clip-row.active {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}
+
+.clip-check {
+  flex: none;
+  accent-color: var(--accent);
+}
+
+.clip-thumb {
+  flex: none;
+  width: 64px;
+  height: 40px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #100f0d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clip-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.clip-thumb-fallback {
+  color: #6f6857;
+  font-size: 0.75rem;
+}
+
+.clip-info {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.clip-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clip-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.66rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clip-status {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.64rem;
+  letter-spacing: 0.02em;
+}
+
+.clip-status.queued {
+  color: var(--muted);
+}
+
+.clip-status.exporting {
+  color: var(--accent-ink);
+}
+
+.clip-status.done {
+  color: #3c7a3c;
+}
+
+.clip-status.error {
+  color: var(--accent);
+  white-space: normal;
+}
+
+.clip-remove {
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--faint);
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 1;
+  padding: 0 0.15rem;
+  transition: color 0.2s var(--ease);
+}
+
+.clip-remove:hover {
+  color: var(--accent);
+}
+
+/* ---------- LUT Studio — export footer ---------- */
+
+.lut-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+}
+
+.lut-footer .lut-export-status {
+  margin-top: 0;
+  flex: 1;
+}
+
+.lut-export-note {
+  margin-right: auto;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 /* ---------- Notices ---------- */
 
 .notice {
