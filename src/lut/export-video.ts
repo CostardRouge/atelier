@@ -52,6 +52,27 @@ function toMicros(value: number, timescale: number): number {
   return Math.round((value / timescale) * 1_000_000);
 }
 
+/**
+ * Derive the display rotation (0/90/180/270 clockwise) from a track's tkhd
+ * matrix. The decoder emits frames in coded orientation, so the container's
+ * rotation must be copied to the output or the export looks un-rotated.
+ *
+ * The matrix is `[a, b, …]` in 16.16 fixed point; `atan2(b, a)` gives the
+ * angle, scale-invariant. mp4-muxer builds `[cosθ, sinθ, …]`, so passing this
+ * derived angle round-trips the exact same matrix for pure rotations.
+ */
+function rotationFromMatrix(
+  matrix: ArrayLike<number> | undefined,
+): 0 | 90 | 180 | 270 {
+  if (!matrix || matrix.length < 2) return 0;
+  const a = matrix[0];
+  const b = matrix[1];
+  if (a === 0 && b === 0) return 0;
+  const deg = ((Math.round((Math.atan2(b, a) * 180) / Math.PI) % 360) + 360) % 360;
+  const snapped = (Math.round(deg / 90) * 90) % 360;
+  return snapped === 90 || snapped === 180 || snapped === 270 ? snapped : 0;
+}
+
 /** A box we only need to serialise; mp4box's box types aren't all exported. */
 interface WritableBox {
   write(stream: unknown): void;
@@ -237,7 +258,13 @@ export async function exportGradedVideo(
 
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
-    video: { codec: 'avc', width, height },
+    video: {
+      codec: 'avc',
+      width,
+      height,
+      // Copy the source's display rotation so the export isn't un-rotated.
+      rotation: rotationFromMatrix(videoTrack.matrix),
+    },
     audio: audioTrack
       ? {
           codec: 'aac',
