@@ -61,7 +61,7 @@ export default function App() {
   const selected = pairs.find((p) => p.id === selectedId) ?? null;
 
   return (
-    <div className="app">
+    <div className={`app${view === 'lut' ? ' lut-mode' : ''}`}>
       <header className="masthead">
         <span className="wordmark">
           Flight <b>Studio</b>

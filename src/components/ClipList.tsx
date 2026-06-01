@@ -28,14 +28,14 @@ function statusLabel(clip: Clip): string | null {
   }
 }
 
-/** Resolution · duration · size line, tolerant to still-loading metadata. */
-function metaLine(clip: Clip): string {
-  if (clip.metaStatus === 'pending') return 'Reading…';
-  const parts: string[] = [];
-  if (clip.width && clip.height) parts.push(`${clip.width}×${clip.height}`);
-  if (clip.duration) parts.push(formatDuration(clip.duration));
-  parts.push(formatBytes(clip.size));
-  return parts.join(' · ');
+/** The visible facts for a clip, in order. Tolerant of still-loading metadata. */
+function metaFacts(clip: Clip): string[] {
+  if (clip.metaStatus === 'pending') return ['Reading…'];
+  const facts: string[] = [];
+  if (clip.width && clip.height) facts.push(`${clip.width}×${clip.height}`);
+  if (clip.duration) facts.push(formatDuration(clip.duration));
+  facts.push(formatBytes(clip.size));
+  return facts;
 }
 
 /**
@@ -112,7 +112,11 @@ export default function ClipList({
                   <span className="clip-name" title={clip.name}>
                     {clip.name}
                   </span>
-                  <span className="clip-meta">{metaLine(clip)}</span>
+                  <span className="clip-meta">
+                    {metaFacts(clip).map((fact) => (
+                      <span key={fact}>{fact}</span>
+                    ))}
+                  </span>
                   {status && (
                     <span className={`clip-status ${clip.exportStatus}`}>
                       {status}
