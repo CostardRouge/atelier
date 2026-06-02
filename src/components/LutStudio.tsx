@@ -473,7 +473,11 @@ export default function LutStudio() {
             </p>
           )}
 
-          <div className="lut-stage">
+          <div
+            className={`lut-stage${activeUrl ? '' : ' empty'}`}
+            onClick={activeUrl ? togglePlay : undefined}
+            title={activeUrl ? (playing ? 'Pause' : 'Play') : undefined}
+          >
             {activeUrl ? (
               <canvas ref={canvasRef} className="lut-canvas" />
             ) : (

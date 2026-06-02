@@ -882,6 +882,13 @@ dd.empty {
   background: #100f0d;
   border-radius: var(--radius);
   overflow: hidden;
+  cursor: pointer;
+}
+
+/* No video yet: drop the black box so the placeholder card sits on paper. */
+.lut-stage.empty {
+  background: transparent;
+  cursor: default;
 }
 
 .lut-canvas {
