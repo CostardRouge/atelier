@@ -1,20 +1,34 @@
-# DJI SRT Telemetry Viewer
+# Atelier
 
-A 100% client-side web tool to view DJI drone flight telemetry alongside the
-video it was captured with.
+A local-first **suite of browser tools for your captures** — photo and video,
+across devices (DJI, Apple, Sony, …). Everything runs in your browser; files
+never leave your machine — no upload, no account, no server.
+
+Today it ships two tools, with more planned (next up: a photo culling/rating
+tool):
+
+- **Telemetry** — view DJI drone flight telemetry in sync with the video it was
+  captured with.
+- **LUT Studio** — preview and batch-apply `.cube` colour LUTs to your footage in
+  real time, with a before/after wipe.
+
+The suite is a tiny shell (`src/app/`) plus self-contained tools (`src/tools/*`)
+that share a generic core (`src/shared/*`). The masthead nav and the routes both
+derive from one **tool registry** (`src/app/tools.tsx`), so adding a tool is a
+single registry entry plus its component. Navigation is hash-based
+(`#/telemetry`, `#/lut`), which deep-links cleanly on static hosting.
+
+## Telemetry tool
 
 When a DJI drone records, the memory card holds both the video (`.mp4`) and a
 same-named `.srt` file. That `.srt` is **not** subtitle text — it's per-frame
 flight telemetry (altitude, GPS, camera settings) encoded in the SubRip format.
-This tool plays the video and shows the telemetry for the currently displayed
+The tool plays the video and shows the telemetry for the currently displayed
 frame, synchronized frame-by-frame.
 
-**Everything runs in your browser. Files never leave your machine — there is no
-upload, no server.**
+### Usage
 
-## Usage
-
-1. Open the app.
+1. Open the app (the Telemetry tool is the default).
 2. Give it your footage — two ways in, your choice:
    - **Just the files**: a single `.mp4` and its `.srt`. Click the drop zone (or
      "Choose files") and select them.
@@ -59,17 +73,29 @@ a lazy reference to the file on disk, so no video bytes are read just to list
 them. The small `.srt` text files are read lazily (per card, as it scrolls into
 view) to build the telemetry summary.
 
+## LUT Studio tool
+
+Add a collection of clips, pick a `.cube` look, and preview the grade in real
+time on a WebGL canvas — with a Lightroom/Capture One-style before/after wipe.
+Batch-export graded copies (H.264 via WebCodecs). The built-in LUTs live in
+`public/luts/` and are discovered at build time, grouped by sub-folder
+(apple/dji/sony/classic). See [`public/luts/README.md`](./public/luts/README.md)
+to add your own — just drop a `.cube` in, no code to edit.
+
 ### Online
 
-Deployed via GitHub Pages at
-`https://costardrouge.github.io/dji-flight-data/`.
+Deployed via GitHub Pages at `https://costardrouge.github.io/atelier/`.
+
+> Renaming note: the deploy base path comes from the `REPO` constant in
+> `vite.config.ts`. Rename the GitHub repo to match (`atelier`) before merging to
+> `main`, or Pages will 404 on assets.
 
 ### Local development
 
 ```bash
 npm install
 npm run dev        # start the dev server
-npm test           # run the parser/cue-search unit tests
+npm test           # run the unit tests
 npm run typecheck  # type-check without emitting
 npm run build      # production build into dist/
 npm run preview    # serve the production build locally
@@ -96,41 +122,49 @@ Guaranteed decoding (and real thumbnails) will come with a future native app
 
 ## Architecture
 
-All business logic lives in `lib/` as **pure, dependency-free, DOM-free
-modules** so it can be reused as-is in other contexts (Node, a worker, a Next.js
-project, a future native app). The **only** brick that changes for a native
-shell is `sources/file-sources.ts` — everything else is reused unchanged.
+The suite is organised so that **`shared/` never imports `tools/`**: generic
+building blocks know nothing about any specific tool, and each tool is
+self-contained. Pure logic lives in `*/lib`-style modules — **dependency-free,
+DOM-free** — so it's reusable as-is (Node, a worker, a future native app). The
+**only** brick that changes for a native shell is `shared/sources/file-sources.ts`.
 
 ```
 src/
-├── lib/                       # pure: zero DOM, zero React
-│   ├── srt-parser.ts          # SRT → Cue[] parser
-│   ├── find-cue.ts            # binary search for the active cue at time t
-│   ├── pair-files.ts          # pair videos with their .srt siblings
-│   ├── telemetry-summary.ts   # summary (cue count, alt range, …) from Cue[]
-│   ├── format.ts              # byte/duration formatting
-│   └── *.test.ts              # unit tests (Vitest)
-├── sources/
-│   └── file-sources.ts        # access paths (files, folder, drop, single-pick)
-├── hooks/
-│   └── use-active-cue.ts      # follow the displayed frame → active Cue (shared)
-├── components/
-│   ├── telemetry-view.tsx     # shared readout: TelemetryPanels + LiveTelemetry
-│   ├── TelemetryPlayer.tsx    # <video> + useActiveCue + full panels (detail page)
-│   ├── Gallery.tsx            # grid of cards
-│   ├── VideoCard.tsx          # one card: inline <video> + live telemetry readout
-│   ├── DetailView.tsx         # one pair → object URL + parsed cues → player
-│   └── FolderDrop.tsx         # files / folder picker + drag-and-drop UI
-├── App.tsx                    # gallery ⇄ detail orchestration
+├── app/                        # the shell + tool wiring
+│   ├── App.tsx                 # masthead + active tool + footer, all from the registry
+│   ├── tools.tsx               # the tool registry (nav + routes derive from it)
+│   ├── use-hash-route.ts       # minimal hash router (useSyncExternalStore)
+│   └── site.ts                 # site-wide constants (repo URL)
+├── shared/                     # generic, tool-agnostic — never imports tools/
+│   ├── lib/                    # pure: format, cube-parser (+ tests)
+│   ├── sources/file-sources.ts # access paths (files, folder, drop, single-pick)
+│   └── components/FolderDrop.tsx
+├── tools/
+│   ├── telemetry/              # DJI flight-log viewer (the original tool)
+│   │   ├── srt-parser.ts       # SRT → Cue[] parser
+│   │   ├── find-cue.ts         # binary search for the active cue at time t
+│   │   ├── pair-files.ts       # pair videos with their .srt siblings
+│   │   ├── telemetry-summary.ts# summary (cue count, alt range, …) from Cue[]
+│   │   ├── use-active-cue.ts   # follow the displayed frame → active Cue
+│   │   ├── TelemetryTool.tsx   # tool root: gallery ⇄ detail (owns its state)
+│   │   ├── DetailView.tsx · TelemetryPlayer.tsx · telemetry-view.tsx
+│   │   ├── Gallery.tsx · VideoCard.tsx
+│   │   └── *.test.ts           # unit tests (Vitest)
+│   └── lut/                    # colour grading (generic, multi-device LUTs)
+│       ├── LutStudio.tsx · ClipList.tsx
+│       ├── lut-gl.ts           # WebGL2 LUT renderer
+│       ├── export-video.ts · batch-export.ts · video-metadata.ts · clip.ts
+│       ├── builtin-luts.ts     # reads the build-time virtual:luts manifest
+│       └── use-lut-preview.ts
+├── index.css
 └── main.tsx
 ```
 
-The frame-sync logic lives in exactly one place — the `useActiveCue` hook — and
-the telemetry readout UI in `telemetry-view.tsx`. Both the inline gallery cards
-and the full detail player consume them, so the live-telemetry feature is the
-same engine whether you are scanning the gallery or studying one clip.
+Adding a tool: create `src/tools/<tool>/<Tool>.tsx`, then add one entry to
+`TOOLS` in `src/app/tools.tsx`. The nav, the route, and the optional full-height
+frame all follow from that entry.
 
-### Notable implementation details
+### Notable implementation details (Telemetry)
 
 - **Parsing the double-bracket field.** Most fields are one bracket each
   (`[iso: 100]`), but altitude packs two pairs into one bracket
@@ -146,21 +180,14 @@ same engine whether you are scanning the gallery or studying one clip.
   everywhere.
 - **Efficient cue lookup.** A 5-minute 60 fps clip is ~18 000 cues, so lookups
   use binary search (last cue with `start <= t`), never a linear scan.
-- **Minimal re-renders.** React state updates only when the active cue actually
-  changes, not on every frame.
 - **No memory leaks.** Object URLs created for the video are revoked when the
   file changes or the component unmounts — never 50 URLs held open at once.
 - **Lazy gallery, live telemetry.** Each card uses an `IntersectionObserver`;
   the video object URL, duration, and SRT parse only happen once the card scrolls
-  into view. The initial render shows just the instant fields (name, size). Once
-  visible, the parsed cues feed the inline live readout — and
-  `requestVideoFrameCallback` only fires while a video is actually playing, so
-  idle cards cost nothing.
+  into view.
 - **Pairing is pure and tested.** `pairFiles` groups by base name
-  case-insensitively and keeps any group that has a video *or* an SRT — so loose
-  files of either kind appear, ready to be completed. Junk (`.LRF`, `.THM`,
-  hidden files) is ignored. `attachToPair` / `detachFromPair` add or undo a
-  manually-chosen file and flag a name mismatch without blocking it.
+  case-insensitively and keeps any group that has a video *or* an SRT. Junk
+  (`.LRF`, `.THM`, hidden files) is ignored.
 
 ### Other telemetry formats
 

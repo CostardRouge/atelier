@@ -1,6 +1,6 @@
 /* ============================================================
-   Flight Studio — "Studio Papier"
-   A warm-paper, gallery-quiet reading room for drone telemetry.
+   Atelier — "Studio Papier"
+   A warm-paper, gallery-quiet workspace for your captures.
    Ink on cream, one vermilion accent, monospace numerals.
    ============================================================ */
 
@@ -124,6 +124,43 @@ body::after {
   .masthead .edition {
     display: none;
   }
+}
+
+/* Section tabs */
+.nav {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.nav button,
+.nav a {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+  padding: 0.32rem 0.85rem;
+  border-radius: 999px;
+  text-decoration: none;
+  transition: color 0.2s var(--ease), background 0.2s var(--ease);
+}
+
+.nav button:hover,
+.nav a:hover {
+  color: var(--ink);
+}
+
+.nav button.active,
+.nav a.active {
+  color: var(--paper);
+  background: var(--ink);
 }
 
 /* ---------- Hero ---------- */
@@ -783,6 +820,606 @@ dd.empty {
   font-size: 1.15rem;
   font-weight: 600;
   color: var(--accent-ink);
+}
+
+/* ---------- LUT Studio ---------- */
+
+.lut-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1.1rem;
+}
+
+.lut-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.lut-select select {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
+}
+
+.lut-compare {
+  margin-left: auto;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  color: var(--ink-soft);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  transition: border-color 0.2s var(--ease), color 0.2s var(--ease);
+}
+
+/* When two compare buttons sit together, only the first claims the auto gap. */
+.lut-compare + .lut-compare {
+  margin-left: 0;
+}
+
+.lut-compare[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.lut-compare:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.lut-stage {
+  position: relative;
+  background: #100f0d;
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+/* No video yet: drop the black box so the placeholder card sits on paper. */
+.lut-stage.empty {
+  background: transparent;
+  cursor: default;
+}
+
+.lut-stage.comparing {
+  cursor: ew-resize;
+}
+
+/* ---------- Before/after wipe ---------- */
+
+/* The divider line; left/top/height are set imperatively to track the canvas. */
+.lut-wipe {
+  position: absolute;
+  width: 2px;
+  margin-left: -1px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.lut-wipe-handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 34px;
+  height: 34px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  background: rgba(0, 0, 0, 0.32);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+}
+
+/* Twin chevrons (‹ ›) inside the handle. */
+.lut-wipe-handle::before,
+.lut-wipe-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-top: 2px solid rgba(255, 255, 255, 0.95);
+  border-right: 2px solid rgba(255, 255, 255, 0.95);
+}
+
+.lut-wipe-handle::before {
+  left: 8px;
+  transform: translateY(-50%) rotate(-135deg);
+}
+
+.lut-wipe-handle::after {
+  right: 8px;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.lut-wipe-tag {
+  position: absolute;
+  top: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 0.18rem 0.4rem;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+
+.lut-wipe-tag.left {
+  right: 10px;
+}
+
+.lut-wipe-tag.right {
+  left: 10px;
+}
+
+.lut-canvas {
+  display: block;
+  width: 100%;
+  max-height: 64vh;
+  object-fit: contain;
+  background: #100f0d;
+}
+
+/* Offscreen decoder/audio source — kept rendered (never display:none) so the
+   browser keeps producing frames, but invisible behind the canvas. */
+.lut-source {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  left: 0;
+  bottom: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.lut-transport {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-top: 0.9rem;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.lut-play {
+  flex: none;
+  width: 2.2rem;
+  height: 2.2rem;
+  border: none;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--paper);
+  cursor: pointer;
+  font-size: 0.8rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s var(--ease);
+}
+
+.lut-play:hover {
+  background: var(--accent);
+}
+
+.lut-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  flex: none;
+  min-width: 3.2ch;
+  text-align: center;
+}
+
+.lut-scrub {
+  flex: 1;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.lut-export.open-btn {
+  margin-top: 0;
+  padding: 0.5rem 1.1rem;
+  font-size: 0.82rem;
+}
+
+.lut-export-status {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-top: 0.9rem;
+}
+
+.lut-export-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  flex: none;
+  min-width: 11ch;
+}
+
+.lut-export-bar {
+  flex: 1;
+  height: 8px;
+  accent-color: var(--accent);
+}
+
+.lut-export-bar::-webkit-progress-bar {
+  background: var(--paper-2);
+  border-radius: 999px;
+}
+
+.lut-export-bar::-webkit-progress-value {
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+/* ---------- LUT Studio — collection layout ---------- */
+
+.lut-studio-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.lut-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 26%) 1fr;
+  gap: 1.5rem;
+  align-items: start;
+  border-radius: var(--radius-lg);
+}
+
+.lut-layout.dragging {
+  outline: 2px dashed var(--accent);
+  outline-offset: 8px;
+}
+
+@media (max-width: 820px) {
+  .lut-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lut-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-width: 0;
+  min-height: 0;
+}
+
+.lut-import {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.lut-empty-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--muted);
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--radius);
+  padding: 1rem;
+  background: var(--surface);
+}
+
+.lut-main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.lut-active-detail {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  margin: 0;
+  min-width: 0;
+}
+
+.lut-active-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lut-active-specs {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  flex: none;
+}
+
+/* ---------- LUT Studio — clip list ---------- */
+
+.clip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.clip-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.clip-all {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.clip-all input {
+  accent-color: var(--accent);
+}
+
+.clip-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.clip-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.2s var(--ease), background 0.2s var(--ease);
+}
+
+.clip-row:hover {
+  border-color: var(--line-strong);
+}
+
+.clip-row.active {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}
+
+.clip-check {
+  flex: none;
+  accent-color: var(--accent);
+}
+
+.clip-thumb {
+  flex: none;
+  width: 64px;
+  height: 40px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #100f0d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clip-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.clip-thumb-fallback {
+  color: #6f6857;
+  font-size: 0.75rem;
+}
+
+.clip-info {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.clip-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clip-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.1rem 0.5rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.66rem;
+  color: var(--muted);
+}
+
+/* Dot separators that disappear cleanly when a fact wraps to a new line. */
+.clip-meta span + span::before {
+  content: '·';
+  margin-right: 0.5rem;
+  color: var(--faint);
+}
+
+.clip-status {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.64rem;
+  letter-spacing: 0.02em;
+}
+
+.clip-status.queued {
+  color: var(--muted);
+}
+
+.clip-status.exporting {
+  color: var(--accent-ink);
+}
+
+.clip-status.done {
+  color: #3c7a3c;
+}
+
+.clip-status.error {
+  color: var(--accent);
+  white-space: normal;
+}
+
+.clip-remove {
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--faint);
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 1;
+  padding: 0 0.15rem;
+  transition: color 0.2s var(--ease);
+}
+
+.clip-remove:hover {
+  color: var(--accent);
+}
+
+/* ---------- LUT Studio — export footer ---------- */
+
+.lut-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+}
+
+.lut-footer .lut-export-status {
+  margin-top: 0;
+  flex: 1;
+}
+
+.lut-export-note {
+  margin-right: auto;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* ---------- LUT Studio — fixed-height app shell ----------
+   In LUT view the page becomes a static frame: the masthead and the export
+   bar stay put, and only the clip list (and, if needed, the preview) scroll.
+   No whole-document scrolling. */
+
+.app.app-full {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: clamp(1rem, 3vw, 1.75rem);
+}
+
+/* The global "nothing is uploaded" footer would push the frame past the
+   viewport — the export bar carries the bottom in this view. */
+.app.app-full > footer {
+  display: none;
+}
+
+.app.app-full .lut-studio-page {
+  flex: 1;
+  min-height: 0;
+  margin-top: 1rem;
+  gap: 1rem;
+}
+
+.app.app-full .lut-layout {
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.app.app-full .lut-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Fit the preview inside the available stage while keeping its aspect ratio. */
+.app.app-full .lut-canvas {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.app.app-full .lut-footer {
+  flex: none;
+}
+
+/* On narrow screens the columns stack, so let the whole frame scroll instead
+   of trapping everything in one cramped viewport. */
+@media (max-width: 820px) {
+  .app.app-full {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+  .app.app-full .lut-layout {
+    min-height: 0;
+  }
+  .app.app-full .lut-stage {
+    min-height: 240px;
+  }
 }
 
 /* ---------- Notices ---------- */
