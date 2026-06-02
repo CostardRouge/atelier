@@ -867,6 +867,11 @@ dd.empty {
   transition: border-color 0.2s var(--ease), color 0.2s var(--ease);
 }
 
+/* When two compare buttons sit together, only the first claims the auto gap. */
+.lut-compare + .lut-compare {
+  margin-left: 0;
+}
+
 .lut-compare[aria-pressed='true'] {
   border-color: var(--accent);
   color: var(--accent-ink);
@@ -889,6 +894,80 @@ dd.empty {
 .lut-stage.empty {
   background: transparent;
   cursor: default;
+}
+
+.lut-stage.comparing {
+  cursor: ew-resize;
+}
+
+/* ---------- Before/after wipe ---------- */
+
+/* The divider line; left/top/height are set imperatively to track the canvas. */
+.lut-wipe {
+  position: absolute;
+  width: 2px;
+  margin-left: -1px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.lut-wipe-handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 34px;
+  height: 34px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  background: rgba(0, 0, 0, 0.32);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+}
+
+/* Twin chevrons (‹ ›) inside the handle. */
+.lut-wipe-handle::before,
+.lut-wipe-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-top: 2px solid rgba(255, 255, 255, 0.95);
+  border-right: 2px solid rgba(255, 255, 255, 0.95);
+}
+
+.lut-wipe-handle::before {
+  left: 8px;
+  transform: translateY(-50%) rotate(-135deg);
+}
+
+.lut-wipe-handle::after {
+  right: 8px;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.lut-wipe-tag {
+  position: absolute;
+  top: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 0.18rem 0.4rem;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+
+.lut-wipe-tag.left {
+  right: 10px;
+}
+
+.lut-wipe-tag.right {
+  left: 10px;
 }
 
 .lut-canvas {

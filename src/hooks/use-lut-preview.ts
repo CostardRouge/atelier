@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import type { CubeLut } from '../lib/cube-parser';
 import { createLutRenderer, type LutRenderer } from '../lut/lut-gl';
 
@@ -17,7 +17,8 @@ import { createLutRenderer, type LutRenderer } from '../lut/lut-gl';
  * @param bypass When true, ignore `lut` and show the original (A/B compare).
  * @param resetKey Changes when the video source swaps (the object URL);
  *   re-creates the renderer and restarts the loop.
- * @returns `supported` is false when WebGL2 is unavailable.
+ * @returns `supported` is false when WebGL2 is unavailable; `setSplit` drives
+ *   the before/after wipe imperatively (no React state churn on pointer move).
  */
 export function useLutPreview(
   videoRef: RefObject<HTMLVideoElement | null>,
@@ -25,7 +26,7 @@ export function useLutPreview(
   lut: CubeLut | null,
   bypass: boolean,
   resetKey?: unknown,
-): { supported: boolean } {
+): { supported: boolean; setSplit: (active: boolean, x: number) => void } {
   const [supported, setSupported] = useState(true);
   const rendererRef = useRef<LutRenderer | null>(null);
 
@@ -106,5 +107,21 @@ export function useLutPreview(
     }
   }, [lut, bypass, videoRef]);
 
-  return { supported };
+  // Set the wipe position and repaint at once, so dragging the divider over a
+  // paused frame updates immediately. Stable identity: reads the live refs.
+  const setSplit = useCallback(
+    (active: boolean, x: number) => {
+      const renderer = rendererRef.current;
+      const video = videoRef.current;
+      if (!renderer) return;
+      renderer.setSplit(active, x);
+      if (video && video.readyState >= 2) {
+        renderer.resize(video.videoWidth, video.videoHeight);
+        renderer.draw(video);
+      }
+    },
+    [videoRef],
+  );
+
+  return { supported, setSplit };
 }

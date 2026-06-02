@@ -33,24 +33,30 @@ uniform sampler2D u_video;
 uniform sampler3D u_lut;
 uniform bool u_hasLut;
 uniform float u_lutSize;
+uniform bool u_split;    // before/after wipe active
+uniform float u_splitX;  // wipe position in [0,1]; left of it shows the grade
 
 void main() {
   vec4 src = texture(u_video, v_uv);
+  vec3 graded = src.rgb;
   if (u_hasLut) {
     // Map [0,1] onto the texel centres so the edges of the cube aren't clipped:
     // scale = (N-1)/N, offset = 0.5/N.
     float scale = (u_lutSize - 1.0) / u_lutSize;
     float offset = 0.5 / u_lutSize;
     vec3 coord = clamp(src.rgb, 0.0, 1.0) * scale + offset;
-    outColor = vec4(texture(u_lut, coord).rgb, src.a);
-  } else {
-    outColor = src;
+    graded = texture(u_lut, coord).rgb;
   }
+  // In split mode, reveal the original to the right of the divider.
+  vec3 rgb = (u_split && v_uv.x > u_splitX) ? src.rgb : graded;
+  outColor = vec4(rgb, src.a);
 }`;
 
 export interface LutRenderer {
   /** Replace the active LUT, or pass null to render the video ungraded. */
   setLut(lut: CubeLut | null): void;
+  /** Enable a before/after wipe; `x` (0..1) is the divider, graded on its left. */
+  setSplit(active: boolean, x: number): void;
   /** Upload the given frame source and draw (graded if a LUT is set). */
   draw(source: TexImageSource): void;
   /** Resize the drawing buffer to match the source resolution. */
@@ -121,8 +127,11 @@ export function createLutRenderer(
   const uLut = gl.getUniformLocation(program, 'u_lut');
   const uHasLut = gl.getUniformLocation(program, 'u_hasLut');
   const uLutSize = gl.getUniformLocation(program, 'u_lutSize');
+  const uSplit = gl.getUniformLocation(program, 'u_split');
+  const uSplitX = gl.getUniformLocation(program, 'u_splitX');
   gl.uniform1i(uVideo, 0); // video on texture unit 0
   gl.uniform1i(uLut, 1); // LUT on texture unit 1
+  gl.uniform1f(uSplitX, 0.5);
 
   // Video frame texture (unit 0). Frames are uploaded flipped so UVs line up.
   const videoTex = gl.createTexture();
@@ -194,6 +203,12 @@ export function createLutRenderer(
         gl.useProgram(program);
         gl.uniform1i(uHasLut, 0);
       }
+    },
+
+    setSplit(active, x) {
+      gl.useProgram(program);
+      gl.uniform1i(uSplit, active ? 1 : 0);
+      gl.uniform1f(uSplitX, x);
     },
 
     draw(source) {

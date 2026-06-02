@@ -44,8 +44,13 @@ const META_CONCURRENCY = 3;
 export default function LutStudio() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const wipeRef = useRef<HTMLDivElement>(null);
   // True while dragging the scrubber, so `timeupdate` doesn't fight the drag.
   const scrubbingRef = useRef(false);
+  // Last before/after wipe position (0..1), kept in a ref so pointer moves
+  // reposition the divider without re-rendering.
+  const splitXRef = useRef(0.5);
 
   const [clips, setClips] = useState<Clip[]>([]);
   const clipsRef = useRef(clips);
@@ -64,6 +69,9 @@ export default function LutStudio() {
   const [cubeError, setCubeError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [bypass, setBypass] = useState(false);
+  // Before/after wipe: a divider that follows the cursor over the preview,
+  // grade on the left, original on the right (like Lightroom / Capture One).
+  const [compareOn, setCompareOn] = useState(false);
 
   // Transport state, mirrored from the offscreen video element.
   const [playing, setPlaying] = useState(false);
@@ -78,7 +86,13 @@ export default function LutStudio() {
 
   const metaProcessing = useRef<Set<string>>(new Set());
 
-  const { supported } = useLutPreview(videoRef, canvasRef, lut, bypass, activeUrl);
+  const { supported, setSplit } = useLutPreview(
+    videoRef,
+    canvasRef,
+    lut,
+    bypass,
+    activeUrl,
+  );
 
   const activeClip = clips.find((c) => c.id === activeId) ?? null;
 
@@ -298,6 +312,55 @@ export default function LutStudio() {
     if (v) v.currentTime = value;
   }
 
+  // --- before/after wipe --------------------------------------------------
+
+  /**
+   * Move the divider to `xNorm` (0..1 across the *canvas*, not the stage —
+   * the canvas is usually letterboxed): set the shader split and lay the
+   * visual line over the canvas. Done imperatively to stay smooth.
+   */
+  function placeWipe(xNorm: number) {
+    const x = Math.min(1, Math.max(0, xNorm));
+    splitXRef.current = x;
+    setSplit(true, x);
+    const stage = stageRef.current;
+    const canvas = canvasRef.current;
+    const line = wipeRef.current;
+    if (!stage || !canvas || !line) return;
+    const s = stage.getBoundingClientRect();
+    const c = canvas.getBoundingClientRect();
+    line.style.left = `${c.left - s.left + x * c.width}px`;
+    line.style.top = `${c.top - s.top}px`;
+    line.style.height = `${c.height}px`;
+  }
+
+  function handleStagePointerMove(e: React.PointerEvent) {
+    if (!compareOn || !activeUrl) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const c = canvas.getBoundingClientRect();
+    placeWipe((e.clientX - c.left) / c.width);
+  }
+
+  function toggleCompare() {
+    setCompareOn((on) => {
+      if (!on) setBypass(false); // wipe needs the grade applied
+      return !on;
+    });
+  }
+
+  // Drive the shader split from `compareOn`. When on, re-seed the divider after
+  // layout (a fresh renderer — new source/look — starts with the split off);
+  // when off (including when bypass takes over), disable it so no wipe lingers.
+  useEffect(() => {
+    if (compareOn && activeUrl) {
+      requestAnimationFrame(() => placeWipe(splitXRef.current));
+    } else {
+      setSplit(false, splitXRef.current);
+    }
+    // placeWipe/setSplit read live refs; only these inputs matter here.
+  }, [compareOn, activeUrl, lut]);
+
   // --- export -------------------------------------------------------------
 
   async function handleExport() {
@@ -457,7 +520,21 @@ export default function LutStudio() {
             <button
               type="button"
               className="lut-compare"
-              onClick={() => setBypass((b) => !b)}
+              onClick={toggleCompare}
+              disabled={!lut}
+              aria-pressed={compareOn}
+              title="Drag a divider across the preview: grade on the left, original on the right"
+            >
+              {compareOn ? 'Comparing ⟷' : 'Compare ⟷'}
+            </button>
+
+            <button
+              type="button"
+              className="lut-compare"
+              onClick={() => {
+                setBypass((b) => !b);
+                setCompareOn(false);
+              }}
               disabled={!lut}
               aria-pressed={bypass}
               title="Toggle between the graded and original image"
@@ -474,10 +551,21 @@ export default function LutStudio() {
           )}
 
           <div
-            className={`lut-stage${activeUrl ? '' : ' empty'}`}
-            onClick={activeUrl ? togglePlay : undefined}
-            title={activeUrl ? (playing ? 'Pause' : 'Play') : undefined}
+            ref={stageRef}
+            className={`lut-stage${activeUrl ? '' : ' empty'}${compareOn ? ' comparing' : ''}`}
+            onClick={activeUrl && !compareOn ? togglePlay : undefined}
+            onPointerMove={handleStagePointerMove}
+            title={
+              activeUrl && !compareOn ? (playing ? 'Pause' : 'Play') : undefined
+            }
           >
+            {activeUrl && compareOn && (
+              <div ref={wipeRef} className="lut-wipe" aria-hidden="true">
+                <span className="lut-wipe-handle" />
+                <span className="lut-wipe-tag left">Graded</span>
+                <span className="lut-wipe-tag right">Original</span>
+              </div>
+            )}
             {activeUrl ? (
               <canvas ref={canvasRef} className="lut-canvas" />
             ) : (
