@@ -1,6 +1,6 @@
 /* ============================================================
-   Flight Studio — "Studio Papier"
-   A warm-paper, gallery-quiet reading room for drone telemetry.
+   Atelier — "Studio Papier"
+   A warm-paper, gallery-quiet workspace for your captures.
    Ink on cream, one vermilion accent, monospace numerals.
    ============================================================ */
 
@@ -136,7 +136,8 @@ body::after {
   background: var(--surface);
 }
 
-.nav button {
+.nav button,
+.nav a {
   border: none;
   background: none;
   cursor: pointer;
@@ -147,14 +148,17 @@ body::after {
   color: var(--muted);
   padding: 0.32rem 0.85rem;
   border-radius: 999px;
+  text-decoration: none;
   transition: color 0.2s var(--ease), background 0.2s var(--ease);
 }
 
-.nav button:hover {
+.nav button:hover,
+.nav a:hover {
   color: var(--ink);
 }
 
-.nav button.active {
+.nav button.active,
+.nav a.active {
   color: var(--paper);
   background: var(--ink);
 }
@@ -1354,7 +1358,7 @@ dd.empty {
    bar stay put, and only the clip list (and, if needed, the preview) scroll.
    No whole-document scrolling. */
 
-.app.lut-mode {
+.app.app-full {
   height: 100dvh;
   display: flex;
   flex-direction: column;
@@ -1365,24 +1369,24 @@ dd.empty {
 
 /* The global "nothing is uploaded" footer would push the frame past the
    viewport — the export bar carries the bottom in this view. */
-.app.lut-mode > footer {
+.app.app-full > footer {
   display: none;
 }
 
-.app.lut-mode .lut-studio-page {
+.app.app-full .lut-studio-page {
   flex: 1;
   min-height: 0;
   margin-top: 1rem;
   gap: 1rem;
 }
 
-.app.lut-mode .lut-layout {
+.app.app-full .lut-layout {
   flex: 1;
   min-height: 0;
   align-items: stretch;
 }
 
-.app.lut-mode .lut-stage {
+.app.app-full .lut-stage {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -1391,29 +1395,29 @@ dd.empty {
 }
 
 /* Fit the preview inside the available stage while keeping its aspect ratio. */
-.app.lut-mode .lut-canvas {
+.app.app-full .lut-canvas {
   width: auto;
   height: auto;
   max-width: 100%;
   max-height: 100%;
 }
 
-.app.lut-mode .lut-footer {
+.app.app-full .lut-footer {
   flex: none;
 }
 
 /* On narrow screens the columns stack, so let the whole frame scroll instead
    of trapping everything in one cramped viewport. */
 @media (max-width: 820px) {
-  .app.lut-mode {
+  .app.app-full {
     height: auto;
     min-height: 100dvh;
     overflow: visible;
   }
-  .app.lut-mode .lut-layout {
+  .app.app-full .lut-layout {
     min-height: 0;
   }
-  .app.lut-mode .lut-stage {
+  .app.app-full .lut-stage {
     min-height: 240px;
   }
 }

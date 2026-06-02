@@ -1,91 +1,46 @@
-import { useState } from 'react';
-import FolderDrop from './components/FolderDrop';
-import Gallery from './components/Gallery';
-import DetailView from './components/DetailView';
-import LutStudio from './components/LutStudio';
-import {
-  attachToPair,
-  detachFromPair,
-  pairFiles,
-  type MediaPair,
-} from './lib/pair-files';
+import { useEffect } from 'react';
+import { REPO_URL } from './app/site';
+import { DEFAULT_TOOL, TOOLS, toolForPath } from './app/tools';
+import { navigate, useHashRoute } from './app/use-hash-route';
 
-const REPO_URL = 'https://github.com/CostardRouge/dji-flight-data';
-
-const STEPS = [
-  {
-    no: '01',
-    title: 'Drop files or a folder',
-    body: 'Bring just one .mp4 and its .srt, or a whole DJI card folder. Nothing uploads; it stays on your machine.',
-  },
-  {
-    no: '02',
-    title: 'Pairs build themselves',
-    body: 'Each video finds its matching .srt sibling automatically and starts reading its flight log.',
-  },
-  {
-    no: '03',
-    title: 'Telemetry plays inline',
-    body: 'Altitude, GPS and exposure move with every clip right in the gallery. Open one full view for the complete readout.',
-  },
-];
-
-type View = 'telemetry' | 'lut';
-
+/**
+ * App shell for the Atelier suite: a masthead whose nav + active tool both
+ * derive from the {@link TOOLS} registry, the active tool rendered in `<main>`,
+ * and a shared footer. Adding a tool never touches this file — it's all driven
+ * by the registry and the hash route.
+ */
 export default function App() {
-  const [pairs, setPairs] = useState<MediaPair[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  const [view, setView] = useState<View>('telemetry');
+  const path = useHashRoute();
+  const tool = toolForPath(path) ?? DEFAULT_TOOL;
 
-  function handleFiles(files: File[]) {
-    setPairs(pairFiles(files));
-    setSelectedId(null);
-    setLoaded(true);
-  }
+  // Reflect the default tool in the address bar on first load / unknown route,
+  // so the URL always names the tool you're looking at.
+  useEffect(() => {
+    if (!toolForPath(path)) navigate(DEFAULT_TOOL.path);
+  }, [path]);
 
-  // Replace one pair in place (matched by id). Used by attach and detach so the
-  // change shows in the gallery and, if it's the open one, the detail view.
-  function updatePair(id: string, fn: (p: MediaPair) => MediaPair) {
-    setPairs((prev) => prev.map((p) => (p.id === id ? fn(p) : p)));
-  }
-
-  function handleAttach(pair: MediaPair, file: File) {
-    updatePair(pair.id, (p) => attachToPair(p, file));
-  }
-
-  function handleDetach(pair: MediaPair, kind: 'video' | 'srt') {
-    updatePair(pair.id, (p) => detachFromPair(p, kind));
-  }
-
-  const selected = pairs.find((p) => p.id === selectedId) ?? null;
+  const Active = tool.Component;
 
   return (
-    <div className={`app${view === 'lut' ? ' lut-mode' : ''}`}>
+    <div className={`app${tool.fullHeight ? ' app-full' : ''}`}>
       <header className="masthead">
         <span className="wordmark">
-          Flight <b>Studio</b>
+          <b>Atelier</b>
         </span>
         <div className="masthead-right">
-          <nav className="nav" aria-label="Sections">
-            <button
-              type="button"
-              className={view === 'telemetry' ? 'active' : undefined}
-              aria-current={view === 'telemetry' ? 'page' : undefined}
-              onClick={() => setView('telemetry')}
-            >
-              Telemetry
-            </button>
-            <button
-              type="button"
-              className={view === 'lut' ? 'active' : undefined}
-              aria-current={view === 'lut' ? 'page' : undefined}
-              onClick={() => setView('lut')}
-            >
-              LUT Studio
-            </button>
+          <nav className="nav" aria-label="Tools">
+            {TOOLS.map((t) => (
+              <a
+                key={t.id}
+                href={`#${t.path}`}
+                className={t.id === tool.id ? 'active' : undefined}
+                aria-current={t.id === tool.id ? 'page' : undefined}
+              >
+                {t.label}
+              </a>
+            ))}
           </nav>
-          <span className="edition">DJI · SRT telemetry</span>
+          {tool.subtitle && <span className="edition">{tool.subtitle}</span>}
           <a
             className="gh-link"
             href={REPO_URL}
@@ -104,71 +59,15 @@ export default function App() {
         </div>
       </header>
 
-      {view === 'lut' ? (
-        <LutStudio />
-      ) : selected ? (
-        <DetailView
-          pair={selected}
-          onBack={() => setSelectedId(null)}
-          onAttach={handleAttach}
-          onDetach={handleDetach}
-        />
-      ) : (
-        <>
-          <section className="hero">
-            <div>
-              <p className="kicker">Footage, with its memory intact</p>
-              <h1>
-                Watch your
-                <br />
-                drone <em>think.</em>
-              </h1>
-            </div>
-            <p className="lede">
-              Every DJI clip carries a hidden flight log — altitude, GPS, ISO,
-              shutter — recorded beside it as an <strong>.srt</strong> file.
-              Flight Studio plays the two together, so the numbers move with the
-              picture. <strong>No upload, no account, no server</strong> — your
-              footage never leaves this machine.
-            </p>
-          </section>
-
-          <section className="how" aria-label="How it works">
-            {STEPS.map((s) => (
-              <article className="step" key={s.no}>
-                <span className="no">{s.no}</span>
-                <h3>{s.title}</h3>
-                <p>{s.body}</p>
-              </article>
-            ))}
-          </section>
-
-          <FolderDrop onFiles={handleFiles} />
-
-          {loaded && (
-            <section aria-label="Your clips">
-              <div className="collection-head">
-                <span className="title">The collection</span>
-                <p className="count">
-                  {pairs.length} clip{pairs.length === 1 ? '' : 's'}
-                </p>
-              </div>
-              <Gallery
-                pairs={pairs}
-                onOpen={(p) => setSelectedId(p.id)}
-                onAttach={handleAttach}
-                onDetach={handleDetach}
-              />
-            </section>
-          )}
-        </>
-      )}
+      <main className="tool-root">
+        <Active />
+      </main>
 
       <footer>
         <span className="dot" />
         Runs entirely in your browser — files are never uploaded.
         <span className="dot" />
-        Telemetry reads from <code>.srt</code>, plain text, always.
+        Everything stays on your machine — no account, no server.
         <span className="dot" />
         <a className="foot-link" href={REPO_URL} target="_blank" rel="noreferrer">
           Source on GitHub

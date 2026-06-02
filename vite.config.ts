@@ -96,10 +96,14 @@ function lutsManifestPlugin(): Plugin {
   };
 }
 
-// Project page on GitHub Pages is served under
-// https://<user>.github.io/dji-flight-data/, so `base` must match the repo
-// name (slashes included) or the built assets will 404.
+// The GitHub repo name, and therefore the GitHub Pages base path
+// (https://<user>.github.io/<REPO>/). Single source of truth so renaming the
+// project is a one-line change. NOTE: this must match the actual repo name when
+// deploying — rename the GitHub repo to `atelier` before merging to `main`, or
+// Pages will 404 on every asset.
+const REPO = 'atelier';
+
 export default defineConfig({
   plugins: [react(), lutsManifestPlugin()],
-  base: '/dji-flight-data/',
+  base: `/${REPO}/`,
 });
