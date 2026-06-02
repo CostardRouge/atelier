@@ -5,7 +5,7 @@ import { parseSrt } from './srt-parser';
 import { findCue } from './find-cue';
 
 const fixture = readFileSync(
-  fileURLToPath(new URL('../../tests/fixtures/sample.srt', import.meta.url)),
+  fileURLToPath(new URL('../../../tests/fixtures/sample.srt', import.meta.url)),
   'utf-8',
 );
 

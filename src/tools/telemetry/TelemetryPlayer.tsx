@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
-import type { Cue } from '../lib/srt-parser';
-import { useActiveCue } from '../hooks/use-active-cue';
+import type { Cue } from './srt-parser';
+import { useActiveCue } from './use-active-cue';
 import { TelemetryPanels } from './telemetry-view';
 
 interface TelemetryPlayerProps {

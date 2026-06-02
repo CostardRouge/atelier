@@ -8,7 +8,7 @@
  * aborting the rest of the queue.
  */
 
-import type { CubeLut } from '../lib/cube-parser';
+import type { CubeLut } from '../../shared/lib/cube-parser';
 import { exportGradedVideo, type ExportProgress } from './export-video';
 
 export interface BatchItem {

@@ -1,4 +1,4 @@
-import type { MediaPair } from '../lib/pair-files';
+import type { MediaPair } from './pair-files';
 import VideoCard from './VideoCard';
 
 interface GalleryProps {

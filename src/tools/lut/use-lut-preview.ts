@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
-import type { CubeLut } from '../lib/cube-parser';
-import { createLutRenderer, type LutRenderer } from '../lut/lut-gl';
+import type { CubeLut } from '../../shared/lib/cube-parser';
+import { createLutRenderer, type LutRenderer } from './lut-gl';
 
 /**
  * Drive a {@link LutRenderer}: paint each displayed video frame into a canvas,

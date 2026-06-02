@@ -1,4 +1,4 @@
-import type { Cue } from '../lib/srt-parser';
+import type { Cue } from './srt-parser';
 
 /** Format a raw value with a unit suffix, tolerating missing data. */
 export function fmt(value: string | undefined, suffix = ''): string {

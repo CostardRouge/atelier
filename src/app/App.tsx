@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
-import { REPO_URL } from './app/site';
-import { DEFAULT_TOOL, TOOLS, toolForPath } from './app/tools';
-import { navigate, useHashRoute } from './app/use-hash-route';
+import { REPO_URL } from './site';
+import { DEFAULT_TOOL, TOOLS, toolForPath } from './tools';
+import { navigate, useHashRoute } from './use-hash-route';
 
 /**
  * App shell for the Atelier suite: a masthead whose nav + active tool both

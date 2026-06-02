@@ -11,7 +11,7 @@
  * `src/hooks/use-lut-preview.ts`.
  */
 
-import type { CubeLut } from '../lib/cube-parser';
+import type { CubeLut } from '../../shared/lib/cube-parser';
 
 const VERT_SRC = `#version 300 es
 in vec2 a_pos;

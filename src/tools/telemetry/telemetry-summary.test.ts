@@ -5,7 +5,7 @@ import { parseSrt } from './srt-parser';
 import { summarizeTelemetry } from './telemetry-summary';
 
 const fixture = readFileSync(
-  fileURLToPath(new URL('../../tests/fixtures/sample.srt', import.meta.url)),
+  fileURLToPath(new URL('../../../tests/fixtures/sample.srt', import.meta.url)),
   'utf-8',
 );
 

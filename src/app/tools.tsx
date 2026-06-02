@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
-import LutStudio from '../components/LutStudio';
-import TelemetryTool from '../components/TelemetryTool';
+import LutStudio from '../tools/lut/LutStudio';
+import TelemetryTool from '../tools/telemetry/TelemetryTool';
 
 /**
  * The tool registry — the single source of truth for the suite. The masthead

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import type { MediaPair } from '../lib/pair-files';
-import { parseSrt, type Cue } from '../lib/srt-parser';
-import { pickFile, SRT_ACCEPT, VIDEO_ACCEPT } from '../sources/file-sources';
+import type { MediaPair } from './pair-files';
+import { parseSrt, type Cue } from './srt-parser';
+import { pickFile, SRT_ACCEPT, VIDEO_ACCEPT } from '../../shared/sources/file-sources';
 import TelemetryPlayer from './TelemetryPlayer';
 
 interface DetailViewProps {

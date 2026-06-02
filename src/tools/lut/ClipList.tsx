@@ -1,5 +1,5 @@
-import { formatBytes, formatDuration } from '../lib/format';
-import type { Clip } from '../lut/clip';
+import { formatBytes, formatDuration } from '../../shared/lib/format';
+import type { Clip } from './clip';
 
 interface ClipListProps {
   clips: Clip[];

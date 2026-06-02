@@ -21,7 +21,7 @@ import {
   type Track,
 } from 'mp4box';
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
-import type { CubeLut } from '../lib/cube-parser';
+import type { CubeLut } from '../../shared/lib/cube-parser';
 import { createLutRenderer } from './lut-gl';
 
 export interface ExportProgress {

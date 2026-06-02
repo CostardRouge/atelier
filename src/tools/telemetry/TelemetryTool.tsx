@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import FolderDrop from './FolderDrop';
+import FolderDrop from '../../shared/components/FolderDrop';
 import Gallery from './Gallery';
 import DetailView from './DetailView';
 import {
@@ -7,7 +7,7 @@ import {
   detachFromPair,
   pairFiles,
   type MediaPair,
-} from '../lib/pair-files';
+} from './pair-files';
 
 const STEPS = [
   {

@@ -1,24 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
-import { parseCube, type CubeLut } from '../lib/cube-parser';
-import { formatDuration } from '../lib/format';
-import { BUILTIN_LUTS, LUT_GROUPS, UNGROUPED_LUTS } from '../lut/builtin-luts';
-import { isExportSupported } from '../lut/export-video';
-import { runBatchExport } from '../lut/batch-export';
-import { clipId, type Clip } from '../lut/clip';
+import { parseCube, type CubeLut } from '../../shared/lib/cube-parser';
+import { formatDuration } from '../../shared/lib/format';
+import { BUILTIN_LUTS, LUT_GROUPS, UNGROUPED_LUTS } from './builtin-luts';
+import { isExportSupported } from './export-video';
+import { runBatchExport } from './batch-export';
+import { clipId, type Clip } from './clip';
 import {
   filterVideos,
   loadClipMeta,
   probeContainer,
   type ContainerInfo,
-} from '../lut/video-metadata';
-import { useLutPreview } from '../hooks/use-lut-preview';
+} from './video-metadata';
+import { useLutPreview } from './use-lut-preview';
 import {
   CUBE_ACCEPT,
   filesFromDataTransfer,
   pickDirectory,
   pickFile,
   pickFiles,
-} from '../sources/file-sources';
+} from '../../shared/sources/file-sources';
 import ClipList from './ClipList';
 
 /** Precise current-position readout: `M:SS.cs` (centiseconds). */

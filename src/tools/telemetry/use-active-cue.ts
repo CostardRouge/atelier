@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import type { Cue } from '../lib/srt-parser';
-import { findCue } from '../lib/find-cue';
+import type { Cue } from './srt-parser';
+import { findCue } from './find-cue';
 
 /**
  * Track the telemetry cue active for the currently displayed video frame.
