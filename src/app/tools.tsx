@@ -16,6 +16,8 @@ export interface Tool {
   label: string;
   /** Optional contextual caption shown beside the wordmark when active. */
   subtitle?: string;
+  /** One-line pitch shown on the home page card. */
+  blurb?: string;
   /** The tool's root component. */
   Component: ComponentType;
   /** When set, the shell becomes a fixed-height frame (e.g. an editor). */
@@ -26,8 +28,10 @@ export const TOOLS: Tool[] = [
   {
     id: 'telemetry',
     path: '/telemetry',
-    label: 'Telemetry',
+    label: 'DJI Telemetry',
     subtitle: 'DJI · SRT telemetry',
+    blurb:
+      'Play any DJI clip with its flight log in sync — altitude, GPS, ISO and shutter move with the frame.',
     Component: TelemetryTool,
   },
   {
@@ -35,13 +39,15 @@ export const TOOLS: Tool[] = [
     path: '/lut',
     label: 'LUT Studio',
     subtitle: 'Colour grading',
+    blurb:
+      'Preview .cube LUTs on your footage with a before/after wipe, then batch-export the graded clips.',
     Component: LutStudio,
     fullHeight: true,
   },
 ];
 
-/** The tool shown for an empty or unknown route. */
-export const DEFAULT_TOOL = TOOLS[0];
+/** Route path of the home page (the empty hash). */
+export const HOME_PATH = '/';
 
 export function toolForPath(path: string): Tool | undefined {
   return TOOLS.find((t) => t.path === path);

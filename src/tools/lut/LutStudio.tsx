@@ -428,17 +428,24 @@ export default function LutStudio() {
     .join(' · ');
 
   return (
-    <section className="lut-studio-page" aria-label="LUT Studio">
-      <div className="collection-head">
-        <span className="title">LUT Studio</span>
-        <p className="count">
+    <section
+      className="flex flex-col flex-1 min-h-0 gap-4 mt-4"
+      aria-label="LUT Studio"
+    >
+      <div className="flex items-baseline justify-between gap-4 border-b border-line pb-3 mb-6">
+        <span className="font-serif text-[1.7rem] tracking-[-0.01em]">
+          LUT Studio
+        </span>
+        <p className="font-mono text-[0.78rem] text-muted tracking-[0.04em] m-0">
           {clips.length} clip{clips.length === 1 ? '' : 's'} · real-time preview,
           nothing uploads
         </p>
       </div>
 
       <div
-        className={`lut-layout${dragging ? ' dragging' : ''}`}
+        className={`grid grid-cols-[minmax(240px,26%)_1fr] gap-6 items-stretch flex-1 min-h-0 rounded-paper-lg max-[820px]:grid-cols-1${
+          dragging ? ' outline outline-2 outline-dashed outline-accent outline-offset-8' : ''
+        }`}
         onDragOver={(e) => {
           e.preventDefault();
           setDragging(true);
@@ -446,11 +453,11 @@ export default function LutStudio() {
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
       >
-        <aside className="lut-aside">
-          <div className="lut-import">
+        <aside className="flex flex-col gap-[0.9rem] min-w-0 min-h-0">
+          <div className="flex items-center gap-[0.6rem] flex-wrap">
             <button
               type="button"
-              className="add-btn"
+              className="px-[0.9rem] py-2 border border-accent rounded-paper bg-accent-wash text-accent-ink cursor-pointer font-semibold text-[0.82rem] transition-[background-color,transform] duration-200 ease-paper hover:bg-accent hover:text-white hover:-translate-y-px"
               onClick={() => runImport(pickFiles)}
               disabled={importing}
             >
@@ -458,7 +465,7 @@ export default function LutStudio() {
             </button>
             <button
               type="button"
-              className="link-btn"
+              className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent disabled:text-faint disabled:cursor-default disabled:no-underline"
               onClick={() => runImport(pickDirectory)}
               disabled={importing}
             >
@@ -467,7 +474,7 @@ export default function LutStudio() {
           </div>
 
           {clips.length === 0 ? (
-            <p className="lut-empty-hint">
+            <p className="m-0 text-[0.85rem] leading-[1.5] text-muted border-[1.5px] border-dashed border-line-strong rounded-paper p-4 bg-surface">
               Add clips or drag them here. Pick one to preview a look; check the
               ones you want to export.
             </p>
@@ -485,11 +492,12 @@ export default function LutStudio() {
           )}
         </aside>
 
-        <div className="lut-main">
-          <div className="lut-toolbar">
-            <label className="lut-select">
+        <div className="min-w-0 min-h-0 flex flex-col gap-[0.6rem]">
+          <div className="flex flex-wrap items-center gap-[0.75rem_1rem] mb-[1.1rem]">
+            <label className="inline-flex items-center gap-2 font-mono text-[0.7rem] tracking-[0.12em] uppercase text-muted">
               <span>Look</span>
               <select
+                className="font-sans text-[0.85rem] font-semibold tracking-normal normal-case text-ink bg-surface border border-line-strong rounded-paper px-[0.7rem] py-[0.45rem] cursor-pointer"
                 value={selected}
                 onChange={(e) => applySelection(e.target.value)}
                 disabled={busy}
@@ -513,13 +521,17 @@ export default function LutStudio() {
               </select>
             </label>
 
-            <button type="button" className="link-btn" onClick={uploadCube}>
+            <button
+              type="button"
+              className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent disabled:text-faint disabled:cursor-default disabled:no-underline"
+              onClick={uploadCube}
+            >
               Upload .cube
             </button>
 
             <button
               type="button"
-              className="lut-compare"
+              className="ml-auto border border-line-strong bg-paper text-ink-soft cursor-pointer text-[0.82rem] font-semibold px-[0.9rem] py-[0.45rem] rounded-full transition-[border-color,color] duration-200 ease-paper aria-pressed:border-accent aria-pressed:text-accent-ink disabled:opacity-50 disabled:cursor-default"
               onClick={toggleCompare}
               disabled={!lut}
               aria-pressed={compareOn}
@@ -530,7 +542,7 @@ export default function LutStudio() {
 
             <button
               type="button"
-              className="lut-compare"
+              className="ml-0 border border-line-strong bg-paper text-ink-soft cursor-pointer text-[0.82rem] font-semibold px-[0.9rem] py-[0.45rem] rounded-full transition-[border-color,color] duration-200 ease-paper aria-pressed:border-accent aria-pressed:text-accent-ink disabled:opacity-50 disabled:cursor-default"
               onClick={() => {
                 setBypass((b) => !b);
                 setCompareOn(false);
@@ -544,15 +556,26 @@ export default function LutStudio() {
           </div>
 
           {activeClip && (
-            <p className="lut-active-detail" title={activeClip.name}>
-              <span className="lut-active-name">{activeClip.name}</span>
-              {activeDetail && <span className="lut-active-specs">{activeDetail}</span>}
+            <p
+              className="flex items-baseline gap-[0.7rem] m-0 min-w-0"
+              title={activeClip.name}
+            >
+              <span className="font-semibold text-[0.9rem] whitespace-nowrap overflow-hidden text-ellipsis">
+                {activeClip.name}
+              </span>
+              {activeDetail && (
+                <span className="font-mono text-[0.72rem] tracking-[0.02em] text-muted flex-none">
+                  {activeDetail}
+                </span>
+              )}
             </p>
           )}
 
           <div
             ref={stageRef}
-            className={`lut-stage${activeUrl ? '' : ' empty'}${compareOn ? ' comparing' : ''}`}
+            className={`relative rounded-paper overflow-hidden flex-1 min-h-0 flex items-center justify-center max-[820px]:min-h-[240px] ${
+              activeUrl ? 'bg-frame cursor-pointer' : 'bg-transparent cursor-default'
+            }${compareOn ? ' cursor-ew-resize' : ''}`}
             onClick={activeUrl && !compareOn ? togglePlay : undefined}
             onPointerMove={handleStagePointerMove}
             title={
@@ -560,16 +583,27 @@ export default function LutStudio() {
             }
           >
             {activeUrl && compareOn && (
-              <div ref={wipeRef} className="lut-wipe" aria-hidden="true">
-                <span className="lut-wipe-handle" />
-                <span className="lut-wipe-tag left">Graded</span>
-                <span className="lut-wipe-tag right">Original</span>
+              <div
+                ref={wipeRef}
+                className="absolute w-0.5 -ml-px bg-white/90 shadow-[0_0_0_0.5px_rgba(0,0,0,0.4)] pointer-events-none z-[2]"
+                aria-hidden="true"
+              >
+                <span className="absolute top-1/2 left-1/2 w-[34px] h-[34px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/95 bg-black/[0.32] shadow-[0_1px_6px_rgba(0,0,0,0.45)] before:content-[''] before:absolute before:top-1/2 before:left-2 before:w-1.5 before:h-1.5 before:border-t-2 before:border-r-2 before:border-white/95 before:-translate-y-1/2 before:-rotate-[135deg] after:content-[''] after:absolute after:top-1/2 after:right-2 after:w-1.5 after:h-1.5 after:border-t-2 after:border-r-2 after:border-white/95 after:-translate-y-1/2 after:rotate-45" />
+                <span className="absolute top-2.5 right-2.5 font-mono text-[0.62rem] tracking-[0.08em] uppercase text-white bg-black/55 px-[0.4rem] py-[0.18rem] rounded-[5px] whitespace-nowrap">
+                  Graded
+                </span>
+                <span className="absolute top-2.5 left-2.5 font-mono text-[0.62rem] tracking-[0.08em] uppercase text-white bg-black/55 px-[0.4rem] py-[0.18rem] rounded-[5px] whitespace-nowrap">
+                  Original
+                </span>
               </div>
             )}
             {activeUrl ? (
-              <canvas ref={canvasRef} className="lut-canvas" />
+              <canvas
+                ref={canvasRef}
+                className="block w-auto h-auto max-w-full max-h-full object-contain bg-frame"
+              />
             ) : (
-              <div className="placeholder">
+              <div className="w-full aspect-video flex items-center justify-center bg-surface border border-line rounded-paper text-muted text-center p-4 font-mono text-[0.85rem]">
                 {clips.length === 0
                   ? 'Add videos to begin.'
                   : 'Select a clip to preview.'}
@@ -580,28 +614,31 @@ export default function LutStudio() {
             <video
               ref={videoRef}
               src={activeUrl ?? undefined}
-              className="lut-source"
+              className="absolute w-0.5 h-0.5 left-0 bottom-0 opacity-0 pointer-events-none"
               playsInline
               onError={() => setActiveError(true)}
             />
           </div>
 
           {activeUrl && (
-            <div className="lut-transport">
+            <div className="flex items-center gap-[0.85rem] mt-[0.9rem] px-[0.85rem] py-[0.6rem] border border-line rounded-paper bg-surface">
               <button
                 type="button"
-                className="lut-play"
+                className="flex-none w-[2.2rem] h-[2.2rem] border-0 rounded-full bg-ink text-paper cursor-pointer text-[0.8rem] leading-none inline-flex items-center justify-center transition-[background-color] duration-200 ease-paper hover:bg-accent"
                 onClick={togglePlay}
                 aria-label={playing ? 'Pause' : 'Play'}
               >
                 {playing ? '❚❚' : '▶'}
               </button>
-              <span className="lut-time" title="Current position">
+              <span
+                className="font-mono text-[0.74rem] tabular-nums text-muted flex-none min-w-[3.2ch] text-center"
+                title="Current position"
+              >
                 {formatTimecode(time)}
               </span>
               <input
                 type="range"
-                className="lut-scrub"
+                className="flex-1 accent-accent cursor-pointer"
                 min={0}
                 max={duration || 0}
                 step={0.001}
@@ -621,53 +658,71 @@ export default function LutStudio() {
                 onChange={(e) => handleScrub(Number(e.target.value))}
                 aria-label="Seek"
               />
-              <span className="lut-time">{formatDuration(duration)}</span>
+              <span className="font-mono text-[0.74rem] tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
+                {formatDuration(duration)}
+              </span>
             </div>
           )}
 
           {!supported && (
-            <p className="notice">
+            <p className="my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-[#eccabf] text-[#7c2e1c] text-[0.86rem] leading-[1.55]">
               Your browser doesn't expose <strong>WebGL2</strong>, which the LUT
               preview needs. Try a recent Chrome, Edge, Firefox or Safari.
             </p>
           )}
 
           {activeError && (
-            <p className="notice">
+            <p className="my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-[#eccabf] text-[#7c2e1c] text-[0.86rem] leading-[1.55]">
               This clip failed to decode. DJI footage is often HEVC/H.265, which
               not every browser plays natively — try Safari (best HEVC support)
               or transcode to H.264.
             </p>
           )}
 
-          {cubeError && <p className="notice">{cubeError}</p>}
+          {cubeError && (
+            <p className="my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-[#eccabf] text-[#7c2e1c] text-[0.86rem] leading-[1.55]">
+              {cubeError}
+            </p>
+          )}
         </div>
       </div>
 
-      <div className="lut-footer">
+      <div className="flex items-center justify-end gap-4 border-t border-line pt-4 flex-none">
         {exporting ? (
           <>
-            <div className="lut-export-status" role="status">
-              <span className="lut-export-label">
+            <div
+              className="flex items-center gap-[0.85rem] mt-0 flex-1"
+              role="status"
+            >
+              <span className="font-mono text-[0.74rem] tracking-[0.04em] text-ink-soft flex-none min-w-[11ch]">
                 Exporting {Math.min(doneCount + 1, batchTotal)}/{batchTotal}
               </span>
-              <progress className="lut-export-bar" value={overallRatio} max={1} />
+              <progress
+                data-export
+                className="flex-1 h-2 accent-accent"
+                value={overallRatio}
+                max={1}
+              />
             </div>
-            <button type="button" className="link-btn" onClick={cancelExport}>
+            <button
+              type="button"
+              className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent disabled:text-faint disabled:cursor-default disabled:no-underline"
+              onClick={cancelExport}
+            >
               Cancel
             </button>
           </>
         ) : (
           <>
             {!exportSupported && clips.length > 0 && (
-              <span className="lut-export-note">
+              <span className="mr-auto text-[0.78rem] text-muted">
                 Export needs WebCodecs (try Chrome/Edge) — preview works
                 everywhere.
               </span>
             )}
             <button
               type="button"
-              className="open-btn lut-export"
+              className="mt-0 px-[1.1rem] py-2 inline-flex items-center justify-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.82rem] font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent hover:text-white active:scale-[0.98] disabled:opacity-50 disabled:cursor-default"
               onClick={handleExport}
               disabled={selectedCount === 0 || !exportSupported}
               title="Render graded copies of the checked clips (H.264 MP4)"

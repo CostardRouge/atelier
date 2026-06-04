@@ -45,7 +45,11 @@ export default function FolderDrop({ onFiles }: FolderDropProps) {
 
   return (
     <div
-      className={`folder-drop${dragging ? ' dragging' : ''}`}
+      className={`border-[1.5px] border-dashed rounded-paper-lg bg-surface p-[clamp(1.75rem,5vw,2.75rem)] text-center mb-8 cursor-pointer transition-[border-color,background-color,transform] duration-[250ms] ease-paper hover:border-accent focus-visible:border-accent focus-visible:outline-none ${
+        dragging
+          ? 'border-accent bg-accent-wash -translate-y-0.5'
+          : 'border-line-strong'
+      }`}
       role="button"
       tabIndex={0}
       onClick={() => run(pickFiles)}
@@ -63,7 +67,7 @@ export default function FolderDrop({ onFiles }: FolderDropProps) {
       onDrop={handleDrop}
     >
       <svg
-        className="drop-icon"
+        className="w-[38px] h-[38px] mx-auto mb-[0.9rem] text-accent"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -76,12 +80,12 @@ export default function FolderDrop({ onFiles }: FolderDropProps) {
         <path d="M12 15.5V10" />
         <path d="m9.5 12 2.5-2.5L14.5 12" />
       </svg>
-      <p>
-        Drop your <strong>.mp4 + .srt</strong> here — or a whole folder.
+      <p className="m-0 text-[1.02rem]">
+        Drop your <strong className="font-semibold text-ink">.mp4 + .srt</strong> here — or a whole folder.
       </p>
-      <p className="drop-actions">
+      <p className="flex items-center justify-center gap-[0.6rem] mt-[0.7rem] mb-0">
         <button
-          className="link-btn"
+          className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent disabled:text-faint disabled:cursor-default disabled:no-underline"
           onClick={(e) => {
             e.stopPropagation();
             run(pickFiles);
@@ -90,9 +94,9 @@ export default function FolderDrop({ onFiles }: FolderDropProps) {
         >
           {busy ? 'opening…' : 'Choose files'}
         </button>
-        <span className="sep">or</span>
+        <span className="text-faint text-[0.85rem]">or</span>
         <button
-          className="link-btn"
+          className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent disabled:text-faint disabled:cursor-default disabled:no-underline"
           onClick={(e) => {
             e.stopPropagation();
             run(pickDirectory);
@@ -102,7 +106,7 @@ export default function FolderDrop({ onFiles }: FolderDropProps) {
           choose a folder
         </button>
       </p>
-      <p className="hint">
+      <p className="mt-[0.55rem] mx-auto mb-0 text-[0.8rem] text-muted max-w-[48ch]">
         {supportsDirectoryPicker()
           ? 'Folders open through your browser’s native picker.'
           : 'Folder selection opens your browser’s dialog.'}{' '}

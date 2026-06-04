@@ -21,12 +21,27 @@ export function Field({
   const display = fmt(value, suffix);
   const empty = display === '—';
   return (
-    <div
-      className={highlight ? 'highlight' : undefined}
-      style={{ display: 'contents' }}
-    >
-      <dt>{label}</dt>
-      <dd className={empty ? 'empty' : undefined}>{display}</dd>
+    <div style={{ display: 'contents' }}>
+      <dt
+        className={
+          highlight
+            ? 'text-[1.15rem] font-semibold text-accent-ink'
+            : 'text-muted text-[0.85rem]'
+        }
+      >
+        {label}
+      </dt>
+      <dd
+        className={`m-0 font-mono tabular-nums text-right ${
+          highlight
+            ? 'text-[1.15rem] font-semibold text-accent-ink'
+            : empty
+              ? 'text-faint'
+              : 'text-ink'
+        }`}
+      >
+        {display}
+      </dd>
     </div>
   );
 }
@@ -38,10 +53,12 @@ export function Field({
 export function TelemetryPanels({ cue }: { cue: Cue | null }) {
   const d = cue?.data ?? {};
   return (
-    <div className="panels">
-      <section className="panel">
-        <h2>Flight</h2>
-        <dl>
+    <div className="grid grid-cols-1 min-[680px]:grid-cols-2 gap-5 mt-6">
+      <section className="bg-surface border border-line rounded-paper p-[1.25rem_1.35rem] shadow-paper-soft">
+        <h2 className="flex items-center gap-2 m-0 mb-4 font-mono text-[0.74rem] font-medium uppercase tracking-[0.18em] text-muted before:content-[''] before:w-[14px] before:h-px before:bg-accent">
+          Flight
+        </h2>
+        <dl className="m-0 grid grid-cols-[auto_1fr] gap-[0.55rem_1rem]">
           <Field label="Rel. altitude" value={d.rel_alt} suffix=" m" highlight />
           <Field label="Abs. altitude" value={d.abs_alt} suffix=" m" />
           <Field label="Latitude" value={d.latitude} />
@@ -54,9 +71,11 @@ export function TelemetryPanels({ cue }: { cue: Cue | null }) {
         </dl>
       </section>
 
-      <section className="panel">
-        <h2>Camera</h2>
-        <dl>
+      <section className="bg-surface border border-line rounded-paper p-[1.25rem_1.35rem] shadow-paper-soft">
+        <h2 className="flex items-center gap-2 m-0 mb-4 font-mono text-[0.74rem] font-medium uppercase tracking-[0.18em] text-muted before:content-[''] before:w-[14px] before:h-px before:bg-accent">
+          Camera
+        </h2>
+        <dl className="m-0 grid grid-cols-[auto_1fr] gap-[0.55rem_1rem]">
           <Field label="ISO" value={d.iso} />
           <Field label="Shutter" value={d.shutter} />
           <Field label="Aperture" value={d.fnum ? `f/${d.fnum}` : undefined} />
@@ -88,13 +107,25 @@ export function LiveTelemetry({ cue }: { cue: Cue | null }) {
     .join('  ·  ');
 
   return (
-    <dl className="live">
-      <dt>Altitude</dt>
-      <dd className="live-alt">{fmt(d.rel_alt, ' m')}</dd>
-      <dt>GPS</dt>
-      <dd>{gps}</dd>
-      <dt>Exposure</dt>
-      <dd>{exposure || '—'}</dd>
+    <dl className="m-0 grid grid-cols-[auto_1fr] items-baseline gap-[0.4rem_0.9rem] px-[0.95rem] py-[0.85rem] border border-line rounded-paper bg-paper">
+      <dt className="font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted">
+        Altitude
+      </dt>
+      <dd className="m-0 text-right font-serif text-[1.7rem] leading-none text-accent-ink">
+        {fmt(d.rel_alt, ' m')}
+      </dd>
+      <dt className="font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted">
+        GPS
+      </dt>
+      <dd className="m-0 text-right font-mono tabular-nums text-[0.82rem] text-ink">
+        {gps}
+      </dd>
+      <dt className="font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted">
+        Exposure
+      </dt>
+      <dd className="m-0 text-right font-mono tabular-nums text-[0.82rem] text-ink">
+        {exposure || '—'}
+      </dd>
     </dl>
   );
 }
