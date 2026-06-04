@@ -1,5 +1,6 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -104,6 +105,6 @@ function lutsManifestPlugin(): Plugin {
 const REPO = 'atelier';
 
 export default defineConfig({
-  plugins: [react(), lutsManifestPlugin()],
+  plugins: [react(), tailwindcss(), lutsManifestPlugin()],
   base: `/${REPO}/`,
 });

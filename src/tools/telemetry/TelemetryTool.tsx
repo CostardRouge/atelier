@@ -75,30 +75,45 @@ export default function TelemetryTool() {
 
   return (
     <>
-      <section className="hero">
+      <section className="py-[clamp(2.5rem,7vw,5rem)_0_clamp(2rem,5vw,3rem)] grid grid-cols-1 gap-6 min-[820px]:grid-cols-[1.35fr_1fr] min-[820px]:items-end">
         <div>
-          <p className="kicker">Footage, with its memory intact</p>
-          <h1>
+          <p className="flex items-center gap-[0.6rem] m-0 mb-4 font-mono text-[0.72rem] uppercase tracking-[0.2em] text-accent-ink before:content-[''] before:w-[26px] before:h-px before:bg-accent">
+            Footage, with its memory intact
+          </p>
+          <h1 className="m-0 font-serif font-normal text-[clamp(2.8rem,8vw,5.2rem)] leading-[0.95] tracking-[-0.02em]">
             Watch your
             <br />
-            drone <em>think.</em>
+            drone <em className="text-accent italic">think.</em>
           </h1>
         </div>
-        <p className="lede">
+        <p className="m-0 text-ink-soft text-[1.05rem] leading-[1.6] max-w-[44ch]">
           Every DJI clip carries a hidden flight log — altitude, GPS, ISO,
-          shutter — recorded beside it as an <strong>.srt</strong> file. Atelier
+          shutter — recorded beside it as an{' '}
+          <strong className="text-ink font-semibold">.srt</strong> file. Atelier
           plays the two together, so the numbers move with the picture.{' '}
-          <strong>No upload, no account, no server</strong> — your footage never
-          leaves this machine.
+          <strong className="text-ink font-semibold">
+            No upload, no account, no server
+          </strong>{' '}
+          — your footage never leaves this machine.
         </p>
       </section>
 
-      <section className="how" aria-label="How it works">
+      <section
+        className="grid grid-cols-1 gap-0 border-t border-b border-line m-0 mb-10 min-[720px]:grid-cols-3"
+        aria-label="How it works"
+      >
         {STEPS.map((s) => (
-          <article className="step" key={s.no}>
-            <span className="no">{s.no}</span>
-            <h3>{s.title}</h3>
-            <p>{s.body}</p>
+          <article
+            className="flex flex-col gap-[0.4rem] py-[1.4rem] min-[720px]:p-[1.6rem_1.6rem_1.6rem_0] [&+&]:min-[720px]:pl-[1.6rem] [&+&]:min-[720px]:border-l [&+&]:min-[720px]:border-line"
+            key={s.no}
+          >
+            <span className="font-mono text-[0.7rem] tracking-[0.16em] text-accent">
+              {s.no}
+            </span>
+            <h3 className="m-0 text-base font-semibold">{s.title}</h3>
+            <p className="m-0 text-[0.88rem] leading-[1.5] text-muted">
+              {s.body}
+            </p>
           </article>
         ))}
       </section>
@@ -107,9 +122,11 @@ export default function TelemetryTool() {
 
       {loaded && (
         <section aria-label="Your clips">
-          <div className="collection-head">
-            <span className="title">The collection</span>
-            <p className="count">
+          <div className="flex items-baseline justify-between gap-4 border-b border-line pb-3 mb-6">
+            <span className="font-serif text-[1.7rem] tracking-[-0.01em]">
+              The collection
+            </span>
+            <p className="m-0 font-mono text-[0.78rem] text-muted tracking-[0.04em]">
               {pairs.length} clip{pairs.length === 1 ? '' : 's'}
             </p>
           </div>

@@ -65,44 +65,59 @@ export default function DetailView({
     if (file) onAttach(pair, file);
   }
 
+  const linkBtn =
+    'p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent disabled:text-faint disabled:cursor-default disabled:no-underline';
+  // .notice base + .mismatch override (font-family: inherit, smaller text, line-strong border)
+  const mismatchNotice =
+    'm-0 px-[0.65rem] py-2 rounded-paper bg-accent-wash border border-line-strong text-accent-ink text-[0.76rem] leading-[1.45]';
+  const notice =
+    'my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-[#eccabf] text-[#7c2e1c] text-[0.86rem] leading-[1.55]';
+
   return (
     <div>
-      <button className="link-btn back" onClick={onBack}>
+      <button
+        className="inline-flex items-center gap-[0.4rem] mb-5 font-mono text-[0.78rem] tracking-[0.04em] text-ink-soft cursor-pointer border-0 bg-transparent p-0 no-underline hover:text-accent"
+        onClick={onBack}
+      >
         ← Back to gallery
       </button>
-      <h2 className="detail-title">{video?.name ?? srt?.name ?? pair.baseName}</h2>
+      <h2 className="font-serif text-[clamp(1.6rem,4vw,2.4rem)] tracking-[-0.01em] normal-case text-ink m-0 mb-5 break-words">
+        {video?.name ?? srt?.name ?? pair.baseName}
+      </h2>
 
       {pair.videoNameMismatch && (
-        <p className="notice mismatch">
-          ⚠ Video name doesn’t match (<code>{video?.name}</code> vs{' '}
-          <code>{pair.baseName}</code>).{' '}
-          <button className="link-btn" onClick={() => onDetach(pair, 'video')}>
+        <p className={mismatchNotice}>
+          ⚠ Video name doesn’t match (
+          <code className="font-mono text-ink break-all">{video?.name}</code> vs{' '}
+          <code className="font-mono text-ink break-all">{pair.baseName}</code>).{' '}
+          <button className={linkBtn} onClick={() => onDetach(pair, 'video')}>
             Remove
           </button>
         </p>
       )}
       {pair.srtNameMismatch && (
-        <p className="notice mismatch">
-          ⚠ Telemetry name doesn’t match (<code>{srt?.name}</code> vs{' '}
-          <code>{pair.baseName}</code>).{' '}
-          <button className="link-btn" onClick={() => onDetach(pair, 'srt')}>
+        <p className={mismatchNotice}>
+          ⚠ Telemetry name doesn’t match (
+          <code className="font-mono text-ink break-all">{srt?.name}</code> vs{' '}
+          <code className="font-mono text-ink break-all">{pair.baseName}</code>).{' '}
+          <button className={linkBtn} onClick={() => onDetach(pair, 'srt')}>
             Remove
           </button>
         </p>
       )}
 
       {!video && (
-        <p className="notice">
+        <p className={notice}>
           No video for this telemetry yet.{' '}
-          <button className="link-btn" onClick={() => handleAdd('video')}>
+          <button className={linkBtn} onClick={() => handleAdd('video')}>
             Add video
           </button>
         </p>
       )}
       {video && !srt && (
-        <p className="notice">
+        <p className={notice}>
           No telemetry for this video yet.{' '}
-          <button className="link-btn" onClick={() => handleAdd('srt')}>
+          <button className={linkBtn} onClick={() => handleAdd('srt')}>
             Add telemetry (.srt)
           </button>
         </p>

@@ -121,16 +121,22 @@ export default function VideoCard({
   const title = video?.name ?? srt?.name ?? pair.baseName;
 
   return (
-    <div className="card" ref={ref}>
-      <div className="card-frame">
+    <div
+      className="flex flex-col overflow-hidden bg-surface border border-line rounded-paper-lg shadow-paper-soft transition-[transform,box-shadow,border-color] duration-300 ease-paper hover:-translate-y-1 hover:shadow-paper hover:border-line-strong"
+      ref={ref}
+    >
+      <div className="relative bg-frame leading-[0]">
         {index != null && (
-          <span className="card-plate">
+          <span className="absolute top-[0.7rem] left-[0.7rem] z-[2] font-mono text-[0.64rem] tracking-[0.12em] px-2 py-[0.22rem] rounded-full bg-[rgba(20,18,15,0.55)] text-paper backdrop-blur-[4px] leading-[1.4]">
             NO. {String(index + 1).padStart(2, '0')}
           </span>
         )}
         {hasTrack && liveAlt && (
-          <span className="card-hud" aria-hidden="true">
-            <span className="card-hud-dot" />
+          <span
+            className="absolute top-[0.7rem] right-[0.7rem] z-[2] inline-flex items-center gap-[0.4rem] font-mono text-[0.74rem] font-medium tracking-[0.02em] px-[0.6rem] py-[0.24rem] rounded-full bg-[rgba(20,18,15,0.55)] text-white backdrop-blur-[4px] leading-[1.4]"
+            aria-hidden="true"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse-dot motion-reduce:animate-none" />
             {liveAlt} m
           </span>
         )}
@@ -138,7 +144,7 @@ export default function VideoCard({
           videoUrl && !videoError ? (
             <video
               ref={videoRef}
-              className="card-video"
+              className="block w-full aspect-video bg-frame"
               src={videoUrl}
               controls
               preload="metadata"
@@ -152,73 +158,89 @@ export default function VideoCard({
               }}
             />
           ) : (
-            <div className="card-video placeholder">
+            <div className="w-full aspect-video flex items-center justify-center bg-frame text-[#8c8576] text-[0.78rem] text-center p-4 font-mono leading-[1.5]">
               {videoError
                 ? 'Playback unavailable (codec not supported by this browser)'
                 : '…'}
             </div>
           )
         ) : (
-          <div className="card-video placeholder missing">
+          <div className="w-full aspect-video flex flex-col items-center justify-center gap-[0.85rem] bg-paper-2 text-[#8c8576] text-[0.78rem] text-center p-4 font-mono leading-[1.5]">
             <span>No video for this telemetry yet.</span>
-            <button className="add-btn" onClick={() => handleAdd('video')}>
+            <button
+              className="px-[0.9rem] py-2 border border-accent rounded-paper bg-accent-wash text-accent-ink cursor-pointer font-semibold text-[0.82rem] transition-[background-color,transform] duration-200 ease-paper hover:bg-accent hover:text-white hover:-translate-y-px"
+              onClick={() => handleAdd('video')}
+            >
               Add video
             </button>
           </div>
         )}
       </div>
 
-      <div className="card-body">
-        <h3 className="card-title" title={title}>
+      <div className="flex flex-col gap-[0.9rem] flex-1 p-[1.1rem_1.2rem_1.2rem]">
+        <h3
+          className="m-0 text-base font-semibold tracking-[-0.01em] whitespace-nowrap overflow-hidden text-ellipsis"
+          title={title}
+        >
           {title}
         </h3>
 
         {pair.videoNameMismatch && (
-          <p className="mismatch">
-            ⚠ Video name doesn’t match (<code>{video?.name}</code> vs{' '}
-            <code>{pair.baseName}</code>).{' '}
-            <button className="link-btn" onClick={() => onDetach(pair, 'video')}>
+          <p className="m-0 px-[0.65rem] py-2 rounded-paper bg-accent-wash border border-line-strong text-accent-ink text-[0.76rem] leading-[1.45]">
+            ⚠ Video name doesn’t match (
+            <code className="font-mono text-ink break-all">{video?.name}</code>{' '}
+            vs <code className="font-mono text-ink break-all">{pair.baseName}</code>
+            ).{' '}
+            <button
+              className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent disabled:text-faint disabled:cursor-default disabled:no-underline"
+              onClick={() => onDetach(pair, 'video')}
+            >
               Remove
             </button>
           </p>
         )}
         {pair.srtNameMismatch && (
-          <p className="mismatch">
-            ⚠ Telemetry name doesn’t match (<code>{srt?.name}</code> vs{' '}
-            <code>{pair.baseName}</code>).{' '}
-            <button className="link-btn" onClick={() => onDetach(pair, 'srt')}>
+          <p className="m-0 px-[0.65rem] py-2 rounded-paper bg-accent-wash border border-line-strong text-accent-ink text-[0.76rem] leading-[1.45]">
+            ⚠ Telemetry name doesn’t match (
+            <code className="font-mono text-ink break-all">{srt?.name}</code> vs{' '}
+            <code className="font-mono text-ink break-all">{pair.baseName}</code>
+            ).{' '}
+            <button
+              className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent disabled:text-faint disabled:cursor-default disabled:no-underline"
+              onClick={() => onDetach(pair, 'srt')}
+            >
               Remove
             </button>
           </p>
         )}
 
         {video && (
-          <p className="card-caption">
+          <p className="mt-[-0.3rem] mb-0 font-mono text-[0.74rem] tracking-[0.02em] text-muted flex items-center gap-2">
             {formatBytes(video.size)}
-            <span className="sep">·</span>
+            <span className="text-faint">·</span>
             {duration === undefined ? '…' : formatDuration(duration)}
           </p>
         )}
 
         {srt ? (
           cues === undefined ? (
-            <p className="card-note">Reading telemetry…</p>
+            <p className="m-0 text-[0.82rem] text-muted">Reading telemetry…</p>
           ) : hasTrack ? (
             <>
               <LiveTelemetry cue={liveCue} />
               {summary && (
-                <p className="card-summary">
+                <p className="m-0 font-mono text-[0.7rem] tracking-[0.02em] text-muted flex flex-wrap items-center gap-[0.45rem]">
                   {summary.cueCount} frames
                   {summary.relAltMin !== null && summary.relAltMax !== null && (
                     <>
-                      <span className="sep">·</span>
+                      <span className="text-faint">·</span>
                       {summary.relAltMin.toFixed(0)}–
                       {summary.relAltMax.toFixed(0)} m
                     </>
                   )}
                   {summary.colorProfile && (
                     <>
-                      <span className="sep">·</span>
+                      <span className="text-faint">·</span>
                       {summary.colorProfile}
                     </>
                   )}
@@ -226,19 +248,25 @@ export default function VideoCard({
               )}
             </>
           ) : (
-            <p className="card-note">Telemetry unreadable.</p>
+            <p className="m-0 text-[0.82rem] text-muted">Telemetry unreadable.</p>
           )
         ) : (
-          <p className="card-note">
+          <p className="m-0 text-[0.82rem] text-muted">
             No .srt — telemetry unavailable.{' '}
-            <button className="link-btn" onClick={() => handleAdd('srt')}>
+            <button
+              className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent disabled:text-faint disabled:cursor-default disabled:no-underline"
+              onClick={() => handleAdd('srt')}
+            >
               Add telemetry
             </button>
           </p>
         )}
 
         {(video || srt) && (
-          <button className="open-btn" onClick={() => onOpen(pair)}>
+          <button
+            className="mt-auto px-4 py-[0.7rem] inline-flex items-center justify-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.85rem] font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent hover:text-white active:scale-[0.98]"
+            onClick={() => onOpen(pair)}
+          >
             {srt && video
               ? 'Open full view'
               : srt
