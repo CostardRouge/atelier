@@ -425,16 +425,6 @@ export default function LutStudio() {
       className="flex flex-col flex-1 min-h-0 gap-4 mt-4"
       aria-label="LUT Studio"
     >
-      <div className="flex items-baseline justify-between gap-4 border-b border-line pb-3 mb-6">
-        <span className="font-serif text-[1.7rem] tracking-[-0.01em]">
-          LUT Studio
-        </span>
-        <p className="font-mono text-[0.78rem] text-muted tracking-[0.04em] m-0">
-          {clips.length} clip{clips.length === 1 ? '' : 's'} · real-time preview,
-          nothing uploads
-        </p>
-      </div>
-
       <div className="grid grid-cols-[minmax(240px,26%)_1fr] gap-6 items-stretch flex-1 min-h-0 rounded-paper-lg max-[820px]:grid-cols-1">
         <aside className="flex flex-col gap-[0.9rem] min-w-0 min-h-0">
           {clips.length === 0 ? (

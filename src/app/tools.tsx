@@ -50,7 +50,6 @@ export const TOOLS: Tool[] = [
     blurb:
       'Preview .cube LUTs on your footage with a before/after wipe, then batch-export the graded clips.',
     Component: LutStudio,
-    fullHeight: true,
     accepts: ['video'],
   },
 ];
