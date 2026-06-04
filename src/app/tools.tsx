@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react';
+import type { AssetKind } from '../shared/library/assets';
 import LutStudio from '../tools/lut/LutStudio';
 import TelemetryTool from '../tools/telemetry/TelemetryTool';
 
@@ -22,6 +23,12 @@ export interface Tool {
   Component: ComponentType;
   /** When set, the shell becomes a fixed-height frame (e.g. an editor). */
   fullHeight?: boolean;
+  /**
+   * Asset kinds this tool consumes. When set, the shell shows the global asset
+   * library sidebar and the tool reads its selection from there. Tools without
+   * `accepts` keep their own import flow (full width, no sidebar).
+   */
+  accepts?: AssetKind[];
 }
 
 export const TOOLS: Tool[] = [
@@ -43,6 +50,7 @@ export const TOOLS: Tool[] = [
       'Preview .cube LUTs on your footage with a before/after wipe, then batch-export the graded clips.',
     Component: LutStudio,
     fullHeight: true,
+    accepts: ['video'],
   },
 ];
 
