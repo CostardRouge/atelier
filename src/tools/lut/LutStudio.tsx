@@ -9,7 +9,7 @@ import {
   loadClipMeta,
   probeContainer,
   type ContainerInfo,
-} from './video-metadata';
+} from '../../shared/media/video-metadata';
 import { useLutPreview } from './use-lut-preview';
 import { CUBE_ACCEPT, pickFile } from '../../shared/sources/file-sources';
 import ClipList from './ClipList';
@@ -171,7 +171,7 @@ export default function LutStudio() {
     );
     for (const clip of pending.slice(0, free)) {
       metaProcessing.current.add(clip.id);
-      loadClipMeta(clip.file)
+      loadClipMeta(clip.file, { thumbnail: false })
         .then((meta) =>
           updateClip(clip.id, (c) => ({ ...c, ...meta, metaStatus: 'ready' })),
         )

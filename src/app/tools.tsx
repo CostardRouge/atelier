@@ -40,6 +40,7 @@ export const TOOLS: Tool[] = [
     blurb:
       'Play any DJI clip with its flight log in sync — altitude, GPS, ISO and shutter move with the frame.',
     Component: TelemetryTool,
+    accepts: ['video+telemetry', 'telemetry', 'video'],
   },
   {
     id: 'lut',

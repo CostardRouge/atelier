@@ -104,21 +104,6 @@ export default function ClipList({
                   aria-label={`Export ${clip.name}`}
                 />
 
-                <div className="flex-none w-16 h-10 rounded-[6px] overflow-hidden bg-frame flex items-center justify-center">
-                  {clip.thumbUrl ? (
-                    <img
-                      src={clip.thumbUrl}
-                      alt=""
-                      loading="lazy"
-                      className="w-full h-full object-cover block"
-                    />
-                  ) : (
-                    <span className="text-[#6f6857] text-[0.75rem]" aria-hidden="true">
-                      ▶
-                    </span>
-                  )}
-                </div>
-
                 <div className="min-w-0 flex-1 flex flex-col gap-[0.12rem]">
                   <span
                     className="text-[0.82rem] font-semibold whitespace-nowrap overflow-hidden text-ellipsis"

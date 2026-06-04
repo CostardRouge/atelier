@@ -1,12 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Tool } from './tools';
-import { useAssetLibrary } from '../shared/library/AssetLibraryContext';
+import {
+  useAssetLibrary,
+  type MediaMeta,
+} from '../shared/library/AssetLibraryContext';
 import type { Asset, AssetKind } from '../shared/library/assets';
 import {
   assetUsableBy,
   selectedUsableAssets,
 } from '../shared/library/capabilities';
-import { formatBytes } from '../shared/lib/format';
+import { formatBytes, formatDuration } from '../shared/lib/format';
 import {
   filesFromDataTransfer,
   pickDirectory,
@@ -209,8 +212,10 @@ export default function AssetSidebar({
             <AssetRow
               key={a.id}
               asset={a}
+              meta={lib.meta.get(a.id)}
               selected={lib.selection.has(a.id)}
               usable={assetUsableBy(accepts, a)}
+              onEnsure={() => lib.ensureMeta(a.id)}
               onToggle={() => lib.toggle(a.id)}
               onRemove={() => lib.remove(a.id)}
             />
@@ -232,17 +237,61 @@ export default function AssetSidebar({
   );
 }
 
+/** The metadata facts for a row, tolerant of still-loading covers. */
+function metaFacts(asset: Asset, meta: MediaMeta | undefined): string {
+  if (!meta || meta.status === 'pending') return 'reading…';
+  const facts: string[] = [];
+  if (meta.width && meta.height) facts.push(`${meta.width}×${meta.height}`);
+  if (meta.isVideo && meta.duration) facts.push(formatDuration(meta.duration));
+  if (!meta.isVideo && meta.imageType) facts.push(meta.imageType);
+  facts.push(formatBytes(asset.size));
+  return facts.join(' · ');
+}
+
 interface AssetRowProps {
   asset: Asset;
+  meta: MediaMeta | undefined;
   selected: boolean;
   usable: boolean;
+  onEnsure: () => void;
   onToggle: () => void;
   onRemove: () => void;
 }
 
-function AssetRow({ asset, selected, usable, onToggle, onRemove }: AssetRowProps) {
+function AssetRow({
+  asset,
+  meta,
+  selected,
+  usable,
+  onEnsure,
+  onToggle,
+  onRemove,
+}: AssetRowProps) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Build the cover lazily — only when the row scrolls into view, so a library
+  // of thousands of files doesn't decode them all up front.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          onEnsure();
+          io.disconnect();
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [onEnsure]);
+
+  const isPhoto = asset.kind === 'photo';
+
   return (
     <div
+      ref={ref}
       className={`group flex items-center gap-2.5 px-2 py-1.5 rounded-[11px] hover:bg-white ${
         selected ? 'bg-white shadow-[inset_0_0_0_1px_var(--color-line-strong)]' : ''
       } ${usable ? '' : 'opacity-45'}`}
@@ -254,12 +303,28 @@ function AssetRow({ asset, selected, usable, onToggle, onRemove }: AssetRowProps
         className="flex-none w-[15px] h-[15px] accent-ink cursor-pointer"
         aria-label={`Select ${asset.baseName}`}
       />
+      <div className="flex-none w-14 h-9 rounded-md overflow-hidden bg-frame grid place-items-center">
+        {meta?.thumbUrl ? (
+          <img
+            src={meta.thumbUrl}
+            alt=""
+            className="w-full h-full object-cover block"
+          />
+        ) : (
+          <span
+            className="font-mono text-[0.55rem] text-[#8a8270] uppercase tracking-wide"
+            aria-hidden="true"
+          >
+            {isPhoto ? (meta?.imageType ?? '◇') : '▶'}
+          </span>
+        )}
+      </div>
       <div className="min-w-0 flex-1">
         <div className="text-[0.79rem] font-medium truncate" title={asset.baseName}>
           {asset.baseName}
         </div>
-        <div className="font-mono text-[0.62rem] text-muted">
-          {formatBytes(asset.size)}
+        <div className="font-mono text-[0.62rem] text-muted truncate">
+          {metaFacts(asset, meta)}
         </div>
       </div>
       <span

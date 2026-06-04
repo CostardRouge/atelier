@@ -38,7 +38,11 @@ export interface ClipMeta {
  * Rejects only if even the metadata can't be read (e.g. the browser can't
  * demux the container at all). A missing thumbnail is not an error.
  */
-export function loadClipMeta(file: File): Promise<ClipMeta> {
+export function loadClipMeta(
+  file: File,
+  options: { thumbnail?: boolean } = {},
+): Promise<ClipMeta> {
+  const wantThumb = options.thumbnail !== false;
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const video = document.createElement('video');
@@ -122,6 +126,11 @@ export function loadClipMeta(file: File): Promise<ClipMeta> {
           finishNoThumb();
         }
       };
+
+      if (!wantThumb) {
+        finishNoThumb();
+        return;
+      }
 
       video.onseeked = captureThumb;
       // Seek a little in so we don't grab a black leading frame.

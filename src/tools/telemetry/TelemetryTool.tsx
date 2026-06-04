@@ -1,19 +1,15 @@
-import { useState } from 'react';
-import FolderDrop from '../../shared/components/FolderDrop';
+import { useMemo, useState } from 'react';
 import Gallery from './Gallery';
 import DetailView from './DetailView';
-import {
-  attachToPair,
-  detachFromPair,
-  pairFiles,
-  type MediaPair,
-} from './pair-files';
+import { type MediaPair } from './pair-files';
+import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
+import { selectedUsableAssets } from '../../shared/library/capabilities';
 
 const STEPS = [
   {
     no: '01',
-    title: 'Drop files or a folder',
-    body: 'Bring just one .mp4 and its .srt, or a whole DJI card folder. Nothing uploads; it stays on your machine.',
+    title: 'Add files or a folder',
+    body: 'Bring just one .mp4 and its .srt, or a whole DJI card folder, to the Library. Nothing uploads; it stays on your machine.',
   },
   {
     no: '02',
@@ -27,37 +23,44 @@ const STEPS = [
   },
 ];
 
+/** Asset kinds the telemetry gallery understands. */
+const TELEMETRY_KINDS = ['video+telemetry', 'telemetry', 'video'] as const;
+
 /**
- * Telemetry tool — the original DJI experience: drop a card folder, pairs build
- * themselves, and each clip plays with its flight log synced to the frame.
+ * Telemetry tool — the original DJI experience: clips play with their flight
+ * log synced to the frame. Its clips are a projection of the shared library's
+ * selected assets (the `.srt` part is the telemetry); completing or detaching a
+ * pair adds/removes the underlying file in the library.
  *
- * Self-contained: owns its own `pairs`/`selectedId` state. The selected pair is
- * kept in state (not a route) on purpose — pairs are built from in-memory
- * `File`s, so an id wouldn't survive a reload to deep-link to.
+ * The open pair is kept in local state (not a route) on purpose — assets are
+ * built from in-memory `File`s, so an id wouldn't survive a reload.
  */
 export default function TelemetryTool() {
-  const [pairs, setPairs] = useState<MediaPair[]>([]);
+  const lib = useAssetLibrary();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [loaded, setLoaded] = useState(false);
 
-  function handleFiles(files: File[]) {
-    setPairs(pairFiles(files));
-    setSelectedId(null);
-    setLoaded(true);
-  }
+  const pairs = useMemo<MediaPair[]>(
+    () =>
+      selectedUsableAssets(TELEMETRY_KINDS, lib.assets, lib.selection).map(
+        (a) => ({
+          id: a.id,
+          baseName: a.baseName,
+          video: a.parts.video ?? null,
+          srt: a.parts.srt ?? null,
+        }),
+      ),
+    [lib.assets, lib.selection],
+  );
 
-  // Replace one pair in place (matched by id). Used by attach and detach so the
-  // change shows in the gallery and, if it's the open one, the detail view.
-  function updatePair(id: string, fn: (p: MediaPair) => MediaPair) {
-    setPairs((prev) => prev.map((p) => (p.id === id ? fn(p) : p)));
-  }
-
-  function handleAttach(pair: MediaPair, file: File) {
-    updatePair(pair.id, (p) => attachToPair(p, file));
+  // Attaching a missing part adds the file to the library (it regroups by base
+  // name, completing the pair when the name matches); detaching removes it.
+  function handleAttach(_pair: MediaPair, file: File) {
+    lib.addFiles([file]);
   }
 
   function handleDetach(pair: MediaPair, kind: 'video' | 'srt') {
-    updatePair(pair.id, (p) => detachFromPair(p, kind));
+    const file = pair[kind];
+    if (file) lib.removeFile(file);
   }
 
   const selected = pairs.find((p) => p.id === selectedId) ?? null;
@@ -118,9 +121,15 @@ export default function TelemetryTool() {
         ))}
       </section>
 
-      <FolderDrop onFiles={handleFiles} />
-
-      {loaded && (
+      {pairs.length === 0 ? (
+        <p className="m-0 text-[0.92rem] leading-[1.6] text-muted border-[1.5px] border-dashed border-line-strong rounded-paper-lg p-6 bg-surface text-center">
+          Add your footage in the{' '}
+          <strong className="text-ink-soft font-semibold">Library</strong> on the
+          left, then select the clips to read. Videos pair with their{' '}
+          <strong className="text-ink-soft font-semibold">.srt</strong> siblings
+          automatically.
+        </p>
+      ) : (
         <section aria-label="Your clips">
           <div className="flex items-baseline justify-between gap-4 border-b border-line pb-3 mb-6">
             <span className="font-serif text-[1.7rem] tracking-[-0.01em]">
