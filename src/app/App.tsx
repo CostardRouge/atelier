@@ -1,7 +1,11 @@
+import { useEffect, useState } from 'react';
+import AssetSidebar from './AssetSidebar';
 import Home from './Home';
 import { REPO_URL } from './site';
 import { HOME_PATH, TOOLS, toolForPath } from './tools';
 import { useHashRoute } from './use-hash-route';
+
+const COLLAPSE_KEY = 'atelier.library.collapsed';
 
 /**
  * App shell for the Atelier suite: a masthead whose nav + active tool both
@@ -15,6 +19,19 @@ export default function App() {
   // an empty or unknown hash lands on home with nothing to redirect.
   const tool = toolForPath(path);
   const Active = tool?.Component ?? Home;
+
+  // Tools that declare `accepts` read their assets from the shared library,
+  // shown as a left sidebar. It collapses to a rail (default for full-height
+  // editor tools, so the work keeps its width); the choice is remembered.
+  const usesLibrary = !!tool?.accepts;
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    const stored = localStorage.getItem(COLLAPSE_KEY);
+    if (stored !== null) return stored === '1';
+    return !!tool?.fullHeight;
+  });
+  useEffect(() => {
+    localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0');
+  }, [collapsed]);
 
   return (
     <div
@@ -84,8 +101,35 @@ export default function App() {
         </div>
       </header>
 
-      <main className={tool?.fullHeight ? 'flex-1 min-h-0 flex flex-col' : undefined}>
-        <Active />
+      <main
+        className={
+          tool?.fullHeight
+            ? `flex-1 min-h-0 flex ${usesLibrary ? 'flex-row gap-4' : 'flex-col'}`
+            : usesLibrary
+              ? 'flex flex-row gap-5 items-start mt-4'
+              : undefined
+        }
+      >
+        {usesLibrary && tool && (
+          <AssetSidebar
+            tool={tool}
+            collapsed={collapsed}
+            onToggle={() => setCollapsed((c) => !c)}
+          />
+        )}
+        {usesLibrary ? (
+          <div
+            className={
+              tool?.fullHeight
+                ? 'flex-1 min-w-0 flex flex-col min-h-0'
+                : 'flex-1 min-w-0'
+            }
+          >
+            <Active />
+          </div>
+        ) : (
+          <Active />
+        )}
       </main>
 
       {/* The export bar carries the bottom in the full-height LUT view, so the
