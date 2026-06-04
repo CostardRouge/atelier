@@ -6,13 +6,11 @@ import { isExportSupported } from './export-video';
 import { runBatchExport } from './batch-export';
 import { type Clip } from './clip';
 import {
-  loadClipMeta,
   probeContainer,
   type ContainerInfo,
 } from '../../shared/media/video-metadata';
 import { useLutPreview } from './use-lut-preview';
 import { CUBE_ACCEPT, pickFile } from '../../shared/sources/file-sources';
-import ClipList from './ClipList';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
 
@@ -25,16 +23,15 @@ function formatTimecode(seconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
 }
 
-/** Max number of clip thumbnails/metadata to read at once. */
-const META_CONCURRENCY = 3;
-
 /**
- * LUT Studio — a collection of videos, graded through a `.cube` LUT.
+ * LUT Studio — grades the videos selected in the shared library through a
+ * `.cube` LUT.
  *
- * Left column: the clip list (thumbnail + summary + export checkbox). Right
- * pane: the real-time WebGL preview of the *active* clip with the look picker.
- * Bottom bar: batch-export the checked clips (sequential, one encoder at a
- * time). Only the active clip is ever decoded for preview; nothing uploads.
+ * The clips come from the library selection (its checkboxes are the export set);
+ * a ‹ / › switcher picks which one to preview. The real-time WebGL preview
+ * grades the active clip with a before/after wipe, and the bottom bar
+ * batch-exports every selected clip (sequential, one encoder at a time). Only
+ * the active clip is ever decoded for preview; nothing uploads.
  */
 export default function LutStudio() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -79,8 +76,6 @@ export default function LutStudio() {
   const exportAbort = useRef<AbortController | null>(null);
   const exportSupported = isExportSupported();
 
-  const metaProcessing = useRef<Set<string>>(new Set());
-
   const { supported, setSplit } = useLutPreview(
     videoRef,
     canvasRef,
@@ -108,15 +103,11 @@ export default function LutStudio() {
   );
 
   // Reconcile the clip list to the selection: keep existing clips (with their
-  // metadata, thumbnail and export state), add newly-selected ones, drop
-  // deselected ones (revoking their thumbnails). All heavy state lives here, in
-  // the tool — the library holds only handles.
+  // export state), add newly-selected ones, drop deselected ones. The clips are
+  // export bookkeeping only — the library owns the handles and the covers.
   useEffect(() => {
     setClips((prev) => {
       const want = new Map(selectedVideos.map((v) => [v.assetId, v.file]));
-      for (const c of prev) {
-        if (!want.has(c.id) && c.thumbUrl) URL.revokeObjectURL(c.thumbUrl);
-      }
       const byId = new Map(
         prev.filter((c) => want.has(c.id)).map((c) => [c.id, c] as const),
       );
@@ -127,8 +118,6 @@ export default function LutStudio() {
           file,
           name: file.name,
           size: file.size,
-          metaStatus: 'pending',
-          exportSelected: true,
           exportStatus: 'idle',
           exportRatio: null,
         });
@@ -139,16 +128,6 @@ export default function LutStudio() {
       return same ? prev : next;
     });
   }, [selectedVideos]);
-
-  // Removing a clip from the list deselects its asset in the library (the
-  // reconcile effect above then drops it and revokes its thumbnail).
-  function removeClip(id: string) {
-    lib.toggle(id);
-  }
-
-  function toggleAll(checked: boolean) {
-    setClips((prev) => prev.map((c) => ({ ...c, exportSelected: checked })));
-  }
 
   // --- effects ------------------------------------------------------------
 
@@ -162,23 +141,11 @@ export default function LutStudio() {
     }
   }, [clips, activeId]);
 
-  // Lazily read metadata + thumbnails for pending clips, a few at a time.
+  // The active clip's resolution comes from the shared library's cover meta,
+  // computed once there; make sure it's been requested.
   useEffect(() => {
-    const free = META_CONCURRENCY - metaProcessing.current.size;
-    if (free <= 0) return;
-    const pending = clips.filter(
-      (c) => c.metaStatus === 'pending' && !metaProcessing.current.has(c.id),
-    );
-    for (const clip of pending.slice(0, free)) {
-      metaProcessing.current.add(clip.id);
-      loadClipMeta(clip.file, { thumbnail: false })
-        .then((meta) =>
-          updateClip(clip.id, (c) => ({ ...c, ...meta, metaStatus: 'ready' })),
-        )
-        .catch(() => updateClip(clip.id, (c) => ({ ...c, metaStatus: 'error' })))
-        .finally(() => metaProcessing.current.delete(clip.id));
-    }
-  }, [clips]);
+    if (activeId) lib.ensureMeta(activeId);
+  }, [activeId, lib.ensureMeta]);
 
   // Swap the preview source when the active clip changes.
   useEffect(() => {
@@ -232,16 +199,6 @@ export default function LutStudio() {
       v.removeEventListener('loadedmetadata', onMeta);
     };
   }, [activeUrl]);
-
-  // Revoke all thumbnails on unmount.
-  useEffect(
-    () => () => {
-      for (const clip of clipsRef.current) {
-        if (clip.thumbUrl) URL.revokeObjectURL(clip.thumbUrl);
-      }
-    },
-    [],
-  );
 
   // --- look picker --------------------------------------------------------
 
@@ -357,22 +314,22 @@ export default function LutStudio() {
   // --- export -------------------------------------------------------------
 
   async function handleExport() {
-    const queue = clips.filter((c) => c.exportSelected);
-    if (queue.length === 0 || exporting) return;
+    if (clips.length === 0 || exporting) return;
     setExporting(true);
-    setBatchTotal(queue.length);
+    setBatchTotal(clips.length);
     setClips((prev) =>
-      prev.map((c) =>
-        c.exportSelected
-          ? { ...c, exportStatus: 'queued', exportRatio: null, exportError: undefined }
-          : c,
-      ),
+      prev.map((c) => ({
+        ...c,
+        exportStatus: 'queued',
+        exportRatio: null,
+        exportError: undefined,
+      })),
     );
     const controller = new AbortController();
     exportAbort.current = controller;
     try {
       await runBatchExport(
-        queue.map((c) => ({ id: c.id, file: c.file, name: c.name })),
+        clips.map((c) => ({ id: c.id, file: c.file, name: c.name })),
         lut,
         {
           onStart: (id) =>
@@ -401,16 +358,27 @@ export default function LutStudio() {
 
   // --- derived ------------------------------------------------------------
 
-  const selectedCount = clips.filter((c) => c.exportSelected).length;
   const doneCount = clips.filter((c) => c.exportStatus === 'done').length;
   const exportingClip = clips.find((c) => c.exportStatus === 'exporting');
   const overallRatio = batchTotal
     ? (doneCount + (exportingClip?.exportRatio ?? 0)) / batchTotal
     : 0;
 
+  // Active-clip switcher (replaces the old clip list for picking the preview).
+  const activeIndex = clips.findIndex((c) => c.id === activeId);
+  function goPrev() {
+    if (activeIndex > 0) setActiveId(clips[activeIndex - 1].id);
+  }
+  function goNext() {
+    if (activeIndex >= 0 && activeIndex < clips.length - 1) {
+      setActiveId(clips[activeIndex + 1].id);
+    }
+  }
+
+  const activeMeta = activeId ? lib.meta.get(activeId) : undefined;
   const activeRes =
-    activeClip?.width && activeClip?.height
-      ? `${activeClip.width}×${activeClip.height}`
+    activeMeta?.width && activeMeta?.height
+      ? `${activeMeta.width}×${activeMeta.height}`
       : null;
   const activeDetail = [
     activeRes,
@@ -425,30 +393,7 @@ export default function LutStudio() {
       className="flex flex-col flex-1 min-h-0 gap-4 mt-4"
       aria-label="LUT Studio"
     >
-      <div className="grid grid-cols-[minmax(240px,26%)_1fr] gap-6 items-stretch flex-1 min-h-0 rounded-paper-lg max-[820px]:grid-cols-1">
-        <aside className="flex flex-col gap-[0.9rem] min-w-0 min-h-0">
-          {clips.length === 0 ? (
-            <p className="m-0 text-[0.85rem] leading-[1.5] text-muted border-[1.5px] border-dashed border-line-strong rounded-paper p-4 bg-surface">
-              Select video assets in the{' '}
-              <strong className="text-ink-soft font-semibold">Library</strong> on
-              the left to grade them. Pick one to preview a look; check the ones
-              to export.
-            </p>
-          ) : (
-            <ClipList
-              clips={clips}
-              activeId={activeId}
-              onSelect={setActiveId}
-              onToggleExport={(id) =>
-                updateClip(id, (c) => ({ ...c, exportSelected: !c.exportSelected }))
-              }
-              onRemove={removeClip}
-              onToggleAll={toggleAll}
-            />
-          )}
-        </aside>
-
-        <div className="min-w-0 min-h-0 flex flex-col gap-[0.6rem]">
+      <div className="min-w-0 min-h-0 flex-1 flex flex-col gap-[0.6rem]">
           <div className="flex flex-wrap items-center gap-[0.75rem_1rem] mb-[1.1rem]">
             <label className="inline-flex items-center gap-2 font-mono text-[0.7rem] tracking-[0.12em] uppercase text-muted">
               <span>Look</span>
@@ -512,11 +457,36 @@ export default function LutStudio() {
           </div>
 
           {activeClip && (
-            <p
-              className="flex items-baseline gap-[0.7rem] m-0 min-w-0"
-              title={activeClip.name}
-            >
-              <span className="font-semibold text-[0.9rem] whitespace-nowrap overflow-hidden text-ellipsis">
+            <div className="flex items-center gap-[0.7rem] m-0 min-w-0">
+              {clips.length > 1 && (
+                <div className="flex items-center gap-1 flex-none">
+                  <button
+                    type="button"
+                    className="w-6 h-6 grid place-items-center rounded-full border border-line-strong bg-paper text-ink-soft cursor-pointer leading-none hover:border-accent hover:text-accent-ink disabled:opacity-40 disabled:cursor-default"
+                    onClick={goPrev}
+                    disabled={activeIndex <= 0}
+                    aria-label="Previous clip"
+                  >
+                    ‹
+                  </button>
+                  <span className="font-mono text-[0.7rem] text-muted tabular-nums min-w-[3ch] text-center">
+                    {activeIndex + 1}/{clips.length}
+                  </span>
+                  <button
+                    type="button"
+                    className="w-6 h-6 grid place-items-center rounded-full border border-line-strong bg-paper text-ink-soft cursor-pointer leading-none hover:border-accent hover:text-accent-ink disabled:opacity-40 disabled:cursor-default"
+                    onClick={goNext}
+                    disabled={activeIndex >= clips.length - 1}
+                    aria-label="Next clip"
+                  >
+                    ›
+                  </button>
+                </div>
+              )}
+              <span
+                className="font-semibold text-[0.9rem] whitespace-nowrap overflow-hidden text-ellipsis"
+                title={activeClip.name}
+              >
                 {activeClip.name}
               </span>
               {activeDetail && (
@@ -524,7 +494,7 @@ export default function LutStudio() {
                   {activeDetail}
                 </span>
               )}
-            </p>
+            </div>
           )}
 
           <div
@@ -640,7 +610,6 @@ export default function LutStudio() {
               {cubeError}
             </p>
           )}
-        </div>
       </div>
 
       <div className="flex items-center justify-end gap-4 border-t border-line pt-4 flex-none">
@@ -680,10 +649,10 @@ export default function LutStudio() {
               type="button"
               className="mt-0 px-[1.1rem] py-2 inline-flex items-center justify-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.82rem] font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent hover:text-white active:scale-[0.98] disabled:opacity-50 disabled:cursor-default"
               onClick={handleExport}
-              disabled={selectedCount === 0 || !exportSupported}
-              title="Render graded copies of the checked clips (H.264 MP4)"
+              disabled={clips.length === 0 || !exportSupported}
+              title="Render graded copies of the selected clips (H.264 MP4)"
             >
-              Export {selectedCount || ''} MP4{selectedCount === 1 ? '' : 's'}
+              Export {clips.length || ''} MP4{clips.length === 1 ? '' : 's'}
             </button>
           </>
         )}

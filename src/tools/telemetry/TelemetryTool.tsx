@@ -5,24 +5,6 @@ import { type MediaPair } from './pair-files';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
 
-const STEPS = [
-  {
-    no: '01',
-    title: 'Add files or a folder',
-    body: 'Bring just one .mp4 and its .srt, or a whole DJI card folder, to the Library. Nothing uploads; it stays on your machine.',
-  },
-  {
-    no: '02',
-    title: 'Pairs build themselves',
-    body: 'Each video finds its matching .srt sibling automatically and starts reading its flight log.',
-  },
-  {
-    no: '03',
-    title: 'Telemetry plays inline',
-    body: 'Altitude, GPS and exposure move with every clip right in the gallery. Open one full view for the complete readout.',
-  },
-];
-
 /** Asset kinds the telemetry gallery understands. */
 const TELEMETRY_KINDS = ['video+telemetry', 'telemetry', 'video'] as const;
 
