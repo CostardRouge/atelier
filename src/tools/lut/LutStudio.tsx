@@ -401,18 +401,22 @@ export default function LutStudio() {
       aria-label="LUT Studio"
     >
       <div className="min-w-0 min-h-0 flex-1 flex flex-col gap-[0.6rem]">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 mb-[1.1rem] px-2 py-2 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
-            {/* Look picker — a custom-chevroned select keyed to the paper palette */}
-            <label className="flex items-center gap-2 min-w-0 pl-1.5">
-              <span className="font-mono text-[0.62rem] tracking-[0.16em] uppercase text-muted select-none">
-                Look
-              </span>
-              <div className="relative inline-flex items-center">
+          {/* One control bar. A container query (the bar's own width, not the
+              viewport — the studio column is narrowed by the library sidebar)
+              keeps it on a single line when there's room, and folds it to two
+              rows below ~40rem: picker + upload on top, compare + view toggle
+              under it. */}
+          <div className="@container flex flex-wrap items-center gap-2 mb-[1.1rem] px-2 py-2 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
+            {/* LUT picker + upload — fills the bar on a narrow layout, shrinks
+                to a fixed width once everything fits on one line. */}
+            <div className="flex items-center gap-2 min-w-0 basis-full @[40rem]:basis-auto">
+              <div className="relative flex items-center flex-1 min-w-0 @[40rem]:flex-none @[40rem]:w-[12.5rem]">
                 <select
-                  className="appearance-none font-sans text-[0.84rem] font-semibold text-ink bg-paper border border-line-strong rounded-full h-[2.3rem] pl-[0.9rem] pr-[2.2rem] cursor-pointer hover:border-faint focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-colors disabled:opacity-60 disabled:cursor-default"
+                  className="appearance-none w-full min-w-0 font-sans text-[0.84rem] font-semibold text-ink bg-paper border border-line-strong rounded-full h-[2.3rem] pl-[0.9rem] pr-[2.2rem] cursor-pointer hover:border-faint focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-colors disabled:opacity-60 disabled:cursor-default"
                   value={selected}
                   onChange={(e) => applySelection(e.target.value)}
                   disabled={busy}
+                  aria-label="LUT"
                 >
                   <option value="none">No LUT (original)</option>
                   {UNGROUPED_LUTS.map((l) => (
@@ -444,42 +448,45 @@ export default function LutStudio() {
                   <path d="m6 9 6 6 6-6" />
                 </svg>
               </div>
-            </label>
 
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 h-[2.3rem] px-[0.85rem] rounded-full text-[0.8rem] font-semibold text-ink-soft hover:text-accent-ink hover:bg-accent-wash transition-colors"
-              onClick={uploadCube}
-              title="Load your own 3D .cube LUT"
-            >
-              <svg
-                className="w-[1.05rem] h-[1.05rem]"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-                <path d="m8 8 4-4 4 4" />
-                <path d="M12 4v11" />
-              </svg>
-              Upload .cube
-            </button>
-
-            <div className="ml-auto flex items-center gap-2 pr-0.5">
               <button
                 type="button"
-                className="inline-flex items-center gap-1.5 h-[2.3rem] px-[0.9rem] rounded-full border text-[0.8rem] font-semibold transition-colors disabled:opacity-50 disabled:cursor-default aria-pressed:border-accent aria-pressed:text-accent-ink aria-pressed:bg-accent-wash border-line-strong bg-paper text-ink-soft hover:enabled:border-faint hover:enabled:text-ink"
+                className="inline-flex items-center gap-1.5 flex-none h-[2.3rem] px-[0.7rem] @[40rem]:px-[0.85rem] rounded-full text-[0.8rem] font-semibold text-ink-soft hover:text-accent-ink hover:bg-accent-wash transition-colors"
+                onClick={uploadCube}
+                title="Load your own 3D .cube LUT"
+                aria-label="Upload a .cube LUT"
+              >
+                <svg
+                  className="w-[1.05rem] h-[1.05rem] flex-none"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+                  <path d="m8 8 4-4 4 4" />
+                  <path d="M12 4v11" />
+                </svg>
+                <span className="hidden @[40rem]:inline">Upload .cube</span>
+              </button>
+            </div>
+
+            {/* Compare + Original/Graded — its own row on a narrow bar, pushed
+                to the right edge once it shares the line with the picker. */}
+            <div className="flex items-center gap-2 basis-full @[40rem]:basis-auto @[40rem]:ml-auto">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 flex-none h-[2.3rem] px-[0.9rem] rounded-full border text-[0.8rem] font-semibold transition-colors disabled:opacity-50 disabled:cursor-default aria-pressed:border-accent aria-pressed:text-accent-ink aria-pressed:bg-accent-wash border-line-strong bg-paper text-ink-soft hover:enabled:border-faint hover:enabled:text-ink"
                 onClick={toggleCompare}
                 disabled={!lut}
                 aria-pressed={compareOn}
                 title="Drag a divider across the preview: grade on the left, original on the right"
               >
                 <svg
-                  className="w-[1.05rem] h-[1.05rem]"
+                  className="w-[1.05rem] h-[1.05rem] flex-none"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -499,7 +506,7 @@ export default function LutStudio() {
               {/* Original / Graded — a segmented switch is clearer than a
                   "Viewing: X" button: the active source reads at a glance. */}
               <div
-                className="inline-flex items-center h-[2.3rem] rounded-full border border-line-strong bg-paper p-[3px]"
+                className="inline-flex items-center flex-none h-[2.3rem] rounded-full border border-line-strong bg-paper p-[3px]"
                 role="group"
                 aria-label="Preview source"
               >
