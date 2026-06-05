@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import type { AssetKind } from '../shared/library/assets';
 import LutStudio from '../tools/lut/LutStudio';
+import OverlayStudio from '../tools/overlay/OverlayStudio';
 import TelemetryTool from '../tools/telemetry/TelemetryTool';
 
 /**
@@ -39,7 +40,16 @@ export const TOOLS: Tool[] = [
       'Play any DJI clip with its flight log in sync — altitude, GPS, ISO and shutter move with the frame.',
     Component: TelemetryTool,
     accepts: ['video+telemetry', 'telemetry', 'video'],
-      fullHeight: true,
+  },
+  {
+    id: 'overlay',
+    path: '/overlay',
+    label: 'Telemetry Overlay',
+    subtitle: 'Burn-in telemetry',
+    blurb:
+      'Place altitude, GPS and exposure readouts anywhere on your DJI clip, then export an MP4 with the telemetry burned in.',
+    Component: OverlayStudio,
+    accepts: ['video+telemetry'],
   },
   {
     id: 'lut',
@@ -49,7 +59,6 @@ export const TOOLS: Tool[] = [
     blurb:
       'Preview .cube LUTs on your footage with a before/after wipe, then batch-export the graded clips.',
     Component: LutStudio,
-      fullHeight: true,
     accepts: ['video'],
   },
 ];
