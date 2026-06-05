@@ -358,17 +358,19 @@ export default function LutStudio() {
               onUpload={uploadCube}
             />
 
-            <div className="ml-auto flex items-center gap-2 pr-0.5">
+            {/* Compare + Original/Graded — its own row on a narrow bar, pushed
+                to the right edge once it shares the line with the picker. */}
+            <div className="flex items-center gap-2 basis-full @[40rem]:basis-auto @[40rem]:ml-auto">
               <button
                 type="button"
-                className="inline-flex items-center gap-1.5 h-[2.3rem] px-[0.9rem] rounded-full border text-[0.8rem] font-semibold transition-colors disabled:opacity-50 disabled:cursor-default aria-pressed:border-accent aria-pressed:text-accent-ink aria-pressed:bg-accent-wash border-line-strong bg-paper text-ink-soft hover:enabled:border-faint hover:enabled:text-ink"
+                className="inline-flex items-center gap-1.5 flex-none h-[2.3rem] px-[0.9rem] rounded-full border text-[0.8rem] font-semibold transition-colors disabled:opacity-50 disabled:cursor-default aria-pressed:border-accent aria-pressed:text-accent-ink aria-pressed:bg-accent-wash border-line-strong bg-paper text-ink-soft hover:enabled:border-faint hover:enabled:text-ink"
                 onClick={toggleCompare}
                 disabled={!lut}
                 aria-pressed={compareOn}
                 title="Drag a divider across the preview: grade on the left, original on the right"
               >
                 <svg
-                  className="w-[1.05rem] h-[1.05rem]"
+                  className="w-[1.05rem] h-[1.05rem] flex-none"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -388,7 +390,7 @@ export default function LutStudio() {
               {/* Original / Graded — a segmented switch is clearer than a
                   "Viewing: X" button: the active source reads at a glance. */}
               <div
-                className="inline-flex items-center h-[2.3rem] rounded-full border border-line-strong bg-paper p-[3px]"
+                className="inline-flex items-center flex-none h-[2.3rem] rounded-full border border-line-strong bg-paper p-[3px]"
                 role="group"
                 aria-label="Preview source"
               >
