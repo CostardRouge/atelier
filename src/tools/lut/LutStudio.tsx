@@ -397,10 +397,10 @@ export default function LutStudio() {
 
   return (
     <section
-      className="flex flex-col flex-1 min-h-0 gap-4 mt-4"
+      className="flex flex-col flex-1 min-h-0 gap-4 mt-4 max-[820px]:flex-none"
       aria-label="LUT Studio"
     >
-      <div className="min-w-0 min-h-0 flex-1 flex flex-col gap-[0.6rem]">
+      <div className="min-w-0 min-h-0 flex-1 flex flex-col gap-[0.6rem] max-[820px]:flex-none">
           {/* One control bar. A container query (the bar's own width, not the
               viewport — the studio column is narrowed by the library sidebar)
               keeps it on a single line when there's room, and folds it to two
@@ -476,7 +476,7 @@ export default function LutStudio() {
 
             {/* Compare + Original/Graded — its own row on a narrow bar, pushed
                 to the right edge once it shares the line with the picker. */}
-            <div className="flex items-center gap-2 basis-full @[40rem]:basis-auto @[40rem]:ml-auto">
+            <div className="flex flex-wrap items-center gap-2 basis-full @[40rem]:basis-auto @[40rem]:ml-auto">
               <button
                 type="button"
                 className="inline-flex items-center gap-1.5 flex-none h-[2.3rem] px-[0.9rem] rounded-full border text-[0.8rem] font-semibold transition-colors disabled:opacity-50 disabled:cursor-default aria-pressed:border-accent aria-pressed:text-accent-ink aria-pressed:bg-accent-wash border-line-strong bg-paper text-ink-soft hover:enabled:border-faint hover:enabled:text-ink"
@@ -575,13 +575,13 @@ export default function LutStudio() {
                 </div>
               )}
               <span
-                className="font-semibold text-[0.9rem] whitespace-nowrap overflow-hidden text-ellipsis"
+                className="flex-1 min-w-0 truncate font-semibold text-[0.9rem]"
                 title={activeClip.name}
               >
                 {activeClip.name}
               </span>
               {activeDetail && (
-                <span className="font-mono text-[0.72rem] tracking-[0.02em] text-muted flex-none">
+                <span className="font-mono text-[0.72rem] tracking-[0.02em] text-muted flex-none max-[820px]:hidden">
                   {activeDetail}
                 </span>
               )}
@@ -590,7 +590,7 @@ export default function LutStudio() {
 
           <div
             ref={stageRef}
-            className={`relative rounded-paper overflow-hidden flex-1 min-h-0 flex items-center justify-center max-[820px]:min-h-[240px] ${
+            className={`relative rounded-paper overflow-hidden flex-1 min-h-0 flex items-center justify-center max-[820px]:flex-none max-[820px]:aspect-video ${
               activeUrl ? 'bg-frame cursor-pointer' : 'bg-transparent cursor-default'
             }${compareOn ? ' cursor-ew-resize' : ''}`}
             onClick={activeUrl && !compareOn ? togglePlay : undefined}
@@ -638,7 +638,7 @@ export default function LutStudio() {
           </div>
 
           {activeUrl && (
-            <div className="flex items-center gap-[0.85rem] mt-[0.9rem] px-[0.85rem] py-[0.6rem] border border-line rounded-paper bg-surface">
+            <div className="flex flex-wrap items-center gap-x-[0.85rem] gap-y-2 mt-[0.9rem] px-[0.85rem] py-[0.6rem] border border-line rounded-paper bg-surface">
               <button
                 type="button"
                 className="flex-none w-[2.2rem] h-[2.2rem] border-0 rounded-full bg-ink text-paper cursor-pointer text-[0.8rem] leading-none inline-flex items-center justify-center transition-[background-color] duration-200 ease-paper hover:bg-accent"
@@ -655,7 +655,7 @@ export default function LutStudio() {
               </span>
               <input
                 type="range"
-                className="flex-1 accent-accent cursor-pointer"
+                className="flex-1 min-w-0 accent-accent cursor-pointer max-[820px]:order-last max-[820px]:basis-full"
                 min={0}
                 max={duration || 0}
                 step={0.001}
@@ -675,7 +675,7 @@ export default function LutStudio() {
                 onChange={(e) => handleScrub(Number(e.target.value))}
                 aria-label="Seek"
               />
-              <span className="font-mono text-[0.74rem] tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
+              <span className="font-mono text-[0.74rem] tabular-nums text-muted flex-none min-w-[3.2ch] text-center max-[820px]:ml-auto">
                 {formatDuration(duration)}
               </span>
             </div>

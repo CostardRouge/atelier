@@ -86,7 +86,7 @@ export default function App() {
       <main
         className={
           tool
-            ? `flex-1 min-h-0 flex mt-4 ${usesLibrary ? 'flex-row gap-4' : 'flex-col'}`
+            ? `flex-1 min-h-0 flex mt-4 ${usesLibrary ? 'flex-row gap-4 max-[820px]:flex-col' : 'flex-col'}`
             : undefined
         }
       >

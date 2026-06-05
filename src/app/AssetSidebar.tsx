@@ -132,7 +132,7 @@ export default function AssetSidebar({
     : lib.assets;
 
   return (
-    <aside className="flex-none w-72 max-w-[78vw] flex flex-col min-h-0 border border-line rounded-paper-lg bg-surface shadow-paper overflow-hidden">
+    <aside className="flex-none w-72 max-w-[78vw] flex flex-col min-h-0 border border-line rounded-paper-lg bg-surface shadow-paper overflow-hidden max-[820px]:w-full max-[820px]:max-w-none max-[820px]:max-h-[55vh]">
       <div className="flex items-center justify-between px-4 pt-3.5 pb-2.5">
         <span className="font-serif text-[1.15rem]">Library</span>
         <button
