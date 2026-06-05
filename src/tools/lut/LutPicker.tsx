@@ -30,9 +30,9 @@ export default function LutPicker({
         <span className="font-mono text-[0.62rem] tracking-[0.16em] uppercase text-muted select-none">
           Look
         </span>
-        <div className="relative inline-flex items-center">
+        <div className="relative inline-flex items-center min-w-0">
           <select
-            className="appearance-none font-sans text-[0.84rem] font-semibold text-ink bg-paper border border-line-strong rounded-full h-[2.3rem] pl-[0.9rem] pr-[2.2rem] cursor-pointer hover:border-faint focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-colors disabled:opacity-60 disabled:cursor-default"
+            className="appearance-none min-w-0 max-w-full overflow-hidden text-ellipsis font-sans text-[0.84rem] font-semibold text-ink bg-paper border border-line-strong rounded-full h-[2.3rem] pl-[0.9rem] pr-[2.2rem] cursor-pointer hover:border-faint focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-colors disabled:opacity-60 disabled:cursor-default"
             value={selected}
             onChange={(e) => onSelect(e.target.value)}
             disabled={busy}
