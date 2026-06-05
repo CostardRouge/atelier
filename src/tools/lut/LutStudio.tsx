@@ -397,70 +397,147 @@ export default function LutStudio() {
 
   return (
     <section
-      className="flex flex-col flex-1 min-h-0 gap-4 mt-4"
+      className="flex flex-col flex-1 min-h-0 gap-4"
       aria-label="LUT Studio"
     >
       <div className="min-w-0 min-h-0 flex-1 flex flex-col gap-[0.6rem]">
-          <div className="flex flex-wrap items-center gap-[0.75rem_1rem] mb-[1.1rem]">
-            <label className="inline-flex items-center gap-2 font-mono text-[0.7rem] tracking-[0.12em] uppercase text-muted">
-              <span>Look</span>
-              <select
-                className="font-sans text-[0.85rem] font-semibold tracking-normal normal-case text-ink bg-surface border border-line-strong rounded-paper px-[0.7rem] py-[0.45rem] cursor-pointer"
-                value={selected}
-                onChange={(e) => applySelection(e.target.value)}
-                disabled={busy}
-              >
-                <option value="none">No LUT (original)</option>
-                {UNGROUPED_LUTS.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-                {LUT_GROUPS.map((g) => (
-                  <optgroup key={g.label} label={g.label}>
-                    {g.luts.map((l) => (
-                      <option key={l.id} value={l.id}>
-                        {l.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-                {customName && <option value="custom">{customName} (uploaded)</option>}
-              </select>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 mb-[1.1rem] px-2 py-2 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
+            {/* Look picker — a custom-chevroned select keyed to the paper palette */}
+            <label className="flex items-center gap-2 min-w-0 pl-1.5">
+              <span className="font-mono text-[0.62rem] tracking-[0.16em] uppercase text-muted select-none">
+                Look
+              </span>
+              <div className="relative inline-flex items-center">
+                <select
+                  className="appearance-none font-sans text-[0.84rem] font-semibold text-ink bg-paper border border-line-strong rounded-full h-[2.3rem] pl-[0.9rem] pr-[2.2rem] cursor-pointer hover:border-faint focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-colors disabled:opacity-60 disabled:cursor-default"
+                  value={selected}
+                  onChange={(e) => applySelection(e.target.value)}
+                  disabled={busy}
+                >
+                  <option value="none">No LUT (original)</option>
+                  {UNGROUPED_LUTS.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name}
+                    </option>
+                  ))}
+                  {LUT_GROUPS.map((g) => (
+                    <optgroup key={g.label} label={g.label}>
+                      {g.luts.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                  {customName && <option value="custom">{customName} (uploaded)</option>}
+                </select>
+                <svg
+                  className="pointer-events-none absolute right-[0.75rem] w-3.5 h-3.5 text-muted"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </div>
             </label>
 
             <button
               type="button"
-              className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent disabled:text-faint disabled:cursor-default disabled:no-underline"
+              className="inline-flex items-center gap-1.5 h-[2.3rem] px-[0.85rem] rounded-full text-[0.8rem] font-semibold text-ink-soft hover:text-accent-ink hover:bg-accent-wash transition-colors"
               onClick={uploadCube}
+              title="Load your own 3D .cube LUT"
             >
+              <svg
+                className="w-[1.05rem] h-[1.05rem]"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+                <path d="m8 8 4-4 4 4" />
+                <path d="M12 4v11" />
+              </svg>
               Upload .cube
             </button>
 
-            <button
-              type="button"
-              className="ml-auto border border-line-strong bg-paper text-ink-soft cursor-pointer text-[0.82rem] font-semibold px-[0.9rem] py-[0.45rem] rounded-full transition-[border-color,color] duration-200 ease-paper aria-pressed:border-accent aria-pressed:text-accent-ink disabled:opacity-50 disabled:cursor-default"
-              onClick={toggleCompare}
-              disabled={!lut}
-              aria-pressed={compareOn}
-              title="Drag a divider across the preview: grade on the left, original on the right"
-            >
-              {compareOn ? 'Comparing ⟷' : 'Compare ⟷'}
-            </button>
+            <div className="ml-auto flex items-center gap-2 pr-0.5">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 h-[2.3rem] px-[0.9rem] rounded-full border text-[0.8rem] font-semibold transition-colors disabled:opacity-50 disabled:cursor-default aria-pressed:border-accent aria-pressed:text-accent-ink aria-pressed:bg-accent-wash border-line-strong bg-paper text-ink-soft hover:enabled:border-faint hover:enabled:text-ink"
+                onClick={toggleCompare}
+                disabled={!lut}
+                aria-pressed={compareOn}
+                title="Drag a divider across the preview: grade on the left, original on the right"
+              >
+                <svg
+                  className="w-[1.05rem] h-[1.05rem]"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="5" width="18" height="14" rx="2" />
+                  <path d="M12 5v14" />
+                  <path d="m7 10-2 2 2 2" />
+                  <path d="m17 10 2 2-2 2" />
+                </svg>
+                Compare
+              </button>
 
-            <button
-              type="button"
-              className="ml-0 border border-line-strong bg-paper text-ink-soft cursor-pointer text-[0.82rem] font-semibold px-[0.9rem] py-[0.45rem] rounded-full transition-[border-color,color] duration-200 ease-paper aria-pressed:border-accent aria-pressed:text-accent-ink disabled:opacity-50 disabled:cursor-default"
-              onClick={() => {
-                setBypass((b) => !b);
-                setCompareOn(false);
-              }}
-              disabled={!lut}
-              aria-pressed={bypass}
-              title="Toggle between the graded and original image"
-            >
-              Viewing: {bypass || !lut ? 'Original' : 'Graded'}
-            </button>
+              {/* Original / Graded — a segmented switch is clearer than a
+                  "Viewing: X" button: the active source reads at a glance. */}
+              <div
+                className="inline-flex items-center h-[2.3rem] rounded-full border border-line-strong bg-paper p-[3px]"
+                role="group"
+                aria-label="Preview source"
+              >
+                <button
+                  type="button"
+                  className={`inline-flex items-center h-full px-[0.85rem] rounded-full text-[0.8rem] font-semibold transition-colors ${
+                    bypass || !lut
+                      ? 'bg-ink text-paper'
+                      : 'text-muted hover:text-ink'
+                  }`}
+                  onClick={() => {
+                    setBypass(true);
+                    setCompareOn(false);
+                  }}
+                  aria-pressed={bypass || !lut}
+                  title="Show the original, ungraded image"
+                >
+                  Original
+                </button>
+                <button
+                  type="button"
+                  className={`inline-flex items-center h-full px-[0.85rem] rounded-full text-[0.8rem] font-semibold transition-colors disabled:text-faint disabled:cursor-default ${
+                    !bypass && lut
+                      ? 'bg-ink text-paper'
+                      : 'text-muted enabled:hover:text-ink'
+                  }`}
+                  onClick={() => {
+                    setBypass(false);
+                    setCompareOn(false);
+                  }}
+                  disabled={!lut}
+                  aria-pressed={!bypass && !!lut}
+                  title={lut ? 'Show the graded image' : 'Pick a LUT first'}
+                >
+                  Graded
+                </button>
+              </div>
+            </div>
           </div>
 
           {activeClip && (
