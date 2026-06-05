@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import AssetSidebar from './AssetSidebar';
 import Home from './Home';
 import { REPO_URL } from './site';
-import { HOME_PATH, TOOLS, toolForPath } from './tools';
+import { HOME_PATH, toolForPath } from './tools';
+import ToolSwitcher from './ToolSwitcher';
 import { useHashRoute } from './use-hash-route';
 
 const COLLAPSE_KEY = 'atelier.library.collapsed';
@@ -54,30 +55,11 @@ export default function App() {
               <span className="text-faint not-italic" aria-hidden="true">
                 /
               </span>
-              <b className="not-italic font-normal text-ink-soft">{tool.label}</b>
+              <ToolSwitcher tool={tool} />
             </>
           )}
         </span>
         <div className="flex items-center gap-[0.9rem]">
-          <nav
-            className="inline-flex gap-1 p-[0.2rem] border border-line rounded-full bg-surface"
-            aria-label="Tools"
-          >
-            {TOOLS.map((t) => (
-              <a
-                key={t.id}
-                href={`#${t.path}`}
-                className={
-                  t.id === tool?.id
-                    ? 'px-[0.85rem] py-[0.32rem] rounded-full no-underline text-[0.78rem] font-semibold tracking-[0.01em] transition-[color,background-color] duration-200 ease-paper text-paper bg-ink'
-                    : 'px-[0.85rem] py-[0.32rem] rounded-full no-underline text-[0.78rem] font-semibold tracking-[0.01em] transition-[color,background-color] duration-200 ease-paper text-muted hover:text-ink'
-                }
-                aria-current={t.id === tool?.id ? 'page' : undefined}
-              >
-                {t.label}
-              </a>
-            ))}
-          </nav>
           {tool?.subtitle && (
             <span className="font-mono text-[0.7rem] tracking-[0.18em] uppercase text-muted max-[480px]:hidden">
               {tool.subtitle}
