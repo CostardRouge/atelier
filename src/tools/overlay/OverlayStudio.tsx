@@ -329,7 +329,7 @@ export default function OverlayStudio() {
 
   return (
     <section
-      className="flex flex-col flex-1 min-h-0 gap-4 mt-4"
+      className="flex flex-col flex-1 min-h-0 gap-4"
       aria-label="Telemetry Overlay"
     >
       {/* Header: clip switcher + name + detail */}
