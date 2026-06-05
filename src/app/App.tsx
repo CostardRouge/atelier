@@ -104,7 +104,7 @@ export default function App() {
       <main
         className={
           tool?.fullHeight
-            ? `flex-1 min-h-0 flex ${usesLibrary ? 'flex-row gap-4' : 'flex-col'}`
+            ? `flex-1 min-h-0 flex mt-4 ${usesLibrary ? 'flex-row gap-4' : 'flex-col'}`
             : usesLibrary
               ? 'flex flex-row gap-5 items-start mt-4'
               : undefined

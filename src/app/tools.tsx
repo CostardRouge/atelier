@@ -41,6 +41,7 @@ export const TOOLS: Tool[] = [
       'Play any DJI clip with its flight log in sync — altitude, GPS, ISO and shutter move with the frame.',
     Component: TelemetryTool,
     accepts: ['video+telemetry', 'telemetry', 'video'],
+      fullHeight: true,
   },
   {
     id: 'lut',
@@ -50,6 +51,7 @@ export const TOOLS: Tool[] = [
     blurb:
       'Preview .cube LUTs on your footage with a before/after wipe, then batch-export the graded clips.',
     Component: LutStudio,
+      fullHeight: true,
     accepts: ['video'],
   },
 ];
