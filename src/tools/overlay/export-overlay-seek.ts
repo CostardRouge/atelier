@@ -29,6 +29,8 @@ import {
   pickAvcCodec,
   type ExportProgress,
 } from '../../shared/media/webcodecs-export';
+import type { CubeLut } from '../../shared/lib/cube-parser';
+import { makeFrameGrader } from '../lut/frame-grader';
 import { drawOverlays } from './draw-overlays';
 import { ensureOverlayFonts } from './fonts';
 import type { OverlayElement } from './overlay-types';
@@ -83,6 +85,7 @@ export async function exportOverlayVideoViaSeek(
   file: File,
   cues: Cue[],
   elements: OverlayElement[],
+  lut: CubeLut | null,
   onProgress?: (p: ExportProgress) => void,
   signal?: AbortSignal,
 ): Promise<Blob> {
@@ -124,6 +127,7 @@ export async function exportOverlayVideoViaSeek(
 
   let pipelineError: Error | null = null;
   let encoder: VideoEncoder | null = null;
+  let grade: ReturnType<typeof makeFrameGrader> | null = null;
 
   try {
     await waitFor(video, 'loadedmetadata');
@@ -139,6 +143,9 @@ export async function exportOverlayVideoViaSeek(
       | OffscreenCanvasRenderingContext2D
       | null;
     if (!ctx) throw new Error('Could not create a 2D canvas for export.');
+
+    // The <video> frame is already display-oriented, so grade at output dims.
+    grade = lut ? makeFrameGrader(lut, outWidth, outHeight) : null;
 
     const bitrate = deriveBitrate(outWidth, outHeight, framerate);
     const muxer = new Muxer({
@@ -180,7 +187,8 @@ export async function exportOverlayVideoViaSeek(
 
       const t = i / framerate;
       await seekTo(video, t);
-      ctx.drawImage(video, 0, 0, outWidth, outHeight);
+      const source = grade ? grade.render(video) : video;
+      ctx.drawImage(source, 0, 0, outWidth, outHeight);
       drawOverlays(ctx, elements, findCue(cues, t), outWidth, outHeight);
 
       const vf = new VideoFrame(canvas, {
@@ -203,6 +211,7 @@ export async function exportOverlayVideoViaSeek(
     const { buffer: output } = muxer.target as ArrayBufferTarget;
     return new Blob([output], { type: 'video/mp4' });
   } finally {
+    grade?.dispose();
     if (encoder && encoder.state !== 'closed') encoder.close();
     video.removeAttribute('src');
     video.load();

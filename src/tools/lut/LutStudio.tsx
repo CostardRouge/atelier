@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { parseCube, type CubeLut } from '../../shared/lib/cube-parser';
 import { formatDuration } from '../../shared/lib/format';
-import { BUILTIN_LUTS, LUT_GROUPS, UNGROUPED_LUTS } from './builtin-luts';
 import { isExportSupported } from './export-video';
 import { runBatchExport } from './batch-export';
 import { type Clip } from './clip';
@@ -10,7 +8,8 @@ import {
   type ContainerInfo,
 } from '../../shared/media/video-metadata';
 import { useLutPreview } from './use-lut-preview';
-import { CUBE_ACCEPT, pickFile } from '../../shared/sources/file-sources';
+import { useLutSelection } from './use-lut-selection';
+import LutPicker from './LutPicker';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
 
@@ -54,12 +53,8 @@ export default function LutStudio() {
   const [activeError, setActiveError] = useState(false);
   const [activeInfo, setActiveInfo] = useState<ContainerInfo>({});
 
-  const [lut, setLut] = useState<CubeLut | null>(null);
-  const [selected, setSelected] = useState('none'); // 'none' | builtin id | 'custom'
-  const [customLut, setCustomLut] = useState<CubeLut | null>(null);
-  const [customName, setCustomName] = useState<string | null>(null);
-  const [cubeError, setCubeError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { lut, selected, customName, cubeError, busy, applySelection, uploadCube } =
+    useLutSelection();
   const [bypass, setBypass] = useState(false);
   // Before/after wipe: a divider that follows the cursor over the preview,
   // grade on the left, original on the right (like Lightroom / Capture One).
@@ -199,53 +194,6 @@ export default function LutStudio() {
       v.removeEventListener('loadedmetadata', onMeta);
     };
   }, [activeUrl]);
-
-  // --- look picker --------------------------------------------------------
-
-  async function applySelection(value: string) {
-    setSelected(value);
-    setCubeError(null);
-    if (value === 'none') {
-      setLut(null);
-      return;
-    }
-    if (value === 'custom') {
-      setLut(customLut);
-      return;
-    }
-    const entry = BUILTIN_LUTS.find((l) => l.id === value);
-    if (!entry) return;
-    setBusy(true);
-    try {
-      const res = await fetch(entry.url);
-      const parsed = parseCube(await res.text());
-      if (!parsed) {
-        setCubeError(`Could not parse ${entry.name}.`);
-        setLut(null);
-      } else {
-        setLut(parsed);
-      }
-    } catch {
-      setCubeError(`Could not load ${entry.name}.`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function uploadCube() {
-    const file = await pickFile(CUBE_ACCEPT);
-    if (!file) return;
-    setCubeError(null);
-    const parsed = parseCube(await file.text());
-    if (!parsed) {
-      setCubeError(`${file.name} isn't a supported 3D .cube LUT (1D LUTs aren't supported).`);
-      return;
-    }
-    setCustomLut(parsed);
-    setCustomName(file.name);
-    setLut(parsed);
-    setSelected('custom');
-  }
 
   // --- transport ----------------------------------------------------------
 
@@ -401,78 +349,14 @@ export default function LutStudio() {
       aria-label="LUT Studio"
     >
       <div className="min-w-0 min-h-0 flex-1 flex flex-col gap-[0.6rem]">
-          {/* One control bar. A container query (the bar's own width, not the
-              viewport — the studio column is narrowed by the library sidebar)
-              keeps it on a single line when there's room, and folds it to two
-              rows below ~40rem: picker + upload on top, compare + view toggle
-              under it. */}
-          <div className="@container flex flex-wrap items-center gap-2 mb-[1.1rem] px-2 py-2 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
-            {/* LUT picker + upload — fills the bar on a narrow layout, shrinks
-                to a fixed width once everything fits on one line. */}
-            <div className="flex items-center gap-2 min-w-0 basis-full @[40rem]:basis-auto">
-              <div className="relative flex items-center flex-1 min-w-0 @[40rem]:flex-none @[40rem]:w-[12.5rem]">
-                <select
-                  className="appearance-none w-full min-w-0 font-sans text-[0.84rem] font-semibold text-ink bg-paper border border-line-strong rounded-full h-[2.3rem] pl-[0.9rem] pr-[2.2rem] cursor-pointer hover:border-faint focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-colors disabled:opacity-60 disabled:cursor-default"
-                  value={selected}
-                  onChange={(e) => applySelection(e.target.value)}
-                  disabled={busy}
-                  aria-label="LUT"
-                >
-                  <option value="none">No LUT (original)</option>
-                  {UNGROUPED_LUTS.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name}
-                    </option>
-                  ))}
-                  {LUT_GROUPS.map((g) => (
-                    <optgroup key={g.label} label={g.label}>
-                      {g.luts.map((l) => (
-                        <option key={l.id} value={l.id}>
-                          {l.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                  {customName && <option value="custom">{customName} (uploaded)</option>}
-                </select>
-                <svg
-                  className="pointer-events-none absolute right-[0.75rem] w-3.5 h-3.5 text-muted"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="m6 9 6 6 6-6" />
-                </svg>
-              </div>
-
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 flex-none h-[2.3rem] px-[0.7rem] @[40rem]:px-[0.85rem] rounded-full text-[0.8rem] font-semibold text-ink-soft hover:text-accent-ink hover:bg-accent-wash transition-colors"
-                onClick={uploadCube}
-                title="Load your own 3D .cube LUT"
-                aria-label="Upload a .cube LUT"
-              >
-                <svg
-                  className="w-[1.05rem] h-[1.05rem] flex-none"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-                  <path d="m8 8 4-4 4 4" />
-                  <path d="M12 4v11" />
-                </svg>
-                <span className="hidden @[40rem]:inline">Upload .cube</span>
-              </button>
-            </div>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 mb-[1.1rem] px-2 py-2 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
+            <LutPicker
+              selected={selected}
+              customName={customName}
+              busy={busy}
+              onSelect={applySelection}
+              onUpload={uploadCube}
+            />
 
             {/* Compare + Original/Graded — its own row on a narrow bar, pushed
                 to the right edge once it shares the line with the picker. */}
