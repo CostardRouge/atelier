@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -35,6 +36,51 @@ export interface MediaMeta {
   imageType?: string;
 }
 
+/** A cull flag on an asset. */
+export type Flag = 'pick' | 'reject' | null;
+
+/** A triage verdict — set by the Cull tool, read by downstream tools. */
+export interface Verdict {
+  /** 0–5; 0 means unrated. */
+  rating: number;
+  flag: Flag;
+}
+
+// Verdicts are keyed by asset id (the base name), so they survive a reload and
+// re-apply when the same files are re-added. The pool itself isn't persisted
+// (File handles can't be), so this is the one piece of triage state that lasts.
+const VERDICTS_KEY = 'atelier:verdicts:v1';
+
+function loadVerdicts(): Map<string, Verdict> {
+  const m = new Map<string, Verdict>();
+  try {
+    const raw = localStorage.getItem(VERDICTS_KEY);
+    if (!raw) return m;
+    const obj = JSON.parse(raw) as Record<string, Partial<Verdict>>;
+    for (const [id, v] of Object.entries(obj)) {
+      const rating = Math.max(0, Math.min(5, Math.round(Number(v?.rating) || 0)));
+      const flag = v?.flag === 'pick' || v?.flag === 'reject' ? v.flag : null;
+      if (rating !== 0 || flag !== null) m.set(id, { rating, flag });
+    }
+  } catch {
+    /* corrupt or unavailable storage — start empty */
+  }
+  return m;
+}
+
+function saveVerdicts(verdicts: ReadonlyMap<string, Verdict>): void {
+  try {
+    if (verdicts.size === 0) localStorage.removeItem(VERDICTS_KEY);
+    else
+      localStorage.setItem(
+        VERDICTS_KEY,
+        JSON.stringify(Object.fromEntries(verdicts)),
+      );
+  } catch {
+    /* quota exceeded or storage unavailable — verdicts stay in-memory only */
+  }
+}
+
 export interface AssetLibrary {
   /** Logical assets, grouped from the raw handles, sorted by base name. */
   assets: Asset[];
@@ -44,6 +90,14 @@ export interface AssetLibrary {
   meta: ReadonlyMap<string, MediaMeta>;
   /** Request an asset's cover metadata (no-op if already built/pending). */
   ensureMeta: (id: string) => void;
+  /** Cull verdicts (rating + flag), keyed by asset id. Absent = unrated/unflagged. */
+  verdicts: ReadonlyMap<string, Verdict>;
+  /** Set an asset's star rating (0–5); 0 clears the rating but keeps any flag. */
+  setRating: (id: string, rating: number) => void;
+  /** Set/replace an asset's flag (pass null to unflag); keeps any rating. */
+  setFlag: (id: string, flag: Flag) => void;
+  /** Remove an asset's verdict entirely (rating + flag). */
+  clearVerdict: (id: string) => void;
   /** Add files (from any source); duplicates are ignored, new assets selected. */
   addFiles: (files: File[]) => void;
   /** Drop an asset entirely (its handles leave the pool). */
@@ -146,6 +200,48 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
     [commitMeta],
   );
 
+  // --- cull verdicts (rating + flag), persisted to localStorage ------------
+  const [verdicts, setVerdicts] = useState<ReadonlyMap<string, Verdict>>(
+    () => loadVerdicts(),
+  );
+  const verdictsRef = useRef<Map<string, Verdict>>(
+    verdicts as Map<string, Verdict>,
+  );
+
+  useEffect(() => {
+    saveVerdicts(verdicts);
+  }, [verdicts]);
+
+  const commitVerdict = useCallback(
+    (id: string, fn: (v: Verdict) => Verdict) => {
+      const next = new Map(verdictsRef.current);
+      const updated = fn(next.get(id) ?? { rating: 0, flag: null });
+      // Prune empty verdicts so the map stays small at scale.
+      if (updated.rating === 0 && updated.flag === null) next.delete(id);
+      else next.set(id, updated);
+      verdictsRef.current = next;
+      setVerdicts(next);
+    },
+    [],
+  );
+
+  const setRating = useCallback(
+    (id: string, rating: number) =>
+      commitVerdict(id, (v) => ({
+        ...v,
+        rating: Math.max(0, Math.min(5, Math.round(rating))),
+      })),
+    [commitVerdict],
+  );
+  const setFlag = useCallback(
+    (id: string, flag: Flag) => commitVerdict(id, (v) => ({ ...v, flag })),
+    [commitVerdict],
+  );
+  const clearVerdict = useCallback(
+    (id: string) => commitVerdict(id, () => ({ rating: 0, flag: null })),
+    [commitVerdict],
+  );
+
   // --- mutations -----------------------------------------------------------
   const addFiles = useCallback(
     (incoming: File[]) => {
@@ -210,6 +306,8 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
     }
     metaRef.current = new Map();
     setMeta(metaRef.current);
+    verdictsRef.current = new Map();
+    setVerdicts(verdictsRef.current);
     setFiles([]);
     setSelection(new Set());
   }, []);
@@ -235,6 +333,10 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
       selection,
       meta,
       ensureMeta,
+      verdicts,
+      setRating,
+      setFlag,
+      clearVerdict,
       addFiles,
       remove,
       removeFile,
@@ -248,6 +350,10 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
       selection,
       meta,
       ensureMeta,
+      verdicts,
+      setRating,
+      setFlag,
+      clearVerdict,
       addFiles,
       remove,
       removeFile,
