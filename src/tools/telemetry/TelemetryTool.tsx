@@ -47,20 +47,19 @@ export default function TelemetryTool() {
 
   const selected = pairs.find((p) => p.id === selectedId) ?? null;
 
-  if (selected) {
-    return (
-      <DetailView
-        pair={selected}
-        onBack={() => setSelectedId(null)}
-        onAttach={handleAttach}
-        onDetach={handleDetach}
-      />
-    );
-  }
-
+  // The tool lives in a fixed-height frame, so its content scrolls here (the
+  // gallery can hold many cards). On narrow screens the whole page scrolls
+  // instead, matching the shell's mobile layout.
   return (
-    <>
-      {pairs.length === 0 ? (
+    <div className="flex-1 min-h-0 overflow-y-auto max-[820px]:overflow-visible pb-4">
+      {selected ? (
+        <DetailView
+          pair={selected}
+          onBack={() => setSelectedId(null)}
+          onAttach={handleAttach}
+          onDetach={handleDetach}
+        />
+      ) : pairs.length === 0 ? (
         <p className="m-0 text-[0.92rem] leading-[1.6] text-muted border-[1.5px] border-dashed border-line-strong rounded-paper-lg p-6 bg-surface text-center">
           Add your footage in the{' '}
           <strong className="text-ink-soft font-semibold">Library</strong> on the
@@ -78,6 +77,6 @@ export default function TelemetryTool() {
           />
         </section>
       )}
-    </>
+    </div>
   );
 }

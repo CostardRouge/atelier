@@ -22,8 +22,6 @@ export interface Tool {
   blurb?: string;
   /** The tool's root component. */
   Component: ComponentType;
-  /** When set, the shell becomes a fixed-height frame (e.g. an editor). */
-  fullHeight?: boolean;
   /**
    * Asset kinds this tool consumes. When set, the shell shows the global asset
    * library sidebar and the tool reads its selection from there. Tools without
@@ -42,7 +40,6 @@ export const TOOLS: Tool[] = [
       'Play any DJI clip with its flight log in sync — altitude, GPS, ISO and shutter move with the frame.',
     Component: TelemetryTool,
     accepts: ['video+telemetry', 'telemetry', 'video'],
-      fullHeight: true,
   },
   {
     id: 'overlay',
@@ -52,7 +49,6 @@ export const TOOLS: Tool[] = [
     blurb:
       'Place altitude, GPS and exposure readouts anywhere on your DJI clip, then export an MP4 with the telemetry burned in.',
     Component: OverlayStudio,
-    fullHeight: true,
     accepts: ['video+telemetry'],
   },
   {
@@ -63,7 +59,6 @@ export const TOOLS: Tool[] = [
     blurb:
       'Preview .cube LUTs on your footage with a before/after wipe, then batch-export the graded clips.',
     Component: LutStudio,
-      fullHeight: true,
     accepts: ['video'],
   },
 ];

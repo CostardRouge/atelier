@@ -292,7 +292,7 @@ function AssetRow({
   return (
     <div
       ref={ref}
-      className={`group flex items-center gap-2.5 px-2 py-1.5 rounded-[11px] hover:bg-white ${
+      className={`group flex items-center gap-2.5 px-2 py-1.5 mb-1 rounded-[11px] hover:bg-white ${
         selected ? 'bg-white shadow-[inset_0_0_0_1px_var(--color-line-strong)]' : ''
       } ${usable ? '' : 'opacity-45'}`}
     >
@@ -303,7 +303,7 @@ function AssetRow({
         className="flex-none w-[15px] h-[15px] accent-ink cursor-pointer"
         aria-label={`Select ${asset.baseName}`}
       />
-      <div className="flex-none w-14 h-9 rounded-md overflow-hidden bg-frame grid place-items-center">
+      <div className="flex-none w-20 h-14 rounded-sm overflow-hidden bg-frame grid place-items-center">
         {meta?.thumbUrl ? (
           <img
             src={meta.thumbUrl}

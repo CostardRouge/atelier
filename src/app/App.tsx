@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import AssetSidebar from './AssetSidebar';
 import Home from './Home';
 import { REPO_URL } from './site';
-import { HOME_PATH, TOOLS, toolForPath } from './tools';
+import { HOME_PATH, toolForPath } from './tools';
+import ToolSwitcher from './ToolSwitcher';
 import { useHashRoute } from './use-hash-route';
 
 const COLLAPSE_KEY = 'atelier.library.collapsed';
@@ -21,22 +22,22 @@ export default function App() {
   const Active = tool?.Component ?? Home;
 
   // Tools that declare `accepts` read their assets from the shared library,
-  // shown as a left sidebar. It collapses to a rail (default for full-height
-  // editor tools, so the work keeps its width); the choice is remembered.
+  // shown as a left sidebar. It collapses to a thin rail (the choice is
+  // remembered); it starts expanded so the library is discoverable.
   const usesLibrary = !!tool?.accepts;
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
-    const stored = localStorage.getItem(COLLAPSE_KEY);
-    if (stored !== null) return stored === '1';
-    return !!tool?.fullHeight;
-  });
+  const [collapsed, setCollapsed] = useState<boolean>(
+    () => localStorage.getItem(COLLAPSE_KEY) === '1',
+  );
   useEffect(() => {
     localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0');
   }, [collapsed]);
 
+  // Every tool runs in a fixed-height frame (the tool owns its own scrolling);
+  // only the Home landing keeps the natural, page-scrolling layout + footer.
   return (
     <div
       className={
-        tool?.fullHeight
+        tool
           ? 'h-dvh flex flex-col min-h-0 overflow-hidden max-w-[1080px] mx-auto px-[clamp(1.25rem,5vw,3.5rem)] pt-[clamp(1.25rem,4vw,3rem)] pb-[clamp(1rem,3vw,1.75rem)] max-[820px]:h-auto max-[820px]:min-h-dvh max-[820px]:overflow-visible'
           : 'max-w-[1080px] mx-auto px-[clamp(1.25rem,5vw,3.5rem)] pt-[clamp(1.25rem,4vw,3rem)] pb-20'
       }
@@ -54,30 +55,11 @@ export default function App() {
               <span className="text-faint not-italic" aria-hidden="true">
                 /
               </span>
-              <b className="not-italic font-normal text-ink-soft">{tool.label}</b>
+              <ToolSwitcher tool={tool} />
             </>
           )}
         </span>
         <div className="flex items-center gap-[0.9rem]">
-          <nav
-            className="inline-flex gap-1 p-[0.2rem] border border-line rounded-full bg-surface"
-            aria-label="Tools"
-          >
-            {TOOLS.map((t) => (
-              <a
-                key={t.id}
-                href={`#${t.path}`}
-                className={
-                  t.id === tool?.id
-                    ? 'px-[0.85rem] py-[0.32rem] rounded-full no-underline text-[0.78rem] font-semibold tracking-[0.01em] transition-[color,background-color] duration-200 ease-paper text-paper bg-ink'
-                    : 'px-[0.85rem] py-[0.32rem] rounded-full no-underline text-[0.78rem] font-semibold tracking-[0.01em] transition-[color,background-color] duration-200 ease-paper text-muted hover:text-ink'
-                }
-                aria-current={t.id === tool?.id ? 'page' : undefined}
-              >
-                {t.label}
-              </a>
-            ))}
-          </nav>
           {tool?.subtitle && (
             <span className="font-mono text-[0.7rem] tracking-[0.18em] uppercase text-muted max-[480px]:hidden">
               {tool.subtitle}
@@ -103,11 +85,9 @@ export default function App() {
 
       <main
         className={
-          tool?.fullHeight
+          tool
             ? `flex-1 min-h-0 flex mt-4 ${usesLibrary ? 'flex-row gap-4' : 'flex-col'}`
-            : usesLibrary
-              ? 'flex flex-row gap-5 items-start mt-4'
-              : undefined
+            : undefined
         }
       >
         {usesLibrary && tool && (
@@ -118,13 +98,7 @@ export default function App() {
           />
         )}
         {usesLibrary ? (
-          <div
-            className={
-              tool?.fullHeight
-                ? 'flex-1 min-w-0 flex flex-col min-h-0'
-                : 'flex-1 min-w-0'
-            }
-          >
+          <div className="flex-1 min-w-0 flex flex-col min-h-0">
             <Active />
           </div>
         ) : (
@@ -132,9 +106,9 @@ export default function App() {
         )}
       </main>
 
-      {/* The export bar carries the bottom in the full-height LUT view, so the
-          global footer would push the fixed frame past the viewport — omit it. */}
-      {!tool?.fullHeight && (
+      {/* Tools run in a fixed-height frame, so the global footer would push it
+          past the viewport — show it only on the Home landing. */}
+      {!tool && (
         <footer className="mt-14 pt-5 border-t border-line text-[0.8rem] text-muted flex flex-wrap items-center gap-[0.5rem_0.7rem]">
           <span className="w-[5px] h-[5px] rounded-full bg-accent inline-block" />
           Runs entirely in your browser — files are never uploaded.
