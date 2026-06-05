@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -43,6 +44,41 @@ export interface Verdict {
   /** 0–5; 0 means unrated. */
   rating: number;
   flag: Flag;
+}
+
+// Verdicts are keyed by asset id (the base name), so they survive a reload and
+// re-apply when the same files are re-added. The pool itself isn't persisted
+// (File handles can't be), so this is the one piece of triage state that lasts.
+const VERDICTS_KEY = 'atelier:verdicts:v1';
+
+function loadVerdicts(): Map<string, Verdict> {
+  const m = new Map<string, Verdict>();
+  try {
+    const raw = localStorage.getItem(VERDICTS_KEY);
+    if (!raw) return m;
+    const obj = JSON.parse(raw) as Record<string, Partial<Verdict>>;
+    for (const [id, v] of Object.entries(obj)) {
+      const rating = Math.max(0, Math.min(5, Math.round(Number(v?.rating) || 0)));
+      const flag = v?.flag === 'pick' || v?.flag === 'reject' ? v.flag : null;
+      if (rating !== 0 || flag !== null) m.set(id, { rating, flag });
+    }
+  } catch {
+    /* corrupt or unavailable storage — start empty */
+  }
+  return m;
+}
+
+function saveVerdicts(verdicts: ReadonlyMap<string, Verdict>): void {
+  try {
+    if (verdicts.size === 0) localStorage.removeItem(VERDICTS_KEY);
+    else
+      localStorage.setItem(
+        VERDICTS_KEY,
+        JSON.stringify(Object.fromEntries(verdicts)),
+      );
+  } catch {
+    /* quota exceeded or storage unavailable — verdicts stay in-memory only */
+  }
 }
 
 export interface AssetLibrary {
@@ -164,11 +200,17 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
     [commitMeta],
   );
 
-  // --- cull verdicts (rating + flag) ---------------------------------------
-  const verdictsRef = useRef<Map<string, Verdict>>(new Map());
+  // --- cull verdicts (rating + flag), persisted to localStorage ------------
   const [verdicts, setVerdicts] = useState<ReadonlyMap<string, Verdict>>(
-    verdictsRef.current,
+    () => loadVerdicts(),
   );
+  const verdictsRef = useRef<Map<string, Verdict>>(
+    verdicts as Map<string, Verdict>,
+  );
+
+  useEffect(() => {
+    saveVerdicts(verdicts);
+  }, [verdicts]);
 
   const commitVerdict = useCallback(
     (id: string, fn: (v: Verdict) => Verdict) => {

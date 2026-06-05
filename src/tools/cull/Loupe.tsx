@@ -13,6 +13,10 @@ interface LoupeProps {
   verdict: Verdict | undefined;
   onRate: (n: number) => void;
   onFlag: (flag: Flag) => void;
+  /** Whether the loupe is currently in fullscreen mode. */
+  zen?: boolean;
+  /** Toggle fullscreen; when omitted the expand button is hidden. */
+  onToggleZen?: () => void;
   className?: string;
 }
 
@@ -28,6 +32,8 @@ export default function Loupe({
   verdict,
   onRate,
   onFlag,
+  zen,
+  onToggleZen,
   className,
 }: LoupeProps) {
   const isPhoto = asset?.kind === 'photo';
@@ -97,6 +103,19 @@ export default function Loupe({
         <div className="text-muted font-mono text-[0.8rem] text-center p-6">
           {isPhoto ? `${meta?.imageType ?? 'image'} · no preview` : '▶ no preview'}
         </div>
+      )}
+
+      {/* fullscreen toggle */}
+      {asset && onToggleZen && (
+        <button
+          type="button"
+          onClick={onToggleZen}
+          className="absolute top-2 right-2 w-7 h-7 grid place-items-center rounded-full bg-black/45 text-white/85 hover:text-white text-sm"
+          title={zen ? 'Exit fullscreen (Esc)' : 'Fullscreen (F)'}
+          aria-label={zen ? 'Exit fullscreen' : 'Fullscreen'}
+        >
+          {zen ? '⤡' : '⤢'}
+        </button>
       )}
 
       {/* verdict controls */}

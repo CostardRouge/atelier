@@ -21,6 +21,7 @@ export default function CullTool() {
   const lib = useAssetLibrary();
   const [filter, setFilter] = useState<CullFilter>('all');
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [zen, setZen] = useState(false);
 
   const workingSet = useMemo(
     () => selectedUsableAssets(['photo', 'video'], lib.assets, lib.selection),
@@ -71,7 +72,42 @@ export default function CullTool() {
     onRate: (n) => focusedId && lib.setRating(focusedId, n),
     onFlag: (f) => focusedId && lib.setFlag(focusedId, f),
     onClearFlag: () => focusedId && lib.setFlag(focusedId, null),
+    onToggleZen: () => setZen((z) => !z),
+    onExitZen: () => setZen(false),
   });
+
+  // Leaving fullscreen when the focus clears keeps the empty state coherent.
+  useEffect(() => {
+    if (!focusedAsset && zen) setZen(false);
+  }, [focusedAsset, zen]);
+
+  const loupe = (
+    <Loupe
+      asset={focusedAsset}
+      meta={focusedAsset ? lib.meta.get(focusedAsset.id) : undefined}
+      verdict={focusedAsset ? lib.verdicts.get(focusedAsset.id) : undefined}
+      onRate={(n) => focusedId && lib.setRating(focusedId, n)}
+      onFlag={(f) => focusedId && lib.setFlag(focusedId, f)}
+      zen={zen}
+      onToggleZen={() => setZen((z) => !z)}
+      className="flex-1 min-h-0"
+    />
+  );
+
+  if (zen) {
+    return (
+      <section
+        className="fixed inset-0 z-50 flex flex-col gap-2 bg-paper p-4"
+        aria-label="Cull (fullscreen)"
+      >
+        <p className="font-mono text-[0.72rem] text-muted tracking-[0.04em] m-0 text-center">
+          {focusedAsset?.baseName ?? ''} · {focusIndex + 1}/{filtered.length} ·
+          ←/→ 1–5 P X U · Esc to exit
+        </p>
+        {loupe}
+      </section>
+    );
+  }
 
   return (
     <section
@@ -87,14 +123,7 @@ export default function CullTool() {
         </p>
       </div>
 
-      <Loupe
-        asset={focusedAsset}
-        meta={focusedAsset ? lib.meta.get(focusedAsset.id) : undefined}
-        verdict={focusedAsset ? lib.verdicts.get(focusedAsset.id) : undefined}
-        onRate={(n) => focusedId && lib.setRating(focusedId, n)}
-        onFlag={(f) => focusedId && lib.setFlag(focusedId, f)}
-        className="flex-1 min-h-0"
-      />
+      {loupe}
 
       <Grid
         assets={filtered}

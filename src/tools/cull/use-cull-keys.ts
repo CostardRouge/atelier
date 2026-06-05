@@ -7,6 +7,10 @@ export interface CullKeyHandlers {
   onRate: (n: number) => void;
   onFlag: (flag: 'pick' | 'reject') => void;
   onClearFlag: () => void;
+  /** Toggle the distraction-free fullscreen loupe (F). */
+  onToggleZen: () => void;
+  /** Leave fullscreen (Escape). */
+  onExitZen: () => void;
   /** When false, shortcuts are ignored (e.g. nothing focused). */
   enabled: boolean;
 }
@@ -16,7 +20,8 @@ export interface CullKeyHandlers {
  * click on a star or a cell never steals focus and silences the arrows.
  *
  * `← / →` move focus · `1–5` set rating · `0` clear rating · `P` pick ·
- * `X` reject · `U` unflag. Typing in an input/textarea (e.g. the library
+ * `X` reject · `U` unflag · `F` fullscreen · `Esc` exit. Typing in an
+ * input/textarea (e.g. the library
  * filter) and any modifier chord are left alone.
  */
 export function useCullKeys(handlers: CullKeyHandlers): void {
@@ -57,6 +62,11 @@ export function useCullKeys(handlers: CullKeyHandlers): void {
       } else if (k === 'u' || k === 'U') {
         e.preventDefault();
         h.onClearFlag();
+      } else if (k === 'f' || k === 'F') {
+        e.preventDefault();
+        h.onToggleZen();
+      } else if (k === 'Escape') {
+        h.onExitZen();
       }
     };
     window.addEventListener('keydown', onKey);
