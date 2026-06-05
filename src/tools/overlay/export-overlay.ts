@@ -12,6 +12,7 @@ import type { Cue } from '../telemetry/srt-parser';
 import { findCue } from '../telemetry/find-cue';
 import {
   DecodeUnsupportedError,
+  drawRotatedFrame,
   exportProcessedVideo,
   makeExportCanvas,
   type ExportProgress,
@@ -34,8 +35,11 @@ export async function exportOverlayVideo(
   await ensureOverlayFonts(elements);
   return exportProcessedVideo(
     file,
-    (width, height): FrameProcessor => {
-      const canvas = makeExportCanvas(width, height);
+    ({ codedWidth, codedHeight, outputWidth, outputHeight, rotation }): FrameProcessor => {
+      // Work in display orientation so the burned-in overlays land exactly
+      // where the preview shows them: rotate the decoded frame into the output
+      // canvas, then draw overlays in those (display) coordinates.
+      const canvas = makeExportCanvas(outputWidth, outputHeight);
       const ctx = canvas.getContext('2d') as
         | CanvasRenderingContext2D
         | OffscreenCanvasRenderingContext2D
@@ -43,8 +47,14 @@ export async function exportOverlayVideo(
       if (!ctx) throw new Error('Could not create a 2D canvas for export.');
       return {
         draw(frame, tMicros) {
-          ctx.drawImage(frame, 0, 0, width, height);
-          drawOverlays(ctx, elements, findCue(cues, tMicros / 1_000_000), width, height);
+          drawRotatedFrame(ctx, frame, codedWidth, codedHeight, rotation, outputWidth, outputHeight);
+          drawOverlays(
+            ctx,
+            elements,
+            findCue(cues, tMicros / 1_000_000),
+            outputWidth,
+            outputHeight,
+          );
           return canvas;
         },
         dispose() {},
@@ -52,6 +62,7 @@ export async function exportOverlayVideo(
     },
     onProgress,
     signal,
+    { bakeRotation: true },
   );
 }
 

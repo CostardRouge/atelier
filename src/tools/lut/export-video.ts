@@ -30,14 +30,16 @@ export function exportGradedVideo(
   onProgress?: (p: ExportProgress) => void,
   signal?: AbortSignal,
 ): Promise<Blob> {
+  // The grade is orientation-independent, so the LUT export keeps frames in
+  // coded orientation and lets the container's rotation flag stand (no baking).
   return exportProcessedVideo(
     file,
-    (width, height): FrameProcessor => {
-      const canvas = makeExportCanvas(width, height);
+    ({ codedWidth, codedHeight }): FrameProcessor => {
+      const canvas = makeExportCanvas(codedWidth, codedHeight);
       const renderer = createLutRenderer(canvas);
       if (!renderer) throw new Error('WebGL2 is required for export.');
       renderer.setLut(lut);
-      renderer.resize(width, height);
+      renderer.resize(codedWidth, codedHeight);
       return {
         draw(frame) {
           renderer.draw(frame);

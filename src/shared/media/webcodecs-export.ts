@@ -35,6 +35,34 @@ export interface ExportProgress {
 }
 
 /**
+ * What the per-frame transform is told about the source. Coded dimensions are
+ * the decoder's raw orientation; output dimensions are what gets encoded — they
+ * differ from coded when {@link ExportOptions.bakeRotation} is on and the clip
+ * is rotated 90°/270° (portrait↔landscape swap).
+ */
+export interface FrameContext {
+  /** Decoder's raw frame dimensions (un-rotated). */
+  codedWidth: number;
+  codedHeight: number;
+  /** Encoded output dimensions (display orientation when baking rotation). */
+  outputWidth: number;
+  outputHeight: number;
+  /** Container display rotation, clockwise degrees. */
+  rotation: 0 | 90 | 180 | 270;
+}
+
+export interface ExportOptions {
+  /**
+   * When true, rotate each decoded frame into display orientation *in pixels*
+   * and emit `rotation: 0`, instead of leaving frames coded and relying on a
+   * rotation flag the player must honour. Essential when something is drawn at
+   * specific coordinates (overlays) so the result matches the on-screen preview
+   * exactly. Default false (cheaper, fine for orientation-independent passes).
+   */
+  bakeRotation?: boolean;
+}
+
+/**
  * A per-frame transform. `draw` receives the decoded frame and the frame's
  * presentation time (microseconds) and must return the surface to encode. It
  * MUST NOT close `frame` — the pipeline closes it after `draw` returns.
@@ -42,6 +70,39 @@ export interface ExportProgress {
 export interface FrameProcessor {
   draw(frame: VideoFrame, tMicros: number): CanvasImageSource;
   dispose(): void;
+}
+
+/**
+ * Draw `source` (coded `cw`×`ch`) into a 2D context already sized to the
+ * display-oriented `ow`×`oh`, applying the container's clockwise `rotation` so
+ * the pixels come out upright. The single source of truth for baking rotation.
+ */
+export function drawRotatedFrame(
+  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  source: CanvasImageSource,
+  cw: number,
+  ch: number,
+  rotation: 0 | 90 | 180 | 270,
+  ow: number,
+  oh: number,
+): void {
+  ctx.save();
+  switch (rotation) {
+    case 90:
+      ctx.translate(ow, 0);
+      ctx.rotate(Math.PI / 2);
+      break;
+    case 180:
+      ctx.translate(ow, oh);
+      ctx.rotate(Math.PI);
+      break;
+    case 270:
+      ctx.translate(0, oh);
+      ctx.rotate((3 * Math.PI) / 2);
+      break;
+  }
+  ctx.drawImage(source, 0, 0, cw, ch);
+  ctx.restore();
 }
 
 /** Thrown when the browser can't decode the source codec via WebCodecs. */
@@ -246,9 +307,10 @@ export function makeExportCanvas(
  */
 export async function exportProcessedVideo(
   file: File,
-  makeProcessor: (width: number, height: number) => FrameProcessor,
+  makeProcessor: (ctx: FrameContext) => FrameProcessor,
   onProgress?: (p: ExportProgress) => void,
   signal?: AbortSignal,
+  options: ExportOptions = {},
 ): Promise<Blob> {
   if (!isExportSupported()) {
     throw new Error('This browser does not support WebCodecs export.');
@@ -268,6 +330,16 @@ export async function exportProcessedVideo(
   const width = videoTrack.video?.width ?? videoTrack.track_width;
   const height = videoTrack.video?.height ?? videoTrack.track_height;
 
+  // Display rotation from the container. Either copy it onto the output as a
+  // flag (default) or bake it into the pixels so coordinate-sensitive passes
+  // (overlays) come out exactly as previewed.
+  const rotation = rotationFromMatrix(videoTrack.matrix);
+  const bakeRotation = options.bakeRotation ?? false;
+  const swap = bakeRotation && (rotation === 90 || rotation === 270);
+  const outputWidth = swap ? height : width;
+  const outputHeight = swap ? width : height;
+  const muxerRotation = bakeRotation ? 0 : rotation;
+
   // Frame rate from the actual sample durations.
   const timescale = videoSamples[0].timescale;
   let ticks = 0;
@@ -275,7 +347,7 @@ export async function exportProcessedVideo(
   const durationSec = ticks / timescale || 1;
   const framerate = Math.max(1, Math.round(videoSamples.length / durationSec));
 
-  const bitrate = deriveBitrate(width, height, framerate);
+  const bitrate = deriveBitrate(outputWidth, outputHeight, framerate);
 
   const description = extractDescription(videoSamples[0]);
   if (!description) {
@@ -286,10 +358,9 @@ export async function exportProcessedVideo(
     target: new ArrayBufferTarget(),
     video: {
       codec: 'avc',
-      width,
-      height,
-      // Copy the source's display rotation so the export isn't un-rotated.
-      rotation: rotationFromMatrix(videoTrack.matrix),
+      width: outputWidth,
+      height: outputHeight,
+      rotation: muxerRotation,
     },
     audio: audioTrack
       ? {
@@ -305,8 +376,8 @@ export async function exportProcessedVideo(
   let pipelineError: Error | null = null;
 
   const encoderConfig: Omit<VideoEncoderConfig, 'codec'> = {
-    width,
-    height,
+    width: outputWidth,
+    height: outputHeight,
     bitrate,
     framerate,
   };
@@ -324,8 +395,14 @@ export async function exportProcessedVideo(
   const gop = Math.max(1, framerate * 2); // keyframe every ~2s
   let processed = 0;
 
-  // Build the per-frame transform once the coded size is known.
-  const processor = makeProcessor(width, height);
+  // Build the per-frame transform once the coded + output sizes are known.
+  const processor = makeProcessor({
+    codedWidth: width,
+    codedHeight: height,
+    outputWidth,
+    outputHeight,
+    rotation,
+  });
 
   const decoder = new VideoDecoder({
     output: (frame) => {

@@ -27,7 +27,6 @@ import {
   isEncodeSupported,
   makeExportCanvas,
   pickAvcCodec,
-  rotationFromMatrix,
   type ExportProgress,
 } from '../../shared/media/webcodecs-export';
 import { drawOverlays } from './draw-overlays';
@@ -103,9 +102,6 @@ export async function exportOverlayVideoViaSeek(
   throwIfAborted();
   if (videoSamples.length === 0) throw new Error('No video frames found.');
 
-  const width = videoTrack.video?.width ?? videoTrack.track_width;
-  const height = videoTrack.video?.height ?? videoTrack.track_height;
-
   const timescale = videoSamples[0].timescale;
   let ticks = 0;
   for (const s of videoSamples) ticks += s.duration;
@@ -113,7 +109,12 @@ export async function exportOverlayVideoViaSeek(
   const framerate = Math.max(1, Math.round(videoSamples.length / durationSec));
   const frameCount = videoSamples.length;
 
-  // Decode source: an offscreen, muted <video>.
+  // Decode source: an offscreen, muted <video>. A <video> element applies the
+  // container's display rotation itself — `videoWidth`/`videoHeight` and what
+  // `drawImage` paints are already display-oriented (same as the editor
+  // preview, which also draws from a <video>). So we encode those pixels
+  // directly with rotation:0, and the burned-in overlays land exactly where the
+  // preview shows them.
   const url = URL.createObjectURL(file);
   const video = document.createElement('video');
   video.src = url;
@@ -121,54 +122,57 @@ export async function exportOverlayVideoViaSeek(
   video.preload = 'auto';
   video.playsInline = true;
 
-  const canvas = makeExportCanvas(width, height);
-  const ctx = canvas.getContext('2d') as
-    | CanvasRenderingContext2D
-    | OffscreenCanvasRenderingContext2D
-    | null;
-  if (!ctx) throw new Error('Could not create a 2D canvas for export.');
-
-  const bitrate = deriveBitrate(width, height, framerate);
-  const muxer = new Muxer({
-    target: new ArrayBufferTarget(),
-    video: {
-      codec: 'avc',
-      width,
-      height,
-      rotation: rotationFromMatrix(videoTrack.matrix),
-    },
-    audio: audioTrack
-      ? {
-          codec: 'aac',
-          sampleRate: audioTrack.audio?.sample_rate ?? 48000,
-          numberOfChannels: audioTrack.audio?.channel_count ?? 2,
-        }
-      : undefined,
-    fastStart: 'in-memory',
-    firstTimestampBehavior: 'cross-track-offset',
-  });
-
   let pipelineError: Error | null = null;
-  const encoderConfig: Omit<VideoEncoderConfig, 'codec'> = {
-    width,
-    height,
-    bitrate,
-    framerate,
-  };
-  const codec = await pickAvcCodec(encoderConfig);
-  const encoder = new VideoEncoder({
-    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-    error: (e) => {
-      pipelineError = e instanceof Error ? e : new Error(String(e));
-    },
-  });
-  encoder.configure({ codec, ...encoderConfig, avc: { format: 'avc' } });
-
-  const gop = Math.max(1, framerate * 2);
-  const frameDuration = Math.round(1_000_000 / framerate);
+  let encoder: VideoEncoder | null = null;
 
   try {
     await waitFor(video, 'loadedmetadata');
+
+    const outWidth =
+      video.videoWidth || videoTrack.video?.width || videoTrack.track_width;
+    const outHeight =
+      video.videoHeight || videoTrack.video?.height || videoTrack.track_height;
+
+    const canvas = makeExportCanvas(outWidth, outHeight);
+    const ctx = canvas.getContext('2d') as
+      | CanvasRenderingContext2D
+      | OffscreenCanvasRenderingContext2D
+      | null;
+    if (!ctx) throw new Error('Could not create a 2D canvas for export.');
+
+    const bitrate = deriveBitrate(outWidth, outHeight, framerate);
+    const muxer = new Muxer({
+      target: new ArrayBufferTarget(),
+      // Pixels are already upright; no rotation flag.
+      video: { codec: 'avc', width: outWidth, height: outHeight, rotation: 0 },
+      audio: audioTrack
+        ? {
+            codec: 'aac',
+            sampleRate: audioTrack.audio?.sample_rate ?? 48000,
+            numberOfChannels: audioTrack.audio?.channel_count ?? 2,
+          }
+        : undefined,
+      fastStart: 'in-memory',
+      firstTimestampBehavior: 'cross-track-offset',
+    });
+
+    const encoderConfig: Omit<VideoEncoderConfig, 'codec'> = {
+      width: outWidth,
+      height: outHeight,
+      bitrate,
+      framerate,
+    };
+    const codec = await pickAvcCodec(encoderConfig);
+    encoder = new VideoEncoder({
+      output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+      error: (e) => {
+        pipelineError = e instanceof Error ? e : new Error(String(e));
+      },
+    });
+    encoder.configure({ codec, ...encoderConfig, avc: { format: 'avc' } });
+
+    const gop = Math.max(1, framerate * 2);
+    const frameDuration = Math.round(1_000_000 / framerate);
 
     for (let i = 0; i < frameCount; i++) {
       throwIfAborted();
@@ -176,8 +180,8 @@ export async function exportOverlayVideoViaSeek(
 
       const t = i / framerate;
       await seekTo(video, t);
-      ctx.drawImage(video, 0, 0, width, height);
-      drawOverlays(ctx, elements, findCue(cues, t), width, height);
+      ctx.drawImage(video, 0, 0, outWidth, outHeight);
+      drawOverlays(ctx, elements, findCue(cues, t), outWidth, outHeight);
 
       const vf = new VideoFrame(canvas, {
         timestamp: Math.round(t * 1_000_000),
@@ -186,7 +190,7 @@ export async function exportOverlayVideoViaSeek(
       encoder.encode(vf, { keyFrame: i % gop === 0 });
       vf.close();
 
-      await awaitQueue(() => encoder.encodeQueueSize, 24);
+      await awaitQueue(() => encoder!.encodeQueueSize, 24);
       onProgress?.({ phase: 'encoding', ratio: (i + 1) / frameCount });
     }
 
@@ -199,7 +203,7 @@ export async function exportOverlayVideoViaSeek(
     const { buffer: output } = muxer.target as ArrayBufferTarget;
     return new Blob([output], { type: 'video/mp4' });
   } finally {
-    if (encoder.state !== 'closed') encoder.close();
+    if (encoder && encoder.state !== 'closed') encoder.close();
     video.removeAttribute('src');
     video.load();
     URL.revokeObjectURL(url);
