@@ -359,10 +359,17 @@ export default function LutStudio() {
   // --- derived ------------------------------------------------------------
 
   const doneCount = clips.filter((c) => c.exportStatus === 'done').length;
+  const errorCount = clips.filter((c) => c.exportStatus === 'error').length;
   const exportingClip = clips.find((c) => c.exportStatus === 'exporting');
   const overallRatio = batchTotal
     ? (doneCount + (exportingClip?.exportRatio ?? 0)) / batchTotal
     : 0;
+
+  // Clips that have entered the export pipeline (queued / running / finished /
+  // failed). The old clip list was the only place per-clip status showed; with
+  // it gone, surface this here so an export is never silent — successes are
+  // confirmed and failures (e.g. HEVC the encoder can't decode) say why.
+  const reported = clips.filter((c) => c.exportStatus !== 'idle');
 
   // Active-clip switcher (replaces the old clip list for picking the preview).
   const activeIndex = clips.findIndex((c) => c.id === activeId);
@@ -390,70 +397,154 @@ export default function LutStudio() {
 
   return (
     <section
-      className="flex flex-col flex-1 min-h-0 gap-4 mt-4"
+      className="flex flex-col flex-1 min-h-0 gap-4"
       aria-label="LUT Studio"
     >
       <div className="min-w-0 min-h-0 flex-1 flex flex-col gap-[0.6rem]">
-          <div className="flex flex-wrap items-center gap-[0.75rem_1rem] mb-[1.1rem]">
-            <label className="inline-flex items-center gap-2 font-mono text-[0.7rem] tracking-[0.12em] uppercase text-muted">
-              <span>Look</span>
-              <select
-                className="font-sans text-[0.85rem] font-semibold tracking-normal normal-case text-ink bg-surface border border-line-strong rounded-paper px-[0.7rem] py-[0.45rem] cursor-pointer"
-                value={selected}
-                onChange={(e) => applySelection(e.target.value)}
-                disabled={busy}
+          {/* One control bar. A container query (the bar's own width, not the
+              viewport — the studio column is narrowed by the library sidebar)
+              keeps it on a single line when there's room, and folds it to two
+              rows below ~40rem: picker + upload on top, compare + view toggle
+              under it. */}
+          <div className="@container flex flex-wrap items-center gap-2 mb-[1.1rem] px-2 py-2 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
+            {/* LUT picker + upload — fills the bar on a narrow layout, shrinks
+                to a fixed width once everything fits on one line. */}
+            <div className="flex items-center gap-2 min-w-0 basis-full @[40rem]:basis-auto">
+              <div className="relative flex items-center flex-1 min-w-0 @[40rem]:flex-none @[40rem]:w-[12.5rem]">
+                <select
+                  className="appearance-none w-full min-w-0 font-sans text-[0.84rem] font-semibold text-ink bg-paper border border-line-strong rounded-full h-[2.3rem] pl-[0.9rem] pr-[2.2rem] cursor-pointer hover:border-faint focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-colors disabled:opacity-60 disabled:cursor-default"
+                  value={selected}
+                  onChange={(e) => applySelection(e.target.value)}
+                  disabled={busy}
+                  aria-label="LUT"
+                >
+                  <option value="none">No LUT (original)</option>
+                  {UNGROUPED_LUTS.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name}
+                    </option>
+                  ))}
+                  {LUT_GROUPS.map((g) => (
+                    <optgroup key={g.label} label={g.label}>
+                      {g.luts.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                  {customName && <option value="custom">{customName} (uploaded)</option>}
+                </select>
+                <svg
+                  className="pointer-events-none absolute right-[0.75rem] w-3.5 h-3.5 text-muted"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </div>
+
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 flex-none h-[2.3rem] px-[0.7rem] @[40rem]:px-[0.85rem] rounded-full text-[0.8rem] font-semibold text-ink-soft hover:text-accent-ink hover:bg-accent-wash transition-colors"
+                onClick={uploadCube}
+                title="Load your own 3D .cube LUT"
+                aria-label="Upload a .cube LUT"
               >
-                <option value="none">No LUT (original)</option>
-                {UNGROUPED_LUTS.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-                {LUT_GROUPS.map((g) => (
-                  <optgroup key={g.label} label={g.label}>
-                    {g.luts.map((l) => (
-                      <option key={l.id} value={l.id}>
-                        {l.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-                {customName && <option value="custom">{customName} (uploaded)</option>}
-              </select>
-            </label>
+                <svg
+                  className="w-[1.05rem] h-[1.05rem] flex-none"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+                  <path d="m8 8 4-4 4 4" />
+                  <path d="M12 4v11" />
+                </svg>
+                <span className="hidden @[40rem]:inline">Upload .cube</span>
+              </button>
+            </div>
 
-            <button
-              type="button"
-              className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent disabled:text-faint disabled:cursor-default disabled:no-underline"
-              onClick={uploadCube}
-            >
-              Upload .cube
-            </button>
+            {/* Compare + Original/Graded — its own row on a narrow bar, pushed
+                to the right edge once it shares the line with the picker. */}
+            <div className="flex items-center gap-2 basis-full @[40rem]:basis-auto @[40rem]:ml-auto">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 flex-none h-[2.3rem] px-[0.9rem] rounded-full border text-[0.8rem] font-semibold transition-colors disabled:opacity-50 disabled:cursor-default aria-pressed:border-accent aria-pressed:text-accent-ink aria-pressed:bg-accent-wash border-line-strong bg-paper text-ink-soft hover:enabled:border-faint hover:enabled:text-ink"
+                onClick={toggleCompare}
+                disabled={!lut}
+                aria-pressed={compareOn}
+                title="Drag a divider across the preview: grade on the left, original on the right"
+              >
+                <svg
+                  className="w-[1.05rem] h-[1.05rem] flex-none"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="5" width="18" height="14" rx="2" />
+                  <path d="M12 5v14" />
+                  <path d="m7 10-2 2 2 2" />
+                  <path d="m17 10 2 2-2 2" />
+                </svg>
+                Compare
+              </button>
 
-            <button
-              type="button"
-              className="ml-auto border border-line-strong bg-paper text-ink-soft cursor-pointer text-[0.82rem] font-semibold px-[0.9rem] py-[0.45rem] rounded-full transition-[border-color,color] duration-200 ease-paper aria-pressed:border-accent aria-pressed:text-accent-ink disabled:opacity-50 disabled:cursor-default"
-              onClick={toggleCompare}
-              disabled={!lut}
-              aria-pressed={compareOn}
-              title="Drag a divider across the preview: grade on the left, original on the right"
-            >
-              {compareOn ? 'Comparing ⟷' : 'Compare ⟷'}
-            </button>
-
-            <button
-              type="button"
-              className="ml-0 border border-line-strong bg-paper text-ink-soft cursor-pointer text-[0.82rem] font-semibold px-[0.9rem] py-[0.45rem] rounded-full transition-[border-color,color] duration-200 ease-paper aria-pressed:border-accent aria-pressed:text-accent-ink disabled:opacity-50 disabled:cursor-default"
-              onClick={() => {
-                setBypass((b) => !b);
-                setCompareOn(false);
-              }}
-              disabled={!lut}
-              aria-pressed={bypass}
-              title="Toggle between the graded and original image"
-            >
-              Viewing: {bypass || !lut ? 'Original' : 'Graded'}
-            </button>
+              {/* Original / Graded — a segmented switch is clearer than a
+                  "Viewing: X" button: the active source reads at a glance. */}
+              <div
+                className="inline-flex items-center flex-none h-[2.3rem] rounded-full border border-line-strong bg-paper p-[3px]"
+                role="group"
+                aria-label="Preview source"
+              >
+                <button
+                  type="button"
+                  className={`inline-flex items-center h-full px-[0.85rem] rounded-full text-[0.8rem] font-semibold transition-colors ${
+                    bypass || !lut
+                      ? 'bg-ink text-paper'
+                      : 'text-muted hover:text-ink'
+                  }`}
+                  onClick={() => {
+                    setBypass(true);
+                    setCompareOn(false);
+                  }}
+                  aria-pressed={bypass || !lut}
+                  title="Show the original, ungraded image"
+                >
+                  Original
+                </button>
+                <button
+                  type="button"
+                  className={`inline-flex items-center h-full px-[0.85rem] rounded-full text-[0.8rem] font-semibold transition-colors disabled:text-faint disabled:cursor-default ${
+                    !bypass && lut
+                      ? 'bg-ink text-paper'
+                      : 'text-muted enabled:hover:text-ink'
+                  }`}
+                  onClick={() => {
+                    setBypass(false);
+                    setCompareOn(false);
+                  }}
+                  disabled={!lut}
+                  aria-pressed={!bypass && !!lut}
+                  title={lut ? 'Show the graded image' : 'Pick a LUT first'}
+                >
+                  Graded
+                </button>
+              </div>
+            </div>
           </div>
 
           {activeClip && (
@@ -612,6 +703,55 @@ export default function LutStudio() {
           )}
       </div>
 
+      {reported.length > 0 && (
+        <div
+          className="flex-none flex flex-col gap-2 max-h-44 overflow-auto px-[0.85rem] py-[0.6rem] border border-line rounded-paper bg-surface"
+          aria-label="Export results"
+        >
+          {reported.map((c) => (
+            <div key={c.id} className="flex flex-col gap-0.5 min-w-0">
+              <div className="flex items-center gap-2 text-[0.8rem] min-w-0">
+                <span
+                  className={`flex-none w-4 text-center font-semibold ${
+                    c.exportStatus === 'done'
+                      ? 'text-[#3f6b3f]'
+                      : c.exportStatus === 'error'
+                        ? 'text-[#9a3a23]'
+                        : 'text-muted'
+                  }`}
+                  aria-hidden="true"
+                >
+                  {c.exportStatus === 'done'
+                    ? '✓'
+                    : c.exportStatus === 'error'
+                      ? '✗'
+                      : c.exportStatus === 'exporting'
+                        ? '⋯'
+                        : '·'}
+                </span>
+                <span className="font-medium truncate min-w-0" title={c.name}>
+                  {c.name}
+                </span>
+                <span className="ml-auto flex-none font-mono text-[0.72rem] text-muted tabular-nums">
+                  {c.exportStatus === 'queued' && 'Queued'}
+                  {c.exportStatus === 'exporting' &&
+                    (c.exportRatio != null
+                      ? `${Math.round(c.exportRatio * 100)}%`
+                      : 'Exporting…')}
+                  {c.exportStatus === 'done' && 'Exported'}
+                  {c.exportStatus === 'error' && 'Failed'}
+                </span>
+              </div>
+              {c.exportStatus === 'error' && c.exportError && (
+                <p className="m-0 pl-6 text-[0.72rem] leading-snug text-[#9a3a23]">
+                  {c.exportError}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="flex items-center justify-end gap-4 border-t border-line pt-4 flex-none">
         {exporting ? (
           <>
@@ -643,6 +783,21 @@ export default function LutStudio() {
               <span className="mr-auto text-[0.78rem] text-muted">
                 Export needs WebCodecs (try Chrome/Edge) — preview works
                 everywhere.
+              </span>
+            )}
+            {exportSupported && reported.length > 0 && (
+              <span className="mr-auto text-[0.78rem] text-ink-soft" role="status">
+                {doneCount > 0 && (
+                  <b className="text-[#3f6b3f] font-semibold">
+                    {doneCount} exported
+                  </b>
+                )}
+                {doneCount > 0 && errorCount > 0 && ' · '}
+                {errorCount > 0 && (
+                  <b className="text-[#9a3a23] font-semibold">
+                    {errorCount} failed
+                  </b>
+                )}
               </span>
             )}
             <button

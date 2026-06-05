@@ -93,7 +93,7 @@ export default function AssetSidebar({
   // --- Collapsed rail -------------------------------------------------------
   if (collapsed) {
     return (
-      <aside className="flex-none w-12 flex flex-col items-center gap-3 py-3 border-r border-line">
+      <aside className="flex-none w-12 flex flex-col items-center gap-3 py-3 border-r border-line max-[820px]:w-full max-[820px]:flex-row max-[820px]:py-2 max-[820px]:px-3 max-[820px]:border-r-0 max-[820px]:border max-[820px]:rounded-paper-lg max-[820px]:bg-surface max-[820px]:shadow-paper-soft">
         <button
           type="button"
           onClick={onToggle}
@@ -101,7 +101,13 @@ export default function AssetSidebar({
           aria-label="Expand asset library"
           title="Expand asset library"
         >
-          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+          <svg
+            viewBox="0 0 16 16"
+            width="14"
+            height="14"
+            aria-hidden="true"
+            className="max-[820px]:rotate-90"
+          >
             <path
               fill="none"
               stroke="currentColor"
@@ -113,12 +119,12 @@ export default function AssetSidebar({
           </svg>
         </button>
         <span
-          className="w-8 h-8 grid place-items-center rounded-lg bg-ink text-paper font-mono text-[0.66rem]"
+          className="w-8 h-8 grid place-items-center rounded-lg bg-ink text-paper font-mono text-[0.66rem] max-[820px]:order-3 max-[820px]:ml-auto"
           title={`${lib.assets.length} assets`}
         >
           {lib.assets.length}
         </span>
-        <span className="[writing-mode:vertical-rl] font-mono text-[0.58rem] tracking-[0.16em] uppercase text-faint mt-1">
+        <span className="[writing-mode:vertical-rl] font-mono text-[0.58rem] tracking-[0.16em] uppercase text-faint mt-1 max-[820px]:[writing-mode:horizontal-tb] max-[820px]:mt-0 max-[820px]:order-2 max-[820px]:text-[0.66rem]">
           Library
         </span>
       </aside>
@@ -132,7 +138,7 @@ export default function AssetSidebar({
     : lib.assets;
 
   return (
-    <aside className="flex-none w-72 max-w-[78vw] flex flex-col min-h-0 border border-line rounded-paper-lg bg-surface shadow-paper overflow-hidden">
+    <aside className="flex-none w-72 max-w-[78vw] flex flex-col min-h-0 border border-line rounded-paper-lg bg-surface shadow-paper overflow-hidden max-[820px]:w-full max-[820px]:max-w-none max-[820px]:max-h-[55vh]">
       <div className="flex items-center justify-between px-4 pt-3.5 pb-2.5">
         <span className="font-serif text-[1.15rem]">Library</span>
         <button
@@ -292,7 +298,7 @@ function AssetRow({
   return (
     <div
       ref={ref}
-      className={`group flex items-center gap-2.5 px-2 py-1.5 rounded-[11px] hover:bg-white ${
+      className={`group flex items-center gap-2.5 px-2 py-1.5 mb-1 rounded-[11px] hover:bg-white ${
         selected ? 'bg-white shadow-[inset_0_0_0_1px_var(--color-line-strong)]' : ''
       } ${usable ? '' : 'opacity-45'}`}
     >
@@ -303,7 +309,7 @@ function AssetRow({
         className="flex-none w-[15px] h-[15px] accent-ink cursor-pointer"
         aria-label={`Select ${asset.baseName}`}
       />
-      <div className="flex-none w-14 h-9 rounded-md overflow-hidden bg-frame grid place-items-center">
+      <div className="flex-none w-20 h-14 rounded-sm overflow-hidden bg-frame grid place-items-center">
         {meta?.thumbUrl ? (
           <img
             src={meta.thumbUrl}
