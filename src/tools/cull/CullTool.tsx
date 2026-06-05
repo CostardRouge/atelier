@@ -111,7 +111,7 @@ export default function CullTool() {
 
   return (
     <section
-      className="flex flex-col flex-1 min-h-0 gap-3 mt-4"
+      className="flex flex-col flex-1 min-h-0 gap-3"
       aria-label="Cull"
     >
       <div className="flex items-center justify-between gap-4 flex-wrap">

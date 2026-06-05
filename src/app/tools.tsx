@@ -41,7 +41,6 @@ export const TOOLS: Tool[] = [
       'Rip through a shoot: rate 1–5, flag picks and rejects, filter to the keepers — ready for the editor.',
     Component: CullTool,
     accepts: ['photo', 'video'],
-    fullHeight: true,
   },
   {
     id: 'telemetry',
