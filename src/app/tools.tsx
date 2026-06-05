@@ -21,8 +21,6 @@ export interface Tool {
   blurb?: string;
   /** The tool's root component. */
   Component: ComponentType;
-  /** When set, the shell becomes a fixed-height frame (e.g. an editor). */
-  fullHeight?: boolean;
   /**
    * Asset kinds this tool consumes. When set, the shell shows the global asset
    * library sidebar and the tool reads its selection from there. Tools without
