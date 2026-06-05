@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import type { AssetKind } from '../shared/library/assets';
 import CullTool from '../tools/cull/CullTool';
+import FinalizeTool from '../tools/finalize/FinalizeTool';
 import LutStudio from '../tools/lut/LutStudio';
 import OverlayStudio from '../tools/overlay/OverlayStudio';
 import TelemetryTool from '../tools/telemetry/TelemetryTool';
@@ -71,6 +72,16 @@ export const TOOLS: Tool[] = [
       'Preview .cube LUTs on your footage with a before/after wipe, then batch-export the graded clips.',
     Component: LutStudio,
     accepts: ['video'],
+  },
+  {
+    id: 'finalize',
+    path: '/finalize',
+    label: 'Finalize',
+    subtitle: 'Export album',
+    blurb:
+      'Copy the keepers — by pick or star threshold — into a real album folder on disk. Stays on your machine.',
+    Component: FinalizeTool,
+    accepts: ['photo', 'video'],
   },
 ];
 
