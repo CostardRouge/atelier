@@ -15,6 +15,8 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react';
 import type { Cue } from '../telemetry/srt-parser';
 import { findCue } from '../telemetry/find-cue';
+import type { CubeLut } from '../../shared/lib/cube-parser';
+import { createLutRenderer, type LutRenderer } from '../lut/lut-gl';
 import {
   boxForId,
   drawOverlays,
@@ -29,6 +31,8 @@ interface StageParams {
   cues: Cue[];
   elements: OverlayElement[];
   selectedId: string | null;
+  /** Optional LUT to grade the preview through (matches the export). */
+  lut: CubeLut | null;
   /** Source key (object URL); resets the loop and canvas when it swaps. */
   resetKey: unknown;
   /** Bump to force a repaint after async work (e.g. fonts finished loading). */
@@ -68,11 +72,50 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   const cuesRef = useRef(params.cues);
   const elementsRef = useRef(params.elements);
   const selectedRef = useRef(params.selectedId);
+  const lutRef = useRef(params.lut);
   cuesRef.current = params.cues;
   elementsRef.current = params.elements;
   selectedRef.current = params.selectedId;
+  lutRef.current = params.lut;
 
   const needsRedraw = useRef(true);
+
+  // Lazily-created GPU grader (the same renderer LUT Studio uses). Reused across
+  // frames; the LUT texture is only re-uploaded when the LUT changes.
+  const graderRef = useRef<{
+    renderer: LutRenderer;
+    canvas: HTMLCanvasElement | OffscreenCanvas;
+  } | null>(null);
+  const graderTried = useRef(false);
+
+  const ensureGrader = useCallback(() => {
+    if (graderRef.current) return graderRef.current;
+    if (graderTried.current) return null; // already failed (no WebGL2)
+    graderTried.current = true;
+    const canvas: HTMLCanvasElement | OffscreenCanvas =
+      typeof OffscreenCanvas !== 'undefined'
+        ? new OffscreenCanvas(1, 1)
+        : document.createElement('canvas');
+    const renderer = createLutRenderer(canvas);
+    if (!renderer) return null;
+    graderRef.current = { renderer, canvas };
+    return graderRef.current;
+  }, []);
+
+  // Upload the LUT when it changes (not per frame), and repaint.
+  useEffect(() => {
+    if (params.lut) ensureGrader()?.renderer.setLut(params.lut);
+    needsRedraw.current = true;
+  }, [params.lut, ensureGrader]);
+
+  // Release GL resources on unmount.
+  useEffect(
+    () => () => {
+      graderRef.current?.renderer.dispose();
+      graderRef.current = null;
+    },
+    [],
+  );
   const drag = useRef<{
     id: string;
     startPx: number;
@@ -100,7 +143,24 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     const vw = canvas.width;
     const vh = canvas.height;
     const cue = findCue(cuesRef.current, video.currentTime);
-    ctx.drawImage(video, 0, 0, vw, vh);
+
+    // Grade through the LUT first (if any), so the preview matches the export;
+    // the <video> frame is already display-oriented, like the export's output.
+    const lut = lutRef.current;
+    let source: CanvasImageSource = video;
+    if (lut) {
+      let g = graderRef.current;
+      if (!g) {
+        g = ensureGrader();
+        g?.renderer.setLut(lut);
+      }
+      if (g) {
+        g.renderer.resize(vw, vh);
+        g.renderer.draw(video);
+        source = g.canvas;
+      }
+    }
+    ctx.drawImage(source, 0, 0, vw, vh);
     drawOverlays(ctx, elementsRef.current, cue, vw, vh);
 
     const sel = selectedRef.current;
@@ -117,7 +177,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       }
     }
     return true;
-  }, [videoRef, canvasRef]);
+  }, [videoRef, canvasRef, ensureGrader]);
 
   // The render loop. rAF (not rVFC) so paused edits repaint too; it skips the
   // 4K composite when idle and clean.

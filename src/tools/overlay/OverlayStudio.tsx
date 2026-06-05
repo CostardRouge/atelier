@@ -18,6 +18,8 @@ import {
   type TelemetryFieldKey,
 } from './overlay-types';
 import { reanchor, useOverlayStage } from './use-overlay-stage';
+import { useLutSelection } from '../lut/use-lut-selection';
+import LutPicker from '../lut/LutPicker';
 
 /** Precise current-position readout: `M:SS.cs` (centiseconds). */
 function formatTimecode(seconds: number): string {
@@ -54,6 +56,7 @@ export default function OverlayStudio() {
   const scrubbingRef = useRef(false);
 
   const lib = useAssetLibrary();
+  const lutSel = useLutSelection();
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeUrl, setActiveUrl] = useState<string | null>(null);
@@ -235,6 +238,7 @@ export default function OverlayStudio() {
     cues,
     elements,
     selectedId: selectedElementId,
+    lut: lutSel.lut,
     resetKey: activeUrl,
     redrawSignal: fontTick,
     onSelect: setSelectedElementId,
@@ -281,6 +285,7 @@ export default function OverlayStudio() {
         activeClip.video,
         cues,
         elements,
+        lutSel.lut,
         {
           codec: activeInfo.codec,
           width: meta?.width,
@@ -332,6 +337,19 @@ export default function OverlayStudio() {
       className="flex flex-col flex-1 min-h-0 gap-4 mt-4"
       aria-label="Telemetry Overlay"
     >
+      {/* Look bar — grade the burn-in through a LUT, reusing LUT Studio's picker */}
+      {activeClip && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-2 py-2 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
+          <LutPicker
+            selected={lutSel.selected}
+            customName={lutSel.customName}
+            busy={lutSel.busy}
+            onSelect={lutSel.applySelection}
+            onUpload={lutSel.uploadCube}
+          />
+        </div>
+      )}
+
       {/* Header: clip switcher + name + detail */}
       {activeClip && (
         <div className="flex items-center gap-[0.7rem] m-0 min-w-0">
@@ -462,6 +480,7 @@ export default function OverlayStudio() {
               will show “—”. Free-text elements still work.
             </p>
           )}
+          {lutSel.cubeError && <p className={notice}>{lutSel.cubeError}</p>}
         </div>
 
         {/* Inspector */}

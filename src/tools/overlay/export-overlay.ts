@@ -18,17 +18,23 @@ import {
   type ExportProgress,
   type FrameProcessor,
 } from '../../shared/media/webcodecs-export';
+import type { CubeLut } from '../../shared/lib/cube-parser';
+import { makeFrameGrader } from '../lut/frame-grader';
 import { drawOverlays } from './draw-overlays';
 import { ensureOverlayFonts } from './fonts';
 import { exportOverlayVideoViaSeek } from './export-overlay-seek';
 import { decideExportPath, type ExportHint } from './pick-export-path';
 import type { OverlayElement } from './overlay-types';
 
-/** WebCodecs overlay export. Throws {@link DecodeUnsupportedError} on HEVC. */
+/**
+ * WebCodecs overlay export, optionally grading through `lut` first. Throws
+ * {@link DecodeUnsupportedError} on HEVC the browser can't decode.
+ */
 export async function exportOverlayVideo(
   file: File,
   cues: Cue[],
   elements: OverlayElement[],
+  lut: CubeLut | null,
   onProgress?: (p: ExportProgress) => void,
   signal?: AbortSignal,
 ): Promise<Blob> {
@@ -37,17 +43,23 @@ export async function exportOverlayVideo(
     file,
     ({ codedWidth, codedHeight, outputWidth, outputHeight, rotation }): FrameProcessor => {
       // Work in display orientation so the burned-in overlays land exactly
-      // where the preview shows them: rotate the decoded frame into the output
-      // canvas, then draw overlays in those (display) coordinates.
+      // where the preview shows them: rotate the (optionally graded) frame into
+      // the output canvas, then draw overlays in those (display) coordinates.
       const canvas = makeExportCanvas(outputWidth, outputHeight);
       const ctx = canvas.getContext('2d') as
         | CanvasRenderingContext2D
         | OffscreenCanvasRenderingContext2D
         | null;
       if (!ctx) throw new Error('Could not create a 2D canvas for export.');
+
+      // When a LUT is set, grade each decoded frame on the GPU (the very same
+      // renderer LUT Studio uses) into a coded-size canvas, then composite that.
+      const grade = lut ? makeFrameGrader(lut, codedWidth, codedHeight) : null;
+
       return {
         draw(frame, tMicros) {
-          drawRotatedFrame(ctx, frame, codedWidth, codedHeight, rotation, outputWidth, outputHeight);
+          const source = grade ? grade.render(frame) : frame;
+          drawRotatedFrame(ctx, source, codedWidth, codedHeight, rotation, outputWidth, outputHeight);
           drawOverlays(
             ctx,
             elements,
@@ -57,7 +69,9 @@ export async function exportOverlayVideo(
           );
           return canvas;
         },
-        dispose() {},
+        dispose() {
+          grade?.dispose();
+        },
       };
     },
     onProgress,
@@ -91,6 +105,7 @@ export async function exportOverlay(
   file: File,
   cues: Cue[],
   elements: OverlayElement[],
+  lut: CubeLut | null,
   hint: ExportHint,
   onProgress?: (p: ExportProgress) => void,
   signal?: AbortSignal,
@@ -108,18 +123,18 @@ export async function exportOverlay(
   let blob: Blob;
   if (decision.path === 'webcodecs') {
     try {
-      blob = await exportOverlayVideo(file, cues, elements, onProgress, signal);
+      blob = await exportOverlayVideo(file, cues, elements, lut, onProgress, signal);
     } catch (err) {
       // WebCodecs couldn't decode after all — fall back to the seek path if the
       // clip is playable; otherwise re-throw.
       if (err instanceof DecodeUnsupportedError && hint.videoPlayable) {
-        blob = await exportOverlayVideoViaSeek(file, cues, elements, onProgress, signal);
+        blob = await exportOverlayVideoViaSeek(file, cues, elements, lut, onProgress, signal);
       } else {
         throw err;
       }
     }
   } else {
-    blob = await exportOverlayVideoViaSeek(file, cues, elements, onProgress, signal);
+    blob = await exportOverlayVideoViaSeek(file, cues, elements, lut, onProgress, signal);
   }
 
   downloadBlob(blob, overlayName(file.name));
