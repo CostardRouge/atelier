@@ -8,8 +8,16 @@
 import type { Asset } from '../../shared/library/assets';
 import type { Verdict } from '../../shared/library/AssetLibraryContext';
 
-/** Threshold the user picks in the UI. Rejects are never exported. */
-export type ExportCriterion = 'picks' | 'rated3' | 'rated4' | 'rated5';
+/**
+ * One checkable export bucket: the explicit pick flag, or an *exact* star
+ * level. The user can tick several at once — e.g. {@link ExportBucket} `'pick'`
+ * and `1` together to grab the picks and the one-stars in a single export.
+ */
+export type ExportBucket = 'pick' | 1 | 2 | 3 | 4 | 5;
+export type ExportSelection = ReadonlySet<ExportBucket>;
+
+/** Every bucket, in display order. */
+export const EXPORT_BUCKETS: ExportBucket[] = ['pick', 1, 2, 3, 4, 5];
 
 export interface ExportItem {
   /** Destination filename in the album folder (de-duplicated). */
@@ -19,15 +27,22 @@ export interface ExportItem {
   assetId: string;
 }
 
-/** Does an asset's verdict clear the export threshold? */
+/** Does this single bucket match an asset's verdict? (Rejects never match.) */
+export function matchesBucket(v: Verdict | undefined, bucket: ExportBucket): boolean {
+  if (v?.flag === 'reject') return false; // a reject is never a keeper
+  if (bucket === 'pick') return v?.flag === 'pick';
+  return (v?.rating ?? 0) === bucket;
+}
+
+/** Is an asset included by the current selection? (Union of the ticked buckets.) */
 export function includesAsset(
   v: Verdict | undefined,
-  c: ExportCriterion,
+  selection: ExportSelection,
 ): boolean {
-  if (v?.flag === 'reject') return false; // a reject is never a keeper
-  if (c === 'picks') return v?.flag === 'pick';
-  const min = c === 'rated3' ? 3 : c === 'rated4' ? 4 : 5;
-  return (v?.rating ?? 0) >= min;
+  for (const bucket of selection) {
+    if (matchesBucket(v, bucket)) return true;
+  }
+  return false;
 }
 
 function uniqueName(name: string, used: Set<string>): string {
@@ -51,12 +66,12 @@ function uniqueName(name: string, used: Set<string>): string {
 export function planExport(
   assets: Asset[],
   verdicts: ReadonlyMap<string, Verdict>,
-  criterion: ExportCriterion,
+  selection: ExportSelection,
 ): ExportItem[] {
   const used = new Set<string>();
   const items: ExportItem[] = [];
   for (const a of assets) {
-    if (!includesAsset(verdicts.get(a.id), criterion)) continue;
+    if (!includesAsset(verdicts.get(a.id), selection)) continue;
     for (const file of [a.parts.image, a.parts.video, a.parts.srt]) {
       if (!file) continue;
       const name = uniqueName(file.name, used);

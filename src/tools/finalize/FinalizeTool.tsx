@@ -3,20 +3,18 @@ import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
 import { formatBytes } from '../../shared/lib/format';
 import {
+  EXPORT_BUCKETS,
   exportSummary,
   includesAsset,
+  matchesBucket,
   planExport,
-  type ExportCriterion,
+  type ExportBucket,
 } from './export-plan';
 import { canExport, pickDirectory, writeItems, type WriteResult } from './write-files';
 import Thumb from './Thumb';
 
-const CRITERIA: { value: ExportCriterion; label: string }[] = [
-  { value: 'picks', label: '✓ Picks' },
-  { value: 'rated3', label: '★3+' },
-  { value: 'rated4', label: '★4+' },
-  { value: 'rated5', label: '★5' },
-];
+const bucketLabel = (b: ExportBucket): string =>
+  b === 'pick' ? '✓ Picks' : `★${b}`;
 
 type Status =
   | { kind: 'idle' }
@@ -32,9 +30,20 @@ type Status =
  */
 export default function FinalizeTool() {
   const lib = useAssetLibrary();
-  const [criterion, setCriterion] = useState<ExportCriterion>('rated4');
+  // Several buckets can be ticked at once; export is their union.
+  const [selection, setSelection] = useState<Set<ExportBucket>>(
+    () => new Set<ExportBucket>(['pick', 4, 5]),
+  );
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   const supported = canExport();
+
+  const toggleBucket = (b: ExportBucket) =>
+    setSelection((prev) => {
+      const next = new Set(prev);
+      if (next.has(b)) next.delete(b);
+      else next.add(b);
+      return next;
+    });
 
   const workingSet = useMemo(
     () => selectedUsableAssets(['photo', 'video'], lib.assets, lib.selection),
@@ -42,28 +51,23 @@ export default function FinalizeTool() {
   );
 
   const counts = useMemo(() => {
-    const c: Record<ExportCriterion, number> = {
-      picks: 0,
-      rated3: 0,
-      rated4: 0,
-      rated5: 0,
-    };
+    const c = new Map<ExportBucket, number>(EXPORT_BUCKETS.map((b) => [b, 0]));
     for (const a of workingSet) {
       const v = lib.verdicts.get(a.id);
-      for (const k of Object.keys(c) as ExportCriterion[]) {
-        if (includesAsset(v, k)) c[k] += 1;
+      for (const b of EXPORT_BUCKETS) {
+        if (matchesBucket(v, b)) c.set(b, (c.get(b) ?? 0) + 1);
       }
     }
     return c;
   }, [workingSet, lib.verdicts]);
 
   const included = useMemo(
-    () => workingSet.filter((a) => includesAsset(lib.verdicts.get(a.id), criterion)),
-    [workingSet, lib.verdicts, criterion],
+    () => workingSet.filter((a) => includesAsset(lib.verdicts.get(a.id), selection)),
+    [workingSet, lib.verdicts, selection],
   );
   const items = useMemo(
-    () => planExport(workingSet, lib.verdicts, criterion),
-    [workingSet, lib.verdicts, criterion],
+    () => planExport(workingSet, lib.verdicts, selection),
+    [workingSet, lib.verdicts, selection],
   );
   const summary = useMemo(() => exportSummary(items), [items]);
 
@@ -94,14 +98,14 @@ export default function FinalizeTool() {
     <section className="flex flex-col flex-1 min-h-0 gap-3" aria-label="Finalize">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex flex-wrap items-center gap-1.5">
-          {CRITERIA.map((o) => {
-            const active = o.value === criterion;
+          {EXPORT_BUCKETS.map((b) => {
+            const active = selection.has(b);
             return (
               <button
-                key={o.value}
+                key={String(b)}
                 type="button"
                 disabled={writing}
-                onClick={() => setCriterion(o.value)}
+                onClick={() => toggleBucket(b)}
                 aria-pressed={active}
                 className={`text-[0.76rem] font-semibold px-[0.7rem] py-[0.3rem] rounded-full border transition-[border-color,color,background-color] duration-200 ease-paper disabled:opacity-50 ${
                   active
@@ -109,10 +113,10 @@ export default function FinalizeTool() {
                     : 'bg-paper text-ink-soft border-line-strong hover:border-accent hover:text-accent-ink'
                 }`}
               >
-                {o.label}
+                {bucketLabel(b)}
                 <span className={active ? 'text-paper/60' : 'text-faint'}>
                   {' '}
-                  {counts[o.value]}
+                  {counts.get(b) ?? 0}
                 </span>
               </button>
             );
@@ -133,7 +137,7 @@ export default function FinalizeTool() {
           </p>
         ) : included.length === 0 ? (
           <p className="text-muted font-mono text-[0.8rem] text-center p-6 m-0">
-            Nothing clears this bar yet — rate or flag assets in Cull, or lower the threshold.
+            Nothing ticked matches — pick the ratings/picks to export above, or cull more in Cull.
           </p>
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-1.5 content-start">

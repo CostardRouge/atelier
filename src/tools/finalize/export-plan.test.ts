@@ -4,8 +4,9 @@ import type { Verdict, Flag } from '../../shared/library/AssetLibraryContext';
 import {
   exportSummary,
   includesAsset,
+  matchesBucket,
   planExport,
-  type ExportCriterion,
+  type ExportBucket,
 } from './export-plan';
 
 function file(name: string, bytes: number): File {
@@ -21,28 +22,43 @@ function asset(id: string, parts: AssetParts, kind: AssetKind = 'photo'): Asset 
 }
 
 const v = (rating: number, flag: Flag = null): Verdict => ({ rating, flag });
+const sel = (...buckets: ExportBucket[]): ReadonlySet<ExportBucket> =>
+  new Set(buckets);
 
-describe('includesAsset', () => {
-  it('matches the chosen threshold, never a reject', () => {
-    expect(includesAsset(v(0, 'pick'), 'picks')).toBe(true);
-    expect(includesAsset(v(5), 'picks')).toBe(false); // rated but not flagged
-    expect(includesAsset(v(4), 'rated4')).toBe(true);
-    expect(includesAsset(v(3), 'rated4')).toBe(false);
-    expect(includesAsset(undefined, 'rated3')).toBe(false);
+describe('matchesBucket', () => {
+  it('matches an exact star level or the pick flag', () => {
+    expect(matchesBucket(v(0, 'pick'), 'pick')).toBe(true);
+    expect(matchesBucket(v(3), 3)).toBe(true);
+    expect(matchesBucket(v(3), 4)).toBe(false); // exact, not threshold
+    expect(matchesBucket(v(5), 'pick')).toBe(false); // rated, not flagged
+    expect(matchesBucket(undefined, 1)).toBe(false);
   });
 
-  it('rejects are excluded even when highly rated or picked', () => {
-    expect(includesAsset(v(5, 'reject'), 'rated4')).toBe(false);
-    expect(includesAsset(v(0, 'reject'), 'picks')).toBe(false);
+  it('a reject never matches any bucket', () => {
+    expect(matchesBucket(v(5, 'reject'), 5)).toBe(false);
+    expect(matchesBucket(v(0, 'reject'), 'pick')).toBe(false);
+  });
+});
+
+describe('includesAsset (union of ticked buckets)', () => {
+  it('includes when any selected bucket matches', () => {
+    expect(includesAsset(v(1), sel('pick', 1))).toBe(true);
+    expect(includesAsset(v(0, 'pick'), sel('pick', 1))).toBe(true);
+    expect(includesAsset(v(2), sel('pick', 1))).toBe(false);
+  });
+
+  it('an empty selection includes nothing', () => {
+    expect(includesAsset(v(5, 'pick'), sel())).toBe(false);
   });
 });
 
 describe('planExport', () => {
   const verdicts = new Map<string, Verdict>([
-    ['a', v(5, 'pick')],
+    ['a', v(1, 'pick')], // 1 star AND picked
     ['b', v(4)],
-    ['c', v(2)],
+    ['c', v(1)], // 1 star only
     ['d', v(5, 'reject')],
+    ['e', v(0, 'pick')], // picked, unrated
   ]);
   const assets = [
     asset('a', { image: file('IMG_a.jpg', 10) }),
@@ -53,45 +69,39 @@ describe('planExport', () => {
     ),
     asset('c', { image: file('IMG_c.jpg', 10) }),
     asset('d', { image: file('IMG_d.jpg', 10) }),
+    asset('e', { image: file('IMG_e.jpg', 10) }),
   ];
 
-  it("'picks' exports only flagged assets, with all their parts", () => {
-    const items = planExport(assets, verdicts, 'picks');
-    expect(items.map((i) => i.name)).toEqual(['IMG_a.jpg']);
+  it('the one-star ∪ picks selection grabs both kinds in one export, no dupes', () => {
+    const items = planExport(assets, verdicts, sel('pick', 1));
+    // a (1★+pick, once), c (1★), e (pick) — b (★4) and rejected d excluded.
+    expect(items.map((i) => i.name).sort()).toEqual([
+      'IMG_a.jpg',
+      'IMG_c.jpg',
+      'IMG_e.jpg',
+    ]);
   });
 
-  it("'rated4' includes b's video + sidecar, excludes the c (★2) and rejected d", () => {
-    const items = planExport(assets, verdicts, 'rated4');
-    expect(items.map((i) => i.name).sort()).toEqual([
-      'CLIP_b.mp4',
-      'CLIP_b.srt',
-      'IMG_a.jpg',
-    ]);
-    const s = exportSummary(items);
-    expect(s).toEqual({ assets: 2, files: 3, bytes: 115 });
+  it('exact star buckets do not spill over (★4 excludes ★1 and ★5)', () => {
+    const items = planExport(assets, verdicts, sel(4));
+    expect(items.map((i) => i.name)).toEqual(['CLIP_b.mp4', 'CLIP_b.srt']);
+    expect(exportSummary(items)).toEqual({ assets: 1, files: 2, bytes: 105 });
   });
 
   it('de-duplicates colliding filenames case-insensitively', () => {
     const dupVerdicts = new Map<string, Verdict>([
-      ['x', v(5, 'pick')],
-      ['y', v(5, 'pick')],
+      ['x', v(0, 'pick')],
+      ['y', v(0, 'pick')],
     ]);
     const dupAssets = [
       asset('x', { image: file('DJI_0001.JPG', 1) }),
       asset('y', { image: file('dji_0001.jpg', 1) }),
     ];
-    const names = planExport(dupAssets, dupVerdicts, 'picks').map((i) => i.name);
+    const names = planExport(dupAssets, dupVerdicts, sel('pick')).map((i) => i.name);
     expect(names).toEqual(['DJI_0001.JPG', 'dji_0001 (2).jpg']);
   });
 
-  it('keeps asset order and is empty when nothing clears the bar', () => {
-    const empty = planExport(assets, verdicts, 'rated5');
-    expect(empty.map((i) => i.name)).toEqual(['IMG_a.jpg']); // only a is ★5 (not reject)
-    const none = planExport(
-      assets,
-      new Map<string, Verdict>(),
-      'picks' as ExportCriterion,
-    );
-    expect(none).toEqual([]);
+  it('an empty selection plans nothing', () => {
+    expect(planExport(assets, verdicts, sel())).toEqual([]);
   });
 });
