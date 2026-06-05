@@ -35,6 +35,16 @@ export interface MediaMeta {
   imageType?: string;
 }
 
+/** A cull flag on an asset. */
+export type Flag = 'pick' | 'reject' | null;
+
+/** A triage verdict — set by the Cull tool, read by downstream tools. */
+export interface Verdict {
+  /** 0–5; 0 means unrated. */
+  rating: number;
+  flag: Flag;
+}
+
 export interface AssetLibrary {
   /** Logical assets, grouped from the raw handles, sorted by base name. */
   assets: Asset[];
@@ -44,6 +54,14 @@ export interface AssetLibrary {
   meta: ReadonlyMap<string, MediaMeta>;
   /** Request an asset's cover metadata (no-op if already built/pending). */
   ensureMeta: (id: string) => void;
+  /** Cull verdicts (rating + flag), keyed by asset id. Absent = unrated/unflagged. */
+  verdicts: ReadonlyMap<string, Verdict>;
+  /** Set an asset's star rating (0–5); 0 clears the rating but keeps any flag. */
+  setRating: (id: string, rating: number) => void;
+  /** Set/replace an asset's flag (pass null to unflag); keeps any rating. */
+  setFlag: (id: string, flag: Flag) => void;
+  /** Remove an asset's verdict entirely (rating + flag). */
+  clearVerdict: (id: string) => void;
   /** Add files (from any source); duplicates are ignored, new assets selected. */
   addFiles: (files: File[]) => void;
   /** Drop an asset entirely (its handles leave the pool). */
@@ -146,6 +164,42 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
     [commitMeta],
   );
 
+  // --- cull verdicts (rating + flag) ---------------------------------------
+  const verdictsRef = useRef<Map<string, Verdict>>(new Map());
+  const [verdicts, setVerdicts] = useState<ReadonlyMap<string, Verdict>>(
+    verdictsRef.current,
+  );
+
+  const commitVerdict = useCallback(
+    (id: string, fn: (v: Verdict) => Verdict) => {
+      const next = new Map(verdictsRef.current);
+      const updated = fn(next.get(id) ?? { rating: 0, flag: null });
+      // Prune empty verdicts so the map stays small at scale.
+      if (updated.rating === 0 && updated.flag === null) next.delete(id);
+      else next.set(id, updated);
+      verdictsRef.current = next;
+      setVerdicts(next);
+    },
+    [],
+  );
+
+  const setRating = useCallback(
+    (id: string, rating: number) =>
+      commitVerdict(id, (v) => ({
+        ...v,
+        rating: Math.max(0, Math.min(5, Math.round(rating))),
+      })),
+    [commitVerdict],
+  );
+  const setFlag = useCallback(
+    (id: string, flag: Flag) => commitVerdict(id, (v) => ({ ...v, flag })),
+    [commitVerdict],
+  );
+  const clearVerdict = useCallback(
+    (id: string) => commitVerdict(id, () => ({ rating: 0, flag: null })),
+    [commitVerdict],
+  );
+
   // --- mutations -----------------------------------------------------------
   const addFiles = useCallback(
     (incoming: File[]) => {
@@ -210,6 +264,8 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
     }
     metaRef.current = new Map();
     setMeta(metaRef.current);
+    verdictsRef.current = new Map();
+    setVerdicts(verdictsRef.current);
     setFiles([]);
     setSelection(new Set());
   }, []);
@@ -235,6 +291,10 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
       selection,
       meta,
       ensureMeta,
+      verdicts,
+      setRating,
+      setFlag,
+      clearVerdict,
       addFiles,
       remove,
       removeFile,
@@ -248,6 +308,10 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
       selection,
       meta,
       ensureMeta,
+      verdicts,
+      setRating,
+      setFlag,
+      clearVerdict,
       addFiles,
       remove,
       removeFile,

@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import type { AssetKind } from '../shared/library/assets';
+import CullTool from '../tools/cull/CullTool';
 import LutStudio from '../tools/lut/LutStudio';
 import TelemetryTool from '../tools/telemetry/TelemetryTool';
 
@@ -32,6 +33,17 @@ export interface Tool {
 }
 
 export const TOOLS: Tool[] = [
+  {
+    id: 'cull',
+    path: '/cull',
+    label: 'Cull',
+    subtitle: 'Triage · rate & flag',
+    blurb:
+      'Rip through a shoot: rate 1–5, flag picks and rejects, filter to the keepers — ready for the editor.',
+    Component: CullTool,
+    accepts: ['photo', 'video'],
+    fullHeight: true,
+  },
   {
     id: 'telemetry',
     path: '/telemetry',
