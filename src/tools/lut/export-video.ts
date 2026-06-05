@@ -319,12 +319,28 @@ export async function exportGradedVideo(
       pipelineError = e instanceof Error ? e : new Error(String(e));
     },
   });
-  decoder.configure({
+  const decoderConfig: VideoDecoderConfig = {
     codec: videoTrack.codec,
     codedWidth: width,
     codedHeight: height,
     description,
-  });
+  };
+  // Fail fast with a clear message when the browser can't decode this source
+  // (DJI footage is often HEVC/H.265, which not every browser decodes via
+  // WebCodecs) — otherwise the error only surfaces deep in the decode loop.
+  const decodeSupport = await VideoDecoder.isConfigSupported(decoderConfig).catch(
+    () => ({ supported: false }) as VideoDecoderSupport,
+  );
+  if (!decodeSupport.supported) {
+    const codec = videoTrack.codec.split('.')[0];
+    const isHevc = /^(hvc1|hev1|hvc|hev)/i.test(codec);
+    throw new Error(
+      isHevc
+        ? "This browser can't decode HEVC/H.265 for export. Try Safari, or transcode the clip to H.264 first."
+        : `This browser can't decode this clip's video codec (${codec}) for export.`,
+    );
+  }
+  decoder.configure(decoderConfig);
 
   try {
     for (const sample of videoSamples) {

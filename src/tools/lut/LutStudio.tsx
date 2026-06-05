@@ -359,10 +359,17 @@ export default function LutStudio() {
   // --- derived ------------------------------------------------------------
 
   const doneCount = clips.filter((c) => c.exportStatus === 'done').length;
+  const errorCount = clips.filter((c) => c.exportStatus === 'error').length;
   const exportingClip = clips.find((c) => c.exportStatus === 'exporting');
   const overallRatio = batchTotal
     ? (doneCount + (exportingClip?.exportRatio ?? 0)) / batchTotal
     : 0;
+
+  // Clips that have entered the export pipeline (queued / running / finished /
+  // failed). The old clip list was the only place per-clip status showed; with
+  // it gone, surface this here so an export is never silent — successes are
+  // confirmed and failures (e.g. HEVC the encoder can't decode) say why.
+  const reported = clips.filter((c) => c.exportStatus !== 'idle');
 
   // Active-clip switcher (replaces the old clip list for picking the preview).
   const activeIndex = clips.findIndex((c) => c.id === activeId);
@@ -612,6 +619,55 @@ export default function LutStudio() {
           )}
       </div>
 
+      {reported.length > 0 && (
+        <div
+          className="flex-none flex flex-col gap-2 max-h-44 overflow-auto px-[0.85rem] py-[0.6rem] border border-line rounded-paper bg-surface"
+          aria-label="Export results"
+        >
+          {reported.map((c) => (
+            <div key={c.id} className="flex flex-col gap-0.5 min-w-0">
+              <div className="flex items-center gap-2 text-[0.8rem] min-w-0">
+                <span
+                  className={`flex-none w-4 text-center font-semibold ${
+                    c.exportStatus === 'done'
+                      ? 'text-[#3f6b3f]'
+                      : c.exportStatus === 'error'
+                        ? 'text-[#9a3a23]'
+                        : 'text-muted'
+                  }`}
+                  aria-hidden="true"
+                >
+                  {c.exportStatus === 'done'
+                    ? '✓'
+                    : c.exportStatus === 'error'
+                      ? '✗'
+                      : c.exportStatus === 'exporting'
+                        ? '⋯'
+                        : '·'}
+                </span>
+                <span className="font-medium truncate min-w-0" title={c.name}>
+                  {c.name}
+                </span>
+                <span className="ml-auto flex-none font-mono text-[0.72rem] text-muted tabular-nums">
+                  {c.exportStatus === 'queued' && 'Queued'}
+                  {c.exportStatus === 'exporting' &&
+                    (c.exportRatio != null
+                      ? `${Math.round(c.exportRatio * 100)}%`
+                      : 'Exporting…')}
+                  {c.exportStatus === 'done' && 'Exported'}
+                  {c.exportStatus === 'error' && 'Failed'}
+                </span>
+              </div>
+              {c.exportStatus === 'error' && c.exportError && (
+                <p className="m-0 pl-6 text-[0.72rem] leading-snug text-[#9a3a23]">
+                  {c.exportError}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="flex items-center justify-end gap-4 border-t border-line pt-4 flex-none">
         {exporting ? (
           <>
@@ -643,6 +699,21 @@ export default function LutStudio() {
               <span className="mr-auto text-[0.78rem] text-muted">
                 Export needs WebCodecs (try Chrome/Edge) — preview works
                 everywhere.
+              </span>
+            )}
+            {exportSupported && reported.length > 0 && (
+              <span className="mr-auto text-[0.78rem] text-ink-soft" role="status">
+                {doneCount > 0 && (
+                  <b className="text-[#3f6b3f] font-semibold">
+                    {doneCount} exported
+                  </b>
+                )}
+                {doneCount > 0 && errorCount > 0 && ' · '}
+                {errorCount > 0 && (
+                  <b className="text-[#9a3a23] font-semibold">
+                    {errorCount} failed
+                  </b>
+                )}
               </span>
             )}
             <button
