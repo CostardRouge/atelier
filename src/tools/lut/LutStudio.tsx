@@ -48,7 +48,6 @@ export default function LutStudio() {
   const [clips, setClips] = useState<Clip[]>([]);
   const clipsRef = useRef(clips);
   clipsRef.current = clips;
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [activeUrl, setActiveUrl] = useState<string | null>(null);
   const [activeError, setActiveError] = useState(false);
   const [activeInfo, setActiveInfo] = useState<ContainerInfo>({});
@@ -79,6 +78,12 @@ export default function LutStudio() {
     activeUrl,
   );
 
+  // The active clip is shared with the library, so clicking an asset in the
+  // sidebar focuses it here; fall back to the first selected clip.
+  const activeId =
+    lib.activeId && clips.some((c) => c.id === lib.activeId)
+      ? lib.activeId
+      : (clips[0]?.id ?? null);
   const activeClip = clips.find((c) => c.id === activeId) ?? null;
 
   // --- clip helpers -------------------------------------------------------
@@ -126,15 +131,11 @@ export default function LutStudio() {
 
   // --- effects ------------------------------------------------------------
 
-  // Keep a valid active clip: default to the first, and repoint if the active
-  // one was removed (deselected) from the list.
+  // Reflect the effective active clip back to the library, so the sidebar
+  // highlights it and a removed clip repoints to the first.
   useEffect(() => {
-    if (clips.length === 0) {
-      if (activeId !== null) setActiveId(null);
-    } else if (activeId === null || !clips.some((c) => c.id === activeId)) {
-      setActiveId(clips[0].id);
-    }
-  }, [clips, activeId]);
+    if (activeId !== lib.activeId) lib.setActive(activeId);
+  }, [activeId, lib.activeId, lib.setActive]);
 
   // The active clip's resolution comes from the shared library's cover meta,
   // computed once there; make sure it's been requested.
@@ -322,11 +323,11 @@ export default function LutStudio() {
   // Active-clip switcher (replaces the old clip list for picking the preview).
   const activeIndex = clips.findIndex((c) => c.id === activeId);
   function goPrev() {
-    if (activeIndex > 0) setActiveId(clips[activeIndex - 1].id);
+    if (activeIndex > 0) lib.setActive(clips[activeIndex - 1].id);
   }
   function goNext() {
     if (activeIndex >= 0 && activeIndex < clips.length - 1) {
-      setActiveId(clips[activeIndex + 1].id);
+      lib.setActive(clips[activeIndex + 1].id);
     }
   }
 

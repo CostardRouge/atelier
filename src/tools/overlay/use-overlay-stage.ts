@@ -23,7 +23,7 @@ import {
   hitTest,
   measureOverlays,
 } from './draw-overlays';
-import type { Anchor, OverlayElement } from './overlay-types';
+import type { OverlayElement } from './overlay-types';
 
 interface StageParams {
   videoRef: RefObject<HTMLVideoElement | null>;
@@ -54,14 +54,6 @@ function snap(value: number, tol = 0.02): number {
   if (Math.abs(value - 1) < tol) return 1;
   if (Math.abs(value - 0.5) < tol) return 0.5;
   return value;
-}
-
-/** Pick the anchor closest to a normalized position, for clean edge pinning. */
-function anchorFor(x: number, y: number): Anchor {
-  const h = x <= 0.04 ? 'left' : x >= 0.96 ? 'right' : 'center';
-  const v = y <= 0.04 ? 'top' : y >= 0.96 ? 'bottom' : 'center';
-  if (v === 'center' && h === 'center') return 'center';
-  return `${v}-${h}` as Anchor;
 }
 
 export function useOverlayStage(params: StageParams): StageHandlers {
@@ -290,9 +282,4 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   );
 
   return { onPointerDown, onPointerMove, onPointerUp };
-}
-
-/** Re-anchor an element to the nearest edge/corner of its current position. */
-export function reanchor(el: OverlayElement): Anchor {
-  return anchorFor(el.x, el.y);
 }

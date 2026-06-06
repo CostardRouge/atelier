@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { anchorOrigin, hitTest, type ElementBox } from './draw-overlays';
+import {
+  anchorOrigin,
+  anchorPoint,
+  hitTest,
+  type ElementBox,
+} from './draw-overlays';
+import type { Anchor } from './overlay-types';
 
 // Geometry only — no canvas. `layoutElement`/`drawOverlays` need a real 2D
 // context (font metrics), so they're exercised manually in the browser; the
@@ -27,6 +33,38 @@ describe('anchorOrigin', () => {
     expect(anchorOrigin('top-center', ax, ay, w, h)).toEqual({ x: 450, y: 300 });
     expect(anchorOrigin('center-right', ax, ay, w, h)).toEqual({ x: 400, y: 280 });
     expect(anchorOrigin('bottom-center', ax, ay, w, h)).toEqual({ x: 450, y: 260 });
+  });
+});
+
+describe('anchorPoint', () => {
+  const w = 100;
+  const h = 40;
+
+  it('reads the anchor point back from a box top-left (inverse of anchorOrigin)', () => {
+    // Box top-left at (400, 260): its bottom-right anchor point is (500, 300).
+    expect(anchorPoint('bottom-right', 400, 260, w, h)).toEqual({ x: 500, y: 300 });
+    expect(anchorPoint('top-left', 400, 260, w, h)).toEqual({ x: 400, y: 260 });
+    expect(anchorPoint('center', 400, 260, w, h)).toEqual({ x: 450, y: 280 });
+  });
+
+  it('round-trips with anchorOrigin for every anchor (re-anchor stays in place)', () => {
+    const anchors: Anchor[] = [
+      'top-left',
+      'top-center',
+      'top-right',
+      'center-left',
+      'center',
+      'center-right',
+      'bottom-left',
+      'bottom-center',
+      'bottom-right',
+    ];
+    // A box fixed on screen; switching anchor must keep its top-left identical.
+    const topLeft = { x: 123, y: 45 };
+    for (const a of anchors) {
+      const ap = anchorPoint(a, topLeft.x, topLeft.y, w, h);
+      expect(anchorOrigin(a, ap.x, ap.y, w, h)).toEqual(topLeft);
+    }
   });
 });
 
