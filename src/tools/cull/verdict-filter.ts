@@ -41,8 +41,9 @@ export function matchesFilter(v: Verdict | undefined, f: CullFilter): boolean {
 }
 
 /**
- * What downstream tools (Finalize, Frame) treat as a keeper: explicitly picked,
- * or rated 4+. Not used by the Cull UI itself — exported for the next links.
+ * What downstream consumers (the Export half, a future Frame tool) treat as a
+ * keeper: explicitly picked, or rated 4+. Not used by the triage UI itself —
+ * exported for the next links in the pipeline.
  */
 export function isPick(v: Verdict | undefined): boolean {
   if (v?.flag === 'reject') return false;

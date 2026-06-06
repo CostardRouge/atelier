@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
 import { formatBytes } from '../../shared/lib/format';
+import ModeSwitch, { type CullMode } from './ModeSwitch';
 import {
   EXPORT_BUCKETS,
   exportSummary,
@@ -22,13 +23,18 @@ type Status =
   | { kind: 'done'; result: WriteResult }
   | { kind: 'error'; message: string };
 
+interface ExportPanelProps {
+  mode: CullMode;
+  onModeChange: (mode: CullMode) => void;
+}
+
 /**
- * Finalize — the last step of the pipeline. Copy the keepers (by an adjustable
- * threshold) out of the in-browser library into a real album folder the user
- * picks, via the File System Access API. Flat, original names, nothing leaves
- * the machine.
+ * Export — the second half of the tool. Copy the keepers (the picks and the star
+ * levels you tick) out of the in-browser library into a real album folder the
+ * user picks, via the File System Access API. Flat, original names, nothing
+ * leaves the machine.
  */
-export default function FinalizeTool() {
+export default function ExportPanel({ mode, onModeChange }: ExportPanelProps) {
   const lib = useAssetLibrary();
   // Several buckets can be ticked at once; export is their union.
   const [selection, setSelection] = useState<Set<ExportBucket>>(
@@ -95,9 +101,10 @@ export default function FinalizeTool() {
   }
 
   return (
-    <section className="flex flex-col flex-1 min-h-0 gap-3" aria-label="Finalize">
+    <section className="flex flex-col flex-1 min-h-0 gap-3" aria-label="Export">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex flex-wrap items-center gap-1.5">
+          <ModeSwitch mode={mode} onChange={onModeChange} disabled={writing} />
           {EXPORT_BUCKETS.map((b) => {
             const active = selection.has(b);
             return (
@@ -133,11 +140,11 @@ export default function FinalizeTool() {
       <div className="flex-1 min-h-0 overflow-y-auto rounded-paper border border-line bg-surface p-2">
         {workingSet.length === 0 ? (
           <p className="text-muted font-mono text-[0.8rem] text-center p-6 m-0">
-            Select photos or videos in the Library, then cull them to pick the keepers.
+            Select photos or videos in the Library, then triage them to pick the keepers.
           </p>
         ) : included.length === 0 ? (
           <p className="text-muted font-mono text-[0.8rem] text-center p-6 m-0">
-            Nothing ticked matches — pick the ratings/picks to export above, or cull more in Cull.
+            Nothing ticked matches — pick the ratings/picks to export above, or switch to Triage to cull more.
           </p>
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-1.5 content-start">
