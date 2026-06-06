@@ -17,7 +17,8 @@ import {
   type OverlayElement,
   type TelemetryFieldKey,
 } from './overlay-types';
-import { reanchor, useOverlayStage } from './use-overlay-stage';
+import { reanchorInPlace } from './draw-overlays';
+import { useOverlayStage } from './use-overlay-stage';
 import { useLutSelection } from '../lut/use-lut-selection';
 import LutPicker from '../lut/LutPicker';
 
@@ -58,7 +59,6 @@ export default function OverlayStudio() {
   const lib = useAssetLibrary();
   const lutSel = useLutSelection();
 
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [activeUrl, setActiveUrl] = useState<string | null>(null);
   const [activeError, setActiveError] = useState(false);
   const [activeInfo, setActiveInfo] = useState<ContainerInfo>({});
@@ -95,19 +95,22 @@ export default function OverlayStudio() {
     [lib.assets, lib.selection],
   );
 
+  // The active clip is shared with the library, so clicking an asset in the
+  // sidebar focuses it here; fall back to the first selected clip.
+  const activeId =
+    lib.activeId && clips.some((c) => c.id === lib.activeId)
+      ? lib.activeId
+      : (clips[0]?.id ?? null);
   const activeClip = clips.find((c) => c.id === activeId) ?? null;
   const activeIndex = clips.findIndex((c) => c.id === activeId);
 
   // --- selection plumbing -------------------------------------------------
 
-  // Keep a valid active clip: default to first, repoint if removed.
+  // Reflect the effective active clip back to the library, so the sidebar
+  // highlights it and a removed clip repoints to the first.
   useEffect(() => {
-    if (clips.length === 0) {
-      if (activeId !== null) setActiveId(null);
-    } else if (activeId === null || !clips.some((c) => c.id === activeId)) {
-      setActiveId(clips[0].id);
-    }
-  }, [clips, activeId]);
+    if (activeId !== lib.activeId) lib.setActive(activeId);
+  }, [activeId, lib.activeId, lib.setActive]);
 
   useEffect(() => {
     if (activeId) lib.ensureMeta(activeId);
@@ -172,7 +175,19 @@ export default function OverlayStudio() {
     const onTime = () => {
       if (!scrubbingRef.current) setTime(v.currentTime);
     };
-    const onMeta = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
+    const onMeta = () => {
+      setDuration(Number.isFinite(v.duration) ? v.duration : 0);
+      // Decode the first frame so the canvas shows the clip instead of black
+      // before the user presses play. A tiny seek forces a decode + 'seeked',
+      // which the stage repaints from.
+      if (v.currentTime === 0) {
+        try {
+          v.currentTime = Math.min(0.001, (v.duration || 1) / 2);
+        } catch {
+          /* seeking unsupported — the frame will appear on first play */
+        }
+      }
+    };
     v.addEventListener('play', onPlay);
     v.addEventListener('pause', onPause);
     v.addEventListener('ended', onPause);
@@ -202,7 +217,31 @@ export default function OverlayStudio() {
   // --- element editing ----------------------------------------------------
 
   function updateElement(id: string, patch: Partial<OverlayElement>) {
-    setElements((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+    setElements((prev) =>
+      prev.map((e) => {
+        if (e.id !== id) return e;
+        // Re-anchoring should keep the element where it sits on screen: switch
+        // which point is the handle, then recompute (x,y) so the box doesn't
+        // jump. Needs the live canvas to measure the rendered box.
+        if (patch.anchor && patch.anchor !== e.anchor) {
+          const canvas = canvasRef.current;
+          const ctx = canvas?.getContext('2d');
+          let moved: { x: number; y: number } | null = null;
+          if (canvas && ctx && canvas.width && canvas.height) {
+            moved = reanchorInPlace(
+              ctx,
+              e,
+              findCue(cues, videoRef.current?.currentTime ?? 0),
+              canvas.width,
+              canvas.height,
+              patch.anchor,
+            );
+          }
+          return moved ? { ...e, ...patch, ...moved } : { ...e, ...patch };
+        }
+        return { ...e, ...patch };
+      }),
+    );
   }
 
   function addElement(el: OverlayElement) {
@@ -225,10 +264,10 @@ export default function OverlayStudio() {
   }
 
   function handleMove(id: string, x: number, y: number) {
+    // Dragging moves the element but keeps its anchor — the box translates with
+    // its anchor point, so the user's chosen anchor (and edge pinning) sticks.
     setElements((prev) =>
-      prev.map((e) =>
-        e.id === id ? { ...e, x, y, anchor: reanchor({ ...e, x, y }) } : e,
-      ),
+      prev.map((e) => (e.id === id ? { ...e, x, y } : e)),
     );
   }
 
@@ -261,11 +300,11 @@ export default function OverlayStudio() {
   }
 
   function goPrev() {
-    if (activeIndex > 0) setActiveId(clips[activeIndex - 1].id);
+    if (activeIndex > 0) lib.setActive(clips[activeIndex - 1].id);
   }
   function goNext() {
     if (activeIndex >= 0 && activeIndex < clips.length - 1) {
-      setActiveId(clips[activeIndex + 1].id);
+      lib.setActive(clips[activeIndex + 1].id);
     }
   }
 
@@ -425,6 +464,7 @@ export default function OverlayStudio() {
               className="absolute w-0.5 h-0.5 left-0 bottom-0 opacity-0 pointer-events-none"
               playsInline
               muted
+              preload="auto"
               onError={() => setActiveError(true)}
             />
           </div>

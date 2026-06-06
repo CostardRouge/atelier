@@ -86,6 +86,14 @@ export interface AssetLibrary {
   assets: Asset[];
   /** Ids of the currently selected assets. */
   selection: ReadonlySet<string>;
+  /**
+   * The asset the user last focused (clicked) in the library — the one a tool
+   * should make active (preview/edit). Null until something is focused; tools
+   * fall back to their first usable clip. Cleared when the asset is removed.
+   */
+  activeId: string | null;
+  /** Focus an asset (or clear with null) — the tool's active item follows. */
+  setActive: (id: string | null) => void;
   /** Lazily-built cover metadata, keyed by asset id. */
   meta: ReadonlyMap<string, MediaMeta>;
   /** Request an asset's cover metadata (no-op if already built/pending). */
@@ -120,6 +128,8 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
   const [selection, setSelection] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const setActive = useCallback((id: string | null) => setActiveId(id), []);
 
   const assets = useMemo(() => buildAssets(files), [files]);
   const assetsRef = useRef<Asset[]>(assets);
@@ -282,6 +292,7 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
         s.delete(id);
         return s;
       });
+      setActiveId((cur) => (cur === id ? null : cur));
     },
     [dropMeta],
   );
@@ -310,6 +321,7 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
     setVerdicts(verdictsRef.current);
     setFiles([]);
     setSelection(new Set());
+    setActiveId(null);
   }, []);
 
   const toggle = useCallback((id: string) => {
@@ -331,6 +343,8 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
     () => ({
       assets,
       selection,
+      activeId,
+      setActive,
       meta,
       ensureMeta,
       verdicts,
@@ -348,6 +362,8 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
     [
       assets,
       selection,
+      activeId,
+      setActive,
       meta,
       ensureMeta,
       verdicts,

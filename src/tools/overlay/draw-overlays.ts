@@ -65,6 +65,28 @@ export function anchorOrigin(
   return { x, y };
 }
 
+/**
+ * Where the anchor point sits for a box whose top-left is (`x`, `y`) — the exact
+ * inverse of {@link anchorOrigin}. Lets us re-anchor an element *in place*:
+ * switch which corner is the handle without the box jumping on screen.
+ */
+export function anchorPoint(
+  anchor: Anchor,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): { x: number; y: number } {
+  const { v, h: hor } = splitAnchor(anchor);
+  let ax = x;
+  if (hor === 'center') ax = x + w / 2;
+  else if (hor === 'right') ax = x + w;
+  let ay = y;
+  if (v === 'center') ay = y + h / 2;
+  else if (v === 'bottom') ay = y + h;
+  return { x: ax, y: ay };
+}
+
 interface Layout {
   text: string;
   font: string;
@@ -239,4 +261,24 @@ export function hitTest(boxes: ElementBox[], px: number, py: number): string | n
 /** Find a single element's box (for drawing the selection outline). */
 export function boxForId(boxes: ElementBox[], id: string): ElementBox | null {
   return boxes.find((b) => b.id === id) ?? null;
+}
+
+/**
+ * Re-anchor an element to `anchor` while keeping its rendered box exactly where
+ * it is: measures the current box, then returns the normalized (x, y) the new
+ * anchor needs so the visible position doesn't change. Returns null when the
+ * element has nothing to measure (then just swap the anchor — it isn't drawn).
+ */
+export function reanchorInPlace(
+  ctx: Ctx2D,
+  el: OverlayElement,
+  cue: Cue | null,
+  vw: number,
+  vh: number,
+  anchor: Anchor,
+): { x: number; y: number } | null {
+  const lay = layoutElement(ctx, el, cue, vw, vh);
+  if (!lay) return null;
+  const p = anchorPoint(anchor, lay.x, lay.y, lay.w, lay.h);
+  return { x: p.x / vw, y: p.y / vh };
 }

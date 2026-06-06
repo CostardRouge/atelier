@@ -79,6 +79,13 @@ export default function AssetSidebar({
     }
   }
 
+  // Clicking a row focuses that asset: make it the tool's active item, and pull
+  // it into the selection (tools act on the selection) if it wasn't already.
+  function activate(id: string) {
+    if (!lib.selection.has(id)) lib.toggle(id);
+    lib.setActive(id);
+  }
+
   async function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     setDragging(false);
@@ -220,9 +227,11 @@ export default function AssetSidebar({
               asset={a}
               meta={lib.meta.get(a.id)}
               selected={lib.selection.has(a.id)}
+              active={lib.activeId === a.id}
               usable={assetUsableBy(accepts, a)}
               onEnsure={() => lib.ensureMeta(a.id)}
               onToggle={() => lib.toggle(a.id)}
+              onActivate={() => activate(a.id)}
               onRemove={() => lib.remove(a.id)}
             />
           ))
@@ -258,9 +267,11 @@ interface AssetRowProps {
   asset: Asset;
   meta: MediaMeta | undefined;
   selected: boolean;
+  active: boolean;
   usable: boolean;
   onEnsure: () => void;
   onToggle: () => void;
+  onActivate: () => void;
   onRemove: () => void;
 }
 
@@ -268,9 +279,11 @@ function AssetRow({
   asset,
   meta,
   selected,
+  active,
   usable,
   onEnsure,
   onToggle,
+  onActivate,
   onRemove,
 }: AssetRowProps) {
   const ref = useRef<HTMLDivElement>(null);
@@ -295,12 +308,19 @@ function AssetRow({
 
   const isPhoto = asset.kind === 'photo';
 
+  // The active row gets an accent ring; a merely-selected row a subtle one.
+  const ring = active
+    ? 'bg-white shadow-[inset_0_0_0_2px_var(--color-accent)]'
+    : selected
+      ? 'bg-white shadow-[inset_0_0_0_1px_var(--color-line-strong)]'
+      : '';
+
   return (
     <div
       ref={ref}
-      className={`group flex items-center gap-2.5 px-2 py-1.5 mb-1 rounded-[11px] hover:bg-white ${
-        selected ? 'bg-white shadow-[inset_0_0_0_1px_var(--color-line-strong)]' : ''
-      } ${usable ? '' : 'opacity-45'}`}
+      className={`group flex items-center gap-2.5 px-2 py-1.5 mb-1 rounded-[11px] hover:bg-white ${ring} ${
+        usable ? '' : 'opacity-45'
+      }`}
     >
       <input
         type="checkbox"
@@ -309,37 +329,52 @@ function AssetRow({
         className="flex-none w-[15px] h-[15px] accent-ink cursor-pointer"
         aria-label={`Select ${asset.baseName}`}
       />
-      <div className="flex-none w-20 h-14 rounded-sm overflow-hidden bg-frame grid place-items-center">
-        {meta?.thumbUrl ? (
-          <img
-            src={meta.thumbUrl}
-            alt=""
-            className="w-full h-full object-cover block"
-          />
-        ) : (
-          <span
-            className="font-mono text-[0.55rem] text-[#8a8270] uppercase tracking-wide"
-            aria-hidden="true"
-          >
-            {isPhoto ? (meta?.imageType ?? '◇') : '▶'}
-          </span>
-        )}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-[0.79rem] font-medium truncate" title={asset.baseName}>
-          {asset.baseName}
-        </div>
-        <div className="font-mono text-[0.62rem] text-muted truncate">
-          {metaFacts(asset, meta)}
-        </div>
-      </div>
-      <span
-        className={`font-mono text-[0.56rem] tracking-[0.06em] uppercase px-1.5 py-0.5 rounded-md border whitespace-nowrap ${chipClass(
-          asset.kind,
-        )}`}
+      {/* The body is the click target: it focuses this asset in the tool.
+          Disabled for assets this tool can't use (the row is already dimmed). */}
+      <button
+        type="button"
+        onClick={onActivate}
+        disabled={!usable}
+        aria-pressed={active}
+        title={
+          usable
+            ? `Use ${asset.baseName} in this tool`
+            : `${asset.baseName} — not usable by this tool`
+        }
+        className="flex-1 min-w-0 flex items-center gap-2.5 text-left cursor-pointer disabled:cursor-default"
       >
-        {kindLabel(asset.kind)}
-      </span>
+        <div className="flex-none w-20 h-14 rounded-sm overflow-hidden bg-frame grid place-items-center">
+          {meta?.thumbUrl ? (
+            <img
+              src={meta.thumbUrl}
+              alt=""
+              className="w-full h-full object-cover block"
+            />
+          ) : (
+            <span
+              className="font-mono text-[0.55rem] text-[#8a8270] uppercase tracking-wide"
+              aria-hidden="true"
+            >
+              {isPhoto ? (meta?.imageType ?? '◇') : '▶'}
+            </span>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[0.79rem] font-medium truncate" title={asset.baseName}>
+            {asset.baseName}
+          </div>
+          <div className="font-mono text-[0.62rem] text-muted truncate">
+            {metaFacts(asset, meta)}
+          </div>
+        </div>
+        <span
+          className={`font-mono text-[0.56rem] tracking-[0.06em] uppercase px-1.5 py-0.5 rounded-md border whitespace-nowrap ${chipClass(
+            asset.kind,
+          )}`}
+        >
+          {kindLabel(asset.kind)}
+        </span>
+      </button>
       <button
         type="button"
         onClick={onRemove}
