@@ -21,6 +21,9 @@ export interface LutSelection {
   cubeError: string | null;
   /** True while a built-in LUT is being fetched/parsed. */
   busy: boolean;
+  /** LUT strength as a multiplier: 0 = original, 1 = full LUT, 3 = 300%. */
+  intensity: number;
+  setIntensity: (value: number) => void;
   applySelection: (value: string) => Promise<void>;
   uploadCube: () => Promise<void>;
 }
@@ -32,6 +35,8 @@ export function useLutSelection(): LutSelection {
   const [customName, setCustomName] = useState<string | null>(null);
   const [cubeError, setCubeError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // LUT strength, 0..3 (100% = the LUT as authored). Persists across LUT swaps.
+  const [intensity, setIntensity] = useState(1);
 
   async function applySelection(value: string) {
     setSelected(value);
@@ -80,5 +85,15 @@ export function useLutSelection(): LutSelection {
     setSelected('custom');
   }
 
-  return { lut, selected, customName, cubeError, busy, applySelection, uploadCube };
+  return {
+    lut,
+    selected,
+    customName,
+    cubeError,
+    busy,
+    intensity,
+    setIntensity,
+    applySelection,
+    uploadCube,
+  };
 }

@@ -35,6 +35,7 @@ export async function exportOverlayVideo(
   cues: Cue[],
   elements: OverlayElement[],
   lut: CubeLut | null,
+  intensity: number,
   onProgress?: (p: ExportProgress) => void,
   signal?: AbortSignal,
 ): Promise<Blob> {
@@ -54,7 +55,9 @@ export async function exportOverlayVideo(
 
       // When a LUT is set, grade each decoded frame on the GPU (the very same
       // renderer LUT Studio uses) into a coded-size canvas, then composite that.
-      const grade = lut ? makeFrameGrader(lut, codedWidth, codedHeight) : null;
+      const grade = lut
+        ? makeFrameGrader(lut, codedWidth, codedHeight, intensity)
+        : null;
 
       return {
         draw(frame, tMicros) {
@@ -106,6 +109,7 @@ export async function exportOverlay(
   cues: Cue[],
   elements: OverlayElement[],
   lut: CubeLut | null,
+  intensity: number,
   hint: ExportHint,
   onProgress?: (p: ExportProgress) => void,
   signal?: AbortSignal,
@@ -123,18 +127,18 @@ export async function exportOverlay(
   let blob: Blob;
   if (decision.path === 'webcodecs') {
     try {
-      blob = await exportOverlayVideo(file, cues, elements, lut, onProgress, signal);
+      blob = await exportOverlayVideo(file, cues, elements, lut, intensity, onProgress, signal);
     } catch (err) {
       // WebCodecs couldn't decode after all — fall back to the seek path if the
       // clip is playable; otherwise re-throw.
       if (err instanceof DecodeUnsupportedError && hint.videoPlayable) {
-        blob = await exportOverlayVideoViaSeek(file, cues, elements, lut, onProgress, signal);
+        blob = await exportOverlayVideoViaSeek(file, cues, elements, lut, intensity, onProgress, signal);
       } else {
         throw err;
       }
     }
   } else {
-    blob = await exportOverlayVideoViaSeek(file, cues, elements, lut, onProgress, signal);
+    blob = await exportOverlayVideoViaSeek(file, cues, elements, lut, intensity, onProgress, signal);
   }
 
   downloadBlob(blob, overlayName(file.name));

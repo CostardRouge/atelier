@@ -21,12 +21,14 @@ export { isExportSupported };
 export type { ExportProgress };
 
 /**
- * Grade `file` through `lut` and return a new MP4 Blob. The video is re-encoded
- * to H.264; audio is copied through. `onProgress` reports encoding progress.
+ * Grade `file` through `lut` at `intensity` (1 = 100%) and return a new MP4
+ * Blob. The video is re-encoded to H.264; audio is copied through.
+ * `onProgress` reports encoding progress.
  */
 export function exportGradedVideo(
   file: File,
   lut: CubeLut | null,
+  intensity: number,
   onProgress?: (p: ExportProgress) => void,
   signal?: AbortSignal,
 ): Promise<Blob> {
@@ -39,6 +41,7 @@ export function exportGradedVideo(
       const renderer = createLutRenderer(canvas);
       if (!renderer) throw new Error('WebGL2 is required for export.');
       renderer.setLut(lut);
+      renderer.setIntensity(intensity);
       renderer.resize(codedWidth, codedHeight);
       return {
         draw(frame) {

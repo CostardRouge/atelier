@@ -283,6 +283,7 @@ export default function OverlayStudio() {
     selectedId: selectedElementId,
     guides,
     lut: lutSel.lut,
+    intensity: lutSel.intensity,
     resetKey: activeUrl,
     redrawSignal: fontTick,
     onSelect: setSelectedElementId,
@@ -329,6 +330,7 @@ export default function OverlayStudio() {
         cues,
         elements,
         lutSel.lut,
+        lutSel.intensity,
         {
           codec: activeInfo.codec,
           width: meta?.width,
@@ -388,6 +390,8 @@ export default function OverlayStudio() {
             selected={lutSel.selected}
             customName={lutSel.customName}
             busy={lutSel.busy}
+            intensity={lutSel.intensity}
+            onIntensityChange={lutSel.setIntensity}
             onSelect={lutSel.applySelection}
             onUpload={lutSel.uploadCube}
           />

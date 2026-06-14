@@ -37,6 +37,8 @@ interface StageParams {
   guides: GuidesState;
   /** Optional LUT to grade the preview through (matches the export). */
   lut: CubeLut | null;
+  /** LUT strength multiplier (0..3; 1 = 100%). */
+  intensity: number;
   /** Source key (object URL); resets the loop and canvas when it swaps. */
   resetKey: unknown;
   /** Bump to force a repaint after async work (e.g. fonts finished loading). */
@@ -70,11 +72,13 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   const selectedRef = useRef(params.selectedId);
   const guidesRef = useRef(params.guides);
   const lutRef = useRef(params.lut);
+  const intensityRef = useRef(params.intensity);
   cuesRef.current = params.cues;
   elementsRef.current = params.elements;
   selectedRef.current = params.selectedId;
   guidesRef.current = params.guides;
   lutRef.current = params.lut;
+  intensityRef.current = params.intensity;
 
   const needsRedraw = useRef(true);
 
@@ -100,11 +104,15 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     return graderRef.current;
   }, []);
 
-  // Upload the LUT when it changes (not per frame), and repaint.
+  // Upload the LUT / intensity when they change (not per frame), and repaint.
   useEffect(() => {
-    if (params.lut) ensureGrader()?.renderer.setLut(params.lut);
+    if (params.lut) {
+      const r = ensureGrader()?.renderer;
+      r?.setLut(params.lut);
+      r?.setIntensity(params.intensity);
+    }
     needsRedraw.current = true;
-  }, [params.lut, ensureGrader]);
+  }, [params.lut, params.intensity, ensureGrader]);
 
   // Release GL resources on unmount.
   useEffect(
@@ -151,6 +159,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       if (!g) {
         g = ensureGrader();
         g?.renderer.setLut(lut);
+        g?.renderer.setIntensity(intensityRef.current);
       }
       if (g) {
         g.renderer.resize(vw, vh);

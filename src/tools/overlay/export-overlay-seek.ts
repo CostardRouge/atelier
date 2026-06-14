@@ -86,6 +86,7 @@ export async function exportOverlayVideoViaSeek(
   cues: Cue[],
   elements: OverlayElement[],
   lut: CubeLut | null,
+  intensity: number,
   onProgress?: (p: ExportProgress) => void,
   signal?: AbortSignal,
 ): Promise<Blob> {
@@ -145,7 +146,7 @@ export async function exportOverlayVideoViaSeek(
     if (!ctx) throw new Error('Could not create a 2D canvas for export.');
 
     // The <video> frame is already display-oriented, so grade at output dims.
-    grade = lut ? makeFrameGrader(lut, outWidth, outHeight) : null;
+    grade = lut ? makeFrameGrader(lut, outWidth, outHeight, intensity) : null;
 
     const bitrate = deriveBitrate(outWidth, outHeight, framerate);
     const muxer = new Muxer({

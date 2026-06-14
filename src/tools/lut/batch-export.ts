@@ -48,6 +48,7 @@ function downloadBlob(blob: Blob, filename: string): void {
 export async function runBatchExport(
   items: BatchItem[],
   lut: CubeLut | null,
+  intensity: number,
   handlers: BatchHandlers,
   signal: AbortSignal,
 ): Promise<void> {
@@ -58,6 +59,7 @@ export async function runBatchExport(
       const blob = await exportGradedVideo(
         item.file,
         lut,
+        intensity,
         (p) => handlers.onProgress(item.id, p),
         signal,
       );

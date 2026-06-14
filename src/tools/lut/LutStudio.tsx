@@ -52,8 +52,17 @@ export default function LutStudio() {
   const [activeError, setActiveError] = useState(false);
   const [activeInfo, setActiveInfo] = useState<ContainerInfo>({});
 
-  const { lut, selected, customName, cubeError, busy, applySelection, uploadCube } =
-    useLutSelection();
+  const {
+    lut,
+    selected,
+    customName,
+    cubeError,
+    busy,
+    intensity,
+    setIntensity,
+    applySelection,
+    uploadCube,
+  } = useLutSelection();
   const [bypass, setBypass] = useState(false);
   // Before/after wipe: a divider that follows the cursor over the preview,
   // grade on the left, original on the right (like Lightroom / Capture One).
@@ -74,6 +83,7 @@ export default function LutStudio() {
     videoRef,
     canvasRef,
     lut,
+    intensity,
     bypass,
     activeUrl,
   );
@@ -279,6 +289,7 @@ export default function LutStudio() {
       await runBatchExport(
         clips.map((c) => ({ id: c.id, file: c.file, name: c.name })),
         lut,
+        intensity,
         {
           onStart: (id) =>
             updateClip(id, (c) => ({ ...c, exportStatus: 'exporting', exportRatio: null })),
@@ -354,6 +365,8 @@ export default function LutStudio() {
               selected={selected}
               customName={customName}
               busy={busy}
+              intensity={intensity}
+              onIntensityChange={setIntensity}
               onSelect={applySelection}
               onUpload={uploadCube}
             />
