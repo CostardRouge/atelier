@@ -10,6 +10,7 @@ import {
   formatGroundSpeed,
   formatHeading,
   formatVerticalSpeed,
+  type SpeedUnit,
 } from '../telemetry/motion';
 import type { OverlayElement, TelemetryFieldKey } from './overlay-types';
 
@@ -52,8 +53,14 @@ export const MISSING = '—';
 /**
  * Resolve a field's display string for `cue`, including unit prefix/suffix.
  * Returns {@link MISSING} when the cue or the value is absent.
+ *
+ * @param speedUnit Only used for `gnd_speed` / `vert_speed` — defaults to `'m/s'`.
  */
-export function formatField(key: TelemetryFieldKey, cue: Cue | null): string {
+export function formatField(
+  key: TelemetryFieldKey,
+  cue: Cue | null,
+  speedUnit?: SpeedUnit,
+): string {
   if (!cue) return MISSING;
   switch (key) {
     case 'frame':
@@ -61,9 +68,9 @@ export function formatField(key: TelemetryFieldKey, cue: Cue | null): string {
     case 'timestamp':
       return cue.timestamp ?? MISSING;
     case 'gnd_speed':
-      return formatGroundSpeed(cue.derived?.groundSpeed) ?? MISSING;
+      return formatGroundSpeed(cue.derived?.groundSpeed, speedUnit) ?? MISSING;
     case 'vert_speed':
-      return formatVerticalSpeed(cue.derived?.verticalSpeed) ?? MISSING;
+      return formatVerticalSpeed(cue.derived?.verticalSpeed, speedUnit) ?? MISSING;
     case 'heading':
       return formatHeading(cue.derived?.heading) ?? MISSING;
   }
@@ -78,12 +85,12 @@ export function formatField(key: TelemetryFieldKey, cue: Cue | null): string {
 /**
  * The full string an element renders for `cue`: a free-text element returns its
  * literal; a telemetry element returns `LABEL value` (or just the value when no
- * label is set).
+ * label is set). Heading-arrow elements return `''` (they render a shape, not text).
  */
 export function renderElementText(el: OverlayElement, cue: Cue | null): string {
   if (el.kind === 'text') return el.text ?? '';
-  if (!el.field) return '';
-  const value = formatField(el.field, cue);
+  if (el.kind === 'heading-arrow' || !el.field) return '';
+  const value = formatField(el.field, cue, el.speedUnit);
   const label = el.label?.trim();
   return label ? `${label} ${value}` : value;
 }
