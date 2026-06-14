@@ -37,6 +37,23 @@ describe('formatField', () => {
     expect(formatField('timestamp', cue)).toBe('2026-05-30 05:49:34.609');
   });
 
+  it('formats the GPS-derived motion fields off cue.derived', () => {
+    const moving = {
+      ...cue,
+      derived: { groundSpeed: 12.34, verticalSpeed: -1.2, heading: 270 },
+    };
+    expect(formatField('gnd_speed', moving)).toBe('12.3 m/s');
+    expect(formatField('vert_speed', moving)).toBe('-1.2 m/s');
+    expect(formatField('heading', moving)).toBe('270° W');
+  });
+
+  it('shows the placeholder when motion was not derivable', () => {
+    // The fixture cues are 16 ms apart, so no motion is derived for them.
+    expect(formatField('gnd_speed', cue)).toBe(MISSING);
+    expect(formatField('heading', cue)).toBe(MISSING);
+    expect(formatField('vert_speed', { ...cue, derived: {} })).toBe(MISSING);
+  });
+
   it('returns the placeholder when the cue or value is missing', () => {
     expect(formatField('rel_alt', null)).toBe(MISSING);
     expect(formatField('iso', { ...cue, data: {} })).toBe(MISSING);

@@ -9,10 +9,16 @@
  * export (true WYSIWYG).
  */
 
-/** Telemetry fields exposable as widgets (raw SRT fields only, v1). */
+/**
+ * Telemetry fields exposable as widgets: the raw SRT fields plus the motion
+ * values (`gnd_speed`, `vert_speed`, `heading`) reconstructed from GPS.
+ */
 export type TelemetryFieldKey =
   | 'rel_alt'
   | 'abs_alt'
+  | 'gnd_speed'
+  | 'vert_speed'
+  | 'heading'
   | 'latitude'
   | 'longitude'
   | 'iso'
@@ -108,6 +114,9 @@ export const CURATED_FONTS: readonly OverlayFontFamily[] = [
 const SHORT_LABELS: Record<TelemetryFieldKey, string> = {
   rel_alt: 'ALT',
   abs_alt: 'ABS ALT',
+  gnd_speed: 'SPEED',
+  vert_speed: 'V.SPEED',
+  heading: 'HDG',
   latitude: 'LAT',
   longitude: 'LON',
   iso: 'ISO',
@@ -175,12 +184,27 @@ export function createTextElement(text = 'Text'): OverlayElement {
   };
 }
 
-/** A sensible starter deck: altitude, GPS and the exposure triplet in corners. */
+/**
+ * A sensible starter deck: altitude headline with speed and heading beneath it,
+ * GPS bottom-left and the exposure pair top-right.
+ */
 export function defaultElementsPreset(): OverlayElement[] {
   const alt = createTelemetryElement('rel_alt');
   alt.anchor = 'top-left';
   alt.x = 0.04;
   alt.y = 0.05;
+
+  const speed = createTelemetryElement('gnd_speed');
+  speed.anchor = 'top-left';
+  speed.x = 0.04;
+  speed.y = 0.12;
+  speed.sizeFrac = 0.03;
+
+  const heading = createTelemetryElement('heading');
+  heading.anchor = 'top-left';
+  heading.x = 0.04;
+  heading.y = 0.16;
+  heading.sizeFrac = 0.03;
 
   const lat = createTelemetryElement('latitude');
   lat.anchor = 'bottom-left';
@@ -206,5 +230,5 @@ export function defaultElementsPreset(): OverlayElement[] {
   shutter.y = 0.09;
   shutter.sizeFrac = 0.03;
 
-  return [alt, lat, lon, iso, shutter];
+  return [alt, speed, heading, lat, lon, iso, shutter];
 }

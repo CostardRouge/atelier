@@ -26,6 +26,13 @@ flight telemetry (altitude, GPS, camera settings) encoded in the SubRip format.
 The tool plays the video and shows the telemetry for the currently displayed
 frame, synchronized frame-by-frame.
 
+The `.srt` records *where* the aircraft was, not how fast it was moving, so the
+tool reconstructs the missing motion from successive GPS fixes: **ground speed**
+(horizontal), **vertical speed** (climb/descent) and **heading** (course over
+ground, with a compass point). These appear alongside the raw fields in the
+Flight panel and the live gallery readout, and can be burned in with the
+Telemetry Overlay tool.
+
 ### Usage
 
 1. Open the app (the Telemetry tool is the default).
@@ -173,6 +180,16 @@ frame all follow from that entry.
   field", the parser extracts the inner content of *all* brackets, joins it, and
   sweeps with a global `key: value` regex — handling both shapes uniformly.
   This is covered by an anti-regression test.
+- **Reconstructed motion (speed & heading).** Raw telemetry has position but no
+  velocity, so `motion.ts` differences each cue against the most recent one at
+  least ~1 s older (a binary-search look-back), giving ground speed (haversine
+  distance ÷ time), signed vertical speed, and a course-over-ground heading.
+  The window matters: GPS only refreshes a few times a second, so differencing
+  adjacent 60 fps frames would flicker `0 → 45 → 0`; the window spans several
+  fixes for a stable readout. Heading is suppressed while hovering (movement
+  below the GPS-noise floor), where "direction of travel" is meaningless. Pure
+  and unit-tested, so the same values feed the panels, the gallery and the
+  overlay export.
 - **Frame-accurate sync, shared once.** The `useActiveCue` hook uses
   `video.requestVideoFrameCallback()` and reads `metadata.mediaTime` (the exact
   presentation time of the displayed frame), falling back to the `timeupdate`

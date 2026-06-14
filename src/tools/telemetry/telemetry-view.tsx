@@ -1,4 +1,9 @@
 import type { Cue } from './srt-parser';
+import {
+  formatGroundSpeed,
+  formatHeading,
+  formatVerticalSpeed,
+} from './motion';
 
 /** Format a raw value with a unit suffix, tolerating missing data. */
 export function fmt(value: string | undefined, suffix = ''): string {
@@ -61,6 +66,9 @@ export function TelemetryPanels({ cue }: { cue: Cue | null }) {
         <dl className="m-0 grid grid-cols-[auto_1fr] gap-[0.55rem_1rem]">
           <Field label="Rel. altitude" value={d.rel_alt} suffix=" m" highlight />
           <Field label="Abs. altitude" value={d.abs_alt} suffix=" m" />
+          <Field label="Ground speed" value={formatGroundSpeed(cue?.derived?.groundSpeed)} />
+          <Field label="Vertical speed" value={formatVerticalSpeed(cue?.derived?.verticalSpeed)} />
+          <Field label="Heading" value={formatHeading(cue?.derived?.heading)} />
           <Field label="Latitude" value={d.latitude} />
           <Field label="Longitude" value={d.longitude} />
           <Field
@@ -98,6 +106,10 @@ export function LiveTelemetry({ cue }: { cue: Cue | null }) {
   const d = cue?.data ?? {};
   const gps =
     d.latitude && d.longitude ? `${d.latitude}, ${d.longitude}` : '—';
+  const motion =
+    [formatGroundSpeed(cue?.derived?.groundSpeed), formatHeading(cue?.derived?.heading)]
+      .filter(Boolean)
+      .join('  ·  ');
   const exposure = [
     d.iso ? `ISO ${d.iso}` : null,
     d.shutter ? d.shutter : null,
@@ -113,6 +125,12 @@ export function LiveTelemetry({ cue }: { cue: Cue | null }) {
       </dt>
       <dd className="m-0 text-right font-serif text-[1.7rem] leading-none text-accent-ink">
         {fmt(d.rel_alt, ' m')}
+      </dd>
+      <dt className="font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted">
+        Speed
+      </dt>
+      <dd className="m-0 text-right font-mono tabular-nums text-[0.82rem] text-ink">
+        {motion || '—'}
       </dd>
       <dt className="font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted">
         GPS
