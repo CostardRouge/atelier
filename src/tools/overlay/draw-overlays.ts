@@ -182,14 +182,79 @@ function arrowLayout(el: OverlayElement, vw: number, vh: number): ArrowLayout {
 }
 
 /**
+ * Draw the compass ring, dashed cardinal lines and N/E/S/W labels.
+ * Call this inside a `ctx.save()/restore()` block with any desired rotation
+ * already applied: in absolute mode the ctx is unrotated (N fixed at screen
+ * top); in relative (track-up) mode the ctx is pre-rotated by `−heading°` so
+ * the heading direction floats to the top.
+ */
+function drawCompassDecoration(
+  ctx: Ctx2D,
+  r: number,
+  el: OverlayElement,
+): void {
+  const ringR = r * 2.0;
+  const lineW = Math.max(0.5, r * 0.055);
+  const gapR = r * 0.65;
+
+  if (el.legibility.mode === 'shadow') {
+    ctx.shadowColor = el.legibility.color;
+    ctx.shadowBlur = el.legibility.padFrac * r * 0.6;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+  }
+
+  // Ring outline
+  ctx.strokeStyle = el.color;
+  ctx.lineWidth = lineW;
+  ctx.globalAlpha = 0.45;
+  ctx.beginPath();
+  ctx.arc(0, 0, ringR, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Dashed cardinal lines — from the gap around the arrow to the ring edge.
+  ctx.globalAlpha = 0.35;
+  ctx.setLineDash([ringR * 0.09, ringR * 0.07]);
+  ctx.beginPath();
+  ctx.moveTo(0, -gapR); ctx.lineTo(0, -ringR);  // N
+  ctx.moveTo(0,  gapR); ctx.lineTo(0,  ringR);  // S
+  ctx.moveTo( gapR, 0); ctx.lineTo( ringR, 0);  // E
+  ctx.moveTo(-gapR, 0); ctx.lineTo(-ringR, 0);  // W
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Cardinal letters
+  const letterR = ringR + r * 0.5;
+  const letterPx = Math.max(6, r * 0.52);
+  ctx.globalAlpha = 0.92;
+  ctx.fillStyle = el.color;
+  ctx.font = `bold ${letterPx}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('N', 0, -letterR);
+  ctx.fillText('S', 0,  letterR);
+  ctx.fillText('E',  letterR, 0);
+  ctx.fillText('W', -letterR, 0);
+
+  ctx.globalAlpha = 1;
+}
+
+/**
  * Draw a heading-arrow element.
  *
- * The arrow chevron rotates to `cue.derived.heading` (0 = North = up on screen).
- * When `el.showCompass` is true, a fixed compass ring with dashed cardinal lines
- * and N/E/S/W labels is drawn first in screen space (it never rotates).
+ * Two modes (controlled by `el.compassMode`):
  *
- * Rotation formula: canvas 0° = East; heading 0° = North = up on screen,
- * so `canvas_angle = (heading − 90) × π/180`.
+ *  • **absolute** (default / north-up): the compass ring is fixed — N is always
+ *    at the top of the screen. The arrow rotates to show the current heading.
+ *
+ *  • **relative** (track-up): the arrow is always pinned pointing UP (forward
+ *    direction). The compass ring rotates by `−heading°` so the heading
+ *    direction rises to the top, just like a "track-up" map on a car GPS.
+ *
+ * When no heading is available (hovering, GPS noise floor):
+ *  - absolute mode: draws a dot instead of the arrow.
+ *  - relative mode: draws the arrow pointing up with a slightly reduced opacity
+ *    to signal "no data, last known direction".
  */
 function drawArrow(
   ctx: Ctx2D,
@@ -201,11 +266,12 @@ function drawArrow(
   const lay = arrowLayout(el, vw, vh);
   const { cx, cy, r, halfSize } = lay;
   const heading = cue?.derived?.heading;
+  const isRelative = el.compassMode === 'relative';
 
   ctx.save();
   ctx.translate(cx, cy);
 
-  // --- axis-aligned background box (before any rotation) ---
+  // --- axis-aligned background box (never rotated) ---
   if (el.legibility.mode === 'box') {
     const pad = el.legibility.padFrac * r;
     ctx.fillStyle = el.legibility.color;
@@ -220,60 +286,28 @@ function drawArrow(
     ctx.fill();
   }
 
-  // --- compass ring, dashed cardinal lines and N/E/S/W labels ---
-  // All drawn in screen space (never rotated) so North is always at the top.
+  // --- compass decoration ---
   if (el.showCompass) {
-    const ringR = r * 2.0;
-    const lineW = Math.max(0.5, r * 0.055);
-    const gapR = r * 0.65; // inner clear zone around the arrow
-
     ctx.save();
-
-    if (el.legibility.mode === 'shadow') {
-      ctx.shadowColor = el.legibility.color;
-      ctx.shadowBlur = el.legibility.padFrac * r * 0.6;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 0;
+    if (isRelative && heading != null) {
+      // Track-up: rotate the compass so the current heading floats to the top.
+      // heading 0° (N) → rotate(0) → N at top ✓
+      // heading 90° (E) → rotate(−90°) → E at top ✓
+      ctx.rotate(-heading * (Math.PI / 180));
     }
-
-    // Ring outline
-    ctx.strokeStyle = el.color;
-    ctx.lineWidth = lineW;
-    ctx.globalAlpha = 0.45;
-    ctx.beginPath();
-    ctx.arc(0, 0, ringR, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Dashed cardinal lines (N, S, E, W) — from the gap around the arrow to the ring.
-    ctx.globalAlpha = 0.35;
-    ctx.setLineDash([ringR * 0.09, ringR * 0.07]);
-    ctx.beginPath();
-    ctx.moveTo(0, -gapR);  ctx.lineTo(0, -ringR);   // N
-    ctx.moveTo(0, gapR);   ctx.lineTo(0, ringR);    // S
-    ctx.moveTo(gapR, 0);   ctx.lineTo(ringR, 0);    // E
-    ctx.moveTo(-gapR, 0);  ctx.lineTo(-ringR, 0);   // W
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Cardinal letters
-    const letterR = ringR + r * 0.5;
-    const letterPx = Math.max(6, r * 0.52);
-    ctx.globalAlpha = 0.92;
-    ctx.fillStyle = el.color;
-    ctx.font = `bold ${letterPx}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('N', 0, -letterR);
-    ctx.fillText('S', 0, letterR);
-    ctx.fillText('E', letterR, 0);
-    ctx.fillText('W', -letterR, 0);
-
-    ctx.globalAlpha = 1;
+    // Absolute mode: no rotation — N always at screen top.
+    drawCompassDecoration(ctx, r, el);
     ctx.restore();
   }
 
-  // --- rotate ctx for the directional arrow ---
-  if (heading != null) {
+  // --- arrow rotation ---
+  if (isRelative) {
+    // Arrow always points up regardless of heading.
+    // The chevron is drawn pointing right by default, so −90° = up.
+    ctx.rotate(-Math.PI / 2);
+  } else if (heading != null) {
+    // North-up: rotate the arrow to the heading direction.
+    // canvas 0° = East; heading 0° = North = up → offset −90°.
     ctx.rotate((heading - 90) * (Math.PI / 180));
   }
 
@@ -287,20 +321,26 @@ function drawArrow(
     ctx.shadowBlur = 0;
   }
 
+  // In relative mode with no heading data: draw the arrow at reduced opacity
+  // (direction is unknown but "forward = up" convention still holds visually).
+  if (isRelative && heading == null) {
+    ctx.globalAlpha = 0.45;
+  }
+
   ctx.fillStyle = el.color;
 
-  if (heading != null) {
+  if (heading != null || isRelative) {
     // Chevron pointing right (East) before rotation.
-    // Tip at (+r, 0); concave tail notch at (−r·0.15, 0).
+    // Tip at (+r, 0); concave tail notch at (−r × 0.15, 0).
     ctx.beginPath();
     ctx.moveTo(r, 0);
     ctx.lineTo(-r * 0.4, -r * 0.6);
     ctx.lineTo(-r * 0.15, 0);
-    ctx.lineTo(-r * 0.4, r * 0.6);
+    ctx.lineTo(-r * 0.4,  r * 0.6);
     ctx.closePath();
     ctx.fill();
   } else {
-    // Hovering — no direction: dot confirms the element is present.
+    // Absolute mode, hovering — dot confirms the element is present.
     ctx.beginPath();
     ctx.arc(0, 0, r * 0.3, 0, Math.PI * 2);
     ctx.fill();

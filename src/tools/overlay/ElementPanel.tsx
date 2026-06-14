@@ -85,6 +85,23 @@ export default function ElementPanel({ element, onChange }: ElementPanelProps) {
             />
             <span className={labelClass}>Compass ring (N / E / S / W)</span>
           </label>
+          {element.showCompass && (
+            <label className="flex flex-col gap-1">
+              <span className={labelClass}>Orientation mode</span>
+              <select
+                className={`${inputClass} cursor-pointer`}
+                value={element.compassMode ?? 'absolute'}
+                onChange={(e) =>
+                  onChange({
+                    compassMode: e.target.value as 'absolute' | 'relative',
+                  })
+                }
+              >
+                <option value="absolute">North-up — ring fixed, arrow rotates</option>
+                <option value="relative">Track-up — arrow fixed up, ring rotates</option>
+              </select>
+            </label>
+          )}
         </div>
       ) : element.kind === 'text' ? (
         <label className="flex flex-col gap-1">

@@ -101,9 +101,18 @@ export interface OverlayElement {
 
   /**
    * `heading-arrow` only: when true, draw a compass ring with N/E/S/W labels
-   * around the arrow. The ring is screen-aligned and never rotates.
+   * around the arrow. The ring rotates in relative mode, stays fixed in absolute.
    */
   showCompass?: boolean;
+
+  /**
+   * `heading-arrow` + `showCompass` only.
+   * - `'absolute'` (default / north-up): the ring is screen-aligned — N is always
+   *   at the top. The arrow rotates to the current heading.
+   * - `'relative'` (track-up): the ring rotates so the heading direction rises to
+   *   the top, mirroring a "track-up" map. The arrow always points up.
+   */
+  compassMode?: 'absolute' | 'relative';
 
   /**
    * `telemetry-field` only, for `gnd_speed` / `vert_speed`: which unit to
