@@ -97,14 +97,17 @@ function lutsManifestPlugin(): Plugin {
   };
 }
 
-// The GitHub repo name, and therefore the GitHub Pages base path
-// (https://<user>.github.io/<REPO>/). Single source of truth so renaming the
-// project is a one-line change. NOTE: this must match the actual repo name when
-// deploying — rename the GitHub repo to `atelier` before merging to `main`, or
-// Pages will 404 on every asset.
-const REPO = 'atelier';
+// The GitHub Pages base path is `/<repo>/` (served from
+// https://<user>.github.io/<repo>/). In CI we read the real repository name
+// from `GITHUB_REPOSITORY` (`owner/repo`, set automatically by GitHub Actions)
+// so the base can never drift out of sync with the repo name — a hardcoded
+// value previously did, and Pages 404'd every asset. Locally (`dev`/`preview`)
+// `GITHUB_REPOSITORY` is unset, so we fall back to the repo name. Set
+// `BASE_PATH` to override — e.g. `/` when serving from a custom domain.
+const REPO = process.env.GITHUB_REPOSITORY?.split('/')[1] ?? 'dji-flight-data';
+const BASE = process.env.BASE_PATH ?? `/${REPO}/`;
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), lutsManifestPlugin()],
-  base: `/${REPO}/`,
+  base: BASE,
 });

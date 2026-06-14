@@ -3,6 +3,7 @@ import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
 import { formatDuration } from '../../shared/lib/format';
 import { isEncodeSupported } from '../../shared/media/webcodecs-export';
+import { useVideoScrub } from '../../shared/media/use-video-scrub';
 import { probeContainer, type ContainerInfo } from '../../shared/media/video-metadata';
 import { parseSrt, type Cue } from '../telemetry/srt-parser';
 import { findCue } from '../telemetry/find-cue';
@@ -18,6 +19,8 @@ import {
   type TelemetryFieldKey,
 } from './overlay-types';
 import { reanchorInPlace } from './draw-overlays';
+import { DEFAULT_GUIDES, type GuidesState } from './guides';
+import GuidesControl from './GuidesControl';
 import { useOverlayStage } from './use-overlay-stage';
 import { useLutSelection } from '../lut/use-lut-selection';
 import LutPicker from '../lut/LutPicker';
@@ -54,7 +57,7 @@ const notice =
 export default function OverlayStudio() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const scrubbingRef = useRef(false);
+  const scrub = useVideoScrub(videoRef);
 
   const lib = useAssetLibrary();
   const lutSel = useLutSelection();
@@ -66,6 +69,7 @@ export default function OverlayStudio() {
 
   const [elements, setElements] = useState<OverlayElement[]>(defaultElementsPreset);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+  const [guides, setGuides] = useState<GuidesState>(DEFAULT_GUIDES);
   const [fontTick, setFontTick] = useState(0);
 
   // Transport, mirrored from the offscreen video element.
@@ -173,7 +177,7 @@ export default function OverlayStudio() {
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
     const onTime = () => {
-      if (!scrubbingRef.current) setTime(v.currentTime);
+      if (!scrub.scrubbingRef.current) setTime(v.currentTime);
     };
     const onMeta = () => {
       setDuration(Number.isFinite(v.duration) ? v.duration : 0);
@@ -277,7 +281,9 @@ export default function OverlayStudio() {
     cues,
     elements,
     selectedId: selectedElementId,
+    guides,
     lut: lutSel.lut,
+    intensity: lutSel.intensity,
     resetKey: activeUrl,
     redrawSignal: fontTick,
     onSelect: setSelectedElementId,
@@ -295,8 +301,7 @@ export default function OverlayStudio() {
 
   function handleScrub(value: number) {
     setTime(value);
-    const v = videoRef.current;
-    if (v) v.currentTime = value;
+    scrub.to(value);
   }
 
   function goPrev() {
@@ -325,6 +330,7 @@ export default function OverlayStudio() {
         cues,
         elements,
         lutSel.lut,
+        lutSel.intensity,
         {
           codec: activeInfo.codec,
           width: meta?.width,
@@ -376,16 +382,21 @@ export default function OverlayStudio() {
       className="flex flex-col flex-1 min-h-0 gap-4"
       aria-label="Telemetry Overlay"
     >
-      {/* Look bar — grade the burn-in through a LUT, reusing LUT Studio's picker */}
+      {/* Toolbar — grade the burn-in through a LUT (reusing LUT Studio's picker)
+          and toggle the editor-only composition guides. */}
       {activeClip && (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-2 py-2 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
           <LutPicker
             selected={lutSel.selected}
             customName={lutSel.customName}
             busy={lutSel.busy}
+            intensity={lutSel.intensity}
+            onIntensityChange={lutSel.setIntensity}
             onSelect={lutSel.applySelection}
             onUpload={lutSel.uploadCube}
           />
+          <span className="w-px self-stretch bg-line mx-0.5" aria-hidden="true" />
+          <GuidesControl guides={guides} onChange={setGuides} />
         </div>
       )}
 
@@ -489,15 +500,9 @@ export default function OverlayStudio() {
                 max={duration || 0}
                 step={0.001}
                 value={Math.min(time, duration || 0)}
-                onPointerDown={() => {
-                  scrubbingRef.current = true;
-                }}
-                onPointerUp={() => {
-                  scrubbingRef.current = false;
-                }}
-                onPointerCancel={() => {
-                  scrubbingRef.current = false;
-                }}
+                onPointerDown={scrub.begin}
+                onPointerUp={() => scrub.end()}
+                onPointerCancel={() => scrub.end()}
                 onChange={(e) => handleScrub(Number(e.target.value))}
                 aria-label="Seek"
               />

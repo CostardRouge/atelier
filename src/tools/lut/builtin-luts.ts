@@ -24,7 +24,7 @@ export interface BuiltinLut {
 }
 
 // `import.meta.env.BASE_URL` makes paths resolve under the deployed base
-// (`/atelier/`) as well as in dev.
+// (`/dji-flight-data/`) as well as in dev.
 const lutUrl = (file: string) => `${import.meta.env.BASE_URL}luts/${file}`;
 
 export const BUILTIN_LUTS: BuiltinLut[] = manifest.map((entry) => ({

@@ -4,6 +4,9 @@ interface LutPickerProps {
   selected: string;
   customName: string | null;
   busy: boolean;
+  /** LUT strength multiplier (0..3; 1 = 100%). */
+  intensity: number;
+  onIntensityChange: (value: number) => void;
   onSelect: (value: string) => void;
   onUpload: () => void;
 }
@@ -21,6 +24,8 @@ export default function LutPicker({
   selected,
   customName,
   busy,
+  intensity,
+  onIntensityChange,
   onSelect,
   onUpload,
 }: LutPickerProps) {
@@ -91,6 +96,31 @@ export default function LutPicker({
         </svg>
         Upload .cube
       </button>
+
+      {/* LUT strength — 0% (original) → 100% (as authored) → 300% (over-applied).
+          Only meaningful with a LUT active. Double-click the slider to reset. */}
+      {selected !== 'none' && (
+        <label className="flex items-center gap-2 min-w-0 pl-1.5">
+          <span className="font-mono text-[0.62rem] tracking-[0.16em] uppercase text-muted select-none">
+            Intensity
+          </span>
+          <input
+            type="range"
+            className="w-[6.5rem] accent-accent cursor-pointer"
+            min={0}
+            max={3}
+            step={0.01}
+            value={intensity}
+            onChange={(e) => onIntensityChange(Number(e.target.value))}
+            onDoubleClick={() => onIntensityChange(1)}
+            aria-label="LUT intensity"
+            title="LUT strength (double-click to reset to 100%)"
+          />
+          <span className="font-mono text-[0.72rem] tabular-nums text-ink-soft min-w-[3.2ch] text-right">
+            {Math.round(intensity * 100)}%
+          </span>
+        </label>
+      )}
     </>
   );
 }

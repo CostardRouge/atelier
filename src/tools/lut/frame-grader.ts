@@ -18,12 +18,13 @@ export interface FrameGrader {
 /**
  * Build a grader sized to `width`×`height`. If WebGL2 is unavailable it returns
  * a pass-through (the source unchanged) so an export degrades to un-graded
- * rather than failing outright.
+ * rather than failing outright. `intensity` is the LUT strength (1 = 100%).
  */
 export function makeFrameGrader(
   lut: CubeLut,
   width: number,
   height: number,
+  intensity = 1,
 ): FrameGrader {
   const canvas = makeExportCanvas(width, height);
   const renderer = createLutRenderer(canvas);
@@ -31,6 +32,7 @@ export function makeFrameGrader(
     return { render: (s) => s, dispose() {} };
   }
   renderer.setLut(lut);
+  renderer.setIntensity(intensity);
   renderer.resize(width, height);
   return {
     render(source) {

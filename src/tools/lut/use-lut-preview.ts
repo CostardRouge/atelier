@@ -14,6 +14,7 @@ import { createLutRenderer, type LutRenderer } from './lut-gl';
  * @param videoRef The source `<video>` (decoded by the browser).
  * @param canvasRef The `<canvas>` to paint.
  * @param lut Active LUT, or null to render ungraded.
+ * @param intensity LUT strength multiplier (0..3; 1 = 100%).
  * @param bypass When true, ignore `lut` and show the original (A/B compare).
  * @param resetKey Changes when the video source swaps (the object URL);
  *   re-creates the renderer and restarts the loop.
@@ -24,6 +25,7 @@ export function useLutPreview(
   videoRef: RefObject<HTMLVideoElement | null>,
   canvasRef: RefObject<HTMLCanvasElement | null>,
   lut: CubeLut | null,
+  intensity: number,
   bypass: boolean,
   resetKey?: unknown,
 ): { supported: boolean; setSplit: (active: boolean, x: number) => void } {
@@ -45,8 +47,9 @@ export function useLutPreview(
     rendererRef.current = renderer;
     setSupported(true);
 
-    // Seed with the current LUT/bypass state before the first paint.
+    // Seed with the current LUT/intensity/bypass state before the first paint.
     renderer.setLut(bypass ? null : lut);
+    renderer.setIntensity(intensity);
 
     let cancelled = false;
     let rvfcHandle = 0;
@@ -94,18 +97,19 @@ export function useLutPreview(
     // effect below; seeding them here just avoids a black first frame.
   }, [resetKey, canvasRef, videoRef]);
 
-  // Apply LUT / bypass changes and repaint immediately so a paused frame
-  // updates without waiting for the next presented frame.
+  // Apply LUT / intensity / bypass changes and repaint immediately so a paused
+  // frame updates without waiting for the next presented frame.
   useEffect(() => {
     const renderer = rendererRef.current;
     const video = videoRef.current;
     if (!renderer) return;
     renderer.setLut(bypass ? null : lut);
+    renderer.setIntensity(intensity);
     if (video && video.readyState >= 2) {
       renderer.resize(video.videoWidth, video.videoHeight);
       renderer.draw(video);
     }
-  }, [lut, bypass, videoRef]);
+  }, [lut, intensity, bypass, videoRef]);
 
   // Set the wipe position and repaint at once, so dragging the divider over a
   // paused frame updates immediately. Stable identity: reads the live refs.

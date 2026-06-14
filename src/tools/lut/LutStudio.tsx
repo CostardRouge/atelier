@@ -7,6 +7,7 @@ import {
   probeContainer,
   type ContainerInfo,
 } from '../../shared/media/video-metadata';
+import { useVideoScrub } from '../../shared/media/use-video-scrub';
 import { useLutPreview } from './use-lut-preview';
 import { useLutSelection } from './use-lut-selection';
 import LutPicker from './LutPicker';
@@ -37,13 +38,12 @@ export default function LutStudio() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const wipeRef = useRef<HTMLDivElement>(null);
-  // True while dragging the scrubber, so `timeupdate` doesn't fight the drag.
-  const scrubbingRef = useRef(false);
   // Last before/after wipe position (0..1), kept in a ref so pointer moves
   // reposition the divider without re-rendering.
   const splitXRef = useRef(0.5);
 
   const lib = useAssetLibrary();
+  const scrub = useVideoScrub(videoRef);
 
   const [clips, setClips] = useState<Clip[]>([]);
   const clipsRef = useRef(clips);
@@ -52,8 +52,17 @@ export default function LutStudio() {
   const [activeError, setActiveError] = useState(false);
   const [activeInfo, setActiveInfo] = useState<ContainerInfo>({});
 
-  const { lut, selected, customName, cubeError, busy, applySelection, uploadCube } =
-    useLutSelection();
+  const {
+    lut,
+    selected,
+    customName,
+    cubeError,
+    busy,
+    intensity,
+    setIntensity,
+    applySelection,
+    uploadCube,
+  } = useLutSelection();
   const [bypass, setBypass] = useState(false);
   // Before/after wipe: a divider that follows the cursor over the preview,
   // grade on the left, original on the right (like Lightroom / Capture One).
@@ -74,6 +83,7 @@ export default function LutStudio() {
     videoRef,
     canvasRef,
     lut,
+    intensity,
     bypass,
     activeUrl,
   );
@@ -179,7 +189,7 @@ export default function LutStudio() {
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
     const onTime = () => {
-      if (!scrubbingRef.current) setTime(v.currentTime);
+      if (!scrub.scrubbingRef.current) setTime(v.currentTime);
     };
     const onMeta = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
     v.addEventListener('play', onPlay);
@@ -207,8 +217,7 @@ export default function LutStudio() {
 
   function handleScrub(value: number) {
     setTime(value);
-    const v = videoRef.current;
-    if (v) v.currentTime = value;
+    scrub.to(value);
   }
 
   // --- before/after wipe --------------------------------------------------
@@ -280,6 +289,7 @@ export default function LutStudio() {
       await runBatchExport(
         clips.map((c) => ({ id: c.id, file: c.file, name: c.name })),
         lut,
+        intensity,
         {
           onStart: (id) =>
             updateClip(id, (c) => ({ ...c, exportStatus: 'exporting', exportRatio: null })),
@@ -355,6 +365,8 @@ export default function LutStudio() {
               selected={selected}
               customName={customName}
               busy={busy}
+              intensity={intensity}
+              onIntensityChange={setIntensity}
               onSelect={applySelection}
               onUpload={uploadCube}
             />
@@ -545,18 +557,10 @@ export default function LutStudio() {
                 max={duration || 0}
                 step={0.001}
                 value={Math.min(time, duration || 0)}
-                onPointerDown={() => {
-                  scrubbingRef.current = true;
-                }}
-                onPointerUp={() => {
-                  scrubbingRef.current = false;
-                }}
-                onPointerCancel={() => {
-                  scrubbingRef.current = false;
-                }}
-                onBlur={() => {
-                  scrubbingRef.current = false;
-                }}
+                onPointerDown={scrub.begin}
+                onPointerUp={() => scrub.end()}
+                onPointerCancel={() => scrub.end()}
+                onBlur={() => scrub.end()}
                 onChange={(e) => handleScrub(Number(e.target.value))}
                 aria-label="Seek"
               />
