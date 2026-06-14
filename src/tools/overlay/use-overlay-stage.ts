@@ -23,6 +23,8 @@ import {
   hitTest,
   measureOverlays,
 } from './draw-overlays';
+import { drawGuides } from './draw-guides';
+import { snapToGrid, type GuidesState } from './guides';
 import type { OverlayElement } from './overlay-types';
 
 interface StageParams {
@@ -31,6 +33,8 @@ interface StageParams {
   cues: Cue[];
   elements: OverlayElement[];
   selectedId: string | null;
+  /** Editor-only composition guides (safe zones + grid); preview only. */
+  guides: GuidesState;
   /** Optional LUT to grade the preview through (matches the export). */
   lut: CubeLut | null;
   /** Source key (object URL); resets the loop and canvas when it swaps. */
@@ -64,10 +68,12 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   const cuesRef = useRef(params.cues);
   const elementsRef = useRef(params.elements);
   const selectedRef = useRef(params.selectedId);
+  const guidesRef = useRef(params.guides);
   const lutRef = useRef(params.lut);
   cuesRef.current = params.cues;
   elementsRef.current = params.elements;
   selectedRef.current = params.selectedId;
+  guidesRef.current = params.guides;
   lutRef.current = params.lut;
 
   const needsRedraw = useRef(true);
@@ -120,7 +126,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   // finished loading) should trigger a repaint, even while paused.
   useEffect(() => {
     needsRedraw.current = true;
-  }, [params.elements, params.selectedId, params.redrawSignal]);
+  }, [params.elements, params.selectedId, params.redrawSignal, params.guides]);
 
   // Composite + (optional) selection outline. Returns false if not ready.
   const drawFrame = useCallback((): boolean => {
@@ -154,6 +160,10 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     }
     ctx.drawImage(source, 0, 0, vw, vh);
     drawOverlays(ctx, elementsRef.current, cue, vw, vh);
+
+    // Editor-only guides, painted over the composite (never via drawOverlays,
+    // so they stay out of the export).
+    drawGuides(ctx, guidesRef.current, vw, vh);
 
     const sel = selectedRef.current;
     if (sel) {
@@ -255,12 +265,22 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       const canvas = canvasRef.current;
       const pt = toVideoPixels(e);
       if (!d || !canvas || !pt) return;
-      const nx = snap(
-        Math.min(1, Math.max(0, d.startX + (pt.px - d.startPx) / canvas.width)),
-      );
-      const ny = snap(
-        Math.min(1, Math.max(0, d.startY + (pt.py - d.startPy) / canvas.height)),
-      );
+      const rawX = Math.min(1, Math.max(0, d.startX + (pt.px - d.startPx) / canvas.width));
+      const rawY = Math.min(1, Math.max(0, d.startY + (pt.py - d.startPy) / canvas.height));
+      // Hold Alt to bypass snapping for fine placement. With grid-snap on, snap
+      // the anchor to the grid lines; otherwise keep the light edge/center snap.
+      const grid = guidesRef.current.grid;
+      let nx = rawX;
+      let ny = rawY;
+      if (!e.altKey) {
+        if (grid.snap) {
+          nx = snapToGrid(rawX, grid.cols);
+          ny = snapToGrid(rawY, grid.rows);
+        } else {
+          nx = snap(rawX);
+          ny = snap(rawY);
+        }
+      }
       onMove(d.id, nx, ny);
     },
     [canvasRef, toVideoPixels, onMove],
