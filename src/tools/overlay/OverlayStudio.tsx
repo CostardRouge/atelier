@@ -3,6 +3,7 @@ import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
 import { formatDuration } from '../../shared/lib/format';
 import { isEncodeSupported } from '../../shared/media/webcodecs-export';
+import { useVideoScrub } from '../../shared/media/use-video-scrub';
 import { probeContainer, type ContainerInfo } from '../../shared/media/video-metadata';
 import { parseSrt, type Cue } from '../telemetry/srt-parser';
 import { findCue } from '../telemetry/find-cue';
@@ -54,7 +55,7 @@ const notice =
 export default function OverlayStudio() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const scrubbingRef = useRef(false);
+  const scrub = useVideoScrub(videoRef);
 
   const lib = useAssetLibrary();
   const lutSel = useLutSelection();
@@ -173,7 +174,7 @@ export default function OverlayStudio() {
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
     const onTime = () => {
-      if (!scrubbingRef.current) setTime(v.currentTime);
+      if (!scrub.scrubbingRef.current) setTime(v.currentTime);
     };
     const onMeta = () => {
       setDuration(Number.isFinite(v.duration) ? v.duration : 0);
@@ -295,8 +296,7 @@ export default function OverlayStudio() {
 
   function handleScrub(value: number) {
     setTime(value);
-    const v = videoRef.current;
-    if (v) v.currentTime = value;
+    scrub.to(value);
   }
 
   function goPrev() {
@@ -489,15 +489,9 @@ export default function OverlayStudio() {
                 max={duration || 0}
                 step={0.001}
                 value={Math.min(time, duration || 0)}
-                onPointerDown={() => {
-                  scrubbingRef.current = true;
-                }}
-                onPointerUp={() => {
-                  scrubbingRef.current = false;
-                }}
-                onPointerCancel={() => {
-                  scrubbingRef.current = false;
-                }}
+                onPointerDown={scrub.begin}
+                onPointerUp={() => scrub.end()}
+                onPointerCancel={() => scrub.end()}
                 onChange={(e) => handleScrub(Number(e.target.value))}
                 aria-label="Seek"
               />
