@@ -9,6 +9,9 @@
  * export (true WYSIWYG).
  */
 
+import type { SpeedUnit } from '../telemetry/motion';
+export type { SpeedUnit };
+
 /**
  * Telemetry fields exposable as widgets: the raw SRT fields plus the motion
  * values (`gnd_speed`, `vert_speed`, `heading`) reconstructed from GPS.
@@ -95,6 +98,27 @@ export interface OverlayElement {
 
   legibility: LegibilityStyle;
   visible: boolean;
+
+  /**
+   * `heading-arrow` only: when true, draw a compass ring with N/E/S/W labels
+   * around the arrow. The ring rotates in relative mode, stays fixed in absolute.
+   */
+  showCompass?: boolean;
+
+  /**
+   * `heading-arrow` + `showCompass` only.
+   * - `'absolute'` (default / north-up): the ring is screen-aligned — N is always
+   *   at the top. The arrow rotates to the current heading.
+   * - `'relative'` (track-up): the ring rotates so the heading direction rises to
+   *   the top, mirroring a "track-up" map. The arrow always points up.
+   */
+  compassMode?: 'absolute' | 'relative';
+
+  /**
+   * `telemetry-field` only, for `gnd_speed` / `vert_speed`: which unit to
+   * display. Defaults to `'m/s'` when absent.
+   */
+  speedUnit?: SpeedUnit;
 }
 
 /** Families that must be loaded via FontFace before canvas text is correct. */

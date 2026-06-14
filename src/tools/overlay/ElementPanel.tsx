@@ -4,8 +4,11 @@ import {
   type Anchor,
   type FontWeight,
   type OverlayElement,
+  type SpeedUnit,
   type TelemetryFieldKey,
 } from './overlay-types';
+
+const SPEED_FIELDS: ReadonlySet<TelemetryFieldKey> = new Set(['gnd_speed', 'vert_speed']);
 
 interface ElementPanelProps {
   element: OverlayElement;
@@ -68,10 +71,38 @@ export default function ElementPanel({ element, onChange }: ElementPanelProps) {
     <div className="flex flex-col gap-[0.85rem]">
       {/* Content */}
       {element.kind === 'heading-arrow' ? (
-        <p className="m-0 text-[0.78rem] text-muted">
-          Rotates to the current course-over-ground heading. Shows a dot
-          while hovering (no direction data).
-        </p>
+        <div className="flex flex-col gap-2">
+          <p className="m-0 text-[0.78rem] text-muted">
+            Rotates to the current course-over-ground heading. Shows a dot
+            while hovering (no direction data).
+          </p>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="w-3.5 h-3.5 accent-accent cursor-pointer"
+              checked={element.showCompass ?? false}
+              onChange={(e) => onChange({ showCompass: e.target.checked })}
+            />
+            <span className={labelClass}>Compass ring (N / E / S / W)</span>
+          </label>
+          {element.showCompass && (
+            <label className="flex flex-col gap-1">
+              <span className={labelClass}>Orientation mode</span>
+              <select
+                className={`${inputClass} cursor-pointer`}
+                value={element.compassMode ?? 'absolute'}
+                onChange={(e) =>
+                  onChange({
+                    compassMode: e.target.value as 'absolute' | 'relative',
+                  })
+                }
+              >
+                <option value="absolute">North-up — ring fixed, arrow rotates</option>
+                <option value="relative">Track-up — arrow fixed up, ring rotates</option>
+              </select>
+            </label>
+          )}
+        </div>
       ) : element.kind === 'text' ? (
         <label className="flex flex-col gap-1">
           <span className={labelClass}>Text</span>
@@ -110,6 +141,19 @@ export default function ElementPanel({ element, onChange }: ElementPanelProps) {
               onChange={(e) => onChange({ label: e.target.value })}
             />
           </label>
+          {element.field && SPEED_FIELDS.has(element.field) && (
+            <label className="flex flex-col gap-1">
+              <span className={labelClass}>Unit</span>
+              <select
+                className={`${inputClass} cursor-pointer`}
+                value={element.speedUnit ?? 'm/s'}
+                onChange={(e) => onChange({ speedUnit: e.target.value as SpeedUnit })}
+              >
+                <option value="m/s">m/s</option>
+                <option value="km/h">km/h</option>
+              </select>
+            </label>
+          )}
         </>
       )}
 
