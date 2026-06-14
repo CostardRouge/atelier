@@ -9,6 +9,8 @@
  * Next.js): it has no external dependencies and never touches the DOM.
  */
 
+import { attachMotion, type Motion } from './motion';
+
 export interface TelemetryData {
   iso?: string;
   shutter?: string;
@@ -35,6 +37,12 @@ export interface Cue {
   /** Capture timestamp line as written, or null if absent. */
   timestamp: string | null;
   data: TelemetryData;
+  /**
+   * Motion (ground/vertical speed, heading) reconstructed from the GPS and
+   * altitude of surrounding cues. Attached by {@link parseSrt}; absent only on
+   * cues parsed outside that path. See {@link attachMotion}.
+   */
+  derived?: Motion;
 }
 
 /**
@@ -171,6 +179,10 @@ export function parseSrt(text: string): Cue[] {
   }
 
   cues.sort((a, b) => a.start - b.start);
+
+  // Reconstruct per-frame motion (speed, heading) now the cues are in order, so
+  // every consumer — panels, gallery, overlay — gets it for free.
+  attachMotion(cues);
 
   return cues;
 }

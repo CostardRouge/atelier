@@ -12,6 +12,7 @@ import ElementPanel from './ElementPanel';
 import { exportOverlay } from './export-overlay';
 import { ensureOverlayFonts } from './fonts';
 import {
+  createHeadingArrowElement,
   createTelemetryElement,
   createTextElement,
   defaultElementsPreset,
@@ -543,6 +544,7 @@ export default function OverlayStudio() {
                 addElement(createTelemetryElement(f))
               }
               onAddText={() => addElement(createTextElement())}
+              onAddArrow={() => addElement(createHeadingArrowElement())}
               onAddPreset={() => {
                 const deck = defaultElementsPreset();
                 setElements(deck);

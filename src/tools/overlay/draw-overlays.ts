@@ -101,9 +101,18 @@ interface Layout {
 }
 
 /**
- * Measure one element against `ctx` (font metrics need a real context). Returns
- * null for elements with nothing to show, so they're neither drawn nor
- * hit-tested.
+ * The video's shorter dimension — the stable reference for `sizeFrac`.
+ * For landscape (vw > vh) this equals vh; for portrait (vh > vw) this equals
+ * vw, so text and arrows stay the same apparent size regardless of orientation.
+ */
+function refDim(vw: number, vh: number): number {
+  return Math.min(vw, vh);
+}
+
+/**
+ * Measure one text element against `ctx` (font metrics need a real context).
+ * Returns null for elements with nothing to show or for non-text kinds
+ * (heading-arrow has its own layout path).
  */
 function layoutElement(
   ctx: Ctx2D,
@@ -115,7 +124,7 @@ function layoutElement(
   const text = renderElementText(el, cue);
   if (text === '') return null;
 
-  const fontPx = Math.max(1, el.sizeFrac * vh);
+  const fontPx = Math.max(1, el.sizeFrac * refDim(vw, vh));
   const font = fontString(el, fontPx);
   ctx.font = font;
   const m = ctx.measureText(text);
@@ -129,6 +138,104 @@ function layoutElement(
 }
 
 const ZERO_SHADOW = 'rgba(0,0,0,0)';
+
+// ---------------------------------------------------------------------------
+// Heading-arrow element
+// ---------------------------------------------------------------------------
+
+interface ArrowLayout {
+  /** Center of the arrow in video pixels. */
+  cx: number;
+  cy: number;
+  /** Half-size (radius) of the bounding square. */
+  r: number;
+  /** Top-left of the bounding square (for hit-testing). */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Bounding box for a heading-arrow element.
+ * The arrow fits inside a `2r × 2r` square anchored at (el.x, el.y).
+ */
+function arrowLayout(el: OverlayElement, vw: number, vh: number): ArrowLayout {
+  const r = Math.max(2, el.sizeFrac * refDim(vw, vh) * 0.5);
+  const w = r * 2;
+  const h = r * 2;
+  const { x, y } = anchorOrigin(el.anchor, el.x * vw, el.y * vh, w, h);
+  return { cx: x + r, cy: y + r, r, x, y, w, h };
+}
+
+/**
+ * Draw a heading-arrow element.
+ *
+ * Renders a filled chevron rotated to `cue.derived.heading` (0 = North = up).
+ * Falls back to a small filled circle while the drone is hovering (no heading
+ * data), giving visual confirmation the element is present but has no direction.
+ *
+ * Rotation formula: canvas 0° points East; heading 0° = North = up on screen,
+ * so `canvas_angle = (heading − 90) × π/180`.
+ */
+function drawArrow(
+  ctx: Ctx2D,
+  el: OverlayElement,
+  cue: Cue | null,
+  vw: number,
+  vh: number,
+): void {
+  const lay = arrowLayout(el, vw, vh);
+  const { cx, cy, r } = lay;
+  const heading = cue?.derived?.heading;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  // Axis-aligned background box (drawn before rotation so it doesn't spin).
+  if (el.legibility.mode === 'box') {
+    const pad = el.legibility.padFrac * r;
+    ctx.fillStyle = el.legibility.color;
+    roundRectPath(ctx, -r - pad, -r - pad, (r + pad) * 2, (r + pad) * 2, pad * 0.5);
+    ctx.fill();
+  }
+
+  if (heading != null) {
+    // Rotate so heading 0° (North) points up on screen.
+    ctx.rotate((heading - 90) * (Math.PI / 180));
+  }
+
+  if (el.legibility.mode === 'shadow') {
+    ctx.shadowColor = el.legibility.color;
+    ctx.shadowBlur = el.legibility.padFrac * r;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+  } else {
+    ctx.shadowColor = ZERO_SHADOW;
+    ctx.shadowBlur = 0;
+  }
+
+  ctx.fillStyle = el.color;
+
+  if (heading != null) {
+    // Chevron arrow pointing right (East) before rotation.
+    // Tip at (+r, 0); concave tail notch at (−r·0.15, 0).
+    ctx.beginPath();
+    ctx.moveTo(r, 0);
+    ctx.lineTo(-r * 0.4, -r * 0.6);
+    ctx.lineTo(-r * 0.15, 0);
+    ctx.lineTo(-r * 0.4, r * 0.6);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    // Hovering — no direction; draw a dot so the element stays visible.
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
 
 /** Draw a rounded rectangle path (roundRect where available, else manual). */
 function roundRectPath(
@@ -164,6 +271,10 @@ export function drawOverlays(
 ): void {
   for (const el of elements) {
     if (!el.visible) continue;
+    if (el.kind === 'heading-arrow') {
+      drawArrow(ctx, el, cue, videoWidth, videoHeight);
+      continue;
+    }
     const lay = layoutElement(ctx, el, cue, videoWidth, videoHeight);
     if (!lay) continue;
 
@@ -227,6 +338,18 @@ export function measureOverlays(
   const boxes: ElementBox[] = [];
   for (const el of elements) {
     if (!el.visible) continue;
+    if (el.kind === 'heading-arrow') {
+      const alay = arrowLayout(el, videoWidth, videoHeight);
+      const margin = Math.max(2, alay.r * 0.15);
+      boxes.push({
+        id: el.id,
+        x: alay.x - margin,
+        y: alay.y - margin,
+        w: alay.w + margin * 2,
+        h: alay.h + margin * 2,
+      });
+      continue;
+    }
     const lay = layoutElement(ctx, el, cue, videoWidth, videoHeight);
     if (!lay) continue;
     const margin = Math.max(
@@ -277,6 +400,11 @@ export function reanchorInPlace(
   vh: number,
   anchor: Anchor,
 ): { x: number; y: number } | null {
+  if (el.kind === 'heading-arrow') {
+    const alay = arrowLayout(el, vw, vh);
+    const p = anchorPoint(anchor, alay.x, alay.y, alay.w, alay.h);
+    return { x: p.x / vw, y: p.y / vh };
+  }
   const lay = layoutElement(ctx, el, cue, vw, vh);
   if (!lay) return null;
   const p = anchorPoint(anchor, lay.x, lay.y, lay.w, lay.h);

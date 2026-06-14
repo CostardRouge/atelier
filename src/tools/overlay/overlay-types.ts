@@ -9,10 +9,16 @@
  * export (true WYSIWYG).
  */
 
-/** Telemetry fields exposable as widgets (raw SRT fields only, v1). */
+/**
+ * Telemetry fields exposable as widgets: the raw SRT fields plus the motion
+ * values (`gnd_speed`, `vert_speed`, `heading`) reconstructed from GPS.
+ */
 export type TelemetryFieldKey =
   | 'rel_alt'
   | 'abs_alt'
+  | 'gnd_speed'
+  | 'vert_speed'
+  | 'heading'
   | 'latitude'
   | 'longitude'
   | 'iso'
@@ -25,7 +31,7 @@ export type TelemetryFieldKey =
   | 'frame'
   | 'timestamp';
 
-export type OverlayKind = 'telemetry-field' | 'text';
+export type OverlayKind = 'telemetry-field' | 'text' | 'heading-arrow';
 
 /** Which point of the element box maps to (x,y) — enables clean corner snaps. */
 export type Anchor =
@@ -76,7 +82,11 @@ export interface OverlayElement {
   x: number;
   y: number;
 
-  /** Font size as a fraction of video height (resolution-independent). */
+  /**
+   * Size as a fraction of the video's **shorter side** — width for portrait,
+   * height for landscape. Keeps the apparent size consistent regardless of
+   * orientation. For text this is the font size; for heading-arrow the radius.
+   */
   fontFamily: OverlayFontFamily;
   sizeFrac: number;
   color: string;
@@ -108,6 +118,9 @@ export const CURATED_FONTS: readonly OverlayFontFamily[] = [
 const SHORT_LABELS: Record<TelemetryFieldKey, string> = {
   rel_alt: 'ALT',
   abs_alt: 'ABS ALT',
+  gnd_speed: 'SPEED',
+  vert_speed: 'V.SPEED',
+  heading: 'HDG',
   latitude: 'LAT',
   longitude: 'LON',
   iso: 'ISO',
@@ -175,12 +188,43 @@ export function createTextElement(text = 'Text'): OverlayElement {
   };
 }
 
-/** A sensible starter deck: altitude, GPS and the exposure triplet in corners. */
+/**
+ * Create a heading-arrow element: a canvas-drawn chevron that rotates to the
+ * current course-over-ground heading. Shrinks to a dot while the drone hovers.
+ */
+export function createHeadingArrowElement(): OverlayElement {
+  return {
+    id: uid(),
+    kind: 'heading-arrow',
+    anchor: 'center',
+    x: 0.5,
+    y: 0.5,
+    ...baseStyle(),
+    sizeFrac: 0.06,
+  };
+}
+
+/**
+ * A sensible starter deck: altitude headline with speed and heading beneath it,
+ * GPS bottom-left and the exposure pair top-right.
+ */
 export function defaultElementsPreset(): OverlayElement[] {
   const alt = createTelemetryElement('rel_alt');
   alt.anchor = 'top-left';
   alt.x = 0.04;
   alt.y = 0.05;
+
+  const speed = createTelemetryElement('gnd_speed');
+  speed.anchor = 'top-left';
+  speed.x = 0.04;
+  speed.y = 0.12;
+  speed.sizeFrac = 0.03;
+
+  const heading = createTelemetryElement('heading');
+  heading.anchor = 'top-left';
+  heading.x = 0.04;
+  heading.y = 0.16;
+  heading.sizeFrac = 0.03;
 
   const lat = createTelemetryElement('latitude');
   lat.anchor = 'bottom-left';
@@ -206,5 +250,5 @@ export function defaultElementsPreset(): OverlayElement[] {
   shutter.y = 0.09;
   shutter.sizeFrac = 0.03;
 
-  return [alt, lat, lon, iso, shutter];
+  return [alt, speed, heading, lat, lon, iso, shutter];
 }

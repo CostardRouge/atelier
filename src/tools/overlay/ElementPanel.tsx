@@ -67,7 +67,12 @@ export default function ElementPanel({ element, onChange }: ElementPanelProps) {
   return (
     <div className="flex flex-col gap-[0.85rem]">
       {/* Content */}
-      {element.kind === 'text' ? (
+      {element.kind === 'heading-arrow' ? (
+        <p className="m-0 text-[0.78rem] text-muted">
+          Rotates to the current course-over-ground heading. Shows a dot
+          while hovering (no direction data).
+        </p>
+      ) : element.kind === 'text' ? (
         <label className="flex flex-col gap-1">
           <span className={labelClass}>Text</span>
           <input
@@ -108,28 +113,30 @@ export default function ElementPanel({ element, onChange }: ElementPanelProps) {
         </>
       )}
 
-      {/* Font */}
-      <label className="flex flex-col gap-1">
-        <span className={labelClass}>Font</span>
-        <select
-          className={`${inputClass} cursor-pointer`}
-          value={element.fontFamily}
-          onChange={(e) =>
-            onChange({ fontFamily: e.target.value as OverlayElement['fontFamily'] })
-          }
-        >
-          {CURATED_FONTS.map((f) => (
-            <option key={f} value={f}>
-              {f}
-            </option>
-          ))}
-        </select>
-      </label>
+      {/* Font — not applicable to heading arrows */}
+      {element.kind !== 'heading-arrow' && (
+        <label className="flex flex-col gap-1">
+          <span className={labelClass}>Font</span>
+          <select
+            className={`${inputClass} cursor-pointer`}
+            value={element.fontFamily}
+            onChange={(e) =>
+              onChange({ fontFamily: e.target.value as OverlayElement['fontFamily'] })
+            }
+          >
+            {CURATED_FONTS.map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       {/* Size */}
       <label className="flex flex-col gap-1">
         <span className={labelClass}>
-          Size · {Math.round(element.sizeFrac * 100)}% of height
+          Size · {Math.round(element.sizeFrac * 100)}% of shorter side
         </span>
         <input
           type="range"
@@ -142,7 +149,7 @@ export default function ElementPanel({ element, onChange }: ElementPanelProps) {
         />
       </label>
 
-      {/* Colour + weight + italic */}
+      {/* Colour + weight + italic (weight/italic not applicable to arrows) */}
       <div className="flex items-end gap-3">
         <label className="flex flex-col gap-1">
           <span className={labelClass}>Colour</span>
@@ -153,31 +160,35 @@ export default function ElementPanel({ element, onChange }: ElementPanelProps) {
             onChange={(e) => onChange({ color: e.target.value })}
           />
         </label>
-        <label className="flex flex-col gap-1 flex-1">
-          <span className={labelClass}>Weight</span>
-          <select
-            className={`${inputClass} cursor-pointer`}
-            value={element.weight}
-            onChange={(e) =>
-              onChange({ weight: Number(e.target.value) as FontWeight })
-            }
-          >
-            {WEIGHTS.map((w) => (
-              <option key={w.value} value={w.value}>
-                {w.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="button"
-          className="flex-none h-9 px-3 border border-line-strong rounded-paper bg-paper text-ink-soft cursor-pointer italic font-serif text-[0.95rem] aria-pressed:border-accent aria-pressed:text-accent-ink"
-          aria-pressed={element.italic}
-          onClick={() => onChange({ italic: !element.italic })}
-          title="Italic"
-        >
-          I
-        </button>
+        {element.kind !== 'heading-arrow' && (
+          <>
+            <label className="flex flex-col gap-1 flex-1">
+              <span className={labelClass}>Weight</span>
+              <select
+                className={`${inputClass} cursor-pointer`}
+                value={element.weight}
+                onChange={(e) =>
+                  onChange({ weight: Number(e.target.value) as FontWeight })
+                }
+              >
+                {WEIGHTS.map((w) => (
+                  <option key={w.value} value={w.value}>
+                    {w.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="flex-none h-9 px-3 border border-line-strong rounded-paper bg-paper text-ink-soft cursor-pointer italic font-serif text-[0.95rem] aria-pressed:border-accent aria-pressed:text-accent-ink"
+              aria-pressed={element.italic}
+              onClick={() => onChange({ italic: !element.italic })}
+              title="Italic"
+            >
+              I
+            </button>
+          </>
+        )}
       </div>
 
       {/* Anchor */}

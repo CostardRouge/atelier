@@ -6,6 +6,11 @@
  */
 
 import type { Cue } from '../telemetry/srt-parser';
+import {
+  formatGroundSpeed,
+  formatHeading,
+  formatVerticalSpeed,
+} from '../telemetry/motion';
 import type { OverlayElement, TelemetryFieldKey } from './overlay-types';
 
 export interface FieldSpec {
@@ -20,6 +25,11 @@ export interface FieldSpec {
 export const FIELD_SPECS: Record<TelemetryFieldKey, FieldSpec> = {
   rel_alt: { label: 'Rel. altitude', suffix: ' m' },
   abs_alt: { label: 'Abs. altitude', suffix: ' m' },
+  // Derived motion fields carry their own units (and sign / compass), so they
+  // are formatted by `motion.ts`, not by the prefix/suffix below.
+  gnd_speed: { label: 'Ground speed' },
+  vert_speed: { label: 'Vertical speed' },
+  heading: { label: 'Heading' },
   latitude: { label: 'Latitude' },
   longitude: { label: 'Longitude' },
   iso: { label: 'ISO' },
@@ -45,8 +55,18 @@ export const MISSING = '—';
  */
 export function formatField(key: TelemetryFieldKey, cue: Cue | null): string {
   if (!cue) return MISSING;
-  if (key === 'frame') return cue.frame != null ? String(cue.frame) : MISSING;
-  if (key === 'timestamp') return cue.timestamp ?? MISSING;
+  switch (key) {
+    case 'frame':
+      return cue.frame != null ? String(cue.frame) : MISSING;
+    case 'timestamp':
+      return cue.timestamp ?? MISSING;
+    case 'gnd_speed':
+      return formatGroundSpeed(cue.derived?.groundSpeed) ?? MISSING;
+    case 'vert_speed':
+      return formatVerticalSpeed(cue.derived?.verticalSpeed) ?? MISSING;
+    case 'heading':
+      return formatHeading(cue.derived?.heading) ?? MISSING;
+  }
 
   const raw = cue.data[key];
   if (raw === undefined || raw === '') return MISSING;
