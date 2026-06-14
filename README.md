@@ -84,11 +84,12 @@ to add your own — just drop a `.cube` in, no code to edit.
 
 ### Online
 
-Deployed via GitHub Pages at `https://costardrouge.github.io/atelier/`.
+Deployed via GitHub Pages at `https://costardrouge.github.io/dji-flight-data/`.
 
-> Renaming note: the deploy base path comes from the `REPO` constant in
-> `vite.config.ts`. Rename the GitHub repo to match (`atelier`) before merging to
-> `main`, or Pages will 404 on assets.
+> Base path: `vite.config.ts` derives the Pages base path from the repository
+> name (via `GITHUB_REPOSITORY` in CI, falling back to `dji-flight-data`
+> locally), so a repo rename can't 404 the assets. Override with the `BASE_PATH`
+> env var — e.g. `/` when serving from a custom domain.
 
 ### Local development
 
