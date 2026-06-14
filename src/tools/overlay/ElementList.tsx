@@ -11,6 +11,7 @@ interface ElementListProps {
   onSelect: (id: string) => void;
   onAddField: (field: TelemetryFieldKey) => void;
   onAddText: () => void;
+  onAddArrow: () => void;
   onAddPreset: () => void;
   onRemove: (id: string) => void;
   onToggleVisible: (id: string) => void;
@@ -27,6 +28,7 @@ export default function ElementList({
   onSelect,
   onAddField,
   onAddText,
+  onAddArrow,
   onAddPreset,
   onRemove,
   onToggleVisible,
@@ -54,6 +56,9 @@ export default function ElementList({
         <button type="button" className={linkBtn} onClick={onAddText}>
           + Text
         </button>
+        <button type="button" className={linkBtn} onClick={onAddArrow} title="Add a directional arrow that rotates to the heading">
+          + Arrow
+        </button>
         <button type="button" className={`${linkBtn} ml-auto`} onClick={onAddPreset}>
           Add deck
         </button>
@@ -68,7 +73,10 @@ export default function ElementList({
         <ul className="m-0 p-0 list-none flex flex-col gap-1">
           {elements.map((el) => {
             const active = el.id === selectedId;
-            const preview = renderElementText(el, cue) || '(empty)';
+            const preview =
+              el.kind === 'heading-arrow'
+                ? 'Heading arrow'
+                : renderElementText(el, cue) || '(empty)';
             return (
               <li
                 key={el.id}
@@ -98,7 +106,7 @@ export default function ElementList({
                   {preview}
                 </span>
                 <span className="flex-none font-mono text-[0.6rem] uppercase tracking-[0.1em] text-muted">
-                  {el.kind === 'text' ? 'TXT' : el.field}
+                  {el.kind === 'heading-arrow' ? '↗' : el.kind === 'text' ? 'TXT' : el.field}
                 </span>
                 <button
                   type="button"

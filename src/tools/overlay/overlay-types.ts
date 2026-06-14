@@ -31,7 +31,7 @@ export type TelemetryFieldKey =
   | 'frame'
   | 'timestamp';
 
-export type OverlayKind = 'telemetry-field' | 'text';
+export type OverlayKind = 'telemetry-field' | 'text' | 'heading-arrow';
 
 /** Which point of the element box maps to (x,y) — enables clean corner snaps. */
 export type Anchor =
@@ -82,7 +82,11 @@ export interface OverlayElement {
   x: number;
   y: number;
 
-  /** Font size as a fraction of video height (resolution-independent). */
+  /**
+   * Size as a fraction of the video's **shorter side** — width for portrait,
+   * height for landscape. Keeps the apparent size consistent regardless of
+   * orientation. For text this is the font size; for heading-arrow the radius.
+   */
   fontFamily: OverlayFontFamily;
   sizeFrac: number;
   color: string;
@@ -181,6 +185,22 @@ export function createTextElement(text = 'Text'): OverlayElement {
     x: 0.05,
     y: 0.05,
     ...baseStyle(),
+  };
+}
+
+/**
+ * Create a heading-arrow element: a canvas-drawn chevron that rotates to the
+ * current course-over-ground heading. Shrinks to a dot while the drone hovers.
+ */
+export function createHeadingArrowElement(): OverlayElement {
+  return {
+    id: uid(),
+    kind: 'heading-arrow',
+    anchor: 'center',
+    x: 0.5,
+    y: 0.5,
+    ...baseStyle(),
+    sizeFrac: 0.06,
   };
 }
 
