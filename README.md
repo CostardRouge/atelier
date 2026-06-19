@@ -4,13 +4,23 @@ A local-first **suite of browser tools for your captures** — photo and video,
 across devices (DJI, Apple, Sony, …). Everything runs in your browser; files
 never leave your machine — no upload, no account, no server.
 
-Today it ships two tools, with more planned (next up: a photo culling/rating
-tool):
+Today it ships four tools, with more planned:
 
-- **Telemetry** — view DJI drone flight telemetry in sync with the video it was
-  captured with.
+- **Cull** — rip through a shoot: rate clips and photos 1–5, flag picks and
+  rejects, filter to the keepers, then copy them straight into an album folder
+  on disk.
+- **DJI Telemetry** — view DJI drone flight telemetry in sync with the video it
+  was captured with.
+- **Telemetry Overlay** — place altitude, GPS and exposure readouts anywhere on
+  a DJI clip and export an MP4 with the telemetry burned in.
 - **LUT Studio** — preview and batch-apply `.cube` colour LUTs to your footage in
   real time, with a before/after wipe.
+
+Tools that consume the same kinds of files (photos, videos, DJI clips) share a
+single **asset library**: import a folder once and switch tools freely — each
+tool sees the subset it can use. Triage verdicts (ratings + flags) from Cull
+persist across reloads, keyed by file name, so a re-import picks up where you
+left off.
 
 The suite is a tiny shell (`src/app/`) plus self-contained tools (`src/tools/*`)
 that share a generic core (`src/shared/*`). The masthead nav and the routes both
@@ -91,12 +101,12 @@ to add your own — just drop a `.cube` in, no code to edit.
 
 ### Online
 
-Deployed via GitHub Pages at `https://costardrouge.github.io/dji-flight-data/`.
+Deployed via GitHub Pages at `https://costardrouge.github.io/atelier/`.
 
 > Base path: `vite.config.ts` derives the Pages base path from the repository
-> name (via `GITHUB_REPOSITORY` in CI, falling back to `dji-flight-data`
-> locally), so a repo rename can't 404 the assets. Override with the `BASE_PATH`
-> env var — e.g. `/` when serving from a custom domain.
+> name (via `GITHUB_REPOSITORY` in CI, falling back to `atelier` locally), so a
+> repo rename can't 404 the assets. Override with the `BASE_PATH` env var — e.g.
+> `/` when serving from a custom domain.
 
 ### Local development
 
@@ -141,29 +151,37 @@ src/
 ├── app/                        # the shell + tool wiring
 │   ├── App.tsx                 # masthead + active tool + footer, all from the registry
 │   ├── tools.tsx               # the tool registry (nav + routes derive from it)
+│   ├── ErrorBoundary.tsx       # a tool crash shows a recoverable panel, not a blank app
+│   ├── Home.tsx · ToolSwitcher.tsx · AssetSidebar.tsx
 │   ├── use-hash-route.ts       # minimal hash router (useSyncExternalStore)
 │   └── site.ts                 # site-wide constants (repo URL)
 ├── shared/                     # generic, tool-agnostic — never imports tools/
 │   ├── lib/                    # pure: format, cube-parser (+ tests)
+│   ├── library/                # the shared asset library: group files into assets,
+│   │                           #   capability-match per tool, persist cull verdicts
+│   ├── media/                  # image/video metadata + WebCodecs H.264 export helpers
 │   ├── sources/file-sources.ts # access paths (files, folder, drop, single-pick)
 │   └── components/FolderDrop.tsx
 ├── tools/
+│   ├── cull/                   # triage: rate 1–5, flag picks/rejects, export keepers
 │   ├── telemetry/              # DJI flight-log viewer (the original tool)
 │   │   ├── srt-parser.ts       # SRT → Cue[] parser
 │   │   ├── find-cue.ts         # binary search for the active cue at time t
 │   │   ├── pair-files.ts       # pair videos with their .srt siblings
-│   │   ├── telemetry-summary.ts# summary (cue count, alt range, …) from Cue[]
+│   │   ├── motion.ts           # reconstruct speed & heading from GPS fixes
 │   │   ├── use-active-cue.ts   # follow the displayed frame → active Cue
-│   │   ├── TelemetryTool.tsx   # tool root: gallery ⇄ detail (owns its state)
-│   │   ├── DetailView.tsx · TelemetryPlayer.tsx · telemetry-view.tsx
-│   │   ├── Gallery.tsx · VideoCard.tsx
+│   │   ├── TelemetryTool.tsx · DetailView.tsx · Gallery.tsx · VideoCard.tsx
 │   │   └── *.test.ts           # unit tests (Vitest)
+│   ├── overlay/                # burn telemetry readouts into an exported MP4
+│   │   ├── draw-overlays.ts    # pure canvas draw of the readout elements
+│   │   ├── export-overlay.ts   # frame-by-frame seek + re-encode
+│   │   └── OverlayStudio.tsx · ElementPanel.tsx · GuidesControl.tsx
 │   └── lut/                    # colour grading (generic, multi-device LUTs)
-│       ├── LutStudio.tsx · ClipList.tsx
+│       ├── LutStudio.tsx · LutPicker.tsx
 │       ├── lut-gl.ts           # WebGL2 LUT renderer
-│       ├── export-video.ts · batch-export.ts · video-metadata.ts · clip.ts
+│       ├── frame-grader.ts · export-video.ts · batch-export.ts · clip.ts
 │       ├── builtin-luts.ts     # reads the build-time virtual:luts manifest
-│       └── use-lut-preview.ts
+│       └── use-lut-preview.ts · use-lut-selection.ts
 ├── index.css
 └── main.tsx
 ```
