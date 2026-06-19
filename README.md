@@ -4,7 +4,7 @@ A local-first **suite of browser tools for your captures** — photo and video,
 across devices (DJI, Apple, Sony, …). Everything runs in your browser; files
 never leave your machine — no upload, no account, no server.
 
-Today it ships five tools, with more planned:
+Today it ships six tools, with more planned:
 
 - **Cull** — rip through a shoot: rate clips and photos 1–5, flag picks and
   rejects, filter to the keepers, then copy them straight into an album folder
@@ -16,6 +16,8 @@ Today it ships five tools, with more planned:
 - **Photo EXIF** — inspect a photo's metadata (camera, lens, the full exposure
   triplet and GPS location) read straight from the file — the photo counterpart
   to Telemetry.
+- **Compare A/B** — lay any two photos or clips under a draggable before/after
+  divider, with synced playback when both are clips.
 - **LUT Studio** — preview and batch-apply `.cube` colour LUTs to your footage in
   real time, with a before/after wipe.
 
@@ -140,6 +142,21 @@ offset is bounds-checked so a truncated read just drops the fields it can't
 reach. The parser and the value formatters are pure and unit-tested, including a
 hand-built TIFF fixture and the GPS DMS-to-decimal conversion.
 
+## Compare A/B tool
+
+The LUT before/after wipe, generalised to **two different files**. Pick any two
+photos or clips from the library and drag a divider across the stage — A on the
+left, B on the right. Where the LUT wipe runs one source through a shader split,
+this layers two media and clips the top one with a `clip-path` inset, so it
+compares two distinct grades, two takes, or a retouch against its original.
+
+When both sides are clips, a single transport drives them together: play/pause
+and scrub seek both, and a light drift-correction keeps the follower locked to
+the leader, so two exports of the same shot line up frame-for-frame. Only the
+two compared files are ever decoded; nothing uploads. The wipe maths and the
+A/B pair reconciliation (keeping a valid pair as the selection changes) are
+pure and unit-tested.
+
 ## Known limitation — HEVC / H.265 codec
 
 Recent DJI drones often record in **HEVC / H.265**, which not every browser
@@ -202,6 +219,9 @@ src/
 │   │   ├── exif-format.ts      # pure value formatters (shutter, f-stop, GPS…)
 │   │   ├── use-exif.ts         # lazily read + parse a file's leading bytes
 │   │   └── ExifTool.tsx · Gallery.tsx · PhotoCard.tsx · DetailView.tsx
+│   ├── compare/                # A/B before/after wipe over two media
+│   │   ├── compare.ts          # pure: clamp, clip-path inset, pair reconcile
+│   │   └── CompareTool.tsx     # layered stage + divider + synced transport
 │   └── lut/                    # colour grading (generic, multi-device LUTs)
 │       ├── LutStudio.tsx · LutPicker.tsx
 │       ├── lut-gl.ts           # WebGL2 LUT renderer

@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import type { AssetKind } from '../shared/library/assets';
+import CompareTool from '../tools/compare/CompareTool';
 import CullTool from '../tools/cull/CullTool';
 import ExifTool from '../tools/exif/ExifTool';
 import LutStudio from '../tools/lut/LutStudio';
@@ -72,6 +73,16 @@ export const TOOLS: Tool[] = [
       'Inspect any photo’s metadata — camera, lens, the full exposure triplet and GPS location — read straight from the file, even RAW.',
     Component: ExifTool,
     accepts: ['photo'],
+  },
+  {
+    id: 'compare',
+    path: '/compare',
+    label: 'Compare A/B',
+    subtitle: 'Before/after wipe',
+    blurb:
+      'Lay any two photos or clips side by side under a draggable divider — two grades, two takes, before and after — with synced playback for clips.',
+    Component: CompareTool,
+    accepts: ['photo', 'video'],
   },
   {
     id: 'lut',
