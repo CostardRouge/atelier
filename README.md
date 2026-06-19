@@ -4,7 +4,7 @@ A local-first **suite of browser tools for your captures** — photo and video,
 across devices (DJI, Apple, Sony, …). Everything runs in your browser; files
 never leave your machine — no upload, no account, no server.
 
-Today it ships seven tools, with more planned:
+Today it ships eight tools, with more planned:
 
 - **Cull** — rip through a shoot: rate clips and photos 1–5, flag picks and
   rejects, filter to the keepers, then copy them straight into an album folder
@@ -22,6 +22,9 @@ Today it ships seven tools, with more planned:
   divider, with synced playback when both are clips.
 - **LUT Studio** — preview and batch-apply `.cube` colour LUTs to your footage in
   real time, with a before/after wipe.
+- **Scopes** — read a photo or clip with broadcast scopes (histogram, waveform,
+  vectorscope), updating live as a clip plays — the analytical companion to LUT
+  Studio.
 
 > **The one network exception.** Everything above runs offline and uploads
 > nothing. The single feature that can make a network request is the Flight
@@ -168,6 +171,23 @@ CSS): it stays out of the main bundle and downloads only when you open this
 tool. The cue-to-track extraction (filtering null-island fixes, bounds, line
 coordinates) is pure and unit-tested; the map glue lives in `use-flight-map.ts`.
 
+## Scopes tool
+
+Broadcast-style scopes for a photo or video frame — the analytical companion to
+LUT Studio:
+
+- **Histogram** — per-channel (RGB) or luma value distribution.
+- **Waveform** — brightness per image column (luma, or an RGB parade), so you
+  read exposure across the frame left-to-right.
+- **Vectorscope** — pixels plotted on the Rec.709 Cb/Cr plane with a skin-tone
+  guide, so you read hue and saturation; neutral greys sit dead centre.
+
+The frame is downscaled (long edge 320 px) and read locally with a `<canvas>` —
+nothing is uploaded. For a clip the scopes update **live** on a
+`requestAnimationFrame` loop while it plays and refresh on every seek. The scope
+maths (`scopes.ts`: histogram bins, waveform column grids, the Cb/Cr plot) is
+pure and unit-tested; only the drawing touches the canvas.
+
 ## Compare A/B tool
 
 The LUT before/after wipe, generalised to **two different files**. Pick any two
@@ -252,12 +272,16 @@ src/
 │   │   ├── flight-path.ts      # pure: cues → track points, bounds, line coords
 │   │   ├── use-flight-map.ts   # lazily-imported MapLibre map + marker + tiles
 │   │   └── MapTool.tsx         # clip switcher + map stage + synced video
-│   └── lut/                    # colour grading (generic, multi-device LUTs)
-│       ├── LutStudio.tsx · LutPicker.tsx
-│       ├── lut-gl.ts           # WebGL2 LUT renderer
-│       ├── frame-grader.ts · export-video.ts · batch-export.ts · clip.ts
-│       ├── builtin-luts.ts     # reads the build-time virtual:luts manifest
-│       └── use-lut-preview.ts · use-lut-selection.ts
+│   ├── lut/                    # colour grading (generic, multi-device LUTs)
+│   │   ├── LutStudio.tsx · LutPicker.tsx
+│   │   ├── lut-gl.ts           # WebGL2 LUT renderer
+│   │   ├── frame-grader.ts · export-video.ts · batch-export.ts · clip.ts
+│   │   ├── builtin-luts.ts     # reads the build-time virtual:luts manifest
+│   │   └── use-lut-preview.ts · use-lut-selection.ts
+│   └── scopes/                 # histogram / waveform / vectorscope
+│       ├── scopes.ts           # pure: pixels → scope data (unit-tested)
+│       ├── draw-scopes.ts      # canvas drawing of each scope
+│       └── ScopesTool.tsx      # frame sampler + live scope rendering
 ├── index.css
 └── main.tsx
 ```

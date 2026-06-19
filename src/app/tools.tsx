@@ -6,6 +6,7 @@ import ExifTool from '../tools/exif/ExifTool';
 import LutStudio from '../tools/lut/LutStudio';
 import MapTool from '../tools/map/MapTool';
 import OverlayStudio from '../tools/overlay/OverlayStudio';
+import ScopesTool from '../tools/scopes/ScopesTool';
 import TelemetryTool from '../tools/telemetry/TelemetryTool';
 
 /**
@@ -104,6 +105,16 @@ export const TOOLS: Tool[] = [
       'Preview .cube LUTs on your footage with a before/after wipe, then batch-export the graded clips.',
     Component: LutStudio,
     accepts: ['video'],
+  },
+  {
+    id: 'scopes',
+    path: '/scopes',
+    label: 'Scopes',
+    subtitle: 'Histogram · waveform · vectorscope',
+    blurb:
+      'Read a photo or clip with broadcast scopes — histogram, waveform and vectorscope — updating live as the clip plays. The analytical companion to LUT Studio.',
+    Component: ScopesTool,
+    accepts: ['photo', 'video'],
   },
 ];
 
