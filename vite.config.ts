@@ -104,7 +104,7 @@ function lutsManifestPlugin(): Plugin {
 // value previously did, and Pages 404'd every asset. Locally (`dev`/`preview`)
 // `GITHUB_REPOSITORY` is unset, so we fall back to the repo name. Set
 // `BASE_PATH` to override — e.g. `/` when serving from a custom domain.
-const REPO = process.env.GITHUB_REPOSITORY?.split('/')[1] ?? 'dji-flight-data';
+const REPO = process.env.GITHUB_REPOSITORY?.split('/')[1] ?? 'atelier';
 const BASE = process.env.BASE_PATH ?? `/${REPO}/`;
 
 export default defineConfig({

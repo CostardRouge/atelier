@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import AssetSidebar from './AssetSidebar';
+import ErrorBoundary from './ErrorBoundary';
 import Home from './Home';
 import { REPO_URL } from './site';
 import { HOME_PATH, toolForPath } from './tools';
@@ -20,6 +21,15 @@ export default function App() {
   // an empty or unknown hash lands on home with nothing to redirect.
   const tool = toolForPath(path);
   const Active = tool?.Component ?? Home;
+
+  // The active view, guarded so a single tool's crash shows a recoverable
+  // panel instead of blanking the suite. Keyed by route, so navigating to
+  // another tool clears a prior error and mounts the next one fresh.
+  const activeContent = (
+    <ErrorBoundary resetKey={path}>
+      <Active />
+    </ErrorBoundary>
+  );
 
   // Tools that declare `accepts` read their assets from the shared library,
   // shown as a left sidebar. It collapses to a thin rail (the choice is
@@ -99,10 +109,10 @@ export default function App() {
         )}
         {usesLibrary ? (
           <div className="flex-1 min-w-0 flex flex-col min-h-0">
-            <Active />
+            {activeContent}
           </div>
         ) : (
-          <Active />
+          activeContent
         )}
       </main>
 
