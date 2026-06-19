@@ -5,8 +5,16 @@ import type { Asset } from '../../shared/library/assets';
 import { formatDuration } from '../../shared/lib/format';
 import { parseSrt, type Cue } from '../telemetry/srt-parser';
 import { useActiveCue } from '../telemetry/use-active-cue';
-import { formatGroundSpeed, formatHeading } from '../telemetry/motion';
 import { extractTrack, parsePosition } from '../map/flight-path';
+import {
+  buildLines,
+  DEFAULT_OVERLAY,
+  FONT_STACK,
+  hexToRgba,
+  OVERLAY_FIELDS,
+  type OverlayConfig,
+  type OverlayFont,
+} from './overlay';
 import { makeFrameGrader, type FrameGrader } from '../lut/frame-grader';
 import { useLutSelection } from '../lut/use-lut-selection';
 import LutPicker from '../lut/LutPicker';
@@ -78,24 +86,6 @@ function roundRect(
   ctx.closePath();
 }
 
-interface ReadoutLine {
-  text: string;
-  dim?: boolean;
-}
-
-function readoutLines(cue: Cue | null): ReadoutLine[] {
-  const d = cue?.data ?? {};
-  const lines: ReadoutLine[] = [{ text: `ALT ${d.rel_alt ?? '—'} m` }];
-  const spd = formatGroundSpeed(cue?.derived?.groundSpeed);
-  if (spd) lines.push({ text: `SPD ${spd}` });
-  const hdg = formatHeading(cue?.derived?.heading);
-  if (hdg) lines.push({ text: `HDG ${hdg}`, dim: true });
-  if (d.latitude && d.longitude) {
-    lines.push({ text: `${d.latitude}, ${d.longitude}`, dim: true });
-  }
-  return lines;
-}
-
 interface Box {
   x: number;
   y: number;
@@ -103,35 +93,39 @@ interface Box {
   h: number;
 }
 
-/** Draw the telemetry readout card; returns its box (preview px) for hit-testing. */
+/** Draw the telemetry readout per the overlay config; returns its box, or null. */
 function drawReadout(
   ctx: CanvasRenderingContext2D,
   cue: Cue | null,
   pos: { x: number; y: number },
   pw: number,
   ph: number,
-): Box {
-  const lines = readoutLines(cue);
-  const fs = Math.max(12, Math.round(ph * 0.032));
+  cfg: OverlayConfig,
+): Box | null {
+  if (!cfg.show) return null;
+  const lines = buildLines(cue, cfg);
+  if (lines.length === 0) return null;
+  const base = Math.max(10, Math.round(ph * 0.03));
+  const fs = Math.max(8, Math.round(base * cfg.fontScale));
   const pad = Math.round(fs * 0.7);
-  ctx.font = `600 ${fs}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+  ctx.font = `600 ${fs}px ${FONT_STACK[cfg.font]}`;
   ctx.textBaseline = 'alphabetic';
   let maxW = 0;
-  for (const l of lines) maxW = Math.max(maxW, ctx.measureText(l.text).width);
+  for (const l of lines) maxW = Math.max(maxW, ctx.measureText(l).width);
   const lh = fs * 1.35;
   const boxW = maxW + pad * 2;
   const boxH = lines.length * lh + pad * 2 - (lh - fs);
   const x = Math.min(Math.max(0, pos.x * pw), pw - boxW);
   const y = Math.min(Math.max(0, pos.y * ph), ph - boxH);
 
-  ctx.fillStyle = 'rgba(15,14,12,0.6)';
-  roundRect(ctx, x, y, boxW, boxH, Math.round(fs * 0.4));
+  ctx.fillStyle = hexToRgba(cfg.bgColor, cfg.bgOpacity);
+  roundRect(ctx, x, y, boxW, boxH, Math.min(cfg.radius, boxH / 2, boxW / 2));
   ctx.fill();
 
+  ctx.fillStyle = cfg.textColor;
   let ty = y + pad + fs * 0.85;
   for (const l of lines) {
-    ctx.fillStyle = l.dim ? 'rgba(255,255,255,0.65)' : '#ffffff';
-    ctx.fillText(l.text, x + pad, ty);
+    ctx.fillText(l, x + pad, ty);
     ty += lh;
   }
   return { x, y, w: boxW, h: boxH };
@@ -153,6 +147,8 @@ export default function ComposerTool() {
   const [videoFit, setVideoFit] = useState<Fit>('cover');
   const [tilesOn, setTilesOn] = useState(false);
   const [zoomOffset, setZoomOffset] = useState(0);
+  const [follow, setFollow] = useState(false);
+  const [overlay, setOverlay] = useState<OverlayConfig>(DEFAULT_OVERLAY);
   const [readoutPos, setReadoutPos] = useState({ x: 0.04, y: 0.8 });
 
   const aspect = ASPECTS.find((a) => a.id === aspectId) ?? ASPECTS[0];
@@ -224,15 +220,15 @@ export default function ComposerTool() {
   }, [active?.video]);
 
   const track = useMemo(() => extractTrack(cues), [cues]);
-  const map = useComposerMap(mapContainerRef, track, tilesOn, zoomOffset);
-  const { getCanvas, setMarker, resize } = map;
-
   const activeCue = useActiveCue(videoRef, cues, url);
   const position = useMemo<[number, number] | null>(() => {
     const live = activeCue ? parsePosition(activeCue) : null;
     if (live) return live;
     return track.length ? [track[0].lon, track[0].lat] : null;
   }, [activeCue, track]);
+
+  const map = useComposerMap(mapContainerRef, track, tilesOn, zoomOffset, follow, position);
+  const { getCanvas, resize } = map;
 
   // --- frame grader (LUT) -------------------------------------------------
   const graderRef = useRef<FrameGrader | null>(null);
@@ -254,10 +250,10 @@ export default function ComposerTool() {
   // --- live values for the draw loop (refs to avoid stale closures) --------
   const cueRef = useRef<Cue | null>(null);
   cueRef.current = activeCue;
-  const posRef = useRef<[number, number] | null>(null);
-  posRef.current = position;
   const readoutRef = useRef(readoutPos);
   readoutRef.current = readoutPos;
+  const overlayRef = useRef(overlay);
+  overlayRef.current = overlay;
   const readoutBoxRef = useRef<Box | null>(null);
 
   const draw = useCallback(() => {
@@ -269,7 +265,6 @@ export default function ComposerTool() {
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, w, h);
     const rects = paneRects(w, h, layout, split, inset, corner);
-    setMarker(posRef.current);
 
     const drawVideoPane = () => {
       const v = videoRef.current;
@@ -304,8 +299,15 @@ export default function ComposerTool() {
       drawMapPane();
     }
 
-    readoutBoxRef.current = drawReadout(ctx, cueRef.current, readoutRef.current, w, h);
-  }, [layout, split, inset, corner, videoFit, lut, getCanvas, setMarker]);
+    readoutBoxRef.current = drawReadout(
+      ctx,
+      cueRef.current,
+      readoutRef.current,
+      w,
+      h,
+      overlayRef.current,
+    );
+  }, [layout, split, inset, corner, videoFit, lut, getCanvas]);
 
   const drawRef = useRef(draw);
   drawRef.current = draw;
@@ -511,6 +513,9 @@ export default function ComposerTool() {
               <button type="button" className={chip} aria-pressed={tilesOn} onClick={() => setTilesOn((t) => !t)} title="Load OpenStreetMap tiles — the one feature that makes a network request">
                 {tilesOn ? 'Map: tiles' : 'Map: offline'}
               </button>
+              <button type="button" className={chip} aria-pressed={follow} onClick={() => setFollow((f) => !f)} title="Keep the map centred on the aircraft as the clip plays">
+                {follow ? 'Follow: on' : 'Follow: off'}
+              </button>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -523,6 +528,59 @@ export default function ComposerTool() {
                 onSelect={lutSel.applySelection}
                 onUpload={lutSel.uploadCube}
               />
+            </div>
+
+            {/* Overlay (telemetry readout) options. */}
+            <div className="flex flex-col gap-2 border-t border-line pt-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted w-14">Overlay</span>
+                <button type="button" className={chip} aria-pressed={overlay.show} onClick={() => setOverlay((o) => ({ ...o, show: !o.show }))}>
+                  {overlay.show ? 'shown' : 'hidden'}
+                </button>
+                <button type="button" className={chip} aria-pressed={overlay.labels} onClick={() => setOverlay((o) => ({ ...o, labels: !o.labels }))} title="Show the field label prefixes">
+                  labels
+                </button>
+                <span className="w-2" />
+                {OVERLAY_FIELDS.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    className={chip}
+                    aria-pressed={!!overlay.fields[f.id]}
+                    onClick={() => setOverlay((o) => ({ ...o, fields: { ...o.fields, [f.id]: !o.fields[f.id] } }))}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <label className="flex items-center gap-1.5">
+                  <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted">Text</span>
+                  <input type="color" value={overlay.textColor} onChange={(e) => setOverlay((o) => ({ ...o, textColor: e.target.value }))} className="w-7 h-7 rounded border border-line-strong bg-paper cursor-pointer" aria-label="Text colour" />
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted">Bg</span>
+                  <input type="color" value={overlay.bgColor} onChange={(e) => setOverlay((o) => ({ ...o, bgColor: e.target.value }))} className="w-7 h-7 rounded border border-line-strong bg-paper cursor-pointer" aria-label="Background colour" />
+                  <input type="range" min={0} max={1} step={0.05} value={overlay.bgOpacity} onChange={(e) => setOverlay((o) => ({ ...o, bgOpacity: Number(e.target.value) }))} className="accent-accent w-20" aria-label="Background opacity" />
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted">Radius</span>
+                  <input type="range" min={0} max={32} step={1} value={overlay.radius} onChange={(e) => setOverlay((o) => ({ ...o, radius: Number(e.target.value) }))} className="accent-accent w-20" />
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted">Size</span>
+                  <input type="range" min={0.6} max={2.2} step={0.1} value={overlay.fontScale} onChange={(e) => setOverlay((o) => ({ ...o, fontScale: Number(e.target.value) }))} className="accent-accent w-20" />
+                </label>
+                <div className="flex items-center gap-1">
+                  <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted">Font</span>
+                  {(['mono', 'sans', 'serif'] as OverlayFont[]).map((fnt) => (
+                    <button key={fnt} type="button" className={chip} aria-pressed={overlay.font === fnt} onClick={() => setOverlay((o) => ({ ...o, font: fnt }))}>
+                      {fnt}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 

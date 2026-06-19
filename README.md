@@ -200,13 +200,18 @@ and map side-by-side, stacked, or one inset over the other), per-pane
 **object-fit** (cover/contain), and a **LUT** for the footage; drag the readout
 anywhere; then **play/pause** to preview the whole assembly in real time.
 
+The map can **fit the whole track** or **follow the aircraft** (centred, panning
+with it as the clip plays), with a zoom-offset slider on top of the auto-fit.
+The readout is fully configurable — which fields show, label prefixes, text and
+background colour/opacity, corner radius, font and size — and can be toggled off.
+
 It's a single `<canvas>` compositor: each frame draws the (LUT-graded) video and
 the map's WebGL canvas into their computed panes, then the readout on top. The
 map runs as a non-interactive MapLibre instance with `preserveDrawingBuffer` so
 its canvas can be composited, and its marker is a GL layer (a DOM marker
-wouldn't be captured). The pane geometry and object-fit maths (`compose-layout.ts`)
-are pure and unit-tested. **MP4 export of the composition is the next step**;
-this ships the live composer.
+wouldn't be captured). The pane/object-fit geometry (`compose-layout.ts`) and the
+readout model (`overlay.ts`) are pure and unit-tested. **MP4 export of the
+composition is the next step**; this ships the live composer.
 
 ## Compare A/B tool
 
