@@ -4,7 +4,7 @@ A local-first **suite of browser tools for your captures** — photo and video,
 across devices (DJI, Apple, Sony, …). Everything runs in your browser; files
 never leave your machine — no upload, no account, no server.
 
-Today it ships six tools, with more planned:
+Today it ships seven tools, with more planned:
 
 - **Cull** — rip through a shoot: rate clips and photos 1–5, flag picks and
   rejects, filter to the keepers, then copy them straight into an album folder
@@ -13,6 +13,8 @@ Today it ships six tools, with more planned:
   was captured with.
 - **Telemetry Overlay** — place altitude, GPS and exposure readouts anywhere on
   a DJI clip and export an MP4 with the telemetry burned in.
+- **Flight Map** — trace a DJI clip's GPS path on a map and scrub the video to
+  walk the aircraft along it (the base map is opt-in — see below).
 - **Photo EXIF** — inspect a photo's metadata (camera, lens, the full exposure
   triplet and GPS location) read straight from the file — the photo counterpart
   to Telemetry.
@@ -20,6 +22,12 @@ Today it ships six tools, with more planned:
   divider, with synced playback when both are clips.
 - **LUT Studio** — preview and batch-apply `.cube` colour LUTs to your footage in
   real time, with a before/after wipe.
+
+> **The one network exception.** Everything above runs offline and uploads
+> nothing. The single feature that can make a network request is the Flight
+> Map's *optional* base map: turning it on fetches map tiles from OpenStreetMap,
+> which reveals the viewed area to that tile server. It's off by default — the
+> flight path itself always draws locally.
 
 Tools that consume the same kinds of files (photos, videos, DJI clips) share a
 single **asset library**: import a folder once and switch tools freely — each
@@ -142,6 +150,24 @@ offset is bounds-checked so a truncated read just drops the fields it can't
 reach. The parser and the value formatters are pure and unit-tested, including a
 hand-built TIFF fixture and the GPS DMS-to-decimal conversion.
 
+## Flight Map tool
+
+Plots a DJI clip's GPS track on a map and moves a marker along it as the video
+plays or scrubs — the spatial counterpart to the Telemetry tool, reading the
+**same parsed cues**. The marker is driven by the very same `useActiveCue` hook
+the Telemetry panels use, so it stays frame-accurate.
+
+The path always draws **offline**: MapLibre renders the track line on a plain
+backdrop with no tiles, so nothing leaves the machine. A **"Load map
+background"** toggle adds an OpenStreetMap raster layer on demand — the only
+thing in the suite that makes a network request, surfaced explicitly because it
+reveals the viewed area to the tile server.
+
+MapLibre is a heavier dependency, so it's **dynamically imported** (JS *and*
+CSS): it stays out of the main bundle and downloads only when you open this
+tool. The cue-to-track extraction (filtering null-island fixes, bounds, line
+coordinates) is pure and unit-tested; the map glue lives in `use-flight-map.ts`.
+
 ## Compare A/B tool
 
 The LUT before/after wipe, generalised to **two different files**. Pick any two
@@ -222,6 +248,10 @@ src/
 │   ├── compare/                # A/B before/after wipe over two media
 │   │   ├── compare.ts          # pure: clamp, clip-path inset, pair reconcile
 │   │   └── CompareTool.tsx     # layered stage + divider + synced transport
+│   ├── map/                    # GPS flight path on a map (MapLibre)
+│   │   ├── flight-path.ts      # pure: cues → track points, bounds, line coords
+│   │   ├── use-flight-map.ts   # lazily-imported MapLibre map + marker + tiles
+│   │   └── MapTool.tsx         # clip switcher + map stage + synced video
 │   └── lut/                    # colour grading (generic, multi-device LUTs)
 │       ├── LutStudio.tsx · LutPicker.tsx
 │       ├── lut-gl.ts           # WebGL2 LUT renderer

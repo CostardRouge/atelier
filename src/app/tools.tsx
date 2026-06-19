@@ -4,6 +4,7 @@ import CompareTool from '../tools/compare/CompareTool';
 import CullTool from '../tools/cull/CullTool';
 import ExifTool from '../tools/exif/ExifTool';
 import LutStudio from '../tools/lut/LutStudio';
+import MapTool from '../tools/map/MapTool';
 import OverlayStudio from '../tools/overlay/OverlayStudio';
 import TelemetryTool from '../tools/telemetry/TelemetryTool';
 
@@ -63,6 +64,16 @@ export const TOOLS: Tool[] = [
       'Place altitude, GPS and exposure readouts anywhere on your DJI clip, then export an MP4 with the telemetry burned in.',
     Component: OverlayStudio,
     accepts: ['video+telemetry'],
+  },
+  {
+    id: 'map',
+    path: '/map',
+    label: 'Flight Map',
+    subtitle: 'GPS flight path',
+    blurb:
+      'Trace a DJI clip’s GPS path on a map and scrub the video to walk the aircraft along it. Draws offline; the map background is opt-in.',
+    Component: MapTool,
+    accepts: ['video+telemetry', 'telemetry'],
   },
   {
     id: 'exif',
