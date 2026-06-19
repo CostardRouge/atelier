@@ -4,7 +4,7 @@ A local-first **suite of browser tools for your captures** — photo and video,
 across devices (DJI, Apple, Sony, …). Everything runs in your browser; files
 never leave your machine — no upload, no account, no server.
 
-Today it ships four tools, with more planned:
+Today it ships five tools, with more planned:
 
 - **Cull** — rip through a shoot: rate clips and photos 1–5, flag picks and
   rejects, filter to the keepers, then copy them straight into an album folder
@@ -13,6 +13,9 @@ Today it ships four tools, with more planned:
   was captured with.
 - **Telemetry Overlay** — place altitude, GPS and exposure readouts anywhere on
   a DJI clip and export an MP4 with the telemetry burned in.
+- **Photo EXIF** — inspect a photo's metadata (camera, lens, the full exposure
+  triplet and GPS location) read straight from the file — the photo counterpart
+  to Telemetry.
 - **LUT Studio** — preview and batch-apply `.cube` colour LUTs to your footage in
   real time, with a before/after wipe.
 
@@ -119,6 +122,24 @@ npm run build      # production build into dist/
 npm run preview    # serve the production build locally
 ```
 
+## Photo EXIF tool
+
+The photo counterpart to Telemetry: select photos in the library and read their
+embedded metadata — camera body, lens, the exposure triplet (shutter, aperture,
+ISO), exposure bias, focal length, and GPS location (with a one-click
+OpenStreetMap link, opened only when *you* click it). The gallery shows a
+camera/exposure line per photo; the full view lays out Camera, Exposure, Image
+and Location panels beside a large preview.
+
+EXIF is read straight from the bytes by a small **dependency-free parser**
+(`exif-parser.ts`): it walks the JPEG `APP1` segment, or — since DNG and most
+camera RAW begin with a TIFF header — the TIFF IFDs directly, so **RAW files
+report their settings even when the browser can't decode a preview**. Only the
+first 256 KB of each file is read, lazily as a card scrolls into view, and every
+offset is bounds-checked so a truncated read just drops the fields it can't
+reach. The parser and the value formatters are pure and unit-tested, including a
+hand-built TIFF fixture and the GPS DMS-to-decimal conversion.
+
 ## Known limitation — HEVC / H.265 codec
 
 Recent DJI drones often record in **HEVC / H.265**, which not every browser
@@ -176,6 +197,11 @@ src/
 │   │   ├── draw-overlays.ts    # pure canvas draw of the readout elements
 │   │   ├── export-overlay.ts   # frame-by-frame seek + re-encode
 │   │   └── OverlayStudio.tsx · ElementPanel.tsx · GuidesControl.tsx
+│   ├── exif/                   # read photo EXIF (camera, lens, exposure, GPS)
+│   │   ├── exif-parser.ts      # dependency-free JPEG/TIFF EXIF reader
+│   │   ├── exif-format.ts      # pure value formatters (shutter, f-stop, GPS…)
+│   │   ├── use-exif.ts         # lazily read + parse a file's leading bytes
+│   │   └── ExifTool.tsx · Gallery.tsx · PhotoCard.tsx · DetailView.tsx
 │   └── lut/                    # colour grading (generic, multi-device LUTs)
 │       ├── LutStudio.tsx · LutPicker.tsx
 │       ├── lut-gl.ts           # WebGL2 LUT renderer

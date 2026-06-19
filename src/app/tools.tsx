@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import type { AssetKind } from '../shared/library/assets';
 import CullTool from '../tools/cull/CullTool';
+import ExifTool from '../tools/exif/ExifTool';
 import LutStudio from '../tools/lut/LutStudio';
 import OverlayStudio from '../tools/overlay/OverlayStudio';
 import TelemetryTool from '../tools/telemetry/TelemetryTool';
@@ -61,6 +62,16 @@ export const TOOLS: Tool[] = [
       'Place altitude, GPS and exposure readouts anywhere on your DJI clip, then export an MP4 with the telemetry burned in.',
     Component: OverlayStudio,
     accepts: ['video+telemetry'],
+  },
+  {
+    id: 'exif',
+    path: '/exif',
+    label: 'Photo EXIF',
+    subtitle: 'Camera · lens · GPS',
+    blurb:
+      'Inspect any photo’s metadata — camera, lens, the full exposure triplet and GPS location — read straight from the file, even RAW.',
+    Component: ExifTool,
+    accepts: ['photo'],
   },
   {
     id: 'lut',
