@@ -268,10 +268,11 @@ export default function ComposerTool() {
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, w, h);
     const rects = paneRects(w, h, layout, split, inset, corner);
+    setMarker(posRef.current);
 
-    // Video (graded if a LUT is picked).
-    const v = videoRef.current;
-    if (v && v.readyState >= 2 && v.videoWidth) {
+    const drawVideoPane = () => {
+      const v = videoRef.current;
+      if (!v || v.readyState < 2 || !v.videoWidth) return;
       let src: CanvasImageSource = v;
       let sw = v.videoWidth;
       let sh = v.videoHeight;
@@ -282,14 +283,26 @@ export default function ComposerTool() {
       }
       const f = fitRect(sw, sh, rects.video, videoFit);
       ctx.drawImage(src, f.sx, f.sy, f.sw, f.sh, f.dx, f.dy, f.dw, f.dh);
+    };
+
+    // The map's WebGL canvas is sized to its pane, but draw via fitRect (cover)
+    // so it's never stretched even during a resize — aspect is always preserved.
+    const drawMapPane = () => {
+      const mc = getCanvas();
+      if (!mc || !mc.width || !mc.height) return;
+      const f = fitRect(mc.width, mc.height, rects.map, 'cover');
+      ctx.drawImage(mc, f.sx, f.sy, f.sw, f.sh, f.dx, f.dy, f.dw, f.dh);
+    };
+
+    // Draw the full-frame pane first, the inset pane on top.
+    if (layout === 'pip-video') {
+      drawMapPane();
+      drawVideoPane();
+    } else {
+      drawVideoPane();
+      drawMapPane();
     }
 
-    // Map (its canvas already matches its pane size → cover).
-    setMarker(posRef.current);
-    const mc = getCanvas();
-    if (mc) ctx.drawImage(mc, rects.map.x, rects.map.y, rects.map.w, rects.map.h);
-
-    // Telemetry readout.
     readoutBoxRef.current = drawReadout(ctx, cueRef.current, readoutRef.current, w, h);
   }, [layout, split, inset, corner, videoFit, lut, getCanvas, setMarker]);
 
@@ -333,12 +346,9 @@ export default function ComposerTool() {
     };
   }, [url]);
 
-  // Keep the offscreen map container sized to its pane (so its canvas matches).
+  // The offscreen map container is sized to its pane via JSX (below); when that
+  // changes, tell MapLibre to re-read the size and re-frame the track.
   useEffect(() => {
-    const el = mapContainerRef.current;
-    if (!el) return;
-    el.style.width = `${Math.max(1, panes.map.w)}px`;
-    el.style.height = `${Math.max(1, panes.map.h)}px`;
     resize();
   }, [panes.map.w, panes.map.h, resize]);
 
@@ -583,7 +593,7 @@ export default function ComposerTool() {
         ref={mapContainerRef}
         aria-hidden="true"
         className="fixed left-[-99999px] top-0 pointer-events-none"
-        style={{ width: 1, height: 1 }}
+        style={{ width: Math.max(1, panes.map.w), height: Math.max(1, panes.map.h) }}
       />
     </section>
   );

@@ -56,8 +56,25 @@ export function useComposerMap(
   tilesOn: boolean,
 ): ComposerMap {
   const mapRef = useRef<MlMap | null>(null);
+  const trackRef = useRef(track);
+  trackRef.current = track;
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(false);
+
+  /** Frame the whole track in the current viewport. */
+  const fitTrack = useCallback((map: MlMap) => {
+    const b = trackBounds(trackRef.current);
+    if (!b) return;
+    if (b.min[0] === b.max[0] && b.min[1] === b.max[1]) {
+      map.jumpTo({ center: b.min, zoom: 15 });
+    } else {
+      map.fitBounds([b.min, b.max] as LngLatBoundsLike, {
+        padding: 30,
+        animate: false,
+        maxZoom: 16,
+      });
+    }
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -103,6 +120,7 @@ export function useComposerMap(
             },
           });
           map.resize();
+          fitTrack(map);
           setReady(true);
         });
       } catch {
@@ -122,18 +140,8 @@ export function useComposerMap(
     const map = mapRef.current;
     if (!ready || !map) return;
     (map.getSource('track') as GeoJSONSource | undefined)?.setData(lineFeature(track));
-    const b = trackBounds(track);
-    if (!b) return;
-    if (b.min[0] === b.max[0] && b.min[1] === b.max[1]) {
-      map.jumpTo({ center: b.min, zoom: 15 });
-    } else {
-      map.fitBounds([b.min, b.max] as LngLatBoundsLike, {
-        padding: 30,
-        animate: false,
-        maxZoom: 16,
-      });
-    }
-  }, [ready, track]);
+    fitTrack(map);
+  }, [ready, track, fitTrack]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -162,7 +170,13 @@ export function useComposerMap(
   }, []);
 
   const getCanvas = useCallback(() => mapRef.current?.getCanvas() ?? null, []);
-  const resize = useCallback(() => mapRef.current?.resize(), []);
+  // Resize to the (new) container size and re-frame the track to the new aspect.
+  const resize = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.resize();
+    fitTrack(map);
+  }, [fitTrack]);
 
   return { ready, error, setMarker, getCanvas, resize };
 }
