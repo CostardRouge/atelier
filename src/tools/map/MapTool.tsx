@@ -157,9 +157,14 @@ export default function MapTool() {
         )}
       </div>
 
-      {/* Map stage. */}
-      <div className="relative rounded-paper overflow-hidden flex-1 min-h-0 bg-frame border border-line max-[820px]:min-h-[280px]">
-        <div ref={containerRef} className="absolute inset-0" />
+      {/* Map stage. The MapLibre container is a flex child with a real pixel
+          height (not `absolute inset-0`) — MapLibre adds `.maplibregl-map`
+          which sets `position: relative`, and that would override an absolute
+          container and collapse it to zero height (a black box). It also keeps
+          no React children, since MapLibre owns that DOM; overlays sit beside
+          it, positioned against the stage. */}
+      <div className="relative flex flex-col rounded-paper overflow-hidden flex-1 min-h-0 bg-frame border border-line max-[820px]:min-h-[280px]">
+        <div ref={containerRef} className="flex-1 min-h-0 w-full" />
 
         {error && (
           <div className="absolute inset-0 grid place-items-center text-center p-6 text-muted font-mono text-[0.82rem]">

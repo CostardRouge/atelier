@@ -101,6 +101,8 @@ export function useFlightMap(
             layout: { 'line-cap': 'round', 'line-join': 'round' },
             paint: { 'line-color': ACCENT, 'line-width': 3, 'line-opacity': 0.9 },
           });
+          // Insurance against an initial 0-size measurement (async mount race).
+          map.resize();
           setReady(true);
         });
       } catch {
