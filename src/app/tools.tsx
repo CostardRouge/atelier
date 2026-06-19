@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import type { AssetKind } from '../shared/library/assets';
 import CompareTool from '../tools/compare/CompareTool';
+import ComposerTool from '../tools/composer/ComposerTool';
 import CullTool from '../tools/cull/CullTool';
 import ExifTool from '../tools/exif/ExifTool';
 import LutStudio from '../tools/lut/LutStudio';
@@ -75,6 +76,16 @@ export const TOOLS: Tool[] = [
       'Trace a DJI clip’s GPS path on a map and scrub the video to walk the aircraft along it. Draws offline; the map background is opt-in.',
     Component: MapTool,
     accepts: ['video+telemetry', 'telemetry'],
+  },
+  {
+    id: 'composer',
+    path: '/composer',
+    label: 'Composer',
+    subtitle: 'Video + map + telemetry',
+    blurb:
+      'Compose a DJI clip with its flight map and a draggable telemetry readout into one frame — pick the aspect, layout and a LUT, and preview the assembly.',
+    Component: ComposerTool,
+    accepts: ['video+telemetry'],
   },
   {
     id: 'exif',

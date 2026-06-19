@@ -4,7 +4,7 @@ A local-first **suite of browser tools for your captures** — photo and video,
 across devices (DJI, Apple, Sony, …). Everything runs in your browser; files
 never leave your machine — no upload, no account, no server.
 
-Today it ships eight tools, with more planned:
+Today it ships nine tools, with more planned:
 
 - **Cull** — rip through a shoot: rate clips and photos 1–5, flag picks and
   rejects, filter to the keepers, then copy them straight into an album folder
@@ -15,6 +15,9 @@ Today it ships eight tools, with more planned:
   a DJI clip and export an MP4 with the telemetry burned in.
 - **Flight Map** — trace a DJI clip's GPS path on a map and scrub the video to
   walk the aircraft along it (the base map is opt-in — see below).
+- **Composer** — combine a clip, its flight map and a draggable telemetry
+  readout into one framed composition (aspect, layout, LUT), previewed live
+  (MP4 export coming next).
 - **Photo EXIF** — inspect a photo's metadata (camera, lens, the full exposure
   triplet and GPS location) read straight from the file — the photo counterpart
   to Telemetry.
@@ -188,6 +191,23 @@ nothing is uploaded. For a clip the scopes update **live** on a
 maths (`scopes.ts`: histogram bins, waveform column grids, the Cb/Cr plot) is
 pure and unit-tested; only the drawing touches the canvas.
 
+## Composer tool
+
+Brings the suite's pieces together: a DJI clip, its **flight map**, and a
+**draggable telemetry readout**, composited into one framed video. Pick the
+output **aspect** (16:9, 9:16, 1:1, 4:5) and **resolution**, a **layout** (video
+and map side-by-side, stacked, or one inset over the other), per-pane
+**object-fit** (cover/contain), and a **LUT** for the footage; drag the readout
+anywhere; then **play/pause** to preview the whole assembly in real time.
+
+It's a single `<canvas>` compositor: each frame draws the (LUT-graded) video and
+the map's WebGL canvas into their computed panes, then the readout on top. The
+map runs as a non-interactive MapLibre instance with `preserveDrawingBuffer` so
+its canvas can be composited, and its marker is a GL layer (a DOM marker
+wouldn't be captured). The pane geometry and object-fit maths (`compose-layout.ts`)
+are pure and unit-tested. **MP4 export of the composition is the next step**;
+this ships the live composer.
+
 ## Compare A/B tool
 
 The LUT before/after wipe, generalised to **two different files**. Pick any two
@@ -272,6 +292,10 @@ src/
 │   │   ├── flight-path.ts      # pure: cues → track points, bounds, line coords
 │   │   ├── use-flight-map.ts   # lazily-imported MapLibre map + marker + tiles
 │   │   └── MapTool.tsx         # clip switcher + map stage + synced video
+│   ├── composer/               # video + map + telemetry → one composition
+│   │   ├── compose-layout.ts   # pure: pane rects, object-fit, output size
+│   │   ├── use-composer-map.ts # MapLibre map for compositing (GL marker)
+│   │   └── ComposerTool.tsx    # canvas compositor + live preview
 │   ├── lut/                    # colour grading (generic, multi-device LUTs)
 │   │   ├── LutStudio.tsx · LutPicker.tsx
 │   │   ├── lut-gl.ts           # WebGL2 LUT renderer
