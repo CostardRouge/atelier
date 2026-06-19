@@ -21,7 +21,7 @@ import {
 import { useComposerMap } from './use-composer-map';
 
 const COMPOSER_KINDS = ['video+telemetry'] as const;
-const PREVIEW_MAX = 880;
+const PREVIEW_MAX = 1440;
 const GRADE_MAX = 1280;
 
 const ASPECTS = [
@@ -152,6 +152,7 @@ export default function ComposerTool() {
   const [corner, setCorner] = useState<Corner>('br');
   const [videoFit, setVideoFit] = useState<Fit>('cover');
   const [tilesOn, setTilesOn] = useState(false);
+  const [zoomOffset, setZoomOffset] = useState(0);
   const [readoutPos, setReadoutPos] = useState({ x: 0.04, y: 0.8 });
 
   const aspect = ASPECTS.find((a) => a.id === aspectId) ?? ASPECTS[0];
@@ -223,7 +224,7 @@ export default function ComposerTool() {
   }, [active?.video]);
 
   const track = useMemo(() => extractTrack(cues), [cues]);
-  const map = useComposerMap(mapContainerRef, track, tilesOn);
+  const map = useComposerMap(mapContainerRef, track, tilesOn, zoomOffset);
   const { getCanvas, setMarker, resize } = map;
 
   const activeCue = useActiveCue(videoRef, cues, url);
@@ -503,6 +504,10 @@ export default function ComposerTool() {
                   </button>
                 ))}
               </div>
+              <label className="flex items-center gap-2">
+                <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted">Map zoom</span>
+                <input type="range" min={-4} max={4} step={0.5} value={zoomOffset} onChange={(e) => setZoomOffset(Number(e.target.value))} className="accent-accent w-28" />
+              </label>
               <button type="button" className={chip} aria-pressed={tilesOn} onClick={() => setTilesOn((t) => !t)} title="Load OpenStreetMap tiles — the one feature that makes a network request">
                 {tilesOn ? 'Map: tiles' : 'Map: offline'}
               </button>

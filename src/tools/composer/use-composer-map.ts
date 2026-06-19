@@ -54,14 +54,17 @@ export function useComposerMap(
   containerRef: RefObject<HTMLDivElement | null>,
   track: TrackPoint[],
   tilesOn: boolean,
+  zoomOffset: number,
 ): ComposerMap {
   const mapRef = useRef<MlMap | null>(null);
   const trackRef = useRef(track);
   trackRef.current = track;
+  const offsetRef = useRef(zoomOffset);
+  offsetRef.current = zoomOffset;
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(false);
 
-  /** Frame the whole track in the current viewport. */
+  /** Frame the whole track, then apply the user's zoom offset. */
   const fitTrack = useCallback((map: MlMap) => {
     const b = trackBounds(trackRef.current);
     if (!b) return;
@@ -69,11 +72,12 @@ export function useComposerMap(
       map.jumpTo({ center: b.min, zoom: 15 });
     } else {
       map.fitBounds([b.min, b.max] as LngLatBoundsLike, {
-        padding: 30,
+        padding: 40,
         animate: false,
         maxZoom: 16,
       });
     }
+    map.setZoom(Math.max(0, map.getZoom() + offsetRef.current));
   }, []);
 
   useEffect(() => {
@@ -142,6 +146,12 @@ export function useComposerMap(
     (map.getSource('track') as GeoJSONSource | undefined)?.setData(lineFeature(track));
     fitTrack(map);
   }, [ready, track, fitTrack]);
+
+  // Re-frame when the user changes the zoom offset.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (ready && map) fitTrack(map);
+  }, [ready, zoomOffset, fitTrack]);
 
   useEffect(() => {
     const map = mapRef.current;
