@@ -8,6 +8,9 @@ import {
   type ContainerInfo,
 } from '../../shared/media/video-metadata';
 import { useVideoScrub } from '../../shared/media/use-video-scrub';
+import { useTranscode } from '../../shared/media/use-transcode';
+import { transcodeStore } from '../../shared/media/transcode-store';
+import TranscodeControl from '../../shared/media/TranscodeControl';
 import { useLutPreview } from './use-lut-preview';
 import { useLutSelection } from './use-lut-selection';
 import LutPicker from './LutPicker';
@@ -96,6 +99,11 @@ export default function LutStudio() {
       : (clips[0]?.id ?? null);
   const activeClip = clips.find((c) => c.id === activeId) ?? null;
 
+  // If the active clip can't be decoded (often HEVC), the user can transcode it
+  // to H.264 in-browser; once ready, the preview and export use that instead.
+  const activeTranscode = useTranscode(activeClip?.file ?? null);
+  const activeSource = activeTranscode.transcoded ?? activeClip?.file ?? null;
+
   // --- clip helpers -------------------------------------------------------
 
   function updateClip(id: string, fn: (c: Clip) => Clip) {
@@ -153,27 +161,29 @@ export default function LutStudio() {
     if (activeId) lib.ensureMeta(activeId);
   }, [activeId, lib.ensureMeta]);
 
-  // Swap the preview source when the active clip changes.
+  // Swap the preview source when the active clip changes — or when its
+  // transcoded H.264 becomes ready (`activeSource` flips), which reloads the
+  // element and clears the prior decode error.
   useEffect(() => {
-    const clip = clipsRef.current.find((c) => c.id === activeId);
-    if (!clip) {
+    if (!activeSource) {
       setActiveUrl(null);
       return;
     }
-    const url = URL.createObjectURL(clip.file);
+    const url = URL.createObjectURL(activeSource);
     setActiveUrl(url);
     setActiveError(false);
-    setActiveInfo({});
     setTime(0);
     setPlaying(false);
     return () => URL.revokeObjectURL(url);
-  }, [activeId]);
+  }, [activeSource]);
 
-  // Probe the active clip's container for codec + fps (best-effort).
+  // Probe the active clip's container for codec + fps (best-effort). Probes the
+  // original file so the readout reflects the source codec even after transcode.
   useEffect(() => {
     const clip = clipsRef.current.find((c) => c.id === activeId);
     if (!clip) return;
     let cancelled = false;
+    setActiveInfo({});
     probeContainer(clip.file).then((info) => {
       if (!cancelled) setActiveInfo(info);
     });
@@ -287,7 +297,13 @@ export default function LutStudio() {
     exportAbort.current = controller;
     try {
       await runBatchExport(
-        clips.map((c) => ({ id: c.id, file: c.file, name: c.name })),
+        // Prefer a clip's transcoded H.264 (if it was made for preview): the
+        // WebCodecs pipeline can decode it, where the HEVC original would fail.
+        clips.map((c) => ({
+          id: c.id,
+          file: transcodeStore.get(c.file).file ?? c.file,
+          name: c.name,
+        })),
         lut,
         intensity,
         {
@@ -578,11 +594,14 @@ export default function LutStudio() {
           )}
 
           {activeError && (
-            <p className="my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-[#eccabf] text-[#7c2e1c] text-[0.86rem] leading-[1.55]">
-              This clip failed to decode. DJI footage is often HEVC/H.265, which
-              not every browser plays natively — try Safari (best HEVC support)
-              or transcode to H.264.
-            </p>
+            <div className="my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-[#eccabf] text-[#7c2e1c] text-[0.86rem] leading-[1.55] flex flex-col gap-3">
+              <p className="m-0">
+                This clip failed to decode. DJI footage is often HEVC/H.265,
+                which not every browser plays natively. Transcode it to H.264 to
+                grade it here (or try Safari, which decodes HEVC best).
+              </p>
+              <TranscodeControl state={activeTranscode} />
+            </div>
           )}
 
           {cubeError && (

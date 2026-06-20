@@ -110,4 +110,9 @@ const BASE = process.env.BASE_PATH ?? `/${REPO}/`;
 export default defineConfig({
   plugins: [react(), tailwindcss(), lutsManifestPlugin()],
   base: BASE,
+  // ffmpeg.wasm (the HEVC→H.264 transcode fallback) spins up a module worker and
+  // is loaded lazily; don't let dev pre-bundling rewrite its worker URL, and emit
+  // ES-format workers so the production build matches.
+  optimizeDeps: { exclude: ['@ffmpeg/ffmpeg'] },
+  worker: { format: 'es' },
 });

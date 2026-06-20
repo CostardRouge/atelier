@@ -237,24 +237,31 @@ two compared files are ever decoded; nothing uploads. The wipe maths and the
 A/B pair reconciliation (keeping a valid pair as the selection changes) are
 pure and unit-tested.
 
-## Known limitation — HEVC / H.265 codec
+## HEVC / H.265 footage
 
 Recent DJI drones often record in **HEVC / H.265**, which not every browser
 decodes natively (Chrome's support is inconsistent depending on the OS; Safari
-handles it best). **If the telemetry loads but the video stays black, that's the
-codec, not a bug.** In the gallery this surfaces as:
+handles it best). When a clip can't be decoded it shows as a black frame with a
+**"playback unavailable"** placeholder, and any export that relies on decoding it
+would fail.
 
-- A "playback unavailable (codec not supported)" placeholder instead of the
-  inline video.
-- "duration unavailable" on the card.
-- **Telemetry still works fully** — the `.srt` is plain text, so the summary and
-  the detailed synced view are unaffected even when the video can't decode.
+**The fix is built in.** A **"Transcode to H.264"** button appears on every clip
+the browser can't decode — in the gallery, LUT Studio and Telemetry Overlay. It
+runs a real ffmpeg, compiled to WebAssembly, **entirely on your machine**
+(nothing uploads) and rewrites the clip to H.264. Once it finishes, that clip
+plays, grades and exports everywhere like any other. The ~31 MB ffmpeg core is
+fetched once, on first use, from a CDN and then cached by the browser;
+transcoding is CPU-bound and slower than real time, so it's opt-in per clip.
 
-Options: try a different browser (Safari is the most reliable for HEVC), or
-transcode to H.264, e.g. `ffmpeg -i in.mp4 -c:v libx264 out.mp4`.
+Notes:
 
-Guaranteed decoding (and real thumbnails) will come with a future native app
-(Tauri) bundling ffmpeg — at which point only the file-access layer changes.
+- **Telemetry never needed this** — the `.srt` is plain text, so the summary and
+  the synced view work even before (or without) a transcode.
+- The alternatives still apply: open the clip in Safari (the most reliable HEVC
+  decoder), or transcode on the command line, e.g.
+  `ffmpeg -i in.mp4 -c:v libx264 out.mp4`.
+- A future native app (Tauri) will bundle ffmpeg for guaranteed decoding and
+  real thumbnails without the in-browser download.
 
 ## Architecture
 

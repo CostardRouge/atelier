@@ -6,6 +6,8 @@ import { formatBytes, formatDuration } from '../../shared/lib/format';
 import { pickFile, SRT_ACCEPT, VIDEO_ACCEPT } from '../../shared/sources/file-sources';
 import { useActiveCue } from './use-active-cue';
 import { LiveTelemetry } from './telemetry-view';
+import { useTranscode } from '../../shared/media/use-transcode';
+import TranscodeControl from '../../shared/media/TranscodeControl';
 
 interface VideoCardProps {
   pair: MediaPair;
@@ -65,19 +67,26 @@ export default function VideoCard({
 
   const { video, srt } = pair;
 
+  // When the browser can't decode the source (often HEVC), the user can
+  // transcode it to H.264 in-browser; once ready we play that instead.
+  const transcode = useTranscode(video);
+  const source = transcode.transcoded ?? video;
+
   // Create the object URL only when the card is visible and a video exists;
-  // revoke on unmount or when the video changes. Never hold 50 URLs open.
+  // revoke on unmount or when the source changes. Never hold 50 URLs open.
+  // `source` flips to the transcoded file when one becomes ready, which reloads
+  // the element and clears the prior decode error.
   useEffect(() => {
-    if (!inView || !video) return;
+    if (!inView || !source) return;
     setVideoError(false);
     setDuration(undefined);
-    const url = URL.createObjectURL(video);
+    const url = URL.createObjectURL(source);
     setVideoUrl(url);
     return () => {
       URL.revokeObjectURL(url);
       setVideoUrl(null);
     };
-  }, [inView, video]);
+  }, [inView, source]);
 
   // Parse the (small, text) SRT lazily once visible.
   useEffect(() => {
@@ -159,9 +168,16 @@ export default function VideoCard({
             />
           ) : (
             <div className="w-full aspect-video flex items-center justify-center bg-frame text-[#8c8576] text-[0.78rem] text-center p-4 font-mono leading-[1.5]">
-              {videoError
-                ? 'Playback unavailable (codec not supported by this browser)'
-                : '…'}
+              {videoError ? (
+                <div className="flex flex-col items-center gap-3">
+                  <span>
+                    Playback unavailable (codec not supported by this browser)
+                  </span>
+                  <TranscodeControl state={transcode} />
+                </div>
+              ) : (
+                '…'
+              )}
             </div>
           )
         ) : (

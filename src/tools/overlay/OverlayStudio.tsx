@@ -4,6 +4,8 @@ import { selectedUsableAssets } from '../../shared/library/capabilities';
 import { formatDuration } from '../../shared/lib/format';
 import { isEncodeSupported } from '../../shared/media/webcodecs-export';
 import { useVideoScrub } from '../../shared/media/use-video-scrub';
+import { useTranscode } from '../../shared/media/use-transcode';
+import TranscodeControl from '../../shared/media/TranscodeControl';
 import { probeContainer, type ContainerInfo } from '../../shared/media/video-metadata';
 import { parseSrt, type Cue } from '../telemetry/srt-parser';
 import { findCue } from '../telemetry/find-cue';
@@ -109,6 +111,11 @@ export default function OverlayStudio() {
   const activeClip = clips.find((c) => c.id === activeId) ?? null;
   const activeIndex = clips.findIndex((c) => c.id === activeId);
 
+  // If the active clip can't be decoded (often HEVC), the user can transcode it
+  // to H.264 in-browser; once ready, the preview and export use that instead.
+  const activeTranscode = useTranscode(activeClip?.video ?? null);
+  const activeSource = activeTranscode.transcoded ?? activeClip?.video ?? null;
+
   // --- selection plumbing -------------------------------------------------
 
   // Reflect the effective active clip back to the library, so the sidebar
@@ -121,22 +128,27 @@ export default function OverlayStudio() {
     if (activeId) lib.ensureMeta(activeId);
   }, [activeId, lib.ensureMeta]);
 
-  // Swap the preview source when the active clip changes.
+  // Swap the preview source when the active clip changes — or when its
+  // transcoded H.264 becomes ready (`activeSource` flips), which reloads the
+  // element and clears the prior decode error.
   useEffect(() => {
-    if (!activeClip) {
+    if (!activeSource) {
       setActiveUrl(null);
       return;
     }
-    const url = URL.createObjectURL(activeClip.video);
+    const url = URL.createObjectURL(activeSource);
     setActiveUrl(url);
     setActiveError(false);
-    setActiveInfo({});
     setTime(0);
     setPlaying(false);
+    return () => URL.revokeObjectURL(url);
+  }, [activeSource]);
+
+  // Reset export feedback and stale codec info when the active clip changes.
+  useEffect(() => {
+    setActiveInfo({});
     setExportDone(false);
     setExportError(null);
-    return () => URL.revokeObjectURL(url);
-    // activeClip identity is stable for a given id; key on the id.
   }, [activeId]);
 
   // Parse the active clip's telemetry.
@@ -325,18 +337,21 @@ export default function OverlayStudio() {
     const controller = new AbortController();
     exportAbort.current = controller;
     const meta = lib.meta.get(activeClip.id);
+    // Prefer the transcoded H.264 (if one was made for preview): WebCodecs can
+    // decode it directly, where the HEVC original would fall back or fail.
+    const transcoded = activeTranscode.transcoded;
     try {
       await exportOverlay(
-        activeClip.video,
+        transcoded ?? activeClip.video,
         cues,
         elements,
         lutSel.lut,
         lutSel.intensity,
         {
-          codec: activeInfo.codec,
+          codec: transcoded ? undefined : activeInfo.codec,
           width: meta?.width,
           height: meta?.height,
-          videoPlayable: !activeError,
+          videoPlayable: transcoded ? true : !activeError,
         },
         (p) => {
           if (p.phase === 'encoding' && p.ratio != null) setExportRatio(p.ratio);
@@ -514,11 +529,15 @@ export default function OverlayStudio() {
           )}
 
           {activeError && (
-            <p className={notice}>
-              This clip failed to decode for preview. DJI footage is often
-              HEVC/H.265 — try Safari (best HEVC support) or transcode to H.264.
-              Overlays still preview over the last frame.
-            </p>
+            <div className={`${notice} flex flex-col gap-3`}>
+              <p className="m-0">
+                This clip failed to decode for preview. DJI footage is often
+                HEVC/H.265. Transcode it to H.264 to edit and export here (or try
+                Safari, which decodes HEVC best). Overlays still preview over the
+                last frame.
+              </p>
+              <TranscodeControl state={activeTranscode} />
+            </div>
           )}
           {activeClip && cues.length === 0 && (
             <p className={notice}>

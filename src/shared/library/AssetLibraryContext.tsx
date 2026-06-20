@@ -11,6 +11,7 @@ import {
 import { buildAssets, fileIdentity, type Asset } from './assets';
 import { loadClipMeta } from '../media/video-metadata';
 import { imageTypeLabel, loadImageMeta } from '../media/image-meta';
+import { transcodeStore } from '../media/transcode-store';
 
 /**
  * The global asset library — a thin, app-wide store of `File` handles plus a
@@ -317,6 +318,8 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
     }
     metaRef.current = new Map();
     setMeta(metaRef.current);
+    // Drop any cached/in-flight transcodes — their source files are leaving.
+    transcodeStore.clear();
     verdictsRef.current = new Map();
     setVerdicts(verdictsRef.current);
     setFiles([]);
