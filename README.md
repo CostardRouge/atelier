@@ -16,8 +16,8 @@ Today it ships nine tools, with more planned:
 - **Flight Map** — trace a DJI clip's GPS path on a map and scrub the video to
   walk the aircraft along it (the base map is opt-in — see below).
 - **Composer** — combine a clip, its flight map and a draggable telemetry
-  readout into one framed composition (aspect, layout, LUT), previewed live
-  (MP4 export coming next).
+  readout into one framed composition (aspect, layout, LUT), preview it live,
+  and export it to MP4.
 - **Photo EXIF** — inspect a photo's metadata (camera, lens, the full exposure
   triplet and GPS location) read straight from the file — the photo counterpart
   to Telemetry.
@@ -210,8 +210,17 @@ the map's WebGL canvas into their computed panes, then the readout on top. The
 map runs as a non-interactive MapLibre instance with `preserveDrawingBuffer` so
 its canvas can be composited, and its marker is a GL layer (a DOM marker
 wouldn't be captured). The pane/object-fit geometry (`compose-layout.ts`) and the
-readout model (`overlay.ts`) are pure and unit-tested. **MP4 export of the
-composition is the next step**; this ships the live composer.
+readout model (`overlay.ts`) are pure and unit-tested.
+
+**MP4 export** reuses the shared WebCodecs pipeline (`exportProcessedVideo`) with
+an `outputSize` set to the composition frame, and a processor that draws each
+decoded frame's composite exactly as the preview does — the same
+`compose-layout`, `draw-readout` and frame-grader. Since that per-frame draw is
+synchronous, the map can't be re-rendered per frame: instead a full-resolution
+export map is built once, framed to the whole track, rendered, and **snapshotted**;
+each frame draws that snapshot and places the aircraft marker via `map.project()`.
+Audio is copied through untouched. HEVC that the browser can't decode surfaces a
+clear message (no seek fallback yet).
 
 ## Compare A/B tool
 
