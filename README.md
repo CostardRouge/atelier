@@ -4,7 +4,7 @@ A local-first **suite of browser tools for your captures** — photo and video,
 across devices (DJI, Apple, Sony, …). Everything runs in your browser; files
 never leave your machine — no upload, no account, no server.
 
-Today it ships four tools, with more planned:
+Today it ships nine tools, with more planned:
 
 - **Cull** — rip through a shoot: rate clips and photos 1–5, flag picks and
   rejects, filter to the keepers, then copy them straight into an album folder
@@ -13,8 +13,27 @@ Today it ships four tools, with more planned:
   was captured with.
 - **Telemetry Overlay** — place altitude, GPS and exposure readouts anywhere on
   a DJI clip and export an MP4 with the telemetry burned in.
+- **Flight Map** — trace a DJI clip's GPS path on a map and scrub the video to
+  walk the aircraft along it (the base map is opt-in — see below).
+- **Composer** — combine a clip, its flight map and a draggable telemetry
+  readout into one framed composition (aspect, layout, LUT), previewed live
+  (MP4 export coming next).
+- **Photo EXIF** — inspect a photo's metadata (camera, lens, the full exposure
+  triplet and GPS location) read straight from the file — the photo counterpart
+  to Telemetry.
+- **Compare A/B** — lay any two photos or clips under a draggable before/after
+  divider, with synced playback when both are clips.
 - **LUT Studio** — preview and batch-apply `.cube` colour LUTs to your footage in
   real time, with a before/after wipe.
+- **Scopes** — read a photo or clip with broadcast scopes (histogram, waveform,
+  vectorscope), updating live as a clip plays — the analytical companion to LUT
+  Studio.
+
+> **The one network exception.** Everything above runs offline and uploads
+> nothing. The single feature that can make a network request is the Flight
+> Map's *optional* base map: turning it on fetches map tiles from OpenStreetMap,
+> which reveals the viewed area to that tile server. It's off by default — the
+> flight path itself always draws locally.
 
 Tools that consume the same kinds of files (photos, videos, DJI clips) share a
 single **asset library**: import a folder once and switch tools freely — each
@@ -119,6 +138,96 @@ npm run build      # production build into dist/
 npm run preview    # serve the production build locally
 ```
 
+## Photo EXIF tool
+
+The photo counterpart to Telemetry: select photos in the library and read their
+embedded metadata — camera body, lens, the exposure triplet (shutter, aperture,
+ISO), exposure bias, focal length, and GPS location (with a one-click
+OpenStreetMap link, opened only when *you* click it). The gallery shows a
+camera/exposure line per photo; the full view lays out Camera, Exposure, Image
+and Location panels beside a large preview.
+
+EXIF is read straight from the bytes by a small **dependency-free parser**
+(`exif-parser.ts`): it walks the JPEG `APP1` segment, or — since DNG and most
+camera RAW begin with a TIFF header — the TIFF IFDs directly, so **RAW files
+report their settings even when the browser can't decode a preview**. Only the
+first 256 KB of each file is read, lazily as a card scrolls into view, and every
+offset is bounds-checked so a truncated read just drops the fields it can't
+reach. The parser and the value formatters are pure and unit-tested, including a
+hand-built TIFF fixture and the GPS DMS-to-decimal conversion.
+
+## Flight Map tool
+
+Plots a DJI clip's GPS track on a map and moves a marker along it as the video
+plays or scrubs — the spatial counterpart to the Telemetry tool, reading the
+**same parsed cues**. The marker is driven by the very same `useActiveCue` hook
+the Telemetry panels use, so it stays frame-accurate.
+
+The path always draws **offline**: MapLibre renders the track line on a plain
+backdrop with no tiles, so nothing leaves the machine. A **"Load map
+background"** toggle adds an OpenStreetMap raster layer on demand — the only
+thing in the suite that makes a network request, surfaced explicitly because it
+reveals the viewed area to the tile server.
+
+MapLibre is a heavier dependency, so it's **dynamically imported** (JS *and*
+CSS): it stays out of the main bundle and downloads only when you open this
+tool. The cue-to-track extraction (filtering null-island fixes, bounds, line
+coordinates) is pure and unit-tested; the map glue lives in `use-flight-map.ts`.
+
+## Scopes tool
+
+Broadcast-style scopes for a photo or video frame — the analytical companion to
+LUT Studio:
+
+- **Histogram** — per-channel (RGB) or luma value distribution.
+- **Waveform** — brightness per image column (luma, or an RGB parade), so you
+  read exposure across the frame left-to-right.
+- **Vectorscope** — pixels plotted on the Rec.709 Cb/Cr plane with a skin-tone
+  guide, so you read hue and saturation; neutral greys sit dead centre.
+
+The frame is downscaled (long edge 320 px) and read locally with a `<canvas>` —
+nothing is uploaded. For a clip the scopes update **live** on a
+`requestAnimationFrame` loop while it plays and refresh on every seek. The scope
+maths (`scopes.ts`: histogram bins, waveform column grids, the Cb/Cr plot) is
+pure and unit-tested; only the drawing touches the canvas.
+
+## Composer tool
+
+Brings the suite's pieces together: a DJI clip, its **flight map**, and a
+**draggable telemetry readout**, composited into one framed video. Pick the
+output **aspect** (16:9, 9:16, 1:1, 4:5) and **resolution**, a **layout** (video
+and map side-by-side, stacked, or one inset over the other), per-pane
+**object-fit** (cover/contain), and a **LUT** for the footage; drag the readout
+anywhere; then **play/pause** to preview the whole assembly in real time.
+
+The map can **fit the whole track** or **follow the aircraft** (centred, panning
+with it as the clip plays), with a zoom-offset slider on top of the auto-fit.
+The readout is fully configurable — which fields show, label prefixes, text and
+background colour/opacity, corner radius, font and size — and can be toggled off.
+
+It's a single `<canvas>` compositor: each frame draws the (LUT-graded) video and
+the map's WebGL canvas into their computed panes, then the readout on top. The
+map runs as a non-interactive MapLibre instance with `preserveDrawingBuffer` so
+its canvas can be composited, and its marker is a GL layer (a DOM marker
+wouldn't be captured). The pane/object-fit geometry (`compose-layout.ts`) and the
+readout model (`overlay.ts`) are pure and unit-tested. **MP4 export of the
+composition is the next step**; this ships the live composer.
+
+## Compare A/B tool
+
+The LUT before/after wipe, generalised to **two different files**. Pick any two
+photos or clips from the library and drag a divider across the stage — A on the
+left, B on the right. Where the LUT wipe runs one source through a shader split,
+this layers two media and clips the top one with a `clip-path` inset, so it
+compares two distinct grades, two takes, or a retouch against its original.
+
+When both sides are clips, a single transport drives them together: play/pause
+and scrub seek both, and a light drift-correction keeps the follower locked to
+the leader, so two exports of the same shot line up frame-for-frame. Only the
+two compared files are ever decoded; nothing uploads. The wipe maths and the
+A/B pair reconciliation (keeping a valid pair as the selection changes) are
+pure and unit-tested.
+
 ## Known limitation — HEVC / H.265 codec
 
 Recent DJI drones often record in **HEVC / H.265**, which not every browser
@@ -176,12 +285,32 @@ src/
 │   │   ├── draw-overlays.ts    # pure canvas draw of the readout elements
 │   │   ├── export-overlay.ts   # frame-by-frame seek + re-encode
 │   │   └── OverlayStudio.tsx · ElementPanel.tsx · GuidesControl.tsx
-│   └── lut/                    # colour grading (generic, multi-device LUTs)
-│       ├── LutStudio.tsx · LutPicker.tsx
-│       ├── lut-gl.ts           # WebGL2 LUT renderer
-│       ├── frame-grader.ts · export-video.ts · batch-export.ts · clip.ts
-│       ├── builtin-luts.ts     # reads the build-time virtual:luts manifest
-│       └── use-lut-preview.ts · use-lut-selection.ts
+│   ├── exif/                   # read photo EXIF (camera, lens, exposure, GPS)
+│   │   ├── exif-parser.ts      # dependency-free JPEG/TIFF EXIF reader
+│   │   ├── exif-format.ts      # pure value formatters (shutter, f-stop, GPS…)
+│   │   ├── use-exif.ts         # lazily read + parse a file's leading bytes
+│   │   └── ExifTool.tsx · Gallery.tsx · PhotoCard.tsx · DetailView.tsx
+│   ├── compare/                # A/B before/after wipe over two media
+│   │   ├── compare.ts          # pure: clamp, clip-path inset, pair reconcile
+│   │   └── CompareTool.tsx     # layered stage + divider + synced transport
+│   ├── map/                    # GPS flight path on a map (MapLibre)
+│   │   ├── flight-path.ts      # pure: cues → track points, bounds, line coords
+│   │   ├── use-flight-map.ts   # lazily-imported MapLibre map + marker + tiles
+│   │   └── MapTool.tsx         # clip switcher + map stage + synced video
+│   ├── composer/               # video + map + telemetry → one composition
+│   │   ├── compose-layout.ts   # pure: pane rects, object-fit, output size
+│   │   ├── use-composer-map.ts # MapLibre map for compositing (GL marker)
+│   │   └── ComposerTool.tsx    # canvas compositor + live preview
+│   ├── lut/                    # colour grading (generic, multi-device LUTs)
+│   │   ├── LutStudio.tsx · LutPicker.tsx
+│   │   ├── lut-gl.ts           # WebGL2 LUT renderer
+│   │   ├── frame-grader.ts · export-video.ts · batch-export.ts · clip.ts
+│   │   ├── builtin-luts.ts     # reads the build-time virtual:luts manifest
+│   │   └── use-lut-preview.ts · use-lut-selection.ts
+│   └── scopes/                 # histogram / waveform / vectorscope
+│       ├── scopes.ts           # pure: pixels → scope data (unit-tested)
+│       ├── draw-scopes.ts      # canvas drawing of each scope
+│       └── ScopesTool.tsx      # frame sampler + live scope rendering
 ├── index.css
 └── main.tsx
 ```

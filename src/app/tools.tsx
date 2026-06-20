@@ -1,8 +1,13 @@
 import type { ComponentType } from 'react';
 import type { AssetKind } from '../shared/library/assets';
+import CompareTool from '../tools/compare/CompareTool';
+import ComposerTool from '../tools/composer/ComposerTool';
 import CullTool from '../tools/cull/CullTool';
+import ExifTool from '../tools/exif/ExifTool';
 import LutStudio from '../tools/lut/LutStudio';
+import MapTool from '../tools/map/MapTool';
 import OverlayStudio from '../tools/overlay/OverlayStudio';
+import ScopesTool from '../tools/scopes/ScopesTool';
 import TelemetryTool from '../tools/telemetry/TelemetryTool';
 
 /**
@@ -63,6 +68,46 @@ export const TOOLS: Tool[] = [
     accepts: ['video+telemetry'],
   },
   {
+    id: 'map',
+    path: '/map',
+    label: 'Flight Map',
+    subtitle: 'GPS flight path',
+    blurb:
+      'Trace a DJI clip’s GPS path on a map and scrub the video to walk the aircraft along it. Draws offline; the map background is opt-in.',
+    Component: MapTool,
+    accepts: ['video+telemetry', 'telemetry'],
+  },
+  {
+    id: 'composer',
+    path: '/composer',
+    label: 'Composer',
+    subtitle: 'Video + map + telemetry',
+    blurb:
+      'Compose a DJI clip with its flight map and a draggable telemetry readout into one frame — pick the aspect, layout and a LUT, and preview the assembly.',
+    Component: ComposerTool,
+    accepts: ['video+telemetry'],
+  },
+  {
+    id: 'exif',
+    path: '/exif',
+    label: 'Photo EXIF',
+    subtitle: 'Camera · lens · GPS',
+    blurb:
+      'Inspect any photo’s metadata — camera, lens, the full exposure triplet and GPS location — read straight from the file, even RAW.',
+    Component: ExifTool,
+    accepts: ['photo'],
+  },
+  {
+    id: 'compare',
+    path: '/compare',
+    label: 'Compare A/B',
+    subtitle: 'Before/after wipe',
+    blurb:
+      'Lay any two photos or clips side by side under a draggable divider — two grades, two takes, before and after — with synced playback for clips.',
+    Component: CompareTool,
+    accepts: ['photo', 'video'],
+  },
+  {
     id: 'lut',
     path: '/lut',
     label: 'LUT Studio',
@@ -71,6 +116,16 @@ export const TOOLS: Tool[] = [
       'Preview .cube LUTs on your footage with a before/after wipe, then batch-export the graded clips.',
     Component: LutStudio,
     accepts: ['video'],
+  },
+  {
+    id: 'scopes',
+    path: '/scopes',
+    label: 'Scopes',
+    subtitle: 'Histogram · waveform · vectorscope',
+    blurb:
+      'Read a photo or clip with broadcast scopes — histogram, waveform and vectorscope — updating live as the clip plays. The analytical companion to LUT Studio.',
+    Component: ScopesTool,
+    accepts: ['photo', 'video'],
   },
 ];
 
