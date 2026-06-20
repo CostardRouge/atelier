@@ -60,6 +60,14 @@ export interface ExportOptions {
    * exactly. Default false (cheaper, fine for orientation-independent passes).
    */
   bakeRotation?: boolean;
+  /**
+   * Encode at this exact size instead of the source video's dimensions. For
+   * compositions (a frame larger/other-shaped than the clip), where the
+   * processor draws the video into a pane and returns a canvas of this size.
+   * The processor must orient the decoded frame itself (it gets `rotation`);
+   * the muxer rotation is forced to 0.
+   */
+  outputSize?: { width: number; height: number };
 }
 
 /**
@@ -336,9 +344,17 @@ export async function exportProcessedVideo(
   const rotation = rotationFromMatrix(videoTrack.matrix);
   const bakeRotation = options.bakeRotation ?? false;
   const swap = bakeRotation && (rotation === 90 || rotation === 270);
-  const outputWidth = swap ? height : width;
-  const outputHeight = swap ? width : height;
-  const muxerRotation = bakeRotation ? 0 : rotation;
+  let outputWidth = swap ? height : width;
+  let outputHeight = swap ? width : height;
+  let muxerRotation = bakeRotation ? 0 : rotation;
+
+  // A composition encodes at its own size; the processor returns a canvas of
+  // this size and orients the decoded frame itself, so no rotation flag.
+  if (options.outputSize) {
+    outputWidth = 2 * Math.round(options.outputSize.width / 2);
+    outputHeight = 2 * Math.round(options.outputSize.height / 2);
+    muxerRotation = 0;
+  }
 
   // Frame rate from the actual sample durations.
   const timescale = videoSamples[0].timescale;

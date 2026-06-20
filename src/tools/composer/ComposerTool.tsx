@@ -6,15 +6,8 @@ import { formatDuration } from '../../shared/lib/format';
 import { parseSrt, type Cue } from '../telemetry/srt-parser';
 import { useActiveCue } from '../telemetry/use-active-cue';
 import { extractTrack, parsePosition } from '../map/flight-path';
-import {
-  buildLines,
-  DEFAULT_OVERLAY,
-  FONT_STACK,
-  hexToRgba,
-  OVERLAY_FIELDS,
-  type OverlayConfig,
-  type OverlayFont,
-} from './overlay';
+import { DEFAULT_OVERLAY, OVERLAY_FIELDS, type OverlayConfig, type OverlayFont } from './overlay';
+import { drawReadout, type Box } from './draw-readout';
 import { makeFrameGrader, type FrameGrader } from '../lut/frame-grader';
 import { useLutSelection } from '../lut/use-lut-selection';
 import LutPicker from '../lut/LutPicker';
@@ -27,6 +20,17 @@ import {
   type LayoutKind,
 } from './compose-layout';
 import { useComposerMap } from './use-composer-map';
+import {
+  compositionName,
+  downloadBlob,
+  exportComposition,
+  type CompositionOptions,
+} from './export-composition';
+import {
+  DecodeUnsupportedError,
+  isExportSupported,
+  type ExportProgress,
+} from '../../shared/media/webcodecs-export';
 
 const COMPOSER_KINDS = ['video+telemetry'] as const;
 const PREVIEW_MAX = 1440;
@@ -67,68 +71,6 @@ function resolveActive(assets: readonly Asset[], id: string | null): Active | nu
   const a = assets.find((x) => x.id === id);
   if (!a || !a.parts.video || !a.parts.srt) return null;
   return { id, baseName: a.baseName, video: a.parts.video, srt: a.parts.srt };
-}
-
-function roundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-interface Box {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-/** Draw the telemetry readout per the overlay config; returns its box, or null. */
-function drawReadout(
-  ctx: CanvasRenderingContext2D,
-  cue: Cue | null,
-  pos: { x: number; y: number },
-  pw: number,
-  ph: number,
-  cfg: OverlayConfig,
-): Box | null {
-  if (!cfg.show) return null;
-  const lines = buildLines(cue, cfg);
-  if (lines.length === 0) return null;
-  const base = Math.max(10, Math.round(ph * 0.03));
-  const fs = Math.max(8, Math.round(base * cfg.fontScale));
-  const pad = Math.round(fs * 0.7);
-  ctx.font = `600 ${fs}px ${FONT_STACK[cfg.font]}`;
-  ctx.textBaseline = 'alphabetic';
-  let maxW = 0;
-  for (const l of lines) maxW = Math.max(maxW, ctx.measureText(l).width);
-  const lh = fs * 1.35;
-  const boxW = maxW + pad * 2;
-  const boxH = lines.length * lh + pad * 2 - (lh - fs);
-  const x = Math.min(Math.max(0, pos.x * pw), pw - boxW);
-  const y = Math.min(Math.max(0, pos.y * ph), ph - boxH);
-
-  ctx.fillStyle = hexToRgba(cfg.bgColor, cfg.bgOpacity);
-  roundRect(ctx, x, y, boxW, boxH, Math.min(cfg.radius, boxH / 2, boxW / 2));
-  ctx.fill();
-
-  ctx.fillStyle = cfg.textColor;
-  let ty = y + pad + fs * 0.85;
-  for (const l of lines) {
-    ctx.fillText(l, x + pad, ty);
-    ty += lh;
-  }
-  return { x, y, w: boxW, h: boxH };
 }
 
 export default function ComposerTool() {
@@ -190,6 +132,11 @@ export default function ComposerTool() {
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const [exportRatio, setExportRatio] = useState<number | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const exportAbort = useRef<AbortController | null>(null);
+  const exportSupported = isExportSupported();
 
   useEffect(() => {
     const srt = active?.srt;
@@ -361,6 +308,58 @@ export default function ComposerTool() {
     if (!v) return;
     if (v.paused) void v.play();
     else v.pause();
+  }
+
+  async function handleExport() {
+    if (!active || exporting) return;
+    videoRef.current?.pause();
+    setExportError(null);
+    setExporting(true);
+    setExportRatio(null);
+    const controller = new AbortController();
+    exportAbort.current = controller;
+    const cfg: CompositionOptions = {
+      outW: out.w,
+      outH: out.h,
+      layout,
+      split,
+      inset,
+      corner,
+      videoFit,
+      lut,
+      intensity,
+      overlay,
+      readoutPos,
+      cues,
+      track,
+      tilesOn,
+      zoomOffset,
+    };
+    try {
+      const blob = await exportComposition(
+        active.video,
+        cfg,
+        (p: ExportProgress) => setExportRatio(p.phase === 'encoding' ? p.ratio : null),
+        controller.signal,
+      );
+      downloadBlob(blob, compositionName(active.video.name));
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        /* cancelled — no message */
+      } else if (err instanceof DecodeUnsupportedError) {
+        setExportError(
+          err.isHevc
+            ? "This browser can't decode HEVC/H.265 for export. Try Safari, or transcode the clip to H.264 first."
+            : "This browser can't decode this clip's codec for export.",
+        );
+      } else {
+        setExportError(err instanceof Error ? err.message : 'Export failed.');
+      }
+    } finally {
+      setExporting(false);
+      setExportRatio(null);
+      exportAbort.current = null;
+    }
   }
 
   const dragRef = useRef<{ dx: number; dy: number } | null>(null);
@@ -633,15 +632,47 @@ export default function ComposerTool() {
             <span className="font-mono text-[0.74rem] tabular-nums text-muted flex-none">
               {formatDuration(duration)}
             </span>
-            <button
-              type="button"
-              disabled
-              className="flex-none px-[1.1rem] py-2 rounded-full border border-line-strong bg-paper text-muted text-[0.82rem] font-semibold cursor-default"
-              title="MP4 export of the composition arrives in the next update"
-            >
-              Export MP4 · soon
-            </button>
+            {exporting ? (
+              <>
+                <span className="font-mono text-[0.72rem] text-ink-soft flex-none tabular-nums min-w-[7ch] text-right">
+                  {exportRatio != null ? `${Math.round(exportRatio * 100)}%` : 'Rendering…'}
+                </span>
+                <button
+                  type="button"
+                  className="flex-none p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] hover:text-accent"
+                  onClick={() => exportAbort.current?.abort()}
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                disabled={!exportSupported}
+                className="flex-none px-[1.1rem] py-2 rounded-full border border-ink bg-ink text-paper text-[0.82rem] font-semibold cursor-pointer transition-colors hover:bg-accent hover:border-accent disabled:opacity-50 disabled:cursor-default"
+                onClick={handleExport}
+                title={
+                  exportSupported
+                    ? 'Render the composition to an MP4'
+                    : 'Export needs WebCodecs — try Chrome or Edge'
+                }
+              >
+                Export MP4
+              </button>
+            )}
           </div>
+
+          {exportError && (
+            <p className="flex-none m-0 px-4 py-2 rounded-paper bg-accent-wash border border-[#eccabf] text-[#7c2e1c] text-[0.82rem]">
+              {exportError}
+            </p>
+          )}
+          {!exportSupported && !exportError && (
+            <p className="flex-none m-0 text-[0.76rem] text-muted px-1">
+              MP4 export needs WebCodecs (Chrome/Edge); the live preview works
+              everywhere.
+            </p>
+          )}
         </>
       )}
 
