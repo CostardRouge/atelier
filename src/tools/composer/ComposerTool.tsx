@@ -334,6 +334,7 @@ export default function ComposerTool() {
       track,
       tilesOn,
       zoomOffset,
+      previewScale,
     };
     try {
       const blob = await exportComposition(
