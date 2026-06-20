@@ -24,7 +24,7 @@ export default function Grid({
 }: GridProps) {
   return (
     <div
-      className={`grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-1.5 content-start overflow-y-auto ${className ?? ''}`}
+      className={`grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] auto-rows-min gap-1.5 content-start overflow-y-auto ${className ?? ''}`}
     >
       {assets.map((a) => (
         <Cell
