@@ -54,12 +54,12 @@ export const OVERLAY_FIELDS: OverlayField[] = [
 
 export const DEFAULT_OVERLAY: OverlayConfig = {
   show: true,
-  fields: { altitude: true, speed: true, vspeed: false, heading: true, coords: true, absAlt: false },
-  labels: true,
+  fields: { altitude: true, speed: true, vspeed: true, heading: false, coords: true, absAlt: false },
+  labels: false,
   textColor: '#ffffff',
   bgColor: '#0f0e0c',
   bgOpacity: 0.55,
-  radius: 8,
+  radius: 0,
   fontScale: 1,
   font: 'mono',
 };

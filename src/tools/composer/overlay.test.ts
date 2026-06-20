@@ -14,22 +14,25 @@ function cue(): Cue {
 }
 
 describe('buildLines', () => {
-  it('includes active fields with labels, skipping missing values', () => {
+  it('includes active fields, skipping missing values', () => {
     const lines = buildLines(cue(), DEFAULT_OVERLAY);
-    expect(lines[0]).toBe('ALT 35.2 m');
-    expect(lines).toContain('GPS 48.8566, 2.3522');
-    // V/S is off by default → absent.
-    expect(lines.some((l) => l.startsWith('V/S'))).toBe(false);
+    // Labels are off by default → bare values, altitude first.
+    expect(lines[0]).toBe('35.2 m');
+    expect(lines).toContain('48.8566, 2.3522');
+    // V/S is on by default → present.
+    expect(lines).toContain('0.0 m/s');
   });
 
-  it('drops the prefix when labels are off', () => {
-    const lines = buildLines(cue(), { ...DEFAULT_OVERLAY, labels: false });
-    expect(lines[0]).toBe('35.2 m');
+  it('adds the prefix when labels are on', () => {
+    const lines = buildLines(cue(), { ...DEFAULT_OVERLAY, labels: true });
+    expect(lines[0]).toBe('ALT 35.2 m');
+    expect(lines).toContain('GPS 48.8566, 2.3522');
   });
 
   it('honours the active-field set', () => {
     const lines = buildLines(cue(), {
       ...DEFAULT_OVERLAY,
+      labels: true,
       fields: { altitude: true, speed: false, heading: false, coords: false },
     });
     expect(lines).toEqual(['ALT 35.2 m']);
