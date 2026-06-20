@@ -147,7 +147,7 @@ export default function ExportPanel({ mode, onModeChange }: ExportPanelProps) {
             Nothing ticked matches — pick the ratings/picks to export above, or switch to Triage to cull more.
           </p>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-1.5 content-start">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] auto-rows-min gap-1.5 content-start">
             {included.map((a) => (
               <Thumb
                 key={a.id}
