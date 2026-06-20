@@ -346,6 +346,13 @@ export default function ComposerTool() {
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
         /* cancelled — no message */
+      } else if (
+        err instanceof DOMException &&
+        (err.name === 'NotReadableError' || err.name === 'NotFoundError')
+      ) {
+        setExportError(
+          'Couldn’t read the video file. Clips opened from a folder can become unreadable after a while — re-add this clip to the Library (drag it in, or use “Add files”) and export again.',
+        );
       } else if (err instanceof DecodeUnsupportedError) {
         setExportError(
           err.isHevc

@@ -314,7 +314,7 @@ export function makeExportCanvas(
  * can't decode the source codec via WebCodecs.
  */
 export async function exportProcessedVideo(
-  file: File,
+  source: File | ArrayBuffer,
   makeProcessor: (ctx: FrameContext) => FrameProcessor,
   onProgress?: (p: ExportProgress) => void,
   signal?: AbortSignal,
@@ -329,7 +329,9 @@ export async function exportProcessedVideo(
   };
 
   onProgress?.({ phase: 'demuxing', ratio: null });
-  const buffer = await file.arrayBuffer();
+  // Accept already-read bytes so callers can read the file while its handle is
+  // freshest (files opened via the folder picker can otherwise go unreadable).
+  const buffer = source instanceof ArrayBuffer ? source : await source.arrayBuffer();
   const { videoTrack, videoSamples, audioTrack, audioSamples } = await demux(buffer);
   throwIfAborted();
 

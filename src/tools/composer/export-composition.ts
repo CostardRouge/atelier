@@ -154,12 +154,16 @@ export async function exportComposition(
   const outH = even(opts.outH);
   const rects = paneRects(outW, outH, opts.layout, opts.split, opts.inset, opts.corner);
 
+  // Read the clip up front — while its handle is freshest, and so an unreadable
+  // file fails fast (before the map setup) with a clear, recoverable error.
+  const buffer = await file.arrayBuffer();
+
   const exportMap = await buildExportMap(opts, rects.map.w, rects.map.h);
   const markerR = Math.max(4, Math.round(outH * 0.008));
 
   try {
     return await exportProcessedVideo(
-      file,
+      buffer,
       ({ codedWidth, codedHeight, rotation }): FrameProcessor => {
         const canvas = makeExportCanvas(outW, outH);
         const ctx = canvas.getContext('2d') as
