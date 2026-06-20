@@ -61,6 +61,9 @@ export interface CompositionOptions {
   track: TrackPoint[];
   tilesOn: boolean;
   zoomOffset: number;
+  /** How much smaller the on-screen preview is than this export (≤ 1), so the
+   * recorded map is framed at the same scale the user set up in the preview. */
+  previewScale: number;
 }
 
 interface ExportMap {
@@ -118,7 +121,7 @@ async function buildExportMap(
     await new Promise<void>((res) => map.once('load', () => res()));
     addTrackLine(map, opts.track);
     setTiles(map, opts.tilesOn);
-    const cam = cameraForTrack(map, opts.track);
+    const cam = cameraForTrack(map, opts.track, opts.previewScale);
     if (cam) map.jumpTo({ center: cam.center, zoom: Math.max(0, cam.zoom + opts.zoomOffset) });
     map.resize();
     await awaitIdle(map, 3000);
