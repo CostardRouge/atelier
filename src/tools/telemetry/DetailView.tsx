@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { MediaPair } from './pair-files';
 import { parseSrt, type Cue } from './srt-parser';
 import { pickFile, SRT_ACCEPT, VIDEO_ACCEPT } from '../../shared/sources/file-sources';
+import { useTranscode } from '../../shared/media/use-transcode';
 import TelemetryPlayer from './TelemetryPlayer';
 
 interface DetailViewProps {
@@ -28,18 +29,23 @@ export default function DetailView({
 
   const { video, srt } = pair;
 
+  // Lets the user convert an undecodable (often HEVC) clip to H.264 in-browser;
+  // once ready, play that instead of the original.
+  const transcode = useTranscode(video);
+  const source = transcode.transcoded ?? video;
+
   useEffect(() => {
-    if (!video) {
+    if (!source) {
       setVideoUrl(null);
       return;
     }
-    const url = URL.createObjectURL(video);
+    const url = URL.createObjectURL(source);
     setVideoUrl(url);
     return () => {
       URL.revokeObjectURL(url);
       setVideoUrl(null);
     };
-  }, [video]);
+  }, [source]);
 
   useEffect(() => {
     if (!srt) {
@@ -123,7 +129,7 @@ export default function DetailView({
         </p>
       )}
 
-      <TelemetryPlayer videoUrl={videoUrl} cues={cues} />
+      <TelemetryPlayer videoUrl={videoUrl} cues={cues} transcode={transcode} />
     </div>
   );
 }
