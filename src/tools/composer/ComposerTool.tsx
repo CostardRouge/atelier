@@ -80,16 +80,16 @@ export default function ComposerTool() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
 
   // --- output / layout settings -------------------------------------------
-  const [aspectId, setAspectId] = useState('16:9');
-  const [quality, setQuality] = useState(1280);
-  const [layout, setLayout] = useState<LayoutKind>('side-by-side');
+  const [aspectId, setAspectId] = useState('9:16');
+  const [quality, setQuality] = useState(1920);
+  const [layout, setLayout] = useState<LayoutKind>('stacked');
   const [split, setSplit] = useState(0.6);
   const [inset, setInset] = useState(0.3);
   const [corner, setCorner] = useState<Corner>('br');
   const [videoFit, setVideoFit] = useState<Fit>('cover');
-  const [tilesOn, setTilesOn] = useState(false);
+  const [tilesOn, setTilesOn] = useState(true);
   const [zoomOffset, setZoomOffset] = useState(0);
-  const [follow, setFollow] = useState(false);
+  const [follow, setFollow] = useState(true);
   const [overlay, setOverlay] = useState<OverlayConfig>(DEFAULT_OVERLAY);
   const [readoutPos, setReadoutPos] = useState({ x: 0.04, y: 0.8 });
 
