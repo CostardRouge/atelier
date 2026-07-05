@@ -137,3 +137,4 @@ dist
 
 # Scratch design mockups (throwaway artifacts, not part of the app)
 .mockups/
+.DS_Store
