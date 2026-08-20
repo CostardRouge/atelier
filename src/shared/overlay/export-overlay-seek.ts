@@ -17,8 +17,8 @@
  */
 
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
-import type { Cue } from '../../shared/telemetry/srt-parser';
-import { findCue } from '../../shared/telemetry/find-cue';
+import type { Cue } from '../telemetry/srt-parser';
+import { findCue } from '../telemetry/find-cue';
 import {
   awaitQueue,
   copyAudio,
@@ -28,9 +28,9 @@ import {
   makeExportCanvas,
   pickAvcCodec,
   type ExportProgress,
-} from '../../shared/media/webcodecs-export';
-import type { CubeLut } from '../../shared/lib/cube-parser';
-import { makeFrameGrader } from '../../shared/lut/frame-grader';
+} from '../media/webcodecs-export';
+import type { CubeLut } from '../lib/cube-parser';
+import { makeFrameGrader } from '../lut/frame-grader';
 import { drawOverlays } from './draw-overlays';
 import { ensureOverlayFonts } from './fonts';
 import type { OverlayElement } from './overlay-types';

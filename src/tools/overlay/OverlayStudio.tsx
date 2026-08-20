@@ -11,10 +11,10 @@ import TranscodeControl from '../../shared/media/TranscodeControl';
 import { probeContainer, type ContainerInfo } from '../../shared/media/video-metadata';
 import { parseSrt, type Cue } from '../../shared/telemetry/srt-parser';
 import { findCue } from '../../shared/telemetry/find-cue';
-import ElementList from './ElementList';
-import ElementPanel from './ElementPanel';
-import { exportOverlay } from './export-overlay';
-import { ensureOverlayFonts } from './fonts';
+import ElementList from '../../shared/overlay/ElementList';
+import ElementPanel from '../../shared/overlay/ElementPanel';
+import { exportOverlay } from '../../shared/overlay/export-overlay';
+import { ensureOverlayFonts } from '../../shared/overlay/fonts';
 import {
   createHeadingArrowElement,
   createTelemetryElement,
@@ -22,11 +22,11 @@ import {
   defaultElementsPreset,
   type OverlayElement,
   type TelemetryFieldKey,
-} from './overlay-types';
-import { reanchorInPlace } from './draw-overlays';
-import { DEFAULT_GUIDES, type GuidesState } from './guides';
-import GuidesControl from './GuidesControl';
-import { useOverlayStage } from './use-overlay-stage';
+} from '../../shared/overlay/overlay-types';
+import { reanchorInPlace } from '../../shared/overlay/draw-overlays';
+import { DEFAULT_GUIDES, type GuidesState } from '../../shared/overlay/guides';
+import GuidesControl from '../../shared/overlay/GuidesControl';
+import { useOverlayStage } from '../../shared/overlay/use-overlay-stage';
 import { useLutSelection } from '../../shared/lut/use-lut-selection';
 import LutPicker from '../../shared/lut/LutPicker';
 

@@ -8,8 +8,8 @@
  * falls back to the codec-agnostic seek path when WebCodecs can't decode.
  */
 
-import type { Cue } from '../../shared/telemetry/srt-parser';
-import { findCue } from '../../shared/telemetry/find-cue';
+import type { Cue } from '../telemetry/srt-parser';
+import { findCue } from '../telemetry/find-cue';
 import {
   DecodeUnsupportedError,
   drawRotatedFrame,
@@ -17,14 +17,14 @@ import {
   makeExportCanvas,
   type ExportProgress,
   type FrameProcessor,
-} from '../../shared/media/webcodecs-export';
-import type { CubeLut } from '../../shared/lib/cube-parser';
-import { makeFrameGrader } from '../../shared/lut/frame-grader';
-import { downloadBlob, outputName } from '../../shared/media/save';
+} from '../media/webcodecs-export';
+import type { CubeLut } from '../lib/cube-parser';
+import { makeFrameGrader } from '../lut/frame-grader';
+import { downloadBlob, outputName } from '../media/save';
 import { drawOverlays } from './draw-overlays';
 import { ensureOverlayFonts } from './fonts';
 import { exportOverlayVideoViaSeek } from './export-overlay-seek';
-import { decideExportPath, type ExportHint } from '../../shared/media/pick-export-path';
+import { decideExportPath, type ExportHint } from '../media/pick-export-path';
 import type { OverlayElement } from './overlay-types';
 
 /**

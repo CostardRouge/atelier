@@ -10,7 +10,7 @@
  * (no canvas), kept separate so they're unit-testable.
  */
 
-import type { Cue } from '../../shared/telemetry/srt-parser';
+import type { Cue } from '../telemetry/srt-parser';
 import { renderElementText } from './field-format';
 import type { Anchor, OverlayElement } from './overlay-types';
 

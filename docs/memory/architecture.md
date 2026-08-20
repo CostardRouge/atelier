@@ -26,6 +26,10 @@ Read before touching the shell (`src/app/`), the tool registry, the shared asset
 
 **Decision.** Since the Scopes and Cull tools were retired (phase 0 of the studio merge, PR #29), the only stored state is the sidebar collapse flag in `localStorage`; the old `atelier:verdicts:v1` key is actively cleaned up on load in `AssetLibraryContext`. **Why**: Cull was the sole consumer of triage verdicts. **How to apply**: the unified studio's project persistence (phase 2) starts from a blank slate — IndexedDB for project documents, directory handles and thumbnails; `localStorage` stays for UI preferences only. See `studio.md`.
 
+## The overlay engine is shared, not a tool internal (2026-08-21)
+
+**Decision.** Everything that defines, draws, edits and exports overlay elements — `overlay-types`, `field-format`, `draw-overlays`, `guides`, `draw-guides`, `fonts`, `use-overlay-stage`, `export-overlay(-seek)`, and the `ElementList`/`ElementPanel`/`GuidesControl` editing components — lives in `src/shared/overlay/`. `tools/overlay/` keeps only the page (`OverlayStudio.tsx`). **Why**: the unified studio (`tools/studio/`) builds on the same engine, and `shared/` never imports `tools/`, so the engine had to move rather than be reached tool-to-tool. **How to apply**: overlay capabilities (new element kinds, title styles, glow) are engine work under `shared/overlay/`, picked up by both pages for as long as the overlay page survives the transition; page-specific layout stays in each tool.
+
 ## Hash routing (2026-08-20)
 
 **Decision.** Navigation is hash-based (`#/telemetry`, `#/lut`) through a minimal `useSyncExternalStore` router. **Why**: the site is served as static files from GitHub Pages, where a history-API path would 404 on deep-link/refresh. **How to apply**: do not introduce a history-API router without solving the static-hosting fallback first.

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FIELD_KEYS, FIELD_SPECS, renderElementText } from './field-format';
-import type { Cue } from '../../shared/telemetry/srt-parser';
+import type { Cue } from '../telemetry/srt-parser';
 import type { OverlayElement, TelemetryFieldKey } from './overlay-types';
 
 interface ElementListProps {
