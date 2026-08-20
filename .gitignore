@@ -138,3 +138,14 @@ dist
 # Scratch design mockups (throwaway artifacts, not part of the app)
 .mockups/
 .DS_Store
+
+# Editor / IDE state — per-developer, never shared
+.idea/
+.vscode/
+
+# Vite build output (anchored: only the one at the repo root)
+/dist
+
+# Environment files — the real values live outside git (CI / hosting secrets)
+.env.*
+!.env.example
