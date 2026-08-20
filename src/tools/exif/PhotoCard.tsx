@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useInViewport } from '../../shared/lib/use-in-viewport';
+import { useObjectUrl } from '../../shared/media/use-object-url';
 import { formatBytes } from '../../shared/lib/format';
 import { imageTypeLabel } from '../../shared/media/image-meta';
 import { cameraLine, exposureLine } from './exif-format';
@@ -12,44 +14,15 @@ interface PhotoCardProps {
   onOpen: (photo: Photo) => void;
 }
 
-/** Defer heavy work (object URL, EXIF read) until the card scrolls into view. */
-function useInViewport<T extends Element>(): [React.RefObject<T>, boolean] {
-  const ref = useRef<T>(null);
-  const [inView, setInView] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || inView) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          setInView(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: '200px' },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [inView]);
-  return [ref, inView];
-}
-
 export default function PhotoCard({ photo, index, onOpen }: PhotoCardProps) {
   const [ref, inView] = useInViewport<HTMLDivElement>();
-  const [url, setUrl] = useState<string | null>(null);
   const [decodeError, setDecodeError] = useState(false);
   const exif = useExif(photo.image, inView);
 
   // Create the preview object URL only once visible; revoke on change/unmount.
+  const url = useObjectUrl(inView ? photo.image : null);
   useEffect(() => {
-    if (!inView) return;
-    setDecodeError(false);
-    const objectUrl = URL.createObjectURL(photo.image);
-    setUrl(objectUrl);
-    return () => {
-      URL.revokeObjectURL(objectUrl);
-      setUrl(null);
-    };
+    if (inView) setDecodeError(false);
   }, [inView, photo.image]);
 
   const camera = exif && cameraLine(exif);

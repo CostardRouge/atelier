@@ -4,6 +4,7 @@ import { imageTypeLabel } from '../../shared/media/image-meta';
 import { ExifPanels } from './exif-view';
 import { isEmptyExif, type ExifData } from './exif-parser';
 import { useExif } from './use-exif';
+import { useObjectUrl } from '../../shared/media/use-object-url';
 import type { Photo } from './photo';
 
 interface DetailViewProps {
@@ -18,7 +19,7 @@ interface DetailViewProps {
  * that gap so the Image panel still reads.
  */
 export default function DetailView({ photo, onBack }: DetailViewProps) {
-  const [url, setUrl] = useState<string | null>(null);
+  const url = useObjectUrl(photo.image);
   const [decodeError, setDecodeError] = useState(false);
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const exif = useExif(photo.image, true);
@@ -26,12 +27,6 @@ export default function DetailView({ photo, onBack }: DetailViewProps) {
   useEffect(() => {
     setDecodeError(false);
     setNatural(null);
-    const objectUrl = URL.createObjectURL(photo.image);
-    setUrl(objectUrl);
-    return () => {
-      URL.revokeObjectURL(objectUrl);
-      setUrl(null);
-    };
   }, [photo.image]);
 
   const typeLabel = imageTypeLabel(photo.image.name);

@@ -5,6 +5,7 @@ import { parseSrt, type Cue } from '../../shared/telemetry/srt-parser';
 import { useActiveCue } from '../../shared/telemetry/use-active-cue';
 import { formatHeading, formatGroundSpeed } from '../../shared/telemetry/motion';
 import { extractTrack, parsePosition } from '../../shared/telemetry/flight-path';
+import { useObjectUrl } from '../../shared/media/use-object-url';
 import { useFlightMap } from './use-flight-map';
 
 /** Asset kinds the flight map understands — it needs telemetry (the GPS). */
@@ -47,7 +48,7 @@ export default function MapTool() {
 
   // Parse the active clip's telemetry, and make a preview URL for its video.
   const [cues, setCues] = useState<Cue[]>([]);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const videoUrl = useObjectUrl(active?.video ?? null);
   const [tilesOn, setTilesOn] = useState(false);
 
   useEffect(() => {
@@ -65,17 +66,6 @@ export default function MapTool() {
       cancelled = true;
     };
   }, [active?.srt]);
-
-  useEffect(() => {
-    const video = active?.video;
-    if (!video) {
-      setVideoUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(video);
-    setVideoUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [active?.video]);
 
   const track = useMemo(() => extractTrack(cues), [cues]);
   const activeCue = useActiveCue(videoRef, cues, videoUrl);
