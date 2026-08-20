@@ -10,20 +10,6 @@
 
 import { createFile, MP4BoxBuffer, type Movie } from 'mp4box';
 
-/** Recognised video container extensions. */
-const VIDEO_EXT = /\.(mp4|mov|m4v)$/i;
-
-/** Keep only the video files from an arbitrary picked/dropped set. */
-export function filterVideos(files: File[]): File[] {
-  return files.filter((f) => {
-    // Skip hidden files and macOS AppleDouble sidecars (`._clip.mp4`,
-    // `.DS_Store`) — a folder pick on a Mac SD card is full of these, and
-    // `._clip.mp4` would otherwise sneak past an extension-only check.
-    if (f.name.startsWith('.')) return false;
-    return f.type.startsWith('video/') || VIDEO_EXT.test(f.name);
-  });
-}
-
 export interface ClipMeta {
   width: number;
   height: number;

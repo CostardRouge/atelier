@@ -7,8 +7,8 @@ import { useVideoScrub } from '../../shared/media/use-video-scrub';
 import { useTranscode } from '../../shared/media/use-transcode';
 import TranscodeControl from '../../shared/media/TranscodeControl';
 import { probeContainer, type ContainerInfo } from '../../shared/media/video-metadata';
-import { parseSrt, type Cue } from '../telemetry/srt-parser';
-import { findCue } from '../telemetry/find-cue';
+import { parseSrt, type Cue } from '../../shared/telemetry/srt-parser';
+import { findCue } from '../../shared/telemetry/find-cue';
 import ElementList from './ElementList';
 import ElementPanel from './ElementPanel';
 import { exportOverlay } from './export-overlay';
@@ -25,8 +25,8 @@ import { reanchorInPlace } from './draw-overlays';
 import { DEFAULT_GUIDES, type GuidesState } from './guides';
 import GuidesControl from './GuidesControl';
 import { useOverlayStage } from './use-overlay-stage';
-import { useLutSelection } from '../lut/use-lut-selection';
-import LutPicker from '../lut/LutPicker';
+import { useLutSelection } from '../../shared/lut/use-lut-selection';
+import LutPicker from '../../shared/lut/LutPicker';
 
 /** Precise current-position readout: `M:SS.cs` (centiseconds). */
 function formatTimecode(seconds: number): string {

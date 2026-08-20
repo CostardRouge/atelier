@@ -12,7 +12,7 @@ import type {
   Map as MlMap,
   StyleSpecification,
 } from 'maplibre-gl';
-import { lineCoordinates, trackBounds, type TrackPoint } from '../map/flight-path';
+import { lineCoordinates, trackBounds, type TrackPoint } from '../../shared/telemetry/flight-path';
 
 export const MAP_ACCENT = '#d9442a';
 export const OSM_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';

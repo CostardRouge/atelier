@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
-import { parseSrt, type Cue } from '../telemetry/srt-parser';
-import { useActiveCue } from '../telemetry/use-active-cue';
-import { formatHeading, formatGroundSpeed } from '../telemetry/motion';
-import { extractTrack, parsePosition } from './flight-path';
+import { parseSrt, type Cue } from '../../shared/telemetry/srt-parser';
+import { useActiveCue } from '../../shared/telemetry/use-active-cue';
+import { formatHeading, formatGroundSpeed } from '../../shared/telemetry/motion';
+import { extractTrack, parsePosition } from '../../shared/telemetry/flight-path';
 import { useFlightMap } from './use-flight-map';
 
 /** Asset kinds the flight map understands — it needs telemetry (the GPS). */

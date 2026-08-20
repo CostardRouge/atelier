@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import Gallery from './Gallery';
 import DetailView from './DetailView';
-import { type MediaPair } from './pair-files';
+import type { MediaPair } from './media-pair';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
 

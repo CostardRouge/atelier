@@ -2,12 +2,10 @@ import type { ComponentType } from 'react';
 import type { AssetKind } from '../shared/library/assets';
 import CompareTool from '../tools/compare/CompareTool';
 import ComposerTool from '../tools/composer/ComposerTool';
-import CullTool from '../tools/cull/CullTool';
 import ExifTool from '../tools/exif/ExifTool';
 import LutStudio from '../tools/lut/LutStudio';
 import MapTool from '../tools/map/MapTool';
 import OverlayStudio from '../tools/overlay/OverlayStudio';
-import ScopesTool from '../tools/scopes/ScopesTool';
 import TelemetryTool from '../tools/telemetry/TelemetryTool';
 
 /**
@@ -29,24 +27,14 @@ export interface Tool {
   /** The tool's root component. */
   Component: ComponentType;
   /**
-   * Asset kinds this tool consumes. When set, the shell shows the global asset
-   * library sidebar and the tool reads its selection from there. Tools without
-   * `accepts` keep their own import flow (full width, no sidebar).
+   * Asset kinds this tool consumes. Every tool reads from the global asset
+   * library: the shell shows the library sidebar and the tool takes its
+   * selection from there, filtered to these kinds.
    */
-  accepts?: AssetKind[];
+  accepts: AssetKind[];
 }
 
 export const TOOLS: Tool[] = [
-  {
-    id: 'cull',
-    path: '/cull',
-    label: 'Cull',
-    subtitle: 'Triage & export',
-    blurb:
-      'Rip through a shoot — rate 1–5, flag picks and rejects, filter to the keepers — then copy them straight into an album folder on disk.',
-    Component: CullTool,
-    accepts: ['photo', 'video'],
-  },
   {
     id: 'telemetry',
     path: '/telemetry',
@@ -116,16 +104,6 @@ export const TOOLS: Tool[] = [
       'Preview .cube LUTs on your footage with a before/after wipe, then batch-export the graded clips.',
     Component: LutStudio,
     accepts: ['video'],
-  },
-  {
-    id: 'scopes',
-    path: '/scopes',
-    label: 'Scopes',
-    subtitle: 'Histogram · waveform · vectorscope',
-    blurb:
-      'Read a photo or clip with broadcast scopes — histogram, waveform and vectorscope — updating live as the clip plays. The analytical companion to LUT Studio.',
-    Component: ScopesTool,
-    accepts: ['photo', 'video'],
   },
 ];
 

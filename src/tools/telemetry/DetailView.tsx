@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { MediaPair } from './pair-files';
-import { parseSrt, type Cue } from './srt-parser';
+import type { MediaPair } from './media-pair';
+import { parseSrt, type Cue } from '../../shared/telemetry/srt-parser';
 import { pickFile, SRT_ACCEPT, VIDEO_ACCEPT } from '../../shared/sources/file-sources';
 import { useTranscode } from '../../shared/media/use-transcode';
 import TelemetryPlayer from './TelemetryPlayer';

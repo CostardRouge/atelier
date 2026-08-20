@@ -8,8 +8,8 @@
  * falls back to the codec-agnostic seek path when WebCodecs can't decode.
  */
 
-import type { Cue } from '../telemetry/srt-parser';
-import { findCue } from '../telemetry/find-cue';
+import type { Cue } from '../../shared/telemetry/srt-parser';
+import { findCue } from '../../shared/telemetry/find-cue';
 import {
   DecodeUnsupportedError,
   drawRotatedFrame,
@@ -19,7 +19,7 @@ import {
   type FrameProcessor,
 } from '../../shared/media/webcodecs-export';
 import type { CubeLut } from '../../shared/lib/cube-parser';
-import { makeFrameGrader } from '../lut/frame-grader';
+import { makeFrameGrader } from '../../shared/lut/frame-grader';
 import { drawOverlays } from './draw-overlays';
 import { ensureOverlayFonts } from './fonts';
 import { exportOverlayVideoViaSeek } from './export-overlay-seek';

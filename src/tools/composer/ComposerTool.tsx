@@ -3,14 +3,14 @@ import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
 import type { Asset } from '../../shared/library/assets';
 import { formatDuration } from '../../shared/lib/format';
-import { parseSrt, type Cue } from '../telemetry/srt-parser';
-import { useActiveCue } from '../telemetry/use-active-cue';
-import { extractTrack, parsePosition } from '../map/flight-path';
+import { parseSrt, type Cue } from '../../shared/telemetry/srt-parser';
+import { useActiveCue } from '../../shared/telemetry/use-active-cue';
+import { extractTrack, parsePosition } from '../../shared/telemetry/flight-path';
 import { DEFAULT_OVERLAY, OVERLAY_FIELDS, type OverlayConfig, type OverlayFont } from './overlay';
 import { drawReadout, type Box } from './draw-readout';
-import { makeFrameGrader, type FrameGrader } from '../lut/frame-grader';
-import { useLutSelection } from '../lut/use-lut-selection';
-import LutPicker from '../lut/LutPicker';
+import { makeFrameGrader, type FrameGrader } from '../../shared/lut/frame-grader';
+import { useLutSelection } from '../../shared/lut/use-lut-selection';
+import LutPicker from '../../shared/lut/LutPicker';
 import {
   fitRect,
   outputSize,

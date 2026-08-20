@@ -12,8 +12,8 @@ import { useTranscode } from '../../shared/media/use-transcode';
 import { transcodeStore } from '../../shared/media/transcode-store';
 import TranscodeControl from '../../shared/media/TranscodeControl';
 import { useLutPreview } from './use-lut-preview';
-import { useLutSelection } from './use-lut-selection';
-import LutPicker from './LutPicker';
+import { useLutSelection } from '../../shared/lut/use-lut-selection';
+import LutPicker from '../../shared/lut/LutPicker';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
 

@@ -15,11 +15,11 @@
  */
 
 import type { Map as MlMap } from 'maplibre-gl';
-import type { Cue } from '../telemetry/srt-parser';
-import { findCue } from '../telemetry/find-cue';
-import { parsePosition, type TrackPoint } from '../map/flight-path';
+import type { Cue } from '../../shared/telemetry/srt-parser';
+import { findCue } from '../../shared/telemetry/find-cue';
+import { parsePosition, type TrackPoint } from '../../shared/telemetry/flight-path';
 import type { CubeLut } from '../../shared/lib/cube-parser';
-import { makeFrameGrader } from '../lut/frame-grader';
+import { makeFrameGrader } from '../../shared/lut/frame-grader';
 import {
   drawRotatedFrame,
   exportProcessedVideo,

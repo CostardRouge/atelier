@@ -6,7 +6,7 @@ import type {
   Map as MlMap,
   StyleSpecification,
 } from 'maplibre-gl';
-import { lineCoordinates, trackBounds, type TrackPoint } from '../map/flight-path';
+import { lineCoordinates, trackBounds, type TrackPoint } from '../../shared/telemetry/flight-path';
 
 const PAPER_BG = '#e8e2d4';
 const ACCENT = '#d9442a';

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { MediaPair } from './pair-files';
-import { parseSrt, type Cue } from './srt-parser';
+import type { MediaPair } from './media-pair';
+import { parseSrt, type Cue } from '../../shared/telemetry/srt-parser';
 import { summarizeTelemetry } from './telemetry-summary';
 import { formatBytes, formatDuration } from '../../shared/lib/format';
 import { pickFile, SRT_ACCEPT, VIDEO_ACCEPT } from '../../shared/sources/file-sources';
-import { useActiveCue } from './use-active-cue';
+import { useActiveCue } from '../../shared/telemetry/use-active-cue';
 import { LiveTelemetry } from './telemetry-view';
 import { useTranscode } from '../../shared/media/use-transcode';
 import TranscodeControl from '../../shared/media/TranscodeControl';
