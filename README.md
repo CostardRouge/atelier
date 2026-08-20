@@ -4,11 +4,8 @@ A local-first **suite of browser tools for your captures** — photo and video,
 across devices (DJI, Apple, Sony, …). Everything runs in your browser; files
 never leave your machine — no upload, no account, no server.
 
-Today it ships nine tools, with more planned:
+Today it ships seven tools, on their way to merging into a single studio:
 
-- **Cull** — rip through a shoot: rate clips and photos 1–5, flag picks and
-  rejects, filter to the keepers, then copy them straight into an album folder
-  on disk.
 - **DJI Telemetry** — view DJI drone flight telemetry in sync with the video it
   was captured with.
 - **Telemetry Overlay** — place altitude, GPS and exposure readouts anywhere on
@@ -25,9 +22,6 @@ Today it ships nine tools, with more planned:
   divider, with synced playback when both are clips.
 - **LUT Studio** — preview and batch-apply `.cube` colour LUTs to your footage in
   real time, with a before/after wipe.
-- **Scopes** — read a photo or clip with broadcast scopes (histogram, waveform,
-  vectorscope), updating live as a clip plays — the analytical companion to LUT
-  Studio.
 
 > **The one network exception.** Everything above runs offline and uploads
 > nothing. The single feature that can make a network request is the Flight
@@ -37,9 +31,7 @@ Today it ships nine tools, with more planned:
 
 Tools that consume the same kinds of files (photos, videos, DJI clips) share a
 single **asset library**: import a folder once and switch tools freely — each
-tool sees the subset it can use. Triage verdicts (ratings + flags) from Cull
-persist across reloads, keyed by file name, so a re-import picks up where you
-left off.
+tool sees the subset it can use.
 
 The suite is a tiny shell (`src/app/`) plus self-contained tools (`src/tools/*`)
 that share a generic core (`src/shared/*`). The masthead nav and the routes both
@@ -174,23 +166,6 @@ CSS): it stays out of the main bundle and downloads only when you open this
 tool. The cue-to-track extraction (filtering null-island fixes, bounds, line
 coordinates) is pure and unit-tested; the map glue lives in `use-flight-map.ts`.
 
-## Scopes tool
-
-Broadcast-style scopes for a photo or video frame — the analytical companion to
-LUT Studio:
-
-- **Histogram** — per-channel (RGB) or luma value distribution.
-- **Waveform** — brightness per image column (luma, or an RGB parade), so you
-  read exposure across the frame left-to-right.
-- **Vectorscope** — pixels plotted on the Rec.709 Cb/Cr plane with a skin-tone
-  guide, so you read hue and saturation; neutral greys sit dead centre.
-
-The frame is downscaled (long edge 320 px) and read locally with a `<canvas>` —
-nothing is uploaded. For a clip the scopes update **live** on a
-`requestAnimationFrame` loop while it plays and refresh on every seek. The scope
-maths (`scopes.ts`: histogram bins, waveform column grids, the Cb/Cr plot) is
-pure and unit-tested; only the drawing touches the canvas.
-
 ## Composer tool
 
 Brings the suite's pieces together: a DJI clip, its **flight map**, and a
@@ -281,25 +256,21 @@ src/
 │   ├── use-hash-route.ts       # minimal hash router (useSyncExternalStore)
 │   └── site.ts                 # site-wide constants (repo URL)
 ├── shared/                     # generic, tool-agnostic — never imports tools/
-│   ├── lib/                    # pure: format, cube-parser (+ tests)
-│   ├── library/                # the shared asset library: group files into assets,
-│   │                           #   capability-match per tool, persist cull verdicts
-│   ├── media/                  # image/video metadata + WebCodecs H.264 export helpers
-│   ├── sources/file-sources.ts # access paths (files, folder, drop, single-pick)
-│   └── components/FolderDrop.tsx
+│   ├── lib/                    # pure: format, cube-parser, use-in-viewport (+ tests)
+│   ├── library/                # the shared asset library: group files into assets
+│   │                           #   (incl. DJI video↔SRT pairing), capability-match per tool
+│   ├── telemetry/              # SRT parser, motion, cue lookup, flight-path extraction
+│   ├── lut/                    # WebGL2 LUT renderer, frame grader, picker, built-ins
+│   ├── map/track-map.ts        # the one MapLibre track-map: style, line layer, OSM tiles
+│   ├── media/                  # metadata, transcode, WebCodecs export, transport/object-URL
+│   │                           #   hooks, export-path decision, download/naming
+│   └── sources/                # file-sources (read) + write-files (export to folder)
 ├── tools/
-│   ├── cull/                   # triage: rate 1–5, flag picks/rejects, export keepers
 │   ├── telemetry/              # DJI flight-log viewer (the original tool)
-│   │   ├── srt-parser.ts       # SRT → Cue[] parser
-│   │   ├── find-cue.ts         # binary search for the active cue at time t
-│   │   ├── pair-files.ts       # pair videos with their .srt siblings
-│   │   ├── motion.ts           # reconstruct speed & heading from GPS fixes
-│   │   ├── use-active-cue.ts   # follow the displayed frame → active Cue
-│   │   ├── TelemetryTool.tsx · DetailView.tsx · Gallery.tsx · VideoCard.tsx
-│   │   └── *.test.ts           # unit tests (Vitest)
+│   │   └── TelemetryTool.tsx · DetailView.tsx · Gallery.tsx · VideoCard.tsx
 │   ├── overlay/                # burn telemetry readouts into an exported MP4
 │   │   ├── draw-overlays.ts    # pure canvas draw of the readout elements
-│   │   ├── export-overlay.ts   # frame-by-frame seek + re-encode
+│   │   ├── export-overlay.ts   # WebCodecs export (+ seek fallback for HEVC)
 │   │   └── OverlayStudio.tsx · ElementPanel.tsx · GuidesControl.tsx
 │   ├── exif/                   # read photo EXIF (camera, lens, exposure, GPS)
 │   │   ├── exif-parser.ts      # dependency-free JPEG/TIFF EXIF reader
@@ -310,23 +281,16 @@ src/
 │   │   ├── compare.ts          # pure: clamp, clip-path inset, pair reconcile
 │   │   └── CompareTool.tsx     # layered stage + divider + synced transport
 │   ├── map/                    # GPS flight path on a map (MapLibre)
-│   │   ├── flight-path.ts      # pure: cues → track points, bounds, line coords
 │   │   ├── use-flight-map.ts   # lazily-imported MapLibre map + marker + tiles
 │   │   └── MapTool.tsx         # clip switcher + map stage + synced video
 │   ├── composer/               # video + map + telemetry → one composition
 │   │   ├── compose-layout.ts   # pure: pane rects, object-fit, output size
 │   │   ├── use-composer-map.ts # MapLibre map for compositing (GL marker)
 │   │   └── ComposerTool.tsx    # canvas compositor + live preview
-│   ├── lut/                    # colour grading (generic, multi-device LUTs)
-│   │   ├── LutStudio.tsx · LutPicker.tsx
-│   │   ├── lut-gl.ts           # WebGL2 LUT renderer
-│   │   ├── frame-grader.ts · export-video.ts · batch-export.ts · clip.ts
-│   │   ├── builtin-luts.ts     # reads the build-time virtual:luts manifest
-│   │   └── use-lut-preview.ts · use-lut-selection.ts
-│   └── scopes/                 # histogram / waveform / vectorscope
-│       ├── scopes.ts           # pure: pixels → scope data (unit-tested)
-│       ├── draw-scopes.ts      # canvas drawing of each scope
-│       └── ScopesTool.tsx      # frame sampler + live scope rendering
+│   └── lut/                    # colour grading (generic, multi-device LUTs)
+│       ├── LutStudio.tsx
+│       ├── export-video.ts · batch-export.ts · clip.ts
+│       └── use-lut-preview.ts
 ├── index.css
 └── main.tsx
 ```
