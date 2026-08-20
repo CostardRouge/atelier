@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { MediaPair } from './pair-files';
-import { parseSrt, type Cue } from './srt-parser';
+import { useInViewport } from '../../shared/lib/use-in-viewport';
+import type { MediaPair } from './media-pair';
+import { parseSrt, type Cue } from '../../shared/telemetry/srt-parser';
 import { summarizeTelemetry } from './telemetry-summary';
 import { formatBytes, formatDuration } from '../../shared/lib/format';
 import { pickFile, SRT_ACCEPT, VIDEO_ACCEPT } from '../../shared/sources/file-sources';
-import { useActiveCue } from './use-active-cue';
+import { useActiveCue } from '../../shared/telemetry/use-active-cue';
 import { LiveTelemetry } from './telemetry-view';
 import { useTranscode } from '../../shared/media/use-transcode';
+import { useObjectUrl } from '../../shared/media/use-object-url';
 import TranscodeControl from '../../shared/media/TranscodeControl';
 
 interface VideoCardProps {
@@ -20,33 +22,6 @@ interface VideoCardProps {
   onDetach: (pair: MediaPair, kind: 'video' | 'srt') => void;
 }
 
-/**
- * Observe whether an element has entered the viewport. Used to defer all heavy
- * work (object URL, metadata, SRT parsing) until a card is actually visible, so
- * the initial render stays instant even with many files.
- */
-function useInViewport<T extends Element>(): [React.RefObject<T>, boolean] {
-  const ref = useRef<T>(null);
-  const [inView, setInView] = useState(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || inView) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          setInView(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: '200px' },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [inView]);
-
-  return [ref, inView];
-}
 
 export default function VideoCard({
   pair,
@@ -58,7 +33,6 @@ export default function VideoCard({
   const [ref, inView] = useInViewport<HTMLDivElement>();
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   // undefined = not loaded yet, null = unavailable (e.g. HEVC).
   const [duration, setDuration] = useState<number | null | undefined>(undefined);
   // undefined = parsing, null = no/unreadable SRT, Cue[] = parsed track.
@@ -76,16 +50,11 @@ export default function VideoCard({
   // revoke on unmount or when the source changes. Never hold 50 URLs open.
   // `source` flips to the transcoded file when one becomes ready, which reloads
   // the element and clears the prior decode error.
+  const videoUrl = useObjectUrl(inView && source ? source : null);
   useEffect(() => {
     if (!inView || !source) return;
     setVideoError(false);
     setDuration(undefined);
-    const url = URL.createObjectURL(source);
-    setVideoUrl(url);
-    return () => {
-      URL.revokeObjectURL(url);
-      setVideoUrl(null);
-    };
   }, [inView, source]);
 
   // Parse the (small, text) SRT lazily once visible.

@@ -5,8 +5,8 @@
  * grading lives in exactly one place.
  */
 
-import type { CubeLut } from '../../shared/lib/cube-parser';
-import { makeExportCanvas } from '../../shared/media/webcodecs-export';
+import type { CubeLut } from '../lib/cube-parser';
+import { makeExportCanvas } from '../media/webcodecs-export';
 import { createLutRenderer } from './lut-gl';
 
 export interface FrameGrader {

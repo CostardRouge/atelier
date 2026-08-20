@@ -5,12 +5,12 @@
  * helper are unit-tested.
  */
 
-import type { Cue } from '../telemetry/srt-parser';
+import type { Cue } from '../../shared/telemetry/srt-parser';
 import {
   formatGroundSpeed,
   formatHeading,
   formatVerticalSpeed,
-} from '../telemetry/motion';
+} from '../../shared/telemetry/motion';
 
 export type OverlayFont = 'mono' | 'sans' | 'serif';
 

@@ -13,10 +13,10 @@
  */
 
 import { useCallback, useEffect, useRef, type RefObject } from 'react';
-import type { Cue } from '../telemetry/srt-parser';
-import { findCue } from '../telemetry/find-cue';
+import type { Cue } from '../../shared/telemetry/srt-parser';
+import { findCue } from '../../shared/telemetry/find-cue';
 import type { CubeLut } from '../../shared/lib/cube-parser';
-import { createLutRenderer, type LutRenderer } from '../lut/lut-gl';
+import { createLutRenderer, type LutRenderer } from '../../shared/lut/lut-gl';
 import {
   boxForId,
   drawOverlays,

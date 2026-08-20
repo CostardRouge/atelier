@@ -1,9 +1,17 @@
 /**
- * Copies the planned files into a directory the user chose via the File System
- * Access API. Works with any `FileSystemDirectoryHandle`, so it can be exercised
- * headless against OPFS (`navigator.storage.getDirectory()`).
+ * Copies files into a directory the user chose via the File System Access API.
+ * Works with any `FileSystemDirectoryHandle`, so it can be exercised headless
+ * against OPFS (`navigator.storage.getDirectory()`).
+ *
+ * Salvaged from the retired Cull tool for the unified studio's
+ * export-to-folder path.
  */
-import type { ExportItem } from './export-plan';
+
+/** A file to write, with its destination name (flat, de-duplicated upstream). */
+export interface WriteItem {
+  name: string;
+  file: File;
+}
 
 export interface WriteResult {
   written: number;
@@ -14,7 +22,7 @@ export interface WriteResult {
 export type WriteProgress = (done: number, total: number, name: string) => void;
 
 /** True when the directory picker is available (Chromium-based browsers). */
-export function canExport(): boolean {
+export function canWriteToDisk(): boolean {
   return typeof window !== 'undefined' && 'showDirectoryPicker' in window;
 }
 
@@ -27,10 +35,11 @@ type ShowDirectoryPicker = (
 
 /**
  * Prompt for a writable directory. Isolated here so the one unavoidable cast
- * (the picker isn't in every lib.dom yet) doesn't leak into the component.
+ * (the picker isn't in every lib.dom yet) doesn't leak into components. Named
+ * apart from `file-sources.pickDirectory`, which picks a directory to *read*.
  * Throws `AbortError` if the user dismisses the dialog.
  */
-export function pickDirectory(): Promise<FileSystemDirectoryHandle> {
+export function pickWritableDirectory(): Promise<FileSystemDirectoryHandle> {
   const fn = (window as unknown as { showDirectoryPicker?: ShowDirectoryPicker })
     .showDirectoryPicker;
   if (!fn) throw new Error('Directory picker not supported');
@@ -40,7 +49,7 @@ export function pickDirectory(): Promise<FileSystemDirectoryHandle> {
 /** Write every item into `dir` (flat). Per-file failures are collected, not thrown. */
 export async function writeItems(
   dir: FileSystemDirectoryHandle,
-  items: ExportItem[],
+  items: WriteItem[],
   onProgress?: WriteProgress,
 ): Promise<WriteResult> {
   const result: WriteResult = { written: 0, bytes: 0, errors: [] };

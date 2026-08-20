@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { parseSrt } from './srt-parser';
+import { parseSrt } from '../../shared/telemetry/srt-parser';
 import { summarizeTelemetry } from './telemetry-summary';
 
 const fixture = readFileSync(

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { formatDuration } from '../../shared/lib/format';
+import { formatDuration, formatTimecode } from '../../shared/lib/format';
+import { useObjectUrl } from '../../shared/media/use-object-url';
 import { isExportSupported } from './export-video';
 import { runBatchExport } from './batch-export';
 import { type Clip } from './clip';
@@ -8,23 +9,15 @@ import {
   type ContainerInfo,
 } from '../../shared/media/video-metadata';
 import { useVideoScrub } from '../../shared/media/use-video-scrub';
+import { useVideoTransport } from '../../shared/media/use-video-transport';
 import { useTranscode } from '../../shared/media/use-transcode';
 import { transcodeStore } from '../../shared/media/transcode-store';
 import TranscodeControl from '../../shared/media/TranscodeControl';
 import { useLutPreview } from './use-lut-preview';
-import { useLutSelection } from './use-lut-selection';
-import LutPicker from './LutPicker';
+import { useLutSelection } from '../../shared/lut/use-lut-selection';
+import LutPicker from '../../shared/lut/LutPicker';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
-
-/** Precise current-position readout: `M:SS.cs` (centiseconds). */
-function formatTimecode(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return '0:00.00';
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  const cs = Math.floor((seconds % 1) * 100);
-  return `${m}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
-}
 
 /**
  * LUT Studio — grades the videos selected in the shared library through a
@@ -51,7 +44,6 @@ export default function LutStudio() {
   const [clips, setClips] = useState<Clip[]>([]);
   const clipsRef = useRef(clips);
   clipsRef.current = clips;
-  const [activeUrl, setActiveUrl] = useState<string | null>(null);
   const [activeError, setActiveError] = useState(false);
   const [activeInfo, setActiveInfo] = useState<ContainerInfo>({});
 
@@ -72,24 +64,12 @@ export default function LutStudio() {
   const [compareOn, setCompareOn] = useState(false);
 
   // Transport state, mirrored from the offscreen video element.
-  const [playing, setPlaying] = useState(false);
-  const [time, setTime] = useState(0);
-  const [duration, setDuration] = useState(0);
 
   // Batch export state.
   const [exporting, setExporting] = useState(false);
   const [batchTotal, setBatchTotal] = useState(0);
   const exportAbort = useRef<AbortController | null>(null);
   const exportSupported = isExportSupported();
-
-  const { supported, setSplit } = useLutPreview(
-    videoRef,
-    canvasRef,
-    lut,
-    intensity,
-    bypass,
-    activeUrl,
-  );
 
   // The active clip is shared with the library, so clicking an asset in the
   // sidebar focuses it here; fall back to the first selected clip.
@@ -103,6 +83,16 @@ export default function LutStudio() {
   // to H.264 in-browser; once ready, the preview and export use that instead.
   const activeTranscode = useTranscode(activeClip?.file ?? null);
   const activeSource = activeTranscode.transcoded ?? activeClip?.file ?? null;
+  const activeUrl = useObjectUrl(activeSource);
+
+  const { supported, setSplit } = useLutPreview(
+    videoRef,
+    canvasRef,
+    lut,
+    intensity,
+    bypass,
+    activeUrl,
+  );
 
   // --- clip helpers -------------------------------------------------------
 
@@ -165,16 +155,7 @@ export default function LutStudio() {
   // transcoded H.264 becomes ready (`activeSource` flips), which reloads the
   // element and clears the prior decode error.
   useEffect(() => {
-    if (!activeSource) {
-      setActiveUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(activeSource);
-    setActiveUrl(url);
     setActiveError(false);
-    setTime(0);
-    setPlaying(false);
-    return () => URL.revokeObjectURL(url);
   }, [activeSource]);
 
   // Probe the active clip's container for codec + fps (best-effort). Probes the
@@ -192,38 +173,13 @@ export default function LutStudio() {
     };
   }, [activeId]);
 
-  // Keep transport state in sync with the element.
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
-    const onTime = () => {
-      if (!scrub.scrubbingRef.current) setTime(v.currentTime);
-    };
-    const onMeta = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
-    v.addEventListener('play', onPlay);
-    v.addEventListener('pause', onPause);
-    v.addEventListener('ended', onPause);
-    v.addEventListener('timeupdate', onTime);
-    v.addEventListener('loadedmetadata', onMeta);
-    return () => {
-      v.removeEventListener('play', onPlay);
-      v.removeEventListener('pause', onPause);
-      v.removeEventListener('ended', onPause);
-      v.removeEventListener('timeupdate', onTime);
-      v.removeEventListener('loadedmetadata', onMeta);
-    };
-  }, [activeUrl]);
-
   // --- transport ----------------------------------------------------------
 
-  function togglePlay() {
-    const v = videoRef.current;
-    if (!v) return;
-    if (v.paused) void v.play();
-    else v.pause();
-  }
+  const { playing, time, duration, setTime, togglePlay } = useVideoTransport(
+    videoRef,
+    activeUrl,
+    { scrubbingRef: scrub.scrubbingRef },
+  );
 
   function handleScrub(value: number) {
     setTime(value);

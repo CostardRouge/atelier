@@ -5,13 +5,13 @@
  * is unit-testable and usable directly inside the canvas renderer.
  */
 
-import type { Cue } from '../telemetry/srt-parser';
+import type { Cue } from '../../shared/telemetry/srt-parser';
 import {
   formatGroundSpeed,
   formatHeading,
   formatVerticalSpeed,
   type SpeedUnit,
-} from '../telemetry/motion';
+} from '../../shared/telemetry/motion';
 import type { OverlayElement, TelemetryFieldKey } from './overlay-types';
 
 export interface FieldSpec {

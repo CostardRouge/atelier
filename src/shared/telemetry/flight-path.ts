@@ -4,7 +4,7 @@
  * produced, so the same data that drives the Telemetry panels draws the map.
  */
 
-import type { Cue } from '../telemetry/srt-parser';
+import type { Cue } from './srt-parser';
 
 export interface TrackPoint {
   lon: number;

@@ -15,7 +15,7 @@ import {
   type ExportProgress,
   type FrameProcessor,
 } from '../../shared/media/webcodecs-export';
-import { createLutRenderer } from './lut-gl';
+import { createLutRenderer } from '../../shared/lut/lut-gl';
 
 export { isExportSupported };
 export type { ExportProgress };

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { parseSrt } from '../telemetry/srt-parser';
+import { parseSrt } from '../../shared/telemetry/srt-parser';
 import { formatField, renderElementText, MISSING } from './field-format';
 import { createTelemetryElement, createTextElement } from './overlay-types';
 

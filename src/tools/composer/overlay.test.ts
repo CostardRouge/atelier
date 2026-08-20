@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Cue } from '../telemetry/srt-parser';
+import type { Cue } from '../../shared/telemetry/srt-parser';
 import { buildLines, DEFAULT_OVERLAY, hexToRgba } from './overlay';
 
 function cue(): Cue {

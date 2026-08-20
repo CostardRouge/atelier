@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
+import { useObjectUrl } from '../../shared/media/use-object-url';
+import { useVideoTransport } from '../../shared/media/use-video-transport';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
-import { formatDuration } from '../../shared/lib/format';
+import { formatDuration, formatTimecode } from '../../shared/lib/format';
 import { isEncodeSupported } from '../../shared/media/webcodecs-export';
 import { useVideoScrub } from '../../shared/media/use-video-scrub';
 import { useTranscode } from '../../shared/media/use-transcode';
 import TranscodeControl from '../../shared/media/TranscodeControl';
 import { probeContainer, type ContainerInfo } from '../../shared/media/video-metadata';
-import { parseSrt, type Cue } from '../telemetry/srt-parser';
-import { findCue } from '../telemetry/find-cue';
+import { parseSrt, type Cue } from '../../shared/telemetry/srt-parser';
+import { findCue } from '../../shared/telemetry/find-cue';
 import ElementList from './ElementList';
 import ElementPanel from './ElementPanel';
 import { exportOverlay } from './export-overlay';
@@ -25,17 +27,8 @@ import { reanchorInPlace } from './draw-overlays';
 import { DEFAULT_GUIDES, type GuidesState } from './guides';
 import GuidesControl from './GuidesControl';
 import { useOverlayStage } from './use-overlay-stage';
-import { useLutSelection } from '../lut/use-lut-selection';
-import LutPicker from '../lut/LutPicker';
-
-/** Precise current-position readout: `M:SS.cs` (centiseconds). */
-function formatTimecode(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return '0:00.00';
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  const cs = Math.floor((seconds % 1) * 100);
-  return `${m}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
-}
+import { useLutSelection } from '../../shared/lut/use-lut-selection';
+import LutPicker from '../../shared/lut/LutPicker';
 
 interface OverlayClip {
   id: string;
@@ -65,7 +58,6 @@ export default function OverlayStudio() {
   const lib = useAssetLibrary();
   const lutSel = useLutSelection();
 
-  const [activeUrl, setActiveUrl] = useState<string | null>(null);
   const [activeError, setActiveError] = useState(false);
   const [activeInfo, setActiveInfo] = useState<ContainerInfo>({});
   const [cues, setCues] = useState<Cue[]>([]);
@@ -76,9 +68,6 @@ export default function OverlayStudio() {
   const [fontTick, setFontTick] = useState(0);
 
   // Transport, mirrored from the offscreen video element.
-  const [playing, setPlaying] = useState(false);
-  const [time, setTime] = useState(0);
-  const [duration, setDuration] = useState(0);
 
   // Export state.
   const [exporting, setExporting] = useState(false);
@@ -115,6 +104,7 @@ export default function OverlayStudio() {
   // to H.264 in-browser; once ready, the preview and export use that instead.
   const activeTranscode = useTranscode(activeClip?.video ?? null);
   const activeSource = activeTranscode.transcoded ?? activeClip?.video ?? null;
+  const activeUrl = useObjectUrl(activeSource);
 
   // --- selection plumbing -------------------------------------------------
 
@@ -132,16 +122,7 @@ export default function OverlayStudio() {
   // transcoded H.264 becomes ready (`activeSource` flips), which reloads the
   // element and clears the prior decode error.
   useEffect(() => {
-    if (!activeSource) {
-      setActiveUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(activeSource);
-    setActiveUrl(url);
     setActiveError(false);
-    setTime(0);
-    setPlaying(false);
-    return () => URL.revokeObjectURL(url);
   }, [activeSource]);
 
   // Reset export feedback and stale codec info when the active clip changes.
@@ -183,41 +164,25 @@ export default function OverlayStudio() {
     };
   }, [activeId]);
 
-  // Keep transport state in sync with the element.
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
-    const onTime = () => {
-      if (!scrub.scrubbingRef.current) setTime(v.currentTime);
-    };
-    const onMeta = () => {
-      setDuration(Number.isFinite(v.duration) ? v.duration : 0);
-      // Decode the first frame so the canvas shows the clip instead of black
-      // before the user presses play. A tiny seek forces a decode + 'seeked',
-      // which the stage repaints from.
-      if (v.currentTime === 0) {
-        try {
-          v.currentTime = Math.min(0.001, (v.duration || 1) / 2);
-        } catch {
-          /* seeking unsupported — the frame will appear on first play */
+  // Transport, with a first-frame prime: a tiny seek forces a decode +
+  // 'seeked', which the stage repaints from, so the canvas shows the clip
+  // instead of black before the user presses play.
+  const { playing, time, duration, setTime, togglePlay } = useVideoTransport(
+    videoRef,
+    activeUrl,
+    {
+      scrubbingRef: scrub.scrubbingRef,
+      onLoadedMetadata: (v) => {
+        if (v.currentTime === 0) {
+          try {
+            v.currentTime = Math.min(0.001, (v.duration || 1) / 2);
+          } catch {
+            /* seeking unsupported — the frame will appear on first play */
+          }
         }
-      }
-    };
-    v.addEventListener('play', onPlay);
-    v.addEventListener('pause', onPause);
-    v.addEventListener('ended', onPause);
-    v.addEventListener('timeupdate', onTime);
-    v.addEventListener('loadedmetadata', onMeta);
-    return () => {
-      v.removeEventListener('play', onPlay);
-      v.removeEventListener('pause', onPause);
-      v.removeEventListener('ended', onPause);
-      v.removeEventListener('timeupdate', onTime);
-      v.removeEventListener('loadedmetadata', onMeta);
-    };
-  }, [activeUrl]);
+      },
+    },
+  );
 
   // Load the brand fonts any element uses, then force a repaint so canvas text
   // measures and renders correctly.
@@ -304,13 +269,6 @@ export default function OverlayStudio() {
   });
 
   // --- transport ----------------------------------------------------------
-
-  function togglePlay() {
-    const v = videoRef.current;
-    if (!v) return;
-    if (v.paused) void v.play();
-    else v.pause();
-  }
 
   function handleScrub(value: number) {
     setTime(value);

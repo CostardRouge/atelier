@@ -9,6 +9,7 @@
  */
 
 import type { CubeLut } from '../../shared/lib/cube-parser';
+import { downloadBlob, outputName } from '../../shared/media/save';
 import { exportGradedVideo, type ExportProgress } from './export-video';
 
 export interface BatchItem {
@@ -24,22 +25,6 @@ export interface BatchHandlers {
   onError(id: string, message: string): void;
 }
 
-/** `clip.mp4` → `clip-graded.mp4`. */
-function gradedName(name: string): string {
-  return `${name.replace(/\.[^.]+$/, '')}-graded.mp4`;
-}
-
-function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  // Keep the URL alive long enough for the download to start.
-  setTimeout(() => URL.revokeObjectURL(url), 30_000);
-}
 
 /**
  * Grade and download each item in turn. Returns when the queue is drained or
@@ -63,7 +48,7 @@ export async function runBatchExport(
         (p) => handlers.onProgress(item.id, p),
         signal,
       );
-      downloadBlob(blob, gradedName(item.name));
+      downloadBlob(blob, outputName(item.name, 'graded'));
       handlers.onDone(item.id);
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;

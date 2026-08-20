@@ -9,7 +9,7 @@
  * export (true WYSIWYG).
  */
 
-import type { SpeedUnit } from '../telemetry/motion';
+import type { SpeedUnit } from '../../shared/telemetry/motion';
 export type { SpeedUnit };
 
 /**

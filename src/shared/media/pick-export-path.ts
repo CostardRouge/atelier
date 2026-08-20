@@ -8,7 +8,7 @@
  *  - `none` — neither works (no encoder, or an undecodable + unplayable codec).
  */
 
-import { isEncodeSupported } from '../../shared/media/webcodecs-export';
+import { isEncodeSupported } from './webcodecs-export';
 
 export type ExportPath = 'webcodecs' | 'seek' | 'none';
 

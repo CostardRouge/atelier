@@ -7,8 +7,8 @@
  */
 
 import { useState } from 'react';
-import { parseCube, type CubeLut } from '../../shared/lib/cube-parser';
-import { CUBE_ACCEPT, pickFile } from '../../shared/sources/file-sources';
+import { parseCube, type CubeLut } from '../lib/cube-parser';
+import { CUBE_ACCEPT, pickFile } from '../sources/file-sources';
 import { BUILTIN_LUTS } from './builtin-luts';
 
 export interface LutSelection {

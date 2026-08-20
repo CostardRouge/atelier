@@ -31,10 +31,9 @@ export default function App() {
     </ErrorBoundary>
   );
 
-  // Tools that declare `accepts` read their assets from the shared library,
-  // shown as a left sidebar. It collapses to a thin rail (the choice is
-  // remembered); it starts expanded so the library is discoverable.
-  const usesLibrary = !!tool?.accepts;
+  // Every tool reads its assets from the shared library, shown as a left
+  // sidebar. It collapses to a thin rail (the choice is remembered); it
+  // starts expanded so the library is discoverable.
   const [collapsed, setCollapsed] = useState<boolean>(
     () => localStorage.getItem(COLLAPSE_KEY) === '1',
   );
@@ -96,21 +95,21 @@ export default function App() {
       <main
         className={
           tool
-            ? `flex-1 min-h-0 flex mt-4 ${usesLibrary ? 'flex-row gap-4 max-[820px]:flex-col' : 'flex-col'}`
+            ? 'flex-1 min-h-0 flex mt-4 flex-row gap-4 max-[820px]:flex-col'
             : undefined
         }
       >
-        {usesLibrary && tool && (
-          <AssetSidebar
-            tool={tool}
-            collapsed={collapsed}
-            onToggle={() => setCollapsed((c) => !c)}
-          />
-        )}
-        {usesLibrary ? (
-          <div className="flex-1 min-w-0 flex flex-col min-h-0">
-            {activeContent}
-          </div>
+        {tool ? (
+          <>
+            <AssetSidebar
+              tool={tool}
+              collapsed={collapsed}
+              onToggle={() => setCollapsed((c) => !c)}
+            />
+            <div className="flex-1 min-w-0 flex flex-col min-h-0">
+              {activeContent}
+            </div>
+          </>
         ) : (
           activeContent
         )}

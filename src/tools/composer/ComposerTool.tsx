@@ -3,14 +3,14 @@ import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
 import type { Asset } from '../../shared/library/assets';
 import { formatDuration } from '../../shared/lib/format';
-import { parseSrt, type Cue } from '../telemetry/srt-parser';
-import { useActiveCue } from '../telemetry/use-active-cue';
-import { extractTrack, parsePosition } from '../map/flight-path';
+import { parseSrt, type Cue } from '../../shared/telemetry/srt-parser';
+import { useActiveCue } from '../../shared/telemetry/use-active-cue';
+import { extractTrack, parsePosition } from '../../shared/telemetry/flight-path';
 import { DEFAULT_OVERLAY, OVERLAY_FIELDS, type OverlayConfig, type OverlayFont } from './overlay';
 import { drawReadout, type Box } from './draw-readout';
-import { makeFrameGrader, type FrameGrader } from '../lut/frame-grader';
-import { useLutSelection } from '../lut/use-lut-selection';
-import LutPicker from '../lut/LutPicker';
+import { makeFrameGrader, type FrameGrader } from '../../shared/lut/frame-grader';
+import { useLutSelection } from '../../shared/lut/use-lut-selection';
+import LutPicker from '../../shared/lut/LutPicker';
 import {
   fitRect,
   outputSize,
@@ -20,12 +20,10 @@ import {
   type LayoutKind,
 } from './compose-layout';
 import { useComposerMap } from './use-composer-map';
-import {
-  compositionName,
-  downloadBlob,
-  exportComposition,
-  type CompositionOptions,
-} from './export-composition';
+import { downloadBlob, outputName } from '../../shared/media/save';
+import { useObjectUrl } from '../../shared/media/use-object-url';
+import { useVideoTransport } from '../../shared/media/use-video-transport';
+import { exportComposition, type CompositionOptions } from './export-composition';
 import {
   DecodeUnsupportedError,
   isExportSupported,
@@ -127,11 +125,8 @@ export default function ComposerTool() {
   }, [activeId, lib.activeId, lib.setActive]);
 
   const [cues, setCues] = useState<Cue[]>([]);
-  const [url, setUrl] = useState<string | null>(null);
+  const url = useObjectUrl(active?.video ?? null);
   const [videoDims, setVideoDims] = useState<{ w: number; h: number } | null>(null);
-  const [playing, setPlaying] = useState(false);
-  const [time, setTime] = useState(0);
-  const [duration, setDuration] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [exportRatio, setExportRatio] = useState<number | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -155,15 +150,7 @@ export default function ComposerTool() {
   }, [active?.srt]);
 
   useEffect(() => {
-    const video = active?.video;
-    if (!video) {
-      setUrl(null);
-      return;
-    }
-    const objectUrl = URL.createObjectURL(video);
-    setUrl(objectUrl);
     setVideoDims(null);
-    return () => URL.revokeObjectURL(objectUrl);
   }, [active?.video]);
 
   const track = useMemo(() => extractTrack(cues), [cues]);
@@ -272,29 +259,11 @@ export default function ComposerTool() {
   }, [active?.id]);
 
   // Transport state from the offscreen video element.
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
-    const onTime = () => setTime(v.currentTime);
-    const onMeta = () => {
-      setDuration(Number.isFinite(v.duration) ? v.duration : 0);
-      setVideoDims({ w: v.videoWidth, h: v.videoHeight });
-    };
-    v.addEventListener('play', onPlay);
-    v.addEventListener('pause', onPause);
-    v.addEventListener('ended', onPause);
-    v.addEventListener('timeupdate', onTime);
-    v.addEventListener('loadedmetadata', onMeta);
-    return () => {
-      v.removeEventListener('play', onPlay);
-      v.removeEventListener('pause', onPause);
-      v.removeEventListener('ended', onPause);
-      v.removeEventListener('timeupdate', onTime);
-      v.removeEventListener('loadedmetadata', onMeta);
-    };
-  }, [url]);
+  const { playing, time, duration, setTime, togglePlay } = useVideoTransport(
+    videoRef,
+    url,
+    { onLoadedMetadata: (v) => setVideoDims({ w: v.videoWidth, h: v.videoHeight }) },
+  );
 
   // The offscreen map container is sized to its pane via JSX (below); when that
   // changes, tell MapLibre to re-read the size and re-frame the track.
@@ -303,12 +272,6 @@ export default function ComposerTool() {
   }, [panes.map.w, panes.map.h, resize]);
 
   // --- transport + drag ---------------------------------------------------
-  function togglePlay() {
-    const v = videoRef.current;
-    if (!v) return;
-    if (v.paused) void v.play();
-    else v.pause();
-  }
 
   async function handleExport() {
     if (!active || exporting) return;
@@ -343,7 +306,7 @@ export default function ComposerTool() {
         (p: ExportProgress) => setExportRatio(p.phase === 'encoding' ? p.ratio : null),
         controller.signal,
       );
-      downloadBlob(blob, compositionName(active.video.name));
+      downloadBlob(blob, outputName(active.video.name, 'composition'));
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
         /* cancelled — no message */

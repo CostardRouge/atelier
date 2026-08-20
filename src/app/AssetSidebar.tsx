@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Tool } from './tools';
 import {
   useAssetLibrary,
@@ -10,6 +10,7 @@ import {
   selectedUsableAssets,
 } from '../shared/library/capabilities';
 import { formatBytes, formatDuration } from '../shared/lib/format';
+import { useInViewport } from '../shared/lib/use-in-viewport';
 import {
   filesFromDataTransfer,
   pickDirectory,
@@ -286,25 +287,12 @@ function AssetRow({
   onActivate,
   onRemove,
 }: AssetRowProps) {
-  const ref = useRef<HTMLDivElement>(null);
-
   // Build the cover lazily — only when the row scrolls into view, so a library
   // of thousands of files doesn't decode them all up front.
+  const [ref, inView] = useInViewport<HTMLDivElement>();
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          onEnsure();
-          io.disconnect();
-        }
-      },
-      { rootMargin: '200px' },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [onEnsure]);
+    if (inView) onEnsure();
+  }, [inView, onEnsure]);
 
   const isPhoto = asset.kind === 'photo';
 

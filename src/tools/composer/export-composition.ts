@@ -15,11 +15,11 @@
  */
 
 import type { Map as MlMap } from 'maplibre-gl';
-import type { Cue } from '../telemetry/srt-parser';
-import { findCue } from '../telemetry/find-cue';
-import { parsePosition, type TrackPoint } from '../map/flight-path';
+import type { Cue } from '../../shared/telemetry/srt-parser';
+import { findCue } from '../../shared/telemetry/find-cue';
+import { parsePosition, type TrackPoint } from '../../shared/telemetry/flight-path';
 import type { CubeLut } from '../../shared/lib/cube-parser';
-import { makeFrameGrader } from '../lut/frame-grader';
+import { makeFrameGrader } from '../../shared/lut/frame-grader';
 import {
   drawRotatedFrame,
   exportProcessedVideo,
@@ -37,13 +37,13 @@ import {
 } from './compose-layout';
 import { drawReadout } from './draw-readout';
 import type { OverlayConfig } from './overlay';
+import { cameraForTrack } from './map-shared';
 import {
   addTrackLine,
-  cameraForTrack,
-  COMPOSER_STYLE,
   MAP_ACCENT,
   setTiles,
-} from './map-shared';
+  TRACK_MAP_STYLE,
+} from '../../shared/map/track-map';
 
 export interface CompositionOptions {
   outW: number;
@@ -107,7 +107,7 @@ async function buildExportMap(
 
   const map = new maplibregl.Map({
     container,
-    style: COMPOSER_STYLE,
+    style: TRACK_MAP_STYLE,
     attributionControl: false,
     interactive: false,
     canvasContextAttributes: { preserveDrawingBuffer: true },
@@ -245,18 +245,3 @@ export async function exportComposition(
   }
 }
 
-/** `clip.mp4` → `clip-composition.mp4`. */
-export function compositionName(name: string): string {
-  return `${name.replace(/\.[^.]+$/, '')}-composition.mp4`;
-}
-
-export function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 30_000);
-}

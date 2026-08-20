@@ -4,27 +4,15 @@ import type {
   LngLatBoundsLike,
   LngLatLike,
   Map as MlMap,
-  StyleSpecification,
 } from 'maplibre-gl';
-import { lineCoordinates, trackBounds, type TrackPoint } from '../map/flight-path';
-
-const PAPER_BG = '#e8e2d4';
-const ACCENT = '#d9442a';
-const OSM_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-
-const EMPTY_STYLE: StyleSpecification = {
-  version: 8,
-  sources: {},
-  layers: [{ id: 'bg', type: 'background', paint: { 'background-color': PAPER_BG } }],
-};
-
-function lineFeature(track: readonly TrackPoint[]) {
-  return {
-    type: 'Feature' as const,
-    geometry: { type: 'LineString' as const, coordinates: lineCoordinates(track) },
-    properties: {},
-  };
-}
+import { trackBounds, type TrackPoint } from '../../shared/telemetry/flight-path';
+import {
+  addTrackLine,
+  lineFeature,
+  MAP_ACCENT,
+  setTiles,
+  TRACK_MAP_STYLE,
+} from '../../shared/map/track-map';
 
 function pointFeature(pos: [number, number] | null) {
   return {
@@ -108,7 +96,7 @@ export function useComposerMap(
         if (cancelled || !container) return;
         map = new maplibregl.Map({
           container,
-          style: EMPTY_STYLE,
+          style: TRACK_MAP_STYLE,
           attributionControl: false,
           interactive: false,
           canvasContextAttributes: { preserveDrawingBuffer: true },
@@ -116,14 +104,7 @@ export function useComposerMap(
         mapRef.current = map;
         map.on('load', () => {
           if (cancelled || !map) return;
-          map.addSource('track', { type: 'geojson', data: lineFeature(track) });
-          map.addLayer({
-            id: 'track-line',
-            type: 'line',
-            source: 'track',
-            layout: { 'line-cap': 'round', 'line-join': 'round' },
-            paint: { 'line-color': ACCENT, 'line-width': 3, 'line-opacity': 0.9 },
-          });
+          addTrackLine(map, track);
           map.addSource('marker', { type: 'geojson', data: pointFeature(posRef.current) });
           map.addLayer({
             id: 'marker',
@@ -132,7 +113,7 @@ export function useComposerMap(
             filter: ['==', ['get', 'hidden'], 0],
             paint: {
               'circle-radius': 6,
-              'circle-color': ACCENT,
+              'circle-color': MAP_ACCENT,
               'circle-stroke-width': 2,
               'circle-stroke-color': '#ffffff',
             },
@@ -180,21 +161,7 @@ export function useComposerMap(
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
-    if (tilesOn) {
-      if (!map.getSource('osm')) {
-        map.addSource('osm', {
-          type: 'raster',
-          tiles: [OSM_TILES],
-          tileSize: 256,
-          maxzoom: 19,
-          attribution: '© OpenStreetMap contributors',
-        });
-        map.addLayer({ id: 'osm', type: 'raster', source: 'osm' }, 'track-line');
-      }
-    } else {
-      if (map.getLayer('osm')) map.removeLayer('osm');
-      if (map.getSource('osm')) map.removeSource('osm');
-    }
+    setTiles(map, tilesOn);
   }, [ready, tilesOn]);
 
   const getCanvas = useCallback(() => mapRef.current?.getCanvas() ?? null, []);

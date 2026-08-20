@@ -3,6 +3,8 @@ import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
 import type { Asset } from '../../shared/library/assets';
 import { formatDuration } from '../../shared/lib/format';
+import { useObjectUrl } from '../../shared/media/use-object-url';
+import { useVideoTransport } from '../../shared/media/use-video-transport';
 import { clamp01, insetForSplit, reconcilePair } from './compare';
 
 /** Asset kinds the compare tool understands (video+telemetry stands in for video). */
@@ -27,21 +29,6 @@ function resolveSide(assets: readonly Asset[], id: string | null): Side | null {
     return { id, baseName: asset.baseName, kind: 'photo', file: asset.parts.image };
   }
   return null;
-}
-
-/** Manage an object URL for a file across changes/unmount. */
-function useObjectUrl(file: File | null): string | null {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!file) {
-      setUrl(null);
-      return;
-    }
-    const objectUrl = URL.createObjectURL(file);
-    setUrl(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [file]);
-  return url;
 }
 
 /**
@@ -125,9 +112,6 @@ export default function CompareTool() {
   const aVideoRef = useRef<HTMLVideoElement>(null);
   const bVideoRef = useRef<HTMLVideoElement>(null);
   const scrubbingRef = useRef(false);
-  const [playing, setPlaying] = useState(false);
-  const [time, setTime] = useState(0);
-  const [duration, setDuration] = useState(0);
 
   const aIsVideo = aSide?.kind === 'video';
   const bIsVideo = bSide?.kind === 'video';
@@ -140,44 +124,14 @@ export default function CompareTool() {
     return els;
   }
 
-  // The first present video leads the clock; the other follows.
-  useEffect(() => {
-    const lead = aIsVideo ? aVideoRef.current : bIsVideo ? bVideoRef.current : null;
-    if (!lead) return;
-    const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
-    const onMeta = () => setDuration(Number.isFinite(lead.duration) ? lead.duration : 0);
-    const onTime = () => {
-      if (!scrubbingRef.current) setTime(lead.currentTime);
-      for (const v of videoEls()) {
-        if (v !== lead && Math.abs(v.currentTime - lead.currentTime) > 0.15) {
-          v.currentTime = lead.currentTime;
-        }
-      }
-    };
-    lead.addEventListener('play', onPlay);
-    lead.addEventListener('pause', onPause);
-    lead.addEventListener('ended', onPause);
-    lead.addEventListener('timeupdate', onTime);
-    lead.addEventListener('loadedmetadata', onMeta);
-    return () => {
-      lead.removeEventListener('play', onPlay);
-      lead.removeEventListener('pause', onPause);
-      lead.removeEventListener('ended', onPause);
-      lead.removeEventListener('timeupdate', onTime);
-      lead.removeEventListener('loadedmetadata', onMeta);
-    };
-  }, [aUrl, bUrl, aIsVideo, bIsVideo]);
-
-  function togglePlay() {
-    const els = videoEls();
-    if (!els.length) return;
-    const anyPaused = els.some((v) => v.paused);
-    for (const v of els) {
-      if (anyPaused) void v.play();
-      else v.pause();
-    }
-  }
+  // The first present video leads the clock; the other follows (and both
+  // play/pause together).
+  const leadRef = aIsVideo ? aVideoRef : bVideoRef;
+  const { playing, time, duration, setTime, togglePlay } = useVideoTransport(
+    leadRef,
+    `${aUrl}|${bUrl}|${aIsVideo}|${bIsVideo}`,
+    { scrubbingRef, followers: videoEls },
+  );
 
   function seek(t: number) {
     setTime(t);

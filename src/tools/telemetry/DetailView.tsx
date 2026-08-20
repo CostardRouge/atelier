@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import type { MediaPair } from './pair-files';
-import { parseSrt, type Cue } from './srt-parser';
+import type { MediaPair } from './media-pair';
+import { parseSrt, type Cue } from '../../shared/telemetry/srt-parser';
 import { pickFile, SRT_ACCEPT, VIDEO_ACCEPT } from '../../shared/sources/file-sources';
 import { useTranscode } from '../../shared/media/use-transcode';
+import { useObjectUrl } from '../../shared/media/use-object-url';
 import TelemetryPlayer from './TelemetryPlayer';
 
 interface DetailViewProps {
@@ -24,7 +25,6 @@ export default function DetailView({
   onAttach,
   onDetach,
 }: DetailViewProps) {
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [cues, setCues] = useState<Cue[]>([]);
 
   const { video, srt } = pair;
@@ -33,19 +33,7 @@ export default function DetailView({
   // once ready, play that instead of the original.
   const transcode = useTranscode(video);
   const source = transcode.transcoded ?? video;
-
-  useEffect(() => {
-    if (!source) {
-      setVideoUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(source);
-    setVideoUrl(url);
-    return () => {
-      URL.revokeObjectURL(url);
-      setVideoUrl(null);
-    };
-  }, [source]);
+  const videoUrl = useObjectUrl(source);
 
   useEffect(() => {
     if (!srt) {

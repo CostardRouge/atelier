@@ -4,7 +4,7 @@
  * (`overlay.ts`); this only paints.
  */
 
-import type { Cue } from '../telemetry/srt-parser';
+import type { Cue } from '../../shared/telemetry/srt-parser';
 import { buildLines, FONT_STACK, hexToRgba, type OverlayConfig } from './overlay';
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
