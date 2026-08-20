@@ -20,10 +20,11 @@ import {
 } from '../../shared/media/webcodecs-export';
 import type { CubeLut } from '../../shared/lib/cube-parser';
 import { makeFrameGrader } from '../../shared/lut/frame-grader';
+import { downloadBlob, outputName } from '../../shared/media/save';
 import { drawOverlays } from './draw-overlays';
 import { ensureOverlayFonts } from './fonts';
 import { exportOverlayVideoViaSeek } from './export-overlay-seek';
-import { decideExportPath, type ExportHint } from './pick-export-path';
+import { decideExportPath, type ExportHint } from '../../shared/media/pick-export-path';
 import type { OverlayElement } from './overlay-types';
 
 /**
@@ -83,22 +84,6 @@ export async function exportOverlayVideo(
   );
 }
 
-/** `clip.mp4` → `clip-overlay.mp4`. */
-export function overlayName(name: string): string {
-  return `${name.replace(/\.[^.]+$/, '')}-overlay.mp4`;
-}
-
-function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 30_000);
-}
-
 /**
  * Export the overlay, choosing the best path and downloading the result.
  * Picks WebCodecs when the browser can decode the source, otherwise the
@@ -141,5 +126,5 @@ export async function exportOverlay(
     blob = await exportOverlayVideoViaSeek(file, cues, elements, lut, intensity, onProgress, signal);
   }
 
-  downloadBlob(blob, overlayName(file.name));
+  downloadBlob(blob, outputName(file.name, 'overlay'));
 }

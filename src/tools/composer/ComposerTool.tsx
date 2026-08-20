@@ -20,12 +20,8 @@ import {
   type LayoutKind,
 } from './compose-layout';
 import { useComposerMap } from './use-composer-map';
-import {
-  compositionName,
-  downloadBlob,
-  exportComposition,
-  type CompositionOptions,
-} from './export-composition';
+import { downloadBlob, outputName } from '../../shared/media/save';
+import { exportComposition, type CompositionOptions } from './export-composition';
 import {
   DecodeUnsupportedError,
   isExportSupported,
@@ -343,7 +339,7 @@ export default function ComposerTool() {
         (p: ExportProgress) => setExportRatio(p.phase === 'encoding' ? p.ratio : null),
         controller.signal,
       );
-      downloadBlob(blob, compositionName(active.video.name));
+      downloadBlob(blob, outputName(active.video.name, 'composition'));
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
         /* cancelled — no message */
