@@ -1,6 +1,6 @@
 # Media pipeline — decode, grade, composite, encode
 
-Read before touching video decode/encode, any export, the transcode fallback, LUT rendering, or canvas compositing (`src/shared/media/*`, `src/tools/lut/*`, `src/tools/overlay/*`, `src/tools/composer/*`).
+Read before touching video decode/encode, any export, the transcode fallback, LUT rendering, or canvas compositing (`src/shared/media/*`, `src/shared/lut/*`, `src/tools/lut/*`, `src/tools/overlay/*`, `src/tools/composer/*`).
 
 ## One shared WebCodecs pipeline, parameterised by a frame processor (2026-08-20)
 

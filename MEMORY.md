@@ -34,7 +34,6 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - One tool registry drives nav, routes and the asset sidebar; adding a tool is one entry plus a component — `architecture.md`.
 - `shared/` never imports `tools/`; pure logic lives in DOM-free modules with unit tests beside them — `architecture.md`, `testing.md`.
 - One global asset library keyed by base name feeds every tool through capability matching — `architecture.md`.
-- Cull verdicts (rating + flag) are the only persisted state, in `localStorage`, keyed by base name — `architecture.md`.
 - Video export is one shared WebCodecs pipeline (`exportProcessedVideo`) parameterised by a per-frame processor; audio is copied, never re-encoded — `media-pipeline.md`.
 - HEVC that the browser cannot decode is handled by an opt-in, in-browser ffmpeg.wasm transcode to H.264, not by uploading or by dropping the clip — `media-pipeline.md`.
 - The GitHub Pages base path is derived from `GITHUB_REPOSITORY`, never hardcoded — `deployment.md`.
@@ -44,7 +43,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 ## Open items (dated; remove when done)
 
 - 2026-08-20 — `src/app/site.ts` still points `REPO_URL` at `https://github.com/CostardRouge/dji-flight-data`, the pre-rename repository name, while `vite.config.ts` falls back to `atelier` and the README links `costardrouge.github.io/atelier/`. The masthead/footer source links are therefore stale. Needs a maintainer decision only in that it is a user-visible link; the fix itself is one constant.
-- 2026-08-20 — `scripts/gen-luts.mjs` tells the reader to add an entry to `src/lut/builtin-luts.ts` after regenerating. That path does not exist (it is `src/tools/lut/builtin-luts.ts`) and the manual list it describes is gone — `builtin-luts.ts` now just reads the `virtual:luts` manifest. The comment is stale in both halves.
+- 2026-08-20 — `scripts/gen-luts.mjs` tells the reader to add an entry to `src/lut/builtin-luts.ts` after regenerating. That path does not exist (it is `src/shared/lut/builtin-luts.ts` since phase 0) and the manual list it describes is gone — `builtin-luts.ts` now just reads the `virtual:luts` manifest. The comment is stale in both halves.
 - 2026-08-20 — `index.html` loads Space Grotesk, Instrument Serif and JetBrains Mono from Google Fonts on every page load, unconditionally, while the README's "one network exception" callout names only the opt-in map tiles. Either self-host the three faces (making the offline claim literal) or widen the callout — a maintainer call, since it is a product statement.
 - 2026-08-20 — `tests/` holds only `fixtures/sample.srt`; all specs live beside their source in `src/**`. Fine as is, but a future agent should not read the empty-looking `tests/` directory as "there are no tests".
 - No secret has ever been tracked in this repository (checked 2026-08-20 across the working tree), so there is nothing to rotate.

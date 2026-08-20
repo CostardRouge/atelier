@@ -12,7 +12,7 @@ Read before touching the shell (`src/app/`), the tool registry, the shared asset
 
 ## Pure logic lives in DOM-free modules (2026-08-20)
 
-**Decision.** Parsing, geometry, planning and maths sit in dependency-free, DOM-free modules (`srt-parser.ts`, `motion.ts`, `find-cue.ts`, `pair-files.ts`, `flight-path.ts`, `scopes.ts`, `compose-layout.ts`, `compare.ts`, `export-plan.ts`, `exif-parser.ts`, `cube-parser.ts`, …); only the thin React/canvas glue touches the DOM. **Why**: it makes the logic unit-testable in a plain node environment and reusable as-is by a future native shell. **How to apply**: new logic goes in its own module with a `.test.ts` beside it, not inside a component. See `testing.md`.
+**Decision.** Parsing, geometry, planning and maths sit in dependency-free, DOM-free modules (`srt-parser.ts`, `motion.ts`, `find-cue.ts`, `flight-path.ts`, `compose-layout.ts`, `compare.ts`, `exif-parser.ts`, `cube-parser.ts`, …); only the thin React/canvas glue touches the DOM. **Why**: it makes the logic unit-testable in a plain node environment and reusable as-is by a future native shell. **How to apply**: new logic goes in its own module with a `.test.ts` beside it, not inside a component. See `testing.md`.
 
 ## One asset library, capability-matched per tool (2026-08-20)
 
@@ -22,9 +22,9 @@ Read before touching the shell (`src/app/`), the tool registry, the shared asset
 
 **Decision.** The library layer stores handles, never bytes; covers/metadata are built lazily per row (as it scrolls into view) and thumbnails are revoked on remove/clear. **Why**: a `File` is a lazy reference to disk, so listing dozens of multi-GB videos is instant — reading them to list them would not scale. **How to apply**: never read a file just to display a list. Object URLs must be revoked when the source changes or the component unmounts.
 
-## Cull verdicts are the only persisted state (2026-08-20)
+## Almost nothing is persisted (rev. 2026-08-21)
 
-**Decision.** Ratings and pick/reject flags are stored in `localStorage`, keyed by asset id (the base name), and re-apply when the same files are re-imported. The pool itself is not persisted. **Why**: `File` handles cannot survive a reload, but triage work must. **How to apply**: reads and writes are already wrapped so corrupt storage or an exceeded quota degrades to in-memory only — keep that. Keying by base name is what makes a re-import pick up where the user left off; changing the key breaks every existing user's triage.
+**Decision.** Since the Scopes and Cull tools were retired (phase 0 of the studio merge, PR #29), the only stored state is the sidebar collapse flag in `localStorage`; the old `atelier:verdicts:v1` key is actively cleaned up on load in `AssetLibraryContext`. **Why**: Cull was the sole consumer of triage verdicts. **How to apply**: the unified studio's project persistence (phase 2) starts from a blank slate — IndexedDB for project documents, directory handles and thumbnails; `localStorage` stays for UI preferences only. See `studio.md`.
 
 ## Hash routing (2026-08-20)
 
