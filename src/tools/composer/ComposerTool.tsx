@@ -583,6 +583,7 @@ export default function ComposerTool() {
               className="flex-none w-[2.2rem] h-[2.2rem] border-0 rounded-full bg-ink text-paper text-[0.8rem] leading-none inline-flex items-center justify-center hover:bg-accent transition-colors"
               onClick={togglePlay}
               aria-label={playing ? 'Pause' : 'Play'}
+              title="Play / pause (Space)"
             >
               {playing ? '❚❚' : '▶'}
             </button>

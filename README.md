@@ -141,8 +141,12 @@ drop to the no-data state at once. The smoothing is a pure function of the cue
 list and the playhead, never an accumulator over rendered frames, so the export
 burns in exactly what the preview showed.
 
-**Keyboard.** `Delete` (or `Backspace`) removes the selected overlay element,
-unless you're typing in a field.
+**Keyboard.** `Space` plays and pauses the clip — here and in Grade, Compare,
+Composer and the legacy Overlay, all of which share one transport — and
+`Delete` (or `Backspace`) removes the selected overlay element. Both stand
+down while you're typing in a field, and space is left alone whenever the
+focused element already answers to it (a button, a slider, a `<video>` with
+its own controls), so it never fires twice.
 
 **Finding your way in a long deck.** The element list folds away behind a
 header carrying the count, and even open it is capped and scrolls on its own
