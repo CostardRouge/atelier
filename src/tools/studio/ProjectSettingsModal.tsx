@@ -1,21 +1,35 @@
 import { useEffect, useRef, useState } from 'react';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
+import {
+  PROJECT_FILE_ACCEPT,
+  parseProjectFile,
+  type ProjectFile,
+} from '../../shared/projects/project-file';
+import { pickFile } from '../../shared/sources/file-sources';
 import { NO_SHIFT, type TimeShift } from '../../shared/telemetry/time-format';
+
+export interface ProjectSettingsDraft {
+  name: string;
+  aspectId: string;
+  timeShift: TimeShift;
+}
 
 interface ProjectSettingsModalProps {
   name: string;
   aspectId: string;
   timeShift: TimeShift;
   onCancel: () => void;
-  onApply: (next: {
-    name: string;
-    aspectId: string;
-    timeShift: TimeShift;
-  }) => void;
+  onApply: (next: ProjectSettingsDraft) => void;
+  /** Download the project file; the draft above is folded in, applied or not. */
+  onExport: (draft: ProjectSettingsDraft) => void;
+  /** Replace the open project's portable half with an imported file. */
+  onImport: (file: ProjectFile) => void;
 }
 
 const field = 'flex flex-col gap-1.5';
 const legend = 'font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted';
+const smallButton =
+  'px-3 py-1.5 inline-flex items-center gap-1.5 border border-line-strong rounded-full bg-paper text-[0.78rem] text-ink-soft cursor-pointer transition-colors hover:border-accent hover:text-accent-ink';
 
 /**
  * Project settings, DaVinci-style: everything chosen at creation stays
@@ -29,11 +43,18 @@ export default function ProjectSettingsModal({
   timeShift,
   onCancel,
   onApply,
+  onExport,
+  onImport,
 }: ProjectSettingsModalProps) {
   const [draftName, setDraftName] = useState(name);
   const [draftAspect, setDraftAspect] = useState(aspectId);
   const [shift, setShift] = useState<TimeShift>(timeShift ?? NO_SHIFT);
+  // An imported file waits for a confirmation: importing overwrites the whole
+  // portable half, which is a lot of work to lose to a mis-click.
+  const [pending, setPending] = useState<ProjectFile | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
+  const confirmRef = useRef<HTMLDivElement>(null);
   const hours = Math.trunc(shift.minutes / 60);
   const mins = Math.abs(shift.minutes % 60);
 
@@ -47,12 +68,37 @@ export default function ProjectSettingsModal({
     // Mount-only: the modal is short-lived.
   }, []);
 
-  function apply() {
-    onApply({
+  // The import/export section sits at the bottom of a scrollable dialog: on a
+  // short window the confirmation would otherwise appear below the fold and
+  // read as "nothing happened".
+  useEffect(() => {
+    if (pending) confirmRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [pending]);
+
+  function draft(): ProjectSettingsDraft {
+    return {
       name: draftName.trim() || name,
       aspectId: draftAspect,
       timeShift: shift,
-    });
+    };
+  }
+
+  function apply() {
+    onApply(draft());
+  }
+
+  /** Read a chosen file; a bad one explains itself instead of throwing. */
+  async function chooseFile() {
+    const file = await pickFile(PROJECT_FILE_ACCEPT);
+    if (!file) return;
+    setImportError(null);
+    setPending(null);
+    const parsed = parseProjectFile(await file.text());
+    if (!parsed.ok) {
+      setImportError(parsed.error);
+      return;
+    }
+    setPending(parsed.file);
   }
 
   /** Rebuild the signed minute total from the hour and minute boxes. */
@@ -186,6 +232,64 @@ export default function ProjectSettingsModal({
             Minutes cover the half- and quarter-hour zones; days are for a
             controller that came back from a flat battery with the wrong date.
           </p>
+        </fieldset>
+
+        <fieldset className="m-0 p-0 border-0 flex flex-col gap-2 pt-4 border-t border-line">
+          <span className={legend}>Import / export</span>
+          <p className="m-0 text-[0.72rem] text-muted leading-relaxed">
+            A project file carries the settings only — overlays, style, grade,
+            format, capture-time shift and the export matrix. Never your media:
+            it is a template you can keep, share or reuse on another machine.
+          </p>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button type="button" onClick={() => onExport(draft())} className={smallButton}>
+              <span aria-hidden="true">↓</span> Export settings
+            </button>
+            <button type="button" onClick={() => void chooseFile()} className={smallButton}>
+              <span aria-hidden="true">↑</span> Import a file…
+            </button>
+          </div>
+
+          {pending && (
+            <div
+              ref={confirmRef}
+              className="flex flex-col gap-2 p-3 rounded-paper border border-accent bg-accent-wash"
+            >
+              <p className="m-0 text-[0.78rem] leading-relaxed">
+                Replace this project's overlays, style, grade and format with
+                {pending.name ? ` “${pending.name}”` : ' the imported file'}?
+              </p>
+              <p className="m-0 text-[0.72rem] text-muted leading-relaxed">
+                {pending.elements.length} element
+                {pending.elements.length === 1 ? '' : 's'} · {pending.settings.aspectId}
+                {pending.lutStack.length > 0 &&
+                  ` · ${pending.lutStack.length} LUT layer${pending.lutStack.length === 1 ? '' : 's'}`}
+                {' '}— the media and the project name stay as they are.
+              </p>
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => onImport(pending)}
+                  className="p-0 border-0 bg-transparent text-[0.78rem] font-semibold text-accent-ink cursor-pointer underline underline-offset-[3px]"
+                >
+                  Replace the settings
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPending(null)}
+                  className="p-0 border-0 bg-transparent text-[0.78rem] text-muted cursor-pointer"
+                >
+                  Keep mine
+                </button>
+              </div>
+            </div>
+          )}
+
+          {importError && (
+            <p className="m-0 text-[0.75rem] text-[#9a3a23]" role="alert">
+              {importError}
+            </p>
+          )}
         </fieldset>
 
         <div className="flex items-center justify-end gap-4 pt-1 border-t border-line">

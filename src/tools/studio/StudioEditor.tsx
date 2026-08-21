@@ -74,7 +74,13 @@ import { useLutStack } from '../../shared/lut/use-lut-stack';
 import GradePanel from './GradePanel';
 import type { StyleTheme } from '../../shared/overlay/title-styles';
 import StylePanel from './StylePanel';
-import ProjectSettingsModal from './ProjectSettingsModal';
+import ProjectSettingsModal, { type ProjectSettingsDraft } from './ProjectSettingsModal';
+import {
+  projectFileName,
+  serializeProjectFile,
+  toProjectFile,
+  type ProjectFile,
+} from '../../shared/projects/project-file';
 import InfoPanel from './InfoPanel';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import { NO_SHIFT, type TimeShift } from '../../shared/telemetry/time-format';
@@ -639,6 +645,50 @@ export default function StudioEditor({
     clips,
   ]);
 
+  // --- project file (settings in, settings out) ----------------------------
+
+  /**
+   * Download the project's portable half. It is composed from the LIVE editor
+   * state plus the settings modal's draft, so what lands on disk is what the
+   * user sees — no waiting for the autosave debounce, and no stale copy if the
+   * draft was never applied.
+   */
+  function exportProjectFile(draft: ProjectSettingsDraft) {
+    const file = toProjectFile({
+      name: draft.name,
+      settings: { aspectId: draft.aspectId, timeShift: draft.timeShift },
+      elements,
+      guides,
+      lutStack: lutStack.toSaved(),
+      outputTransform: lutStack.output,
+      theme,
+      exportPrefs: { fileName: exportFileName.trim() || null, variants },
+    });
+    downloadBlob(
+      new Blob([serializeProjectFile(file)], { type: 'application/json' }),
+      projectFileName(draft.name),
+    );
+  }
+
+  /**
+   * Adopt an imported file: the whole portable half at once, straight into the
+   * live state (the autosave then persists it like any other edit). The name,
+   * the media folder and the clip are the project's own and are left alone.
+   */
+  function importProjectFile(file: ProjectFile) {
+    setAspectId(file.settings.aspectId);
+    setTimeShift(file.settings.timeShift ?? { ...NO_SHIFT });
+    setElements(structuredClone(file.elements));
+    setGuides(structuredClone(file.guides));
+    setTheme(structuredClone(file.theme));
+    setExportFileName(file.exportPrefs.fileName ?? '');
+    setVariants(structuredClone(file.exportPrefs.variants));
+    void lutStack.restore(file.lutStack, file.outputTransform);
+    // The incoming deck has different ids — whatever was selected is gone.
+    setSelectedElementId(null);
+    setShowSettings(false);
+  }
+
   // --- export -------------------------------------------------------------
 
   /** Render every requested variant in turn; each downloads as it finishes. */
@@ -908,7 +958,7 @@ export default function StudioEditor({
           type="button"
           onClick={() => setShowSettings(true)}
           className={`${barPill} border-line-strong bg-paper font-mono text-[0.68rem] tracking-[0.06em] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink`}
-          title="Project settings — name, format"
+          title="Project settings — name, format, import/export"
         >
           {ASPECT_PRESETS.find((a) => a.id === aspectId)?.id ?? aspectId}
           <span className="text-[1.05rem] leading-none" aria-hidden="true">
@@ -929,6 +979,8 @@ export default function StudioEditor({
             setTimeShift(nextShift);
             setShowSettings(false);
           }}
+          onExport={exportProjectFile}
+          onImport={importProjectFile}
         />
       )}
 
