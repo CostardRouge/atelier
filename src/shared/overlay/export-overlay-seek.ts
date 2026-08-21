@@ -17,6 +17,7 @@
  */
 
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
+import { safeChunkMetadata } from '../media/colour-tag';
 import type { Cue } from '../telemetry/srt-parser';
 import { findCue } from '../telemetry/find-cue';
 import {
@@ -189,7 +190,9 @@ export async function exportOverlayVideoViaSeek(
     };
     const codec = await pickAvcCodec(encoderConfig);
     encoder = new VideoEncoder({
-      output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+      // Guarded: a colour space the muxer cannot encode would become a WRONG
+      // colr box, not an absent one — see media/colour-tag.ts.
+      output: (chunk, meta) => muxer.addVideoChunk(chunk, safeChunkMetadata(meta)),
       error: (e) => {
         pipelineError = e instanceof Error ? e : new Error(String(e));
       },
