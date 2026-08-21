@@ -16,8 +16,9 @@ import type { OverlayElement } from '../overlay/overlay-types';
 import type { GuidesState } from '../overlay/guides';
 import type { StyleTheme } from '../overlay/title-styles';
 import type { PersistedDirectoryHandle } from '../sources/file-sources';
+import { defaultVariants, type ExportVariant } from './export-variants';
 
-export const PROJECT_DOC_VERSION = 2;
+export const PROJECT_DOC_VERSION = 3;
 
 /** Identity of one media file, enough to re-match it inside a folder. */
 export interface SavedMediaRef {
@@ -58,6 +59,12 @@ export interface SavedLut {
   intensity: number;
 }
 
+export interface ExportPrefs {
+  /** Custom base file name, or null to use the source clip's name. */
+  fileName: string | null;
+  variants: ExportVariant[];
+}
+
 export interface ProjectMedia {
   /** Chromium only; null when the folder was picked via the fallback input. */
   dirHandle: PersistedDirectoryHandle | null;
@@ -79,6 +86,8 @@ export interface ProjectDoc {
   lut: SavedLut;
   /** Title-style theme (preset + tweaks), or null for element styles as-is. */
   theme: StyleTheme | null;
+  /** The export matrix: custom base name + the deliverables one press makes. */
+  exportPrefs: ExportPrefs;
   // --- bound half ----------------------------------------------------------
   media: ProjectMedia;
   // --- baked gallery facts (usable without the media) ----------------------
@@ -96,7 +105,7 @@ export function createProjectDoc(
   aspectId: string,
   elements: OverlayElement[],
   guides: GuidesState,
-  template?: Pick<ProjectDoc, 'elements' | 'guides' | 'lut' | 'theme'>,
+  template?: Pick<ProjectDoc, 'elements' | 'guides' | 'lut' | 'theme' | 'exportPrefs'>,
 ): ProjectDoc {
   const now = Date.now();
   return {
@@ -112,6 +121,9 @@ export function createProjectDoc(
       ? structuredClone(template.lut)
       : { selected: 'none', customName: null, customText: null, intensity: 1 },
     theme: template ? structuredClone(template.theme) : null,
+    exportPrefs: template
+      ? structuredClone(template.exportPrefs)
+      : { fileName: null, variants: defaultVariants() },
     media: { dirHandle: null, files: [], activeId: null },
     thumbnail: null,
     durationSeconds: null,
@@ -120,14 +132,21 @@ export function createProjectDoc(
 
 /**
  * Bring a stored document up to the current version. v1 → v2 adds the
- * title-style theme (null: element styles as-is, visually identical).
- * Idempotent; the store runs it on every read.
+ * title-style theme (null: element styles as-is, visually identical);
+ * v2 → v3 adds the export matrix (one source-faithful variant — exactly
+ * what Export used to do). Idempotent; the store runs it on every read.
  */
 export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
   if (doc.version >= PROJECT_DOC_VERSION) return doc;
   const migrated = { ...doc };
   if (migrated.version < 2) {
     migrated.theme = migrated.theme ?? null;
+  }
+  if (migrated.version < 3) {
+    migrated.exportPrefs = migrated.exportPrefs ?? {
+      fileName: null,
+      variants: defaultVariants(),
+    };
   }
   migrated.version = PROJECT_DOC_VERSION;
   return migrated;

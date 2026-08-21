@@ -22,6 +22,10 @@ describe('migrateProjectDoc', () => {
     const migrated = migrateProjectDoc(v1Doc());
     expect(migrated.version).toBe(PROJECT_DOC_VERSION);
     expect(migrated.theme).toBeNull();
+    // v3: the export matrix defaults to the one source-faithful variant.
+    expect(migrated.exportPrefs.fileName).toBeNull();
+    expect(migrated.exportPrefs.variants).toHaveLength(1);
+    expect(migrated.exportPrefs.variants[0].aspectId).toBe('source');
   });
 
   it('is idempotent and leaves current documents untouched', () => {

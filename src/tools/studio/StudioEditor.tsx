@@ -14,7 +14,18 @@ import { findCue } from '../../shared/telemetry/find-cue';
 import ElementList from '../../shared/overlay/ElementList';
 import ElementPanel from '../../shared/overlay/ElementPanel';
 import GuidesControl from '../../shared/overlay/GuidesControl';
-import { exportOverlay } from '../../shared/overlay/export-overlay';
+import { exportOverlayVideoViaSeek } from '../../shared/overlay/export-overlay-seek';
+import { exportVariantVideo } from '../../shared/media/export-variant';
+import { downloadBlob } from '../../shared/media/save';
+import { DecodeUnsupportedError } from '../../shared/media/webcodecs-export';
+import {
+  createVariant,
+  defaultVariants,
+  variantFileName,
+  variantOutputSize,
+  type ExportVariant,
+  type VariantResolution,
+} from '../../shared/projects/export-variants';
 import { ensureOverlayFonts } from '../../shared/overlay/fonts';
 import {
   createHeadingArrowElement,
@@ -116,8 +127,15 @@ export default function StudioEditor({
   // Export state.
   const [exporting, setExporting] = useState(false);
   const [exportRatio, setExportRatio] = useState(0);
+  const [exportStep, setExportStep] = useState<{ index: number; total: number } | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportDone, setExportDone] = useState(false);
+  const [exportFileName, setExportFileName] = useState(project.exportPrefs.fileName ?? '');
+  const [variants, setVariants] = useState<ExportVariant[]>(() =>
+    project.exportPrefs.variants.length
+      ? structuredClone(project.exportPrefs.variants)
+      : defaultVariants(),
+  );
   const exportAbort = useRef<AbortController | null>(null);
   const exportSupported = isEncodeSupported();
 
@@ -348,6 +366,10 @@ export default function StudioEditor({
             intensity: lutSel.intensity,
           },
           theme,
+          exportPrefs: {
+            fileName: exportFileName.trim() || null,
+            variants,
+          },
           media: {
             ...docRef.current.media,
             files: mediaFiles.length ? mediaFiles : docRef.current.media.files,
@@ -372,6 +394,8 @@ export default function StudioEditor({
     projectName,
     aspectId,
     theme,
+    exportFileName,
+    variants,
     activeId,
     lutSel.selected,
     lutSel.intensity,
@@ -381,37 +405,76 @@ export default function StudioEditor({
 
   // --- export -------------------------------------------------------------
 
+  /** Render every requested variant in turn; each downloads as it finishes. */
   async function handleExport() {
-    if (!active || !activeVideo || exporting) return;
+    if (!active || !activeVideo || exporting || variants.length === 0) return;
+    const meta = lib.meta.get(active.id);
+    const srcWidth = meta?.width ?? videoRef.current?.videoWidth ?? 0;
+    const srcHeight = meta?.height ?? videoRef.current?.videoHeight ?? 0;
+    if (!srcWidth || !srcHeight) {
+      setExportError('The clip has not produced its dimensions yet — play a frame first.');
+      return;
+    }
     setExporting(true);
     setExportRatio(0);
     setExportError(null);
     setExportDone(false);
     const controller = new AbortController();
     exportAbort.current = controller;
-    const meta = lib.meta.get(active.id);
     // Prefer the transcoded H.264 (if one was made for preview): WebCodecs can
-    // decode it directly, where the HEVC original would fall back or fail.
-    const transcoded = activeTranscode.transcoded;
+    // decode it directly, where the HEVC original would fail.
+    const source = activeTranscode.transcoded ?? activeVideo;
+    const base = exportFileName.trim() || active.baseName;
     try {
-      await exportOverlay(
-        transcoded ?? activeVideo,
-        cues,
-        elements,
-        lutSel.lut,
-        lutSel.intensity,
-        theme,
-        {
-          codec: transcoded ? undefined : activeInfo.codec,
-          width: meta?.width,
-          height: meta?.height,
-          videoPlayable: transcoded ? true : !activeError,
-        },
-        (p) => {
+      for (let i = 0; i < variants.length; i += 1) {
+        const variant = variants[i];
+        setExportStep({ index: i + 1, total: variants.length });
+        setExportRatio(0);
+        const opts = {
+          elements,
+          cues,
+          lut: lutSel.lut,
+          intensity: lutSel.intensity,
+          theme,
+          srcWidth,
+          srcHeight,
+        };
+        const onProgress = (p: { phase: string; ratio: number | null }) => {
           if (p.phase === 'encoding' && p.ratio != null) setExportRatio(p.ratio);
-        },
-        controller.signal,
-      );
+        };
+        let blob: Blob;
+        try {
+          blob = await exportVariantVideo(source, variant, opts, onProgress, controller.signal);
+        } catch (err) {
+          // Source-geometry variants keep the codec-agnostic seek fallback
+          // (playable-but-undecodable HEVC); reframed ones cannot.
+          const sourceGeometry =
+            variant.aspectId === 'source' && variant.resolution === 'source';
+          if (
+            err instanceof DecodeUnsupportedError &&
+            sourceGeometry &&
+            !activeError
+          ) {
+            blob = await exportOverlayVideoViaSeek(
+              source,
+              cues,
+              variant.overlays ? elements : [],
+              lutSel.lut,
+              lutSel.intensity,
+              theme,
+              onProgress,
+              controller.signal,
+            );
+          } else if (err instanceof DecodeUnsupportedError) {
+            throw new Error(
+              "This browser can't decode the source for a reframed export — transcode the clip to H.264 first (Overlay tab banner).",
+            );
+          } else {
+            throw err;
+          }
+        }
+        downloadBlob(blob, variantFileName(base, variant));
+      }
       setExportDone(true);
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
@@ -419,8 +482,21 @@ export default function StudioEditor({
       }
     } finally {
       setExporting(false);
+      setExportStep(null);
       exportAbort.current = null;
     }
+  }
+
+  function updateVariant(id: string, patch: Partial<ExportVariant>) {
+    setVariants((prev) => prev.map((v) => (v.id === id ? { ...v, ...patch } : v)));
+  }
+  function addVariant() {
+    // A new row starts from the project's destination format — the reason the
+    // format lives in the settings.
+    setVariants((prev) => [...prev, createVariant(aspectId)]);
+  }
+  function removeVariant(id: string) {
+    setVariants((prev) => (prev.length > 1 ? prev.filter((v) => v.id !== id) : prev));
   }
 
   function cancelExport() {
@@ -755,31 +831,109 @@ export default function StudioEditor({
               )}
 
               {tab === 'export' && (
-                <div className="flex flex-col gap-3">
-                  <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[0.8rem]">
-                    <dt className="font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted pt-[2px]">
-                      Source
-                    </dt>
-                    <dd className="m-0 truncate" title={active.baseName}>
-                      {active.baseName}
-                    </dd>
-                    {activeDetail && (
-                      <>
-                        <dt className="font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted pt-[2px]">
-                          Detail
-                        </dt>
-                        <dd className="m-0 font-mono text-[0.76rem] tabular-nums">
-                          {activeDetail}
-                        </dd>
-                      </>
-                    )}
-                    <dt className="font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted pt-[2px]">
-                      Output
-                    </dt>
-                    <dd className="m-0">
-                      H.264 MP4, source resolution, overlays + look burned in
-                    </dd>
-                  </dl>
+                <div className="flex flex-col gap-3.5">
+                  <label className="flex flex-col gap-1">
+                    <span className="font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted">
+                      File name
+                    </span>
+                    <input
+                      type="text"
+                      value={exportFileName}
+                      onChange={(e) => setExportFileName(e.target.value)}
+                      placeholder={active.baseName}
+                      className="font-sans text-[0.84rem] px-3 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
+                    />
+                  </label>
+
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted">
+                      Variants · {variants.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={addVariant}
+                      className="p-0 border-0 bg-transparent text-[0.78rem] text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] hover:text-accent"
+                    >
+                      + Add variant
+                    </button>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    {variants.map((v) => {
+                      const dims =
+                        activeMeta?.width && activeMeta?.height
+                          ? variantOutputSize(v, activeMeta.width, activeMeta.height)
+                          : null;
+                      return (
+                        <div
+                          key={v.id}
+                          className="flex flex-col gap-2 border border-line rounded-paper bg-paper px-2.5 py-2"
+                        >
+                          <div className="flex items-center gap-2">
+                            <select
+                              className="flex-1 min-w-0 font-sans text-[0.78rem] px-2 py-[0.35rem] border border-line-strong rounded-paper bg-surface text-ink cursor-pointer focus:outline-none focus:border-accent"
+                              value={v.aspectId}
+                              onChange={(e) => updateVariant(v.id, { aspectId: e.target.value })}
+                              aria-label="Variant format"
+                            >
+                              <option value="source">Source frame</option>
+                              {ASPECT_PRESETS.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                  {a.id} — {a.label}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              className="flex-none font-sans text-[0.78rem] px-2 py-[0.35rem] border border-line-strong rounded-paper bg-surface text-ink cursor-pointer focus:outline-none focus:border-accent"
+                              value={String(v.resolution)}
+                              onChange={(e) =>
+                                updateVariant(v.id, {
+                                  resolution: (e.target.value === 'source'
+                                    ? 'source'
+                                    : Number(e.target.value)) as VariantResolution,
+                                })
+                              }
+                              aria-label="Variant resolution"
+                            >
+                              <option value="source">Source res</option>
+                              <option value="1080">1080p</option>
+                              <option value="720">720p</option>
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => removeVariant(v.id)}
+                              disabled={variants.length <= 1}
+                              className="flex-none w-6 h-6 grid place-items-center rounded-full border border-line bg-transparent text-faint cursor-pointer hover:text-[#9a3a23] hover:border-[#e3b8a9] disabled:opacity-30 disabled:cursor-default"
+                              aria-label="Remove variant"
+                              title="Remove this variant"
+                            >
+                              ×
+                            </button>
+                          </div>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <label className="flex items-center gap-1.5 cursor-pointer select-none flex-none">
+                              <input
+                                type="checkbox"
+                                className="w-3.5 h-3.5 accent-accent cursor-pointer"
+                                checked={v.overlays}
+                                onChange={(e) => updateVariant(v.id, { overlays: e.target.checked })}
+                              />
+                              <span className="font-mono text-[0.62rem] tracking-[0.1em] uppercase text-muted">
+                                Overlays
+                              </span>
+                            </label>
+                            <span
+                              className="flex-1 min-w-0 text-right font-mono text-[0.68rem] tabular-nums text-faint truncate"
+                              title={variantFileName(exportFileName.trim() || active.baseName, v)}
+                            >
+                              {dims ? `${dims.w}×${dims.h} · ` : ''}
+                              {variantFileName(exportFileName.trim() || active.baseName, v)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
 
                   {!exportSupported && (
                     <p className="m-0 text-[0.78rem] text-muted">
@@ -792,7 +946,10 @@ export default function StudioEditor({
                     <div className="flex flex-col gap-2" role="status">
                       <div className="flex items-center gap-3">
                         <span className="font-mono text-[0.74rem] tracking-[0.04em] text-ink-soft flex-none">
-                          Exporting… {Math.round(exportRatio * 100)}%
+                          {exportStep && exportStep.total > 1
+                            ? `Variant ${exportStep.index}/${exportStep.total} · `
+                            : 'Exporting… '}
+                          {Math.round(exportRatio * 100)}%
                         </span>
                         <progress
                           data-export
@@ -816,7 +973,7 @@ export default function StudioEditor({
                           className="text-[0.78rem] text-[#3f6b3f] font-semibold"
                           role="status"
                         >
-                          ✓ Exported
+                          ✓ Exported {variants.length > 1 ? `${variants.length} variants` : ''}
                         </span>
                       )}
                       {exportError && (
@@ -829,9 +986,9 @@ export default function StudioEditor({
                         className="px-[1.1rem] py-2 inline-flex items-center justify-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.82rem] font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent hover:text-white active:scale-[0.98] disabled:opacity-50 disabled:cursor-default"
                         onClick={handleExport}
                         disabled={!active || !exportSupported}
-                        title="Render a copy with the overlays and look burned in (H.264 MP4)"
+                        title="Render every variant (H.264 MP4), one after the other"
                       >
-                        Export MP4
+                        Export {variants.length > 1 ? `${variants.length} MP4s` : 'MP4'}
                       </button>
                     </>
                   )}
