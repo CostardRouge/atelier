@@ -7,12 +7,25 @@ import {
   type SpeedUnit,
   type TelemetryFieldKey,
 } from './overlay-types';
+import {
+  resolveElementStyle,
+  type StyleTheme,
+  type ThemableKey,
+} from './title-styles';
 
 const SPEED_FIELDS: ReadonlySet<TelemetryFieldKey> = new Set(['gnd_speed', 'vert_speed']);
 
 interface ElementPanelProps {
   element: OverlayElement;
   onChange: (patch: Partial<OverlayElement>) => void;
+  /**
+   * The project's title-style theme, when the host has one (the studio).
+   * With a theme, controls display the RESOLVED appearance, editing an
+   * appearance control pins that property as an element override, and each
+   * pinned property offers a "back to theme" reset. Without a theme the panel
+   * behaves exactly as before themes existed.
+   */
+  theme?: StyleTheme | null;
 }
 
 const ANCHORS: Anchor[] = [
@@ -39,6 +52,19 @@ const labelClass =
 const inputClass =
   'font-sans text-[0.82rem] text-ink bg-surface border border-line-strong rounded-paper px-[0.6rem] py-[0.4rem] w-full';
 
+/** Which element patch keys pin which themable property. */
+const THEMABLE_OF: Record<string, ThemableKey> = {
+  fontFamily: 'fontFamily',
+  weight: 'weight',
+  italic: 'italic',
+  color: 'color',
+  legibility: 'legibility',
+  uppercase: 'uppercase',
+  letterSpacingEm: 'letterSpacing',
+  glowAmount: 'glow',
+  glowWarmth: 'glow',
+};
+
 /** Parse an `rgba()`/hex colour into a `#rrggbb` hex and alpha (0..1). */
 function splitColor(color: string): { hex: string; alpha: number } {
   const rgba = color.match(/rgba?\(([^)]+)\)/i);
@@ -63,12 +89,79 @@ function toRgba(hex: string, alpha: number): string {
 }
 
 /** Style controls for the selected overlay element. */
-export default function ElementPanel({ element, onChange }: ElementPanelProps) {
-  const leg = element.legibility;
+export default function ElementPanel({ element, onChange, theme }: ElementPanelProps) {
+  const activeTheme = theme ?? null;
+  // With a theme, controls show the effective (resolved) appearance; without
+  // one this is exactly the element's own values.
+  const st = resolveElementStyle(element, activeTheme);
+  const leg = st.legibility;
   const legColor = splitColor(leg.color);
+  const overrides = element.styleOverrides ?? [];
+
+  /** Patch + pin any appearance keys the patch touches (only under a theme). */
+  function change(patch: Partial<OverlayElement>) {
+    if (activeTheme) {
+      const pinned = new Set(overrides);
+      let grew = false;
+      for (const key of Object.keys(patch)) {
+        const themable = THEMABLE_OF[key];
+        if (themable && !pinned.has(themable)) {
+          pinned.add(themable);
+          grew = true;
+        }
+      }
+      if (grew) {
+        onChange({ ...patch, styleOverrides: [...pinned] });
+        return;
+      }
+    }
+    onChange(patch);
+  }
+
+  function resetOverride(key: ThemableKey) {
+    onChange({ styleOverrides: overrides.filter((k) => k !== key) });
+  }
+
+  /** "Back to theme" affordance beside a control whose property is pinned. */
+  function OverrideDot({ prop }: { prop: ThemableKey }) {
+    if (!activeTheme || !overrides.includes(prop)) return null;
+    return (
+      <button
+        type="button"
+        className="p-0 border-0 bg-transparent text-accent cursor-pointer leading-none text-[0.72rem]"
+        title="Overriding the project style — click to follow the theme again"
+        aria-label={`Reset ${prop} to theme`}
+        onClick={() => resetOverride(prop)}
+      >
+        ↺
+      </button>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-[0.85rem]">
+      {activeTheme && (
+        <div className="flex items-center gap-2 text-[0.72rem] text-muted">
+          {overrides.length === 0 ? (
+            <span>Following the project style.</span>
+          ) : (
+            <>
+              <span>
+                {overrides.length} propert{overrides.length === 1 ? 'y' : 'ies'}{' '}
+                overriding the style.
+              </span>
+              <button
+                type="button"
+                className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[2px]"
+                onClick={() => onChange({ styleOverrides: [] })}
+              >
+                Reset all
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Content */}
       {element.kind === 'heading-arrow' ? (
         <div className="flex flex-col gap-2">
@@ -81,7 +174,7 @@ export default function ElementPanel({ element, onChange }: ElementPanelProps) {
               type="checkbox"
               className="w-3.5 h-3.5 accent-accent cursor-pointer"
               checked={element.showCompass ?? false}
-              onChange={(e) => onChange({ showCompass: e.target.checked })}
+              onChange={(e) => change({ showCompass: e.target.checked })}
             />
             <span className={labelClass}>Compass ring (N / E / S / W)</span>
           </label>
@@ -92,7 +185,7 @@ export default function ElementPanel({ element, onChange }: ElementPanelProps) {
                 className={`${inputClass} cursor-pointer`}
                 value={element.compassMode ?? 'absolute'}
                 onChange={(e) =>
-                  onChange({
+                  change({
                     compassMode: e.target.value as 'absolute' | 'relative',
                   })
                 }
@@ -110,7 +203,7 @@ export default function ElementPanel({ element, onChange }: ElementPanelProps) {
             type="text"
             className={inputClass}
             value={element.text ?? ''}
-            onChange={(e) => onChange({ text: e.target.value })}
+            onChange={(e) => change({ text: e.target.value })}
           />
         </label>
       ) : (
@@ -121,7 +214,7 @@ export default function ElementPanel({ element, onChange }: ElementPanelProps) {
               className={`${inputClass} cursor-pointer`}
               value={element.field}
               onChange={(e) =>
-                onChange({ field: e.target.value as TelemetryFieldKey })
+                change({ field: e.target.value as TelemetryFieldKey })
               }
             >
               {FIELD_KEYS.map((k) => (
@@ -138,7 +231,7 @@ export default function ElementPanel({ element, onChange }: ElementPanelProps) {
               className={inputClass}
               placeholder="(none)"
               value={element.label ?? ''}
-              onChange={(e) => onChange({ label: e.target.value })}
+              onChange={(e) => change({ label: e.target.value })}
             />
           </label>
           {element.field && SPEED_FIELDS.has(element.field) && (
@@ -147,7 +240,7 @@ export default function ElementPanel({ element, onChange }: ElementPanelProps) {
               <select
                 className={`${inputClass} cursor-pointer`}
                 value={element.speedUnit ?? 'm/s'}
-                onChange={(e) => onChange({ speedUnit: e.target.value as SpeedUnit })}
+                onChange={(e) => change({ speedUnit: e.target.value as SpeedUnit })}
               >
                 <option value="m/s">m/s</option>
                 <option value="km/h">km/h</option>
@@ -160,12 +253,14 @@ export default function ElementPanel({ element, onChange }: ElementPanelProps) {
       {/* Font — not applicable to heading arrows */}
       {element.kind !== 'heading-arrow' && (
         <label className="flex flex-col gap-1">
-          <span className={labelClass}>Font</span>
+          <span className={`${labelClass} flex items-center gap-1.5`}>
+            Font <OverrideDot prop="fontFamily" />
+          </span>
           <select
             className={`${inputClass} cursor-pointer`}
-            value={element.fontFamily}
+            value={st.fontFamily}
             onChange={(e) =>
-              onChange({ fontFamily: e.target.value as OverlayElement['fontFamily'] })
+              change({ fontFamily: e.target.value as OverlayElement['fontFamily'] })
             }
           >
             {CURATED_FONTS.map((f) => (
@@ -177,7 +272,7 @@ export default function ElementPanel({ element, onChange }: ElementPanelProps) {
         </label>
       )}
 
-      {/* Size */}
+      {/* Size — geometry: always the element's own (themes only multiply it) */}
       <label className="flex flex-col gap-1">
         <span className={labelClass}>
           Size · {Math.round(element.sizeFrac * 100)}% of shorter side
@@ -189,30 +284,34 @@ export default function ElementPanel({ element, onChange }: ElementPanelProps) {
           max={0.14}
           step={0.005}
           value={element.sizeFrac}
-          onChange={(e) => onChange({ sizeFrac: Number(e.target.value) })}
+          onChange={(e) => change({ sizeFrac: Number(e.target.value) })}
         />
       </label>
 
       {/* Colour + weight + italic (weight/italic not applicable to arrows) */}
       <div className="flex items-end gap-3">
         <label className="flex flex-col gap-1">
-          <span className={labelClass}>Colour</span>
+          <span className={`${labelClass} flex items-center gap-1.5`}>
+            Colour <OverrideDot prop="color" />
+          </span>
           <input
             type="color"
             className="w-12 h-9 p-0 border border-line-strong rounded-paper bg-surface cursor-pointer"
-            value={element.color.startsWith('#') ? element.color : '#ffffff'}
-            onChange={(e) => onChange({ color: e.target.value })}
+            value={st.color.startsWith('#') ? st.color : '#ffffff'}
+            onChange={(e) => change({ color: e.target.value })}
           />
         </label>
         {element.kind !== 'heading-arrow' && (
           <>
             <label className="flex flex-col gap-1 flex-1">
-              <span className={labelClass}>Weight</span>
+              <span className={`${labelClass} flex items-center gap-1.5`}>
+                Weight <OverrideDot prop="weight" />
+              </span>
               <select
                 className={`${inputClass} cursor-pointer`}
-                value={element.weight}
+                value={st.weight}
                 onChange={(e) =>
-                  onChange({ weight: Number(e.target.value) as FontWeight })
+                  change({ weight: Number(e.target.value) as FontWeight })
                 }
               >
                 {WEIGHTS.map((w) => (
@@ -225,8 +324,8 @@ export default function ElementPanel({ element, onChange }: ElementPanelProps) {
             <button
               type="button"
               className="flex-none h-9 px-3 border border-line-strong rounded-paper bg-paper text-ink-soft cursor-pointer italic font-serif text-[0.95rem] aria-pressed:border-accent aria-pressed:text-accent-ink"
-              aria-pressed={element.italic}
-              onClick={() => onChange({ italic: !element.italic })}
+              aria-pressed={st.italic}
+              onClick={() => change({ italic: !st.italic })}
               title="Italic"
             >
               I
@@ -249,7 +348,7 @@ export default function ElementPanel({ element, onChange }: ElementPanelProps) {
                   : 'border-line-strong bg-paper hover:border-accent'
               }`}
               aria-pressed={element.anchor === a}
-              onClick={() => onChange({ anchor: a })}
+              onClick={() => change({ anchor: a })}
               title={a}
             >
               <span
@@ -265,12 +364,14 @@ export default function ElementPanel({ element, onChange }: ElementPanelProps) {
       {/* Legibility */}
       <div className="flex flex-col gap-2 pt-1 border-t border-line">
         <label className="flex flex-col gap-1">
-          <span className={labelClass}>Legibility</span>
+          <span className={`${labelClass} flex items-center gap-1.5`}>
+            Legibility <OverrideDot prop="legibility" />
+          </span>
           <select
             className={`${inputClass} cursor-pointer`}
             value={leg.mode}
             onChange={(e) =>
-              onChange({
+              change({
                 legibility: { ...leg, mode: e.target.value as typeof leg.mode },
               })
             }
@@ -289,7 +390,7 @@ export default function ElementPanel({ element, onChange }: ElementPanelProps) {
                 className="w-12 h-9 p-0 border border-line-strong rounded-paper bg-surface cursor-pointer"
                 value={legColor.hex}
                 onChange={(e) =>
-                  onChange({
+                  change({
                     legibility: { ...leg, color: toRgba(e.target.value, legColor.alpha) },
                   })
                 }
@@ -307,7 +408,7 @@ export default function ElementPanel({ element, onChange }: ElementPanelProps) {
                 step={0.05}
                 value={legColor.alpha}
                 onChange={(e) =>
-                  onChange({
+                  change({
                     legibility: {
                       ...leg,
                       color: toRgba(legColor.hex, Number(e.target.value)),

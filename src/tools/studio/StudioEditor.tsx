@@ -29,6 +29,8 @@ import { DEFAULT_GUIDES, type GuidesState } from '../../shared/overlay/guides';
 import { useOverlayStage } from '../../shared/overlay/use-overlay-stage';
 import { useLutSelection } from '../../shared/lut/use-lut-selection';
 import LutPicker from '../../shared/lut/LutPicker';
+import type { StyleTheme } from '../../shared/overlay/title-styles';
+import StylePanel from './StylePanel';
 import { savedMediaRef, type ProjectDoc } from '../../shared/projects/project-types';
 import { putProject } from '../../shared/projects/project-store';
 import type { Reconciliation } from '../../shared/projects/reconcile';
@@ -36,10 +38,11 @@ import type { Reconciliation } from '../../shared/projects/reconcile';
 /** Clips with or without telemetry — the studio edits both. */
 const STUDIO_KINDS = ['video+telemetry', 'video'] as const;
 
-type PanelTab = 'overlay' | 'grade' | 'export';
+type PanelTab = 'overlay' | 'style' | 'grade' | 'export';
 
 const TABS: Array<{ id: PanelTab; label: string }> = [
   { id: 'overlay', label: 'Overlay' },
+  { id: 'style', label: 'Style' },
   { id: 'grade', label: 'Grade' },
   { id: 'export', label: 'Export' },
 ];
@@ -103,6 +106,7 @@ export default function StudioEditor({
   const [guides, setGuides] = useState<GuidesState>(() => project.guides ?? DEFAULT_GUIDES);
   const [fontTick, setFontTick] = useState(0);
   const [projectName, setProjectName] = useState(project.name);
+  const [theme, setTheme] = useState<StyleTheme | null>(() => project.theme);
   const [saveState, setSaveState] = useState<SaveState>('saved');
 
   // Export state.
@@ -199,13 +203,13 @@ export default function StudioEditor({
   // measures and renders correctly.
   useEffect(() => {
     let cancelled = false;
-    ensureOverlayFonts(elements).then(() => {
+    ensureOverlayFonts(elements, theme).then(() => {
       if (!cancelled) setFontTick((t) => t + 1);
     });
     return () => {
       cancelled = true;
     };
-  }, [elements]);
+  }, [elements, theme]);
 
   // --- element editing ----------------------------------------------------
 
@@ -227,6 +231,7 @@ export default function StudioEditor({
               canvas.width,
               canvas.height,
               patch.anchor,
+              theme,
             );
           }
           return moved ? { ...e, ...patch, ...moved } : { ...e, ...patch };
@@ -268,6 +273,7 @@ export default function StudioEditor({
     guides,
     lut: lutSel.lut,
     intensity: lutSel.intensity,
+    theme,
     resetKey: activeUrl,
     redrawSignal: fontTick,
     onSelect: setSelectedElementId,
@@ -336,6 +342,7 @@ export default function StudioEditor({
             customText: lutSel.customText,
             intensity: lutSel.intensity,
           },
+          theme,
           media: {
             ...docRef.current.media,
             files: mediaFiles.length ? mediaFiles : docRef.current.media.files,
@@ -358,6 +365,7 @@ export default function StudioEditor({
     elements,
     guides,
     projectName,
+    theme,
     activeId,
     lutSel.selected,
     lutSel.intensity,
@@ -386,7 +394,7 @@ export default function StudioEditor({
         elements,
         lutSel.lut,
         lutSel.intensity,
-        null,
+        theme,
         {
           codec: transcoded ? undefined : activeInfo.codec,
           width: meta?.width,
@@ -683,6 +691,7 @@ export default function StudioEditor({
                       </h2>
                       <ElementPanel
                         element={selectedElement}
+                        theme={theme}
                         onChange={(patch) =>
                           updateElement(selectedElement.id, patch)
                         }
@@ -694,6 +703,10 @@ export default function StudioEditor({
                     <GuidesControl guides={guides} onChange={setGuides} />
                   </div>
                 </>
+              )}
+
+              {tab === 'style' && (
+                <StylePanel theme={theme} onChange={setTheme} />
               )}
 
               {tab === 'grade' && (
