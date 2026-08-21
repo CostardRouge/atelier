@@ -3,6 +3,7 @@ import {
   LUT_GROUPS,
   UNGROUPED_LUTS,
 } from '../../shared/lut/builtin-luts';
+import { OUTPUT_TRANSFORM_OPTIONS } from '../../shared/lut/transfer';
 import type { LutStack } from '../../shared/lut/use-lut-stack';
 
 interface GradePanelProps {
@@ -11,6 +12,9 @@ interface GradePanelProps {
 
 const labelClass =
   'font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted';
+
+const selectClass =
+  'w-full min-w-0 font-sans text-[0.8rem] px-2 py-[0.4rem] border border-line-strong rounded-paper bg-paper text-ink cursor-pointer focus:outline-none focus:border-accent disabled:opacity-60';
 
 /**
  * The grade: a stack of looks applied top to bottom, each with its own
@@ -27,6 +31,12 @@ export default function GradePanel({ stack }: GradePanelProps) {
   const activeCount = stack.layers.filter(
     (l) => l.enabled && l.intensity > 0,
   ).length;
+
+  // Conversion LUTs are authored for a Rec.709 reference display (~gamma 2.4)
+  // while a browser shows ~2.2, so a look can read flatter here than intended.
+  // Rec.709 and sRGB share primaries — only the curve changes.
+  const outputHint =
+    OUTPUT_TRANSFORM_OPTIONS.find((o) => o.id === stack.output)?.hint ?? '';
 
   return (
     <div className="flex flex-col gap-3">
@@ -166,6 +176,30 @@ export default function GradePanel({ stack }: GradePanelProps) {
           ))}
         </div>
       )}
+
+      {/* Output transform — the delivery stage, always last */}
+      <div className="flex flex-col gap-1.5 pt-1 border-t border-line">
+        <span className={labelClass}>Output transform</span>
+        <select
+          className={selectClass}
+          value={stack.output}
+          onChange={(e) =>
+            stack.setOutput(
+              e.target.value as (typeof OUTPUT_TRANSFORM_OPTIONS)[number]['id'],
+            )
+          }
+          aria-label="Output transform"
+        >
+          {OUTPUT_TRANSFORM_OPTIONS.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <p className="m-0 text-[0.72rem] text-faint leading-relaxed">
+          {outputHint}
+        </p>
+      </div>
 
       <p className="m-0 text-[0.72rem] text-faint leading-relaxed">
         Looks apply top to bottom and bake into one LUT — the preview, the

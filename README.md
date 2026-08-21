@@ -72,7 +72,22 @@ bottom — each with its own strength (0–300%) and an on/off switch for
 instant A/B, reordered with ↑/↓. The stack **bakes into a single LUT**
 (each layer resampled through the previous one, the way an NLE flattens a
 node graph), so the preview, the stills and every export variant still grade
-through one shader pass. The stage, element model and
+through one shader pass.
+
+**Output transform.** Conversion LUTs (D-Log→709, Apple Log→709, S-Log→709)
+are authored for a Rec.709 reference display — BT.1886, gamma 2.4, a dark
+grading suite. A browser shows roughly gamma 2.2, so those looks arrive
+lighter and flatter than intended: the error is ~+59% at code 0.1 and 0% at
+both ends, which reads as milky, lifted blacks rather than a brighter image.
+Pick **Rec.709 2.4 → sRGB** at the foot of the Grade tab and the grade is
+re-encoded for the screen it will actually be watched on. Rec.709 and sRGB
+share primaries, so only the curve changes — no gamut conversion is involved.
+It defaults to **None**, so nothing you already made re-grades itself, and
+`sRGB → Rec.709 2.4` goes the other way for a calibrated TV. It is a
+*delivery* stage, always last, baked into the same single LUT. Note this is
+tonal, not spatial: it restores contrast, it does not sharpen.
+
+The stage, element model and
 export come from the shared overlay engine (`src/shared/overlay/`) — the same
 renderer draws the preview and the export, so what you place is exactly what
 burns in. An **A/B** toggle on the transport wipes original against composed

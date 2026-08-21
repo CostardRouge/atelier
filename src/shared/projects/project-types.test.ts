@@ -30,6 +30,8 @@ describe('migrateProjectDoc', () => {
     expect(migrated.lutStack).toEqual([]);
     // v5: no correction, which is exactly what an old project meant.
     expect(migrated.settings.timeShift).toEqual({ minutes: 0, days: 0 });
+    // v6: no output transform, so the grade is delivered exactly as authored.
+    expect(migrated.outputTransform).toBe('none');
   });
 
   it('keeps a capture-time correction that is already set', () => {
@@ -74,6 +76,26 @@ describe('migrateProjectDoc', () => {
       intensity: 1,
     };
     expect(migrateProjectDoc(orphan).lutStack).toEqual([]);
+  });
+
+  it("leaves an older document's grade untouched, transform off", () => {
+    // A saved project must look on reopen exactly as it did when it was
+    // closed — never re-encode someone's grade behind their back.
+    const stored: Record<string, unknown> = {
+      ...createProjectDoc('pre-transform', '16:9', [], DEFAULT_GUIDES),
+      version: 5,
+    };
+    delete stored.outputTransform;
+    const migrated = migrateProjectDoc(stored as unknown as ProjectDoc);
+    expect(migrated.version).toBe(PROJECT_DOC_VERSION);
+    expect(migrated.outputTransform).toBe('none');
+  });
+
+  it('keeps an output transform a document already carries', () => {
+    const doc = createProjectDoc('graded', '16:9', [], DEFAULT_GUIDES);
+    doc.outputTransform = 'rec709-to-srgb';
+    const stored = { ...doc, version: 5 } as ProjectDoc;
+    expect(migrateProjectDoc(stored).outputTransform).toBe('rec709-to-srgb');
   });
 
   it('is idempotent and leaves current documents untouched', () => {

@@ -185,7 +185,7 @@ export default function StudioEditor({
   useEffect(() => {
     if (restoredRef.current) return;
     restoredRef.current = true;
-    void lutStack.restore(project.lutStack);
+    void lutStack.restore(project.lutStack, project.outputTransform);
     if (project.media.activeId && clips.some((c) => c.id === project.media.activeId)) {
       lib.setActive(project.media.activeId);
     }
@@ -439,6 +439,7 @@ export default function StudioEditor({
           elements,
           guides,
           lutStack: lutStack.toSaved(),
+          outputTransform: lutStack.output,
           theme,
           exportPrefs: {
             fileName: exportFileName.trim() || null,
@@ -473,6 +474,7 @@ export default function StudioEditor({
     variants,
     activeId,
     lutStack.layers,
+    lutStack.output,
     clips,
   ]);
 
