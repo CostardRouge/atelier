@@ -37,6 +37,7 @@ import {
   resolveFrameRate,
   type ExportFrameRate,
 } from './frame-rate';
+import { safeChunkMetadata } from './colour-tag';
 
 export interface ExportProgress {
   phase: 'demuxing' | 'encoding' | 'finalizing';
@@ -424,7 +425,9 @@ export async function exportProcessedVideo(
   const codec = await pickAvcCodec(encoderConfig);
 
   const encoder = new VideoEncoder({
-    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+    // Guarded: a colour space the muxer cannot encode would become a WRONG
+      // colr box, not an absent one — see media/colour-tag.ts.
+      output: (chunk, meta) => muxer.addVideoChunk(chunk, safeChunkMetadata(meta)),
     error: (e) => {
       pipelineError = e instanceof Error ? e : new Error(String(e));
     },
