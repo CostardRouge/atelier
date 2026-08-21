@@ -11,6 +11,15 @@
  *   - **heading**         — course over ground (the bearing of the travel
  *                           vector), suppressed when the aircraft is hovering.
  *
+ * **Rates are per second of CAPTURE, not per second of file.** Every value here
+ * is a distance over a time, and on conformed footage (slow motion, time-lapse)
+ * the file's seconds are not life's: a 4× slow-motion clip would report a
+ * quarter of the true ground speed. `timeScale` — capture seconds per media
+ * second, measured in `time-scale.ts` — converts both the divisor and the
+ * look-back window, so the readings stay physical whatever cadence the camera
+ * conformed to. The heading needs no such correction: an azimuth is a ratio of
+ * distances, and stretching time does not turn it.
+ *
  * Why a *window* and not consecutive frames: at 50–60 fps the GPS only refreshes
  * a few times a second, so most frame-to-frame position deltas are exactly zero
  * and the rest are large spikes. Differencing each frame against its immediate
@@ -40,9 +49,9 @@ export interface Motion {
 const EARTH_RADIUS_M = 6_371_008.8;
 const DEG2RAD = Math.PI / 180;
 
-/** Target look-back window for a stable estimate, in seconds. */
+/** Target look-back window for a stable estimate, in seconds of CAPTURE time. */
 const WINDOW_S = 1.0;
-/** Minimum spanned time to trust a derived value (avoids tiny-dt noise). */
+/** Minimum spanned CAPTURE time to trust a derived value (avoids tiny-dt noise). */
 const MIN_DT_S = 0.3;
 /** Below this horizontal travel (metres) the heading is GPS noise, not motion. */
 const MIN_MOVE_M = 1.0;
@@ -134,21 +143,41 @@ export function lastIndexAtOrBefore(cues: Cue[], t: number): number {
  * Expects `cues` sorted by ascending `start` (as produced by `parseSrt`). The
  * first cue — and any cue whose look-back window is too short — gets an empty
  * motion object, so consumers can treat "no predecessor" the same as "missing".
+ *
+ * Always derives from the raw positions and times, so re-running it with another
+ * `timeScale` re-answers the question rather than compounding a correction.
+ *
+ * @param timeScale Capture seconds per second of media — `1` for ordinary
+ *   footage, `0.25` for 4× slow motion, `10` for a 10× time-lapse. It divides
+ *   the rates *and* stretches the look-back window: one second of flight is four
+ *   seconds of a 4× clip, and looking back a single file-second there would span
+ *   a quarter of the GPS updates the estimate needs.
  */
-export function attachMotion(cues: Cue[]): void {
+export function attachMotion(cues: Cue[], timeScale = 1): void {
+  const scale = Number.isFinite(timeScale) && timeScale > 0 ? timeScale : 1;
+  // The constants below are capture seconds; the cue timeline is media seconds,
+  // so the window converts into it and the spanned time converts out of it.
+  // Heavy slow motion can stretch a one-second window past the clip itself
+  // (8× on an eight-second file is the whole thing), which would quietly turn
+  // every reading into "the average since frame 0"; half the clip is the most
+  // that can still be called a window.
+  const mediaSpan = cues.length > 1 ? cues[cues.length - 1].start - cues[0].start : 0;
+  const windowS = mediaSpan > 0 ? Math.min(WINDOW_S / scale, mediaSpan / 2) : WINDOW_S / scale;
+
   for (let i = 0; i < cues.length; i++) {
     const cur = cues[i];
     const motion: Motion = {};
 
     if (i > 0) {
-      // Reference = the latest cue at least WINDOW_S older; fall back to the
+      // Reference = the latest cue at least `windowS` older; fall back to the
       // earliest cue while still inside that opening window.
-      let ref = lastIndexAtOrBefore(cues, cur.start - WINDOW_S);
+      let ref = lastIndexAtOrBefore(cues, cur.start - windowS);
       if (ref < 0) ref = 0;
       if (ref >= i) ref = i - 1;
 
       const prev = cues[ref];
-      const dt = cur.start - prev.start;
+      // Capture seconds spanned — the physical divisor of every rate below.
+      const dt = (cur.start - prev.start) * scale;
 
       if (dt >= MIN_DT_S) {
         const lat1 = num(prev.data.latitude);
@@ -178,6 +207,20 @@ export function attachMotion(cues: Cue[]): void {
 
     cur.derived = motion;
   }
+}
+
+/**
+ * A copy of `cues` with motion re-derived at `timeScale` — the studio's route
+ * when the author overrides the measured cadence.
+ *
+ * A copy, not a mutation: React holds the cue list as state, and re-deriving in
+ * place would leave every consumer looking at the same array reference with
+ * different numbers inside it. Shallow — `data` is read-only and shared.
+ */
+export function retimeCues(cues: readonly Cue[], timeScale: number): Cue[] {
+  const copy = cues.map((cue) => ({ ...cue }));
+  attachMotion(copy, timeScale);
+  return copy;
 }
 
 /** Display unit for speed values. */

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { useActiveAsset } from '../../shared/library/use-active-asset';
 import { useObjectUrl } from '../../shared/media/use-object-url';
@@ -84,6 +84,14 @@ import {
 import InfoPanel from './InfoPanel';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import { NO_SHIFT, type TimeShift } from '../../shared/telemetry/time-format';
+import {
+  AUTO_TIME_SCALE,
+  measureTimeScale,
+  overrideApplies,
+  resolveTimeScale,
+  type TimeScaleSetting,
+} from '../../shared/telemetry/time-scale';
+import { retimeCues } from '../../shared/telemetry/motion';
 import { savedMediaRef, type ProjectDoc } from '../../shared/projects/project-types';
 import { putProject } from '../../shared/projects/project-store';
 import type { Reconciliation } from '../../shared/projects/reconcile';
@@ -159,7 +167,10 @@ export default function StudioEditor({
   const [tab, setTab] = useState<PanelTab>('overlay');
   const [activeError, setActiveError] = useState(false);
   const [activeInfo, setActiveInfo] = useState<ContainerInfo>({});
-  const [cues, setCues] = useState<Cue[]>([]);
+  // Telemetry as parsed, with rates derived against the file's own seconds; the
+  // cadence correction is applied below, so changing it re-derives instead of
+  // re-reading the sidecar.
+  const [rawCues, setRawCues] = useState<Cue[]>([]);
 
   const [elements, setElements] = useState<OverlayElement[]>(() =>
     project.elements.length ? project.elements : defaultElementsPreset(),
@@ -201,6 +212,10 @@ export default function StudioEditor({
   // and timestamp element reads through the same one.
   const [timeShift, setTimeShift] = useState<TimeShift>(
     () => project.settings.timeShift ?? { ...NO_SHIFT },
+  );
+  // Slow motion / time-lapse: how much real time a second of this clip covers.
+  const [timeScale, setTimeScale] = useState<TimeScaleSetting>(
+    () => project.settings.timeScale ?? { ...AUTO_TIME_SCALE },
   );
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState<StyleTheme | null>(() => project.theme);
@@ -281,22 +296,34 @@ export default function StudioEditor({
   // Parse the active clip's telemetry — clips without an .srt just get no cues.
   useEffect(() => {
     if (!activeSrt) {
-      setCues([]);
+      setRawCues([]);
       return;
     }
     let cancelled = false;
     activeSrt
       .text()
       .then((text) => {
-        if (!cancelled) setCues(parseSrt(text));
+        if (!cancelled) setRawCues(parseSrt(text, { timeScale: 1 }));
       })
       .catch(() => {
-        if (!cancelled) setCues([]);
+        if (!cancelled) setRawCues([]);
       });
     return () => {
       cancelled = true;
     };
   }, [activeSrt]);
+
+  // The clip's cadence, measured from its own telemetry, and the scale actually
+  // in force (the author's override wins). Re-deriving is a pure pass over the
+  // cues, so a change to the setting costs no re-read and no re-parse — and it
+  // reaches every readout at once, because they all read `cue.derived`.
+  const timing = useMemo(() => measureTimeScale(rawCues), [rawCues]);
+  // An override belongs to the clip it was typed for: stepping to another clip
+  // falls back to that clip's own measurement rather than inheriting a cadence
+  // measured elsewhere.
+  const overridden = overrideApplies(timeScale, activeId);
+  const scale = resolveTimeScale(timeScale, timing, activeId);
+  const cues = useMemo(() => retimeCues(rawCues, scale), [rawCues, scale]);
 
   // Probe the active clip's container for codec + fps (best-effort).
   useEffect(() => {
@@ -600,7 +627,7 @@ export default function StudioEditor({
           ...docRef.current,
           name: projectName.trim() || docRef.current.name,
           updatedAt: Date.now(),
-          settings: { ...docRef.current.settings, aspectId, timeShift },
+          settings: { ...docRef.current.settings, aspectId, timeShift, timeScale },
           elements,
           guides,
           lutStack: lutStack.toSaved(),
@@ -635,6 +662,7 @@ export default function StudioEditor({
     projectName,
     aspectId,
     timeShift,
+    timeScale,
     theme,
     exportFileName,
     variants,
@@ -978,11 +1006,23 @@ export default function StudioEditor({
           name={projectName}
           aspectId={aspectId}
           timeShift={timeShift}
+          timeScale={overridden ? timeScale : { ...AUTO_TIME_SCALE }}
+          measured={timing}
           onCancel={() => setShowSettings(false)}
-          onApply={({ name, aspectId: nextAspect, timeShift: nextShift }) => {
+          onApply={({
+            name,
+            aspectId: nextAspect,
+            timeShift: nextShift,
+            timeScale: nextScale,
+          }) => {
             setProjectName(name);
             setAspectId(nextAspect);
             setTimeShift(nextShift);
+            setTimeScale(
+              nextScale.mode === 'manual'
+                ? { ...nextScale, clipId: activeId ?? undefined }
+                : nextScale,
+            );
             setShowSettings(false);
           }}
           onExport={exportProjectFile}
@@ -1371,6 +1411,9 @@ export default function StudioEditor({
                   duration={duration}
                   cues={cues}
                   cue={activeCue}
+                  timing={timing}
+                  scale={scale}
+                  overridden={overridden}
                 />
               )}
 

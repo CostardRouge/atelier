@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   attachMotion,
+  retimeCues,
   bearing,
   compass16,
   formatGroundSpeed,
@@ -137,5 +138,90 @@ describe('motion formatters', () => {
     expect(formatHeading(90)).toBe('90° E');
     expect(formatHeading(247.5)).toBe('248° WSW');
     expect(formatHeading(undefined)).toBeUndefined();
+  });
+});
+
+describe('attachMotion under a conform', () => {
+  /** Ten seconds of media, one cue every 0.1 s, moving due east at a steady rate. */
+  function eastbound(): Cue[] {
+    const cues: Cue[] = [];
+    for (let i = 0; i <= 100; i++) {
+      // 0.0001° of longitude at this latitude is ~10.7 m; one step per 0.1 s.
+      cues.push(cue(i / 10, 16, -61 + i * 0.0001, 35));
+    }
+    return cues;
+  }
+
+  it('reads the same ground speed whatever cadence the clip was conformed to', () => {
+    const real = eastbound();
+    attachMotion(real);
+    const atSpeed = real[80].derived?.groundSpeed ?? 0;
+    expect(atSpeed).toBeGreaterThan(0);
+
+    // The same flight shot at 4× and laid down slowed: identical positions, but
+    // every cue four times further apart on the file's timeline.
+    const slow = eastbound().map((c) => ({ ...c, start: c.start * 4, end: c.end * 4 }));
+    attachMotion(slow, 0.25);
+    expect(slow[80].derived?.groundSpeed).toBeCloseTo(atSpeed, 6);
+  });
+
+  it('under-reports by exactly the conform factor when the scale is ignored', () => {
+    const slow = eastbound().map((c) => ({ ...c, start: c.start * 4, end: c.end * 4 }));
+    attachMotion(slow, 1);
+    const wrong = slow[80].derived?.groundSpeed ?? 0;
+    attachMotion(slow, 0.25);
+    const right = slow[80].derived?.groundSpeed ?? 0;
+    expect(right / wrong).toBeCloseTo(4, 6);
+  });
+
+  it('leaves the heading alone — an azimuth does not care about time', () => {
+    const slow = eastbound().map((c) => ({ ...c, start: c.start * 4, end: c.end * 4 }));
+    attachMotion(slow, 1);
+    const uncorrected = slow[80].derived?.heading ?? 0;
+    attachMotion(slow, 0.25);
+    const corrected = slow[80].derived?.heading ?? 0;
+    // Both read due east. They differ in the last ten-thousandth of a degree
+    // because the corrected window looks back over four times as much track,
+    // so the great-circle bearing is taken between a different pair of fixes —
+    // not because the conform turned the aircraft.
+    expect(uncorrected).toBeCloseTo(90, 3);
+    expect(corrected).toBeCloseTo(90, 3);
+  });
+
+  it('scales the vertical speed the same way', () => {
+    const climbing = eastbound().map((c, i) => ({
+      ...c,
+      start: c.start * 4,
+      end: c.end * 4,
+      data: { ...c.data, rel_alt: String(35 + i * 0.2) },
+    }));
+    attachMotion(climbing, 0.25);
+    // 0.2 m per 0.1 s of capture time = 2 m/s, whatever the file's timeline says.
+    expect(climbing[80].derived?.verticalSpeed).toBeCloseTo(2, 1);
+  });
+
+  it('re-deriving is idempotent, never compounding', () => {
+    const cues = eastbound();
+    attachMotion(cues, 0.25);
+    const once = cues[80].derived?.groundSpeed;
+    attachMotion(cues, 0.25);
+    expect(cues[80].derived?.groundSpeed).toBe(once);
+  });
+});
+
+describe('retimeCues', () => {
+  it('answers with a new list and leaves the original untouched', () => {
+    const cues = [
+      cue(0, 16, -61, 35),
+      cue(1, 16, -60.9999, 35),
+      cue(2, 16, -60.9998, 35),
+    ];
+    attachMotion(cues);
+    const before = cues[2].derived?.groundSpeed;
+    const retimed = retimeCues(cues, 0.5);
+    expect(retimed).not.toBe(cues);
+    expect(retimed[2]).not.toBe(cues[2]);
+    expect(cues[2].derived?.groundSpeed).toBe(before);
+    expect(retimed[2].derived?.groundSpeed).toBeCloseTo((before ?? 0) * 2, 6);
   });
 });

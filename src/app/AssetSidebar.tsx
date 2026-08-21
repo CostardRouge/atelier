@@ -10,6 +10,12 @@ import {
   selectedUsableAssets,
 } from '../shared/library/capabilities';
 import { formatBytes, formatDuration } from '../shared/lib/format';
+import {
+  describeTimeScale,
+  formatCadence,
+  isRealtime,
+  timeScaleTag,
+} from '../shared/telemetry/time-scale';
 import { useInViewport } from '../shared/lib/use-in-viewport';
 import {
   filesFromDataTransfer,
@@ -253,15 +259,64 @@ export default function AssetSidebar({
   );
 }
 
-/** The metadata facts for a row, tolerant of still-loading covers. */
+/**
+ * The metadata facts for a row, tolerant of still-loading covers.
+ *
+ * The frame rate shown is the one the camera **shot** at, which on conformed
+ * footage is not the one the file plays at — a 4× slow-motion clip reads
+ * `120 fps` here and carries the cadence chip that says so. It appears only for
+ * clips whose `.srt` was measurable: the container knows the playback rate and
+ * nothing else, so a clip without telemetry gets no figure rather than a
+ * misleading one.
+ */
 function metaFacts(asset: Asset, meta: MediaMeta | undefined): string {
   if (!meta || meta.status === 'pending') return 'reading…';
   const facts: string[] = [];
   if (meta.width && meta.height) facts.push(`${meta.width}×${meta.height}`);
   if (meta.isVideo && meta.duration) facts.push(formatDuration(meta.duration));
   if (!meta.isVideo && meta.imageType) facts.push(meta.imageType);
+  const fps = fpsText(meta);
+  if (fps) facts.push(fps);
   facts.push(formatBytes(asset.size));
   return facts.join(' · ');
+}
+
+/**
+ * The capture frame rate as a row label, or null when it was never measured.
+ * Same figure as the facts line, kept in one place so the two cannot disagree.
+ */
+function fpsText(meta: MediaMeta | undefined): string | null {
+  const fps = meta?.timing?.captureFps ?? meta?.timing?.mediaFps;
+  if (!fps) return null;
+  return `${Number.isInteger(fps) ? fps : fps.toFixed(2)} fps`;
+}
+
+/**
+ * What the row's tooltip says about cadence. A clip whose log gives a playback
+ * rate but no conform gets told so plainly — `30 fps` alone would read as the
+ * rate it was shot at, which is exactly the claim we cannot make.
+ */
+function cadenceSentence(
+  meta: MediaMeta | undefined,
+  fpsLabel: string | null,
+): string {
+  const timing = meta?.timing;
+  if (!timing) return '';
+  if (timing.basis === 'none') {
+    return fpsLabel ? `plays at ${fpsLabel} — shooting cadence not measurable` : '';
+  }
+  return [describeTimeScale(timing.scale) ?? 'real time', formatCadence(timing)]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/**
+ * A chip over the frame — the repo's idiom for a fact about the picture
+ * (VideoCard's shot number, the LUT wipe's Original/Graded). Tiny, because it
+ * shares an 80×56 thumbnail.
+ */
+function scrim(corner: string): string {
+  return `absolute ${corner} left-[3px] z-[2] font-mono text-[0.5rem] tracking-[0.06em] uppercase text-paper bg-[rgba(20,18,15,0.62)] px-[0.25rem] py-px rounded-[4px] leading-[1.35] whitespace-nowrap backdrop-blur-[3px]`;
 }
 
 interface AssetRowProps {
@@ -296,6 +351,13 @@ function AssetRow({
 
   const isPhoto = asset.kind === 'photo';
 
+  // Cadence: shown only from a real measurement — a clip with no readable
+  // sidecar leaves the row exactly as it was, rather than claiming a rate.
+  const scale = meta?.timing?.scale;
+  const cadenceTag = scale != null && !isRealtime(scale) ? timeScaleTag(scale) : null;
+  const fpsLabel = fpsText(meta);
+  const cadenceLine = cadenceSentence(meta, fpsLabel);
+
   // The active row gets an accent ring; a merely-selected row a subtle one.
   const ring = active
     ? 'bg-white shadow-[inset_0_0_0_2px_var(--color-accent)]'
@@ -324,14 +386,17 @@ function AssetRow({
         onClick={onActivate}
         disabled={!usable}
         aria-pressed={active}
-        title={
+        title={[
           usable
             ? `Use ${asset.baseName} in this tool`
-            : `${asset.baseName} — not usable by this tool`
-        }
+            : `${asset.baseName} — not usable by this tool`,
+          cadenceLine,
+        ]
+          .filter(Boolean)
+          .join(' — ')}
         className="flex-1 min-w-0 flex items-center gap-2.5 text-left cursor-pointer disabled:cursor-default"
       >
-        <div className="flex-none w-20 h-14 rounded-sm overflow-hidden bg-frame grid place-items-center">
+        <div className="relative flex-none w-20 h-14 rounded-sm overflow-hidden bg-frame grid place-items-center">
           {meta?.thumbUrl ? (
             <img
               src={meta.thumbUrl}
@@ -344,6 +409,20 @@ function AssetRow({
               aria-hidden="true"
             >
               {isPhoto ? (meta?.imageType ?? '◇') : '▶'}
+            </span>
+          )}
+          {/* Cadence rides on the frame, not in the row: the 288px sidebar
+              leaves the name/facts column about 32px, so a fact placed there is
+              a fact nobody reads. Both chips repeat what the facts line already
+              says (and the title spells out), hence aria-hidden. */}
+          {cadenceTag && (
+            <span className={scrim('top-[3px]')} aria-hidden="true">
+              {cadenceTag}
+            </span>
+          )}
+          {fpsLabel && (
+            <span className={scrim('bottom-[3px]')} aria-hidden="true">
+              {fpsLabel}
             </span>
           )}
         </div>

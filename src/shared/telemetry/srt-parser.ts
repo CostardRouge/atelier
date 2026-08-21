@@ -10,6 +10,7 @@
  */
 
 import { attachMotion, type Motion } from './motion';
+import { measureTimeScale } from './time-scale';
 
 export interface TelemetryData {
   iso?: string;
@@ -36,6 +37,13 @@ export interface Cue {
   frame: number | null;
   /** Capture timestamp line as written, or null if absent. */
   timestamp: string | null;
+  /**
+   * DJI's `DiffTime`, in **seconds** — the real interval between this telemetry
+   * sample and the previous one, which is not the interval the file plays them
+   * at on conformed (slow-motion, time-lapse) footage. Absent when the firmware
+   * does not write it. See telemetry/time-scale.ts.
+   */
+  diffTime?: number;
   data: TelemetryData;
   /**
    * Motion (ground/vertical speed, heading) reconstructed from the GPS and
@@ -68,6 +76,13 @@ const BRACKET_RE = /\[([^\]]*)\]/g;
 const KV_RE = /([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([^[\]]*?)(?=\s+[A-Za-z_][A-Za-z0-9_]*\s*:|$)/g;
 
 const FRAME_RE = /FrameCnt\s*:\s*(\d+)/;
+
+/**
+ * `DiffTime: 16ms` — sits on the FrameCnt line, outside the `[ ]` groups, so the
+ * bracket sweep never sees it. Kept because it is the only per-cue statement of
+ * the *capture* cadence (telemetry/time-scale.ts).
+ */
+const DIFF_TIME_RE = /DiffTime\s*:\s*([\d.]+)\s*ms/i;
 
 /** ISO-like capture timestamp, e.g. `2026-05-30 05:49:34.609`. */
 const TIMESTAMP_RE = /\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:[.,]\d+)?/;
@@ -105,12 +120,17 @@ function detectFormat(text: string): SrtFormat {
 function parseBracketPayload(payload: string): {
   frame: number | null;
   timestamp: string | null;
+  diffTime: number | undefined;
   data: TelemetryData;
 } {
   const clean = stripTags(payload);
 
   const frameMatch = clean.match(FRAME_RE);
   const frame = frameMatch ? Number(frameMatch[1]) : null;
+
+  const diffMatch = clean.match(DIFF_TIME_RE);
+  const diffMs = diffMatch ? Number(diffMatch[1]) : NaN;
+  const diffTime = Number.isFinite(diffMs) && diffMs > 0 ? diffMs / 1000 : undefined;
 
   const timestampMatch = clean.match(TIMESTAMP_RE);
   const timestamp = timestampMatch ? timestampMatch[0] : null;
@@ -137,7 +157,18 @@ function parseBracketPayload(payload: string): {
     }
   }
 
-  return { frame, timestamp, data };
+  return { frame, timestamp, diffTime, data };
+}
+
+export interface ParseSrtOptions {
+  /**
+   * Capture seconds per second of media, for footage the camera conformed
+   * (slow motion, time-lapse). `'auto'` — the default — measures it from the
+   * cues themselves so every consumer of `cue.derived` gets true speeds without
+   * knowing the concept exists; a number forces it, and `1` leaves the rates in
+   * media time. See telemetry/time-scale.ts.
+   */
+  timeScale?: number | 'auto';
 }
 
 /**
@@ -145,9 +176,10 @@ function parseBracketPayload(payload: string): {
  * start time.
  *
  * @param text Raw contents of the `.srt` file.
+ * @param options See {@link ParseSrtOptions}.
  * @returns Cues in start-time order. Malformed blocks are skipped.
  */
-export function parseSrt(text: string): Cue[] {
+export function parseSrt(text: string, options: ParseSrtOptions = {}): Cue[] {
   const format = detectFormat(text);
   if (format !== 'bracket') {
     // Only the bracket format is supported today. Returning empty rather than
@@ -173,16 +205,22 @@ export function parseSrt(text: string): Cue[] {
     // Payload is everything after the timing line.
     const payload = block.slice(timing.index! + timing[0].length);
 
-    const { frame, timestamp, data } = parseBracketPayload(payload);
+    const { frame, timestamp, diffTime, data } = parseBracketPayload(payload);
 
-    cues.push({ start, end, frame, timestamp, data });
+    cues.push({ start, end, frame, timestamp, diffTime, data });
   }
 
   cues.sort((a, b) => a.start - b.start);
 
   // Reconstruct per-frame motion (speed, heading) now the cues are in order, so
-  // every consumer — panels, gallery, overlay — gets it for free.
-  attachMotion(cues);
+  // every consumer — panels, gallery, overlay — gets it for free. Rates are
+  // derived against CAPTURE seconds: on a conformed clip the file's own seconds
+  // would divide a real distance by a stretched time and under-report every
+  // speed. Measuring by default means a slow-motion clip is right everywhere,
+  // not only where someone remembered to ask.
+  const requested = options.timeScale ?? 'auto';
+  const timeScale = requested === 'auto' ? measureTimeScale(cues).scale : requested;
+  attachMotion(cues, timeScale);
 
   return cues;
 }

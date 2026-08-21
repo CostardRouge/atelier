@@ -11,6 +11,8 @@ import { buildAssets, fileIdentity, type Asset } from './assets';
 import { loadClipMeta } from '../media/video-metadata';
 import { imageTypeLabel, loadImageMeta } from '../media/image-meta';
 import { transcodeStore } from '../media/transcode-store';
+import { probeSrtTiming } from '../telemetry/srt-probe';
+import type { TimeScaleReading } from '../telemetry/time-scale';
 
 /**
  * The global asset library — a thin, app-wide store of `File` handles plus a
@@ -34,6 +36,14 @@ export interface MediaMeta {
   thumbUrl?: string;
   /** `RAW`, `JPEG`, … for images. */
   imageType?: string;
+  /**
+   * Cadence measured from the paired `.srt` — the frame rate the camera shot at
+   * and whether the clip was conformed (slow motion, time-lapse). Absent for a
+   * clip with no telemetry: the container declares the rate it *plays* at, never
+   * the rate it was shot at, so there is nothing honest to show without the log.
+   * See telemetry/time-scale.ts.
+   */
+  timing?: TimeScaleReading;
 }
 
 // The retired Cull tool persisted triage verdicts under this key; clean up the
@@ -103,6 +113,20 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
     setMeta(next);
   }, []);
 
+  /**
+   * Merge into an existing entry. The cover and the cadence are two independent
+   * async reads of the same asset; whichever lands second must not erase the
+   * first, so neither writes a whole fresh object.
+   */
+  const patchMeta = useCallback((id: string, patch: Partial<MediaMeta>) => {
+    const current = metaRef.current.get(id);
+    if (!current) return;
+    const next = new Map(metaRef.current);
+    next.set(id, { ...current, ...patch });
+    metaRef.current = next;
+    setMeta(next);
+  }, []);
+
   const dropMeta = useCallback((ids: Iterable<string>) => {
     const next = new Map(metaRef.current);
     let changed = false;
@@ -124,12 +148,12 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
       if (metaRef.current.has(id)) return;
       const asset = assetsRef.current.find((a) => a.id === id);
       if (!asset) return;
-      const { video, image } = asset.parts;
+      const { video, image, srt } = asset.parts;
       commitMeta(id, { status: 'pending', isVideo: !!video });
       if (video) {
         loadClipMeta(video)
           .then((r) =>
-            commitMeta(id, {
+            patchMeta(id, {
               status: 'ready',
               isVideo: true,
               width: r.width,
@@ -138,11 +162,16 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
               thumbUrl: r.thumbUrl,
             }),
           )
-          .catch(() => commitMeta(id, { status: 'error', isVideo: true }));
+          .catch(() => patchMeta(id, { status: 'error', isVideo: true }));
+        // Cadence rides alongside the cover: both ends of the sidecar are a few
+        // kilobytes, and it is the only place the *capture* rate is written.
+        if (srt) {
+          probeSrtTiming(srt).then((timing) => patchMeta(id, { timing }));
+        }
       } else if (image) {
         loadImageMeta(image)
           .then((r) =>
-            commitMeta(id, {
+            patchMeta(id, {
               status: 'ready',
               isVideo: false,
               width: r.width,
@@ -152,7 +181,7 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
             }),
           )
           .catch(() =>
-            commitMeta(id, {
+            patchMeta(id, {
               status: 'error',
               isVideo: false,
               imageType: imageTypeLabel(image.name),
@@ -162,7 +191,7 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
         commitMeta(id, { status: 'error', isVideo: false });
       }
     },
-    [commitMeta],
+    [commitMeta, patchMeta],
   );
 
   // --- mutations -----------------------------------------------------------

@@ -35,7 +35,10 @@ Today it ships eight tools, converging into a single studio:
 
 Tools that consume the same kinds of files (photos, videos, DJI clips) share a
 single **asset library**: import a folder once and switch tools freely — each
-tool sees the subset it can use.
+tool sees the subset it can use. A clip with a flight log also shows, over its
+thumbnail, the rate the camera **shot** at (`120 FPS`) and a `4× SLOW` marker
+when the file was conformed — read from both ends of the `.srt`, a few kilobytes,
+never from the video.
 
 The suite is a tiny shell (`src/app/`) plus self-contained tools (`src/tools/*`)
 that share a generic core (`src/shared/*`). The masthead nav and the routes both
@@ -164,6 +167,20 @@ default, and can be pointed at a telemetry key for firmware that does write
 one. It never invents a level: with nothing to read it draws empty. Speeds
 read in **m/s, km/h or mph**.
 
+**Slow motion and time-lapse.** A conformed clip plays at a speed the camera
+never shot at: a hundred and twenty frames a second laid down at thirty makes
+one second of flight last four seconds of file. Every speed rebuilt from the
+log is a distance over a time, so on that clip the ground speed would read a
+quarter of the truth — and a hyperlapse would read many times too much. The
+studio measures the real cadence from the log's own capture timestamps and
+corrects the rates; the **Info** tab states what it found (`120 → 30 fps ·
+4× slow motion`), and project settings let you override it by hand for footage
+whose log says nothing. Only rates move: a heading is a direction and survives
+any conform, and the clock badges keep reading the capture time — which is why
+they tick slowly on a ralenti, and that part is true. The container cannot
+help here: a conformed file honestly declares the rate it *plays* at, and the
+rate it was shot at is written nowhere in the mp4.
+
 **Why the heading stutters, and what to do about it.** The flight log has no
 compass and no yaw: the heading is *course over ground*, rebuilt from GPS
 fixes about a second apart. So it steps (the GPS is slower than the video),
@@ -258,7 +275,9 @@ tool reconstructs the missing motion from successive GPS fixes: **ground speed**
 (horizontal), **vertical speed** (climb/descent) and **heading** (course over
 ground, with a compass point). These appear alongside the raw fields in the
 Flight panel and the live gallery readout, and can be burned in with the
-Telemetry Overlay tool.
+Telemetry Overlay tool. Those rates are computed per second of *capture*, not
+per second of file, so a slow-motion or time-lapse clip reads true — see
+"Slow motion and time-lapse" above.
 
 ### Usage
 
@@ -465,7 +484,7 @@ src/
 │   ├── lib/                    # pure: format, cube-parser, use-in-viewport (+ tests)
 │   ├── library/                # the shared asset library: group files into assets
 │   │                           #   (incl. DJI video↔SRT pairing), capability-match per tool
-│   ├── telemetry/              # SRT parser, motion, cue lookup, flight-path extraction
+│   ├── telemetry/              # SRT parser, motion, cadence, cue lookup, flight-path extraction
 │   ├── overlay/                # the overlay engine: element model, canvas stage,
 │   │                           #   draw/measure/hit-test, fonts, guides, burn-in export,
 │   │                           #   and the ElementList/ElementPanel/GuidesControl editors

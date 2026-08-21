@@ -157,10 +157,23 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   } | null>(null);
 
   // Any edit to elements/selection (or an external redraw signal, e.g. fonts
-  // finished loading) should trigger a repaint, even while paused.
+  // finished loading) should trigger a repaint, even while paused. `cues`
+  // belongs here too: correcting a clip's cadence hands down a re-derived cue
+  // list with the same clip on screen, and without a repaint the canvas would
+  // keep the old speeds while the inspector already shows the new ones — and
+  // the autosaved thumbnail would bake the stale frame.
   useEffect(() => {
     needsRedraw.current = true;
-  }, [params.elements, params.selectedId, params.redrawSignal, params.guides, params.theme, params.timeShift, params.compare]);
+  }, [
+    params.elements,
+    params.selectedId,
+    params.redrawSignal,
+    params.guides,
+    params.theme,
+    params.timeShift,
+    params.compare,
+    params.cues,
+  ]);
 
   // Composite + (optional) selection outline. Returns false if not ready.
   const drawFrame = useCallback((): boolean => {
