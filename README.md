@@ -6,9 +6,10 @@ never leave your machine — no upload, no account, no server.
 
 Today it ships eight tools, converging into a single studio:
 
-- **Studio** — the unified editor the suite is converging on: place telemetry
-  and text overlays on a clip (with or without a flight log), grade it through
-  a LUT, and export the burn-in — one stage, one inspector, one export.
+- **Studio** — the unified editor the suite is converging on. Opens on your
+  **projects** (saved compositions with a baked preview); each project keeps
+  its overlays, look and layout, remembers which folder its media lives in,
+  and reopens in one click. Edit on one stage — overlays, LUT, export.
 - **DJI Telemetry** — view DJI drone flight telemetry in sync with the video it
   was captured with.
 - **Telemetry Overlay** — place altitude, GPS and exposure readouts anywhere on
@@ -44,19 +45,32 @@ single registry entry plus its component. Navigation is hash-based
 
 ## Studio tool
 
-The destination of the whole suite: one editor instead of eight pages. Phase 1
-ships the core loop — pick a clip in the Library, place overlay elements on the
-canvas stage (drag to position, anchors keep edge pinning), grade through a
-`.cube` LUT, scrub with the shared transport, and export an H.264 MP4 with the
-overlays and the look burned in. The inspector is tabbed (Overlay / Grade /
-Export). Unlike the Telemetry Overlay page it also accepts clips **without** an
-`.srt`: telemetry fields read “—”, free text and the LUT still work.
+The destination of the whole suite: one editor instead of eight pages.
 
-The stage, element model and export come from the shared overlay engine
-(`src/shared/overlay/`) — the same renderer draws the preview and the export,
-so what you place is exactly what burns in. Next phases bring projects (a
-gallery of saved compositions, reconciled against a media folder), named title
-styles with a film-halation glow, and the remaining tools as panels.
+**Projects first.** `#/studio/home` is a gallery of saved projects — thumbnail
+(baked at save time, so nothing decodes), aspect badge, duration, element and
+file counts. Creating one goes through a small intro modal (name, destination
+aspect, start-from-template, optional media folder). Everything you do in the
+editor autosaves to IndexedDB, but **media is never copied**: a project stores
+the folder's *handle* plus each file's name/size/mtime. Reopening re-lists the
+folder after one permission click and reconciles it — found / changed /
+missing — and missing media never blocks editing (a banner offers a re-point).
+On browsers without the File System Access API (Firefox, Safari) the handle
+can't persist, so reopening falls back to the same banner. A project is also a
+template: "Use as template" duplicates its portable half (overlays, look,
+guides, settings) with no media binding.
+
+**The editor.** Pick a clip, place overlay elements on the canvas stage (drag
+to position, anchors keep edge pinning), grade through a `.cube` LUT, scrub
+with the shared transport, and export an H.264 MP4 with the overlays and the
+look burned in. The inspector is tabbed (Overlay / Grade / Export). Clips
+**without** an `.srt` are accepted: telemetry fields read “—”, free text and
+the LUT still work. The stage, element model and export come from the shared
+overlay engine (`src/shared/overlay/`) — the same renderer draws the preview
+and the export, so what you place is exactly what burns in.
+
+Next phases bring named title styles with a film-halation glow, and the
+remaining tools as panels.
 
 ## Telemetry tool
 
@@ -286,9 +300,13 @@ src/
 │   ├── map/track-map.ts        # the one MapLibre track-map: style, line layer, OSM tiles
 │   ├── media/                  # metadata, transcode, WebCodecs export, transport/object-URL
 │   │                           #   hooks, export-path decision, download/naming
-│   └── sources/                # file-sources (read) + write-files (export to folder)
+│   ├── projects/               # studio project documents: types, media reconciliation,
+│   │                           #   IndexedDB store (handles + thumbnails persist; media never)
+│   └── sources/                # file-sources (read, incl. persistable directory handles)
+│                               #   + write-files (export to folder)
 ├── tools/
-│   ├── studio/                 # the unified editor (stage + tabbed inspector + export)
+│   ├── studio/                 # the unified editor: project gallery + creation modal +
+│   │                           #   autosaving editor (stage, tabbed inspector, export)
 │   ├── telemetry/              # DJI flight-log viewer (the original tool)
 │   │   └── TelemetryTool.tsx · DetailView.tsx · Gallery.tsx · VideoCard.tsx
 │   ├── overlay/                # the Telemetry Overlay page (engine lives in shared/overlay)

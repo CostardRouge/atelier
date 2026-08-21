@@ -23,7 +23,7 @@ Read before adding anything that could touch the network, read files, or persist
 
 ## Persistence is deliberately minimal (2026-08-20)
 
-**Decision (rev. 2026-08-21).** Only the sidebar collapse flag is stored (`localStorage`); cull verdicts left with the retired Cull tool. `File` handles are not persisted. **Why**: handles cannot survive a reload, and re-asking for the folder is honest about what the app can access. **How to apply**: storage failures must degrade silently to in-memory rather than throwing. Directory *handles* (unlike `File`s) are structured-cloneable and can persist in IndexedDB — the studio's phase-2 project model relies on this (see `studio.md`).
+**Decision (rev. 2026-08-21).** Two stores now exist: `localStorage` for UI prefs (sidebar collapse flag), and IndexedDB (`atelier-studio`) for studio project documents — including directory *handles* (structured-cloneable, unlike `File`s) and baked thumbnails. Media bytes are never persisted anywhere. **Why**: `File` handles cannot survive a reload; directory handles can, turning project reopen into one permission click. **How to apply**: storage failures must degrade silently to in-memory (the store already returns `[]`/false instead of throwing); `navigator.storage.persist()` is requested once per studio session; details in `studio.md`.
 
 ## A future native shell is an accepted direction, not a plan (2026-08-20)
 
