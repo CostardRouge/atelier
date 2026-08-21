@@ -69,9 +69,14 @@ read “—”, free text and the LUT still work. The stage, element model and
 export come from the shared overlay engine (`src/shared/overlay/`) — the same
 renderer draws the preview and the export, so what you place is exactly what
 burns in. An **A/B** toggle on the transport wipes original against composed
-(draggable divider, editor-only); the **Info** tab reads the clip's facts and
-the full telemetry panels at the playhead; **project settings** (name, format)
-stay editable from the project bar, DaVinci-style.
+(draggable divider, editor-only), a **shutter** button beside it saves the
+frame under the playhead as a JPEG with the look and overlays burned in at
+source resolution; the **Info** tab reads the clip's facts and the live
+telemetry at the playhead; **project settings** (name, format) stay editable
+from the project bar, DaVinci-style. Beyond telemetry fields and free text,
+the overlay kit holds a heading arrow (with an optional compass ring),
+**viewfinder brackets** for the frame's corners, and **clock/date** fields
+read out of the flight log.
 
 **The export matrix.** One press of Export can produce several deliverables:
 each *variant* picks a frame (source or any destination preset — a landscape
@@ -80,8 +85,9 @@ delivery resolution (short-side 1080p/720p, never upscaled) and whether the
 overlays burn in. Names follow automatically (`vol-9x16-1080p-clean.mp4` —
 suffixes only where a variant departs from the source), the base name is
 editable, and the whole matrix persists with the project (templates carry
-it). Variants render sequentially with per-variant progress; each file
-downloads as it finishes.
+it). Variants render sequentially with per-variant progress. Files land in
+the browser's downloads by default, or — on Chromium — straight into a
+**destination folder** you pick once, stills included.
 
 **Title styles.** The Style tab adopts a named look as the project's theme —
 *Or ciné* (optical-print gold serif), *Pixel CRT* (terminal red on phosphor),
