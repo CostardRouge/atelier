@@ -7,7 +7,7 @@
  * scheduled for absorption and must not grow features.
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { parseCube, type CubeLut } from '../lib/cube-parser';
 import { CUBE_ACCEPT, pickFile } from '../sources/file-sources';
 import { BUILTIN_LUTS } from './builtin-luts';
@@ -88,12 +88,32 @@ export function useLutStack(): LutStack {
   // Uploaded cubes keep their source text so a project can restore them.
   const [customText, setCustomText] = useState<Record<string, string>>({});
 
-  // Baking walks a lattice, so it must not run on every render — only when the
-  // stack's shape, order, strengths, switches, output transform or lattice
-  // lookup actually change.
+  // Baking walks a lattice, and `setIntensity` maps to a NEW layers array, so
+  // without this the strength slider re-bakes on every drag step, in render:
+  // measured 6.6 ms for one look, 28 ms with an output transform, 38 ms for
+  // three looks and a transform — ~26 fps, before React's re-render and the
+  // ~575 KB 3D-texture re-upload each step.
+  //
+  // Deferring the bake's INPUTS lets the urgent render skip the memo and commit
+  // the control immediately, with the bake following in a transition. Measured
+  // in a browser against a 30 ms memo: the control commits 0 ms after the
+  // change instead of 31 ms.
+  //
+  // What it does NOT do — both measured, so do not claim otherwise: it does not
+  // reduce the number of bakes (React already batches a burst of synchronous
+  // updates into one either way), and it does not make the bake cheaper or
+  // non-blocking. It reorders the work. On a heavy stack the image still trails
+  // the thumb; the next step there is moving the bake off the render path, not
+  // stacking a debounce on top of this.
+  //
+  // Chosen over committing on pointer-release, which would kill the live
+  // preview — watching the image while dialling strength IS the interaction.
+  const bakeLayers = useDeferredValue(layers);
+  const bakeOutput = useDeferredValue(output);
+  const bakeInterpolation = useDeferredValue(interpolation);
   const composed = useMemo(
-    () => composeLutStack(layers, output, interpolation),
-    [layers, output, interpolation],
+    () => composeLutStack(bakeLayers, bakeOutput, bakeInterpolation),
+    [bakeLayers, bakeOutput, bakeInterpolation],
   );
 
   const addBuiltin = useCallback(async (builtinId: string) => {
