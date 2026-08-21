@@ -76,15 +76,22 @@ export default function InfoPanel({
   const hasTelemetry = cues.length > 0;
   // Cadence, and what it implies for every rate below: on conformed footage the
   // speeds are divided by capture seconds, not by the file's. Said here rather
-  // than beside each readout — one clip, one cadence.
+  // than beside each readout — one clip, one cadence. When the log cannot answer
+  // (and the author has not), the row says which rate it *is* quoting: the
+  // playback one alone would read as the rate the camera shot at.
   const shownTiming = withScale(timing, scale);
-  const cadence = [
-    formatCadence(shownTiming),
-    describeTimeScale(scale),
-    overridden ? 'set by hand' : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const cadence =
+    timing.basis === 'none' && !overridden
+      ? timing.mediaFps
+        ? `plays at ${timing.mediaFps} fps · shooting cadence not measurable`
+        : ''
+      : [
+          formatCadence(shownTiming),
+          describeTimeScale(scale),
+          overridden ? 'set by hand' : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
   const d = cue?.data ?? {};
   const summary = hasTelemetry ? summarizeTelemetry(cues) : null;
   const flightLine = summary

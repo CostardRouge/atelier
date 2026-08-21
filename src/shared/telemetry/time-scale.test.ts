@@ -46,7 +46,9 @@ function clip(
       end: Math.round(((i + 1) / mediaFps) * 1000) / 1000,
       frame: i + 1,
       timestamp: timestamps ? stamp(Math.round(captured + drift)) : null,
-      diffTime: diffTime ? 1 / captureFps : undefined,
+      // Whole milliseconds, exactly as `DiffTime: 8ms` reaches the parser —
+      // an exact 1/fps float would hide the quantisation this path must handle.
+      diffTime: diffTime ? Math.round(1000 / captureFps) / 1000 : undefined,
       data: {},
     });
   }
@@ -187,6 +189,39 @@ describe('measureTimeScale', () => {
     expect(d.scale).toBeCloseTo(0.25, 6);
   });
 
+  it('never states a shot rate it did not measure', () => {
+    // A log with cue timings but no usable clock: the playback rate is known,
+    // the rate the camera shot at is not. "30 fps" alone would assert they are
+    // the same — the one claim this reading cannot support.
+    const blind = clip(600, 30, 120, { timestamps: false, diffTime: false });
+    const r = measureTimeScale(blind);
+    expect(r.mediaFps).toBe(30);
+    expect(r.captureFps).toBeNull();
+    expect(formatCadence(r)).toBeNull();
+  });
+
+  it('reads a whole-millisecond DiffTime as the rate that wrote it', () => {
+    // 120 fps is 8.333 ms and DJI writes `8ms`; dividing by that reads 125 fps
+    // — a rate no camera shoots — and lands 4 % out, past any snap.
+    const r = measureTimeScale(
+      clip(600, 30, 120, { timestamps: false }),
+    );
+    expect(r.basis).toBe('diff-time');
+    expect(r.captureFps).toBe(120);
+    expect(r.scale).toBeCloseTo(0.25, 6);
+
+    const fast = measureTimeScale(clip(600, 30, 240, { timestamps: false }));
+    expect(fast.captureFps).toBe(240);
+    expect(fast.scale).toBeCloseTo(0.125, 6);
+
+    // A millisecond no standard rate would write is answered with silence.
+    const odd = clip(600, 30, 120, { timestamps: false }).map((c) => ({
+      ...c,
+      diffTime: 0.013,
+    }));
+    expect(measureTimeScale(odd).basis).toBe('none');
+  });
+
   it('says nothing about a file that is subtitles, not a flight log', () => {
     // SDH captions carry square brackets, so the parser's format sniff accepts
     // them; their cue spacing read as a frame interval would announce a film as
@@ -251,7 +286,13 @@ describe('presentation', () => {
 });
 
 describe('the project setting', () => {
-  const measured = { ...REALTIME, scale: 0.25, mediaFps: 30, captureFps: 120 };
+  const measured = {
+    ...REALTIME,
+    basis: 'timestamps' as const,
+    scale: 0.25,
+    mediaFps: 30,
+    captureFps: 120,
+  };
 
   it('follows the measurement on auto, and the author on manual', () => {
     expect(resolveTimeScale(AUTO_TIME_SCALE, measured)).toBe(0.25);

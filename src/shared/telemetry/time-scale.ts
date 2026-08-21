@@ -322,7 +322,38 @@ function scaleFromDiffTime(
   if (diffs.length < 3) return null;
   const captureStep = median(diffs);
   if (!(captureStep > 0)) return null;
-  return { scale: captureStep * mediaFps, samples: diffs.length };
+  const captureFps = rateWritingDiffTime(captureStep);
+  if (!captureFps) return null;
+  return { scale: mediaFps / captureFps, samples: diffs.length };
+}
+
+/**
+ * The rate a camera shoots that would write this `DiffTime`.
+ *
+ * `DiffTime` is whole milliseconds, and the rates slow motion uses fall badly
+ * inside a millisecond: 120 fps is 8.333 ms and gets written `8ms`, 240 fps is
+ * 4.167 ms and gets written `4ms`. Dividing by the written value directly reads
+ * 125 fps and 250 fps — rates no camera shoots — and lands 4 % out, twice the
+ * snap tolerance, so nothing downstream can rescue it: the library would show
+ * "125 fps · 4.2× slow" and every speed would run 4 % high.
+ *
+ * So the arithmetic is inverted: ask which standard rate, rounded the way the
+ * firmware rounds, writes the millisecond we were given. Exactly one family
+ * usually matches (8 ms ← 120/119.88; 4 ms ← 240/239.76), and where a family
+ * has an NTSC twin 0.1 % away the integer wins. No match — nothing a camera
+ * shoots writes that number — is answered with silence, not with a division.
+ */
+function rateWritingDiffTime(stepSeconds: number): number | null {
+  const written = Math.round(stepSeconds * 1000);
+  if (written <= 0) return null;
+  const matches = STANDARD_RATES.filter(
+    (rate) => Math.round(1000 / rate) === written,
+  );
+  if (matches.length === 0) return null;
+  // Prefer the whole rate over its NTSC twin; they differ by 0.1 %, and the
+  // integer is what a shooter recognises.
+  const integer = matches.find((rate) => Number.isInteger(rate));
+  return integer ?? matches[matches.length - 1];
 }
 
 /**
@@ -505,10 +536,18 @@ export function withScale(reading: TimeScaleReading, scale: number): TimeScaleRe
   };
 }
 
-/** `120 → 30 fps` when the two differ, `60 fps` when they don't, else null. */
+/**
+ * `120 → 30 fps` when the two differ, `60 fps` when they don't, else null.
+ *
+ * Null whenever the capture rate is unknown — `60 fps` on its own *states* that
+ * the clip was shot at the rate it plays, which is precisely the claim an
+ * unmeasurable log cannot support. A caller with only a playback rate to show
+ * has to say so in its own words (the library says "plays at 30 fps — shooting
+ * cadence not measurable").
+ */
 export function formatCadence(reading: TimeScaleReading): string | null {
   const { mediaFps, captureFps } = reading;
-  if (!mediaFps) return null;
+  if (!mediaFps || !captureFps || reading.basis === 'none') return null;
   const round = (fps: number) => (Number.isInteger(fps) ? String(fps) : fps.toFixed(2));
   if (!captureFps || Math.abs(captureFps - mediaFps) / mediaFps <= SNAP_TOLERANCE) {
     return `${round(mediaFps)} fps`;
