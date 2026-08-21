@@ -6,6 +6,25 @@ import { useVideoTransport } from '../../shared/media/use-video-transport';
 import { formatDuration, formatTimecode } from '../../shared/lib/format';
 import { isEncodeSupported } from '../../shared/media/webcodecs-export';
 import { useVideoScrub } from '../../shared/media/use-video-scrub';
+import TrimBar from '../../shared/media/TrimBar';
+import {
+  clampPlayhead,
+  exportTrim,
+  fullRange,
+  isTrimmed,
+  minTrimLength,
+  restoreTrim,
+  saveTrim,
+  setEnd as setTrimEnd,
+  setStart as setTrimStart,
+  trimDuration,
+  type SavedTrim,
+  type TrimRange,
+} from '../../shared/media/trim';
+import {
+  describeKeyTarget,
+  targetOwnsTyping,
+} from '../../shared/media/transport-keys';
 import { useTranscode } from '../../shared/media/use-transcode';
 import TranscodeControl from '../../shared/media/TranscodeControl';
 import { probeContainer, type ContainerInfo } from '../../shared/media/video-metadata';
@@ -148,6 +167,23 @@ export default function StudioEditor({
   const [guides, setGuides] = useState<GuidesState>(() => project.guides ?? DEFAULT_GUIDES);
   const [fontTick, setFontTick] = useState(0);
   const [compareOn, setCompareOn] = useState(false);
+
+  // --- trim ---------------------------------------------------------------
+  // In/out points per clip, keyed by base name: switching clips inside a
+  // project must not lose the range you just set on the previous one (the
+  // maintainer trims several clips of one flight, then exports them one by
+  // one). Only trimmed clips have an entry.
+  const [trims, setTrims] = useState<Record<string, SavedTrim>>(
+    () => project.media.trims ?? {},
+  );
+  const [range, setRange] = useState<TrimRange>(() => fullRange(0));
+  const [loop, setLoop] = useState(false);
+  // The transport wires its listeners once per media, so the live values reach
+  // it through refs rather than through captured props.
+  const rangeRef = useRef<TrimRange | null>(null);
+  const loopRef = useRef(false);
+  rangeRef.current = range.end > range.start ? range : null;
+  loopRef.current = loop;
   const [grabbing, setGrabbing] = useState(false);
   // Export destination: the browser's downloads, or a folder the user picks
   // once (File System Access — Chromium only). The handle lives for the
@@ -276,6 +312,8 @@ export default function StudioEditor({
     activeUrl,
     {
       scrubbingRef: scrub.scrubbingRef,
+      rangeRef,
+      loopRef,
       onLoadedMetadata: (v) => {
         if (v.currentTime === 0) {
           try {
@@ -287,6 +325,47 @@ export default function StudioEditor({
       },
     },
   );
+
+  // One frame, or 100 ms when the probe found no frame rate: the handles stop
+  // that far from each other, and it is the arrow-key step.
+  const frameStep = minTrimLength(activeInfo.fps);
+
+  // Open each clip on the range that belongs to it. `restoreTrim` refuses a
+  // saved range whose media has a different duration — same file name, other
+  // take — and falls back to the whole clip.
+  useEffect(() => {
+    if (!activeId || duration <= 0) {
+      setRange(fullRange(duration));
+      return;
+    }
+    const next = restoreTrim(trims[activeId], duration, frameStep);
+    setRange(next);
+    // A clip that reopens trimmed opens ON its in point, not on a frame it no
+    // longer keeps.
+    const at = videoRef.current?.currentTime ?? 0;
+    const inside = clampPlayhead(at, next);
+    if (inside !== at) handleScrub(inside);
+    // Reading `trims` fresh on a clip change is the point; re-running on every
+    // trim edit would fight the edit itself.
+  }, [activeId, duration]);
+
+  /** Move the handles and remember them for this clip. */
+  function applyRange(next: TrimRange) {
+    setRange(next);
+    if (!activeId) return;
+    setTrims((prev) => {
+      const saved = saveTrim(next, duration);
+      if (!saved) {
+        if (!prev[activeId]) return prev;
+        const rest = { ...prev };
+        delete rest[activeId];
+        return rest;
+      }
+      return { ...prev, [activeId]: saved };
+    });
+  }
+
+  const trimmed = isTrimmed(range, duration);
 
   // Load the brand fonts any element uses, then force a repaint so canvas text
   // measures and renders correctly.
@@ -363,13 +442,7 @@ export default function StudioEditor({
     if (!selectedElementId) return;
     function onKey(e: KeyboardEvent) {
       if (e.key !== 'Delete' && e.key !== 'Backspace') return;
-      const t = e.target as HTMLElement | null;
-      if (
-        t &&
-        (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))
-      ) {
-        return;
-      }
+      if (targetOwnsTyping(describeKeyTarget(e.target))) return;
       e.preventDefault(); // Backspace would otherwise navigate back.
       removeElement(selectedElementId!);
     }
@@ -386,6 +459,42 @@ export default function StudioEditor({
     setSelectedElementId(id);
     if (id) setTab('overlay');
   }
+
+  // I and O cut at the playhead, Shift returns a handle to the clip's own end
+  // — the gestures of any logging tool. (Space belongs to the shared
+  // transport.) Guarded on the event target so both stay ordinary characters
+  // inside a text field.
+  useEffect(() => {
+    if (!activeUrl) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (targetOwnsTyping(describeKeyTarget(e.target))) return;
+      const key = e.key.toLowerCase();
+      if (key !== 'i' && key !== 'o') return;
+      if (duration <= 0) return;
+      e.preventDefault();
+      const d = duration;
+      const current = rangeRef.current ?? fullRange(d);
+      const at = videoRef.current?.currentTime ?? 0;
+      if (key === 'i') {
+        applyRange(
+          e.shiftKey
+            ? setTrimStart(current, 0, d, frameStep)
+            : setTrimStart(current, at, d, frameStep),
+        );
+      } else {
+        applyRange(
+          e.shiftKey
+            ? setTrimEnd(current, d, d, frameStep)
+            : setTrimEnd(current, at, d, frameStep),
+        );
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // Re-wired when the clip (or its measurements) change: `applyRange` writes
+    // the duration it was told into the saved trim, so it must not be stale.
+  }, [activeUrl, frameStep, duration, activeId]);
 
   // Selecting an element — from the list, or by clicking it on the stage —
   // brings its settings into view. With a long deck the panel sits well below
@@ -497,6 +606,7 @@ export default function StudioEditor({
             ...docRef.current.media,
             files: mediaFiles.length ? mediaFiles : docRef.current.media.files,
             activeId,
+            trims,
           },
           thumbnail: await bakeThumbnail(),
           durationSeconds: durationRef.current || docRef.current.durationSeconds,
@@ -521,6 +631,7 @@ export default function StudioEditor({
     exportFileName,
     variants,
     activeId,
+    trims,
     lutStack.layers,
     lutStack.output,
     clips,
@@ -568,6 +679,9 @@ export default function StudioEditor({
           timeShift,
           srcWidth,
           srcHeight,
+          // null when the whole clip is kept, so an untrimmed export runs the
+          // exact path it ran before trimming existed.
+          trim: exportTrim(range, duration),
         };
         const onProgress = (p: { phase: string; ratio: number | null }) => {
           if (p.phase === 'encoding' && p.ratio != null) setExportRatio(p.ratio);
@@ -596,6 +710,7 @@ export default function StudioEditor({
               onProgress,
               controller.signal,
               variant.frameRate,
+              opts.trim,
             );
           } else if (err instanceof DecodeUnsupportedError) {
             throw new Error(
@@ -609,7 +724,9 @@ export default function StudioEditor({
         const stat: ExportStat = {
           bytes: blob.size,
           seconds: (Date.now() - startedAt) / 1000,
-          clipSeconds: durationRef.current || null,
+          // What was encoded, not what the clip holds: a trimmed run that
+          // rendered 5 s of a 40 s rush is not 8× realtime.
+          clipSeconds: (trimmed ? trimDuration(range) : durationRef.current) || null,
         };
         measured.push(stat);
         setVariantStats((prev) => ({ ...prev, [variant.id]: stat }));
@@ -934,7 +1051,8 @@ export default function StudioEditor({
           </div>
 
           {activeUrl && (
-            <div className="flex items-center gap-[0.85rem] px-[0.85rem] py-[0.6rem] border border-line rounded-paper bg-surface flex-none">
+            <div className="flex flex-col gap-[0.45rem] px-[0.85rem] py-[0.6rem] border border-line rounded-paper bg-surface flex-none">
+             <div className="flex items-center gap-[0.85rem]">
               <button
                 type="button"
                 className="flex-none w-[2.2rem] h-[2.2rem] border-0 rounded-full bg-ink text-paper cursor-pointer text-[0.8rem] leading-none inline-flex items-center justify-center transition-[background-color] duration-200 ease-paper hover:bg-accent"
@@ -947,22 +1065,33 @@ export default function StudioEditor({
               <span className="font-mono text-[0.74rem] tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
                 {formatTimecode(time)}
               </span>
-              <input
-                type="range"
-                className="flex-1 accent-accent cursor-pointer"
-                min={0}
-                max={duration || 0}
-                step={0.001}
-                value={Math.min(time, duration || 0)}
-                onPointerDown={scrub.begin}
-                onPointerUp={() => scrub.end()}
-                onPointerCancel={() => scrub.end()}
-                onChange={(e) => handleScrub(Number(e.target.value))}
-                aria-label="Seek"
+              <TrimBar
+                duration={duration}
+                time={time}
+                range={range}
+                minLength={frameStep}
+                step={frameStep}
+                onSeek={handleScrub}
+                onScrubStart={scrub.begin}
+                onScrubEnd={() => scrub.end()}
+                onRangeChange={applyRange}
               />
               <span className="font-mono text-[0.74rem] tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
                 {formatDuration(duration)}
               </span>
+              <button
+                type="button"
+                onClick={() => setLoop((l) => !l)}
+                aria-pressed={loop}
+                className={`flex-none px-2.5 py-1 rounded-full border font-mono text-[0.64rem] tracking-[0.1em] cursor-pointer transition-colors ${
+                  loop
+                    ? 'border-accent bg-accent-wash text-accent-ink'
+                    : 'border-line-strong bg-paper text-muted hover:text-accent-ink hover:border-accent'
+                }`}
+                title="Loop the trimmed range instead of stopping on the out point"
+              >
+                ↻
+              </button>
               <button
                 type="button"
                 onClick={() => void handleGrabFrame()}
@@ -986,6 +1115,39 @@ export default function StudioEditor({
               >
                 A/B
               </button>
+             </div>
+
+             {/* The trim readout sits on its own line, and that line is ALWAYS
+                 rendered: appearing on the first drag, it would resize the row
+                 above and make the rail jump under the pointer mid-gesture.
+                 Untrimmed, it teaches the two shortcuts instead. */}
+             <div className="flex items-center gap-2 h-[1.1rem] pl-[3.05rem] font-mono text-[0.64rem] tracking-[0.06em] tabular-nums">
+               {trimmed ? (
+                 <>
+                   <span
+                     className="inline-flex items-center gap-1.5 text-accent-ink"
+                     title="Trimmed range — only this part previews and exports"
+                   >
+                     <span className="uppercase tracking-[0.12em] text-muted">Trim</span>
+                     {formatTimecode(range.start)} → {formatTimecode(range.end)} ·{' '}
+                     {trimDuration(range).toFixed(1)}s
+                   </span>
+                   <button
+                     type="button"
+                     onClick={() => applyRange(fullRange(duration))}
+                     className="border-0 bg-transparent p-0 text-accent-ink cursor-pointer text-[0.8rem] leading-none hover:text-accent"
+                     title="Use the whole clip again"
+                     aria-label="Clear the trim"
+                   >
+                     ↺
+                   </button>
+                 </>
+               ) : (
+                 <span className="text-faint">
+                   Full clip — drag the handles, or press I / O to cut at the playhead
+                 </span>
+               )}
+             </div>
             </div>
           )}
 

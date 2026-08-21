@@ -67,6 +67,22 @@ Info / Export); tools run edge-to-edge so a landscape clip finally gets the
 width it needs. Clips **without** an `.srt` are accepted: telemetry fields
 read “—”, free text and the grade still work.
 
+**Trim.** The scrub bar carries two handles: everything before the in point
+and after the out point greys out, and the playhead can only travel between
+them — drag a handle past it and it is pushed along, live. The handles never
+cross (they stop one frame from each other). Playback stops on the out point;
+press play there and it replays from the in point, or turn on **↻** to loop the
+range. `I` and `O` cut at the playhead, `Shift+I` /
+`Shift+O` put a handle back on the clip's own end, and a focused handle steps
+by a frame with ← → (a second with Shift). The range is what exports: every
+variant is encoded from the in point, audio included, with the file starting at
+zero — the overlays still read the *source* timeline, so telemetry and the
+capture clock stay attached to the right frames. Each clip keeps **its own**
+range, in the project and across clip switches, which is what lets you cut
+several clips of one flight and export them one by one to assemble elsewhere. A
+project reopened against different footage of the same name starts from the
+whole clip rather than applying someone else's in/out points.
+
 **The grade is a stack.** Add several looks and they apply in order, top to
 bottom — each with its own strength (0–300%) and an on/off switch for
 instant A/B, reordered with ↑/↓. The stack **bakes into a single LUT**

@@ -38,6 +38,7 @@ import {
   type ExportFrameRate,
 } from './frame-rate';
 import { safeChunkMetadata } from './colour-tag';
+import type { TrimRange } from './trim';
 
 export interface ExportProgress {
   phase: 'demuxing' | 'encoding' | 'finalizing';
@@ -87,6 +88,12 @@ export interface ExportOptions {
    * below the source rate and duplicated above it. See `frame-rate.ts`.
    */
   frameRate?: ExportFrameRate;
+  /**
+   * Encode only `[start, end]` of the source (seconds). The output starts at
+   * timestamp 0; the processor still sees SOURCE times, so overlays, cues and
+   * the capture clock stay attached to the right frame.
+   */
+  trim?: TrimRange | null;
 }
 
 /**
@@ -279,6 +286,98 @@ export function demux(buffer: ArrayBuffer): Promise<DemuxResult> {
   });
 }
 
+/** The little a {@link trimWindow} needs of a demuxed sample. */
+export interface TrimSample {
+  cts: number;
+  duration: number;
+  timescale: number;
+  is_sync: boolean;
+}
+
+/** Which samples to feed the decoder, and which decoded frames to keep. */
+export interface TrimWindow {
+  /** First sample to decode: a sync sample at or before the in point. */
+  decodeFrom: number;
+  /** Last sample to decode (inclusive). */
+  decodeTo: number;
+  /**
+   * Presentation time (µs) of the first frame that is kept — the frame the
+   * preview shows under the in handle. Frames before it are decoded (they are
+   * references) then dropped, and every kept timestamp is shifted by this so
+   * the output starts at 0.
+   */
+  baseMicros: number;
+  /** Frames at or after this presentation time (µs) are dropped. */
+  endMicros: number;
+  /** How many frames get encoded — the progress denominator. */
+  frameCount: number;
+}
+
+/**
+ * Resolve a trim into sample indices.
+ *
+ * Two subtleties this encodes, so no caller has to rediscover them:
+ *   - decoding must start at the **sync sample before** the in point, or the
+ *     first frames come out as macroblock soup; the frames between it and the
+ *     in point are decoded purely as references and thrown away;
+ *   - the last sample to decode is the one with the highest index among those
+ *     presented before the out point — a B-frame can only reference frames
+ *     *earlier in decode order*, so nothing beyond it is ever needed, while
+ *     frames inside the window that are presented late are still covered.
+ *
+ * `null` (no trim) returns the whole file with `baseMicros` 0, so timestamps
+ * pass through exactly as they did before trimming existed.
+ */
+export function trimWindow(
+  samples: readonly TrimSample[],
+  trim: TrimRange | null | undefined,
+): TrimWindow {
+  const last = samples.length - 1;
+  if (!trim || samples.length === 0) {
+    return {
+      decodeFrom: 0,
+      decodeTo: last,
+      baseMicros: 0,
+      endMicros: Number.POSITIVE_INFINITY,
+      frameCount: samples.length,
+    };
+  }
+  const startMicros = Math.max(0, Math.round(trim.start * 1_000_000));
+  const endMicros = Math.max(startMicros, Math.round(trim.end * 1_000_000));
+
+  const cts = samples.map((s) => toMicros(s.cts, s.timescale));
+  const ends = samples.map((s, i) => cts[i] + toMicros(s.duration, s.timescale));
+
+  // The frame under the in handle is the one whose presentation *covers* it.
+  let first = samples.findIndex((_, i) => ends[i] > startMicros);
+  if (first < 0) first = last;
+
+  let decodeFrom = 0;
+  for (let i = first; i >= 0; i -= 1) {
+    if (samples[i].is_sync && cts[i] <= cts[first]) {
+      decodeFrom = i;
+      break;
+    }
+  }
+
+  let decodeTo = first;
+  let frameCount = 0;
+  for (let i = 0; i <= last; i += 1) {
+    if (cts[i] < endMicros) {
+      if (i > decodeTo) decodeTo = i;
+      if (ends[i] > startMicros) frameCount += 1;
+    }
+  }
+
+  return {
+    decodeFrom,
+    decodeTo,
+    baseMicros: cts[first],
+    endMicros,
+    frameCount: Math.max(1, frameCount),
+  };
+}
+
 /** Pick the highest H.264 level the encoder supports for this resolution. */
 export async function pickAvcCodec(
   config: Omit<VideoEncoderConfig, 'codec'>,
@@ -434,7 +533,10 @@ export async function exportProcessedVideo(
   });
   encoder.configure({ codec, ...encoderConfig, avc: { format: 'avc' } });
 
-  const total = videoSamples.length;
+  // Which slice of the file to encode. Untrimmed exports get the whole thing
+  // with a zero offset, i.e. exactly the previous behaviour.
+  const win = trimWindow(videoSamples, options.trim);
+  const total = win.frameCount;
   const gop = Math.max(1, framerate * 2); // keyframe every ~2s
   let processed = 0;
   // Retiming state: the grid is anchored on the first decoded frame, so a clip
@@ -458,12 +560,22 @@ export async function exportProcessedVideo(
     output: (frame) => {
       try {
         const timestamp = frame.timestamp;
+        // Outside the trim: decoded only because later frames reference it.
+        if (timestamp < win.baseMicros || timestamp >= win.endMicros) {
+          frame.close();
+          return;
+        }
         const srcDuration = frame.duration ?? sourceFrameDuration;
+        // The grid is anchored on the first frame that is KEPT, so a trimmed
+        // export starts its output at index 0 like any other.
         if (origin === null) origin = timestamp;
 
         // Which output frames this decoded frame owes. Pass-through gives one,
         // at the source's own timestamp; retiming gives none (dropped), one, or
-        // several (duplicated) on the output grid.
+        // several (duplicated) on the output grid. Either way the timestamp is
+        // rebased by the trim's origin (0 when nothing is trimmed) so the file
+        // starts at zero — while the processor keeps receiving SOURCE times,
+        // or cues, the capture clock and overlays detach from the picture.
         let timestamps: number[];
         let duration: number;
         if (retime) {
@@ -478,10 +590,12 @@ export async function exportProcessedVideo(
             return;
           }
           nextIndex = indices[indices.length - 1] + 1;
-          timestamps = indices.map((i) => origin! + frameTimestampMicros(i, framerate));
+          timestamps = indices.map(
+            (i) => origin! - win.baseMicros + frameTimestampMicros(i, framerate),
+          );
           duration = outputFrameDuration;
         } else {
-          timestamps = [timestamp];
+          timestamps = [timestamp - win.baseMicros];
           duration = srcDuration;
         }
 
@@ -531,10 +645,11 @@ export async function exportProcessedVideo(
   decoder.configure(decoderConfig);
 
   try {
-    for (const sample of videoSamples) {
+    for (let i = win.decodeFrom; i <= win.decodeTo; i += 1) {
+      const sample = videoSamples[i];
       throwIfAborted();
       if (pipelineError) throw pipelineError;
-      if (!sample.data) continue;
+      if (!sample?.data) continue;
       decoder.decode(
         new EncodedVideoChunk({
           type: sample.is_sync ? 'key' : 'delta',
@@ -551,7 +666,7 @@ export async function exportProcessedVideo(
     await encoder.flush();
     if (pipelineError) throw pipelineError;
 
-    copyAudio(muxer, audioTrack, audioSamples);
+    copyAudio(muxer, audioTrack, audioSamples, win);
 
     onProgress?.({ phase: 'finalizing', ratio: null });
     muxer.finalize();
@@ -564,25 +679,40 @@ export async function exportProcessedVideo(
   }
 }
 
-/** Copy the original AAC audio samples into the muxer, untouched. */
+/**
+ * Copy the original AAC audio samples into the muxer, untouched.
+ *
+ * With a `slice`, only the frames overlapping it are copied, rebased on the
+ * same origin as the video so the two stay in sync. Audio is still never
+ * re-encoded, so a cut lands on an AAC frame boundary (~21 ms at 48 kHz) —
+ * inaudible against a video cut, and the price of keeping the track
+ * bit-for-bit identical.
+ */
 export function copyAudio(
   muxer: Muxer<ArrayBufferTarget>,
   audioTrack: Track | null,
   audioSamples: Sample[],
+  slice?: Pick<TrimWindow, 'baseMicros' | 'endMicros'>,
 ): void {
   if (!audioTrack || audioSamples.length === 0) return;
   const asc = buildAacAsc(
     audioTrack.audio?.sample_rate ?? 48000,
     audioTrack.audio?.channel_count ?? 2,
   );
-  audioSamples.forEach((sample, i) => {
+  const base = slice?.baseMicros ?? 0;
+  const until = slice?.endMicros ?? Number.POSITIVE_INFINITY;
+  let written = 0;
+  audioSamples.forEach((sample) => {
     if (!sample.data) return;
+    const cts = toMicros(sample.cts, sample.timescale);
+    const duration = toMicros(sample.duration, sample.timescale);
+    if (cts + duration <= base || cts >= until) return;
     muxer.addAudioChunkRaw(
       sample.data,
       'key',
-      toMicros(sample.cts, sample.timescale),
-      toMicros(sample.duration, sample.timescale),
-      i === 0
+      Math.max(0, cts - base),
+      duration,
+      written++ === 0
         ? {
             decoderConfig: {
               codec: 'mp4a.40.2',
