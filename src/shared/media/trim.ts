@@ -96,6 +96,27 @@ export function clampPlayhead(t: number, range: TrimRange | null): number {
   return clamp(t, range.start, range.end);
 }
 
+/**
+ * The reverse push: dragging the playhead *into* a handle and carrying on
+ * takes the handle with it. Only ever widens the range — the playhead pushes
+ * a boundary outwards, it never squeezes one — so the minimum length can't be
+ * violated and the two handles can't meet.
+ *
+ * Without this, widening a tight range means letting go of the playhead,
+ * grabbing a handle that sits under it, and dragging that: three gestures for
+ * one intention.
+ */
+export function pushBounds(
+  range: TrimRange,
+  t: number,
+  duration: number,
+): TrimRange {
+  const at = clamp(t, 0, Math.max(0, duration));
+  if (at < range.start) return { start: at, end: range.end };
+  if (at > range.end) return { start: range.start, end: at };
+  return range;
+}
+
 /** How long the trimmed result runs. */
 export function trimDuration(range: TrimRange): number {
   return Math.max(0, range.end - range.start);

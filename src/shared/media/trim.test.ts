@@ -6,6 +6,7 @@ import {
   fullRange,
   isTrimmed,
   minTrimLength,
+  pushBounds,
   restoreTrim,
   saveTrim,
   setEnd,
@@ -51,6 +52,29 @@ describe('clampPlayhead', () => {
 
   it('leaves an untrimmed clip alone', () => {
     expect(clampPlayhead(7, null)).toBe(7);
+  });
+});
+
+describe('pushBounds', () => {
+  it('carries the handle the playhead runs into', () => {
+    expect(pushBounds({ start: 5, end: 12 }, 3, 15)).toEqual({ start: 3, end: 12 });
+    expect(pushBounds({ start: 5, end: 12 }, 14, 15)).toEqual({ start: 5, end: 14 });
+  });
+
+  it('leaves the range alone while the playhead stays inside it', () => {
+    const range = { start: 5, end: 12 };
+    expect(pushBounds(range, 7, 15)).toBe(range);
+  });
+
+  it('never pushes past the clip', () => {
+    expect(pushBounds({ start: 5, end: 12 }, -2, 15)).toEqual({ start: 0, end: 12 });
+    expect(pushBounds({ start: 5, end: 12 }, 99, 15)).toEqual({ start: 5, end: 15 });
+  });
+
+  it('only ever widens, so the handles can never meet', () => {
+    const tight = { start: 7, end: 7.04 };
+    expect(pushBounds(tight, 7.02, 15)).toBe(tight);
+    expect(pushBounds(tight, 6, 15)).toEqual({ start: 6, end: 7.04 });
   });
 });
 

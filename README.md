@@ -69,8 +69,16 @@ read “—”, free text and the grade still work.
 
 **Trim.** The scrub bar carries two handles: everything before the in point
 and after the out point greys out, and the playhead can only travel between
-them — drag a handle past it and it is pushed along, live. The handles never
-cross (they stop one frame from each other). Playback stops on the out point;
+them. Whatever you drag, the picture follows it — grab a handle and you watch
+the frame you are cutting on, not the one you left the playhead at. The push
+works both ways: a handle dragged past the playhead carries it, and the
+playhead dragged into a handle carries the handle outwards, so a tight range
+widens without letting go. (Clicking in the greyed-out zone only lands on the
+nearest kept frame; nothing is re-cut unless you drag through it.) The handles
+are grabbed on the rail, the playhead by its head below — two bands, because
+the two sit on top of each other constantly and neither must ever become
+ungrabbable. The handles never cross (they stop one frame from each other).
+Playback stops on the out point;
 press play there and it replays from the in point, or turn on **↻** to loop the
 range. `I` and `O` cut at the playhead, `Shift+I` /
 `Shift+O` put a handle back on the clip's own end, and a focused handle steps
