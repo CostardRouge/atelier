@@ -107,45 +107,64 @@ const SRGB_KNEE_ENCODED = 0.04045;
 const SRGB_SLOPE = 12.92;
 const SRGB_KNEE_LINEAR = SRGB_KNEE_ENCODED / SRGB_SLOPE;
 
+/** A per-channel curve. Takes an already-clamped value. */
+type Curve = (x: number) => number;
+
 /**
- * Code value → linear light, per channel.
+ * Code value → linear light, one closure per curve.
  *
  * sRGB is the REAL piecewise curve, not a bare 2.2 power: its linear toe below
  * 0.04045 is what keeps deep shadows from crushing, and dropping it is the
  * usual way a "simplified" sRGB implementation blocks up blacks.
  */
+const DECODE: Readonly<Record<TransferFn, Curve>> = {
+  'gamma-2.2': (x) => Math.pow(x, 2.2),
+  'gamma-2.4': (x) => Math.pow(x, 2.4),
+  srgb: (x) =>
+    x <= SRGB_KNEE_ENCODED ? x / SRGB_SLOPE : Math.pow((x + 0.055) / 1.055, 2.4),
+};
+
+/** Linear light → code value. Each entry is the inverse of its `DECODE` twin. */
+const ENCODE: Readonly<Record<TransferFn, Curve>> = {
+  'gamma-2.2': (x) => Math.pow(x, 1 / 2.2),
+  'gamma-2.4': (x) => Math.pow(x, 1 / 2.4),
+  srgb: (x) =>
+    x <= SRGB_KNEE_LINEAR ? x * SRGB_SLOPE : 1.055 * Math.pow(x, 1 / 2.4) - 0.055,
+};
+
+/** Code value → linear light, per channel. */
 export function toLinear(v: number, fn: TransferFn): number {
-  const x = clamp01(v);
-  switch (fn) {
-    case 'gamma-2.2':
-      return Math.pow(x, 2.2);
-    case 'gamma-2.4':
-      return Math.pow(x, 2.4);
-    case 'srgb':
-      return x <= SRGB_KNEE_ENCODED
-        ? x / SRGB_SLOPE
-        : Math.pow((x + 0.055) / 1.055, 2.4);
-  }
+  return DECODE[fn](clamp01(v));
 }
 
 /** Linear light → code value, per channel. The inverse of `toLinear`. */
 export function fromLinear(v: number, fn: TransferFn): number {
-  const x = clamp01(v);
-  switch (fn) {
-    case 'gamma-2.2':
-      return Math.pow(x, 1 / 2.2);
-    case 'gamma-2.4':
-      return Math.pow(x, 1 / 2.4);
-    case 'srgb':
-      return x <= SRGB_KNEE_LINEAR
-        ? x * SRGB_SLOPE
-        : 1.055 * Math.pow(x, 1 / 2.4) - 0.055;
-  }
+  return ENCODE[fn](clamp01(v));
+}
+
+/**
+ * Resolve a transform ONCE into a per-channel function.
+ *
+ * Use this, never `applyTransfer`, inside a loop. `applyTransfer` re-derives
+ * the (from, to) pair and allocates an object on every call — invisible for a
+ * handful of values, ruinous inside a bake, which calls it 3× per lattice
+ * point (786,432 times at 64³). That allocation, not the lattice walk, was
+ * most of the cost: a zero-layer transform bake measured 185 ms before this
+ * and a fraction of that after.
+ */
+export function makeTransfer(t: OutputTransform): (v: number) => number {
+  const pair = transformPair(t);
+  if (!pair) return (v) => v;
+  const decode = DECODE[pair.from];
+  const encode = ENCODE[pair.to];
+  return (v) => clamp01(encode(decode(clamp01(v))));
 }
 
 /**
  * Re-encode one channel from its source curve to its destination curve.
  * `none` is the identity, so a caller can apply this unconditionally.
+ *
+ * For a single value only — in a loop use `makeTransfer`.
  *
  * Both endpoints are fixed points of every transform (0 → 0, 1 → 1), which is
  * what guarantees the black and white points never drift — only the shape of

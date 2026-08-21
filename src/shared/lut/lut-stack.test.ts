@@ -187,10 +187,14 @@ describe('composeLutStack — output transform', () => {
     expect(after).not.toBeCloseTo(before, 3);
   });
 
-  it('bakes at the full lattice, whatever the inputs measure', () => {
-    // A transfer curve is steepest near black; a 33³ lattice would band there.
+  it('imposes a lattice floor, but does not force the maximum', () => {
+    // Without a floor a coarse stack would band the transfer curve; with a
+    // forced 64³ every strength-slider step would re-bake for ~180 ms.
     expect(composeLutStack([layer({ lut: half(9) })])!.size).toBe(9);
-    expect(composeLutStack([layer({ lut: half(9) })], 'rec709-to-srgb')!.size).toBe(64);
+    expect(composeLutStack([layer({ lut: half(9) })], 'rec709-to-srgb')!.size).toBe(33);
+    expect(composeLutStack([], 'rec709-to-srgb')!.size).toBe(33);
+    // A denser look still wins — the floor never costs precision.
+    expect(composeLutStack([layer({ lut: half(64) })], 'rec709-to-srgb')!.size).toBe(64);
   });
 
   it('pins black and white through the whole chain', () => {

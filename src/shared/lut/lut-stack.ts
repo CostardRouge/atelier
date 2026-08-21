@@ -27,10 +27,13 @@
 
 import type { CubeLut } from '../lib/cube-parser';
 import { sampleTrilinear, sampleWith, type Interpolation } from './interpolate';
-import { applyTransfer, transformLabel, type OutputTransform } from './transfer';
+import { makeTransfer, transformLabel, type OutputTransform } from './transfer';
 
 /** Upper bound on the composed lattice: 64³ ≈ 3 MB of floats, plenty. */
 const MAX_COMPOSED_SIZE = 64;
+
+/** Floor when an output transform is baked in; see `composeLutStack`. */
+const TRANSFORM_MIN_SIZE = 33;
 
 /** One entry of the stack, with its parsed LUT resolved. */
 export interface LutLayer {
@@ -76,20 +79,25 @@ export function composeLutStack(
 ): CubeLut | null {
   const active = activeLayers(layers);
   const transform = output !== 'none';
+  // Resolved once: inside the lattice walk this runs 3× per point.
+  const transfer = makeTransfer(output);
   if (active.length === 0 && !transform) return null;
   if (!transform && active.length === 1 && active[0].intensity === 1) {
     return active[0].lut;
   }
 
-  // A transfer curve is steepest near black, exactly where an under-sampled
-  // lattice bands, so a transform always bakes at the full lattice rather than
-  // at the largest input size (our shipped looks are 33³).
-  const size = transform
-    ? MAX_COMPOSED_SIZE
-    : Math.min(
-        MAX_COMPOSED_SIZE,
-        active.reduce((max, l) => Math.max(max, l.lut.size), 2),
-      );
+  const largest = active.reduce((max, l) => Math.max(max, l.lut.size), 2);
+  // A transfer curve is steepest near black, where a coarse lattice bands, so
+  // a transform imposes a FLOOR — without one a stack of zero layers would
+  // bake the curve into a 2³ cube. It is only a floor: baking everything at
+  // 64³ costs ~180 ms per bake, and the strength slider re-bakes on every drag
+  // step, which froze the UI. At the shipped 33³ the error is 0.77 of an 8-bit
+  // code against 0.35 at 64³ — both under the quantisation step, and not worth
+  // eight times the lattice.
+  const size = Math.min(
+    MAX_COMPOSED_SIZE,
+    transform ? Math.max(largest, TRANSFORM_MIN_SIZE) : largest,
+  );
   const last = size - 1;
   const data = new Float32Array(size * size * size * 3);
 
@@ -115,9 +123,9 @@ export function composeLutStack(
         // [0,1], so an above-100% layer loses the headroom it was carrying —
         // harmless, since the 8-bit canvas clipped that overshoot anyway.
         if (transform) {
-          r = applyTransfer(r, output);
-          g = applyTransfer(g, output);
-          b = applyTransfer(b, output);
+          r = transfer(r);
+          g = transfer(g);
+          b = transfer(b);
         }
 
         const o = (ri + gi * size + bi * size * size) * 3;
