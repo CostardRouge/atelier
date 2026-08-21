@@ -26,6 +26,43 @@ describe('migrateProjectDoc', () => {
     expect(migrated.exportPrefs.fileName).toBeNull();
     expect(migrated.exportPrefs.variants).toHaveLength(1);
     expect(migrated.exportPrefs.variants[0].aspectId).toBe('source');
+    // v4: no look was set, so the grade stack is empty.
+    expect(migrated.lutStack).toEqual([]);
+  });
+
+  it('carries a v3 single look into a one-layer stack', () => {
+    const doc = v1Doc();
+    doc.lut = {
+      selected: 'kodak-2383',
+      customName: null,
+      customText: null,
+      intensity: 0.6,
+    };
+    const migrated = migrateProjectDoc(doc);
+    expect(migrated.lutStack).toHaveLength(1);
+    expect(migrated.lutStack[0].source).toBe('builtin:kodak-2383');
+    expect(migrated.lutStack[0].intensity).toBe(0.6);
+    expect(migrated.lutStack[0].enabled).toBe(true);
+  });
+
+  it('carries a v3 custom look, and drops one whose text is gone', () => {
+    const withText = v1Doc();
+    withText.lut = {
+      selected: 'custom',
+      customName: 'mine.cube',
+      customText: 'LUT_3D_SIZE 2',
+      intensity: 1,
+    };
+    expect(migrateProjectDoc(withText).lutStack[0].source).toBe('custom');
+
+    const orphan = v1Doc();
+    orphan.lut = {
+      selected: 'custom',
+      customName: 'gone.cube',
+      customText: null,
+      intensity: 1,
+    };
+    expect(migrateProjectDoc(orphan).lutStack).toEqual([]);
   });
 
   it('is idempotent and leaves current documents untouched', () => {

@@ -65,7 +65,14 @@ to position, anchors keep edge pinning), grade through a `.cube` LUT, scrub
 with the shared transport. The inspector is tabbed (Overlay / Style / Grade /
 Info / Export); tools run edge-to-edge so a landscape clip finally gets the
 width it needs. Clips **without** an `.srt` are accepted: telemetry fields
-read “—”, free text and the LUT still work. The stage, element model and
+read “—”, free text and the grade still work.
+
+**The grade is a stack.** Add several looks and they apply in order, top to
+bottom — each with its own strength (0–300%) and an on/off switch for
+instant A/B, reordered with ↑/↓. The stack **bakes into a single LUT**
+(each layer resampled through the previous one, the way an NLE flattens a
+node graph), so the preview, the stills and every export variant still grade
+through one shader pass. The stage, element model and
 export come from the shared overlay engine (`src/shared/overlay/`) — the same
 renderer draws the preview and the export, so what you place is exactly what
 burns in. An **A/B** toggle on the transport wipes original against composed

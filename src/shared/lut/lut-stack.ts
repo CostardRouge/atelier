@@ -1,0 +1,169 @@
+/**
+ * LUT stacking — several looks applied in order, each with its own strength
+ * and a bypass switch, resolved into ONE `CubeLut`.
+ *
+ * Composition rather than chaining: instead of running N GPU passes, we walk a
+ * lattice and, for each point, push the colour through every enabled layer in
+ * turn (trilinear sample + intensity mix), baking the result into a single
+ * cube. The renderer, the preview, the frame grab and both export paths keep
+ * receiving exactly one LUT and never learn that stacking exists.
+ *
+ * That's the same "bake" a colour-managed NLE performs when it flattens a
+ * node graph: resampling on a finite lattice loses a little precision against
+ * a true chain, so the composed cube adopts the LARGEST input size (capped) to
+ * keep the error under the interpolation the GPU would do anyway.
+ *
+ * Pure and DOM-free.
+ */
+
+import type { CubeLut } from '../lib/cube-parser';
+
+/** Upper bound on the composed lattice: 64³ ≈ 3 MB of floats, plenty. */
+const MAX_COMPOSED_SIZE = 64;
+
+/** One entry of the stack, with its parsed LUT resolved. */
+export interface LutLayer {
+  id: string;
+  /** `builtin:<id>` or `custom` — how the layer is restored from a document. */
+  source: string;
+  /** Display name (the built-in's name, or the uploaded file's). */
+  name: string;
+  lut: CubeLut;
+  /** Strength: 0 = original, 1 = the look as authored, up to 3 = 300%. */
+  intensity: number;
+  /** Off keeps the layer in the stack but skips it — the A/B of grading. */
+  enabled: boolean;
+}
+
+function clamp01(n: number): number {
+  return n < 0 ? 0 : n > 1 ? 1 : n;
+}
+
+/**
+ * Trilinear sample of `lut` at a normalized colour, honouring the cube's
+ * input domain. Out-of-domain inputs clamp, exactly like the GPU's
+ * `CLAMP_TO_EDGE` sampler, so preview and bake agree.
+ */
+export function sampleLut(
+  lut: CubeLut,
+  r: number,
+  g: number,
+  b: number,
+): [number, number, number] {
+  const n = lut.size;
+  const last = n - 1;
+  const norm = (v: number, i: number): number => {
+    const lo = lut.domainMin[i];
+    const hi = lut.domainMax[i];
+    const span = hi - lo;
+    return clamp01(span === 0 ? 0 : (v - lo) / span) * last;
+  };
+
+  const x = norm(r, 0);
+  const y = norm(g, 1);
+  const z = norm(b, 2);
+
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const z0 = Math.floor(z);
+  const x1 = Math.min(x0 + 1, last);
+  const y1 = Math.min(y0 + 1, last);
+  const z1 = Math.min(z0 + 1, last);
+  const fx = x - x0;
+  const fy = y - y0;
+  const fz = z - z0;
+
+  // Red varies fastest, then green, then blue (the .cube table order).
+  const at = (xi: number, yi: number, zi: number): number =>
+    (xi + yi * n + zi * n * n) * 3;
+
+  const out: [number, number, number] = [0, 0, 0];
+  for (let c = 0; c < 3; c += 1) {
+    const c000 = lut.data[at(x0, y0, z0) + c];
+    const c100 = lut.data[at(x1, y0, z0) + c];
+    const c010 = lut.data[at(x0, y1, z0) + c];
+    const c110 = lut.data[at(x1, y1, z0) + c];
+    const c001 = lut.data[at(x0, y0, z1) + c];
+    const c101 = lut.data[at(x1, y0, z1) + c];
+    const c011 = lut.data[at(x0, y1, z1) + c];
+    const c111 = lut.data[at(x1, y1, z1) + c];
+
+    const c00 = c000 + (c100 - c000) * fx;
+    const c10 = c010 + (c110 - c010) * fx;
+    const c01 = c001 + (c101 - c001) * fx;
+    const c11 = c011 + (c111 - c011) * fx;
+    const c0 = c00 + (c10 - c00) * fy;
+    const c1 = c01 + (c11 - c01) * fy;
+    out[c] = c0 + (c1 - c0) * fz;
+  }
+  return out;
+}
+
+/** The layers that actually affect the image. */
+export function activeLayers(layers: readonly LutLayer[]): LutLayer[] {
+  return layers.filter((l) => l.enabled && l.intensity > 0);
+}
+
+/**
+ * Bake the stack into one LUT, or null when nothing is active (the caller
+ * then grades through no LUT at all — the cheapest path).
+ *
+ * A single full-strength layer is returned as-is: the common case must not pay
+ * a resampling round-trip.
+ */
+export function composeLutStack(layers: readonly LutLayer[]): CubeLut | null {
+  const active = activeLayers(layers);
+  if (active.length === 0) return null;
+  if (active.length === 1 && active[0].intensity === 1) return active[0].lut;
+
+  const size = Math.min(
+    MAX_COMPOSED_SIZE,
+    active.reduce((max, l) => Math.max(max, l.lut.size), 2),
+  );
+  const last = size - 1;
+  const data = new Float32Array(size * size * size * 3);
+
+  for (let bi = 0; bi < size; bi += 1) {
+    for (let gi = 0; gi < size; gi += 1) {
+      for (let ri = 0; ri < size; ri += 1) {
+        let r = ri / last;
+        let g = gi / last;
+        let b = bi / last;
+
+        for (const layer of active) {
+          const [lr, lg, lb] = sampleLut(layer.lut, r, g, b);
+          // Intensity mixes toward the layer's output; above 1 it extrapolates
+          // past the look, matching the shader's behaviour.
+          const t = layer.intensity;
+          r = r + (lr - r) * t;
+          g = g + (lg - g) * t;
+          b = b + (lb - b) * t;
+        }
+
+        const o = (ri + gi * size + bi * size * size) * 3;
+        data[o] = r;
+        data[o + 1] = g;
+        data[o + 2] = b;
+      }
+    }
+  }
+
+  return {
+    size,
+    data,
+    title: active.map((l) => l.name).join(' → '),
+    domainMin: [0, 0, 0],
+    domainMax: [1, 1, 1],
+  };
+}
+
+/** Move the layer at `index` one slot up (-1) or down (+1); pure. */
+export function reorderLayer<T>(layers: readonly T[], index: number, delta: -1 | 1): T[] {
+  const target = index + delta;
+  if (index < 0 || index >= layers.length || target < 0 || target >= layers.length) {
+    return layers.slice();
+  }
+  const next = layers.slice();
+  [next[index], next[target]] = [next[target], next[index]];
+  return next;
+}

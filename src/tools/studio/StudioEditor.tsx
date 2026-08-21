@@ -45,8 +45,8 @@ import {
 import { reanchorInPlace } from '../../shared/overlay/draw-overlays';
 import { DEFAULT_GUIDES, type GuidesState } from '../../shared/overlay/guides';
 import { useOverlayStage } from '../../shared/overlay/use-overlay-stage';
-import { useLutSelection } from '../../shared/lut/use-lut-selection';
-import LutPicker from '../../shared/lut/LutPicker';
+import { useLutStack } from '../../shared/lut/use-lut-stack';
+import GradePanel from './GradePanel';
 import type { StyleTheme } from '../../shared/overlay/title-styles';
 import StylePanel from './StylePanel';
 import ProjectSettingsModal from './ProjectSettingsModal';
@@ -109,7 +109,7 @@ export default function StudioEditor({
   const scrub = useVideoScrub(videoRef);
 
   const lib = useAssetLibrary();
-  const lutSel = useLutSelection();
+  const lutStack = useLutStack();
   const { assets: clips, activeId, active, activeIndex, goPrev, goNext } =
     useActiveAsset(STUDIO_KINDS);
 
@@ -170,7 +170,7 @@ export default function StudioEditor({
   useEffect(() => {
     if (restoredRef.current) return;
     restoredRef.current = true;
-    void lutSel.restore(project.lut);
+    void lutStack.restore(project.lutStack);
     if (project.media.activeId && clips.some((c) => c.id === project.media.activeId)) {
       lib.setActive(project.media.activeId);
     }
@@ -308,8 +308,8 @@ export default function StudioEditor({
     elements,
     selectedId: selectedElementId,
     guides,
-    lut: lutSel.lut,
-    intensity: lutSel.intensity,
+    lut: lutStack.composed,
+    intensity: 1,
     theme,
     compare: compareOn,
     resetKey: activeUrl,
@@ -375,12 +375,7 @@ export default function StudioEditor({
           settings: { ...docRef.current.settings, aspectId },
           elements,
           guides,
-          lut: {
-            selected: lutSel.selected,
-            customName: lutSel.customName,
-            customText: lutSel.customText,
-            intensity: lutSel.intensity,
-          },
+          lutStack: lutStack.toSaved(),
           theme,
           exportPrefs: {
             fileName: exportFileName.trim() || null,
@@ -413,9 +408,7 @@ export default function StudioEditor({
     exportFileName,
     variants,
     activeId,
-    lutSel.selected,
-    lutSel.intensity,
-    lutSel.customText,
+    lutStack.layers,
     clips,
   ]);
 
@@ -449,8 +442,8 @@ export default function StudioEditor({
         const opts = {
           elements,
           cues,
-          lut: lutSel.lut,
-          intensity: lutSel.intensity,
+          lut: lutStack.composed,
+          intensity: 1,
           theme,
           srcWidth,
           srcHeight,
@@ -475,8 +468,8 @@ export default function StudioEditor({
               source,
               cues,
               variant.overlays ? elements : [],
-              lutSel.lut,
-              lutSel.intensity,
+              lutStack.composed,
+              1,
               theme,
               onProgress,
               controller.signal,
@@ -540,8 +533,8 @@ export default function StudioEditor({
       const blob = await grabFrame(video, {
         elements,
         cues,
-        lut: lutSel.lut,
-        intensity: lutSel.intensity,
+        lut: lutStack.composed,
+        intensity: 1,
         theme,
         overlays: true,
       });
@@ -831,7 +824,7 @@ export default function StudioEditor({
               fields will show “—”. Free-text elements still work.
             </p>
           )}
-          {lutSel.cubeError && <p className={notice}>{lutSel.cubeError}</p>}
+          {lutStack.error && <p className={notice}>{lutStack.error}</p>}
         </div>
 
         {/* Inspector */}
@@ -893,23 +886,7 @@ export default function StudioEditor({
                 <StylePanel theme={theme} onChange={setTheme} />
               )}
 
-              {tab === 'grade' && (
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-3">
-                  <LutPicker
-                    selected={lutSel.selected}
-                    customName={lutSel.customName}
-                    busy={lutSel.busy}
-                    intensity={lutSel.intensity}
-                    onIntensityChange={lutSel.setIntensity}
-                    onSelect={lutSel.applySelection}
-                    onUpload={lutSel.uploadCube}
-                  />
-                  <p className="m-0 w-full text-[0.78rem] text-muted leading-[1.5]">
-                    The look grades the preview and the export identically —
-                    same renderer, same result.
-                  </p>
-                </div>
-              )}
+              {tab === 'grade' && <GradePanel stack={lutStack} />}
 
               {tab === 'info' && (
                 <InfoPanel

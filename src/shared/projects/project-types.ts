@@ -17,8 +17,9 @@ import type { GuidesState } from '../overlay/guides';
 import type { StyleTheme } from '../overlay/title-styles';
 import type { PersistedDirectoryHandle } from '../sources/file-sources';
 import { defaultVariants, type ExportVariant } from './export-variants';
+import type { SavedLutLayer } from '../lut/use-lut-stack';
 
-export const PROJECT_DOC_VERSION = 3;
+export const PROJECT_DOC_VERSION = 4;
 
 /** Identity of one media file, enough to re-match it inside a folder. */
 export interface SavedMediaRef {
@@ -51,7 +52,7 @@ export interface ProjectSettings {
   aspectId: string;
 }
 
-/** The LUT half of `useLutSelection`, in a persistable shape. */
+/** The pre-v4 single-look grade, kept so old documents still parse. */
 export interface SavedLut {
   selected: string;
   customName: string | null;
@@ -83,7 +84,10 @@ export interface ProjectDoc {
   // --- portable half -------------------------------------------------------
   elements: OverlayElement[];
   guides: GuidesState;
+  /** Legacy single-look grade; migrated into `lutStack` on read (v4). */
   lut: SavedLut;
+  /** The grade: LUT layers in application order, each with strength + switch. */
+  lutStack: SavedLutLayer[];
   /** Title-style theme (preset + tweaks), or null for element styles as-is. */
   theme: StyleTheme | null;
   /** The export matrix: custom base name + the deliverables one press makes. */
@@ -105,7 +109,10 @@ export function createProjectDoc(
   aspectId: string,
   elements: OverlayElement[],
   guides: GuidesState,
-  template?: Pick<ProjectDoc, 'elements' | 'guides' | 'lut' | 'theme' | 'exportPrefs'>,
+  template?: Pick<
+    ProjectDoc,
+    'elements' | 'guides' | 'lut' | 'lutStack' | 'theme' | 'exportPrefs'
+  >,
 ): ProjectDoc {
   const now = Date.now();
   return {
@@ -120,6 +127,7 @@ export function createProjectDoc(
     lut: template
       ? structuredClone(template.lut)
       : { selected: 'none', customName: null, customText: null, intensity: 1 },
+    lutStack: template ? structuredClone(template.lutStack) : [],
     theme: template ? structuredClone(template.theme) : null,
     exportPrefs: template
       ? structuredClone(template.exportPrefs)
@@ -134,7 +142,9 @@ export function createProjectDoc(
  * Bring a stored document up to the current version. v1 → v2 adds the
  * title-style theme (null: element styles as-is, visually identical);
  * v2 → v3 adds the export matrix (one source-faithful variant — exactly
- * what Export used to do). Idempotent; the store runs it on every read.
+ * what Export used to do); v3 → v4 turns the single look into a one-layer
+ * stack, so an old project grades identically on reopen. Idempotent; the
+ * store runs it on every read.
  */
 export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
   if (doc.version >= PROJECT_DOC_VERSION) return doc;
@@ -148,6 +158,30 @@ export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
       variants: defaultVariants(),
     };
   }
+  if (migrated.version < 4) {
+    // A v3 document's grade IS its single look — derive the stack from it
+    // unless one is somehow already present.
+    migrated.lutStack = migrated.lutStack?.length
+      ? migrated.lutStack
+      : savedLutAsStack(migrated.lut);
+  }
   migrated.version = PROJECT_DOC_VERSION;
   return migrated;
+}
+
+/** The v3 single-look grade as a one-layer stack (empty when it graded nothing). */
+export function savedLutAsStack(lut: SavedLut | undefined): SavedLutLayer[] {
+  if (!lut || lut.selected === 'none') return [];
+  const isCustom = lut.selected === 'custom';
+  if (isCustom && !lut.customText) return [];
+  return [
+    {
+      id: `migrated-${lut.selected}`,
+      source: isCustom ? 'custom' : `builtin:${lut.selected}`,
+      name: isCustom ? (lut.customName ?? 'Custom look') : lut.selected,
+      customText: isCustom ? lut.customText : null,
+      intensity: lut.intensity ?? 1,
+      enabled: true,
+    },
+  ];
 }
