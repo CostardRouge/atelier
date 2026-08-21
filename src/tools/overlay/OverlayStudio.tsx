@@ -11,22 +11,23 @@ import TranscodeControl from '../../shared/media/TranscodeControl';
 import { probeContainer, type ContainerInfo } from '../../shared/media/video-metadata';
 import { parseSrt, type Cue } from '../../shared/telemetry/srt-parser';
 import { findCue } from '../../shared/telemetry/find-cue';
-import ElementList from './ElementList';
-import ElementPanel from './ElementPanel';
-import { exportOverlay } from './export-overlay';
-import { ensureOverlayFonts } from './fonts';
+import ElementList from '../../shared/overlay/ElementList';
+import ElementPanel from '../../shared/overlay/ElementPanel';
+import { exportOverlay } from '../../shared/overlay/export-overlay';
+import { ensureOverlayFonts } from '../../shared/overlay/fonts';
 import {
+  createFrameCornersElement,
   createHeadingArrowElement,
   createTelemetryElement,
   createTextElement,
   defaultElementsPreset,
   type OverlayElement,
   type TelemetryFieldKey,
-} from './overlay-types';
-import { reanchorInPlace } from './draw-overlays';
-import { DEFAULT_GUIDES, type GuidesState } from './guides';
-import GuidesControl from './GuidesControl';
-import { useOverlayStage } from './use-overlay-stage';
+} from '../../shared/overlay/overlay-types';
+import { reanchorInPlace } from '../../shared/overlay/draw-overlays';
+import { DEFAULT_GUIDES, type GuidesState } from '../../shared/overlay/guides';
+import GuidesControl from '../../shared/overlay/GuidesControl';
+import { useOverlayStage } from '../../shared/overlay/use-overlay-stage';
 import { useLutSelection } from '../../shared/lut/use-lut-selection';
 import LutPicker from '../../shared/lut/LutPicker';
 
@@ -305,6 +306,7 @@ export default function OverlayStudio() {
         elements,
         lutSel.lut,
         lutSel.intensity,
+        null,
         {
           codec: transcoded ? undefined : activeInfo.codec,
           width: meta?.width,
@@ -517,15 +519,17 @@ export default function OverlayStudio() {
               selectedId={selectedElementId}
               cue={activeCue}
               onSelect={setSelectedElementId}
-              onAddField={(f: TelemetryFieldKey) =>
-                addElement(createTelemetryElement(f))
-              }
-              onAddText={() => addElement(createTextElement())}
-              onAddArrow={() => addElement(createHeadingArrowElement())}
-              onAddPreset={() => {
-                const deck = defaultElementsPreset();
-                setElements(deck);
-                setSelectedElementId(deck[0]?.id ?? null);
+              addControls={{
+                onAddField: (f: TelemetryFieldKey) =>
+                  addElement(createTelemetryElement(f)),
+                onAddText: () => addElement(createTextElement()),
+                onAddArrow: () => addElement(createHeadingArrowElement()),
+                onAddCorners: () => addElement(createFrameCornersElement()),
+                onAddPreset: () => {
+                  const deck = defaultElementsPreset();
+                  setElements(deck);
+                  setSelectedElementId(deck[0]?.id ?? null);
+                },
               }}
               onRemove={removeElement}
               onToggleVisible={toggleVisible}

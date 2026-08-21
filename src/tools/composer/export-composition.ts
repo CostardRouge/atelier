@@ -34,7 +34,7 @@ import {
   type Corner,
   type Fit,
   type LayoutKind,
-} from './compose-layout';
+} from '../../shared/media/compose-layout';
 import { drawReadout } from './draw-readout';
 import type { OverlayConfig } from './overlay';
 import { cameraForTrack } from './map-shared';

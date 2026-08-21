@@ -18,7 +18,7 @@ import {
   type Corner,
   type Fit,
   type LayoutKind,
-} from './compose-layout';
+} from '../../shared/media/compose-layout';
 import { useComposerMap } from './use-composer-map';
 import { downloadBlob, outputName } from '../../shared/media/save';
 import { useObjectUrl } from '../../shared/media/use-object-url';

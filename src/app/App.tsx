@@ -41,17 +41,23 @@ export default function App() {
     localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0');
   }, [collapsed]);
 
-  // Every tool runs in a fixed-height frame (the tool owns its own scrolling);
-  // only the Home landing keeps the natural, page-scrolling layout + footer.
+  // Every tool runs in a fixed-height, FULL-WIDTH frame — editing wants every
+  // pixel (a landscape clip beside two panels eats width fast), so tools run
+  // edge-to-edge with only a thin breathing margin. Only the Home landing
+  // keeps a readable column and the natural page scroll + footer.
   return (
     <div
       className={
         tool
-          ? 'h-dvh flex flex-col min-h-0 overflow-hidden max-w-[1080px] mx-auto px-[clamp(1.25rem,5vw,3.5rem)] pt-[clamp(1.25rem,4vw,3rem)] pb-[clamp(1rem,3vw,1.75rem)] max-[820px]:h-auto max-[820px]:min-h-dvh max-[820px]:overflow-visible'
+          ? 'h-dvh flex flex-col min-h-0 overflow-hidden w-full px-4 pt-3 pb-3 max-[820px]:h-auto max-[820px]:min-h-dvh max-[820px]:overflow-visible'
           : 'max-w-[1080px] mx-auto px-[clamp(1.25rem,5vw,3.5rem)] pt-[clamp(1.25rem,4vw,3rem)] pb-20'
       }
     >
-      <header className="flex items-baseline justify-between gap-4 pb-4 border-b border-line">
+      <header
+        className={`flex items-baseline justify-between gap-4 border-b border-line ${
+          tool ? 'pb-2.5' : 'pb-4'
+        }`}
+      >
         <span className="inline-flex items-baseline gap-[0.4rem] font-serif text-2xl tracking-[-0.01em] italic">
           <a
             href={`#${HOME_PATH}`}
@@ -95,7 +101,7 @@ export default function App() {
       <main
         className={
           tool
-            ? 'flex-1 min-h-0 flex mt-4 flex-row gap-4 max-[820px]:flex-col'
+            ? 'flex-1 min-h-0 flex mt-3 flex-row gap-4 max-[820px]:flex-col'
             : undefined
         }
       >

@@ -10,25 +10,58 @@
  * (no canvas), kept separate so they're unit-testable.
  */
 
-import type { Cue } from '../../shared/telemetry/srt-parser';
+import type { Cue } from '../telemetry/srt-parser';
 import { renderElementText } from './field-format';
 import type { Anchor, OverlayElement } from './overlay-types';
+import {
+  halolight,
+  resolveElementStyle,
+  warmDrift,
+  type GlowLayers,
+  type ResolvedStyle,
+  type StyleTheme,
+} from './title-styles';
 
 type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
+/** Optional render context: the project theme and the media time (grain). */
+export interface DrawOptions {
+  theme?: StyleTheme | null;
+  /** Current media time in seconds — phases the animated grain so preview and
+   * export stay frame-identical. */
+  timeSeconds?: number;
+}
+
 /** Generic fallback appended to each family so missing glyphs degrade sanely. */
 function genericFallback(family: string): string {
-  if (family === 'JetBrains Mono' || family === 'Courier New') return 'monospace';
+  if (
+    family === 'JetBrains Mono' ||
+    family === 'Courier New' ||
+    family === 'VT323'
+  ) {
+    return 'monospace';
+  }
   if (family === 'Instrument Serif' || family === 'Georgia') return 'serif';
   return 'sans-serif';
 }
 
-/** Build a CSS `font` shorthand for an element at a given pixel size. */
-function fontString(el: OverlayElement, fontPx: number): string {
-  const style = el.italic ? 'italic ' : '';
-  return `${style}${el.weight} ${fontPx}px '${el.fontFamily}', ${genericFallback(
-    el.fontFamily,
+/** Build a CSS `font` shorthand for a resolved style at a given pixel size. */
+function fontString(st: ResolvedStyle, fontPx: number): string {
+  const style = st.italic ? 'italic ' : '';
+  return `${style}${st.weight} ${fontPx}px '${st.fontFamily}', ${genericFallback(
+    st.fontFamily,
   )}`;
+}
+
+/**
+ * Canvas letter-spacing (Chromium 99+/Safari 17+). Set before BOTH measure and
+ * draw so the box matches the paint; silently absent elsewhere (spacing is a
+ * refinement, never load-bearing).
+ */
+function setLetterSpacing(ctx: Ctx2D, em: number, fontPx: number): void {
+  if ('letterSpacing' in ctx) {
+    (ctx as { letterSpacing: string }).letterSpacing = `${em * fontPx}px`;
+  }
 }
 
 /** Split an anchor into its vertical and horizontal components. */
@@ -98,6 +131,8 @@ interface Layout {
   h: number;
   /** Baseline offset from the box top (for textBaseline:'alphabetic'). */
   ascent: number;
+  /** The element's appearance after theme/override resolution. */
+  st: ResolvedStyle;
 }
 
 /**
@@ -120,21 +155,26 @@ function layoutElement(
   cue: Cue | null,
   vw: number,
   vh: number,
+  theme?: StyleTheme | null,
 ): Layout | null {
-  const text = renderElementText(el, cue);
-  if (text === '') return null;
+  const raw = renderElementText(el, cue);
+  if (raw === '') return null;
+  const st = resolveElementStyle(el, theme ?? null);
+  const text = st.uppercase ? raw.toUpperCase() : raw;
 
-  const fontPx = Math.max(1, el.sizeFrac * refDim(vw, vh));
-  const font = fontString(el, fontPx);
+  const fontPx = Math.max(1, st.sizeFrac * refDim(vw, vh));
+  const font = fontString(st, fontPx);
   ctx.font = font;
+  setLetterSpacing(ctx, st.letterSpacingEm, fontPx);
   const m = ctx.measureText(text);
+  setLetterSpacing(ctx, 0, fontPx);
   const w = m.width;
   const ascent = m.actualBoundingBoxAscent ?? fontPx * 0.8;
   const descent = m.actualBoundingBoxDescent ?? fontPx * 0.2;
   const h = ascent + descent;
 
   const { x, y } = anchorOrigin(el.anchor, el.x * vw, el.y * vh, w, h);
-  return { text, font, fontPx, x, y, w, h, ascent };
+  return { text, font, fontPx, x, y, w, h, ascent, st };
 }
 
 const ZERO_SHADOW = 'rgba(0,0,0,0)';
@@ -188,24 +228,26 @@ function arrowLayout(el: OverlayElement, vw: number, vh: number): ArrowLayout {
  * top); in relative (track-up) mode the ctx is pre-rotated by `−heading°` so
  * the heading direction floats to the top.
  */
-function drawCompassDecoration(
-  ctx: Ctx2D,
-  r: number,
-  el: OverlayElement,
-): void {
+function drawCompassDecoration(ctx: Ctx2D, r: number, st: ResolvedStyle): void {
   const ringR = r * 2.0;
   const lineW = Math.max(0.5, r * 0.055);
   const gapR = r * 0.65;
 
-  if (el.legibility.mode === 'shadow') {
-    ctx.shadowColor = el.legibility.color;
-    ctx.shadowBlur = el.legibility.padFrac * r * 0.6;
+  if (st.glow) {
+    const [wr, wg, wb] = warmDrift(st.color, st.glowWarmth);
+    ctx.shadowColor = `rgba(${wr},${wg},${wb},${st.glow.haloAlpha})`;
+    ctx.shadowBlur = Math.max(1, st.glow.haloRadiusFrac * r * 3);
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+  } else if (st.legibility.mode === 'shadow') {
+    ctx.shadowColor = st.legibility.color;
+    ctx.shadowBlur = st.legibility.padFrac * r * 0.6;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
   }
 
   // Ring outline
-  ctx.strokeStyle = el.color;
+  ctx.strokeStyle = st.color;
   ctx.lineWidth = lineW;
   ctx.globalAlpha = 0.45;
   ctx.beginPath();
@@ -227,7 +269,7 @@ function drawCompassDecoration(
   const letterR = ringR + r * 0.5;
   const letterPx = Math.max(6, r * 0.52);
   ctx.globalAlpha = 0.92;
-  ctx.fillStyle = el.color;
+  ctx.fillStyle = st.color;
   ctx.font = `bold ${letterPx}px sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -262,7 +304,9 @@ function drawArrow(
   cue: Cue | null,
   vw: number,
   vh: number,
+  theme?: StyleTheme | null,
 ): void {
+  const st = resolveElementStyle(el, theme ?? null);
   const lay = arrowLayout(el, vw, vh);
   const { cx, cy, r, halfSize } = lay;
   const heading = cue?.derived?.heading;
@@ -272,9 +316,9 @@ function drawArrow(
   ctx.translate(cx, cy);
 
   // --- axis-aligned background box (never rotated) ---
-  if (el.legibility.mode === 'box') {
-    const pad = el.legibility.padFrac * r;
-    ctx.fillStyle = el.legibility.color;
+  if (st.legibility.mode === 'box') {
+    const pad = st.legibility.padFrac * r;
+    ctx.fillStyle = st.legibility.color;
     roundRectPath(
       ctx,
       -halfSize - pad,
@@ -296,7 +340,7 @@ function drawArrow(
       ctx.rotate(-heading * (Math.PI / 180));
     }
     // Absolute mode: no rotation — N always at screen top.
-    drawCompassDecoration(ctx, r, el);
+    drawCompassDecoration(ctx, r, st);
     ctx.restore();
   }
 
@@ -311,9 +355,16 @@ function drawArrow(
     ctx.rotate((heading - 90) * (Math.PI / 180));
   }
 
-  if (el.legibility.mode === 'shadow') {
-    ctx.shadowColor = el.legibility.color;
-    ctx.shadowBlur = el.legibility.padFrac * r;
+  if (st.glow) {
+    // The glow's halo layer, adapted to a filled shape: one warm shadow pass.
+    const [wr, wg, wb] = warmDrift(st.color, st.glowWarmth);
+    ctx.shadowColor = `rgba(${wr},${wg},${wb},${st.glow.haloAlpha})`;
+    ctx.shadowBlur = Math.max(1, (st.glow.haloRadiusFrac + st.glow.bleedRadiusFrac * 0.4) * r * 3);
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+  } else if (st.legibility.mode === 'shadow') {
+    ctx.shadowColor = st.legibility.color;
+    ctx.shadowBlur = st.legibility.padFrac * r;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
   } else {
@@ -327,7 +378,7 @@ function drawArrow(
     ctx.globalAlpha = 0.45;
   }
 
-  ctx.fillStyle = el.color;
+  ctx.fillStyle = st.color;
 
   if (heading != null || isRelative) {
     // Chevron pointing right (East) before rotation.
@@ -346,6 +397,54 @@ function drawArrow(
     ctx.fill();
   }
 
+  ctx.restore();
+}
+
+/**
+ * Frame-corner brackets: four L-shaped marks inset from the frame edges — the
+ * viewfinder furniture of a HUD. Spans the whole frame, so it ignores the
+ * anchor/position: `sizeFrac` is the arm length, `cornerInset` the distance
+ * from the edges, both fractions of the shorter side.
+ */
+function drawFrameCorners(
+  ctx: Ctx2D,
+  el: OverlayElement,
+  vw: number,
+  vh: number,
+  st: ResolvedStyle,
+): void {
+  const ref = refDim(vw, vh);
+  const arm = Math.max(2, st.sizeFrac * ref);
+  const inset = Math.max(0, (el.cornerInset ?? 0.03) * ref);
+  const lw = Math.max(1, arm * 0.08);
+
+  ctx.save();
+  ctx.strokeStyle = st.color;
+  ctx.lineWidth = lw;
+  ctx.lineCap = 'butt';
+  if (st.glow) {
+    const [wr, wg, wb] = warmDrift(st.color, st.glowWarmth);
+    ctx.shadowColor = `rgba(${wr},${wg},${wb},${st.glow.haloAlpha})`;
+    ctx.shadowBlur = Math.max(1, st.glow.haloRadiusFrac * ref * 0.6);
+  } else if (st.legibility.mode === 'shadow') {
+    ctx.shadowColor = st.legibility.color;
+    ctx.shadowBlur = st.legibility.padFrac * arm * 0.5;
+  }
+
+  const l = inset;
+  const t = inset;
+  const r = vw - inset;
+  const b = vh - inset;
+  ctx.beginPath();
+  // Top-left
+  ctx.moveTo(l, t + arm); ctx.lineTo(l, t); ctx.lineTo(l + arm, t);
+  // Top-right
+  ctx.moveTo(r - arm, t); ctx.lineTo(r, t); ctx.lineTo(r, t + arm);
+  // Bottom-right
+  ctx.moveTo(r, b - arm); ctx.lineTo(r, b); ctx.lineTo(r - arm, b);
+  // Bottom-left
+  ctx.moveTo(l + arm, b); ctx.lineTo(l, b); ctx.lineTo(l, b - arm);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -373,6 +472,149 @@ function roundRectPath(
   ctx.closePath();
 }
 
+// ---------------------------------------------------------------------------
+// Film grain (the glow's fourth layer)
+// ---------------------------------------------------------------------------
+
+/** Deterministic 128² monochrome noise tile, built once (any time, any run). */
+let grainTile: HTMLCanvasElement | OffscreenCanvas | null = null;
+
+function getGrainTile(): HTMLCanvasElement | OffscreenCanvas | null {
+  if (grainTile) return grainTile;
+  const size = 128;
+  const canvas =
+    typeof document !== 'undefined'
+      ? document.createElement('canvas')
+      : typeof OffscreenCanvas !== 'undefined'
+        ? new OffscreenCanvas(size, size)
+        : null;
+  if (!canvas) return null;
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d') as Ctx2D | null;
+  if (!ctx) return null;
+  const img = ctx.createImageData(size, size);
+  // Tiny LCG so preview and export produce the identical tile.
+  let seed = 987654321;
+  for (let i = 0; i < img.data.length; i += 4) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    const v = seed % 256;
+    img.data[i] = v;
+    img.data[i + 1] = v;
+    img.data[i + 2] = v;
+    img.data[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  grainTile = canvas;
+  return canvas;
+}
+
+/**
+ * Grain over one glow region: the noise tile, offset deterministically from
+ * the media time (~10 steps/s), composited 'overlay' so it bites both the
+ * bright halo and the dark ground — never a plain grey wash.
+ */
+function drawGrain(
+  ctx: Ctx2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  alpha: number,
+  timeSeconds: number,
+): void {
+  const tile = getGrainTile();
+  if (!tile || alpha <= 0 || w <= 0 || h <= 0) return;
+  const step = Math.floor(timeSeconds * 10);
+  // Deterministic pseudo-random offsets per step.
+  const ox = (step * 53) % 128;
+  const oy = (step * 97) % 128;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  ctx.globalAlpha = alpha;
+  ctx.globalCompositeOperation = 'overlay';
+  for (let ty = y - oy - 128; ty < y + h; ty += 128) {
+    for (let tx = x - ox - 128; tx < x + w; tx += 128) {
+      ctx.drawImage(tile, tx, ty);
+    }
+  }
+  ctx.restore();
+}
+
+/**
+ * The four-layer glow behind/around a text run (see title-styles.ts): wide
+ * warm bleed, tight bright halo, softened core, then grain over the whole
+ * region. Layers 1–2 are extra fills of the same text carrying only a shadow;
+ * the final fill is the letter body itself.
+ */
+function drawGlowedText(
+  ctx: Ctx2D,
+  lay: Layout,
+  glow: GlowLayers,
+  timeSeconds: number,
+): void {
+  const { st, fontPx } = lay;
+  const baselineY = lay.y + lay.ascent;
+  const [wr, wg, wb] = warmDrift(st.color, st.glowWarmth);
+
+  setLetterSpacing(ctx, st.letterSpacingEm, fontPx);
+
+  // 1 — wide bleed, warm-drifted, drawn twice so the veil has body.
+  if (glow.bleedRadiusFrac > 0 && glow.bleedAlpha > 0) {
+    ctx.save();
+    ctx.shadowColor = `rgba(${wr},${wg},${wb},${glow.bleedAlpha})`;
+    ctx.shadowBlur = glow.bleedRadiusFrac * fontPx;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.fillStyle = st.color;
+    ctx.fillText(lay.text, lay.x, baselineY);
+    ctx.fillText(lay.text, lay.x, baselineY);
+    ctx.restore();
+  }
+
+  // 2 — tight halo, brightened ink.
+  if (glow.haloRadiusFrac > 0 && glow.haloAlpha > 0) {
+    ctx.save();
+    ctx.shadowColor = halolight(st.color, glow.haloAlpha);
+    ctx.shadowBlur = Math.max(1, glow.haloRadiusFrac * fontPx);
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.fillStyle = st.color;
+    ctx.fillText(lay.text, lay.x, baselineY);
+    ctx.restore();
+  }
+
+  // 3 — the letter body, slightly softened where ctx.filter exists.
+  ctx.save();
+  const coreBlur = glow.coreBlurFrac * fontPx;
+  if (coreBlur >= 0.2 && 'filter' in ctx) {
+    (ctx as { filter: string }).filter = `blur(${coreBlur.toFixed(2)}px)`;
+  }
+  ctx.shadowColor = ZERO_SHADOW;
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = st.color;
+  ctx.fillText(lay.text, lay.x, baselineY);
+  ctx.restore();
+
+  setLetterSpacing(ctx, 0, fontPx);
+
+  // 4 — grain over the whole glow region.
+  if (glow.grainAlpha > 0) {
+    const reach = glow.bleedRadiusFrac * fontPx + fontPx * 0.2;
+    drawGrain(
+      ctx,
+      lay.x - reach,
+      lay.y - reach,
+      lay.w + reach * 2,
+      lay.h + reach * 2,
+      glow.grainAlpha,
+      timeSeconds,
+    );
+  }
+}
+
 /** Paint all visible elements onto `ctx`. */
 export function drawOverlays(
   ctx: Ctx2D,
@@ -380,24 +622,38 @@ export function drawOverlays(
   cue: Cue | null,
   videoWidth: number,
   videoHeight: number,
+  opts?: DrawOptions,
 ): void {
+  const theme = opts?.theme ?? null;
+  const timeSeconds = opts?.timeSeconds ?? 0;
   for (const el of elements) {
     if (!el.visible) continue;
     if (el.kind === 'heading-arrow') {
-      drawArrow(ctx, el, cue, videoWidth, videoHeight);
+      drawArrow(ctx, el, cue, videoWidth, videoHeight, theme);
       continue;
     }
-    const lay = layoutElement(ctx, el, cue, videoWidth, videoHeight);
+    if (el.kind === 'frame-corners') {
+      drawFrameCorners(
+        ctx,
+        el,
+        videoWidth,
+        videoHeight,
+        resolveElementStyle(el, theme),
+      );
+      continue;
+    }
+    const lay = layoutElement(ctx, el, cue, videoWidth, videoHeight, theme);
     if (!lay) continue;
+    const st = lay.st;
 
     ctx.font = lay.font;
     ctx.textBaseline = 'alphabetic';
     ctx.textAlign = 'left';
 
-    const pad = el.legibility.padFrac * lay.fontPx;
-    if (el.legibility.mode === 'box') {
+    const pad = st.legibility.padFrac * lay.fontPx;
+    if (st.legibility.mode === 'box') {
       ctx.save();
-      ctx.fillStyle = el.legibility.color;
+      ctx.fillStyle = st.legibility.color;
       roundRectPath(
         ctx,
         lay.x - pad,
@@ -410,18 +666,25 @@ export function drawOverlays(
       ctx.restore();
     }
 
+    if (lay.st.glow) {
+      drawGlowedText(ctx, lay, lay.st.glow, timeSeconds);
+      continue;
+    }
+
     ctx.save();
-    if (el.legibility.mode === 'shadow') {
-      ctx.shadowColor = el.legibility.color;
-      ctx.shadowBlur = Math.max(1, el.legibility.padFrac * lay.fontPx);
+    setLetterSpacing(ctx, st.letterSpacingEm, lay.fontPx);
+    if (st.legibility.mode === 'shadow') {
+      ctx.shadowColor = st.legibility.color;
+      ctx.shadowBlur = Math.max(1, st.legibility.padFrac * lay.fontPx);
       ctx.shadowOffsetX = 0;
       ctx.shadowOffsetY = lay.fontPx * 0.05;
     } else {
       ctx.shadowColor = ZERO_SHADOW;
       ctx.shadowBlur = 0;
     }
-    ctx.fillStyle = el.color;
+    ctx.fillStyle = st.color;
     ctx.fillText(lay.text, lay.x, lay.y + lay.ascent);
+    setLetterSpacing(ctx, 0, lay.fontPx);
     ctx.restore();
   }
 }
@@ -446,10 +709,15 @@ export function measureOverlays(
   cue: Cue | null,
   videoWidth: number,
   videoHeight: number,
+  opts?: DrawOptions,
 ): ElementBox[] {
+  const theme = opts?.theme ?? null;
   const boxes: ElementBox[] = [];
   for (const el of elements) {
     if (!el.visible) continue;
+    // Frame corners span the whole frame: a hit box would swallow every click,
+    // so they are never draggable — select them from the element list.
+    if (el.kind === 'frame-corners') continue;
     if (el.kind === 'heading-arrow') {
       const alay = arrowLayout(el, videoWidth, videoHeight);
       const margin = Math.max(2, alay.r * 0.15);
@@ -462,11 +730,15 @@ export function measureOverlays(
       });
       continue;
     }
-    const lay = layoutElement(ctx, el, cue, videoWidth, videoHeight);
+    const lay = layoutElement(ctx, el, cue, videoWidth, videoHeight, theme);
     if (!lay) continue;
+    // The grab box must cover everything painted: legibility padding, and the
+    // glow's bleed when the element carries one (a glow clipped out of its
+    // own hit-box would be undraggable at the edges).
     const margin = Math.max(
-      el.legibility.padFrac * lay.fontPx,
+      lay.st.legibility.padFrac * lay.fontPx,
       lay.fontPx * 0.2,
+      lay.st.glow ? lay.st.glow.bleedRadiusFrac * lay.fontPx * 0.5 : 0,
     );
     boxes.push({
       id: el.id,
@@ -511,13 +783,15 @@ export function reanchorInPlace(
   vw: number,
   vh: number,
   anchor: Anchor,
+  theme?: StyleTheme | null,
 ): { x: number; y: number } | null {
+  if (el.kind === 'frame-corners') return null;
   if (el.kind === 'heading-arrow') {
     const alay = arrowLayout(el, vw, vh);
     const p = anchorPoint(anchor, alay.x, alay.y, alay.w, alay.h);
     return { x: p.x / vw, y: p.y / vh };
   }
-  const lay = layoutElement(ctx, el, cue, vw, vh);
+  const lay = layoutElement(ctx, el, cue, vw, vh, theme ?? null);
   if (!lay) return null;
   const p = anchorPoint(anchor, lay.x, lay.y, lay.w, lay.h);
   return { x: p.x / vw, y: p.y / vh };
