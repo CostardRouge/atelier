@@ -185,9 +185,14 @@ dropped, above it they are duplicated, and the panel says so rather than
 implying interpolated motion. Names follow automatically (`vol-9x16-1080p-30fps-clean.mp4` —
 suffixes only where a variant departs from the source), the base name is
 editable, and the whole matrix persists with the project (templates carry
-it). Variants render sequentially with per-variant progress. Files land in
-the browser's downloads by default, or — on Chromium — straight into a
-**destination folder** you pick once, stills included.
+it). Variants render sequentially with per-variant progress, each row counting
+up while it works and keeping **what it cost** once done — file size, render
+time and speed against realtime (`367 KB · 16 s · 0.2× realtime`), with a total
+for the run. That is how you tell what a setting costs on *your* machine; the
+figures live for the session and clear as soon as the setting that produced
+them changes. Files land in the browser's downloads by default, or — on
+Chromium — straight into a **destination folder** you pick once, stills
+included.
 
 **Title styles.** The Style tab adopts a named look as the project's theme —
 *Or ciné* (optical-print gold serif), *Pixel CRT* (terminal red on phosphor),
