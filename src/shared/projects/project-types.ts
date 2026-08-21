@@ -20,8 +20,9 @@ import { defaultVariants, type ExportVariant } from './export-variants';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
 import { NO_SHIFT, type TimeShift } from '../telemetry/time-format';
 import type { OutputTransform } from '../lut/transfer';
+import type { SavedTrim } from '../media/trim';
 
-export const PROJECT_DOC_VERSION = 7;
+export const PROJECT_DOC_VERSION = 8;
 
 /** Identity of one media file, enough to re-match it inside a folder. */
 export interface SavedMediaRef {
@@ -82,6 +83,15 @@ export interface ProjectMedia {
   files: SavedMediaRef[];
   /** Base name (asset id) of the clip that was active when last saved. */
   activeId: string | null;
+  /**
+   * In/out points per clip, keyed by base name — only for the clips that are
+   * actually trimmed. Bound, not portable: seconds into *this* footage mean
+   * nothing under another media, which is why each entry carries the duration
+   * it was set against (see media/trim.ts, `restoreTrim`). Per clip rather
+   * than per project because the maintainer trims several clips of one flight
+   * and exports them one by one to assemble later.
+   */
+  trims: Record<string, SavedTrim>;
 }
 
 export interface ProjectDoc {
@@ -155,7 +165,7 @@ export function createProjectDoc(
     exportPrefs: template
       ? structuredClone(template.exportPrefs)
       : { fileName: null, variants: defaultVariants() },
-    media: { dirHandle: null, files: [], activeId: null },
+    media: { dirHandle: null, files: [], activeId: null, trims: {} },
     thumbnail: null,
     durationSeconds: null,
   };
@@ -171,8 +181,9 @@ export function createProjectDoc(
  * before it existed); v5 → v6 adds the output transform, defaulting to
  * 'none' — an existing grade must never re-encode itself behind the user's
  * back; v6 → v7 gives every stored variant an explicit 'source' frame rate,
- * which is the only cadence an export could produce before it existed.
- * Idempotent; the store runs it on every read.
+ * which is the only cadence an export could produce before it existed;
+ * v7 → v8 adds the per-clip trims, empty, so every clip reopens at its full
+ * length. Idempotent; the store runs it on every read.
  */
 export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
   if (doc.version >= PROJECT_DOC_VERSION) return doc;
@@ -216,6 +227,10 @@ export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
         frameRate: v.frameRate ?? 'source',
       })),
     };
+  }
+  if (migrated.version < 8) {
+    // No trim was possible before v8: every clip runs full length.
+    migrated.media = { ...migrated.media, trims: migrated.media?.trims ?? {} };
   }
   migrated.version = PROJECT_DOC_VERSION;
   return migrated;

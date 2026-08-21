@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { targetOwnsSpace, type KeyTarget } from './transport-keys';
+import { targetOwnsSpace, targetOwnsTyping, type KeyTarget } from './transport-keys';
 
 function t(tagName: string, extra: Partial<KeyTarget> = {}): KeyTarget {
   return { tagName, isContentEditable: false, role: null, ...extra };
@@ -35,5 +35,23 @@ describe('targetOwnsSpace', () => {
     expect(targetOwnsSpace(t('DIV', { role: 'Slider' }))).toBe(true);
     expect(targetOwnsSpace(t('DIV', { role: 'textbox' }))).toBe(true);
     expect(targetOwnsSpace(t('DIV', { role: 'presentation' }))).toBe(false);
+  });
+});
+
+describe('targetOwnsTyping', () => {
+  it('stands down only where text is being typed', () => {
+    expect(targetOwnsTyping(null)).toBe(false);
+    expect(targetOwnsTyping(t('INPUT'))).toBe(true);
+    expect(targetOwnsTyping(t('TEXTAREA'))).toBe(true);
+    expect(targetOwnsTyping(t('SELECT'))).toBe(true);
+    expect(targetOwnsTyping(t('DIV', { isContentEditable: true }))).toBe(true);
+  });
+
+  it('leaves letter shortcuts alive on anything else', () => {
+    // The narrower half of the pair: a focused button owns SPACE, but not the
+    // letter `i` — blocking it there would kill I/O after any button click.
+    expect(targetOwnsTyping(t('BUTTON'))).toBe(false);
+    expect(targetOwnsTyping(t('DIV', { role: 'slider' }))).toBe(false);
+    expect(targetOwnsTyping(t('CANVAS'))).toBe(false);
   });
 });

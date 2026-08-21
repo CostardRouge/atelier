@@ -1,5 +1,5 @@
 /**
- * Who owns the space bar.
+ * Who owns a key press.
  *
  * Space is the suite's transport key (play/pause), bound on `window` so it
  * works wherever the pointer happens to be. But space is also the browser's
@@ -59,4 +59,27 @@ export function targetOwnsSpace(target: KeyTarget | null): boolean {
   if (TYPING_TAGS.has(target.tagName)) return true;
   if (ACTIVATED_TAGS.has(target.tagName)) return true;
   return target.role !== null && ACTIVATED_ROLES.has(target.role.toLowerCase());
+}
+
+/**
+ * True when the focused element is somewhere text is being typed — the guard
+ * every *letter* shortcut needs (`I`/`O` for the trim handles, Delete for the
+ * selected element). Narrower than {@link targetOwnsSpace} on purpose: a
+ * button doesn't own the letter `i`, and treating it as if it did would kill
+ * those shortcuts for the rest of the session after any button click.
+ */
+export function targetOwnsTyping(target: KeyTarget | null): boolean {
+  if (!target) return false;
+  return target.isContentEditable || TYPING_TAGS.has(target.tagName);
+}
+
+/** Describe a DOM event target for the two predicates above. */
+export function describeKeyTarget(target: EventTarget | null): KeyTarget | null {
+  const el = target as HTMLElement | null;
+  if (!el || typeof el.tagName !== 'string') return null;
+  return {
+    tagName: el.tagName,
+    isContentEditable: el.isContentEditable === true,
+    role: el.getAttribute?.('role') ?? null,
+  };
 }

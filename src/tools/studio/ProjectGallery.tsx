@@ -196,6 +196,8 @@ export default function ProjectGallery({
       dirHandle: choices.folder?.handle ?? null,
       files: choices.folder?.refs ?? [],
       activeId: null,
+      // A template carries no in/out points: they belong to the footage.
+      trims: {},
     };
     await putProject(doc);
     setCreating(false);

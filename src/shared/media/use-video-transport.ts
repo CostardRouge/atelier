@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { targetOwnsSpace, type KeyTarget } from './transport-keys';
+import { describeKeyTarget, targetOwnsSpace } from './transport-keys';
+import { TRIM_EPSILON, type TrimRange } from './trim';
 
 /**
  * The suite's one video transport: playing / time / duration state wired to a
@@ -9,6 +10,10 @@ import { targetOwnsSpace, type KeyTarget } from './transport-keys';
  * The tool keeps its own seek handler (coalesced via `useVideoScrub`, or a
  * direct `currentTime` write) — seeking strategies legitimately differ, the
  * clock does not.
+ *
+ * A tool that trims (the studio) passes a range: playback then stops on the
+ * out point instead of the file's end, and pressing play there replays from
+ * the in point. Tools that pass nothing behave exactly as before.
  */
 
 export interface TransportOptions {
@@ -27,6 +32,21 @@ export interface TransportOptions {
    * the key).
    */
   spaceToggles?: boolean;
+  /**
+   * The in/out range playback is confined to, or null for the whole clip. A
+   * **ref**, because the event listeners below are wired once per media and
+   * would otherwise close over a stale range.
+   */
+  rangeRef?: RefObject<TrimRange | null>;
+  /** While `.current` is true, reaching the out point jumps back to the in point. */
+  loopRef?: RefObject<boolean>;
+  /**
+   * Keep playing when the media changes. Switching clips in an editor should
+   * not stop playback: if it was running, the next clip picks it up as soon as
+   * its metadata is in. Off by default — a tool that swaps media for another
+   * reason shouldn't start playing on its own.
+   */
+  resumeAcrossMedia?: boolean;
 }
 
 export interface VideoTransport {
@@ -55,18 +75,63 @@ export function useVideoTransport(
     onLoadedMetadata,
     followers,
     spaceToggles = true,
+    rangeRef,
+    loopRef,
+    resumeAcrossMedia,
   } = opts ?? {};
+  // Whether the element is playing, readable synchronously — the state above
+  // is already reset by the time the new media's events arrive.
+  const playingRef = useRef(false);
 
   useEffect(() => {
     // New media (or none): the clock restarts; duration refreshes on
-    // `loadedmetadata`.
+    // `loadedmetadata`. Whether the *previous* clip was running is captured
+    // first, so playback can be handed over to this one.
+    const wasPlaying = playingRef.current;
+    playingRef.current = false;
     setPlaying(false);
     setTime(0);
     setDuration(0);
     const v = videoRef.current;
     if (!v) return;
-    const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
+
+    // The out point is enforced on a rAF loop rather than on `timeupdate`:
+    // that event only fires ~4×/s, so playback would run up to 250 ms past the
+    // handle. The loop only compares the clock — React state still comes from
+    // `timeupdate`, so this costs no extra render.
+    let raf = 0;
+    const stopWatch = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+    };
+    const watch = () => {
+      raf = requestAnimationFrame(watch);
+      const range = rangeRef?.current;
+      if (!range || v.paused || scrubbingRef?.current) return;
+      if (v.currentTime < range.end - TRIM_EPSILON) return;
+      if (loopRef?.current) {
+        v.currentTime = range.start;
+        setTime(range.start);
+      } else {
+        v.pause();
+        // Land exactly on the handle, so the next play is unambiguously "at
+        // the out point" and replays from the in point.
+        v.currentTime = range.end;
+        setTime(range.end);
+      }
+    };
+
+    const onPlay = () => {
+      playingRef.current = true;
+      setPlaying(true);
+      stopWatch();
+      raf = requestAnimationFrame(watch);
+    };
+    const onPause = () => {
+      playingRef.current = false;
+      setPlaying(false);
+      stopWatch();
+    };
     const onTime = () => {
       if (!scrubbingRef?.current) setTime(v.currentTime);
       for (const f of followers?.() ?? []) {
@@ -78,6 +143,10 @@ export function useVideoTransport(
     const onMeta = () => {
       setDuration(Number.isFinite(v.duration) ? v.duration : 0);
       onLoadedMetadata?.(v);
+      // Hand playback over to the new clip. The element is muted, and the
+      // gesture that started playback already happened, so this is allowed;
+      // a rejection (a browser that disagrees) just leaves it paused.
+      if (resumeAcrossMedia && wasPlaying) void v.play().catch(() => {});
     };
     v.addEventListener('play', onPlay);
     v.addEventListener('pause', onPause);
@@ -85,6 +154,7 @@ export function useVideoTransport(
     v.addEventListener('timeupdate', onTime);
     v.addEventListener('loadedmetadata', onMeta);
     return () => {
+      stopWatch();
       v.removeEventListener('play', onPlay);
       v.removeEventListener('pause', onPause);
       v.removeEventListener('ended', onPause);
@@ -100,6 +170,16 @@ export function useVideoTransport(
     if (!v) return;
     const els = [v, ...(followers?.() ?? []).filter((f) => f !== v)];
     const anyPaused = els.some((el) => el.paused);
+    const range = rangeRef?.current;
+    if (
+      anyPaused &&
+      range &&
+      (v.currentTime >= range.end - TRIM_EPSILON || v.currentTime < range.start)
+    ) {
+      // Sitting on (or outside) the out point: play means replay the range.
+      for (const el of els) el.currentTime = range.start;
+      setTime(range.start);
+    }
     for (const el of els) {
       if (anyPaused) void el.play();
       else el.pause();
@@ -121,7 +201,7 @@ export function useVideoTransport(
       // Held space repeats: one press, one toggle. Modified space belongs to
       // the browser (page down, shortcuts).
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
-      if (targetOwnsSpace(describeTarget(e.target))) return;
+      if (targetOwnsSpace(describeKeyTarget(e.target))) return;
       const v = videoRef.current;
       // No media loaded: leave the key alone rather than calling play() on an
       // empty element (a rejected promise, and a stolen keypress for nothing).
@@ -134,14 +214,4 @@ export function useVideoTransport(
   }, [spaceToggles]);
 
   return { playing, time, duration, setTime, togglePlay };
-}
-
-function describeTarget(target: EventTarget | null): KeyTarget | null {
-  const el = target as HTMLElement | null;
-  if (!el || typeof el.tagName !== 'string') return null;
-  return {
-    tagName: el.tagName,
-    isContentEditable: el.isContentEditable === true,
-    role: el.getAttribute?.('role') ?? null,
-  };
 }

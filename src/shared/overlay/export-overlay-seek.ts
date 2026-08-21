@@ -36,6 +36,7 @@ import {
   type ExportFrameRate,
 } from '../media/frame-rate';
 import type { CubeLut } from '../lib/cube-parser';
+import type { TrimRange } from '../media/trim';
 import { makeFrameGrader } from '../lut/frame-grader';
 import { drawOverlays } from './draw-overlays';
 import { ensureOverlayFonts } from './fonts';
@@ -101,6 +102,8 @@ export async function exportOverlayVideoViaSeek(
   onProgress?: (p: ExportProgress) => void,
   signal?: AbortSignal,
   frameRate?: ExportFrameRate,
+  /** Render only this slice of the source; null renders the whole clip. */
+  trim?: TrimRange | null,
 ): Promise<Blob> {
   if (!isEncodeSupported()) {
     throw new Error('This browser does not support WebCodecs encoding.');
@@ -124,12 +127,18 @@ export async function exportOverlayVideoViaSeek(
   const durationSec = ticks / timescale || 1;
   const sourceFramerate = Math.max(1, Math.round(videoSamples.length / durationSec));
   const framerate = resolveFrameRate(frameRate, sourceFramerate);
+  // The trim is applied on the timeline, not on samples: this path seeks by
+  // time anyway. Frames are still looked up at their SOURCE time (cues, the
+  // capture clock), only the encoded timestamps restart at 0.
+  const startSec = Math.max(0, trim?.start ?? 0);
+  const endSec = trim ? Math.max(startSec, trim.end) : durationSec;
   // This path already samples the timeline at `i / framerate`, so a delivery
-  // cadence just changes the grid — and the sample count with it.
+  // cadence just changes the grid — and the sample count with it. A trim
+  // shortens the span the grid covers.
   const frameCount =
-    framerate === sourceFramerate
-      ? videoSamples.length
-      : outputFrameCount(durationSec, framerate);
+    trim || framerate !== sourceFramerate
+      ? outputFrameCount(endSec - startSec, framerate)
+      : videoSamples.length;
 
   // Decode source: an offscreen, muted <video>. A <video> element applies the
   // container's display rotation itself — `videoWidth`/`videoHeight` and what
@@ -206,14 +215,14 @@ export async function exportOverlayVideoViaSeek(
       throwIfAborted();
       if (pipelineError) throw pipelineError;
 
-      const t = i / framerate;
+      const t = startSec + i / framerate;
       await seekTo(video, t);
       const source = grade ? grade.render(video) : video;
       ctx.drawImage(source, 0, 0, outWidth, outHeight);
       drawOverlays(ctx, elements, findCue(cues, t), outWidth, outHeight, { theme, timeSeconds: t, timeShift, cues });
 
       const vf = new VideoFrame(canvas, {
-        timestamp: Math.round(t * 1_000_000),
+        timestamp: Math.round((t - startSec) * 1_000_000),
         duration: frameDuration,
       });
       encoder.encode(vf, { keyFrame: i % gop === 0 });
@@ -226,7 +235,17 @@ export async function exportOverlayVideoViaSeek(
     await encoder.flush();
     if (pipelineError) throw pipelineError;
 
-    copyAudio(muxer, audioTrack, audioSamples);
+    copyAudio(
+      muxer,
+      audioTrack,
+      audioSamples,
+      trim
+        ? {
+            baseMicros: Math.round(startSec * 1_000_000),
+            endMicros: Math.round(endSec * 1_000_000),
+          }
+        : undefined,
+    );
     onProgress?.({ phase: 'finalizing', ratio: null });
     muxer.finalize();
     const { buffer: output } = muxer.target as ArrayBufferTarget;

@@ -20,6 +20,7 @@ import { ensureOverlayFonts } from '../overlay/fonts';
 import type { OverlayElement } from '../overlay/overlay-types';
 import type { StyleTheme } from '../overlay/title-styles';
 import type { TimeShift } from '../telemetry/time-format';
+import type { TrimRange } from './trim';
 import { fitRect } from './compose-layout';
 import {
   drawRotatedFrame,
@@ -43,6 +44,8 @@ export interface VariantRenderOptions {
   /** Display-oriented source dimensions (from the clip's metadata). */
   srcWidth: number;
   srcHeight: number;
+  /** Encode only this slice of the source; null exports the whole clip. */
+  trim?: TrimRange | null;
 }
 
 export async function exportVariantVideo(
@@ -108,6 +111,7 @@ export async function exportVariantVideo(
     {
       outputSize: { width: out.w, height: out.h },
       frameRate: variant.frameRate,
+      trim: opts.trim ?? null,
     },
   );
 }
