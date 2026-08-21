@@ -60,6 +60,17 @@ can't persist, so reopening falls back to the same banner. A project is also a
 template: "Use as template" duplicates its portable half (overlays, look,
 guides, settings) with no media binding.
 
+**Settings travel as a file.** Project settings (the ⚙ chip in the project
+bar) has an *Import / export* section: **Export settings** downloads
+`<project>.atelier.json` — that same portable half, custom `.cube` text
+inlined so a shared grade lands identically — and **Import a file…** replaces
+the open project's settings with a file's, behind a confirmation (the media
+and the project name stay put). From the gallery, **Import a project file**
+creates a *new* project instead, which is what you want for a preset someone
+sent you. Nothing bound to a machine is written: no folder handle, no media
+list, no thumbnail. An older file is migrated on read; a file from a newer
+version of Atelier is refused rather than half-read.
+
 **The editor.** Pick a clip, place overlay elements on the canvas stage (drag
 to position, anchors keep edge pinning), grade through a `.cube` LUT, scrub
 with the shared transport. The inspector is tabbed (Overlay / Style / Grade /
@@ -464,6 +475,7 @@ src/
 │   │                           #   hooks, export-path decision, download/naming
 │   ├── projects/               # studio project documents: types, media reconciliation,
 │   │                           #   IndexedDB store (handles + thumbnails persist; media never)
+│   │                           #   + project-file (the portable half as .atelier.json)
 │   └── sources/                # file-sources (read, incl. persistable directory handles)
 │                               #   + write-files (export to folder)
 ├── tools/

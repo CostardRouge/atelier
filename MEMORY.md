@@ -52,6 +52,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - **No CI gate can see a broken shader** — GLSL is a template literal nothing compiles, and failure degrades silently to un-graded exports. Run `node scripts/check-shader.mjs` after touching `lut-gl.ts` — `media-pipeline.md`.
 - HDR (HLG/PQ) is not handled and deliberately will not be: the pipeline is 8-bit SDR by construction and a browser cannot reasonably do better — `media-pipeline.md`.
 - In/out trimming is **per clip** (bound half of the project, keyed by media name and guarded by duration) and the export cuts inside the one WebCodecs pipeline — `studio.md`, `media-pipeline.md`.
+- A project's settings export to / import from `.atelier.json` — the portable half exactly, media and trims never; export + overwrite-this-project live in the settings modal, import-as-new-project in the gallery — `studio.md`.
 - The DJI video `.srt` carries no battery level (Mini 4 Pro included): the gauge takes an authored value or a named telemetry key, and draws empty rather than inventing one — `studio.md`.
 
 ## Open items (dated; remove when done)

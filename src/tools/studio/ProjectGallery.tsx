@@ -11,6 +11,13 @@ import {
   listProjects,
   putProject,
 } from '../../shared/projects/project-store';
+import {
+  PROJECT_FILE_ACCEPT,
+  PROJECT_FILE_EXTENSION,
+  applyProjectFile,
+  parseProjectFile,
+} from '../../shared/projects/project-file';
+import { pickFile } from '../../shared/sources/file-sources';
 import { DEFAULT_GUIDES } from '../../shared/overlay/guides';
 import { defaultElementsPreset } from '../../shared/overlay/overlay-types';
 import NewProjectModal, { type NewProjectChoices } from './NewProjectModal';
@@ -174,6 +181,7 @@ export default function ProjectGallery({
 }: ProjectGalleryProps) {
   const [projects, setProjects] = useState<ProjectDoc[] | null>(null);
   const [creating, setCreating] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
     void listProjects().then(setProjects);
@@ -202,6 +210,30 @@ export default function ProjectGallery({
     await putProject(doc);
     setCreating(false);
     onCreated(doc, choices.folder?.files ?? []);
+  }
+
+  /**
+   * A project file becomes a NEW project rather than overwriting anything —
+   * the common case is a settings file someone sent you. (Replacing the open
+   * project's settings is the other half, in the editor's settings modal.)
+   */
+  async function handleImport() {
+    const picked = await pickFile(PROJECT_FILE_ACCEPT);
+    if (!picked) return;
+    setImportError(null);
+    const parsed = parseProjectFile(await picked.text());
+    if (!parsed.ok) {
+      setImportError(parsed.error);
+      return;
+    }
+    const fallback = picked.name.replace(/\.(atelier\.)?json$/i, '');
+    const name = parsed.file.name.trim() || fallback || 'Imported project';
+    const doc = applyProjectFile(
+      createProjectDoc(name, parsed.file.settings.aspectId, [], DEFAULT_GUIDES),
+      parsed.file,
+    );
+    await putProject(doc);
+    refresh();
   }
 
   async function handleDelete(id: string) {
@@ -235,12 +267,26 @@ export default function ProjectGallery({
         <span className="flex-1" />
         <button
           type="button"
+          onClick={() => void handleImport()}
+          className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-line-strong rounded-full bg-paper text-ink-soft cursor-pointer text-[0.84rem] transition-colors hover:border-accent hover:text-accent-ink"
+          title={`Create a project from an exported settings file (${PROJECT_FILE_EXTENSION})`}
+        >
+          ↑ Import a project file
+        </button>
+        <button
+          type="button"
           onClick={() => setCreating(true)}
           className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent active:scale-[0.98]"
         >
           + New project
         </button>
       </div>
+
+      {importError && (
+        <p className="m-0 text-[0.8rem] text-[#9a3a23]" role="alert">
+          {importError}
+        </p>
+      )}
 
       {projects === null ? (
         <p className="m-0 text-[0.85rem] text-muted font-mono">Loading projects…</p>
@@ -258,6 +304,13 @@ export default function ProjectGallery({
               className="mt-1 px-[1.1rem] py-2 inline-flex items-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold hover:bg-accent hover:border-accent"
             >
               Create the first one
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleImport()}
+              className="p-0 border-0 bg-transparent text-[0.78rem] text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink"
+            >
+              or import a project file
             </button>
           </div>
         </div>
