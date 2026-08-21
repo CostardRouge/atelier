@@ -17,6 +17,12 @@ import GuidesControl from '../../shared/overlay/GuidesControl';
 import { exportOverlayVideoViaSeek } from '../../shared/overlay/export-overlay-seek';
 import { exportVariantVideo } from '../../shared/media/export-variant';
 import { downloadBlob } from '../../shared/media/save';
+import { frameGrabName, grabFrame } from '../../shared/media/frame-grab';
+import {
+  canWriteToDisk,
+  pickWritableDirectory,
+  writeItems,
+} from '../../shared/sources/write-files';
 import { DecodeUnsupportedError } from '../../shared/media/webcodecs-export';
 import {
   createVariant,
@@ -122,6 +128,11 @@ export default function StudioEditor({
   const [guides, setGuides] = useState<GuidesState>(() => project.guides ?? DEFAULT_GUIDES);
   const [fontTick, setFontTick] = useState(0);
   const [compareOn, setCompareOn] = useState(false);
+  const [grabbing, setGrabbing] = useState(false);
+  // Export destination: the browser's downloads, or a folder the user picks
+  // once (File System Access — Chromium only). The handle lives for the
+  // session; it is a delivery choice, not project data.
+  const [destDir, setDestDir] = useState<FileSystemDirectoryHandle | null>(null);
   const [projectName, setProjectName] = useState(project.name);
   const [aspectId, setAspectId] = useState(project.settings.aspectId);
   const [showSettings, setShowSettings] = useState(false);
@@ -478,7 +489,7 @@ export default function StudioEditor({
             throw err;
           }
         }
-        downloadBlob(blob, variantFileName(base, variant));
+        await deliver(blob, variantFileName(base, variant));
       }
       setExportDone(true);
     } catch (err) {
@@ -506,6 +517,47 @@ export default function StudioEditor({
 
   function cancelExport() {
     exportAbort.current?.abort();
+  }
+
+  /** Write one finished file: into the chosen folder, else download it. */
+  async function deliver(blob: Blob, name: string): Promise<void> {
+    if (destDir) {
+      const res = await writeItems(destDir, [
+        { name, file: new File([blob], name, { type: blob.type }) },
+      ]);
+      if (res.errors.length) throw new Error(res.errors[0].message);
+      return;
+    }
+    downloadBlob(blob, name);
+  }
+
+  /** Capture the composed frame under the playhead as a JPEG still. */
+  async function handleGrabFrame() {
+    const video = videoRef.current;
+    if (!video || !active || grabbing) return;
+    setGrabbing(true);
+    try {
+      const blob = await grabFrame(video, {
+        elements,
+        cues,
+        lut: lutSel.lut,
+        intensity: lutSel.intensity,
+        theme,
+        overlays: true,
+      });
+      if (blob) {
+        await deliver(
+          blob,
+          frameGrabName(exportFileName.trim() || active.baseName, video.currentTime),
+        );
+      } else {
+        setExportError('No decoded frame to capture yet — play or scrub first.');
+      }
+    } catch (err) {
+      setExportError((err as Error).message || 'Frame capture failed');
+    } finally {
+      setGrabbing(false);
+    }
   }
 
   // --- derived ------------------------------------------------------------
@@ -738,6 +790,16 @@ export default function StudioEditor({
               </span>
               <button
                 type="button"
+                onClick={() => void handleGrabFrame()}
+                disabled={grabbing}
+                className="flex-none px-2.5 py-1 rounded-full border border-line-strong bg-paper text-[0.78rem] text-muted cursor-pointer hover:text-accent-ink hover:border-accent transition-colors disabled:opacity-50 disabled:cursor-default"
+                title="Save this frame as a JPEG, overlays and look burned in"
+                aria-label="Capture frame"
+              >
+                {grabbing ? '…' : '⌾'}
+              </button>
+              <button
+                type="button"
                 onClick={() => setCompareOn((c) => !c)}
                 aria-pressed={compareOn}
                 className={`flex-none px-2.5 py-1 rounded-full border font-mono text-[0.64rem] tracking-[0.1em] cursor-pointer transition-colors ${
@@ -874,6 +936,45 @@ export default function StudioEditor({
                       className="font-sans text-[0.84rem] px-3 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
                     />
                   </label>
+
+                  <div className="flex flex-col gap-1">
+                    <span className="font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted">
+                      Destination
+                    </span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      {canWriteToDisk() ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void pickWritableDirectory()
+                                .then(setDestDir)
+                                .catch(() => undefined);
+                            }}
+                            className="flex-none px-3 py-[0.35rem] rounded-full border border-line-strong bg-paper text-[0.78rem] font-semibold text-ink cursor-pointer hover:border-accent"
+                          >
+                            {destDir ? 'Change folder…' : 'Choose folder…'}
+                          </button>
+                          <span className="min-w-0 truncate text-[0.76rem] text-muted">
+                            {destDir ? destDir.name : 'Downloads'}
+                          </span>
+                          {destDir && (
+                            <button
+                              type="button"
+                              onClick={() => setDestDir(null)}
+                              className="flex-none p-0 border-0 bg-transparent text-[0.74rem] text-faint cursor-pointer hover:text-accent-ink underline underline-offset-[2px]"
+                            >
+                              use downloads
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-[0.76rem] text-muted">
+                          Downloads — folder writing needs Chromium.
+                        </span>
+                      )}
+                    </div>
+                  </div>
 
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted">
