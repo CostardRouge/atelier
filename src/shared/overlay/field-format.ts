@@ -42,7 +42,23 @@ export const FIELD_SPECS: Record<TelemetryFieldKey, FieldSpec> = {
   ct: { label: 'Color temp.', suffix: ' K' },
   frame: { label: 'Frame' },
   timestamp: { label: 'Timestamp' },
+  clock: { label: 'Clock (HH:MM:SS)' },
+  date: { label: 'Date' },
 };
+
+/** The time-of-day inside a DJI timestamp ("2025-01-01 12:00:00.000"). */
+function clockOf(timestamp: string | null | undefined): string | null {
+  if (!timestamp) return null;
+  const m = /(\d{1,2}:\d{2}:\d{2})/.exec(timestamp);
+  return m ? m[1] : null;
+}
+
+/** The calendar date inside a DJI timestamp, ISO-style. */
+function dateOf(timestamp: string | null | undefined): string | null {
+  if (!timestamp) return null;
+  const m = /(\d{4}[-/]\d{2}[-/]\d{2})/.exec(timestamp);
+  return m ? m[1].replace(/\//g, '-') : null;
+}
 
 /** All field keys in menu order. */
 export const FIELD_KEYS = Object.keys(FIELD_SPECS) as TelemetryFieldKey[];
@@ -67,6 +83,10 @@ export function formatField(
       return cue.frame != null ? String(cue.frame) : MISSING;
     case 'timestamp':
       return cue.timestamp ?? MISSING;
+    case 'clock':
+      return clockOf(cue.timestamp) ?? MISSING;
+    case 'date':
+      return dateOf(cue.timestamp) ?? MISSING;
     case 'gnd_speed':
       return formatGroundSpeed(cue.derived?.groundSpeed, speedUnit) ?? MISSING;
     case 'vert_speed':
@@ -89,7 +109,10 @@ export function formatField(
  */
 export function renderElementText(el: OverlayElement, cue: Cue | null): string {
   if (el.kind === 'text') return el.text ?? '';
-  if (el.kind === 'heading-arrow' || !el.field) return '';
+  // Shape-only kinds render no text.
+  if (el.kind === 'heading-arrow' || el.kind === 'frame-corners' || !el.field) {
+    return '';
+  }
   const value = formatField(el.field, cue, el.speedUnit);
   const label = el.label?.trim();
   return label ? `${label} ${value}` : value;

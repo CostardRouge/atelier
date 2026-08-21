@@ -163,7 +163,42 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
       )}
 
       {/* Content */}
-      {element.kind === 'heading-arrow' ? (
+      {element.kind === 'frame-corners' ? (
+        <div className="flex flex-col gap-2">
+          <p className="m-0 text-[0.78rem] text-muted">
+            Viewfinder brackets in the frame's four corners. It spans the whole
+            frame, so it isn't dragged — tune its geometry here.
+          </p>
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>
+              Arm length · {Math.round(element.sizeFrac * 100)}%
+            </span>
+            <input
+              type="range"
+              className="w-full accent-accent cursor-pointer"
+              min={0.01}
+              max={0.2}
+              step={0.005}
+              value={element.sizeFrac}
+              onChange={(e) => change({ sizeFrac: Number(e.target.value) })}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>
+              Inset · {Math.round((element.cornerInset ?? 0.03) * 100)}%
+            </span>
+            <input
+              type="range"
+              className="w-full accent-accent cursor-pointer"
+              min={0}
+              max={0.15}
+              step={0.005}
+              value={element.cornerInset ?? 0.03}
+              onChange={(e) => change({ cornerInset: Number(e.target.value) })}
+            />
+          </label>
+        </div>
+      ) : element.kind === 'heading-arrow' ? (
         <div className="flex flex-col gap-2">
           <p className="m-0 text-[0.78rem] text-muted">
             Rotates to the current course-over-ground heading. Shows a dot
@@ -250,8 +285,8 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
         </>
       )}
 
-      {/* Font — not applicable to heading arrows */}
-      {element.kind !== 'heading-arrow' && (
+      {/* Font — not applicable to shape-only kinds */}
+      {element.kind !== 'heading-arrow' && element.kind !== 'frame-corners' && (
         <label className="flex flex-col gap-1">
           <span className={`${labelClass} flex items-center gap-1.5`}>
             Font <OverrideDot prop="fontFamily" />
@@ -272,7 +307,9 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
         </label>
       )}
 
-      {/* Size — geometry: always the element's own (themes only multiply it) */}
+      {/* Size — geometry: always the element's own (themes only multiply it).
+          Frame corners carry their own arm-length slider above. */}
+      {element.kind !== 'frame-corners' && (
       <label className="flex flex-col gap-1">
         <span className={labelClass}>
           Size · {Math.round(element.sizeFrac * 100)}% of shorter side
@@ -287,6 +324,7 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
           onChange={(e) => change({ sizeFrac: Number(e.target.value) })}
         />
       </label>
+      )}
 
       {/* Colour + weight + italic (weight/italic not applicable to arrows) */}
       <div className="flex items-end gap-3">
@@ -301,7 +339,7 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
             onChange={(e) => change({ color: e.target.value })}
           />
         </label>
-        {element.kind !== 'heading-arrow' && (
+        {element.kind !== 'heading-arrow' && element.kind !== 'frame-corners' && (
           <>
             <label className="flex flex-col gap-1 flex-1">
               <span className={`${labelClass} flex items-center gap-1.5`}>
@@ -334,7 +372,8 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
         )}
       </div>
 
-      {/* Anchor */}
+      {/* Anchor — meaningless for a full-frame decoration */}
+      {element.kind !== 'frame-corners' && (
       <div className="flex flex-col gap-1">
         <span className={labelClass}>Anchor</span>
         <div className="grid grid-cols-3 gap-1 w-[5.4rem]">
@@ -360,6 +399,7 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
           ))}
         </div>
       </div>
+      )}
 
       {/* Legibility */}
       <div className="flex flex-col gap-2 pt-1 border-t border-line">

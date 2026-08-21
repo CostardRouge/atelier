@@ -12,6 +12,7 @@ interface ElementListProps {
   onAddField: (field: TelemetryFieldKey) => void;
   onAddText: () => void;
   onAddArrow: () => void;
+  onAddCorners: () => void;
   onAddPreset: () => void;
   onRemove: (id: string) => void;
   onToggleVisible: (id: string) => void;
@@ -29,6 +30,7 @@ export default function ElementList({
   onAddField,
   onAddText,
   onAddArrow,
+  onAddCorners,
   onAddPreset,
   onRemove,
   onToggleVisible,
@@ -59,6 +61,14 @@ export default function ElementList({
         <button type="button" className={linkBtn} onClick={onAddArrow} title="Add a directional arrow that rotates to the heading">
           + Arrow
         </button>
+        <button
+          type="button"
+          className={linkBtn}
+          onClick={onAddCorners}
+          title="Add viewfinder brackets in the frame's four corners"
+        >
+          + Corners
+        </button>
         <button type="button" className={`${linkBtn} ml-auto`} onClick={onAddPreset}>
           Add deck
         </button>
@@ -76,7 +86,9 @@ export default function ElementList({
             const preview =
               el.kind === 'heading-arrow'
                 ? 'Heading arrow'
-                : renderElementText(el, cue) || '(empty)';
+                : el.kind === 'frame-corners'
+                  ? 'Frame corners'
+                  : renderElementText(el, cue) || '(empty)';
             return (
               <li
                 key={el.id}

@@ -32,9 +32,15 @@ export type TelemetryFieldKey =
   | 'color_md'
   | 'ct'
   | 'frame'
-  | 'timestamp';
+  | 'timestamp'
+  | 'clock'
+  | 'date';
 
-export type OverlayKind = 'telemetry-field' | 'text' | 'heading-arrow';
+export type OverlayKind =
+  | 'telemetry-field'
+  | 'text'
+  | 'heading-arrow'
+  | 'frame-corners';
 
 /** Which point of the element box maps to (x,y) — enables clean corner snaps. */
 export type Anchor =
@@ -121,6 +127,12 @@ export interface OverlayElement {
    */
   speedUnit?: SpeedUnit;
 
+  /**
+   * `frame-corners` only: how far the brackets sit from the frame edges, as a
+   * fraction of the shorter side. Defaults to 0.03.
+   */
+  cornerInset?: number;
+
   // --- appearance extensions (title styles) --------------------------------
 
   /** Render the text uppercase. Absent = false. */
@@ -176,6 +188,8 @@ const SHORT_LABELS: Record<TelemetryFieldKey, string> = {
   ct: 'WB',
   frame: 'FRAME',
   timestamp: 'TIME',
+  clock: '',
+  date: '',
 };
 
 /** A short, stable unique id (crypto where available, Math.random fallback). */
@@ -229,6 +243,26 @@ export function createTextElement(text = 'Text'): OverlayElement {
     x: 0.05,
     y: 0.05,
     ...baseStyle(),
+  };
+}
+
+/**
+ * Create the frame-corner brackets: four L-shaped marks inset from the frame
+ * edges, the viewfinder furniture of a HUD. It spans the whole frame, so it
+ * ignores anchor/position — `sizeFrac` is the arm length, `cornerInset` the
+ * distance from the edges.
+ */
+export function createFrameCornersElement(): OverlayElement {
+  return {
+    id: uid(),
+    kind: 'frame-corners',
+    anchor: 'center',
+    x: 0.5,
+    y: 0.5,
+    ...baseStyle(),
+    sizeFrac: 0.05,
+    cornerInset: 0.03,
+    legibility: { mode: 'none', color: 'rgba(0,0,0,0.65)', padFrac: 0.3 },
   };
 }
 

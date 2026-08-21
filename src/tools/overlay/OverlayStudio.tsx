@@ -16,6 +16,7 @@ import ElementPanel from '../../shared/overlay/ElementPanel';
 import { exportOverlay } from '../../shared/overlay/export-overlay';
 import { ensureOverlayFonts } from '../../shared/overlay/fonts';
 import {
+  createFrameCornersElement,
   createHeadingArrowElement,
   createTelemetryElement,
   createTextElement,
@@ -523,6 +524,7 @@ export default function OverlayStudio() {
               }
               onAddText={() => addElement(createTextElement())}
               onAddArrow={() => addElement(createHeadingArrowElement())}
+              onAddCorners={() => addElement(createFrameCornersElement())}
               onAddPreset={() => {
                 const deck = defaultElementsPreset();
                 setElements(deck);

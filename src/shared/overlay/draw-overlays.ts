@@ -400,6 +400,54 @@ function drawArrow(
   ctx.restore();
 }
 
+/**
+ * Frame-corner brackets: four L-shaped marks inset from the frame edges — the
+ * viewfinder furniture of a HUD. Spans the whole frame, so it ignores the
+ * anchor/position: `sizeFrac` is the arm length, `cornerInset` the distance
+ * from the edges, both fractions of the shorter side.
+ */
+function drawFrameCorners(
+  ctx: Ctx2D,
+  el: OverlayElement,
+  vw: number,
+  vh: number,
+  st: ResolvedStyle,
+): void {
+  const ref = refDim(vw, vh);
+  const arm = Math.max(2, st.sizeFrac * ref);
+  const inset = Math.max(0, (el.cornerInset ?? 0.03) * ref);
+  const lw = Math.max(1, arm * 0.08);
+
+  ctx.save();
+  ctx.strokeStyle = st.color;
+  ctx.lineWidth = lw;
+  ctx.lineCap = 'butt';
+  if (st.glow) {
+    const [wr, wg, wb] = warmDrift(st.color, st.glowWarmth);
+    ctx.shadowColor = `rgba(${wr},${wg},${wb},${st.glow.haloAlpha})`;
+    ctx.shadowBlur = Math.max(1, st.glow.haloRadiusFrac * ref * 0.6);
+  } else if (st.legibility.mode === 'shadow') {
+    ctx.shadowColor = st.legibility.color;
+    ctx.shadowBlur = st.legibility.padFrac * arm * 0.5;
+  }
+
+  const l = inset;
+  const t = inset;
+  const r = vw - inset;
+  const b = vh - inset;
+  ctx.beginPath();
+  // Top-left
+  ctx.moveTo(l, t + arm); ctx.lineTo(l, t); ctx.lineTo(l + arm, t);
+  // Top-right
+  ctx.moveTo(r - arm, t); ctx.lineTo(r, t); ctx.lineTo(r, t + arm);
+  // Bottom-right
+  ctx.moveTo(r, b - arm); ctx.lineTo(r, b); ctx.lineTo(r - arm, b);
+  // Bottom-left
+  ctx.moveTo(l + arm, b); ctx.lineTo(l, b); ctx.lineTo(l, b - arm);
+  ctx.stroke();
+  ctx.restore();
+}
+
 /** Draw a rounded rectangle path (roundRect where available, else manual). */
 function roundRectPath(
   ctx: Ctx2D,
@@ -584,6 +632,16 @@ export function drawOverlays(
       drawArrow(ctx, el, cue, videoWidth, videoHeight, theme);
       continue;
     }
+    if (el.kind === 'frame-corners') {
+      drawFrameCorners(
+        ctx,
+        el,
+        videoWidth,
+        videoHeight,
+        resolveElementStyle(el, theme),
+      );
+      continue;
+    }
     const lay = layoutElement(ctx, el, cue, videoWidth, videoHeight, theme);
     if (!lay) continue;
     const st = lay.st;
@@ -657,6 +715,9 @@ export function measureOverlays(
   const boxes: ElementBox[] = [];
   for (const el of elements) {
     if (!el.visible) continue;
+    // Frame corners span the whole frame: a hit box would swallow every click,
+    // so they are never draggable — select them from the element list.
+    if (el.kind === 'frame-corners') continue;
     if (el.kind === 'heading-arrow') {
       const alay = arrowLayout(el, videoWidth, videoHeight);
       const margin = Math.max(2, alay.r * 0.15);
@@ -724,6 +785,7 @@ export function reanchorInPlace(
   anchor: Anchor,
   theme?: StyleTheme | null,
 ): { x: number; y: number } | null {
+  if (el.kind === 'frame-corners') return null;
   if (el.kind === 'heading-arrow') {
     const alay = arrowLayout(el, vw, vh);
     const p = anchorPoint(anchor, alay.x, alay.y, alay.w, alay.h);

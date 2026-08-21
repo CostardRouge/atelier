@@ -11,9 +11,6 @@ import TranscodeControl from '../../shared/media/TranscodeControl';
 import { probeContainer, type ContainerInfo } from '../../shared/media/video-metadata';
 import { parseSrt, type Cue } from '../../shared/telemetry/srt-parser';
 import { findCue } from '../../shared/telemetry/find-cue';
-import { TelemetryPanels } from '../../shared/telemetry/telemetry-view';
-import { summarizeTelemetry } from '../../shared/telemetry/telemetry-summary';
-import { formatBytes } from '../../shared/lib/format';
 import ElementList from '../../shared/overlay/ElementList';
 import ElementPanel from '../../shared/overlay/ElementPanel';
 import GuidesControl from '../../shared/overlay/GuidesControl';
@@ -31,6 +28,7 @@ import {
 } from '../../shared/projects/export-variants';
 import { ensureOverlayFonts } from '../../shared/overlay/fonts';
 import {
+  createFrameCornersElement,
   createHeadingArrowElement,
   createTelemetryElement,
   createTextElement,
@@ -46,6 +44,7 @@ import LutPicker from '../../shared/lut/LutPicker';
 import type { StyleTheme } from '../../shared/overlay/title-styles';
 import StylePanel from './StylePanel';
 import ProjectSettingsModal from './ProjectSettingsModal';
+import InfoPanel from './InfoPanel';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import { savedMediaRef, type ProjectDoc } from '../../shared/projects/project-types';
 import { putProject } from '../../shared/projects/project-store';
@@ -797,6 +796,7 @@ export default function StudioEditor({
                     }
                     onAddText={() => addElement(createTextElement())}
                     onAddArrow={() => addElement(createHeadingArrowElement())}
+                    onAddCorners={() => addElement(createFrameCornersElement())}
                     onAddPreset={() => {
                       const deck = defaultElementsPreset();
                       setElements(deck);
@@ -850,81 +850,14 @@ export default function StudioEditor({
               )}
 
               {tab === 'info' && (
-                <div className="flex flex-col gap-3">
-                  <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[0.8rem]">
-                    <dt className="font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted pt-[2px]">
-                      Clip
-                    </dt>
-                    <dd className="m-0 truncate" title={active.baseName}>
-                      {active.baseName}
-                    </dd>
-                    {activeVideo && (
-                      <>
-                        <dt className="font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted pt-[2px]">
-                          Size
-                        </dt>
-                        <dd className="m-0 font-mono text-[0.76rem] tabular-nums">
-                          {formatBytes(activeVideo.size)}
-                        </dd>
-                      </>
-                    )}
-                    {activeDetail && (
-                      <>
-                        <dt className="font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted pt-[2px]">
-                          Detail
-                        </dt>
-                        <dd className="m-0 font-mono text-[0.76rem] tabular-nums">
-                          {activeDetail}
-                        </dd>
-                      </>
-                    )}
-                    {duration > 0 && (
-                      <>
-                        <dt className="font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted pt-[2px]">
-                          Duration
-                        </dt>
-                        <dd className="m-0 font-mono text-[0.76rem] tabular-nums">
-                          {formatDuration(duration)}
-                        </dd>
-                      </>
-                    )}
-                    {hasTelemetry && (
-                      <>
-                        <dt className="font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted pt-[2px]">
-                          Flight
-                        </dt>
-                        <dd className="m-0 font-mono text-[0.76rem] tabular-nums">
-                          {(() => {
-                            const sum = summarizeTelemetry(cues);
-                            return [
-                              `${sum.cueCount} cues`,
-                              sum.relAltMax != null
-                                ? `alt ${sum.relAltMin ?? 0}–${sum.relAltMax} m`
-                                : null,
-                              sum.colorProfile,
-                            ]
-                              .filter(Boolean)
-                              .join(' · ');
-                          })()}
-                        </dd>
-                      </>
-                    )}
-                  </dl>
-
-                  {hasTelemetry ? (
-                    <div className="pt-2 border-t border-line">
-                      <p className="m-0 mb-2 font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted">
-                        Telemetry at playhead
-                      </p>
-                      <TelemetryPanels cue={activeCue} />
-                    </div>
-                  ) : (
-                    <p className="m-0 text-[0.78rem] text-muted">
-                      No flight log (.srt) with this clip — the inspector shows
-                      live telemetry when one is present.
-                    </p>
-                  )}
-                </div>
+                <InfoPanel
+                  baseName={active.baseName}
+                  video={activeVideo}
+                  detail={activeDetail}
+                  duration={duration}
+                  cues={cues}
+                  cue={activeCue}
+                />
               )}
 
               {tab === 'export' && (
