@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FIELD_KEYS, FIELD_SPECS, renderElementText } from './field-format';
 import type { Cue } from '../telemetry/srt-parser';
 import type { TimeShift } from '../telemetry/time-format';
@@ -55,6 +55,15 @@ export default function ElementList({
   onToggleVisible,
 }: ElementListProps) {
   const [field, setField] = useState<TelemetryFieldKey>('rel_alt');
+  const activeRow = useRef<HTMLLIElement>(null);
+
+  // The list can be scrolled inside its own box, and the selection often
+  // changes from the stage (a click or a drag) rather than from here — so keep
+  // the highlighted row where it can be seen.
+  useEffect(() => {
+    if (!selectedId) return;
+    activeRow.current?.scrollIntoView({ block: 'nearest' });
+  }, [selectedId]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -124,6 +133,7 @@ export default function ElementList({
             return (
               <li
                 key={el.id}
+                ref={active ? activeRow : undefined}
                 className={`group flex items-center gap-2 px-2 py-1.5 rounded-[10px] cursor-pointer ${
                   active ? 'bg-accent-wash' : 'hover:bg-white'
                 }`}

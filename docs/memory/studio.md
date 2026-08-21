@@ -48,6 +48,10 @@ Read before touching `src/tools/studio/`, `src/shared/overlay/`, anything about 
 
 **Gap behaviour is the author's choice** (`headingGap` on the element): `dim` (default) holds the last bearing and fades it over `headingHoldSeconds`, `hold` keeps it plain then drops, `hide` is the old abrupt no-data state. Both the arrow and the tape share `headingSmoothing` / `headingGap` / `headingHoldSeconds`. `DrawOptions.cues` carries the cue list into the renderer — without it (a caller that passes only the cue at the playhead) the instruments fall back to the raw reading, so nothing regresses.
 
+## Navigating a long deck in a 340px column (2026-08-21)
+
+**Decision.** Three moves, all from the maintainer hunting for controls: (1) the element list folds behind an "Elements · N" header and, open, is **capped at 15rem with its own scroll** — a deck of fifteen readouts used to push the style panel off the bottom; (2) selecting an element scrolls its settings panel into view (`scrollIntoView({block:'nearest'})` on a ref in StudioEditor); (3) `ElementList` keeps the *selected row* in view the same way, because selection often changes from the stage rather than from the list. **How to apply**: `block:'nearest'` is deliberate — it does nothing when the target is already visible, so ordinary clicking never jumps the column. New long sections in the inspector should bound their own height rather than relying on the shared scroller.
+
 ## The editor splits on a CONTAINER query, not the viewport (2026-08-21)
 
 **Trap, found in the wild.** The stage/inspector split used `min-[900px]:flex-row`, a **viewport** media query — but the editor's real estate is the window minus the 288px Library sidebar and the shell's margins. At a 1000px window the row layout still applied and the fixed 340px inspector left the stage **308px**: the inspector was wider than the picture (the maintainer's "l'overlay remplace la visualisation"). Measured before the fix: 1100→408px, 1000→308px, 900→208px of canvas. It now splits on `@min-[800px]` against the editor's **own** width, and those cases stack instead (538px of canvas).

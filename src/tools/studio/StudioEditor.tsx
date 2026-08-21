@@ -133,6 +133,8 @@ export default function StudioEditor({
   const [resettingDeck, setResettingDeck] = useState(false);
   // The palette starts unfolded only when there is nothing on the frame yet.
   const [paletteOpen, setPaletteOpen] = useState(() => elements.length === 0);
+  const [listOpen, setListOpen] = useState(true);
+  const elementPanelRef = useRef<HTMLDivElement>(null);
   const [guides, setGuides] = useState<GuidesState>(() => project.guides ?? DEFAULT_GUIDES);
   const [fontTick, setFontTick] = useState(0);
   const [compareOn, setCompareOn] = useState(false);
@@ -338,6 +340,17 @@ export default function StudioEditor({
     return () => window.removeEventListener('keydown', onKey);
     // `removeElement` only calls state updaters, so the mounted listener stays
     // correct; the selected id is what has to be fresh.
+  }, [selectedElementId]);
+
+  // Selecting an element — from the list, or by clicking it on the stage —
+  // brings its settings into view. With a long deck the panel sits well below
+  // the fold, and hunting for it was the maintainer's complaint.
+  useEffect(() => {
+    if (!selectedElementId) return;
+    elementPanelRef.current?.scrollIntoView({
+      block: 'nearest',
+      behavior: 'smooth',
+    });
   }, [selectedElementId]);
 
   function toggleVisible(id: string) {
@@ -929,15 +942,38 @@ export default function StudioEditor({
                   />
 
                   <div className="pt-3 border-t border-line flex flex-col gap-2">
-                    <ElementList
-                      elements={elements}
-                      selectedId={selectedElementId}
-                      cue={activeCue}
-                      timeShift={timeShift}
-                      onSelect={setSelectedElementId}
-                      onRemove={removeElement}
-                      onToggleVisible={toggleVisible}
-                    />
+                    <button
+                      type="button"
+                      onClick={() => setListOpen((o) => !o)}
+                      aria-expanded={listOpen}
+                      className="flex items-center gap-1.5 p-0 border-0 bg-transparent text-accent-ink font-semibold text-[0.82rem] cursor-pointer hover:text-accent"
+                    >
+                      <span aria-hidden="true" className="text-[0.7rem]">
+                        {listOpen ? '▾' : '▸'}
+                      </span>
+                      Elements
+                      <span className="ml-auto font-mono text-[0.66rem] tabular-nums text-muted">
+                        {elements.length}
+                      </span>
+                    </button>
+                    {/*
+                      Capped and scrollable rather than free-growing: a deck of
+                      fifteen readouts used to push the style panel off the
+                      bottom of the inspector.
+                    */}
+                    {listOpen && (
+                      <div className="max-h-[15rem] overflow-y-auto overscroll-contain -mx-1 px-1">
+                        <ElementList
+                          elements={elements}
+                          selectedId={selectedElementId}
+                          cue={activeCue}
+                          timeShift={timeShift}
+                          onSelect={setSelectedElementId}
+                          onRemove={removeElement}
+                          onToggleVisible={toggleVisible}
+                        />
+                      </div>
+                    )}
 
                     {/* The starter deck: an offer when there is nothing to
                         lose, a two-step confirm once there is. */}
@@ -980,7 +1016,7 @@ export default function StudioEditor({
                   </div>
 
                   {selectedElement && (
-                    <div className="pt-3 border-t border-line">
+                    <div ref={elementPanelRef} className="pt-3 border-t border-line scroll-mt-2">
                       <h2 className="m-0 mb-2 flex items-baseline gap-2 font-mono text-[0.7rem] font-medium uppercase tracking-[0.16em] text-muted">
                         Style
                         <span className="ml-auto normal-case tracking-normal text-[0.68rem] text-faint">

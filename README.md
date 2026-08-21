@@ -116,6 +116,12 @@ burns in exactly what the preview showed.
 **Keyboard.** `Delete` (or `Backspace`) removes the selected overlay element,
 unless you're typing in a field.
 
+**Finding your way in a long deck.** The element list folds away behind a
+header carrying the count, and even open it is capped and scrolls on its own
+rather than pushing the style panel off the bottom. Selecting an element —
+from the list or by clicking it on the frame — scrolls its settings into
+view, and keeps the matching row visible in the list.
+
 **Reading the clock.** Clock, date and timestamp elements each choose how they
 read: 24-hour or 12-hour, AM/PM shown or not, seconds and milliseconds on or
 off, and a date in ISO, `30/05/2026`, `05/30/2026`, `30 May 2026`,
