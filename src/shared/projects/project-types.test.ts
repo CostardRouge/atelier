@@ -1,0 +1,54 @@
+import { describe, expect, it } from 'vitest';
+import {
+  createProjectDoc,
+  migrateProjectDoc,
+  PROJECT_DOC_VERSION,
+  type ProjectDoc,
+} from './project-types';
+import { defaultElementsPreset } from '../overlay/overlay-types';
+import { DEFAULT_GUIDES } from '../overlay/guides';
+import { themeFromPreset } from '../overlay/title-styles';
+
+function v1Doc(): ProjectDoc {
+  const doc = createProjectDoc('legacy', '16:9', defaultElementsPreset(), DEFAULT_GUIDES);
+  // Simulate a phase-2 document: version 1, no theme field at all.
+  const stored: Record<string, unknown> = { ...doc, version: 1 };
+  delete stored.theme;
+  return stored as unknown as ProjectDoc;
+}
+
+describe('migrateProjectDoc', () => {
+  it('brings a v1 document to the current version with a null theme', () => {
+    const migrated = migrateProjectDoc(v1Doc());
+    expect(migrated.version).toBe(PROJECT_DOC_VERSION);
+    expect(migrated.theme).toBeNull();
+  });
+
+  it('is idempotent and leaves current documents untouched', () => {
+    const doc = createProjectDoc('now', '9:16', [], DEFAULT_GUIDES);
+    doc.theme = themeFromPreset('or-cine');
+    const migrated = migrateProjectDoc(doc);
+    expect(migrated).toBe(doc);
+    expect(migrated.theme?.presetId).toBe('or-cine');
+  });
+});
+
+describe('createProjectDoc with a template', () => {
+  it('copies the portable half including the theme, but never the media', () => {
+    const source = createProjectDoc('src', '9:16', defaultElementsPreset(), DEFAULT_GUIDES);
+    source.theme = themeFromPreset('pixel-crt');
+    source.media = {
+      dirHandle: null,
+      files: [{ name: 'a.mp4', size: 1, lastModified: 1 }],
+      activeId: 'a',
+    };
+    const copy = createProjectDoc('copy', '1:1', [], DEFAULT_GUIDES, source);
+    expect(copy.theme?.presetId).toBe('pixel-crt');
+    expect(copy.elements).toHaveLength(source.elements.length);
+    expect(copy.media.files).toHaveLength(0);
+    expect(copy.settings.aspectId).toBe('1:1'); // the modal's choice wins
+    // Deep copy — mutating the copy's theme never touches the source.
+    copy.theme!.style.color = '#000001';
+    expect(source.theme!.style.color).not.toBe('#000001');
+  });
+});

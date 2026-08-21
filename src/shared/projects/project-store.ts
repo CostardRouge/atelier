@@ -10,7 +10,7 @@
  * pressure), and the studio must keep editing in memory when it does.
  */
 
-import type { ProjectDoc } from './project-types';
+import { migrateProjectDoc, type ProjectDoc } from './project-types';
 
 const DB_NAME = 'atelier-studio';
 const DB_VERSION = 1;
@@ -53,7 +53,7 @@ async function withStore<T>(
 export async function listProjects(): Promise<ProjectDoc[]> {
   try {
     const all = await withStore('readonly', (s) => s.getAll() as IDBRequest<ProjectDoc[]>);
-    return all.sort((a, b) => b.updatedAt - a.updatedAt);
+    return all.map(migrateProjectDoc).sort((a, b) => b.updatedAt - a.updatedAt);
   } catch {
     return [];
   }
@@ -62,7 +62,7 @@ export async function listProjects(): Promise<ProjectDoc[]> {
 export async function getProject(id: string): Promise<ProjectDoc | null> {
   try {
     const doc = await withStore('readonly', (s) => s.get(id) as IDBRequest<ProjectDoc | undefined>);
-    return doc ?? null;
+    return doc ? migrateProjectDoc(doc) : null;
   } catch {
     return null;
   }

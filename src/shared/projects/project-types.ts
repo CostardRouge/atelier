@@ -14,9 +14,10 @@
 
 import type { OverlayElement } from '../overlay/overlay-types';
 import type { GuidesState } from '../overlay/guides';
+import type { StyleTheme } from '../overlay/title-styles';
 import type { PersistedDirectoryHandle } from '../sources/file-sources';
 
-export const PROJECT_DOC_VERSION = 1;
+export const PROJECT_DOC_VERSION = 2;
 
 /** Identity of one media file, enough to re-match it inside a folder. */
 export interface SavedMediaRef {
@@ -76,6 +77,8 @@ export interface ProjectDoc {
   elements: OverlayElement[];
   guides: GuidesState;
   lut: SavedLut;
+  /** Title-style theme (preset + tweaks), or null for element styles as-is. */
+  theme: StyleTheme | null;
   // --- bound half ----------------------------------------------------------
   media: ProjectMedia;
   // --- baked gallery facts (usable without the media) ----------------------
@@ -93,7 +96,7 @@ export function createProjectDoc(
   aspectId: string,
   elements: OverlayElement[],
   guides: GuidesState,
-  template?: Pick<ProjectDoc, 'elements' | 'guides' | 'lut'>,
+  template?: Pick<ProjectDoc, 'elements' | 'guides' | 'lut' | 'theme'>,
 ): ProjectDoc {
   const now = Date.now();
   return {
@@ -108,8 +111,24 @@ export function createProjectDoc(
     lut: template
       ? structuredClone(template.lut)
       : { selected: 'none', customName: null, customText: null, intensity: 1 },
+    theme: template ? structuredClone(template.theme) : null,
     media: { dirHandle: null, files: [], activeId: null },
     thumbnail: null,
     durationSeconds: null,
   };
+}
+
+/**
+ * Bring a stored document up to the current version. v1 → v2 adds the
+ * title-style theme (null: element styles as-is, visually identical).
+ * Idempotent; the store runs it on every read.
+ */
+export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
+  if (doc.version >= PROJECT_DOC_VERSION) return doc;
+  const migrated = { ...doc };
+  if (migrated.version < 2) {
+    migrated.theme = migrated.theme ?? null;
+  }
+  migrated.version = PROJECT_DOC_VERSION;
+  return migrated;
 }
