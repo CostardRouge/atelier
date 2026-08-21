@@ -4,7 +4,7 @@
  *
  * Composition rather than chaining: instead of running N GPU passes, we walk a
  * lattice and, for each point, push the colour through every enabled layer in
- * turn (trilinear sample + intensity mix), baking the result into a single
+ * turn (sample + intensity mix), baking the result into a single
  * cube. The renderer, the preview, the frame grab and both export paths keep
  * receiving exactly one LUT and never learn that stacking exists.
  *
@@ -26,6 +26,7 @@
  */
 
 import type { CubeLut } from '../lib/cube-parser';
+import { sampleTrilinear, sampleWith, type Interpolation } from './interpolate';
 import { applyTransfer, transformLabel, type OutputTransform } from './transfer';
 
 /** Upper bound on the composed lattice: 64³ ≈ 3 MB of floats, plenty. */
@@ -45,69 +46,12 @@ export interface LutLayer {
   enabled: boolean;
 }
 
-function clamp01(n: number): number {
-  return n < 0 ? 0 : n > 1 ? 1 : n;
-}
-
 /**
- * Trilinear sample of `lut` at a normalized colour, honouring the cube's
- * input domain. Out-of-domain inputs clamp, exactly like the GPU's
- * `CLAMP_TO_EDGE` sampler, so preview and bake agree.
+ * Trilinear sample of `lut` at a normalized colour — the module's historical
+ * name, kept so callers and specs do not churn. The maths, and its tetrahedral
+ * sibling, live in interpolate.ts.
  */
-export function sampleLut(
-  lut: CubeLut,
-  r: number,
-  g: number,
-  b: number,
-): [number, number, number] {
-  const n = lut.size;
-  const last = n - 1;
-  const norm = (v: number, i: number): number => {
-    const lo = lut.domainMin[i];
-    const hi = lut.domainMax[i];
-    const span = hi - lo;
-    return clamp01(span === 0 ? 0 : (v - lo) / span) * last;
-  };
-
-  const x = norm(r, 0);
-  const y = norm(g, 1);
-  const z = norm(b, 2);
-
-  const x0 = Math.floor(x);
-  const y0 = Math.floor(y);
-  const z0 = Math.floor(z);
-  const x1 = Math.min(x0 + 1, last);
-  const y1 = Math.min(y0 + 1, last);
-  const z1 = Math.min(z0 + 1, last);
-  const fx = x - x0;
-  const fy = y - y0;
-  const fz = z - z0;
-
-  // Red varies fastest, then green, then blue (the .cube table order).
-  const at = (xi: number, yi: number, zi: number): number =>
-    (xi + yi * n + zi * n * n) * 3;
-
-  const out: [number, number, number] = [0, 0, 0];
-  for (let c = 0; c < 3; c += 1) {
-    const c000 = lut.data[at(x0, y0, z0) + c];
-    const c100 = lut.data[at(x1, y0, z0) + c];
-    const c010 = lut.data[at(x0, y1, z0) + c];
-    const c110 = lut.data[at(x1, y1, z0) + c];
-    const c001 = lut.data[at(x0, y0, z1) + c];
-    const c101 = lut.data[at(x1, y0, z1) + c];
-    const c011 = lut.data[at(x0, y1, z1) + c];
-    const c111 = lut.data[at(x1, y1, z1) + c];
-
-    const c00 = c000 + (c100 - c000) * fx;
-    const c10 = c010 + (c110 - c010) * fx;
-    const c01 = c001 + (c101 - c001) * fx;
-    const c11 = c011 + (c111 - c011) * fx;
-    const c0 = c00 + (c10 - c00) * fy;
-    const c1 = c01 + (c11 - c01) * fy;
-    out[c] = c0 + (c1 - c0) * fz;
-  }
-  return out;
-}
+export const sampleLut = sampleTrilinear;
 
 /** The layers that actually affect the image. */
 export function activeLayers(layers: readonly LutLayer[]): LutLayer[] {
@@ -128,6 +72,7 @@ export function activeLayers(layers: readonly LutLayer[]): LutLayer[] {
 export function composeLutStack(
   layers: readonly LutLayer[],
   output: OutputTransform = 'none',
+  interpolation: Interpolation = 'trilinear',
 ): CubeLut | null {
   const active = activeLayers(layers);
   const transform = output !== 'none';
@@ -156,7 +101,7 @@ export function composeLutStack(
         let b = bi / last;
 
         for (const layer of active) {
-          const [lr, lg, lb] = sampleLut(layer.lut, r, g, b);
+          const [lr, lg, lb] = sampleWith(layer.lut, r, g, b, interpolation);
           // Intensity mixes toward the layer's output; above 1 it extrapolates
           // past the look, matching the shader's behaviour.
           const t = layer.intensity;

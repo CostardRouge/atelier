@@ -372,6 +372,7 @@ export default function StudioEditor({
     guides,
     lut: lutStack.composed,
     intensity: 1,
+    interpolation: lutStack.interpolation,
     theme,
     timeShift,
     compare: compareOn,

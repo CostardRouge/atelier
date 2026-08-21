@@ -87,6 +87,19 @@ It defaults to **None**, so nothing you already made re-grades itself, and
 *delivery* stage, always last, baked into the same single LUT. Note this is
 tonal, not spatial: it restores contrast, it does not sharpen.
 
+**Interpolation.** A 33³ cube holds 35,937 points; an 8-bit image holds 16.7
+million colours, so nearly every pixel is interpolated between lattice points.
+**Trilinear** averages all 8 corners of the enclosing cell — including the two
+on the far diagonal, which have nothing to do with the colour at hand, so an
+asymmetric look can tint greys the LUT leaves neutral. **Tetrahedral** (the
+default, as in Resolve) splits the cell into 6 tetrahedra that all share the
+neutral axis, and reads the 4 corners that matter. Measured on the shipped
+cubes, the grey tint trilinear invents drops from 2.59 to 0.01 code values on
+Apple Log→709; off the neutral axis the two can differ by up to 29 codes.
+Toggle it in the Grade tab and watch a sky or a gradient — that is where it
+shows. It is used by both the bake and the shader, so the preview and the
+export never disagree.
+
 The stage, element model and
 export come from the shared overlay engine (`src/shared/overlay/`) — the same
 renderer draws the preview and the export, so what you place is exactly what

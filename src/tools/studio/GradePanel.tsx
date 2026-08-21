@@ -201,6 +201,39 @@ export default function GradePanel({ stack }: GradePanelProps) {
         </p>
       </div>
 
+      {/* How the LUT's lattice is read between its points */}
+      <div className="flex flex-col gap-1.5">
+        <span className={labelClass}>Interpolation</span>
+        <div className="flex items-center gap-1.5">
+          {(['tetrahedral', 'trilinear'] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => stack.setInterpolation(mode)}
+              aria-pressed={stack.interpolation === mode}
+              className={`flex-1 px-2 py-[0.35rem] rounded-paper border text-[0.78rem] cursor-pointer capitalize ${
+                stack.interpolation === mode
+                  ? 'border-accent bg-paper font-semibold text-accent-ink'
+                  : 'border-line bg-transparent text-ink-soft hover:border-accent'
+              }`}
+              title={
+                mode === 'tetrahedral'
+                  ? 'What Resolve uses — keeps neutral greys neutral'
+                  : 'The GPU sampler on its own — faster, less faithful'
+              }
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+        <p className="m-0 text-[0.72rem] text-faint leading-relaxed">
+          A 33³ cube has to be interpolated between its points. Tetrahedral
+          reads the 4 lattice corners that matter, so greys stay grey;
+          trilinear averages all 8 and can tint them. Look at skies and
+          gradients — that is where it shows.
+        </p>
+      </div>
+
       <p className="m-0 text-[0.72rem] text-faint leading-relaxed">
         Looks apply top to bottom and bake into one LUT — the preview, the
         stills and every export variant grade identically. Above 100% a look

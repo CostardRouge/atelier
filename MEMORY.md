@@ -45,6 +45,8 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - The heading is course over ground (no compass in the log) and vanishes while hovering or yawing; smoothing is a pure `(cues, time)` function, never a per-frame accumulator — `studio.md`.
 - Tool layouts split on **container** queries, not viewport ones: the Library sidebar eats 288px the viewport query cannot see — `studio.md`.
 - Time elements: presentation per badge, capture-time **shift** per project; no timezone picker — the log has no zone to convert from — `studio.md`.
+- Conversion LUTs target a Rec.709 reference display (~gamma 2.4) while the canvas is sRGB (~2.2); an optional output transform closes that gap, baked into the composed LUT, off by default — `media-pipeline.md`.
+- LUT lattice lookup is tetrahedral by default (neutrals stay neutral), trilinear on request; the mode is a localStorage render pref and must be used by the bake AND the shader — `media-pipeline.md`.
 - The DJI video `.srt` carries no battery level (Mini 4 Pro included): the gauge takes an authored value or a named telemetry key, and draws empty rather than inventing one — `studio.md`.
 
 ## Open items (dated; remove when done)
