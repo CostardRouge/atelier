@@ -36,6 +36,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - One global asset library keyed by base name feeds every tool through capability matching — `architecture.md`.
 - Video export is one shared WebCodecs pipeline (`exportProcessedVideo`) parameterised by a per-frame processor; audio is copied, never re-encoded — `media-pipeline.md`.
 - HEVC that the browser cannot decode is handled by an opt-in, in-browser ffmpeg.wasm transcode to H.264, not by uploading or by dropping the clip — `media-pipeline.md`.
+- Export frame rate is a per-variant resample onto a `1/fps` grid — duration kept, frames dropped or duplicated, never interpolated; asking for the source rate stays an exact pass-through — `media-pipeline.md`, `studio.md`.
 - The GitHub Pages base path is derived from `GITHUB_REPOSITORY`, never hardcoded — `deployment.md`.
 - Built-in LUTs are discovered by a Vite virtual module scanning `public/luts/` — no manual list — `deployment.md`.
 - MapLibre is dynamically imported (JS + CSS) so it stays out of the main bundle — `frontend.md`.

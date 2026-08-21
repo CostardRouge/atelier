@@ -32,6 +32,27 @@ describe('migrateProjectDoc', () => {
     expect(migrated.settings.timeShift).toEqual({ minutes: 0, days: 0 });
     // v6: no output transform, so the grade is delivered exactly as authored.
     expect(migrated.outputTransform).toBe('none');
+    // v7: the source cadence, the only one an old export could produce.
+    expect(migrated.exportPrefs.variants[0].frameRate).toBe('source');
+  });
+
+  it('gives a pre-v7 variant the source frame rate, keeping its other choices', () => {
+    const doc = v1Doc();
+    const stored = {
+      ...doc,
+      version: 6,
+      exportPrefs: {
+        fileName: 'vol',
+        variants: [
+          { id: 'a', aspectId: '9:16', resolution: 1080, overlays: false },
+        ],
+      },
+    } as unknown as ProjectDoc;
+    const [v] = migrateProjectDoc(stored).exportPrefs.variants;
+    expect(v.frameRate).toBe('source');
+    expect(v.aspectId).toBe('9:16');
+    expect(v.resolution).toBe(1080);
+    expect(v.overlays).toBe(false);
   });
 
   it('keeps a capture-time correction that is already set', () => {

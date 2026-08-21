@@ -58,9 +58,15 @@ describe('naming', () => {
   });
 
   it('suffixes only what departs from the source', () => {
-    const v = variant({ aspectId: '9:16', resolution: 1080, overlays: false });
-    expect(variantFileName('vol', v)).toBe('vol-9x16-1080p-clean.mp4');
+    const v = variant({
+      aspectId: '9:16',
+      resolution: 1080,
+      frameRate: 30,
+      overlays: false,
+    });
+    expect(variantFileName('vol', v)).toBe('vol-9x16-1080p-30fps-clean.mp4');
     expect(variantFileName('vol', variant({ overlays: false }))).toBe('vol-clean.mp4');
+    expect(variantFileName('vol', variant({ frameRate: 24 }))).toBe('vol-24fps.mp4');
   });
 
   it('trims a pasted .mp4 and falls back on an empty base', () => {
@@ -75,6 +81,7 @@ describe('defaults', () => {
     expect(rest).toHaveLength(0);
     expect(v.aspectId).toBe('source');
     expect(v.resolution).toBe('source');
+    expect(v.frameRate).toBe('source');
     expect(v.overlays).toBe(true);
   });
 });

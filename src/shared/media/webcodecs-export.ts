@@ -11,6 +11,10 @@
  *   mp4box.js demux → VideoDecoder → processor.draw → VideoEncoder (H.264)
  *   → mp4-muxer, with the original AAC audio track copied through untouched.
  *
+ * The output cadence is the source's unless {@link ExportOptions.frameRate}
+ * asks otherwise, in which case frames are resampled onto a regular grid
+ * (see `frame-rate.ts`) — the duration, and therefore the audio sync, is kept.
+ *
  * Nothing leaves the machine. Video is re-encoded to H.264 (broad
  * compatibility); audio is remuxed, not re-encoded, so it stays bit-for-bit
  * identical.
@@ -27,6 +31,12 @@ import {
   type Track,
 } from 'mp4box';
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
+import {
+  frameTimestampMicros,
+  planFrameIndices,
+  resolveFrameRate,
+  type ExportFrameRate,
+} from './frame-rate';
 
 export interface ExportProgress {
   phase: 'demuxing' | 'encoding' | 'finalizing';
@@ -68,6 +78,14 @@ export interface ExportOptions {
    * the muxer rotation is forced to 0.
    */
   outputSize?: { width: number; height: number };
+  /**
+   * Encode at this cadence instead of the clip's own. 'source' (the default)
+   * keeps every decoded frame with its original timestamp — the exact
+   * pass-through. A number resamples onto a regular `1/fps` grid: the clip
+   * keeps its duration (the copied audio stays in sync), frames are dropped
+   * below the source rate and duplicated above it. See `frame-rate.ts`.
+   */
+  frameRate?: ExportFrameRate;
 }
 
 /**
@@ -358,12 +376,16 @@ export async function exportProcessedVideo(
     muxerRotation = 0;
   }
 
-  // Frame rate from the actual sample durations.
+  // Frame rate from the actual sample durations, then the requested output
+  // cadence. Asking for the rate the clip already has resolves to the source
+  // rate and keeps the exact pass-through (no resampled grid to drift on).
   const timescale = videoSamples[0].timescale;
   let ticks = 0;
   for (const s of videoSamples) ticks += s.duration;
   const durationSec = ticks / timescale || 1;
-  const framerate = Math.max(1, Math.round(videoSamples.length / durationSec));
+  const sourceFramerate = Math.max(1, Math.round(videoSamples.length / durationSec));
+  const framerate = resolveFrameRate(options.frameRate, sourceFramerate);
+  const retime = framerate !== sourceFramerate;
 
   const bitrate = deriveBitrate(outputWidth, outputHeight, framerate);
 
@@ -412,6 +434,13 @@ export async function exportProcessedVideo(
   const total = videoSamples.length;
   const gop = Math.max(1, framerate * 2); // keyframe every ~2s
   let processed = 0;
+  // Retiming state: the grid is anchored on the first decoded frame, so a clip
+  // whose first sample is not at t=0 still starts its output at index 0.
+  const sourceFrameDuration = Math.round(1_000_000 / sourceFramerate);
+  const outputFrameDuration = Math.round(1_000_000 / framerate);
+  let origin: number | null = null;
+  let nextIndex = 0;
+  let emitted = 0;
 
   // Build the per-frame transform once the coded + output sizes are known.
   const processor = makeProcessor({
@@ -426,12 +455,41 @@ export async function exportProcessedVideo(
     output: (frame) => {
       try {
         const timestamp = frame.timestamp;
-        const duration = frame.duration ?? Math.round(1_000_000 / framerate);
+        const srcDuration = frame.duration ?? sourceFrameDuration;
+        if (origin === null) origin = timestamp;
+
+        // Which output frames this decoded frame owes. Pass-through gives one,
+        // at the source's own timestamp; retiming gives none (dropped), one, or
+        // several (duplicated) on the output grid.
+        let timestamps: number[];
+        let duration: number;
+        if (retime) {
+          const start = timestamp - origin;
+          const indices = planFrameIndices(start, start + srcDuration, framerate, nextIndex);
+          if (indices.length === 0) {
+            // Nothing to encode from this frame — skip the transform entirely,
+            // which is what makes a downscale to 24 fps cheaper, not dearer.
+            frame.close();
+            processed++;
+            onProgress?.({ phase: 'encoding', ratio: processed / total });
+            return;
+          }
+          nextIndex = indices[indices.length - 1] + 1;
+          timestamps = indices.map((i) => origin! + frameTimestampMicros(i, framerate));
+          duration = outputFrameDuration;
+        } else {
+          timestamps = [timestamp];
+          duration = srcDuration;
+        }
+
         const source = processor.draw(frame, timestamp);
         frame.close();
-        const out = new VideoFrame(source, { timestamp, duration });
-        encoder.encode(out, { keyFrame: processed % gop === 0 });
-        out.close();
+        for (const ts of timestamps) {
+          const out = new VideoFrame(source, { timestamp: ts, duration });
+          encoder.encode(out, { keyFrame: emitted % gop === 0 });
+          out.close();
+          emitted++;
+        }
         processed++;
         onProgress?.({ phase: 'encoding', ratio: processed / total });
       } catch (e) {
