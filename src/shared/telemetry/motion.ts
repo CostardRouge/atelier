@@ -20,6 +20,7 @@
  */
 
 import type { Cue } from './srt-parser';
+export type { Cue };
 
 /** Reconstructed motion for one cue. Each field is absent when not derivable. */
 export interface Motion {
@@ -111,7 +112,7 @@ export function compass16(deg: number): string {
  * Index of the most recent cue at start time `t` or earlier, by binary search
  * over the ascending-`start` array. Returns -1 when `t` precedes every cue.
  */
-function lastIndexAtOrBefore(cues: Cue[], t: number): number {
+export function lastIndexAtOrBefore(cues: Cue[], t: number): number {
   let lo = 0;
   let hi = cues.length - 1;
   let res = -1;

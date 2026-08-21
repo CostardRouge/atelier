@@ -34,6 +34,7 @@ import { makeFrameGrader } from '../lut/frame-grader';
 import { drawOverlays } from './draw-overlays';
 import { ensureOverlayFonts } from './fonts';
 import type { StyleTheme } from './title-styles';
+import type { TimeShift } from '../telemetry/time-format';
 import type { OverlayElement } from './overlay-types';
 
 /** Seek `video` to `t` (seconds) and resolve once the frame is ready. */
@@ -89,6 +90,7 @@ export async function exportOverlayVideoViaSeek(
   lut: CubeLut | null,
   intensity: number,
   theme?: StyleTheme | null,
+  timeShift?: TimeShift | null,
   onProgress?: (p: ExportProgress) => void,
   signal?: AbortSignal,
 ): Promise<Blob> {
@@ -192,7 +194,7 @@ export async function exportOverlayVideoViaSeek(
       await seekTo(video, t);
       const source = grade ? grade.render(video) : video;
       ctx.drawImage(source, 0, 0, outWidth, outHeight);
-      drawOverlays(ctx, elements, findCue(cues, t), outWidth, outHeight, { theme, timeSeconds: t });
+      drawOverlays(ctx, elements, findCue(cues, t), outWidth, outHeight, { theme, timeSeconds: t, timeShift, cues });
 
       const vf = new VideoFrame(canvas, {
         timestamp: Math.round(t * 1_000_000),

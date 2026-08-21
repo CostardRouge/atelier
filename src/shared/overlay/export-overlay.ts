@@ -72,7 +72,7 @@ export async function exportOverlayVideo(
             findCue(cues, tMicros / 1_000_000),
             outputWidth,
             outputHeight,
-            { theme, timeSeconds: tMicros / 1_000_000 },
+            { theme, timeSeconds: tMicros / 1_000_000, cues },
           );
           return canvas;
         },
@@ -121,13 +121,13 @@ export async function exportOverlay(
       // WebCodecs couldn't decode after all — fall back to the seek path if the
       // clip is playable; otherwise re-throw.
       if (err instanceof DecodeUnsupportedError && hint.videoPlayable) {
-        blob = await exportOverlayVideoViaSeek(file, cues, elements, lut, intensity, theme, onProgress, signal);
+        blob = await exportOverlayVideoViaSeek(file, cues, elements, lut, intensity, theme, null, onProgress, signal);
       } else {
         throw err;
       }
     }
   } else {
-    blob = await exportOverlayVideoViaSeek(file, cues, elements, lut, intensity, theme, onProgress, signal);
+    blob = await exportOverlayVideoViaSeek(file, cues, elements, lut, intensity, theme, null, onProgress, signal);
   }
 
   downloadBlob(blob, outputName(file.name, 'overlay'));

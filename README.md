@@ -99,6 +99,41 @@ default, and can be pointed at a telemetry key for firmware that does write
 one. It never invents a level: with nothing to read it draws empty. Speeds
 read in **m/s, km/h or mph**.
 
+**Why the heading stutters, and what to do about it.** The flight log has no
+compass and no yaw: the heading is *course over ground*, rebuilt from GPS
+fixes about a second apart. So it steps (the GPS is slower than the video),
+and it disappears whenever horizontal travel falls below a metre — hovering,
+creeping, or yawing on the spot, where the nose turns but the ground track
+doesn't. Both heading instruments therefore carry a **smoothing** control: a
+window of readings averaged as directions rather than numbers (350° and 10°
+average to North, not South), which eases the steps *and* bridges the short
+gaps. When the reading really is gone you choose what happens — hold the last
+bearing while it fades out (the default), hold it plainly for a set time, or
+drop to the no-data state at once. The smoothing is a pure function of the cue
+list and the playhead, never an accumulator over rendered frames, so the export
+burns in exactly what the preview showed.
+
+**Keyboard.** `Delete` (or `Backspace`) removes the selected overlay element,
+unless you're typing in a field.
+
+**Finding your way in a long deck.** The element list folds away behind a
+header carrying the count, and even open it is capped and scrolls on its own
+rather than pushing the style panel off the bottom. Selecting an element —
+from the list or by clicking it on the frame — scrolls its settings into
+view, and keeps the matching row visible in the list.
+
+**Reading the clock.** Clock, date and timestamp elements each choose how they
+read: 24-hour or 12-hour, AM/PM shown or not, seconds and milliseconds on or
+off, and a date in ISO, `30/05/2026`, `05/30/2026`, `30 May 2026`,
+`May 30, 2026` or `Sat 30 May 2026`. There is deliberately **no timezone
+picker**: the flight log records a bare wall-clock reading with no offset and
+no zone name — whatever the aircraft's clock said — so converting it would mean
+guessing where it came from, and a dropdown would be false precision. What the
+project settings offer instead is a **correction**: hours, minutes (the
+half- and quarter-hour zones are real) and whole days, applied to the footage
+once so every time element moves together and none can contradict another. It
+rolls the date across midnight rather than wrapping the hour.
+
 **Adding is a palette, not a dropdown.** Everything you can drop on the frame
 sits in a foldable grid — Flight, Camera, Time, Shapes — and each cell
 previews *what it will actually add*: the live value at the playhead, in the

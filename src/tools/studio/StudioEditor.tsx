@@ -48,6 +48,7 @@ import StylePanel from './StylePanel';
 import ProjectSettingsModal from './ProjectSettingsModal';
 import InfoPanel from './InfoPanel';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
+import { NO_SHIFT, type TimeShift } from '../../shared/telemetry/time-format';
 import { savedMediaRef, type ProjectDoc } from '../../shared/projects/project-types';
 import { putProject } from '../../shared/projects/project-store';
 import type { Reconciliation } from '../../shared/projects/reconcile';
@@ -132,6 +133,8 @@ export default function StudioEditor({
   const [resettingDeck, setResettingDeck] = useState(false);
   // The palette starts unfolded only when there is nothing on the frame yet.
   const [paletteOpen, setPaletteOpen] = useState(() => elements.length === 0);
+  const [listOpen, setListOpen] = useState(true);
+  const elementPanelRef = useRef<HTMLDivElement>(null);
   const [guides, setGuides] = useState<GuidesState>(() => project.guides ?? DEFAULT_GUIDES);
   const [fontTick, setFontTick] = useState(0);
   const [compareOn, setCompareOn] = useState(false);
@@ -142,6 +145,11 @@ export default function StudioEditor({
   const [destDir, setDestDir] = useState<FileSystemDirectoryHandle | null>(null);
   const [projectName, setProjectName] = useState(project.name);
   const [aspectId, setAspectId] = useState(project.settings.aspectId);
+  // The clip's capture-time correction — footage-level, so every clock, date
+  // and timestamp element reads through the same one.
+  const [timeShift, setTimeShift] = useState<TimeShift>(
+    () => project.settings.timeShift ?? { ...NO_SHIFT },
+  );
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState<StyleTheme | null>(() => project.theme);
   const [saveState, setSaveState] = useState<SaveState>('saved');
@@ -276,6 +284,7 @@ export default function StudioEditor({
               canvas.height,
               patch.anchor,
               theme,
+              timeShift,
             );
           }
           return moved ? { ...e, ...patch, ...moved } : { ...e, ...patch };
@@ -310,6 +319,40 @@ export default function StudioEditor({
     setResettingDeck(false);
   }
 
+  // Delete / Backspace removes the selected element. Guarded on the event
+  // target: the same keys must keep editing text inside the project name, a
+  // free-text element, a file name or any number box.
+  useEffect(() => {
+    if (!selectedElementId) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))
+      ) {
+        return;
+      }
+      e.preventDefault(); // Backspace would otherwise navigate back.
+      removeElement(selectedElementId!);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // `removeElement` only calls state updaters, so the mounted listener stays
+    // correct; the selected id is what has to be fresh.
+  }, [selectedElementId]);
+
+  // Selecting an element — from the list, or by clicking it on the stage —
+  // brings its settings into view. With a long deck the panel sits well below
+  // the fold, and hunting for it was the maintainer's complaint.
+  useEffect(() => {
+    if (!selectedElementId) return;
+    elementPanelRef.current?.scrollIntoView({
+      block: 'nearest',
+      behavior: 'smooth',
+    });
+  }, [selectedElementId]);
+
   function toggleVisible(id: string) {
     setElements((prev) =>
       prev.map((e) => (e.id === id ? { ...e, visible: !e.visible } : e)),
@@ -330,6 +373,7 @@ export default function StudioEditor({
     lut: lutStack.composed,
     intensity: 1,
     theme,
+    timeShift,
     compare: compareOn,
     resetKey: activeUrl,
     redrawSignal: fontTick,
@@ -391,7 +435,7 @@ export default function StudioEditor({
           ...docRef.current,
           name: projectName.trim() || docRef.current.name,
           updatedAt: Date.now(),
-          settings: { ...docRef.current.settings, aspectId },
+          settings: { ...docRef.current.settings, aspectId, timeShift },
           elements,
           guides,
           lutStack: lutStack.toSaved(),
@@ -423,6 +467,7 @@ export default function StudioEditor({
     guides,
     projectName,
     aspectId,
+    timeShift,
     theme,
     exportFileName,
     variants,
@@ -464,6 +509,7 @@ export default function StudioEditor({
           lut: lutStack.composed,
           intensity: 1,
           theme,
+          timeShift,
           srcWidth,
           srcHeight,
         };
@@ -490,6 +536,7 @@ export default function StudioEditor({
               lutStack.composed,
               1,
               theme,
+              timeShift,
               onProgress,
               controller.signal,
             );
@@ -555,6 +602,7 @@ export default function StudioEditor({
         lut: lutStack.composed,
         intensity: 1,
         theme,
+        timeShift,
         overlays: true,
       });
       if (blob) {
@@ -663,10 +711,12 @@ export default function StudioEditor({
         <ProjectSettingsModal
           name={projectName}
           aspectId={aspectId}
+          timeShift={timeShift}
           onCancel={() => setShowSettings(false)}
-          onApply={({ name, aspectId: nextAspect }) => {
+          onApply={({ name, aspectId: nextAspect, timeShift: nextShift }) => {
             setProjectName(name);
             setAspectId(nextAspect);
+            setTimeShift(nextShift);
             setShowSettings(false);
           }}
         />
@@ -739,12 +789,27 @@ export default function StudioEditor({
         </div>
       )}
 
-      {/* Body: stage + inspector */}
-      <div className="flex flex-col min-[900px]:flex-row gap-4 flex-1 min-h-0">
+      {/*
+        Body: stage + inspector.
+
+        The split is a CONTAINER query, not a viewport one. The editor's real
+        estate is the window minus the Library sidebar (288px) and the shell's
+        margins, so a viewport breakpoint lied: at a 1000px window the row
+        layout still applied and the 340px inspector left the stage 308px —
+        the inspector was wider than the picture. Measuring the editor's own
+        width puts the two side by side only when there is room for both.
+
+        The container wrapper exists so the settings modal, a sibling of this
+        block, stays out of it: `container-type: inline-size` implies layout
+        containment, which would make a `position: fixed` overlay resolve
+        against the container instead of the viewport.
+      */}
+      <div className="@container flex-1 min-h-0 flex flex-col">
+      <div className="flex flex-col @min-[800px]:flex-row gap-4 flex-1 min-h-0">
         {/* Stage */}
         <div className="flex flex-col gap-[0.6rem] flex-1 min-w-0 min-h-0">
           <div
-            className={`relative rounded-paper overflow-hidden flex-1 min-h-0 flex items-center justify-center max-[820px]:min-h-[240px] ${
+            className={`relative rounded-paper overflow-hidden flex-1 min-h-0 flex items-center justify-center @max-[800px]:min-h-[240px] ${
               activeUrl ? 'bg-frame' : 'bg-transparent'
             }`}
           >
@@ -854,7 +919,7 @@ export default function StudioEditor({
 
         {/* Inspector */}
         {active && (
-          <div className="flex flex-col gap-3 min-[900px]:w-[340px] flex-none min-h-0 border border-line rounded-paper bg-surface p-3">
+          <div className="flex flex-col gap-3 @min-[800px]:w-[340px] flex-none min-h-0 @max-[800px]:max-h-[45vh] border border-line rounded-paper bg-surface p-3">
             <div
               className="flex gap-1 p-1 rounded-full bg-paper border border-line flex-none"
               role="tablist"
@@ -870,20 +935,45 @@ export default function StudioEditor({
                     elements={elements}
                     cue={activeCue}
                     theme={theme}
+                    timeShift={timeShift}
                     onAdd={addElement}
                     open={paletteOpen}
                     onOpenChange={setPaletteOpen}
                   />
 
                   <div className="pt-3 border-t border-line flex flex-col gap-2">
-                    <ElementList
-                      elements={elements}
-                      selectedId={selectedElementId}
-                      cue={activeCue}
-                      onSelect={setSelectedElementId}
-                      onRemove={removeElement}
-                      onToggleVisible={toggleVisible}
-                    />
+                    <button
+                      type="button"
+                      onClick={() => setListOpen((o) => !o)}
+                      aria-expanded={listOpen}
+                      className="flex items-center gap-1.5 p-0 border-0 bg-transparent text-accent-ink font-semibold text-[0.82rem] cursor-pointer hover:text-accent"
+                    >
+                      <span aria-hidden="true" className="text-[0.7rem]">
+                        {listOpen ? '▾' : '▸'}
+                      </span>
+                      Elements
+                      <span className="ml-auto font-mono text-[0.66rem] tabular-nums text-muted">
+                        {elements.length}
+                      </span>
+                    </button>
+                    {/*
+                      Capped and scrollable rather than free-growing: a deck of
+                      fifteen readouts used to push the style panel off the
+                      bottom of the inspector.
+                    */}
+                    {listOpen && (
+                      <div className="max-h-[15rem] overflow-y-auto overscroll-contain -mx-1 px-1">
+                        <ElementList
+                          elements={elements}
+                          selectedId={selectedElementId}
+                          cue={activeCue}
+                          timeShift={timeShift}
+                          onSelect={setSelectedElementId}
+                          onRemove={removeElement}
+                          onToggleVisible={toggleVisible}
+                        />
+                      </div>
+                    )}
 
                     {/* The starter deck: an offer when there is nothing to
                         lose, a two-step confirm once there is. */}
@@ -926,9 +1016,12 @@ export default function StudioEditor({
                   </div>
 
                   {selectedElement && (
-                    <div className="pt-3 border-t border-line">
-                      <h2 className="m-0 mb-2 font-mono text-[0.7rem] font-medium uppercase tracking-[0.16em] text-muted">
+                    <div ref={elementPanelRef} className="pt-3 border-t border-line scroll-mt-2">
+                      <h2 className="m-0 mb-2 flex items-baseline gap-2 font-mono text-[0.7rem] font-medium uppercase tracking-[0.16em] text-muted">
                         Style
+                        <span className="ml-auto normal-case tracking-normal text-[0.68rem] text-faint">
+                          Delete removes it
+                        </span>
                       </h2>
                       <ElementPanel
                         element={selectedElement}
@@ -1169,6 +1262,7 @@ export default function StudioEditor({
             </div>
           </div>
         )}
+      </div>
       </div>
     </section>
   );

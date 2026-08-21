@@ -40,6 +40,42 @@ Read before touching `src/tools/studio/`, `src/shared/overlay/`, anything about 
 
 **`ElementList` no longer owns adding.** Its add row is opt-in via `addControls` — the studio omits it, the legacy overlay page passes it and stays untouched (that page dies in phase 4; don't polish it, don't duplicate the list either).
 
+## The heading is course over ground, and it has holes (2026-08-21)
+
+**The cause, so no future session re-diagnoses it.** The `.srt` carries no compass and no yaw. `motion.ts` reconstructs the heading as the azimuth between GPS fixes ~1 s apart, and **suppresses it** below `MIN_MOVE_M = 1` metre of horizontal travel — hovering, creeping, or **yawing on the spot** (nose turns, ground track doesn't) all produce nothing. Do **not** lower that floor to "fix" the gaps: it trades a gap for a weathervane driven by GPS noise.
+
+**The remedy.** `telemetry/heading-smooth.ts` (pure, 8 tests) averages a window of readings and reports `{heading, age, confidence}`. Two rules it must keep: (1) it is a pure function of `(cues, time)`, **never an accumulator over rendered frames** — preview and export do not render at the same cadence, and a frame-fed filter would make the burn-in disagree with the screen; (2) the average is **circular** (unit vectors), because averaging 350° and 10° arithmetically points due South. The same window bridges short gaps for free.
+
+**Gap behaviour is the author's choice** (`headingGap` on the element): `dim` (default) holds the last bearing and fades it over `headingHoldSeconds`, `hold` keeps it plain then drops, `hide` is the old abrupt no-data state. Both the arrow and the tape share `headingSmoothing` / `headingGap` / `headingHoldSeconds`. `DrawOptions.cues` carries the cue list into the renderer — without it (a caller that passes only the cue at the playhead) the instruments fall back to the raw reading, so nothing regresses.
+
+## The glow's grain must be masked by the glow, not by a box (2026-08-21)
+
+**The bug the maintainer saw**: a visible rectangle around every glowing readout, worse the higher the glow — "comme s'il y avait un carré autour". Cause: the fourth halation layer painted the noise tile through `ctx.rect(); ctx.clip()` at uniform alpha with `overlay` compositing, so the texture stopped dead at a bounding box whose size scales with `bleedRadiusFrac`. **Rule**: nothing in the glow may be bounded by a rectangle — every layer has to carry the halation's own falloff.
+
+**The fix**: compose the grain in a scratch buffer and cut it down with `destination-in` against the same shadowed text the bleed layer paints, so its alpha *is* the glow's falloff. Buffers are module-level and grow-only (`scratches.grain` / `scratches.mask`), because a full-resolution export would otherwise allocate a pair per readout per frame; `MAX_SCRATCH` skips the grain rather than allocating absurdly.
+
+**Canvas trap, measured in Chromium (2026-08-21)**: **a shadow is dropped when the drawing operation runs under a `destination-*` composite mode.** Drawing shadowed text straight into a `destination-in` context left ~2.5k faint pixels where the halation covers ~17k — it silently erased the grain instead of shaping it. Build any such mask in its **own** buffer under `source-over`, then composite it as one image. Applies to every future mask, not just this one.
+
+## Navigating a long deck in a 340px column (2026-08-21)
+
+**Decision.** Three moves, all from the maintainer hunting for controls: (1) the element list folds behind an "Elements · N" header and, open, is **capped at 15rem with its own scroll** — a deck of fifteen readouts used to push the style panel off the bottom; (2) selecting an element scrolls its settings panel into view (`scrollIntoView({block:'nearest'})` on a ref in StudioEditor); (3) `ElementList` keeps the *selected row* in view the same way, because selection often changes from the stage rather than from the list. **How to apply**: `block:'nearest'` is deliberate — it does nothing when the target is already visible, so ordinary clicking never jumps the column. New long sections in the inspector should bound their own height rather than relying on the shared scroller.
+
+## The editor splits on a CONTAINER query, not the viewport (2026-08-21)
+
+**Trap, found in the wild.** The stage/inspector split used `min-[900px]:flex-row`, a **viewport** media query — but the editor's real estate is the window minus the 288px Library sidebar and the shell's margins. At a 1000px window the row layout still applied and the fixed 340px inspector left the stage **308px**: the inspector was wider than the picture (the maintainer's "l'overlay remplace la visualisation"). Measured before the fix: 1100→408px, 1000→308px, 900→208px of canvas. It now splits on `@min-[800px]` against the editor's **own** width, and those cases stack instead (538px of canvas).
+
+**Sub-trap**: `container-type: inline-size` implies layout containment, which makes a `position: fixed` descendant resolve against the container instead of the viewport. The `@container` sits on a wrapper around the stage/inspector row only, so the settings modal — a sibling — still covers the viewport. Verified. Any new full-screen overlay must stay outside that wrapper.
+
+## Time fields: format per badge, correction per clip (2026-08-21)
+
+**No timezone picker — deliberately.** DJI's `.srt` records a bare wall-clock reading (`2026-05-30 05:49:34.609`) with no UTC offset and no zone name: it is whatever the aircraft's clock said, and nothing in the file says where on Earth that belongs. Converting between zones needs the source zone, which we do not have; assuming UTC is wrong for most flights. A zone dropdown would look authoritative while producing an arbitrary answer. Do not add one. What is offered instead is a **shift** — hours, **minutes** (the half- and quarter-hour zones are real: India +5:30, Nepal +5:45, Chatham +12:45) and whole **days** (a controller back from a flat battery with the wrong date).
+
+**Where each half lives.** The *format* (12h/24h, meridiem, seconds, milliseconds, date style) is the badge's business and sits on the element as `timeFormat`. The *shift* is the **footage's** and sits in `ProjectSettings.timeShift`, threaded through `DrawOptions.timeShift` to every render path (stage, both exports, the frame grab, and the inspector previews). **Why**: a per-element shift is a footgun — change the clock's, forget the date's, and the overlay contradicts itself. One correction, every time element.
+
+**The arithmetic runs in UTC** (`Date.UTC` / `getUTC*` in `telemetry/time-format.ts`), never through a local `Date`: parsing locally would let the *rendering machine's* zone move the value, so a preview and an export on two computers could disagree. Same input, same string, everywhere.
+
+**Behaviour change to know**: `timestamp` used to echo the SRT line verbatim, milliseconds included; it is now formatted, with milliseconds opt-in (noise on a title card). ProjectDoc v5 adds the zeroed shift.
+
 ## The instrument elements: heading tape and battery (2026-08-21)
 
 **Heading tape.** The maintainer's favourite from the HUD mockup, now an overlay kind: a slice of the compass sliding under a fixed sight, ticks fading out at both ends. Geometry is pure in `shared/overlay/heading-tape.ts` (`tapeTicks` / `tapeFadeAlpha` / `angleDelta`, tested) — ticks are emitted on the **absolute** compass scale, not relative to the heading, which is what makes them *slide through* the window instead of being redrawn under it; `angleDelta` is what keeps the ribbon continuous across North. Nearly everything is a knob (`tape*` on `OverlayElement`): width, span, major/minor steps, tick height, edge fade, opacity, sight colour + mark, caption placement, cardinals, baseline rule. **Conventions**: the fade is applied per-tick, never through a canvas alpha mask — a mask needs an offscreen buffer per frame and the export renders full-resolution; only the baseline rule uses a real gradient. With **no heading** the furniture stays and the scale is not drawn: a tape frozen on an invented bearing is exactly the lie the palette rule forbids.

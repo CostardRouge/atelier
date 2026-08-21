@@ -27,6 +27,7 @@ import { drawGuides } from './draw-guides';
 import { snapToGrid, type GuidesState } from './guides';
 import type { OverlayElement } from './overlay-types';
 import type { StyleTheme } from './title-styles';
+import type { TimeShift } from '../telemetry/time-format';
 
 interface StageParams {
   videoRef: RefObject<HTMLVideoElement | null>;
@@ -46,6 +47,8 @@ interface StageParams {
   redrawSignal?: unknown;
   /** The project's title-style theme (null → element styles as-is). */
   theme?: StyleTheme | null;
+  /** The project's capture-time correction, for clock/date/timestamp. */
+  timeShift?: TimeShift | null;
   /**
    * A/B compare: when true, a draggable divider wipes between the ORIGINAL
    * frame (left) and the composed one — LUT + overlays — (right). Dragging on
@@ -83,6 +86,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   const lutRef = useRef(params.lut);
   const intensityRef = useRef(params.intensity);
   const themeRef = useRef(params.theme ?? null);
+  const shiftRef = useRef(params.timeShift ?? null);
   const compareRef = useRef(params.compare ?? false);
   const splitRef = useRef(0.5);
   cuesRef.current = params.cues;
@@ -92,6 +96,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   lutRef.current = params.lut;
   intensityRef.current = params.intensity;
   themeRef.current = params.theme ?? null;
+  shiftRef.current = params.timeShift ?? null;
   compareRef.current = params.compare ?? false;
 
   const needsRedraw = useRef(true);
@@ -148,7 +153,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   // finished loading) should trigger a repaint, even while paused.
   useEffect(() => {
     needsRedraw.current = true;
-  }, [params.elements, params.selectedId, params.redrawSignal, params.guides, params.theme, params.compare]);
+  }, [params.elements, params.selectedId, params.redrawSignal, params.guides, params.theme, params.timeShift, params.compare]);
 
   // Composite + (optional) selection outline. Returns false if not ready.
   const drawFrame = useCallback((): boolean => {
@@ -184,6 +189,8 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     ctx.drawImage(source, 0, 0, vw, vh);
     drawOverlays(ctx, elementsRef.current, cue, vw, vh, {
       theme: themeRef.current,
+      timeShift: shiftRef.current,
+      cues: cuesRef.current,
       timeSeconds: video.currentTime,
     });
 
@@ -218,6 +225,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     if (sel) {
       const boxes = measureOverlays(ctx, elementsRef.current, cue, vw, vh, {
         theme: themeRef.current,
+        timeShift: shiftRef.current,
       });
       const box = boxForId(boxes, sel);
       if (box) {
@@ -306,6 +314,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       const cue = findCue(cuesRef.current, video.currentTime);
       const boxes = measureOverlays(ctx, elementsRef.current, cue, canvas.width, canvas.height, {
         theme: themeRef.current,
+        timeShift: shiftRef.current,
       });
       const id = hitTest(boxes, pt.px, pt.py);
       onSelect(id);

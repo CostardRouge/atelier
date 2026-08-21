@@ -18,6 +18,7 @@ import { drawOverlays } from '../overlay/draw-overlays';
 import { ensureOverlayFonts } from '../overlay/fonts';
 import type { OverlayElement } from '../overlay/overlay-types';
 import type { StyleTheme } from '../overlay/title-styles';
+import type { TimeShift } from '../telemetry/time-format';
 
 export interface FrameGrabOptions {
   elements: OverlayElement[];
@@ -25,6 +26,7 @@ export interface FrameGrabOptions {
   lut: CubeLut | null;
   intensity: number;
   theme: StyleTheme | null;
+  timeShift?: TimeShift | null;
   /** Burn the overlays in, or capture the clean graded frame. */
   overlays: boolean;
   /** JPEG quality 0..1. */
@@ -65,6 +67,8 @@ export async function grabFrame(
     const t = video.currentTime;
     drawOverlays(ctx, opts.elements, findCue(opts.cues, t), w, h, {
       theme: opts.theme,
+      timeShift: opts.timeShift,
+      cues: opts.cues,
       timeSeconds: t,
     });
   }

@@ -18,6 +18,7 @@ import { drawOverlays } from '../overlay/draw-overlays';
 import { ensureOverlayFonts } from '../overlay/fonts';
 import type { OverlayElement } from '../overlay/overlay-types';
 import type { StyleTheme } from '../overlay/title-styles';
+import type { TimeShift } from '../telemetry/time-format';
 import { fitRect } from './compose-layout';
 import {
   drawRotatedFrame,
@@ -37,6 +38,7 @@ export interface VariantRenderOptions {
   lut: CubeLut | null;
   intensity: number;
   theme: StyleTheme | null;
+  timeShift?: TimeShift | null;
   /** Display-oriented source dimensions (from the clip's metadata). */
   srcWidth: number;
   srcHeight: number;
@@ -88,6 +90,8 @@ export async function exportVariantVideo(
             const t = tMicros / 1_000_000;
             drawOverlays(ctx, opts.elements, findCue(opts.cues, t), out.w, out.h, {
               theme: opts.theme,
+              timeShift: opts.timeShift,
+              cues: opts.cues,
               timeSeconds: t,
             });
           }

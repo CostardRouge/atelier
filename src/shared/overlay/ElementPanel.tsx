@@ -1,11 +1,13 @@
-import { FIELD_KEYS, FIELD_SPECS } from './field-format';
+import { FIELD_KEYS, FIELD_SPECS, TIME_FIELDS } from './field-format';
 import { BATTERY_KEYS } from './battery';
 import { SPEED_UNITS } from '../telemetry/motion';
+import type { DateStyle, TimeFormatOptions } from '../telemetry/time-format';
 import {
   CURATED_FONTS,
   type Anchor,
   type BatterySource,
   type FontWeight,
+  type HeadingGapMode,
   type LabelPlacement,
   type OverlayElement,
   type SpeedUnit,
@@ -123,6 +125,12 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
     onChange(patch);
   }
 
+  /** Time presentation lives in one nested object, like `legibility`. */
+  const time: TimeFormatOptions = element.timeFormat ?? {};
+  function patchTime(patch: Partial<TimeFormatOptions>) {
+    change({ timeFormat: { ...time, ...patch } });
+  }
+
   function resetOverride(key: ThemableKey) {
     onChange({ styleOverrides: overrides.filter((k) => k !== key) });
   }
@@ -235,6 +243,68 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
               </select>
             </label>
           )}
+          <div className="flex flex-col gap-2 pt-2 border-t border-line">
+            <label className="flex flex-col gap-1">
+              <span className={labelClass}>
+                Smoothing ·{' '}
+                {(element.headingSmoothing ?? 0.6) === 0
+                  ? 'off'
+                  : `${(element.headingSmoothing ?? 0.6).toFixed(1)} s`}
+              </span>
+              <input
+                type="range"
+                className="w-full accent-accent cursor-pointer"
+                min={0}
+                max={3}
+                step={0.1}
+                value={element.headingSmoothing ?? 0.6}
+                onChange={(e) =>
+                  change({ headingSmoothing: Number(e.target.value) })
+                }
+              />
+              <span className="text-[0.7rem] text-faint leading-relaxed">
+                The heading is rebuilt from GPS a few times a second, so it
+                steps. Averaging a window of readings eases it — and bridges
+                the short gaps where there is nothing to read.
+              </span>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className={labelClass}>When the heading is lost</span>
+              <select
+                className={`${inputClass} cursor-pointer`}
+                value={element.headingGap ?? 'dim'}
+                onChange={(e) =>
+                  change({ headingGap: e.target.value as HeadingGapMode })
+                }
+              >
+                <option value="dim">Hold the last bearing, fading out</option>
+                <option value="hold">Hold it plainly, then drop</option>
+                <option value="hide">Drop to the no-data state at once</option>
+              </select>
+              <span className="text-[0.7rem] text-faint leading-relaxed">
+                There is no compass in the log: the heading is course over
+                ground, so it disappears while hovering or yawing on the spot.
+              </span>
+            </label>
+            {(element.headingGap ?? 'dim') !== 'hide' && (
+              <label className="flex flex-col gap-1">
+                <span className={labelClass}>
+                  Hold for · {(element.headingHoldSeconds ?? 2).toFixed(1)} s
+                </span>
+                <input
+                  type="range"
+                  className="w-full accent-accent cursor-pointer"
+                  min={0.5}
+                  max={10}
+                  step={0.5}
+                  value={element.headingHoldSeconds ?? 2}
+                  onChange={(e) =>
+                    change({ headingHoldSeconds: Number(e.target.value) })
+                  }
+                />
+              </label>
+            )}
+          </div>
         </div>
       ) : element.kind === 'heading-tape' ? (
         <div className="flex flex-col gap-2">
@@ -408,6 +478,68 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
             />
             <span className={labelClass}>Baseline rule</span>
           </label>
+          <div className="flex flex-col gap-2 pt-2 border-t border-line">
+            <label className="flex flex-col gap-1">
+              <span className={labelClass}>
+                Smoothing ·{' '}
+                {(element.headingSmoothing ?? 0.6) === 0
+                  ? 'off'
+                  : `${(element.headingSmoothing ?? 0.6).toFixed(1)} s`}
+              </span>
+              <input
+                type="range"
+                className="w-full accent-accent cursor-pointer"
+                min={0}
+                max={3}
+                step={0.1}
+                value={element.headingSmoothing ?? 0.6}
+                onChange={(e) =>
+                  change({ headingSmoothing: Number(e.target.value) })
+                }
+              />
+              <span className="text-[0.7rem] text-faint leading-relaxed">
+                The heading is rebuilt from GPS a few times a second, so it
+                steps. Averaging a window of readings eases it — and bridges
+                the short gaps where there is nothing to read.
+              </span>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className={labelClass}>When the heading is lost</span>
+              <select
+                className={`${inputClass} cursor-pointer`}
+                value={element.headingGap ?? 'dim'}
+                onChange={(e) =>
+                  change({ headingGap: e.target.value as HeadingGapMode })
+                }
+              >
+                <option value="dim">Hold the last bearing, fading out</option>
+                <option value="hold">Hold it plainly, then drop</option>
+                <option value="hide">Drop to the no-data state at once</option>
+              </select>
+              <span className="text-[0.7rem] text-faint leading-relaxed">
+                There is no compass in the log: the heading is course over
+                ground, so it disappears while hovering or yawing on the spot.
+              </span>
+            </label>
+            {(element.headingGap ?? 'dim') !== 'hide' && (
+              <label className="flex flex-col gap-1">
+                <span className={labelClass}>
+                  Hold for · {(element.headingHoldSeconds ?? 2).toFixed(1)} s
+                </span>
+                <input
+                  type="range"
+                  className="w-full accent-accent cursor-pointer"
+                  min={0.5}
+                  max={10}
+                  step={0.5}
+                  value={element.headingHoldSeconds ?? 2}
+                  onChange={(e) =>
+                    change({ headingHoldSeconds: Number(e.target.value) })
+                  }
+                />
+              </label>
+            )}
+          </div>
         </div>
       ) : element.kind === 'battery' ? (
         <div className="flex flex-col gap-2">
@@ -569,6 +701,84 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
               onChange={(e) => change({ label: e.target.value })}
             />
           </label>
+          {element.field && TIME_FIELDS.has(element.field) && (
+            <div className="flex flex-col gap-2">
+              {element.field !== 'date' && (
+                <>
+                  <label className="flex flex-col gap-1">
+                    <span className={labelClass}>Clock</span>
+                    <select
+                      className={`${inputClass} cursor-pointer`}
+                      value={time.hour12 ? '12' : '24'}
+                      onChange={(e) =>
+                        patchTime({ hour12: e.target.value === '12' })
+                      }
+                    >
+                      <option value="24">24-hour</option>
+                      <option value="12">12-hour</option>
+                    </select>
+                  </label>
+                  {time.hour12 && (
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        className="w-3.5 h-3.5 accent-accent cursor-pointer"
+                        checked={time.meridiem ?? true}
+                        onChange={(e) => patchTime({ meridiem: e.target.checked })}
+                      />
+                      <span className={labelClass}>Show AM / PM</span>
+                    </label>
+                  )}
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="w-3.5 h-3.5 accent-accent cursor-pointer"
+                      checked={time.seconds ?? true}
+                      onChange={(e) => patchTime({ seconds: e.target.checked })}
+                    />
+                    <span className={labelClass}>Seconds</span>
+                  </label>
+                  {element.field === 'timestamp' && (
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        className="w-3.5 h-3.5 accent-accent cursor-pointer"
+                        checked={time.milliseconds ?? false}
+                        onChange={(e) =>
+                          patchTime({ milliseconds: e.target.checked })
+                        }
+                      />
+                      <span className={labelClass}>Milliseconds</span>
+                    </label>
+                  )}
+                </>
+              )}
+              {element.field !== 'clock' && (
+                <label className="flex flex-col gap-1">
+                  <span className={labelClass}>Date</span>
+                  <select
+                    className={`${inputClass} cursor-pointer`}
+                    value={time.dateStyle ?? 'iso'}
+                    onChange={(e) =>
+                      patchTime({ dateStyle: e.target.value as DateStyle })
+                    }
+                  >
+                    <option value="iso">2026-05-30</option>
+                    <option value="dmy">30/05/2026</option>
+                    <option value="mdy">05/30/2026</option>
+                    <option value="long-dmy">30 May 2026</option>
+                    <option value="long-mdy">May 30, 2026</option>
+                    <option value="weekday">Sat 30 May 2026</option>
+                  </select>
+                </label>
+              )}
+              <p className="m-0 text-[0.7rem] text-faint leading-relaxed">
+                The flight log records a bare wall-clock reading with no
+                timezone. If this clip's clock was off, correct it once in the
+                project settings — it applies to every time element at once.
+              </p>
+            </div>
+          )}
           {element.field && SPEED_FIELDS.has(element.field) && (
             <label className="flex flex-col gap-1">
               <span className={labelClass}>Unit</span>

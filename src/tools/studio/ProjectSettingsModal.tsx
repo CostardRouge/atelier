@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
+import { NO_SHIFT, type TimeShift } from '../../shared/telemetry/time-format';
 
 interface ProjectSettingsModalProps {
   name: string;
   aspectId: string;
+  timeShift: TimeShift;
   onCancel: () => void;
-  onApply: (next: { name: string; aspectId: string }) => void;
+  onApply: (next: {
+    name: string;
+    aspectId: string;
+    timeShift: TimeShift;
+  }) => void;
 }
 
 const field = 'flex flex-col gap-1.5';
@@ -20,12 +26,16 @@ const legend = 'font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted'
 export default function ProjectSettingsModal({
   name,
   aspectId,
+  timeShift,
   onCancel,
   onApply,
 }: ProjectSettingsModalProps) {
   const [draftName, setDraftName] = useState(name);
   const [draftAspect, setDraftAspect] = useState(aspectId);
+  const [shift, setShift] = useState<TimeShift>(timeShift ?? NO_SHIFT);
   const nameRef = useRef<HTMLInputElement>(null);
+  const hours = Math.trunc(shift.minutes / 60);
+  const mins = Math.abs(shift.minutes % 60);
 
   useEffect(() => {
     nameRef.current?.focus();
@@ -38,7 +48,17 @@ export default function ProjectSettingsModal({
   }, []);
 
   function apply() {
-    onApply({ name: draftName.trim() || name, aspectId: draftAspect });
+    onApply({
+      name: draftName.trim() || name,
+      aspectId: draftAspect,
+      timeShift: shift,
+    });
+  }
+
+  /** Rebuild the signed minute total from the hour and minute boxes. */
+  function setHM(h: number, m: number) {
+    const sign = h < 0 || (h === 0 && Object.is(h, -0)) ? -1 : 1;
+    setShift({ ...shift, minutes: h * 60 + sign * Math.abs(m) });
   }
 
   return (
@@ -104,6 +124,67 @@ export default function ProjectSettingsModal({
           <p className="m-0 text-[0.7rem] text-faint">
             The project's format seeds new export variants; the Export tab can
             still add other formats per variant.
+          </p>
+        </fieldset>
+
+        <fieldset className="m-0 p-0 border-0 flex flex-col gap-1.5">
+          <span className={legend}>Capture time</span>
+          <p className="m-0 text-[0.72rem] text-muted leading-relaxed">
+            The flight log records a bare wall-clock reading with no timezone —
+            whatever the aircraft's clock said. If it was off, correct it here:
+            the shift applies to every clock, date and timestamp element at
+            once, and rolls the date when it crosses midnight.
+          </p>
+          <div className="flex items-end gap-2">
+            <label className="flex flex-col gap-1">
+              <span className={legend}>Hours</span>
+              <input
+                type="number"
+                value={hours}
+                min={-23}
+                max={23}
+                onChange={(e) => setHM(Number(e.target.value) || 0, mins)}
+                className="w-[4.5rem] font-mono text-[0.85rem] px-2 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className={legend}>Minutes</span>
+              <input
+                type="number"
+                value={mins}
+                min={0}
+                max={59}
+                step={15}
+                onChange={(e) => setHM(hours, Number(e.target.value) || 0)}
+                className="w-[4.5rem] font-mono text-[0.85rem] px-2 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className={legend}>Days</span>
+              <input
+                type="number"
+                value={shift.days}
+                min={-366}
+                max={366}
+                onChange={(e) =>
+                  setShift({ ...shift, days: Number(e.target.value) || 0 })
+                }
+                className="w-[4.5rem] font-mono text-[0.85rem] px-2 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
+              />
+            </label>
+            {(shift.minutes !== 0 || shift.days !== 0) && (
+              <button
+                type="button"
+                onClick={() => setShift({ ...NO_SHIFT })}
+                className="mb-1.5 p-0 border-0 bg-transparent text-[0.75rem] text-accent-ink cursor-pointer underline underline-offset-[3px]"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <p className="m-0 text-[0.7rem] text-faint">
+            Minutes cover the half- and quarter-hour zones; days are for a
+            controller that came back from a flat battery with the wrong date.
           </p>
         </fieldset>
 

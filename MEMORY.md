@@ -41,6 +41,10 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - MapLibre is dynamically imported (JS + CSS) so it stays out of the main bundle — `frontend.md`.
 - The overlay engine (element model, stage, burn-in export, editing panels) is shared (`shared/overlay/`), consumed by both the Studio and the legacy overlay page — `architecture.md`, `studio.md`.
 - Overlay elements are added from a foldable preview palette, never a dropdown; a preview shows the real value or nothing, never a fabricated one — `studio.md`.
+- Canvas trap: a shadow is dropped when drawing under a `destination-*` composite mode — build masks in their own buffer first — `studio.md`.
+- The heading is course over ground (no compass in the log) and vanishes while hovering or yawing; smoothing is a pure `(cues, time)` function, never a per-frame accumulator — `studio.md`.
+- Tool layouts split on **container** queries, not viewport ones: the Library sidebar eats 288px the viewport query cannot see — `studio.md`.
+- Time elements: presentation per badge, capture-time **shift** per project; no timezone picker — the log has no zone to convert from — `studio.md`.
 - The DJI video `.srt` carries no battery level (Mini 4 Pro included): the gauge takes an authored value or a named telemetry key, and draws empty rather than inventing one — `studio.md`.
 
 ## Open items (dated; remove when done)

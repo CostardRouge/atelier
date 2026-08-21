@@ -12,9 +12,11 @@
 
 import type { Cue } from '../telemetry/srt-parser';
 import { formatHeading } from '../telemetry/motion';
+import type { TimeShift } from '../telemetry/time-format';
 import { MISSING, renderElementText } from './field-format';
 import { batteryLevel } from './battery';
 import { tapeFadeAlpha, tapeTicks } from './heading-tape';
+import { smoothHeading } from '../telemetry/heading-smooth';
 import type { Anchor, OverlayElement } from './overlay-types';
 import {
   halolight,
@@ -34,6 +36,49 @@ export interface DrawOptions {
   /** Current media time in seconds — phases the animated grain so preview and
    * export stay frame-identical. */
   timeSeconds?: number;
+  /**
+   * The project's capture-time correction, applied to every clock/date/
+   * timestamp element at once (see telemetry/time-format.ts for why this is a
+   * shift and not a timezone).
+   */
+  timeShift?: TimeShift | null;
+  /**
+   * The whole cue list. The heading instruments need it, not just the cue at
+   * the playhead: their easing averages a window of readings and bridges the
+   * gaps where course-over-ground is unavailable (see heading-smooth.ts).
+   */
+  cues?: readonly Cue[];
+}
+
+/**
+ * The bearing a heading instrument should draw, and how strongly.
+ *
+ * Falls back to the cue's own raw reading when no cue list was supplied (the
+ * legacy overlay page), so nothing regresses where smoothing isn't wired.
+ */
+function headingFor(
+  el: OverlayElement,
+  cue: Cue | null,
+  opts?: DrawOptions,
+): { heading: number | null; alpha: number } {
+  const raw = cue?.derived?.heading ?? null;
+  const cues = opts?.cues;
+  if (!cues || cues.length === 0) return { heading: raw, alpha: 1 };
+
+  const gap = el.headingGap ?? 'dim';
+  const hold = gap === 'hide' ? 0 : (el.headingHoldSeconds ?? 2);
+  const out = smoothHeading(
+    cues,
+    opts?.timeSeconds ?? 0,
+    el.headingSmoothing ?? 0.6,
+    hold,
+  );
+  if (out.heading == null) return { heading: null, alpha: 1 };
+  // Live data always draws at full strength; only a stale bearing fades, and
+  // only in 'dim' mode. 'hold' shows it plainly until the window runs out.
+  if (out.confidence <= 0) return { heading: null, alpha: 1 };
+  const alpha = gap === 'dim' ? Math.max(0.25, out.confidence) : 1;
+  return { heading: out.heading, alpha };
 }
 
 /** Generic fallback appended to each family so missing glyphs degrade sanely. */
@@ -160,8 +205,9 @@ function layoutElement(
   vw: number,
   vh: number,
   theme?: StyleTheme | null,
+  timeShift?: TimeShift | null,
 ): Layout | null {
-  const raw = renderElementText(el, cue);
+  const raw = renderElementText(el, cue, timeShift);
   if (raw === '') return null;
   const st = resolveElementStyle(el, theme ?? null);
   const text = st.uppercase ? raw.toUpperCase() : raw;
@@ -309,11 +355,13 @@ function drawArrow(
   vw: number,
   vh: number,
   theme?: StyleTheme | null,
+  opts?: DrawOptions,
 ): void {
   const st = resolveElementStyle(el, theme ?? null);
   const lay = arrowLayout(el, vw, vh);
   const { cx, cy, r, halfSize } = lay;
-  const heading = cue?.derived?.heading;
+  const { heading: eased, alpha: headingAlpha } = headingFor(el, cue, opts);
+  const heading = eased ?? undefined;
   const isRelative = el.compassMode === 'relative';
 
   ctx.save();
@@ -380,6 +428,10 @@ function drawArrow(
   // (direction is unknown but "forward = up" convention still holds visually).
   if (isRelative && heading == null) {
     ctx.globalAlpha = 0.45;
+  } else {
+    // A held (stale) bearing draws faded rather than vanishing — the abrupt
+    // cut is what the maintainer wanted gone.
+    ctx.globalAlpha = headingAlpha;
   }
 
   ctx.fillStyle = st.color;
@@ -475,10 +527,12 @@ function drawHeadingTape(
   vw: number,
   vh: number,
   theme?: StyleTheme | null,
+  opts?: DrawOptions,
 ): void {
   const st = resolveElementStyle(el, theme ?? null);
   const lay = tapeLayout(el, st, vw, vh);
-  const heading = cue?.derived?.heading;
+  const { heading: eased, alpha: headingAlpha } = headingFor(el, cue, opts);
+  const heading = eased ?? undefined;
   const { cx, cy, halfW, fontPx, tickH } = lay;
   const fade = el.tapeFadeFrac ?? 0.22;
   const lineW = Math.max(0.6, fontPx * 0.09);
@@ -540,7 +594,8 @@ function drawHeadingTape(
       if (alpha <= 0.01) continue;
       const tx = cx + tick.t * halfW;
       const len = tick.major ? tickH : tickH * 0.55;
-      ctx.globalAlpha = alpha * Math.max(0, Math.min(1, el.tapeOpacity ?? 1));
+      ctx.globalAlpha =
+        alpha * Math.max(0, Math.min(1, el.tapeOpacity ?? 1)) * headingAlpha;
       ctx.strokeStyle = st.color;
       ctx.lineWidth = tick.major ? lineW : lineW * 0.7;
       ctx.beginPath();
@@ -871,44 +926,149 @@ function getGrainTile(): HTMLCanvasElement | OffscreenCanvas | null {
 }
 
 /**
- * Grain over one glow region: the noise tile, offset deterministically from
- * the media time (~10 steps/s), composited 'overlay' so it bites both the
- * bright halo and the dark ground — never a plain grey wash.
+ * A scratch canvas the grain is composed in, reused across elements and frames
+ * so a full-resolution export doesn't allocate one per readout per frame. It
+ * only ever grows; callers draw the sub-rect they asked for.
  */
-function drawGrain(
+interface Scratch {
+  canvas: HTMLCanvasElement | OffscreenCanvas;
+  ctx: Ctx2D;
+  w: number;
+  h: number;
+}
+
+/**
+ * Two scratch canvases the grain is composed in — the noise field and the mask
+ * cut out of it — reused across elements and frames so a full-resolution
+ * export doesn't allocate a pair per readout per frame. They only ever grow;
+ * callers draw the sub-rect they asked for.
+ */
+const scratches: Record<'grain' | 'mask', Scratch | null> = { grain: null, mask: null };
+
+/** Refuse to build a grain buffer bigger than this (a runaway glow radius). */
+const MAX_SCRATCH = 4096;
+
+function getScratch(key: 'grain' | 'mask', w: number, h: number): Scratch | null {
+  if (w > MAX_SCRATCH || h > MAX_SCRATCH) return null;
+  const held = scratches[key];
+  if (held && held.w >= w && held.h >= h) return held;
+  const nw = Math.min(MAX_SCRATCH, Math.max(w, held?.w ?? 0));
+  const nh = Math.min(MAX_SCRATCH, Math.max(h, held?.h ?? 0));
+  const canvas =
+    typeof document !== 'undefined'
+      ? document.createElement('canvas')
+      : typeof OffscreenCanvas !== 'undefined'
+        ? new OffscreenCanvas(nw, nh)
+        : null;
+  if (!canvas) return null;
+  canvas.width = nw;
+  canvas.height = nh;
+  const ctx = canvas.getContext('2d') as Ctx2D | null;
+  if (!ctx) return null;
+  const made: Scratch = { canvas, ctx, w: nw, h: nh };
+  scratches[key] = made;
+  return made;
+}
+
+/**
+ * Grain over one glow — the fourth halation layer.
+ *
+ * It is masked by **the glow's own shape**, not by a bounding box. Painting a
+ * clipped rectangle of `overlay` noise is what used to draw a visible lighter
+ * square around every glowing readout: the noise stopped dead at the clip
+ * edge, and the brighter the glow the larger and more obvious the patch.
+ *
+ * So the grain is composed in a scratch buffer and cut down with
+ * `destination-in` against the same blurred text the bleed layer paints. The
+ * result carries the glow's soft falloff as its alpha: grain is strongest on
+ * the letters, thins out through the halation, and reaches zero exactly where
+ * the glow does — no edge to see.
+ *
+ * The mask is built in its OWN buffer first. Drawing shadowed text straight
+ * into a `destination-in` context loses the shadow — measured in Chromium:
+ * ~2.5k faint pixels survive instead of the ~17k the halation covers — which
+ * would erase the grain almost entirely. Two steps, one image composite.
+ */
+function drawShapedGrain(
   ctx: Ctx2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  alpha: number,
+  lay: Layout,
+  glow: GlowLayers,
   timeSeconds: number,
 ): void {
   const tile = getGrainTile();
-  if (!tile || alpha <= 0 || w <= 0 || h <= 0) return;
+  if (!tile || glow.grainAlpha <= 0) return;
+
+  const reach = glow.bleedRadiusFrac * lay.fontPx + lay.fontPx * 0.3;
+  const x = Math.floor(lay.x - reach);
+  const y = Math.floor(lay.y - reach);
+  const w = Math.ceil(lay.w + reach * 2);
+  const h = Math.ceil(lay.h + reach * 2);
+  if (w <= 0 || h <= 0) return;
+
+  // No buffer available (no DOM, no OffscreenCanvas, or an absurd radius):
+  // skip the grain rather than fall back to painting a square.
+  const buf = getScratch('grain', w, h);
+  const mask = getScratch('mask', w, h);
+  if (!buf || !mask) return;
+
+  // 1 — the mask: white text with the same wide shadow the bleed layer uses,
+  //     drawn twice to match the doubled bleed, under NORMAL compositing.
+  const mctx = mask.ctx;
+  mctx.save();
+  mctx.globalCompositeOperation = 'source-over';
+  mctx.globalAlpha = 1;
+  mctx.clearRect(0, 0, w, h);
+  mctx.font = lay.font;
+  mctx.textBaseline = 'alphabetic';
+  mctx.textAlign = 'left';
+  setLetterSpacing(mctx, lay.st.letterSpacingEm, lay.fontPx);
+  mctx.fillStyle = '#ffffff';
+  mctx.shadowColor = 'rgba(255,255,255,1)';
+  mctx.shadowBlur = Math.max(1, glow.bleedRadiusFrac * lay.fontPx);
+  mctx.shadowOffsetX = 0;
+  mctx.shadowOffsetY = 0;
+  const bx = lay.x - x;
+  const by = lay.y - y + lay.ascent;
+  mctx.fillText(lay.text, bx, by);
+  mctx.fillText(lay.text, bx, by);
+  setLetterSpacing(mctx, 0, lay.fontPx);
+  mctx.restore();
+
+  // 2 — the noise field, offset deterministically from the media time so the
+  //     preview and the export grain identically at the same frame.
+  const bctx = buf.ctx;
+  bctx.save();
+  bctx.globalCompositeOperation = 'source-over';
+  bctx.globalAlpha = 1;
+  bctx.clearRect(0, 0, w, h);
   const step = Math.floor(timeSeconds * 10);
-  // Deterministic pseudo-random offsets per step.
   const ox = (step * 53) % 128;
   const oy = (step * 97) % 128;
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(x, y, w, h);
-  ctx.clip();
-  ctx.globalAlpha = alpha;
-  ctx.globalCompositeOperation = 'overlay';
-  for (let ty = y - oy - 128; ty < y + h; ty += 128) {
-    for (let tx = x - ox - 128; tx < x + w; tx += 128) {
-      ctx.drawImage(tile, tx, ty);
+  for (let ty = -oy; ty < h; ty += 128) {
+    for (let tx = -ox; tx < w; tx += 128) {
+      bctx.drawImage(tile, tx, ty);
     }
   }
+
+  // 3 — cut the field down to the glow's shape.
+  bctx.globalCompositeOperation = 'destination-in';
+  bctx.drawImage(mask.canvas, 0, 0, w, h, 0, 0, w, h);
+  bctx.restore();
+
+  // 4 — onto the frame, 'overlay' so it bites the bright halo and the dark
+  //     ground alike instead of washing grey over both.
+  ctx.save();
+  ctx.globalAlpha = glow.grainAlpha;
+  ctx.globalCompositeOperation = 'overlay';
+  ctx.drawImage(buf.canvas, 0, 0, w, h, x, y, w, h);
   ctx.restore();
 }
 
 /**
  * The four-layer glow behind/around a text run (see title-styles.ts): wide
- * warm bleed, tight bright halo, softened core, then grain over the whole
- * region. Layers 1–2 are extra fills of the same text carrying only a shadow;
- * the final fill is the letter body itself.
+ * warm bleed, tight bright halo, softened core, then grain masked by the glow
+ * itself. Layers 1–2 are extra fills of the same text carrying only a shadow;
+ * the third fill is the letter body.
  */
 function drawGlowedText(
   ctx: Ctx2D,
@@ -961,19 +1121,8 @@ function drawGlowedText(
 
   setLetterSpacing(ctx, 0, fontPx);
 
-  // 4 — grain over the whole glow region.
-  if (glow.grainAlpha > 0) {
-    const reach = glow.bleedRadiusFrac * fontPx + fontPx * 0.2;
-    drawGrain(
-      ctx,
-      lay.x - reach,
-      lay.y - reach,
-      lay.w + reach * 2,
-      lay.h + reach * 2,
-      glow.grainAlpha,
-      timeSeconds,
-    );
-  }
+  // 4 — grain, shaped by the glow rather than by a bounding box.
+  drawShapedGrain(ctx, lay, glow, timeSeconds);
 }
 
 /** Paint all visible elements onto `ctx`. */
@@ -990,11 +1139,11 @@ export function drawOverlays(
   for (const el of elements) {
     if (!el.visible) continue;
     if (el.kind === 'heading-arrow') {
-      drawArrow(ctx, el, cue, videoWidth, videoHeight, theme);
+      drawArrow(ctx, el, cue, videoWidth, videoHeight, theme, opts);
       continue;
     }
     if (el.kind === 'heading-tape') {
-      drawHeadingTape(ctx, el, cue, videoWidth, videoHeight, theme);
+      drawHeadingTape(ctx, el, cue, videoWidth, videoHeight, theme, opts);
       continue;
     }
     if (el.kind === 'battery') {
@@ -1011,7 +1160,7 @@ export function drawOverlays(
       );
       continue;
     }
-    const lay = layoutElement(ctx, el, cue, videoWidth, videoHeight, theme);
+    const lay = layoutElement(ctx, el, cue, videoWidth, videoHeight, theme, opts?.timeShift);
     if (!lay) continue;
     const st = lay.st;
 
@@ -1115,7 +1264,7 @@ export function measureOverlays(
       });
       continue;
     }
-    const lay = layoutElement(ctx, el, cue, videoWidth, videoHeight, theme);
+    const lay = layoutElement(ctx, el, cue, videoWidth, videoHeight, theme, opts?.timeShift);
     if (!lay) continue;
     // The grab box must cover everything painted: legibility padding, and the
     // glow's bleed when the element carries one (a glow clipped out of its
@@ -1169,6 +1318,7 @@ export function reanchorInPlace(
   vh: number,
   anchor: Anchor,
   theme?: StyleTheme | null,
+  timeShift?: TimeShift | null,
 ): { x: number; y: number } | null {
   if (el.kind === 'frame-corners') return null;
   if (el.kind === 'heading-arrow') {
@@ -1185,7 +1335,7 @@ export function reanchorInPlace(
     const p = anchorPoint(anchor, lay.x, lay.y, lay.w, lay.h);
     return { x: p.x / vw, y: p.y / vh };
   }
-  const lay = layoutElement(ctx, el, cue, vw, vh, theme ?? null);
+  const lay = layoutElement(ctx, el, cue, vw, vh, theme ?? null, timeShift);
   if (!lay) return null;
   const p = anchorPoint(anchor, lay.x, lay.y, lay.w, lay.h);
   return { x: p.x / vw, y: p.y / vh };

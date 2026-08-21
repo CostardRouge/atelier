@@ -34,7 +34,33 @@ describe('formatField', () => {
 
   it('reads frame and timestamp off the cue, not its data', () => {
     expect(formatField('frame', cue)).toBe('1');
-    expect(formatField('timestamp', cue)).toBe('2026-05-30 05:49:34.609');
+    // The timestamp is re-formatted rather than echoed: milliseconds are noise
+    // on a title card, so they are opt-in.
+    expect(formatField('timestamp', cue)).toBe('2026-05-30 05:49:34');
+    expect(
+      formatField('timestamp', cue, undefined, { format: { milliseconds: true } }),
+    ).toBe('2026-05-30 05:49:34.609');
+  });
+
+  it('formats the time fields, and corrects them by the project shift', () => {
+    expect(formatField('clock', cue)).toBe('05:49:34');
+    expect(formatField('date', cue)).toBe('2026-05-30');
+
+    const opts = { format: { hour12: true, seconds: false }, shift: null };
+    expect(formatField('clock', cue, undefined, opts)).toBe('5:49 AM');
+
+    // A correction rolls the date when it crosses midnight — one shift, both
+    // fields, so the clock and the date can never disagree.
+    const shift = { minutes: -6 * 60, days: 0 };
+    expect(formatField('clock', cue, undefined, { shift })).toBe('23:49:34');
+    expect(formatField('date', cue, undefined, { shift })).toBe('2026-05-29');
+  });
+
+  it('says nothing when there is no timestamp to read', () => {
+    const blind = { ...cue, timestamp: null };
+    expect(formatField('clock', blind)).toBe('—');
+    expect(formatField('date', blind)).toBe('—');
+    expect(formatField('timestamp', blind)).toBe('—');
   });
 
   it('formats the GPS-derived motion fields off cue.derived', () => {
