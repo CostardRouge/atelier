@@ -11,6 +11,9 @@ import TranscodeControl from '../../shared/media/TranscodeControl';
 import { probeContainer, type ContainerInfo } from '../../shared/media/video-metadata';
 import { parseSrt, type Cue } from '../../shared/telemetry/srt-parser';
 import { findCue } from '../../shared/telemetry/find-cue';
+import { TelemetryPanels } from '../../shared/telemetry/telemetry-view';
+import { summarizeTelemetry } from '../../shared/telemetry/telemetry-summary';
+import { formatBytes } from '../../shared/lib/format';
 import ElementList from '../../shared/overlay/ElementList';
 import ElementPanel from '../../shared/overlay/ElementPanel';
 import GuidesControl from '../../shared/overlay/GuidesControl';
@@ -51,12 +54,13 @@ import type { Reconciliation } from '../../shared/projects/reconcile';
 /** Clips with or without telemetry — the studio edits both. */
 const STUDIO_KINDS = ['video+telemetry', 'video'] as const;
 
-type PanelTab = 'overlay' | 'style' | 'grade' | 'export';
+type PanelTab = 'overlay' | 'style' | 'grade' | 'info' | 'export';
 
 const TABS: Array<{ id: PanelTab; label: string }> = [
   { id: 'overlay', label: 'Overlay' },
   { id: 'style', label: 'Style' },
   { id: 'grade', label: 'Grade' },
+  { id: 'info', label: 'Info' },
   { id: 'export', label: 'Export' },
 ];
 
@@ -827,6 +831,84 @@ export default function StudioEditor({
                     The look grades the preview and the export identically —
                     same renderer, same result.
                   </p>
+                </div>
+              )}
+
+              {tab === 'info' && (
+                <div className="flex flex-col gap-3">
+                  <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[0.8rem]">
+                    <dt className="font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted pt-[2px]">
+                      Clip
+                    </dt>
+                    <dd className="m-0 truncate" title={active.baseName}>
+                      {active.baseName}
+                    </dd>
+                    {activeVideo && (
+                      <>
+                        <dt className="font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted pt-[2px]">
+                          Size
+                        </dt>
+                        <dd className="m-0 font-mono text-[0.76rem] tabular-nums">
+                          {formatBytes(activeVideo.size)}
+                        </dd>
+                      </>
+                    )}
+                    {activeDetail && (
+                      <>
+                        <dt className="font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted pt-[2px]">
+                          Detail
+                        </dt>
+                        <dd className="m-0 font-mono text-[0.76rem] tabular-nums">
+                          {activeDetail}
+                        </dd>
+                      </>
+                    )}
+                    {duration > 0 && (
+                      <>
+                        <dt className="font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted pt-[2px]">
+                          Duration
+                        </dt>
+                        <dd className="m-0 font-mono text-[0.76rem] tabular-nums">
+                          {formatDuration(duration)}
+                        </dd>
+                      </>
+                    )}
+                    {hasTelemetry && (
+                      <>
+                        <dt className="font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted pt-[2px]">
+                          Flight
+                        </dt>
+                        <dd className="m-0 font-mono text-[0.76rem] tabular-nums">
+                          {(() => {
+                            const sum = summarizeTelemetry(cues);
+                            return [
+                              `${sum.cueCount} cues`,
+                              sum.relAltMax != null
+                                ? `alt ${sum.relAltMin ?? 0}–${sum.relAltMax} m`
+                                : null,
+                              sum.colorProfile,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ');
+                          })()}
+                        </dd>
+                      </>
+                    )}
+                  </dl>
+
+                  {hasTelemetry ? (
+                    <div className="pt-2 border-t border-line">
+                      <p className="m-0 mb-2 font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted">
+                        Telemetry at playhead
+                      </p>
+                      <TelemetryPanels cue={activeCue} />
+                    </div>
+                  ) : (
+                    <p className="m-0 text-[0.78rem] text-muted">
+                      No flight log (.srt) with this clip — the inspector shows
+                      live telemetry when one is present.
+                    </p>
+                  )}
                 </div>
               )}
 

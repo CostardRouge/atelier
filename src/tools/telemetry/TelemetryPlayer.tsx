@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Cue } from '../../shared/telemetry/srt-parser';
 import { useActiveCue } from '../../shared/telemetry/use-active-cue';
-import { TelemetryPanels } from './telemetry-view';
+import { TelemetryPanels } from '../../shared/telemetry/telemetry-view';
 import type { UseTranscode } from '../../shared/media/use-transcode';
 import TranscodeControl from '../../shared/media/TranscodeControl';
 

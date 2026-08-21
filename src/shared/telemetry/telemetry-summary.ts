@@ -3,7 +3,7 @@
  * from the v1 parser's `Cue[]` output.
  */
 
-import type { Cue } from '../../shared/telemetry/srt-parser';
+import type { Cue } from './srt-parser';
 
 export interface TelemetrySummary {
   /** Number of cues (≈ frames of telemetry). */

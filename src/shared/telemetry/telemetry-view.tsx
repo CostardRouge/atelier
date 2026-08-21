@@ -1,9 +1,9 @@
-import type { Cue } from '../../shared/telemetry/srt-parser';
+import type { Cue } from './srt-parser';
 import {
   formatGroundSpeed,
   formatHeading,
   formatVerticalSpeed,
-} from '../../shared/telemetry/motion';
+} from './motion';
 
 /** Format a raw value with a unit suffix, tolerating missing data. */
 export function fmt(value: string | undefined, suffix = ''): string {
