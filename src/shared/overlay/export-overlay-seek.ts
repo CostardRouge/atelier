@@ -33,6 +33,7 @@ import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
 import { drawOverlays } from './draw-overlays';
 import { ensureOverlayFonts } from './fonts';
+import type { StyleTheme } from './title-styles';
 import type { OverlayElement } from './overlay-types';
 
 /** Seek `video` to `t` (seconds) and resolve once the frame is ready. */
@@ -87,6 +88,7 @@ export async function exportOverlayVideoViaSeek(
   elements: OverlayElement[],
   lut: CubeLut | null,
   intensity: number,
+  theme?: StyleTheme | null,
   onProgress?: (p: ExportProgress) => void,
   signal?: AbortSignal,
 ): Promise<Blob> {
@@ -97,7 +99,7 @@ export async function exportOverlayVideoViaSeek(
     if (signal?.aborted) throw new DOMException('Export cancelled', 'AbortError');
   };
 
-  await ensureOverlayFonts(elements);
+  await ensureOverlayFonts(elements, theme);
 
   onProgress?.({ phase: 'demuxing', ratio: null });
   // Demux only to learn dimensions / rotation / frame rate and to copy audio.
@@ -190,7 +192,7 @@ export async function exportOverlayVideoViaSeek(
       await seekTo(video, t);
       const source = grade ? grade.render(video) : video;
       ctx.drawImage(source, 0, 0, outWidth, outHeight);
-      drawOverlays(ctx, elements, findCue(cues, t), outWidth, outHeight);
+      drawOverlays(ctx, elements, findCue(cues, t), outWidth, outHeight, { theme, timeSeconds: t });
 
       const vf = new VideoFrame(canvas, {
         timestamp: Math.round(t * 1_000_000),

@@ -23,6 +23,7 @@ import { makeFrameGrader } from '../lut/frame-grader';
 import { downloadBlob, outputName } from '../media/save';
 import { drawOverlays } from './draw-overlays';
 import { ensureOverlayFonts } from './fonts';
+import type { StyleTheme } from './title-styles';
 import { exportOverlayVideoViaSeek } from './export-overlay-seek';
 import { decideExportPath, type ExportHint } from '../media/pick-export-path';
 import type { OverlayElement } from './overlay-types';
@@ -37,10 +38,11 @@ export async function exportOverlayVideo(
   elements: OverlayElement[],
   lut: CubeLut | null,
   intensity: number,
+  theme?: StyleTheme | null,
   onProgress?: (p: ExportProgress) => void,
   signal?: AbortSignal,
 ): Promise<Blob> {
-  await ensureOverlayFonts(elements);
+  await ensureOverlayFonts(elements, theme);
   return exportProcessedVideo(
     file,
     ({ codedWidth, codedHeight, outputWidth, outputHeight, rotation }): FrameProcessor => {
@@ -70,6 +72,7 @@ export async function exportOverlayVideo(
             findCue(cues, tMicros / 1_000_000),
             outputWidth,
             outputHeight,
+            { theme, timeSeconds: tMicros / 1_000_000 },
           );
           return canvas;
         },
@@ -95,6 +98,7 @@ export async function exportOverlay(
   elements: OverlayElement[],
   lut: CubeLut | null,
   intensity: number,
+  theme: StyleTheme | null,
   hint: ExportHint,
   onProgress?: (p: ExportProgress) => void,
   signal?: AbortSignal,
@@ -112,18 +116,18 @@ export async function exportOverlay(
   let blob: Blob;
   if (decision.path === 'webcodecs') {
     try {
-      blob = await exportOverlayVideo(file, cues, elements, lut, intensity, onProgress, signal);
+      blob = await exportOverlayVideo(file, cues, elements, lut, intensity, theme, onProgress, signal);
     } catch (err) {
       // WebCodecs couldn't decode after all — fall back to the seek path if the
       // clip is playable; otherwise re-throw.
       if (err instanceof DecodeUnsupportedError && hint.videoPlayable) {
-        blob = await exportOverlayVideoViaSeek(file, cues, elements, lut, intensity, onProgress, signal);
+        blob = await exportOverlayVideoViaSeek(file, cues, elements, lut, intensity, theme, onProgress, signal);
       } else {
         throw err;
       }
     }
   } else {
-    blob = await exportOverlayVideoViaSeek(file, cues, elements, lut, intensity, onProgress, signal);
+    blob = await exportOverlayVideoViaSeek(file, cues, elements, lut, intensity, theme, onProgress, signal);
   }
 
   downloadBlob(blob, outputName(file.name, 'overlay'));

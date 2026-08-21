@@ -26,6 +26,7 @@ import {
 import { drawGuides } from './draw-guides';
 import { snapToGrid, type GuidesState } from './guides';
 import type { OverlayElement } from './overlay-types';
+import type { StyleTheme } from './title-styles';
 
 interface StageParams {
   videoRef: RefObject<HTMLVideoElement | null>;
@@ -43,6 +44,8 @@ interface StageParams {
   resetKey: unknown;
   /** Bump to force a repaint after async work (e.g. fonts finished loading). */
   redrawSignal?: unknown;
+  /** The project's title-style theme (null → element styles as-is). */
+  theme?: StyleTheme | null;
   onSelect: (id: string | null) => void;
   /** Commit a dragged element's new normalized position. */
   onMove: (id: string, x: number, y: number) => void;
@@ -73,12 +76,14 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   const guidesRef = useRef(params.guides);
   const lutRef = useRef(params.lut);
   const intensityRef = useRef(params.intensity);
+  const themeRef = useRef(params.theme ?? null);
   cuesRef.current = params.cues;
   elementsRef.current = params.elements;
   selectedRef.current = params.selectedId;
   guidesRef.current = params.guides;
   lutRef.current = params.lut;
   intensityRef.current = params.intensity;
+  themeRef.current = params.theme ?? null;
 
   const needsRedraw = useRef(true);
 
@@ -134,7 +139,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   // finished loading) should trigger a repaint, even while paused.
   useEffect(() => {
     needsRedraw.current = true;
-  }, [params.elements, params.selectedId, params.redrawSignal, params.guides]);
+  }, [params.elements, params.selectedId, params.redrawSignal, params.guides, params.theme]);
 
   // Composite + (optional) selection outline. Returns false if not ready.
   const drawFrame = useCallback((): boolean => {
@@ -168,7 +173,10 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       }
     }
     ctx.drawImage(source, 0, 0, vw, vh);
-    drawOverlays(ctx, elementsRef.current, cue, vw, vh);
+    drawOverlays(ctx, elementsRef.current, cue, vw, vh, {
+      theme: themeRef.current,
+      timeSeconds: video.currentTime,
+    });
 
     // Editor-only guides, painted over the composite (never via drawOverlays,
     // so they stay out of the export).
@@ -176,7 +184,9 @@ export function useOverlayStage(params: StageParams): StageHandlers {
 
     const sel = selectedRef.current;
     if (sel) {
-      const boxes = measureOverlays(ctx, elementsRef.current, cue, vw, vh);
+      const boxes = measureOverlays(ctx, elementsRef.current, cue, vw, vh, {
+        theme: themeRef.current,
+      });
       const box = boxForId(boxes, sel);
       if (box) {
         ctx.save();
@@ -247,7 +257,9 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       if (!ctx) return;
 
       const cue = findCue(cuesRef.current, video.currentTime);
-      const boxes = measureOverlays(ctx, elementsRef.current, cue, canvas.width, canvas.height);
+      const boxes = measureOverlays(ctx, elementsRef.current, cue, canvas.width, canvas.height, {
+        theme: themeRef.current,
+      });
       const id = hitTest(boxes, pt.px, pt.py);
       onSelect(id);
 

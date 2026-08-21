@@ -305,6 +305,7 @@ export default function OverlayStudio() {
         elements,
         lutSel.lut,
         lutSel.intensity,
+        null,
         {
           codec: transcoded ? undefined : activeInfo.codec,
           width: meta?.width,

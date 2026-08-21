@@ -56,6 +56,7 @@ export type OverlayFontFamily =
   | 'Space Grotesk'
   | 'JetBrains Mono'
   | 'Instrument Serif'
+  | 'VT323'
   | 'Arial'
   | 'Georgia'
   | 'Courier New';
@@ -119,6 +120,23 @@ export interface OverlayElement {
    * display. Defaults to `'m/s'` when absent.
    */
   speedUnit?: SpeedUnit;
+
+  // --- appearance extensions (title styles) --------------------------------
+
+  /** Render the text uppercase. Absent = false. */
+  uppercase?: boolean;
+  /** Extra letter spacing in em (fraction of font size). Absent = 0. */
+  letterSpacingEm?: number;
+  /** Element-level glow (used when 'glow' is overridden or there's no theme). */
+  glowAmount?: number;
+  glowWarmth?: number;
+
+  /**
+   * Appearance keys this element pins against the project theme (the cascade's
+   * third level — see title-styles.ts). Absent/empty = fully themed. Ignored
+   * when no theme is active: the element's own values always apply then.
+   */
+  styleOverrides?: string[];
 }
 
 /** Families that must be loaded via FontFace before canvas text is correct. */
@@ -126,6 +144,7 @@ export const BRAND_FONTS: ReadonlySet<OverlayFontFamily> = new Set([
   'Space Grotesk',
   'JetBrains Mono',
   'Instrument Serif',
+  'VT323',
 ]);
 
 /** The font choices offered in the style picker. */
@@ -133,6 +152,7 @@ export const CURATED_FONTS: readonly OverlayFontFamily[] = [
   'Space Grotesk',
   'JetBrains Mono',
   'Instrument Serif',
+  'VT323',
   'Arial',
   'Georgia',
   'Courier New',
