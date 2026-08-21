@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { Cue } from '../telemetry/srt-parser';
+import type { TimeShift } from '../telemetry/time-format';
 import { FIELD_SPECS, formatField, MISSING, renderElementText } from './field-format';
 import {
   createBatteryElement,
@@ -25,6 +26,8 @@ interface ElementPaletteProps {
   cue: Cue | null;
   /** The project theme, so a cell previews the look it will really wear. */
   theme: StyleTheme | null;
+  /** The project's capture-time correction, so a Clock cell previews it too. */
+  timeShift?: TimeShift | null;
   onAdd: (el: OverlayElement) => void;
   /**
    * Fold state, owned by the caller: the inspector unmounts its tabs, and a
@@ -91,14 +94,22 @@ function countPlaced(elements: OverlayElement[], item: PaletteItem): number {
  * telemetry (or the field is empty in this cue) the cell falls back to the
  * label alone: a fabricated "87 m" would be a lie about the footage.
  */
-function previewText(item: PaletteItem, el: OverlayElement, cue: Cue | null): string {
+function previewText(
+  item: PaletteItem,
+  el: OverlayElement,
+  cue: Cue | null,
+  timeShift?: TimeShift | null,
+): string {
   if (item.kind === 'text') return el.text ?? 'Text';
   if (item.kind !== 'telemetry-field') return '';
-  const value = formatField(item.field, cue, el.speedUnit);
+  const value = formatField(item.field, cue, el.speedUnit, {
+    format: el.timeFormat,
+    shift: timeShift,
+  });
   if (value === MISSING) {
     return el.label?.trim() || FIELD_SPECS[item.field].label;
   }
-  return renderElementText(el, cue);
+  return renderElementText(el, cue, timeShift);
 }
 
 /** Shape kinds draw no text, so their cells preview the glyph itself. */
@@ -201,6 +212,7 @@ export default function ElementPalette({
   elements,
   cue,
   theme,
+  timeShift,
   onAdd,
   open,
   onOpenChange,
@@ -284,7 +296,7 @@ export default function ElementPalette({
                           className="whitespace-nowrap leading-none"
                           style={previewTextStyle(appearance, '0.62rem')}
                         >
-                          {previewText(item, el, cue)}
+                          {previewText(item, el, cue, timeShift)}
                         </span>
                       )}
                     </span>

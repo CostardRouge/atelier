@@ -18,8 +18,9 @@ import type { StyleTheme } from '../overlay/title-styles';
 import type { PersistedDirectoryHandle } from '../sources/file-sources';
 import { defaultVariants, type ExportVariant } from './export-variants';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
+import { NO_SHIFT, type TimeShift } from '../telemetry/time-format';
 
-export const PROJECT_DOC_VERSION = 4;
+export const PROJECT_DOC_VERSION = 5;
 
 /** Identity of one media file, enough to re-match it inside a folder. */
 export interface SavedMediaRef {
@@ -50,6 +51,14 @@ export interface ProjectSettings {
    * edits at source aspect.
    */
   aspectId: string;
+  /**
+   * Correction applied to the clip's capture time before any clock/date/
+   * timestamp element renders it. A property of the FOOTAGE (this flight's
+   * clock was an hour off), not of each badge — so one reading can never
+   * contradict another. See telemetry/time-format.ts for why this is a shift
+   * and not a timezone.
+   */
+  timeShift?: TimeShift;
 }
 
 /** The pre-v4 single-look grade, kept so old documents still parse. */
@@ -121,7 +130,7 @@ export function createProjectDoc(
     name,
     createdAt: now,
     updatedAt: now,
-    settings: { aspectId },
+    settings: { aspectId, timeShift: { ...NO_SHIFT } },
     elements: template ? structuredClone(template.elements) : elements,
     guides: template ? structuredClone(template.guides) : guides,
     lut: template
@@ -143,8 +152,9 @@ export function createProjectDoc(
  * title-style theme (null: element styles as-is, visually identical);
  * v2 → v3 adds the export matrix (one source-faithful variant — exactly
  * what Export used to do); v3 → v4 turns the single look into a one-layer
- * stack, so an old project grades identically on reopen. Idempotent; the
- * store runs it on every read.
+ * stack, so an old project grades identically on reopen; v4 → v5 adds the
+ * capture-time correction, zeroed (which is what "no correction" meant
+ * before it existed). Idempotent; the store runs it on every read.
  */
 export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
   if (doc.version >= PROJECT_DOC_VERSION) return doc;
@@ -164,6 +174,14 @@ export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
     migrated.lutStack = migrated.lutStack?.length
       ? migrated.lutStack
       : savedLutAsStack(migrated.lut);
+  }
+  if (migrated.version < 5) {
+    // No correction was possible before v5, so "no correction" is exactly
+    // what an old project meant — clocks read identically after the upgrade.
+    migrated.settings = {
+      ...migrated.settings,
+      timeShift: migrated.settings?.timeShift ?? { ...NO_SHIFT },
+    };
   }
   migrated.version = PROJECT_DOC_VERSION;
   return migrated;

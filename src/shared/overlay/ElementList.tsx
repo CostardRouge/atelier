@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FIELD_KEYS, FIELD_SPECS, renderElementText } from './field-format';
 import type { Cue } from '../telemetry/srt-parser';
+import type { TimeShift } from '../telemetry/time-format';
 import type { OverlayElement, TelemetryFieldKey } from './overlay-types';
 
 /**
@@ -22,6 +23,8 @@ interface ElementListProps {
   selectedId: string | null;
   /** Active cue, so each row can preview its current value. */
   cue: Cue | null;
+  /** The project's capture-time correction, so rows read what the stage draws. */
+  timeShift?: TimeShift | null;
   onSelect: (id: string) => void;
   /** Omit to render the list alone (the studio adds through the palette). */
   addControls?: ElementAddControls;
@@ -45,6 +48,7 @@ export default function ElementList({
   elements,
   selectedId,
   cue,
+  timeShift,
   onSelect,
   addControls,
   onRemove,
@@ -116,7 +120,7 @@ export default function ElementList({
             const shape = SHAPE_ROW[el.kind];
             const preview = shape
               ? shape.name
-              : renderElementText(el, cue) || '(empty)';
+              : renderElementText(el, cue, timeShift) || '(empty)';
             return (
               <li
                 key={el.id}

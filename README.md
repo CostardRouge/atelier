@@ -99,6 +99,18 @@ default, and can be pointed at a telemetry key for firmware that does write
 one. It never invents a level: with nothing to read it draws empty. Speeds
 read in **m/s, km/h or mph**.
 
+**Reading the clock.** Clock, date and timestamp elements each choose how they
+read: 24-hour or 12-hour, AM/PM shown or not, seconds and milliseconds on or
+off, and a date in ISO, `30/05/2026`, `05/30/2026`, `30 May 2026`,
+`May 30, 2026` or `Sat 30 May 2026`. There is deliberately **no timezone
+picker**: the flight log records a bare wall-clock reading with no offset and
+no zone name — whatever the aircraft's clock said — so converting it would mean
+guessing where it came from, and a dropdown would be false precision. What the
+project settings offer instead is a **correction**: hours, minutes (the
+half- and quarter-hour zones are real) and whole days, applied to the footage
+once so every time element moves together and none can contradict another. It
+rolls the date across midnight rather than wrapping the hour.
+
 **Adding is a palette, not a dropdown.** Everything you can drop on the frame
 sits in a foldable grid — Flight, Camera, Time, Shapes — and each cell
 previews *what it will actually add*: the live value at the playhead, in the

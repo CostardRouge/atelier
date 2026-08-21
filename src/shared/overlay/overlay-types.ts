@@ -10,7 +10,8 @@
  */
 
 import type { SpeedUnit } from '../telemetry/motion';
-export type { SpeedUnit };
+import type { TimeFormatOptions } from '../telemetry/time-format';
+export type { SpeedUnit, TimeFormatOptions };
 
 /**
  * Telemetry fields exposable as widgets: the raw SRT fields plus the motion
@@ -137,6 +138,14 @@ export interface OverlayElement {
    * display. Defaults to `'m/s'` when absent.
    */
   speedUnit?: SpeedUnit;
+
+  /**
+   * `telemetry-field` only, for `clock` / `date` / `timestamp`: how this badge
+   * reads (12h vs 24h, meridiem, seconds, date style). The *correction* to the
+   * capture time is NOT here — it belongs to the footage, so it lives in the
+   * project settings and applies to every time element at once.
+   */
+  timeFormat?: TimeFormatOptions;
 
   /**
    * `frame-corners` only: how far the brackets sit from the frame edges, as a

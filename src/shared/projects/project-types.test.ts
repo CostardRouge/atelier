@@ -28,6 +28,17 @@ describe('migrateProjectDoc', () => {
     expect(migrated.exportPrefs.variants[0].aspectId).toBe('source');
     // v4: no look was set, so the grade stack is empty.
     expect(migrated.lutStack).toEqual([]);
+    // v5: no correction, which is exactly what an old project meant.
+    expect(migrated.settings.timeShift).toEqual({ minutes: 0, days: 0 });
+  });
+
+  it('keeps a capture-time correction that is already set', () => {
+    const doc = v1Doc();
+    doc.settings = { ...doc.settings, timeShift: { minutes: -90, days: 1 } };
+    expect(migrateProjectDoc(doc).settings.timeShift).toEqual({
+      minutes: -90,
+      days: 1,
+    });
   });
 
   it('carries a v3 single look into a one-layer stack', () => {

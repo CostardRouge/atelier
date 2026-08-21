@@ -48,6 +48,7 @@ import StylePanel from './StylePanel';
 import ProjectSettingsModal from './ProjectSettingsModal';
 import InfoPanel from './InfoPanel';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
+import { NO_SHIFT, type TimeShift } from '../../shared/telemetry/time-format';
 import { savedMediaRef, type ProjectDoc } from '../../shared/projects/project-types';
 import { putProject } from '../../shared/projects/project-store';
 import type { Reconciliation } from '../../shared/projects/reconcile';
@@ -142,6 +143,11 @@ export default function StudioEditor({
   const [destDir, setDestDir] = useState<FileSystemDirectoryHandle | null>(null);
   const [projectName, setProjectName] = useState(project.name);
   const [aspectId, setAspectId] = useState(project.settings.aspectId);
+  // The clip's capture-time correction — footage-level, so every clock, date
+  // and timestamp element reads through the same one.
+  const [timeShift, setTimeShift] = useState<TimeShift>(
+    () => project.settings.timeShift ?? { ...NO_SHIFT },
+  );
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState<StyleTheme | null>(() => project.theme);
   const [saveState, setSaveState] = useState<SaveState>('saved');
@@ -276,6 +282,7 @@ export default function StudioEditor({
               canvas.height,
               patch.anchor,
               theme,
+              timeShift,
             );
           }
           return moved ? { ...e, ...patch, ...moved } : { ...e, ...patch };
@@ -330,6 +337,7 @@ export default function StudioEditor({
     lut: lutStack.composed,
     intensity: 1,
     theme,
+    timeShift,
     compare: compareOn,
     resetKey: activeUrl,
     redrawSignal: fontTick,
@@ -391,7 +399,7 @@ export default function StudioEditor({
           ...docRef.current,
           name: projectName.trim() || docRef.current.name,
           updatedAt: Date.now(),
-          settings: { ...docRef.current.settings, aspectId },
+          settings: { ...docRef.current.settings, aspectId, timeShift },
           elements,
           guides,
           lutStack: lutStack.toSaved(),
@@ -423,6 +431,7 @@ export default function StudioEditor({
     guides,
     projectName,
     aspectId,
+    timeShift,
     theme,
     exportFileName,
     variants,
@@ -464,6 +473,7 @@ export default function StudioEditor({
           lut: lutStack.composed,
           intensity: 1,
           theme,
+          timeShift,
           srcWidth,
           srcHeight,
         };
@@ -490,6 +500,7 @@ export default function StudioEditor({
               lutStack.composed,
               1,
               theme,
+              timeShift,
               onProgress,
               controller.signal,
             );
@@ -555,6 +566,7 @@ export default function StudioEditor({
         lut: lutStack.composed,
         intensity: 1,
         theme,
+        timeShift,
         overlays: true,
       });
       if (blob) {
@@ -663,10 +675,12 @@ export default function StudioEditor({
         <ProjectSettingsModal
           name={projectName}
           aspectId={aspectId}
+          timeShift={timeShift}
           onCancel={() => setShowSettings(false)}
-          onApply={({ name, aspectId: nextAspect }) => {
+          onApply={({ name, aspectId: nextAspect, timeShift: nextShift }) => {
             setProjectName(name);
             setAspectId(nextAspect);
+            setTimeShift(nextShift);
             setShowSettings(false);
           }}
         />
@@ -870,6 +884,7 @@ export default function StudioEditor({
                     elements={elements}
                     cue={activeCue}
                     theme={theme}
+                    timeShift={timeShift}
                     onAdd={addElement}
                     open={paletteOpen}
                     onOpenChange={setPaletteOpen}
@@ -880,6 +895,7 @@ export default function StudioEditor({
                       elements={elements}
                       selectedId={selectedElementId}
                       cue={activeCue}
+                      timeShift={timeShift}
                       onSelect={setSelectedElementId}
                       onRemove={removeElement}
                       onToggleVisible={toggleVisible}

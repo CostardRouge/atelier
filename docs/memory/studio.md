@@ -40,6 +40,16 @@ Read before touching `src/tools/studio/`, `src/shared/overlay/`, anything about 
 
 **`ElementList` no longer owns adding.** Its add row is opt-in via `addControls` — the studio omits it, the legacy overlay page passes it and stays untouched (that page dies in phase 4; don't polish it, don't duplicate the list either).
 
+## Time fields: format per badge, correction per clip (2026-08-21)
+
+**No timezone picker — deliberately.** DJI's `.srt` records a bare wall-clock reading (`2026-05-30 05:49:34.609`) with no UTC offset and no zone name: it is whatever the aircraft's clock said, and nothing in the file says where on Earth that belongs. Converting between zones needs the source zone, which we do not have; assuming UTC is wrong for most flights. A zone dropdown would look authoritative while producing an arbitrary answer. Do not add one. What is offered instead is a **shift** — hours, **minutes** (the half- and quarter-hour zones are real: India +5:30, Nepal +5:45, Chatham +12:45) and whole **days** (a controller back from a flat battery with the wrong date).
+
+**Where each half lives.** The *format* (12h/24h, meridiem, seconds, milliseconds, date style) is the badge's business and sits on the element as `timeFormat`. The *shift* is the **footage's** and sits in `ProjectSettings.timeShift`, threaded through `DrawOptions.timeShift` to every render path (stage, both exports, the frame grab, and the inspector previews). **Why**: a per-element shift is a footgun — change the clock's, forget the date's, and the overlay contradicts itself. One correction, every time element.
+
+**The arithmetic runs in UTC** (`Date.UTC` / `getUTC*` in `telemetry/time-format.ts`), never through a local `Date`: parsing locally would let the *rendering machine's* zone move the value, so a preview and an export on two computers could disagree. Same input, same string, everywhere.
+
+**Behaviour change to know**: `timestamp` used to echo the SRT line verbatim, milliseconds included; it is now formatted, with milliseconds opt-in (noise on a title card). ProjectDoc v5 adds the zeroed shift.
+
 ## The instrument elements: heading tape and battery (2026-08-21)
 
 **Heading tape.** The maintainer's favourite from the HUD mockup, now an overlay kind: a slice of the compass sliding under a fixed sight, ticks fading out at both ends. Geometry is pure in `shared/overlay/heading-tape.ts` (`tapeTicks` / `tapeFadeAlpha` / `angleDelta`, tested) — ticks are emitted on the **absolute** compass scale, not relative to the heading, which is what makes them *slide through* the window instead of being redrawn under it; `angleDelta` is what keeps the ribbon continuous across North. Nearly everything is a knob (`tape*` on `OverlayElement`): width, span, major/minor steps, tick height, edge fade, opacity, sight colour + mark, caption placement, cardinals, baseline rule. **Conventions**: the fade is applied per-tick, never through a canvas alpha mask — a mask needs an offscreen buffer per frame and the export renders full-resolution; only the baseline rule uses a real gradient. With **no heading** the furniture stays and the scale is not drawn: a tape frozen on an invented bearing is exactly the lie the palette rule forbids.

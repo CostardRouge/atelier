@@ -12,7 +12,27 @@ import {
   formatVerticalSpeed,
   type SpeedUnit,
 } from '../telemetry/motion';
+import {
+  formatClock,
+  formatDate,
+  formatTimestamp,
+  parseWallClock,
+  shiftWallClock,
+  type TimeFormatOptions,
+  type TimeShift,
+} from '../telemetry/time-format';
 import type { OverlayElement, TelemetryFieldKey } from './overlay-types';
+
+/**
+ * How a time field reads. The **format** is the element's business (this badge
+ * shows a 12-hour clock); the **shift** is the footage's (this clip's clock was
+ * an hour off), so it comes from the project and applies to every time element
+ * at once — one correction can't disagree with another.
+ */
+export interface TimeFieldOptions {
+  format?: TimeFormatOptions;
+  shift?: TimeShift | null;
+}
 
 export interface FieldSpec {
   /** Human label for the inspector / add menu. */
@@ -46,19 +66,12 @@ export const FIELD_SPECS: Record<TelemetryFieldKey, FieldSpec> = {
   date: { label: 'Date' },
 };
 
-/** The time-of-day inside a DJI timestamp ("2025-01-01 12:00:00.000"). */
-function clockOf(timestamp: string | null | undefined): string | null {
-  if (!timestamp) return null;
-  const m = /(\d{1,2}:\d{2}:\d{2})/.exec(timestamp);
-  return m ? m[1] : null;
-}
-
-/** The calendar date inside a DJI timestamp, ISO-style. */
-function dateOf(timestamp: string | null | undefined): string | null {
-  if (!timestamp) return null;
-  const m = /(\d{4}[-/]\d{2}[-/]\d{2})/.exec(timestamp);
-  return m ? m[1].replace(/\//g, '-') : null;
-}
+/** The three fields read out of the DJI capture timestamp. */
+export const TIME_FIELDS: ReadonlySet<TelemetryFieldKey> = new Set([
+  'clock',
+  'date',
+  'timestamp',
+]);
 
 /** All field keys in menu order. */
 export const FIELD_KEYS = Object.keys(FIELD_SPECS) as TelemetryFieldKey[];
@@ -71,22 +84,28 @@ export const MISSING = '—';
  * Returns {@link MISSING} when the cue or the value is absent.
  *
  * @param speedUnit Only used for `gnd_speed` / `vert_speed` — defaults to `'m/s'`.
+ * @param time      Clock/date/timestamp presentation, and the project's
+ *                  capture-time correction (see telemetry/time-format.ts).
  */
 export function formatField(
   key: TelemetryFieldKey,
   cue: Cue | null,
   speedUnit?: SpeedUnit,
+  time?: TimeFieldOptions,
 ): string {
   if (!cue) return MISSING;
+  if (TIME_FIELDS.has(key)) {
+    const parsed = parseWallClock(cue.timestamp);
+    if (!parsed) return MISSING;
+    const wc = shiftWallClock(parsed, time?.shift);
+    const opts = time?.format ?? {};
+    if (key === 'clock') return formatClock(wc, opts);
+    if (key === 'date') return formatDate(wc, opts);
+    return formatTimestamp(wc, opts);
+  }
   switch (key) {
     case 'frame':
       return cue.frame != null ? String(cue.frame) : MISSING;
-    case 'timestamp':
-      return cue.timestamp ?? MISSING;
-    case 'clock':
-      return clockOf(cue.timestamp) ?? MISSING;
-    case 'date':
-      return dateOf(cue.timestamp) ?? MISSING;
     case 'gnd_speed':
       return formatGroundSpeed(cue.derived?.groundSpeed, speedUnit) ?? MISSING;
     case 'vert_speed':
@@ -116,10 +135,17 @@ const SHAPE_KINDS: ReadonlySet<string> = new Set([
  * label is set). Shape kinds return `''` — they draw, and any caption they show
  * is laid out by their own renderer.
  */
-export function renderElementText(el: OverlayElement, cue: Cue | null): string {
+export function renderElementText(
+  el: OverlayElement,
+  cue: Cue | null,
+  shift?: TimeShift | null,
+): string {
   if (el.kind === 'text') return el.text ?? '';
   if (SHAPE_KINDS.has(el.kind) || !el.field) return '';
-  const value = formatField(el.field, cue, el.speedUnit);
+  const value = formatField(el.field, cue, el.speedUnit, {
+    format: el.timeFormat,
+    shift,
+  });
   const label = el.label?.trim();
   return label ? `${label} ${value}` : value;
 }

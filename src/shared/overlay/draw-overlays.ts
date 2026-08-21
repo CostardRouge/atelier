@@ -12,6 +12,7 @@
 
 import type { Cue } from '../telemetry/srt-parser';
 import { formatHeading } from '../telemetry/motion';
+import type { TimeShift } from '../telemetry/time-format';
 import { MISSING, renderElementText } from './field-format';
 import { batteryLevel } from './battery';
 import { tapeFadeAlpha, tapeTicks } from './heading-tape';
@@ -34,6 +35,12 @@ export interface DrawOptions {
   /** Current media time in seconds — phases the animated grain so preview and
    * export stay frame-identical. */
   timeSeconds?: number;
+  /**
+   * The project's capture-time correction, applied to every clock/date/
+   * timestamp element at once (see telemetry/time-format.ts for why this is a
+   * shift and not a timezone).
+   */
+  timeShift?: TimeShift | null;
 }
 
 /** Generic fallback appended to each family so missing glyphs degrade sanely. */
@@ -160,8 +167,9 @@ function layoutElement(
   vw: number,
   vh: number,
   theme?: StyleTheme | null,
+  timeShift?: TimeShift | null,
 ): Layout | null {
-  const raw = renderElementText(el, cue);
+  const raw = renderElementText(el, cue, timeShift);
   if (raw === '') return null;
   const st = resolveElementStyle(el, theme ?? null);
   const text = st.uppercase ? raw.toUpperCase() : raw;
@@ -1011,7 +1019,7 @@ export function drawOverlays(
       );
       continue;
     }
-    const lay = layoutElement(ctx, el, cue, videoWidth, videoHeight, theme);
+    const lay = layoutElement(ctx, el, cue, videoWidth, videoHeight, theme, opts?.timeShift);
     if (!lay) continue;
     const st = lay.st;
 
@@ -1115,7 +1123,7 @@ export function measureOverlays(
       });
       continue;
     }
-    const lay = layoutElement(ctx, el, cue, videoWidth, videoHeight, theme);
+    const lay = layoutElement(ctx, el, cue, videoWidth, videoHeight, theme, opts?.timeShift);
     if (!lay) continue;
     // The grab box must cover everything painted: legibility padding, and the
     // glow's bleed when the element carries one (a glow clipped out of its
@@ -1169,6 +1177,7 @@ export function reanchorInPlace(
   vh: number,
   anchor: Anchor,
   theme?: StyleTheme | null,
+  timeShift?: TimeShift | null,
 ): { x: number; y: number } | null {
   if (el.kind === 'frame-corners') return null;
   if (el.kind === 'heading-arrow') {
@@ -1185,7 +1194,7 @@ export function reanchorInPlace(
     const p = anchorPoint(anchor, lay.x, lay.y, lay.w, lay.h);
     return { x: p.x / vw, y: p.y / vh };
   }
-  const lay = layoutElement(ctx, el, cue, vw, vh, theme ?? null);
+  const lay = layoutElement(ctx, el, cue, vw, vh, theme ?? null, timeShift);
   if (!lay) return null;
   const p = anchorPoint(anchor, lay.x, lay.y, lay.w, lay.h);
   return { x: p.x / vw, y: p.y / vh };
