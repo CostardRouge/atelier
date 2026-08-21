@@ -24,6 +24,18 @@ interface WindowWithFsApi extends Window {
   showDirectoryPicker?: () => Promise<FsDirHandle>;
 }
 
+/**
+ * A directory handle as the studio's project store persists it: structured-
+ * cloneable (survives IndexedDB) and re-checkable for permission on reopen.
+ * The permission methods are Chromium-only, hence optional.
+ */
+export interface PersistedDirectoryHandle {
+  readonly kind: 'directory';
+  readonly name: string;
+  queryPermission?(desc: { mode: 'read' | 'readwrite' }): Promise<PermissionState>;
+  requestPermission?(desc: { mode: 'read' | 'readwrite' }): Promise<PermissionState>;
+}
+
 // --- Minimal typings for the drag-and-drop entries API (webkit prefixed). ---
 
 interface FsEntry {
@@ -136,6 +148,53 @@ export async function pickDirectory(): Promise<File[]> {
     }
   }
   return pickViaInput();
+}
+
+/**
+ * Pick a directory AND keep its handle (Chromium): the handle is what a studio
+ * project stores in IndexedDB so reopening the project can re-list the same
+ * folder after one permission click. On browsers without the File System
+ * Access API this falls back to the plain folder pick — files, no handle.
+ */
+export interface PickedDirectory {
+  handle: PersistedDirectoryHandle | null;
+  files: File[];
+}
+
+export async function pickDirectoryWithHandle(): Promise<PickedDirectory> {
+  if (supportsDirectoryPicker()) {
+    try {
+      const picker = (window as WindowWithFsApi).showDirectoryPicker;
+      const dir = await picker!();
+      const files: File[] = [];
+      await collectFromDirHandle(dir, files);
+      return { handle: dir as unknown as PersistedDirectoryHandle, files };
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return { handle: null, files: [] };
+      }
+      throw err;
+    }
+  }
+  return { handle: null, files: await pickViaInput() };
+}
+
+/**
+ * Re-list every file under a persisted directory handle. The caller has
+ * already obtained permission (`queryPermission`/`requestPermission`); a
+ * revoked or failing handle resolves to null so the caller can fall back to a
+ * manual re-pick.
+ */
+export async function filesFromDirectoryHandle(
+  handle: PersistedDirectoryHandle,
+): Promise<File[] | null> {
+  try {
+    const files: File[] = [];
+    await collectFromDirHandle(handle as unknown as FsDirHandle, files);
+    return files;
+  } catch {
+    return null;
+  }
 }
 
 /**

@@ -18,6 +18,8 @@ export interface LutSelection {
   selected: string;
   /** File name of the uploaded LUT, if any (shown as the 'custom' option). */
   customName: string | null;
+  /** Raw `.cube` text of the uploaded LUT — what a project document persists. */
+  customText: string | null;
   cubeError: string | null;
   /** True while a built-in LUT is being fetched/parsed. */
   busy: boolean;
@@ -26,6 +28,13 @@ export interface LutSelection {
   setIntensity: (value: number) => void;
   applySelection: (value: string) => Promise<void>;
   uploadCube: () => Promise<void>;
+  /** Restore a saved selection (builtin id, or a custom LUT from stored text). */
+  restore: (saved: {
+    selected: string;
+    customName: string | null;
+    customText: string | null;
+    intensity: number;
+  }) => Promise<void>;
 }
 
 export function useLutSelection(): LutSelection {
@@ -33,6 +42,7 @@ export function useLutSelection(): LutSelection {
   const [selected, setSelected] = useState('none');
   const [customLut, setCustomLut] = useState<CubeLut | null>(null);
   const [customName, setCustomName] = useState<string | null>(null);
+  const [customText, setCustomText] = useState<string | null>(null);
   const [cubeError, setCubeError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // LUT strength, 0..3 (100% = the LUT as authored). Persists across LUT swaps.
@@ -72,7 +82,8 @@ export function useLutSelection(): LutSelection {
     const file = await pickFile(CUBE_ACCEPT);
     if (!file) return;
     setCubeError(null);
-    const parsed = parseCube(await file.text());
+    const text = await file.text();
+    const parsed = parseCube(text);
     if (!parsed) {
       setCubeError(
         `${file.name} isn't a supported 3D .cube LUT (1D LUTs aren't supported).`,
@@ -81,19 +92,47 @@ export function useLutSelection(): LutSelection {
     }
     setCustomLut(parsed);
     setCustomName(file.name);
+    setCustomText(text);
     setLut(parsed);
     setSelected('custom');
+  }
+
+  async function restore(saved: {
+    selected: string;
+    customName: string | null;
+    customText: string | null;
+    intensity: number;
+  }) {
+    setIntensity(saved.intensity);
+    if (saved.customText) {
+      const parsed = parseCube(saved.customText);
+      if (parsed) {
+        setCustomLut(parsed);
+        setCustomName(saved.customName);
+        setCustomText(saved.customText);
+        if (saved.selected === 'custom') {
+          setLut(parsed);
+          setSelected('custom');
+          return;
+        }
+      }
+    }
+    if (saved.selected !== 'custom') {
+      await applySelection(saved.selected);
+    }
   }
 
   return {
     lut,
     selected,
     customName,
+    customText,
     cubeError,
     busy,
     intensity,
     setIntensity,
     applySelection,
     uploadCube,
+    restore,
   };
 }

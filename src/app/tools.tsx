@@ -121,6 +121,11 @@ export const TOOLS: Tool[] = [
 /** Route path of the home page (the empty hash). */
 export const HOME_PATH = '/';
 
+/**
+ * Resolve a route to its tool. A tool owns its sub-routes too (`/studio/home`
+ * belongs to `/studio`) — the tool component reads the hash itself to pick the
+ * sub-view, so the shell stays a two-level router.
+ */
 export function toolForPath(path: string): Tool | undefined {
-  return TOOLS.find((t) => t.path === path);
+  return TOOLS.find((t) => t.path === path || path.startsWith(`${t.path}/`));
 }
