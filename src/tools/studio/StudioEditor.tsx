@@ -342,16 +342,26 @@ export default function StudioEditor({
     // correct; the selected id is what has to be fresh.
   }, [selectedElementId]);
 
+  // Picking an element is a request to edit it, wherever the inspector
+  // happens to be: the settings only exist on the Overlay tab, so a click on
+  // the stage from Style / Grade / Info / Export comes back with the tab.
+  function selectElement(id: string | null) {
+    setSelectedElementId(id);
+    if (id) setTab('overlay');
+  }
+
   // Selecting an element — from the list, or by clicking it on the stage —
   // brings its settings into view. With a long deck the panel sits well below
-  // the fold, and hunting for it was the maintainer's complaint.
+  // the fold, and hunting for it was the maintainer's complaint. Keyed on the
+  // tab too: coming back from another tab must scroll even when the selection
+  // itself did not change (clicking the element that was already selected).
   useEffect(() => {
-    if (!selectedElementId) return;
+    if (!selectedElementId || tab !== 'overlay') return;
     elementPanelRef.current?.scrollIntoView({
       block: 'nearest',
       behavior: 'smooth',
     });
-  }, [selectedElementId]);
+  }, [selectedElementId, tab]);
 
   function toggleVisible(id: string) {
     setElements((prev) =>
@@ -378,7 +388,7 @@ export default function StudioEditor({
     compare: compareOn,
     resetKey: activeUrl,
     redrawSignal: fontTick,
-    onSelect: setSelectedElementId,
+    onSelect: selectElement,
     onMove: handleMove,
   });
 
@@ -971,7 +981,7 @@ export default function StudioEditor({
                           selectedId={selectedElementId}
                           cue={activeCue}
                           timeShift={timeShift}
-                          onSelect={setSelectedElementId}
+                          onSelect={selectElement}
                           onRemove={removeElement}
                           onToggleVisible={toggleVisible}
                         />
