@@ -63,14 +63,25 @@ guides, settings) with no media binding.
 **The editor.** Pick a clip, place overlay elements on the canvas stage (drag
 to position, anchors keep edge pinning), grade through a `.cube` LUT, scrub
 with the shared transport, and export an H.264 MP4 with the overlays and the
-look burned in. The inspector is tabbed (Overlay / Grade / Export). Clips
-**without** an `.srt` are accepted: telemetry fields read “—”, free text and
-the LUT still work. The stage, element model and export come from the shared
-overlay engine (`src/shared/overlay/`) — the same renderer draws the preview
-and the export, so what you place is exactly what burns in.
+look burned in. The inspector is tabbed (Overlay / Style / Grade / Export).
+Clips **without** an `.srt` are accepted: telemetry fields read “—”, free text
+and the LUT still work. The stage, element model and export come from the
+shared overlay engine (`src/shared/overlay/`) — the same renderer draws the
+preview and the export, so what you place is exactly what burns in.
 
-Next phases bring named title styles with a film-halation glow, and the
-remaining tools as panels.
+**Title styles.** The Style tab adopts a named look as the project's theme —
+*Or ciné* (optical-print gold serif), *Pixel CRT* (terminal red on phosphor),
+*Rouge plein cadre* (flat saturated caps), or Neutral — then tweaks it: one
+**glow slider** (matte → fluo) drives a four-layer film halation (softened
+core, tight bright halo, wide warm-drifting bleed, animated grain — the grain
+is phased from the media time, so preview and export are frame-identical),
+with each layer hand-tunable in an advanced disclosure. Elements follow the
+theme; editing an element's appearance pins just that property as an override
+(marked ↺ — one click follows the theme again). Geometry never comes from the
+theme: size is a multiplier, positions are untouched, so switching looks never
+breaks a layout.
+
+Next phase: the remaining tools become studio panels.
 
 ## Telemetry tool
 
