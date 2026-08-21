@@ -519,16 +519,17 @@ export default function OverlayStudio() {
               selectedId={selectedElementId}
               cue={activeCue}
               onSelect={setSelectedElementId}
-              onAddField={(f: TelemetryFieldKey) =>
-                addElement(createTelemetryElement(f))
-              }
-              onAddText={() => addElement(createTextElement())}
-              onAddArrow={() => addElement(createHeadingArrowElement())}
-              onAddCorners={() => addElement(createFrameCornersElement())}
-              onAddPreset={() => {
-                const deck = defaultElementsPreset();
-                setElements(deck);
-                setSelectedElementId(deck[0]?.id ?? null);
+              addControls={{
+                onAddField: (f: TelemetryFieldKey) =>
+                  addElement(createTelemetryElement(f)),
+                onAddText: () => addElement(createTextElement()),
+                onAddArrow: () => addElement(createHeadingArrowElement()),
+                onAddCorners: () => addElement(createFrameCornersElement()),
+                onAddPreset: () => {
+                  const deck = defaultElementsPreset();
+                  setElements(deck);
+                  setSelectedElementId(deck[0]?.id ?? null);
+                },
               }}
               onRemove={removeElement}
               onToggleVisible={toggleVisible}

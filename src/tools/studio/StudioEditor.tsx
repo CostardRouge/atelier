@@ -12,6 +12,7 @@ import { probeContainer, type ContainerInfo } from '../../shared/media/video-met
 import { parseSrt, type Cue } from '../../shared/telemetry/srt-parser';
 import { findCue } from '../../shared/telemetry/find-cue';
 import ElementList from '../../shared/overlay/ElementList';
+import ElementPalette from '../../shared/overlay/ElementPalette';
 import ElementPanel from '../../shared/overlay/ElementPanel';
 import GuidesControl from '../../shared/overlay/GuidesControl';
 import { exportOverlayVideoViaSeek } from '../../shared/overlay/export-overlay-seek';
@@ -34,13 +35,8 @@ import {
 } from '../../shared/projects/export-variants';
 import { ensureOverlayFonts } from '../../shared/overlay/fonts';
 import {
-  createFrameCornersElement,
-  createHeadingArrowElement,
-  createTelemetryElement,
-  createTextElement,
   defaultElementsPreset,
   type OverlayElement,
-  type TelemetryFieldKey,
 } from '../../shared/overlay/overlay-types';
 import { reanchorInPlace } from '../../shared/overlay/draw-overlays';
 import { DEFAULT_GUIDES, type GuidesState } from '../../shared/overlay/guides';
@@ -125,6 +121,9 @@ export default function StudioEditor({
     project.elements.length ? project.elements : defaultElementsPreset(),
   );
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+  const [resettingDeck, setResettingDeck] = useState(false);
+  // The palette starts unfolded only when there is nothing on the frame yet.
+  const [paletteOpen, setPaletteOpen] = useState(() => elements.length === 0);
   const [guides, setGuides] = useState<GuidesState>(() => project.guides ?? DEFAULT_GUIDES);
   const [fontTick, setFontTick] = useState(0);
   const [compareOn, setCompareOn] = useState(false);
@@ -284,6 +283,14 @@ export default function StudioEditor({
     const placed = { ...el, y: Math.min(0.95, el.y + offset) };
     setElements((prev) => [...prev, placed]);
     setSelectedElementId(placed.id);
+  }
+
+  /** Replace the deck with the starter preset — the only destructive add. */
+  function loadDefaultDeck() {
+    const deck = defaultElementsPreset();
+    setElements(deck);
+    setSelectedElementId(deck[0]?.id ?? null);
+    setResettingDeck(false);
   }
 
   function removeElement(id: string) {
@@ -841,25 +848,64 @@ export default function StudioEditor({
             <div className="flex flex-col gap-3 flex-1 min-h-0 overflow-auto">
               {tab === 'overlay' && (
                 <>
-                  <ElementList
+                  <ElementPalette
                     elements={elements}
-                    selectedId={selectedElementId}
                     cue={activeCue}
-                    onSelect={setSelectedElementId}
-                    onAddField={(f: TelemetryFieldKey) =>
-                      addElement(createTelemetryElement(f))
-                    }
-                    onAddText={() => addElement(createTextElement())}
-                    onAddArrow={() => addElement(createHeadingArrowElement())}
-                    onAddCorners={() => addElement(createFrameCornersElement())}
-                    onAddPreset={() => {
-                      const deck = defaultElementsPreset();
-                      setElements(deck);
-                      setSelectedElementId(deck[0]?.id ?? null);
-                    }}
-                    onRemove={removeElement}
-                    onToggleVisible={toggleVisible}
+                    theme={theme}
+                    onAdd={addElement}
+                    open={paletteOpen}
+                    onOpenChange={setPaletteOpen}
                   />
+
+                  <div className="pt-3 border-t border-line flex flex-col gap-2">
+                    <ElementList
+                      elements={elements}
+                      selectedId={selectedElementId}
+                      cue={activeCue}
+                      onSelect={setSelectedElementId}
+                      onRemove={removeElement}
+                      onToggleVisible={toggleVisible}
+                    />
+
+                    {/* The starter deck: an offer when there is nothing to
+                        lose, a two-step confirm once there is. */}
+                    {elements.length === 0 ? (
+                      <button
+                        type="button"
+                        onClick={loadDefaultDeck}
+                        className="self-start p-0 border-0 bg-transparent text-[0.78rem] text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] hover:text-accent"
+                      >
+                        Start from the default deck
+                      </button>
+                    ) : resettingDeck ? (
+                      <span className="flex flex-wrap items-center gap-2 text-[0.75rem] text-muted">
+                        Replace {elements.length} element
+                        {elements.length > 1 ? 's' : ''} with the default deck?
+                        <button
+                          type="button"
+                          onClick={loadDefaultDeck}
+                          className="p-0 border-0 bg-transparent text-[#9a3a23] font-semibold cursor-pointer underline underline-offset-[3px]"
+                        >
+                          Reset
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setResettingDeck(false)}
+                          className="p-0 border-0 bg-transparent text-muted cursor-pointer"
+                        >
+                          Keep
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setResettingDeck(true)}
+                        className="self-start p-0 border-0 bg-transparent text-[0.75rem] text-faint cursor-pointer hover:text-[#9a3a23]"
+                      >
+                        Reset deck
+                      </button>
+                    )}
+                  </div>
 
                   {selectedElement && (
                     <div className="pt-3 border-t border-line">

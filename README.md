@@ -85,6 +85,15 @@ the overlay kit holds a heading arrow (with an optional compass ring),
 **viewfinder brackets** for the frame's corners, and **clock/date** fields
 read out of the flight log.
 
+**Adding is a palette, not a dropdown.** Everything you can drop on the frame
+sits in a foldable grid — Flight, Camera, Time, Shapes — and each cell
+previews *what it will actually add*: the live value at the playhead, in the
+project's title style, on a dark stage. No telemetry in the clip? The cell
+shows the label alone rather than a made-up number. A cell already on the
+frame is marked, never blocked. The starter deck is an offer when the frame is
+empty and a confirmed **Reset deck** once it isn't — it can no longer wipe a
+layout by surprise.
+
 **The export matrix.** One press of Export can produce several deliverables:
 each *variant* picks a frame (source or any destination preset — a landscape
 master cover-crops into 9:16 with the overlays recomposed for that frame), a

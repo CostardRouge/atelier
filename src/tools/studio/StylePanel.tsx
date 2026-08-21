@@ -7,10 +7,11 @@ import {
   glowLayersFor,
   themeFromPreset,
   TITLE_STYLE_PRESETS,
-  warmDrift,
   type GlowLayers,
   type StyleTheme,
+  type TitleStyle,
 } from '../../shared/overlay/title-styles';
+import { previewTextStyle } from '../../shared/overlay/style-preview';
 import { useState } from 'react';
 
 interface StylePanelProps {
@@ -30,28 +31,13 @@ const WEIGHTS: { value: FontWeight; label: string }[] = [
   { value: 700, label: 'Bold' },
 ];
 
-/** CSS approximation of a preset's glow, for the picker cards only. */
-function previewShadow(presetId: string): string {
-  const preset = TITLE_STYLE_PRESETS.find((p) => p.id === presetId);
-  if (!preset || preset.style.glowAmount === 0) return 'none';
-  const g = glowLayersFor(preset.style);
-  const [r, gr, b] = warmDrift(preset.style.color, preset.style.glowWarmth);
-  const em = 1; // preview font is ~1em; fractions read directly as em
-  return [
-    `0 0 ${(g.haloRadiusFrac * em).toFixed(2)}em rgba(255,255,255,${g.haloAlpha * 0.6})`,
-    `0 0 ${(g.bleedRadiusFrac * em).toFixed(2)}em rgba(${r},${gr},${b},${Math.min(1, g.bleedAlpha * 2)})`,
-  ].join(', ');
+/** A preset card's inline style — the same DOM approximation the palette uses. */
+function cardStyle(style: TitleStyle) {
+  return previewTextStyle(
+    { ...style, glow: style.glowAmount > 0 ? glowLayersFor(style) : null },
+    '0.95rem',
+  );
 }
-
-const PREVIEW_FALLBACK: Record<string, string> = {
-  'Space Grotesk': "'Space Grotesk', sans-serif",
-  'JetBrains Mono': "'JetBrains Mono', monospace",
-  'Instrument Serif': "'Instrument Serif', serif",
-  VT323: "'VT323', monospace",
-  Arial: 'Arial, sans-serif',
-  Georgia: 'Georgia, serif',
-  'Courier New': "'Courier New', monospace",
-};
 
 const ADVANCED_FIELDS: Array<{
   key: keyof GlowLayers;
@@ -119,20 +105,7 @@ export default function StylePanel({ theme, onChange }: StylePanelProps) {
                 className="flex-none w-[4.6rem] h-[2.2rem] grid place-items-center rounded-[4px] bg-[#141210] overflow-hidden"
                 aria-hidden="true"
               >
-                <span
-                  style={{
-                    fontFamily: PREVIEW_FALLBACK[p.style.fontFamily],
-                    color: p.style.color,
-                    fontWeight: p.style.weight,
-                    fontStyle: p.style.italic ? 'italic' : 'normal',
-                    textTransform: p.style.uppercase ? 'uppercase' : 'none',
-                    textShadow: previewShadow(p.id),
-                    fontSize: '0.95rem',
-                    letterSpacing: `${p.style.letterSpacingEm}em`,
-                  }}
-                >
-                  Alt 87m
-                </span>
+                <span style={cardStyle(p.style)}>Alt 87m</span>
               </span>
               <span className="min-w-0">
                 <span className="block font-semibold text-[0.82rem]">{p.name}</span>

@@ -3,17 +3,28 @@ import { FIELD_KEYS, FIELD_SPECS, renderElementText } from './field-format';
 import type { Cue } from '../telemetry/srt-parser';
 import type { OverlayElement, TelemetryFieldKey } from './overlay-types';
 
+/**
+ * The compact add row above the list — a field dropdown and four link buttons.
+ * The studio replaced it with `ElementPalette`; the legacy overlay page keeps
+ * it until that page retires, so it is opt-in rather than always drawn.
+ */
+export interface ElementAddControls {
+  onAddField: (field: TelemetryFieldKey) => void;
+  onAddText: () => void;
+  onAddArrow: () => void;
+  onAddCorners: () => void;
+  /** Destructive: replaces the whole deck with the starter preset. */
+  onAddPreset: () => void;
+}
+
 interface ElementListProps {
   elements: OverlayElement[];
   selectedId: string | null;
   /** Active cue, so each row can preview its current value. */
   cue: Cue | null;
   onSelect: (id: string) => void;
-  onAddField: (field: TelemetryFieldKey) => void;
-  onAddText: () => void;
-  onAddArrow: () => void;
-  onAddCorners: () => void;
-  onAddPreset: () => void;
+  /** Omit to render the list alone (the studio adds through the palette). */
+  addControls?: ElementAddControls;
   onRemove: (id: string) => void;
   onToggleVisible: (id: string) => void;
 }
@@ -21,17 +32,13 @@ interface ElementListProps {
 const linkBtn =
   'p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent';
 
-/** The list of placed elements plus the controls to add more. */
+/** The list of placed elements, optionally preceded by the legacy add row. */
 export default function ElementList({
   elements,
   selectedId,
   cue,
   onSelect,
-  onAddField,
-  onAddText,
-  onAddArrow,
-  onAddCorners,
-  onAddPreset,
+  addControls,
   onRemove,
   onToggleVisible,
 }: ElementListProps) {
@@ -39,40 +46,55 @@ export default function ElementList({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          className="font-sans text-[0.8rem] text-ink bg-surface border border-line-strong rounded-paper px-[0.55rem] py-[0.35rem] cursor-pointer"
-          value={field}
-          onChange={(e) => setField(e.target.value as TelemetryFieldKey)}
-          aria-label="Telemetry field to add"
-        >
-          {FIELD_KEYS.map((k) => (
-            <option key={k} value={k}>
-              {FIELD_SPECS[k].label}
-            </option>
-          ))}
-        </select>
-        <button type="button" className={linkBtn} onClick={() => onAddField(field)}>
-          + Field
-        </button>
-        <button type="button" className={linkBtn} onClick={onAddText}>
-          + Text
-        </button>
-        <button type="button" className={linkBtn} onClick={onAddArrow} title="Add a directional arrow that rotates to the heading">
-          + Arrow
-        </button>
-        <button
-          type="button"
-          className={linkBtn}
-          onClick={onAddCorners}
-          title="Add viewfinder brackets in the frame's four corners"
-        >
-          + Corners
-        </button>
-        <button type="button" className={`${linkBtn} ml-auto`} onClick={onAddPreset}>
-          Add deck
-        </button>
-      </div>
+      {addControls && (
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            className="font-sans text-[0.8rem] text-ink bg-surface border border-line-strong rounded-paper px-[0.55rem] py-[0.35rem] cursor-pointer"
+            value={field}
+            onChange={(e) => setField(e.target.value as TelemetryFieldKey)}
+            aria-label="Telemetry field to add"
+          >
+            {FIELD_KEYS.map((k) => (
+              <option key={k} value={k}>
+                {FIELD_SPECS[k].label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className={linkBtn}
+            onClick={() => addControls.onAddField(field)}
+          >
+            + Field
+          </button>
+          <button type="button" className={linkBtn} onClick={addControls.onAddText}>
+            + Text
+          </button>
+          <button
+            type="button"
+            className={linkBtn}
+            onClick={addControls.onAddArrow}
+            title="Add a directional arrow that rotates to the heading"
+          >
+            + Arrow
+          </button>
+          <button
+            type="button"
+            className={linkBtn}
+            onClick={addControls.onAddCorners}
+            title="Add viewfinder brackets in the frame's four corners"
+          >
+            + Corners
+          </button>
+          <button
+            type="button"
+            className={`${linkBtn} ml-auto`}
+            onClick={addControls.onAddPreset}
+          >
+            Add deck
+          </button>
+        </div>
+      )}
 
       {elements.length === 0 ? (
         <p className="m-0 px-1 py-3 text-[0.8rem] text-muted">
