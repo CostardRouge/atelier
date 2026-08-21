@@ -3,8 +3,17 @@
  *
  * The browser still decodes the video natively (HTML `<video>`); this just adds
  * a GPU pass on top: each frame is uploaded as a 2D texture, its colour is used
- * to look up the graded colour in a 3D LUT texture (`sampler3D`, hardware
- * trilinear interpolation), and the result is drawn to a `<canvas>`.
+ * to look up the graded colour in a 3D LUT texture (`sampler3D`), and the
+ * result is drawn to a `<canvas>`.
+ *
+ * Two lookups live in the shader. TRILINEAR is one `texture()` call — the
+ * hardware sampler does the work for free. TETRAHEDRAL fetches the cell's 8
+ * corners with `texelFetch` and interpolates from the 4 that matter; it is
+ * what Resolve uses, and it keeps neutrals neutral (see interpolate.ts, which
+ * holds the same maths for the CPU bake — the two MUST agree or preview and
+ * export diverge). `texelFetch` ignores sampler filter state, so both paths
+ * share one texture and the mode is a live uniform switch: no re-upload, and
+ * the 8-bit fallback for GPUs without `OES_texture_float_linear` is untouched.
  *
  * Kept framework-free (no React, no DOM tree beyond the canvas it's handed) so
  * the GPU logic lives in one testable-by-inspection place; the React glue is in
@@ -12,6 +21,7 @@
  */
 
 import type { CubeLut } from '../lib/cube-parser';
+import type { Interpolation } from './interpolate';
 
 const VERT_SRC = `#version 300 es
 in vec2 a_pos;
@@ -33,20 +43,68 @@ uniform sampler2D u_video;
 uniform sampler3D u_lut;
 uniform bool u_hasLut;
 uniform float u_lutSize;
+uniform bool u_tetra;    // tetrahedral lookup instead of hardware trilinear
 uniform bool u_split;    // before/after wipe active
 uniform float u_splitX;  // wipe position in [0,1]; left of it shows the grade
 uniform float u_intensity; // LUT strength: 0 = original, 1 = full, >1 over-applied
+
+/** One lattice point, with the index clamped like CLAMP_TO_EDGE. */
+vec3 lutTexel(ivec3 c, int last) {
+  return texelFetch(u_lut, clamp(c, ivec3(0), ivec3(last)), 0).rgb;
+}
+
+/**
+ * Tetrahedral (Kasson): order the fractions to pick one of 6 tetrahedra, then
+ * interpolate from its 4 vertices. All six share the c000->c111 edge — the
+ * neutral axis — so a grey interpolates between two greys and stays grey.
+ */
+vec3 lookupTetrahedral(vec3 rgb) {
+  int last = int(u_lutSize) - 1;
+  vec3 p = clamp(rgb, 0.0, 1.0) * float(last);
+  vec3 base = floor(p);
+  vec3 f = p - base;
+  ivec3 i0 = ivec3(base);
+
+  vec3 c000 = lutTexel(i0 + ivec3(0, 0, 0), last);
+  vec3 c100 = lutTexel(i0 + ivec3(1, 0, 0), last);
+  vec3 c010 = lutTexel(i0 + ivec3(0, 1, 0), last);
+  vec3 c110 = lutTexel(i0 + ivec3(1, 1, 0), last);
+  vec3 c001 = lutTexel(i0 + ivec3(0, 0, 1), last);
+  vec3 c101 = lutTexel(i0 + ivec3(1, 0, 1), last);
+  vec3 c011 = lutTexel(i0 + ivec3(0, 1, 1), last);
+  vec3 c111 = lutTexel(i0 + ivec3(1, 1, 1), last);
+
+  if (f.r > f.g) {
+    if (f.g > f.b) {
+      return c000 + (c100 - c000) * f.r + (c110 - c100) * f.g + (c111 - c110) * f.b;
+    } else if (f.r > f.b) {
+      return c000 + (c100 - c000) * f.r + (c111 - c101) * f.g + (c101 - c100) * f.b;
+    }
+    return c000 + (c101 - c001) * f.r + (c111 - c101) * f.g + (c001 - c000) * f.b;
+  }
+  if (f.b > f.g) {
+    return c000 + (c111 - c011) * f.r + (c011 - c001) * f.g + (c001 - c000) * f.b;
+  } else if (f.b > f.r) {
+    return c000 + (c111 - c011) * f.r + (c010 - c000) * f.g + (c011 - c010) * f.b;
+  }
+  return c000 + (c110 - c010) * f.r + (c010 - c000) * f.g + (c111 - c110) * f.b;
+}
 
 void main() {
   vec4 src = texture(u_video, v_uv);
   vec3 graded = src.rgb;
   if (u_hasLut) {
-    // Map [0,1] onto the texel centres so the edges of the cube aren't clipped:
-    // scale = (N-1)/N, offset = 0.5/N.
-    float scale = (u_lutSize - 1.0) / u_lutSize;
-    float offset = 0.5 / u_lutSize;
-    vec3 coord = clamp(src.rgb, 0.0, 1.0) * scale + offset;
-    vec3 looked = texture(u_lut, coord).rgb;
+    vec3 looked;
+    if (u_tetra) {
+      looked = lookupTetrahedral(src.rgb);
+    } else {
+      // Map [0,1] onto the texel centres so the edges of the cube aren't
+      // clipped: scale = (N-1)/N, offset = 0.5/N.
+      float scale = (u_lutSize - 1.0) / u_lutSize;
+      float offset = 0.5 / u_lutSize;
+      vec3 coord = clamp(src.rgb, 0.0, 1.0) * scale + offset;
+      looked = texture(u_lut, coord).rgb;
+    }
     // Blend toward the look. >1 extrapolates past it (stronger than the LUT
     // itself); the 8-bit canvas clamps any overshoot on write.
     graded = mix(src.rgb, looked, u_intensity);
@@ -56,6 +114,28 @@ void main() {
   outColor = vec4(rgb, src.a);
 }`;
 
+/**
+ * The lattice lookup every NEW renderer starts with.
+ *
+ * Interpolation is a global RENDER preference, not per-project creative data,
+ * and the export paths build a throwaway renderer per job through
+ * `frame-grader.ts` — threading a mode through eight call sites (several of
+ * them already eight positional arguments deep) would buy nothing. Long-lived
+ * preview renderers take the mode explicitly instead, via `setInterpolation`,
+ * because they have to change it live.
+ *
+ * Defaults to 'tetrahedral', matching Resolve, Nuke and Baselight — and
+ * matching `useLutInterpolation`'s own default, so the app renders the same
+ * way whichever tool the user opens first. Before this path existed everything
+ * was trilinear; the preference can put it back.
+ */
+let defaultInterpolation: Interpolation = 'tetrahedral';
+
+/** Set the mode new renderers start with. Owned by `useLutInterpolation`. */
+export function setDefaultLutInterpolation(mode: Interpolation): void {
+  defaultInterpolation = mode;
+}
+
 export interface LutRenderer {
   /** Replace the active LUT, or pass null to render the video ungraded. */
   setLut(lut: CubeLut | null): void;
@@ -63,6 +143,8 @@ export interface LutRenderer {
   setSplit(active: boolean, x: number): void;
   /** LUT strength: 0 = original, 1 = full LUT, up to 3 = over-applied. */
   setIntensity(value: number): void;
+  /** Switch the lattice lookup. Live: no re-upload, no texture state change. */
+  setInterpolation(mode: Interpolation): void;
   /** Upload the given frame source and draw (graded if a LUT is set). */
   draw(source: TexImageSource): void;
   /** Resize the drawing buffer to match the source resolution. */
@@ -136,10 +218,12 @@ export function createLutRenderer(
   const uSplit = gl.getUniformLocation(program, 'u_split');
   const uSplitX = gl.getUniformLocation(program, 'u_splitX');
   const uIntensity = gl.getUniformLocation(program, 'u_intensity');
+  const uTetra = gl.getUniformLocation(program, 'u_tetra');
   gl.uniform1i(uVideo, 0); // video on texture unit 0
   gl.uniform1i(uLut, 1); // LUT on texture unit 1
   gl.uniform1f(uSplitX, 0.5);
   gl.uniform1f(uIntensity, 1.0); // full-strength LUT until told otherwise
+  gl.uniform1i(uTetra, defaultInterpolation === 'tetrahedral' ? 1 : 0);
 
   // Video frame texture (unit 0). Frames are uploaded flipped so UVs line up.
   const videoTex = gl.createTexture();
@@ -222,6 +306,11 @@ export function createLutRenderer(
     setIntensity(value) {
       gl.useProgram(program);
       gl.uniform1f(uIntensity, value);
+    },
+
+    setInterpolation(mode) {
+      gl.useProgram(program);
+      gl.uniform1i(uTetra, mode === 'tetrahedral' ? 1 : 0);
     },
 
     draw(source) {

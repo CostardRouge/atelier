@@ -6,6 +6,7 @@ import {
   sampleLut,
   type LutLayer,
 } from './lut-stack';
+import { applyTransfer } from './transfer';
 import type { CubeLut } from '../lib/cube-parser';
 
 /** Build a size³ cube from a per-channel function. */
@@ -143,6 +144,71 @@ describe('composeLutStack', () => {
       layer({ lut: identity(5), name: 'Bleach', intensity: 0.5 }),
     ])!;
     expect(composed.title).toBe('Kodak → Bleach');
+  });
+});
+
+describe('composeLutStack — output transform', () => {
+  it("changes nothing when left at 'none'", () => {
+    // The default must stay byte-identical, or every saved project re-grades
+    // itself on reopen.
+    const layers = [layer({ lut: half(9) }), layer({ lut: swapRB(9), intensity: 0.5 })];
+    const implicit = composeLutStack(layers)!;
+    const explicit = composeLutStack(layers, 'none')!;
+    expect(Array.from(explicit.data)).toEqual(Array.from(implicit.data));
+    expect(explicit.size).toBe(implicit.size);
+  });
+
+  it("keeps the single-layer fast path only while it's off", () => {
+    const only = half(9);
+    expect(composeLutStack([layer({ lut: only })])).toBe(only);
+    // With a transform there is something left to apply, so the shortcut that
+    // hands the layer back untouched has to be bypassed.
+    expect(composeLutStack([layer({ lut: only })], 'rec709-to-srgb')).not.toBe(only);
+  });
+
+  it('still produces a cube when the stack is empty', () => {
+    // Nothing to grade, but the transform must still reach the picture.
+    expect(composeLutStack([], 'none')).toBeNull();
+    const composed = composeLutStack([], 'rec709-to-srgb')!;
+    expect(composed).not.toBeNull();
+    expect(sampleLut(composed, 0.5, 0.5, 0.5)[0]).toBeCloseTo(
+      applyTransfer(0.5, 'rec709-to-srgb'),
+      3,
+    );
+  });
+
+  it('applies after the layers, not before', () => {
+    // half() then the curve is NOT the curve then half() — a nonlinear stage
+    // does not commute with a linear one, so this pins the order.
+    const composed = composeLutStack([layer({ lut: half(33) })], 'rec709-to-srgb')!;
+    const after = applyTransfer(0.5, 'rec709-to-srgb');
+    const before = applyTransfer(1, 'rec709-to-srgb') / 2;
+    expect(sampleLut(composed, 1, 1, 1)[0]).toBeCloseTo(after, 3);
+    expect(after).not.toBeCloseTo(before, 3);
+  });
+
+  it('imposes a lattice floor, but does not force the maximum', () => {
+    // Without a floor a coarse stack would band the transfer curve; with a
+    // forced 64³ every strength-slider step would re-bake for ~180 ms.
+    expect(composeLutStack([layer({ lut: half(9) })])!.size).toBe(9);
+    expect(composeLutStack([layer({ lut: half(9) })], 'rec709-to-srgb')!.size).toBe(33);
+    expect(composeLutStack([], 'rec709-to-srgb')!.size).toBe(33);
+    // A denser look still wins — the floor never costs precision.
+    expect(composeLutStack([layer({ lut: half(64) })], 'rec709-to-srgb')!.size).toBe(64);
+  });
+
+  it('pins black and white through the whole chain', () => {
+    const composed = composeLutStack([layer({ lut: identity(9) })], 'rec709-to-srgb')!;
+    expect(sampleLut(composed, 0, 0, 0)[0]).toBeCloseTo(0, 6);
+    expect(sampleLut(composed, 1, 1, 1)[0]).toBeCloseTo(1, 6);
+  });
+
+  it('names the transform at the end of the chain', () => {
+    const composed = composeLutStack(
+      [layer({ lut: half(5), name: 'Kodak' })],
+      'rec709-to-srgb',
+    )!;
+    expect(composed.title).toBe('Kodak → Rec.709 2.4 → sRGB');
   });
 });
 

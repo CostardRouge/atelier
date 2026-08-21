@@ -17,6 +17,7 @@ import type { Cue } from '../telemetry/srt-parser';
 import { findCue } from '../telemetry/find-cue';
 import type { CubeLut } from '../lib/cube-parser';
 import { createLutRenderer, type LutRenderer } from '../lut/lut-gl';
+import type { Interpolation } from '../lut/interpolate';
 import {
   boxForId,
   drawOverlays,
@@ -41,6 +42,8 @@ interface StageParams {
   lut: CubeLut | null;
   /** LUT strength multiplier (0..3; 1 = 100%). */
   intensity: number;
+  /** Lattice lookup for the LUT; see shared/lut/interpolate.ts. */
+  interpolation?: Interpolation;
   /** Source key (object URL); resets the loop and canvas when it swaps. */
   resetKey: unknown;
   /** Bump to force a repaint after async work (e.g. fonts finished loading). */
@@ -85,6 +88,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   const guidesRef = useRef(params.guides);
   const lutRef = useRef(params.lut);
   const intensityRef = useRef(params.intensity);
+  const interpolationRef = useRef(params.interpolation);
   const themeRef = useRef(params.theme ?? null);
   const shiftRef = useRef(params.timeShift ?? null);
   const compareRef = useRef(params.compare ?? false);
@@ -95,6 +99,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   guidesRef.current = params.guides;
   lutRef.current = params.lut;
   intensityRef.current = params.intensity;
+  interpolationRef.current = params.interpolation;
   themeRef.current = params.theme ?? null;
   shiftRef.current = params.timeShift ?? null;
   compareRef.current = params.compare ?? false;
@@ -123,15 +128,17 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     return graderRef.current;
   }, []);
 
-  // Upload the LUT / intensity when they change (not per frame), and repaint.
+  // Upload the LUT / intensity / lookup when they change (not per frame), and
+  // repaint. The lookup is a live uniform switch: no texture re-upload.
   useEffect(() => {
     if (params.lut) {
       const r = ensureGrader()?.renderer;
       r?.setLut(params.lut);
       r?.setIntensity(params.intensity);
+      if (params.interpolation) r?.setInterpolation(params.interpolation);
     }
     needsRedraw.current = true;
-  }, [params.lut, params.intensity, ensureGrader]);
+  }, [params.lut, params.intensity, params.interpolation, ensureGrader]);
 
   // Release GL resources on unmount.
   useEffect(
@@ -179,6 +186,9 @@ export function useOverlayStage(params: StageParams): StageHandlers {
         g = ensureGrader();
         g?.renderer.setLut(lut);
         g?.renderer.setIntensity(intensityRef.current);
+        if (interpolationRef.current) {
+          g?.renderer.setInterpolation(interpolationRef.current);
+        }
       }
       if (g) {
         g.renderer.resize(vw, vh);

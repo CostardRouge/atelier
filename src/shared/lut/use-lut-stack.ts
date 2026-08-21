@@ -12,6 +12,9 @@ import { parseCube, type CubeLut } from '../lib/cube-parser';
 import { CUBE_ACCEPT, pickFile } from '../sources/file-sources';
 import { BUILTIN_LUTS } from './builtin-luts';
 import { composeLutStack, reorderLayer, type LutLayer } from './lut-stack';
+import type { OutputTransform } from './transfer';
+import type { Interpolation } from './interpolate';
+import { useLutInterpolation } from './use-lut-interpolation';
 
 /** A layer as a project document stores it — no parsed data, just identity. */
 export interface SavedLutLayer {
@@ -26,6 +29,18 @@ export interface SavedLutLayer {
 
 export interface LutStack {
   layers: LutLayer[];
+  /**
+   * How the graded result is re-encoded for the screen it will be watched on.
+   * Baked into `composed` as a final stage — transfer.ts says why it defaults
+   * to 'none'.
+   */
+  output: OutputTransform;
+  /**
+   * How the LUT's lattice is read between its points. A render preference
+   * (localStorage, not project data) — the bake and the shader must both use
+   * it or preview and export diverge.
+   */
+  interpolation: Interpolation;
   /** The whole stack baked into one LUT, or null when nothing is active. */
   composed: CubeLut | null;
   /** True while a built-in is being fetched. */
@@ -37,8 +52,13 @@ export interface LutStack {
   move: (id: string, delta: -1 | 1) => void;
   setIntensity: (id: string, intensity: number) => void;
   setEnabled: (id: string, enabled: boolean) => void;
+  setOutput: (output: OutputTransform) => void;
+  setInterpolation: (mode: Interpolation) => void;
   /** Rebuild the stack from a saved document. */
-  restore: (saved: readonly SavedLutLayer[]) => Promise<void>;
+  restore: (
+    saved: readonly SavedLutLayer[],
+    output?: OutputTransform,
+  ) => Promise<void>;
   /** The persistable shape of the current stack. */
   toSaved: () => SavedLutLayer[];
 }
@@ -61,14 +81,20 @@ async function loadBuiltin(builtinId: string): Promise<{ lut: CubeLut; name: str
 
 export function useLutStack(): LutStack {
   const [layers, setLayers] = useState<LutLayer[]>([]);
+  const [output, setOutput] = useState<OutputTransform>('none');
+  const { interpolation, setInterpolation } = useLutInterpolation();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Uploaded cubes keep their source text so a project can restore them.
   const [customText, setCustomText] = useState<Record<string, string>>({});
 
   // Baking walks a lattice, so it must not run on every render — only when the
-  // stack's shape, order, strengths or switches actually change.
-  const composed = useMemo(() => composeLutStack(layers), [layers]);
+  // stack's shape, order, strengths, switches, output transform or lattice
+  // lookup actually change.
+  const composed = useMemo(
+    () => composeLutStack(layers, output, interpolation),
+    [layers, output, interpolation],
+  );
 
   const addBuiltin = useCallback(async (builtinId: string) => {
     setError(null);
@@ -130,7 +156,11 @@ export function useLutStack(): LutStack {
     setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, enabled } : l)));
   }, []);
 
-  const restore = useCallback(async (saved: readonly SavedLutLayer[]) => {
+  const restore = useCallback(async (
+    saved: readonly SavedLutLayer[],
+    savedOutput: OutputTransform = 'none',
+  ) => {
+    setOutput(savedOutput);
     if (saved.length === 0) return;
     setBusy(true);
     const texts: Record<string, string> = {};
@@ -172,6 +202,8 @@ export function useLutStack(): LutStack {
 
   return {
     layers,
+    output,
+    interpolation,
     composed,
     busy,
     error,
@@ -181,6 +213,8 @@ export function useLutStack(): LutStack {
     move,
     setIntensity,
     setEnabled,
+    setOutput,
+    setInterpolation,
     restore,
     toSaved,
   };

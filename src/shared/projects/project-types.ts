@@ -19,8 +19,9 @@ import type { PersistedDirectoryHandle } from '../sources/file-sources';
 import { defaultVariants, type ExportVariant } from './export-variants';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
 import { NO_SHIFT, type TimeShift } from '../telemetry/time-format';
+import type { OutputTransform } from '../lut/transfer';
 
-export const PROJECT_DOC_VERSION = 5;
+export const PROJECT_DOC_VERSION = 6;
 
 /** Identity of one media file, enough to re-match it inside a folder. */
 export interface SavedMediaRef {
@@ -97,6 +98,12 @@ export interface ProjectDoc {
   lut: SavedLut;
   /** The grade: LUT layers in application order, each with strength + switch. */
   lutStack: SavedLutLayer[];
+  /**
+   * Delivery stage baked after the stack: how the graded result is re-encoded
+   * for the screen it will be watched on. 'none' leaves the looks exactly as
+   * authored (see shared/lut/transfer.ts).
+   */
+  outputTransform: OutputTransform;
   /** Title-style theme (preset + tweaks), or null for element styles as-is. */
   theme: StyleTheme | null;
   /** The export matrix: custom base name + the deliverables one press makes. */
@@ -120,7 +127,13 @@ export function createProjectDoc(
   guides: GuidesState,
   template?: Pick<
     ProjectDoc,
-    'elements' | 'guides' | 'lut' | 'lutStack' | 'theme' | 'exportPrefs'
+    | 'elements'
+    | 'guides'
+    | 'lut'
+    | 'lutStack'
+    | 'outputTransform'
+    | 'theme'
+    | 'exportPrefs'
   >,
 ): ProjectDoc {
   const now = Date.now();
@@ -137,6 +150,7 @@ export function createProjectDoc(
       ? structuredClone(template.lut)
       : { selected: 'none', customName: null, customText: null, intensity: 1 },
     lutStack: template ? structuredClone(template.lutStack) : [],
+    outputTransform: template ? template.outputTransform : 'none',
     theme: template ? structuredClone(template.theme) : null,
     exportPrefs: template
       ? structuredClone(template.exportPrefs)
@@ -154,7 +168,9 @@ export function createProjectDoc(
  * what Export used to do); v3 → v4 turns the single look into a one-layer
  * stack, so an old project grades identically on reopen; v4 → v5 adds the
  * capture-time correction, zeroed (which is what "no correction" meant
- * before it existed). Idempotent; the store runs it on every read.
+ * before it existed); v5 → v6 adds the output transform, defaulting to
+ * 'none' — an existing grade must never re-encode itself behind the user's
+ * back. Idempotent; the store runs it on every read.
  */
 export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
   if (doc.version >= PROJECT_DOC_VERSION) return doc;
@@ -182,6 +198,11 @@ export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
       ...migrated.settings,
       timeShift: migrated.settings?.timeShift ?? { ...NO_SHIFT },
     };
+  }
+  if (migrated.version < 6) {
+    // Off by default: a saved project must look on reopen exactly as it did
+    // when it was closed.
+    migrated.outputTransform = migrated.outputTransform ?? 'none';
   }
   migrated.version = PROJECT_DOC_VERSION;
   return migrated;
