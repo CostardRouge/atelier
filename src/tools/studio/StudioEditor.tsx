@@ -30,6 +30,12 @@ import {
   type ExportFrameRate,
 } from '../../shared/media/frame-rate';
 import {
+  describeExportRun,
+  describeExportStat,
+  formatElapsed,
+  type ExportStat,
+} from '../../shared/media/export-stats';
+import {
   createVariant,
   defaultVariants,
   variantFileName,
@@ -170,8 +176,31 @@ export default function StudioEditor({
       ? structuredClone(project.exportPrefs.variants)
       : defaultVariants(),
   );
+  // What each variant cost, last time it rendered — size, wall clock, speed.
+  // Session-only state on purpose: it measures this machine today, not the
+  // composition, so it has no business in the project document.
+  const [variantStats, setVariantStats] = useState<Record<string, ExportStat>>({});
+  const [runStats, setRunStats] = useState<ExportStat[]>([]);
+  // The variant being rendered right now, with the clock it started on, so its
+  // row can count up while it works.
+  const [liveExport, setLiveExport] = useState<{ id: string; startedAt: number } | null>(
+    null,
+  );
+  const [liveElapsed, setLiveElapsed] = useState(0);
   const exportAbort = useRef<AbortController | null>(null);
   const exportSupported = isEncodeSupported();
+
+  // Tick the in-flight variant's timer. One interval for the whole export, not
+  // one per row, and none at all when nothing is rendering.
+  useEffect(() => {
+    if (!liveExport) return;
+    setLiveElapsed(0);
+    const id = setInterval(
+      () => setLiveElapsed((Date.now() - liveExport.startedAt) / 1000),
+      250,
+    );
+    return () => clearInterval(id);
+  }, [liveExport]);
 
   // If the active clip can't be decoded (often HEVC), the user can transcode it
   // to H.264 in-browser; once ready, the preview and export use that instead.
@@ -197,10 +226,14 @@ export default function StudioEditor({
   }, []);
 
   // Reset export feedback and stale codec info when the active clip changes.
+  // The stats go too: another clip renders to another size in another time,
+  // and leaving the old figures under the rows would attribute them to it.
   useEffect(() => {
     setActiveInfo({});
     setExportDone(false);
     setExportError(null);
+    setVariantStats({});
+    setRunStats([]);
   }, [activeId]);
 
   // Parse the active clip's telemetry — clips without an .srt just get no cues.
@@ -509,6 +542,8 @@ export default function StudioEditor({
     setExportRatio(0);
     setExportError(null);
     setExportDone(false);
+    setRunStats([]);
+    const measured: ExportStat[] = [];
     const controller = new AbortController();
     exportAbort.current = controller;
     // Prefer the transcoded H.264 (if one was made for preview): WebCodecs can
@@ -520,6 +555,10 @@ export default function StudioEditor({
         const variant = variants[i];
         setExportStep({ index: i + 1, total: variants.length });
         setExportRatio(0);
+        // Time the whole variant, delivery included: writing a 400 MB file to
+        // a folder is part of what the user waited for.
+        const startedAt = Date.now();
+        setLiveExport({ id: variant.id, startedAt });
         const opts = {
           elements,
           cues,
@@ -567,6 +606,14 @@ export default function StudioEditor({
           }
         }
         await deliver(blob, variantFileName(base, variant));
+        const stat: ExportStat = {
+          bytes: blob.size,
+          seconds: (Date.now() - startedAt) / 1000,
+          clipSeconds: durationRef.current || null,
+        };
+        measured.push(stat);
+        setVariantStats((prev) => ({ ...prev, [variant.id]: stat }));
+        setRunStats([...measured]);
       }
       setExportDone(true);
     } catch (err) {
@@ -576,20 +623,43 @@ export default function StudioEditor({
     } finally {
       setExporting(false);
       setExportStep(null);
+      setLiveExport(null);
       exportAbort.current = null;
     }
   }
 
+  /**
+   * Drop a variant's measurement (all of them with no id). A figure is only
+   * true of the settings that produced it: leaving "38 MB · 41 s" under a row
+   * whose resolution just changed would credit the new setting with the old
+   * run. The run summary goes with it, for the same reason.
+   */
+  function forgetStats(id?: string) {
+    setVariantStats((prev) => {
+      if (!id) return Object.keys(prev).length ? {} : prev;
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setRunStats([]);
+    setExportDone(false);
+  }
+
   function updateVariant(id: string, patch: Partial<ExportVariant>) {
     setVariants((prev) => prev.map((v) => (v.id === id ? { ...v, ...patch } : v)));
+    forgetStats(id);
   }
   function addVariant() {
     // A new row starts from the project's destination format — the reason the
     // format lives in the settings.
     setVariants((prev) => [...prev, createVariant(aspectId)]);
+    setRunStats([]);
+    setExportDone(false);
   }
   function removeVariant(id: string) {
     setVariants((prev) => (prev.length > 1 ? prev.filter((v) => v.id !== id) : prev));
+    forgetStats(id);
   }
 
   function cancelExport() {
@@ -1151,6 +1221,7 @@ export default function StudioEditor({
                         activeMeta?.width && activeMeta?.height
                           ? variantOutputSize(v, activeMeta.width, activeMeta.height)
                           : null;
+                      const stats = variantStats[v.id];
                       return (
                         <div
                           key={v.id}
@@ -1249,6 +1320,25 @@ export default function StudioEditor({
                               {variantFileName(exportFileName.trim() || active.baseName, v)}
                             </span>
                           </div>
+                          {/* What this row cost last time it rendered — the
+                              figure sits with the settings that produced it,
+                              which is the whole point of showing it. */}
+                          {liveExport?.id === v.id ? (
+                            <div
+                              className="flex items-center gap-1.5 pt-1.5 border-t border-dashed border-line font-mono text-[0.66rem] tabular-nums text-accent-ink"
+                              role="status"
+                            >
+                              <span className="w-[7px] h-[7px] rounded-full bg-accent animate-pulse-dot" />
+                              rendering… {formatElapsed(liveElapsed)}
+                            </div>
+                          ) : (
+                            stats && (
+                              <div className="flex items-center gap-1.5 pt-1.5 border-t border-dashed border-line font-mono text-[0.66rem] tabular-nums text-ink-soft">
+                                <span className="text-[#3f6b3f]">✓</span>
+                                {describeExportStat(stats)}
+                              </div>
+                            )
+                          )}
                         </div>
                       );
                     })}
@@ -1287,13 +1377,18 @@ export default function StudioEditor({
                     </div>
                   ) : (
                     <>
-                      {exportDone && (
-                        <span
-                          className="text-[0.78rem] text-[#3f6b3f] font-semibold"
+                      {exportDone && runStats.length > 0 && (
+                        <div
+                          className="flex flex-col gap-0.5 px-2.5 py-2 rounded-paper bg-surface border border-[#c7d6c0]"
                           role="status"
                         >
-                          ✓ Exported {variants.length > 1 ? `${variants.length} variants` : ''}
-                        </span>
+                          <span className="font-mono text-[0.66rem] tracking-[0.1em] uppercase text-[#3f6b3f]">
+                            ✓ Exported
+                          </span>
+                          <span className="font-mono text-[0.74rem] tabular-nums text-ink-soft">
+                            {describeExportRun(runStats)}
+                          </span>
+                        </div>
                       )}
                       {exportError && (
                         <span className="text-[0.78rem] text-[#9a3a23]" role="status">
