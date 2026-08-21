@@ -46,6 +46,12 @@ interface StageParams {
   redrawSignal?: unknown;
   /** The project's title-style theme (null → element styles as-is). */
   theme?: StyleTheme | null;
+  /**
+   * A/B compare: when true, a draggable divider wipes between the ORIGINAL
+   * frame (left) and the composed one — LUT + overlays — (right). Dragging on
+   * the canvas moves the divider; element editing resumes when it's off.
+   */
+  compare?: boolean;
   onSelect: (id: string | null) => void;
   /** Commit a dragged element's new normalized position. */
   onMove: (id: string, x: number, y: number) => void;
@@ -77,6 +83,8 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   const lutRef = useRef(params.lut);
   const intensityRef = useRef(params.intensity);
   const themeRef = useRef(params.theme ?? null);
+  const compareRef = useRef(params.compare ?? false);
+  const splitRef = useRef(0.5);
   cuesRef.current = params.cues;
   elementsRef.current = params.elements;
   selectedRef.current = params.selectedId;
@@ -84,6 +92,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   lutRef.current = params.lut;
   intensityRef.current = params.intensity;
   themeRef.current = params.theme ?? null;
+  compareRef.current = params.compare ?? false;
 
   const needsRedraw = useRef(true);
 
@@ -139,7 +148,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   // finished loading) should trigger a repaint, even while paused.
   useEffect(() => {
     needsRedraw.current = true;
-  }, [params.elements, params.selectedId, params.redrawSignal, params.guides, params.theme]);
+  }, [params.elements, params.selectedId, params.redrawSignal, params.guides, params.theme, params.compare]);
 
   // Composite + (optional) selection outline. Returns false if not ready.
   const drawFrame = useCallback((): boolean => {
@@ -177,6 +186,29 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       theme: themeRef.current,
       timeSeconds: video.currentTime,
     });
+
+    // A/B wipe (editor-only): the ORIGINAL frame covers the left of the
+    // divider, so the composite (LUT + overlays) reads as the "after".
+    if (compareRef.current) {
+      const splitX = Math.round(splitRef.current * vw);
+      if (splitX > 0) {
+        ctx.drawImage(video, 0, 0, splitX, vh, 0, 0, splitX, vh);
+      }
+      ctx.save();
+      ctx.fillStyle = '#d9442a';
+      const lw = Math.max(2, vh * 0.004);
+      ctx.fillRect(splitX - lw / 2, 0, lw, vh);
+      const r = Math.max(8, vh * 0.02);
+      ctx.beginPath();
+      ctx.arc(splitX, vh / 2, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `bold ${r}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('⇄', splitX, vh / 2);
+      ctx.restore();
+    }
 
     // Editor-only guides, painted over the composite (never via drawOverlays,
     // so they stay out of the export).
@@ -256,6 +288,21 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
+      if (compareRef.current) {
+        // Compare mode: any drag moves the wipe divider.
+        splitRef.current = Math.min(1, Math.max(0, pt.px / canvas.width));
+        needsRedraw.current = true;
+        drag.current = {
+          id: '__wipe__',
+          startPx: pt.px,
+          startPy: pt.py,
+          startX: splitRef.current,
+          startY: 0,
+        };
+        canvas.setPointerCapture(e.pointerId);
+        return;
+      }
+
       const cue = findCue(cuesRef.current, video.currentTime);
       const boxes = measureOverlays(ctx, elementsRef.current, cue, canvas.width, canvas.height, {
         theme: themeRef.current,
@@ -286,6 +333,11 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       const canvas = canvasRef.current;
       const pt = toVideoPixels(e);
       if (!d || !canvas || !pt) return;
+      if (d.id === '__wipe__') {
+        splitRef.current = Math.min(1, Math.max(0, pt.px / canvas.width));
+        needsRedraw.current = true;
+        return;
+      }
       const rawX = Math.min(1, Math.max(0, d.startX + (pt.px - d.startPx) / canvas.width));
       const rawY = Math.min(1, Math.max(0, d.startY + (pt.py - d.startPy) / canvas.height));
       // Hold Alt to bypass snapping for fine placement. With grid-snap on, snap

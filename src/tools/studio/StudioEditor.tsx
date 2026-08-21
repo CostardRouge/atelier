@@ -122,6 +122,7 @@ export default function StudioEditor({
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [guides, setGuides] = useState<GuidesState>(() => project.guides ?? DEFAULT_GUIDES);
   const [fontTick, setFontTick] = useState(0);
+  const [compareOn, setCompareOn] = useState(false);
   const [projectName, setProjectName] = useState(project.name);
   const [aspectId, setAspectId] = useState(project.settings.aspectId);
   const [showSettings, setShowSettings] = useState(false);
@@ -300,6 +301,7 @@ export default function StudioEditor({
     lut: lutSel.lut,
     intensity: lutSel.intensity,
     theme,
+    compare: compareOn,
     resetKey: activeUrl,
     redrawSignal: fontTick,
     onSelect: setSelectedElementId,
@@ -735,6 +737,19 @@ export default function StudioEditor({
               <span className="font-mono text-[0.74rem] tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
                 {formatDuration(duration)}
               </span>
+              <button
+                type="button"
+                onClick={() => setCompareOn((c) => !c)}
+                aria-pressed={compareOn}
+                className={`flex-none px-2.5 py-1 rounded-full border font-mono text-[0.64rem] tracking-[0.1em] cursor-pointer transition-colors ${
+                  compareOn
+                    ? 'border-accent bg-accent-wash text-accent-ink'
+                    : 'border-line-strong bg-paper text-muted hover:text-accent-ink hover:border-accent'
+                }`}
+                title="Compare original vs composed — drag the divider on the stage"
+              >
+                A/B
+              </button>
             </div>
           )}
 
