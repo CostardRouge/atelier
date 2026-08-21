@@ -62,12 +62,26 @@ guides, settings) with no media binding.
 
 **The editor.** Pick a clip, place overlay elements on the canvas stage (drag
 to position, anchors keep edge pinning), grade through a `.cube` LUT, scrub
-with the shared transport, and export an H.264 MP4 with the overlays and the
-look burned in. The inspector is tabbed (Overlay / Style / Grade / Export).
-Clips **without** an `.srt` are accepted: telemetry fields read “—”, free text
-and the LUT still work. The stage, element model and export come from the
-shared overlay engine (`src/shared/overlay/`) — the same renderer draws the
-preview and the export, so what you place is exactly what burns in.
+with the shared transport. The inspector is tabbed (Overlay / Style / Grade /
+Info / Export); tools run edge-to-edge so a landscape clip finally gets the
+width it needs. Clips **without** an `.srt` are accepted: telemetry fields
+read “—”, free text and the LUT still work. The stage, element model and
+export come from the shared overlay engine (`src/shared/overlay/`) — the same
+renderer draws the preview and the export, so what you place is exactly what
+burns in. An **A/B** toggle on the transport wipes original against composed
+(draggable divider, editor-only); the **Info** tab reads the clip's facts and
+the full telemetry panels at the playhead; **project settings** (name, format)
+stay editable from the project bar, DaVinci-style.
+
+**The export matrix.** One press of Export can produce several deliverables:
+each *variant* picks a frame (source or any destination preset — a landscape
+master cover-crops into 9:16 with the overlays recomposed for that frame), a
+delivery resolution (short-side 1080p/720p, never upscaled) and whether the
+overlays burn in. Names follow automatically (`vol-9x16-1080p-clean.mp4` —
+suffixes only where a variant departs from the source), the base name is
+editable, and the whole matrix persists with the project (templates carry
+it). Variants render sequentially with per-variant progress; each file
+downloads as it finishes.
 
 **Title styles.** The Style tab adopts a named look as the project's theme —
 *Or ciné* (optical-print gold serif), *Pixel CRT* (terminal red on phosphor),
