@@ -7,6 +7,7 @@ import {
   type Anchor,
   type BatterySource,
   type FontWeight,
+  type HeadingGapMode,
   type LabelPlacement,
   type OverlayElement,
   type SpeedUnit,
@@ -242,6 +243,68 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
               </select>
             </label>
           )}
+          <div className="flex flex-col gap-2 pt-2 border-t border-line">
+            <label className="flex flex-col gap-1">
+              <span className={labelClass}>
+                Smoothing ·{' '}
+                {(element.headingSmoothing ?? 0.6) === 0
+                  ? 'off'
+                  : `${(element.headingSmoothing ?? 0.6).toFixed(1)} s`}
+              </span>
+              <input
+                type="range"
+                className="w-full accent-accent cursor-pointer"
+                min={0}
+                max={3}
+                step={0.1}
+                value={element.headingSmoothing ?? 0.6}
+                onChange={(e) =>
+                  change({ headingSmoothing: Number(e.target.value) })
+                }
+              />
+              <span className="text-[0.7rem] text-faint leading-relaxed">
+                The heading is rebuilt from GPS a few times a second, so it
+                steps. Averaging a window of readings eases it — and bridges
+                the short gaps where there is nothing to read.
+              </span>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className={labelClass}>When the heading is lost</span>
+              <select
+                className={`${inputClass} cursor-pointer`}
+                value={element.headingGap ?? 'dim'}
+                onChange={(e) =>
+                  change({ headingGap: e.target.value as HeadingGapMode })
+                }
+              >
+                <option value="dim">Hold the last bearing, fading out</option>
+                <option value="hold">Hold it plainly, then drop</option>
+                <option value="hide">Drop to the no-data state at once</option>
+              </select>
+              <span className="text-[0.7rem] text-faint leading-relaxed">
+                There is no compass in the log: the heading is course over
+                ground, so it disappears while hovering or yawing on the spot.
+              </span>
+            </label>
+            {(element.headingGap ?? 'dim') !== 'hide' && (
+              <label className="flex flex-col gap-1">
+                <span className={labelClass}>
+                  Hold for · {(element.headingHoldSeconds ?? 2).toFixed(1)} s
+                </span>
+                <input
+                  type="range"
+                  className="w-full accent-accent cursor-pointer"
+                  min={0.5}
+                  max={10}
+                  step={0.5}
+                  value={element.headingHoldSeconds ?? 2}
+                  onChange={(e) =>
+                    change({ headingHoldSeconds: Number(e.target.value) })
+                  }
+                />
+              </label>
+            )}
+          </div>
         </div>
       ) : element.kind === 'heading-tape' ? (
         <div className="flex flex-col gap-2">
@@ -415,6 +478,68 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
             />
             <span className={labelClass}>Baseline rule</span>
           </label>
+          <div className="flex flex-col gap-2 pt-2 border-t border-line">
+            <label className="flex flex-col gap-1">
+              <span className={labelClass}>
+                Smoothing ·{' '}
+                {(element.headingSmoothing ?? 0.6) === 0
+                  ? 'off'
+                  : `${(element.headingSmoothing ?? 0.6).toFixed(1)} s`}
+              </span>
+              <input
+                type="range"
+                className="w-full accent-accent cursor-pointer"
+                min={0}
+                max={3}
+                step={0.1}
+                value={element.headingSmoothing ?? 0.6}
+                onChange={(e) =>
+                  change({ headingSmoothing: Number(e.target.value) })
+                }
+              />
+              <span className="text-[0.7rem] text-faint leading-relaxed">
+                The heading is rebuilt from GPS a few times a second, so it
+                steps. Averaging a window of readings eases it — and bridges
+                the short gaps where there is nothing to read.
+              </span>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className={labelClass}>When the heading is lost</span>
+              <select
+                className={`${inputClass} cursor-pointer`}
+                value={element.headingGap ?? 'dim'}
+                onChange={(e) =>
+                  change({ headingGap: e.target.value as HeadingGapMode })
+                }
+              >
+                <option value="dim">Hold the last bearing, fading out</option>
+                <option value="hold">Hold it plainly, then drop</option>
+                <option value="hide">Drop to the no-data state at once</option>
+              </select>
+              <span className="text-[0.7rem] text-faint leading-relaxed">
+                There is no compass in the log: the heading is course over
+                ground, so it disappears while hovering or yawing on the spot.
+              </span>
+            </label>
+            {(element.headingGap ?? 'dim') !== 'hide' && (
+              <label className="flex flex-col gap-1">
+                <span className={labelClass}>
+                  Hold for · {(element.headingHoldSeconds ?? 2).toFixed(1)} s
+                </span>
+                <input
+                  type="range"
+                  className="w-full accent-accent cursor-pointer"
+                  min={0.5}
+                  max={10}
+                  step={0.5}
+                  value={element.headingHoldSeconds ?? 2}
+                  onChange={(e) =>
+                    change({ headingHoldSeconds: Number(e.target.value) })
+                  }
+                />
+              </label>
+            )}
+          </div>
         </div>
       ) : element.kind === 'battery' ? (
         <div className="flex flex-col gap-2">

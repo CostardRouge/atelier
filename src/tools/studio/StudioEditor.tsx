@@ -317,6 +317,29 @@ export default function StudioEditor({
     setResettingDeck(false);
   }
 
+  // Delete / Backspace removes the selected element. Guarded on the event
+  // target: the same keys must keep editing text inside the project name, a
+  // free-text element, a file name or any number box.
+  useEffect(() => {
+    if (!selectedElementId) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))
+      ) {
+        return;
+      }
+      e.preventDefault(); // Backspace would otherwise navigate back.
+      removeElement(selectedElementId!);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // `removeElement` only calls state updaters, so the mounted listener stays
+    // correct; the selected id is what has to be fresh.
+  }, [selectedElementId]);
+
   function toggleVisible(id: string) {
     setElements((prev) =>
       prev.map((e) => (e.id === id ? { ...e, visible: !e.visible } : e)),
@@ -753,12 +776,27 @@ export default function StudioEditor({
         </div>
       )}
 
-      {/* Body: stage + inspector */}
-      <div className="flex flex-col min-[900px]:flex-row gap-4 flex-1 min-h-0">
+      {/*
+        Body: stage + inspector.
+
+        The split is a CONTAINER query, not a viewport one. The editor's real
+        estate is the window minus the Library sidebar (288px) and the shell's
+        margins, so a viewport breakpoint lied: at a 1000px window the row
+        layout still applied and the 340px inspector left the stage 308px —
+        the inspector was wider than the picture. Measuring the editor's own
+        width puts the two side by side only when there is room for both.
+
+        The container wrapper exists so the settings modal, a sibling of this
+        block, stays out of it: `container-type: inline-size` implies layout
+        containment, which would make a `position: fixed` overlay resolve
+        against the container instead of the viewport.
+      */}
+      <div className="@container flex-1 min-h-0 flex flex-col">
+      <div className="flex flex-col @min-[800px]:flex-row gap-4 flex-1 min-h-0">
         {/* Stage */}
         <div className="flex flex-col gap-[0.6rem] flex-1 min-w-0 min-h-0">
           <div
-            className={`relative rounded-paper overflow-hidden flex-1 min-h-0 flex items-center justify-center max-[820px]:min-h-[240px] ${
+            className={`relative rounded-paper overflow-hidden flex-1 min-h-0 flex items-center justify-center @max-[800px]:min-h-[240px] ${
               activeUrl ? 'bg-frame' : 'bg-transparent'
             }`}
           >
@@ -868,7 +906,7 @@ export default function StudioEditor({
 
         {/* Inspector */}
         {active && (
-          <div className="flex flex-col gap-3 min-[900px]:w-[340px] flex-none min-h-0 border border-line rounded-paper bg-surface p-3">
+          <div className="flex flex-col gap-3 @min-[800px]:w-[340px] flex-none min-h-0 @max-[800px]:max-h-[45vh] border border-line rounded-paper bg-surface p-3">
             <div
               className="flex gap-1 p-1 rounded-full bg-paper border border-line flex-none"
               role="tablist"
@@ -943,8 +981,11 @@ export default function StudioEditor({
 
                   {selectedElement && (
                     <div className="pt-3 border-t border-line">
-                      <h2 className="m-0 mb-2 font-mono text-[0.7rem] font-medium uppercase tracking-[0.16em] text-muted">
+                      <h2 className="m-0 mb-2 flex items-baseline gap-2 font-mono text-[0.7rem] font-medium uppercase tracking-[0.16em] text-muted">
                         Style
+                        <span className="ml-auto normal-case tracking-normal text-[0.68rem] text-faint">
+                          Delete removes it
+                        </span>
                       </h2>
                       <ElementPanel
                         element={selectedElement}
@@ -1185,6 +1226,7 @@ export default function StudioEditor({
             </div>
           </div>
         )}
+      </div>
       </div>
     </section>
   );

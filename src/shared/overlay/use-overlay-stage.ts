@@ -190,6 +190,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     drawOverlays(ctx, elementsRef.current, cue, vw, vh, {
       theme: themeRef.current,
       timeShift: shiftRef.current,
+      cues: cuesRef.current,
       timeSeconds: video.currentTime,
     });
 

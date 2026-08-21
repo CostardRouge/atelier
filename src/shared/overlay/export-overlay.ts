@@ -72,7 +72,7 @@ export async function exportOverlayVideo(
             findCue(cues, tMicros / 1_000_000),
             outputWidth,
             outputHeight,
-            { theme, timeSeconds: tMicros / 1_000_000 },
+            { theme, timeSeconds: tMicros / 1_000_000, cues },
           );
           return canvas;
         },

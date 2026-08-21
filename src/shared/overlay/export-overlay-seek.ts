@@ -194,7 +194,7 @@ export async function exportOverlayVideoViaSeek(
       await seekTo(video, t);
       const source = grade ? grade.render(video) : video;
       ctx.drawImage(source, 0, 0, outWidth, outHeight);
-      drawOverlays(ctx, elements, findCue(cues, t), outWidth, outHeight, { theme, timeSeconds: t, timeShift });
+      drawOverlays(ctx, elements, findCue(cues, t), outWidth, outHeight, { theme, timeSeconds: t, timeShift, cues });
 
       const vf = new VideoFrame(canvas, {
         timestamp: Math.round(t * 1_000_000),

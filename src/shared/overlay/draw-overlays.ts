@@ -16,6 +16,7 @@ import type { TimeShift } from '../telemetry/time-format';
 import { MISSING, renderElementText } from './field-format';
 import { batteryLevel } from './battery';
 import { tapeFadeAlpha, tapeTicks } from './heading-tape';
+import { smoothHeading } from '../telemetry/heading-smooth';
 import type { Anchor, OverlayElement } from './overlay-types';
 import {
   halolight,
@@ -41,6 +42,43 @@ export interface DrawOptions {
    * shift and not a timezone).
    */
   timeShift?: TimeShift | null;
+  /**
+   * The whole cue list. The heading instruments need it, not just the cue at
+   * the playhead: their easing averages a window of readings and bridges the
+   * gaps where course-over-ground is unavailable (see heading-smooth.ts).
+   */
+  cues?: readonly Cue[];
+}
+
+/**
+ * The bearing a heading instrument should draw, and how strongly.
+ *
+ * Falls back to the cue's own raw reading when no cue list was supplied (the
+ * legacy overlay page), so nothing regresses where smoothing isn't wired.
+ */
+function headingFor(
+  el: OverlayElement,
+  cue: Cue | null,
+  opts?: DrawOptions,
+): { heading: number | null; alpha: number } {
+  const raw = cue?.derived?.heading ?? null;
+  const cues = opts?.cues;
+  if (!cues || cues.length === 0) return { heading: raw, alpha: 1 };
+
+  const gap = el.headingGap ?? 'dim';
+  const hold = gap === 'hide' ? 0 : (el.headingHoldSeconds ?? 2);
+  const out = smoothHeading(
+    cues,
+    opts?.timeSeconds ?? 0,
+    el.headingSmoothing ?? 0.6,
+    hold,
+  );
+  if (out.heading == null) return { heading: null, alpha: 1 };
+  // Live data always draws at full strength; only a stale bearing fades, and
+  // only in 'dim' mode. 'hold' shows it plainly until the window runs out.
+  if (out.confidence <= 0) return { heading: null, alpha: 1 };
+  const alpha = gap === 'dim' ? Math.max(0.25, out.confidence) : 1;
+  return { heading: out.heading, alpha };
 }
 
 /** Generic fallback appended to each family so missing glyphs degrade sanely. */
@@ -317,11 +355,13 @@ function drawArrow(
   vw: number,
   vh: number,
   theme?: StyleTheme | null,
+  opts?: DrawOptions,
 ): void {
   const st = resolveElementStyle(el, theme ?? null);
   const lay = arrowLayout(el, vw, vh);
   const { cx, cy, r, halfSize } = lay;
-  const heading = cue?.derived?.heading;
+  const { heading: eased, alpha: headingAlpha } = headingFor(el, cue, opts);
+  const heading = eased ?? undefined;
   const isRelative = el.compassMode === 'relative';
 
   ctx.save();
@@ -388,6 +428,10 @@ function drawArrow(
   // (direction is unknown but "forward = up" convention still holds visually).
   if (isRelative && heading == null) {
     ctx.globalAlpha = 0.45;
+  } else {
+    // A held (stale) bearing draws faded rather than vanishing — the abrupt
+    // cut is what the maintainer wanted gone.
+    ctx.globalAlpha = headingAlpha;
   }
 
   ctx.fillStyle = st.color;
@@ -483,10 +527,12 @@ function drawHeadingTape(
   vw: number,
   vh: number,
   theme?: StyleTheme | null,
+  opts?: DrawOptions,
 ): void {
   const st = resolveElementStyle(el, theme ?? null);
   const lay = tapeLayout(el, st, vw, vh);
-  const heading = cue?.derived?.heading;
+  const { heading: eased, alpha: headingAlpha } = headingFor(el, cue, opts);
+  const heading = eased ?? undefined;
   const { cx, cy, halfW, fontPx, tickH } = lay;
   const fade = el.tapeFadeFrac ?? 0.22;
   const lineW = Math.max(0.6, fontPx * 0.09);
@@ -548,7 +594,8 @@ function drawHeadingTape(
       if (alpha <= 0.01) continue;
       const tx = cx + tick.t * halfW;
       const len = tick.major ? tickH : tickH * 0.55;
-      ctx.globalAlpha = alpha * Math.max(0, Math.min(1, el.tapeOpacity ?? 1));
+      ctx.globalAlpha =
+        alpha * Math.max(0, Math.min(1, el.tapeOpacity ?? 1)) * headingAlpha;
       ctx.strokeStyle = st.color;
       ctx.lineWidth = tick.major ? lineW : lineW * 0.7;
       ctx.beginPath();
@@ -998,11 +1045,11 @@ export function drawOverlays(
   for (const el of elements) {
     if (!el.visible) continue;
     if (el.kind === 'heading-arrow') {
-      drawArrow(ctx, el, cue, videoWidth, videoHeight, theme);
+      drawArrow(ctx, el, cue, videoWidth, videoHeight, theme, opts);
       continue;
     }
     if (el.kind === 'heading-tape') {
-      drawHeadingTape(ctx, el, cue, videoWidth, videoHeight, theme);
+      drawHeadingTape(ctx, el, cue, videoWidth, videoHeight, theme, opts);
       continue;
     }
     if (el.kind === 'battery') {

@@ -51,6 +51,15 @@ export type LabelPlacement = 'none' | 'above' | 'below' | 'left' | 'right';
 /** What the heading tape draws under its sight. */
 export type TapeReticle = 'none' | 'line' | 'triangle' | 'both';
 
+/**
+ * What a heading instrument does while the reading is gone (hovering, or a yaw
+ * on the spot — see telemetry/heading-smooth.ts).
+ * - `dim`  hold the last bearing, fading out over the hold window (default);
+ * - `hold` keep it at full strength for the hold window, then drop;
+ * - `hide` drop to the no-data state at once.
+ */
+export type HeadingGapMode = 'dim' | 'hold' | 'hide';
+
 /** Where the battery gauge reads its level. See battery.ts. */
 export type BatterySource = 'manual' | 'telemetry';
 
@@ -123,6 +132,19 @@ export interface OverlayElement {
    * around the arrow. The ring rotates in relative mode, stays fixed in absolute.
    */
   showCompass?: boolean;
+
+  // --- heading instruments (arrow + tape) ----------------------------------
+
+  /**
+   * Easing time constant in seconds for the reconstructed heading, on both the
+   * arrow and the tape. 0 disables it (raw, stepping readings). The same
+   * window bridges short data gaps — see telemetry/heading-smooth.ts.
+   */
+  headingSmoothing?: number;
+  /** What to do while the heading is missing. Default 'dim'. */
+  headingGap?: HeadingGapMode;
+  /** How long a stale bearing keeps being shown, in seconds. Default 2. */
+  headingHoldSeconds?: number;
 
   /**
    * `heading-arrow` + `showCompass` only.
@@ -346,6 +368,9 @@ export function createHeadingArrowElement(): OverlayElement {
     y: 0.5,
     ...baseStyle(),
     sizeFrac: 0.06,
+    headingSmoothing: 0.6,
+    headingGap: 'dim',
+    headingHoldSeconds: 2,
   };
 }
 
@@ -375,6 +400,9 @@ export function createHeadingTapeElement(): OverlayElement {
     tapeCardinals: true,
     tapeLabel: 'above',
     tapeOpacity: 1,
+    headingSmoothing: 0.6,
+    headingGap: 'dim',
+    headingHoldSeconds: 2,
     legibility: { mode: 'shadow', color: 'rgba(0,0,0,0.55)', padFrac: 0.3 },
   };
 }

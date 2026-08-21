@@ -99,6 +99,23 @@ default, and can be pointed at a telemetry key for firmware that does write
 one. It never invents a level: with nothing to read it draws empty. Speeds
 read in **m/s, km/h or mph**.
 
+**Why the heading stutters, and what to do about it.** The flight log has no
+compass and no yaw: the heading is *course over ground*, rebuilt from GPS
+fixes about a second apart. So it steps (the GPS is slower than the video),
+and it disappears whenever horizontal travel falls below a metre — hovering,
+creeping, or yawing on the spot, where the nose turns but the ground track
+doesn't. Both heading instruments therefore carry a **smoothing** control: a
+window of readings averaged as directions rather than numbers (350° and 10°
+average to North, not South), which eases the steps *and* bridges the short
+gaps. When the reading really is gone you choose what happens — hold the last
+bearing while it fades out (the default), hold it plainly for a set time, or
+drop to the no-data state at once. The smoothing is a pure function of the cue
+list and the playhead, never an accumulator over rendered frames, so the export
+burns in exactly what the preview showed.
+
+**Keyboard.** `Delete` (or `Backspace`) removes the selected overlay element,
+unless you're typing in a field.
+
 **Reading the clock.** Clock, date and timestamp elements each choose how they
 read: 24-hour or 12-hour, AM/PM shown or not, seconds and milliseconds on or
 off, and a date in ISO, `30/05/2026`, `05/30/2026`, `30 May 2026`,

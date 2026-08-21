@@ -91,6 +91,7 @@ export async function exportVariantVideo(
             drawOverlays(ctx, opts.elements, findCue(opts.cues, t), out.w, out.h, {
               theme: opts.theme,
               timeShift: opts.timeShift,
+              cues: opts.cues,
               timeSeconds: t,
             });
           }
