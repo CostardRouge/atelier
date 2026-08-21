@@ -93,7 +93,7 @@ export function createProjectDoc(
   aspectId: string,
   elements: OverlayElement[],
   guides: GuidesState,
-  template?: Pick<ProjectDoc, 'elements' | 'guides' | 'lut' | 'settings'>,
+  template?: Pick<ProjectDoc, 'elements' | 'guides' | 'lut'>,
 ): ProjectDoc {
   const now = Date.now();
   return {
@@ -102,7 +102,7 @@ export function createProjectDoc(
     name,
     createdAt: now,
     updatedAt: now,
-    settings: template?.settings ?? { aspectId },
+    settings: { aspectId },
     elements: template ? structuredClone(template.elements) : elements,
     guides: template ? structuredClone(template.guides) : guides,
     lut: template
