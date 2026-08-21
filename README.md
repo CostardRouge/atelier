@@ -174,8 +174,11 @@ layout by surprise.
 **The export matrix.** One press of Export can produce several deliverables:
 each *variant* picks a frame (source or any destination preset — a landscape
 master cover-crops into 9:16 with the overlays recomposed for that frame), a
-delivery resolution (short-side 1080p/720p, never upscaled) and whether the
-overlays burn in. Names follow automatically (`vol-9x16-1080p-clean.mp4` —
+delivery resolution (short-side 1080p/720p, never upscaled), a **frame rate**
+(source, or 24/25/30/48/50/60/120) and whether the overlays burn in. The clip
+keeps its duration whatever the cadence — below the source rate frames are
+dropped, above it they are duplicated, and the panel says so rather than
+implying interpolated motion. Names follow automatically (`vol-9x16-1080p-30fps-clean.mp4` —
 suffixes only where a variant departs from the source), the base name is
 editable, and the whole matrix persists with the project (templates carry
 it). Variants render sequentially with per-variant progress. Files land in

@@ -29,6 +29,11 @@ import {
   pickAvcCodec,
   type ExportProgress,
 } from '../media/webcodecs-export';
+import {
+  outputFrameCount,
+  resolveFrameRate,
+  type ExportFrameRate,
+} from '../media/frame-rate';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
 import { drawOverlays } from './draw-overlays';
@@ -82,6 +87,7 @@ function waitFor(video: HTMLVideoElement, event: string): Promise<void> {
 /**
  * Render `file` with overlays burned in, decoding via a `<video>` element so
  * any browser-playable codec works. Returns a new H.264 MP4 Blob.
+ * `frameRate` picks the delivery cadence ('source' / omitted = the clip's own).
  */
 export async function exportOverlayVideoViaSeek(
   file: File,
@@ -93,6 +99,7 @@ export async function exportOverlayVideoViaSeek(
   timeShift?: TimeShift | null,
   onProgress?: (p: ExportProgress) => void,
   signal?: AbortSignal,
+  frameRate?: ExportFrameRate,
 ): Promise<Blob> {
   if (!isEncodeSupported()) {
     throw new Error('This browser does not support WebCodecs encoding.');
@@ -114,8 +121,14 @@ export async function exportOverlayVideoViaSeek(
   let ticks = 0;
   for (const s of videoSamples) ticks += s.duration;
   const durationSec = ticks / timescale || 1;
-  const framerate = Math.max(1, Math.round(videoSamples.length / durationSec));
-  const frameCount = videoSamples.length;
+  const sourceFramerate = Math.max(1, Math.round(videoSamples.length / durationSec));
+  const framerate = resolveFrameRate(frameRate, sourceFramerate);
+  // This path already samples the timeline at `i / framerate`, so a delivery
+  // cadence just changes the grid — and the sample count with it.
+  const frameCount =
+    framerate === sourceFramerate
+      ? videoSamples.length
+      : outputFrameCount(durationSec, framerate);
 
   // Decode source: an offscreen, muted <video>. A <video> element applies the
   // container's display rotation itself — `videoWidth`/`videoHeight` and what

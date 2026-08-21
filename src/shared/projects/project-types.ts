@@ -21,7 +21,7 @@ import type { SavedLutLayer } from '../lut/use-lut-stack';
 import { NO_SHIFT, type TimeShift } from '../telemetry/time-format';
 import type { OutputTransform } from '../lut/transfer';
 
-export const PROJECT_DOC_VERSION = 6;
+export const PROJECT_DOC_VERSION = 7;
 
 /** Identity of one media file, enough to re-match it inside a folder. */
 export interface SavedMediaRef {
@@ -170,7 +170,9 @@ export function createProjectDoc(
  * capture-time correction, zeroed (which is what "no correction" meant
  * before it existed); v5 → v6 adds the output transform, defaulting to
  * 'none' — an existing grade must never re-encode itself behind the user's
- * back. Idempotent; the store runs it on every read.
+ * back; v6 → v7 gives every stored variant an explicit 'source' frame rate,
+ * which is the only cadence an export could produce before it existed.
+ * Idempotent; the store runs it on every read.
  */
 export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
   if (doc.version >= PROJECT_DOC_VERSION) return doc;
@@ -203,6 +205,17 @@ export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
     // Off by default: a saved project must look on reopen exactly as it did
     // when it was closed.
     migrated.outputTransform = migrated.outputTransform ?? 'none';
+  }
+  if (migrated.version < 7) {
+    // Exports followed the source cadence before v7, so that is what an old
+    // variant meant — a reopened project re-renders identically.
+    migrated.exportPrefs = {
+      ...migrated.exportPrefs,
+      variants: (migrated.exportPrefs?.variants ?? defaultVariants()).map((v) => ({
+        ...v,
+        frameRate: v.frameRate ?? 'source',
+      })),
+    };
   }
   migrated.version = PROJECT_DOC_VERSION;
   return migrated;

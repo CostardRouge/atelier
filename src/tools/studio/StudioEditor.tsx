@@ -26,6 +26,10 @@ import {
 } from '../../shared/sources/write-files';
 import { DecodeUnsupportedError } from '../../shared/media/webcodecs-export';
 import {
+  FRAME_RATE_CHOICES,
+  type ExportFrameRate,
+} from '../../shared/media/frame-rate';
+import {
   createVariant,
   defaultVariants,
   variantFileName,
@@ -542,6 +546,7 @@ export default function StudioEditor({
               timeShift,
               onProgress,
               controller.signal,
+              variant.frameRate,
             );
           } else if (err instanceof DecodeUnsupportedError) {
             throw new Error(
@@ -637,6 +642,9 @@ export default function StudioEditor({
   ]
     .filter(Boolean)
     .join(' · ');
+  // The clip's own cadence, when the container probe produced one — used to
+  // label "Source fps" and to warn when a variant asks for more than exists.
+  const sourceFps = activeInfo.fps && activeInfo.fps > 0 ? activeInfo.fps : null;
 
   const selectedElement = elements.find((e) => e.id === selectedElementId) ?? null;
   const activeCue = findCue(cues, time);
@@ -1151,8 +1159,20 @@ export default function StudioEditor({
                                 </option>
                               ))}
                             </select>
+                            <button
+                              type="button"
+                              onClick={() => removeVariant(v.id)}
+                              disabled={variants.length <= 1}
+                              className="flex-none w-6 h-6 grid place-items-center rounded-full border border-line bg-transparent text-faint cursor-pointer hover:text-[#9a3a23] hover:border-[#e3b8a9] disabled:opacity-30 disabled:cursor-default"
+                              aria-label="Remove variant"
+                              title="Remove this variant"
+                            >
+                              ×
+                            </button>
+                          </div>
+                          <div className="flex items-center gap-2">
                             <select
-                              className="flex-none font-sans text-[0.78rem] px-2 py-[0.35rem] border border-line-strong rounded-paper bg-surface text-ink cursor-pointer focus:outline-none focus:border-accent"
+                              className="flex-1 min-w-0 font-sans text-[0.78rem] px-2 py-[0.35rem] border border-line-strong rounded-paper bg-surface text-ink cursor-pointer focus:outline-none focus:border-accent"
                               value={String(v.resolution)}
                               onChange={(e) =>
                                 updateVariant(v.id, {
@@ -1167,17 +1187,37 @@ export default function StudioEditor({
                               <option value="1080">1080p</option>
                               <option value="720">720p</option>
                             </select>
-                            <button
-                              type="button"
-                              onClick={() => removeVariant(v.id)}
-                              disabled={variants.length <= 1}
-                              className="flex-none w-6 h-6 grid place-items-center rounded-full border border-line bg-transparent text-faint cursor-pointer hover:text-[#9a3a23] hover:border-[#e3b8a9] disabled:opacity-30 disabled:cursor-default"
-                              aria-label="Remove variant"
-                              title="Remove this variant"
+                            <select
+                              className="flex-1 min-w-0 font-sans text-[0.78rem] px-2 py-[0.35rem] border border-line-strong rounded-paper bg-surface text-ink cursor-pointer focus:outline-none focus:border-accent"
+                              value={String(v.frameRate)}
+                              onChange={(e) =>
+                                updateVariant(v.id, {
+                                  frameRate: (e.target.value === 'source'
+                                    ? 'source'
+                                    : Number(e.target.value)) as ExportFrameRate,
+                                })
+                              }
+                              aria-label="Variant frame rate"
+                              title="Delivery frame rate — 'Source fps' keeps every frame exactly as shot"
                             >
-                              ×
-                            </button>
+                              <option value="source">
+                                Source fps{sourceFps ? ` (${sourceFps})` : ''}
+                              </option>
+                              {FRAME_RATE_CHOICES.map((f) => (
+                                <option key={f} value={f}>
+                                  {f} fps
+                                </option>
+                              ))}
+                            </select>
                           </div>
+                          {/* Say what a higher cadence really does: the encoder
+                              repeats frames, it does not invent motion. */}
+                          {sourceFps && v.frameRate !== 'source' && v.frameRate > sourceFps && (
+                            <p className="m-0 text-[0.7rem] leading-snug text-muted">
+                              {v.frameRate} fps from {sourceFps} — frames are
+                              duplicated, not interpolated: no new motion.
+                            </p>
+                          )}
                           <div className="flex items-center gap-2 min-w-0">
                             <label className="flex items-center gap-1.5 cursor-pointer select-none flex-none">
                               <input

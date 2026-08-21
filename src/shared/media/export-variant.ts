@@ -2,7 +2,8 @@
  * Render ONE export variant of a composition: the (optionally LUT-graded,
  * upright) clip cover-cropped into the variant's output frame, the overlay
  * elements drawn relative to THAT frame (so a 9:16 deliverable keeps its
- * titles composed for 9:16), through the shared WebCodecs pipeline.
+ * titles composed for 9:16), at the variant's delivery cadence, through the
+ * shared WebCodecs pipeline.
  *
  * WebCodecs-only: the seek fallback renders at source geometry and doesn't
  * reframe — undecodable HEVC surfaces a clear message pointing at the
@@ -104,6 +105,9 @@ export async function exportVariantVideo(
     },
     onProgress,
     signal,
-    { outputSize: { width: out.w, height: out.h } },
+    {
+      outputSize: { width: out.w, height: out.h },
+      frameRate: variant.frameRate,
+    },
   );
 }

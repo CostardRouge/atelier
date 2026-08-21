@@ -9,12 +9,16 @@
  *   cover-crops into that frame at the source's pixel density.
  * - `resolution` is the SHORT side (how delivery platforms speak: 1080p
  *   vertical = 1080×1920). 'source' keeps the source density. Never upscales.
- * - File names are `<base>[-9x16][-1080p][-clean].mp4` — suffixes only where
- *   a variant departs from the source, so the plain export keeps a plain name.
+ * - `frameRate` is the delivery cadence; 'source' keeps the clip's own and is
+ *   the only exact pass-through (see media/frame-rate.ts).
+ * - File names are `<base>[-9x16][-1080p][-30fps][-clean].mp4` — suffixes only
+ *   where a variant departs from the source, so the plain export keeps a plain
+ *   name.
  */
 
 import { ASPECT_PRESETS } from './project-types';
 import { even } from '../media/compose-layout';
+import { describeFrameRate, type ExportFrameRate } from '../media/frame-rate';
 
 export type VariantAspect = 'source' | string;
 export type VariantResolution = 'source' | 1080 | 720;
@@ -23,6 +27,8 @@ export interface ExportVariant {
   id: string;
   aspectId: VariantAspect;
   resolution: VariantResolution;
+  /** Delivery frame rate; 'source' keeps the clip's own cadence. */
+  frameRate: ExportFrameRate;
   /** Burn the overlay elements (and their theme) in, or deliver clean. */
   overlays: boolean;
 }
@@ -35,11 +41,12 @@ export function createVariant(aspectId: VariantAspect = 'source'): ExportVariant
         : `var_${Math.random().toString(36).slice(2)}`,
     aspectId,
     resolution: 'source',
+    frameRate: 'source',
     overlays: true,
   };
 }
 
-/** The out-of-the-box export: the source frame, source density, overlays in. */
+/** The out-of-the-box export: source frame, density and cadence, overlays in. */
 export function defaultVariants(): ExportVariant[] {
   return [createVariant('source')];
 }
@@ -87,6 +94,7 @@ export function variantSuffix(variant: ExportVariant): string {
     parts.push(variant.aspectId.replace(':', 'x'));
   }
   if (variant.resolution !== 'source') parts.push(`${variant.resolution}p`);
+  if (variant.frameRate !== 'source') parts.push(`${variant.frameRate}fps`);
   if (!variant.overlays) parts.push('clean');
   return parts.join('-');
 }
@@ -98,11 +106,12 @@ export function variantFileName(base: string, variant: ExportVariant): string {
   return suffix ? `${cleanBase}-${suffix}.mp4` : `${cleanBase}.mp4`;
 }
 
-/** Human summary for a variant row ("9:16 · 1080p · clean"). */
+/** Human summary for a variant row ("9:16 · 1080p · 30 fps · clean"). */
 export function describeVariant(variant: ExportVariant): string {
   const parts = [
     variant.aspectId === 'source' ? 'Source frame' : variant.aspectId,
     variant.resolution === 'source' ? 'source res' : `${variant.resolution}p`,
+    describeFrameRate(variant.frameRate),
     variant.overlays ? 'overlays' : 'clean',
   ];
   return parts.join(' · ');
