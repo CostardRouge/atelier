@@ -31,6 +31,8 @@ import { useLutSelection } from '../../shared/lut/use-lut-selection';
 import LutPicker from '../../shared/lut/LutPicker';
 import type { StyleTheme } from '../../shared/overlay/title-styles';
 import StylePanel from './StylePanel';
+import ProjectSettingsModal from './ProjectSettingsModal';
+import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import { savedMediaRef, type ProjectDoc } from '../../shared/projects/project-types';
 import { putProject } from '../../shared/projects/project-store';
 import type { Reconciliation } from '../../shared/projects/reconcile';
@@ -106,6 +108,8 @@ export default function StudioEditor({
   const [guides, setGuides] = useState<GuidesState>(() => project.guides ?? DEFAULT_GUIDES);
   const [fontTick, setFontTick] = useState(0);
   const [projectName, setProjectName] = useState(project.name);
+  const [aspectId, setAspectId] = useState(project.settings.aspectId);
+  const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState<StyleTheme | null>(() => project.theme);
   const [saveState, setSaveState] = useState<SaveState>('saved');
 
@@ -334,6 +338,7 @@ export default function StudioEditor({
           ...docRef.current,
           name: projectName.trim() || docRef.current.name,
           updatedAt: Date.now(),
+          settings: { ...docRef.current.settings, aspectId },
           elements,
           guides,
           lut: {
@@ -365,6 +370,7 @@ export default function StudioEditor({
     elements,
     guides,
     projectName,
+    aspectId,
     theme,
     activeId,
     lutSel.selected,
@@ -486,6 +492,14 @@ export default function StudioEditor({
           aria-label="Project name"
           className="flex-1 min-w-0 max-w-[24rem] font-serif text-[1.15rem] bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0.5"
         />
+        <button
+          type="button"
+          onClick={() => setShowSettings(true)}
+          className="flex-none inline-flex items-center gap-1.5 px-3 py-[0.4rem] rounded-full border border-line-strong bg-paper font-mono text-[0.68rem] tracking-[0.06em] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink transition-colors"
+          title="Project settings — name, format"
+        >
+          {ASPECT_PRESETS.find((a) => a.id === aspectId)?.id ?? aspectId} · ⚙
+        </button>
         <span
           className={`flex-none font-mono text-[0.64rem] tracking-[0.1em] uppercase border rounded-full px-2.5 py-[3px] ${saveBadge[saveState].cls}`}
           role="status"
@@ -493,6 +507,19 @@ export default function StudioEditor({
           {saveBadge[saveState].label}
         </span>
       </div>
+
+      {showSettings && (
+        <ProjectSettingsModal
+          name={projectName}
+          aspectId={aspectId}
+          onCancel={() => setShowSettings(false)}
+          onApply={({ name, aspectId: nextAspect }) => {
+            setProjectName(name);
+            setAspectId(nextAspect);
+            setShowSettings(false);
+          }}
+        />
+      )}
 
       {mediaTrouble && (
         <div className={`${notice} m-0 flex flex-wrap items-center gap-x-4 gap-y-2`}>
