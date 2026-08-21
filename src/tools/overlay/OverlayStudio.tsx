@@ -463,6 +463,7 @@ export default function OverlayStudio() {
                 className="flex-none w-[2.2rem] h-[2.2rem] border-0 rounded-full bg-ink text-paper cursor-pointer text-[0.8rem] leading-none inline-flex items-center justify-center transition-[background-color] duration-200 ease-paper hover:bg-accent"
                 onClick={togglePlay}
                 aria-label={playing ? 'Pause' : 'Play'}
+                title="Play / pause (Space)"
               >
                 {playing ? '❚❚' : '▶'}
               </button>
