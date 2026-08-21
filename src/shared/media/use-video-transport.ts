@@ -40,6 +40,13 @@ export interface TransportOptions {
   rangeRef?: RefObject<TrimRange | null>;
   /** While `.current` is true, reaching the out point jumps back to the in point. */
   loopRef?: RefObject<boolean>;
+  /**
+   * Keep playing when the media changes. Switching clips in an editor should
+   * not stop playback: if it was running, the next clip picks it up as soon as
+   * its metadata is in. Off by default — a tool that swaps media for another
+   * reason shouldn't start playing on its own.
+   */
+  resumeAcrossMedia?: boolean;
 }
 
 export interface VideoTransport {
@@ -70,11 +77,18 @@ export function useVideoTransport(
     spaceToggles = true,
     rangeRef,
     loopRef,
+    resumeAcrossMedia,
   } = opts ?? {};
+  // Whether the element is playing, readable synchronously — the state above
+  // is already reset by the time the new media's events arrive.
+  const playingRef = useRef(false);
 
   useEffect(() => {
     // New media (or none): the clock restarts; duration refreshes on
-    // `loadedmetadata`.
+    // `loadedmetadata`. Whether the *previous* clip was running is captured
+    // first, so playback can be handed over to this one.
+    const wasPlaying = playingRef.current;
+    playingRef.current = false;
     setPlaying(false);
     setTime(0);
     setDuration(0);
@@ -108,11 +122,13 @@ export function useVideoTransport(
     };
 
     const onPlay = () => {
+      playingRef.current = true;
       setPlaying(true);
       stopWatch();
       raf = requestAnimationFrame(watch);
     };
     const onPause = () => {
+      playingRef.current = false;
       setPlaying(false);
       stopWatch();
     };
@@ -127,6 +143,10 @@ export function useVideoTransport(
     const onMeta = () => {
       setDuration(Number.isFinite(v.duration) ? v.duration : 0);
       onLoadedMetadata?.(v);
+      // Hand playback over to the new clip. The element is muted, and the
+      // gesture that started playback already happened, so this is allowed;
+      // a rejection (a browser that disagrees) just leaves it paused.
+      if (resumeAcrossMedia && wasPlaying) void v.play().catch(() => {});
     };
     v.addEventListener('play', onPlay);
     v.addEventListener('pause', onPause);

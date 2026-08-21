@@ -314,6 +314,8 @@ export default function StudioEditor({
       scrubbingRef: scrub.scrubbingRef,
       rangeRef,
       loopRef,
+      // Stepping through a project's clips shouldn't stop the transport.
+      resumeAcrossMedia: true,
       onLoadedMetadata: (v) => {
         if (v.currentTime === 0) {
           try {
