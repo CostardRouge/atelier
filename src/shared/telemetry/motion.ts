@@ -180,7 +180,17 @@ export function attachMotion(cues: Cue[]): void {
 }
 
 /** Display unit for speed values. */
-export type SpeedUnit = 'm/s' | 'km/h';
+export type SpeedUnit = 'm/s' | 'km/h' | 'mph';
+
+/** Metres per second → one display unit. */
+const SPEED_FACTOR: Record<SpeedUnit, number> = {
+  'm/s': 1,
+  'km/h': 3.6,
+  mph: 2.236936,
+};
+
+/** The speed units offered in the pickers, in order. */
+export const SPEED_UNITS: readonly SpeedUnit[] = ['m/s', 'km/h', 'mph'];
 
 /** Round `value` to `digits` decimals, treating sub-resolution magnitudes as 0. */
 function signed(value: number, digits: number): string {
@@ -190,18 +200,18 @@ function signed(value: number, digits: number): string {
   return value > 0 ? `+${text}` : text;
 }
 
-/** Display string for ground speed, e.g. `12.3 m/s` or `44.3 km/h`. */
+/** Display string for ground speed, e.g. `12.3 m/s`, `44.3 km/h`, `27.5 mph`. */
 export function formatGroundSpeed(value?: number, unit: SpeedUnit = 'm/s'): string | undefined {
   if (value == null) return undefined;
-  if (unit === 'km/h') return `${(value * 3.6).toFixed(1)} km/h`;
-  return `${value.toFixed(1)} m/s`;
+  const factor = SPEED_FACTOR[unit] ?? 1;
+  return `${(value * factor).toFixed(1)} ${unit}`;
 }
 
 /** Display string for vertical speed, signed, e.g. `+1.4 m/s` / `-5.1 km/h`. */
 export function formatVerticalSpeed(value?: number, unit: SpeedUnit = 'm/s'): string | undefined {
   if (value == null) return undefined;
-  if (unit === 'km/h') return `${signed(value * 3.6, 1)} km/h`;
-  return `${signed(value, 1)} m/s`;
+  const factor = SPEED_FACTOR[unit] ?? 1;
+  return `${signed(value * factor, 1)} ${unit}`;
 }
 
 /** Display string for heading, degrees + cardinal, e.g. `247° WSW`. */

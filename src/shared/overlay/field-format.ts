@@ -102,17 +102,23 @@ export function formatField(
   return `${spec.prefix ?? ''}${raw}${spec.suffix ?? ''}`;
 }
 
+/** Kinds that paint a shape and lay out their own captions, not a text run. */
+const SHAPE_KINDS: ReadonlySet<string> = new Set([
+  'heading-arrow',
+  'heading-tape',
+  'frame-corners',
+  'battery',
+]);
+
 /**
  * The full string an element renders for `cue`: a free-text element returns its
  * literal; a telemetry element returns `LABEL value` (or just the value when no
- * label is set). Heading-arrow elements return `''` (they render a shape, not text).
+ * label is set). Shape kinds return `''` — they draw, and any caption they show
+ * is laid out by their own renderer.
  */
 export function renderElementText(el: OverlayElement, cue: Cue | null): string {
   if (el.kind === 'text') return el.text ?? '';
-  // Shape-only kinds render no text.
-  if (el.kind === 'heading-arrow' || el.kind === 'frame-corners' || !el.field) {
-    return '';
-  }
+  if (SHAPE_KINDS.has(el.kind) || !el.field) return '';
   const value = formatField(el.field, cue, el.speedUnit);
   const label = el.label?.trim();
   return label ? `${label} ${value}` : value;

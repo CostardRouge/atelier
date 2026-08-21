@@ -40,7 +40,18 @@ export type OverlayKind =
   | 'telemetry-field'
   | 'text'
   | 'heading-arrow'
-  | 'frame-corners';
+  | 'heading-tape'
+  | 'frame-corners'
+  | 'battery';
+
+/** Where a shape element's caption sits relative to it. */
+export type LabelPlacement = 'none' | 'above' | 'below' | 'left' | 'right';
+
+/** What the heading tape draws under its sight. */
+export type TapeReticle = 'none' | 'line' | 'triangle' | 'both';
+
+/** Where the battery gauge reads its level. See battery.ts. */
+export type BatterySource = 'manual' | 'telemetry';
 
 /** Which point of the element box maps to (x,y) — enables clean corner snaps. */
 export type Anchor =
@@ -132,6 +143,53 @@ export interface OverlayElement {
    * fraction of the shorter side. Defaults to 0.03.
    */
   cornerInset?: number;
+
+  // --- heading tape --------------------------------------------------------
+  // A sliding compass ribbon (see heading-tape.ts for the geometry).
+
+  /** Degrees visible across the whole tape. Default 90 — wider reads flatter. */
+  tapeSpanDeg?: number;
+  /** Tape width as a fraction of the frame's width. Default 0.5. */
+  tapeWidthFrac?: number;
+  /** Degrees between labelled ticks. Default 30. */
+  tapeMajorStep?: number;
+  /** Degrees between plain ticks. Default 10. */
+  tapeMinorStep?: number;
+  /** Share of each half that dissolves into the image. 0..0.9, default 0.22. */
+  tapeFadeFrac?: number;
+  /** Tick height as a multiple of the label font size. Default 1. */
+  tapeTickScale?: number;
+  /** What marks the centre. Default 'both'. */
+  tapeReticle?: TapeReticle;
+  /** Sight colour — deliberately its own, so it reads against the ticks. */
+  tapeReticleColor?: string;
+  /** Draw the horizontal rule the ticks stand on. Default true. */
+  tapeRule?: boolean;
+  /** Letters (N/E/S/W) rather than degrees on the cardinal ticks. Default true. */
+  tapeCardinals?: boolean;
+  /** Where the "247° WSW" caption sits, or 'none'. Default 'above'. */
+  tapeLabel?: LabelPlacement;
+  /** Overall opacity of the ribbon, 0..1. Default 1. */
+  tapeOpacity?: number;
+
+  // --- battery gauge -------------------------------------------------------
+
+  /** Where the level comes from. Default 'manual' — the sidecar has none. */
+  batterySource?: BatterySource;
+  /** `batterySource:'telemetry'`: the cue key to read; blank probes the known set. */
+  batteryKey?: string;
+  /** `batterySource:'manual'`: the authored percentage, 0..100. */
+  batteryPercent?: number;
+  /** Gauge width as a multiple of its height. Default 2.1. */
+  batteryAspect?: number;
+  /** Print the number beside the cell. Default true. */
+  batteryShowPercent?: boolean;
+  /** At or below this percentage the fill turns to `batteryLowColor`. Default 20. */
+  batteryLowPercent?: number;
+  /** The alarm colour. Default a warm red. */
+  batteryLowColor?: string;
+  /** Where the caption sits relative to the cell. Default 'right'. */
+  batteryLabel?: LabelPlacement;
 
   // --- appearance extensions (title styles) --------------------------------
 
@@ -279,6 +337,61 @@ export function createHeadingArrowElement(): OverlayElement {
     y: 0.5,
     ...baseStyle(),
     sizeFrac: 0.06,
+  };
+}
+
+/**
+ * Create a heading tape: the sliding compass ribbon, ticks under a fixed
+ * centre sight, ends dissolving into the image. Sits across the top by
+ * default, where a cockpit HUD puts it.
+ */
+export function createHeadingTapeElement(): OverlayElement {
+  return {
+    id: uid(),
+    kind: 'heading-tape',
+    anchor: 'top-center',
+    x: 0.5,
+    y: 0.06,
+    ...baseStyle(),
+    sizeFrac: 0.028,
+    tapeSpanDeg: 90,
+    tapeWidthFrac: 0.5,
+    tapeMajorStep: 30,
+    tapeMinorStep: 10,
+    tapeFadeFrac: 0.22,
+    tapeTickScale: 1,
+    tapeReticle: 'both',
+    tapeReticleColor: '#e2542f',
+    tapeRule: true,
+    tapeCardinals: true,
+    tapeLabel: 'above',
+    tapeOpacity: 1,
+    legibility: { mode: 'shadow', color: 'rgba(0,0,0,0.55)', padFrac: 0.3 },
+  };
+}
+
+/**
+ * Create a battery gauge. Manual by default and on purpose: the DJI video
+ * sidecar carries no state of charge (see battery.ts), so an author sets the
+ * level as a prop, or points the gauge at a telemetry key if their firmware
+ * ever writes one.
+ */
+export function createBatteryElement(): OverlayElement {
+  return {
+    id: uid(),
+    kind: 'battery',
+    anchor: 'top-right',
+    x: 0.95,
+    y: 0.05,
+    ...baseStyle(),
+    sizeFrac: 0.03,
+    batterySource: 'manual',
+    batteryPercent: 100,
+    batteryAspect: 2.1,
+    batteryShowPercent: true,
+    batteryLowPercent: 20,
+    batteryLowColor: '#e2402a',
+    batteryLabel: 'right',
   };
 }
 

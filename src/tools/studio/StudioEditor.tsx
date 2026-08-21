@@ -291,6 +291,9 @@ export default function StudioEditor({
     const placed = { ...el, y: Math.min(0.95, el.y + offset) };
     setElements((prev) => [...prev, placed]);
     setSelectedElementId(placed.id);
+    // Touching the deck answers the reset question; an armed confirmation must
+    // never sit waiting behind work done since.
+    setResettingDeck(false);
   }
 
   /** Replace the deck with the starter preset — the only destructive add. */
@@ -304,6 +307,7 @@ export default function StudioEditor({
   function removeElement(id: string) {
     setElements((prev) => prev.filter((e) => e.id !== id));
     setSelectedElementId((s) => (s === id ? null : s));
+    setResettingDeck(false);
   }
 
   function toggleVisible(id: string) {

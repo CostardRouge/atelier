@@ -85,6 +85,20 @@ the overlay kit holds a heading arrow (with an optional compass ring),
 **viewfinder brackets** for the frame's corners, and **clock/date** fields
 read out of the flight log.
 
+**The instruments.** A **heading tape** — the cockpit ribbon: a slice of the
+compass sliding under a fixed sight, ticks dissolving into the image at both
+ends, letters on N/E/S/W. Nearly everything is a knob: width, visible span,
+which degrees get ticks and which get labels, tick height, edge fade, opacity,
+sight colour and mark, where the "247° WSW" reading sits, baseline rule on or
+off. With no heading (hovering, or a clip without telemetry) the scale simply
+isn't drawn — a tape frozen on an invented bearing would be a lie. Alongside
+it, a **battery gauge**: cell, fill, low-charge alarm colour and threshold,
+caption placement. Note that DJI's per-frame `.srt` carries **no battery
+level** — the Mini 4 Pro included — so the gauge takes an authored value by
+default, and can be pointed at a telemetry key for firmware that does write
+one. It never invents a level: with nothing to read it draws empty. Speeds
+read in **m/s, km/h or mph**.
+
 **Adding is a palette, not a dropdown.** Everything you can drop on the frame
 sits in a foldable grid — Flight, Camera, Time, Shapes — and each cell
 previews *what it will actually add*: the live value at the playhead, in the

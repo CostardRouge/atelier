@@ -14,8 +14,14 @@ describe('PALETTE_GROUPS', () => {
     expect([...offered].sort()).toEqual([...FIELD_KEYS].sort());
   });
 
-  it('offers every shape kind exactly once', () => {
-    const shapes: OverlayKind[] = ['text', 'heading-arrow', 'frame-corners'];
+  it('offers every non-telemetry kind exactly once', () => {
+    const shapes: OverlayKind[] = [
+      'text',
+      'heading-arrow',
+      'heading-tape',
+      'frame-corners',
+      'battery',
+    ];
     for (const kind of shapes) {
       expect(items.filter((i) => i.kind === kind)).toHaveLength(1);
     }
