@@ -29,6 +29,14 @@ interface ElementListProps {
   onToggleVisible: (id: string) => void;
 }
 
+/** Row text for the kinds that draw a shape instead of a string. */
+const SHAPE_ROW: Partial<Record<OverlayElement['kind'], { name: string; tag: string }>> = {
+  'heading-arrow': { name: 'Heading arrow', tag: '↗' },
+  'heading-tape': { name: 'Heading tape', tag: '⇥' },
+  'frame-corners': { name: 'Frame corners', tag: '⌗' },
+  battery: { name: 'Battery', tag: '▮' },
+};
+
 const linkBtn =
   'p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent';
 
@@ -105,12 +113,10 @@ export default function ElementList({
         <ul className="m-0 p-0 list-none flex flex-col gap-1">
           {elements.map((el) => {
             const active = el.id === selectedId;
-            const preview =
-              el.kind === 'heading-arrow'
-                ? 'Heading arrow'
-                : el.kind === 'frame-corners'
-                  ? 'Frame corners'
-                  : renderElementText(el, cue) || '(empty)';
+            const shape = SHAPE_ROW[el.kind];
+            const preview = shape
+              ? shape.name
+              : renderElementText(el, cue) || '(empty)';
             return (
               <li
                 key={el.id}
@@ -140,7 +146,7 @@ export default function ElementList({
                   {preview}
                 </span>
                 <span className="flex-none font-mono text-[0.6rem] uppercase tracking-[0.1em] text-muted">
-                  {el.kind === 'heading-arrow' ? '↗' : el.kind === 'text' ? 'TXT' : el.field}
+                  {shape ? shape.tag : el.kind === 'text' ? 'TXT' : el.field}
                 </span>
                 <button
                   type="button"

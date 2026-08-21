@@ -2,8 +2,10 @@ import type { CSSProperties } from 'react';
 import type { Cue } from '../telemetry/srt-parser';
 import { FIELD_SPECS, formatField, MISSING, renderElementText } from './field-format';
 import {
+  createBatteryElement,
   createFrameCornersElement,
   createHeadingArrowElement,
+  createHeadingTapeElement,
   createTelemetryElement,
   createTextElement,
   type OverlayElement,
@@ -44,8 +46,12 @@ function elementFor(item: PaletteItem): OverlayElement {
       return createTextElement();
     case 'heading-arrow':
       return createHeadingArrowElement();
+    case 'heading-tape':
+      return createHeadingTapeElement();
     case 'frame-corners':
       return createFrameCornersElement();
+    case 'battery':
+      return createBatteryElement();
   }
 }
 
@@ -58,9 +64,13 @@ function nameOf(item: PaletteItem): string {
     case 'text':
       return 'Text';
     case 'heading-arrow':
-      return 'Heading';
+      return 'Arrow';
+    case 'heading-tape':
+      return 'Heading tape';
     case 'frame-corners':
       return 'Corners';
+    case 'battery':
+      return 'Battery';
   }
 }
 
@@ -101,6 +111,58 @@ function ArrowGlyph({ style }: { style: CSSProperties }) {
       aria-hidden="true"
     >
       <path d="M12 3 L19 20 L12 15.5 L5 20 Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function TapeGlyph({ style, sight }: { style: CSSProperties; sight: string }) {
+  // Ticks thinning toward both ends, the way the real ribbon dissolves.
+  const ticks = [-13, -9, -5, 0, 5, 9, 13];
+  return (
+    <svg
+      viewBox="0 0 32 14"
+      className="w-[1.9rem] h-[1.1rem]"
+      style={style}
+      aria-hidden="true"
+    >
+      <g stroke="currentColor" strokeWidth="1.1">
+        {ticks.map((t) => (
+          <line
+            key={t}
+            x1={16 + t}
+            y1="4"
+            x2={16 + t}
+            y2={t % 10 === 0 ? 10 : 7.5}
+            opacity={1 - Math.abs(t) / 16}
+          />
+        ))}
+        <line x1="2" y1="4" x2="30" y2="4" opacity="0.35" />
+      </g>
+      <path d="M16 3.4 L13.4 0.6 L18.6 0.6 Z" fill={sight} />
+    </svg>
+  );
+}
+
+function BatteryGlyph({ style }: { style: CSSProperties }) {
+  return (
+    <svg
+      viewBox="0 0 32 16"
+      className="w-[1.75rem] h-[0.95rem]"
+      style={style}
+      aria-hidden="true"
+    >
+      <rect
+        x="1"
+        y="2"
+        width="26"
+        height="12"
+        rx="2.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+      />
+      <rect x="3.4" y="4.4" width="16" height="7.2" rx="1.4" fill="currentColor" />
+      <rect x="28.4" y="5.6" width="2.6" height="4.8" rx="1" fill="currentColor" />
     </svg>
   );
 }
@@ -208,6 +270,13 @@ export default function ElementPalette({
                     >
                       {item.kind === 'heading-arrow' ? (
                         <ArrowGlyph style={glyphStyle} />
+                      ) : item.kind === 'heading-tape' ? (
+                        <TapeGlyph
+                          style={glyphStyle}
+                          sight={el.tapeReticleColor ?? resolved.color}
+                        />
+                      ) : item.kind === 'battery' ? (
+                        <BatteryGlyph style={glyphStyle} />
                       ) : item.kind === 'frame-corners' ? (
                         <CornersGlyph style={glyphStyle} />
                       ) : (

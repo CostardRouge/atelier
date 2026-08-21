@@ -6,6 +6,7 @@ import {
   formatGroundSpeed,
   formatHeading,
   formatVerticalSpeed,
+  SPEED_UNITS,
   haversine,
 } from './motion';
 import type { Cue } from './srt-parser';
@@ -120,6 +121,15 @@ describe('motion formatters', () => {
     expect(formatVerticalSpeed(-0.8)).toBe('-0.8 m/s');
     expect(formatVerticalSpeed(0.02)).toBe('0.0 m/s');
     expect(formatVerticalSpeed(undefined)).toBeUndefined();
+  });
+
+  it('converts into every offered unit, sign kept', () => {
+    // 10 m/s = 36 km/h = 22.4 mph
+    expect(formatGroundSpeed(10, 'km/h')).toBe('36.0 km/h');
+    expect(formatGroundSpeed(10, 'mph')).toBe('22.4 mph');
+    expect(formatVerticalSpeed(-2, 'mph')).toBe('-4.5 mph');
+    expect(formatVerticalSpeed(2, 'km/h')).toBe('+7.2 km/h');
+    expect(SPEED_UNITS).toEqual(['m/s', 'km/h', 'mph']);
   });
 
   it('formats heading as degrees plus compass point', () => {

@@ -1,10 +1,15 @@
 import { FIELD_KEYS, FIELD_SPECS } from './field-format';
+import { BATTERY_KEYS } from './battery';
+import { SPEED_UNITS } from '../telemetry/motion';
 import {
   CURATED_FONTS,
   type Anchor,
+  type BatterySource,
   type FontWeight,
+  type LabelPlacement,
   type OverlayElement,
   type SpeedUnit,
+  type TapeReticle,
   type TelemetryFieldKey,
 } from './overlay-types';
 import {
@@ -231,6 +236,301 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
             </label>
           )}
         </div>
+      ) : element.kind === 'heading-tape' ? (
+        <div className="flex flex-col gap-2">
+          <p className="m-0 text-[0.78rem] text-muted">
+            A slice of the compass sliding under a fixed sight. Ends fade into
+            the image; the scale disappears when there is no heading (hovering,
+            or a clip without telemetry).
+          </p>
+          <div className="flex items-end gap-3">
+            <label className="flex flex-col gap-1 flex-1">
+              <span className={labelClass}>
+                Width · {Math.round((element.tapeWidthFrac ?? 0.5) * 100)}% of frame
+              </span>
+              <input
+                type="range"
+                className="w-full accent-accent cursor-pointer"
+                min={0.15}
+                max={0.98}
+                step={0.01}
+                value={element.tapeWidthFrac ?? 0.5}
+                onChange={(e) => change({ tapeWidthFrac: Number(e.target.value) })}
+              />
+            </label>
+          </div>
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>
+              Span · {Math.round(element.tapeSpanDeg ?? 90)}° visible
+            </span>
+            <input
+              type="range"
+              className="w-full accent-accent cursor-pointer"
+              min={20}
+              max={180}
+              step={5}
+              value={element.tapeSpanDeg ?? 90}
+              onChange={(e) => change({ tapeSpanDeg: Number(e.target.value) })}
+            />
+          </label>
+          <div className="flex items-end gap-3">
+            <label className="flex flex-col gap-1 flex-1">
+              <span className={labelClass}>Labelled every</span>
+              <select
+                className={`${inputClass} cursor-pointer`}
+                value={element.tapeMajorStep ?? 30}
+                onChange={(e) => change({ tapeMajorStep: Number(e.target.value) })}
+              >
+                {[10, 15, 20, 30, 45, 90].map((d) => (
+                  <option key={d} value={d}>{d}°</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 flex-1">
+              <span className={labelClass}>Tick every</span>
+              <select
+                className={`${inputClass} cursor-pointer`}
+                value={element.tapeMinorStep ?? 10}
+                onChange={(e) => change({ tapeMinorStep: Number(e.target.value) })}
+              >
+                {[1, 2, 5, 10, 15, 30].map((d) => (
+                  <option key={d} value={d}>{d}°</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>
+              Tick height · {Math.round((element.tapeTickScale ?? 1) * 100)}%
+            </span>
+            <input
+              type="range"
+              className="w-full accent-accent cursor-pointer"
+              min={0.4}
+              max={2.5}
+              step={0.1}
+              value={element.tapeTickScale ?? 1}
+              onChange={(e) => change({ tapeTickScale: Number(e.target.value) })}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>
+              Edge fade · {Math.round((element.tapeFadeFrac ?? 0.22) * 100)}%
+            </span>
+            <input
+              type="range"
+              className="w-full accent-accent cursor-pointer"
+              min={0}
+              max={0.6}
+              step={0.02}
+              value={element.tapeFadeFrac ?? 0.22}
+              onChange={(e) => change({ tapeFadeFrac: Number(e.target.value) })}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>
+              Opacity · {Math.round((element.tapeOpacity ?? 1) * 100)}%
+            </span>
+            <input
+              type="range"
+              className="w-full accent-accent cursor-pointer"
+              min={0.1}
+              max={1}
+              step={0.05}
+              value={element.tapeOpacity ?? 1}
+              onChange={(e) => change({ tapeOpacity: Number(e.target.value) })}
+            />
+          </label>
+
+          <div className="flex items-end gap-3 pt-1 border-t border-line">
+            <label className="flex flex-col gap-1">
+              <span className={labelClass}>Sight</span>
+              <input
+                type="color"
+                className="w-12 h-9 p-0 border border-line-strong rounded-paper bg-surface cursor-pointer"
+                value={
+                  (element.tapeReticleColor ?? st.color).startsWith('#')
+                    ? (element.tapeReticleColor ?? st.color)
+                    : '#e2542f'
+                }
+                onChange={(e) => change({ tapeReticleColor: e.target.value })}
+              />
+            </label>
+            <label className="flex flex-col gap-1 flex-1">
+              <span className={labelClass}>Sight mark</span>
+              <select
+                className={`${inputClass} cursor-pointer`}
+                value={element.tapeReticle ?? 'both'}
+                onChange={(e) =>
+                  change({ tapeReticle: e.target.value as TapeReticle })
+                }
+              >
+                <option value="both">Pointer + line</option>
+                <option value="triangle">Pointer only</option>
+                <option value="line">Line only</option>
+                <option value="none">None</option>
+              </select>
+            </label>
+          </div>
+
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>Reading</span>
+            <select
+              className={`${inputClass} cursor-pointer`}
+              value={element.tapeLabel ?? 'above'}
+              onChange={(e) =>
+                change({ tapeLabel: e.target.value as LabelPlacement })
+              }
+            >
+              <option value="above">Above the tape</option>
+              <option value="below">Below the tape</option>
+              <option value="left">Left of the tape</option>
+              <option value="right">Right of the tape</option>
+              <option value="none">Hidden</option>
+            </select>
+          </label>
+
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="w-3.5 h-3.5 accent-accent cursor-pointer"
+              checked={element.tapeCardinals ?? true}
+              onChange={(e) => change({ tapeCardinals: e.target.checked })}
+            />
+            <span className={labelClass}>Letters at N / E / S / W</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="w-3.5 h-3.5 accent-accent cursor-pointer"
+              checked={element.tapeRule ?? true}
+              onChange={(e) => change({ tapeRule: e.target.checked })}
+            />
+            <span className={labelClass}>Baseline rule</span>
+          </label>
+        </div>
+      ) : element.kind === 'battery' ? (
+        <div className="flex flex-col gap-2">
+          <p className="m-0 text-[0.78rem] text-muted">
+            A charge gauge. DJI's per-frame <code>.srt</code> carries no battery
+            level — the Mini 4 Pro included — so this is an authored value by
+            default. Point it at a telemetry key if your firmware writes one.
+          </p>
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>Level from</span>
+            <select
+              className={`${inputClass} cursor-pointer`}
+              value={element.batterySource ?? 'manual'}
+              onChange={(e) =>
+                change({ batterySource: e.target.value as BatterySource })
+              }
+            >
+              <option value="manual">A value I set</option>
+              <option value="telemetry">A telemetry key</option>
+            </select>
+          </label>
+          {(element.batterySource ?? 'manual') === 'manual' ? (
+            <label className="flex flex-col gap-1">
+              <span className={labelClass}>
+                Level · {Math.round(element.batteryPercent ?? 100)}%
+              </span>
+              <input
+                type="range"
+                className="w-full accent-accent cursor-pointer"
+                min={0}
+                max={100}
+                step={1}
+                value={element.batteryPercent ?? 100}
+                onChange={(e) => change({ batteryPercent: Number(e.target.value) })}
+              />
+            </label>
+          ) : (
+            <label className="flex flex-col gap-1">
+              <span className={labelClass}>Key</span>
+              <input
+                type="text"
+                className={inputClass}
+                placeholder={`(probe ${BATTERY_KEYS.slice(0, 3).join(', ')}…)`}
+                value={element.batteryKey ?? ''}
+                onChange={(e) => change({ batteryKey: e.target.value })}
+              />
+              <span className="text-[0.7rem] text-faint leading-relaxed">
+                Blank probes the keys DJI firmwares are known to use. With
+                nothing to read the gauge draws empty — it never invents a level.
+              </span>
+            </label>
+          )}
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>
+              Cell width · {(element.batteryAspect ?? 2.1).toFixed(1)}× its height
+            </span>
+            <input
+              type="range"
+              className="w-full accent-accent cursor-pointer"
+              min={1.2}
+              max={4}
+              step={0.1}
+              value={element.batteryAspect ?? 2.1}
+              onChange={(e) => change({ batteryAspect: Number(e.target.value) })}
+            />
+          </label>
+          <div className="flex items-end gap-3 pt-1 border-t border-line">
+            <label className="flex flex-col gap-1">
+              <span className={labelClass}>Low</span>
+              <input
+                type="color"
+                className="w-12 h-9 p-0 border border-line-strong rounded-paper bg-surface cursor-pointer"
+                value={
+                  (element.batteryLowColor ?? '#e2402a').startsWith('#')
+                    ? (element.batteryLowColor ?? '#e2402a')
+                    : '#e2402a'
+                }
+                onChange={(e) => change({ batteryLowColor: e.target.value })}
+              />
+            </label>
+            <label className="flex flex-col gap-1 flex-1">
+              <span className={labelClass}>
+                Alarm below · {Math.round(element.batteryLowPercent ?? 20)}%
+              </span>
+              <input
+                type="range"
+                className="w-full accent-accent cursor-pointer"
+                min={0}
+                max={60}
+                step={1}
+                value={element.batteryLowPercent ?? 20}
+                onChange={(e) =>
+                  change({ batteryLowPercent: Number(e.target.value) })
+                }
+              />
+            </label>
+          </div>
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>Reading</span>
+            <select
+              className={`${inputClass} cursor-pointer`}
+              value={
+                element.batteryShowPercent === false
+                  ? 'none'
+                  : (element.batteryLabel ?? 'right')
+              }
+              onChange={(e) => {
+                const v = e.target.value as LabelPlacement;
+                change(
+                  v === 'none'
+                    ? { batteryShowPercent: false }
+                    : { batteryShowPercent: true, batteryLabel: v },
+                );
+              }}
+            >
+              <option value="right">Right of the cell</option>
+              <option value="left">Left of the cell</option>
+              <option value="above">Above the cell</option>
+              <option value="below">Below the cell</option>
+              <option value="none">Hidden</option>
+            </select>
+          </label>
+        </div>
       ) : element.kind === 'text' ? (
         <label className="flex flex-col gap-1">
           <span className={labelClass}>Text</span>
@@ -277,8 +577,11 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
                 value={element.speedUnit ?? 'm/s'}
                 onChange={(e) => change({ speedUnit: e.target.value as SpeedUnit })}
               >
-                <option value="m/s">m/s</option>
-                <option value="km/h">km/h</option>
+                {SPEED_UNITS.map((u) => (
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
+                ))}
               </select>
             </label>
           )}

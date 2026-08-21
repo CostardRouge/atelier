@@ -14,7 +14,9 @@ export type PaletteItem =
   | { kind: 'telemetry-field'; field: TelemetryFieldKey }
   | { kind: 'text' }
   | { kind: 'heading-arrow' }
-  | { kind: 'frame-corners' };
+  | { kind: 'heading-tape' }
+  | { kind: 'frame-corners' }
+  | { kind: 'battery' };
 
 export interface PaletteGroup {
   /** Section header — short, it sits above a three-column grid. */
@@ -56,7 +58,11 @@ export const PALETTE_GROUPS: readonly PaletteGroup[] = [
     items: [field('clock'), field('date'), field('timestamp'), field('frame')],
   },
   {
+    label: 'Instruments',
+    items: [{ kind: 'heading-tape' }, { kind: 'heading-arrow' }, { kind: 'battery' }],
+  },
+  {
     label: 'Shapes',
-    items: [{ kind: 'text' }, { kind: 'heading-arrow' }, { kind: 'frame-corners' }],
+    items: [{ kind: 'text' }, { kind: 'frame-corners' }],
   },
 ];

@@ -11,12 +11,16 @@
  */
 
 import type { Cue } from '../telemetry/srt-parser';
-import { renderElementText } from './field-format';
+import { formatHeading } from '../telemetry/motion';
+import { MISSING, renderElementText } from './field-format';
+import { batteryLevel } from './battery';
+import { tapeFadeAlpha, tapeTicks } from './heading-tape';
 import type { Anchor, OverlayElement } from './overlay-types';
 import {
   halolight,
   resolveElementStyle,
   warmDrift,
+  withAlpha,
   type GlowLayers,
   type ResolvedStyle,
   type StyleTheme,
@@ -400,6 +404,363 @@ function drawArrow(
   ctx.restore();
 }
 
+// ---------------------------------------------------------------------------
+// Heading tape (compass ribbon)
+// ---------------------------------------------------------------------------
+
+interface TapeLayout {
+  /** Centre of the ribbon (where the sight sits), in video pixels. */
+  cx: number;
+  cy: number;
+  halfW: number;
+  fontPx: number;
+  /** Major tick height; minors are 55% of it. */
+  tickH: number;
+  /** Bounding box, caption included. */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Offset from the box top to the ribbon's centre line. */
+  ribbonDy: number;
+}
+
+function tapeLayout(
+  el: OverlayElement,
+  st: ResolvedStyle,
+  vw: number,
+  vh: number,
+): TapeLayout {
+  const fontPx = Math.max(4, st.sizeFrac * refDim(vw, vh));
+  const halfW = Math.max(fontPx, ((el.tapeWidthFrac ?? 0.5) * vw) / 2);
+  const tickH = Math.max(2, fontPx * (el.tapeTickScale ?? 1));
+  const place = el.tapeLabel ?? 'above';
+  // Ribbon band: ticks hang below the rule, labels sit under them.
+  const bandH = tickH + fontPx * 1.35;
+  // A caption above/below adds a line; left/right widen instead.
+  const capH = place === 'above' || place === 'below' ? fontPx * 1.5 : 0;
+  const capW = place === 'left' || place === 'right' ? fontPx * 6 : 0;
+  const w = halfW * 2 + capW;
+  const h = bandH + capH;
+
+  const { x, y } = anchorOrigin(el.anchor, el.x * vw, el.y * vh, w, h);
+  const ribbonTop = place === 'above' ? y + capH : y;
+  const cx = place === 'left' ? x + capW + halfW : x + halfW;
+  return {
+    cx,
+    cy: ribbonTop,
+    halfW,
+    fontPx,
+    tickH,
+    x,
+    y,
+    w,
+    h,
+    ribbonDy: ribbonTop - y,
+  };
+}
+
+/**
+ * The heading tape: a slice of the compass scale sliding under a fixed sight.
+ *
+ * Everything is drawn per-tick with its own alpha rather than through one
+ * masked layer — a canvas alpha mask would need an offscreen buffer per frame,
+ * and the export renders at full resolution. Fading each mark individually
+ * costs nothing and reads the same.
+ */
+function drawHeadingTape(
+  ctx: Ctx2D,
+  el: OverlayElement,
+  cue: Cue | null,
+  vw: number,
+  vh: number,
+  theme?: StyleTheme | null,
+): void {
+  const st = resolveElementStyle(el, theme ?? null);
+  const lay = tapeLayout(el, st, vw, vh);
+  const heading = cue?.derived?.heading;
+  const { cx, cy, halfW, fontPx, tickH } = lay;
+  const fade = el.tapeFadeFrac ?? 0.22;
+  const lineW = Math.max(0.6, fontPx * 0.09);
+
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, Math.min(1, el.tapeOpacity ?? 1));
+
+  if (st.legibility.mode === 'shadow') {
+    ctx.shadowColor = st.legibility.color;
+    ctx.shadowBlur = Math.max(1, st.legibility.padFrac * fontPx);
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = fontPx * 0.05;
+  } else if (st.glow) {
+    const [wr, wg, wb] = warmDrift(st.color, st.glowWarmth);
+    ctx.shadowColor = `rgba(${wr},${wg},${wb},${st.glow.haloAlpha})`;
+    ctx.shadowBlur = Math.max(1, st.glow.haloRadiusFrac * fontPx * 3);
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+  }
+
+  // The rule the ticks stand on: one gradient, transparent at both ends.
+  if ((el.tapeRule ?? true) && typeof ctx.createLinearGradient === 'function') {
+    const grad = ctx.createLinearGradient(cx - halfW, 0, cx + halfW, 0);
+    const stop = Math.max(0, Math.min(0.49, fade));
+    grad.addColorStop(0, withAlpha(st.color, 0));
+    grad.addColorStop(stop, withAlpha(st.color, 0.75));
+    grad.addColorStop(1 - stop, withAlpha(st.color, 0.75));
+    grad.addColorStop(1, withAlpha(st.color, 0));
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = lineW;
+    ctx.beginPath();
+    ctx.moveTo(cx - halfW, cy);
+    ctx.lineTo(cx + halfW, cy);
+    ctx.stroke();
+  }
+
+  // No heading (hovering, or a clip with no telemetry): the furniture stays,
+  // the scale does not — a tape frozen on an invented bearing would be a lie.
+  if (heading == null) {
+    ctx.globalAlpha *= 0.5;
+    ctx.fillStyle = st.color;
+    ctx.font = fontString(st, fontPx);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('—', cx, cy + tickH * 0.35);
+  } else {
+    const ticks = tapeTicks(
+      heading,
+      el.tapeSpanDeg ?? 90,
+      el.tapeMajorStep ?? 30,
+      el.tapeMinorStep ?? 10,
+      el.tapeCardinals ?? true,
+    );
+    ctx.font = fontString(st, fontPx);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    for (const tick of ticks) {
+      const alpha = tapeFadeAlpha(tick.t, fade);
+      if (alpha <= 0.01) continue;
+      const tx = cx + tick.t * halfW;
+      const len = tick.major ? tickH : tickH * 0.55;
+      ctx.globalAlpha = alpha * Math.max(0, Math.min(1, el.tapeOpacity ?? 1));
+      ctx.strokeStyle = st.color;
+      ctx.lineWidth = tick.major ? lineW : lineW * 0.7;
+      ctx.beginPath();
+      ctx.moveTo(tx, cy);
+      ctx.lineTo(tx, cy + len);
+      ctx.stroke();
+      if (tick.label) {
+        ctx.fillStyle = st.color;
+        ctx.fillText(tick.label, tx, cy + tickH + fontPx * 0.15);
+      }
+    }
+  }
+
+  // The sight — its own colour, so it never dissolves into the scale.
+  ctx.globalAlpha = Math.max(0, Math.min(1, el.tapeOpacity ?? 1));
+  const reticle = el.tapeReticle ?? 'both';
+  const rc = el.tapeReticleColor ?? st.color;
+  if (reticle !== 'none') {
+    ctx.strokeStyle = rc;
+    ctx.fillStyle = rc;
+    ctx.lineWidth = lineW * 1.4;
+    if (reticle === 'line' || reticle === 'both') {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - tickH * 0.55);
+      ctx.lineTo(cx, cy + tickH * 1.05);
+      ctx.stroke();
+    }
+    if (reticle === 'triangle' || reticle === 'both') {
+      const s = tickH * 0.42;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - lineW * 0.5);
+      ctx.lineTo(cx - s, cy - s - lineW * 0.5);
+      ctx.lineTo(cx + s, cy - s - lineW * 0.5);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  // Caption: the same reading the tape shows, in words.
+  const place = el.tapeLabel ?? 'above';
+  if (place !== 'none') {
+    const caption = formatHeading(heading) ?? `${el.label ?? 'HDG'} ${MISSING}`;
+    const text = st.uppercase ? caption.toUpperCase() : caption;
+    ctx.fillStyle = st.color;
+    ctx.font = fontString(st, fontPx);
+    if (place === 'above') {
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(text, cx, cy - tickH * 0.75);
+    } else if (place === 'below') {
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(text, cx, cy + tickH + fontPx * 1.5);
+    } else if (place === 'left') {
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, cx - halfW - fontPx * 0.5, cy + tickH * 0.4);
+    } else {
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, cx + halfW + fontPx * 0.5, cy + tickH * 0.4);
+    }
+  }
+
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Battery gauge
+// ---------------------------------------------------------------------------
+
+interface BatteryLayout {
+  /** Top-left of the cell itself (the caption sits outside it). */
+  cellX: number;
+  cellY: number;
+  cellW: number;
+  cellH: number;
+  fontPx: number;
+  /** Bounding box, caption included. */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+function batteryLayout(
+  el: OverlayElement,
+  st: ResolvedStyle,
+  vw: number,
+  vh: number,
+): BatteryLayout {
+  const fontPx = Math.max(4, st.sizeFrac * refDim(vw, vh));
+  const cellH = fontPx * 1.15;
+  const cellW = cellH * Math.max(1.2, el.batteryAspect ?? 2.1);
+  // The nub on the positive end reads as a battery at any size.
+  const nub = cellW * 0.07;
+  const place = el.batteryShowPercent === false ? 'none' : (el.batteryLabel ?? 'right');
+  const capW = place === 'left' || place === 'right' ? fontPx * 2.8 : 0;
+  const capH = place === 'above' || place === 'below' ? fontPx * 1.35 : 0;
+
+  const w = cellW + nub + capW;
+  const h = cellH + capH;
+  const { x, y } = anchorOrigin(el.anchor, el.x * vw, el.y * vh, w, h);
+  return {
+    cellX: place === 'left' ? x + capW : x,
+    cellY: place === 'above' ? y + capH : y,
+    cellW,
+    cellH,
+    fontPx,
+    x,
+    y,
+    w,
+    h,
+  };
+}
+
+/**
+ * The battery gauge: a cell that fills with the level, turning to the alarm
+ * colour under the low threshold. With no level at all it draws the empty cell
+ * and a “—” — the same honesty as a missing telemetry field (see battery.ts:
+ * the DJI video sidecar carries no state of charge).
+ */
+function drawBattery(
+  ctx: Ctx2D,
+  el: OverlayElement,
+  cue: Cue | null,
+  vw: number,
+  vh: number,
+  theme?: StyleTheme | null,
+): void {
+  const st = resolveElementStyle(el, theme ?? null);
+  const lay = batteryLayout(el, st, vw, vh);
+  const { cellX, cellY, cellW, cellH, fontPx } = lay;
+  const level = batteryLevel(el, cue);
+  const low = el.batteryLowPercent ?? 20;
+  const fill =
+    level != null && level <= low ? (el.batteryLowColor ?? '#e2402a') : st.color;
+  const lineW = Math.max(0.6, fontPx * 0.08);
+
+  ctx.save();
+  if (st.legibility.mode === 'box') {
+    const pad = st.legibility.padFrac * fontPx;
+    ctx.fillStyle = st.legibility.color;
+    roundRectPath(ctx, lay.x - pad, lay.y - pad, lay.w + pad * 2, lay.h + pad * 2, pad * 0.5);
+    ctx.fill();
+  } else if (st.legibility.mode === 'shadow') {
+    ctx.shadowColor = st.legibility.color;
+    ctx.shadowBlur = Math.max(1, st.legibility.padFrac * fontPx);
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = fontPx * 0.05;
+  } else if (st.glow) {
+    const [wr, wg, wb] = warmDrift(fill, st.glowWarmth);
+    ctx.shadowColor = `rgba(${wr},${wg},${wb},${st.glow.haloAlpha})`;
+    ctx.shadowBlur = Math.max(1, st.glow.haloRadiusFrac * fontPx * 3);
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+  }
+
+  // Shell + nub
+  ctx.strokeStyle = st.color;
+  ctx.lineWidth = lineW;
+  roundRectPath(ctx, cellX, cellY, cellW, cellH, cellH * 0.22);
+  ctx.stroke();
+  const nubW = cellW * 0.07;
+  const nubH = cellH * 0.42;
+  ctx.fillStyle = st.color;
+  roundRectPath(
+    ctx,
+    cellX + cellW + lineW * 0.5,
+    cellY + (cellH - nubH) / 2,
+    nubW,
+    nubH,
+    nubW * 0.4,
+  );
+  ctx.fill();
+
+  // Fill
+  const inset = lineW * 1.8;
+  if (level != null && level > 0) {
+    const innerW = cellW - inset * 2;
+    ctx.fillStyle = fill;
+    roundRectPath(
+      ctx,
+      cellX + inset,
+      cellY + inset,
+      Math.max(lineW, (innerW * level) / 100),
+      cellH - inset * 2,
+      (cellH - inset * 2) * 0.18,
+    );
+    ctx.fill();
+  }
+
+  // Caption
+  const place = el.batteryShowPercent === false ? 'none' : (el.batteryLabel ?? 'right');
+  if (place !== 'none') {
+    const text = level == null ? MISSING : `${Math.round(level)}%`;
+    ctx.fillStyle = level != null && level <= low ? fill : st.color;
+    ctx.font = fontString(st, fontPx);
+    if (place === 'right') {
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, cellX + cellW + nubW + fontPx * 0.45, cellY + cellH / 2);
+    } else if (place === 'left') {
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, cellX - fontPx * 0.35, cellY + cellH / 2);
+    } else if (place === 'above') {
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(text, cellX + cellW / 2, cellY - fontPx * 0.2);
+    } else {
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(text, cellX + cellW / 2, cellY + cellH + fontPx * 0.2);
+    }
+  }
+
+  ctx.restore();
+}
+
 /**
  * Frame-corner brackets: four L-shaped marks inset from the frame edges — the
  * viewfinder furniture of a HUD. Spans the whole frame, so it ignores the
@@ -632,6 +993,14 @@ export function drawOverlays(
       drawArrow(ctx, el, cue, videoWidth, videoHeight, theme);
       continue;
     }
+    if (el.kind === 'heading-tape') {
+      drawHeadingTape(ctx, el, cue, videoWidth, videoHeight, theme);
+      continue;
+    }
+    if (el.kind === 'battery') {
+      drawBattery(ctx, el, cue, videoWidth, videoHeight, theme);
+      continue;
+    }
     if (el.kind === 'frame-corners') {
       drawFrameCorners(
         ctx,
@@ -730,6 +1099,22 @@ export function measureOverlays(
       });
       continue;
     }
+    if (el.kind === 'heading-tape' || el.kind === 'battery') {
+      const st = resolveElementStyle(el, theme);
+      const lay =
+        el.kind === 'heading-tape'
+          ? tapeLayout(el, st, videoWidth, videoHeight)
+          : batteryLayout(el, st, videoWidth, videoHeight);
+      const margin = Math.max(2, st.sizeFrac * refDim(videoWidth, videoHeight) * 0.3);
+      boxes.push({
+        id: el.id,
+        x: lay.x - margin,
+        y: lay.y - margin,
+        w: lay.w + margin * 2,
+        h: lay.h + margin * 2,
+      });
+      continue;
+    }
     const lay = layoutElement(ctx, el, cue, videoWidth, videoHeight, theme);
     if (!lay) continue;
     // The grab box must cover everything painted: legibility padding, and the
@@ -789,6 +1174,15 @@ export function reanchorInPlace(
   if (el.kind === 'heading-arrow') {
     const alay = arrowLayout(el, vw, vh);
     const p = anchorPoint(anchor, alay.x, alay.y, alay.w, alay.h);
+    return { x: p.x / vw, y: p.y / vh };
+  }
+  if (el.kind === 'heading-tape' || el.kind === 'battery') {
+    const st = resolveElementStyle(el, theme ?? null);
+    const lay =
+      el.kind === 'heading-tape'
+        ? tapeLayout(el, st, vw, vh)
+        : batteryLayout(el, st, vw, vh);
+    const p = anchorPoint(anchor, lay.x, lay.y, lay.w, lay.h);
     return { x: p.x / vw, y: p.y / vh };
   }
   const lay = layoutElement(ctx, el, cue, vw, vh, theme ?? null);

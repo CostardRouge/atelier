@@ -57,6 +57,14 @@ const STUDIO_KINDS = ['video+telemetry', 'video'] as const;
 
 type PanelTab = 'overlay' | 'style' | 'grade' | 'info' | 'export';
 
+/**
+ * The project bar's chips. One fixed height for all of them — the save badge
+ * used to be visibly smaller than its neighbours, which made the row look like
+ * three unrelated widgets rather than one bar.
+ */
+const barPill =
+  'flex-none inline-flex items-center gap-1.5 h-[1.95rem] px-3 rounded-full border transition-colors';
+
 const TABS: Array<{ id: PanelTab; label: string }> = [
   { id: 'overlay', label: 'Overlay' },
   { id: 'style', label: 'Style' },
@@ -283,6 +291,9 @@ export default function StudioEditor({
     const placed = { ...el, y: Math.min(0.95, el.y + offset) };
     setElements((prev) => [...prev, placed]);
     setSelectedElementId(placed.id);
+    // Touching the deck answers the reset question; an armed confirmation must
+    // never sit waiting behind work done since.
+    setResettingDeck(false);
   }
 
   /** Replace the deck with the starter preset — the only destructive add. */
@@ -296,6 +307,7 @@ export default function StudioEditor({
   function removeElement(id: string) {
     setElements((prev) => prev.filter((e) => e.id !== id));
     setSelectedElementId((s) => (s === id ? null : s));
+    setResettingDeck(false);
   }
 
   function toggleVisible(id: string) {
@@ -610,12 +622,14 @@ export default function StudioEditor({
 
   return (
     <section className="flex flex-col flex-1 min-h-0 gap-4" aria-label="Studio">
-      {/* Project bar: back to gallery, editable name, save state */}
+      {/* Project bar: back to gallery, editable name, then — pinned right —
+          the save state and the format/settings pill. Every pill shares one
+          height so the row reads as a single band, not a drift of chips. */}
       <div className="flex items-center gap-3 min-w-0">
         <button
           type="button"
           onClick={onShowProjects}
-          className="flex-none inline-flex items-center gap-1.5 px-3 py-[0.4rem] rounded-full border border-line-strong bg-paper text-[0.78rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink transition-colors"
+          className={`${barPill} border-line-strong bg-paper text-[0.78rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink`}
         >
           ‹ Projects
         </button>
@@ -625,20 +639,24 @@ export default function StudioEditor({
           aria-label="Project name"
           className="flex-1 min-w-0 max-w-[24rem] font-serif text-[1.15rem] bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0.5"
         />
-        <button
-          type="button"
-          onClick={() => setShowSettings(true)}
-          className="flex-none inline-flex items-center gap-1.5 px-3 py-[0.4rem] rounded-full border border-line-strong bg-paper font-mono text-[0.68rem] tracking-[0.06em] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink transition-colors"
-          title="Project settings — name, format"
-        >
-          {ASPECT_PRESETS.find((a) => a.id === aspectId)?.id ?? aspectId} · ⚙
-        </button>
+        <span className="flex-1" />
         <span
-          className={`flex-none font-mono text-[0.64rem] tracking-[0.1em] uppercase border rounded-full px-2.5 py-[3px] ${saveBadge[saveState].cls}`}
+          className={`${barPill} font-mono text-[0.64rem] tracking-[0.1em] uppercase ${saveBadge[saveState].cls}`}
           role="status"
         >
           {saveBadge[saveState].label}
         </span>
+        <button
+          type="button"
+          onClick={() => setShowSettings(true)}
+          className={`${barPill} border-line-strong bg-paper font-mono text-[0.68rem] tracking-[0.06em] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink`}
+          title="Project settings — name, format"
+        >
+          {ASPECT_PRESETS.find((a) => a.id === aspectId)?.id ?? aspectId}
+          <span className="text-[1.05rem] leading-none" aria-hidden="true">
+            ⚙
+          </span>
+        </button>
       </div>
 
       {showSettings && (
