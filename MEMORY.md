@@ -24,7 +24,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 ## Direction in five lines
 
 - **Local-first, no server, no account**: files are read in the browser and never uploaded. Every feature must hold this line; the documented exception is the Flight Map's opt-in OpenStreetMap base layer, off by default and surfaced explicitly (README, "The one network exception"). The full list of requests the app actually makes is in `local-first.md` — it is longer than that callout.
-- **A suite, not an app**: a thin shell (`src/app/`) plus self-contained tools (`src/tools/*`) over a generic core (`src/shared/*`), all listed in one registry (`src/app/tools.tsx`).
+- **A suite converging into one Studio**: a thin shell (`src/app/`) plus self-contained tools (`src/tools/*`) over a generic core (`src/shared/*`), all listed in one registry (`src/app/tools.tsx`) — and, since 2026-08-20, an agreed plan to merge the tools into a single `/studio` editor (phases and decisions in `studio.md`).
 - **Capture-oriented**: photo and video across devices (DJI, Apple, Sony), with DJI flight telemetry as the founding case.
 - **The browser is the runtime today, not forever**: pure logic is kept DOM-free so a native shell (Tauri, bundled ffmpeg) can reuse it — `shared/sources/file-sources.ts` is meant to be the only brick that changes.
 - **Visual identity is deliberate**: "Studio Papier" — ink on warm cream, one vermilion accent, monospace numerals (`src/index.css` tokens).
@@ -39,6 +39,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - The GitHub Pages base path is derived from `GITHUB_REPOSITORY`, never hardcoded — `deployment.md`.
 - Built-in LUTs are discovered by a Vite virtual module scanning `public/luts/` — no manual list — `deployment.md`.
 - MapLibre is dynamically imported (JS + CSS) so it stays out of the main bundle — `frontend.md`.
+- The overlay engine (element model, stage, burn-in export, editing panels) is shared (`shared/overlay/`), consumed by both the Studio and the legacy overlay page — `architecture.md`, `studio.md`.
 
 ## Open items (dated; remove when done)
 
@@ -58,3 +59,4 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 | `docs/memory/deployment.md` | `vite.config.ts`, CI, GitHub Pages, `public/luts/`, anything about how the site is built |
 | `docs/memory/testing.md` | tests, what is testable, how to keep new logic testable |
 | `docs/memory/local-first.md` | anything that could touch the network, read files, or persist data |
+| `docs/memory/studio.md` | the Studio tool, the tool-merge plan, project persistence, title styles, retiring a legacy tool |
