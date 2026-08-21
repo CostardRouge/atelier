@@ -23,7 +23,7 @@ import { AUTO_TIME_SCALE, type TimeScaleSetting } from '../telemetry/time-scale'
 import type { OutputTransform } from '../lut/transfer';
 import type { SavedTrim } from '../media/trim';
 
-export const PROJECT_DOC_VERSION = 10;
+export const PROJECT_DOC_VERSION = 11;
 
 /** Identity of one media file, enough to re-match it inside a folder. */
 export interface SavedMediaRef {
@@ -204,7 +204,9 @@ export function createProjectDoc(
  * shows: a slow-motion clip used to report a fraction of its true ground speed,
  * and pinning old projects to `manual: 1` would preserve that as if it were a
  * choice. It is a measurement being corrected, it is stated in the Info tab, and
- * `manual` is one click away. Idempotent; the store runs it on every read.
+ * `manual` is one click away; v10 → v11 gives every stored variant an explicit
+ * speed of 1, which is the only speed an export could deliver before it
+ * existed. Idempotent; the store runs it on every read.
  */
 export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
   if (doc.version >= PROJECT_DOC_VERSION) return doc;
@@ -270,6 +272,15 @@ export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
     migrated.settings = {
       ...migrated.settings,
       timeScale: migrated.settings?.timeScale ?? { ...AUTO_TIME_SCALE },
+    };
+  }
+  if (migrated.version < 11) {
+    migrated.exportPrefs = {
+      ...migrated.exportPrefs,
+      variants: (migrated.exportPrefs?.variants ?? defaultVariants()).map((v) => ({
+        ...v,
+        speed: v.speed ?? 1,
+      })),
     };
   }
   migrated.version = PROJECT_DOC_VERSION;

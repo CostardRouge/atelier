@@ -112,6 +112,7 @@ export async function exportVariantVideo(
       outputSize: { width: out.w, height: out.h },
       frameRate: variant.frameRate,
       trim: opts.trim ?? null,
+      speed: variant.speed,
     },
   );
 }

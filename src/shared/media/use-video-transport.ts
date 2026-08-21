@@ -47,6 +47,13 @@ export interface TransportOptions {
    * reason shouldn't start playing on its own.
    */
   resumeAcrossMedia?: boolean;
+  /**
+   * Preview speed: 1 plays as shot, 4 runs a 4× slow-motion clip back at life's
+   * pace. **Viewing only.** Nothing derived moves with it — the readouts follow
+   * `currentTime`, which is media time whatever rate it advances at, and the
+   * export has its own delivered speed. Clamped to what the browsers accept.
+   */
+  rate?: number;
 }
 
 export interface VideoTransport {
@@ -60,6 +67,14 @@ export interface VideoTransport {
 }
 
 const DRIFT = 0.15;
+/** Chromium and Safari refuse a playbackRate outside roughly this range. */
+const MIN_RATE = 0.0625;
+const MAX_RATE = 16;
+
+export function clampPlaybackRate(rate: number): number {
+  if (!Number.isFinite(rate) || rate <= 0) return 1;
+  return Math.min(MAX_RATE, Math.max(MIN_RATE, rate));
+}
 
 export function useVideoTransport(
   videoRef: RefObject<HTMLVideoElement | null>,
@@ -78,10 +93,16 @@ export function useVideoTransport(
     rangeRef,
     loopRef,
     resumeAcrossMedia,
+    rate = 1,
   } = opts ?? {};
   // Whether the element is playing, readable synchronously — the state above
   // is already reset by the time the new media's events arrive.
   const playingRef = useRef(false);
+  const playbackRate = clampPlaybackRate(rate);
+  // Read by the `loadedmetadata` listener below, which is wired once per media
+  // and would otherwise capture the rate as it was when the clip loaded.
+  const rateRef = useRef(playbackRate);
+  rateRef.current = playbackRate;
 
   useEffect(() => {
     // New media (or none): the clock restarts; duration refreshes on
@@ -142,6 +163,10 @@ export function useVideoTransport(
     };
     const onMeta = () => {
       setDuration(Number.isFinite(v.duration) ? v.duration : 0);
+      // Re-assert the rate on new media: the element keeps it across a load in
+      // every browser we target, but "in every browser we target" is exactly
+      // the kind of assumption that breaks one release later.
+      v.playbackRate = rateRef.current;
       onLoadedMetadata?.(v);
       // Hand playback over to the new clip. The element is muted, and the
       // gesture that started playback already happened, so this is allowed;
@@ -164,6 +189,16 @@ export function useVideoTransport(
     // Listeners close over the tool's latest callbacks; re-wiring is driven by
     // the media (resetKey), not by callback identity.
   }, [resetKey]);
+
+  // The rate applies to the lead and to every follower, so an A/B pair stays
+  // together rather than drifting apart at speed.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.playbackRate = playbackRate;
+    for (const f of followers?.() ?? []) f.playbackRate = playbackRate;
+    // `followers` is a fresh closure each render; the rate is what drives this.
+  }, [playbackRate, resetKey]);
 
   const togglePlay = () => {
     const v = videoRef.current;

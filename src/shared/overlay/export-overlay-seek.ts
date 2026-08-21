@@ -33,6 +33,8 @@ import {
 import {
   outputFrameCount,
   resolveFrameRate,
+  resolveSpeed,
+  retimedDuration,
   type ExportFrameRate,
 } from '../media/frame-rate';
 import type { CubeLut } from '../lib/cube-parser';
@@ -89,7 +91,12 @@ function waitFor(video: HTMLVideoElement, event: string): Promise<void> {
 /**
  * Render `file` with overlays burned in, decoding via a `<video>` element so
  * any browser-playable codec works. Returns a new H.264 MP4 Blob.
- * `frameRate` picks the delivery cadence ('source' / omitted = the clip's own).
+ * `frameRate` picks the delivery cadence ('source' / omitted = the clip's own),
+ * `speed` the delivered speed (1 = as shot). This path samples the timeline by
+ * seeking, so a re-time is just where it seeks to — but it drops the audio for
+ * the same reason the WebCodecs path does, and must keep doing so: the studio
+ * falls back here for undecodable HEVC, and a variant that quietly ignored its
+ * speed would ship a normal clip under a `-2x` name.
  */
 export async function exportOverlayVideoViaSeek(
   file: File,
@@ -104,6 +111,7 @@ export async function exportOverlayVideoViaSeek(
   frameRate?: ExportFrameRate,
   /** Render only this slice of the source; null renders the whole clip. */
   trim?: TrimRange | null,
+  speed?: number,
 ): Promise<Blob> {
   if (!isEncodeSupported()) {
     throw new Error('This browser does not support WebCodecs encoding.');
@@ -132,12 +140,14 @@ export async function exportOverlayVideoViaSeek(
   // capture clock), only the encoded timestamps restart at 0.
   const startSec = Math.max(0, trim?.start ?? 0);
   const endSec = trim ? Math.max(startSec, trim.end) : durationSec;
+  const rate = resolveSpeed(speed);
   // This path already samples the timeline at `i / framerate`, so a delivery
   // cadence just changes the grid — and the sample count with it. A trim
-  // shortens the span the grid covers.
+  // shortens the span the grid covers; a speed changes how much source each
+  // step advances across that span, and therefore how many steps there are.
   const frameCount =
-    trim || framerate !== sourceFramerate
-      ? outputFrameCount(endSec - startSec, framerate)
+    trim || framerate !== sourceFramerate || rate !== 1
+      ? outputFrameCount(retimedDuration(endSec - startSec, rate), framerate)
       : videoSamples.length;
 
   // Decode source: an offscreen, muted <video>. A <video> element applies the
@@ -180,13 +190,16 @@ export async function exportOverlayVideoViaSeek(
       target: new ArrayBufferTarget(),
       // Pixels are already upright; no rotation flag.
       video: { codec: 'avc', width: outWidth, height: outHeight, rotation: 0 },
-      audio: audioTrack
-        ? {
-            codec: 'aac',
-            sampleRate: audioTrack.audio?.sample_rate ?? 48000,
-            numberOfChannels: audioTrack.audio?.channel_count ?? 2,
-          }
-        : undefined,
+      // Declared only when it will actually be copied: a re-timed export is
+      // silent, and an empty audio track is worse than none.
+      audio:
+        audioTrack && rate === 1
+          ? {
+              codec: 'aac',
+              sampleRate: audioTrack.audio?.sample_rate ?? 48000,
+              numberOfChannels: audioTrack.audio?.channel_count ?? 2,
+            }
+          : undefined,
       fastStart: 'in-memory',
       firstTimestampBehavior: 'cross-track-offset',
     });
@@ -215,14 +228,26 @@ export async function exportOverlayVideoViaSeek(
       throwIfAborted();
       if (pipelineError) throw pipelineError;
 
-      const t = startSec + i / framerate;
+      // Where the output is, and the source instant it shows: the trim moves
+      // the origin, the speed decides how fast the source is walked from it.
+      // Overlays read the SOURCE time, so a burned-in readout still belongs to
+      // the frame under it.
+      const out = i / framerate;
+      const t = startSec + out * rate;
       await seekTo(video, t);
       const source = grade ? grade.render(video) : video;
       ctx.drawImage(source, 0, 0, outWidth, outHeight);
-      drawOverlays(ctx, elements, findCue(cues, t), outWidth, outHeight, { theme, timeSeconds: t, timeShift, cues });
+      drawOverlays(ctx, elements, findCue(cues, t), outWidth, outHeight, {
+        theme,
+        timeSeconds: t,
+        timeShift,
+        cues,
+      });
 
       const vf = new VideoFrame(canvas, {
-        timestamp: Math.round((t - startSec) * 1_000_000),
+        // The OUTPUT instant, not the source one: a re-time is precisely the
+        // two drifting apart, and a trim moves where the source starts.
+        timestamp: Math.round(out * 1_000_000),
         duration: frameDuration,
       });
       encoder.encode(vf, { keyFrame: i % gop === 0 });
@@ -235,9 +260,11 @@ export async function exportOverlayVideoViaSeek(
     await encoder.flush();
     if (pipelineError) throw pipelineError;
 
+    // Silent when re-timed — a copied track against a re-timed picture is a
+    // desync, and the caller has said so in the UI. See media/frame-rate.ts.
     copyAudio(
       muxer,
-      audioTrack,
+      rate === 1 ? audioTrack : null,
       audioSamples,
       trim
         ? {

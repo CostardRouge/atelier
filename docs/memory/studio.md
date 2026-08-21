@@ -78,6 +78,18 @@ Read before touching `src/tools/studio/`, `src/shared/overlay/`, anything about 
 
 **The container can never answer this.** A conformed file honestly declares the rate it *plays* at; the rate it was shot at is written nowhere in the mp4. Only the telemetry knows — hence a clip with no `.srt` gets an honest "unknown" plus the manual override, never a guess. And `parseSrt` applies the measurement **by default**, so the map, composer and legacy panels are right without knowing the concept exists; the studio parses at scale 1 and applies `ProjectSettings.timeScale` (`auto` | `manual`, ProjectDoc v8) itself. The v8 migration is the one that deliberately changes what an old project shows: pinning it to `manual: 1` would preserve a wrong measurement as if it had been a choice.
 
+## Two speeds, and they must never be confused (2026-08-21)
+
+**Decision.** *Playback speed* is a **viewing** choice — `video.playbackRate` on the transport, session state, no document field, and nothing derived follows it (the readouts key off `currentTime`, which is media time whatever rate it advances at). *Delivered speed* is a **per-variant export** choice that really re-times the file, and it sits in the export matrix beside aspect / resolution / frame rate, where a per-variant delivery decision belongs. Both offer the factor that undoes the clip's own conform (`real (4×)` on the transport, "4× speed — real time" in the variant menu), which is the whole reason the cadence measurement exists.
+
+**The arithmetic is one line, on purpose.** The source span is divided by the speed *before* it meets the existing `1/fps` grid (`planFrameIndices`), so cadence and speed compose instead of fighting: 2× at the source rate drops every other frame, 0.5× repeats each one, 2× at 30 fps from 60 fps keeps a quarter. No interpolation, ever — the same rule the frame-rate control already followed.
+
+**A re-timed variant ships silent, and that is a decision, not an omission.** Audio is copied bit-for-bit and never re-encoded (see `media-pipeline.md`); a copied track against a re-timed picture is a desync, which is worse than no track. The muxer must not even *declare* an audio track in that case — an empty track is worse than none — and the UI says it before the export runs. Both export paths do this: the seek fallback too, because the studio falls back there for undecodable HEVC and a variant that quietly ignored its speed would ship a normal clip under a `-2x` name.
+
+**Burned-in telemetry does not change under a re-time**: every output frame still draws the cue of the source frame it shows, so a sped-up clip reports how fast the aircraft really flew. That falls out of deriving motion in capture seconds (above) — don't "fix" it.
+
+**Trap for whoever tests this in CI or a container**: the headless Chromium in this project's cloud sessions has **no H.264 encoder** (`VideoEncoder.isConfigSupported` says false for every `avc1.*`; VP8/VP9 only), and `MediaRecorder`'s `video/mp4` writes VP9 in an MP4, which the export pipeline rejects for want of an `avcC`. So no export can be driven end to end there — verify the retime through `frame-rate.test.ts` and the UI, and run the encode on a real machine.
+
 ## The heading is course over ground, and it has holes (2026-08-21)
 
 **The cause, so no future session re-diagnoses it.** The `.srt` carries no compass and no yaw. `motion.ts` reconstructs the heading as the azimuth between GPS fixes ~1 s apart, and **suppresses it** below `MIN_MOVE_M = 1` metre of horizontal travel — hovering, creeping, or **yawing on the spot** (nose turns, ground track doesn't) all produce nothing. Do **not** lower that floor to "fix" the gaps: it trades a gap for a weathervane driven by GPS noise.

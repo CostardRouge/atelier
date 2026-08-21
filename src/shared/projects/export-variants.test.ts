@@ -69,6 +69,16 @@ describe('naming', () => {
     expect(variantFileName('vol', variant({ frameRate: 24 }))).toBe('vol-24fps.mp4');
   });
 
+  it('names a re-timed variant by its speed', () => {
+    expect(variantFileName('vol', variant({ speed: 2 }))).toBe('vol-2x.mp4');
+    expect(variantFileName('vol', variant({ speed: 0.5 }))).toBe('vol-0.5x.mp4');
+    // Normal speed is not a departure, so it adds nothing.
+    expect(variantFileName('vol', variant({ speed: 1 }))).toBe('vol.mp4');
+    expect(
+      variantFileName('vol', variant({ resolution: 1080, speed: 4, overlays: false })),
+    ).toBe('vol-1080p-4x-clean.mp4');
+  });
+
   it('trims a pasted .mp4 and falls back on an empty base', () => {
     expect(variantFileName(' clip.mp4 ', variant())).toBe('clip.mp4');
     expect(variantFileName('   ', variant())).toBe('export.mp4');

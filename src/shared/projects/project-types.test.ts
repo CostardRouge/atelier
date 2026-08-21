@@ -75,6 +75,23 @@ describe('migrateProjectDoc', () => {
     expect(v.overlays).toBe(false);
   });
 
+  it('gives a pre-v9 variant the speed it was exported at — normal', () => {
+    const doc = v1Doc();
+    const stored = {
+      ...doc,
+      version: 8,
+      exportPrefs: {
+        fileName: null,
+        variants: [
+          { id: 'a', aspectId: 'source', resolution: 'source', frameRate: 30, overlays: true },
+        ],
+      },
+    } as unknown as ProjectDoc;
+    const [v] = migrateProjectDoc(stored).exportPrefs.variants;
+    expect(v.speed).toBe(1);
+    expect(v.frameRate).toBe(30);
+  });
+
   it('keeps a capture-time correction that is already set', () => {
     const doc = v1Doc();
     doc.settings = { ...doc.settings, timeShift: { minutes: -90, days: 1 } };

@@ -33,7 +33,14 @@ function sampleDoc(): ProjectDoc {
   doc.exportPrefs = {
     fileName: 'sunset',
     variants: [
-      { id: 'v1', aspectId: '9:16', resolution: 1080, frameRate: 30, overlays: true },
+      {
+        id: 'v1',
+        aspectId: '9:16',
+        resolution: 1080,
+        frameRate: 30,
+        speed: 1,
+        overlays: true,
+      },
     ],
   };
   // Bound half: must never travel. Trims included — in/out points are seconds

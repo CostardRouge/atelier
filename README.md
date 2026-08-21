@@ -195,6 +195,12 @@ drop to the no-data state at once. The smoothing is a pure function of the cue
 list and the playhead, never an accumulator over rendered frames, so the export
 burns in exactly what the preview showed.
 
+**Playback speed.** The transport carries a speed picker (0.25× to 4×) that
+changes **only what you are watching** — no readout moves with it, and the
+export has its own delivered speed. On a conformed clip it also offers
+`real (4×)`, which plays a 4× ralenti back at the pace it was flown; that option
+follows the clip, so it stays right when you step to another one.
+
 **Keyboard.** `Space` plays and pauses the clip — here and in Grade, Compare,
 Composer and the legacy Overlay, all of which share one transport — and
 `Delete` (or `Backspace`) removes the selected overlay element. Both stand
@@ -233,10 +239,19 @@ layout by surprise.
 each *variant* picks a frame (source or any destination preset — a landscape
 master cover-crops into 9:16 with the overlays recomposed for that frame), a
 delivery resolution (short-side 1080p/720p, never upscaled), a **frame rate**
-(source, or 24/25/30/48/50/60/120) and whether the overlays burn in. The clip
-keeps its duration whatever the cadence — below the source rate frames are
-dropped, above it they are duplicated, and the panel says so rather than
-implying interpolated motion. Names follow automatically (`vol-9x16-1080p-30fps-clean.mp4` —
+(source, or 24/25/30/48/50/60/120), a **speed** and whether the overlays burn
+in. The clip keeps its duration whatever the cadence — below the source rate
+frames are dropped, above it they are duplicated, and the panel says so rather
+than implying interpolated motion. The **speed** is the other axis: it moves the
+duration and leaves the cadence alone (2× delivers half as long at the same
+fps), the menu offers the one that puts a conformed clip back at life's pace
+(“4× speed — real time” on a 4× ralenti), and the row states what you will get —
+`2× speed — 0:01 instead of 0:03, delivered without audio`. Silent on purpose:
+audio is copied bit-for-bit and never re-encoded here, and a copied track
+against a re-timed picture is a desync, which is worse than no track. Burned-in
+telemetry is unaffected — every frame keeps its own reading, so a sped-up clip
+still says how fast the aircraft was really flying. Names follow automatically
+(`vol-9x16-1080p-30fps-2x-clean.mp4` —
 suffixes only where a variant departs from the source), the base name is
 editable, and the whole matrix persists with the project (templates carry
 it). Variants render sequentially with per-variant progress, each row counting

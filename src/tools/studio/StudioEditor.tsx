@@ -2,7 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { useActiveAsset } from '../../shared/library/use-active-asset';
 import { useObjectUrl } from '../../shared/media/use-object-url';
-import { useVideoTransport } from '../../shared/media/use-video-transport';
+import {
+  clampPlaybackRate,
+  useVideoTransport,
+} from '../../shared/media/use-video-transport';
 import { formatDuration, formatTimecode } from '../../shared/lib/format';
 import { isEncodeSupported } from '../../shared/media/webcodecs-export';
 import { useVideoScrub } from '../../shared/media/use-video-scrub';
@@ -46,6 +49,9 @@ import {
 import { DecodeUnsupportedError } from '../../shared/media/webcodecs-export';
 import {
   FRAME_RATE_CHOICES,
+  SPEED_CHOICES,
+  resolveSpeed,
+  retimedDuration,
   type ExportFrameRate,
 } from '../../shared/media/frame-rate';
 import {
@@ -58,6 +64,7 @@ import {
   createVariant,
   defaultVariants,
   variantFileName,
+  variantIsRetimed,
   variantOutputSize,
   type ExportVariant,
   type VariantResolution,
@@ -217,6 +224,11 @@ export default function StudioEditor({
   const [timeScale, setTimeScale] = useState<TimeScaleSetting>(
     () => project.settings.timeScale ?? { ...AUTO_TIME_SCALE },
   );
+  // Preview speed. A viewing choice, not the composition's: session state, no
+  // document field, and nothing derived follows it. 'realtime' tracks the
+  // clip's own cadence, so a 4× ralenti plays back at life's pace and a
+  // hyperlapse crawls — and it stays right when the clip changes.
+  const [previewSpeed, setPreviewSpeed] = useState<number | 'realtime'>(1);
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState<StyleTheme | null>(() => project.theme);
   const [saveState, setSaveState] = useState<SaveState>('saved');
@@ -324,6 +336,16 @@ export default function StudioEditor({
   const overridden = overrideApplies(timeScale, activeId);
   const scale = resolveTimeScale(timeScale, timing, activeId);
   const cues = useMemo(() => retimeCues(rawCues, scale), [rawCues, scale]);
+  // Undoing the conform is exactly playing at 1/scale: a 4× slow clip at 4×.
+  const realtimeRate = clampPlaybackRate(1 / scale);
+  // The delivered-speed menu: the standard steps, plus the one that undoes this
+  // clip's own conform when that is not already among them.
+  const speedChoices = useMemo(() => {
+    const set = new Set<number>(SPEED_CHOICES);
+    if (realtimeRate !== 1) set.add(Math.round(realtimeRate * 100) / 100);
+    return [...set].sort((a, b) => a - b);
+  }, [realtimeRate]);
+  const previewRate = previewSpeed === 'realtime' ? realtimeRate : previewSpeed;
 
   // Probe the active clip's container for codec + fps (best-effort).
   useEffect(() => {
@@ -349,6 +371,7 @@ export default function StudioEditor({
       loopRef,
       // Stepping through a project's clips shouldn't stop the transport.
       resumeAcrossMedia: true,
+      rate: previewRate,
       onLoadedMetadata: (v) => {
         if (v.currentTime === 0) {
           try {
@@ -791,6 +814,7 @@ export default function StudioEditor({
               controller.signal,
               variant.frameRate,
               opts.trim,
+              variant.speed,
             );
           } else if (err instanceof DecodeUnsupportedError) {
             throw new Error(
@@ -1202,6 +1226,34 @@ export default function StudioEditor({
               >
                 {grabbing ? '…' : '⌾'}
               </button>
+              {/* Preview speed. Viewing only — it moves no readout and no
+                  export; the delivered speed lives in the Export tab. */}
+              <select
+                value={previewSpeed === 'realtime' ? 'realtime' : String(previewSpeed)}
+                onChange={(e) =>
+                  setPreviewSpeed(
+                    e.target.value === 'realtime' ? 'realtime' : Number(e.target.value),
+                  )
+                }
+                className={`flex-none pl-2 pr-1 py-1 rounded-full border font-mono text-[0.64rem] tracking-[0.06em] cursor-pointer transition-colors focus:outline-none ${
+                  previewRate === 1
+                    ? 'border-line-strong bg-paper text-muted hover:text-accent-ink hover:border-accent'
+                    : 'border-accent bg-accent-wash text-accent-ink'
+                }`}
+                aria-label="Preview speed"
+                title="Preview speed — the readouts and the export are untouched"
+              >
+                {SPEED_CHOICES.map((sp) => (
+                  <option key={sp} value={sp}>
+                    {sp}×
+                  </option>
+                ))}
+                {realtimeRate !== 1 && (
+                  <option value="realtime">
+                    real ({Math.round(realtimeRate * 100) / 100}×)
+                  </option>
+                )}
+              </select>
               <button
                 type="button"
                 onClick={() => setCompareOn((c) => !c)}
@@ -1561,6 +1613,36 @@ export default function StudioEditor({
                               ))}
                             </select>
                           </div>
+                          <div className="flex items-center gap-2">
+                            <select
+                              className="flex-1 min-w-0 font-sans text-[0.78rem] px-2 py-[0.35rem] border border-line-strong rounded-paper bg-surface text-ink cursor-pointer focus:outline-none focus:border-accent"
+                              value={String(resolveSpeed(v.speed))}
+                              onChange={(e) =>
+                                updateVariant(v.id, { speed: Number(e.target.value) })
+                              }
+                              aria-label="Variant speed"
+                              title="Delivered speed — the clip's duration changes, its cadence does not"
+                            >
+                              {speedChoices.map((sp) => (
+                                <option key={sp} value={sp}>
+                                  {sp === 1 ? 'Normal speed' : `${sp}× speed`}
+                                  {sp !== 1 && sp === realtimeRate ? ' — real time' : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          {/* A re-time is a real change of duration, and the
+                              audio cannot follow it — say both before it runs. */}
+                          {variantIsRetimed(v) && (
+                            <p className="m-0 text-[0.7rem] leading-snug text-muted">
+                              {resolveSpeed(v.speed)}× speed
+                              {duration > 0
+                                ? ` — ${formatDuration(retimedDuration(duration, v.speed))} instead of ${formatDuration(duration)}`
+                                : ''}
+                              , delivered without audio: a copied track would
+                              drift against a re-timed picture.
+                            </p>
+                          )}
                           {/* Say what a higher cadence really does: the encoder
                               repeats frames, it does not invent motion. */}
                           {sourceFps && v.frameRate !== 'source' && v.frameRate > sourceFps && (
