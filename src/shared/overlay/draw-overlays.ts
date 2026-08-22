@@ -971,6 +971,93 @@ function getScratch(key: 'grain' | 'mask', w: number, h: number): Scratch | null
 }
 
 /**
+ * One element's grain mask (blurred white text), kept across frames.
+ *
+ * The mask depends only on the glowing text's content, font and glow radius
+ * — never on `timeSeconds` — so redrawing it every frame throws away two
+ * shadow-blurred `fillText` calls (the single most expensive step in the
+ * glow) on a bitmap that is almost always identical to the previous frame's.
+ * Keyed by element id, not by content, so a size-preserving text change
+ * (e.g. a digit ticking over) reuses the same backing canvas.
+ */
+interface MaskCacheEntry {
+  key: string;
+  canvas: HTMLCanvasElement | OffscreenCanvas;
+  w: number;
+  h: number;
+}
+
+const maskCache = new Map<string, MaskCacheEntry>();
+
+/** Defensive backstop against unbounded growth (elements created and never reused). */
+const MAX_MASK_CACHE = 256;
+
+function getMaskFor(
+  elementId: string,
+  lay: Layout,
+  glow: GlowLayers,
+  w: number,
+  h: number,
+  bx: number,
+  by: number,
+): HTMLCanvasElement | OffscreenCanvas | null {
+  const key = `${lay.text} ${lay.font} ${lay.st.letterSpacingEm} ${glow.bleedRadiusFrac} ${bx.toFixed(2)},${by.toFixed(2)}`;
+  const cached = maskCache.get(elementId);
+  if (cached && cached.key === key && cached.w === w && cached.h === h) {
+    return cached.canvas;
+  }
+
+  // Render into the shared, grow-only scratch first (steps 1's old home) —
+  // this is the expensive part, and it only runs on an actual cache miss.
+  const scratch = getScratch('mask', w, h);
+  if (!scratch) return null;
+  const mctx = scratch.ctx;
+  mctx.save();
+  mctx.globalCompositeOperation = 'source-over';
+  mctx.globalAlpha = 1;
+  mctx.clearRect(0, 0, w, h);
+  mctx.font = lay.font;
+  mctx.textBaseline = 'alphabetic';
+  mctx.textAlign = 'left';
+  setLetterSpacing(mctx, lay.st.letterSpacingEm, lay.fontPx);
+  mctx.fillStyle = '#ffffff';
+  mctx.shadowColor = 'rgba(255,255,255,1)';
+  mctx.shadowBlur = Math.max(1, glow.bleedRadiusFrac * lay.fontPx);
+  mctx.shadowOffsetX = 0;
+  mctx.shadowOffsetY = 0;
+  mctx.fillText(lay.text, bx, by);
+  mctx.fillText(lay.text, bx, by);
+  setLetterSpacing(mctx, 0, lay.fontPx);
+  mctx.restore();
+
+  // Snapshot into a dedicated, element-owned canvas: the shared scratch is
+  // overwritten by the next glowing element in the same paint pass, so it
+  // cannot double as the cache's storage.
+  if (maskCache.size > MAX_MASK_CACHE) maskCache.clear();
+  let entry = cached;
+  if (!entry || entry.w !== w || entry.h !== h) {
+    const canvas =
+      typeof document !== 'undefined'
+        ? document.createElement('canvas')
+        : typeof OffscreenCanvas !== 'undefined'
+          ? new OffscreenCanvas(w, h)
+          : null;
+    if (!canvas) return null;
+    canvas.width = w;
+    canvas.height = h;
+    entry = { key, canvas, w, h };
+  } else {
+    entry.key = key;
+  }
+  const ectx = entry.canvas.getContext('2d') as Ctx2D | null;
+  if (!ectx) return null;
+  ectx.clearRect(0, 0, w, h);
+  ectx.drawImage(scratch.canvas, 0, 0, w, h, 0, 0, w, h);
+  maskCache.set(elementId, entry);
+  return entry.canvas;
+}
+
+/**
  * Grain over one glow — the fourth halation layer.
  *
  * It is masked by **the glow's own shape**, not by a bounding box. Painting a
@@ -979,10 +1066,10 @@ function getScratch(key: 'grain' | 'mask', w: number, h: number): Scratch | null
  * edge, and the brighter the glow the larger and more obvious the patch.
  *
  * So the grain is composed in a scratch buffer and cut down with
- * `destination-in` against the same blurred text the bleed layer paints. The
- * result carries the glow's soft falloff as its alpha: grain is strongest on
- * the letters, thins out through the halation, and reaches zero exactly where
- * the glow does — no edge to see.
+ * `destination-in` against the same blurred text the bleed layer paints (see
+ * `getMaskFor`, cached across frames). The result carries the glow's soft
+ * falloff as its alpha: grain is strongest on the letters, thins out through
+ * the halation, and reaches zero exactly where the glow does — no edge to see.
  *
  * The mask is built in its OWN buffer first. Drawing shadowed text straight
  * into a `destination-in` context loses the shadow — measured in Chromium:
@@ -994,6 +1081,7 @@ function drawShapedGrain(
   lay: Layout,
   glow: GlowLayers,
   timeSeconds: number,
+  elementId: string,
 ): void {
   const tile = getGrainTile();
   if (!tile || glow.grainAlpha <= 0) return;
@@ -1008,31 +1096,12 @@ function drawShapedGrain(
   // No buffer available (no DOM, no OffscreenCanvas, or an absurd radius):
   // skip the grain rather than fall back to painting a square.
   const buf = getScratch('grain', w, h);
-  const mask = getScratch('mask', w, h);
-  if (!buf || !mask) return;
+  if (!buf) return;
 
-  // 1 — the mask: white text with the same wide shadow the bleed layer uses,
-  //     drawn twice to match the doubled bleed, under NORMAL compositing.
-  const mctx = mask.ctx;
-  mctx.save();
-  mctx.globalCompositeOperation = 'source-over';
-  mctx.globalAlpha = 1;
-  mctx.clearRect(0, 0, w, h);
-  mctx.font = lay.font;
-  mctx.textBaseline = 'alphabetic';
-  mctx.textAlign = 'left';
-  setLetterSpacing(mctx, lay.st.letterSpacingEm, lay.fontPx);
-  mctx.fillStyle = '#ffffff';
-  mctx.shadowColor = 'rgba(255,255,255,1)';
-  mctx.shadowBlur = Math.max(1, glow.bleedRadiusFrac * lay.fontPx);
-  mctx.shadowOffsetX = 0;
-  mctx.shadowOffsetY = 0;
   const bx = lay.x - x;
   const by = lay.y - y + lay.ascent;
-  mctx.fillText(lay.text, bx, by);
-  mctx.fillText(lay.text, bx, by);
-  setLetterSpacing(mctx, 0, lay.fontPx);
-  mctx.restore();
+  const mask = getMaskFor(elementId, lay, glow, w, h, bx, by);
+  if (!mask) return;
 
   // 2 — the noise field, offset deterministically from the media time so the
   //     preview and the export grain identically at the same frame.
@@ -1052,7 +1121,7 @@ function drawShapedGrain(
 
   // 3 — cut the field down to the glow's shape.
   bctx.globalCompositeOperation = 'destination-in';
-  bctx.drawImage(mask.canvas, 0, 0, w, h, 0, 0, w, h);
+  bctx.drawImage(mask, 0, 0, w, h, 0, 0, w, h);
   bctx.restore();
 
   // 4 — onto the frame, 'overlay' so it bites the bright halo and the dark
@@ -1075,6 +1144,7 @@ function drawGlowedText(
   lay: Layout,
   glow: GlowLayers,
   timeSeconds: number,
+  elementId: string,
 ): void {
   const { st, fontPx } = lay;
   const baselineY = lay.y + lay.ascent;
@@ -1122,7 +1192,7 @@ function drawGlowedText(
   setLetterSpacing(ctx, 0, fontPx);
 
   // 4 — grain, shaped by the glow rather than by a bounding box.
-  drawShapedGrain(ctx, lay, glow, timeSeconds);
+  drawShapedGrain(ctx, lay, glow, timeSeconds, elementId);
 }
 
 /** Paint all visible elements onto `ctx`. */
@@ -1185,7 +1255,7 @@ export function drawOverlays(
     }
 
     if (lay.st.glow) {
-      drawGlowedText(ctx, lay, lay.st.glow, timeSeconds);
+      drawGlowedText(ctx, lay, lay.st.glow, timeSeconds, el.id);
       continue;
     }
 
