@@ -248,6 +248,14 @@ export interface OverlayElement {
   rotateReturn?: boolean;
   /** Where the caption sits relative to the phone. Default 'below'. */
   rotateLabel?: LabelPlacement;
+  /**
+   * The phone's height as a fraction of `sizeFrac`'s square. Default 0.66.
+   * Sized independently of `rotateArcScale` — see draw-overlays.ts for why:
+   * the two must never touch across the whole turn.
+   */
+  rotatePhoneScale?: number;
+  /** The turn arrow's radius, same fraction. Default 0.44. */
+  rotateArcScale?: number;
 
   // --- timing --------------------------------------------------------------
 
@@ -500,6 +508,8 @@ export function createRotateDeviceElement(): OverlayElement {
     rotateCycleSeconds: 1.8,
     rotateReturn: true,
     rotateLabel: 'below',
+    rotatePhoneScale: 0.66,
+    rotateArcScale: 0.44,
     legibility: { mode: 'shadow', color: 'rgba(0,0,0,0.55)', padFrac: 0.3 },
   };
 }

@@ -739,6 +739,36 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
               <option value="ccw">Anticlockwise — onto its left side</option>
             </select>
           </label>
+          <div className="flex gap-2">
+            <label className="flex flex-col gap-1 flex-1 min-w-0">
+              <span className={labelClass}>
+                Phone size · {Math.round((element.rotatePhoneScale ?? 0.66) * 100)}%
+              </span>
+              <input
+                type="range"
+                className="w-full accent-accent cursor-pointer"
+                min={0.3}
+                max={0.85}
+                step={0.02}
+                value={element.rotatePhoneScale ?? 0.66}
+                onChange={(e) => change({ rotatePhoneScale: Number(e.target.value) })}
+              />
+            </label>
+            <label className="flex flex-col gap-1 flex-1 min-w-0">
+              <span className={labelClass}>
+                Arrow size · {Math.round((element.rotateArcScale ?? 0.44) * 100)}%
+              </span>
+              <input
+                type="range"
+                className="w-full accent-accent cursor-pointer"
+                min={0.2}
+                max={0.48}
+                step={0.02}
+                value={element.rotateArcScale ?? 0.44}
+                onChange={(e) => change({ rotateArcScale: Number(e.target.value) })}
+              />
+            </label>
+          </div>
           <label className="flex flex-col gap-1">
             <span className={labelClass}>
               Cycle · {(element.rotateCycleSeconds ?? 1.8).toFixed(1)} s

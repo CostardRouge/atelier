@@ -1251,15 +1251,29 @@ interface RotateLayout {
   /** Centre of the square the phone tips inside. */
   cx: number;
   cy: number;
-  /** The square's side — the phone's height, its widest extent once tipped. */
+  /** The square's side — the box the phone tips inside and the arc runs in. */
   side: number;
   phoneW: number;
   phoneH: number;
+  /** Turn-arrow radius and stroke weight, sized independently of the phone. */
+  arcRadius: number;
+  arcWeight: number;
   fontPx: number;
   caption: string;
   place: LabelPlacement;
   gap: number;
 }
+
+/**
+ * Default fraction of the box `side` the phone's height uses, and the arc's
+ * radius. Chosen so neither touches the other AT ANY POINT of the turn: the
+ * phone's farthest reach from the box centre is its half-diagonal, which does
+ * not change as it rotates (only which direction it points does) — so keeping
+ * that half-diagonal comfortably inside the arc's inner edge is enough,
+ * whatever `localSeconds` lands on.
+ */
+const DEFAULT_PHONE_SCALE = 0.66;
+const DEFAULT_ARC_SCALE = 0.44;
 
 /**
  * The pictogram's geometry. The phone tips a quarter turn, so the box that
@@ -1274,12 +1288,16 @@ function rotateLayout(
   vw: number,
   vh: number,
 ): RotateLayout {
-  // `sizeFrac` sizes the SQUARE the phone tips inside, and the phone is drawn
-  // a little smaller than it so the turn arrow has room to run outside the
-  // handset without leaving the element's box.
+  // `sizeFrac` sizes the SQUARE the phone tips inside; `rotatePhoneScale` and
+  // `rotateArcScale` size the phone and the turn arrow independently within
+  // it, both as a fraction of `side` — that independence is the point: making
+  // the arrow bigger must not also inflate the phone it arcs around, and vice
+  // versa.
   const side = Math.max(8, st.sizeFrac * refDim(vw, vh));
-  const phoneH = side * 0.82;
+  const phoneH = side * (el.rotatePhoneScale ?? DEFAULT_PHONE_SCALE);
   const phoneW = phoneH * 0.52;
+  const arcRadius = side * (el.rotateArcScale ?? DEFAULT_ARC_SCALE);
+  const arcWeight = Math.max(0.8, side * 0.028);
   const fontPx = Math.max(4, side * 0.15);
   const caption = st.uppercase ? (el.text ?? '').toUpperCase() : (el.text ?? '');
   const place: LabelPlacement = caption.trim() ? (el.rotateLabel ?? 'below') : 'none';
@@ -1309,6 +1327,8 @@ function rotateLayout(
     side,
     phoneW,
     phoneH,
+    arcRadius,
+    arcWeight,
     fontPx,
     caption,
     place,
@@ -1385,7 +1405,7 @@ function drawRotateDevice(
   ctx.save();
   ctx.translate(lay.cx, lay.cy);
   ctx.globalAlpha = alpha(0.9);
-  drawTurnArrow(ctx, lay.side * 0.47, stroke, (el.rotateDirection ?? 'cw') === 'cw');
+  drawTurnArrow(ctx, lay.arcRadius, lay.arcWeight, (el.rotateDirection ?? 'cw') === 'cw');
   ctx.restore();
 
   // The phone itself.
