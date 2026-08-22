@@ -126,6 +126,10 @@ const TABS: Array<{ id: PanelTab; label: string }> = [
 
 const notice =
   'my-2 px-4 py-[0.7rem] rounded-paper bg-accent-wash border border-[#eccabf] text-[#7c2e1c] text-[0.84rem] leading-[1.5]';
+/** Same shape as `notice`, without the warning colour — for media that is
+ * absent but not necessarily a problem (see the missing-media banner below). */
+const noticeMuted =
+  'my-2 px-4 py-[0.7rem] rounded-paper bg-paper-2 border border-line text-ink-soft text-[0.84rem] leading-[1.5]';
 
 type SaveState = 'saved' | 'saving' | 'unsaved' | 'storage-error';
 
@@ -141,6 +145,9 @@ interface StudioEditorProps {
   onDocSaved: (doc: ProjectDoc) => void;
   /** Re-point the media folder (missing/changed media, or no handle). */
   onRepoint: () => void;
+  /** Drop the currently-missing media from this project's known list, so it
+   * stops being flagged next time the project opens (see the banner below). */
+  onForgetMissing: () => void;
 }
 
 /**
@@ -158,6 +165,7 @@ export default function StudioEditor({
   onShowProjects,
   onDocSaved,
   onRepoint,
+  onForgetMissing,
 }: StudioEditorProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -983,8 +991,11 @@ export default function StudioEditor({
     },
   };
 
-  const mediaTrouble =
-    reconciliation && reconciliation.missing + reconciliation.changed > 0;
+  const missingCount = reconciliation?.missing ?? 0;
+  const changedCount = reconciliation?.changed ?? 0;
+  const hasMissing = missingCount > 0;
+  const hasChanged = changedCount > 0;
+  const mediaTrouble = hasMissing || hasChanged;
 
   return (
     <section className="flex flex-col flex-1 min-h-0 gap-4" aria-label="Studio">
@@ -1055,14 +1066,17 @@ export default function StudioEditor({
       )}
 
       {mediaTrouble && (
-        <div className={`${notice} m-0 flex flex-wrap items-center gap-x-4 gap-y-2`}>
+        <div
+          className={`${hasChanged ? notice : noticeMuted} m-0 flex flex-wrap items-center gap-x-4 gap-y-2`}
+        >
           <span>
-            {reconciliation.missing > 0 &&
-              `${reconciliation.missing} media file${reconciliation.missing > 1 ? 's' : ''} missing`}
-            {reconciliation.missing > 0 && reconciliation.changed > 0 && ' · '}
-            {reconciliation.changed > 0 &&
-              `${reconciliation.changed} changed since last save`}
+            {hasMissing &&
+              `${missingCount} media file${missingCount > 1 ? 's' : ''} not in this folder`}
+            {hasMissing && hasChanged && ' · '}
+            {hasChanged && `${changedCount} changed since last save`}
             {' '}— the project stays editable.
+            {hasMissing &&
+              ' Moved, archived or deleted on purpose? Remove them below so this stops asking.'}
           </span>
           <button
             type="button"
@@ -1071,6 +1085,15 @@ export default function StudioEditor({
           >
             Point to the media folder…
           </button>
+          {hasMissing && (
+            <button
+              type="button"
+              onClick={onForgetMissing}
+              className="p-0 border-0 bg-transparent text-ink-soft font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-ink"
+            >
+              Remove missing files from this project
+            </button>
+          )}
         </div>
       )}
 
