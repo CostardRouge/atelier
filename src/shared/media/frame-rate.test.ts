@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  describeSpeed,
   frameTimestampMicros,
   outputFrameCount,
   planFrameIndices,
   resolveFrameRate,
+  resolveSpeed,
+  retimedDuration,
+  speedSuffix,
 } from './frame-rate';
 
 describe('resolveFrameRate', () => {
@@ -113,5 +117,116 @@ describe('outputFrameCount', () => {
     expect(outputFrameCount(10, 30)).toBe(300);
     expect(outputFrameCount(10, 24)).toBe(240);
     expect(outputFrameCount(0, 30)).toBe(1);
+  });
+});
+
+/**
+ * The retime as the pipelines run it: the source span divided by the speed,
+ * then laid on the output grid. `speed` 2 walks the source twice as fast.
+ */
+function retimeAtSpeed(
+  sourceFps: number,
+  targetFps: number,
+  speed: number,
+  frames: number,
+): number[][] {
+  const step = Math.round(1_000_000 / sourceFps);
+  let next = 0;
+  const out: number[][] = [];
+  for (let i = 0; i < frames; i++) {
+    const start = Math.round((i * 1_000_000) / sourceFps) / speed;
+    const indices = planFrameIndices(start, start + step / speed, targetFps, next);
+    if (indices.length) next = indices[indices.length - 1] + 1;
+    out.push(indices);
+  }
+  return out;
+}
+
+describe('resolveSpeed', () => {
+  it('keeps the clip as shot when nothing is asked for', () => {
+    expect(resolveSpeed(undefined)).toBe(1);
+    expect(resolveSpeed(null)).toBe(1);
+    expect(resolveSpeed(1)).toBe(1);
+  });
+
+  it('takes a real multiplier', () => {
+    expect(resolveSpeed(2)).toBe(2);
+    expect(resolveSpeed(0.25)).toBe(0.25);
+  });
+
+  it('refuses a speed that would be nonsense rather than clamping into one', () => {
+    expect(resolveSpeed(0)).toBe(1);
+    expect(resolveSpeed(-2)).toBe(1);
+    expect(resolveSpeed(NaN)).toBe(1);
+    expect(resolveSpeed(1000)).toBe(1);
+  });
+});
+
+describe('speed presentation', () => {
+  it('says nothing about a clip delivered as shot', () => {
+    expect(describeSpeed(1)).toBeNull();
+    expect(speedSuffix(1)).toBeNull();
+  });
+
+  it('names the departure', () => {
+    expect(describeSpeed(2)).toBe('2× speed');
+    expect(describeSpeed(0.5)).toBe('0.5× speed');
+    expect(speedSuffix(2)).toBe('2x');
+    expect(speedSuffix(0.5)).toBe('0.5x');
+  });
+
+  it('moves the duration, and only the duration', () => {
+    expect(retimedDuration(40, 2)).toBe(20);
+    expect(retimedDuration(40, 0.5)).toBe(80);
+    expect(retimedDuration(40, 1)).toBe(40);
+  });
+});
+
+describe('planFrameIndices under a retime', () => {
+  it('drops every other frame at 2× and the same cadence', () => {
+    // Twice as fast at 30 fps: half the frames, half the duration.
+    expect(retimeAtSpeed(30, 30, 2, 6)).toEqual([[0], [], [1], [], [2], []]);
+  });
+
+  it('repeats every frame at half speed', () => {
+    expect(retimeAtSpeed(30, 30, 0.5, 3)).toEqual([
+      [0, 1],
+      [2, 3],
+      [4, 5],
+    ]);
+  });
+
+  it('composes with a cadence change instead of fighting it', () => {
+    // 60 fps source, delivered at 30 fps and 2× — a quarter of the frames.
+    expect(retimeAtSpeed(60, 30, 2, 8)).toEqual([
+      [0], [], [], [], [1], [], [], [],
+    ]);
+  });
+
+  it('starts at index 0 from a trimmed origin, whatever the speed', () => {
+    // A trim hands the grid frames that begin mid-file; the pipeline rebases on
+    // the first KEPT frame, so the two features compose instead of colliding.
+    for (const speed of [0.5, 2]) {
+      const step = Math.round(1_000_000 / 30);
+      const origin = Math.round(7.3 * 1_000_000); // in point, 7.3 s in
+      let next = 0;
+      const out: number[][] = [];
+      for (let i = 0; i < 6; i++) {
+        const start = (origin + i * step - origin) / speed;
+        const indices = planFrameIndices(start, start + step / speed, 30, next);
+        if (indices.length) next = indices[indices.length - 1] + 1;
+        out.push(indices);
+      }
+      expect(out.flat()[0]).toBe(0);
+      expect(out).toEqual(retimeAtSpeed(30, 30, speed, 6));
+    }
+  });
+
+  it('emits every output index exactly once, in order', () => {
+    for (const speed of [0.25, 0.5, 2, 4]) {
+      const flat = retimeAtSpeed(30, 30, speed, 40).flat();
+      expect(flat).toEqual([...flat].sort((a, b) => a - b));
+      expect(new Set(flat).size).toBe(flat.length);
+    }
   });
 });

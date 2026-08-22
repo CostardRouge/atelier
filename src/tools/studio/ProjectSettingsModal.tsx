@@ -6,18 +6,35 @@ import {
   type ProjectFile,
 } from '../../shared/projects/project-file';
 import { pickFile } from '../../shared/sources/file-sources';
+import SectionLegend from './SectionLegend';
 import { NO_SHIFT, type TimeShift } from '../../shared/telemetry/time-format';
+import {
+  describeTimeScale,
+  formatCadence,
+  type TimeScaleReading,
+  type TimeScaleSetting,
+} from '../../shared/telemetry/time-scale';
 
 export interface ProjectSettingsDraft {
   name: string;
   aspectId: string;
   timeShift: TimeShift;
+  /**
+   * The clip's cadence correction. Rides in the draft so one shape serves
+   * apply and export alike — but it is NOT portable, and `project-file.ts`
+   * drops it on the way out: it is measured against one clip's telemetry and
+   * would silently multiply another clip's speeds.
+   */
+  timeScale: TimeScaleSetting;
 }
 
 interface ProjectSettingsModalProps {
   name: string;
   aspectId: string;
   timeShift: TimeShift;
+  timeScale: TimeScaleSetting;
+  /** What this clip's telemetry says its cadence is, for the auto option. */
+  measured: TimeScaleReading;
   onCancel: () => void;
   onApply: (next: ProjectSettingsDraft) => void;
   /** Download the project file; the draft above is folded in, applied or not. */
@@ -41,6 +58,8 @@ export default function ProjectSettingsModal({
   name,
   aspectId,
   timeShift,
+  timeScale,
+  measured,
   onCancel,
   onApply,
   onExport,
@@ -53,10 +72,28 @@ export default function ProjectSettingsModal({
   // portable half, which is a lot of work to lose to a mis-click.
   const [pending, setPending] = useState<ProjectFile | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [scaleMode, setScaleMode] = useState<'auto' | 'manual'>(
+    timeScale?.mode ?? 'auto',
+  );
+  // The author thinks in "four times slower", not in "0.25 capture seconds per
+  // media second" — so the box holds the factor and a direction, and the scale
+  // is rebuilt from them on apply.
+  const startScale =
+    timeScale?.mode === 'manual' ? timeScale.scale : measured.scale;
+  const [slower, setSlower] = useState(startScale <= 1);
+  const [factor, setFactor] = useState(
+    () => Math.round((startScale <= 1 ? 1 / startScale : startScale) * 100) / 100,
+  );
   const nameRef = useRef<HTMLInputElement>(null);
   const confirmRef = useRef<HTMLDivElement>(null);
   const hours = Math.trunc(shift.minutes / 60);
   const mins = Math.abs(shift.minutes % 60);
+  const measuredLabel =
+    measured.basis === 'none'
+      ? 'nothing measurable in this clip — treated as real time'
+      : [describeTimeScale(measured.scale) ?? 'real time', formatCadence(measured)]
+          .filter(Boolean)
+          .join(' · ');
 
   useEffect(() => {
     nameRef.current?.focus();
@@ -76,10 +113,15 @@ export default function ProjectSettingsModal({
   }, [pending]);
 
   function draft(): ProjectSettingsDraft {
+    const magnitude = Math.min(600, Math.max(1, Number(factor) || 1));
     return {
       name: draftName.trim() || name,
       aspectId: draftAspect,
       timeShift: shift,
+      timeScale:
+        scaleMode === 'manual'
+          ? { mode: 'manual', scale: slower ? 1 / magnitude : magnitude }
+          : { mode: 'auto', scale: 1 },
     };
   }
 
@@ -117,13 +159,13 @@ export default function ProjectSettingsModal({
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="w-full max-w-[28rem] max-h-[90vh] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper p-6">
+      <div className="w-full max-w-[28rem] max-h-[90vh] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6">
         <div>
           <h2 className="m-0 font-serif text-[1.4rem]">Project settings</h2>
         </div>
 
         <label className={field}>
-          <span className={legend}>Name</span>
+          <SectionLegend label="Name" />
           <input
             ref={nameRef}
             value={draftName}
@@ -136,7 +178,12 @@ export default function ProjectSettingsModal({
         </label>
 
         <fieldset className="m-0 p-0 border-0 flex flex-col gap-1.5">
-          <span className={legend}>Format</span>
+          <SectionLegend label="Format">
+            <p>
+              The project's format seeds new export variants; the Export tab can
+              still add other formats per variant.
+            </p>
+          </SectionLegend>
           <div className="grid grid-cols-2 gap-2">
             {ASPECT_PRESETS.map((a) => (
               <button
@@ -167,20 +214,104 @@ export default function ProjectSettingsModal({
               </button>
             ))}
           </div>
-          <p className="m-0 text-[0.7rem] text-faint">
-            The project's format seeds new export variants; the Export tab can
-            still add other formats per variant.
-          </p>
         </fieldset>
 
         <fieldset className="m-0 p-0 border-0 flex flex-col gap-1.5">
-          <span className={legend}>Capture time</span>
-          <p className="m-0 text-[0.72rem] text-muted leading-relaxed">
-            The flight log records a bare wall-clock reading with no timezone —
-            whatever the aircraft's clock said. If it was off, correct it here:
-            the shift applies to every clock, date and timestamp element at
-            once, and rolls the date when it crosses midnight.
-          </p>
+          <SectionLegend label="Cadence">
+            <p>
+              Slow motion and time-lapse are <em>conformed</em>: the file plays
+              at a speed the camera never shot at, so every speed read from the
+              flight log — ground, vertical — would be divided by the wrong
+              seconds. The log's own timestamps say what the real cadence was.
+            </p>
+            <p>
+              Only rates move: a heading is a direction and survives any
+              conform, and the clock badges keep reading the capture time, which
+              is why they tick slowly on a ralenti — that part is true.
+            </p>
+          </SectionLegend>
+          <div className="flex flex-col gap-1.5">
+            <button
+              type="button"
+              onClick={() => setScaleMode('auto')}
+              aria-pressed={scaleMode === 'auto'}
+              className={`flex flex-col items-start gap-0.5 px-3 py-2 rounded-paper border text-left cursor-pointer transition-colors ${
+                scaleMode === 'auto'
+                  ? 'border-accent bg-accent-wash'
+                  : 'border-line bg-paper hover:border-line-strong'
+              }`}
+            >
+              <span className="font-semibold text-[0.82rem]">
+                Follow the flight log
+              </span>
+              <span className="font-mono text-[0.68rem] text-muted">
+                {measuredLabel}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setScaleMode('manual')}
+              aria-pressed={scaleMode === 'manual'}
+              className={`flex flex-col items-start gap-0.5 px-3 py-2 rounded-paper border text-left cursor-pointer transition-colors ${
+                scaleMode === 'manual'
+                  ? 'border-accent bg-accent-wash'
+                  : 'border-line bg-paper hover:border-line-strong'
+              }`}
+            >
+              <span className="font-semibold text-[0.82rem]">Set it by hand</span>
+              <span className="text-[0.68rem] text-muted">
+                For footage whose log says nothing — or a conform you did yourself.
+              </span>
+            </button>
+          </div>
+          {scaleMode === 'manual' && (
+            <div className="flex items-center gap-2 pl-3">
+              <span className="text-[0.78rem] text-ink-soft">This clip plays</span>
+              <input
+                type="number"
+                value={factor}
+                min={1}
+                max={600}
+                step={0.5}
+                onChange={(e) => setFactor(Number(e.target.value))}
+                className="w-[5rem] font-mono text-[0.85rem] px-2 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
+              />
+              <span className="text-[0.78rem] text-ink-soft">×</span>
+              <div className="flex rounded-full border border-line-strong overflow-hidden">
+                {(['slower', 'faster'] as const).map((dir) => (
+                  <button
+                    key={dir}
+                    type="button"
+                    onClick={() => setSlower(dir === 'slower')}
+                    aria-pressed={slower === (dir === 'slower')}
+                    className={`px-2.5 py-1 font-mono text-[0.68rem] cursor-pointer transition-colors ${
+                      slower === (dir === 'slower')
+                        ? 'bg-ink text-paper'
+                        : 'bg-paper text-muted hover:text-ink'
+                    }`}
+                  >
+                    {dir}
+                  </button>
+                ))}
+              </div>
+              <span className="text-[0.78rem] text-ink-soft">than life</span>
+            </div>
+          )}
+        </fieldset>
+
+        <fieldset className="m-0 p-0 border-0 flex flex-col gap-1.5">
+          <SectionLegend label="Capture-time shift">
+            <p>
+              The flight log records a bare wall-clock reading with no timezone
+              — whatever the aircraft's clock said. If it was off, correct it
+              here: the shift applies to every clock, date and timestamp element
+              at once, and rolls the date when it crosses midnight.
+            </p>
+            <p>
+              Minutes cover the half- and quarter-hour zones; days are for a
+              controller that came back from a flat battery with the wrong date.
+            </p>
+          </SectionLegend>
           <div className="flex items-end gap-2">
             <label className="flex flex-col gap-1">
               <span className={legend}>Hours</span>
@@ -228,19 +359,17 @@ export default function ProjectSettingsModal({
               </button>
             )}
           </div>
-          <p className="m-0 text-[0.7rem] text-faint">
-            Minutes cover the half- and quarter-hour zones; days are for a
-            controller that came back from a flat battery with the wrong date.
-          </p>
         </fieldset>
 
         <fieldset className="m-0 p-0 border-0 flex flex-col gap-2 pt-4 border-t border-line">
-          <span className={legend}>Import / export</span>
-          <p className="m-0 text-[0.72rem] text-muted leading-relaxed">
-            A project file carries the settings only — overlays, style, grade,
-            format, capture-time shift and the export matrix. Never your media:
-            it is a template you can keep, share or reuse on another machine.
-          </p>
+          <SectionLegend label="Import / export">
+            <p>
+              A project file carries the settings only — overlays, style, grade,
+              format, capture-time shift and the export matrix. Never your
+              media, and never this clip's cadence: it is a template you can
+              keep, share or reuse on another machine.
+            </p>
+          </SectionLegend>
           <div className="flex flex-wrap items-center gap-2.5">
             <button type="button" onClick={() => onExport(draft())} className={smallButton}>
               <span aria-hidden="true">↓</span> Export settings
@@ -292,7 +421,9 @@ export default function ProjectSettingsModal({
           )}
         </fieldset>
 
-        <div className="flex items-center justify-end gap-4 pt-1 border-t border-line">
+        {/* Pinned: on a phone the card scrolls, and Apply used to sit below
+            the fold — the one control every visit ends with. */}
+        <div className="sticky bottom-0 -mx-6 mt-4 px-6 pb-6 flex items-center justify-end gap-4 pt-1 border-t border-line bg-surface">
           <button
             type="button"
             onClick={onCancel}

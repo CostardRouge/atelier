@@ -102,7 +102,12 @@ export function parseWallClock(stamp: string | null | undefined): WallClock | nu
 }
 
 /** Epoch millis treating the reading as if it were UTC — a zone-free ruler. */
-function toEpoch(wc: WallClock): number {
+/**
+ * Epoch milliseconds for a zone-free reading, computed through `Date.UTC` so the
+ * rendering machine's own zone can never move it. Exported because measuring a
+ * clip's cadence (telemetry/time-scale.ts) needs to subtract two readings.
+ */
+export function toEpoch(wc: WallClock): number {
   return Date.UTC(wc.year, wc.month - 1, wc.day, wc.hour, wc.minute, wc.second, wc.ms);
 }
 

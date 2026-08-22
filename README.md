@@ -35,7 +35,10 @@ Today it ships eight tools, converging into a single studio:
 
 Tools that consume the same kinds of files (photos, videos, DJI clips) share a
 single **asset library**: import a folder once and switch tools freely — each
-tool sees the subset it can use.
+tool sees the subset it can use. A clip with a flight log also shows, over its
+thumbnail, the rate the camera **shot** at (`120 FPS`) and a `4× SLOW` marker
+when the file was conformed — read from both ends of the `.srt`, a few kilobytes,
+never from the video.
 
 The suite is a tiny shell (`src/app/`) plus self-contained tools (`src/tools/*`)
 that share a generic core (`src/shared/*`). The masthead nav and the routes both
@@ -164,6 +167,20 @@ default, and can be pointed at a telemetry key for firmware that does write
 one. It never invents a level: with nothing to read it draws empty. Speeds
 read in **m/s, km/h or mph**.
 
+**Slow motion and time-lapse.** A conformed clip plays at a speed the camera
+never shot at: a hundred and twenty frames a second laid down at thirty makes
+one second of flight last four seconds of file. Every speed rebuilt from the
+log is a distance over a time, so on that clip the ground speed would read a
+quarter of the truth — and a hyperlapse would read many times too much. The
+studio measures the real cadence from the log's own capture timestamps and
+corrects the rates; the **Info** tab states what it found (`120 → 30 fps ·
+4× slow motion`), and project settings let you override it by hand for footage
+whose log says nothing. Only rates move: a heading is a direction and survives
+any conform, and the clock badges keep reading the capture time — which is why
+they tick slowly on a ralenti, and that part is true. The container cannot
+help here: a conformed file honestly declares the rate it *plays* at, and the
+rate it was shot at is written nowhere in the mp4.
+
 **Why the heading stutters, and what to do about it.** The flight log has no
 compass and no yaw: the heading is *course over ground*, rebuilt from GPS
 fixes about a second apart. So it steps (the GPS is slower than the video),
@@ -177,6 +194,12 @@ bearing while it fades out (the default), hold it plainly for a set time, or
 drop to the no-data state at once. The smoothing is a pure function of the cue
 list and the playhead, never an accumulator over rendered frames, so the export
 burns in exactly what the preview showed.
+
+**Playback speed.** The transport carries a speed picker (0.25× to 4×) that
+changes **only what you are watching** — no readout moves with it, and the
+export has its own delivered speed. On a conformed clip it also offers
+`real (4×)`, which plays a 4× ralenti back at the pace it was flown; that option
+follows the clip, so it stays right when you step to another one.
 
 **Keyboard.** `Space` plays and pauses the clip — here and in Grade, Compare,
 Composer and the legacy Overlay, all of which share one transport — and
@@ -216,10 +239,19 @@ layout by surprise.
 each *variant* picks a frame (source or any destination preset — a landscape
 master cover-crops into 9:16 with the overlays recomposed for that frame), a
 delivery resolution (short-side 1080p/720p, never upscaled), a **frame rate**
-(source, or 24/25/30/48/50/60/120) and whether the overlays burn in. The clip
-keeps its duration whatever the cadence — below the source rate frames are
-dropped, above it they are duplicated, and the panel says so rather than
-implying interpolated motion. Names follow automatically (`vol-9x16-1080p-30fps-clean.mp4` —
+(source, or 24/25/30/48/50/60/120), a **speed** and whether the overlays burn
+in. The clip keeps its duration whatever the cadence — below the source rate
+frames are dropped, above it they are duplicated, and the panel says so rather
+than implying interpolated motion. The **speed** is the other axis: it moves the
+duration and leaves the cadence alone (2× delivers half as long at the same
+fps), the menu offers the one that puts a conformed clip back at life's pace
+(“4× speed — real time” on a 4× ralenti), and the row states what you will get —
+`2× speed — 0:01 instead of 0:03, delivered without audio`. Silent on purpose:
+audio is copied bit-for-bit and never re-encoded here, and a copied track
+against a re-timed picture is a desync, which is worse than no track. Burned-in
+telemetry is unaffected — every frame keeps its own reading, so a sped-up clip
+still says how fast the aircraft was really flying. Names follow automatically
+(`vol-9x16-1080p-30fps-2x-clean.mp4` —
 suffixes only where a variant departs from the source), the base name is
 editable, and the whole matrix persists with the project (templates carry
 it). Variants render sequentially with per-variant progress, each row counting
@@ -258,7 +290,9 @@ tool reconstructs the missing motion from successive GPS fixes: **ground speed**
 (horizontal), **vertical speed** (climb/descent) and **heading** (course over
 ground, with a compass point). These appear alongside the raw fields in the
 Flight panel and the live gallery readout, and can be burned in with the
-Telemetry Overlay tool.
+Telemetry Overlay tool. Those rates are computed per second of *capture*, not
+per second of file, so a slow-motion or time-lapse clip reads true — see
+"Slow motion and time-lapse" above.
 
 ### Usage
 
@@ -465,7 +499,7 @@ src/
 │   ├── lib/                    # pure: format, cube-parser, use-in-viewport (+ tests)
 │   ├── library/                # the shared asset library: group files into assets
 │   │                           #   (incl. DJI video↔SRT pairing), capability-match per tool
-│   ├── telemetry/              # SRT parser, motion, cue lookup, flight-path extraction
+│   ├── telemetry/              # SRT parser, motion, cadence, cue lookup, flight-path extraction
 │   ├── overlay/                # the overlay engine: element model, canvas stage,
 │   │                           #   draw/measure/hit-test, fonts, guides, burn-in export,
 │   │                           #   and the ElementList/ElementPanel/GuidesControl editors

@@ -1,13 +1,22 @@
 /**
- * Export frame rate — choosing the output cadence, and the retiming arithmetic
- * that produces it. Pure and DOM-free; the pipelines in `webcodecs-export.ts`
- * and `overlay/export-overlay-seek.ts` are the only consumers.
+ * Export cadence and speed — the output timeline, and the arithmetic that
+ * produces it. Pure and DOM-free; the pipelines in `webcodecs-export.ts` and
+ * `overlay/export-overlay-seek.ts` are the only consumers.
  *
- * The model is a **resample, not a re-time**: the clip keeps its wall-clock
- * duration (so the copied audio stays in sync) and the output frames land on a
+ * **Two independent knobs, one grid.** The output frames always land on a
  * regular grid of `1/fps`, each showing the source frame that was on screen at
- * that instant. Below the source rate frames are dropped; above it they are
- * duplicated — no motion is invented, which is why the UI has to say so.
+ * that instant; below the source rate frames are dropped, above it they are
+ * duplicated — no motion is ever invented, which is why the UI has to say so.
+ *
+ *  - {@link ExportFrameRate} changes the **cadence** and keeps the duration:
+ *    the clip lasts as long as it did, so the copied audio stays in sync.
+ *  - {@link resolveSpeed} changes the **duration**: the source timeline is
+ *    divided by the speed before it meets the grid, so 2× delivers a clip half
+ *    as long at the same cadence (frames dropped), and 0.5× one twice as long
+ *    (frames repeated). This is a real re-time, so the audio **cannot** come
+ *    along: it is copied bit-for-bit, never re-encoded, and a copied track
+ *    against a re-timed picture is a desync. A re-timed variant ships silent,
+ *    and the UI says so before the export runs.
  */
 
 /** 'source' keeps the clip's own cadence; a number is an explicit target. */
@@ -88,4 +97,40 @@ export function planFrameIndices(
 /** Label for a picker row ("Source fps" / "30 fps"). */
 export function describeFrameRate(rate: ExportFrameRate): string {
   return rate === 'source' ? 'source fps' : `${rate} fps`;
+}
+
+/** Delivery speed: 1 keeps the clip's own, 2 delivers it twice as fast. */
+export const SPEED_CHOICES: readonly number[] = [0.25, 0.5, 1, 2, 4];
+
+/** Beyond these a frame lasts minutes, or the clip is gone in a blink. */
+const MIN_SPEED = 1 / 16;
+const MAX_SPEED = 16;
+
+/**
+ * The speed to deliver at. Anything absent, unreadable or out of range keeps
+ * the clip's own — the same "fall back to the source" rule the cadence uses.
+ */
+export function resolveSpeed(requested: number | undefined | null): number {
+  if (requested == null || !Number.isFinite(requested)) return 1;
+  if (requested < MIN_SPEED || requested > MAX_SPEED) return 1;
+  return requested;
+}
+
+/** How long the delivered clip runs, in seconds. */
+export function retimedDuration(durationSec: number, speed: number): number {
+  const s = resolveSpeed(speed);
+  return durationSec / s;
+}
+
+/** Label for a picker row — null at normal speed, which needs no words. */
+export function describeSpeed(speed: number): string | null {
+  const s = resolveSpeed(speed);
+  if (s === 1) return null;
+  return `${s}× speed`;
+}
+
+/** File-name part for a re-timed variant (`2x`, `0.5x`), null at normal speed. */
+export function speedSuffix(speed: number): string | null {
+  const s = resolveSpeed(speed);
+  return s === 1 ? null : `${s}x`;
 }

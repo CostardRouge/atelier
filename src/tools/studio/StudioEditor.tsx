@@ -1,8 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { useActiveAsset } from '../../shared/library/use-active-asset';
 import { useObjectUrl } from '../../shared/media/use-object-url';
-import { useVideoTransport } from '../../shared/media/use-video-transport';
+import {
+  clampPlaybackRate,
+  useVideoTransport,
+} from '../../shared/media/use-video-transport';
 import { formatDuration, formatTimecode } from '../../shared/lib/format';
 import { isEncodeSupported } from '../../shared/media/webcodecs-export';
 import { useVideoScrub } from '../../shared/media/use-video-scrub';
@@ -46,6 +49,9 @@ import {
 import { DecodeUnsupportedError } from '../../shared/media/webcodecs-export';
 import {
   FRAME_RATE_CHOICES,
+  SPEED_CHOICES,
+  resolveSpeed,
+  retimedDuration,
   type ExportFrameRate,
 } from '../../shared/media/frame-rate';
 import {
@@ -58,6 +64,7 @@ import {
   createVariant,
   defaultVariants,
   variantFileName,
+  variantIsRetimed,
   variantOutputSize,
   type ExportVariant,
   type VariantResolution,
@@ -84,6 +91,14 @@ import {
 import InfoPanel from './InfoPanel';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import { NO_SHIFT, type TimeShift } from '../../shared/telemetry/time-format';
+import {
+  AUTO_TIME_SCALE,
+  measureTimeScale,
+  overrideApplies,
+  resolveTimeScale,
+  type TimeScaleSetting,
+} from '../../shared/telemetry/time-scale';
+import { retimeCues } from '../../shared/telemetry/motion';
 import { savedMediaRef, type ProjectDoc } from '../../shared/projects/project-types';
 import { putProject } from '../../shared/projects/project-store';
 import type { Reconciliation } from '../../shared/projects/reconcile';
@@ -159,7 +174,10 @@ export default function StudioEditor({
   const [tab, setTab] = useState<PanelTab>('overlay');
   const [activeError, setActiveError] = useState(false);
   const [activeInfo, setActiveInfo] = useState<ContainerInfo>({});
-  const [cues, setCues] = useState<Cue[]>([]);
+  // Telemetry as parsed, with rates derived against the file's own seconds; the
+  // cadence correction is applied below, so changing it re-derives instead of
+  // re-reading the sidecar.
+  const [rawCues, setRawCues] = useState<Cue[]>([]);
 
   const [elements, setElements] = useState<OverlayElement[]>(() =>
     project.elements.length ? project.elements : defaultElementsPreset(),
@@ -202,6 +220,15 @@ export default function StudioEditor({
   const [timeShift, setTimeShift] = useState<TimeShift>(
     () => project.settings.timeShift ?? { ...NO_SHIFT },
   );
+  // Slow motion / time-lapse: how much real time a second of this clip covers.
+  const [timeScale, setTimeScale] = useState<TimeScaleSetting>(
+    () => project.settings.timeScale ?? { ...AUTO_TIME_SCALE },
+  );
+  // Preview speed. A viewing choice, not the composition's: session state, no
+  // document field, and nothing derived follows it. 'realtime' tracks the
+  // clip's own cadence, so a 4× ralenti plays back at life's pace and a
+  // hyperlapse crawls — and it stays right when the clip changes.
+  const [previewSpeed, setPreviewSpeed] = useState<number | 'realtime'>(1);
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState<StyleTheme | null>(() => project.theme);
   const [saveState, setSaveState] = useState<SaveState>('saved');
@@ -281,22 +308,44 @@ export default function StudioEditor({
   // Parse the active clip's telemetry — clips without an .srt just get no cues.
   useEffect(() => {
     if (!activeSrt) {
-      setCues([]);
+      setRawCues([]);
       return;
     }
     let cancelled = false;
     activeSrt
       .text()
       .then((text) => {
-        if (!cancelled) setCues(parseSrt(text));
+        if (!cancelled) setRawCues(parseSrt(text, { timeScale: 1 }));
       })
       .catch(() => {
-        if (!cancelled) setCues([]);
+        if (!cancelled) setRawCues([]);
       });
     return () => {
       cancelled = true;
     };
   }, [activeSrt]);
+
+  // The clip's cadence, measured from its own telemetry, and the scale actually
+  // in force (the author's override wins). Re-deriving is a pure pass over the
+  // cues, so a change to the setting costs no re-read and no re-parse — and it
+  // reaches every readout at once, because they all read `cue.derived`.
+  const timing = useMemo(() => measureTimeScale(rawCues), [rawCues]);
+  // An override belongs to the clip it was typed for: stepping to another clip
+  // falls back to that clip's own measurement rather than inheriting a cadence
+  // measured elsewhere.
+  const overridden = overrideApplies(timeScale, activeId);
+  const scale = resolveTimeScale(timeScale, timing, activeId);
+  const cues = useMemo(() => retimeCues(rawCues, scale), [rawCues, scale]);
+  // Undoing the conform is exactly playing at 1/scale: a 4× slow clip at 4×.
+  const realtimeRate = clampPlaybackRate(1 / scale);
+  // The delivered-speed menu: the standard steps, plus the one that undoes this
+  // clip's own conform when that is not already among them.
+  const speedChoices = useMemo(() => {
+    const set = new Set<number>(SPEED_CHOICES);
+    if (realtimeRate !== 1) set.add(Math.round(realtimeRate * 100) / 100);
+    return [...set].sort((a, b) => a - b);
+  }, [realtimeRate]);
+  const previewRate = previewSpeed === 'realtime' ? realtimeRate : previewSpeed;
 
   // Probe the active clip's container for codec + fps (best-effort).
   useEffect(() => {
@@ -322,6 +371,7 @@ export default function StudioEditor({
       loopRef,
       // Stepping through a project's clips shouldn't stop the transport.
       resumeAcrossMedia: true,
+      rate: previewRate,
       onLoadedMetadata: (v) => {
         if (v.currentTime === 0) {
           try {
@@ -600,7 +650,7 @@ export default function StudioEditor({
           ...docRef.current,
           name: projectName.trim() || docRef.current.name,
           updatedAt: Date.now(),
-          settings: { ...docRef.current.settings, aspectId, timeShift },
+          settings: { ...docRef.current.settings, aspectId, timeShift, timeScale },
           elements,
           guides,
           lutStack: lutStack.toSaved(),
@@ -635,6 +685,7 @@ export default function StudioEditor({
     projectName,
     aspectId,
     timeShift,
+    timeScale,
     theme,
     exportFileName,
     variants,
@@ -763,6 +814,7 @@ export default function StudioEditor({
               controller.signal,
               variant.frameRate,
               opts.trim,
+              variant.speed,
             );
           } else if (err instanceof DecodeUnsupportedError) {
             throw new Error(
@@ -978,11 +1030,23 @@ export default function StudioEditor({
           name={projectName}
           aspectId={aspectId}
           timeShift={timeShift}
+          timeScale={overridden ? timeScale : { ...AUTO_TIME_SCALE }}
+          measured={timing}
           onCancel={() => setShowSettings(false)}
-          onApply={({ name, aspectId: nextAspect, timeShift: nextShift }) => {
+          onApply={({
+            name,
+            aspectId: nextAspect,
+            timeShift: nextShift,
+            timeScale: nextScale,
+          }) => {
             setProjectName(name);
             setAspectId(nextAspect);
             setTimeShift(nextShift);
+            setTimeScale(
+              nextScale.mode === 'manual'
+                ? { ...nextScale, clipId: activeId ?? undefined }
+                : nextScale,
+            );
             setShowSettings(false);
           }}
           onExport={exportProjectFile}
@@ -1112,7 +1176,14 @@ export default function StudioEditor({
 
           {activeUrl && (
             <div className="flex flex-col gap-[0.45rem] px-[0.85rem] py-[0.6rem] border border-line rounded-paper bg-surface flex-none">
-             <div className="flex items-center gap-[0.85rem]">
+             {/* Two groups, and the row wraps between them: the rail (play,
+                 clock, trim, duration) keeps a usable width, and the tools drop
+                 to a line of their own rather than pushing the last one past
+                 the edge — which used to give the whole document a horizontal
+                 scrollbar on a phone. Every tool added here from now on lands
+                 in the second group and costs nothing. */}
+             <div className="flex flex-wrap items-center gap-x-[0.85rem] gap-y-2">
+              <div className="flex items-center gap-[0.85rem] grow shrink basis-[15rem] min-w-0">
               <button
                 type="button"
                 className="flex-none w-[2.2rem] h-[2.2rem] border-0 rounded-full bg-ink text-paper cursor-pointer text-[0.8rem] leading-none inline-flex items-center justify-center transition-[background-color] duration-200 ease-paper hover:bg-accent"
@@ -1139,6 +1210,12 @@ export default function StudioEditor({
               <span className="font-mono text-[0.74rem] tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
                 {formatDuration(duration)}
               </span>
+              </div>
+
+              {/* The tools. `flex-wrap` on the group itself is the second net:
+                  if even they cannot share one line, they stack instead of
+                  overflowing. */}
+              <div className="flex flex-wrap items-center gap-2 max-w-full">
               <button
                 type="button"
                 onClick={() => setLoop((l) => !l)}
@@ -1162,6 +1239,34 @@ export default function StudioEditor({
               >
                 {grabbing ? '…' : '⌾'}
               </button>
+              {/* Preview speed. Viewing only — it moves no readout and no
+                  export; the delivered speed lives in the Export tab. */}
+              <select
+                value={previewSpeed === 'realtime' ? 'realtime' : String(previewSpeed)}
+                onChange={(e) =>
+                  setPreviewSpeed(
+                    e.target.value === 'realtime' ? 'realtime' : Number(e.target.value),
+                  )
+                }
+                className={`flex-none pl-2 pr-1 py-1 rounded-full border font-mono text-[0.64rem] tracking-[0.06em] cursor-pointer transition-colors focus:outline-none ${
+                  previewRate === 1
+                    ? 'border-line-strong bg-paper text-muted hover:text-accent-ink hover:border-accent'
+                    : 'border-accent bg-accent-wash text-accent-ink'
+                }`}
+                aria-label="Preview speed"
+                title="Preview speed — the readouts and the export are untouched"
+              >
+                {SPEED_CHOICES.map((sp) => (
+                  <option key={sp} value={sp}>
+                    {sp}×
+                  </option>
+                ))}
+                {realtimeRate !== 1 && (
+                  <option value="realtime">
+                    real ({Math.round(realtimeRate * 100) / 100}×)
+                  </option>
+                )}
+              </select>
               <button
                 type="button"
                 onClick={() => setCompareOn((c) => !c)}
@@ -1175,6 +1280,7 @@ export default function StudioEditor({
               >
                 A/B
               </button>
+              </div>
              </div>
 
              {/* The trim readout sits on its own line, and that line is ALWAYS
@@ -1371,6 +1477,9 @@ export default function StudioEditor({
                   duration={duration}
                   cues={cues}
                   cue={activeCue}
+                  timing={timing}
+                  scale={scale}
+                  overridden={overridden}
                 />
               )}
 
@@ -1518,6 +1627,36 @@ export default function StudioEditor({
                               ))}
                             </select>
                           </div>
+                          <div className="flex items-center gap-2">
+                            <select
+                              className="flex-1 min-w-0 font-sans text-[0.78rem] px-2 py-[0.35rem] border border-line-strong rounded-paper bg-surface text-ink cursor-pointer focus:outline-none focus:border-accent"
+                              value={String(resolveSpeed(v.speed))}
+                              onChange={(e) =>
+                                updateVariant(v.id, { speed: Number(e.target.value) })
+                              }
+                              aria-label="Variant speed"
+                              title="Delivered speed — the clip's duration changes, its cadence does not"
+                            >
+                              {speedChoices.map((sp) => (
+                                <option key={sp} value={sp}>
+                                  {sp === 1 ? 'Normal speed' : `${sp}× speed`}
+                                  {sp !== 1 && sp === realtimeRate ? ' — real time' : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          {/* A re-time is a real change of duration, and the
+                              audio cannot follow it — say both before it runs. */}
+                          {variantIsRetimed(v) && (
+                            <p className="m-0 text-[0.7rem] leading-snug text-muted">
+                              {resolveSpeed(v.speed)}× speed
+                              {duration > 0
+                                ? ` — ${formatDuration(retimedDuration(duration, v.speed))} instead of ${formatDuration(duration)}`
+                                : ''}
+                              , delivered without audio: a copied track would
+                              drift against a re-timed picture.
+                            </p>
+                          )}
                           {/* Say what a higher cadence really does: the encoder
                               repeats frames, it does not invent motion. */}
                           {sourceFps && v.frameRate !== 'source' && v.frameRate > sourceFps && (

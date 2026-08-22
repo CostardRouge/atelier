@@ -30,6 +30,13 @@ describe('parseSrt', () => {
     expect(cues[0].timestamp).toBe('2026-05-30 05:49:34.609');
   });
 
+  // DiffTime rides on the FrameCnt line, OUTSIDE the `[ ]` groups the bracket
+  // sweep reads — it was silently dropped until the cadence work needed it.
+  it('parses DiffTime, in seconds, from outside the brackets', () => {
+    expect(cues[0].diffTime).toBeCloseTo(0.016, 6);
+    expect(cues[2].diffTime).toBeCloseTo(0.017, 6);
+  });
+
   // Anti-regression: the double-pair bracket `[rel_alt: ... abs_alt: ...]`
   // must split into two distinct fields. Indispensable.
   it('splits the double-pair rel_alt/abs_alt bracket', () => {
