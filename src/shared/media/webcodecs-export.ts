@@ -35,6 +35,7 @@ import {
   frameTimestampMicros,
   planFrameIndices,
   resolveFrameRate,
+  resolveSpeed,
   type ExportFrameRate,
 } from './frame-rate';
 import { safeChunkMetadata } from './colour-tag';
@@ -94,6 +95,17 @@ export interface ExportOptions {
    * the capture clock stay attached to the right frame.
    */
   trim?: TrimRange | null;
+  /**
+   * Deliver the clip at this speed: 1 (the default) as shot, 2 twice as fast,
+   * 0.5 half. The source timeline is divided by it before meeting the output
+   * grid, so the cadence is unchanged and the DURATION moves — frames dropped
+   * when speeding up, repeated when slowing down, never interpolated.
+   *
+   * A re-timed export is delivered **silent**: audio is copied bit-for-bit and
+   * never re-encoded here, and a copied track against a re-timed picture is a
+   * desync, which is worse than no track. Callers must say so in the UI.
+   */
+  speed?: number;
 }
 
 /**
@@ -485,7 +497,12 @@ export async function exportProcessedVideo(
   const durationSec = ticks / timescale || 1;
   const sourceFramerate = Math.max(1, Math.round(videoSamples.length / durationSec));
   const framerate = resolveFrameRate(options.frameRate, sourceFramerate);
-  const retime = framerate !== sourceFramerate;
+  const speed = resolveSpeed(options.speed);
+  // The grid path handles both knobs. A speed always needs it — even at the
+  // source cadence — because every timestamp moves.
+  const retime = framerate !== sourceFramerate || speed !== 1;
+  // A re-timed picture cannot carry a copied audio track: see `frame-rate.ts`.
+  const keepAudio = speed === 1 ? audioTrack : null;
 
   const bitrate = deriveBitrate(outputWidth, outputHeight, framerate);
 
@@ -502,11 +519,11 @@ export async function exportProcessedVideo(
       height: outputHeight,
       rotation: muxerRotation,
     },
-    audio: audioTrack
+    audio: keepAudio
       ? {
           codec: 'aac',
-          sampleRate: audioTrack.audio?.sample_rate ?? 48000,
-          numberOfChannels: audioTrack.audio?.channel_count ?? 2,
+          sampleRate: keepAudio.audio?.sample_rate ?? 48000,
+          numberOfChannels: keepAudio.audio?.channel_count ?? 2,
         }
       : undefined,
     fastStart: 'in-memory',
@@ -579,8 +596,15 @@ export async function exportProcessedVideo(
         let timestamps: number[];
         let duration: number;
         if (retime) {
-          const start = timestamp - origin;
-          const indices = planFrameIndices(start, start + srcDuration, framerate, nextIndex);
+          // The source span, divided by the speed: that is the whole re-time,
+          // and the grid below turns it into dropped or repeated frames.
+          const start = (timestamp - origin) / speed;
+          const indices = planFrameIndices(
+            start,
+            start + srcDuration / speed,
+            framerate,
+            nextIndex,
+          );
           if (indices.length === 0) {
             // Nothing to encode from this frame — skip the transform entirely,
             // which is what makes a downscale to 24 fps cheaper, not dearer.
@@ -666,7 +690,9 @@ export async function exportProcessedVideo(
     await encoder.flush();
     if (pipelineError) throw pipelineError;
 
-    copyAudio(muxer, audioTrack, audioSamples, win);
+    // Trimmed: only the audio overlapping the window, rebased on it. Re-timed:
+    // no audio at all — `keepAudio` is null (see `frame-rate.ts`).
+    copyAudio(muxer, keepAudio, audioSamples, win);
 
     onProgress?.({ phase: 'finalizing', ratio: null });
     muxer.finalize();

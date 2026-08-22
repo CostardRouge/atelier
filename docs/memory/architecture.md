@@ -18,9 +18,11 @@ Read before touching the shell (`src/app/`), the tool registry, the shared asset
 
 **Decision.** `src/shared/library/` holds a single app-wide pool of `File` handles. `buildAssets` groups raw files into logical *assets* keyed by the lowercased base name (so `DJI_0001.MP4` + `DJI_0001.SRT` is one `video+telemetry` asset, `IMG_8801.RAF` + `IMG_8801.JPG` one `photo` asset), and each tool declares the `AssetKind`s it `accepts`; `capabilities.ts` projects the pool down to those. **Why**: import a folder once and switch tools freely. **How to apply**: the one non-obvious matching rule is that a `video+telemetry` asset satisfies a tool asking only for `video` — keep it when touching `capabilities.ts`. Files the classifier does not recognise (`.LRF`, `.THM`, dotfiles) are ignored, and the first file to claim a slot wins so grouping stays deterministic.
 
-## Only `File` handles are held; nothing is read eagerly (2026-08-20)
+## Only `File` handles are held; nothing is read eagerly (rev. 2026-08-21)
 
 **Decision.** The library layer stores handles, never bytes; covers/metadata are built lazily per row (as it scrolls into view) and thumbnails are revoked on remove/clear. **Why**: a `File` is a lazy reference to disk, so listing dozens of multi-GB videos is instant — reading them to list them would not scale. **How to apply**: never read a file just to display a list. Object URLs must be revoked when the source changes or the component unmounts.
+
+**The one read the list does make** (2026-08-21): 128 KB from each end of the `.srt`, to measure the clip's cadence (`telemetry/srt-probe.ts`). It is a sidecar, not the media — kilobytes against gigabytes — and it is the only place a *capture* frame rate is written. `probeContainer` stays banned from this path: its 48 MB cap per file is for the one active clip, and on a conformed file it would report the playback rate anyway. **How to apply**: a new derived `MediaMeta` field must merge onto the existing entry (`patchMeta`), never replace it — the cover and the cadence are independent async reads of the same asset, and whichever lands second used to erase the first.
 
 ## Almost nothing is persisted (rev. 2026-08-21)
 

@@ -11,8 +11,11 @@ import { themeFromPreset } from '../overlay/title-styles';
 
 function v1Doc(): ProjectDoc {
   const doc = createProjectDoc('legacy', '16:9', defaultElementsPreset(), DEFAULT_GUIDES);
-  // Simulate a phase-2 document: version 1, no theme field at all.
-  const stored: Record<string, unknown> = { ...doc, version: 1 };
+  // Simulate a phase-2 document: version 1, no theme field at all, and guides
+  // that predate the safe zone's quarter-turn mode.
+  const guides: Record<string, unknown> = { ...doc.guides };
+  delete guides.safeZoneOrientation;
+  const stored: Record<string, unknown> = { ...doc, version: 1, guides };
   delete stored.theme;
   return stored as unknown as ProjectDoc;
 }
@@ -34,6 +37,23 @@ describe('migrateProjectDoc', () => {
     expect(migrated.outputTransform).toBe('none');
     // v7: the source cadence, the only one an old export could produce.
     expect(migrated.exportPrefs.variants[0].frameRate).toBe('source');
+    // v8: no trim, so every clip reopens at its full length.
+    expect(migrated.media.trims).toEqual({});
+    // v9: the safe zone follows the frame's orientation. Editor-only chrome,
+    // so an old project adopting it changes no rendered pixel.
+    expect(migrated.guides.safeZoneOrientation).toBe('auto');
+  });
+
+  it('keeps a safe-zone rotation the author pinned', () => {
+    const doc = v1Doc();
+    const stored = {
+      ...doc,
+      version: 8,
+      guides: { ...DEFAULT_GUIDES, safeZone: 'reels', safeZoneOrientation: 'upright' },
+    } as unknown as ProjectDoc;
+    const migrated = migrateProjectDoc(stored);
+    expect(migrated.guides.safeZoneOrientation).toBe('upright');
+    expect(migrated.guides.safeZone).toBe('reels');
   });
 
   it('gives a pre-v7 variant the source frame rate, keeping its other choices', () => {
@@ -53,6 +73,23 @@ describe('migrateProjectDoc', () => {
     expect(v.aspectId).toBe('9:16');
     expect(v.resolution).toBe(1080);
     expect(v.overlays).toBe(false);
+  });
+
+  it('gives a pre-v9 variant the speed it was exported at — normal', () => {
+    const doc = v1Doc();
+    const stored = {
+      ...doc,
+      version: 8,
+      exportPrefs: {
+        fileName: null,
+        variants: [
+          { id: 'a', aspectId: 'source', resolution: 'source', frameRate: 30, overlays: true },
+        ],
+      },
+    } as unknown as ProjectDoc;
+    const [v] = migrateProjectDoc(stored).exportPrefs.variants;
+    expect(v.speed).toBe(1);
+    expect(v.frameRate).toBe(30);
   });
 
   it('keeps a capture-time correction that is already set', () => {

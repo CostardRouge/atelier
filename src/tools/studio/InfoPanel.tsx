@@ -6,6 +6,12 @@ import {
   motionAt,
 } from '../../shared/telemetry/motion';
 import { summarizeTelemetry } from '../../shared/telemetry/telemetry-summary';
+import {
+  describeTimeScale,
+  formatCadence,
+  withScale,
+  type TimeScaleReading,
+} from '../../shared/telemetry/time-scale';
 import { formatBytes, formatDuration } from '../../shared/lib/format';
 
 interface InfoPanelProps {
@@ -17,6 +23,12 @@ interface InfoPanelProps {
   cues: Cue[];
   /** The cue under the playhead, or null. */
   cue: Cue | null;
+  /** Cadence measured from this clip's telemetry. */
+  timing: TimeScaleReading;
+  /** The scale actually in force — the measurement, or the author's override. */
+  scale: number;
+  /** True when that scale came from the settings rather than from the log. */
+  overridden: boolean;
 }
 
 const dt = 'font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted pt-[2px]';
@@ -58,8 +70,29 @@ export default function InfoPanel({
   duration,
   cues,
   cue,
+  timing,
+  scale,
+  overridden,
 }: InfoPanelProps) {
   const hasTelemetry = cues.length > 0;
+  // Cadence, and what it implies for every rate below: on conformed footage the
+  // speeds are divided by capture seconds, not by the file's. Said here rather
+  // than beside each readout — one clip, one cadence. When the log cannot answer
+  // (and the author has not), the row says which rate it *is* quoting: the
+  // playback one alone would read as the rate the camera shot at.
+  const shownTiming = withScale(timing, scale);
+  const cadence =
+    timing.basis === 'none' && !overridden
+      ? timing.mediaFps
+        ? `plays at ${timing.mediaFps} fps · shooting cadence not measurable`
+        : ''
+      : [
+          formatCadence(shownTiming),
+          describeTimeScale(scale),
+          overridden ? 'set by hand' : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
   const d = cue?.data ?? {};
   const summary = hasTelemetry ? summarizeTelemetry(cues) : null;
   const flightLine = summary
@@ -84,6 +117,7 @@ export default function InfoPanel({
         {video && <Row label="Size" value={formatBytes(video.size)} />}
         {detail && <Row label="Detail" value={detail} />}
         {duration > 0 && <Row label="Duration" value={formatDuration(duration)} />}
+        {cadence && <Row label="Cadence" value={cadence} />}
         {flightLine && <Row label="Flight" value={flightLine} />}
       </dl>
 

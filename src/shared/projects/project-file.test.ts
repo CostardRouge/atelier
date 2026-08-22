@@ -33,7 +33,14 @@ function sampleDoc(): ProjectDoc {
   doc.exportPrefs = {
     fileName: 'sunset',
     variants: [
-      { id: 'v1', aspectId: '9:16', resolution: 1080, frameRate: 30, overlays: true },
+      {
+        id: 'v1',
+        aspectId: '9:16',
+        resolution: 1080,
+        frameRate: 30,
+        speed: 1,
+        overlays: true,
+      },
     ],
   };
   // Bound half: must never travel. Trims included — in/out points are seconds
@@ -50,6 +57,19 @@ function sampleDoc(): ProjectDoc {
 }
 
 describe('toProjectFile', () => {
+  it('leaves the cadence correction behind — it belongs to one clip', () => {
+    const doc = sampleDoc();
+    doc.settings = {
+      ...doc.settings,
+      timeScale: { mode: 'manual', scale: 0.25, clipId: 'dji_0001' },
+    };
+    const file = toProjectFile(doc, Date.parse('2026-08-21T10:00:00Z'));
+    expect(file.settings.timeScale).toBeUndefined();
+    expect(serializeProjectFile(file)).not.toContain('timeScale');
+    // …and the document it came from is untouched.
+    expect(doc.settings.timeScale?.scale).toBe(0.25);
+  });
+
   it('carries the portable half and nothing bound to this machine', () => {
     const file = toProjectFile(sampleDoc(), Date.parse('2026-08-21T10:00:00Z'));
     expect(file.kind).toBe(PROJECT_FILE_KIND);

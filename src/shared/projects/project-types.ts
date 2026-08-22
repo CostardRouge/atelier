@@ -13,16 +13,17 @@
  */
 
 import type { OverlayElement } from '../overlay/overlay-types';
-import type { GuidesState } from '../overlay/guides';
+import { DEFAULT_GUIDES, type GuidesState } from '../overlay/guides';
 import type { StyleTheme } from '../overlay/title-styles';
 import type { PersistedDirectoryHandle } from '../sources/file-sources';
 import { defaultVariants, type ExportVariant } from './export-variants';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
 import { NO_SHIFT, type TimeShift } from '../telemetry/time-format';
+import { AUTO_TIME_SCALE, type TimeScaleSetting } from '../telemetry/time-scale';
 import type { OutputTransform } from '../lut/transfer';
 import type { SavedTrim } from '../media/trim';
 
-export const PROJECT_DOC_VERSION = 8;
+export const PROJECT_DOC_VERSION = 11;
 
 /** Identity of one media file, enough to re-match it inside a folder. */
 export interface SavedMediaRef {
@@ -61,6 +62,15 @@ export interface ProjectSettings {
    * and not a timezone.
    */
   timeShift?: TimeShift;
+  /**
+   * How fast the clip plays against life. Conformed footage (slow motion,
+   * time-lapse) divides real distances by stretched seconds, so every derived
+   * rate — ground speed, vertical speed — would be wrong without it. `auto`
+   * follows what the telemetry measures; manual covers the clips nothing can
+   * measure. Like `timeShift`, a property of the FOOTAGE rather than of a badge.
+   * See telemetry/time-scale.ts.
+   */
+  timeScale?: TimeScaleSetting;
 }
 
 /** The pre-v4 single-look grade, kept so old documents still parse. */
@@ -153,7 +163,11 @@ export function createProjectDoc(
     name,
     createdAt: now,
     updatedAt: now,
-    settings: { aspectId, timeShift: { ...NO_SHIFT } },
+    settings: {
+      aspectId,
+      timeShift: { ...NO_SHIFT },
+      timeScale: { ...AUTO_TIME_SCALE },
+    },
     elements: template ? structuredClone(template.elements) : elements,
     guides: template ? structuredClone(template.guides) : guides,
     lut: template
@@ -183,7 +197,16 @@ export function createProjectDoc(
  * back; v6 → v7 gives every stored variant an explicit 'source' frame rate,
  * which is the only cadence an export could produce before it existed;
  * v7 → v8 adds the per-clip trims, empty, so every clip reopens at its full
- * length. Idempotent; the store runs it on every read.
+ * length; v8 → v9 adds the safe zone's quarter-turn mode, on 'auto'; v9 → v10
+ * adds the cadence correction, on `auto`.
+ *
+ * v10 is the one migration that deliberately changes what a reopened project
+ * shows: a slow-motion clip used to report a fraction of its true ground speed,
+ * and pinning old projects to `manual: 1` would preserve that as if it were a
+ * choice. It is a measurement being corrected, it is stated in the Info tab, and
+ * `manual` is one click away; v10 → v11 gives every stored variant an explicit
+ * speed of 1, which is the only speed an export could deliver before it
+ * existed. Idempotent; the store runs it on every read.
  */
 export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
   if (doc.version >= PROJECT_DOC_VERSION) return doc;
@@ -231,6 +254,34 @@ export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
   if (migrated.version < 8) {
     // No trim was possible before v8: every clip runs full length.
     migrated.media = { ...migrated.media, trims: migrated.media?.trims ?? {} };
+  }
+  if (migrated.version < 9) {
+    // 'auto', not the pre-v9 'upright'. The usual rule — a reopened project
+    // must look exactly as it was closed — guards RENDERED output; guides are
+    // editor-only chrome that never reaches a pixel of the export, and landing
+    // old projects on 'upright' would hide the quarter-turn from every project
+    // that predates it. One click on Rotate pins it back.
+    migrated.guides = {
+      ...(migrated.guides ?? DEFAULT_GUIDES),
+      safeZoneOrientation: migrated.guides?.safeZoneOrientation ?? 'auto',
+    };
+  }
+  if (migrated.version < 10) {
+    // 'auto', not 'manual: 1': an old project's speeds were not a choice, they
+    // were a clip's cadence going unmeasured. See the note above.
+    migrated.settings = {
+      ...migrated.settings,
+      timeScale: migrated.settings?.timeScale ?? { ...AUTO_TIME_SCALE },
+    };
+  }
+  if (migrated.version < 11) {
+    migrated.exportPrefs = {
+      ...migrated.exportPrefs,
+      variants: (migrated.exportPrefs?.variants ?? defaultVariants()).map((v) => ({
+        ...v,
+        speed: v.speed ?? 1,
+      })),
+    };
   }
   migrated.version = PROJECT_DOC_VERSION;
   return migrated;

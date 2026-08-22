@@ -73,12 +73,19 @@ export function toProjectFile(
   source: ProjectPortable & { name: string },
   exportedAt: number = Date.now(),
 ): ProjectFile {
+  // The cadence correction stays home: it is measured against ONE clip's
+  // telemetry (and carries that clip's id), so travelling with a template it
+  // could only misapply — a 4× override silently quadrupling another clip's
+  // speeds. `parseProjectFile` drops it on the way in; not writing it keeps the
+  // file honest about what it can restore.
+  const portableSettings = structuredClone(source.settings);
+  delete portableSettings.timeScale;
   return {
     kind: PROJECT_FILE_KIND,
     version: PROJECT_DOC_VERSION,
     name: source.name,
     exportedAt: new Date(exportedAt).toISOString(),
-    settings: structuredClone(source.settings),
+    settings: portableSettings,
     elements: structuredClone(source.elements),
     guides: structuredClone(source.guides),
     lutStack: structuredClone(source.lutStack),

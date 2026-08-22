@@ -11,6 +11,9 @@
  *   vertical = 1080×1920). 'source' keeps the source density. Never upscales.
  * - `frameRate` is the delivery cadence; 'source' keeps the clip's own and is
  *   the only exact pass-through (see media/frame-rate.ts).
+ * - `speed` is the delivered speed (1 = as shot). It changes the DURATION, not
+ *   the cadence — and a re-timed variant ships silent, because the audio is
+ *   copied, never re-encoded.
  * - File names are `<base>[-9x16][-1080p][-30fps][-clean].mp4` — suffixes only
  *   where a variant departs from the source, so the plain export keeps a plain
  *   name.
@@ -18,7 +21,13 @@
 
 import { ASPECT_PRESETS } from './project-types';
 import { even } from '../media/compose-layout';
-import { describeFrameRate, type ExportFrameRate } from '../media/frame-rate';
+import {
+  describeFrameRate,
+  describeSpeed,
+  resolveSpeed,
+  speedSuffix,
+  type ExportFrameRate,
+} from '../media/frame-rate';
 
 export type VariantAspect = 'source' | string;
 export type VariantResolution = 'source' | 1080 | 720;
@@ -29,6 +38,8 @@ export interface ExportVariant {
   resolution: VariantResolution;
   /** Delivery frame rate; 'source' keeps the clip's own cadence. */
   frameRate: ExportFrameRate;
+  /** Delivered speed; 1 keeps the clip's own. Re-timed variants have no audio. */
+  speed: number;
   /** Burn the overlay elements (and their theme) in, or deliver clean. */
   overlays: boolean;
 }
@@ -42,6 +53,7 @@ export function createVariant(aspectId: VariantAspect = 'source'): ExportVariant
     aspectId,
     resolution: 'source',
     frameRate: 'source',
+    speed: 1,
     overlays: true,
   };
 }
@@ -95,6 +107,8 @@ export function variantSuffix(variant: ExportVariant): string {
   }
   if (variant.resolution !== 'source') parts.push(`${variant.resolution}p`);
   if (variant.frameRate !== 'source') parts.push(`${variant.frameRate}fps`);
+  const speed = speedSuffix(variant.speed);
+  if (speed) parts.push(speed);
   if (!variant.overlays) parts.push('clean');
   return parts.join('-');
 }
@@ -106,13 +120,19 @@ export function variantFileName(base: string, variant: ExportVariant): string {
   return suffix ? `${cleanBase}-${suffix}.mp4` : `${cleanBase}.mp4`;
 }
 
-/** Human summary for a variant row ("9:16 · 1080p · 30 fps · clean"). */
+/** True when this variant re-times, and therefore delivers without audio. */
+export function variantIsRetimed(variant: ExportVariant): boolean {
+  return resolveSpeed(variant.speed) !== 1;
+}
+
+/** Human summary for a variant row ("9:16 · 1080p · 30 fps · 2× speed · clean"). */
 export function describeVariant(variant: ExportVariant): string {
   const parts = [
     variant.aspectId === 'source' ? 'Source frame' : variant.aspectId,
     variant.resolution === 'source' ? 'source res' : `${variant.resolution}p`,
     describeFrameRate(variant.frameRate),
+    describeSpeed(variant.speed),
     variant.overlays ? 'overlays' : 'clean',
-  ];
+  ].filter(Boolean);
   return parts.join(' · ');
 }

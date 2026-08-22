@@ -1,8 +1,21 @@
-import { SAFE_ZONE_PRESETS, clampDivisions, type GuidesState } from './guides';
+import {
+  SAFE_ZONE_PRESETS,
+  clampDivisions,
+  findSafeZone,
+  shouldRotateSafeZone,
+  type GuidesState,
+} from './guides';
 
 interface GuidesControlProps {
   guides: GuidesState;
   onChange: (next: GuidesState) => void;
+  /**
+   * The edited frame's aspect (w/h), so the rotate toggle can show what
+   * `'auto'` actually resolves to. Omitted (no clip loaded, dimensions not
+   * probed yet) the toggle reads as upright, which is what `'auto'` draws
+   * when the frame's orientation is unknown.
+   */
+  frameAspect?: number;
 }
 
 const toggle =
@@ -14,10 +27,23 @@ const toggle =
  * state lives in {@link GuidesState}, owned by the studio. Renders as a fragment
  * so it drops straight into the toolbar's flex row.
  */
-export default function GuidesControl({ guides, onChange }: GuidesControlProps) {
+export default function GuidesControl({
+  guides,
+  onChange,
+  frameAspect,
+}: GuidesControlProps) {
   const { grid } = guides;
   const setGrid = (patch: Partial<typeof grid>) =>
     onChange({ ...guides, grid: { ...grid, ...patch } });
+
+  const preset = findSafeZone(guides.safeZone);
+  const rotated =
+    !!preset &&
+    shouldRotateSafeZone(
+      guides.safeZoneOrientation,
+      preset.aspect,
+      frameAspect ?? 0,
+    );
 
   return (
     <>
@@ -30,7 +56,15 @@ export default function GuidesControl({ guides, onChange }: GuidesControlProps) 
           <select
             className="appearance-none min-w-0 max-w-full overflow-hidden text-ellipsis font-sans text-[0.84rem] font-semibold text-ink bg-paper border border-line-strong rounded-full h-[2.3rem] pl-[0.9rem] pr-[2.2rem] cursor-pointer hover:border-faint focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-colors"
             value={guides.safeZone}
-            onChange={(e) => onChange({ ...guides, safeZone: e.target.value })}
+            onChange={(e) =>
+              // Back to 'auto' with the template: a rotation pinned for a
+              // portrait preset means nothing once you pick the landscape one.
+              onChange({
+                ...guides,
+                safeZone: e.target.value,
+                safeZoneOrientation: 'auto',
+              })
+            }
           >
             <option value="none">Off</option>
             {SAFE_ZONE_PRESETS.map((p) => (
@@ -53,6 +87,42 @@ export default function GuidesControl({ guides, onChange }: GuidesControlProps) 
           </svg>
         </div>
       </label>
+
+      {/* Quarter-turn for the template. Auto-on when the preset's orientation
+          disagrees with the frame's; this returns it upright. */}
+      {preset && (
+        <button
+          type="button"
+          className={toggle}
+          aria-pressed={rotated}
+          onClick={() =>
+            onChange({
+              ...guides,
+              safeZoneOrientation: rotated ? 'upright' : 'rotated',
+            })
+          }
+          title={
+            rotated
+              ? `${preset.label}'s safe area is turned a quarter-turn to span this frame — click for the upright template`
+              : `Turn ${preset.label}'s safe area a quarter-turn so it spans this frame`
+          }
+        >
+          <svg
+            className="w-[1.05rem] h-[1.05rem] flex-none"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M21 12a9 9 0 1 1-3.2-6.9" />
+            <path d="M21 3v5h-5" />
+          </svg>
+          Rotate
+        </button>
+      )}
 
       <span className="w-px self-stretch bg-line mx-0.5" aria-hidden="true" />
 
