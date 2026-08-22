@@ -313,7 +313,7 @@ function cadenceSentence(
 /**
  * A chip over the frame — the repo's idiom for a fact about the picture
  * (VideoCard's shot number, the LUT wipe's Original/Graded). Tiny, because it
- * shares an 80×56 thumbnail.
+ * shares the fixed 80×56 thumbnail with up to one other corner chip.
  */
 function scrim(corner: string): string {
   return `absolute ${corner} left-[3px] z-[2] font-mono text-[0.5rem] tracking-[0.06em] uppercase text-paper bg-[rgba(20,18,15,0.62)] px-[0.25rem] py-px rounded-[4px] leading-[1.35] whitespace-nowrap backdrop-blur-[3px]`;
@@ -396,12 +396,16 @@ function AssetRow({
           .join(' — ')}
         className="flex-1 min-w-0 flex items-center gap-2.5 text-left cursor-pointer disabled:cursor-default"
       >
-        <div className="relative flex-none w-20 h-14 rounded-sm overflow-hidden bg-frame grid place-items-center">
+        {/* Fixed 80×56 for every row, always — this is the same frame the
+            player letterboxes into, so a portrait clip pillarboxes here too
+            instead of resizing the box. Keeping every thumbnail identical is
+            what keeps every title starting at the same x. */}
+        <div className="relative flex-none w-20 h-14 rounded-sm overflow-hidden bg-frame flex items-center justify-center">
           {meta?.thumbUrl ? (
             <img
               src={meta.thumbUrl}
               alt=""
-              className="w-full h-full object-cover block"
+              className="w-full h-full object-contain block"
             />
           ) : (
             <span
@@ -411,10 +415,9 @@ function AssetRow({
               {isPhoto ? (meta?.imageType ?? '◇') : '▶'}
             </span>
           )}
-          {/* Cadence rides on the frame, not in the row: the 288px sidebar
-              leaves the name/facts column about 32px, so a fact placed there is
-              a fact nobody reads. Both chips repeat what the facts line already
-              says (and the title spells out), hence aria-hidden. */}
+          {/* Cadence rides on the frame: it's already carrying two facts
+              (speed and fps), so the kind chip lives in the text column
+              instead of crowding a third onto it. */}
           {cadenceTag && (
             <span className={scrim('top-[3px]')} aria-hidden="true">
               {cadenceTag}
@@ -426,21 +429,21 @@ function AssetRow({
             </span>
           )}
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 flex flex-col gap-[3px]">
           <div className="text-[0.79rem] font-medium truncate" title={asset.baseName}>
             {asset.baseName}
           </div>
           <div className="font-mono text-[0.62rem] text-muted truncate">
             {metaFacts(asset, meta)}
           </div>
+          <span
+            className={`self-start font-mono text-[0.56rem] tracking-[0.06em] uppercase px-1.5 py-0.5 rounded-md border whitespace-nowrap ${chipClass(
+              asset.kind,
+            )}`}
+          >
+            {kindLabel(asset.kind)}
+          </span>
         </div>
-        <span
-          className={`font-mono text-[0.56rem] tracking-[0.06em] uppercase px-1.5 py-0.5 rounded-md border whitespace-nowrap ${chipClass(
-            asset.kind,
-          )}`}
-        >
-          {kindLabel(asset.kind)}
-        </span>
       </button>
       <button
         type="button"
