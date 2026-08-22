@@ -73,6 +73,83 @@ export function findSafeZone(id: string): SafeZonePreset | null {
   return SAFE_ZONE_PRESETS.find((p) => p.id === id) ?? null;
 }
 
+/**
+ * How the safe-zone template is laid over the frame.
+ *
+ * Each preset is authored for one orientation (portrait for Reels, TikTok and
+ * Shorts; landscape for YouTube), so over a frame of the opposite orientation
+ * the upright template shrinks to a band across the middle — true for the crop
+ * it describes, useless for reading a landscape composition. `'rotated'` turns
+ * the template a quarter-turn so it spans the frame instead; `'auto'` (the
+ * default) does that only when the two orientations disagree, and `'upright'`
+ * pins the template as authored.
+ */
+export type SafeZoneOrientation = 'auto' | 'upright' | 'rotated';
+
+/**
+ * -1 portrait, 1 landscape, 0 square-ish. The dead band around 1:1 keeps
+ * near-square frames and templates out of the rotation logic, where a
+ * quarter-turn moves nothing anyone could see.
+ */
+export function orientationOf(aspect: number): -1 | 0 | 1 {
+  if (!Number.isFinite(aspect) || aspect <= 0) return 0;
+  if (aspect > 1.02) return 1;
+  if (aspect < 0.98) return -1;
+  return 0;
+}
+
+/** Whether `mode` calls for a quarter-turn over a frame of `frameAspect`. */
+export function shouldRotateSafeZone(
+  mode: SafeZoneOrientation,
+  presetAspect: number,
+  frameAspect: number,
+): boolean {
+  if (mode === 'rotated') return true;
+  if (mode === 'upright') return false;
+  const p = orientationOf(presetAspect);
+  const f = orientationOf(frameAspect);
+  return p !== 0 && f !== 0 && p !== f;
+}
+
+/**
+ * The preset turned a quarter-turn **clockwise** — the phone tipped onto its
+ * right-hand side. The aspect inverts and every deadzone travels with it: the
+ * portrait top bar becomes a strip down the right edge, the right-hand action
+ * column becomes a band along the bottom.
+ *
+ * The labels are deliberately NOT rotated by this (nor by the drawing code):
+ * they name what covers the area and have to stay readable.
+ */
+export function rotateSafeZone(preset: SafeZonePreset): SafeZonePreset {
+  return {
+    ...preset,
+    aspect: 1 / preset.aspect,
+    deadzones: preset.deadzones.map((r) => ({
+      ...r,
+      x: 1 - r.y - r.h,
+      y: r.x,
+      w: r.h,
+      h: r.w,
+    })),
+  };
+}
+
+/**
+ * The safe-zone template to draw over a `frameAspect` frame, already turned
+ * when the state (or the frame) calls for it. Null when no preset is picked.
+ */
+export function resolveSafeZone(
+  guides: GuidesState,
+  frameAspect: number,
+): SafeZonePreset | null {
+  const preset = findSafeZone(guides.safeZone);
+  if (!preset) return null;
+  const mode = guides.safeZoneOrientation ?? 'auto';
+  return shouldRotateSafeZone(mode, preset.aspect, frameAspect)
+    ? rotateSafeZone(preset)
+    : preset;
+}
+
 export interface GridConfig {
   /** Draw the grid lines on the preview. */
   show: boolean;
@@ -85,11 +162,14 @@ export interface GridConfig {
 export interface GuidesState {
   /** Active safe-zone preset id, or 'none'. */
   safeZone: string;
+  /** Quarter-turn handling for that preset; see {@link SafeZoneOrientation}. */
+  safeZoneOrientation: SafeZoneOrientation;
   grid: GridConfig;
 }
 
 export const DEFAULT_GUIDES: GuidesState = {
   safeZone: 'none',
+  safeZoneOrientation: 'auto',
   grid: { show: false, cols: 3, rows: 3, snap: false },
 };
 

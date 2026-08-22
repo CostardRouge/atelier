@@ -372,7 +372,15 @@ export default function OverlayStudio() {
             onUpload={lutSel.uploadCube}
           />
           <span className="w-px self-stretch bg-line mx-0.5" aria-hidden="true" />
-          <GuidesControl guides={guides} onChange={setGuides} />
+          <GuidesControl
+            guides={guides}
+            onChange={setGuides}
+            frameAspect={
+              activeMeta?.width && activeMeta?.height
+                ? activeMeta.width / activeMeta.height
+                : undefined
+            }
+          />
         </div>
       )}
 

@@ -884,6 +884,12 @@ export default function StudioEditor({
     activeMeta?.width && activeMeta?.height
       ? `${activeMeta.width}×${activeMeta.height}`
       : null;
+  // The stage draws at source resolution, so the guides' notion of "this
+  // frame" is the clip's own aspect — undefined until the probe lands.
+  const frameAspect =
+    activeMeta?.width && activeMeta?.height
+      ? activeMeta.width / activeMeta.height
+      : undefined;
   const activeDetail = [
     activeRes,
     activeInfo.codec,
@@ -1342,7 +1348,11 @@ export default function StudioEditor({
                   )}
 
                   <div className="pt-3 border-t border-line flex flex-wrap items-center gap-2">
-                    <GuidesControl guides={guides} onChange={setGuides} />
+                    <GuidesControl
+                      guides={guides}
+                      onChange={setGuides}
+                      frameAspect={frameAspect}
+                    />
                   </div>
                 </>
               )}
