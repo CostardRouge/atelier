@@ -38,6 +38,7 @@ const SHAPE_ROW: Partial<Record<OverlayElement['kind'], { name: string; tag: str
   'heading-tape': { name: 'Heading tape', tag: '⇥' },
   'frame-corners': { name: 'Frame corners', tag: '⌗' },
   battery: { name: 'Battery', tag: '▮' },
+  'rotate-device': { name: 'Rotate phone', tag: '⟳' },
 };
 
 const linkBtn =
