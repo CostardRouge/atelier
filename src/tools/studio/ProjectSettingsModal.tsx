@@ -6,6 +6,7 @@ import {
   type ProjectFile,
 } from '../../shared/projects/project-file';
 import { pickFile } from '../../shared/sources/file-sources';
+import SectionLegend from './SectionLegend';
 import { NO_SHIFT, type TimeShift } from '../../shared/telemetry/time-format';
 import {
   describeTimeScale,
@@ -158,13 +159,13 @@ export default function ProjectSettingsModal({
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="w-full max-w-[28rem] max-h-[90vh] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper p-6">
+      <div className="w-full max-w-[28rem] max-h-[90vh] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6">
         <div>
           <h2 className="m-0 font-serif text-[1.4rem]">Project settings</h2>
         </div>
 
         <label className={field}>
-          <span className={legend}>Name</span>
+          <SectionLegend label="Name" />
           <input
             ref={nameRef}
             value={draftName}
@@ -177,7 +178,12 @@ export default function ProjectSettingsModal({
         </label>
 
         <fieldset className="m-0 p-0 border-0 flex flex-col gap-1.5">
-          <span className={legend}>Format</span>
+          <SectionLegend label="Format">
+            <p>
+              The project's format seeds new export variants; the Export tab can
+              still add other formats per variant.
+            </p>
+          </SectionLegend>
           <div className="grid grid-cols-2 gap-2">
             {ASPECT_PRESETS.map((a) => (
               <button
@@ -208,20 +214,22 @@ export default function ProjectSettingsModal({
               </button>
             ))}
           </div>
-          <p className="m-0 text-[0.7rem] text-faint">
-            The project's format seeds new export variants; the Export tab can
-            still add other formats per variant.
-          </p>
         </fieldset>
 
         <fieldset className="m-0 p-0 border-0 flex flex-col gap-1.5">
-          <span className={legend}>Cadence</span>
-          <p className="m-0 text-[0.72rem] text-muted leading-relaxed">
-            Slow motion and time-lapse are <em>conformed</em>: the file plays at a
-            speed the camera never shot at, so every speed read from the flight
-            log — ground, vertical — would be divided by the wrong seconds. The
-            log's own timestamps say what the real cadence was.
-          </p>
+          <SectionLegend label="Cadence">
+            <p>
+              Slow motion and time-lapse are <em>conformed</em>: the file plays
+              at a speed the camera never shot at, so every speed read from the
+              flight log — ground, vertical — would be divided by the wrong
+              seconds. The log's own timestamps say what the real cadence was.
+            </p>
+            <p>
+              Only rates move: a heading is a direction and survives any
+              conform, and the clock badges keep reading the capture time, which
+              is why they tick slowly on a ralenti — that part is true.
+            </p>
+          </SectionLegend>
           <div className="flex flex-col gap-1.5">
             <button
               type="button"
@@ -289,21 +297,21 @@ export default function ProjectSettingsModal({
               <span className="text-[0.78rem] text-ink-soft">than life</span>
             </div>
           )}
-          <p className="m-0 text-[0.7rem] text-faint">
-            Only rates move: a heading is a direction and survives any conform,
-            and the clock badges keep reading the capture time, which is why they
-            tick slowly on a ralenti — that part is true.
-          </p>
         </fieldset>
 
         <fieldset className="m-0 p-0 border-0 flex flex-col gap-1.5">
-          <span className={legend}>Capture time</span>
-          <p className="m-0 text-[0.72rem] text-muted leading-relaxed">
-            The flight log records a bare wall-clock reading with no timezone —
-            whatever the aircraft's clock said. If it was off, correct it here:
-            the shift applies to every clock, date and timestamp element at
-            once, and rolls the date when it crosses midnight.
-          </p>
+          <SectionLegend label="Capture-time shift">
+            <p>
+              The flight log records a bare wall-clock reading with no timezone
+              — whatever the aircraft's clock said. If it was off, correct it
+              here: the shift applies to every clock, date and timestamp element
+              at once, and rolls the date when it crosses midnight.
+            </p>
+            <p>
+              Minutes cover the half- and quarter-hour zones; days are for a
+              controller that came back from a flat battery with the wrong date.
+            </p>
+          </SectionLegend>
           <div className="flex items-end gap-2">
             <label className="flex flex-col gap-1">
               <span className={legend}>Hours</span>
@@ -351,19 +359,17 @@ export default function ProjectSettingsModal({
               </button>
             )}
           </div>
-          <p className="m-0 text-[0.7rem] text-faint">
-            Minutes cover the half- and quarter-hour zones; days are for a
-            controller that came back from a flat battery with the wrong date.
-          </p>
         </fieldset>
 
         <fieldset className="m-0 p-0 border-0 flex flex-col gap-2 pt-4 border-t border-line">
-          <span className={legend}>Import / export</span>
-          <p className="m-0 text-[0.72rem] text-muted leading-relaxed">
-            A project file carries the settings only — overlays, style, grade,
-            format, capture-time shift and the export matrix. Never your media:
-            it is a template you can keep, share or reuse on another machine.
-          </p>
+          <SectionLegend label="Import / export">
+            <p>
+              A project file carries the settings only — overlays, style, grade,
+              format, capture-time shift and the export matrix. Never your
+              media, and never this clip's cadence: it is a template you can
+              keep, share or reuse on another machine.
+            </p>
+          </SectionLegend>
           <div className="flex flex-wrap items-center gap-2.5">
             <button type="button" onClick={() => onExport(draft())} className={smallButton}>
               <span aria-hidden="true">↓</span> Export settings
@@ -415,7 +421,9 @@ export default function ProjectSettingsModal({
           )}
         </fieldset>
 
-        <div className="flex items-center justify-end gap-4 pt-1 border-t border-line">
+        {/* Pinned: on a phone the card scrolls, and Apply used to sit below
+            the fold — the one control every visit ends with. */}
+        <div className="sticky bottom-0 -mx-6 mt-4 px-6 pb-6 flex items-center justify-end gap-4 pt-1 border-t border-line bg-surface">
           <button
             type="button"
             onClick={onCancel}
