@@ -540,6 +540,13 @@ export async function exportProcessedVideo(
   };
   const codec = await pickAvcCodec(encoderConfig);
 
+  // Everything from here on holds a VideoEncoder (and, once created, a
+  // VideoDecoder) that MUST be closed on every exit path, success or not — an
+  // encoder left open after e.g. configure() rejects this resolution still
+  // holds a hardware encode session, and the browser caps how many a page can
+  // have concurrently. Leak one and every export after it fails too, not just
+  // this one, so the whole pipeline lives inside a single try/finally rather
+  // than the encoder/decoder being created ahead of a narrower try block.
   const encoder = new VideoEncoder({
     // Guarded: a colour space the muxer cannot encode would become a WRONG
       // colr box, not an absent one — see media/colour-tag.ts.
@@ -548,159 +555,163 @@ export async function exportProcessedVideo(
       pipelineError = e instanceof Error ? e : new Error(String(e));
     },
   });
-  encoder.configure({ codec, ...encoderConfig, avc: { format: 'avc' } });
-
-  // Which slice of the file to encode. Untrimmed exports get the whole thing
-  // with a zero offset, i.e. exactly the previous behaviour.
-  const win = trimWindow(videoSamples, options.trim);
-  const total = win.frameCount;
-  const gop = Math.max(1, framerate * 2); // keyframe every ~2s
-  let processed = 0;
-  // Retiming state: the grid is anchored on the first decoded frame, so a clip
-  // whose first sample is not at t=0 still starts its output at index 0.
-  const sourceFrameDuration = Math.round(1_000_000 / sourceFramerate);
-  const outputFrameDuration = Math.round(1_000_000 / framerate);
-  let origin: number | null = null;
-  let nextIndex = 0;
-  let emitted = 0;
-
-  // Build the per-frame transform once the coded + output sizes are known.
-  const processor = makeProcessor({
-    codedWidth: width,
-    codedHeight: height,
-    outputWidth,
-    outputHeight,
-    rotation,
-  });
-
-  const decoder = new VideoDecoder({
-    output: (frame) => {
-      try {
-        const timestamp = frame.timestamp;
-        // Outside the trim: decoded only because later frames reference it.
-        if (timestamp < win.baseMicros || timestamp >= win.endMicros) {
-          frame.close();
-          return;
-        }
-        const srcDuration = frame.duration ?? sourceFrameDuration;
-        // The grid is anchored on the first frame that is KEPT, so a trimmed
-        // export starts its output at index 0 like any other.
-        if (origin === null) origin = timestamp;
-
-        // Which output frames this decoded frame owes. Pass-through gives one,
-        // at the source's own timestamp; retiming gives none (dropped), one, or
-        // several (duplicated) on the output grid. Either way the timestamp is
-        // rebased by the trim's origin (0 when nothing is trimmed) so the file
-        // starts at zero — while the processor keeps receiving SOURCE times,
-        // or cues, the capture clock and overlays detach from the picture.
-        let timestamps: number[];
-        let duration: number;
-        if (retime) {
-          // The source span, divided by the speed: that is the whole re-time,
-          // and the grid below turns it into dropped or repeated frames.
-          const start = (timestamp - origin) / speed;
-          const indices = planFrameIndices(
-            start,
-            start + srcDuration / speed,
-            framerate,
-            nextIndex,
-          );
-          if (indices.length === 0) {
-            // Nothing to encode from this frame — skip the transform entirely,
-            // which is what makes a downscale to 24 fps cheaper, not dearer.
-            frame.close();
-            processed++;
-            onProgress?.({ phase: 'encoding', ratio: processed / total });
-            return;
-          }
-          nextIndex = indices[indices.length - 1] + 1;
-          timestamps = indices.map(
-            (i) => origin! - win.baseMicros + frameTimestampMicros(i, framerate),
-          );
-          duration = outputFrameDuration;
-        } else {
-          timestamps = [timestamp - win.baseMicros];
-          duration = srcDuration;
-        }
-
-        const source = processor.draw(frame, timestamp);
-        frame.close();
-        for (const ts of timestamps) {
-          const out = new VideoFrame(source, { timestamp: ts, duration });
-          encoder.encode(out, { keyFrame: emitted % gop === 0 });
-          out.close();
-          emitted++;
-        }
-        processed++;
-        onProgress?.({ phase: 'encoding', ratio: processed / total });
-      } catch (e) {
-        pipelineError = e instanceof Error ? e : new Error(String(e));
-        frame.close();
-      }
-    },
-    error: (e) => {
-      pipelineError = e instanceof Error ? e : new Error(String(e));
-    },
-  });
-  const decoderConfig: VideoDecoderConfig = {
-    codec: videoTrack.codec,
-    codedWidth: width,
-    codedHeight: height,
-    description,
-  };
-  // Fail fast with a clear, typed error when the browser can't decode this
-  // source (DJI footage is often HEVC/H.265, which not every browser decodes
-  // via WebCodecs) — so callers can fall back to the seek path.
-  const decodeSupport = await VideoDecoder.isConfigSupported(decoderConfig).catch(
-    () => ({ supported: false }) as VideoDecoderSupport,
-  );
-  if (!decodeSupport.supported) {
-    processor.dispose();
-    if (encoder.state !== 'closed') encoder.close();
-    const baseCodec = videoTrack.codec.split('.')[0];
-    const isHevc = /^(hvc1|hev1|hvc|hev)/i.test(baseCodec);
-    throw new DecodeUnsupportedError(
-      isHevc
-        ? "This browser can't decode HEVC/H.265 for export. Try Safari, or transcode the clip to H.264 first."
-        : `This browser can't decode this clip's video codec (${baseCodec}) for export.`,
-      isHevc,
-    );
-  }
-  decoder.configure(decoderConfig);
+  let decoderRef: VideoDecoder | undefined;
 
   try {
-    for (let i = win.decodeFrom; i <= win.decodeTo; i += 1) {
-      const sample = videoSamples[i];
-      throwIfAborted();
-      if (pipelineError) throw pipelineError;
-      if (!sample?.data) continue;
-      decoder.decode(
-        new EncodedVideoChunk({
-          type: sample.is_sync ? 'key' : 'delta',
-          timestamp: toMicros(sample.cts, sample.timescale),
-          duration: toMicros(sample.duration, sample.timescale),
-          data: sample.data,
-        }),
+    encoder.configure({ codec, ...encoderConfig, avc: { format: 'avc' } });
+
+    // Which slice of the file to encode. Untrimmed exports get the whole thing
+    // with a zero offset, i.e. exactly the previous behaviour.
+    const win = trimWindow(videoSamples, options.trim);
+    const total = win.frameCount;
+    const gop = Math.max(1, framerate * 2); // keyframe every ~2s
+    let processed = 0;
+    // Retiming state: the grid is anchored on the first decoded frame, so a clip
+    // whose first sample is not at t=0 still starts its output at index 0.
+    const sourceFrameDuration = Math.round(1_000_000 / sourceFramerate);
+    const outputFrameDuration = Math.round(1_000_000 / framerate);
+    let origin: number | null = null;
+    let nextIndex = 0;
+    let emitted = 0;
+
+    // Build the per-frame transform once the coded + output sizes are known.
+    const processor = makeProcessor({
+      codedWidth: width,
+      codedHeight: height,
+      outputWidth,
+      outputHeight,
+      rotation,
+    });
+
+    try {
+      const decoder = new VideoDecoder({
+        output: (frame) => {
+          try {
+            const timestamp = frame.timestamp;
+            // Outside the trim: decoded only because later frames reference it.
+            if (timestamp < win.baseMicros || timestamp >= win.endMicros) {
+              frame.close();
+              return;
+            }
+            const srcDuration = frame.duration ?? sourceFrameDuration;
+            // The grid is anchored on the first frame that is KEPT, so a trimmed
+            // export starts its output at index 0 like any other.
+            if (origin === null) origin = timestamp;
+
+            // Which output frames this decoded frame owes. Pass-through gives one,
+            // at the source's own timestamp; retiming gives none (dropped), one, or
+            // several (duplicated) on the output grid. Either way the timestamp is
+            // rebased by the trim's origin (0 when nothing is trimmed) so the file
+            // starts at zero — while the processor keeps receiving SOURCE times,
+            // or cues, the capture clock and overlays detach from the picture.
+            let timestamps: number[];
+            let duration: number;
+            if (retime) {
+              // The source span, divided by the speed: that is the whole re-time,
+              // and the grid below turns it into dropped or repeated frames.
+              const start = (timestamp - origin) / speed;
+              const indices = planFrameIndices(
+                start,
+                start + srcDuration / speed,
+                framerate,
+                nextIndex,
+              );
+              if (indices.length === 0) {
+                // Nothing to encode from this frame — skip the transform entirely,
+                // which is what makes a downscale to 24 fps cheaper, not dearer.
+                frame.close();
+                processed++;
+                onProgress?.({ phase: 'encoding', ratio: processed / total });
+                return;
+              }
+              nextIndex = indices[indices.length - 1] + 1;
+              timestamps = indices.map(
+                (i) => origin! - win.baseMicros + frameTimestampMicros(i, framerate),
+              );
+              duration = outputFrameDuration;
+            } else {
+              timestamps = [timestamp - win.baseMicros];
+              duration = srcDuration;
+            }
+
+            const source = processor.draw(frame, timestamp);
+            frame.close();
+            for (const ts of timestamps) {
+              const out = new VideoFrame(source, { timestamp: ts, duration });
+              encoder.encode(out, { keyFrame: emitted % gop === 0 });
+              out.close();
+              emitted++;
+            }
+            processed++;
+            onProgress?.({ phase: 'encoding', ratio: processed / total });
+          } catch (e) {
+            pipelineError = e instanceof Error ? e : new Error(String(e));
+            frame.close();
+          }
+        },
+        error: (e) => {
+          pipelineError = e instanceof Error ? e : new Error(String(e));
+        },
+      });
+      decoderRef = decoder;
+      const decoderConfig: VideoDecoderConfig = {
+        codec: videoTrack.codec,
+        codedWidth: width,
+        codedHeight: height,
+        description,
+      };
+      // Fail fast with a clear, typed error when the browser can't decode this
+      // source (DJI footage is often HEVC/H.265, which not every browser decodes
+      // via WebCodecs) — so callers can fall back to the seek path.
+      const decodeSupport = await VideoDecoder.isConfigSupported(decoderConfig).catch(
+        () => ({ supported: false }) as VideoDecoderSupport,
       );
-      await awaitQueue(() => decoder.decodeQueueSize, 24);
-      await awaitQueue(() => encoder.encodeQueueSize, 24);
+      if (!decodeSupport.supported) {
+        const baseCodec = videoTrack.codec.split('.')[0];
+        const isHevc = /^(hvc1|hev1|hvc|hev)/i.test(baseCodec);
+        throw new DecodeUnsupportedError(
+          isHevc
+            ? "This browser can't decode HEVC/H.265 for export. Try Safari, or transcode the clip to H.264 first."
+            : `This browser can't decode this clip's video codec (${baseCodec}) for export.`,
+          isHevc,
+        );
+      }
+      decoder.configure(decoderConfig);
+
+      for (let i = win.decodeFrom; i <= win.decodeTo; i += 1) {
+        const sample = videoSamples[i];
+        throwIfAborted();
+        if (pipelineError) throw pipelineError;
+        if (!sample?.data) continue;
+        decoder.decode(
+          new EncodedVideoChunk({
+            type: sample.is_sync ? 'key' : 'delta',
+            timestamp: toMicros(sample.cts, sample.timescale),
+            duration: toMicros(sample.duration, sample.timescale),
+            data: sample.data,
+          }),
+        );
+        await awaitQueue(() => decoder.decodeQueueSize, 24);
+        await awaitQueue(() => encoder.encodeQueueSize, 24);
+      }
+
+      await decoder.flush();
+      await encoder.flush();
+      if (pipelineError) throw pipelineError;
+
+      // Trimmed: only the audio overlapping the window, rebased on it. Re-timed:
+      // no audio at all — `keepAudio` is null (see `frame-rate.ts`).
+      copyAudio(muxer, keepAudio, audioSamples, win);
+
+      onProgress?.({ phase: 'finalizing', ratio: null });
+      muxer.finalize();
+      const { buffer: output } = muxer.target as ArrayBufferTarget;
+      return new Blob([output], { type: 'video/mp4' });
+    } finally {
+      processor.dispose();
     }
-
-    await decoder.flush();
-    await encoder.flush();
-    if (pipelineError) throw pipelineError;
-
-    // Trimmed: only the audio overlapping the window, rebased on it. Re-timed:
-    // no audio at all — `keepAudio` is null (see `frame-rate.ts`).
-    copyAudio(muxer, keepAudio, audioSamples, win);
-
-    onProgress?.({ phase: 'finalizing', ratio: null });
-    muxer.finalize();
-    const { buffer: output } = muxer.target as ArrayBufferTarget;
-    return new Blob([output], { type: 'video/mp4' });
   } finally {
-    processor.dispose();
-    if (decoder.state !== 'closed') decoder.close();
+    if (decoderRef && decoderRef.state !== 'closed') decoderRef.close();
     if (encoder.state !== 'closed') encoder.close();
   }
 }
