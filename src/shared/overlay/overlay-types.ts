@@ -11,6 +11,7 @@
 
 import type { SpeedUnit } from '../telemetry/motion';
 import type { TimeFormatOptions } from '../telemetry/time-format';
+import type { ElementAnimation, TimeWindow } from './animation';
 export type { SpeedUnit, TimeFormatOptions };
 
 /**
@@ -43,7 +44,11 @@ export type OverlayKind =
   | 'heading-arrow'
   | 'heading-tape'
   | 'frame-corners'
-  | 'battery';
+  | 'battery'
+  | 'rotate-device';
+
+/** Which way the `rotate-device` pictogram tips the phone. */
+export type RotateDirection = 'cw' | 'ccw';
 
 /** Where a shape element's caption sits relative to it. */
 export type LabelPlacement = 'none' | 'above' | 'below' | 'left' | 'right';
@@ -232,6 +237,34 @@ export interface OverlayElement {
   batteryLowColor?: string;
   /** Where the caption sits relative to the cell. Default 'right'. */
   batteryLabel?: LabelPlacement;
+
+  // --- rotate-device prompt ------------------------------------------------
+
+  /** Which way the phone tips. Default 'cw' — onto its right side. */
+  rotateDirection?: RotateDirection;
+  /** Seconds for one full tip (and return). Default 1.8. */
+  rotateCycleSeconds?: number;
+  /** Tip and come back, rather than tipping and holding. Default true. */
+  rotateReturn?: boolean;
+  /** Where the caption sits relative to the phone. Default 'below'. */
+  rotateLabel?: LabelPlacement;
+
+  // --- timing --------------------------------------------------------------
+
+  /**
+   * When this element is on screen, in seconds from the first exported frame —
+   * or, when it belongs to a scene, from that scene's start (see scenes.ts).
+   * Absent = the whole clip, which is what every element meant before windows
+   * existed.
+   */
+  window?: TimeWindow;
+  /** How it arrives and how it leaves. Absent = a hard cut. See animation.ts. */
+  animation?: ElementAnimation;
+  /**
+   * The scene this element belongs to, if any. A scene lends it a window and
+   * can hold back everything outside itself while it runs.
+   */
+  sceneId?: string;
 
   // --- appearance extensions (title styles) --------------------------------
 
@@ -440,6 +473,34 @@ export function createBatteryElement(): OverlayElement {
     batteryLowPercent: 20,
     batteryLowColor: '#e2402a',
     batteryLabel: 'right',
+  };
+}
+
+/**
+ * Create the "turn your phone" prompt: a phone pictogram that tips a quarter
+ * turn, with a caption under it.
+ *
+ * It is a drawing, not a control: the export is a flat video, so the only way
+ * to invite a viewer to rotate their screen is to show them the gesture. That
+ * is also why the tipping matters more than the words — it reads before the
+ * caption does, and it survives a viewer who does not read the caption's
+ * language.
+ */
+export function createRotateDeviceElement(): OverlayElement {
+  return {
+    id: uid(),
+    kind: 'rotate-device',
+    text: 'Rotate your phone',
+    anchor: 'center',
+    x: 0.5,
+    y: 0.5,
+    ...baseStyle(),
+    sizeFrac: 0.16,
+    rotateDirection: 'cw',
+    rotateCycleSeconds: 1.8,
+    rotateReturn: true,
+    rotateLabel: 'below',
+    legibility: { mode: 'shadow', color: 'rgba(0,0,0,0.55)', padFrac: 0.3 },
   };
 }
 

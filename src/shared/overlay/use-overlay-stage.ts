@@ -28,6 +28,7 @@ import { drawGuides } from './draw-guides';
 import { snapToGrid, type GuidesState } from './guides';
 import type { OverlayElement } from './overlay-types';
 import type { StyleTheme } from './title-styles';
+import type { Scene } from './scenes';
 import type { TimeShift } from '../telemetry/time-format';
 
 interface StageParams {
@@ -52,6 +53,13 @@ interface StageParams {
   theme?: StyleTheme | null;
   /** The project's capture-time correction, for clock/date/timestamp. */
   timeShift?: TimeShift | null;
+  /** The project's scenes — the intro's window, scrim and solo. */
+  scenes?: readonly Scene[];
+  /**
+   * Media time of the clip's in point: element windows are counted from the
+   * first frame the export will keep, not from the media's zero.
+   */
+  originSeconds?: number;
   /**
    * A/B compare: when true, a draggable divider wipes between the ORIGINAL
    * frame (left) and the composed one — LUT + overlays — (right). Dragging on
@@ -91,6 +99,8 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   const interpolationRef = useRef(params.interpolation);
   const themeRef = useRef(params.theme ?? null);
   const shiftRef = useRef(params.timeShift ?? null);
+  const scenesRef = useRef(params.scenes);
+  const originRef = useRef(params.originSeconds ?? 0);
   const compareRef = useRef(params.compare ?? false);
   const splitRef = useRef(0.5);
   cuesRef.current = params.cues;
@@ -102,6 +112,8 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   interpolationRef.current = params.interpolation;
   themeRef.current = params.theme ?? null;
   shiftRef.current = params.timeShift ?? null;
+  scenesRef.current = params.scenes;
+  originRef.current = params.originSeconds ?? 0;
   compareRef.current = params.compare ?? false;
 
   const needsRedraw = useRef(true);
@@ -171,6 +183,8 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     params.guides,
     params.theme,
     params.timeShift,
+    params.scenes,
+    params.originSeconds,
     params.compare,
     params.cues,
   ]);
@@ -215,6 +229,12 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       timeShift: shiftRef.current,
       cues: cuesRef.current,
       timeSeconds: video.currentTime,
+      scenes: scenesRef.current,
+      originSeconds: originRef.current,
+      // The selected element is drawn even outside its window, ghosted: a
+      // title that lives in the first three seconds must stay reachable with
+      // the playhead anywhere else. Editor-only — no export sets this.
+      ghostId: selectedRef.current,
     });
 
     // A/B wipe (editor-only): the ORIGINAL frame covers the left of the
@@ -249,6 +269,10 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       const boxes = measureOverlays(ctx, elementsRef.current, cue, vw, vh, {
         theme: themeRef.current,
         timeShift: shiftRef.current,
+        scenes: scenesRef.current,
+        originSeconds: originRef.current,
+        timeSeconds: video.currentTime,
+        ghostId: sel,
       });
       const box = boxForId(boxes, sel);
       if (box) {
@@ -338,6 +362,10 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       const boxes = measureOverlays(ctx, elementsRef.current, cue, canvas.width, canvas.height, {
         theme: themeRef.current,
         timeShift: shiftRef.current,
+        scenes: scenesRef.current,
+        originSeconds: originRef.current,
+        timeSeconds: video.currentTime,
+        ghostId: selectedRef.current,
       });
       const id = hitTest(boxes, pt.px, pt.py);
       onSelect(id);

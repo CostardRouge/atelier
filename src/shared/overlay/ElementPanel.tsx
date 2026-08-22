@@ -10,6 +10,7 @@ import {
   type HeadingGapMode,
   type LabelPlacement,
   type OverlayElement,
+  type RotateDirection,
   type SpeedUnit,
   type TapeReticle,
   type TelemetryFieldKey,
@@ -705,6 +706,75 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
               <option value="above">Above the cell</option>
               <option value="below">Below the cell</option>
               <option value="none">Hidden</option>
+            </select>
+          </label>
+        </div>
+      ) : element.kind === 'rotate-device' ? (
+        <div className="flex flex-col gap-2">
+          <p className="m-0 text-[0.78rem] text-muted">
+            A phone tipping a quarter turn, to invite the viewer to rotate their
+            screen. It is drawn into the video like everything else — the export
+            is a flat file, so the gesture is the whole message.
+          </p>
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>Caption</span>
+            <input
+              type="text"
+              className={inputClass}
+              placeholder="(none)"
+              value={element.text ?? ''}
+              onChange={(e) => change({ text: e.target.value })}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>Turn</span>
+            <select
+              className={`${inputClass} cursor-pointer`}
+              value={element.rotateDirection ?? 'cw'}
+              onChange={(e) =>
+                change({ rotateDirection: e.target.value as RotateDirection })
+              }
+            >
+              <option value="cw">Clockwise — onto its right side</option>
+              <option value="ccw">Anticlockwise — onto its left side</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>
+              Cycle · {(element.rotateCycleSeconds ?? 1.8).toFixed(1)} s
+            </span>
+            <input
+              type="range"
+              className="w-full accent-accent cursor-pointer"
+              min={0.6}
+              max={4}
+              step={0.1}
+              value={element.rotateCycleSeconds ?? 1.8}
+              onChange={(e) => change({ rotateCycleSeconds: Number(e.target.value) })}
+            />
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="w-3.5 h-3.5 accent-accent cursor-pointer"
+              checked={element.rotateReturn ?? true}
+              onChange={(e) => change({ rotateReturn: e.target.checked })}
+            />
+            <span className={labelClass}>Tip back upright each cycle</span>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className={labelClass}>Caption position</span>
+            <select
+              className={`${inputClass} cursor-pointer`}
+              value={element.rotateLabel ?? 'below'}
+              onChange={(e) =>
+                change({ rotateLabel: e.target.value as LabelPlacement })
+              }
+            >
+              <option value="below">Below the phone</option>
+              <option value="above">Above the phone</option>
+              <option value="right">Right of the phone</option>
+              <option value="left">Left of the phone</option>
             </select>
           </label>
         </div>

@@ -102,6 +102,42 @@ Read before touching `src/tools/studio/`, `src/shared/overlay/`, anything about 
 
 **Trap for whoever tests this in CI or a container**: the headless Chromium in this project's cloud sessions has **no H.264 encoder** (`VideoEncoder.isConfigSupported` says false for every `avc1.*`; VP8/VP9 only), and `MediaRecorder`'s `video/mp4` writes VP9 in an MP4, which the export pipeline rejects for want of an `avcC`. So no export can be driven end to end there — verify the retime through `frame-rate.test.ts` and the UI, and run the encode on a real machine.
 
+## The intro is a scene, not a class of element (2026-08-22)
+
+**Decision.** The maintainer asked for "a new group of elements for the introduction, animated, with an end time, that can veil the others". Built as **three orthogonal pieces**, not one new element type:
+
+1. **`window` + `animation` on every `OverlayElement`** (`shared/overlay/animation.ts`, pure, 22 tests). Any element can be given a life span and an entrance/exit — the intro is only the first customer; "the altitude readout appears during the flight sequence" comes free. Absent = the pre-existing behaviour, so no migration pain.
+2. **A `Scene`** (`shared/overlay/scenes.ts`, pure, 15 tests) in the portable half: one window shared by the elements that carry its `sceneId`, plus a **scrim** (colour/opacity/fade, painted over the picture and *under* every element) and **solo** (holds back everything outside the scene, `hudFade` seconds to bring it back — the maintainer chose "adjustable per scene", 0 = a cut). Element windows inside a scene are **offsets into it**, which is what makes moving the intro move the whole stagger.
+3. **An Intro palette group of *presets***, not kinds (`intro-presets.ts`): hook title, subtitle, question, rotate-phone. A hook title and a subtitle are both `text` — telling them apart by kind would have duplicated the style cascade, the theme, dragging and both export paths. Only `rotate-device` is a real new kind.
+
+**Why the split matters.** Rejected on purpose: a parallel "intro element" class. It would have needed its own styling, palette, panel, renderer and burn-in. Do not re-propose it.
+
+**Scope decided with the maintainer**: the intro plays **over the running footage**; the export stays a 1:1 mapping of source frames. A title card on black or a **freeze of the first frame** — output longer than input — is a separate, later chantier that touches the WebCodecs pipeline, the trim and the export stats. Do not slip it in sideways.
+
+**Conventions to keep.**
+- The animation is a **pure function of time** (`transformAt(anim, window, t)`), never an accumulator over rendered frames — the preview runs on rAF, the export on decoded frames, and a frame-fed filter would make the burn-in disagree with the screen. Same rule as `heading-smooth.ts`.
+- Distances come out as **fractions of the shorter side**, never pixels, so a title rises the same distance in a 480px preview and a 4K export.
+- The window is the element's **whole life**: the exit finishes *at* `end`, so "disappears at 3 s" means gone at 3 s. A window too short for both steps splits in the middle rather than dropping one.
+- **`DrawOptions.originSeconds` is the clip's in point.** `timeSeconds` is media time (grain, heading smoothing); windows count from the first EXPORTED frame. Any new render path must pass both or a trimmed clip plays its intro at the wrong moment — five call sites: stage, `export-variant`, `export-overlay-seek`, `frame-grab`, and the stage's `measureOverlays`.
+- **Scaling happens around the element's anchor**, not its box centre: a title anchored bottom-left grows from that corner and stays pinned.
+- **Hit boxes are measured untransformed**, and an element that is off screen (out of window, or held back by a solo) gets **no box** — otherwise a click during the intro lands on an invisible readout, and a title mid-slide squirms away from the pointer.
+
+## Editing something that is not on screen (2026-08-22)
+
+**The trap, seen immediately**: select a title that lives at 0–3 s, park the playhead at 0:42, and it cannot be dragged — it is not drawn. **The remedy**: `DrawOptions.ghostId` (editor-only, never set by an export) draws the *selected* element at 35% even outside its window, and `measureOverlays` grants it a box on the same condition. So selection always keeps the element reachable, and only the selected one.
+
+Timing is edited numerically for now (`TimingPanel.tsx`, studio-only — the legacy overlay page has no in-point to count from), with "From playhead" buttons, the `I`/`O` reflex. A **lane under the TrimBar** showing each timed element as a draggable bar is the natural next step; remember that bar splits into **bands, never z-index** (see the trimming entry).
+
+## Canvas trap: an element fades in pieces (2026-08-22)
+
+A dozen helpers inside `draw-overlays.ts` **assign** `ctx.globalAlpha` (the tape's per-tick fade, the compass ring, the glow's grain), so wrapping an element's draw in `ctx.globalAlpha = 0.4` is stomped by the first of them and the element fades in pieces. The fix is a module-level `elementAlpha` set by `drawOverlays` around each element, and every absolute assignment routed through `alpha(x)`. **Any new drawing code that sets `globalAlpha` must go through `alpha()`** or it will ignore animations and the solo.
+
+## The rotate-phone prompt (2026-08-22)
+
+The founding request: most exports are portrait, some footage is better watched in landscape, and the viewer needs inviting to turn the screen. It is a **drawing, not a control** — an export is a flat video with no interactivity, so the tipping gesture *is* the instruction, and the arc arrow exists so a still frame (thumbnail, frame grab) reads too. `sizeFrac` sizes the **square the phone tips inside**, not the handset: a box sized to the upright phone would make the element jump around its anchor mid-turn. The cycle (`rotate-device.ts`, pure, 6 tests) is beat-upright → quarter turn → beat-tipped → back, so the eye finds the phone before it moves.
+
+**The arrow and the phone must be sized independently (2026-08-22).** The first cut sized the arc off the phone (`0.47×`/`0.82×` the box), which put the arc's inner edge and the phone's half-diagonal within a hair of each other — touching at the 45° mid-turn point, where the tipped rectangle reaches farthest from centre (a constant, whatever the angle — only the direction changes). `rotatePhoneScale` (default 0.66) and `rotateArcScale` (default 0.44), both element props, size the two independently; two sliders in `ElementPanel` let an author widen either without inflating the other. The bound to respect when touching the defaults again: the phone's half-diagonal (`phoneH × 0.567`) must stay comfortably inside the arc's inner edge (`arcRadius − arcWeight/2`), and `arcRadius + arcWeight/2` must stay ≤ `side/2` or the arc clips the element's own box.
+
 ## The heading is course over ground, and it has holes (2026-08-21)
 
 **The cause, so no future session re-diagnoses it.** The `.srt` carries no compass and no yaw. `motion.ts` reconstructs the heading as the azimuth between GPS fixes ~1 s apart, and **suppresses it** below `MIN_MOVE_M = 1` metre of horizontal travel — hovering, creeping, or **yawing on the spot** (nose turns, ground track doesn't) all produce nothing. Do **not** lower that floor to "fix" the gaps: it trades a gap for a weathervane driven by GPS noise.

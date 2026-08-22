@@ -36,6 +36,9 @@ import { findCue } from '../../shared/telemetry/find-cue';
 import ElementList from '../../shared/overlay/ElementList';
 import ElementPalette from '../../shared/overlay/ElementPalette';
 import ElementPanel from '../../shared/overlay/ElementPanel';
+import ScenePanel from '../../shared/overlay/ScenePanel';
+import TimingPanel from '../../shared/overlay/TimingPanel';
+import { createIntroScene, findScene, type Scene } from '../../shared/overlay/scenes';
 import GuidesControl from '../../shared/overlay/GuidesControl';
 import { exportOverlayVideoViaSeek } from '../../shared/overlay/export-overlay-seek';
 import { exportVariantVideo } from '../../shared/media/export-variant';
@@ -239,6 +242,11 @@ export default function StudioEditor({
   const [previewSpeed, setPreviewSpeed] = useState<number | 'realtime'>(1);
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState<StyleTheme | null>(() => project.theme);
+  // Scenes — today the introduction alone. Portable project data: an intro
+  // travels with the template, like the elements it lends its window to.
+  const [scenes, setScenes] = useState<Scene[]>(() =>
+    structuredClone(project.scenes ?? []),
+  );
   const [saveState, setSaveState] = useState<SaveState>('saved');
 
   // Export state.
@@ -477,14 +485,26 @@ export default function StudioEditor({
   }
 
   function addElement(el: OverlayElement) {
-    // Stagger new elements so they don't land exactly on top of each other.
-    const offset = Math.min(0.5, elements.length * 0.06);
+    // An intro element brings its scene into being: the palette is the only
+    // place an intro starts, so there is nothing to set up first.
+    if (el.sceneId && !findScene(scenes, el.sceneId)) {
+      setScenes((prev) => [...prev, createIntroScene(3)]);
+    }
+    // Stagger new elements so they don't land exactly on top of each other —
+    // except intro presets, which are composed where they mean to be.
+    const offset = el.sceneId ? 0 : Math.min(0.5, elements.length * 0.06);
     const placed = { ...el, y: Math.min(0.95, el.y + offset) };
     setElements((prev) => [...prev, placed]);
     setSelectedElementId(placed.id);
     // Touching the deck answers the reset question; an armed confirmation must
     // never sit waiting behind work done since.
     setResettingDeck(false);
+  }
+
+  /** Drop a scene and everything that lived in it — the panel confirms first. */
+  function removeScene(id: string) {
+    setScenes((prev) => prev.filter((sc) => sc.id !== id));
+    setElements((prev) => prev.filter((e) => e.sceneId !== id));
   }
 
   /** Replace the deck with the starter preset — the only destructive add. */
@@ -597,6 +617,11 @@ export default function StudioEditor({
     interpolation: lutStack.interpolation,
     theme,
     timeShift,
+    scenes,
+    // Windows run from the first frame the export keeps, so the preview has to
+    // count from the in point too — otherwise a trimmed clip shows the intro
+    // at a different moment than the file does.
+    originSeconds: range.start,
     compare: compareOn,
     resetKey: activeUrl,
     redrawSignal: fontTick,
@@ -664,6 +689,7 @@ export default function StudioEditor({
           lutStack: lutStack.toSaved(),
           outputTransform: lutStack.output,
           theme,
+          scenes,
           exportPrefs: {
             fileName: exportFileName.trim() || null,
             variants,
@@ -695,6 +721,7 @@ export default function StudioEditor({
     timeShift,
     timeScale,
     theme,
+    scenes,
     exportFileName,
     variants,
     activeId,
@@ -721,6 +748,7 @@ export default function StudioEditor({
       lutStack: lutStack.toSaved(),
       outputTransform: lutStack.output,
       theme,
+      scenes,
       exportPrefs: { fileName: exportFileName.trim() || null, variants },
     });
     downloadBlob(
@@ -740,6 +768,7 @@ export default function StudioEditor({
     setElements(structuredClone(file.elements));
     setGuides(structuredClone(file.guides));
     setTheme(structuredClone(file.theme));
+    setScenes(structuredClone(file.scenes ?? []));
     setExportFileName(file.exportPrefs.fileName ?? '');
     setVariants(structuredClone(file.exportPrefs.variants));
     void lutStack.restore(file.lutStack, file.outputTransform);
@@ -788,6 +817,7 @@ export default function StudioEditor({
           intensity: 1,
           theme,
           timeShift,
+          scenes,
           srcWidth,
           srcHeight,
           // null when the whole clip is kept, so an untrimmed export runs the
@@ -823,6 +853,7 @@ export default function StudioEditor({
               variant.frameRate,
               opts.trim,
               variant.speed,
+              scenes,
             );
           } else if (err instanceof DecodeUnsupportedError) {
             throw new Error(
@@ -920,6 +951,8 @@ export default function StudioEditor({
         intensity: 1,
         theme,
         timeShift,
+        scenes,
+        originSeconds: range.start,
         overlays: true,
       });
       if (blob) {
@@ -963,6 +996,12 @@ export default function StudioEditor({
 
   const selectedElement = elements.find((e) => e.id === selectedElementId) ?? null;
   const activeCue = findCue(cues, time);
+  // Every timing control reads in "seconds from the first exported frame", so
+  // the playhead has to be offset by the in point before it can be shown or
+  // dropped into a field.
+  const playhead = Math.max(0, time - range.start);
+  const introScene = scenes[0] ?? null;
+  const selectedScene = findScene(scenes, selectedElement?.sceneId);
   const hasTelemetry = cues.length > 0;
 
   const tabButton = (t: { id: PanelTab; label: string }) => (
@@ -1384,6 +1423,30 @@ export default function StudioEditor({
                     onOpenChange={setPaletteOpen}
                   />
 
+                  {introScene && (
+                    <div className="pt-3 border-t border-line flex flex-col gap-2">
+                      <h2 className="m-0 flex items-baseline gap-2 font-mono text-[0.7rem] font-medium uppercase tracking-[0.16em] text-muted">
+                        {introScene.name}
+                        <span className="ml-auto normal-case tracking-normal text-[0.68rem] text-faint tabular-nums">
+                          {introScene.start.toFixed(1)}–{introScene.end.toFixed(1)} s
+                        </span>
+                      </h2>
+                      <ScenePanel
+                        scene={introScene}
+                        memberCount={
+                          elements.filter((e) => e.sceneId === introScene.id).length
+                        }
+                        playhead={playhead}
+                        onChange={(next) =>
+                          setScenes((prev) =>
+                            prev.map((sc) => (sc.id === next.id ? next : sc)),
+                          )
+                        }
+                        onRemove={() => removeScene(introScene.id)}
+                      />
+                    </div>
+                  )}
+
                   <div className="pt-3 border-t border-line flex flex-col gap-2">
                     <button
                       type="button"
@@ -1469,6 +1532,18 @@ export default function StudioEditor({
                       <ElementPanel
                         element={selectedElement}
                         theme={theme}
+                        onChange={(patch) =>
+                          updateElement(selectedElement.id, patch)
+                        }
+                      />
+
+                      <h2 className="m-0 mt-3 mb-2 pt-3 border-t border-line flex items-baseline gap-2 font-mono text-[0.7rem] font-medium uppercase tracking-[0.16em] text-muted">
+                        Timing
+                      </h2>
+                      <TimingPanel
+                        element={selectedElement}
+                        scene={selectedScene}
+                        playhead={playhead}
                         onChange={(patch) =>
                           updateElement(selectedElement.id, patch)
                         }

@@ -45,6 +45,7 @@ import { ensureOverlayFonts } from './fonts';
 import type { StyleTheme } from './title-styles';
 import type { TimeShift } from '../telemetry/time-format';
 import type { OverlayElement } from './overlay-types';
+import type { Scene } from './scenes';
 
 /** Seek `video` to `t` (seconds) and resolve once the frame is ready. */
 function seekTo(video: HTMLVideoElement, t: number): Promise<void> {
@@ -111,7 +112,10 @@ export async function exportOverlayVideoViaSeek(
   frameRate?: ExportFrameRate,
   /** Render only this slice of the source; null renders the whole clip. */
   trim?: TrimRange | null,
+  /** Delivered speed — 1 = as shot, 2 = twice as fast, 0.5 = half. */
   speed?: number,
+  /** The project's scenes — the intro's window, scrim and solo. */
+  scenes?: readonly Scene[],
 ): Promise<Blob> {
   if (!isEncodeSupported()) {
     throw new Error('This browser does not support WebCodecs encoding.');
@@ -242,6 +246,10 @@ export async function exportOverlayVideoViaSeek(
         timeSeconds: t,
         timeShift,
         cues,
+        scenes,
+        // Windows count from the first EXPORTED frame, so a trimmed head does
+        // not eat the intro that plays over it.
+        originSeconds: startSec,
       });
 
       const vf = new VideoFrame(canvas, {

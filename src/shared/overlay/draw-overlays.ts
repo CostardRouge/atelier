@@ -17,7 +17,10 @@ import { MISSING, renderElementText } from './field-format';
 import { batteryLevel } from './battery';
 import { tapeFadeAlpha, tapeTicks } from './heading-tape';
 import { smoothHeading } from '../telemetry/heading-smooth';
-import type { Anchor, OverlayElement } from './overlay-types';
+import type { Anchor, LabelPlacement, OverlayElement } from './overlay-types';
+import { isHidden, transformAt, type Transform } from './animation';
+import { tipAngle } from './rotate-device';
+import { findScene, resolveScenes, resolveWindow, type Scene } from './scenes';
 import {
   halolight,
   resolveElementStyle,
@@ -48,7 +51,44 @@ export interface DrawOptions {
    * gaps where course-over-ground is unavailable (see heading-smooth.ts).
    */
   cues?: readonly Cue[];
+  /**
+   * The scenes of the project — the intro and anything else that lends a group
+   * of elements one window, a scrim and the power to hold the rest back.
+   */
+  scenes?: readonly Scene[];
+  /**
+   * Media time of the FIRST EXPORTED FRAME, i.e. the clip's in point. Windows
+   * and animations are counted from it, not from the media's zero: trimming
+   * two seconds off the head must not eat the intro that plays over them.
+   */
+  originSeconds?: number;
+  /**
+   * Editor-only. This element is drawn even outside its window, ghosted, so a
+   * title that lives at 0–3 s can still be selected and dragged with the
+   * playhead at 0:42. Never set on an export path.
+   */
+  ghostId?: string | null;
 }
+
+/**
+ * Alpha of the element being drawn — an animation's fade, and the scene solo's
+ * hold-back.
+ *
+ * It is module state rather than a parameter because an element's drawing runs
+ * through a dozen helpers that each *assign* `globalAlpha` (the tape's per-tick
+ * fade, the compass ring, the glow's grain). A wrapper alpha would be stomped
+ * by the first of them, and the element would fade in pieces; every absolute
+ * assignment therefore goes through `alpha()`. Set and cleared around each
+ * element by `drawOverlays`, which is the only writer.
+ */
+let elementAlpha = 1;
+
+function alpha(a: number): number {
+  return a * elementAlpha;
+}
+
+/** How visible an out-of-window element is while it is selected in the editor. */
+const GHOST_ALPHA = 0.35;
 
 /**
  * The bearing a heading instrument should draw, and how strongly.
@@ -301,13 +341,13 @@ function drawCompassDecoration(ctx: Ctx2D, r: number, st: ResolvedStyle): void {
   // Ring outline
   ctx.strokeStyle = st.color;
   ctx.lineWidth = lineW;
-  ctx.globalAlpha = 0.45;
+  ctx.globalAlpha = alpha(0.45);
   ctx.beginPath();
   ctx.arc(0, 0, ringR, 0, Math.PI * 2);
   ctx.stroke();
 
   // Dashed cardinal lines — from the gap around the arrow to the ring edge.
-  ctx.globalAlpha = 0.35;
+  ctx.globalAlpha = alpha(0.35);
   ctx.setLineDash([ringR * 0.09, ringR * 0.07]);
   ctx.beginPath();
   ctx.moveTo(0, -gapR); ctx.lineTo(0, -ringR);  // N
@@ -320,7 +360,7 @@ function drawCompassDecoration(ctx: Ctx2D, r: number, st: ResolvedStyle): void {
   // Cardinal letters
   const letterR = ringR + r * 0.5;
   const letterPx = Math.max(6, r * 0.52);
-  ctx.globalAlpha = 0.92;
+  ctx.globalAlpha = alpha(0.92);
   ctx.fillStyle = st.color;
   ctx.font = `bold ${letterPx}px sans-serif`;
   ctx.textAlign = 'center';
@@ -429,11 +469,11 @@ function drawArrow(
   // In relative mode with no heading data: draw the arrow at reduced opacity
   // (direction is unknown but "forward = up" convention still holds visually).
   if (isRelative && heading == null) {
-    ctx.globalAlpha = 0.45;
+    ctx.globalAlpha = alpha(0.45);
   } else {
     // A held (stale) bearing draws faded rather than vanishing — the abrupt
     // cut is what the maintainer wanted gone.
-    ctx.globalAlpha = headingAlpha;
+    ctx.globalAlpha = alpha(headingAlpha);
   }
 
   ctx.fillStyle = st.color;
@@ -540,7 +580,7 @@ function drawHeadingTape(
   const lineW = Math.max(0.6, fontPx * 0.09);
 
   ctx.save();
-  ctx.globalAlpha = Math.max(0, Math.min(1, el.tapeOpacity ?? 1));
+  ctx.globalAlpha = alpha(Math.max(0, Math.min(1, el.tapeOpacity ?? 1)));
 
   if (st.legibility.mode === 'shadow') {
     ctx.shadowColor = st.legibility.color;
@@ -592,12 +632,13 @@ function drawHeadingTape(
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     for (const tick of ticks) {
-      const alpha = tapeFadeAlpha(tick.t, fade);
-      if (alpha <= 0.01) continue;
+      const tickAlpha = tapeFadeAlpha(tick.t, fade);
+      if (tickAlpha <= 0.01) continue;
       const tx = cx + tick.t * halfW;
       const len = tick.major ? tickH : tickH * 0.55;
-      ctx.globalAlpha =
-        alpha * Math.max(0, Math.min(1, el.tapeOpacity ?? 1)) * headingAlpha;
+      ctx.globalAlpha = alpha(
+        tickAlpha * Math.max(0, Math.min(1, el.tapeOpacity ?? 1)) * headingAlpha,
+      );
       ctx.strokeStyle = st.color;
       ctx.lineWidth = tick.major ? lineW : lineW * 0.7;
       ctx.beginPath();
@@ -612,7 +653,7 @@ function drawHeadingTape(
   }
 
   // The sight — its own colour, so it never dissolves into the scale.
-  ctx.globalAlpha = Math.max(0, Math.min(1, el.tapeOpacity ?? 1));
+  ctx.globalAlpha = alpha(Math.max(0, Math.min(1, el.tapeOpacity ?? 1)));
   const reticle = el.tapeReticle ?? 'both';
   const rc = el.tapeReticleColor ?? st.color;
   if (reticle !== 'none') {
@@ -1129,7 +1170,7 @@ function drawShapedGrain(
   // 4 — onto the frame, 'overlay' so it bites the bright halo and the dark
   //     ground alike instead of washing grey over both.
   ctx.save();
-  ctx.globalAlpha = glow.grainAlpha;
+  ctx.globalAlpha = alpha(glow.grainAlpha);
   ctx.globalCompositeOperation = 'overlay';
   ctx.drawImage(buf.canvas, 0, 0, w, h, x, y, w, h);
   ctx.restore();
@@ -1197,6 +1238,337 @@ function drawGlowedText(
   drawShapedGrain(ctx, lay, glow, timeSeconds, elementId);
 }
 
+// ---------------------------------------------------------------------------
+// Rotate-device prompt
+// ---------------------------------------------------------------------------
+
+interface RotateLayout {
+  /** Bounding box of the whole element, caption included. */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Centre of the square the phone tips inside. */
+  cx: number;
+  cy: number;
+  /** The square's side — the phone's height, its widest extent once tipped. */
+  side: number;
+  phoneW: number;
+  phoneH: number;
+  fontPx: number;
+  caption: string;
+  place: LabelPlacement;
+  gap: number;
+}
+
+/**
+ * The pictogram's geometry. The phone tips a quarter turn, so the box that
+ * holds it is a SQUARE of its height: sizing the box to the upright phone
+ * would make the element jump around its anchor mid-turn, and its grab box
+ * disagree with what is on screen half the time.
+ */
+function rotateLayout(
+  ctx: Ctx2D,
+  el: OverlayElement,
+  st: ResolvedStyle,
+  vw: number,
+  vh: number,
+): RotateLayout {
+  // `sizeFrac` sizes the SQUARE the phone tips inside, and the phone is drawn
+  // a little smaller than it so the turn arrow has room to run outside the
+  // handset without leaving the element's box.
+  const side = Math.max(8, st.sizeFrac * refDim(vw, vh));
+  const phoneH = side * 0.82;
+  const phoneW = phoneH * 0.52;
+  const fontPx = Math.max(4, side * 0.15);
+  const caption = st.uppercase ? (el.text ?? '').toUpperCase() : (el.text ?? '');
+  const place: LabelPlacement = caption.trim() ? (el.rotateLabel ?? 'below') : 'none';
+  const gap = side * 0.08;
+
+  let capW = 0;
+  if (place === 'left' || place === 'right') {
+    ctx.save();
+    ctx.font = fontString(st, fontPx);
+    capW = ctx.measureText(caption).width + gap;
+    ctx.restore();
+  }
+  const capH = place === 'above' || place === 'below' ? fontPx * 1.35 + gap : 0;
+
+  const w = side + capW;
+  const h = side + capH;
+  const { x, y } = anchorOrigin(el.anchor, el.x * vw, el.y * vh, w, h);
+  const sqX = place === 'left' ? x + capW : x;
+  const sqY = place === 'above' ? y + capH : y;
+  return {
+    x,
+    y,
+    w,
+    h,
+    cx: sqX + side / 2,
+    cy: sqY + side / 2,
+    side,
+    phoneW,
+    phoneH,
+    fontPx,
+    caption,
+    place,
+    gap,
+  };
+}
+
+/**
+ * The arc-and-arrowhead that says "turn", drawn in the STATIC frame: the phone
+ * moves under it, the instruction does not move with it. A still frame (a
+ * thumbnail, a frame grab) must read as an instruction too, which is why the
+ * arrow exists at all rather than the motion carrying everything.
+ */
+function drawTurnArrow(ctx: Ctx2D, r: number, weight: number, cw: boolean): void {
+  const from = (-160 * Math.PI) / 180;
+  const to = (-20 * Math.PI) / 180;
+  ctx.lineWidth = weight;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(0, 0, r, from, to);
+  ctx.stroke();
+
+  // Head at the end the motion runs towards, along the arc's tangent there.
+  const a = cw ? to : from;
+  const dir = cw ? 1 : -1;
+  const hx = r * Math.cos(a);
+  const hy = r * Math.sin(a);
+  const tx = -Math.sin(a) * dir;
+  const ty = Math.cos(a) * dir;
+  const size = weight * 3;
+  ctx.beginPath();
+  ctx.moveTo(hx + tx * size, hy + ty * size);
+  ctx.lineTo(hx - ty * size * 0.6 - tx * size * 0.2, hy + tx * size * 0.6 - ty * size * 0.2);
+  ctx.lineTo(hx + ty * size * 0.6 - tx * size * 0.2, hy - tx * size * 0.6 - ty * size * 0.2);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawRotateDevice(
+  ctx: Ctx2D,
+  el: OverlayElement,
+  vw: number,
+  vh: number,
+  theme: StyleTheme | null | undefined,
+  localSeconds: number,
+): void {
+  const st = resolveElementStyle(el, theme ?? null);
+  const lay = rotateLayout(ctx, el, st, vw, vh);
+  const stroke = Math.max(0.8, lay.phoneH * 0.035);
+
+  ctx.save();
+  if (st.legibility.mode === 'box') {
+    const pad = st.legibility.padFrac * lay.fontPx;
+    ctx.fillStyle = st.legibility.color;
+    roundRectPath(ctx, lay.x - pad, lay.y - pad, lay.w + pad * 2, lay.h + pad * 2, pad * 0.5);
+    ctx.fill();
+  } else if (st.legibility.mode === 'shadow') {
+    ctx.shadowColor = st.legibility.color;
+    ctx.shadowBlur = Math.max(1, st.legibility.padFrac * lay.fontPx);
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = lay.fontPx * 0.05;
+  } else if (st.glow) {
+    const [wr, wg, wb] = warmDrift(st.color, st.glowWarmth);
+    ctx.shadowColor = `rgba(${wr},${wg},${wb},${st.glow.haloAlpha})`;
+    ctx.shadowBlur = Math.max(1, st.glow.haloRadiusFrac * lay.fontPx * 3);
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+  }
+
+  ctx.strokeStyle = st.color;
+  ctx.fillStyle = st.color;
+
+  // The turn arrow, around the phone but not turning with it.
+  ctx.save();
+  ctx.translate(lay.cx, lay.cy);
+  ctx.globalAlpha = alpha(0.9);
+  drawTurnArrow(ctx, lay.side * 0.47, stroke, (el.rotateDirection ?? 'cw') === 'cw');
+  ctx.restore();
+
+  // The phone itself.
+  ctx.save();
+  ctx.translate(lay.cx, lay.cy);
+  ctx.rotate(
+    tipAngle(
+      localSeconds,
+      el.rotateCycleSeconds ?? 1.8,
+      el.rotateDirection ?? 'cw',
+      el.rotateReturn ?? true,
+    ),
+  );
+  const pw = lay.phoneW;
+  const ph = lay.phoneH;
+  ctx.fillStyle = withAlpha(st.color, 0.14);
+  roundRectPath(ctx, -pw / 2, -ph / 2, pw, ph, pw * 0.2);
+  ctx.fill();
+  ctx.strokeStyle = st.color;
+  ctx.lineWidth = stroke;
+  roundRectPath(ctx, -pw / 2, -ph / 2, pw, ph, pw * 0.2);
+  ctx.stroke();
+  // Earpiece and home bar: two marks are enough to read "phone" and they tell
+  // the viewer which way up it is.
+  ctx.fillStyle = st.color;
+  roundRectPath(ctx, -pw * 0.13, -ph * 0.42, pw * 0.26, stroke, stroke * 0.5);
+  ctx.fill();
+  ctx.globalAlpha = alpha(0.75);
+  roundRectPath(ctx, -pw * 0.18, ph * 0.38, pw * 0.36, stroke, stroke * 0.5);
+  ctx.fill();
+  ctx.restore();
+
+  // The caption.
+  if (lay.place !== 'none') {
+    ctx.globalAlpha = alpha(1);
+    ctx.fillStyle = st.color;
+    ctx.font = fontString(st, lay.fontPx);
+    setLetterSpacing(ctx, st.letterSpacingEm, lay.fontPx);
+    if (lay.place === 'above' || lay.place === 'below') {
+      ctx.textAlign = 'center';
+      ctx.textBaseline = lay.place === 'above' ? 'bottom' : 'top';
+      const ty =
+        lay.place === 'above' ? lay.cy - lay.side / 2 - lay.gap : lay.cy + lay.side / 2 + lay.gap;
+      ctx.fillText(lay.caption, lay.cx, ty);
+    } else {
+      ctx.textAlign = lay.place === 'left' ? 'right' : 'left';
+      ctx.textBaseline = 'middle';
+      const tx =
+        lay.place === 'left' ? lay.cx - lay.side / 2 - lay.gap : lay.cx + lay.side / 2 + lay.gap;
+      ctx.fillText(lay.caption, tx, lay.cy);
+    }
+    setLetterSpacing(ctx, 0, lay.fontPx);
+  }
+  ctx.restore();
+}
+
+/** Paint one text-bearing element (fields, labels, titles). */
+function drawTextElement(
+  ctx: Ctx2D,
+  lay: Layout,
+  timeSeconds: number,
+  reveal: number,
+  revealSteps: boolean,
+  elementId: string,
+): void {
+  const st = lay.st;
+  ctx.font = lay.font;
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+
+  const pad = st.legibility.padFrac * lay.fontPx;
+
+  if (reveal < 1) {
+    // Cut the element down to the revealed share, from its left edge. The clip
+    // is generous vertically so a glow or a legibility box is not sliced along
+    // the way — only the reveal's own edge should show.
+    const cutW = revealWidth(ctx, lay, reveal, revealSteps);
+    const slack = lay.fontPx * 2 + pad * 2;
+    ctx.beginPath();
+    ctx.rect(lay.x - slack, lay.y - slack, cutW + slack, lay.h + slack * 2);
+    ctx.clip();
+  }
+
+  if (st.legibility.mode === 'box') {
+    ctx.save();
+    ctx.fillStyle = st.legibility.color;
+    roundRectPath(
+      ctx,
+      lay.x - pad,
+      lay.y - pad,
+      lay.w + pad * 2,
+      lay.h + pad * 2,
+      pad * 0.5,
+    );
+    ctx.fill();
+    ctx.restore();
+  }
+
+  if (st.glow) {
+    drawGlowedText(ctx, lay, st.glow, timeSeconds, elementId);
+    return;
+  }
+
+  ctx.save();
+  setLetterSpacing(ctx, st.letterSpacingEm, lay.fontPx);
+  if (st.legibility.mode === 'shadow') {
+    ctx.shadowColor = st.legibility.color;
+    ctx.shadowBlur = Math.max(1, st.legibility.padFrac * lay.fontPx);
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = lay.fontPx * 0.05;
+  } else {
+    ctx.shadowColor = ZERO_SHADOW;
+    ctx.shadowBlur = 0;
+  }
+  ctx.fillStyle = st.color;
+  ctx.fillText(lay.text, lay.x, lay.y + lay.ascent);
+  setLetterSpacing(ctx, 0, lay.fontPx);
+  ctx.restore();
+}
+
+/**
+ * Where to cut a partly-revealed text. A typewriter stops on whole characters
+ * (it is typing, not wiping), which needs the substring measured against the
+ * same font and letter-spacing the paint uses; a wipe cuts anywhere.
+ */
+function revealWidth(ctx: Ctx2D, lay: Layout, reveal: number, steps: boolean): number {
+  if (!steps) return lay.w * reveal;
+  const chars = [...lay.text];
+  const shown = Math.round(chars.length * reveal);
+  if (shown >= chars.length) return lay.w;
+  if (shown <= 0) return 0;
+  ctx.save();
+  ctx.font = lay.font;
+  setLetterSpacing(ctx, lay.st.letterSpacingEm, lay.fontPx);
+  const w = ctx.measureText(chars.slice(0, shown).join('')).width;
+  setLetterSpacing(ctx, 0, lay.fontPx);
+  ctx.restore();
+  return w;
+}
+
+/**
+ * The scrim: a scene's veil over the picture, under every element. Painted
+ * before the deck so a HUD left visible by a non-solo scene stays readable on
+ * top of it rather than being dimmed with the footage.
+ */
+function drawScrim(
+  ctx: Ctx2D,
+  scrim: { color: string; opacity: number },
+  vw: number,
+  vh: number,
+): void {
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, Math.min(1, scrim.opacity));
+  ctx.fillStyle = scrim.color;
+  ctx.fillRect(0, 0, vw, vh);
+  ctx.restore();
+}
+
+/**
+ * Apply an element's animation to `ctx`. Scaling happens around the element's
+ * ANCHOR point, not its box centre: a title anchored bottom-left grows from
+ * that corner and stays pinned there, which is what placing it there meant.
+ */
+function applyTransform(
+  ctx: Ctx2D,
+  el: OverlayElement,
+  tf: Transform,
+  vw: number,
+  vh: number,
+): void {
+  if (tf.dx !== 0 || tf.dy !== 0) {
+    const ref = refDim(vw, vh);
+    ctx.translate(tf.dx * ref, tf.dy * ref);
+  }
+  if (tf.scale !== 1) {
+    const ox = el.x * vw;
+    const oy = el.y * vh;
+    ctx.translate(ox, oy);
+    ctx.scale(tf.scale, tf.scale);
+    ctx.translate(-ox, -oy);
+  }
+}
+
 /** Paint all visible elements onto `ctx`. */
 export function drawOverlays(
   ctx: Ctx2D,
@@ -1208,75 +1580,82 @@ export function drawOverlays(
 ): void {
   const theme = opts?.theme ?? null;
   const timeSeconds = opts?.timeSeconds ?? 0;
+  const elapsed = elapsedAt(opts);
+  const layer = resolveScenes(opts?.scenes, elapsed);
+  if (layer.scrim) drawScrim(ctx, layer.scrim, videoWidth, videoHeight);
+
   for (const el of elements) {
     if (!el.visible) continue;
-    if (el.kind === 'heading-arrow') {
-      drawArrow(ctx, el, cue, videoWidth, videoHeight, theme, opts);
-      continue;
+    const scene = findScene(opts?.scenes, el.sceneId);
+    const win = resolveWindow(el, scene);
+    let tf = transformAt(el.animation, win, elapsed);
+    if (!scene && layer.outsideAlpha < 1) {
+      tf = { ...tf, alpha: tf.alpha * layer.outsideAlpha };
     }
-    if (el.kind === 'heading-tape') {
-      drawHeadingTape(ctx, el, cue, videoWidth, videoHeight, theme, opts);
-      continue;
-    }
-    if (el.kind === 'battery') {
-      drawBattery(ctx, el, cue, videoWidth, videoHeight, theme);
-      continue;
-    }
-    if (el.kind === 'frame-corners') {
-      drawFrameCorners(
-        ctx,
-        el,
-        videoWidth,
-        videoHeight,
-        resolveElementStyle(el, theme),
-      );
-      continue;
-    }
-    const lay = layoutElement(ctx, el, cue, videoWidth, videoHeight, theme, opts?.timeShift);
-    if (!lay) continue;
-    const st = lay.st;
-
-    ctx.font = lay.font;
-    ctx.textBaseline = 'alphabetic';
-    ctx.textAlign = 'left';
-
-    const pad = st.legibility.padFrac * lay.fontPx;
-    if (st.legibility.mode === 'box') {
-      ctx.save();
-      ctx.fillStyle = st.legibility.color;
-      roundRectPath(
-        ctx,
-        lay.x - pad,
-        lay.y - pad,
-        lay.w + pad * 2,
-        lay.h + pad * 2,
-        pad * 0.5,
-      );
-      ctx.fill();
-      ctx.restore();
-    }
-
-    if (lay.st.glow) {
-      drawGlowedText(ctx, lay, lay.st.glow, timeSeconds, el.id);
-      continue;
+    if (isHidden(tf)) {
+      // Out of its window: normally not drawn at all — unless the editor is
+      // pointing at it, in which case a ghost keeps it selectable and
+      // draggable instead of stranding it at a playhead it does not live at.
+      if (opts?.ghostId !== el.id) continue;
+      tf = { alpha: GHOST_ALPHA, dx: 0, dy: 0, scale: 1, reveal: 1, revealSteps: false };
     }
 
     ctx.save();
-    setLetterSpacing(ctx, st.letterSpacingEm, lay.fontPx);
-    if (st.legibility.mode === 'shadow') {
-      ctx.shadowColor = st.legibility.color;
-      ctx.shadowBlur = Math.max(1, st.legibility.padFrac * lay.fontPx);
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = lay.fontPx * 0.05;
+    elementAlpha = tf.alpha;
+    ctx.globalAlpha = tf.alpha;
+    applyTransform(ctx, el, tf, videoWidth, videoHeight);
+
+    if (el.kind === 'heading-arrow') {
+      drawArrow(ctx, el, cue, videoWidth, videoHeight, theme, opts);
+    } else if (el.kind === 'heading-tape') {
+      drawHeadingTape(ctx, el, cue, videoWidth, videoHeight, theme, opts);
+    } else if (el.kind === 'battery') {
+      drawBattery(ctx, el, cue, videoWidth, videoHeight, theme);
+    } else if (el.kind === 'frame-corners') {
+      drawFrameCorners(ctx, el, videoWidth, videoHeight, resolveElementStyle(el, theme));
+    } else if (el.kind === 'rotate-device') {
+      // Its own cycle runs from the moment the element appears, so the phone
+      // always starts upright rather than mid-tip.
+      drawRotateDevice(ctx, el, videoWidth, videoHeight, theme, elapsed - (win?.start ?? 0));
     } else {
-      ctx.shadowColor = ZERO_SHADOW;
-      ctx.shadowBlur = 0;
+      const lay = layoutElement(
+        ctx,
+        el,
+        cue,
+        videoWidth,
+        videoHeight,
+        theme,
+        opts?.timeShift,
+      );
+      if (lay) drawTextElement(ctx, lay, timeSeconds, tf.reveal, tf.revealSteps, el.id);
     }
-    ctx.fillStyle = st.color;
-    ctx.fillText(lay.text, lay.x, lay.y + lay.ascent);
-    setLetterSpacing(ctx, 0, lay.fontPx);
+
+    elementAlpha = 1;
     ctx.restore();
   }
+}
+
+/** Seconds since the first exported frame — what windows are counted from. */
+function elapsedAt(opts?: DrawOptions): number {
+  return Math.max(0, (opts?.timeSeconds ?? 0) - (opts?.originSeconds ?? 0));
+}
+
+/**
+ * Whether an element is on screen at this instant — the same answer
+ * `drawOverlays` acts on, so hit boxes never outlive what is painted.
+ */
+function isOnScreen(
+  el: OverlayElement,
+  opts: DrawOptions | undefined,
+  elapsed: number,
+  outsideAlpha: number,
+): boolean {
+  if (opts?.ghostId === el.id) return true;
+  const scene = findScene(opts?.scenes, el.sceneId);
+  // Held back by a solo scene counts as off screen: during an intro that hides
+  // the HUD, a click on the picture must not land on an invisible readout.
+  if (!scene && outsideAlpha <= 0) return false;
+  return !isHidden(transformAt(el.animation, resolveWindow(el, scene), elapsed));
 }
 
 /** Geometry of one element in video-pixel space — used for hit-testing. */
@@ -1302,12 +1681,33 @@ export function measureOverlays(
   opts?: DrawOptions,
 ): ElementBox[] {
   const theme = opts?.theme ?? null;
+  const elapsed = elapsedAt(opts);
+  const { outsideAlpha } = resolveScenes(opts?.scenes, elapsed);
   const boxes: ElementBox[] = [];
   for (const el of elements) {
     if (!el.visible) continue;
     // Frame corners span the whole frame: a hit box would swallow every click,
     // so they are never draggable — select them from the element list.
     if (el.kind === 'frame-corners') continue;
+    // An element that is not on screen has no box: clicking where a title will
+    // be in two seconds must not grab it. The ghosted selection is the one
+    // exception, and it is exactly why it is drawn.
+    if (!isOnScreen(el, opts, elapsed, outsideAlpha)) continue;
+    // The box is deliberately measured WITHOUT the animation's transform: a
+    // title that is mid-slide would otherwise squirm away from the pointer.
+    if (el.kind === 'rotate-device') {
+      const st = resolveElementStyle(el, theme);
+      const lay = rotateLayout(ctx, el, st, videoWidth, videoHeight);
+      const margin = Math.max(2, lay.fontPx * 0.3);
+      boxes.push({
+        id: el.id,
+        x: lay.x - margin,
+        y: lay.y - margin,
+        w: lay.w + margin * 2,
+        h: lay.h + margin * 2,
+      });
+      continue;
+    }
     if (el.kind === 'heading-arrow') {
       const alay = arrowLayout(el, videoWidth, videoHeight);
       const margin = Math.max(2, alay.r * 0.15);
@@ -1404,6 +1804,11 @@ export function reanchorInPlace(
       el.kind === 'heading-tape'
         ? tapeLayout(el, st, vw, vh)
         : batteryLayout(el, st, vw, vh);
+    const p = anchorPoint(anchor, lay.x, lay.y, lay.w, lay.h);
+    return { x: p.x / vw, y: p.y / vh };
+  }
+  if (el.kind === 'rotate-device') {
+    const lay = rotateLayout(ctx, el, resolveElementStyle(el, theme ?? null), vw, vh);
     const p = anchorPoint(anchor, lay.x, lay.y, lay.w, lay.h);
     return { x: p.x / vw, y: p.y / vh };
   }
