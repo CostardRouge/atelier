@@ -3,7 +3,7 @@ import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
 import { parseSrt, type Cue } from '../../shared/telemetry/srt-parser';
 import { useActiveCue } from '../../shared/telemetry/use-active-cue';
-import { formatHeading, formatGroundSpeed } from '../../shared/telemetry/motion';
+import { formatHeading, formatGroundSpeed, motionAt } from '../../shared/telemetry/motion';
 import { extractTrack, parsePosition } from '../../shared/telemetry/flight-path';
 import { useObjectUrl } from '../../shared/media/use-object-url';
 import { useFlightMap } from './use-flight-map';
@@ -84,8 +84,8 @@ export default function MapTool() {
   const liveCoord = position ? `${position[1].toFixed(6)}, ${position[0].toFixed(6)}` : null;
   const liveAlt = activeCue?.data.rel_alt;
   const liveMotion = [
-    formatGroundSpeed(activeCue?.derived?.groundSpeed),
-    formatHeading(activeCue?.derived?.heading),
+    formatGroundSpeed(motionAt(activeCue).groundSpeed),
+    formatHeading(motionAt(activeCue).heading),
   ]
     .filter(Boolean)
     .join('  ·  ');

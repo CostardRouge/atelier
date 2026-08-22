@@ -80,10 +80,65 @@ describe('formatField', () => {
     expect(formatField('vert_speed', { ...cue, derived: {} })).toBe(MISSING);
   });
 
+  it('fills a missing motion value from the opening window look-ahead', () => {
+    const opening = { ...cue, derived: {}, lead: { groundSpeed: 12.34, heading: 270 } };
+    expect(formatField('gnd_speed', opening)).toBe('12.3 m/s');
+    expect(formatField('heading', opening)).toBe('270° W');
+    // Opted out on the element, the readout waits for a backward measurement.
+    expect(formatField('gnd_speed', opening, undefined, undefined, false)).toBe(MISSING);
+    expect(formatField('heading', opening, undefined, undefined, false)).toBe(MISSING);
+  });
+
+  it('never lets the look-ahead cover a measured value', () => {
+    const both = { ...cue, derived: { groundSpeed: 3 }, lead: { groundSpeed: 12.34 } };
+    expect(formatField('gnd_speed', both)).toBe('3.0 m/s');
+  });
+
   it('returns the placeholder when the cue or value is missing', () => {
     expect(formatField('rel_alt', null)).toBe(MISSING);
     expect(formatField('iso', { ...cue, data: {} })).toBe(MISSING);
     expect(formatField('frame', { ...cue, frame: null })).toBe(MISSING);
+  });
+});
+
+/** `1.5` → `00:00:01,500`, the SRT timing shape. */
+function srtTime(seconds: number): string {
+  const ms = Math.round(seconds * 1000);
+  const pad = (n: number, w = 2) => String(n).padStart(w, '0');
+  return `${pad(Math.floor(ms / 3_600_000))}:${pad(Math.floor(ms / 60_000) % 60)}:${pad(
+    Math.floor(ms / 1000) % 60,
+  )},${pad(ms % 1000, 3)}`;
+}
+
+/** A 2-second, 30 fps clip flying due north at ~10 m/s. */
+function northboundClip(): string {
+  const step = 1 / 30;
+  return Array.from({ length: 60 }, (_, i) => {
+    const t = i * step;
+    const lat = (16 + t * 8.98e-5).toFixed(6); // ~10 m/s
+    return [
+      String(i + 1),
+      `${srtTime(t)} --> ${srtTime(t + step)}`,
+      `<font size="28">FrameCnt: ${i + 1}, DiffTime: 33ms`,
+      '2026-05-30 05:49:34.609',
+      `[iso: 100] [latitude: ${lat}] [longitude: -61.000000] [rel_alt: ${(35 + t).toFixed(3)} abs_alt: 80.196] </font>`,
+    ].join('\n');
+  }).join('\n\n');
+}
+
+describe('the first frame of a clip', () => {
+  it('reads its instruments instead of showing dashes', () => {
+    const clip = parseSrt(northboundClip());
+    const first = clip[0];
+
+    // What the look-back alone can say about frame 1: nothing.
+    expect(formatField('gnd_speed', first, undefined, undefined, false)).toBe(MISSING);
+    expect(formatField('heading', first, undefined, undefined, false)).toBe(MISSING);
+
+    // What the clip is actually doing there, measured over the second ahead.
+    expect(formatField('gnd_speed', first)).toBe('10.0 m/s');
+    expect(formatField('heading', first)).toBe('0° N');
+    expect(formatField('vert_speed', first)).toBe('+1.0 m/s');
   });
 });
 
@@ -106,5 +161,12 @@ describe('renderElementText', () => {
   it('shows the placeholder for a missing telemetry value', () => {
     const el = { ...createTelemetryElement('iso'), label: '' };
     expect(renderElementText(el, null)).toBe(MISSING);
+  });
+
+  it('anticipates the opening window unless the element opts out', () => {
+    const opening = { ...cue, derived: {}, lead: { groundSpeed: 12.34 } };
+    const el = { ...createTelemetryElement('gnd_speed'), label: '' };
+    expect(renderElementText(el, opening)).toBe('12.3 m/s');
+    expect(renderElementText({ ...el, earlyValues: false }, opening)).toBe(MISSING);
   });
 });

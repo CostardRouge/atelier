@@ -102,10 +102,13 @@ function previewText(
 ): string {
   if (item.kind === 'text') return el.text ?? 'Text';
   if (item.kind !== 'telemetry-field') return '';
-  const value = formatField(item.field, cue, el.speedUnit, {
-    format: el.timeFormat,
-    shift: timeShift,
-  });
+  const value = formatField(
+    item.field,
+    cue,
+    el.speedUnit,
+    { format: el.timeFormat, shift: timeShift },
+    el.earlyValues !== false,
+  );
   if (value === MISSING) {
     return el.label?.trim() || FIELD_SPECS[item.field].label;
   }

@@ -106,6 +106,16 @@ Read before touching `src/tools/studio/`, `src/shared/overlay/`, anything about 
 
 **Gap behaviour is the author's choice** (`headingGap` on the element): `dim` (default) holds the last bearing and fades it over `headingHoldSeconds`, `hold` keeps it plain then drops, `hide` is the old abrupt no-data state. Both the arrow and the tape share `headingSmoothing` / `headingGap` / `headingHoldSeconds`. `DrawOptions.cues` carries the cue list into the renderer — without it (a caller that passes only the cue at the playhead) the instruments fall back to the raw reading, so nothing regresses.
 
+## The opening second is measured forward, not left blank (2026-08-22)
+
+**The complaint.** Every motion instrument (speed, vertical speed, heading readout, arrow, tape) opens on `—` and only comes alive after the first second — and the maintainer's cuts are short, so that hole *is* the beginning of the video posted to social. Cause: `motion.ts` differences each cue against one ~1 s older, so the first cues have no past (no speed below `MIN_DT_S`, no heading until `MIN_MOVE_M` of travel accumulates).
+
+**Decision.** The data is not missing, only ahead. `attachMotion` now also attaches `Cue.lead` — the *same* window measured **forward** — to the cues of the opening window only, and `motionAt(cue, early)` merges `derived.x ?? lead.x`. Per-element opt-out `earlyValues` (default **on**, so no document migration and old projects gain it) reaches the renderer, the field formatter and `smoothHeading`; the inspector shows it as "Value from the start" on the two heading instruments and on the three derived readouts.
+
+**The lines that keep this honest**, and that a future change must not cross: it is a *measurement of the coming second*, never an extrapolation — a hovering start still shows nothing, which keeps the palette's anti-fabrication rule intact; `lead` never covers a value the look-back could measure (merge is per field, `derived` wins); and it stops at the opening window — mid-clip gaps belong to `headingGap` (`dim`/`hold`/`hide`), because carrying a bearing *backwards* into a gap would announce a turn before it happens. `lead` is a separate field rather than a patched `derived` precisely so both readings stay available and the opt-out is a read-time decision, not a re-parse.
+
+**How to apply**: read motion through `motionAt`, never `cue.derived?.x` — every call site (overlay, panels, map, composer HUD) was converted. `smoothHeading` reads the field inline instead, on purpose: it walks up to a 12 s window per rendered frame and an object per cue would be a needless allocation.
+
 ## The glow's grain must be masked by the glow, not by a box (2026-08-21)
 
 **The bug the maintainer saw**: a visible rectangle around every glowing readout, worse the higher the glow — "comme s'il y avait un carré autour". Cause: the fourth halation layer painted the noise tile through `ctx.rect(); ctx.clip()` at uniform alpha with `overlay` compositing, so the texture stopped dead at a bounding box whose size scales with `bleedRadiusFrac`. **Rule**: nothing in the glow may be bounded by a rectangle — every layer has to carry the halation's own falloff.

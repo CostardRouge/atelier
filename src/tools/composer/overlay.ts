@@ -10,6 +10,7 @@ import {
   formatGroundSpeed,
   formatHeading,
   formatVerticalSpeed,
+  motionAt,
 } from '../../shared/telemetry/motion';
 
 export type OverlayFont = 'mono' | 'sans' | 'serif';
@@ -40,9 +41,9 @@ export interface OverlayField {
 
 export const OVERLAY_FIELDS: OverlayField[] = [
   { id: 'altitude', label: 'ALT', get: (c) => (c?.data.rel_alt ? `${c.data.rel_alt} m` : null) },
-  { id: 'speed', label: 'SPD', get: (c) => formatGroundSpeed(c?.derived?.groundSpeed) ?? null },
-  { id: 'vspeed', label: 'V/S', get: (c) => formatVerticalSpeed(c?.derived?.verticalSpeed) ?? null },
-  { id: 'heading', label: 'HDG', get: (c) => formatHeading(c?.derived?.heading) ?? null },
+  { id: 'speed', label: 'SPD', get: (c) => formatGroundSpeed(motionAt(c).groundSpeed) ?? null },
+  { id: 'vspeed', label: 'V/S', get: (c) => formatVerticalSpeed(motionAt(c).verticalSpeed) ?? null },
+  { id: 'heading', label: 'HDG', get: (c) => formatHeading(motionAt(c).heading) ?? null },
   {
     id: 'coords',
     label: 'GPS',

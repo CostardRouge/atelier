@@ -51,6 +51,14 @@ export interface Cue {
    * cues parsed outside that path. See {@link attachMotion}.
    */
   derived?: Motion;
+  /**
+   * The same motion measured **forward** instead of backward, attached only to
+   * the cues of the clip's opening window — where there is no past to measure
+   * against and the instruments would otherwise read `—`. Never overwrites
+   * {@link derived}; consumers merge the two through `motionAt`. See
+   * {@link attachMotion}.
+   */
+  lead?: Motion;
 }
 
 /**

@@ -11,7 +11,7 @@
  */
 
 import type { Cue } from '../telemetry/srt-parser';
-import { formatHeading } from '../telemetry/motion';
+import { formatHeading, motionAt } from '../telemetry/motion';
 import type { TimeShift } from '../telemetry/time-format';
 import { MISSING, renderElementText } from './field-format';
 import { batteryLevel } from './battery';
@@ -61,7 +61,8 @@ function headingFor(
   cue: Cue | null,
   opts?: DrawOptions,
 ): { heading: number | null; alpha: number } {
-  const raw = cue?.derived?.heading ?? null;
+  const early = el.earlyValues !== false;
+  const raw = motionAt(cue, early).heading ?? null;
   const cues = opts?.cues;
   if (!cues || cues.length === 0) return { heading: raw, alpha: 1 };
 
@@ -72,6 +73,7 @@ function headingFor(
     opts?.timeSeconds ?? 0,
     el.headingSmoothing ?? 0.6,
     hold,
+    early,
   );
   if (out.heading == null) return { heading: null, alpha: 1 };
   // Live data always draws at full strength; only a stale bearing fades, and
