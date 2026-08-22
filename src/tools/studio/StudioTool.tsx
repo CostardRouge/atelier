@@ -74,6 +74,39 @@ export default function StudioTool() {
     [lib.addFiles],
   );
 
+  /**
+   * Drop the currently-missing entries from the open project's known media
+   * list, without touching the folder or asking for permission again. For
+   * media that was moved, archived or deleted on purpose (not lost) — the
+   * project should stop flagging it as missing on every future open.
+   */
+  const forgetMissing = useCallback(async () => {
+    if (!open?.reconciliation) return;
+    const missingNames = new Set(
+      open.reconciliation.items
+        .filter((item) => item.status === 'missing')
+        .map((item) => item.ref.name.toLowerCase()),
+    );
+    if (!missingNames.size) return;
+    const files = open.doc.media.files.filter(
+      (f) => !missingNames.has(f.name.toLowerCase()),
+    );
+    const doc: ProjectDoc = {
+      ...open.doc,
+      updatedAt: Date.now(),
+      media: { ...open.doc.media, files },
+    };
+    await putProject(doc);
+    const items = open.reconciliation.items.filter((item) => item.status !== 'missing');
+    const reconciliation: Reconciliation = {
+      items,
+      found: items.filter((item) => item.status === 'found').length,
+      changed: items.filter((item) => item.status === 'changed').length,
+      missing: 0,
+    };
+    setOpen({ doc, reconciliation });
+  }, [open]);
+
   /** Re-point the media folder for the open project, then re-reconcile. */
   const repoint = useCallback(async () => {
     if (!open) return;
@@ -131,6 +164,7 @@ export default function StudioTool() {
       onShowProjects={() => navigate(HOME_ROUTE)}
       onDocSaved={handleDocSaved}
       onRepoint={() => void repoint()}
+      onForgetMissing={() => void forgetMissing()}
     />
   );
 }
