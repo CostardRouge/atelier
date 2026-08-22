@@ -13,7 +13,7 @@
  */
 
 import type { OverlayElement } from '../overlay/overlay-types';
-import type { GuidesState } from '../overlay/guides';
+import { DEFAULT_GUIDES, type GuidesState } from '../overlay/guides';
 import type { StyleTheme } from '../overlay/title-styles';
 import type { PersistedDirectoryHandle } from '../sources/file-sources';
 import { defaultVariants, type ExportVariant } from './export-variants';
@@ -22,7 +22,7 @@ import { NO_SHIFT, type TimeShift } from '../telemetry/time-format';
 import type { OutputTransform } from '../lut/transfer';
 import type { SavedTrim } from '../media/trim';
 
-export const PROJECT_DOC_VERSION = 8;
+export const PROJECT_DOC_VERSION = 9;
 
 /** Identity of one media file, enough to re-match it inside a folder. */
 export interface SavedMediaRef {
@@ -183,7 +183,8 @@ export function createProjectDoc(
  * back; v6 → v7 gives every stored variant an explicit 'source' frame rate,
  * which is the only cadence an export could produce before it existed;
  * v7 → v8 adds the per-clip trims, empty, so every clip reopens at its full
- * length. Idempotent; the store runs it on every read.
+ * length; v8 → v9 adds the safe zone's quarter-turn mode, on 'auto'.
+ * Idempotent; the store runs it on every read.
  */
 export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
   if (doc.version >= PROJECT_DOC_VERSION) return doc;
@@ -231,6 +232,17 @@ export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
   if (migrated.version < 8) {
     // No trim was possible before v8: every clip runs full length.
     migrated.media = { ...migrated.media, trims: migrated.media?.trims ?? {} };
+  }
+  if (migrated.version < 9) {
+    // 'auto', not the pre-v9 'upright'. The usual rule — a reopened project
+    // must look exactly as it was closed — guards RENDERED output; guides are
+    // editor-only chrome that never reaches a pixel of the export, and landing
+    // old projects on 'upright' would hide the quarter-turn from every project
+    // that predates it. One click on Rotate pins it back.
+    migrated.guides = {
+      ...(migrated.guides ?? DEFAULT_GUIDES),
+      safeZoneOrientation: migrated.guides?.safeZoneOrientation ?? 'auto',
+    };
   }
   migrated.version = PROJECT_DOC_VERSION;
   return migrated;

@@ -8,7 +8,7 @@
  */
 
 import {
-  findSafeZone,
+  resolveSafeZone,
   targetFrame,
   type GuidesState,
   type SafeZonePreset,
@@ -99,6 +99,8 @@ export function drawGuides(
   vh: number,
 ): void {
   if (guides.grid.show) drawGrid(ctx, guides.grid.cols, guides.grid.rows, vw, vh);
-  const preset = findSafeZone(guides.safeZone);
+  // The template may be turned a quarter-turn to span the frame — see
+  // `resolveSafeZone`. Everything below is orientation-agnostic from here.
+  const preset = resolveSafeZone(guides, vh > 0 ? vw / vh : 0);
   if (preset) drawSafeZone(ctx, preset, vw, vh);
 }
