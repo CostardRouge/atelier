@@ -1176,7 +1176,14 @@ export default function StudioEditor({
 
           {activeUrl && (
             <div className="flex flex-col gap-[0.45rem] px-[0.85rem] py-[0.6rem] border border-line rounded-paper bg-surface flex-none">
-             <div className="flex items-center gap-[0.85rem]">
+             {/* Two groups, and the row wraps between them: the rail (play,
+                 clock, trim, duration) keeps a usable width, and the tools drop
+                 to a line of their own rather than pushing the last one past
+                 the edge — which used to give the whole document a horizontal
+                 scrollbar on a phone. Every tool added here from now on lands
+                 in the second group and costs nothing. */}
+             <div className="flex flex-wrap items-center gap-x-[0.85rem] gap-y-2">
+              <div className="flex items-center gap-[0.85rem] grow shrink basis-[15rem] min-w-0">
               <button
                 type="button"
                 className="flex-none w-[2.2rem] h-[2.2rem] border-0 rounded-full bg-ink text-paper cursor-pointer text-[0.8rem] leading-none inline-flex items-center justify-center transition-[background-color] duration-200 ease-paper hover:bg-accent"
@@ -1203,6 +1210,12 @@ export default function StudioEditor({
               <span className="font-mono text-[0.74rem] tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
                 {formatDuration(duration)}
               </span>
+              </div>
+
+              {/* The tools. `flex-wrap` on the group itself is the second net:
+                  if even they cannot share one line, they stack instead of
+                  overflowing. */}
+              <div className="flex flex-wrap items-center gap-2 max-w-full">
               <button
                 type="button"
                 onClick={() => setLoop((l) => !l)}
@@ -1267,6 +1280,7 @@ export default function StudioEditor({
               >
                 A/B
               </button>
+              </div>
              </div>
 
              {/* The trim readout sits on its own line, and that line is ALWAYS

@@ -45,11 +45,20 @@ export default function App() {
   // pixel (a landscape clip beside two panels eats width fast), so tools run
   // edge-to-edge with only a thin breathing margin. Only the Home landing
   // keeps a readable column and the natural page scroll + footer.
+  //
+  // Under 820px the frame gives up its fixed height so the page scrolls
+  // normally — but only VERTICALLY. Sideways it clips: a control row that
+  // outgrows the screen should wrap (they are built to), and the one that
+  // someday doesn't must not hand the whole document a horizontal scrollbar
+  // and let the interface drift into the margin. `clip` rather than `hidden`
+  // because it creates no scroll container, so the y axis stays plainly
+  // visible and sticky positioning keeps working; anything legitimately wider
+  // than the screen scrolls inside its own container, untouched by this.
   return (
     <div
       className={
         tool
-          ? 'h-dvh flex flex-col min-h-0 overflow-hidden w-full px-4 pt-3 pb-3 max-[820px]:h-auto max-[820px]:min-h-dvh max-[820px]:overflow-visible'
+          ? 'h-dvh flex flex-col min-h-0 overflow-hidden w-full px-4 pt-3 pb-3 max-[820px]:h-auto max-[820px]:min-h-dvh max-[820px]:overflow-x-clip max-[820px]:overflow-y-visible'
           : 'max-w-[1080px] mx-auto px-[clamp(1.25rem,5vw,3.5rem)] pt-[clamp(1.25rem,4vw,3rem)] pb-20'
       }
     >
