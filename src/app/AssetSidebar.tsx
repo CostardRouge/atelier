@@ -23,7 +23,7 @@ import {
   pickFiles,
 } from '../shared/sources/file-sources';
 
-/** Short, human label for a kind chip (row tooltip — full word). */
+/** Short, human label for a kind chip. */
 function kindLabel(kind: AssetKind): string {
   switch (kind) {
     case 'video+telemetry':
@@ -32,24 +32,6 @@ function kindLabel(kind: AssetKind): string {
       return 'srt';
     default:
       return kind;
-  }
-}
-
-/** Three-letter abbreviation for the kind scrim on the thumbnail — the pill is
- *  too small for the full word once it rides on a possibly-narrow (portrait)
- *  frame; the full word is still available via the row's tooltip. */
-function kindShort(kind: AssetKind): string {
-  switch (kind) {
-    case 'video+telemetry':
-      return 'V+S';
-    case 'telemetry':
-      return 'SRT';
-    case 'video':
-      return 'VID';
-    case 'photo':
-      return 'IMG';
-    default:
-      return kind.slice(0, 3).toUpperCase();
   }
 }
 
@@ -331,42 +313,10 @@ function cadenceSentence(
 /**
  * A chip over the frame — the repo's idiom for a fact about the picture
  * (VideoCard's shot number, the LUT wipe's Original/Graded). Tiny, because it
- * shares a thumbnail whose width can be as narrow as {@link THUMB_MIN_WIDTH}px
- * on a portrait clip.
+ * shares the fixed 80×56 thumbnail with up to one other corner chip.
  */
 function scrim(corner: string): string {
   return `absolute ${corner} left-[3px] z-[2] font-mono text-[0.5rem] tracking-[0.06em] uppercase text-paper bg-[rgba(20,18,15,0.62)] px-[0.25rem] py-px rounded-[4px] leading-[1.35] whitespace-nowrap backdrop-blur-[3px]`;
-}
-
-/**
- * The kind chip, moved off the text row and onto the thumbnail's opposite
- * corner (2026-08-22) — on a 288px sidebar the name/facts column had only
- * ~32px left once the chip sat beside it, so both truncated to nothing. Kept
- * colour-coded (not the dark `scrim()` pill) because that colour is how a
- * row's kind reads at a glance.
- */
-function kindScrimClass(kind: AssetKind): string {
-  return `absolute bottom-[3px] right-[3px] z-[2] font-mono text-[0.5rem] tracking-[0.04em] uppercase px-[0.25rem] py-px rounded-[4px] leading-[1.35] whitespace-nowrap border ${chipClass(kind)}`;
-}
-
-/** Thumbnail height is fixed (56px); only the width adapts to aspect ratio. */
-const THUMB_HEIGHT = 56;
-const THUMB_MAX_WIDTH = 80;
-const THUMB_MIN_WIDTH = 32;
-
-/**
- * Thumbnail box width in px. Landscape/square media (or anything not yet
- * measured) keeps the original fixed 80×56 box untouched. Portrait media
- * narrows the box instead of growing it taller, so it visibly "stands up"
- * (width < height) without changing row height or reflowing the list — the
- * freed width goes straight to the name/facts column.
- */
-function thumbWidth(meta: MediaMeta | undefined): number {
-  if (!meta?.width || !meta.height || meta.width >= meta.height) {
-    return THUMB_MAX_WIDTH;
-  }
-  const ratio = meta.width / meta.height;
-  return Math.max(THUMB_MIN_WIDTH, Math.round(THUMB_HEIGHT * ratio));
 }
 
 interface AssetRowProps {
@@ -440,26 +390,22 @@ function AssetRow({
           usable
             ? `Use ${asset.baseName} in this tool`
             : `${asset.baseName} — not usable by this tool`,
-          kindLabel(asset.kind),
           cadenceLine,
         ]
           .filter(Boolean)
           .join(' — ')}
         className="flex-1 min-w-0 flex items-center gap-2.5 text-left cursor-pointer disabled:cursor-default"
       >
-        <div
-          className="relative flex-none h-14 rounded-sm overflow-hidden bg-frame grid place-items-center"
-          style={{ width: thumbWidth(meta) }}
-        >
+        {/* Fixed 80×56 for every row, always — this is the same frame the
+            player letterboxes into, so a portrait clip pillarboxes here too
+            instead of resizing the box. Keeping every thumbnail identical is
+            what keeps every title starting at the same x. */}
+        <div className="relative flex-none w-20 h-14 rounded-sm overflow-hidden bg-frame flex items-center justify-center">
           {meta?.thumbUrl ? (
             <img
               src={meta.thumbUrl}
               alt=""
-              className={`w-full h-full block ${
-                meta.width && meta.height && meta.width < meta.height
-                  ? 'object-contain'
-                  : 'object-cover'
-              }`}
+              className="w-full h-full object-contain block"
             />
           ) : (
             <span
@@ -469,10 +415,9 @@ function AssetRow({
               {isPhoto ? (meta?.imageType ?? '◇') : '▶'}
             </span>
           )}
-          {/* Facts ride on the frame, not in the row: freeing the name/facts
-              column of the kind chip (moved to bottom-right, 2026-08-22) is
-              what makes room for them there instead. All three repeat what the
-              facts line or title already says, hence aria-hidden. */}
+          {/* Cadence rides on the frame: it's already carrying two facts
+              (speed and fps), so the kind chip lives in the text column
+              instead of crowding a third onto it. */}
           {cadenceTag && (
             <span className={scrim('top-[3px]')} aria-hidden="true">
               {cadenceTag}
@@ -483,17 +428,21 @@ function AssetRow({
               {fpsLabel}
             </span>
           )}
-          <span className={kindScrimClass(asset.kind)} aria-hidden="true">
-            {kindShort(asset.kind)}
-          </span>
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 flex flex-col gap-[3px]">
           <div className="text-[0.79rem] font-medium truncate" title={asset.baseName}>
             {asset.baseName}
           </div>
           <div className="font-mono text-[0.62rem] text-muted truncate">
             {metaFacts(asset, meta)}
           </div>
+          <span
+            className={`self-start font-mono text-[0.56rem] tracking-[0.06em] uppercase px-1.5 py-0.5 rounded-md border whitespace-nowrap ${chipClass(
+              asset.kind,
+            )}`}
+          >
+            {kindLabel(asset.kind)}
+          </span>
         </div>
       </button>
       <button
