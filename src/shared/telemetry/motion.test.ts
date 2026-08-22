@@ -3,9 +3,11 @@ import {
   attachMotion,
   bearing,
   compass16,
+  firstIndexAtOrAfter,
   formatGroundSpeed,
   formatHeading,
   formatVerticalSpeed,
+  motionAt,
   SPEED_UNITS,
   haversine,
 } from './motion';
@@ -107,6 +109,103 @@ describe('attachMotion', () => {
     const cues = [cue(0, 16, -61, 10), cue(0.016, 16.001, -61, 12)];
     attachMotion(cues);
     expect(cues[1].derived).toEqual({});
+  });
+});
+
+/**
+ * A 3-second track sampled every 100 ms. `latAt` returns the latitude at a
+ * given time, so a test can decide when the aircraft starts moving.
+ */
+function trackOf(latAt: (t: number) => number, altAt: (t: number) => number = () => 10): Cue[] {
+  const cues: Cue[] = [];
+  for (let k = 0; k <= 30; k++) {
+    const t = Number((k * 0.1).toFixed(3));
+    cues.push(cue(t, latAt(t), -61, altAt(t)));
+  }
+  return cues;
+}
+
+/** Flying due north at 0.001°/s ≈ 111 m/s, from the very first frame. */
+const northbound = (t: number) => 16 + t * 0.001;
+
+describe('firstIndexAtOrAfter', () => {
+  it('mirrors lastIndexAtOrBefore, and reports -1 past the end', () => {
+    const cues = trackOf(northbound);
+    expect(firstIndexAtOrAfter(cues, 0)).toBe(0);
+    expect(firstIndexAtOrAfter(cues, 1)).toBe(10);
+    expect(firstIndexAtOrAfter(cues, 0.95)).toBe(10);
+    expect(firstIndexAtOrAfter(cues, 99)).toBe(-1);
+  });
+});
+
+describe('attachMotion — the opening window measured forward', () => {
+  it('gives the first cue the reading it is about to have', () => {
+    const cues = trackOf(northbound, (t) => 10 + t * 2);
+    attachMotion(cues);
+
+    // Nothing backwards, as before…
+    expect(cues[0].derived).toEqual({});
+    // …but the coming second is a real measurement.
+    expect(cues[0].lead?.groundSpeed).toBeCloseTo(111.2, 0);
+    expect(cues[0].lead?.verticalSpeed).toBeCloseTo(2, 3);
+    expect(cues[0].lead?.heading).toBeCloseTo(0, 1);
+  });
+
+  it('attaches nothing where the look-back already answers', () => {
+    const cues = trackOf(northbound);
+    attachMotion(cues);
+    expect(cues[0].lead).toBeDefined(); // 0 s — no past at all
+    expect(cues[2].lead).toBeDefined(); // 0.2 s — span still too short to trust
+    expect(cues[3].lead).toBeUndefined(); // 0.3 s — the look-back is enough
+  });
+
+  it('reaches no further than the opening window', () => {
+    // Hovering for two seconds, then off to the north. A mid-clip gap belongs
+    // to the gap policies (heading-smooth.ts): carrying the bearing backwards
+    // into it would announce the turn before it happens.
+    const cues = trackOf((t) => (t < 2 ? 16 : 16 + (t - 2) * 0.001));
+    attachMotion(cues);
+    expect(cues[15].derived?.heading).toBeUndefined();
+    expect(cues[15].lead).toBeUndefined();
+  });
+
+  it('never overwrites a value the look-back could measure', () => {
+    // Still for 0.6 s, then off to the north: at 0.5 s the backward window
+    // honestly reads 0 m/s, while the window ahead is already moving.
+    const cues = trackOf((t) => (t < 0.6 ? 16 : 16 + (t - 0.6) * 0.001));
+    attachMotion(cues);
+
+    const at = cues[5];
+    expect(at.start).toBeCloseTo(0.5, 3);
+    expect(at.derived?.groundSpeed).toBeCloseTo(0, 3);
+    expect(at.derived?.heading).toBeUndefined();
+    // The measured 0 wins; only the missing heading comes from ahead.
+    expect(motionAt(at).groundSpeed).toBeCloseTo(0, 3);
+    expect(motionAt(at).heading).toBeCloseTo(0, 1);
+  });
+
+  it('invents nothing for an aircraft that stays put', () => {
+    const cues = trackOf(() => 16);
+    attachMotion(cues);
+    expect(motionAt(cues[0]).heading).toBeUndefined();
+    expect(motionAt(cues[0]).groundSpeed).toBeCloseTo(0, 3);
+  });
+});
+
+describe('motionAt', () => {
+  it('fills the missing values from ahead, or nothing when asked', () => {
+    const cues = trackOf(northbound);
+    attachMotion(cues);
+
+    expect(motionAt(cues[0]).groundSpeed).toBeCloseTo(111.2, 0);
+    expect(motionAt(cues[0], false)).toEqual({});
+    expect(motionAt(null)).toEqual({});
+  });
+
+  it('is a plain read of `derived` outside the opening window', () => {
+    const cues = trackOf(northbound);
+    attachMotion(cues);
+    expect(motionAt(cues[20])).toBe(cues[20].derived);
   });
 });
 

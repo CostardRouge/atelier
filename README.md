@@ -178,6 +178,20 @@ drop to the no-data state at once. The smoothing is a pure function of the cue
 list and the playhead, never an accumulator over rendered frames, so the export
 burns in exactly what the preview showed.
 
+**And why they start blank — "value from the start".** Speed, vertical speed
+and heading are not read from the log, they are *measured* between two GPS
+fixes about a second apart. The clip's first second therefore has nothing
+behind it to measure: the readouts, the arrow and the tape sit on `—` exactly
+where a social cut begins. Those elements carry a **Value from the start**
+switch, on by default, which fills that hole with the same window measured
+*forward* — the reading the instrument is about to have, one second early.
+It is a real measurement of the coming second, never an extrapolation: an
+aircraft that does not move still shows nothing, and a value the look-back can
+measure is never covered by the one ahead. Turn the switch off for the strictly
+backward-looking reading. It only ever applies to the opening window — a gap in
+the middle of a clip belongs to the gap behaviour above, since carrying a
+bearing backwards there would announce a turn before it happens.
+
 **Keyboard.** `Space` plays and pauses the clip — here and in Grade, Compare,
 Composer and the legacy Overlay, all of which share one transport — and
 `Delete` (or `Backspace`) removes the selected overlay element. Both stand
@@ -526,9 +540,12 @@ frame all follow from that entry.
   The window matters: GPS only refreshes a few times a second, so differencing
   adjacent 60 fps frames would flicker `0 → 45 → 0`; the window spans several
   fixes for a stable readout. Heading is suppressed while hovering (movement
-  below the GPS-noise floor), where "direction of travel" is meaningless. Pure
-  and unit-tested, so the same values feed the panels, the gallery and the
-  overlay export.
+  below the GPS-noise floor), where "direction of travel" is meaningless. The
+  cues of the opening window — the ones with no past to difference against —
+  also carry the *same window measured forward*, kept in a separate field so it
+  can fill a hole but never cover a real measurement (see "value from the
+  start" above). Pure and unit-tested, so the same values feed the panels, the
+  gallery and the overlay export.
 - **Frame-accurate sync, shared once.** The `useActiveCue` hook uses
   `video.requestVideoFrameCallback()` and reads `metadata.mediaTime` (the exact
   presentation time of the displayed frame), falling back to the `timeupdate`

@@ -44,6 +44,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - Overlay elements are added from a foldable preview palette, never a dropdown; a preview shows the real value or nothing, never a fabricated one — `studio.md`.
 - Canvas trap: a shadow is dropped when drawing under a `destination-*` composite mode — build masks in their own buffer first — `studio.md`.
 - The heading is course over ground (no compass in the log) and vanishes while hovering or yawing; smoothing is a pure `(cues, time)` function, never a per-frame accumulator — `studio.md`.
+- The clip's opening window carries the same motion measured **forward** (`Cue.lead`, read through `motionAt`), so the instruments are alive on frame one; it never covers a real reading, never reaches past that window, and invents nothing — `studio.md`.
 - Tool layouts split on **container** queries, not viewport ones: the Library sidebar eats 288px the viewport query cannot see — `studio.md`.
 - Time elements: presentation per badge, capture-time **shift** per project; no timezone picker — the log has no zone to convert from — `studio.md`.
 - Conversion LUTs target a Rec.709 reference display (~gamma 2.4) while the canvas is sRGB (~2.2); an optional output transform closes that gap, baked into the composed LUT, off by default — `media-pipeline.md`.

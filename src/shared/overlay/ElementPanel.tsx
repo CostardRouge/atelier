@@ -22,6 +22,13 @@ import {
 
 const SPEED_FIELDS: ReadonlySet<TelemetryFieldKey> = new Set(['gnd_speed', 'vert_speed']);
 
+/** Fields rebuilt from motion, and therefore blank on the clip's first frames. */
+const DERIVED_FIELDS: ReadonlySet<TelemetryFieldKey> = new Set([
+  'gnd_speed',
+  'vert_speed',
+  'heading',
+]);
+
 interface ElementPanelProps {
   element: OverlayElement;
   onChange: (patch: Partial<OverlayElement>) => void;
@@ -93,6 +100,42 @@ function toRgba(hex: string, alpha: number): string {
   const g = parseInt(h.slice(2, 4), 16);
   const b = parseInt(h.slice(4, 6), 16);
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/**
+ * Speed and heading are not read from the log, they are *measured* between two
+ * positions a second apart — so the clip's opening second has nothing behind it
+ * and the instrument reads `—`. This offers the mirror measurement, taken over
+ * the second ahead. Shared by the two heading instruments and the derived
+ * readouts, which is the whole set of elements that can start blank.
+ */
+function EarlyValues({
+  element,
+  change,
+}: {
+  element: OverlayElement;
+  change: (patch: Partial<OverlayElement>) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          className="w-3.5 h-3.5 accent-accent cursor-pointer"
+          checked={element.earlyValues !== false}
+          onChange={(e) => change({ earlyValues: e.target.checked })}
+        />
+        <span className={labelClass}>Value from the start</span>
+      </label>
+      <span className="text-[0.7rem] text-faint leading-relaxed">
+        This value is measured between two GPS fixes a second apart, so the
+        clip's first second has nothing behind it to measure — the instrument
+        would sit blank exactly where a social cut begins. On, it shows the
+        second *ahead* instead: the reading it is about to have, measured, not
+        invented. A drone that does not move still shows nothing.
+      </span>
+    </div>
+  );
 }
 
 /** Style controls for the selected overlay element. */
@@ -304,6 +347,7 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
                 />
               </label>
             )}
+            <EarlyValues element={element} change={change} />
           </div>
         </div>
       ) : element.kind === 'heading-tape' ? (
@@ -539,6 +583,7 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
                 />
               </label>
             )}
+            <EarlyValues element={element} change={change} />
           </div>
         </div>
       ) : element.kind === 'battery' ? (
@@ -794,6 +839,9 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
                 ))}
               </select>
             </label>
+          )}
+          {element.field && DERIVED_FIELDS.has(element.field) && (
+            <EarlyValues element={element} change={change} />
           )}
         </>
       )}

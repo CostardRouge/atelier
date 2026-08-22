@@ -156,6 +156,17 @@ export interface OverlayElement {
   compassMode?: 'absolute' | 'relative';
 
   /**
+   * Speed / vertical-speed / heading readouts and the two heading instruments:
+   * show the value **measured forward** over the clip's opening window while
+   * there is no past to measure against, instead of `—` (see
+   * telemetry/motion.ts). Defaults to **on** — the hole is a second at most,
+   * but on a social cut it is the first second, and an instrument that spends
+   * it blank is what the viewer remembers. Turn it off for the strictly
+   * backward-looking reading.
+   */
+  earlyValues?: boolean;
+
+  /**
    * `telemetry-field` only, for `gnd_speed` / `vert_speed`: which unit to
    * display. Defaults to `'m/s'` when absent.
    */

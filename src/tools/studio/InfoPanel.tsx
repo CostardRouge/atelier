@@ -3,6 +3,7 @@ import {
   formatGroundSpeed,
   formatHeading,
   formatVerticalSpeed,
+  motionAt,
 } from '../../shared/telemetry/motion';
 import { summarizeTelemetry } from '../../shared/telemetry/telemetry-summary';
 import { formatBytes, formatDuration } from '../../shared/lib/format';
@@ -96,9 +97,9 @@ export default function InfoPanel({
           <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
             <Row label="Rel. alt" value={d.rel_alt} suffix=" m" />
             <Row label="Abs. alt" value={d.abs_alt} suffix=" m" />
-            <Row label="Speed" value={formatGroundSpeed(cue?.derived?.groundSpeed)} />
-            <Row label="V. speed" value={formatVerticalSpeed(cue?.derived?.verticalSpeed)} />
-            <Row label="Heading" value={formatHeading(cue?.derived?.heading)} />
+            <Row label="Speed" value={formatGroundSpeed(motionAt(cue).groundSpeed)} />
+            <Row label="V. speed" value={formatVerticalSpeed(motionAt(cue).verticalSpeed)} />
+            <Row label="Heading" value={formatHeading(motionAt(cue).heading)} />
             <Row label="Lat" value={d.latitude} />
             <Row label="Lon" value={d.longitude} />
             <Row

@@ -10,6 +10,7 @@ import {
   formatGroundSpeed,
   formatHeading,
   formatVerticalSpeed,
+  motionAt,
   type SpeedUnit,
 } from '../telemetry/motion';
 import {
@@ -86,12 +87,17 @@ export const MISSING = '—';
  * @param speedUnit Only used for `gnd_speed` / `vert_speed` — defaults to `'m/s'`.
  * @param time      Clock/date/timestamp presentation, and the project's
  *                  capture-time correction (see telemetry/time-format.ts).
+ * @param early     Only used for the derived motion fields: accept the
+ *                  opening window's look-ahead reading rather than showing
+ *                  `—` until the first backward measurement lands (see
+ *                  telemetry/motion.ts). Default on.
  */
 export function formatField(
   key: TelemetryFieldKey,
   cue: Cue | null,
   speedUnit?: SpeedUnit,
   time?: TimeFieldOptions,
+  early = true,
 ): string {
   if (!cue) return MISSING;
   if (TIME_FIELDS.has(key)) {
@@ -107,11 +113,11 @@ export function formatField(
     case 'frame':
       return cue.frame != null ? String(cue.frame) : MISSING;
     case 'gnd_speed':
-      return formatGroundSpeed(cue.derived?.groundSpeed, speedUnit) ?? MISSING;
+      return formatGroundSpeed(motionAt(cue, early).groundSpeed, speedUnit) ?? MISSING;
     case 'vert_speed':
-      return formatVerticalSpeed(cue.derived?.verticalSpeed, speedUnit) ?? MISSING;
+      return formatVerticalSpeed(motionAt(cue, early).verticalSpeed, speedUnit) ?? MISSING;
     case 'heading':
-      return formatHeading(cue.derived?.heading) ?? MISSING;
+      return formatHeading(motionAt(cue, early).heading) ?? MISSING;
   }
 
   const raw = cue.data[key];
@@ -142,10 +148,13 @@ export function renderElementText(
 ): string {
   if (el.kind === 'text') return el.text ?? '';
   if (SHAPE_KINDS.has(el.kind) || !el.field) return '';
-  const value = formatField(el.field, cue, el.speedUnit, {
-    format: el.timeFormat,
-    shift,
-  });
+  const value = formatField(
+    el.field,
+    cue,
+    el.speedUnit,
+    { format: el.timeFormat, shift },
+    el.earlyValues !== false,
+  );
   const label = el.label?.trim();
   return label ? `${label} ${value}` : value;
 }

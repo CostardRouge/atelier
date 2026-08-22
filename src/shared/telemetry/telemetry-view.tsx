@@ -3,6 +3,7 @@ import {
   formatGroundSpeed,
   formatHeading,
   formatVerticalSpeed,
+  motionAt,
 } from './motion';
 
 /** Format a raw value with a unit suffix, tolerating missing data. */
@@ -66,9 +67,9 @@ export function TelemetryPanels({ cue }: { cue: Cue | null }) {
         <dl className="m-0 grid grid-cols-[auto_1fr] gap-[0.55rem_1rem]">
           <Field label="Rel. altitude" value={d.rel_alt} suffix=" m" highlight />
           <Field label="Abs. altitude" value={d.abs_alt} suffix=" m" />
-          <Field label="Ground speed" value={formatGroundSpeed(cue?.derived?.groundSpeed)} />
-          <Field label="Vertical speed" value={formatVerticalSpeed(cue?.derived?.verticalSpeed)} />
-          <Field label="Heading" value={formatHeading(cue?.derived?.heading)} />
+          <Field label="Ground speed" value={formatGroundSpeed(motionAt(cue).groundSpeed)} />
+          <Field label="Vertical speed" value={formatVerticalSpeed(motionAt(cue).verticalSpeed)} />
+          <Field label="Heading" value={formatHeading(motionAt(cue).heading)} />
           <Field label="Latitude" value={d.latitude} />
           <Field label="Longitude" value={d.longitude} />
           <Field
@@ -107,7 +108,7 @@ export function LiveTelemetry({ cue }: { cue: Cue | null }) {
   const gps =
     d.latitude && d.longitude ? `${d.latitude}, ${d.longitude}` : '—';
   const motion =
-    [formatGroundSpeed(cue?.derived?.groundSpeed), formatHeading(cue?.derived?.heading)]
+    [formatGroundSpeed(motionAt(cue).groundSpeed), formatHeading(motionAt(cue).heading)]
       .filter(Boolean)
       .join('  ·  ');
   const exposure = [

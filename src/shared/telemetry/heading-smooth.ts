@@ -58,12 +58,18 @@ const MAX_WINDOW_S = 12;
  *                    newest reading as-is.
  * @param holdSeconds How long a stale reading keeps being reported after the
  *                    data stops, with `confidence` decaying across it.
+ * @param early       Accept the look-ahead readings of the opening window
+ *                    (`Cue.lead`, see motion.ts) so the instrument is already
+ *                    pointing on the clip's first frame instead of waiting a
+ *                    second for its first backward measurement. Default on;
+ *                    `false` is the strictly backward-looking behaviour.
  */
 export function smoothHeading(
   cues: readonly Cue[],
   timeSeconds: number,
   tauSeconds = 0.6,
   holdSeconds = 2,
+  early = true,
 ): SmoothedHeading {
   if (cues.length === 0) return NO_HEADING;
   const start = lastIndexAtOrBefore(cues as Cue[], timeSeconds);
@@ -84,7 +90,10 @@ export function smoothHeading(
     const cue = cues[i];
     const dt = now - cue.start;
     if (dt > Math.max(reach, hold)) break;
-    const h = cue.derived?.heading;
+    // Read the field directly rather than through `motionAt`: this loop runs
+    // per rendered frame over up to a 12 s window, and an object per cue is a
+    // needless allocation.
+    const h = cue.derived?.heading ?? (early ? cue.lead?.heading : undefined);
     if (h == null) continue;
 
     if (newest === null) {

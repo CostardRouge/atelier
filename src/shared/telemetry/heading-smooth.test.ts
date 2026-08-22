@@ -82,6 +82,21 @@ describe('smoothHeading', () => {
     expect(forwards).toEqual(backwards);
   });
 
+  it('points from the first frame on the opening window look-ahead', () => {
+    // The clip opens with no reading behind it (motion.ts measures backwards),
+    // but the first cues carry the window measured forward.
+    const cues = track([null, null, null, 90, 90, 90]);
+    cues[0].lead = { heading: 88 };
+    cues[1].lead = { heading: 89 };
+
+    const early = smoothHeading(cues, 0, 0.6, 2);
+    expect(early.heading).toBeCloseTo(88, 3);
+    expect(early.confidence).toBe(1); // live, not a stale bearing being held
+
+    // Opted out, the instrument waits for its first real reading.
+    expect(smoothHeading(cues, 0, 0.6, 2, false).heading).toBeNull();
+  });
+
   it('follows a steady turn without lagging forever', () => {
     // A constant 60°/s turn: the eased value trails, but by a bounded amount.
     const cues = track(Array.from({ length: 40 }, (_, i) => (i * 6) % 360));
