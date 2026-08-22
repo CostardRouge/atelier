@@ -15,6 +15,7 @@
 import type { OverlayElement } from '../overlay/overlay-types';
 import { DEFAULT_GUIDES, type GuidesState } from '../overlay/guides';
 import type { StyleTheme } from '../overlay/title-styles';
+import type { Scene } from '../overlay/scenes';
 import type { PersistedDirectoryHandle } from '../sources/file-sources';
 import { defaultVariants, type ExportVariant } from './export-variants';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
@@ -23,7 +24,7 @@ import { AUTO_TIME_SCALE, type TimeScaleSetting } from '../telemetry/time-scale'
 import type { OutputTransform } from '../lut/transfer';
 import type { SavedTrim } from '../media/trim';
 
-export const PROJECT_DOC_VERSION = 11;
+export const PROJECT_DOC_VERSION = 12;
 
 /** Identity of one media file, enough to re-match it inside a folder. */
 export interface SavedMediaRef {
@@ -126,6 +127,12 @@ export interface ProjectDoc {
   outputTransform: OutputTransform;
   /** Title-style theme (preset + tweaks), or null for element styles as-is. */
   theme: StyleTheme | null;
+  /**
+   * Scenes — today the introduction, which lends its elements one window, an
+   * optional scrim and the power to hold the HUD back while it plays. Portable:
+   * an intro is part of the template, not of the footage.
+   */
+  scenes: Scene[];
   /** The export matrix: custom base name + the deliverables one press makes. */
   exportPrefs: ExportPrefs;
   // --- bound half ----------------------------------------------------------
@@ -153,6 +160,7 @@ export function createProjectDoc(
     | 'lutStack'
     | 'outputTransform'
     | 'theme'
+    | 'scenes'
     | 'exportPrefs'
   >,
 ): ProjectDoc {
@@ -176,6 +184,7 @@ export function createProjectDoc(
     lutStack: template ? structuredClone(template.lutStack) : [],
     outputTransform: template ? template.outputTransform : 'none',
     theme: template ? structuredClone(template.theme) : null,
+    scenes: template ? structuredClone(template.scenes ?? []) : [],
     exportPrefs: template
       ? structuredClone(template.exportPrefs)
       : { fileName: null, variants: defaultVariants() },
@@ -206,7 +215,9 @@ export function createProjectDoc(
  * choice. It is a measurement being corrected, it is stated in the Info tab, and
  * `manual` is one click away; v10 → v11 gives every stored variant an explicit
  * speed of 1, which is the only speed an export could deliver before it
- * existed. Idempotent; the store runs it on every read.
+ * existed; v11 → v12 adds the scene list, empty — no project could have an
+ * intro before it existed, and an empty list draws exactly nothing.
+ * Idempotent; the store runs it on every read.
  */
 export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
   if (doc.version >= PROJECT_DOC_VERSION) return doc;
@@ -282,6 +293,9 @@ export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
         speed: v.speed ?? 1,
       })),
     };
+  }
+  if (migrated.version < 12) {
+    migrated.scenes = migrated.scenes ?? [];
   }
   migrated.version = PROJECT_DOC_VERSION;
   return migrated;

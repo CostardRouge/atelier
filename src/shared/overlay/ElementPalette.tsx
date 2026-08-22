@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import type { Cue } from '../telemetry/srt-parser';
 import type { TimeShift } from '../telemetry/time-format';
 import { FIELD_SPECS, formatField, MISSING, renderElementText } from './field-format';
+import { introPreset } from './intro-presets';
 import {
   createBatteryElement,
   createFrameCornersElement,
@@ -55,6 +56,8 @@ function elementFor(item: PaletteItem): OverlayElement {
       return createFrameCornersElement();
     case 'battery':
       return createBatteryElement();
+    case 'preset':
+      return introPreset(item.preset).create();
   }
 }
 
@@ -74,16 +77,36 @@ function nameOf(item: PaletteItem): string {
       return 'Corners';
     case 'battery':
       return 'Battery';
+    case 'preset':
+      return introPreset(item.preset).label;
   }
 }
 
-/** How many of this component are already placed. */
+/**
+ * How many of this component are already placed.
+ *
+ * Intro cells count nothing on purpose: a preset is a starting point, not a
+ * component you place once — three titles in one intro is an ordinary thing to
+ * want, and "already there" would be a warning about nothing.
+ */
 function countPlaced(elements: OverlayElement[], item: PaletteItem): number {
+  if (item.kind === 'preset') return 0;
   return elements.filter((e) =>
     item.kind === 'telemetry-field'
       ? e.kind === 'telemetry-field' && e.field === item.field
       : e.kind === item.kind,
   ).length;
+}
+
+/**
+ * What an intro cell says instead of a count: where in the intro it lands.
+ * A staggered preset shows its offset, so the palette tells you the second
+ * subtitle arrives after the title without you placing it first.
+ */
+function timingHint(el: OverlayElement): string | null {
+  if (!el.sceneId) return null;
+  const start = el.window?.start ?? 0;
+  return start > 0 ? `+${start.toFixed(1)}s` : 'intro';
 }
 
 /**
@@ -100,7 +123,7 @@ function previewText(
   cue: Cue | null,
   timeShift?: TimeShift | null,
 ): string {
-  if (item.kind === 'text') return el.text ?? 'Text';
+  if (item.kind === 'text' || item.kind === 'preset') return el.text ?? '';
   if (item.kind !== 'telemetry-field') return '';
   const value = formatField(
     item.field,
@@ -200,6 +223,31 @@ function CornersGlyph({ style }: { style: CSSProperties }) {
   );
 }
 
+/** The intro prompt's cell: a phone mid-turn, with the arc that says "turn". */
+function PhoneGlyph({ style }: { style: CSSProperties }) {
+  return (
+    <svg
+      viewBox="0 0 32 22"
+      className="w-[1.9rem] h-[1.3rem]"
+      style={style}
+      aria-hidden="true"
+    >
+      <g stroke="currentColor" fill="none" strokeWidth="1.4">
+        <rect
+          x="10.5"
+          y="4"
+          width="11"
+          height="16"
+          rx="2"
+          transform="rotate(22 16 12)"
+        />
+        <path d="M7 8 A 9.5 9.5 0 0 1 25 8" strokeWidth="1.2" opacity="0.85" />
+      </g>
+      <path d="M25 8 L22.4 4.6 L27.8 5.2 Z" fill="currentColor" opacity="0.85" />
+    </svg>
+  );
+}
+
 /**
  * The component palette: a grid of what can be dropped on the frame, each cell
  * previewing what it will actually add — the current value in the current
@@ -246,6 +294,7 @@ export default function ElementPalette({
                 const resolved = resolveElementStyle(el, theme);
                 const appearance: PreviewAppearance = resolved;
                 const placed = countPlaced(elements, item);
+                const hint = timingHint(el);
                 const name = nameOf(item);
                 const glyphStyle: CSSProperties = {
                   color: resolved.color,
@@ -253,7 +302,13 @@ export default function ElementPalette({
                 };
                 return (
                   <button
-                    key={item.kind === 'telemetry-field' ? item.field : item.kind}
+                    key={
+                      item.kind === 'telemetry-field'
+                        ? item.field
+                        : item.kind === 'preset'
+                          ? item.preset
+                          : item.kind
+                    }
                     type="button"
                     onClick={() => onAdd(elementFor(item))}
                     title={
@@ -267,13 +322,19 @@ export default function ElementPalette({
                       <span className="flex-1 min-w-0 truncate font-mono text-[0.53rem] uppercase tracking-[0.08em] text-muted leading-none">
                         {name}
                       </span>
-                      {placed > 0 && (
-                        <span
-                          className="flex-none font-mono text-[0.53rem] text-accent leading-none"
-                          aria-label={`${placed} already placed`}
-                        >
-                          {placed > 1 ? placed : '•'}
+                      {hint ? (
+                        <span className="flex-none font-mono text-[0.53rem] text-muted leading-none">
+                          {hint}
                         </span>
+                      ) : (
+                        placed > 0 && (
+                          <span
+                            className="flex-none font-mono text-[0.53rem] text-accent leading-none"
+                            aria-label={`${placed} already placed`}
+                          >
+                            {placed > 1 ? placed : '•'}
+                          </span>
+                        )
                       )}
                     </span>
                     <span
@@ -294,6 +355,8 @@ export default function ElementPalette({
                         <BatteryGlyph style={glyphStyle} />
                       ) : item.kind === 'frame-corners' ? (
                         <CornersGlyph style={glyphStyle} />
+                      ) : el.kind === 'rotate-device' ? (
+                        <PhoneGlyph style={glyphStyle} />
                       ) : (
                         <span
                           className="whitespace-nowrap leading-none"

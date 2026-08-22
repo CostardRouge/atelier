@@ -19,6 +19,7 @@ import { drawOverlays } from '../overlay/draw-overlays';
 import { ensureOverlayFonts } from '../overlay/fonts';
 import type { OverlayElement } from '../overlay/overlay-types';
 import type { StyleTheme } from '../overlay/title-styles';
+import type { Scene } from '../overlay/scenes';
 import type { TimeShift } from '../telemetry/time-format';
 import type { TrimRange } from './trim';
 import { fitRect } from './compose-layout';
@@ -41,6 +42,8 @@ export interface VariantRenderOptions {
   intensity: number;
   theme: StyleTheme | null;
   timeShift?: TimeShift | null;
+  /** The project's scenes — the intro's window, scrim and solo. */
+  scenes?: readonly Scene[];
   /** Display-oriented source dimensions (from the clip's metadata). */
   srcWidth: number;
   srcHeight: number;
@@ -97,6 +100,10 @@ export async function exportVariantVideo(
               timeShift: opts.timeShift,
               cues: opts.cues,
               timeSeconds: t,
+              scenes: opts.scenes,
+              // `t` is the SOURCE timestamp; windows count from the first
+              // exported frame, which a trim moves.
+              originSeconds: opts.trim?.start ?? 0,
             });
           }
           return canvas;

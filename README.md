@@ -153,6 +153,27 @@ the overlay kit holds a heading arrow (with an optional compass ring),
 **viewfinder brackets** for the frame's corners, and **clock/date** fields
 read out of the flight log.
 
+**The introduction.** A social cut lives or dies on its first second, so the
+Overlay tab opens on an **Intro** row: a hook title, a subtitle, a typed-out
+question, and an invitation to **turn the phone** for footage you would rather
+show in landscape. They are ordinary overlay elements — same fonts, same style
+theme, same dragging — placed in a **scene**: one shared window they all live
+in, and leave together. Inside it each element carries its own offset, so a
+subtitle can land half a second after the title; move the scene and the whole
+stagger moves with it. The scene can lay a **veil** over the picture (colour,
+strength, fade) so a title reads over any rush, and can **hold the rest of the
+deck back** while it plays, fading the telemetry HUD in when it ends — the HUD
+"boots up" after the hook.
+
+Every element, intro or not, can now be given a **window** (appears at, disappears
+at — both settable from the playhead) and an **entrance and exit**: fade, slide
+in four directions, scale, typewriter or wipe, each with its own duration and
+curve. Windows count from the clip's **in point**, so trimming the head never
+eats the intro that plays over it. While you are editing an element that is not
+on screen at the playhead, it stays drawn as a ghost so it can still be selected
+and dragged. The phone pictogram is drawn into the video like everything else —
+an export is a flat file, so the tipping gesture *is* the instruction.
+
 **The instruments.** A **heading tape** — the cockpit ribbon: a slice of the
 compass sliding under a fixed sight, ticks dissolving into the image at both
 ends, letters on N/E/S/W. Nearly everything is a knob: width, visible span,
@@ -516,7 +537,8 @@ src/
 │   ├── telemetry/              # SRT parser, motion, cadence, cue lookup, flight-path extraction
 │   ├── overlay/                # the overlay engine: element model, canvas stage,
 │   │                           #   draw/measure/hit-test, fonts, guides, burn-in export,
-│   │                           #   and the ElementList/ElementPanel/GuidesControl editors
+│   │                           #   animation + scenes (the intro layer, pure), and the
+│   │                           #   ElementList/ElementPanel/Timing/Scene/Guides editors
 │   ├── lut/                    # WebGL2 LUT renderer, frame grader, picker, built-ins
 │   ├── map/track-map.ts        # the one MapLibre track-map: style, line layer, OSM tiles
 │   ├── media/                  # metadata, transcode, WebCodecs export, transport/object-URL

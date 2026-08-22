@@ -22,6 +22,7 @@ import type { OverlayElement } from '../overlay/overlay-types';
 import type { GuidesState } from '../overlay/guides';
 import { DEFAULT_GUIDES } from '../overlay/guides';
 import type { StyleTheme } from '../overlay/title-styles';
+import type { Scene } from '../overlay/scenes';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
 import type { OutputTransform } from '../lut/transfer';
 import { NO_SHIFT } from '../telemetry/time-format';
@@ -51,6 +52,7 @@ export interface ProjectPortable {
   lutStack: SavedLutLayer[];
   outputTransform: OutputTransform;
   theme: StyleTheme | null;
+  scenes: Scene[];
   exportPrefs: ExportPrefs;
 }
 
@@ -91,6 +93,7 @@ export function toProjectFile(
     lutStack: structuredClone(source.lutStack),
     outputTransform: source.outputTransform,
     theme: structuredClone(source.theme),
+    scenes: structuredClone(source.scenes ?? []),
     exportPrefs: structuredClone(source.exportPrefs),
   };
 }
@@ -172,6 +175,7 @@ export function parseProjectFile(text: string): ParseResult {
     lutStack: Array.isArray(raw.lutStack) ? (raw.lutStack as SavedLutLayer[]) : [],
     outputTransform: (raw.outputTransform as OutputTransform) ?? 'none',
     theme: isRecord(raw.theme) ? (raw.theme as unknown as StyleTheme) : null,
+    scenes: Array.isArray(raw.scenes) ? (raw.scenes as Scene[]) : [],
     exportPrefs:
       isRecord(raw.exportPrefs) && Array.isArray(raw.exportPrefs.variants)
         ? {
@@ -204,6 +208,7 @@ export function parseProjectFile(text: string): ParseResult {
       lutStack: migrated.lutStack,
       outputTransform: migrated.outputTransform,
       theme: migrated.theme,
+      scenes: migrated.scenes,
       exportPrefs: migrated.exportPrefs,
     },
   };
