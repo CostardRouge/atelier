@@ -378,6 +378,14 @@ export function createLutRenderer(
       gl.deleteProgram(program);
       gl.deleteShader(vert);
       gl.deleteShader(frag);
+      // Deleting the GL objects above frees their GPU memory but NOT the
+      // context itself — that only happens on GC (non-deterministic) or a
+      // browser-forced loss once the page's context cap is hit. An export
+      // creates one of these per run (frame-grader.ts), so without an
+      // explicit loseContext() a run of exports silently eats into that cap
+      // until new contexts stop being grantable — surfacing as an unrelated
+      // "LUT stopped applying" or a broken preview later in the same tab.
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
     },
   };
 }
