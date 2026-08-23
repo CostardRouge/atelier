@@ -61,6 +61,10 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - A second durable store follows the studio's hand-rolled IndexedDB pattern in its own database; Dexie and SQLite were both weighed and declined for a one-document-per-trip model — `roadtrip.md`.
 - The Road Trip day badge is built from ordinary overlay `text` elements handed to `drawOverlays`, never a second renderer — it inherits the title-style presets, and preview and export are the same code at two sizes — `roadtrip.md`.
 - A badge's look belongs to the TRIP, not the post (a signature that varies per post is not one), and defaults to `neutral`: flat vermilion measurably vanishes over warm footage — `roadtrip.md`.
+- Badge copy is English by default and every word is an editable field on the trip; a per-piece override that is emptied returns the computed value, never a blank — `roadtrip.md`.
+- A badge piece departs from the theme by writing its own value AND pinning that key in `styleOverrides`; casing is applied to the string, never to the element's flag — `roadtrip.md`.
+- `StylePanel` is engine-level (`shared/overlay/`) since Road Trip became its second consumer — a tool never reaches into another tool — `architecture.md`, `roadtrip.md`.
+- `LegibilityStyle` gained a corner radius and an outline, drawn by one shared helper; the radius defaults to what the four call sites used to hard-code, so no stored document changes shape — `roadtrip.md`.
 
 ## Open items (dated; remove when done)
 

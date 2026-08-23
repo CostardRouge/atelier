@@ -1,15 +1,30 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
-import type { Asset } from '../../shared/library/assets';
+import { useActiveAsset } from '../../shared/library/use-active-asset';
+import type { Asset, AssetKind } from '../../shared/library/assets';
 import { ASPECT_PRESETS, savedMediaRef } from '../../shared/projects/project-types';
-import { TITLE_STYLE_PRESETS, themeFromPreset } from '../../shared/overlay/title-styles';
+import StylePanel from '../../shared/overlay/StylePanel';
 import type { Anchor } from '../../shared/overlay/overlay-types';
-import { badgeContent, BADGE_LANGUAGES, COUNTER_MODES } from '../../shared/roadtrip/day-badge';
-import { badgeElements } from '../../shared/roadtrip/badge-layout';
+import {
+  BADGE_PIECES,
+  COUNTER_MODES,
+  DEFAULT_BADGE_WORDS,
+  FRENCH_BADGE_WORDS,
+  WORD_FIELDS,
+  badgeContent,
+  type BadgePiece,
+  type BadgeWords,
+} from '../../shared/roadtrip/day-badge';
+import {
+  badgeElements,
+  badgeSettleSeconds,
+  type BadgePieceStyle,
+} from '../../shared/roadtrip/badge-layout';
 import { badgeToPng, frameSize, loadBadgeSource } from '../../shared/roadtrip/badge-render';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
 import type { PostBadge, TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
 import BadgeStage from './BadgeStage';
+import PieceStylePanel from './PieceStylePanel';
 
 interface PostEditorProps {
   trip: TripDoc;
@@ -21,14 +36,23 @@ interface PostEditorProps {
 
 const legend = 'font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted';
 const section = 'flex flex-col gap-2';
+const inputClass =
+  'font-sans text-[0.82rem] px-2.5 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent';
 
-const MEDIA_KINDS = new Set(['photo', 'video', 'video+telemetry']);
+/** Pass as a module constant — a fresh array per render re-runs the projection. */
+const MEDIA_KINDS: readonly AssetKind[] = ['photo', 'video+telemetry', 'video'];
 
 /** The nine anchors, laid out as the 3×3 grid they are. */
-const ANCHORS: Anchor[][] = [
-  ['top-left', 'top-center', 'top-right'],
-  ['center-left', 'center', 'center-right'],
-  ['bottom-left', 'bottom-center', 'bottom-right'],
+const ANCHORS: Anchor[] = [
+  'top-left',
+  'top-center',
+  'top-right',
+  'center-left',
+  'center',
+  'center-right',
+  'bottom-left',
+  'bottom-center',
+  'bottom-right',
 ];
 
 /** Where an anchor's default position sits, so picking one actually moves it. */
@@ -42,11 +66,48 @@ function pickable(asset: Asset): File | null {
   return asset.parts.image ?? asset.parts.video ?? null;
 }
 
+function Fold({
+  title,
+  children,
+  open,
+  onToggle,
+}: {
+  title: string;
+  children: React.ReactNode;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="border border-line rounded-paper bg-surface">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className={`w-full flex items-center gap-2 px-3 py-2 border-0 bg-transparent cursor-pointer ${legend}`}
+      >
+        <span className="flex-1 text-left">{title}</span>
+        <span className="text-faint" aria-hidden="true">
+          {open ? '−' : '+'}
+        </span>
+      </button>
+      {open && <div className="px-3 pb-3">{children}</div>}
+    </div>
+  );
+}
+
 /**
  * Composing one post's hook: the picture, the badge over it, and the PNG that
- * comes out. The style is the TRIP's — a badge that varies per post stops being
- * a signature, which is the whole reason it exists — so the preset picker
- * writes to the trip while everything else writes to the post.
+ * comes out.
+ *
+ * Two scopes, deliberately. The TRIP owns the look — the title style and the
+ * words — because a badge that varies per post stops being the signature that
+ * makes a post recognisable in a feed. The POST owns what is true of this one
+ * piece: which day it counts, where the block sits, and any departure a
+ * particular picture needs.
+ *
+ * The picture is whatever is active in the Library on the left, and the two
+ * stay in step: opening a post points the Library at its picture, and picking
+ * another one there re-points the post.
  */
 export default function PostEditor({
   trip,
@@ -56,27 +117,41 @@ export default function PostEditor({
   onChangeTrip,
 }: PostEditorProps) {
   const lib = useAssetLibrary();
+  const { active } = useActiveAsset(MEDIA_KINDS);
   const [exporting, setExporting] = useState(false);
   const [duration, setDuration] = useState(0);
+  const [piece, setPiece] = useState<BadgePiece>('kicker');
+  const [openFold, setOpenFold] = useState<string | null>('piece');
 
-  const candidates = useMemo(
-    () => lib.assets.filter((a) => MEDIA_KINDS.has(a.kind) && pickable(a)),
-    [lib.assets],
-  );
+  const activeFile = active ? pickable(active) : null;
 
-  /** The library file matching the post's hint, if it is loaded right now. */
-  const file = useMemo(() => {
-    if (!post.media) return null;
-    const want = post.media.name.toLowerCase();
-    for (const asset of candidates) {
-      const f = pickable(asset);
-      if (f && f.name.toLowerCase() === want) return f;
+  // --- the Library and the post point at the same picture ------------------
+  // Opening a post activates its picture; from then on the sidebar leads.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current) return;
+    if (!post.media) {
+      restored.current = true;
+      return;
     }
-    return null;
-  }, [post.media, candidates]);
+    if (!lib.assets.length) return;
+    const want = post.media.name.toLowerCase();
+    const match = lib.assets.find((a) => {
+      const f = pickable(a);
+      return f && f.name.toLowerCase() === want;
+    });
+    if (match) lib.setActive(match.id);
+    restored.current = true;
+  }, [post.media, lib.assets, lib.setActive]);
 
-  const missing = post.media !== null && file === null;
-  const isVideo = Boolean(file && !file.type.startsWith('image/'));
+  useEffect(() => {
+    if (!restored.current || !activeFile) return;
+    if (post.media?.name.toLowerCase() === activeFile.name.toLowerCase()) return;
+    onChangePost({ ...post, media: savedMediaRef(activeFile) });
+  }, [activeFile, post, onChangePost]);
+
+  const missing = post.media !== null && activeFile === null;
+  const isVideo = Boolean(activeFile && !activeFile.type.startsWith('image/'));
 
   const aspectPreset =
     ASPECT_PRESETS.find((a) => a.id === post.badge.aspectId) ?? ASPECT_PRESETS[0];
@@ -86,22 +161,58 @@ export default function PostEditor({
     () =>
       badgeContent(trip, post, {
         mode: post.badge.mode,
-        language: trip.badgeLanguage,
+        words: trip.badgeWords,
         showAnniversary: post.badge.showAnniversary,
+        overrides: post.badge.textOverrides,
       }),
     [trip, post],
   );
 
   const elements = useMemo(
-    () => (content ? badgeElements(content, post.badge.layout, aspect) : []),
-    [content, post.badge.layout, aspect],
+    () =>
+      content
+        ? badgeElements(content, post.badge.layout, aspect, post.badge.pieceStyles)
+        : [],
+    [content, post.badge.layout, post.badge.pieceStyles, aspect],
   );
+
+  // --- the badge's own clock ------------------------------------------------
+  const settle = badgeSettleSeconds(post.badge.pieceStyles);
+  const animated = settle > 0 || Object.values(post.badge.pieceStyles).some((s) => s?.animation);
+  const loopSeconds = Math.max(settle + 1.5, 3);
+  // A still of an animated badge shows it settled, never caught mid-slide.
+  const [time, setTime] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => {
+    if (!animated) setTime(0);
+    else if (!playing) setTime(settle);
+  }, [animated, settle, playing]);
+
+  useEffect(() => {
+    if (!playing) return;
+    let raf = 0;
+    let started: number | null = null;
+    const tick = (now: number) => {
+      started ??= now;
+      setTime(((now - started) / 1000) % loopSeconds);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing, loopSeconds]);
 
   const patchBadge = useCallback(
     (patch: Partial<PostBadge>) =>
       onChangePost({ ...post, badge: { ...post.badge, ...patch } }),
     [post, onChangePost],
   );
+
+  const patchWords = (patch: Partial<BadgeWords>) =>
+    onChangeTrip({ ...trip, badgeWords: { ...trip.badgeWords, ...patch } });
+
+  const pieceStyle: BadgePieceStyle = post.badge.pieceStyles[piece] ?? {};
+  const setPieceStyle = (style: BadgePieceStyle) =>
+    patchBadge({ pieceStyles: { ...post.badge.pieceStyles, [piece]: style } });
 
   // A clip's frame must stay inside the clip: switching to a shorter video
   // would otherwise leave the badge pinned past the end and decode nothing.
@@ -115,15 +226,15 @@ export default function PostEditor({
     setExporting(true);
     try {
       const { w, h } = frameSize(aspect, 1920);
-      const els = content ? badgeElements(content, post.badge.layout, aspect) : [];
-      const source = file
-        ? await loadBadgeSource(file, post.badge.videoTimeSeconds)
+      const source = activeFile
+        ? await loadBadgeSource(activeFile, post.badge.videoTimeSeconds)
         : null;
       try {
         const blob = await badgeToPng({
           source,
-          elements: els,
+          elements,
           theme: trip.theme,
+          timeSeconds: time,
           width: w,
           height: h,
         });
@@ -143,6 +254,11 @@ export default function PostEditor({
       setExporting(false);
     }
   }
+
+  const fold = (id: string) => ({
+    open: openFold === id,
+    onToggle: () => setOpenFold((cur) => (cur === id ? null : id)),
+  });
 
   return (
     <section
@@ -177,52 +293,58 @@ export default function PostEditor({
       </div>
 
       <div className="flex flex-col @min-[860px]:flex-row gap-5 min-h-0">
-        <div className="flex-1 min-w-0 flex items-start justify-center">
+        <div className="flex-1 min-w-0 flex flex-col items-center gap-3">
           <BadgeStage
-            file={file}
+            file={activeFile}
             videoTimeSeconds={post.badge.videoTimeSeconds}
             aspect={aspect}
             elements={elements}
             theme={trip.theme}
+            timeSeconds={time}
             onSourceLoaded={(info) => setDuration(info.duration)}
           />
+
+          {animated && (
+            <div className="flex items-center gap-3 w-full max-w-[26rem]">
+              <button
+                type="button"
+                onClick={() => setPlaying((p) => !p)}
+                className="flex-none px-3 py-1.5 border border-line-strong rounded-full bg-paper text-[0.76rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
+              >
+                {playing ? '❚❚ Pause' : '▶ Play'}
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={loopSeconds}
+                step={0.02}
+                value={time}
+                onChange={(e) => {
+                  setPlaying(false);
+                  setTime(Number(e.target.value));
+                }}
+                className="flex-1 accent-accent"
+                aria-label="Badge time"
+              />
+              <span className="flex-none font-mono text-[0.68rem] tabular-nums text-muted">
+                {time.toFixed(2)}s
+              </span>
+            </div>
+          )}
         </div>
 
-        <div className="flex-none w-full @min-[860px]:w-[21rem] flex flex-col gap-5">
+        <div className="flex-none w-full @min-[860px]:w-[22rem] flex flex-col gap-3">
           <div className={section}>
-            <span className={legend}>Picture</span>
-            {candidates.length === 0 ? (
-              <p className="m-0 text-[0.78rem] text-muted">
-                Nothing in the Library yet — add files on the left and they show
-                up here.
+            <span className={legend}>Picture · from the Library</span>
+            {activeFile ? (
+              <p className="m-0 text-[0.8rem] text-ink-soft truncate" title={activeFile.name}>
+                {activeFile.name}
               </p>
             ) : (
-              <select
-                value={post.media?.name ?? ''}
-                onChange={(e) => {
-                  const chosen = candidates
-                    .map(pickable)
-                    .find((f) => f && f.name === e.target.value);
-                  onChangePost({ ...post, media: chosen ? savedMediaRef(chosen) : null });
-                }}
-                className="font-sans text-[0.85rem] px-3 py-2 border border-line-strong rounded-paper bg-paper text-ink cursor-pointer focus:outline-none focus:border-accent"
-              >
-                <option value="">No picture — badge alone</option>
-                {candidates.map((asset) => {
-                  const f = pickable(asset)!;
-                  return (
-                    <option key={asset.id} value={f.name}>
-                      {f.name}
-                    </option>
-                  );
-                })}
-              </select>
-            )}
-            {missing && (
-              <p className="m-0 text-[0.75rem] text-muted">
-                “{post.media?.name}” is not in the Library right now. The post
-                keeps its day and its badge — add the folder back to see the
-                picture again.
+              <p className="m-0 text-[0.78rem] text-muted">
+                {missing
+                  ? `“${post.media?.name}” is not in the Library right now. The post keeps its day and its badge.`
+                  : 'Tick a photo or a clip in the Library on the left — the badge composes over whatever is active there.'}
               </p>
             )}
             {isVideo && duration > 0 && (
@@ -247,14 +369,14 @@ export default function PostEditor({
 
           <div className={section}>
             <span className={legend}>Frame</span>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-4 gap-1.5">
               {ASPECT_PRESETS.map((a) => (
                 <button
                   key={a.id}
                   type="button"
                   onClick={() => patchBadge({ aspectId: a.id })}
                   aria-pressed={a.id === post.badge.aspectId}
-                  className={`px-3 py-2 rounded-paper border text-left cursor-pointer text-[0.78rem] transition-colors ${
+                  className={`px-2 py-1.5 rounded-paper border text-center cursor-pointer text-[0.74rem] transition-colors ${
                     a.id === post.badge.aspectId
                       ? 'border-accent bg-accent-wash text-accent-ink font-semibold'
                       : 'border-line bg-paper hover:border-line-strong'
@@ -273,7 +395,7 @@ export default function PostEditor({
               onChange={(e) =>
                 patchBadge({ mode: e.target.value as PostBadge['mode'] })
               }
-              className="font-sans text-[0.85rem] px-3 py-2 border border-line-strong rounded-paper bg-paper text-ink cursor-pointer focus:outline-none focus:border-accent"
+              className={`${inputClass} cursor-pointer`}
             >
               {COUNTER_MODES.map((m) => (
                 <option key={m.id} value={m.id}>
@@ -290,88 +412,140 @@ export default function PostEditor({
               />
               Lead with “one year ago today”
             </label>
-            {post.badge.showAnniversary && content && !/\d+\s*(an|year)/i.test(content.kicker ?? '') && (
-              <p className="m-0 text-[0.72rem] text-faint">
-                Less than a year has passed, so the trip’s name is used instead —
-                nothing claims an anniversary that has not come round.
-              </p>
-            )}
-          </div>
-
-          <div className={section}>
-            <span className={legend}>Style · shared by the whole trip</span>
-            <select
-              value={trip.theme?.presetId ?? ''}
-              onChange={(e) =>
-                onChangeTrip({ ...trip, theme: themeFromPreset(e.target.value) })
-              }
-              className="font-sans text-[0.85rem] px-3 py-2 border border-line-strong rounded-paper bg-paper text-ink cursor-pointer focus:outline-none focus:border-accent"
-            >
-              {TITLE_STYLE_PRESETS.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} — {p.tagline}
-                </option>
-              ))}
-            </select>
-            <select
-              value={trip.badgeLanguage}
-              onChange={(e) =>
-                onChangeTrip({
-                  ...trip,
-                  badgeLanguage: e.target.value as TripDoc['badgeLanguage'],
-                })
-              }
-              className="font-sans text-[0.85rem] px-3 py-2 border border-line-strong rounded-paper bg-paper text-ink cursor-pointer focus:outline-none focus:border-accent"
-            >
-              {BADGE_LANGUAGES.map((l) => (
-                <option key={l.id} value={l.id}>
-                  Badge language · {l.label}
-                </option>
-              ))}
-            </select>
           </div>
 
           <div className={section}>
             <span className={legend}>Placement</span>
-            <div className="grid grid-cols-3 gap-1.5 w-[7.5rem]">
-              {ANCHORS.flat().map((anchor) => (
-                <button
-                  key={anchor}
-                  type="button"
-                  onClick={() =>
+            <div className="flex items-start gap-3">
+              <div className="grid grid-cols-3 gap-1.5 w-[6.5rem] flex-none">
+                {ANCHORS.map((anchor) => (
+                  <button
+                    key={anchor}
+                    type="button"
+                    onClick={() =>
+                      patchBadge({
+                        layout: { ...post.badge.layout, anchor, ...positionFor(anchor) },
+                      })
+                    }
+                    aria-label={anchor}
+                    aria-pressed={anchor === post.badge.layout.anchor}
+                    className={`h-7 rounded-[4px] border cursor-pointer transition-colors ${
+                      anchor === post.badge.layout.anchor
+                        ? 'border-accent bg-accent'
+                        : 'border-line bg-paper hover:border-line-strong'
+                    }`}
+                  />
+                ))}
+              </div>
+              <label className="flex-1 flex flex-col gap-1">
+                <span className={legend}>
+                  Numeral · {Math.round(post.badge.layout.sizeFrac * 100)}%
+                </span>
+                <input
+                  type="range"
+                  min={0.05}
+                  max={0.4}
+                  step={0.005}
+                  value={post.badge.layout.sizeFrac}
+                  onChange={(e) =>
                     patchBadge({
-                      layout: { ...post.badge.layout, anchor, ...positionFor(anchor) },
+                      layout: { ...post.badge.layout, sizeFrac: Number(e.target.value) },
                     })
                   }
-                  aria-label={anchor}
-                  aria-pressed={anchor === post.badge.layout.anchor}
-                  className={`h-8 rounded-[4px] border cursor-pointer transition-colors ${
-                    anchor === post.badge.layout.anchor
-                      ? 'border-accent bg-accent'
-                      : 'border-line bg-paper hover:border-line-strong'
-                  }`}
+                  className="accent-accent"
                 />
-              ))}
+              </label>
             </div>
-            <label className="flex flex-col gap-1">
-              <span className={legend}>
-                Numeral size · {Math.round(post.badge.layout.sizeFrac * 100)}%
-              </span>
-              <input
-                type="range"
-                min={0.05}
-                max={0.4}
-                step={0.005}
-                value={post.badge.layout.sizeFrac}
-                onChange={(e) =>
-                  patchBadge({
-                    layout: { ...post.badge.layout, sizeFrac: Number(e.target.value) },
-                  })
-                }
-                className="accent-accent"
-              />
-            </label>
           </div>
+
+          <Fold title="Piece · text, colour, animation" {...fold('piece')}>
+            <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-5 gap-1">
+                {BADGE_PIECES.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setPiece(p.id)}
+                    aria-pressed={piece === p.id}
+                    title={p.label}
+                    className={`px-1 py-1.5 rounded-paper border text-[0.68rem] cursor-pointer truncate transition-colors ${
+                      piece === p.id
+                        ? 'border-accent bg-accent-wash text-accent-ink font-semibold'
+                        : 'border-line bg-paper text-ink-soft hover:border-line-strong'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+
+              <label className="flex flex-col gap-1">
+                <span className={legend}>Text</span>
+                <input
+                  value={post.badge.textOverrides[piece] ?? ''}
+                  placeholder={content?.[piece] ?? '(nothing here)'}
+                  onChange={(e) =>
+                    patchBadge({
+                      textOverrides: {
+                        ...post.badge.textOverrides,
+                        [piece]: e.target.value,
+                      },
+                    })
+                  }
+                  className={inputClass}
+                />
+                <span className="text-[0.68rem] text-faint">
+                  Empty follows the trip — clearing it always gives the computed
+                  value back.
+                </span>
+              </label>
+
+              <PieceStylePanel style={pieceStyle} onChange={setPieceStyle} />
+            </div>
+          </Fold>
+
+          <Fold title="Style · shared by the whole trip" {...fold('style')}>
+            <StylePanel
+              theme={trip.theme}
+              onChange={(theme) => onChangeTrip({ ...trip, theme })}
+            />
+          </Fold>
+
+          <Fold title="Words · shared by the whole trip" {...fold('words')}>
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => onChangeTrip({ ...trip, badgeWords: { ...DEFAULT_BADGE_WORDS } })}
+                  className="flex-1 px-2 py-1.5 rounded-paper border border-line bg-paper text-[0.74rem] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
+                >
+                  English
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChangeTrip({ ...trip, badgeWords: { ...FRENCH_BADGE_WORDS } })}
+                  className="flex-1 px-2 py-1.5 rounded-paper border border-line bg-paper text-[0.74rem] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
+                >
+                  Français
+                </button>
+              </div>
+              {WORD_FIELDS.map((f) => (
+                <label key={f.key} className="flex items-center gap-2">
+                  <span className="w-24 flex-none text-[0.72rem] text-muted">
+                    {f.label}
+                  </span>
+                  <input
+                    value={trip.badgeWords[f.key]}
+                    onChange={(e) => patchWords({ [f.key]: e.target.value })}
+                    className={`${inputClass} flex-1 min-w-0`}
+                  />
+                </label>
+              ))}
+              <p className="m-0 text-[0.68rem] text-faint">
+                “{'{n}'}” in the N-years line is replaced by the number of years.
+              </p>
+            </div>
+          </Fold>
 
           {!content && (
             <p className="m-0 text-[0.78rem] text-[#9a3a23]" role="alert">

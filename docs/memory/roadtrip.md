@@ -59,6 +59,32 @@ Read before touching `src/tools/roadtrip/` or `src/shared/roadtrip/`, and before
 
 **The layout needs the frame's ASPECT**, because element `y` is a fraction of the height while `sizeFrac` is a fraction of the *shorter side*: on 9:16 a line of 0.17 covers 0.17 × 9/16 of the height. Stacking in raw `sizeFrac` spaces correctly on a square and pulls apart on a portrait frame — `heightFractionOf` is the one conversion, tested both ways.
 
+## The badge's words are DATA, and English is only their default (2026-08-23)
+
+**Decision.** The maintainer's instruction: "english by default, no need for french actually, give option to override text". So the fr/en enum is gone. The trip carries a `BadgeWords` record — six fields, English out of the box — and any single piece can additionally be replaced with free text per post (`PostBadge.textOverrides`). **Why this scope split**: the vocabulary is trip-wide (typing "Jour" 250 times is not an option), while "THE RED CENTRE" instead of the trip's name is a property of one post. A one-click Français button fills the six fields; it is a convenience, not a second built-in language.
+
+**An empty override means "computed", never "blank".** Clearing the field has to give the derived value back, or an override would be a one-way door with no way to see the real number again. Tested.
+
+**The v2 → v3 migration translates the retired enum into the vocabulary it stood for** rather than dropping it: a trip that was set to French keeps saying exactly what it said. A migration must never silently re-language published copy.
+
+## A piece may depart from the trip's style, and departure is two moves (2026-08-23)
+
+**Decision.** `BadgePieceStyle` (casing, ink, panel fill/radius/outline, animation) is applied in `badge-layout.ts` by writing the element's own value **and pinning exactly that key in `styleOverrides`**. Anything left unset stays fully themed, which is what keeps one preset change restyling the whole deck — the cascade in `title-styles.ts` already does the work, nothing new was invented.
+
+**Casing is applied to the STRING, then `uppercase` is pinned off.** Setting the element's `uppercase` flag would let a theme that uppercases undo a deliberate lowercase; transforming the text and pinning the key is the only way round that survives a theme change. Tested both ways.
+
+**An outline with no fill is a real look** — a hairline frame around the trip's name — so `borderColor` alone builds a `box` with a transparent fill rather than requiring a background first.
+
+**Animation is the engine's own model, with no translation layer** (`shared/overlay/animation.ts`): the same fade / slide / scale / typewriter / wipe the studio's intro titles use, so a look authored on a badge means the same thing there. An animated piece is given `window = {start: 0, end: null}` — an animation needs a life to play inside, and a badge lives for the whole shot. `badgeSettleSeconds` is what a still defaults to, so a PNG is never caught mid-slide; it ignores exits deliberately (a still wants the badge settled, not gone).
+
+## The engine's legibility box gained a radius and an outline (2026-08-23)
+
+**Decision.** `LegibilityStyle` grew optional `radiusFrac`, `borderColor` and `borderWidthFrac`, and all four draw sites now go through one `paintLegibilityBox` helper. Before this each site hard-coded `pad * 0.5` and none could stroke. `radiusFrac` is a fraction of the PADDING and defaults to 0.5 precisely so every stored document keeps the exact shape it had. **How to apply**: the memory rule about `measureOverlays` still holds — the stroke sits on the box's own path, so half of it lies outside, and the grab box was widened by that half.
+
+## The picture follows the Library selection (2026-08-23)
+
+**Decision.** The badge composes over whatever is active in the shared Library sidebar (`useActiveAsset`), and the two stay in step both ways: opening a post activates its stored picture, and picking another asset in the sidebar re-points the post. **Why**: the maintainer asked for it by name to cut friction — a dropdown duplicating the sidebar is a second list to keep in sync by hand. **The trap to respect**: the restore must run only once and only after the library has loaded, and the record-back effect must be gated on it having run — otherwise the first render writes whatever happened to be active over the post's own choice.
+
 ## The default badge look is `neutral`, and that was measured (2026-08-23)
 
 **Decision.** A new trip adopts the `neutral` preset (white, drop shadow). The first cut adopted `plein-cadre` on the reasoning that a badge is a signature — **wrong in the browser**: flat vermilion over warm footage all but vanishes, and warm footage is most of a desert road trip. A badge lands on a photograph nobody has vetted, unlike a studio overlay whose author is watching the clip; the default has to survive that.
@@ -74,8 +100,8 @@ The Library's "Add files" button filtered to `video/*,.srt` only, so a photo cou
 ## Open, and decided but not built (2026-08-23)
 
 - **The `.roadtrip.json` export is the safety net the maintainer asked for by name** — he expects to pull a JSON out weekly so a cleared IndexedDB cannot cost him a year of tracking. Follow `projects/project-file.ts` exactly (portable half only, `{ok:false, error}` parsing, refuse a file from a newer version). Agreed shape of the reminder: a **discreet banner** ("last export 12 days ago"), never a blocking prompt. Not built.
-- **The badge still only comes out as a PNG.** Burning it into a clip means handing the same elements to the Studio's export path, which is a real integration (a project would have to carry a trip reference, or the elements would have to be importable). Not started, and the maintainer has not asked for it in those terms yet — he asked for "an overlay in my drone videos", which this is half of.
-- **The three visual directions drawn in the design pass were never formally chosen.** They now exist as the four title-style presets in the Style picker, so the choice is one dropdown rather than a code change — but he has not said which one is the signature.
+- **The three visual directions drawn in the design pass were never formally chosen.** They now exist as the four title-style presets in the Style picker (the studio's own `StylePanel`, moved to `shared/overlay/` when Road Trip became its second consumer), so the choice is one click rather than a code change — but he has not said which one is the signature.
+- **A badge can be animated but only exports as a still.** The PNG renders at the preview's current time. Burning a moving hook into a clip means handing the same elements to the studio's WebCodecs export, which is the natural next chantier now that the animation model is shared.
 - **Carousels are a later phase**: a post becomes an ordered list of slides with a role (intro / content / CTA), and the closing call-to-action slide is a **single global template edited once** (his choice), reinjected automatically — not re-authored per post. For a reel the hook rides the Studio's existing intro *scene* rather than a new mechanism, and the CTA stays a separate end card rather than being baked into the export.
 - **Time Machine** (an animated counter winding back to the media's day) and an API into his own geolocated media-triage system are wanted but explicitly last: both were discussed as "after the rest works".
 - Element positioning is **not** fixed to a corner — he rejected a pinned top/side badge; placement is free, which is what the shared overlay engine already gives.

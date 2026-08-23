@@ -16,6 +16,8 @@ interface BadgeStageProps {
   aspect: number;
   elements: OverlayElement[];
   theme: StyleTheme | null;
+  /** Where the badge's own animations are up to, in seconds. */
+  timeSeconds: number;
   onSourceLoaded?: (info: { width: number; height: number; duration: number }) => void;
 }
 
@@ -30,6 +32,7 @@ export default function BadgeStage({
   aspect,
   elements,
   theme,
+  timeSeconds,
   onSourceLoaded,
 }: BadgeStageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -49,7 +52,7 @@ export default function BadgeStage({
       // Still paint: an empty frame with its badge is a legitimate thing to
       // look at while choosing a picture.
       const canvas = canvasRef.current;
-      if (canvas) void renderBadge(canvas, { source: null, elements, theme });
+      if (canvas) void renderBadge(canvas, { source: null, elements, theme, timeSeconds });
       return;
     }
 
@@ -89,8 +92,13 @@ export default function BadgeStage({
     const { w, h } = frameSize(aspect, PREVIEW_LONG_EDGE);
     canvas.width = w;
     canvas.height = h;
-    void renderBadge(canvas, { source: sourceRef.current, elements, theme });
-  }, [aspect, elements, theme, loading, file, videoTimeSeconds]);
+    void renderBadge(canvas, {
+      source: sourceRef.current,
+      elements,
+      theme,
+      timeSeconds,
+    });
+  }, [aspect, elements, theme, timeSeconds, loading, file, videoTimeSeconds]);
 
   useEffect(() => () => sourceRef.current?.release(), []);
 

@@ -1,23 +1,29 @@
 /**
  * The badge as OVERLAY ELEMENTS — not as a second rendering system.
  *
- * `shared/overlay/` already knows how to place, style, theme, glow and burn in
- * a piece of text, in the preview and in both export paths. So the badge is
- * built out of ordinary `text` elements and handed to `drawOverlays`: it
- * inherits the title-style presets (Or ciné, Pixel CRT, Rouge plein cadre —
- * the three directions drawn in the design pass) for free, and the engine
- * never learns that trips exist. This is the same lesson as the studio's
- * intro: extend the element model, do not add a parallel class of thing.
+ * `shared/overlay/` already knows how to place, style, theme, glow, animate
+ * and burn in a piece of text, in the preview and in both export paths. So the
+ * badge is built out of ordinary `text` elements and handed to `drawOverlays`:
+ * it inherits the title-style presets, the legibility panel and the whole
+ * animation model (fade, slide, typewriter…) for free, and the engine never
+ * learns that trips exist. Same lesson as the studio's intro: extend the
+ * element model, do not add a parallel class of thing.
+ *
+ * Per-piece styling therefore reduces to two moves — write the element's own
+ * value, and pin the matching key in `styleOverrides` so the trip's theme
+ * stops supplying it. Anything left unset stays fully themed, which is what
+ * keeps one preset change restyling the whole deck.
  *
  * Pure and DOM-free.
  */
 
+import type { ElementAnimation } from '../overlay/animation';
 import {
   createTextElement,
   type Anchor,
   type OverlayElement,
 } from '../overlay/overlay-types';
-import type { BadgeContent } from './day-badge';
+import type { BadgeContent, BadgePiece } from './day-badge';
 
 /** Where the block sits and how big its numeral is. */
 export interface BadgeLayout {
@@ -35,6 +41,27 @@ export const DEFAULT_BADGE_LAYOUT: BadgeLayout = {
   y: 0.9,
   sizeFrac: 0.17,
 };
+
+/** How one piece departs from the trip's theme. Every field is optional. */
+export interface BadgePieceStyle {
+  /** `as-is` follows the theme's own casing; the other two force it. */
+  textCase?: 'as-is' | 'upper' | 'lower';
+  /** Ink. Null or absent = the theme's colour. */
+  color?: string | null;
+  /** Panel fill behind the text. Null or absent = no panel. */
+  boxColor?: string | null;
+  /** Panel padding, as a fraction of the piece's font size. */
+  boxPadFrac?: number;
+  /** Corner radius as a fraction of the padding (0 square, large = pill). */
+  boxRadiusFrac?: number;
+  /** Panel outline. Null or absent = no outline. */
+  borderColor?: string | null;
+  borderWidthFrac?: number;
+  /** Entrance and exit. Absent = the piece simply is there. */
+  animation?: ElementAnimation | null;
+}
+
+export type BadgePieceStyles = Partial<Record<BadgePiece, BadgePieceStyle>>;
 
 /**
  * Each piece's size as a multiple of the headline's, in drawing order. The
@@ -59,8 +86,13 @@ const GAP_AFTER = {
   caption: 0,
 } as const;
 
-type PieceKey = keyof typeof RATIOS;
-const ORDER: readonly PieceKey[] = ['kicker', 'label', 'headline', 'counter', 'caption'];
+const ORDER: readonly BadgePiece[] = [
+  'kicker',
+  'label',
+  'headline',
+  'counter',
+  'caption',
+];
 
 /**
  * A size expressed as a fraction of the SHORTER side, converted to a fraction
@@ -89,6 +121,62 @@ function verticalOf(anchor: Anchor): 'top' | 'center' | 'bottom' {
   return 'center';
 }
 
+/** The author's casing, applied to the string rather than to the element. */
+function casedText(text: string, style: BadgePieceStyle | undefined): string {
+  if (style?.textCase === 'upper') return text.toLocaleUpperCase();
+  if (style?.textCase === 'lower') return text.toLocaleLowerCase();
+  return text;
+}
+
+/**
+ * Write one piece's departures onto its element and pin exactly those keys
+ * against the theme. Casing is applied to the TEXT and then `uppercase` is
+ * pinned off, so a theme that uppercases cannot undo a deliberate lowercase.
+ */
+function applyPieceStyle(el: OverlayElement, style: BadgePieceStyle | undefined): void {
+  const pinned: string[] = [];
+
+  if (style?.textCase && style.textCase !== 'as-is') {
+    el.uppercase = false;
+    pinned.push('uppercase');
+  }
+  if (style?.color) {
+    el.color = style.color;
+    pinned.push('color');
+  }
+  if (style?.boxColor) {
+    el.legibility = {
+      mode: 'box',
+      color: style.boxColor,
+      padFrac: style.boxPadFrac ?? 0.3,
+      radiusFrac: style.boxRadiusFrac ?? 0.5,
+      borderColor: style.borderColor ?? null,
+      borderWidthFrac: style.borderWidthFrac ?? 0,
+    };
+    pinned.push('legibility');
+  } else if (style?.borderColor) {
+    // An outline with no fill is a legitimate look — a hairline frame around
+    // the trip's name — so it does not require picking a background first.
+    el.legibility = {
+      mode: 'box',
+      color: 'rgba(0,0,0,0)',
+      padFrac: style.boxPadFrac ?? 0.3,
+      radiusFrac: style.boxRadiusFrac ?? 0.5,
+      borderColor: style.borderColor,
+      borderWidthFrac: style.borderWidthFrac ?? 0.06,
+    };
+    pinned.push('legibility');
+  }
+  if (style?.animation) {
+    el.animation = style.animation;
+    // An animation needs a life to play inside. The badge lives for the whole
+    // shot, so only the entrance and exit are ever on screen.
+    el.window = { start: 0, end: null };
+  }
+
+  el.styleOverrides = pinned;
+}
+
 /**
  * The badge's overlay elements, top to bottom. Pieces that are null are
  * skipped entirely — no placeholder, no reserved space — so a badge with no
@@ -100,9 +188,10 @@ export function badgeElements(
   content: BadgeContent,
   layout: BadgeLayout,
   aspect: number,
+  styles: BadgePieceStyles = {},
 ): OverlayElement[] {
   const pieces = ORDER.map((key) => ({ key, text: content[key] })).filter(
-    (p): p is { key: PieceKey; text: string } => Boolean(p.text),
+    (p): p is { key: BadgePiece; text: string } => Boolean(p.text),
   );
   if (!pieces.length) return [];
 
@@ -129,15 +218,29 @@ export function badgeElements(
 
   let cursor = top;
   return pieces.map((piece, i) => {
-    const el = createTextElement(piece.text);
+    const style = styles[piece.key];
+    const el = createTextElement(casedText(piece.text, style));
     el.anchor = lineAnchor;
     el.x = layout.x;
     el.y = cursor;
     el.sizeFrac = layout.sizeFrac * RATIOS[piece.key];
-    // The badge is a themed block: appearance comes from the project's title
-    // style, so no element pins an override of its own.
-    el.styleOverrides = [];
+    applyPieceStyle(el, style);
     cursor += heights[i] + gaps[i];
     return el;
   });
+}
+
+/**
+ * How long the badge's animations take to settle, in seconds — what a still
+ * export defaults to, so the PNG is never caught mid-slide. Zero when nothing
+ * is animated.
+ */
+export function badgeSettleSeconds(styles: BadgePieceStyles): number {
+  let settled = 0;
+  for (const style of Object.values(styles)) {
+    const step = style?.animation?.in;
+    if (!step) continue;
+    settled = Math.max(settled, (step.delay ?? 0) + step.duration);
+  }
+  return settled;
 }

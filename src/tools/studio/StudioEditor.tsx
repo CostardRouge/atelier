@@ -83,7 +83,7 @@ import { useOverlayStage } from '../../shared/overlay/use-overlay-stage';
 import { useLutStack } from '../../shared/lut/use-lut-stack';
 import GradePanel from './GradePanel';
 import type { StyleTheme } from '../../shared/overlay/title-styles';
-import StylePanel from './StylePanel';
+import StylePanel from '../../shared/overlay/StylePanel';
 import ProjectSettingsModal, { type ProjectSettingsDraft } from './ProjectSettingsModal';
 import {
   projectFileName,

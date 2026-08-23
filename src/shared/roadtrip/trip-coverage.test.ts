@@ -8,6 +8,7 @@ import {
   tripCoverage,
 } from './trip-coverage';
 import type { IsoDate } from './trip-days';
+import { DEFAULT_BADGE_WORDS } from './day-badge';
 import {
   defaultPostBadge,
   type PostKind,
@@ -53,7 +54,7 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   endDate: '2025-03-10',
   stages: [],
   posts: [],
-  badgeLanguage: 'fr',
+  badgeWords: { ...DEFAULT_BADGE_WORDS },
   theme: null,
   createdAt: 0,
   updatedAt: 0,

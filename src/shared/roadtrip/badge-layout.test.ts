@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_BADGE_LAYOUT,
   badgeElements,
+  badgeSettleSeconds,
   heightFractionOf,
   type BadgeLayout,
+  type BadgePieceStyles,
 } from './badge-layout';
 import type { BadgeContent } from './day-badge';
 
@@ -131,7 +133,7 @@ describe('badgeElements', () => {
     expect(reelSpan).toBeCloseTo(wideSpan * (9 / 16), 6);
   });
 
-  it('leaves every element fully themed', () => {
+  it('leaves every element fully themed when no piece departs', () => {
     const els = badgeElements(full, layout(), REEL);
     expect(els.every((e) => e.styleOverrides?.length === 0)).toBe(true);
   });
@@ -139,5 +141,99 @@ describe('badgeElements', () => {
   it('gives each element a distinct id', () => {
     const els = badgeElements(full, layout(), REEL);
     expect(new Set(els.map((e) => e.id)).size).toBe(els.length);
+  });
+});
+
+describe('badgeElements — per-piece styles', () => {
+  const kickerOf = (styles: BadgePieceStyles) =>
+    badgeElements(full, layout(), REEL, styles)[0];
+
+  it('forces the case on the TEXT and pins uppercase off', () => {
+    // Casing the string rather than the element is what stops a theme that
+    // uppercases from undoing a deliberate lowercase.
+    const upper = kickerOf({ kicker: { textCase: 'upper' } });
+    expect(upper.text).toBe('AUSTRALIE');
+    expect(upper.uppercase).toBe(false);
+    expect(upper.styleOverrides).toContain('uppercase');
+
+    const lower = kickerOf({ kicker: { textCase: 'lower' } });
+    expect(lower.text).toBe('australie');
+  });
+
+  it('leaves casing to the theme on as-is', () => {
+    const el = kickerOf({ kicker: { textCase: 'as-is' } });
+    expect(el.text).toBe('Australie');
+    expect(el.styleOverrides).not.toContain('uppercase');
+  });
+
+  it('pins only the keys a piece actually departs on', () => {
+    const el = kickerOf({ kicker: { color: '#ff0000' } });
+    expect(el.color).toBe('#ff0000');
+    expect(el.styleOverrides).toEqual(['color']);
+  });
+
+  it('builds a filled panel from a background colour', () => {
+    const el = kickerOf({
+      kicker: { boxColor: '#d9442a', boxPadFrac: 0.4, boxRadiusFrac: 2 },
+    });
+    expect(el.legibility).toMatchObject({
+      mode: 'box',
+      color: '#d9442a',
+      padFrac: 0.4,
+      radiusFrac: 2,
+    });
+    expect(el.styleOverrides).toContain('legibility');
+  });
+
+  it('allows an outline with no fill — a hairline frame is a real look', () => {
+    const el = kickerOf({ kicker: { borderColor: '#ffffff' } });
+    expect(el.legibility?.mode).toBe('box');
+    expect(el.legibility?.color).toBe('rgba(0,0,0,0)');
+    expect(el.legibility?.borderColor).toBe('#ffffff');
+    expect(el.legibility?.borderWidthFrac).toBeGreaterThan(0);
+  });
+
+  it('gives an animated piece a window to play inside', () => {
+    const el = kickerOf({
+      kicker: { animation: { in: { preset: 'fade', duration: 0.4, easing: 'out' } } },
+    });
+    expect(el.animation?.in?.preset).toBe('fade');
+    expect(el.window).toEqual({ start: 0, end: null });
+  });
+
+  it('leaves an unstyled piece alone even when its neighbour is styled', () => {
+    const els = badgeElements(full, layout(), REEL, {
+      kicker: { color: '#ff0000' },
+    });
+    const headline = els.find((e) => e.text === '27')!;
+    expect(headline.styleOverrides).toEqual([]);
+    expect(headline.window).toBeUndefined();
+  });
+});
+
+describe('badgeSettleSeconds', () => {
+  it('is zero when nothing is animated', () => {
+    expect(badgeSettleSeconds({})).toBe(0);
+  });
+
+  it('is the latest entrance to finish, delay included', () => {
+    expect(
+      badgeSettleSeconds({
+        kicker: { animation: { in: { preset: 'fade', duration: 0.4, easing: 'out' } } },
+        headline: {
+          animation: {
+            in: { preset: 'slide', duration: 0.5, easing: 'out', delay: 0.8 },
+          },
+        },
+      }),
+    ).toBeCloseTo(1.3, 6);
+  });
+
+  it('ignores exits — a still wants the badge settled, not gone', () => {
+    expect(
+      badgeSettleSeconds({
+        kicker: { animation: { out: { preset: 'fade', duration: 3, easing: 'in' } } },
+      }),
+    ).toBe(0);
   });
 });

@@ -339,18 +339,36 @@ a carousel or a single photo.
 
 **The hook.** Open a piece and you compose its badge over the picture: the
 number the trip gives it, big, with everything else deliberately subordinate —
-"Australie · Jour · **27** · sur 310 · Kalbarri". It counts four ways (day of
-trip, a range of days, the day at a place, how long you stayed), can lead with
-"il y a 1 an" once a year has actually passed, and reads in French or English.
-Pick a frame (9:16, 4:5, 1:1, 16:9), place the block on a 3×3 grid, size the
-numeral, and export a PNG — ready as a Reel's opening frame or a carousel's
-first slide.
+"Australia · Day · **27** · of 310 · Kalbarri". It counts four ways (day of
+trip, a range of days, the day at a place, how long you stayed) and can lead
+with "1 year ago today" once a year has actually passed. Pick a frame (9:16,
+4:5, 1:1, 16:9), place the block on a 3×3 grid, size the numeral, and export a
+PNG — ready as a Reel's opening frame or a carousel's first slide.
+
+**The picture is whatever is ticked in the Library**, and the two stay in step:
+opening a piece points the Library at its picture, and picking another one
+there re-points the piece. Videos work as well as photos, with a frame
+scrubber.
+
+**Every word is yours.** The badge is written in English out of the box and
+each of its six words is a field on the trip, so writing the deck in French is
+six inputs (there is a one-click French button) rather than a language setting
+with two options. On top of that any single piece — the trip name, the word,
+the numeral, the total, the place — can be replaced with free text per post;
+clearing the field always gives the computed value back.
+
+**Each piece can depart from the trip's style**: its casing (as-is, UPPER,
+lower), its ink, a panel behind it (fill, corner radius, outline) and an
+entrance and exit drawn from the engine's own animation model — fade, slide,
+scale, typewriter, wipe, with duration, easing and a stagger delay. A transport
+under the preview plays the badge so you can see the entrance land.
 
 The badge is built out of the **same overlay engine the Studio uses**, not a
-second rendering system: it is a stack of ordinary text elements, so it inherits
-the title-style presets (Neutral, Or ciné, Pixel CRT, Rouge plein cadre) for
-free and the preview is the export at a smaller size. The style belongs to the
-**trip**, not to the post — a badge that varies per post stops being the
+second rendering system: it is a stack of ordinary text elements, so it
+inherits the title-style presets (Neutral, Or ciné, Pixel CRT, Rouge plein
+cadre) — through the very same style picker the Studio's Style tab uses — and
+the preview is the export at a smaller size. The style and the words belong to
+the **trip**, not to the post: a badge that varies per post stops being the
 signature that makes a post recognisable in a feed.
 
 **Nothing is keyed by a file name.** A post records the *day* it tells, never a
@@ -362,9 +380,10 @@ database and autosave as you edit; a refused write (private window, full disk)
 is said out loud rather than swallowed.
 
 Currently in place: the trip, its days, the grid, day-keyed posts, and the badge
-through to a PNG. Multi-slide carousels with a call-to-action ending, burning
-the hook into a clip through the Studio, and a portable `.json` export of a trip
-are the phases that follow.
+— words, per-piece styling and animation — through to a PNG. Multi-slide
+carousels with a call-to-action ending, burning an animated hook into a clip
+through the Studio's video export, and a portable `.json` export of a trip are
+the phases that follow.
 
 ## Telemetry tool
 

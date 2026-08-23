@@ -22,10 +22,10 @@ const stage = (
 });
 
 describe('createTripDoc', () => {
-  it('is born at the current version, with a badge look and language', () => {
+  it('is born at the current version, in English, with a safe badge look', () => {
     const doc = createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04');
     expect(doc.version).toBe(TRIP_DOC_VERSION);
-    expect(doc.badgeLanguage).toBe('fr');
+    expect(doc.badgeWords.day).toBe('Day');
     expect(doc.theme?.presetId).toBe('neutral');
   });
 
@@ -103,6 +103,78 @@ describe('migrateTripDoc', () => {
   it('leaves a current document untouched', () => {
     const doc = createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04');
     expect(migrateTripDoc(doc)).toBe(doc);
+  });
+});
+
+describe('migrateTripDoc — v2 → v3', () => {
+  /** A v2 document: the language enum, no overrides, no piece styles. */
+  const v2 = (badgeLanguage: string) =>
+    ({
+      version: 2,
+      id: 't2',
+      name: 'Australie',
+      destination: 'Australia',
+      startDate: '2025-03-01',
+      endDate: '2026-01-04',
+      stages: [],
+      badgeLanguage,
+      theme: null,
+      posts: [
+        {
+          id: 'p1',
+          kind: 'photo',
+          date: '2025-03-27',
+          endDate: null,
+          title: 'Cliffs',
+          media: null,
+          badge: {
+            mode: 'day',
+            layout: { anchor: 'bottom-left', x: 0.07, y: 0.9, sizeFrac: 0.17 },
+            showAnniversary: false,
+            aspectId: '4:5',
+            videoTimeSeconds: 0,
+          },
+          publishedAt: null,
+          createdAt: 0,
+        },
+      ],
+      createdAt: 0,
+      updatedAt: 0,
+    }) as unknown as TripDoc;
+
+  it('keeps a French deck saying exactly what it said', () => {
+    // The enum is translated into the vocabulary it stood for, never dropped —
+    // a migration must not silently re-language published copy.
+    const doc = migrateTripDoc(v2('fr'));
+    expect(doc.badgeWords).toMatchObject({ day: 'Jour', of: 'sur', at: 'à' });
+  });
+
+  it('lands an English deck on the English words', () => {
+    expect(migrateTripDoc(v2('en')).badgeWords).toMatchObject({
+      day: 'Day',
+      of: 'of',
+    });
+  });
+
+  it('drops the retired enum rather than leaving it to rot beside the words', () => {
+    const doc = migrateTripDoc(v2('fr'));
+    expect('badgeLanguage' in doc).toBe(false);
+  });
+
+  it('gives every post its overrides and piece styles, empty', () => {
+    const doc = migrateTripDoc(v2('en'));
+    expect(doc.posts[0].badge.textOverrides).toEqual({});
+    expect(doc.posts[0].badge.pieceStyles).toEqual({});
+  });
+
+  it('keeps what the v2 badge already said', () => {
+    const doc = migrateTripDoc(v2('en'));
+    expect(doc.posts[0].badge).toMatchObject({ mode: 'day', aspectId: '4:5' });
+  });
+
+  it('is idempotent', () => {
+    const once = migrateTripDoc(v2('fr'));
+    expect(migrateTripDoc(once)).toEqual(once);
   });
 });
 

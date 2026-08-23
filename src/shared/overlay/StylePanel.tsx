@@ -2,7 +2,7 @@ import {
   CURATED_FONTS,
   type FontWeight,
   type OverlayFontFamily,
-} from '../../shared/overlay/overlay-types';
+} from './overlay-types';
 import {
   glowLayersFor,
   themeFromPreset,
@@ -10,10 +10,21 @@ import {
   type GlowLayers,
   type StyleTheme,
   type TitleStyle,
-} from '../../shared/overlay/title-styles';
-import { previewTextStyle } from '../../shared/overlay/style-preview';
+} from './title-styles';
+import { previewTextStyle } from './style-preview';
 import { useState } from 'react';
 
+/**
+ * The title-style picker: preset cards, then the theme's own knobs (font,
+ * weight, case, colour, letter-spacing, legibility, the one glow slider and
+ * its advanced per-layer disclosure).
+ *
+ * It lives in the shared engine rather than in the studio because more than
+ * one tool adopts a theme now — Road Trip's day badge wears one too, and
+ * `shared/` never imports `tools/`, so a second consumer meant moving the
+ * generic half out rather than reaching across tools. Same move the element
+ * list and the guides control already made.
+ */
 interface StylePanelProps {
   theme: StyleTheme | null;
   onChange: (theme: StyleTheme | null) => void;

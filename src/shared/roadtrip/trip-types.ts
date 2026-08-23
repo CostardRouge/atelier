@@ -20,10 +20,20 @@
 import { isIsoDate, isWithin, type IsoDate } from './trip-days';
 import type { SavedMediaRef } from '../projects/project-types';
 import { themeFromPreset, type StyleTheme } from '../overlay/title-styles';
-import { DEFAULT_BADGE_LAYOUT, type BadgeLayout } from './badge-layout';
-import type { BadgeLanguage, CounterMode } from './day-badge';
+import {
+  DEFAULT_BADGE_LAYOUT,
+  type BadgeLayout,
+  type BadgePieceStyles,
+} from './badge-layout';
+import {
+  DEFAULT_BADGE_WORDS,
+  FRENCH_BADGE_WORDS,
+  type BadgePiece,
+  type BadgeWords,
+  type CounterMode,
+} from './day-badge';
 
-export const TRIP_DOC_VERSION = 2;
+export const TRIP_DOC_VERSION = 3;
 
 /**
  * The look every badge of a trip starts with. `neutral` — white with a drop
@@ -73,6 +83,14 @@ export interface PostBadge {
   aspectId: string;
   /** Frame of a video clip the badge sits on; ignored for a photo. */
   videoTimeSeconds: number;
+  /**
+   * Free text replacing a computed piece, per piece. An empty string means
+   * "computed", never "blank": clearing the field gives the derived value
+   * back, so an override is never a one-way door.
+   */
+  textOverrides: Partial<Record<BadgePiece, string>>;
+  /** How each piece departs from the trip's theme — case, colour, panel, animation. */
+  pieceStyles: BadgePieceStyles;
 }
 
 /** The frame each kind of post is delivered in, unless the author says otherwise. */
@@ -89,6 +107,8 @@ export function defaultPostBadge(kind: PostKind = 'photo'): PostBadge {
     showAnniversary: false,
     aspectId: ASPECT_FOR_KIND[kind],
     videoTimeSeconds: 0,
+    textOverrides: {},
+    pieceStyles: {},
   };
 }
 
@@ -131,8 +151,13 @@ export interface TripDoc {
   endDate: IsoDate;
   stages: TripStage[];
   posts: TripPost[];
-  /** The language the badges are WRITTEN in — published copy, not UI chrome. */
-  badgeLanguage: BadgeLanguage;
+  /**
+   * Every word the badges say. English out of the box and editable field by
+   * field, so writing the deck in another language is six inputs rather than a
+   * second vocabulary in the code — and badge copy is published content, which
+   * the author must always have the last word on.
+   */
+  badgeWords: BadgeWords;
   /**
    * The title style every badge of this trip wears. Per trip, not per post,
    * on purpose: a constant badge is what makes a post recognisable in a feed
@@ -159,7 +184,7 @@ export function createTripDoc(
     endDate,
     stages: [],
     posts: [],
-    badgeLanguage: 'fr',
+    badgeWords: { ...DEFAULT_BADGE_WORDS },
     theme: themeFromPreset(DEFAULT_THEME_PRESET),
     createdAt: now,
     updatedAt: now,
@@ -234,21 +259,42 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * runs it on read.
  *
  * v1 → v2 adds the badge: a media hint and badge settings per post, and the
- * language and title style per trip. This is the one migration that may adopt
- * a LOOK rather than preserving one, and it is safe precisely because it can
- * change nothing: no v1 post had a badge at all, so there is no existing
- * rendering for a theme to alter.
+ * title style per trip. This is the one migration that may adopt a LOOK rather
+ * than preserving one, and it is safe precisely because it can change nothing:
+ * no v1 post had a badge at all, so there is no existing rendering to alter.
+ *
+ * v2 → v3 replaces the fr/en language enum with the words themselves, and
+ * gives each post its text overrides and per-piece styles. A trip that was set
+ * to French keeps saying exactly what it said: the enum is translated into the
+ * vocabulary it stood for rather than dropped.
  */
 export function migrateTripDoc(doc: TripDoc): TripDoc {
   if (doc.version >= TRIP_DOC_VERSION) return doc;
   const migrated = { ...doc };
   if (migrated.version < 2) {
-    migrated.badgeLanguage = migrated.badgeLanguage ?? 'fr';
     migrated.theme = migrated.theme ?? themeFromPreset(DEFAULT_THEME_PRESET);
     migrated.posts = (migrated.posts ?? []).map((post) => ({
       ...post,
       media: post.media ?? null,
       badge: post.badge ?? defaultPostBadge(post.kind),
+    }));
+  }
+  if (migrated.version < 3) {
+    // v2 stored a two-value language enum; v3 stores the words themselves.
+    // A trip that was set to French keeps saying exactly what it said — the
+    // enum is translated into the vocabulary it stood for, not dropped.
+    const legacy = (migrated as unknown as { badgeLanguage?: string }).badgeLanguage;
+    migrated.badgeWords = migrated.badgeWords ?? {
+      ...(legacy === 'fr' ? FRENCH_BADGE_WORDS : DEFAULT_BADGE_WORDS),
+    };
+    delete (migrated as unknown as { badgeLanguage?: string }).badgeLanguage;
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      badge: {
+        ...post.badge,
+        textOverrides: post.badge?.textOverrides ?? {},
+        pieceStyles: post.badge?.pieceStyles ?? {},
+      },
     }));
   }
   migrated.version = TRIP_DOC_VERSION;

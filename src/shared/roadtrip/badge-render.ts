@@ -145,6 +145,12 @@ export interface RenderBadgeOptions {
   source: BadgeSource | null;
   elements: OverlayElement[];
   theme: StyleTheme | null;
+  /**
+   * Where the badge's animations are up to, in seconds from the first frame.
+   * Windows and entrances are counted from zero here — a badge has no clip to
+   * be trimmed against, so `originSeconds` is always 0.
+   */
+  timeSeconds?: number;
   /** Painted where no picture covers the frame. */
   background?: string;
 }
@@ -174,7 +180,11 @@ export async function renderBadge(
   // Fonts must be resident before the first fillText or the badge draws in a
   // fallback face and silently changes width.
   await ensureOverlayFonts(opts.elements, opts.theme);
-  drawOverlays(ctx, opts.elements, null, w, h, { theme: opts.theme });
+  drawOverlays(ctx, opts.elements, null, w, h, {
+    theme: opts.theme,
+    timeSeconds: opts.timeSeconds ?? 0,
+    originSeconds: 0,
+  });
 }
 
 /** Render at full size and hand back a PNG — lossless, since text is the point. */

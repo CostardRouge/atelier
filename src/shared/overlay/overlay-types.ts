@@ -100,6 +100,21 @@ export interface LegibilityStyle {
   color: string;
   /** Padding (box) or blur (shadow) as a fraction of font size. */
   padFrac: number;
+  /**
+   * `box` only. Corner radius as a fraction of the PADDING, so the default
+   * 0.5 reproduces exactly what the box drew before the knob existed and no
+   * stored document changes shape. Large values are clamped to a pill by
+   * `roundRectPath`; 0 is a hard rectangle.
+   */
+  radiusFrac?: number;
+  /** `box` only. Outline colour; absent or null draws no outline. */
+  borderColor?: string | null;
+  /**
+   * `box` only. Outline width as a fraction of the font size. The stroke sits
+   * on the box's own path, so half of it lies outside — `measureOverlays`
+   * widens the grab box by that half.
+   */
+  borderWidthFrac?: number;
 }
 
 export interface OverlayElement {

@@ -411,17 +411,7 @@ function drawArrow(
 
   // --- axis-aligned background box (never rotated) ---
   if (st.legibility.mode === 'box') {
-    const pad = st.legibility.padFrac * r;
-    ctx.fillStyle = st.legibility.color;
-    roundRectPath(
-      ctx,
-      -halfSize - pad,
-      -halfSize - pad,
-      (halfSize + pad) * 2,
-      (halfSize + pad) * 2,
-      pad * 0.5,
-    );
-    ctx.fill();
+    paintLegibilityBox(ctx, st, -halfSize, -halfSize, halfSize * 2, halfSize * 2, r);
   }
 
   // --- compass decoration ---
@@ -780,10 +770,7 @@ function drawBattery(
 
   ctx.save();
   if (st.legibility.mode === 'box') {
-    const pad = st.legibility.padFrac * fontPx;
-    ctx.fillStyle = st.legibility.color;
-    roundRectPath(ctx, lay.x - pad, lay.y - pad, lay.w + pad * 2, lay.h + pad * 2, pad * 0.5);
-    ctx.fill();
+    paintLegibilityBox(ctx, st, lay.x, lay.y, lay.w, lay.h, fontPx);
   } else if (st.legibility.mode === 'shadow') {
     ctx.shadowColor = st.legibility.color;
     ctx.shadowBlur = Math.max(1, st.legibility.padFrac * fontPx);
@@ -908,6 +895,48 @@ function drawFrameCorners(
 }
 
 /** Draw a rounded rectangle path (roundRect where available, else manual). */
+/**
+ * The `box` legibility panel: one filled (optionally outlined) rounded rect
+ * behind an element's content box. Every kind that offers `box` goes through
+ * here so the radius and the outline behave identically on all of them —
+ * before this, four call sites each hard-coded `pad * 0.5` and none could
+ * stroke.
+ *
+ * `x/y/w/h` are the CONTENT box; the padding is added here. `unitPx` is the
+ * element's font size (or its equivalent for a shape), which every fraction in
+ * `LegibilityStyle` is relative to.
+ */
+function paintLegibilityBox(
+  ctx: Ctx2D,
+  st: ResolvedStyle,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  unitPx: number,
+): void {
+  const leg = st.legibility;
+  const pad = leg.padFrac * unitPx;
+  ctx.save();
+  roundRectPath(
+    ctx,
+    x - pad,
+    y - pad,
+    w + pad * 2,
+    h + pad * 2,
+    pad * (leg.radiusFrac ?? 0.5),
+  );
+  ctx.fillStyle = leg.color;
+  ctx.fill();
+  const borderW = (leg.borderWidthFrac ?? 0) * unitPx;
+  if (leg.borderColor && borderW > 0) {
+    ctx.strokeStyle = leg.borderColor;
+    ctx.lineWidth = borderW;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function roundRectPath(
   ctx: Ctx2D,
   x: number,
@@ -1381,10 +1410,7 @@ function drawRotateDevice(
 
   ctx.save();
   if (st.legibility.mode === 'box') {
-    const pad = st.legibility.padFrac * lay.fontPx;
-    ctx.fillStyle = st.legibility.color;
-    roundRectPath(ctx, lay.x - pad, lay.y - pad, lay.w + pad * 2, lay.h + pad * 2, pad * 0.5);
-    ctx.fill();
+    paintLegibilityBox(ctx, st, lay.x, lay.y, lay.w, lay.h, lay.fontPx);
   } else if (st.legibility.mode === 'shadow') {
     ctx.shadowColor = st.legibility.color;
     ctx.shadowBlur = Math.max(1, st.legibility.padFrac * lay.fontPx);
@@ -1490,18 +1516,7 @@ function drawTextElement(
   }
 
   if (st.legibility.mode === 'box') {
-    ctx.save();
-    ctx.fillStyle = st.legibility.color;
-    roundRectPath(
-      ctx,
-      lay.x - pad,
-      lay.y - pad,
-      lay.w + pad * 2,
-      lay.h + pad * 2,
-      pad * 0.5,
-    );
-    ctx.fill();
-    ctx.restore();
+    paintLegibilityBox(ctx, st, lay.x, lay.y, lay.w, lay.h, lay.fontPx);
   }
 
   if (st.glow) {
@@ -1761,8 +1776,12 @@ export function measureOverlays(
     // The grab box must cover everything painted: legibility padding, and the
     // glow's bleed when the element carries one (a glow clipped out of its
     // own hit-box would be undraggable at the edges).
+    const border =
+      lay.st.legibility.mode === 'box'
+        ? (lay.st.legibility.borderWidthFrac ?? 0) * lay.fontPx * 0.5
+        : 0;
     const margin = Math.max(
-      lay.st.legibility.padFrac * lay.fontPx,
+      lay.st.legibility.padFrac * lay.fontPx + border,
       lay.fontPx * 0.2,
       lay.st.glow ? lay.st.glow.bleedRadiusFrac * lay.fontPx * 0.5 : 0,
     );
