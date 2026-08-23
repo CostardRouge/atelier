@@ -33,5 +33,5 @@ The looks in [`classic/`](./classic) are generated, not hand-tuned, by
 | `classic/warm.cube` | Warm tint |
 | `classic/cool.cube` | Cool / teal tint |
 | `classic/filmic-contrast.cube` | Gentle S-curve contrast |
-| `classic/bw.cube` | Black & white (Rec. 709 luma) |
+| `classic/black-and-white.cube` | Black & white (Rec. 709 luma) |
 | `classic/sepia.cube` | Sepia tone |

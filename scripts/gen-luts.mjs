@@ -94,7 +94,7 @@ const luts = [
     ),
   },
   {
-    file: 'bw.cube',
+    file: 'black-and-white.cube',
     text: buildCube('Black & White', 2, (r, g, b) => {
       const y = REC709[0] * r + REC709[1] * g + REC709[2] * b;
       return [y, y, y];
