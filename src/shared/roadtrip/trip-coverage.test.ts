@@ -8,7 +8,13 @@ import {
   tripCoverage,
 } from './trip-coverage';
 import type { IsoDate } from './trip-days';
-import type { PostKind, TripDoc, TripPost, TripStage } from './trip-types';
+import {
+  defaultPostBadge,
+  type PostKind,
+  type TripDoc,
+  type TripPost,
+  type TripStage,
+} from './trip-types';
 
 let seq = 0;
 const post = (
@@ -20,6 +26,8 @@ const post = (
   date,
   endDate: opts.end ?? null,
   title: `post ${seq}`,
+  media: null,
+  badge: defaultPostBadge(opts.kind ?? 'photo'),
   publishedAt: opts.published ? 1_700_000_000_000 : null,
   createdAt: 1_600_000_000_000,
 });
@@ -45,6 +53,8 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   endDate: '2025-03-10',
   stages: [],
   posts: [],
+  badgeLanguage: 'fr',
+  theme: null,
   createdAt: 0,
   updatedAt: 0,
   ...over,

@@ -20,6 +20,7 @@ interface DayPanelProps {
   onAddPost: (post: TripPost) => void;
   onUpdatePost: (post: TripPost) => void;
   onDeletePost: (id: string) => void;
+  onOpenPost: (post: TripPost) => void;
 }
 
 const legend = 'font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted';
@@ -36,10 +37,12 @@ function PostRow({
   post,
   onUpdate,
   onDelete,
+  onOpen,
 }: {
   post: TripPost;
   onUpdate: (post: TripPost) => void;
   onDelete: () => void;
+  onOpen: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
   const kind = POST_KINDS.find((k) => k.id === post.kind);
@@ -64,8 +67,17 @@ function PostRow({
           {post.publishedAt === null
             ? 'draft'
             : `published ${formatPublished(post.publishedAt)}`}
+          {post.media && <> · {post.media.name}</>}
         </span>
       </span>
+
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex-none px-3 py-1.5 border border-line-strong rounded-full bg-paper text-[0.75rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
+      >
+        Hook
+      </button>
 
       <button
         type="button"
@@ -113,9 +125,9 @@ function PostRow({
 
 /**
  * One day of the trip, opened from the grid: what has already been told from
- * it, and the one gesture that matters here — adding another piece. Media,
- * badges and slides join a post in a later phase; what a post carries today is
- * the day it tells and whether it went out.
+ * it, and the one gesture that matters here — adding another piece. Composing
+ * a piece's hook is a screen of its own (`PostEditor`), reached from its row;
+ * this panel stays a list. Slides and the closing call to action come later.
  */
 export default function DayPanel({
   trip,
@@ -124,6 +136,7 @@ export default function DayPanel({
   onAddPost,
   onUpdatePost,
   onDeletePost,
+  onOpenPost,
 }: DayPanelProps) {
   const [kind, setKind] = useState<PostKind>('reel');
   const [title, setTitle] = useState('');
@@ -171,6 +184,7 @@ export default function DayPanel({
               post={post}
               onUpdate={onUpdatePost}
               onDelete={() => onDeletePost(post.id)}
+              onOpen={() => onOpenPost(post)}
             />
           ))}
         </ul>

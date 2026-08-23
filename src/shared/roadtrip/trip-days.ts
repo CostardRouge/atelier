@@ -111,6 +111,26 @@ export function dayNumber(start: IsoDate, iso: IsoDate): number | null {
   return delta === null ? null : delta + 1;
 }
 
+/**
+ * Whole years elapsed from `from` to `to` — the "1" of "one year ago today".
+ * Counted on the calendar, not by dividing days: the anniversary of 29 February
+ * falls on 1 March in common years, and 365.25 would put it either side by
+ * turns. Negative when `to` precedes `from`; null for a bad date.
+ */
+export function yearsBetween(from: IsoDate, to: IsoDate): number | null {
+  const a = parseIsoDate(from);
+  const b = parseIsoDate(to);
+  if (a === null || b === null) return null;
+  const da = new Date(a);
+  const db = new Date(b);
+  let years = db.getUTCFullYear() - da.getUTCFullYear();
+  const monthDelta = db.getUTCMonth() - da.getUTCMonth();
+  const dayDelta = db.getUTCDate() - da.getUTCDate();
+  // The anniversary has not come round yet this year.
+  if (monthDelta < 0 || (monthDelta === 0 && dayDelta < 0)) years -= 1;
+  return years;
+}
+
 /** Inclusive length of a span in days ("310"); null for a bad or reversed span. */
 export function spanLength(start: IsoDate, end: IsoDate): number | null {
   const delta = daysBetween(start, end);

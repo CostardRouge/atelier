@@ -9,6 +9,8 @@ interface TripOverviewProps {
   trip: TripDoc;
   onShowTrips: () => void;
   onChange: (trip: TripDoc) => void;
+  /** Open a piece's hook composer. */
+  onOpenPost: (post: TripPost) => void;
 }
 
 const barPill =
@@ -35,6 +37,7 @@ export default function TripOverview({
   trip,
   onShowTrips,
   onChange,
+  onOpenPost,
 }: TripOverviewProps) {
   const coverage = useMemo(() => tripCoverage(trip), [trip]);
   const [selected, setSelected] = useState<IsoDate | null>(
@@ -126,6 +129,7 @@ export default function TripOverview({
             mutate(trip.posts.map((p) => (p.id === post.id ? post : p)))
           }
           onDeletePost={(id) => mutate(trip.posts.filter((p) => p.id !== id))}
+          onOpenPost={onOpenPost}
         />
       )}
     </section>

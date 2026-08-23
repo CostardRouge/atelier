@@ -19,7 +19,7 @@ Read before touching `src/tools/roadtrip/` or `src/shared/roadtrip/`, and before
 
 **Decision.** A trip holds STAGES (places, each with their own span) and POSTS. There is deliberately **no stored day record**: a day is a calendar date inside the trip's span, derived on read (`tripCoverage`). Storing 310 empty rows to answer "which days have nothing" would be a second source of truth for something two subtractions already know, and it would have to be migrated every time a trip's dates are edited.
 
-**A post is keyed by the DATE it tells, never by a file name.** The maintainer re-exports through Capture One and the Studio, so names, sizes and mtimes all change under him; the day a photo was shot does not. This was his explicit instruction and it is the load-bearing choice of the whole model — media references will *join* a post in a later phase, they will never become its key. **How to apply**: any new tracking field hangs off the day or the post's date, never off a filename.
+**A post is keyed by the DATE it tells, never by a file name.** The maintainer re-exports through Capture One and the Studio, so names, sizes and mtimes all change under him; the day a photo was shot does not. This was his explicit instruction and it is the load-bearing choice of the whole model. A post DOES carry a media reference (`TripPost.media`, a `SavedMediaRef`), but only as a hint for re-finding the file in the library: losing it costs the picture, never the post or its place in the trip, and the missing case is stated plainly rather than treated as an error. **How to apply**: any new tracking field hangs off the day or the post's date, never off a filename.
 
 **A multi-day post occupies every day it spans** (`postDays`, clamped to the trip). "Days 27–29" tells three days, and the grid must show three days told — the grid's question is "has this day been told", not "how many posts start here".
 
@@ -47,10 +47,35 @@ Read before touching `src/tools/roadtrip/` or `src/shared/roadtrip/`, and before
 
 `requestPersistentStorage()` stays exported from `project-store.ts` and is called by both tools — the grant is **origin-wide**, so whichever tool mounts first serves both.
 
+## The badge is overlay ELEMENTS, not a second renderer (2026-08-23)
+
+**Decision.** `badge-layout.ts` turns the badge's text into ordinary `text` `OverlayElement`s and hands them to `drawOverlays`. **Why**: `shared/overlay/` already places, styles, themes, glows and burns in text, in the preview and both export paths — so the badge inherits the four title-style presets for free and the engine never learns that trips exist. Same lesson as the studio's intro (`studio.md`): extend the element model, never add a parallel class of thing. `shared/roadtrip/` importing `shared/overlay/` is shared→shared and fine; the tool imports both.
+
+**The content has FIVE pieces and the numeral is alone in one of them** (`day-badge.ts`): kicker · label · headline · counter · caption. The word ("Jour") is its own piece precisely so it can be set at a fifth of the numeral's size — folded into the headline it would be drawn at the same size and the badge would read as a phrase, which is the opposite of the maintainer's "one dominant number". `RATIOS` in `badge-layout.ts` keeps every other piece under a third of the headline, and a test asserts it.
+
+**"Il y a 1 an" is a KICKER OVERRIDE, not a counter mode.** It answers "why is this going out now", a different question from "where in the trip is this"; as a mode it would have cost the day number its place as the headline. The two compose. It falls back to the trip's name under a year rather than announcing "0 ans" — `yearsBetween` counts on the calendar, so a 29 February anniversary lands on 1 March in common years (dividing by 365.25 lands either side by turns).
+
+**A stage counter over a date outside every stage falls back to the day of the trip**, never invents a place. Same anti-fabrication line as the overlay palette and the battery gauge.
+
+**The layout needs the frame's ASPECT**, because element `y` is a fraction of the height while `sizeFrac` is a fraction of the *shorter side*: on 9:16 a line of 0.17 covers 0.17 × 9/16 of the height. Stacking in raw `sizeFrac` spaces correctly on a square and pulls apart on a portrait frame — `heightFractionOf` is the one conversion, tested both ways.
+
+## The default badge look is `neutral`, and that was measured (2026-08-23)
+
+**Decision.** A new trip adopts the `neutral` preset (white, drop shadow). The first cut adopted `plein-cadre` on the reasoning that a badge is a signature — **wrong in the browser**: flat vermilion over warm footage all but vanishes, and warm footage is most of a desert road trip. A badge lands on a photograph nobody has vetted, unlike a studio overlay whose author is watching the clip; the default has to survive that.
+
+**The signature comes from the theme being per TRIP, not from which preset it is.** Pick Or ciné or Pixel CRT once and every badge of the trip wears it — that is what makes a post recognisable in a feed out of order, which is the whole strategy. Per-post styling was rejected for exactly that reason.
+
+**Preview and export are the same code at two sizes** (`badge-render.ts`): everything the render needs is a fraction of the frame, so only the canvas differs. Do not let them diverge — a badge that looks right at 480 px and lands differently at 1920 px is worse than no preview.
+
+## `pickFiles` accepts photos now (2026-08-23)
+
+The Library's "Add files" button filtered to `video/*,.srt` only, so a photo could reach the library through the folder picker or a drag but never through the button — with Photo EXIF, Compare and now Road Trip being photo-first, that was a dead end for half the suite. The accept list now covers every kind `classifyPart` recognises, camera RAW included (the OS dialog greys RAW out otherwise, and the library deliberately keeps handles the browser cannot decode).
+
 ## Open, and decided but not built (2026-08-23)
 
 - **The `.roadtrip.json` export is the safety net the maintainer asked for by name** — he expects to pull a JSON out weekly so a cleared IndexedDB cannot cost him a year of tracking. Follow `projects/project-file.ts` exactly (portable half only, `{ok:false, error}` parsing, refuse a file from a newer version). Agreed shape of the reminder: a **discreet banner** ("last export 12 days ago"), never a blocking prompt. Not built.
-- **The day badge** ("Jour 27 / 310") is the next phase and the reason the counters exist: `postDayRange` and `stageDayNumber` already return the numbers with no formatting decided, deliberately. Three visual directions were drawn with the maintainer (rouge plein cadre / carnet de bord / data readout, reusing the `or-cine` and `pixel-crt` presets) and none is chosen yet. The layout rule he gave: **one dominant central number**, context (place, total) clearly subordinate — not everything at equal weight.
+- **The badge still only comes out as a PNG.** Burning it into a clip means handing the same elements to the Studio's export path, which is a real integration (a project would have to carry a trip reference, or the elements would have to be importable). Not started, and the maintainer has not asked for it in those terms yet — he asked for "an overlay in my drone videos", which this is half of.
+- **The three visual directions drawn in the design pass were never formally chosen.** They now exist as the four title-style presets in the Style picker, so the choice is one dropdown rather than a code change — but he has not said which one is the signature.
 - **Carousels are a later phase**: a post becomes an ordered list of slides with a role (intro / content / CTA), and the closing call-to-action slide is a **single global template edited once** (his choice), reinjected automatically — not re-authored per post. For a reel the hook rides the Studio's existing intro *scene* rather than a new mechanism, and the CTA stays a separate end card rather than being baked into the export.
 - **Time Machine** (an animated counter winding back to the media's day) and an API into his own geolocated media-triage system are wanted but explicitly last: both were discussed as "after the rest works".
 - Element positioning is **not** fixed to a corner — he rejected a pinned top/side badge; placement is free, which is what the shared overlay engine already gives.

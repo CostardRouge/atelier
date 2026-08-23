@@ -10,15 +10,34 @@
  *
  * A post is keyed by the DATE it tells, never by a file name. The maintainer
  * re-exports his media through Capture One and the Studio, so names and sizes
- * change under him; the day a photo was shot does not. Media references join
- * a post in a later phase, and they will be an addition to it, not its key.
+ * change under him; the day a photo was shot does not. A post DOES carry a
+ * media reference (`TripPost.media`), but only as a hint for re-finding the
+ * file: losing it costs the picture, never the post or its place in the trip.
  *
  * Pure and DOM-free.
  */
 
 import { isIsoDate, isWithin, type IsoDate } from './trip-days';
+import type { SavedMediaRef } from '../projects/project-types';
+import { themeFromPreset, type StyleTheme } from '../overlay/title-styles';
+import { DEFAULT_BADGE_LAYOUT, type BadgeLayout } from './badge-layout';
+import type { BadgeLanguage, CounterMode } from './day-badge';
 
-export const TRIP_DOC_VERSION = 1;
+export const TRIP_DOC_VERSION = 2;
+
+/**
+ * The look every badge of a trip starts with. `neutral` — white with a drop
+ * shadow — because a badge lands on a photograph nobody has seen yet, and it
+ * is the only preset that stays legible over all of them. Measured: the flat
+ * vermilion of `plein-cadre` all but vanishes on warm footage, which is most
+ * of a desert road trip.
+ *
+ * The signature the strategy needs comes from the theme being per TRIP, not
+ * from which preset it is: pick Or ciné or Pixel CRT once and every badge of
+ * the trip wears it. Same rule as the studio — a look is adopted, never
+ * imposed on a document that never asked for one.
+ */
+const DEFAULT_THEME_PRESET = 'neutral';
 
 /** What a post is delivered as. Drives the badge layout, not the storage. */
 export type PostKind = 'reel' | 'carousel' | 'photo';
@@ -44,6 +63,35 @@ export interface TripStage {
   endDate: IsoDate;
 }
 
+/** How one post's badge counts and where it sits. */
+export interface PostBadge {
+  mode: CounterMode;
+  layout: BadgeLayout;
+  /** Lead with "one year ago today" rather than the trip's name. */
+  showAnniversary: boolean;
+  /** The frame the badge is composed for, from `ASPECT_PRESETS`. */
+  aspectId: string;
+  /** Frame of a video clip the badge sits on; ignored for a photo. */
+  videoTimeSeconds: number;
+}
+
+/** The frame each kind of post is delivered in, unless the author says otherwise. */
+const ASPECT_FOR_KIND: Record<PostKind, string> = {
+  reel: '9:16',
+  carousel: '4:5',
+  photo: '4:5',
+};
+
+export function defaultPostBadge(kind: PostKind = 'photo'): PostBadge {
+  return {
+    mode: 'day',
+    layout: { ...DEFAULT_BADGE_LAYOUT },
+    showAnniversary: false,
+    aspectId: ASPECT_FOR_KIND[kind],
+    videoTimeSeconds: 0,
+  };
+}
+
 export interface TripPost {
   id: string;
   kind: PostKind;
@@ -53,6 +101,15 @@ export interface TripPost {
   endDate: IsoDate | null;
   /** Working title, for finding it again in a list. Not published copy. */
   title: string;
+  /**
+   * The picture the badge goes over. A HINT for re-finding the file in the
+   * library, never the post's identity: the maintainer re-exports through
+   * Capture One and the Studio, so name, size and mtime all change under him.
+   * A post whose media has gone is a normal post that still tells its day.
+   */
+  media: SavedMediaRef | null;
+  /** How this post's badge counts and where it sits. */
+  badge: PostBadge;
   /**
    * When it actually went out, or null while it is still a draft. Kept as a
    * timestamp rather than a flag so the overview can tell "planned for that
@@ -74,6 +131,14 @@ export interface TripDoc {
   endDate: IsoDate;
   stages: TripStage[];
   posts: TripPost[];
+  /** The language the badges are WRITTEN in — published copy, not UI chrome. */
+  badgeLanguage: BadgeLanguage;
+  /**
+   * The title style every badge of this trip wears. Per trip, not per post,
+   * on purpose: a constant badge is what makes a post recognisable in a feed
+   * out of order, which is the whole strategy the tool serves.
+   */
+  theme: StyleTheme | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -94,6 +159,8 @@ export function createTripDoc(
     endDate,
     stages: [],
     posts: [],
+    badgeLanguage: 'fr',
+    theme: themeFromPreset(DEFAULT_THEME_PRESET),
     createdAt: now,
     updatedAt: now,
   };
@@ -111,6 +178,8 @@ export function createTripPost(
     date,
     endDate,
     title: title.trim(),
+    media: null,
+    badge: defaultPostBadge(kind),
     publishedAt: null,
     createdAt: Date.now(),
   };
@@ -161,11 +230,27 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
 }
 
 /**
- * Bring a stored document up to the current version. Nothing to do at v1;
- * the hook exists so the first added field is a migration like every other in
- * this repo, rather than a scramble. Idempotent — the store runs it on read.
+ * Bring a stored document up to the current version. Idempotent — the store
+ * runs it on read.
+ *
+ * v1 → v2 adds the badge: a media hint and badge settings per post, and the
+ * language and title style per trip. This is the one migration that may adopt
+ * a LOOK rather than preserving one, and it is safe precisely because it can
+ * change nothing: no v1 post had a badge at all, so there is no existing
+ * rendering for a theme to alter.
  */
 export function migrateTripDoc(doc: TripDoc): TripDoc {
   if (doc.version >= TRIP_DOC_VERSION) return doc;
-  return { ...doc, version: TRIP_DOC_VERSION };
+  const migrated = { ...doc };
+  if (migrated.version < 2) {
+    migrated.badgeLanguage = migrated.badgeLanguage ?? 'fr';
+    migrated.theme = migrated.theme ?? themeFromPreset(DEFAULT_THEME_PRESET);
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      media: post.media ?? null,
+      badge: post.badge ?? defaultPostBadge(post.kind),
+    }));
+  }
+  migrated.version = TRIP_DOC_VERSION;
+  return migrated;
 }

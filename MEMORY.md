@@ -59,6 +59,8 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - The DJI video `.srt` carries no battery level (Mini 4 Pro included): the gauge takes an authored value or a named telemetry key, and draws empty rather than inventing one — `studio.md`.
 - Road Trip tracks a journey by **calendar day, never by file name** (exports get renamed and re-graded); days are derived from the trip's two dates, and trip dates are `YYYY-MM-DD` with every subtraction in UTC — `roadtrip.md`.
 - A second durable store follows the studio's hand-rolled IndexedDB pattern in its own database; Dexie and SQLite were both weighed and declined for a one-document-per-trip model — `roadtrip.md`.
+- The Road Trip day badge is built from ordinary overlay `text` elements handed to `drawOverlays`, never a second renderer — it inherits the title-style presets, and preview and export are the same code at two sizes — `roadtrip.md`.
+- A badge's look belongs to the TRIP, not the post (a signature that varies per post is not one), and defaults to `neutral`: flat vermilion measurably vanishes over warm footage — `roadtrip.md`.
 
 ## Open items (dated; remove when done)
 

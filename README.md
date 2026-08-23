@@ -337,16 +337,34 @@ silence is called out with a link that jumps to it. Clicking a day opens it:
 what has already come out of it, and one gesture to add another piece — a reel,
 a carousel or a single photo.
 
+**The hook.** Open a piece and you compose its badge over the picture: the
+number the trip gives it, big, with everything else deliberately subordinate —
+"Australie · Jour · **27** · sur 310 · Kalbarri". It counts four ways (day of
+trip, a range of days, the day at a place, how long you stayed), can lead with
+"il y a 1 an" once a year has actually passed, and reads in French or English.
+Pick a frame (9:16, 4:5, 1:1, 16:9), place the block on a 3×3 grid, size the
+numeral, and export a PNG — ready as a Reel's opening frame or a carousel's
+first slide.
+
+The badge is built out of the **same overlay engine the Studio uses**, not a
+second rendering system: it is a stack of ordinary text elements, so it inherits
+the title-style presets (Neutral, Or ciné, Pixel CRT, Rouge plein cadre) for
+free and the preview is the export at a smaller size. The style belongs to the
+**trip**, not to the post — a badge that varies per post stops being the
+signature that makes a post recognisable in a feed.
+
 **Nothing is keyed by a file name.** A post records the *day* it tells, never a
 filename: exports get renamed and re-graded between tools, and a tracking system
-built on names goes stale the first time you touch Capture One. Trips live in
-their own IndexedDB database and autosave as you edit; a refused write (private
-window, full disk) is said out loud rather than swallowed.
+built on names goes stale the first time you touch Capture One. A post does
+point at a picture, but only as a hint for re-finding it — lose the file and the
+post still holds its day and its badge. Trips live in their own IndexedDB
+database and autosave as you edit; a refused write (private window, full disk)
+is said out loud rather than swallowed.
 
-Currently in place: the trip, its days, the grid, and posts as day-keyed
-entries. Media, the "day 27 / 310" badge rendering, multi-slide carousels with a
-call-to-action ending, and a portable `.json` export of a trip are the phases
-that follow.
+Currently in place: the trip, its days, the grid, day-keyed posts, and the badge
+through to a PNG. Multi-slide carousels with a call-to-action ending, burning
+the hook into a clip through the Studio, and a portable `.json` export of a trip
+are the phases that follow.
 
 ## Telemetry tool
 

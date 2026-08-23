@@ -13,6 +13,7 @@ import {
   todayIso,
   toIsoDate,
   weekdayIndex,
+  yearsBetween,
 } from './trip-days';
 
 describe('parseIsoDate', () => {
@@ -94,6 +95,33 @@ describe('daysBetween', () => {
     // 23 h and 25 h days exist locally; in UTC every day is 24 h, so a naive
     // ms/86400000 on local dates would round to 6 or 8 here.
     expect(daysBetween('2025-03-27', '2025-04-03')).toBe(7);
+  });
+});
+
+describe('yearsBetween', () => {
+  it('turns over exactly on the anniversary, not before', () => {
+    expect(yearsBetween('2025-03-27', '2026-03-26')).toBe(0);
+    expect(yearsBetween('2025-03-27', '2026-03-27')).toBe(1);
+    expect(yearsBetween('2025-03-27', '2026-03-28')).toBe(1);
+  });
+
+  it('counts several years', () => {
+    expect(yearsBetween('2025-03-27', '2028-08-01')).toBe(3);
+  });
+
+  it('is negative before the start', () => {
+    expect(yearsBetween('2026-03-27', '2025-03-27')).toBe(-1);
+  });
+
+  it('puts a 29 February anniversary on 1 March in a common year', () => {
+    // Dividing days by 365.25 lands either side of this by turns; the calendar
+    // does not: 28 Feb is not yet a year, 1 Mar is.
+    expect(yearsBetween('2024-02-29', '2025-02-28')).toBe(0);
+    expect(yearsBetween('2024-02-29', '2025-03-01')).toBe(1);
+  });
+
+  it('is null on a bad date', () => {
+    expect(yearsBetween('nope', '2026-03-27')).toBeNull();
   });
 });
 

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { navigate, useHashRoute } from '../../app/use-hash-route';
 import { requestPersistentStorage } from '../../shared/projects/project-store';
 import { putTrip } from '../../shared/roadtrip/trip-store';
-import type { TripDoc } from '../../shared/roadtrip/trip-types';
+import type { TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
+import PostEditor from './PostEditor';
 import TripGallery from './TripGallery';
 import TripOverview from './TripOverview';
 
@@ -24,6 +25,12 @@ export default function RoadTripTool() {
   const path = useHashRoute();
   const [open, setOpen] = useState<TripDoc | null>(null);
   const [storageFailed, setStorageFailed] = useState(false);
+  /**
+   * The piece whose hook is being composed, by id — never the post OBJECT.
+   * Editing writes a new post into the trip, and a held copy would go stale
+   * the moment a control moved.
+   */
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
 
   // Ask the browser (once) not to evict our stores under disk pressure.
   const persistAsked = useRef(false);
@@ -73,8 +80,23 @@ export default function RoadTripTool() {
 
   const handleOpen = useCallback((doc: TripDoc) => {
     setOpen(doc);
+    setEditingPostId(null);
     navigate('/roadtrip');
   }, []);
+
+  const updatePost = useCallback(
+    (post: TripPost) => {
+      if (!open) return;
+      handleChange({
+        ...open,
+        posts: open.posts.map((p) => (p.id === post.id ? post : p)),
+        updatedAt: Date.now(),
+      });
+    },
+    [open, handleChange],
+  );
+
+  const editingPost = open?.posts.find((p) => p.id === editingPostId) ?? null;
 
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-3">
@@ -91,12 +113,22 @@ export default function RoadTripTool() {
 
       {showGallery ? (
         <TripGallery openTripId={open?.id ?? null} onOpen={handleOpen} />
+      ) : editingPost ? (
+        <PostEditor
+          key={editingPost.id}
+          trip={open}
+          post={editingPost}
+          onBack={() => setEditingPostId(null)}
+          onChangePost={updatePost}
+          onChangeTrip={handleChange}
+        />
       ) : (
         <TripOverview
           key={open.id}
           trip={open}
           onShowTrips={() => navigate(HOME_ROUTE)}
           onChange={handleChange}
+          onOpenPost={(post) => setEditingPostId(post.id)}
         />
       )}
     </div>

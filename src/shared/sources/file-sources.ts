@@ -198,15 +198,27 @@ export async function filesFromDirectoryHandle(
 }
 
 /**
- * Pick individual files (one or more `.mp4`/`.mov` plus their `.srt`) via a
- * plain `<input type="file" multiple>` — no `webkitdirectory`. For users who
- * just want to load a single clip and its telemetry without a whole folder.
- * Resolves with the chosen files, or `[]` if the dialog is dismissed.
+ * Pick individual files — clips plus their `.srt`, or photos — via a plain
+ * `<input type="file" multiple>` (no `webkitdirectory`), for loading a couple
+ * of files without pointing at a whole folder. Resolves with the chosen files,
+ * or `[]` if the dialog is dismissed.
+ *
+ * The accept list covers **every** kind the library classifies, photos and
+ * camera RAW included: this one button feeds all the tools, and half of them
+ * (Photo EXIF, Compare, Road Trip) are photo-first. A video-only filter left
+ * their users no way in but the folder picker or a drag.
  */
 export async function pickFiles(): Promise<File[]> {
   const files = await runFilePicker((input) => {
     input.multiple = true;
-    input.accept = 'video/*,.mp4,.mov,.srt,text/plain';
+    input.accept = [
+      'video/*,.mp4,.mov,.m4v,.webm',
+      '.srt,text/plain',
+      'image/*,.jpg,.jpeg,.png,.heic,.heif,.webp,.tif,.tiff,.avif,.gif',
+      // RAW: handles are kept even where the browser has no decoder, and the
+      // OS dialog would grey them out without this.
+      '.raf,.arw,.cr2,.cr3,.nef,.dng,.orf,.rw2,.raw,.srw,.pef',
+    ].join(',');
   });
   return files ? Array.from(files) : [];
 }
