@@ -4,12 +4,15 @@ A local-first **suite of browser tools for your captures** — photo and video,
 across devices (DJI, Apple, Sony, …). Everything runs in your browser; files
 never leave your machine — no upload, no account, no server.
 
-Today it ships eight tools, converging into a single studio:
+Today it ships nine tools, converging into a single studio:
 
 - **Studio** — the unified editor the suite is converging on. Opens on your
   **projects** (saved compositions with a baked preview); each project keeps
   its overlays, look and layout, remembers which folder its media lives in,
   and reopens in one click. Edit on one stage — overlays, LUT, export.
+- **Road Trip** — plan and track how a journey gets told. Give a trip its two
+  dates and every day of it becomes a cell in a contribution-style grid; the
+  holes are the days you have never posted from.
 - **DJI Telemetry** — view DJI drone flight telemetry in sync with the video it
   was captured with.
 - **Telemetry Overlay** — place altitude, GPS and exposure readouts anywhere on
@@ -311,6 +314,39 @@ theme: size is a multiplier, positions are untouched, so switching looks never
 breaks a layout.
 
 Next phase: the remaining tools become studio panels.
+
+## Road Trip tool
+
+Editing a clip is one problem; telling a whole journey, months after it
+happened, is another. Road Trip (`#/roadtrip`) is about the second one.
+
+**A trip is its two dates.** Give a trip a name, a destination and the days you
+left and came back, and everything else derives from that: day 27 of 310 is a
+subtraction, not something you record. Dates are handled as plain calendar days
+(`YYYY-MM-DD`) and every subtraction runs in UTC, so a trip planned in one
+timezone and reviewed in another never disagrees about which day a photo
+belongs to — and a daylight-saving change cannot shift a day number.
+
+**The grid is the point.** `#/roadtrip` shows every day of the trip as a cell in
+a contribution-style grid, one column per week, Monday at the top. Its job is
+the **holes**: with thousands of photos and a year's distance, what you cannot
+answer from memory is which days you have never told. Empty cells are drawn
+like any other, five intensity rungs separate "nothing here" from "drafted but
+never sent" from "published once, twice, more", and the longest stretch of
+silence is called out with a link that jumps to it. Clicking a day opens it:
+what has already come out of it, and one gesture to add another piece — a reel,
+a carousel or a single photo.
+
+**Nothing is keyed by a file name.** A post records the *day* it tells, never a
+filename: exports get renamed and re-graded between tools, and a tracking system
+built on names goes stale the first time you touch Capture One. Trips live in
+their own IndexedDB database and autosave as you edit; a refused write (private
+window, full disk) is said out loud rather than swallowed.
+
+Currently in place: the trip, its days, the grid, and posts as day-keyed
+entries. Media, the "day 27 / 310" badge rendering, multi-slide carousels with a
+call-to-action ending, and a portable `.json` export of a trip are the phases
+that follow.
 
 ## Telemetry tool
 

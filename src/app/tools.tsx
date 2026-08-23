@@ -6,6 +6,7 @@ import ExifTool from '../tools/exif/ExifTool';
 import LutStudio from '../tools/lut/LutStudio';
 import MapTool from '../tools/map/MapTool';
 import OverlayStudio from '../tools/overlay/OverlayStudio';
+import RoadTripTool from '../tools/roadtrip/RoadTripTool';
 import StudioTool from '../tools/studio/StudioTool';
 import TelemetryTool from '../tools/telemetry/TelemetryTool';
 
@@ -45,6 +46,16 @@ export const TOOLS: Tool[] = [
       'One place to edit a clip: overlay telemetry and text, grade through a LUT, and export the result — the editor the whole suite is converging on.',
     Component: StudioTool,
     accepts: ['video+telemetry', 'video'],
+  },
+  {
+    id: 'roadtrip',
+    path: '/roadtrip',
+    label: 'Road Trip',
+    subtitle: 'Trip · days · posts',
+    blurb:
+      'Give a trip its dates and every photo knows which day it belongs to — a grid of the whole journey shows what you have told and what you never have.',
+    Component: RoadTripTool,
+    accepts: ['photo', 'video+telemetry', 'video'],
   },
   {
     id: 'telemetry',

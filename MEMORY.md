@@ -57,6 +57,8 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - Conformed footage (slow motion, time-lapse) is corrected by ONE measured number — capture seconds per media second — applied in `attachMotion`; physics runs on capture seconds, aesthetics on timeline seconds — `studio.md`.
 - The intro is a **scene** (a shared window + optional scrim + solo) over ordinary elements that gained a `window` and an `animation`, not a second class of element; it plays over the running footage and the export stays 1:1 with the source — `studio.md`.
 - The DJI video `.srt` carries no battery level (Mini 4 Pro included): the gauge takes an authored value or a named telemetry key, and draws empty rather than inventing one — `studio.md`.
+- Road Trip tracks a journey by **calendar day, never by file name** (exports get renamed and re-graded); days are derived from the trip's two dates, and trip dates are `YYYY-MM-DD` with every subtraction in UTC — `roadtrip.md`.
+- A second durable store follows the studio's hand-rolled IndexedDB pattern in its own database; Dexie and SQLite were both weighed and declined for a one-document-per-trip model — `roadtrip.md`.
 
 ## Open items (dated; remove when done)
 
@@ -81,3 +83,4 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 | `docs/memory/testing.md` | tests, what is testable, how to keep new logic testable |
 | `docs/memory/local-first.md` | anything that could touch the network, read files, or persist data |
 | `docs/memory/studio.md` | the Studio tool, the tool-merge plan, project persistence, title styles, retiring a legacy tool |
+| `docs/memory/roadtrip.md` | the Road Trip tool, trip/day/post model, day badges, publishing cadence and strategy |

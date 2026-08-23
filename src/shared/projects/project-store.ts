@@ -88,8 +88,9 @@ export async function deleteProject(id: string): Promise<void> {
 
 /**
  * Ask the browser not to evict our storage under disk pressure. Best-effort:
- * some browsers grant silently, some ignore. Call once per session from the
- * studio.
+ * some browsers grant silently, some ignore. The grant is ORIGIN-wide, not
+ * per database, so one call covers every store the suite keeps — the studio
+ * and Road Trip each ask once on mount, and whichever runs first serves both.
  */
 export async function requestPersistentStorage(): Promise<boolean> {
   try {
