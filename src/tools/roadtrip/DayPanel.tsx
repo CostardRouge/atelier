@@ -52,24 +52,28 @@ function PostRow({
 
   return (
     <li className="flex items-center gap-3 py-2 border-b border-line last:border-b-0">
-      {/* The hook as it was last composed. A post that has never been opened
-          has none, and the frame is drawn empty rather than skipped, so the
-          rows stay aligned. */}
+      {/* The hook as it was last composed, at the frame it was composed for:
+          a 16:9 piece is wide here and a 9:16 one is narrow. Fixing the box
+          and cropping to it would hide the one thing the picture is for —
+          recognising, at a glance, what shape the piece is. Only the height
+          is fixed, so the rows still line up. A post never opened has no
+          picture, and gets a placeholder of the commonest frame rather than
+          collapsing its row. */}
       <button
         type="button"
         onClick={onOpen}
         aria-label={`Open ${post.title || 'this piece'}`}
-        className="flex-none w-[38px] h-[48px] p-0 rounded-[4px] overflow-hidden border border-line bg-paper-2 cursor-pointer hover:border-accent"
+        className="flex-none h-[48px] p-0 rounded-[4px] overflow-hidden border border-line bg-paper-2 cursor-pointer hover:border-accent leading-none"
       >
         {thumb ? (
           <img
             src={thumb}
             alt=""
-            className="w-full h-full object-cover block"
+            className="h-full w-auto max-w-[96px] object-contain block"
             draggable={false}
           />
         ) : (
-          <span className="block w-full h-full" aria-hidden="true" />
+          <span className="block h-full w-[38px]" aria-hidden="true" />
         )}
       </button>
       <span

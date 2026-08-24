@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { navigate, useHashRoute } from '../../app/use-hash-route';
+import { isWithinRoute, navigate, useHashRoute } from '../../app/use-hash-route';
 import { requestPersistentStorage } from '../../shared/projects/project-store';
 import { putTrip } from '../../shared/roadtrip/trip-store';
 import type { TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
@@ -8,6 +8,8 @@ import TripGallery from './TripGallery';
 import TripOverview from './TripOverview';
 
 /** The gallery sub-route; `/roadtrip` itself is the open trip. */
+/** This tool's own route; every sub-route hangs off it. */
+const BASE_ROUTE = '/roadtrip';
 const HOME_ROUTE = '/roadtrip/home';
 
 const SAVE_DEBOUNCE_MS = 800;
@@ -41,9 +43,16 @@ export default function RoadTripTool() {
   }, []);
 
   const showGallery = path === HOME_ROUTE || !open;
+  // Guarded by `isWithinRoute`: this tool is still mounted and still
+  // subscribed to the route at the instant the hash changes to another
+  // tool's, and without the guard it would read that path, find it
+  // incomplete, and navigate straight back here — the switcher doing nothing
+  // at all. It only bit with no document open, which is what made it look
+  // intermittent.
+  const mine = isWithinRoute(path, BASE_ROUTE);
   useEffect(() => {
-    if (path !== HOME_ROUTE && !open) navigate(HOME_ROUTE);
-  }, [path, open]);
+    if (mine && path !== HOME_ROUTE && !open) navigate(HOME_ROUTE);
+  }, [mine, path, open]);
 
   // One pending write at a time; the latest document wins.
   const saveTimer = useRef<number | null>(null);
@@ -81,7 +90,7 @@ export default function RoadTripTool() {
   const handleOpen = useCallback((doc: TripDoc) => {
     setOpen(doc);
     setEditingPostId(null);
-    navigate('/roadtrip');
+    navigate(BASE_ROUTE);
   }, []);
 
   const updatePost = useCallback(

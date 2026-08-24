@@ -28,3 +28,19 @@ export function useHashRoute(): string {
 export function navigate(path: string): void {
   if (window.location.hash !== `#${path}`) window.location.hash = path;
 }
+
+/**
+ * True when `path` is `base` itself or one of its sub-routes — `/roadtrip`,
+ * `/roadtrip/home`, but never `/roadtrip-notes` or `/studio`.
+ *
+ * A tool with sub-routes redirects when it lands on an incomplete one (no
+ * project open → go to the gallery). That redirect MUST be guarded by this,
+ * because a tool is still mounted and still subscribed to the route at the
+ * instant the hash changes to another tool's: without the guard it reads the
+ * new path, decides it is not one of its own, and navigates "back" — and the
+ * tool switcher silently does nothing. That was a real bug, and it looked
+ * intermittent because it only bit when the tool had no document open.
+ */
+export function isWithinRoute(path: string, base: string): boolean {
+  return path === base || path.startsWith(`${base}/`);
+}

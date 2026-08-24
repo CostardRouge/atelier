@@ -36,6 +36,12 @@ Read before touching the shell (`src/app/`), the tool registry, the shared asset
 
 **Decision.** Navigation is hash-based (`#/telemetry`, `#/lut`) through a minimal `useSyncExternalStore` router. **Why**: the site is served as static files from GitHub Pages, where a history-API path would 404 on deep-link/refresh. **How to apply**: do not introduce a history-API router without solving the static-hosting fallback first.
 
+## A tool's route redirect must be guarded by `isWithinRoute` (2026-08-24)
+
+**The bug, reproduced**: from the Road Trip gallery, picking Studio in the switcher did nothing — the hash went back to `#/roadtrip/home` and the page never changed. Both tools with sub-routes (`/studio`, `/roadtrip`) redirect an incomplete route to their gallery (`if (path !== HOME_ROUTE && !open) navigate(HOME_ROUTE)`), and a tool is still mounted and still subscribed to `useHashRoute` at the instant the hash becomes another tool's. It read `/studio`, found it "not my home route", and navigated back. It only bit with no document open, which is exactly why it looked intermittent.
+
+**How to apply**: any route effect in a tool must first check the path is its own — `isWithinRoute(path, BASE_ROUTE)` in `app/use-hash-route.ts` (which also refuses `/roadtrip-notes` for `/roadtrip`). More generally: **a mounted component may observe a route that no longer belongs to it**, so never navigate from an effect without asking whose route it is.
+
 ## A tool crash must not blank the app (2026-08-20)
 
 **Decision.** `ErrorBoundary` wraps the active tool and resets on route change. **Why**: one tool's exception used to take the whole suite down. **How to apply**: errors are logged to the console only — nothing is reported anywhere, by design (see `local-first.md`).
