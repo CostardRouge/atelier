@@ -338,7 +338,14 @@ card — the day, its number, what is sitting there and whether any of it went
 out — drawn immediately rather than after the browser's own tooltip delay, so
 the grid can be swept rather than interrogated. Clicking a day opens it: what
 has already come out of it, and one gesture to add another piece — a reel, a
-carousel or a single photo. Each piece in that list carries **a thumbnail of
+carousel or a single photo. Any row in that list opens its piece — the whole
+row, not just the thumbnail — and a piece can be **duplicated** on the spot,
+carrying its look and its slides but neither its publication nor its Studio
+link. **Where you are is in the URL**: `#/roadtrip/australia-d1060760/2025-07-09`
+names the trip and the day, so coming back from a piece lands on the day you
+were working on rather than on day one of three hundred, a reload keeps its
+place, and a day can be linked to. The trip's part is readable but resolves on
+an id fragment, so renaming a trip never breaks a link. Each piece in that list carries **a thumbnail of
 its own hook**, kept in the browser beside the trip, so a day reopened months
 later shows what you left there instead of a file name.
 
@@ -357,6 +364,9 @@ controls scroll beside it —
 the Studio's layout, and the reason is the same: you are watching the picture,
 not the panel. Stacked on a phone, the page scrolls as one, because a panel
 with its own scrollbar inside a scrolling page is a trap.
+
+A piece is renamed in place, by typing over its title — the same gesture as a
+Studio project's name.
 
 **The picture is whatever is ticked in the Library**, and the two stay in step:
 opening a piece points the Library at its picture, and picking another one

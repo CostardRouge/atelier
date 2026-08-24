@@ -317,6 +317,33 @@ export function createTripDoc(
   };
 }
 
+/**
+ * A copy of a piece, on the same day, ready to be re-cut. Everything about
+ * how it looks and what it counts is carried over — that is the point, and it
+ * is why "duplicate" beats "add another and style it again".
+ *
+ * Three things are deliberately NOT carried: the publication (a copy has not
+ * gone out), the Studio link (two pieces sending a hook into one project
+ * would overwrite each other), and the id — of the piece and of every slide
+ * and shade inside it, since two documents sharing an id is how a list starts
+ * editing the wrong row.
+ */
+export function duplicateTripPost(post: TripPost, suffix = ' (copy)'): TripPost {
+  return {
+    ...structuredClone(post),
+    id: newId(),
+    title: post.title.trim() ? `${post.title.trim()}${suffix}` : '',
+    badge: {
+      ...structuredClone(post.badge),
+      shades: post.badge.shades.map((shade) => ({ ...shade, id: newId() })),
+    },
+    slides: post.slides.map((slide) => ({ ...structuredClone(slide), id: newId() })),
+    projectId: null,
+    publishedAt: null,
+    createdAt: Date.now(),
+  };
+}
+
 export function createTripPost(
   kind: PostKind,
   date: IsoDate,
@@ -325,7 +352,7 @@ export function createTripPost(
   defaults?: HookDefaults | null,
 ): TripPost {
   return {
-    id: crypto.randomUUID(),
+    id: newId(),
     kind,
     date,
     endDate,

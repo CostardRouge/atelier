@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { deleteThumbs } from '../../shared/roadtrip/trip-store';
 import { formatIsoDate, type IsoDate } from '../../shared/roadtrip/trip-days';
 import { tripCoverage } from '../../shared/roadtrip/trip-coverage';
@@ -9,6 +9,9 @@ import StagesPanel from './StagesPanel';
 
 interface TripOverviewProps {
   trip: TripDoc;
+  /** The day the route names; null falls back to the first day of the trip. */
+  selectedDate: IsoDate | null;
+  onSelectDate: (date: IsoDate) => void;
   onShowTrips: () => void;
   onChange: (trip: TripDoc) => void;
   /** Open a piece's hook composer. */
@@ -37,14 +40,16 @@ function Stat({ value, label }: { value: string; label: string }) {
  */
 export default function TripOverview({
   trip,
+  selectedDate,
+  onSelectDate,
   onShowTrips,
   onChange,
   onOpenPost,
 }: TripOverviewProps) {
   const coverage = useMemo(() => tripCoverage(trip), [trip]);
-  const [selected, setSelected] = useState<IsoDate | null>(
-    () => coverage.days[0]?.date ?? null,
-  );
+  // The day lives in the route, so coming back from a piece lands on the day
+  // you were working on rather than on the first day of a 300-day trip.
+  const selected = selectedDate ?? coverage.days[0]?.date ?? null;
 
   const selectedCell = useMemo(
     () => coverage.days.find((d) => d.date === selected) ?? null,
@@ -107,7 +112,7 @@ export default function TripOverview({
           endDate={trip.endDate}
           days={coverage.days}
           selected={selected}
-          onSelect={setSelected}
+          onSelect={onSelectDate}
         />
       </div>
 
@@ -116,7 +121,7 @@ export default function TripOverview({
           The longest stretch nothing has been told from runs{' '}
           <button
             type="button"
-            onClick={() => setSelected(coverage.longestGap!.start)}
+            onClick={() => onSelectDate(coverage.longestGap!.start)}
             className="p-0 border-0 bg-transparent text-accent-ink underline underline-offset-[3px] cursor-pointer font-semibold"
           >
             {formatIsoDate(coverage.longestGap.start)} →{' '}

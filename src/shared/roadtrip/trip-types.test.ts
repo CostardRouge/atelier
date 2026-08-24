@@ -4,6 +4,7 @@ import {
   createTripDoc,
   createTripPost,
   defaultPostBadge,
+  duplicateTripPost,
   hookDefaultsFrom,
   migrateTripDoc,
   spanProblem,
@@ -457,5 +458,67 @@ describe('hook defaults — the look a trip gives a new piece', () => {
 
   it('starts a trip with none — a default nobody chose is a factory setting', () => {
     expect(createTripDoc('A', 'B', '2025-03-01', '2025-03-10').hookDefaults).toEqual({});
+  });
+});
+
+describe('duplicateTripPost', () => {
+  const source = () => {
+    const post = createTripPost('carousel', '2025-07-09', 'Kalbarri cliffs');
+    return {
+      ...post,
+      projectId: 'proj-1',
+      publishedAt: 1_700_000_000_000,
+      badge: {
+        ...post.badge,
+        aspectId: '1:1',
+        shades: [createShade({ strength: 0.4 })],
+      },
+      slides: [
+        { id: 's1', media: null, videoTimeSeconds: 0, caption: 'One' },
+        { id: 's2', media: null, videoTimeSeconds: 2, caption: 'Two' },
+      ],
+    };
+  };
+
+  it('carries the look and the slides over — that is the point', () => {
+    const copy = duplicateTripPost(source());
+    expect(copy.badge.aspectId).toBe('1:1');
+    expect(copy.badge.shades[0].strength).toBe(0.4);
+    expect(copy.slides.map((s) => s.caption)).toEqual(['One', 'Two']);
+    expect(copy.date).toBe('2025-07-09');
+    expect(copy.kind).toBe('carousel');
+  });
+
+  it('says it is a copy', () => {
+    expect(duplicateTripPost(source()).title).toBe('Kalbarri cliffs (copy)');
+  });
+
+  it('leaves an untitled piece untitled rather than naming it "(copy)"', () => {
+    const blank = { ...source(), title: '  ' };
+    expect(duplicateTripPost(blank).title).toBe('');
+  });
+
+  it('has not been published, and is not linked to a project', () => {
+    // Two pieces sending a hook into one project would overwrite each other.
+    const copy = duplicateTripPost(source());
+    expect(copy.publishedAt).toBeNull();
+    expect(copy.projectId).toBeNull();
+  });
+
+  it('gives new ids all the way down', () => {
+    const from = source();
+    const copy = duplicateTripPost(from);
+    expect(copy.id).not.toBe(from.id);
+    expect(copy.slides.map((s) => s.id)).not.toEqual(from.slides.map((s) => s.id));
+    expect(copy.badge.shades[0].id).not.toBe(from.badge.shades[0].id);
+  });
+
+  it('shares no mutable state with the piece it came from', () => {
+    const from = source();
+    const copy = duplicateTripPost(from);
+    copy.badge.layout.sizeFrac = 0.9;
+    copy.slides[0].caption = 'changed';
+    expect(from.badge.layout.sizeFrac).not.toBe(0.9);
+    expect(from.slides[0].caption).toBe('One');
   });
 });

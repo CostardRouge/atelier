@@ -165,6 +165,20 @@ The EXIF date is read as written, never converted: EXIF has no timezone and the 
 
 **`exif-parser.ts` moved to `shared/exif/`** when Road Trip became its second consumer — a tool never reaches into another tool (the same move `StylePanel` made).
 
+## Where you are lives in the ROUTE (2026-08-24)
+
+`#/roadtrip/<trip>/<day>/<piece>`, any tail of which may be absent (`trip-route.ts`, pure and tested). It was component state, and coming back from a piece dropped you on the trip's FIRST day — a real loss on a 300-day trip, every time. The route also survives a reload and makes a day linkable.
+
+The trip's part is `<slug>-<first 8 of its id>` (`australia-d1060760`): the slug is there to be read and is ignored on resolve, so renaming a trip cannot break a link and two trips called "Australia" stay distinguishable. A malformed day drops itself AND everything after it — half a route (a piece under a nonexistent day) is worse than none.
+
+## A panel that belongs to the PIECE must not be hidden behind a slide (2026-08-24)
+
+The Studio bridge and the per-kind defaults were rendered inside the hook-only branch, so opening a carousel's second slide made them vanish — and the maintainer reported both features as missing. **How to apply**: before putting a control inside `isHook`, ask whether it is about the SLIDE (its picture, its caption, the badge's own styling) or about the PIECE (its name, its link, the trip's defaults). Only the first belongs there.
+
+## The whole row opens the piece (2026-08-24)
+
+A list you sweep through should not make you aim at a 38px thumbnail or a small button. The row is a `div` with `role="button"` (a real `<button>` cannot contain the buttons the row already holds), and **every control inside it stops propagation and prevents default** — without that, marking a piece published also opened the editor and the action was lost behind the screen change. Duplicating carries the look and the slides but never the publication, the Studio link, or any id (piece, slide or shade): two documents sharing an id is how a list starts editing the wrong row.
+
 ## The bridge to the Studio: the hook is sent as an intro SCENE (2026-08-24)
 
 **Decision, taken with the maintainer after weighing three options.** His real workflow was: grade + telemetry in the Studio, badge in Road Trip, two files joined on a phone. Rejected: concatenating a hook clip and the footage (a multi-source export, an audio-timeline problem, and the pre-roll he had already deferred), and having Road Trip's own exporter borrow the project's LUT (two exporters doing one job, guaranteed to drift). **Chosen: Road Trip briefs the Studio.** A post carries `projectId`; `hook-scene.ts` translates the badge into a `roadtrip-hook` scene plus its elements; ONE Studio export then carries grade, telemetry and hook. This also answers "can Road Trip pick a LUT" — it does not need to, the Studio already grades.

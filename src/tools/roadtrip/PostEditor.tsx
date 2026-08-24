@@ -639,11 +639,19 @@ export default function PostEditor({
         >
           ← Overview
         </button>
-        <div className="min-w-0">
-          <h1 className="m-0 font-serif text-[1.25rem] leading-tight truncate">
-            {post.title || 'Untitled piece'}
-          </h1>
-          <p className="m-0 font-mono text-[0.68rem] text-muted">
+        <div className="min-w-0 flex-1 max-w-[26rem]">
+          {/* Editable in place, like the Studio's project name: a piece is
+              found again by what it is called, and having to go back to the
+              day panel to rename it is the kind of friction that stops you
+              naming things at all. */}
+          <input
+            value={post.title}
+            onChange={(e) => onChangePost({ ...post, title: e.target.value })}
+            placeholder="Untitled piece"
+            aria-label="What this piece shows"
+            className="w-full font-serif text-[1.25rem] leading-tight bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0.5 placeholder:text-faint placeholder:italic"
+          />
+          <p className="m-0 px-1 font-mono text-[0.68rem] text-muted">
             {formatIsoDate(post.date)} · {post.kind}
           </p>
         </div>
@@ -799,6 +807,82 @@ export default function PostEditor({
               {exportNote}
             </p>
           )}
+
+          <Fold title="Studio · grade, telemetry, one export" {...fold('studio')}>
+            <StudioLink
+              post={post}
+              elements={hookElements}
+              shades={post.badge.shades}
+              file={slideFile}
+              onChangePost={onChangePost}
+            />
+          </Fold>
+
+          <Fold title="Defaults · what a new piece starts from" {...fold('defaults')}>
+            <div className="flex flex-col gap-2">
+              <p className="m-0 text-[0.78rem] text-ink-soft">
+                The frame, the placement, the shades, the per-piece styling and
+                what this piece counts — kept for the next{' '}
+                {POST_KINDS.find((k) => k.id === post.kind)?.label.toLowerCase() ??
+                  post.kind}{' '}
+                of this trip. What it says about a particular day is never
+                inherited.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChangeTrip({
+                      ...trip,
+                      hookDefaults: {
+                        ...trip.hookDefaults,
+                        [post.kind]: hookDefaultsFrom(post.badge),
+                      },
+                    })
+                  }
+                  className="px-2.5 py-1.5 rounded-paper border border-line-strong bg-paper text-[0.74rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
+                >
+                  Save as the default
+                </button>
+                {savedDefault && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        patchBadge({
+                          ...defaultPostBadge(post.kind, savedDefault),
+                          // The day, the frame of the clip and the author's own
+                          // words belong to this piece, not to the default.
+                          referenceDate: post.badge.referenceDate,
+                          videoTimeSeconds: post.badge.videoTimeSeconds,
+                          textOverrides: post.badge.textOverrides,
+                        })
+                      }
+                      className="px-2.5 py-1.5 rounded-paper border border-line bg-paper text-[0.74rem] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
+                    >
+                      Apply it to this piece
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = { ...trip.hookDefaults };
+                        delete next[post.kind];
+                        onChangeTrip({ ...trip, hookDefaults: next });
+                      }}
+                      className="px-2.5 py-1.5 p-0 border-0 bg-transparent text-[0.74rem] text-faint cursor-pointer underline underline-offset-[3px] hover:text-[#9a3a23]"
+                    >
+                      Forget it
+                    </button>
+                  </>
+                )}
+              </div>
+              {!savedDefault && (
+                <span className="text-[0.7rem] text-faint">
+                  Nothing saved yet — new pieces start from the factory look.
+                </span>
+              )}
+            </div>
+          </Fold>
 
           <div className={section}>
             <span className={legend}>Frame</span>
@@ -1194,82 +1278,6 @@ export default function PostEditor({
                   </span>
                 )}
               </p>
-            </div>
-          </Fold>
-
-          <Fold title="Studio · grade, telemetry, one export" {...fold('studio')}>
-            <StudioLink
-              post={post}
-              elements={hookElements}
-              shades={post.badge.shades}
-              file={slideFile}
-              onChangePost={onChangePost}
-            />
-          </Fold>
-
-          <Fold title="Defaults · what a new piece starts from" {...fold('defaults')}>
-            <div className="flex flex-col gap-2">
-              <p className="m-0 text-[0.78rem] text-ink-soft">
-                The frame, the placement, the shades, the per-piece styling and
-                what this piece counts — kept for the next{' '}
-                {POST_KINDS.find((k) => k.id === post.kind)?.label.toLowerCase() ??
-                  post.kind}{' '}
-                of this trip. What it says about a particular day is never
-                inherited.
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  onClick={() =>
-                    onChangeTrip({
-                      ...trip,
-                      hookDefaults: {
-                        ...trip.hookDefaults,
-                        [post.kind]: hookDefaultsFrom(post.badge),
-                      },
-                    })
-                  }
-                  className="px-2.5 py-1.5 rounded-paper border border-line-strong bg-paper text-[0.74rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
-                >
-                  Save as the default
-                </button>
-                {savedDefault && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        patchBadge({
-                          ...defaultPostBadge(post.kind, savedDefault),
-                          // The day, the frame of the clip and the author's own
-                          // words belong to this piece, not to the default.
-                          referenceDate: post.badge.referenceDate,
-                          videoTimeSeconds: post.badge.videoTimeSeconds,
-                          textOverrides: post.badge.textOverrides,
-                        })
-                      }
-                      className="px-2.5 py-1.5 rounded-paper border border-line bg-paper text-[0.74rem] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
-                    >
-                      Apply it to this piece
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const next = { ...trip.hookDefaults };
-                        delete next[post.kind];
-                        onChangeTrip({ ...trip, hookDefaults: next });
-                      }}
-                      className="px-2.5 py-1.5 p-0 border-0 bg-transparent text-[0.74rem] text-faint cursor-pointer underline underline-offset-[3px] hover:text-[#9a3a23]"
-                    >
-                      Forget it
-                    </button>
-                  </>
-                )}
-              </div>
-              {!savedDefault && (
-                <span className="text-[0.7rem] text-faint">
-                  Nothing saved yet — new pieces start from the factory look.
-                </span>
-              )}
             </div>
           </Fold>
 

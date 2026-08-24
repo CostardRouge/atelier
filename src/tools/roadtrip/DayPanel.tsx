@@ -9,6 +9,7 @@ import { getThumbs } from '../../shared/roadtrip/trip-store';
 import {
   POST_KINDS,
   createTripPost,
+  duplicateTripPost,
   type PostKind,
   type TripDoc,
   type TripPost,
@@ -34,16 +35,29 @@ function formatPublished(ts: number): string {
   });
 }
 
+/**
+ * Stop a control inside the row from also opening the piece. Every button in
+ * the row needs it: without it, marking something published or starting a
+ * delete would open the editor at the same time, and the action would be lost
+ * behind a screen change.
+ */
+function stopRow(e: React.MouseEvent) {
+  e.stopPropagation();
+  e.preventDefault();
+}
+
 function PostRow({
   post,
   thumb,
   onUpdate,
+  onDuplicate,
   onDelete,
   onOpen,
 }: {
   post: TripPost;
   thumb: string | null;
   onUpdate: (post: TripPost) => void;
+  onDuplicate: () => void;
   onDelete: () => void;
   onOpen: () => void;
 }) {
@@ -51,7 +65,22 @@ function PostRow({
   const kind = POST_KINDS.find((k) => k.id === post.kind);
 
   return (
-    <li className="flex items-center gap-3 py-2 border-b border-line last:border-b-0">
+    // The whole row opens the piece — the thumbnail and the Hook button are
+    // small targets in a list you sweep through. It is a `div` with a button
+    // role rather than a `<button>`, because a row holds buttons of its own
+    // and nesting them is invalid.
+    <li
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        if (e.target !== e.currentTarget) return;
+        e.preventDefault();
+        onOpen();
+      }}
+      aria-label={`Open ${post.title || 'this piece'}`}
+      className="flex items-center gap-3 py-2 border-b border-line last:border-b-0 cursor-pointer rounded-paper transition-colors hover:bg-paper-2/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink">
       {/* The hook as it was last composed, at the frame it was composed for:
           a 16:9 piece is wide here and a 9:16 one is narrow. Fixing the box
           and cropping to it would hide the one thing the picture is for —
@@ -59,11 +88,9 @@ function PostRow({
           is fixed, so the rows still line up. A post never opened has no
           picture, and gets a placeholder of the commonest frame rather than
           collapsing its row. */}
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-label={`Open ${post.title || 'this piece'}`}
-        className="flex-none h-[48px] p-0 rounded-[4px] overflow-hidden border border-line bg-paper-2 cursor-pointer hover:border-accent leading-none"
+      <span
+        aria-hidden="true"
+        className="flex-none h-[48px] rounded-[4px] overflow-hidden border border-line bg-paper-2 leading-none"
       >
         {thumb ? (
           <img
@@ -75,7 +102,7 @@ function PostRow({
         ) : (
           <span className="block h-full w-[38px]" aria-hidden="true" />
         )}
-      </button>
+      </span>
       <span
         className={`flex-none font-mono text-[0.6rem] tracking-[0.1em] uppercase px-2 py-[3px] rounded-full border ${
           post.publishedAt === null
@@ -100,20 +127,25 @@ function PostRow({
 
       <button
         type="button"
-        onClick={onOpen}
-        className="flex-none px-3 py-1.5 border border-line-strong rounded-full bg-paper text-[0.75rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
+        onClick={(e) => {
+          stopRow(e);
+          onDuplicate();
+        }}
+        className="flex-none px-3 py-1.5 border border-line rounded-full bg-paper text-[0.75rem] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
+        title="A copy of this piece on the same day"
       >
-        Hook
+        Duplicate
       </button>
 
       <button
         type="button"
-        onClick={() =>
+        onClick={(e) => {
+          stopRow(e);
           onUpdate({
             ...post,
             publishedAt: post.publishedAt === null ? Date.now() : null,
-          })
-        }
+          });
+        }}
         className="flex-none p-0 border-0 bg-transparent text-[0.75rem] text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink"
       >
         {post.publishedAt === null ? 'Mark published' : 'Back to draft'}
@@ -123,14 +155,20 @@ function PostRow({
         <span className="flex-none flex items-center gap-2 text-[0.75rem]">
           <button
             type="button"
-            onClick={onDelete}
+            onClick={(e) => {
+              stopRow(e);
+              onDelete();
+            }}
             className="p-0 border-0 bg-transparent text-[#9a3a23] font-semibold cursor-pointer underline underline-offset-[3px]"
           >
             Delete
           </button>
           <button
             type="button"
-            onClick={() => setConfirming(false)}
+            onClick={(e) => {
+              stopRow(e);
+              setConfirming(false);
+            }}
             className="p-0 border-0 bg-transparent text-muted cursor-pointer"
           >
             Keep
@@ -139,7 +177,10 @@ function PostRow({
       ) : (
         <button
           type="button"
-          onClick={() => setConfirming(true)}
+          onClick={(e) => {
+            stopRow(e);
+            setConfirming(true);
+          }}
           className="flex-none p-0 border-0 bg-transparent text-[0.75rem] text-faint cursor-pointer hover:text-[#9a3a23]"
           aria-label="Delete this post"
         >
@@ -240,6 +281,7 @@ export default function DayPanel({
               post={post}
               thumb={thumbs.get(post.id) ?? null}
               onUpdate={onUpdatePost}
+              onDuplicate={() => onAddPost(duplicateTripPost(post))}
               onDelete={() => onDeletePost(post.id)}
               onOpen={() => onOpenPost(post)}
             />
