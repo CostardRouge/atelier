@@ -18,11 +18,10 @@ interface StudioLinkProps {
   onChangePost: (post: TripPost) => void;
 }
 
-const legend = 'font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted';
 const button =
   'px-2.5 py-1.5 rounded-paper border border-line-strong bg-paper text-[0.74rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink disabled:opacity-50 disabled:cursor-default';
-const quiet =
-  'px-2.5 py-1.5 rounded-paper border border-line bg-paper text-[0.74rem] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink';
+const link =
+  'p-0 border-0 bg-transparent text-[0.76rem] text-accent-ink cursor-pointer underline underline-offset-[3px] hover:text-accent disabled:opacity-50 disabled:cursor-default disabled:no-underline';
 
 /**
  * The bridge to the Studio.
@@ -135,47 +134,59 @@ export default function StudioLink({
   const candidates = projects ?? [];
 
   return (
-    <div className="flex flex-col gap-2.5">
-      <p className="m-0 text-[0.78rem] text-ink-soft">
-        Link the Studio project this clip is graded in and the badge can be sent
-        there as an intro scene. One export then carries the grade, the
-        telemetry and the hook — nothing left to join afterwards.
-      </p>
-
+    <div className="flex flex-col gap-3">
       {linked ? (
         <>
-          <div className="flex items-center gap-2">
-            <span className={`${legend} flex-1 truncate`} title={linked.name}>
-              {linked.name}
-            </span>
-            <span className="font-mono text-[0.66rem] text-faint">
-              {hasHook(linked) ? 'hook sent' : 'no hook yet'}
+          {/* The project as a card, with the picture it already carries: a
+              name alone does not tell you whether this is the right clip. */}
+          <div className="flex items-center gap-3 p-2 rounded-paper border border-line bg-paper">
+            <ProjectThumb doc={linked} />
+            <span className="flex-1 min-w-0">
+              <span className="block text-[0.86rem] text-ink truncate" title={linked.name}>
+                {linked.name}
+              </span>
+              <span
+                className={`inline-flex items-center gap-1.5 font-mono text-[0.64rem] tracking-[0.1em] uppercase ${
+                  hasHook(linked) ? 'text-accent-ink' : 'text-faint'
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    hasHook(linked) ? 'bg-accent' : 'bg-[#c9c0ad]'
+                  }`}
+                  aria-hidden="true"
+                />
+                {hasHook(linked) ? 'hook in the project' : 'no hook sent yet'}
+              </span>
             </span>
           </div>
-          <div className="flex flex-wrap gap-1.5">
+
+          <button
+            type="button"
+            className="px-[1.1rem] py-2 inline-flex items-center justify-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.82rem] font-semibold hover:bg-accent hover:border-accent disabled:opacity-60"
+            disabled={busy !== null || !elements.length}
+            onClick={() => void send(true)}
+          >
+            {busy ?? (hasHook(linked) ? 'Update the hook and open the Studio' : 'Send the hook and open the Studio')}
+          </button>
+
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              className={button}
-              disabled={busy !== null || !elements.length}
-              onClick={() => void send(true)}
-            >
-              {busy ?? '→ Send the hook and open the Studio'}
-            </button>
-            <button
-              type="button"
-              className={quiet}
+              className={link}
               disabled={busy !== null || !elements.length}
               onClick={() => void send(false)}
             >
-              Send only
+              Send without leaving
             </button>
             <button
               type="button"
-              className={quiet}
+              className={link}
               onClick={() => navigate(`/studio/open/${encodeURIComponent(linked.id)}`)}
             >
-              Open
+              Open the project
             </button>
+            <span className="flex-1" />
             <button
               type="button"
               onClick={() => void unlink()}
@@ -184,60 +195,104 @@ export default function StudioLink({
               Unlink
             </button>
           </div>
+
           {!elements.length && (
             <span className="text-[0.7rem] text-faint">
-              There is no badge to send — the trip's dates cannot be read.
+              There is no badge to send — the trip&rsquo;s dates cannot be read.
             </span>
           )}
-          <span className="text-[0.7rem] text-faint">
-            The shades stay here: a Studio scene has one flat scrim, not a
-            gradient, so the strongest shade's colour and strength go over as
-            that veil and the shape does not.
-          </span>
+          <p className="m-0 text-[0.7rem] text-faint leading-snug">
+            One export from the Studio then carries the grade, the telemetry
+            and the hook. Sending again replaces the last one and touches
+            nothing else. The shades stay here: a Studio scene has one flat
+            scrim rather than a gradient, so the strongest shade&rsquo;s colour
+            and strength cross over and its shape does not.
+          </p>
         </>
       ) : (
         <>
-          <label className="flex flex-col gap-1">
-            <span className={legend}>Link an existing project</span>
-            <select
-              value=""
-              disabled={busy !== null || candidates.length === 0}
-              onChange={(e) => {
-                if (!e.target.value) return;
-                onChangePost({ ...post, projectId: e.target.value });
-              }}
-              className="font-sans text-[0.78rem] px-2 py-1.5 border border-line-strong rounded-paper bg-paper text-ink cursor-pointer focus:outline-none focus:border-accent disabled:opacity-50"
-            >
-              <option value="">
-                {projects === null
-                  ? 'Looking…'
-                  : candidates.length
-                    ? 'Pick a project…'
-                    : 'No projects in this browser yet'}
-              </option>
+          <p className="m-0 text-[0.78rem] text-ink-soft leading-snug">
+            Link the project this clip is graded in, and the badge can be sent
+            there as an intro scene — one export, grade and telemetry and hook,
+            nothing left to join afterwards.
+          </p>
+
+          {candidates.length > 0 && (
+            <div className="flex flex-col gap-1 max-h-[13rem] overflow-y-auto -mx-0.5 px-0.5">
               {candidates.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
+                <button
+                  key={p.id}
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() => onChangePost({ ...post, projectId: p.id })}
+                  className="flex items-center gap-2.5 p-1.5 rounded-paper border border-line bg-paper text-left cursor-pointer hover:border-accent hover:bg-accent-wash/40 disabled:opacity-50"
+                >
+                  <ProjectThumb doc={p} small />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[0.8rem] text-ink truncate" title={p.name}>
+                      {p.name}
+                    </span>
+                    <span className="block font-mono text-[0.62rem] text-faint">
+                      {new Date(p.updatedAt).toLocaleDateString(undefined, {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </span>
+                  </span>
+                </button>
               ))}
-            </select>
-          </label>
+            </div>
+          )}
+
           <button
             type="button"
             className={button}
             disabled={busy !== null}
             onClick={() => void create()}
           >
-            {busy ?? '+ Create a project for this clip'}
+            {busy ?? (candidates.length ? '+ Or create one for this clip' : '+ Create a project for this clip')}
           </button>
+          {projects !== null && candidates.length === 0 && (
+            <span className="text-[0.7rem] text-faint">
+              No Studio projects in this browser yet.
+            </span>
+          )}
         </>
       )}
 
       {note && (
-        <p className="m-0 px-2.5 py-2 rounded-paper border border-line bg-paper text-[0.75rem] text-ink-soft">
+        <p className="m-0 px-2.5 py-2 rounded-paper border border-line bg-paper text-[0.75rem] text-ink-soft leading-snug">
           {note}
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * A project's own thumbnail, which the Studio already keeps. A name alone does
+ * not answer "is this the right clip"; the picture does, at a glance.
+ */
+function ProjectThumb({ doc, small = false }: { doc: ProjectDoc; small?: boolean }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!doc.thumbnail) {
+      setUrl(null);
+      return;
+    }
+    const made = URL.createObjectURL(doc.thumbnail);
+    setUrl(made);
+    return () => URL.revokeObjectURL(made);
+  }, [doc.thumbnail]);
+
+  const size = small ? 'w-[44px] h-[30px]' : 'w-[58px] h-[40px]';
+  return (
+    <span
+      className={`flex-none ${size} rounded-[4px] overflow-hidden border border-line bg-paper-2 block`}
+      aria-hidden="true"
+    >
+      {url && <img src={url} alt="" className="w-full h-full object-cover block" />}
+    </span>
   );
 }

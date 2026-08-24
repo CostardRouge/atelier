@@ -370,8 +370,10 @@ Studio project's name.
 
 **The picture is whatever is ticked in the Library**, and the two stay in step:
 opening a piece points the Library at its picture, and picking another one
-there re-points the piece. Videos work as well as photos, with a frame
-scrubber.
+there re-points the piece. Videos work as well as photos: the frame the hook sits
+on is chosen by **dragging along a filmstrip of the clip itself**, the way a
+phone gallery picks a cover — the thumbnails fill in as they decode, the
+preview follows the drag, and the arrows nudge frame by frame.
 
 **Stages** are the places the trip stopped at, each with its own span. They are
 what lets a badge name a place, say "3 days in Kalbarri", or count which day of

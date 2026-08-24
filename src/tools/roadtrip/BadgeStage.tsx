@@ -64,8 +64,10 @@ export default function BadgeStage({
   const onRenderedRef = useRef(onRendered);
   onRenderedRef.current = onRendered;
 
-  // Decode the picture. Re-runs when the clip's frame moves, because a video
-  // source IS the seeked element — a photo re-decodes only when the file does.
+  // Decode the picture. ONLY when the file changes: moving a clip's frame
+  // seeks the element that is already open (below). Re-decoding per nudge —
+  // a new element and a new object URL each time — is what made choosing a
+  // hook frame stutter and flash "decoding…" the whole way across.
   useEffect(() => {
     let cancelled = false;
     sourceRef.current?.release();
@@ -103,9 +105,29 @@ export default function BadgeStage({
       cancelled = true;
     };
     // `elements`/`theme` deliberately absent: they drive the paint below, not
-    // the decode, and listing them would re-decode the file on every nudge of
-    // a slider.
-  }, [file, videoTimeSeconds]);
+    // the decode. `videoTimeSeconds` likewise — see the seek effect.
+  }, [file]);
+
+  // Move the open clip to the asked-for moment, then repaint. `frameSeq` is
+  // what makes the paint wait for the frame: painting on `videoTimeSeconds`
+  // alone would draw the OLD frame, since the seek has not landed yet.
+  const [frameSeq, setFrameSeq] = useState(0);
+  useEffect(() => {
+    const source = sourceRef.current;
+    if (!source?.seek || loading) return;
+    let cancelled = false;
+    void source
+      .seek(videoTimeSeconds)
+      .then(() => {
+        if (!cancelled) setFrameSeq((n) => n + 1);
+      })
+      .catch(() => {
+        /* a seek that fails leaves the last good frame on screen */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [videoTimeSeconds, loading]);
 
   // Paint. Runs on every change of anything drawn, including after a decode.
   useEffect(() => {
@@ -135,7 +157,7 @@ export default function BadgeStage({
     qr,
     loading,
     file,
-    videoTimeSeconds,
+    frameSeq,
   ]);
 
   useEffect(() => () => sourceRef.current?.release(), []);
