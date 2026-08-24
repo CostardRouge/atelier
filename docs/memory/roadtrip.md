@@ -165,6 +165,22 @@ The EXIF date is read as written, never converted: EXIF has no timezone and the 
 
 **`exif-parser.ts` moved to `shared/exif/`** when Road Trip became its second consumer — a tool never reaches into another tool (the same move `StylePanel` made).
 
+## The bridge to the Studio: the hook is sent as an intro SCENE (2026-08-24)
+
+**Decision, taken with the maintainer after weighing three options.** His real workflow was: grade + telemetry in the Studio, badge in Road Trip, two files joined on a phone. Rejected: concatenating a hook clip and the footage (a multi-source export, an audio-timeline problem, and the pre-roll he had already deferred), and having Road Trip's own exporter borrow the project's LUT (two exporters doing one job, guaranteed to drift). **Chosen: Road Trip briefs the Studio.** A post carries `projectId`; `hook-scene.ts` translates the badge into a `roadtrip-hook` scene plus its elements; ONE Studio export then carries grade, telemetry and hook. This also answers "can Road Trip pick a LUT" — it does not need to, the Studio already grades.
+
+**Two rules make sending repeatable**: everything injected is prefixed `roadtrip:` and belongs to the one scene, so a send REPLACES the last one instead of stacking a second badge; and nothing else in the project is touched — grade, trim, telemetry elements and the author's own intro all survive. Unlinking removes the hook again rather than leaving one nobody can edit.
+
+**The shades do not cross over, and that is said in the panel.** A scene scrim is one flat colour at one opacity; a gradient's *shape* cannot be expressed. `scrimFromShades` takes the strongest shade's colour and 60% of its strength (a full-frame veil reads far heavier than the same number in a gradient that clears half the frame). Turning a bottom gradient into a full veil silently would be a different picture.
+
+**Handover route**: `#/studio/open/<id>` opens a project and rewrites itself to `/studio` on arrival, so a reload does not re-run the open and Back does not bounce. It exists so neither tool reaches into the other's state.
+
+**Trap**: creating a project with a media ref but no directory handle greets a brand-new project with "1 media file not in this folder" — `reconcileMedia` runs whenever `media.files` is non-empty and finds nothing. A project created from Road Trip records NO media; the clip is already in the shared Library, which is where the Studio picks it up.
+
+## A trip remembers the look it gives a new piece (2026-08-24)
+
+`TripDoc.hookDefaults` keeps, per post kind, everything about how a hook is composed — frame, placement, shades, per-piece styling, counter mode, temporal mode. Saved from a piece by hand, never inferred, and empty until asked for: a default nobody chose is another factory setting. What belongs to one day is never inherited (reference day, the clip's frame, the author's own text overrides) — that distinction is the whole point of the feature, and `defaultPostBadge` enforces it.
+
 ## One stack of SHADES, not a vignette control and a scrim control (2026-08-24)
 
 **Decision, with the maintainer.** The two were the same thing seen twice — a gradient of some colour, anchored somewhere, reaching some distance — and keeping them apart cost every combination that actually comes up (a wash from the left AND a vignette; a band clear at the top edge and dark at mid-frame) and left the vignette locked to black. `shades.ts` replaces both: up to four layers, each a DIRECTION (four edges, two middle bands, radial), a reach, a strength, a colour, an `invert` flag, and `followHook`.

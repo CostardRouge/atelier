@@ -472,10 +472,23 @@ error-correction level M, versions 1 to 10 (213 characters); a link that does
 not fit is refused with a reason rather than drawn as a code that scans to half
 a URL.
 
+**The Studio and Road Trip are joined up.** A piece can link the Studio project
+its clip is graded in — pick an existing one or create it from the piece — and
+the badge is then **sent into that project as an intro scene**. One export from
+the Studio carries the grade, the telemetry overlay and the day badge, so there
+is nothing left to join afterwards on a phone. Sending is explicit and
+repeatable: everything the bridge writes is named `roadtrip:…` and lives in one
+scene, so a second send replaces the first and never touches the grade, the
+trim, the telemetry elements or your own intro. The one thing that does not
+cross over is the shades — a Studio scene has a flat scrim rather than a
+gradient, so the strongest shade's colour and strength go over as that veil and
+the *shape* stays here, which the panel says out loud.
+
 Currently in place: the trip, its days and stages, the grid, day-keyed posts,
 the badge — words, temporal line, per-piece styling, animation and picture
-treatments — the deck through to its PNGs, and the animated hook burned into a
-clip. A portable `.json` export of a trip is the phase that follows.
+treatments — the deck through to its PNGs, the animated hook burned into a
+clip, and the bridge into the Studio. A portable `.json` export of a trip is
+the phase that follows.
 
 ## Telemetry tool
 

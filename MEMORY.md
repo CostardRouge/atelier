@@ -78,6 +78,9 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - Only a deck's content slides reorder; the hook and the call to action are structural — `roadtrip.md`.
 - Vignette and scrim are ONE stack of shades (direction × reach × strength × colour × invert × follow-the-hook); a middle band must run edge-to-edge with the peak in the centre, or a canvas gradient blacks out the far half — `roadtrip.md`.
 - In an async paint, read the canvas's size AFTER the last await: a stale render that read it before drew a miniature over a resized stage — `roadtrip.md`.
+- Road Trip briefs the STUDIO: a piece links a project and the badge is sent in as a `roadtrip-hook` scene, so one export carries grade + telemetry + hook; a send replaces the last, and the shades' shape does not cross over — `roadtrip.md`.
+- `#/studio/open/<id>` hands a project between tools and rewrites itself on arrival; neither tool reaches into the other's state — `architecture.md`, `roadtrip.md`.
+- A trip remembers the look it gives a new piece of each kind; what belongs to one day is never inherited — `roadtrip.md`.
 - Road Trip's grid draws its own hover card (fixed-positioned, pointer-transparent) because the native `title` is far too slow to sweep a calendar with — `roadtrip.md`.
 - Each post keeps a small JPEG of its HOOK in a second IndexedDB store, taken from the preview canvas, drawn at the piece's own orientation, and pruned on delete — `roadtrip.md`.
 - A tool that redirects from a route effect must first check the path is its own (`isWithinRoute`): a mounted tool still observes the hash after it has changed to another tool's, and redirecting then makes the switcher do nothing — `architecture.md`.

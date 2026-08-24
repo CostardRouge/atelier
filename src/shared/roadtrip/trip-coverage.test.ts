@@ -28,6 +28,7 @@ const post = (
   date,
   endDate: opts.end ?? null,
   title: `post ${seq}`,
+  projectId: null,
   media: null,
   badge: defaultPostBadge(opts.kind ?? 'photo'),
   slides: [],

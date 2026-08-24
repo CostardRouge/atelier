@@ -26,6 +26,7 @@ const post = (date: IsoDate, end: IsoDate | null = null): TripPost => ({
   badge: defaultPostBadge('photo'),
   slides: [],
   includeCta: false,
+  projectId: null,
   publishedAt: null,
   createdAt: 0,
 });

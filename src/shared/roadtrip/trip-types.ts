@@ -41,7 +41,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 7;
+export const TRIP_DOC_VERSION = 8;
 
 /**
  * The look every badge of a trip starts with. `neutral` — white with a drop
@@ -242,6 +242,12 @@ export interface TripPost {
    * day" from "published, months later" — the trip is being told a year after
    * it happened, so those two dates are never the same.
    */
+  /**
+   * The Studio project this piece is composed in, when there is one. The badge
+   * is sent there as an intro scene and ONE export carries the grade, the
+   * telemetry and the hook — see `hook-scene.ts`.
+   */
+  projectId: string | null;
   publishedAt: number | null;
   createdAt: number;
 }
@@ -330,6 +336,7 @@ export function createTripPost(
     // A carousel is the shape that ends on a call to action; a reel's last
     // frame is the footage, and a single photo has no last slide to give.
     includeCta: kind === 'carousel',
+    projectId: null,
     publishedAt: null,
     createdAt: Date.now(),
   };
@@ -398,6 +405,11 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * backdrop, the place marker and the reference day. A post that had the
  * boolean on lands on `auto` — the intent kept, the untrue anniversary dropped.
  *
+ * v7 → v8 lets a piece point at a Studio project, so the graded clip and the
+ * day badge can leave as ONE export instead of two files joined on a phone.
+ * Nothing existing is linked: a link is a choice, and guessing one from a file
+ * name is exactly the identity-by-name this tool refuses.
+ *
  * v6 → v7 gives a trip a place to keep the look it gives a new piece of each
  * kind. It starts empty on purpose — a default nobody chose is a factory
  * setting, and existing pieces keep exactly the look they were composed with.
@@ -432,6 +444,12 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
       ...post,
       slides: post.slides ?? [],
       includeCta: post.includeCta ?? false,
+    }));
+  }
+  if (migrated.version < 8) {
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      projectId: post.projectId ?? null,
     }));
   }
   if (migrated.version < 7) {

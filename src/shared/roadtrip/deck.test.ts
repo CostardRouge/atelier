@@ -20,6 +20,7 @@ const post = (over: Partial<TripPost> = {}, kind: PostKind = 'carousel'): TripPo
   badge: defaultPostBadge(kind),
   slides: [],
   includeCta: false,
+  projectId: null,
   publishedAt: null,
   createdAt: 0,
   ...over,

@@ -23,6 +23,7 @@ import {
 } from '../../shared/roadtrip/badge-layout';
 import type { Shade } from '../../shared/roadtrip/shades';
 import ShadesPanel from './ShadesPanel';
+import StudioLink from './StudioLink';
 import {
   TIME_AGO_WORD_FIELDS,
   timeAgoPreviews,
@@ -1194,6 +1195,16 @@ export default function PostEditor({
                 )}
               </p>
             </div>
+          </Fold>
+
+          <Fold title="Studio · grade, telemetry, one export" {...fold('studio')}>
+            <StudioLink
+              post={post}
+              elements={hookElements}
+              shades={post.badge.shades}
+              file={slideFile}
+              onChangePost={onChangePost}
+            />
           </Fold>
 
           <Fold title="Defaults · what a new piece starts from" {...fold('defaults')}>
