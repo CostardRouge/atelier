@@ -26,7 +26,7 @@ import {
   type BadgeLayout,
   type BadgePieceStyles,
 } from './badge-layout';
-import { DEFAULT_BACKDROP, type BadgeBackdrop } from './badge-render';
+import { createShade, vignetteShade, type Shade } from './shades';
 import { DEFAULT_CTA, type CtaSlide } from './cta-slide';
 import {
   DEFAULT_TIME_AGO_WORDS,
@@ -41,7 +41,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 5;
+export const TRIP_DOC_VERSION = 6;
 
 /**
  * The look every badge of a trip starts with. `neutral` — white with a drop
@@ -101,8 +101,12 @@ export interface PostBadge {
   showPin: boolean;
   /** How long the hook lasts, in seconds — what an exit animation lands on. */
   durationSeconds: number;
-  /** Vignette and scrim over the picture, under the badge. */
-  backdrop: BadgeBackdrop;
+  /**
+   * The darkening laid over the picture, under the badge — up to a handful of
+   * layers. Replaces the old single vignette + single scrim, which were the
+   * same thing seen twice and could not be combined (see `shades.ts`).
+   */
+  shades: Shade[];
   /** The frame the badge is composed for, from `ASPECT_PRESETS`. */
   aspectId: string;
   /** Frame of a video clip the badge sits on; ignored for a photo. */
@@ -132,7 +136,7 @@ export function defaultPostBadge(kind: PostKind = 'photo'): PostBadge {
     referenceDate: null,
     showPin: false,
     durationSeconds: DEFAULT_BADGE_DURATION,
-    backdrop: { ...DEFAULT_BACKDROP },
+    shades: [],
     aspectId: ASPECT_FOR_KIND[kind],
     videoTimeSeconds: 0,
     textOverrides: {},
@@ -337,6 +341,12 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * backdrop, the place marker and the reference day. A post that had the
  * boolean on lands on `auto` — the intent kept, the untrue anniversary dropped.
  *
+ * v5 → v6 turns the vignette and the scrim into one stack of SHADES. Both are
+ * carried over as the shades they always were: a vignette becomes an inverted
+ * radial (dark at the corners), a scrim becomes an edge shade — one that
+ * follows the hook if it was the `under` variant — keeping its strength,
+ * colour and side. A post with neither gets an empty stack.
+ *
  * v4 → v5 makes a post a DECK: extra slides and a closing call to action, plus
  * the trip's one CTA template. Every existing post becomes a deck of one,
  * which is exactly what it already was, so nothing changes shape.
@@ -363,6 +373,39 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
       includeCta: post.includeCta ?? false,
     }));
   }
+  if (migrated.version < 6) {
+    migrated.posts = (migrated.posts ?? []).map((post) => {
+      const badge = post.badge as unknown as {
+        shades?: Shade[];
+        backdrop?: {
+          vignette?: number;
+          gradient?: 'off' | 'linear' | 'under';
+          gradientStrength?: number;
+          gradientColor?: string;
+          gradientFrom?: 'top' | 'bottom';
+        };
+      };
+      if (badge?.shades) return post;
+      const old = badge?.backdrop;
+      const shades: Shade[] = [];
+      if (old?.gradient && old.gradient !== 'off' && (old.gradientStrength ?? 0) > 0) {
+        shades.push(
+          createShade({
+            direction: old.gradientFrom === 'top' ? 'top' : 'bottom',
+            strength: old.gradientStrength ?? 0.65,
+            color: old.gradientColor ?? '#000000',
+            // `linear` reached roughly half the frame; `under` hugged the block.
+            reach: 0.58,
+            followHook: old.gradient === 'under',
+          }),
+        );
+      }
+      if ((old?.vignette ?? 0) > 0) shades.push(vignetteShade(old!.vignette! * 0.85));
+      const next = { ...post.badge, shades };
+      delete (next as unknown as { backdrop?: unknown }).backdrop;
+      return { ...post, badge: next };
+    });
+  }
   if (migrated.version < 4) {
     // The v3 boolean fired on any date a year or more after the shot, so a
     // deck that had it on was announcing anniversaries on days that were not
@@ -376,7 +419,7 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
         referenceDate: post.badge?.referenceDate ?? null,
         showPin: post.badge?.showPin ?? false,
         durationSeconds: post.badge?.durationSeconds ?? DEFAULT_BADGE_DURATION,
-        backdrop: post.badge?.backdrop ?? { ...DEFAULT_BACKDROP },
+        shades: post.badge?.shades ?? [],
       };
       delete (badge as unknown as { showAnniversary?: boolean }).showAnniversary;
       return { ...post, badge };

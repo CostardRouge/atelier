@@ -95,7 +95,7 @@ export async function renderDeck(
         // The closing card is not part of the trip's title-style deck.
         theme: isCta ? null : theme,
         timeSeconds: slide.kind === 'hook' ? opts.timeSeconds : 0,
-        backdrop: slide.kind === 'hook' ? post.badge.backdrop : undefined,
+        shades: slide.kind === 'hook' ? post.badge.shades : undefined,
         block: null,
         background: isCta ? trip.cta.background : undefined,
         qr: cta?.qr

@@ -21,7 +21,8 @@ import {
   badgeSettleSeconds,
   type BadgePieceStyle,
 } from '../../shared/roadtrip/badge-layout';
-import type { BadgeBackdrop } from '../../shared/roadtrip/badge-render';
+import type { Shade } from '../../shared/roadtrip/shades';
+import ShadesPanel from './ShadesPanel';
 import {
   TIME_AGO_WORD_FIELDS,
   timeAgoPreviews,
@@ -394,8 +395,7 @@ export default function PostEditor({
       },
     });
 
-  const patchBackdrop = (patch: Partial<BadgeBackdrop>) =>
-    patchBadge({ backdrop: { ...post.badge.backdrop, ...patch } });
+  const setShades = (shades: Shade[]) => patchBadge({ shades });
 
   /** What the temporal line actually says, so the panel shows it rather than
    *  describing it — a mode that has nothing true to say must be visible. */
@@ -483,7 +483,7 @@ export default function PostEditor({
         srcWidth: srcInfo.width,
         srcHeight: srcInfo.height,
         range: hookRange(post.badge.videoTimeSeconds, hookLength, duration),
-        backdrop: post.badge.backdrop,
+        shades: post.badge.shades,
         block,
         onProgress: (p) =>
           setExporting(
@@ -642,7 +642,7 @@ export default function PostEditor({
             elements={elements}
             theme={isCta ? null : trip.theme}
             timeSeconds={isHook ? time : 0}
-            backdrop={isHook ? post.badge.backdrop : undefined}
+            shades={isHook ? post.badge.shades : undefined}
             block={isHook ? block : null}
             background={isCta ? trip.cta.background : undefined}
             qr={
@@ -655,7 +655,7 @@ export default function PostEditor({
           />
 
           {isHook && animated && (
-            <div className="flex items-center gap-3 w-full max-w-[26rem]">
+            <div className="flex-none flex items-center gap-3 w-full max-w-[26rem]">
               <button
                 type="button"
                 onClick={() => setPlaying((p) => !p)}
@@ -1168,7 +1168,7 @@ export default function PostEditor({
             </div>
           </Fold>
 
-          <Fold title="Picture · vignette, scrim, duration" {...fold('backdrop')}>
+          <Fold title="Picture · shades, duration" {...fold('backdrop')}>
             <div className="flex flex-col gap-3">
               <label className="flex flex-col gap-1">
                 <span className={legend}>
@@ -1190,102 +1190,10 @@ export default function PostEditor({
                 </span>
               </label>
 
-              <label className="flex flex-col gap-1">
-                <span className={legend}>
-                  Vignette · {Math.round(post.badge.backdrop.vignette * 100)}%
-                </span>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.02}
-                  value={post.badge.backdrop.vignette}
-                  onChange={(e) =>
-                    patchBackdrop({ vignette: Number(e.target.value) })
-                  }
-                  className="accent-accent"
-                />
-              </label>
-
-              <div className="flex flex-col gap-1.5">
-                <span className={legend}>Scrim</span>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {(
-                    [
-                      ['off', 'Off'],
-                      ['linear', 'Whole frame'],
-                      ['under', 'Under the hook'],
-                    ] as const
-                  ).map(([id, label]) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => patchBackdrop({ gradient: id })}
-                      aria-pressed={post.badge.backdrop.gradient === id}
-                      className={`px-2 py-1.5 rounded-paper border text-[0.72rem] cursor-pointer transition-colors ${
-                        post.badge.backdrop.gradient === id
-                          ? 'border-accent bg-accent-wash text-accent-ink font-semibold'
-                          : 'border-line bg-paper text-ink-soft hover:border-line-strong'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+              <div className="flex flex-col gap-1.5 pt-1 border-t border-line">
+                <span className={`${legend} pt-2`}>Shades over the picture</span>
+                <ShadesPanel shades={post.badge.shades} onChange={setShades} />
               </div>
-
-              {post.badge.backdrop.gradient !== 'off' && (
-                <>
-                  <label className="flex flex-col gap-1">
-                    <span className={legend}>
-                      Strength ·{' '}
-                      {Math.round(post.badge.backdrop.gradientStrength * 100)}%
-                    </span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.02}
-                      value={post.badge.backdrop.gradientStrength}
-                      onChange={(e) =>
-                        patchBackdrop({ gradientStrength: Number(e.target.value) })
-                      }
-                      className="accent-accent"
-                    />
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <span className="flex-1 text-[0.78rem] text-ink-soft">
-                      Scrim colour
-                    </span>
-                    <input
-                      type="color"
-                      value={post.badge.backdrop.gradientColor}
-                      onChange={(e) =>
-                        patchBackdrop({ gradientColor: e.target.value })
-                      }
-                      className="w-7 h-7 p-0 border border-line-strong rounded-[5px] bg-paper cursor-pointer"
-                      aria-label="Scrim colour"
-                    />
-                  </div>
-                  <div className="flex gap-1.5">
-                    {(['bottom', 'top'] as const).map((edge) => (
-                      <button
-                        key={edge}
-                        type="button"
-                        onClick={() => patchBackdrop({ gradientFrom: edge })}
-                        aria-pressed={post.badge.backdrop.gradientFrom === edge}
-                        className={`flex-1 px-2 py-1.5 rounded-paper border text-[0.72rem] cursor-pointer transition-colors ${
-                          post.badge.backdrop.gradientFrom === edge
-                            ? 'border-accent bg-accent-wash text-accent-ink font-semibold'
-                            : 'border-line bg-paper text-ink-soft hover:border-line-strong'
-                        }`}
-                      >
-                        From the {edge}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
             </div>
           </Fold>
 

@@ -350,7 +350,10 @@ stayed), and closes on an optional line about when. Pick a frame (9:16,
 4:5, 1:1, 16:9), place the block on a 3×3 grid, size the numeral, and export a
 PNG — ready as a Reel's opening frame or a carousel's first slide.
 
-On a wide screen the badge holds still while its controls scroll beside it —
+The picture takes every pixel the column can spare — it grows with the window
+rather than stopping at a fixed fraction of it — while the transport and the
+export button stay put. On a wide screen the badge holds still while its
+controls scroll beside it —
 the Studio's layout, and the reason is the same: you are watching the picture,
 not the panel. Stacked on a phone, the page scrolls as one, because a panel
 with its own scrollbar inside a scrolling page is a trap.
@@ -413,10 +416,16 @@ the preview plays the whole thing so you can watch the entrance land and the
 exit leave.
 
 **The picture can be helped.** A bright sky exactly where the hook sits is the
-normal case, so there is a **vignette** and a **scrim** — either across the
-whole frame from the badge's own edge, or confined to the hook zone, in any
-colour and strength. Darkening the picture keeps the typography clean, which a
-panel behind every line does not.
+normal case, so up to four **shades** can be laid over it. One shade is a
+direction — from any of the four edges, a band across the middle either way, or
+radial — a reach, a strength and **its own colour**, and it can be **inverted**:
+"from the top, reaching halfway, inverted" is clear at the edge and darkest at
+mid-frame, which is what a centred hook on a textured picture needs. *Follow the
+hook* hands the reach to the badge itself — a linear shade lands on the block's
+own edge, a radial centres on it — so the fade moves when the text does. They
+stack, so a wash from the left and a corner vignette can be on at once.
+Darkening the picture keeps the typography clean, which a panel behind every
+line does not.
 
 The badge is built out of the **same overlay engine the Studio uses**, not a
 second rendering system: it is a stack of ordinary text elements, so it

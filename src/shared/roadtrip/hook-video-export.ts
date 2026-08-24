@@ -15,7 +15,8 @@ import type { TrimRange } from '../media/trim';
 import type { OverlayElement } from '../overlay/overlay-types';
 import type { StyleTheme } from '../overlay/title-styles';
 import type { ExportVariant } from '../projects/export-variants';
-import { paintBackdrop, type BadgeBackdrop } from './badge-render';
+import { paintShades } from './badge-render';
+import type { HookBlock, Shade } from './shades';
 
 export interface HookVideoOptions {
   file: File;
@@ -27,15 +28,15 @@ export interface HookVideoOptions {
   srcHeight: number;
   /** The slice to encode; null sends the whole clip. */
   range: TrimRange | null;
-  backdrop?: BadgeBackdrop;
-  /** The badge block's extent, for a scrim confined to the hook zone. */
-  block?: { top: number; bottom: number } | null;
+  shades?: readonly Shade[];
+  /** The badge block's extent, for a shade that follows the hook. */
+  block?: HookBlock | null;
   onProgress?: (p: ExportProgress) => void;
   signal?: AbortSignal;
 }
 
 export function exportHookVideo(opts: HookVideoOptions): Promise<Blob> {
-  const { backdrop, block = null } = opts;
+  const { shades, block = null } = opts;
   return exportVariantVideo(
     opts.file,
     opts.variant,
@@ -51,8 +52,8 @@ export function exportHookVideo(opts: HookVideoOptions): Promise<Blob> {
       // The badge's windows count from the first exported frame, and the
       // pipeline reads that from the trim's in point — so the entrance plays
       // on frame one of the delivered clip, not wherever it fell in the rush.
-      paintUnderOverlays: backdrop
-        ? (ctx, w, h) => paintBackdrop(ctx, w, h, backdrop, block)
+      paintUnderOverlays: shades?.length
+        ? (ctx, w, h) => paintShades(ctx, w, h, shades, block)
         : undefined,
     },
     opts.onProgress,

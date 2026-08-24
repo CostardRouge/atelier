@@ -6,10 +6,10 @@ import {
   frameSize,
   loadBadgeSource,
   renderBadge,
-  type BadgeBackdrop,
   type BadgeSource,
   type QrDraw,
 } from '../../shared/roadtrip/badge-render';
+import type { HookBlock, Shade } from '../../shared/roadtrip/shades';
 
 interface BadgeStageProps {
   file: File | null;
@@ -20,10 +20,10 @@ interface BadgeStageProps {
   theme: StyleTheme | null;
   /** Where the badge's own animations are up to, in seconds. */
   timeSeconds: number;
-  /** Vignette and scrim over the picture, under the badge. */
-  backdrop?: BadgeBackdrop;
-  /** The badge block's extent, for a scrim confined to the hook zone. */
-  block?: { top: number; bottom: number } | null;
+  /** Darkening over the picture, under the badge. */
+  shades?: readonly Shade[];
+  /** The badge block's extent, for a shade that follows the hook. */
+  block?: HookBlock | null;
   /** Painted where no picture covers the frame — the closing card's ground. */
   background?: string;
   /** A QR square under the text. */
@@ -49,7 +49,7 @@ export default function BadgeStage({
   elements,
   theme,
   timeSeconds,
-  backdrop,
+  shades,
   block,
   background,
   qr,
@@ -72,24 +72,11 @@ export default function BadgeStage({
     sourceRef.current = null;
     setError(null);
 
-    if (!file) {
-      // Still paint: an empty frame with its badge is a legitimate thing to
-      // look at while choosing a picture.
-      const canvas = canvasRef.current;
-      if (canvas) {
-        void renderBadge(canvas, {
-          source: null,
-          elements,
-          theme,
-          timeSeconds,
-          backdrop,
-          block,
-          background,
-          qr,
-        });
-      }
-      return;
-    }
+    // No picture: the paint effect below already draws the empty frame with
+    // its badge, at the right size. This branch used to paint too — into a
+    // canvas it never sized — and its font wait landed AFTER the resize, so a
+    // miniature badge stayed burnt into the corner of the stage.
+    if (!file) return;
 
     setLoading(true);
     void loadBadgeSource(file, videoTimeSeconds)
@@ -132,7 +119,7 @@ export default function BadgeStage({
       elements,
       theme,
       timeSeconds,
-      backdrop,
+      shades,
       block,
       background,
       qr,
@@ -142,7 +129,7 @@ export default function BadgeStage({
     elements,
     theme,
     timeSeconds,
-    backdrop,
+    shades,
     block,
     background,
     qr,
@@ -154,11 +141,16 @@ export default function BadgeStage({
   useEffect(() => () => sourceRef.current?.release(), []);
 
   return (
-    <div className="flex flex-col items-center gap-2 min-h-0">
-      <div className="relative flex items-center justify-center min-h-0">
+    // The picture takes every pixel the column can spare: both max
+    // constraints apply to the canvas, and a replaced element honours them
+    // proportionally, so it fills the box without ever distorting. The 62vh
+    // cap is kept only for the STACKED layout, where the page scrolls and an
+    // unbounded picture would push the controls off a phone screen.
+    <div className="flex flex-col items-center gap-2 min-h-0 w-full @min-[860px]:flex-1">
+      <div className="relative flex items-center justify-center min-h-0 w-full @min-[860px]:flex-1">
         <canvas
           ref={canvasRef}
-          className="max-w-full max-h-[62vh] object-contain rounded-paper border border-line-strong bg-frame"
+          className="max-w-full max-h-[62vh] @min-[860px]:max-h-full object-contain rounded-paper border border-line-strong bg-frame"
         />
         {loading && (
           <span className="absolute font-mono text-[0.7rem] text-paper bg-[rgba(20,18,15,0.7)] px-3 py-1.5 rounded-full">

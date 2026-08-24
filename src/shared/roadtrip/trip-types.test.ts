@@ -248,10 +248,8 @@ describe('migrateTripDoc — v3 → v4', () => {
     expect(migrateTripDoc(v3(true)).posts[0].badge.durationSeconds).toBeGreaterThan(0);
   });
 
-  it('gives every post a backdrop, off', () => {
-    const backdrop = migrateTripDoc(v3(true)).posts[0].badge.backdrop;
-    expect(backdrop.gradient).toBe('off');
-    expect(backdrop.vignette).toBe(0);
+  it('leaves the picture alone — no shade until one is asked for', () => {
+    expect(migrateTripDoc(v3(true)).posts[0].badge.shades).toEqual([]);
   });
 
   it('moves the year lines into the temporal vocabulary, keeping the words', () => {
@@ -316,5 +314,70 @@ describe('stageProblem', () => {
     expect(stageProblem(trip, stage('2025-12-30', '2026-02-01'))).toMatch(
       /ends after the trip/,
     );
+  });
+});
+
+describe('migrateTripDoc — v5 → v6, the shades', () => {
+  /** A v5 document, with the vignette + scrim pair the shades replace. */
+  const v5 = (backdrop: Record<string, unknown>): TripDoc => {
+    const doc = createTripDoc('Australia', 'AU', '2025-03-01', '2026-01-04');
+    const post = createTripPost('photo', '2025-03-27', 'A day');
+    const badge = { ...post.badge } as unknown as Record<string, unknown>;
+    delete badge.shades;
+    badge.backdrop = backdrop;
+    return {
+      ...doc,
+      version: 5,
+      posts: [{ ...post, badge } as unknown as (typeof doc)['posts'][number]],
+    };
+  };
+
+  it('carries a scrim over as the edge shade it always was', () => {
+    const shades = migrateTripDoc(
+      v5({ gradient: 'linear', gradientStrength: 0.5, gradientColor: '#101010', gradientFrom: 'top', vignette: 0 }),
+    ).posts[0].badge.shades;
+    expect(shades).toHaveLength(1);
+    expect(shades[0]).toMatchObject({
+      direction: 'top',
+      strength: 0.5,
+      color: '#101010',
+      followHook: false,
+    });
+  });
+
+  it('keeps an “under the hook” scrim following the hook', () => {
+    const shades = migrateTripDoc(
+      v5({ gradient: 'under', gradientStrength: 0.6, gradientColor: '#000000', gradientFrom: 'bottom', vignette: 0 }),
+    ).posts[0].badge.shades;
+    expect(shades[0]).toMatchObject({ direction: 'bottom', followHook: true });
+  });
+
+  it('carries a vignette over as an inverted radial', () => {
+    const shades = migrateTripDoc(
+      v5({ gradient: 'off', gradientStrength: 0.65, gradientColor: '#000000', gradientFrom: 'bottom', vignette: 0.4 }),
+    ).posts[0].badge.shades;
+    expect(shades).toHaveLength(1);
+    expect(shades[0]).toMatchObject({ direction: 'radial', invert: true });
+  });
+
+  it('carries BOTH when both were on — which is what could not be done before', () => {
+    const shades = migrateTripDoc(
+      v5({ gradient: 'linear', gradientStrength: 0.5, gradientColor: '#000000', gradientFrom: 'bottom', vignette: 0.3 }),
+    ).posts[0].badge.shades;
+    expect(shades).toHaveLength(2);
+  });
+
+  it('leaves a post that had neither with nothing at all', () => {
+    const shades = migrateTripDoc(
+      v5({ gradient: 'off', gradientStrength: 0.65, gradientColor: '#000000', gradientFrom: 'bottom', vignette: 0 }),
+    ).posts[0].badge.shades;
+    expect(shades).toEqual([]);
+  });
+
+  it('drops the retired field rather than carrying two truths', () => {
+    const badge = migrateTripDoc(
+      v5({ gradient: 'linear', gradientStrength: 0.5, gradientColor: '#000000', gradientFrom: 'bottom', vignette: 0 }),
+    ).posts[0].badge as unknown as { backdrop?: unknown };
+    expect(badge.backdrop).toBeUndefined();
   });
 });

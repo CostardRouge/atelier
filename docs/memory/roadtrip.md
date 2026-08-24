@@ -165,13 +165,31 @@ The EXIF date is read as written, never converted: EXIF has no timezone and the 
 
 **`exif-parser.ts` moved to `shared/exif/`** when Road Trip became its second consumer — a tool never reaches into another tool (the same move `StylePanel` made).
 
+## One stack of SHADES, not a vignette control and a scrim control (2026-08-24)
+
+**Decision, with the maintainer.** The two were the same thing seen twice — a gradient of some colour, anchored somewhere, reaching some distance — and keeping them apart cost every combination that actually comes up (a wash from the left AND a vignette; a band clear at the top edge and dark at mid-frame) and left the vignette locked to black. `shades.ts` replaces both: up to four layers, each a DIRECTION (four edges, two middle bands, radial), a reach, a strength, a colour, an `invert` flag, and `followHook`.
+
+**`invert` is not "pick the opposite edge".** `top` reaching 0.5 inverted is clear at the top and dark at mid-frame; no un-inverted shade draws that. It is the case the maintainer asked for by name — a portrait frame whose text sits in the middle.
+
+**`followHook` keeps the old "under the hook" behaviour**: a linear shade lands on the badge block's own edge (with a margin of the block's height, so the fade clears the first line), a radial centres on the block. A scrim that moves with the text it protects beats one placed by eye, which is why it survived the merge.
+
+**Trap, measured in the browser**: a middle band drawn as centre→edge blacks out the whole far half — a canvas gradient holds its end colour past its endpoints. A band must run EDGE TO EDGE with the peak at 0.5 (`stopsFor(..., mirrored)`). The unit tests assert the stop shape, and the browser check samples five points of the real canvas per direction; the pure geometry alone would not have caught it.
+
+`shadeGradient` returns the gradient in FRACTIONS of the frame (radii against the SHORTER side, so a radial stays a circle on 9:16) and `paintShades` is a dumb translation into pixels — the same split that keeps the burn-in and the PNG identical.
+
+## Never read a canvas's size before an await and draw after it (2026-08-24)
+
+**Measured**: a miniature badge stayed burnt into the corner of the stage. `renderBadge` read `canvas.width/height`, awaited the fonts, and drew — while a newer render had resized the canvas in between. The stale call painted at the OLD scale over the new frame. The trigger was `BadgeStage`'s decode effect painting an empty frame into a canvas it never sized (300×150, the element default), but any caller could have caused it.
+
+**How to apply**: the font wait is now the FIRST thing `renderBadge` does; everything after it is synchronous, so two overlapping renders each draw a complete, self-consistent frame and the last one simply wins. The general rule: in an async paint, read the surface's dimensions AFTER the last await, never before.
+
 ## The grid's hover card, the panel's own scroll, the day's thumbnails (2026-08-24)
 
 Three asks from the same session, one theme — the tool has to be readable at a glance.
 
 **The hover card is ours, not `title`.** The native tooltip waits about a second on the first cell, which is useless on a grid meant to be *swept*, and it cannot show the kinds. `DayCard` is `position: fixed` with coordinates from the cell's `getBoundingClientRect()`, clamped to the viewport and `pointer-events: none`. Fixed rather than absolute on purpose: the grid scrolls sideways inside its own `overflow-x-auto` box, so an absolutely-positioned card would be clipped by it or drift with its scroll. `aria-label` still carries the same sentence — the card is decoration, the label is the accessible name.
 
-**The editor's panel scrolls by itself above 860px** (`overflow-y-auto` + `min-h-0` on the column, `overflow-hidden` on the section) so the badge stays in view while the folds are worked through — the studio's layout, same reason. **Below 860px the page scrolls as one**: a panel with its own scrollbar inside a scrolling page is a trap on a phone. Both breakpoints are CONTAINER queries (`@min-[860px]`), never viewport ones — the Library sidebar eats 288px the viewport cannot see.
+**The stage takes the height it is given** (`flex-1 min-h-0` down the column, `max-h-full` on the canvas — both max constraints apply, and a replaced element honours them proportionally, so it fills the box without distorting). The 62vh cap is kept only for the STACKED layout, where the page scrolls and an unbounded picture would push the transport off a phone. **The editor's panel scrolls by itself above 860px** (`overflow-y-auto` + `min-h-0` on the column, `overflow-hidden` on the section) so the badge stays in view while the folds are worked through — the studio's layout, same reason. **Below 860px the page scrolls as one**: a panel with its own scrollbar inside a scrolling page is a trap on a phone. Both breakpoints are CONTAINER queries (`@min-[860px]`), never viewport ones — the Library sidebar eats 288px the viewport cannot see.
 
 **Each post keeps a thumbnail of its hook**, in a second object store (`thumbs`) of the roadtrip database, keyed by post id — apart from the documents because they are the only heavy values and a trip doc is read on every gallery render. It is a picture of the BADGE, not of the raw media: what you need to recognise a day you last touched in March is what you already made of it. **It is drawn at the piece's own orientation** — fixed height, natural width, no letterbox and no crop — because the shape of a piece is half of what identifies it in the list; a fixed box cropping 16:9 and 9:16 to the same rectangle hid the one thing the picture was for. The stage takes it (`BadgeStage.onRendered` → `canvasThumbnail`), debounced 700ms — the stage repaints on every animation frame of the badge's transport, and writing each one would be an IndexedDB write per frame. It is a cache: losing it costs a row its picture, never the post. **Prune on delete** (`deleteThumbs`), for a post and for a whole trip; nothing else ever will.
 

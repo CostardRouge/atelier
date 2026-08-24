@@ -10,6 +10,7 @@
  */
 
 import type { QrMatrix } from '../lib/qr';
+import { shadeGradient, type HookBlock, type Shade } from './shades';
 import { drawOverlays } from '../overlay/draw-overlays';
 import { ensureOverlayFonts } from '../overlay/fonts';
 import type { OverlayElement } from '../overlay/overlay-types';
@@ -142,65 +143,6 @@ function loadVideoFrame(file: File, timeSeconds: number): Promise<BadgeSource> {
   });
 }
 
-/**
- * How the picture is darkened so the badge can be read over it. A holiday
- * photograph is often a bright sky exactly where the hook sits, and darkening
- * the PICTURE is honest in a way a panel behind every line is not — it keeps
- * the typography clean and does the work optically.
- */
-export interface BadgeBackdrop {
-  /** Corner darkening, 0 (off) .. 1. */
-  vignette: number;
-  /**
-   * `linear` runs the whole frame from the badge's own side; `under` is
-   * confined to the block, for a picture that only needs help where the text
-   * is. `off` leaves the picture alone.
-   */
-  gradient: 'off' | 'linear' | 'under';
-  /** Peak opacity of the gradient, 0 .. 1. */
-  gradientStrength: number;
-  /** The colour it fades from. Black is the safe default; a tint is a look. */
-  gradientColor: string;
-  /** Which edge the gradient is anchored to — follows the badge's anchor. */
-  gradientFrom: 'top' | 'bottom';
-}
-
-export const DEFAULT_BACKDROP: BadgeBackdrop = {
-  vignette: 0,
-  gradient: 'off',
-  gradientStrength: 0.65,
-  gradientColor: '#000000',
-  gradientFrom: 'bottom',
-};
-
-/**
- * The band a gradient covers, in fractions of the frame height, as
- * `{ from, to }` where `from` is the opaque end. Pure so the geometry can be
- * checked without a canvas.
- *
- * `linear` reaches roughly half the frame from its edge — enough to lift a
- * block of text without turning the picture into a poster. `under` hugs the
- * badge's own extent with a margin of its own height, so the fade starts
- * clear of the first line rather than cutting across it.
- */
-export function gradientBand(
-  backdrop: BadgeBackdrop,
-  block: { top: number; bottom: number } | null,
-): { from: number; to: number } | null {
-  if (backdrop.gradient === 'off' || backdrop.gradientStrength <= 0) return null;
-  const fromBottom = backdrop.gradientFrom === 'bottom';
-
-  if (backdrop.gradient === 'linear') {
-    return fromBottom ? { from: 1, to: 0.42 } : { from: 0, to: 0.58 };
-  }
-
-  if (!block) return null;
-  const margin = Math.max(block.bottom - block.top, 0.02);
-  return fromBottom
-    ? { from: 1, to: Math.max(0, block.top - margin * 0.35) }
-    : { from: 0, to: Math.min(1, block.bottom + margin * 0.35) };
-}
-
 /** Where a QR square goes and what it says. Fractions of the frame. */
 export interface QrDraw {
   /** Left edge as a fraction of the WIDTH, top edge as a fraction of the HEIGHT. */
@@ -270,10 +212,10 @@ export interface RenderBadgeOptions {
   timeSeconds?: number;
   /** Painted where no picture covers the frame. */
   background?: string;
-  /** Vignette and scrim, painted over the picture and under the badge. */
-  backdrop?: BadgeBackdrop;
-  /** The badge block's extent, for a scrim confined to the hook zone. */
-  block?: { top: number; bottom: number } | null;
+  /** Darkening painted over the picture and under the badge. */
+  shades?: readonly Shade[];
+  /** The badge block's extent, for a shade that follows the hook. */
+  block?: HookBlock | null;
   /** A QR square, drawn under the text — the call-to-action slide's hero. */
   qr?: QrDraw | null;
 }
@@ -287,46 +229,49 @@ function rgba(color: string, alpha: number): string {
 }
 
 /**
- * Paint the scrim and the vignette over the picture. Both run BEFORE the
- * badge, never after: darkening the text you just drew would defeat the point.
+ * Paint the shades over the picture. They run BEFORE the badge, never after:
+ * darkening the text you just drew would defeat the point.
  *
  * Exported because the video burn-in needs the same treatment on every frame,
  * through the Studio's export pipeline rather than through `renderBadge` — a
- * hook whose gradient appeared in the PNG and vanished in the reel would be a
+ * gradient that appeared in the PNG and vanished in the reel would be a
  * different picture.
+ *
+ * The geometry is `shades.ts`'s; this only translates fractions into pixels.
  */
-export function paintBackdrop(
+export function paintShades(
   ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
   w: number,
   h: number,
-  backdrop: BadgeBackdrop,
-  block: { top: number; bottom: number } | null,
+  shades: readonly Shade[],
+  block: HookBlock | null,
 ): void {
-  const band = gradientBand(backdrop, block);
-  if (band && typeof ctx.createLinearGradient === 'function') {
-    const grad = ctx.createLinearGradient(0, band.from * h, 0, band.to * h);
-    grad.addColorStop(0, rgba(backdrop.gradientColor, backdrop.gradientStrength));
-    // An eased middle stop stops the fade reading as a hard edge.
-    grad.addColorStop(0.55, rgba(backdrop.gradientColor, backdrop.gradientStrength * 0.35));
-    grad.addColorStop(1, rgba(backdrop.gradientColor, 0));
-    ctx.save();
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, w, h);
-    ctx.restore();
-  }
+  const short = Math.min(w, h);
+  for (const shade of shades) {
+    const g = shadeGradient(shade, block);
+    if (!g) continue;
 
-  const amount = Math.max(0, Math.min(1, backdrop.vignette));
-  if (amount > 0 && typeof ctx.createRadialGradient === 'function') {
-    // Centred on the frame, reaching the corners: the inner stop is held clear
-    // of the middle so the subject is untouched and only the edges close in.
-    const cx = w / 2;
-    const cy = h / 2;
-    const outer = Math.hypot(cx, cy);
-    const grad = ctx.createRadialGradient(cx, cy, outer * 0.45, cx, cy, outer);
-    grad.addColorStop(0, 'rgba(0,0,0,0)');
-    grad.addColorStop(1, `rgba(0,0,0,${amount * 0.85})`);
+    let gradient: CanvasGradient;
+    if (g.kind === 'linear') {
+      if (typeof ctx.createLinearGradient !== 'function') continue;
+      gradient = ctx.createLinearGradient(g.x0 * w, g.y0 * h, g.x1 * w, g.y1 * h);
+    } else {
+      if (typeof ctx.createRadialGradient !== 'function') continue;
+      // Radii are fractions of the SHORTER side, so a radial keeps its shape
+      // on a 9:16 frame instead of turning into a stripe.
+      gradient = ctx.createRadialGradient(
+        g.cx * w,
+        g.cy * h,
+        g.r0 * short,
+        g.cx * w,
+        g.cy * h,
+        Math.max(g.r1 * short, 1),
+      );
+    }
+    for (const stop of g.stops) gradient.addColorStop(stop.at, rgba(shade.color, stop.alpha));
+
     ctx.save();
-    ctx.fillStyle = grad;
+    ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, w, h);
     ctx.restore();
   }
@@ -343,6 +288,14 @@ export async function renderBadge(
 ): Promise<void> {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
+
+  // The fonts are waited for FIRST, and everything after is synchronous.
+  // Reading the canvas size before an await and drawing after it is how a
+  // stale render paints a miniature into a canvas a newer one has resized —
+  // measured, and it left a ghost badge in the corner of the stage. Keeping
+  // the whole paint in one synchronous block also makes two overlapping
+  // renders idempotent: each draws a complete, self-consistent frame.
+  await ensureOverlayFonts(opts.elements, opts.theme);
   const { width: w, height: h } = canvas;
 
   ctx.clearRect(0, 0, w, h);
@@ -354,12 +307,9 @@ export async function renderBadge(
     ctx.drawImage(opts.source.image, sx, sy, sw, sh, 0, 0, w, h);
   }
 
-  if (opts.backdrop) paintBackdrop(ctx, w, h, opts.backdrop, opts.block ?? null);
+  if (opts.shades?.length) paintShades(ctx, w, h, opts.shades, opts.block ?? null);
   if (opts.qr) drawQr(ctx, w, h, opts.qr);
 
-  // Fonts must be resident before the first fillText or the badge draws in a
-  // fallback face and silently changes width.
-  await ensureOverlayFonts(opts.elements, opts.theme);
   drawOverlays(ctx, opts.elements, null, w, h, {
     theme: opts.theme,
     timeSeconds: opts.timeSeconds ?? 0,
