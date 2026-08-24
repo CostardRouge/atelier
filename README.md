@@ -350,18 +350,42 @@ opening a piece points the Library at its picture, and picking another one
 there re-points the piece. Videos work as well as photos, with a frame
 scrubber.
 
+**Stages** are the places the trip stopped at, each with its own span. They are
+what lets a badge name a place, say "3 days in Kalbarri", or count which day of
+a stop a picture is — and an optional marker sets the place off from the rest.
+
+**The temporal line.** Instead of the trip's name the kicker can say how long
+ago the picture was taken, and this is a set of choices rather than one: the
+elapsed days, weeks, months, years-and-months, a plain "since 27 Mar 2025", or
+the true anniversary. **Anniversary only ever fires on the actual anniversary** —
+same month, same day — because a line that announces one on a day that is not
+one is a lie the rest of the tool would not tell; on any other day the trip's
+name comes back, and the panel says so. **Auto** picks the truest striking line
+for the gap on the day it is read. The reference day is itself a field: set it
+ahead and the line reads correctly on the day the post goes out, not on the day
+you composed it.
+
 **Every word is yours.** The badge is written in English out of the box and
-each of its six words is a field on the trip, so writing the deck in French is
-six inputs (there is a one-click French button) rather than a language setting
-with two options. On top of that any single piece — the trip name, the word,
-the numeral, the total, the place — can be replaced with free text per post;
-clearing the field always gives the computed value back.
+every word — the counter's, the units, the templates — is a field on the trip,
+so writing the deck in French is a handful of inputs (there is a one-click
+French button) rather than a language setting with two options. On top of that
+any single piece — the trip name, the word, the numeral, the total, the place —
+can be replaced with free text per post; clearing the field always gives the
+computed value back.
 
 **Each piece can depart from the trip's style**: its casing (as-is, UPPER,
 lower), its ink, a panel behind it (fill, corner radius, outline) and an
 entrance and exit drawn from the engine's own animation model — fade, slide,
-scale, typewriter, wipe, with duration, easing and a stagger delay. A transport
-under the preview plays the badge so you can see the entrance land.
+scale, typewriter, wipe, with duration, easing and a stagger delay. The hook
+has a **duration**, which is what an exit animation lands on; a transport under
+the preview plays the whole thing so you can watch the entrance land and the
+exit leave.
+
+**The picture can be helped.** A bright sky exactly where the hook sits is the
+normal case, so there is a **vignette** and a **scrim** — either across the
+whole frame from the badge's own edge, or confined to the hook zone, in any
+colour and strength. Darkening the picture keeps the typography clean, which a
+panel behind every line does not.
 
 The badge is built out of the **same overlay engine the Studio uses**, not a
 second rendering system: it is a stack of ordinary text elements, so it
@@ -379,11 +403,11 @@ post still holds its day and its badge. Trips live in their own IndexedDB
 database and autosave as you edit; a refused write (private window, full disk)
 is said out loud rather than swallowed.
 
-Currently in place: the trip, its days, the grid, day-keyed posts, and the badge
-— words, per-piece styling and animation — through to a PNG. Multi-slide
-carousels with a call-to-action ending, burning an animated hook into a clip
-through the Studio's video export, and a portable `.json` export of a trip are
-the phases that follow.
+Currently in place: the trip, its days and stages, the grid, day-keyed posts,
+and the badge — words, temporal line, per-piece styling, animation and picture
+treatments — through to a PNG. Multi-slide carousels with a call-to-action
+ending, burning an animated hook into a clip through the Studio's video export,
+and a portable `.json` export of a trip are the phases that follow.
 
 ## Telemetry tool
 

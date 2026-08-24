@@ -131,6 +131,42 @@ export function yearsBetween(from: IsoDate, to: IsoDate): number | null {
   return years;
 }
 
+/**
+ * Whole months elapsed from `from` to `to`, on the calendar. Same shape as
+ * `yearsBetween` and for the same reason: a month is not 30.44 days, and a
+ * "1 month ago" that turns over on the 30th of a 31-day month reads as wrong
+ * to the person who took the photograph.
+ */
+export function monthsBetween(from: IsoDate, to: IsoDate): number | null {
+  const a = parseIsoDate(from);
+  const b = parseIsoDate(to);
+  if (a === null || b === null) return null;
+  const da = new Date(a);
+  const db = new Date(b);
+  let months =
+    (db.getUTCFullYear() - da.getUTCFullYear()) * 12 +
+    (db.getUTCMonth() - da.getUTCMonth());
+  if (db.getUTCDate() < da.getUTCDate()) months -= 1;
+  return months;
+}
+
+/**
+ * Whether two dates fall on the same day of the same month — what makes a
+ * date an ANNIVERSARY rather than merely a year or more later. 29 February
+ * has no anniversary in a common year, and saying so is more honest than
+ * quietly moving it.
+ */
+export function sameDayOfYear(a: IsoDate, b: IsoDate): boolean {
+  const ms1 = parseIsoDate(a);
+  const ms2 = parseIsoDate(b);
+  if (ms1 === null || ms2 === null) return false;
+  const d1 = new Date(ms1);
+  const d2 = new Date(ms2);
+  return (
+    d1.getUTCMonth() === d2.getUTCMonth() && d1.getUTCDate() === d2.getUTCDate()
+  );
+}
+
 /** Inclusive length of a span in days ("310"); null for a bad or reversed span. */
 export function spanLength(start: IsoDate, end: IsoDate): number | null {
   const delta = daysBetween(start, end);

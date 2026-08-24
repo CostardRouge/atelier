@@ -35,6 +35,13 @@ export interface BadgeLayout {
   sizeFrac: number;
 }
 
+/**
+ * How long the hook lasts, in seconds — the badge's own life, not the clip's.
+ * It is what an EXIT animation is laid against, so it is also the answer to
+ * "where do I change the hook duration": nowhere else.
+ */
+export const DEFAULT_BADGE_DURATION = 4;
+
 export const DEFAULT_BADGE_LAYOUT: BadgeLayout = {
   anchor: 'bottom-left',
   x: 0.07,
@@ -133,7 +140,11 @@ function casedText(text: string, style: BadgePieceStyle | undefined): string {
  * against the theme. Casing is applied to the TEXT and then `uppercase` is
  * pinned off, so a theme that uppercases cannot undo a deliberate lowercase.
  */
-function applyPieceStyle(el: OverlayElement, style: BadgePieceStyle | undefined): void {
+function applyPieceStyle(
+  el: OverlayElement,
+  style: BadgePieceStyle | undefined,
+  durationSeconds: number,
+): void {
   const pinned: string[] = [];
 
   if (style?.textCase && style.textCase !== 'as-is') {
@@ -169,12 +180,61 @@ function applyPieceStyle(el: OverlayElement, style: BadgePieceStyle | undefined)
   }
   if (style?.animation) {
     el.animation = style.animation;
-    // An animation needs a life to play inside. The badge lives for the whole
-    // shot, so only the entrance and exit are ever on screen.
-    el.window = { start: 0, end: null };
+    // An animation needs a life to play inside, and an EXIT needs that life to
+    // END — the engine lays an out step against the window's close, so a null
+    // end means the exit never plays at all. A piece with only an entrance
+    // keeps an open window so it does not vanish for no reason.
+    el.window = style.animation.out
+      ? { start: 0, end: durationSeconds }
+      : { start: 0, end: null };
   }
 
   el.styleOverrides = pinned;
+}
+
+/** The block's own metrics, shared by the layout and by anything drawn under it. */
+function blockMetrics(
+  content: BadgeContent,
+  layout: BadgeLayout,
+  aspect: number,
+): { pieces: { key: BadgePiece; text: string }[]; heights: number[]; gaps: number[]; top: number; height: number } {
+  const pieces = ORDER.map((key) => ({ key, text: content[key] })).filter(
+    (p): p is { key: BadgePiece; text: string } => Boolean(p.text),
+  );
+  const heights = pieces.map((p) =>
+    heightFractionOf(layout.sizeFrac * RATIOS[p.key], aspect),
+  );
+  const gaps = pieces.map((p, i) =>
+    i === pieces.length - 1
+      ? 0
+      : heightFractionOf(layout.sizeFrac * GAP_AFTER[p.key], aspect),
+  );
+  const height = heights.reduce((a, b) => a + b, 0) + gaps.reduce((a, b) => a + b, 0);
+  const vertical = verticalOf(layout.anchor);
+  const top =
+    vertical === 'top'
+      ? layout.y
+      : vertical === 'bottom'
+        ? layout.y - height
+        : layout.y - height / 2;
+  return { pieces, heights, gaps, top, height };
+}
+
+/**
+ * Where the badge's block sits in the frame, as fractions of the height. What
+ * a scrim confined to "the hook zone" needs to know, and the reason it is
+ * derived from the same numbers the layout uses rather than guessed: a
+ * gradient that does not line up with the text it exists to lift is worse than
+ * no gradient.
+ */
+export function badgeBlockExtent(
+  content: BadgeContent,
+  layout: BadgeLayout,
+  aspect: number,
+): { top: number; bottom: number } | null {
+  const { pieces, top, height } = blockMetrics(content, layout, aspect);
+  if (!pieces.length) return null;
+  return { top, bottom: top + height };
 }
 
 /**
@@ -189,29 +249,10 @@ export function badgeElements(
   layout: BadgeLayout,
   aspect: number,
   styles: BadgePieceStyles = {},
+  durationSeconds: number = DEFAULT_BADGE_DURATION,
 ): OverlayElement[] {
-  const pieces = ORDER.map((key) => ({ key, text: content[key] })).filter(
-    (p): p is { key: BadgePiece; text: string } => Boolean(p.text),
-  );
+  const { pieces, heights, gaps, top } = blockMetrics(content, layout, aspect);
   if (!pieces.length) return [];
-
-  const heights = pieces.map((p) =>
-    heightFractionOf(layout.sizeFrac * RATIOS[p.key], aspect),
-  );
-  const gaps = pieces.map((p, i) =>
-    i === pieces.length - 1
-      ? 0
-      : heightFractionOf(layout.sizeFrac * GAP_AFTER[p.key], aspect),
-  );
-  const blockHeight = heights.reduce((a, b) => a + b, 0) + gaps.reduce((a, b) => a + b, 0);
-
-  const vertical = verticalOf(layout.anchor);
-  const top =
-    vertical === 'top'
-      ? layout.y
-      : vertical === 'bottom'
-        ? layout.y - blockHeight
-        : layout.y - blockHeight / 2;
 
   const horizontal = horizontalOf(layout.anchor);
   const lineAnchor = `top-${horizontal}` as Anchor;
@@ -224,7 +265,7 @@ export function badgeElements(
     el.x = layout.x;
     el.y = cursor;
     el.sizeFrac = layout.sizeFrac * RATIOS[piece.key];
-    applyPieceStyle(el, style);
+    applyPieceStyle(el, style, durationSeconds);
     cursor += heights[i] + gaps[i];
     return el;
   });

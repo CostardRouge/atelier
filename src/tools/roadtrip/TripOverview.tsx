@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
 import { formatIsoDate, type IsoDate } from '../../shared/roadtrip/trip-days';
 import { tripCoverage } from '../../shared/roadtrip/trip-coverage';
-import type { TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
+import type { TripDoc, TripPost, TripStage } from '../../shared/roadtrip/trip-types';
 import DayHeatmap from './DayHeatmap';
 import DayPanel from './DayPanel';
+import StagesPanel from './StagesPanel';
 
 interface TripOverviewProps {
   trip: TripDoc;
@@ -51,6 +52,11 @@ export default function TripOverview({
 
   const mutate = useCallback(
     (posts: TripPost[]) => onChange({ ...trip, posts, updatedAt: Date.now() }),
+    [trip, onChange],
+  );
+
+  const setStages = useCallback(
+    (stages: TripStage[]) => onChange({ ...trip, stages, updatedAt: Date.now() }),
     [trip, onChange],
   );
 
@@ -118,6 +124,8 @@ export default function TripOverview({
           — {coverage.longestGap.length} days.
         </p>
       )}
+
+      <StagesPanel trip={trip} onChange={setStages} />
 
       {selected && (
         <DayPanel

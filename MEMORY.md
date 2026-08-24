@@ -65,6 +65,9 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - A badge piece departs from the theme by writing its own value AND pinning that key in `styleOverrides`; casing is applied to the string, never to the element's flag — `roadtrip.md`.
 - `StylePanel` is engine-level (`shared/overlay/`) since Road Trip became its second consumer — a tool never reaches into another tool — `architecture.md`, `roadtrip.md`.
 - `LegibilityStyle` gained a corner radius and an outline, drawn by one shared helper; the radius defaults to what the four call sites used to hard-code, so no stored document changes shape — `roadtrip.md`.
+- A badge's temporal line ("515 days ago") is a MODE, and `anniversary` fires only on the real anniversary; the reference day is an input, never `Date.now()` — `roadtrip.md`.
+- An overlay EXIT animation needs its window to have an END, or it never plays — the badge's hook duration is what supplies one — `roadtrip.md`.
+- A glyph drawn on canvas must survive a font stack we do not control: an emoji default drew nothing at all where no colour-emoji font existed — `roadtrip.md`.
 
 ## Open items (dated; remove when done)
 

@@ -51,7 +51,7 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
 const opts = (over: Partial<BadgeOptions> = {}): BadgeOptions => ({
   mode: 'day',
   words: DEFAULT_BADGE_WORDS,
-  showAnniversary: false,
+  timeAgo: 'off',
   today: '2026-08-23',
   ...over,
 });
@@ -111,17 +111,20 @@ describe('badgeContent — the words are data, not a language switch', () => {
     expect(c).toMatchObject({ label: 'Sol', counter: '· 310' });
   });
 
-  it('substitutes {n} in the N-years line', () => {
+  it('takes an invented temporal template too', () => {
     const c = badgeContent(
       trip(),
       post('2025-03-27'),
       opts({
-        showAnniversary: true,
-        today: '2028-08-01',
-        words: { ...DEFAULT_BADGE_WORDS, yearsAgo: '{n} summers back' },
+        timeAgo: 'days-ago',
+        today: '2026-08-24',
+        words: {
+          ...DEFAULT_BADGE_WORDS,
+          time: { ...DEFAULT_BADGE_WORDS.time, agoTemplate: '↺ {n}' },
+        },
       }),
     );
-    expect(c!.kicker).toBe('3 summers back');
+    expect(c!.kicker).toBe('↺ 515 days');
   });
 });
 
@@ -223,39 +226,51 @@ describe('badgeContent — stage modes', () => {
   });
 });
 
-describe('badgeContent — the anniversary kicker', () => {
-  it('replaces the trip name once a year has passed', () => {
+describe('badgeContent — the temporal kicker', () => {
+  it('replaces the trip name with the elapsed time', () => {
     const c = badgeContent(
       trip(),
       post('2025-03-27'),
-      opts({ showAnniversary: true, today: '2026-03-27' }),
+      opts({ timeAgo: 'days-ago', today: '2026-08-24' }),
+    );
+    expect(c!.kicker).toBe('515 days ago');
+  });
+
+  it('speaks on the real anniversary', () => {
+    const c = badgeContent(
+      trip(),
+      post('2025-03-27'),
+      opts({ timeAgo: 'anniversary', today: '2026-03-27' }),
     );
     expect(c!.kicker).toBe('1 year ago today');
   });
 
-  it('pluralises past the first year', () => {
+  it('falls back to the trip name when the anniversary is not today', () => {
+    // The retired boolean announced one on any date a year or more later.
     const c = badgeContent(
       trip(),
       post('2025-03-27'),
-      opts({ showAnniversary: true, today: '2027-08-01' }),
-    );
-    expect(c!.kicker).toBe('2 years ago today');
-  });
-
-  it('says nothing of the sort before the first anniversary', () => {
-    const c = badgeContent(
-      trip(),
-      post('2025-03-27'),
-      opts({ showAnniversary: true, today: '2026-03-26' }),
+      opts({ timeAgo: 'anniversary', today: '2026-08-24' }),
     );
     expect(c!.kicker).toBe('Australia');
+  });
+
+  it('reads the reference day, not the real today', () => {
+    // A post is composed before it goes out; the line has to read correctly
+    // on the day it is published.
+    const c = badgeContent(
+      trip(),
+      post('2025-03-27'),
+      opts({ timeAgo: 'anniversary', referenceDate: '2026-03-27', today: '2026-08-24' }),
+    );
+    expect(c!.kicker).toBe('1 year ago today');
   });
 
   it('leaves the headline untouched — the day is still what dominates', () => {
     const c = badgeContent(
       trip(),
       post('2025-03-27'),
-      opts({ showAnniversary: true, today: '2026-03-27' }),
+      opts({ timeAgo: 'auto', today: '2026-08-24' }),
     );
     expect(c).toMatchObject({ headline: '27', counter: 'of 310' });
   });
@@ -265,11 +280,58 @@ describe('badgeContent — the anniversary kicker', () => {
       trip(),
       post('2025-03-27'),
       opts({
-        showAnniversary: true,
-        today: '2026-03-27',
+        timeAgo: 'days-ago',
+        today: '2026-08-24',
         overrides: { kicker: 'ONE LAP OF AUSTRALIA' },
       }),
     );
     expect(c!.kicker).toBe('ONE LAP OF AUSTRALIA');
+  });
+});
+
+describe('badgeContent — the place marker', () => {
+  const doc = trip({ stages: [stage('Kalbarri', '2025-03-25', '2025-03-28')] });
+
+  it('is absent unless asked for', () => {
+    expect(badgeContent(doc, post('2025-03-27'), opts())?.caption).toBe('Kalbarri');
+  });
+
+  it('sets the marker before the place', () => {
+    expect(
+      badgeContent(doc, post('2025-03-27'), opts({ showPin: true }))?.caption,
+    ).toBe('\u25C6 Kalbarri');
+  });
+
+  it('takes whatever glyph the trip writes', () => {
+    const c = badgeContent(
+      doc,
+      post('2025-03-27'),
+      opts({ showPin: true, words: { ...DEFAULT_BADGE_WORDS, pin: '\u{1F4CD}' } }),
+    );
+    expect(c?.caption).toBe('\u{1F4CD} Kalbarri');
+  });
+
+  it('marks the place in a stage mode too, wherever it lands', () => {
+    const c = badgeContent(
+      doc,
+      post('2025-03-27'),
+      opts({ mode: 'stage-day', showPin: true }),
+    );
+    expect(c?.label).toBe('\u25C6 Kalbarri');
+  });
+
+  it('adds nothing when there is no place to mark', () => {
+    expect(
+      badgeContent(trip(), post('2025-03-27'), opts({ showPin: true }))?.caption,
+    ).toBeNull();
+  });
+
+  it('adds nothing when the glyph has been cleared', () => {
+    const c = badgeContent(
+      doc,
+      post('2025-03-27'),
+      opts({ showPin: true, words: { ...DEFAULT_BADGE_WORDS, pin: '  ' } }),
+    );
+    expect(c?.caption).toBe('Kalbarri');
   });
 });

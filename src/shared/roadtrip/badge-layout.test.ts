@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_BADGE_LAYOUT,
+  badgeBlockExtent,
   badgeElements,
   badgeSettleSeconds,
   heightFractionOf,
@@ -235,5 +236,72 @@ describe('badgeSettleSeconds', () => {
         kicker: { animation: { out: { preset: 'fade', duration: 3, easing: 'in' } } },
       }),
     ).toBe(0);
+  });
+});
+
+describe('badgeElements — the hook has a duration, so exits can play', () => {
+  const anim = (out: boolean) => ({
+    kicker: {
+      animation: {
+        in: { preset: 'fade' as const, duration: 0.4, easing: 'out' as const },
+        out: out
+          ? { preset: 'fade' as const, duration: 0.4, easing: 'in' as const }
+          : null,
+      },
+    },
+  });
+
+  it('closes the window on the duration when a piece exits', () => {
+    // Without an end the engine has nothing to lay the exit against, so it
+    // never plays — the bug this fixes.
+    const el = badgeElements(full, layout(), REEL, anim(true), 6)[0];
+    expect(el.window).toEqual({ start: 0, end: 6 });
+  });
+
+  it('leaves the window open when a piece only enters', () => {
+    const el = badgeElements(full, layout(), REEL, anim(false), 6)[0];
+    expect(el.window).toEqual({ start: 0, end: null });
+  });
+
+  it('gives an unanimated piece no window at all', () => {
+    const el = badgeElements(full, layout(), REEL, anim(true), 6)[2];
+    expect(el.window).toBeUndefined();
+  });
+});
+
+describe('badgeBlockExtent', () => {
+  it('spans the block a bottom anchor hangs above it', () => {
+    const extent = badgeBlockExtent(full, layout({ anchor: 'bottom-left', y: 0.9 }), REEL)!;
+    expect(extent.bottom).toBeCloseTo(0.9, 6);
+    expect(extent.top).toBeLessThan(extent.bottom);
+  });
+
+  it('starts at a top anchor', () => {
+    const extent = badgeBlockExtent(full, layout({ anchor: 'top-left', y: 0.1 }), REEL)!;
+    expect(extent.top).toBeCloseTo(0.1, 6);
+  });
+
+  it('agrees with where the elements actually land', () => {
+    const els = badgeElements(full, layout(), REEL);
+    const extent = badgeBlockExtent(full, layout(), REEL)!;
+    expect(els[0].y).toBeCloseTo(extent.top, 6);
+    expect(els[els.length - 1].y).toBeLessThan(extent.bottom);
+  });
+
+  it('grows with the numeral', () => {
+    const small = badgeBlockExtent(full, layout({ sizeFrac: 0.1 }), REEL)!;
+    const big = badgeBlockExtent(full, layout({ sizeFrac: 0.25 }), REEL)!;
+    expect(big.bottom - big.top).toBeGreaterThan(small.bottom - small.top);
+  });
+
+  it('is null when there is nothing to draw', () => {
+    const empty = {
+      kicker: null,
+      label: null,
+      headline: '',
+      counter: null,
+      caption: null,
+    };
+    expect(badgeBlockExtent(empty, layout(), REEL)).toBeNull();
   });
 });

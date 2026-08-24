@@ -16,12 +16,24 @@ import {
   type BadgeWords,
 } from '../../shared/roadtrip/day-badge';
 import {
+  badgeBlockExtent,
   badgeElements,
   badgeSettleSeconds,
   type BadgePieceStyle,
 } from '../../shared/roadtrip/badge-layout';
-import { badgeToPng, frameSize, loadBadgeSource } from '../../shared/roadtrip/badge-render';
-import { formatIsoDate } from '../../shared/roadtrip/trip-days';
+import {
+  badgeToPng,
+  frameSize,
+  loadBadgeSource,
+  type BadgeBackdrop,
+} from '../../shared/roadtrip/badge-render';
+import {
+  TIME_AGO_MODES,
+  TIME_AGO_WORD_FIELDS,
+  timeAgoLine,
+  type TimeAgoWords,
+} from '../../shared/roadtrip/time-ago';
+import { formatIsoDate, todayIso } from '../../shared/roadtrip/trip-days';
 import type { PostBadge, TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
 import BadgeStage from './BadgeStage';
 import PieceStylePanel from './PieceStylePanel';
@@ -162,7 +174,9 @@ export default function PostEditor({
       badgeContent(trip, post, {
         mode: post.badge.mode,
         words: trip.badgeWords,
-        showAnniversary: post.badge.showAnniversary,
+        timeAgo: post.badge.timeAgo,
+        referenceDate: post.badge.referenceDate,
+        showPin: post.badge.showPin,
         overrides: post.badge.textOverrides,
       }),
     [trip, post],
@@ -171,15 +185,37 @@ export default function PostEditor({
   const elements = useMemo(
     () =>
       content
-        ? badgeElements(content, post.badge.layout, aspect, post.badge.pieceStyles)
+        ? badgeElements(
+            content,
+            post.badge.layout,
+            aspect,
+            post.badge.pieceStyles,
+            post.badge.durationSeconds,
+          )
         : [],
-    [content, post.badge.layout, post.badge.pieceStyles, aspect],
+    [
+      content,
+      post.badge.layout,
+      post.badge.pieceStyles,
+      post.badge.durationSeconds,
+      aspect,
+    ],
+  );
+
+  const block = useMemo(
+    () => (content ? badgeBlockExtent(content, post.badge.layout, aspect) : null),
+    [content, post.badge.layout, aspect],
   );
 
   // --- the badge's own clock ------------------------------------------------
   const settle = badgeSettleSeconds(post.badge.pieceStyles);
-  const animated = settle > 0 || Object.values(post.badge.pieceStyles).some((s) => s?.animation);
-  const loopSeconds = Math.max(settle + 1.5, 3);
+  const styles = Object.values(post.badge.pieceStyles);
+  const animated = styles.some((s) => s?.animation);
+  const exits = styles.some((s) => s?.animation?.out);
+  // With an exit, the loop IS the hook: you have to watch it leave.
+  const loopSeconds = exits
+    ? post.badge.durationSeconds
+    : Math.max(settle + 1.5, 3);
   // A still of an animated badge shows it settled, never caught mid-slide.
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -210,6 +246,27 @@ export default function PostEditor({
   const patchWords = (patch: Partial<BadgeWords>) =>
     onChangeTrip({ ...trip, badgeWords: { ...trip.badgeWords, ...patch } });
 
+  const patchTimeWords = (patch: Partial<TimeAgoWords>) =>
+    onChangeTrip({
+      ...trip,
+      badgeWords: {
+        ...trip.badgeWords,
+        time: { ...trip.badgeWords.time, ...patch },
+      },
+    });
+
+  const patchBackdrop = (patch: Partial<BadgeBackdrop>) =>
+    patchBadge({ backdrop: { ...post.badge.backdrop, ...patch } });
+
+  /** What the temporal line actually says, so the panel shows it rather than
+   *  describing it — a mode that has nothing true to say must be visible. */
+  const timeLine = timeAgoLine(
+    post.date,
+    post.badge.referenceDate ?? todayIso(),
+    post.badge.timeAgo,
+    trip.badgeWords.time,
+  );
+
   const pieceStyle: BadgePieceStyle = post.badge.pieceStyles[piece] ?? {};
   const setPieceStyle = (style: BadgePieceStyle) =>
     patchBadge({ pieceStyles: { ...post.badge.pieceStyles, [piece]: style } });
@@ -235,6 +292,8 @@ export default function PostEditor({
           elements,
           theme: trip.theme,
           timeSeconds: time,
+          backdrop: post.badge.backdrop,
+          block,
           width: w,
           height: h,
         });
@@ -301,6 +360,8 @@ export default function PostEditor({
             elements={elements}
             theme={trip.theme}
             timeSeconds={time}
+            backdrop={post.badge.backdrop}
+            block={block}
             onSourceLoaded={(info) => setDuration(info.duration)}
           />
 
@@ -406,11 +467,11 @@ export default function PostEditor({
             <label className="flex items-center gap-2 text-[0.8rem] text-ink-soft cursor-pointer">
               <input
                 type="checkbox"
-                checked={post.badge.showAnniversary}
-                onChange={(e) => patchBadge({ showAnniversary: e.target.checked })}
+                checked={post.badge.showPin}
+                onChange={(e) => patchBadge({ showPin: e.target.checked })}
                 className="accent-accent"
               />
-              Lead with “one year ago today”
+              Marker before the place
             </label>
           </div>
 
@@ -457,6 +518,189 @@ export default function PostEditor({
               </label>
             </div>
           </div>
+
+          <Fold title="Time · what the kicker says about when" {...fold('time')}>
+            <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-2 gap-1.5">
+                {TIME_AGO_MODES.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => patchBadge({ timeAgo: m.id })}
+                    title={m.hint}
+                    aria-pressed={post.badge.timeAgo === m.id}
+                    className={`px-2 py-1.5 rounded-paper border text-left text-[0.74rem] cursor-pointer transition-colors ${
+                      post.badge.timeAgo === m.id
+                        ? 'border-accent bg-accent-wash text-accent-ink font-semibold'
+                        : 'border-line bg-paper text-ink-soft hover:border-line-strong'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+
+              <label className="flex flex-col gap-1">
+                <span className={legend}>Read on</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={post.badge.referenceDate ?? todayIso()}
+                    onChange={(e) => patchBadge({ referenceDate: e.target.value })}
+                    className={`${inputClass} flex-1 min-w-0`}
+                  />
+                  {post.badge.referenceDate && (
+                    <button
+                      type="button"
+                      onClick={() => patchBadge({ referenceDate: null })}
+                      className="flex-none p-0 border-0 bg-transparent text-[0.74rem] text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink"
+                    >
+                      Today
+                    </button>
+                  )}
+                </div>
+                <span className="text-[0.68rem] text-faint">
+                  The day this goes out. Set it ahead and the line reads
+                  correctly then, not now.
+                </span>
+              </label>
+
+              <p className="m-0 px-2.5 py-2 rounded-paper bg-paper border border-line text-[0.8rem]">
+                {timeLine ? (
+                  <span className="text-ink">“{timeLine}”</span>
+                ) : (
+                  <span className="text-muted">
+                    {post.badge.timeAgo === 'off'
+                      ? 'The kicker stays the trip’s name.'
+                      : post.badge.timeAgo === 'anniversary'
+                        ? 'Not the anniversary on that day — the trip’s name is used instead. Nothing claims a date it is not.'
+                        : 'Nothing true to say about that gap yet — the trip’s name is used instead.'}
+                  </span>
+                )}
+              </p>
+            </div>
+          </Fold>
+
+          <Fold title="Picture · vignette, scrim, duration" {...fold('backdrop')}>
+            <div className="flex flex-col gap-3">
+              <label className="flex flex-col gap-1">
+                <span className={legend}>
+                  Hook duration · {post.badge.durationSeconds.toFixed(1)}s
+                </span>
+                <input
+                  type="range"
+                  min={1}
+                  max={15}
+                  step={0.5}
+                  value={post.badge.durationSeconds}
+                  onChange={(e) =>
+                    patchBadge({ durationSeconds: Number(e.target.value) })
+                  }
+                  className="accent-accent"
+                />
+                <span className="text-[0.68rem] text-faint">
+                  How long the hook lasts — what an exit animation lands on.
+                </span>
+              </label>
+
+              <label className="flex flex-col gap-1">
+                <span className={legend}>
+                  Vignette · {Math.round(post.badge.backdrop.vignette * 100)}%
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.02}
+                  value={post.badge.backdrop.vignette}
+                  onChange={(e) =>
+                    patchBackdrop({ vignette: Number(e.target.value) })
+                  }
+                  className="accent-accent"
+                />
+              </label>
+
+              <div className="flex flex-col gap-1.5">
+                <span className={legend}>Scrim</span>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(
+                    [
+                      ['off', 'Off'],
+                      ['linear', 'Whole frame'],
+                      ['under', 'Under the hook'],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => patchBackdrop({ gradient: id })}
+                      aria-pressed={post.badge.backdrop.gradient === id}
+                      className={`px-2 py-1.5 rounded-paper border text-[0.72rem] cursor-pointer transition-colors ${
+                        post.badge.backdrop.gradient === id
+                          ? 'border-accent bg-accent-wash text-accent-ink font-semibold'
+                          : 'border-line bg-paper text-ink-soft hover:border-line-strong'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {post.badge.backdrop.gradient !== 'off' && (
+                <>
+                  <label className="flex flex-col gap-1">
+                    <span className={legend}>
+                      Strength ·{' '}
+                      {Math.round(post.badge.backdrop.gradientStrength * 100)}%
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.02}
+                      value={post.badge.backdrop.gradientStrength}
+                      onChange={(e) =>
+                        patchBackdrop({ gradientStrength: Number(e.target.value) })
+                      }
+                      className="accent-accent"
+                    />
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="flex-1 text-[0.78rem] text-ink-soft">
+                      Scrim colour
+                    </span>
+                    <input
+                      type="color"
+                      value={post.badge.backdrop.gradientColor}
+                      onChange={(e) =>
+                        patchBackdrop({ gradientColor: e.target.value })
+                      }
+                      className="w-7 h-7 p-0 border border-line-strong rounded-[5px] bg-paper cursor-pointer"
+                      aria-label="Scrim colour"
+                    />
+                  </div>
+                  <div className="flex gap-1.5">
+                    {(['bottom', 'top'] as const).map((edge) => (
+                      <button
+                        key={edge}
+                        type="button"
+                        onClick={() => patchBackdrop({ gradientFrom: edge })}
+                        aria-pressed={post.badge.backdrop.gradientFrom === edge}
+                        className={`flex-1 px-2 py-1.5 rounded-paper border text-[0.72rem] cursor-pointer transition-colors ${
+                          post.badge.backdrop.gradientFrom === edge
+                            ? 'border-accent bg-accent-wash text-accent-ink font-semibold'
+                            : 'border-line bg-paper text-ink-soft hover:border-line-strong'
+                        }`}
+                      >
+                        From the {edge}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </Fold>
 
           <Fold title="Piece · text, colour, animation" {...fold('piece')}>
             <div className="flex flex-col gap-3">
@@ -541,8 +785,22 @@ export default function PostEditor({
                   />
                 </label>
               ))}
+              <span className={`${legend} pt-2`}>Time</span>
+              {TIME_AGO_WORD_FIELDS.map((f) => (
+                <label key={f.key} className="flex items-center gap-2">
+                  <span className="w-24 flex-none text-[0.72rem] text-muted">
+                    {f.label}
+                  </span>
+                  <input
+                    value={trip.badgeWords.time[f.key]}
+                    onChange={(e) => patchTimeWords({ [f.key]: e.target.value })}
+                    className={`${inputClass} flex-1 min-w-0`}
+                  />
+                </label>
+              ))}
               <p className="m-0 text-[0.68rem] text-faint">
-                “{'{n}'}” in the N-years line is replaced by the number of years.
+                “{'{n}'}” is replaced by the quantity, “{'{date}'}” by the
+                picture’s own day.
               </p>
             </div>
           </Fold>

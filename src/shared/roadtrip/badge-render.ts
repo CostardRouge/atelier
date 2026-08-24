@@ -141,6 +141,65 @@ function loadVideoFrame(file: File, timeSeconds: number): Promise<BadgeSource> {
   });
 }
 
+/**
+ * How the picture is darkened so the badge can be read over it. A holiday
+ * photograph is often a bright sky exactly where the hook sits, and darkening
+ * the PICTURE is honest in a way a panel behind every line is not — it keeps
+ * the typography clean and does the work optically.
+ */
+export interface BadgeBackdrop {
+  /** Corner darkening, 0 (off) .. 1. */
+  vignette: number;
+  /**
+   * `linear` runs the whole frame from the badge's own side; `under` is
+   * confined to the block, for a picture that only needs help where the text
+   * is. `off` leaves the picture alone.
+   */
+  gradient: 'off' | 'linear' | 'under';
+  /** Peak opacity of the gradient, 0 .. 1. */
+  gradientStrength: number;
+  /** The colour it fades from. Black is the safe default; a tint is a look. */
+  gradientColor: string;
+  /** Which edge the gradient is anchored to — follows the badge's anchor. */
+  gradientFrom: 'top' | 'bottom';
+}
+
+export const DEFAULT_BACKDROP: BadgeBackdrop = {
+  vignette: 0,
+  gradient: 'off',
+  gradientStrength: 0.65,
+  gradientColor: '#000000',
+  gradientFrom: 'bottom',
+};
+
+/**
+ * The band a gradient covers, in fractions of the frame height, as
+ * `{ from, to }` where `from` is the opaque end. Pure so the geometry can be
+ * checked without a canvas.
+ *
+ * `linear` reaches roughly half the frame from its edge — enough to lift a
+ * block of text without turning the picture into a poster. `under` hugs the
+ * badge's own extent with a margin of its own height, so the fade starts
+ * clear of the first line rather than cutting across it.
+ */
+export function gradientBand(
+  backdrop: BadgeBackdrop,
+  block: { top: number; bottom: number } | null,
+): { from: number; to: number } | null {
+  if (backdrop.gradient === 'off' || backdrop.gradientStrength <= 0) return null;
+  const fromBottom = backdrop.gradientFrom === 'bottom';
+
+  if (backdrop.gradient === 'linear') {
+    return fromBottom ? { from: 1, to: 0.42 } : { from: 0, to: 0.58 };
+  }
+
+  if (!block) return null;
+  const margin = Math.max(block.bottom - block.top, 0.02);
+  return fromBottom
+    ? { from: 1, to: Math.max(0, block.top - margin * 0.35) }
+    : { from: 0, to: Math.min(1, block.bottom + margin * 0.35) };
+}
+
 export interface RenderBadgeOptions {
   source: BadgeSource | null;
   elements: OverlayElement[];
@@ -153,6 +212,59 @@ export interface RenderBadgeOptions {
   timeSeconds?: number;
   /** Painted where no picture covers the frame. */
   background?: string;
+  /** Vignette and scrim, painted over the picture and under the badge. */
+  backdrop?: BadgeBackdrop;
+  /** The badge block's extent, for a scrim confined to the hook zone. */
+  block?: { top: number; bottom: number } | null;
+}
+
+/** `#rrggbb` → `rgba(r,g,b,a)`; anything else is passed through unchanged. */
+function rgba(color: string, alpha: number): string {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(color.trim());
+  if (!m) return color;
+  const [r, g, b] = [m[1], m[2], m[3]].map((h) => parseInt(h, 16));
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/**
+ * Paint the scrim and the vignette over the picture. Both run BEFORE the
+ * badge, never after: darkening the text you just drew would defeat the point.
+ */
+function paintBackdrop(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  backdrop: BadgeBackdrop,
+  block: { top: number; bottom: number } | null,
+): void {
+  const band = gradientBand(backdrop, block);
+  if (band && typeof ctx.createLinearGradient === 'function') {
+    const grad = ctx.createLinearGradient(0, band.from * h, 0, band.to * h);
+    grad.addColorStop(0, rgba(backdrop.gradientColor, backdrop.gradientStrength));
+    // An eased middle stop stops the fade reading as a hard edge.
+    grad.addColorStop(0.55, rgba(backdrop.gradientColor, backdrop.gradientStrength * 0.35));
+    grad.addColorStop(1, rgba(backdrop.gradientColor, 0));
+    ctx.save();
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
+  }
+
+  const amount = Math.max(0, Math.min(1, backdrop.vignette));
+  if (amount > 0 && typeof ctx.createRadialGradient === 'function') {
+    // Centred on the frame, reaching the corners: the inner stop is held clear
+    // of the middle so the subject is untouched and only the edges close in.
+    const cx = w / 2;
+    const cy = h / 2;
+    const outer = Math.hypot(cx, cy);
+    const grad = ctx.createRadialGradient(cx, cy, outer * 0.45, cx, cy, outer);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(1, `rgba(0,0,0,${amount * 0.85})`);
+    ctx.save();
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
+  }
 }
 
 /**
@@ -176,6 +288,8 @@ export async function renderBadge(
     const { sx, sy, sw, sh } = coverRect(opts.source.width, opts.source.height, w, h);
     ctx.drawImage(opts.source.image, sx, sy, sw, sh, 0, 0, w, h);
   }
+
+  if (opts.backdrop) paintBackdrop(ctx, w, h, opts.backdrop, opts.block ?? null);
 
   // Fonts must be resident before the first fillText or the badge draws in a
   // fallback face and silently changes width.

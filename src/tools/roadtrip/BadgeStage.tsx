@@ -6,6 +6,7 @@ import {
   frameSize,
   loadBadgeSource,
   renderBadge,
+  type BadgeBackdrop,
   type BadgeSource,
 } from '../../shared/roadtrip/badge-render';
 
@@ -18,6 +19,10 @@ interface BadgeStageProps {
   theme: StyleTheme | null;
   /** Where the badge's own animations are up to, in seconds. */
   timeSeconds: number;
+  /** Vignette and scrim over the picture, under the badge. */
+  backdrop?: BadgeBackdrop;
+  /** The badge block's extent, for a scrim confined to the hook zone. */
+  block?: { top: number; bottom: number } | null;
   onSourceLoaded?: (info: { width: number; height: number; duration: number }) => void;
 }
 
@@ -33,6 +38,8 @@ export default function BadgeStage({
   elements,
   theme,
   timeSeconds,
+  backdrop,
+  block,
   onSourceLoaded,
 }: BadgeStageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -52,7 +59,16 @@ export default function BadgeStage({
       // Still paint: an empty frame with its badge is a legitimate thing to
       // look at while choosing a picture.
       const canvas = canvasRef.current;
-      if (canvas) void renderBadge(canvas, { source: null, elements, theme, timeSeconds });
+      if (canvas) {
+        void renderBadge(canvas, {
+          source: null,
+          elements,
+          theme,
+          timeSeconds,
+          backdrop,
+          block,
+        });
+      }
       return;
     }
 
@@ -97,8 +113,20 @@ export default function BadgeStage({
       elements,
       theme,
       timeSeconds,
+      backdrop,
+      block,
     });
-  }, [aspect, elements, theme, timeSeconds, loading, file, videoTimeSeconds]);
+  }, [
+    aspect,
+    elements,
+    theme,
+    timeSeconds,
+    backdrop,
+    block,
+    loading,
+    file,
+    videoTimeSeconds,
+  ]);
 
   useEffect(() => () => sourceRef.current?.release(), []);
 

@@ -41,7 +41,7 @@ describe('createTripPost', () => {
     const post = createTripPost('reel', '2025-03-27', 'Cliffs');
     expect(post.media).toBeNull();
     expect(post.badge.mode).toBe('day');
-    expect(post.badge.showAnniversary).toBe(false);
+    expect(post.badge.timeAgo).toBe('off');
     expect(post.publishedAt).toBeNull();
   });
 
@@ -174,6 +174,111 @@ describe('migrateTripDoc — v2 → v3', () => {
 
   it('is idempotent', () => {
     const once = migrateTripDoc(v2('fr'));
+    expect(migrateTripDoc(once)).toEqual(once);
+  });
+});
+
+describe('migrateTripDoc — v3 → v4', () => {
+  /** A v3 document: the anniversary boolean, flat year words, no duration. */
+  const v3 = (showAnniversary: boolean, french = false) =>
+    ({
+      version: 3,
+      id: 't3',
+      name: 'Australie',
+      destination: 'Australia',
+      startDate: '2025-03-01',
+      endDate: '2026-01-04',
+      stages: [],
+      theme: null,
+      badgeWords: french
+        ? {
+            day: 'Jour',
+            days: 'Jours',
+            of: 'sur',
+            at: 'à',
+            yearAgo: 'Il y a 1 an',
+            yearsAgo: 'Il y a {n} ans',
+          }
+        : {
+            day: 'Day',
+            days: 'Days',
+            of: 'of',
+            at: 'in',
+            yearAgo: '1 year ago today',
+            yearsAgo: '{n} years ago today',
+          },
+      posts: [
+        {
+          id: 'p1',
+          kind: 'photo',
+          date: '2025-03-27',
+          endDate: null,
+          title: 'Cliffs',
+          media: null,
+          badge: {
+            mode: 'day',
+            layout: { anchor: 'bottom-left', x: 0.07, y: 0.9, sizeFrac: 0.17 },
+            showAnniversary,
+            aspectId: '4:5',
+            videoTimeSeconds: 0,
+            textOverrides: {},
+            pieceStyles: {},
+          },
+          publishedAt: null,
+          createdAt: 0,
+        },
+      ],
+      createdAt: 0,
+      updatedAt: 0,
+    }) as unknown as TripDoc;
+
+  it('turns the anniversary boolean into a mode that is always true', () => {
+    // The boolean fired on any date a year or more later; `auto` says the
+    // truest striking thing about the gap on whatever day it is read.
+    expect(migrateTripDoc(v3(true)).posts[0].badge.timeAgo).toBe('auto');
+    expect(migrateTripDoc(v3(false)).posts[0].badge.timeAgo).toBe('off');
+  });
+
+  it('drops the retired boolean', () => {
+    const badge = migrateTripDoc(v3(true)).posts[0].badge;
+    expect('showAnniversary' in badge).toBe(false);
+  });
+
+  it('gives the hook a duration, so an exit animation has something to land on', () => {
+    expect(migrateTripDoc(v3(true)).posts[0].badge.durationSeconds).toBeGreaterThan(0);
+  });
+
+  it('gives every post a backdrop, off', () => {
+    const backdrop = migrateTripDoc(v3(true)).posts[0].badge.backdrop;
+    expect(backdrop.gradient).toBe('off');
+    expect(backdrop.vignette).toBe(0);
+  });
+
+  it('moves the year lines into the temporal vocabulary, keeping the words', () => {
+    const fr = migrateTripDoc(v3(true, true));
+    expect(fr.badgeWords.time.anniversary).toBe('Il y a 1 an');
+    expect(fr.badgeWords.time.anniversaryPlural).toBe('Il y a {n} ans');
+    // …and the rest of the French vocabulary comes with them.
+    expect(fr.badgeWords.time.days).toBe('jours');
+  });
+
+  it('lands an English deck on the English temporal words', () => {
+    expect(migrateTripDoc(v3(true)).badgeWords.time.days).toBe('days');
+  });
+
+  it('gives the trip a place marker', () => {
+    expect(migrateTripDoc(v3(true)).badgeWords.pin).toBeTruthy();
+  });
+
+  it('keeps what the v3 badge already said', () => {
+    expect(migrateTripDoc(v3(true)).posts[0].badge).toMatchObject({
+      mode: 'day',
+      aspectId: '4:5',
+    });
+  });
+
+  it('is idempotent', () => {
+    const once = migrateTripDoc(v3(true, true));
     expect(migrateTripDoc(once)).toEqual(once);
   });
 });

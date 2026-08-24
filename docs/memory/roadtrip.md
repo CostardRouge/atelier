@@ -85,6 +85,30 @@ Read before touching `src/tools/roadtrip/` or `src/shared/roadtrip/`, and before
 
 **Decision.** The badge composes over whatever is active in the shared Library sidebar (`useActiveAsset`), and the two stay in step both ways: opening a post activates its stored picture, and picking another asset in the sidebar re-points the post. **Why**: the maintainer asked for it by name to cut friction — a dropdown duplicating the sidebar is a second list to keep in sync by hand. **The trap to respect**: the restore must run only once and only after the library has loaded, and the record-back effect must be gated on it having run — otherwise the first render writes whatever happened to be active over the post's own choice.
 
+## The temporal line replaced the anniversary boolean (2026-08-24)
+
+**The complaint that caused it**: "one year ago today" fired on any date a year or more after the shot, so it announced an anniversary on days that were not one. That is the one thing this tool must not do. **Decision**: the boolean became a MODE (`time-ago.ts`) — off · auto · anniversary · years+months · months · weeks · days · since — and `anniversary` now fires only when the month AND day match. Every other mode says something true on any day, and `auto` picks the truest striking line for the gap on the day it is read. When a mode has nothing true to say it returns null and the trip's name comes back; the panel shows the ACTUAL line rather than describing it, so a mode that is silent is visible as silent.
+
+**The reference day is an input, not `Date.now()`** (`PostBadge.referenceDate`, null = the real today). A post is composed before it goes out, and the line has to read correctly on the day it is published. This is also what makes the whole module testable without freezing a clock.
+
+**Units are counted on the calendar, never by division** (`monthsBetween` beside `yearsBetween`): a month is not 30.44 days, and "1 month ago" turning over on the 30th of a 31-day month reads as wrong to the person who took the photograph. `quantity()` picks the noun by the number from a table, so a language whose plural is the same word ("mois") is a data problem, not a rule.
+
+## The hook has a duration, and that is what makes exits work (2026-08-24)
+
+**The bug**: out animations did nothing. Cause — `badge-layout` gave every animated piece `window = {start: 0, end: null}`, and the engine lays an OUT step against the window's END, so a null end left it nowhere to play. **Decision**: `PostBadge.durationSeconds` (default 4) is the hook's own life; a piece that EXITS gets `{0, duration}`, a piece that only enters keeps `{0, null}` so it does not vanish for no reason, and an unanimated piece gets no window at all. The transport loops over the duration when anything exits — you have to watch it leave.
+
+## The picture gets treated, not the typography (2026-08-24)
+
+**Decision.** `BadgeBackdrop` (vignette + scrim) is painted in `badge-render.ts` between the picture and the badge, never as overlay elements: it is full-frame, the engine has no such concept, and a scrim is a property of THIS picture rather than of the composition. The scrim runs either across the whole frame from the badge's own edge or confined to the hook zone (`gradientBand`, pure and tested), and the confined band is derived from `badgeBlockExtent` — the same numbers the layout uses — because a gradient that does not line up with the text it exists to lift is worse than none. **Why darken the picture rather than panel every line**: a bright sky exactly where the hook sits is the normal case, and doing it optically keeps the typography clean.
+
+## Stages needed an editor before the place field meant anything (2026-08-24)
+
+`stages` existed in the model from phase 1 but nothing could create one, so the place piece was always null, both stage counter modes always fell back, and the marker had nothing to mark. Adding the option without the editor would have shipped a control that could not do anything. **How to apply**: before adding an option that reads a field, check something can write it.
+
+## The place marker is a geometric glyph, not an emoji (2026-08-24)
+
+**Measured**: with "📍" as the default, the marker drew **nothing at all** in a Chromium with no colour-emoji font — it vanished silently. The default is `◆` (U+25C6): in every font, monochrome, so it takes the badge's own ink and glow, and it suits the house typography. It is a field, so anyone who wants the emoji types it. **The general rule**: a glyph the badge draws must survive a font stack we do not control — canvas text has no fallback chain we can see failing.
+
 ## The default badge look is `neutral`, and that was measured (2026-08-23)
 
 **Decision.** A new trip adopts the `neutral` preset (white, drop shadow). The first cut adopted `plein-cadre` on the reasoning that a badge is a signature — **wrong in the browser**: flat vermilion over warm footage all but vanishes, and warm footage is most of a desert road trip. A badge lands on a photograph nobody has vetted, unlike a studio overlay whose author is watching the clip; the default has to survive that.
@@ -101,7 +125,7 @@ The Library's "Add files" button filtered to `video/*,.srt` only, so a photo cou
 
 - **The `.roadtrip.json` export is the safety net the maintainer asked for by name** — he expects to pull a JSON out weekly so a cleared IndexedDB cannot cost him a year of tracking. Follow `projects/project-file.ts` exactly (portable half only, `{ok:false, error}` parsing, refuse a file from a newer version). Agreed shape of the reminder: a **discreet banner** ("last export 12 days ago"), never a blocking prompt. Not built.
 - **The three visual directions drawn in the design pass were never formally chosen.** They now exist as the four title-style presets in the Style picker (the studio's own `StylePanel`, moved to `shared/overlay/` when Road Trip became its second consumer), so the choice is one click rather than a code change — but he has not said which one is the signature.
-- **A badge can be animated but only exports as a still.** The PNG renders at the preview's current time. Burning a moving hook into a clip means handing the same elements to the studio's WebCodecs export, which is the natural next chantier now that the animation model is shared.
+- **A badge can be animated but only exports as a still.** The PNG renders at the preview's current time. Burning a moving hook into a clip means handing the same elements to the studio's WebCodecs export, which is the natural next chantier now that the animation model and the hook's duration are both in place.
 - **Carousels are a later phase**: a post becomes an ordered list of slides with a role (intro / content / CTA), and the closing call-to-action slide is a **single global template edited once** (his choice), reinjected automatically — not re-authored per post. For a reel the hook rides the Studio's existing intro *scene* rather than a new mechanism, and the CTA stays a separate end card rather than being baked into the export.
 - **Time Machine** (an animated counter winding back to the media's day) and an API into his own geolocated media-triage system are wanted but explicitly last: both were discussed as "after the rest works".
 - Element positioning is **not** fixed to a corner — he rejected a pinned top/side badge; placement is free, which is what the shared overlay engine already gives.

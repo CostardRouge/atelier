@@ -21,10 +21,17 @@ import { isIsoDate, isWithin, type IsoDate } from './trip-days';
 import type { SavedMediaRef } from '../projects/project-types';
 import { themeFromPreset, type StyleTheme } from '../overlay/title-styles';
 import {
+  DEFAULT_BADGE_DURATION,
   DEFAULT_BADGE_LAYOUT,
   type BadgeLayout,
   type BadgePieceStyles,
 } from './badge-layout';
+import { DEFAULT_BACKDROP, type BadgeBackdrop } from './badge-render';
+import {
+  DEFAULT_TIME_AGO_WORDS,
+  FRENCH_TIME_AGO_WORDS,
+  type TimeAgoMode,
+} from './time-ago';
 import {
   DEFAULT_BADGE_WORDS,
   FRENCH_BADGE_WORDS,
@@ -33,7 +40,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 3;
+export const TRIP_DOC_VERSION = 4;
 
 /**
  * The look every badge of a trip starts with. `neutral` — white with a drop
@@ -77,8 +84,24 @@ export interface TripStage {
 export interface PostBadge {
   mode: CounterMode;
   layout: BadgeLayout;
-  /** Lead with "one year ago today" rather than the trip's name. */
-  showAnniversary: boolean;
+  /**
+   * What the kicker says about WHEN — see time-ago.ts. Replaces the v3
+   * "show anniversary" boolean, which announced an anniversary on any date a
+   * year or more later, most of which were not one.
+   */
+  timeAgo: TimeAgoMode;
+  /**
+   * The day this post is read on. Null = whatever today actually is. Set it to
+   * compose a post ahead of the day it goes out, so the temporal line reads
+   * correctly then rather than now.
+   */
+  referenceDate: IsoDate | null;
+  /** Set the place behind the marker glyph. */
+  showPin: boolean;
+  /** How long the hook lasts, in seconds — what an exit animation lands on. */
+  durationSeconds: number;
+  /** Vignette and scrim over the picture, under the badge. */
+  backdrop: BadgeBackdrop;
   /** The frame the badge is composed for, from `ASPECT_PRESETS`. */
   aspectId: string;
   /** Frame of a video clip the badge sits on; ignored for a photo. */
@@ -104,7 +127,11 @@ export function defaultPostBadge(kind: PostKind = 'photo'): PostBadge {
   return {
     mode: 'day',
     layout: { ...DEFAULT_BADGE_LAYOUT },
-    showAnniversary: false,
+    timeAgo: 'off',
+    referenceDate: null,
+    showPin: false,
+    durationSeconds: DEFAULT_BADGE_DURATION,
+    backdrop: { ...DEFAULT_BACKDROP },
     aspectId: ASPECT_FOR_KIND[kind],
     videoTimeSeconds: 0,
     textOverrides: {},
@@ -267,6 +294,11 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * gives each post its text overrides and per-piece styles. A trip that was set
  * to French keeps saying exactly what it said: the enum is translated into the
  * vocabulary it stood for rather than dropped.
+ *
+ * v3 → v4 turns the anniversary boolean into a temporal MODE, adds the hook's
+ * duration (an exit animation had nothing to land on without it), the picture
+ * backdrop, the place marker and the reference day. A post that had the
+ * boolean on lands on `auto` — the intent kept, the untrue anniversary dropped.
  */
 export function migrateTripDoc(doc: TripDoc): TripDoc {
   if (doc.version >= TRIP_DOC_VERSION) return doc;
@@ -278,6 +310,47 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
       media: post.media ?? null,
       badge: post.badge ?? defaultPostBadge(post.kind),
     }));
+  }
+  if (migrated.version < 4) {
+    // The v3 boolean fired on any date a year or more after the shot, so a
+    // deck that had it on was announcing anniversaries on days that were not
+    // one. It lands on `auto`, which says the truest striking thing about the
+    // gap on whatever day the post is read — the intent kept, the lie dropped.
+    migrated.posts = (migrated.posts ?? []).map((post) => {
+      const legacy = post.badge as unknown as { showAnniversary?: boolean };
+      const badge = {
+        ...post.badge,
+        timeAgo: post.badge?.timeAgo ?? (legacy?.showAnniversary ? 'auto' : 'off'),
+        referenceDate: post.badge?.referenceDate ?? null,
+        showPin: post.badge?.showPin ?? false,
+        durationSeconds: post.badge?.durationSeconds ?? DEFAULT_BADGE_DURATION,
+        backdrop: post.badge?.backdrop ?? { ...DEFAULT_BACKDROP },
+      };
+      delete (badge as unknown as { showAnniversary?: boolean }).showAnniversary;
+      return { ...post, badge };
+    });
+    // The temporal vocabulary moved into its own record; a trip that had
+    // French year lines keeps them.
+    const words = migrated.badgeWords as unknown as {
+      yearAgo?: string;
+      yearsAgo?: string;
+      time?: unknown;
+      of?: string;
+    } | undefined;
+    if (words && !words.time) {
+      const french = words.of === 'sur';
+      migrated.badgeWords = {
+        ...migrated.badgeWords,
+        pin: migrated.badgeWords?.pin ?? '\u25C6',
+        time: {
+          ...(french ? FRENCH_TIME_AGO_WORDS : DEFAULT_TIME_AGO_WORDS),
+          ...(words.yearAgo ? { anniversary: words.yearAgo } : {}),
+          ...(words.yearsAgo ? { anniversaryPlural: words.yearsAgo } : {}),
+        },
+      };
+      delete (migrated.badgeWords as unknown as { yearAgo?: string }).yearAgo;
+      delete (migrated.badgeWords as unknown as { yearsAgo?: string }).yearsAgo;
+    }
   }
   if (migrated.version < 3) {
     // v2 stored a two-value language enum; v3 stores the words themselves.

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { coverRect, frameSize } from './badge-render';
+import {
+  DEFAULT_BACKDROP,
+  coverRect,
+  frameSize,
+  gradientBand,
+  type BadgeBackdrop,
+} from './badge-render';
 
 describe('coverRect', () => {
   it('crops the sides of a source wider than the frame', () => {
@@ -75,5 +81,66 @@ describe('frameSize', () => {
     const { w, h } = frameSize(0.001, 10);
     expect(w).toBeGreaterThanOrEqual(1);
     expect(h).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('gradientBand', () => {
+  const backdrop = (over: Partial<BadgeBackdrop> = {}): BadgeBackdrop => ({
+    ...DEFAULT_BACKDROP,
+    ...over,
+  });
+  const block = { top: 0.62, bottom: 0.88 };
+
+  it('is absent when the scrim is off', () => {
+    expect(gradientBand(backdrop(), block)).toBeNull();
+  });
+
+  it('is absent at zero strength — an invisible scrim is no scrim', () => {
+    expect(
+      gradientBand(backdrop({ gradient: 'linear', gradientStrength: 0 }), block),
+    ).toBeNull();
+  });
+
+  it('runs from the badge’s own edge for a whole-frame scrim', () => {
+    const bottom = gradientBand(backdrop({ gradient: 'linear' }), block)!;
+    expect(bottom.from).toBe(1);
+    expect(bottom.to).toBeLessThan(bottom.from);
+
+    const top = gradientBand(
+      backdrop({ gradient: 'linear', gradientFrom: 'top' }),
+      block,
+    )!;
+    expect(top.from).toBe(0);
+    expect(top.to).toBeGreaterThan(top.from);
+  });
+
+  it('clears the first line when confined to the hook zone', () => {
+    // The fade has to start above the text it exists to lift, not across it.
+    const band = gradientBand(backdrop({ gradient: 'under' }), block)!;
+    expect(band.from).toBe(1);
+    expect(band.to).toBeLessThan(block.top);
+  });
+
+  it('follows a block that moves', () => {
+    const high = gradientBand(backdrop({ gradient: 'under' }), {
+      top: 0.1,
+      bottom: 0.3,
+    })!;
+    const low = gradientBand(backdrop({ gradient: 'under' }), block)!;
+    expect(high.to).toBeLessThan(low.to);
+  });
+
+  it('never runs off the frame', () => {
+    const band = gradientBand(backdrop({ gradient: 'under' }), {
+      top: 0.02,
+      bottom: 0.06,
+    })!;
+    expect(band.to).toBeGreaterThanOrEqual(0);
+  });
+
+  it('has nothing to hug when there is no block', () => {
+    expect(gradientBand(backdrop({ gradient: 'under' }), null)).toBeNull();
+    // A whole-frame scrim does not need one.
+    expect(gradientBand(backdrop({ gradient: 'linear' }), null)).not.toBeNull();
   });
 });
