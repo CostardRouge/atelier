@@ -57,6 +57,35 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - Conformed footage (slow motion, time-lapse) is corrected by ONE measured number — capture seconds per media second — applied in `attachMotion`; physics runs on capture seconds, aesthetics on timeline seconds — `studio.md`.
 - The intro is a **scene** (a shared window + optional scrim + solo) over ordinary elements that gained a `window` and an `animation`, not a second class of element; it plays over the running footage and the export stays 1:1 with the source — `studio.md`.
 - The DJI video `.srt` carries no battery level (Mini 4 Pro included): the gauge takes an authored value or a named telemetry key, and draws empty rather than inventing one — `studio.md`.
+- Road Trip tracks a journey by **calendar day, never by file name** (exports get renamed and re-graded); days are derived from the trip's two dates, and trip dates are `YYYY-MM-DD` with every subtraction in UTC — `roadtrip.md`.
+- A second durable store follows the studio's hand-rolled IndexedDB pattern in its own database; Dexie and SQLite were both weighed and declined for a one-document-per-trip model — `roadtrip.md`.
+- The Road Trip day badge is built from ordinary overlay `text` elements handed to `drawOverlays`, never a second renderer — it inherits the title-style presets, and preview and export are the same code at two sizes — `roadtrip.md`.
+- A badge's look belongs to the TRIP, not the post (a signature that varies per post is not one), and defaults to `neutral`: flat vermilion measurably vanishes over warm footage — `roadtrip.md`.
+- Badge copy is English by default and every word is an editable field on the trip; a per-piece override that is emptied returns the computed value, never a blank — `roadtrip.md`.
+- A badge piece departs from the theme by writing its own value AND pinning that key in `styleOverrides`; casing is applied to the string, never to the element's flag — `roadtrip.md`.
+- `StylePanel` is engine-level (`shared/overlay/`) since Road Trip became its second consumer — a tool never reaches into another tool — `architecture.md`, `roadtrip.md`.
+- `LegibilityStyle` gained a corner radius and an outline, drawn by one shared helper; the radius defaults to what the four call sites used to hard-code, so no stored document changes shape — `roadtrip.md`.
+- A badge's temporal line ("515 days ago") is a MODE and a PIECE of its own, drawn under the place — it never displaces the trip's name; `anniversary` fires only on the real anniversary, and the reference day is an input, never `Date.now()` — `roadtrip.md`.
+- Every mode in a Road Trip panel shows the line it would really draw for the post in hand, or the reason it cannot: a fabricated example, and a silent fallback, both read as a broken feature — `roadtrip.md`.
+- The day a piece tells is measured from the picture (EXIF, else the file's date, labelled as such) and offered, never applied on its own; a picture dated outside the trip is called out — `roadtrip.md`.
+- `exif-parser.ts` is engine-level (`shared/exif/`) since Road Trip became its second consumer — `architecture.md`, `roadtrip.md`.
+- An overlay EXIT animation needs its window to have an END, or it never plays — the badge's hook duration is what supplies one — `roadtrip.md`.
+- A glyph drawn on canvas must survive a font stack we do not control: an emoji default drew nothing at all where no colour-emoji font existed — `roadtrip.md`.
+- A Road Trip post is a DECK (hook → content → call to action); a reel or a photo is the same model with one slide, and the closing card lives on the TRIP — `roadtrip.md`.
+- The QR code is encoded locally (`shared/lib/qr.ts`) rather than fetched, and is verified by decoding the rendered canvas with a decoder installed in the scratchpad, never in the repo — `roadtrip.md`.
+- `drawOverlays` draws one line and never wraps: a sentence is wrapped onto a character budget first (`shared/lib/wrap-text.ts`) — `roadtrip.md`.
+- An animated hook burns into a clip through the Studio's own `exportVariantVideo`, trimmed to START on the chosen frame so `originSeconds` puts the entrance on frame one; the scrim reaches the frame through a new `paintUnderOverlays` hook — `roadtrip.md`, `media-pipeline.md`.
+- Only a deck's content slides reorder; the hook and the call to action are structural — `roadtrip.md`.
+- Vignette and scrim are ONE stack of shades (direction × reach × strength × colour × invert × follow-the-hook); a middle band must run edge-to-edge with the peak in the centre, or a canvas gradient blacks out the far half — `roadtrip.md`.
+- In an async paint, read the canvas's size AFTER the last await: a stale render that read it before drew a miniature over a resized stage — `roadtrip.md`.
+- Road Trip addresses everything in the hash (`#/roadtrip/<trip>/<day>/<piece>`), so Back lands on the day you were on and a day is linkable — `roadtrip.md`.
+- A control about the PIECE (its name, its Studio link, the trip's defaults) must never be rendered inside the hook-only branch: on a carousel's second slide it vanishes and reads as missing — `roadtrip.md`.
+- Road Trip briefs the STUDIO: a piece links a project and the badge is sent in as a `roadtrip-hook` scene, so one export carries grade + telemetry + hook; a send replaces the last, and the shades' shape does not cross over — `roadtrip.md`.
+- `#/studio/open/<id>` hands a project between tools and rewrites itself on arrival; neither tool reaches into the other's state — `architecture.md`, `roadtrip.md`.
+- A trip remembers the look it gives a new piece of each kind; what belongs to one day is never inherited — `roadtrip.md`.
+- Road Trip's grid draws its own hover card (fixed-positioned, pointer-transparent) because the native `title` is far too slow to sweep a calendar with — `roadtrip.md`.
+- Each post keeps a small JPEG of its HOOK in a second IndexedDB store, taken from the preview canvas, drawn at the piece's own orientation, and pruned on delete — `roadtrip.md`.
+- A tool that redirects from a route effect must first check the path is its own (`isWithinRoute`): a mounted tool still observes the hash after it has changed to another tool's, and redirecting then makes the switcher do nothing — `architecture.md`.
 
 ## Open items (dated; remove when done)
 
@@ -81,3 +110,4 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 | `docs/memory/testing.md` | tests, what is testable, how to keep new logic testable |
 | `docs/memory/local-first.md` | anything that could touch the network, read files, or persist data |
 | `docs/memory/studio.md` | the Studio tool, the tool-merge plan, project persistence, title styles, retiring a legacy tool |
+| `docs/memory/roadtrip.md` | the Road Trip tool, trip/day/post model, day badges, publishing cadence and strategy |

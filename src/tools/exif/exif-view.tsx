@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { ExifData } from './exif-parser';
+import type { ExifData } from '../../shared/exif/exif-parser';
 import {
   exposureProgramLabel,
   flashLabel,

@@ -1,18 +1,33 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { navigate, useHashRoute } from '../../app/use-hash-route';
+import { isWithinRoute, navigate, useHashRoute } from '../../app/use-hash-route';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import {
   filesFromDirectoryHandle,
   pickDirectoryWithHandle,
 } from '../../shared/sources/file-sources';
 import { savedMediaRef, type ProjectDoc } from '../../shared/projects/project-types';
-import { putProject, requestPersistentStorage } from '../../shared/projects/project-store';
+import {
+  getProject,
+  putProject,
+  requestPersistentStorage,
+} from '../../shared/projects/project-store';
 import { reconcileMedia, type Reconciliation } from '../../shared/projects/reconcile';
 import ProjectGallery from './ProjectGallery';
 import StudioEditor from './StudioEditor';
 
 /** The gallery sub-route; `/studio` itself is the editor. */
+/** This tool's own route; every sub-route hangs off it. */
+const BASE_ROUTE = '/studio';
 const HOME_ROUTE = '/studio/home';
+
+/**
+ * `#/studio/open/<id>` opens that project and lands in the editor. It exists
+ * so another tool can hand a project over by navigating — Road Trip sends a
+ * badge into a project and then opens it — without either tool reaching into
+ * the other's state. The route is consumed on arrival: it rewrites itself to
+ * `/studio`, so a reload does not re-run the open and a Back does not bounce.
+ */
+const OPEN_PREFIX = '/studio/open/';
 
 interface OpenProject {
   doc: ProjectDoc;
@@ -41,9 +56,19 @@ export default function StudioTool() {
   // The editor route with nothing open (fresh tab, reload) goes to the
   // gallery — reopening needs a user gesture for folder permission anyway.
   const showGallery = path === HOME_ROUTE || !open;
+  // Guarded by `isWithinRoute`: this tool is still mounted and still
+  // subscribed to the route at the instant the hash changes to another
+  // tool's, and without the guard it would read that path, find it
+  // incomplete, and navigate straight back here — the switcher doing nothing
+  // at all. It only bit with no document open, which is what made it look
+  // intermittent.
+  const mine = isWithinRoute(path, BASE_ROUTE);
+  const requestedId = mine && path.startsWith(OPEN_PREFIX)
+    ? decodeURIComponent(path.slice(OPEN_PREFIX.length))
+    : null;
   useEffect(() => {
-    if (path !== HOME_ROUTE && !open) navigate(HOME_ROUTE);
-  }, [path, open]);
+    if (mine && !requestedId && path !== HOME_ROUTE && !open) navigate(HOME_ROUTE);
+  }, [mine, requestedId, path, open]);
 
   /** List a project's folder (asking permission if needed) and load it. */
   const openProject = useCallback(
@@ -69,7 +94,7 @@ export default function StudioTool() {
         : null;
       if (files.length) lib.addFiles(files);
       setOpen({ doc, reconciliation });
-      navigate('/studio');
+      navigate(BASE_ROUTE);
     },
     [lib.addFiles],
   );
@@ -130,10 +155,27 @@ export default function StudioTool() {
     async (doc: ProjectDoc, files: File[]) => {
       if (files.length) lib.addFiles(files);
       setOpen({ doc, reconciliation: null });
-      navigate('/studio');
+      navigate(BASE_ROUTE);
     },
     [lib.addFiles],
   );
+
+  // A project handed over from another tool. Loaded once per id: the route is
+  // rewritten immediately, and a project already open is simply revealed
+  // rather than re-listed (which would ask for folder permission again).
+  const handedOver = useRef<string | null>(null);
+  useEffect(() => {
+    if (!requestedId || handedOver.current === requestedId) return;
+    handedOver.current = requestedId;
+    if (open?.doc.id === requestedId) {
+      navigate(BASE_ROUTE);
+      return;
+    }
+    void getProject(requestedId).then((doc) => {
+      if (doc) void openProject(doc);
+      else navigate(HOME_ROUTE);
+    });
+  }, [requestedId, open?.doc.id, openProject]);
 
   const handleDocSaved = useCallback((doc: ProjectDoc) => {
     setOpen((prev) => (prev && prev.doc.id === doc.id ? { ...prev, doc } : prev));
@@ -146,7 +188,7 @@ export default function StudioTool() {
         onOpen={(doc) => {
           if (open?.doc.id === doc.id) {
             // Already loaded — just return to the editor, no re-reconcile.
-            navigate('/studio');
+            navigate(BASE_ROUTE);
             return;
           }
           void openProject(doc);

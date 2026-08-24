@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { formatBytes } from '../../shared/lib/format';
 import { imageTypeLabel } from '../../shared/media/image-meta';
 import { ExifPanels } from './exif-view';
-import { isEmptyExif, type ExifData } from './exif-parser';
+import { isEmptyExif, type ExifData } from '../../shared/exif/exif-parser';
 import { useExif } from './use-exif';
 import { useObjectUrl } from '../../shared/media/use-object-url';
 import type { Photo } from './photo';

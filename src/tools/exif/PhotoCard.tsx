@@ -4,7 +4,7 @@ import { useObjectUrl } from '../../shared/media/use-object-url';
 import { formatBytes } from '../../shared/lib/format';
 import { imageTypeLabel } from '../../shared/media/image-meta';
 import { cameraLine, exposureLine } from './exif-format';
-import { isEmptyExif } from './exif-parser';
+import { isEmptyExif } from '../../shared/exif/exif-parser';
 import { useExif } from './use-exif';
 import type { Photo } from './photo';
 

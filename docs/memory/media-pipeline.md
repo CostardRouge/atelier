@@ -107,3 +107,7 @@ Read before touching video decode/encode, any export, the transcode fallback, LU
 ## Composer composites on a single canvas, with a snapshotted map (2026-08-20)
 
 **Decision.** The Composer draws the (graded) video and the map's WebGL canvas into computed panes, then the readout, per frame. For export, the map is built once at full resolution, framed to the whole track, rendered and **snapshotted**; each frame draws that snapshot and places the aircraft marker via `map.project()`. **Why**: the per-frame draw in the export pipeline is synchronous, so MapLibre cannot be re-rendered per frame. **How to apply**: the compositing map needs `preserveDrawingBuffer` (otherwise its canvas cannot be `drawImage`d) and the marker must be a GL layer — a DOM marker is not captured. Panes are drawn with a cover-fit rect so a resize never stretches the map.
+
+## `exportVariantVideo` has one hook for painting between picture and overlays (2026-08-24)
+
+`VariantRenderOptions.paintUnderOverlays?(ctx, w, h)` runs once per frame, after the cover-crop and before `drawOverlays`. Added for Road Trip's hook scrim and vignette, which have to darken the picture rather than the text drawn over it; the Studio leaves it unset. The ctx is `CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D` (the export canvas may be either) — anything drawing through it must be typed for both. Use it for per-frame *treatment* only: anything with its own timing belongs in the element model, never in a paint callback the engine knows nothing about.

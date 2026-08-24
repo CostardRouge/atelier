@@ -49,6 +49,17 @@ export interface VariantRenderOptions {
   srcHeight: number;
   /** Encode only this slice of the source; null exports the whole clip. */
   trim?: TrimRange | null;
+  /**
+   * Painted into the variant's frame after the picture and BEFORE the
+   * overlays, once per frame. The Studio leaves it unset; Road Trip uses it
+   * for the hook's scrim and vignette, which have to darken the picture rather
+   * than the text drawn over it.
+   */
+  paintUnderOverlays?: (
+    ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+    w: number,
+    h: number,
+  ) => void;
 }
 
 export async function exportVariantVideo(
@@ -93,6 +104,7 @@ export async function exportVariantVideo(
           // fills it fully, the excess is cropped symmetrically.
           const f = fitRect(displayW, displayH, frame, 'cover');
           ctx.drawImage(upright, f.sx, f.sy, f.sw, f.sh, f.dx, f.dy, f.dw, f.dh);
+          opts.paintUnderOverlays?.(ctx, out.w, out.h);
           if (variant.overlays) {
             const t = tMicros / 1_000_000;
             drawOverlays(ctx, opts.elements, findCue(opts.cues, t), out.w, out.h, {

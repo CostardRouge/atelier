@@ -4,12 +4,15 @@ A local-first **suite of browser tools for your captures** — photo and video,
 across devices (DJI, Apple, Sony, …). Everything runs in your browser; files
 never leave your machine — no upload, no account, no server.
 
-Today it ships eight tools, converging into a single studio:
+Today it ships nine tools, converging into a single studio:
 
 - **Studio** — the unified editor the suite is converging on. Opens on your
   **projects** (saved compositions with a baked preview); each project keeps
   its overlays, look and layout, remembers which folder its media lives in,
   and reopens in one click. Edit on one stage — overlays, LUT, export.
+- **Road Trip** — plan and track how a journey gets told. Give a trip its two
+  dates and every day of it becomes a cell in a contribution-style grid; the
+  holes are the days you have never posted from.
 - **DJI Telemetry** — view DJI drone flight telemetry in sync with the video it
   was captured with.
 - **Telemetry Overlay** — place altitude, GPS and exposure readouts anywhere on
@@ -311,6 +314,191 @@ theme: size is a multiplier, positions are untouched, so switching looks never
 breaks a layout.
 
 Next phase: the remaining tools become studio panels.
+
+## Road Trip tool
+
+Editing a clip is one problem; telling a whole journey, months after it
+happened, is another. Road Trip (`#/roadtrip`) is about the second one.
+
+**A trip is its two dates.** Give a trip a name, a destination and the days you
+left and came back, and everything else derives from that: day 27 of 310 is a
+subtraction, not something you record. Dates are handled as plain calendar days
+(`YYYY-MM-DD`) and every subtraction runs in UTC, so a trip planned in one
+timezone and reviewed in another never disagrees about which day a photo
+belongs to — and a daylight-saving change cannot shift a day number.
+
+**The grid is the point.** `#/roadtrip` shows every day of the trip as a cell in
+a contribution-style grid, one column per week, Monday at the top. Its job is
+the **holes**: with thousands of photos and a year's distance, what you cannot
+answer from memory is which days you have never told. Empty cells are drawn
+like any other, five intensity rungs separate "nothing here" from "drafted but
+never sent" from "published once, twice, more", and the longest stretch of
+silence is called out with a link that jumps to it. Hovering a cell raises a
+card — the day, its number, what is sitting there and whether any of it went
+out — drawn immediately rather than after the browser's own tooltip delay, so
+the grid can be swept rather than interrogated. Clicking a day opens it: what
+has already come out of it, and one gesture to add another piece — a reel, a
+carousel or a single photo. Any row in that list opens its piece — the whole
+row, not just the thumbnail — and a piece can be **duplicated** on the spot,
+carrying its look and its slides but neither its publication nor its Studio
+link. **Where you are is in the URL**: `#/roadtrip/australia-d1060760/2025-07-09`
+names the trip and the day, so coming back from a piece lands on the day you
+were working on rather than on day one of three hundred, a reload keeps its
+place, and a day can be linked to. The trip's part is readable but resolves on
+an id fragment, so renaming a trip never breaks a link. Each piece in that list carries **a thumbnail of
+its own hook**, kept in the browser beside the trip, so a day reopened months
+later shows what you left there instead of a file name.
+
+**The hook.** Open a piece and you compose its badge over the picture: the
+number the trip gives it, big, with everything else deliberately subordinate —
+"Australia · Day · **27** · of 310 · ◆ Kalbarri · 1 year ago today". It counts
+four ways (day of trip, a range of days, the day at a place, how long you
+stayed), and closes on an optional line about when. Pick a frame (9:16,
+4:5, 1:1, 16:9), place the block on a 3×3 grid, size the numeral, and export a
+PNG — ready as a Reel's opening frame or a carousel's first slide.
+
+The picture takes every pixel the column can spare — it grows with the window
+rather than stopping at a fixed fraction of it — while the transport and the
+export button stay put. On a wide screen the badge holds still while its
+controls scroll beside it —
+the Studio's layout, and the reason is the same: you are watching the picture,
+not the panel. Stacked on a phone, the page scrolls as one, because a panel
+with its own scrollbar inside a scrolling page is a trap.
+
+A piece is renamed in place, by typing over its title — the same gesture as a
+Studio project's name.
+
+**The picture is whatever is ticked in the Library**, and the two stay in step:
+opening a piece points the Library at its picture, and picking another one
+there re-points the piece. Videos work as well as photos, with a frame
+scrubber.
+
+**Stages** are the places the trip stopped at, each with its own span. They are
+what lets a badge name a place, say "3 days in Kalbarri", or count which day of
+a stop a picture is — and an optional marker sets the place off from the rest.
+
+**The temporal line.** Under the place, in the badge's quietest type, a line
+can say how long ago the picture was taken — **beside** the trip's name, never
+instead of it: "AUSTRALIA" is what makes a post recognisable in a feed, and a
+badge that traded it for "9 months ago" lost the one word the whole strategy
+rests on. It is a set of choices rather than one: the
+elapsed days, weeks, months, years-and-months, a plain "since 27 Mar 2025", or
+the true anniversary. **Anniversary only ever fires on the actual anniversary** —
+same month, same day — because a line that announces one on a day that is not
+one is a lie the rest of the tool would not tell; on any other day the trip's
+name comes back, and the panel says so. **Auto** picks the truest striking line
+for the gap on the day it is read. The reference day is itself a field: set it
+ahead and the line reads correctly on the day the post goes out, not on the day
+you composed it.
+
+**Every option shows what it would really say.** The counter modes and the
+temporal modes are listed with the line they would draw *for the post in hand* —
+"Day · 27 · of 310", "Kalbarri · 3 · of 4", "515 days ago" — or, when a mode has
+nothing to count, the reason: "No stage covers 27 Mar 2025", "This piece tells a
+single day — give it an end date to count a range". The old fixed examples were
+invented values, and three of the four counter modes looked broken because
+picking one changed nothing and said nothing.
+
+**The day is measured, not guessed.** Everything the badge draws is a
+subtraction from the day the piece is filed under, so the editor reads the
+picture's own date — the camera's `DateTimeOriginal` where there is one, the
+file's date otherwise, and it says which — and offers to file the piece under
+it. A picture dated outside the trip is called out rather than counted: a photo
+from another year will happily read "day 261 of 310", arithmetically correct and
+about a day it has nothing to do with. The piece's day and its "through" date
+are both editable fields, so a range is one input rather than a mode with
+nothing behind it.
+
+**Every word is yours.** The badge is written in English out of the box and
+every word — the counter's, the units, the templates — is a field on the trip,
+so writing the deck in French is a handful of inputs (there is a one-click
+French button) rather than a language setting with two options. On top of that
+any single piece — the trip name, the word, the numeral, the total, the place —
+can be replaced with free text per post; clearing the field always gives the
+computed value back.
+
+**Each piece can depart from the trip's style**: its casing (as-is, UPPER,
+lower), its ink, a panel behind it (fill, corner radius, outline) and an
+entrance and exit drawn from the engine's own animation model — fade, slide,
+scale, typewriter, wipe, with duration, easing and a stagger delay. The hook
+has a **duration**, which is what an exit animation lands on; a transport under
+the preview plays the whole thing so you can watch the entrance land and the
+exit leave.
+
+**The picture can be helped.** A bright sky exactly where the hook sits is the
+normal case, so up to four **shades** can be laid over it. One shade is a
+direction — from any of the four edges, a band across the middle either way, or
+radial — a reach, a strength and **its own colour**, and it can be **inverted**:
+"from the top, reaching halfway, inverted" is clear at the edge and darkest at
+mid-frame, which is what a centred hook on a textured picture needs. *Follow the
+hook* hands the reach to the badge itself — a linear shade lands on the block's
+own edge, a radial centres on it — so the fade moves when the text does. They
+stack, so a wash from the left and a corner vignette can be on at once.
+Darkening the picture keeps the typography clean, which a panel behind every
+line does not.
+
+The badge is built out of the **same overlay engine the Studio uses**, not a
+second rendering system: it is a stack of ordinary text elements, so it
+inherits the title-style presets (Neutral, Or ciné, Pixel CRT, Rouge plein
+cadre) — through the very same style picker the Studio's Style tab uses — and
+the preview is the export at a smaller size. The style and the words belong to
+the **trip**, not to the post: a badge that varies per post stops being the
+signature that makes a post recognisable in a feed.
+
+**Nothing is keyed by a file name.** A post records the *day* it tells, never a
+filename: exports get renamed and re-graded between tools, and a tracking system
+built on names goes stale the first time you touch Capture One. A post does
+point at a picture, but only as a hint for re-finding it — lose the file and the
+post still holds its day and its badge. Trips live in their own IndexedDB
+database and autosave as you edit; a refused write (private window, full disk)
+is said out loud rather than swallowed.
+
+**A post is a deck.** The hook is slide one; add as many content pictures after
+it as you like, each with its own optional caption, and close on the trip's
+**call-to-action card** — headline, sentence, link and a **QR code**, edited
+once and appended to every deck that asks for it. A reel or a single photo is
+the same model with a deck of one, so a piece can be re-cut into a carousel
+without being rebuilt. Export writes the whole deck as numbered PNGs into a
+folder you pick (or downloads them one by one where the folder picker is not
+available), named so a file listing is already in swipe order. The order is
+yours: drag a content slide along the strip, or move it with the Earlier /
+Later buttons. Only the middle moves — a hook that opened third and a call to
+action that came second would stop being either.
+
+**The hook can leave as a moving clip, not only a still.** When the hook sits
+on a video, "Export hook video" burns the animated badge into it through the
+**same WebCodecs pipeline the Studio exports with** — cover-cropped into the
+post's frame, the scrim and vignette applied per frame, audio copied through,
+never re-encoded. The clip starts on the frame you picked with the scrubber, so
+the entrance plays on frame one instead of having already happened; a length
+slider says how much of the rush goes out, defaulting to the badge's own hold
+plus a beat. It reads MP4 and MOV (what the demuxer handles) and says so
+plainly for anything else — the PNG export has no such limit.
+
+The QR code is generated **on your machine** — a ~250-line encoder in
+`shared/lib/qr.ts` rather than a call to a web service, because a card that
+fetched its own QR would be the one place the suite phoned home. Byte mode,
+error-correction level M, versions 1 to 10 (213 characters); a link that does
+not fit is refused with a reason rather than drawn as a code that scans to half
+a URL.
+
+**The Studio and Road Trip are joined up.** A piece can link the Studio project
+its clip is graded in — pick an existing one or create it from the piece — and
+the badge is then **sent into that project as an intro scene**. One export from
+the Studio carries the grade, the telemetry overlay and the day badge, so there
+is nothing left to join afterwards on a phone. Sending is explicit and
+repeatable: everything the bridge writes is named `roadtrip:…` and lives in one
+scene, so a second send replaces the first and never touches the grade, the
+trim, the telemetry elements or your own intro. The one thing that does not
+cross over is the shades — a Studio scene has a flat scrim rather than a
+gradient, so the strongest shade's colour and strength go over as that veil and
+the *shape* stays here, which the panel says out loud.
+
+Currently in place: the trip, its days and stages, the grid, day-keyed posts,
+the badge — words, temporal line, per-piece styling, animation and picture
+treatments — the deck through to its PNGs, the animated hook burned into a
+clip, and the bridge into the Studio. A portable `.json` export of a trip is
+the phase that follows.
 
 ## Telemetry tool
 

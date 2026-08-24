@@ -4,7 +4,7 @@
  * view can render a single em-dash uniformly (mirroring the telemetry panels).
  */
 
-import type { ExifData, GpsCoord } from './exif-parser';
+import type { ExifData, GpsCoord } from '../../shared/exif/exif-parser';
 
 /** Trim a float to at most 2 decimals, dropping trailing zeros (24.0 → "24"). */
 function trim(n: number): string {
