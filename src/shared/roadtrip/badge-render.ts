@@ -9,6 +9,7 @@
  * difference between the two is the canvas they are handed.
  */
 
+import type { QrMatrix } from '../lib/qr';
 import { drawOverlays } from '../overlay/draw-overlays';
 import { ensureOverlayFonts } from '../overlay/fonts';
 import type { OverlayElement } from '../overlay/overlay-types';
@@ -200,6 +201,63 @@ export function gradientBand(
     : { from: 0, to: Math.min(1, block.bottom + margin * 0.35) };
 }
 
+/** Where a QR square goes and what it says. Fractions of the frame. */
+export interface QrDraw {
+  /** Left edge as a fraction of the WIDTH, top edge as a fraction of the HEIGHT. */
+  x: number;
+  y: number;
+  /** Side as a fraction of the frame's SHORTER side. */
+  sizeFrac: number;
+  matrix: QrMatrix;
+  dark: string;
+  light: string;
+}
+
+/**
+ * Draw a QR code, snapped so every module is a whole number of pixels.
+ *
+ * The snapping is the point: a module rendered 7.4 px wide lands on half
+ * pixels, the browser antialiases the edges grey, and a scanner reading a
+ * photograph of the result has to guess. Rounding down to a whole module size
+ * and centring the remainder costs a hair of size and buys a hard edge.
+ *
+ * The quiet zone is drawn too — four modules of light on every side. Without
+ * it a code printed against a dark photograph is unreadable, and it is the
+ * single most common way a QR fails in the wild.
+ */
+export function drawQr(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  qr: QrDraw,
+): void {
+  const QUIET = 4;
+  const side = qr.sizeFrac * Math.min(w, h);
+  const total = qr.matrix.size + QUIET * 2;
+  const module = Math.max(1, Math.floor(side / total));
+  const drawn = module * total;
+  // Centre what the rounding left over, so the square stays where it was put.
+  const left = Math.round(qr.x * w + (side - drawn) / 2);
+  const top = Math.round(qr.y * h + (side - drawn) / 2);
+
+  ctx.save();
+  ctx.fillStyle = qr.light;
+  ctx.fillRect(left, top, drawn, drawn);
+  ctx.fillStyle = qr.dark;
+  for (let row = 0; row < qr.matrix.size; row++) {
+    for (let col = 0; col < qr.matrix.size; col++) {
+      if (!qr.matrix.modules[row * qr.matrix.size + col]) continue;
+      ctx.fillRect(
+        left + (col + QUIET) * module,
+        top + (row + QUIET) * module,
+        module,
+        module,
+      );
+    }
+  }
+  ctx.restore();
+}
+
 export interface RenderBadgeOptions {
   source: BadgeSource | null;
   elements: OverlayElement[];
@@ -216,6 +274,8 @@ export interface RenderBadgeOptions {
   backdrop?: BadgeBackdrop;
   /** The badge block's extent, for a scrim confined to the hook zone. */
   block?: { top: number; bottom: number } | null;
+  /** A QR square, drawn under the text — the call-to-action slide's hero. */
+  qr?: QrDraw | null;
 }
 
 /** `#rrggbb` → `rgba(r,g,b,a)`; anything else is passed through unchanged. */
@@ -290,6 +350,7 @@ export async function renderBadge(
   }
 
   if (opts.backdrop) paintBackdrop(ctx, w, h, opts.backdrop, opts.block ?? null);
+  if (opts.qr) drawQr(ctx, w, h, opts.qr);
 
   // Fonts must be resident before the first fillText or the badge draws in a
   // fallback face and silently changes width.

@@ -21,21 +21,26 @@ import {
   badgeSettleSeconds,
   type BadgePieceStyle,
 } from '../../shared/roadtrip/badge-layout';
-import {
-  badgeToPng,
-  frameSize,
-  loadBadgeSource,
-  type BadgeBackdrop,
-} from '../../shared/roadtrip/badge-render';
+import type { BadgeBackdrop } from '../../shared/roadtrip/badge-render';
 import {
   TIME_AGO_MODES,
   TIME_AGO_WORD_FIELDS,
   timeAgoLine,
   type TimeAgoWords,
 } from '../../shared/roadtrip/time-ago';
+import { ctaLayout } from '../../shared/roadtrip/cta-slide';
+import { contentSlideElements, deckSlides } from '../../shared/roadtrip/deck';
+import { renderDeck } from '../../shared/roadtrip/deck-export';
 import { formatIsoDate, todayIso } from '../../shared/roadtrip/trip-days';
-import type { PostBadge, TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
+import {
+  createPostSlide,
+  type PostBadge,
+  type TripDoc,
+  type TripPost,
+} from '../../shared/roadtrip/trip-types';
+import { canWriteToDisk, pickWritableDirectory, writeItems } from '../../shared/sources/write-files';
 import BadgeStage from './BadgeStage';
+import CtaPanel from './CtaPanel';
 import PieceStylePanel from './PieceStylePanel';
 
 interface PostEditorProps {
@@ -130,40 +135,70 @@ export default function PostEditor({
 }: PostEditorProps) {
   const lib = useAssetLibrary();
   const { active } = useActiveAsset(MEDIA_KINDS);
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState<string | null>(null);
+  const [exportNote, setExportNote] = useState<string | null>(null);
   const [duration, setDuration] = useState(0);
+  const [selected, setSelected] = useState(0);
   const [piece, setPiece] = useState<BadgePiece>('kicker');
   const [openFold, setOpenFold] = useState<string | null>('piece');
 
   const activeFile = active ? pickable(active) : null;
 
-  // --- the Library and the post point at the same picture ------------------
-  // Opening a post activates its picture; from then on the sidebar leads.
-  const restored = useRef(false);
+  // --- the deck: the hook, any content pictures, and the closing card ------
+  const slides = useMemo(() => deckSlides(trip, post), [trip, post]);
+  const slideIndex = Math.min(selected, slides.length - 1);
+  const slide = slides[slideIndex];
+  const isHook = slide.kind === 'hook';
+  const isCta = slide.kind === 'cta';
+
+  /** Write a picture to whichever slide is open. */
+  const setSlideMedia = useCallback(
+    (ref: ReturnType<typeof savedMediaRef> | null) => {
+      if (slide.kind === 'hook') {
+        onChangePost({ ...post, media: ref });
+      } else if (slide.slideId) {
+        onChangePost({
+          ...post,
+          slides: post.slides.map((s) =>
+            s.id === slide.slideId ? { ...s, media: ref } : s,
+          ),
+        });
+      }
+    },
+    [slide, post, onChangePost],
+  );
+
+  // --- the Library and the open slide point at the same picture ------------
+  // Opening a slide activates its picture; from then on the sidebar leads.
+  // Keyed by slide, so stepping through a carousel re-points the Library each
+  // time rather than writing the first slide's picture over the others.
+  const restoredFor = useRef<string | null>(null);
+  const slideKey = slide.slideId ?? slide.kind;
   useEffect(() => {
-    if (restored.current) return;
-    if (!post.media) {
-      restored.current = true;
+    if (restoredFor.current === slideKey) return;
+    if (isCta || !slide.media) {
+      restoredFor.current = slideKey;
       return;
     }
     if (!lib.assets.length) return;
-    const want = post.media.name.toLowerCase();
+    const want = slide.media.name.toLowerCase();
     const match = lib.assets.find((a) => {
       const f = pickable(a);
       return f && f.name.toLowerCase() === want;
     });
     if (match) lib.setActive(match.id);
-    restored.current = true;
-  }, [post.media, lib.assets, lib.setActive]);
+    restoredFor.current = slideKey;
+  }, [slideKey, slide.media, isCta, lib.assets, lib.setActive]);
 
   useEffect(() => {
-    if (!restored.current || !activeFile) return;
-    if (post.media?.name.toLowerCase() === activeFile.name.toLowerCase()) return;
-    onChangePost({ ...post, media: savedMediaRef(activeFile) });
-  }, [activeFile, post, onChangePost]);
+    if (restoredFor.current !== slideKey || !activeFile || isCta) return;
+    if (slide.media?.name.toLowerCase() === activeFile.name.toLowerCase()) return;
+    setSlideMedia(savedMediaRef(activeFile));
+  }, [activeFile, slideKey, slide.media, isCta, setSlideMedia]);
 
-  const missing = post.media !== null && activeFile === null;
-  const isVideo = Boolean(activeFile && !activeFile.type.startsWith('image/'));
+  const slideFile = isCta ? null : activeFile;
+  const missing = !isCta && slide.media !== null && activeFile === null;
+  const isVideo = Boolean(slideFile && !slideFile.type.startsWith('image/'));
 
   const aspectPreset =
     ASPECT_PRESETS.find((a) => a.id === post.badge.aspectId) ?? ASPECT_PRESETS[0];
@@ -182,7 +217,9 @@ export default function PostEditor({
     [trip, post],
   );
 
-  const elements = useMemo(
+  const cta = useMemo(() => ctaLayout(trip.cta, aspect), [trip.cta, aspect]);
+
+  const hookElements = useMemo(
     () =>
       content
         ? badgeElements(
@@ -202,10 +239,40 @@ export default function PostEditor({
     ],
   );
 
+  const elements = useMemo(() => {
+    if (isHook) return hookElements;
+    if (isCta) return cta.elements;
+    return contentSlideElements(slide.caption, aspect);
+  }, [isHook, isCta, hookElements, cta.elements, slide.caption, aspect]);
+
   const block = useMemo(
     () => (content ? badgeBlockExtent(content, post.badge.layout, aspect) : null),
     [content, post.badge.layout, aspect],
   );
+
+  const patchSlide = (patch: Partial<(typeof post.slides)[number]>) => {
+    if (!slide.slideId) return;
+    onChangePost({
+      ...post,
+      slides: post.slides.map((s) => (s.id === slide.slideId ? { ...s, ...patch } : s)),
+    });
+  };
+
+  function addSlide() {
+    const ref = activeFile ? savedMediaRef(activeFile) : null;
+    onChangePost({ ...post, slides: [...post.slides, createPostSlide(ref)] });
+    // Land on what was just added, which is where the author is looking.
+    setSelected(post.slides.length + 1);
+  }
+
+  function removeSlide() {
+    if (!slide.slideId) return;
+    onChangePost({
+      ...post,
+      slides: post.slides.filter((s) => s.id !== slide.slideId),
+    });
+    setSelected(Math.max(0, slideIndex - 1));
+  }
 
   // --- the badge's own clock ------------------------------------------------
   const settle = badgeSettleSeconds(post.badge.pieceStyles);
@@ -279,38 +346,76 @@ export default function PostEditor({
     }
   }, [duration, post.badge.videoTimeSeconds, patchBadge]);
 
-  async function exportPng() {
-    setExporting(true);
+  const resolve = useCallback(
+    (ref: { name: string } | null) => {
+      if (!ref) return null;
+      const want = ref.name.toLowerCase();
+      for (const asset of lib.assets) {
+        const f = pickable(asset);
+        if (f && f.name.toLowerCase() === want) return f;
+      }
+      return null;
+    },
+    [lib.assets],
+  );
+
+  /**
+   * Render every slide and hand the set over. A folder keeps the deck in
+   * order on disk; where the picker is unavailable each slide is downloaded
+   * in turn, which is the only thing a non-Chromium browser can do.
+   */
+  async function exportDeck() {
+    setExportNote(null);
+    setExporting('Rendering…');
     try {
-      const { w, h } = frameSize(aspect, 1920);
-      const source = activeFile
-        ? await loadBadgeSource(activeFile, post.badge.videoTimeSeconds)
-        : null;
-      try {
-        const blob = await badgeToPng({
-          source,
-          elements,
-          theme: trip.theme,
-          timeSeconds: time,
-          backdrop: post.badge.backdrop,
-          block,
-          width: w,
-          height: h,
-        });
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        const slug =
-          (post.title.trim() || `day-${post.date}`).replace(/[^\w-]+/g, '-') || 'hook';
-        a.href = url;
-        a.download = `${trip.name || 'trip'}-${slug}.png`.replace(/^-+/, '');
-        a.click();
-        URL.revokeObjectURL(url);
-      } finally {
-        source?.release();
+      const rendered = await renderDeck({
+        trip,
+        post,
+        aspect,
+        longEdge: 1920,
+        timeSeconds: time,
+        resolve,
+        onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`),
+      });
+      if (!rendered.length) {
+        setExportNote('Nothing could be rendered — check the pictures are loaded.');
+        return;
+      }
+      const short = slides.length - rendered.length;
+
+      if (canWriteToDisk()) {
+        let dir: FileSystemDirectoryHandle;
+        try {
+          dir = await pickWritableDirectory();
+        } catch {
+          return; // dismissed
+        }
+        setExporting('Writing…');
+        const res = await writeItems(
+          dir,
+          rendered.map((r) => ({ name: r.name, file: new File([r.blob], r.name) })),
+        );
+        setExportNote(
+          `${res.written} slide${res.written === 1 ? '' : 's'} written` +
+            (short ? ` · ${short} could not be rendered` : '') +
+            (res.errors.length ? ` · ${res.errors.length} failed to write` : ''),
+        );
+      } else {
+        for (const r of rendered) {
+          const url = URL.createObjectURL(r.blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = r.name;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+        setExportNote(
+          `${rendered.length} slide${rendered.length === 1 ? '' : 's'} downloaded` +
+            (short ? ` · ${short} could not be rendered` : ''),
+        );
       }
     } finally {
-      setExporting(false);
+      setExporting(null);
     }
   }
 
@@ -343,29 +448,38 @@ export default function PostEditor({
         <span className="flex-1" />
         <button
           type="button"
-          onClick={() => void exportPng()}
-          disabled={exporting}
+          onClick={() => void exportDeck()}
+          disabled={exporting !== null}
           className="px-[1.1rem] py-2 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.82rem] font-semibold hover:bg-accent hover:border-accent disabled:opacity-60"
         >
-          {exporting ? 'Rendering…' : '↓ Export PNG'}
+          {exporting ??
+            (slides.length === 1
+              ? '↓ Export PNG'
+              : `↓ Export ${slides.length} slides`)}
         </button>
       </div>
 
       <div className="flex flex-col @min-[860px]:flex-row gap-5 min-h-0">
         <div className="flex-1 min-w-0 flex flex-col items-center gap-3">
           <BadgeStage
-            file={activeFile}
-            videoTimeSeconds={post.badge.videoTimeSeconds}
+            file={slideFile}
+            videoTimeSeconds={slide.videoTimeSeconds}
             aspect={aspect}
             elements={elements}
-            theme={trip.theme}
-            timeSeconds={time}
-            backdrop={post.badge.backdrop}
-            block={block}
+            theme={isCta ? null : trip.theme}
+            timeSeconds={isHook ? time : 0}
+            backdrop={isHook ? post.badge.backdrop : undefined}
+            block={isHook ? block : null}
+            background={isCta ? trip.cta.background : undefined}
+            qr={
+              isCta && cta.qr
+                ? { ...cta.qr, dark: trip.cta.ink, light: trip.cta.background }
+                : null
+            }
             onSourceLoaded={(info) => setDuration(info.duration)}
           />
 
-          {animated && (
+          {isHook && animated && (
             <div className="flex items-center gap-3 w-full max-w-[26rem]">
               <button
                 type="button"
@@ -396,37 +510,50 @@ export default function PostEditor({
 
         <div className="flex-none w-full @min-[860px]:w-[22rem] flex flex-col gap-3">
           <div className={section}>
-            <span className={legend}>Picture · from the Library</span>
-            {activeFile ? (
-              <p className="m-0 text-[0.8rem] text-ink-soft truncate" title={activeFile.name}>
-                {activeFile.name}
-              </p>
-            ) : (
-              <p className="m-0 text-[0.78rem] text-muted">
-                {missing
-                  ? `“${post.media?.name}” is not in the Library right now. The post keeps its day and its badge.`
-                  : 'Tick a photo or a clip in the Library on the left — the badge composes over whatever is active there.'}
-              </p>
-            )}
-            {isVideo && duration > 0 && (
-              <label className="flex flex-col gap-1">
-                <span className={legend}>
-                  Frame · {post.badge.videoTimeSeconds.toFixed(1)}s
-                </span>
-                <input
-                  type="range"
-                  min={0}
-                  max={Math.max(duration - 0.05, 0)}
-                  step={0.1}
-                  value={post.badge.videoTimeSeconds}
-                  onChange={(e) =>
-                    patchBadge({ videoTimeSeconds: Number(e.target.value) })
-                  }
-                  className="accent-accent"
-                />
-              </label>
-            )}
+            <span className={legend}>
+              Deck · {slides.length} slide{slides.length === 1 ? '' : 's'}
+            </span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {slides.map((s, i) => (
+                <button
+                  key={s.slideId ?? s.kind}
+                  type="button"
+                  onClick={() => setSelected(i)}
+                  aria-pressed={i === slideIndex}
+                  title={s.kind === 'content' ? `Slide ${s.position}` : s.kind}
+                  className={`px-2.5 py-1.5 rounded-paper border text-[0.72rem] cursor-pointer transition-colors ${
+                    i === slideIndex
+                      ? 'border-accent bg-accent-wash text-accent-ink font-semibold'
+                      : 'border-line bg-paper text-ink-soft hover:border-line-strong'
+                  }`}
+                >
+                  {s.kind === 'hook' ? 'Hook' : s.kind === 'cta' ? 'Call to action' : s.position}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={addSlide}
+                className="px-2.5 py-1.5 rounded-paper border border-line-strong bg-paper text-[0.72rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
+              >
+                + Slide
+              </button>
+            </div>
+            <label className="flex items-center gap-2 text-[0.78rem] text-ink-soft cursor-pointer">
+              <input
+                type="checkbox"
+                checked={post.includeCta}
+                onChange={(e) => onChangePost({ ...post, includeCta: e.target.checked })}
+                className="accent-accent"
+              />
+              Close with the trip’s call to action
+            </label>
           </div>
+
+          {exportNote && (
+            <p className="m-0 px-2.5 py-2 rounded-paper border border-line bg-paper text-[0.76rem] text-ink-soft">
+              {exportNote}
+            </p>
+          )}
 
           <div className={section}>
             <span className={legend}>Frame</span>
@@ -449,6 +576,75 @@ export default function PostEditor({
             </div>
           </div>
 
+          {isCta ? (
+            <div className={section}>
+              <span className={legend}>Closing card · shared by the whole trip</span>
+              <CtaPanel
+                cta={trip.cta}
+                onChange={(next) => onChangeTrip({ ...trip, cta: next })}
+                problem={cta.qrProblem}
+              />
+            </div>
+          ) : (
+          <>
+          <div className={section}>
+            <span className={legend}>Picture · from the Library</span>
+            {slideFile ? (
+              <p className="m-0 text-[0.8rem] text-ink-soft truncate" title={slideFile.name}>
+                {slideFile.name}
+              </p>
+            ) : (
+              <p className="m-0 text-[0.78rem] text-muted">
+                {missing
+                  ? `“${slide.media?.name}” is not in the Library right now. The slide keeps its place in the deck.`
+                  : 'Tick a photo or a clip in the Library on the left — this slide composes over whatever is active there.'}
+              </p>
+            )}
+            {isVideo && duration > 0 && (
+              <label className="flex flex-col gap-1">
+                <span className={legend}>
+                  Frame · {slide.videoTimeSeconds.toFixed(1)}s
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={Math.max(duration - 0.05, 0)}
+                  step={0.1}
+                  value={slide.videoTimeSeconds}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    if (isHook) patchBadge({ videoTimeSeconds: v });
+                    else patchSlide({ videoTimeSeconds: v });
+                  }}
+                  className="accent-accent"
+                />
+              </label>
+            )}
+          </div>
+
+          {slide.kind === 'content' && (
+            <div className={section}>
+              <label className="flex flex-col gap-1">
+                <span className={legend}>Caption</span>
+                <input
+                  value={slide.caption}
+                  onChange={(e) => patchSlide({ caption: e.target.value })}
+                  placeholder="A line over this picture — optional"
+                  className={inputClass}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={removeSlide}
+                className="self-start p-0 border-0 bg-transparent text-[0.75rem] text-faint cursor-pointer underline underline-offset-[3px] hover:text-[#9a3a23]"
+              >
+                Remove this slide
+              </button>
+            </div>
+          )}
+
+          {isHook && (
+          <>
           <div className={section}>
             <span className={legend}>What it counts</span>
             <select
@@ -810,6 +1006,10 @@ export default function PostEditor({
               This trip’s dates read backwards, so there is no total to count
               towards. Fix them and the badge comes back.
             </p>
+          )}
+          </>
+          )}
+          </>
           )}
         </div>
       </div>

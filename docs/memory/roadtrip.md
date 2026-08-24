@@ -109,6 +109,30 @@ Read before touching `src/tools/roadtrip/` or `src/shared/roadtrip/`, and before
 
 **Measured**: with "📍" as the default, the marker drew **nothing at all** in a Chromium with no colour-emoji font — it vanished silently. The default is `◆` (U+25C6): in every font, monochrome, so it takes the badge's own ink and glow, and it suits the house typography. It is a field, so anyone who wants the emoji types it. **The general rule**: a glyph the badge draws must survive a font stack we do not control — canvas text has no fallback chain we can see failing.
 
+## A post is a DECK, and a reel is a deck of one (2026-08-24)
+
+**Decision.** `TripPost.slides` holds the pictures after the hook; `deckSlides()` assembles hook → content → call to action. Nothing branches on `post.kind`: a single photo and a reel are the same model with one slide, which is what lets a piece be re-cut into a carousel without being rebuilt. The CTA is **not stored on the post** — it is appended at render time from `TripDoc.cta`, which is the whole point of editing it once.
+
+**A CTA that says nothing is not appended**, even when the post asks for it: a blank last slide is worse than none.
+
+**File names are `NN-hook / NN / NN-cta`, zero-padded to at least two digits** so a file listing is already in swipe order — tested, because `10` sorting before `2` would silently reorder a carousel on upload.
+
+**Content slides carry no badge.** The counter has done its work on slide one; repeating it would stop the hook being a hook. A caption keeps the trip's font but pins `glow` and `legibility` off — the glow is the badge's signature.
+
+## The QR is generated here, and it is verified by decoding (2026-08-24)
+
+**Decision.** `shared/lib/qr.ts` is a hand-rolled encoder (byte mode, EC level M, versions 1–10). **Why not a library**: a card that fetched its own QR from a service would be the single place this suite phoned home, and the local-first line is the product. It is ~250 lines against a spec that has not moved since 2000 — unlike Dexie, it earns the code it costs.
+
+**How it was made trustworthy, and how to keep it so**: the matrices are dumped from a throwaway vitest spec and decoded by `jsqr` installed in the SCRATCHPAD, never in the repo. 15 payloads across versions 1–10, UTF-8 accents and the 213-byte ceiling all round-trip, and the rendered CTA canvas itself is scanned back. Re-run that loop after any change to the encoder — unit tests alone cannot tell you a QR scans.
+
+**The structural tests caught what decoding could not.** Reserving the format strip wrote over `(6,8)` and `(8,6)`, punching two holes in the timing lines a decoder uses to find the module grid; error correction hid it and jsqr still read the code. Index 6 is skipped on purpose now. **The lesson**: for a format with redundancy, a passing round trip is not proof of correctness.
+
+**Refusing is part of the contract**: a link past 213 bytes returns null with a reason rather than a code that scans to half a URL. **Drawing**: modules are snapped to whole pixels and a four-module quiet zone is painted, because a QR on half pixels antialiases grey and one without a quiet zone is unreadable against a dark photograph.
+
+## The overlay engine never wraps, so a sentence must be wrapped for it (2026-08-24)
+
+**Measured**: the CTA's body ran off both edges of the frame. `drawOverlays` draws a text element as ONE line by design — right for a readout, wrong for a sentence. `shared/lib/wrap-text.ts` wraps onto a character BUDGET rather than a measured width, so it stays pure and testable; `charBudget` deliberately assumes 0.55 em per character against a real average nearer 0.5, because wrapping a word early is invisible and wrapping one late loses the words. Explicit newlines are kept, an over-long single word is left whole. **How to apply**: any new roadtrip text that is a sentence rather than a value goes through it, and the caption block grows UPWARD from its foot so two lines do not fall off the bottom.
+
 ## The default badge look is `neutral`, and that was measured (2026-08-23)
 
 **Decision.** A new trip adopts the `neutral` preset (white, drop shadow). The first cut adopted `plein-cadre` on the reasoning that a badge is a signature — **wrong in the browser**: flat vermilion over warm footage all but vanishes, and warm footage is most of a desert road trip. A badge lands on a photograph nobody has vetted, unlike a studio overlay whose author is watching the clip; the default has to survive that.
@@ -126,6 +150,7 @@ The Library's "Add files" button filtered to `video/*,.srt` only, so a photo cou
 - **The `.roadtrip.json` export is the safety net the maintainer asked for by name** — he expects to pull a JSON out weekly so a cleared IndexedDB cannot cost him a year of tracking. Follow `projects/project-file.ts` exactly (portable half only, `{ok:false, error}` parsing, refuse a file from a newer version). Agreed shape of the reminder: a **discreet banner** ("last export 12 days ago"), never a blocking prompt. Not built.
 - **The three visual directions drawn in the design pass were never formally chosen.** They now exist as the four title-style presets in the Style picker (the studio's own `StylePanel`, moved to `shared/overlay/` when Road Trip became its second consumer), so the choice is one click rather than a code change — but he has not said which one is the signature.
 - **A badge can be animated but only exports as a still.** The PNG renders at the preview's current time. Burning a moving hook into a clip means handing the same elements to the studio's WebCodecs export, which is the natural next chantier now that the animation model and the hook's duration are both in place.
+- **Slides cannot be reordered.** Adding and removing is there; dragging is not, and a carousel whose order is wrong currently has to be rebuilt from the point of the mistake.
 - **Carousels are a later phase**: a post becomes an ordered list of slides with a role (intro / content / CTA), and the closing call-to-action slide is a **single global template edited once** (his choice), reinjected automatically — not re-authored per post. For a reel the hook rides the Studio's existing intro *scene* rather than a new mechanism, and the CTA stays a separate end card rather than being baked into the export.
 - **Time Machine** (an animated counter winding back to the media's day) and an API into his own geolocated media-triage system are wanted but explicitly last: both were discussed as "after the rest works".
 - Element positioning is **not** fixed to a corner — he rejected a pinned top/side badge; placement is free, which is what the shared overlay engine already gives.

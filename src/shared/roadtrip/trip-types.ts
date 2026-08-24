@@ -27,6 +27,7 @@ import {
   type BadgePieceStyles,
 } from './badge-layout';
 import { DEFAULT_BACKDROP, type BadgeBackdrop } from './badge-render';
+import { DEFAULT_CTA, type CtaSlide } from './cta-slide';
 import {
   DEFAULT_TIME_AGO_WORDS,
   FRENCH_TIME_AGO_WORDS,
@@ -40,7 +41,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 4;
+export const TRIP_DOC_VERSION = 5;
 
 /**
  * The look every badge of a trip starts with. `neutral` — white with a drop
@@ -139,6 +140,23 @@ export function defaultPostBadge(kind: PostKind = 'photo'): PostBadge {
   };
 }
 
+/**
+ * A picture after the hook, in a carousel. It carries no badge: the counter
+ * has done its work on the first slide, and repeating it would stop the hook
+ * being one.
+ */
+export interface PostSlide {
+  id: string;
+  media: SavedMediaRef | null;
+  videoTimeSeconds: number;
+  /** The author's own line over this picture; empty draws nothing. */
+  caption: string;
+}
+
+export function createPostSlide(media: SavedMediaRef | null = null): PostSlide {
+  return { id: crypto.randomUUID(), media, videoTimeSeconds: 0, caption: '' };
+}
+
 export interface TripPost {
   id: string;
   kind: PostKind;
@@ -157,6 +175,14 @@ export interface TripPost {
   media: SavedMediaRef | null;
   /** How this post's badge counts and where it sits. */
   badge: PostBadge;
+  /**
+   * The pictures after the hook. Empty for a single photo or a reel; a
+   * carousel is the same model with more of them, so nothing branches on
+   * `kind` and a piece can be re-cut without being rebuilt.
+   */
+  slides: PostSlide[];
+  /** Close the deck with the trip's call-to-action slide. */
+  includeCta: boolean;
   /**
    * When it actually went out, or null while it is still a draft. Kept as a
    * timestamp rather than a flag so the overview can tell "planned for that
@@ -191,6 +217,12 @@ export interface TripDoc {
    * out of order, which is the whole strategy the tool serves.
    */
   theme: StyleTheme | null;
+  /**
+   * The closing slide, edited once and appended to every deck that asks for
+   * it. On the TRIP because a signature re-authored per post drifts — and
+   * nobody retypes the same last slide 250 times.
+   */
+  cta: CtaSlide;
   createdAt: number;
   updatedAt: number;
 }
@@ -213,6 +245,7 @@ export function createTripDoc(
     posts: [],
     badgeWords: { ...DEFAULT_BADGE_WORDS },
     theme: themeFromPreset(DEFAULT_THEME_PRESET),
+    cta: { ...DEFAULT_CTA },
     createdAt: now,
     updatedAt: now,
   };
@@ -232,6 +265,10 @@ export function createTripPost(
     title: title.trim(),
     media: null,
     badge: defaultPostBadge(kind),
+    slides: [],
+    // A carousel is the shape that ends on a call to action; a reel's last
+    // frame is the footage, and a single photo has no last slide to give.
+    includeCta: kind === 'carousel',
     publishedAt: null,
     createdAt: Date.now(),
   };
@@ -299,6 +336,10 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * duration (an exit animation had nothing to land on without it), the picture
  * backdrop, the place marker and the reference day. A post that had the
  * boolean on lands on `auto` — the intent kept, the untrue anniversary dropped.
+ *
+ * v4 → v5 makes a post a DECK: extra slides and a closing call to action, plus
+ * the trip's one CTA template. Every existing post becomes a deck of one,
+ * which is exactly what it already was, so nothing changes shape.
  */
 export function migrateTripDoc(doc: TripDoc): TripDoc {
   if (doc.version >= TRIP_DOC_VERSION) return doc;
@@ -309,6 +350,17 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
       ...post,
       media: post.media ?? null,
       badge: post.badge ?? defaultPostBadge(post.kind),
+    }));
+  }
+  if (migrated.version < 5) {
+    // Nothing existing gains a slide or a call to action: a deck of one is
+    // exactly what every post was before decks existed, so no piece changes
+    // shape on upgrade.
+    migrated.cta = migrated.cta ?? { ...DEFAULT_CTA };
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      slides: post.slides ?? [],
+      includeCta: post.includeCta ?? false,
     }));
   }
   if (migrated.version < 4) {

@@ -403,11 +403,27 @@ post still holds its day and its badge. Trips live in their own IndexedDB
 database and autosave as you edit; a refused write (private window, full disk)
 is said out loud rather than swallowed.
 
+**A post is a deck.** The hook is slide one; add as many content pictures after
+it as you like, each with its own optional caption, and close on the trip's
+**call-to-action card** — headline, sentence, link and a **QR code**, edited
+once and appended to every deck that asks for it. A reel or a single photo is
+the same model with a deck of one, so a piece can be re-cut into a carousel
+without being rebuilt. Export writes the whole deck as numbered PNGs into a
+folder you pick (or downloads them one by one where the folder picker is not
+available), named so a file listing is already in swipe order.
+
+The QR code is generated **on your machine** — a ~250-line encoder in
+`shared/lib/qr.ts` rather than a call to a web service, because a card that
+fetched its own QR would be the one place the suite phoned home. Byte mode,
+error-correction level M, versions 1 to 10 (213 characters); a link that does
+not fit is refused with a reason rather than drawn as a code that scans to half
+a URL.
+
 Currently in place: the trip, its days and stages, the grid, day-keyed posts,
-and the badge — words, temporal line, per-piece styling, animation and picture
-treatments — through to a PNG. Multi-slide carousels with a call-to-action
-ending, burning an animated hook into a clip through the Studio's video export,
-and a portable `.json` export of a trip are the phases that follow.
+the badge — words, temporal line, per-piece styling, animation and picture
+treatments — and the deck through to its PNGs. Burning an animated hook into a
+clip through the Studio's video export and a portable `.json` export of a trip
+are the phases that follow.
 
 ## Telemetry tool
 

@@ -6,6 +6,7 @@ import {
   type BadgeOptions,
 } from './day-badge';
 import type { IsoDate } from './trip-days';
+import { DEFAULT_CTA } from './cta-slide';
 import {
   defaultPostBadge,
   type TripDoc,
@@ -21,6 +22,8 @@ const post = (date: IsoDate, end: IsoDate | null = null): TripPost => ({
   title: '',
   media: null,
   badge: defaultPostBadge('photo'),
+  slides: [],
+  includeCta: false,
   publishedAt: null,
   createdAt: 0,
 });
@@ -43,6 +46,7 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   posts: [],
   badgeWords: { ...DEFAULT_BADGE_WORDS },
   theme: null,
+  cta: { ...DEFAULT_CTA },
   createdAt: 0,
   updatedAt: 0,
   ...over,

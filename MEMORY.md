@@ -68,6 +68,9 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - A badge's temporal line ("515 days ago") is a MODE, and `anniversary` fires only on the real anniversary; the reference day is an input, never `Date.now()` — `roadtrip.md`.
 - An overlay EXIT animation needs its window to have an END, or it never plays — the badge's hook duration is what supplies one — `roadtrip.md`.
 - A glyph drawn on canvas must survive a font stack we do not control: an emoji default drew nothing at all where no colour-emoji font existed — `roadtrip.md`.
+- A Road Trip post is a DECK (hook → content → call to action); a reel or a photo is the same model with one slide, and the closing card lives on the TRIP — `roadtrip.md`.
+- The QR code is encoded locally (`shared/lib/qr.ts`) rather than fetched, and is verified by decoding the rendered canvas with a decoder installed in the scratchpad, never in the repo — `roadtrip.md`.
+- `drawOverlays` draws one line and never wraps: a sentence is wrapped onto a character budget first (`shared/lib/wrap-text.ts`) — `roadtrip.md`.
 
 ## Open items (dated; remove when done)
 

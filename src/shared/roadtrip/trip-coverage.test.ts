@@ -8,6 +8,7 @@ import {
   tripCoverage,
 } from './trip-coverage';
 import type { IsoDate } from './trip-days';
+import { DEFAULT_CTA } from './cta-slide';
 import { DEFAULT_BADGE_WORDS } from './day-badge';
 import {
   defaultPostBadge,
@@ -29,6 +30,8 @@ const post = (
   title: `post ${seq}`,
   media: null,
   badge: defaultPostBadge(opts.kind ?? 'photo'),
+  slides: [],
+  includeCta: false,
   publishedAt: opts.published ? 1_700_000_000_000 : null,
   createdAt: 1_600_000_000_000,
 });
@@ -56,6 +59,7 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   posts: [],
   badgeWords: { ...DEFAULT_BADGE_WORDS },
   theme: null,
+  cta: { ...DEFAULT_CTA },
   createdAt: 0,
   updatedAt: 0,
   ...over,

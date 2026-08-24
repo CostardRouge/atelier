@@ -8,6 +8,7 @@ import {
   renderBadge,
   type BadgeBackdrop,
   type BadgeSource,
+  type QrDraw,
 } from '../../shared/roadtrip/badge-render';
 
 interface BadgeStageProps {
@@ -23,6 +24,10 @@ interface BadgeStageProps {
   backdrop?: BadgeBackdrop;
   /** The badge block's extent, for a scrim confined to the hook zone. */
   block?: { top: number; bottom: number } | null;
+  /** Painted where no picture covers the frame — the closing card's ground. */
+  background?: string;
+  /** A QR square under the text. */
+  qr?: QrDraw | null;
   onSourceLoaded?: (info: { width: number; height: number; duration: number }) => void;
 }
 
@@ -40,6 +45,8 @@ export default function BadgeStage({
   timeSeconds,
   backdrop,
   block,
+  background,
+  qr,
   onSourceLoaded,
 }: BadgeStageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -67,6 +74,8 @@ export default function BadgeStage({
           timeSeconds,
           backdrop,
           block,
+          background,
+          qr,
         });
       }
       return;
@@ -115,6 +124,8 @@ export default function BadgeStage({
       timeSeconds,
       backdrop,
       block,
+      background,
+      qr,
     });
   }, [
     aspect,
@@ -123,6 +134,8 @@ export default function BadgeStage({
     timeSeconds,
     backdrop,
     block,
+    background,
+    qr,
     loading,
     file,
     videoTimeSeconds,
