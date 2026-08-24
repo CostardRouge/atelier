@@ -201,7 +201,9 @@ export default function DayPanel({
   const totalDays = spanLength(trip.startDate, trip.endDate);
 
   function add() {
-    onAddPost(createTripPost(kind, date, title));
+    // A new piece starts from the look the trip was last happy with for this
+    // kind, so the second reel does not begin at the factory settings.
+    onAddPost(createTripPost(kind, date, title, null, trip.hookDefaults[kind]));
     setTitle('');
   }
 

@@ -3,12 +3,15 @@ import {
   TRIP_DOC_VERSION,
   createTripDoc,
   createTripPost,
+  defaultPostBadge,
+  hookDefaultsFrom,
   migrateTripDoc,
   spanProblem,
   stageProblem,
   type TripDoc,
   type TripStage,
 } from './trip-types';
+import { createShade } from './shades';
 
 const stage = (
   startDate: string,
@@ -379,5 +382,80 @@ describe('migrateTripDoc — v5 → v6, the shades', () => {
       v5({ gradient: 'linear', gradientStrength: 0.5, gradientColor: '#000000', gradientFrom: 'bottom', vignette: 0 }),
     ).posts[0].badge as unknown as { backdrop?: unknown };
     expect(badge.backdrop).toBeUndefined();
+  });
+});
+
+describe('hook defaults — the look a trip gives a new piece', () => {
+  const composed = () => {
+    const post = createTripPost('reel', '2025-03-27', 'A reel');
+    return {
+      ...post.badge,
+      aspectId: '1:1',
+      mode: 'stage-day' as const,
+      timeAgo: 'days-ago' as const,
+      showPin: true,
+      durationSeconds: 6,
+      layout: { ...post.badge.layout, anchor: 'top-right' as const, sizeFrac: 0.3 },
+      pieceStyles: { headline: { textCase: 'upper' as const } },
+      shades: [{ ...createShade(), direction: 'radial' as const, strength: 0.4 }],
+    };
+  };
+
+  it('lifts the look out of a piece', () => {
+    const d = hookDefaultsFrom(composed());
+    expect(d).toMatchObject({
+      aspectId: '1:1',
+      mode: 'stage-day',
+      timeAgo: 'days-ago',
+      showPin: true,
+      durationSeconds: 6,
+    });
+    expect(d.layout.anchor).toBe('top-right');
+    expect(d.pieceStyles.headline?.textCase).toBe('upper');
+    expect(d.shades[0].direction).toBe('radial');
+  });
+
+  it('gives a new piece that look', () => {
+    const badge = defaultPostBadge('reel', hookDefaultsFrom(composed()));
+    expect(badge.aspectId).toBe('1:1');
+    expect(badge.layout.sizeFrac).toBe(0.3);
+    expect(badge.shades[0].strength).toBe(0.4);
+  });
+
+  it('never inherits what belongs to one day', () => {
+    // A reference day, a clip's frame and the author's own words are facts
+    // about the piece that was composed, not habits of the trip.
+    const from = { ...composed(), referenceDate: '2026-01-01', videoTimeSeconds: 4.5 };
+    const badge = defaultPostBadge('reel', hookDefaultsFrom(from));
+    expect(badge.referenceDate).toBeNull();
+    expect(badge.videoTimeSeconds).toBe(0);
+    expect(badge.textOverrides).toEqual({});
+  });
+
+  it('does not share mutable state with the piece it came from', () => {
+    const source = composed();
+    const d = hookDefaultsFrom(source);
+    const badge = defaultPostBadge('reel', d);
+    badge.layout.sizeFrac = 0.9;
+    badge.shades[0].strength = 0.1;
+    expect(d.layout.sizeFrac).toBe(0.3);
+    expect(d.shades[0].strength).toBe(0.4);
+    expect(source.layout.sizeFrac).toBe(0.3);
+  });
+
+  it('gives each copied shade its own id', () => {
+    const d = hookDefaultsFrom(composed());
+    const a = defaultPostBadge('reel', d);
+    const b = defaultPostBadge('reel', d);
+    expect(a.shades[0].id).not.toBe(b.shades[0].id);
+  });
+
+  it('falls back to the factory look with no default saved', () => {
+    expect(defaultPostBadge('reel').aspectId).toBe('9:16');
+    expect(defaultPostBadge('reel', null).shades).toEqual([]);
+  });
+
+  it('starts a trip with none — a default nobody chose is a factory setting', () => {
+    expect(createTripDoc('A', 'B', '2025-03-01', '2025-03-10').hookDefaults).toEqual({});
   });
 });

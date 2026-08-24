@@ -41,7 +41,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 6;
+export const TRIP_DOC_VERSION = 7;
 
 /**
  * The look every badge of a trip starts with. `neutral` — white with a drop
@@ -121,6 +121,50 @@ export interface PostBadge {
   pieceStyles: BadgePieceStyles;
 }
 
+/**
+ * The LOOK a trip gives a new piece of one kind — everything about how a hook
+ * is composed, and nothing about which day it tells. Saved from a piece the
+ * author is happy with, so the second reel of a trip starts where the first
+ * one ended rather than at the factory defaults. `null` for a kind that has
+ * never been saved.
+ *
+ * It deliberately holds the counter MODE and the temporal mode too: those are
+ * editorial habits ("my reels count the day of the trip and say how long ago
+ * it was"), not facts about a particular picture.
+ */
+export interface HookDefaults {
+  aspectId: string;
+  mode: CounterMode;
+  timeAgo: TimeAgoMode;
+  showPin: boolean;
+  durationSeconds: number;
+  layout: BadgeLayout;
+  pieceStyles: BadgePieceStyles;
+  shades: Shade[];
+}
+
+export type HookDefaultsByKind = Partial<Record<PostKind, HookDefaults>>;
+
+/** What a piece's look is, lifted out of it so it can be saved on the trip. */
+export function hookDefaultsFrom(badge: PostBadge): HookDefaults {
+  return {
+    aspectId: badge.aspectId,
+    mode: badge.mode,
+    timeAgo: badge.timeAgo,
+    showPin: badge.showPin,
+    durationSeconds: badge.durationSeconds,
+    layout: { ...badge.layout },
+    pieceStyles: structuredClone(badge.pieceStyles),
+    shades: badge.shades.map((shade) => ({ ...shade, id: newId() })),
+  };
+}
+
+function newId(): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `id_${Math.random().toString(36).slice(2)}`;
+}
+
 /** The frame each kind of post is delivered in, unless the author says otherwise. */
 const ASPECT_FOR_KIND: Record<PostKind, string> = {
   reel: '9:16',
@@ -128,19 +172,24 @@ const ASPECT_FOR_KIND: Record<PostKind, string> = {
   photo: '4:5',
 };
 
-export function defaultPostBadge(kind: PostKind = 'photo'): PostBadge {
+export function defaultPostBadge(
+  kind: PostKind = 'photo',
+  defaults?: HookDefaults | null,
+): PostBadge {
   return {
-    mode: 'day',
-    layout: { ...DEFAULT_BADGE_LAYOUT },
-    timeAgo: 'off',
+    mode: defaults?.mode ?? 'day',
+    layout: { ...(defaults?.layout ?? DEFAULT_BADGE_LAYOUT) },
+    timeAgo: defaults?.timeAgo ?? 'off',
+    // Never inherited: the reference day belongs to the piece that is going
+    // out, not to the trip's habits.
     referenceDate: null,
-    showPin: false,
-    durationSeconds: DEFAULT_BADGE_DURATION,
-    shades: [],
-    aspectId: ASPECT_FOR_KIND[kind],
+    showPin: defaults?.showPin ?? false,
+    durationSeconds: defaults?.durationSeconds ?? DEFAULT_BADGE_DURATION,
+    shades: (defaults?.shades ?? []).map((shade) => ({ ...shade, id: newId() })),
+    aspectId: defaults?.aspectId ?? ASPECT_FOR_KIND[kind],
     videoTimeSeconds: 0,
     textOverrides: {},
-    pieceStyles: {},
+    pieceStyles: defaults ? structuredClone(defaults.pieceStyles) : {},
   };
 }
 
@@ -227,6 +276,12 @@ export interface TripDoc {
    * nobody retypes the same last slide 250 times.
    */
   cta: CtaSlide;
+  /**
+   * The look a new piece of each kind starts from — saved from a piece the
+   * author is happy with. Empty until they ask for it: a default nobody chose
+   * is just another factory setting.
+   */
+  hookDefaults: HookDefaultsByKind;
   createdAt: number;
   updatedAt: number;
 }
@@ -248,6 +303,7 @@ export function createTripDoc(
     stages: [],
     posts: [],
     badgeWords: { ...DEFAULT_BADGE_WORDS },
+    hookDefaults: {},
     theme: themeFromPreset(DEFAULT_THEME_PRESET),
     cta: { ...DEFAULT_CTA },
     createdAt: now,
@@ -260,6 +316,7 @@ export function createTripPost(
   date: IsoDate,
   title: string,
   endDate: IsoDate | null = null,
+  defaults?: HookDefaults | null,
 ): TripPost {
   return {
     id: crypto.randomUUID(),
@@ -268,7 +325,7 @@ export function createTripPost(
     endDate,
     title: title.trim(),
     media: null,
-    badge: defaultPostBadge(kind),
+    badge: defaultPostBadge(kind, defaults),
     slides: [],
     // A carousel is the shape that ends on a call to action; a reel's last
     // frame is the footage, and a single photo has no last slide to give.
@@ -341,6 +398,10 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * backdrop, the place marker and the reference day. A post that had the
  * boolean on lands on `auto` — the intent kept, the untrue anniversary dropped.
  *
+ * v6 → v7 gives a trip a place to keep the look it gives a new piece of each
+ * kind. It starts empty on purpose — a default nobody chose is a factory
+ * setting, and existing pieces keep exactly the look they were composed with.
+ *
  * v5 → v6 turns the vignette and the scrim into one stack of SHADES. Both are
  * carried over as the shades they always were: a vignette becomes an inverted
  * radial (dark at the corners), a scrim becomes an edge shade — one that
@@ -372,6 +433,9 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
       slides: post.slides ?? [],
       includeCta: post.includeCta ?? false,
     }));
+  }
+  if (migrated.version < 7) {
+    migrated.hookDefaults = migrated.hookDefaults ?? {};
   }
   if (migrated.version < 6) {
     migrated.posts = (migrated.posts ?? []).map((post) => {

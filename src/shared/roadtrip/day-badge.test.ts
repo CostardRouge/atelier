@@ -49,6 +49,7 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   badgeWords: { ...DEFAULT_BADGE_WORDS },
   theme: null,
   cta: { ...DEFAULT_CTA },
+  hookDefaults: {},
   createdAt: 0,
   updatedAt: 0,
   ...over,
