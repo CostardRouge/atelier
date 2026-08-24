@@ -9,7 +9,8 @@ Today it ships nine tools, converging into a single studio:
 - **Studio** — the unified editor the suite is converging on. Opens on your
   **projects** (saved compositions with a baked preview); each project keeps
   its overlays, look and layout, remembers which folder its media lives in,
-  and reopens in one click. Edit on one stage — overlays, LUT, export.
+  and reopens in one click. Edit on one stage — overlays, LUT, export —
+  **clips and photographs alike**.
 - **Road Trip** — plan and track how a journey gets told. Give a trip its two
   dates and every day of it becomes a cell in a contribution-style grid; the
   holes are the days you have never posted from.
@@ -85,6 +86,27 @@ width it needs. Clips **without** an `.srt` are accepted: telemetry fields
 read “—”, free text and the grade still work. Stepping to the next clip with
 ‹ › hands playback over rather than stopping it: if you were watching, the
 next one picks up as soon as it is ready.
+
+**Photographs are edited on the same stage.** A photo is not a second kind of
+project: it is a media a project can hold beside its clips, so a rush and a
+frame you shot the same afternoon sit under the same ‹ › and share the same
+overlays, look and export matrix. What a still does not have, it does not
+pretend to have — no transport, no trim, no cadence, no speed, no shutter
+button (the export *is* the still); what stays is the A/B wipe, which is how a
+grade gets judged. **The exposure readouts come alive**: a photo's EXIF is read
+as the one telemetry cue it is worth, so ISO, shutter, aperture, exposure
+compensation, focal length, GPS position, altitude and the capture clock/date
+draw over a photograph exactly as they draw over a clip — and what a
+photograph cannot answer (ground speed, vertical speed, heading, relative
+altitude) reads “—” rather than being invented. Timing has nothing to bite on
+over one instant, so the deck is drawn **settled**: every element where and how
+it comes to rest, no entrances half-played. Export writes JPEGs through the
+same variant rows — reframed, capped, overlays in or out
+(`IMG_8801-4x5-1080p.jpg`) — with the cadence and speed controls simply gone.
+A RAW file the browser cannot decode is kept in the library and says so in
+words, pointing at the JPEG or TIFF your developer can produce; where a RAW
+and its sidecar JPEG share a name, the pair is one photo and the decodable
+half is the one you see, whichever the folder happened to list first.
 
 **Trim.** The scrub bar carries two handles: everything before the in point
 and after the out point greys out, and the playhead can only travel between
@@ -723,14 +745,18 @@ src/
 │   ├── library/                # the shared asset library: group files into assets
 │   │                           #   (incl. DJI video↔SRT pairing), capability-match per tool
 │   ├── telemetry/              # SRT parser, motion, cadence, cue lookup, flight-path extraction
+│   ├── exif/                   # dependency-free JPEG/TIFF EXIF reader, plus exif-cue:
+│   │                           #   a photograph read as the one telemetry cue it is worth
 │   ├── overlay/                # the overlay engine: element model, canvas stage,
 │   │                           #   draw/measure/hit-test, fonts, guides, burn-in export,
-│   │                           #   animation + scenes (the intro layer, pure), and the
+│   │                           #   animation + scenes (the intro layer, pure), still-frame
+│   │                           #   (a deck settled for a still), and the
 │   │                           #   ElementList/ElementPanel/Timing/Scene/Guides editors
 │   ├── lut/                    # WebGL2 LUT renderer, frame grader, picker, built-ins
 │   ├── map/track-map.ts        # the one MapLibre track-map: style, line layer, OSM tiles
 │   ├── media/                  # metadata, transcode, WebCodecs export, transport/object-URL
-│   │                           #   hooks, export-path decision, download/naming
+│   │                           #   hooks, export-path decision, download/naming,
+│   │                           #   photo-frame (decode a still, render one variant of it)
 │   ├── projects/               # studio project documents: types, media reconciliation,
 │   │                           #   IndexedDB store (handles + thumbnails persist; media never)
 │   │                           #   + project-file (the portable half as .atelier.json)
@@ -743,7 +769,6 @@ src/
 │   │   └── TelemetryTool.tsx · DetailView.tsx · Gallery.tsx · VideoCard.tsx
 │   ├── overlay/                # the Telemetry Overlay page (engine lives in shared/overlay)
 │   ├── exif/                   # read photo EXIF (camera, lens, exposure, GPS)
-│   │   ├── exif-parser.ts      # dependency-free JPEG/TIFF EXIF reader
 │   │   ├── exif-format.ts      # pure value formatters (shutter, f-stop, GPS…)
 │   │   ├── use-exif.ts         # lazily read + parse a file's leading bytes
 │   │   └── ExifTool.tsx · Gallery.tsx · PhotoCard.tsx · DetailView.tsx

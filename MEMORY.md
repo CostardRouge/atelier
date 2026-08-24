@@ -85,6 +85,11 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - A trip remembers the look it gives a new piece of each kind; what belongs to one day is never inherited — `roadtrip.md`.
 - Road Trip's grid draws its own hover card (fixed-positioned, pointer-transparent) because the native `title` is far too slow to sweep a calendar with — `roadtrip.md`.
 - Each post keeps a small JPEG of its HOOK in a second IndexedDB store, taken from the preview canvas, drawn at the piece's own orientation, and pruned on delete — `roadtrip.md`.
+- The Studio edits **stills on the same stage as clips** — a photo is a media a project holds beside its rushes, never a second kind of project — `studio.md`.
+- A photograph is read as the **one telemetry cue it is worth** (`shared/exif/exif-cue.ts`), so the exposure, position and time elements work over it; what a still cannot answer (speed, heading, relative altitude) stays `—` — `studio.md`.
+- A still has **no clock**: the deck is settled (`settleForStill`) before it reaches the renderer, or an entrance draws mid-slide and a later window draws nothing — `studio.md`.
+- An `ImageBitmap` on the stage is released **one commit after** it is replaced, never where the new one is decoded: painting a detached bitmap throws inside rAF and kills the render loop — `studio.md`.
+- A RAW yields its image slot to a sidecar JPEG of the same base name — the decodable half is what every tool wants to show, and listing order must not decide it — `architecture.md`, `studio.md`.
 - A tool that redirects from a route effect must first check the path is its own (`isWithinRoute`): a mounted tool still observes the hash after it has changed to another tool's, and redirecting then makes the switcher do nothing — `architecture.md`.
 
 ## Open items (dated; remove when done)
