@@ -76,6 +76,8 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - `drawOverlays` draws one line and never wraps: a sentence is wrapped onto a character budget first (`shared/lib/wrap-text.ts`) — `roadtrip.md`.
 - An animated hook burns into a clip through the Studio's own `exportVariantVideo`, trimmed to START on the chosen frame so `originSeconds` puts the entrance on frame one; the scrim reaches the frame through a new `paintUnderOverlays` hook — `roadtrip.md`, `media-pipeline.md`.
 - Only a deck's content slides reorder; the hook and the call to action are structural — `roadtrip.md`.
+- Road Trip's grid draws its own hover card (fixed-positioned, pointer-transparent) because the native `title` is far too slow to sweep a calendar with — `roadtrip.md`.
+- Each post keeps a small JPEG of its HOOK in a second IndexedDB store, taken from the preview canvas and pruned on delete — `roadtrip.md`.
 
 ## Open items (dated; remove when done)
 

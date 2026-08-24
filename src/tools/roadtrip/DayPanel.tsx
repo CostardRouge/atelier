@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { formatIsoDate, spanLength, type IsoDate } from '../../shared/roadtrip/trip-days';
 import {
   stageAt,
   stageDayNumber,
   type DayCell,
 } from '../../shared/roadtrip/trip-coverage';
+import { getThumbs } from '../../shared/roadtrip/trip-store';
 import {
   POST_KINDS,
   createTripPost,
@@ -35,11 +36,13 @@ function formatPublished(ts: number): string {
 
 function PostRow({
   post,
+  thumb,
   onUpdate,
   onDelete,
   onOpen,
 }: {
   post: TripPost;
+  thumb: string | null;
   onUpdate: (post: TripPost) => void;
   onDelete: () => void;
   onOpen: () => void;
@@ -49,6 +52,26 @@ function PostRow({
 
   return (
     <li className="flex items-center gap-3 py-2 border-b border-line last:border-b-0">
+      {/* The hook as it was last composed. A post that has never been opened
+          has none, and the frame is drawn empty rather than skipped, so the
+          rows stay aligned. */}
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`Open ${post.title || 'this piece'}`}
+        className="flex-none w-[38px] h-[48px] p-0 rounded-[4px] overflow-hidden border border-line bg-paper-2 cursor-pointer hover:border-accent"
+      >
+        {thumb ? (
+          <img
+            src={thumb}
+            alt=""
+            className="w-full h-full object-cover block"
+            draggable={false}
+          />
+        ) : (
+          <span className="block w-full h-full" aria-hidden="true" />
+        )}
+      </button>
       <span
         className={`flex-none font-mono text-[0.6rem] tracking-[0.1em] uppercase px-2 py-[3px] rounded-full border ${
           post.publishedAt === null
@@ -141,9 +164,36 @@ export default function DayPanel({
   const [kind, setKind] = useState<PostKind>('reel');
   const [title, setTitle] = useState('');
 
+  const posts = cell?.posts ?? [];
+  const ids = useMemo(() => posts.map((p) => p.id).join('|'), [posts]);
+
+  /**
+   * The stored hooks, as object URLs. Keyed on the ids so switching day
+   * reloads, and every URL is revoked on the way out — an unrevoked blob URL
+   * holds its bytes for the lifetime of the document.
+   */
+  const [thumbs, setThumbs] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    let alive = true;
+    const urls: string[] = [];
+    void getThumbs(ids ? ids.split('|') : []).then((blobs) => {
+      const next = new Map<string, string>();
+      for (const [id, blob] of blobs) {
+        const url = URL.createObjectURL(blob);
+        urls.push(url);
+        next.set(id, url);
+      }
+      if (alive) setThumbs(next);
+      else for (const url of urls) URL.revokeObjectURL(url);
+    });
+    return () => {
+      alive = false;
+      for (const url of urls) URL.revokeObjectURL(url);
+    };
+  }, [ids]);
+
   const stage = stageAt(trip, date);
   const atStage = stage ? stageDayNumber(stage, date) : null;
-  const posts = cell?.posts ?? [];
   const totalDays = spanLength(trip.startDate, trip.endDate);
 
   function add() {
@@ -182,6 +232,7 @@ export default function DayPanel({
             <PostRow
               key={post.id}
               post={post}
+              thumb={thumbs.get(post.id) ?? null}
               onUpdate={onUpdatePost}
               onDelete={() => onDeletePost(post.id)}
               onOpen={() => onOpenPost(post)}

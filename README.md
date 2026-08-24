@@ -333,9 +333,14 @@ the **holes**: with thousands of photos and a year's distance, what you cannot
 answer from memory is which days you have never told. Empty cells are drawn
 like any other, five intensity rungs separate "nothing here" from "drafted but
 never sent" from "published once, twice, more", and the longest stretch of
-silence is called out with a link that jumps to it. Clicking a day opens it:
-what has already come out of it, and one gesture to add another piece — a reel,
-a carousel or a single photo.
+silence is called out with a link that jumps to it. Hovering a cell raises a
+card — the day, its number, what is sitting there and whether any of it went
+out — drawn immediately rather than after the browser's own tooltip delay, so
+the grid can be swept rather than interrogated. Clicking a day opens it: what
+has already come out of it, and one gesture to add another piece — a reel, a
+carousel or a single photo. Each piece in that list carries **a thumbnail of
+its own hook**, kept in the browser beside the trip, so a day reopened months
+later shows what you left there instead of a file name.
 
 **The hook.** Open a piece and you compose its badge over the picture: the
 number the trip gives it, big, with everything else deliberately subordinate —
@@ -344,6 +349,11 @@ four ways (day of trip, a range of days, the day at a place, how long you
 stayed), and closes on an optional line about when. Pick a frame (9:16,
 4:5, 1:1, 16:9), place the block on a 3×3 grid, size the numeral, and export a
 PNG — ready as a Reel's opening frame or a carousel's first slide.
+
+On a wide screen the badge holds still while its controls scroll beside it —
+the Studio's layout, and the reason is the same: you are watching the picture,
+not the panel. Stacked on a phone, the page scrolls as one, because a panel
+with its own scrollbar inside a scrolling page is a trap.
 
 **The picture is whatever is ticked in the Library**, and the two stay in step:
 opening a piece points the Library at its picture, and picking another one

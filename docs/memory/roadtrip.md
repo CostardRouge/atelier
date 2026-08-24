@@ -165,6 +165,16 @@ The EXIF date is read as written, never converted: EXIF has no timezone and the 
 
 **`exif-parser.ts` moved to `shared/exif/`** when Road Trip became its second consumer — a tool never reaches into another tool (the same move `StylePanel` made).
 
+## The grid's hover card, the panel's own scroll, the day's thumbnails (2026-08-24)
+
+Three asks from the same session, one theme — the tool has to be readable at a glance.
+
+**The hover card is ours, not `title`.** The native tooltip waits about a second on the first cell, which is useless on a grid meant to be *swept*, and it cannot show the kinds. `DayCard` is `position: fixed` with coordinates from the cell's `getBoundingClientRect()`, clamped to the viewport and `pointer-events: none`. Fixed rather than absolute on purpose: the grid scrolls sideways inside its own `overflow-x-auto` box, so an absolutely-positioned card would be clipped by it or drift with its scroll. `aria-label` still carries the same sentence — the card is decoration, the label is the accessible name.
+
+**The editor's panel scrolls by itself above 860px** (`overflow-y-auto` + `min-h-0` on the column, `overflow-hidden` on the section) so the badge stays in view while the folds are worked through — the studio's layout, same reason. **Below 860px the page scrolls as one**: a panel with its own scrollbar inside a scrolling page is a trap on a phone. Both breakpoints are CONTAINER queries (`@min-[860px]`), never viewport ones — the Library sidebar eats 288px the viewport cannot see.
+
+**Each post keeps a thumbnail of its hook**, in a second object store (`thumbs`) of the roadtrip database, keyed by post id — apart from the documents because they are the only heavy values and a trip doc is read on every gallery render. It is a picture of the BADGE, not of the raw media: what you need to recognise a day you last touched in March is what you already made of it. The stage takes it (`BadgeStage.onRendered` → `canvasThumbnail`), debounced 700ms — the stage repaints on every animation frame of the badge's transport, and writing each one would be an IndexedDB write per frame. It is a cache: losing it costs a row its picture, never the post. **Prune on delete** (`deleteThumbs`), for a post and for a whole trip; nothing else ever will.
+
 ## The hook burns in through the Studio's pipeline, not a second exporter (2026-08-24)
 
 **Decision.** "Export hook video" hands the badge's own `OverlayElement[]` to `exportVariantVideo` — the Studio's WebCodecs export — with no LUT and no cues. Nothing about decoding, cover-cropping, cadence or muxing is re-implemented; `shared/roadtrip/hook-video.ts` only decides WHICH slice goes out and under what name, and `hook-video-export.ts` makes the call (same pure/DOM split as `deck.ts` / `deck-export.ts`).

@@ -53,6 +53,8 @@ import {
   type TripDoc,
   type TripPost,
 } from '../../shared/roadtrip/trip-types';
+import { canvasThumbnail } from '../../shared/roadtrip/thumbnail';
+import { putThumb } from '../../shared/roadtrip/trip-store';
 import { canWriteToDisk, pickWritableDirectory, writeItems } from '../../shared/sources/write-files';
 import BadgeStage from './BadgeStage';
 import CtaPanel from './CtaPanel';
@@ -509,6 +511,32 @@ export default function PostEditor({
   }
 
   /**
+   * Keep a small picture of the hook beside the trip, so a day opened months
+   * later shows what is sitting in it rather than a file name. Debounced and
+   * taken only from the hook — the stage redraws on every frame of the badge's
+   * transport, and writing each one would be a write per animation frame.
+   */
+  const thumbTimer = useRef<number | null>(null);
+  const captureThumb = useCallback(
+    (canvas: HTMLCanvasElement) => {
+      if (!isHook) return;
+      if (thumbTimer.current !== null) window.clearTimeout(thumbTimer.current);
+      thumbTimer.current = window.setTimeout(() => {
+        void canvasThumbnail(canvas).then((blob) => {
+          if (blob) void putThumb(post.id, blob);
+        });
+      }, 700);
+    },
+    [isHook, post.id],
+  );
+  useEffect(
+    () => () => {
+      if (thumbTimer.current !== null) window.clearTimeout(thumbTimer.current);
+    },
+    [],
+  );
+
+  /**
    * Render every slide and hand the set over. A folder keeps the deck in
    * order on disk; where the picker is unavailable each slide is downloaded
    * in turn, which is the only thing a non-Chromium browser can do.
@@ -567,8 +595,12 @@ export default function PostEditor({
   });
 
   return (
+    // Wide: the page holds still and the panel scrolls by itself, so the badge
+    // stays in view while its controls are worked through — the studio's own
+    // layout. Narrow (stacked): the whole page scrolls, because a panel with
+    // its own scrollbar inside a scrolling page is a trap on a phone.
     <section
-      className="@container flex flex-col flex-1 min-h-0 gap-4 overflow-auto"
+      className="@container flex flex-col flex-1 min-h-0 gap-4 overflow-auto @min-[860px]:overflow-hidden"
       aria-label="Hook"
     >
       <div className="flex items-center gap-3 flex-wrap">
@@ -601,8 +633,8 @@ export default function PostEditor({
         </button>
       </div>
 
-      <div className="flex flex-col @min-[860px]:flex-row gap-5 min-h-0">
-        <div className="flex-1 min-w-0 flex flex-col items-center gap-3">
+      <div className="flex flex-col @min-[860px]:flex-row gap-5 min-h-0 @min-[860px]:flex-1">
+        <div className="flex-1 min-w-0 flex flex-col items-center gap-3 @min-[860px]:min-h-0">
           <BadgeStage
             file={slideFile}
             videoTimeSeconds={slide.videoTimeSeconds}
@@ -619,6 +651,7 @@ export default function PostEditor({
                 : null
             }
             onSourceLoaded={setSrcInfo}
+            onRendered={captureThumb}
           />
 
           {isHook && animated && (
@@ -650,7 +683,7 @@ export default function PostEditor({
           )}
         </div>
 
-        <div className="flex-none w-full @min-[860px]:w-[22rem] flex flex-col gap-3">
+        <div className="flex-none w-full @min-[860px]:w-[22rem] flex flex-col gap-3 @min-[860px]:min-h-0 @min-[860px]:overflow-y-auto @min-[860px]:overscroll-contain @min-[860px]:pr-1.5">
           <div className={section}>
             <span className={legend}>
               Deck · {slides.length} slide{slides.length === 1 ? '' : 's'}

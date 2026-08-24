@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   WEEKDAYS,
   formatIsoDate,
@@ -7,6 +7,7 @@ import {
   todayIso,
   type IsoDate,
 } from '../../shared/roadtrip/trip-days';
+import { POST_KINDS } from '../../shared/roadtrip/trip-types';
 import type { DayCell } from '../../shared/roadtrip/trip-coverage';
 
 interface DayHeatmapProps {
@@ -33,6 +34,14 @@ function levelOf(cell: DayCell): number {
   if (cell.posts.length === 0) return 0;
   if (cell.published === 0) return 1;
   return Math.min(2 + cell.published - 1, 4);
+}
+
+/** What the card says about a day, in the order it is read. */
+interface Hovered {
+  cell: DayCell;
+  /** Viewport coordinates of the cell — the card is positioned fixed. */
+  x: number;
+  y: number;
 }
 
 function cellTitle(cell: DayCell): string {
@@ -65,6 +74,10 @@ export default function DayHeatmap({
   const months = useMemo(() => monthLabels(weeks), [weeks]);
   const byDate = useMemo(() => new Map(days.map((d) => [d.date, d])), [days]);
   const today = useMemo(() => todayIso(), []);
+  // A card of our own rather than the browser's `title`: the native tooltip
+  // takes about a second to appear on the first cell, which is far too slow
+  // for a grid meant to be swept over, and it cannot show the kinds.
+  const [hovered, setHovered] = useState<Hovered | null>(null);
 
   if (!weeks.length) return null;
 
@@ -120,13 +133,20 @@ export default function DayHeatmap({
                   if (!cell) return <span key={row} style={{ width: CELL, height: CELL }} />;
                   const isSelected = date === selected;
                   const isToday = date === today;
+                  const show = (el: HTMLElement) => {
+                    const r = el.getBoundingClientRect();
+                    setHovered({ cell, x: r.left + r.width / 2, y: r.top });
+                  };
                   return (
                     <button
                       key={row}
                       type="button"
                       role="gridcell"
                       onClick={() => onSelect(date)}
-                      title={cellTitle(cell)}
+                      onPointerEnter={(e) => show(e.currentTarget)}
+                      onPointerLeave={() => setHovered((h) => (h?.cell === cell ? null : h))}
+                      onFocus={(e) => show(e.currentTarget)}
+                      onBlur={() => setHovered((h) => (h?.cell === cell ? null : h))}
                       aria-label={cellTitle(cell)}
                       aria-selected={isSelected}
                       className="p-0 border cursor-pointer rounded-[3px] transition-[transform,box-shadow] duration-150 ease-paper hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink"
@@ -150,6 +170,8 @@ export default function DayHeatmap({
         </div>
       </div>
 
+      {hovered && <DayCard hovered={hovered} />}
+
       <div className="flex items-center gap-2 mt-3 font-mono text-[0.6rem] text-faint">
         <span>Nothing</span>
         {LEVELS.map((bg, i) => (
@@ -162,6 +184,61 @@ export default function DayHeatmap({
         ))}
         <span>Told often</span>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The hover card. Fixed to the viewport and clamped to it, because the grid
+ * scrolls sideways inside its own box and an absolutely-positioned card would
+ * either be clipped by that box or drift with its scroll.
+ *
+ * It never takes the pointer, so sweeping across the grid is uninterrupted.
+ */
+function DayCard({ hovered }: { hovered: Hovered }) {
+  const { cell } = hovered;
+  const drafts = cell.posts.length - cell.published;
+  const kinds = POST_KINDS.map((k) => ({
+    label: k.label,
+    count: cell.posts.filter((p) => p.kind === k.id).length,
+  })).filter((k) => k.count > 0);
+
+  // Half the card's own width, so the clamp keeps it on screen at both edges.
+  const HALF = 92;
+  const x = Math.min(Math.max(hovered.x, HALF + 6), window.innerWidth - HALF - 6);
+
+  return (
+    <div
+      role="presentation"
+      className="fixed z-50 pointer-events-none -translate-x-1/2 -translate-y-full"
+      style={{ left: x, top: hovered.y - 8 }}
+    >
+      <div className="px-3 py-2 rounded-paper border border-frame bg-frame text-paper shadow-[0_6px_18px_rgba(16,15,13,0.28)] min-w-[9rem]">
+        <span className="block font-mono text-[0.62rem] tracking-[0.12em] uppercase text-[rgba(244,240,231,0.62)]">
+          day {cell.dayNumber}
+        </span>
+        <span className="block text-[0.82rem] leading-tight">
+          {formatIsoDate(cell.date)}
+        </span>
+        {cell.posts.length === 0 ? (
+          <span className="block mt-1 font-mono text-[0.66rem] text-[rgba(244,240,231,0.62)]">
+            nothing told yet
+          </span>
+        ) : (
+          <span className="block mt-1 font-mono text-[0.66rem] text-[rgba(244,240,231,0.82)]">
+            {kinds.map((k) => `${k.count} ${k.label.toLowerCase()}`).join(' · ')}
+            <span className="block text-[rgba(244,240,231,0.62)]">
+              {cell.published ? `${cell.published} published` : 'draft only'}
+              {drafts > 0 && cell.published > 0 ? ` · ${drafts} draft` : ''}
+            </span>
+          </span>
+        )}
+      </div>
+      {/* The stem, pointing back at the cell. */}
+      <span
+        className="block mx-auto w-2 h-2 -mt-1 rotate-45 bg-frame border-r border-b border-frame"
+        aria-hidden="true"
+      />
     </div>
   );
 }

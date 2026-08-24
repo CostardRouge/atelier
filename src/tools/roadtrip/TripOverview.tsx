@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
+import { deleteThumbs } from '../../shared/roadtrip/trip-store';
 import { formatIsoDate, type IsoDate } from '../../shared/roadtrip/trip-days';
 import { tripCoverage } from '../../shared/roadtrip/trip-coverage';
 import type { TripDoc, TripPost, TripStage } from '../../shared/roadtrip/trip-types';
@@ -136,7 +137,10 @@ export default function TripOverview({
           onUpdatePost={(post) =>
             mutate(trip.posts.map((p) => (p.id === post.id ? post : p)))
           }
-          onDeletePost={(id) => mutate(trip.posts.filter((p) => p.id !== id))}
+          onDeletePost={(id) => {
+            void deleteThumbs([id]);
+            mutate(trip.posts.filter((p) => p.id !== id));
+          }}
           onOpenPost={onOpenPost}
         />
       )}

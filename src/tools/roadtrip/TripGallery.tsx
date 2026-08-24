@@ -2,7 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { formatIsoDate, spanLength } from '../../shared/roadtrip/trip-days';
 import { tripCoverage } from '../../shared/roadtrip/trip-coverage';
 import { createTripDoc, type TripDoc } from '../../shared/roadtrip/trip-types';
-import { deleteTrip, listTrips, putTrip } from '../../shared/roadtrip/trip-store';
+import {
+  deleteThumbs,
+  deleteTrip,
+  listTrips,
+  putTrip,
+} from '../../shared/roadtrip/trip-store';
 import NewTripModal, { type NewTripChoices } from './NewTripModal';
 
 interface TripGalleryProps {
@@ -132,7 +137,11 @@ export default function TripGallery({ openTripId, onOpen }: TripGalleryProps) {
   }
 
   async function handleDelete(id: string) {
+    // The hooks go with the trip: nothing else will ever prune them, and they
+    // are the only heavy values in the database.
+    const doomed = trips?.find((t) => t.id === id);
     await deleteTrip(id);
+    if (doomed) await deleteThumbs(doomed.posts.map((p) => p.id));
     refresh();
   }
 

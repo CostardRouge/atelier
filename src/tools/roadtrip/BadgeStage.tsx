@@ -29,6 +29,12 @@ interface BadgeStageProps {
   /** A QR square under the text. */
   qr?: QrDraw | null;
   onSourceLoaded?: (info: { width: number; height: number; duration: number }) => void;
+  /**
+   * Fired after each successful paint, with the canvas that was just drawn.
+   * Used to keep a thumbnail of the hook — the picture has to be taken here,
+   * because this is the only place it already exists.
+   */
+  onRendered?: (canvas: HTMLCanvasElement) => void;
 }
 
 /**
@@ -48,11 +54,15 @@ export default function BadgeStage({
   background,
   qr,
   onSourceLoaded,
+  onRendered,
 }: BadgeStageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sourceRef = useRef<BadgeSource | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Held in a ref so a caller passing a fresh closure cannot re-run the paint.
+  const onRenderedRef = useRef(onRendered);
+  onRenderedRef.current = onRendered;
 
   // Decode the picture. Re-runs when the clip's frame moves, because a video
   // source IS the seeked element — a photo re-decodes only when the file does.
@@ -126,7 +136,7 @@ export default function BadgeStage({
       block,
       background,
       qr,
-    });
+    }).then(() => onRenderedRef.current?.(canvas));
   }, [
     aspect,
     elements,
