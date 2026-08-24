@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contentSlideElements, deckSlides, slideFileName } from './deck';
+import { contentSlideElements, deckSlides, moveItem, slideFileName } from './deck';
 import { DEFAULT_CTA } from './cta-slide';
 import { DEFAULT_BADGE_WORDS } from './day-badge';
 import {
@@ -157,5 +157,45 @@ describe('contentSlideElements', () => {
 
   it('keeps a shadow, since it lands on an unvetted photograph', () => {
     expect(contentSlideElements('x')[0].legibility?.mode).toBe('shadow');
+  });
+});
+
+describe('moveItem', () => {
+  const abc = ['a', 'b', 'c', 'd'] as const;
+
+  it('moves an item later, closing the hole behind it', () => {
+    expect(moveItem(abc, 0, 2)).toEqual(['b', 'c', 'a', 'd']);
+  });
+
+  it('moves an item earlier', () => {
+    expect(moveItem(abc, 3, 1)).toEqual(['a', 'd', 'b', 'c']);
+  });
+
+  it('leaves the list alone when nothing moves', () => {
+    expect(moveItem(abc, 2, 2)).toEqual([...abc]);
+  });
+
+  it('never mutates the list it was given', () => {
+    const source = [...abc];
+    moveItem(source, 0, 3);
+    expect(source).toEqual([...abc]);
+  });
+
+  it('clamps a drop past either end instead of dropping the item', () => {
+    expect(moveItem(abc, 0, 99)).toEqual(['b', 'c', 'd', 'a']);
+    expect(moveItem(abc, 3, -5)).toEqual(['d', 'a', 'b', 'c']);
+  });
+
+  it('keeps every item, whatever the indices', () => {
+    for (const from of [-1, 0, 1, 2, 3, 9]) {
+      for (const to of [-1, 0, 1, 2, 3, 9]) {
+        expect([...moveItem(abc, from, to)].sort()).toEqual([...abc].sort());
+      }
+    }
+  });
+
+  it('is a no-op on a list too short to reorder', () => {
+    expect(moveItem(['only'], 0, 1)).toEqual(['only']);
+    expect(moveItem([], 0, 0)).toEqual([]);
   });
 });

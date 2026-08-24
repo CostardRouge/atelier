@@ -71,6 +71,8 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - A Road Trip post is a DECK (hook → content → call to action); a reel or a photo is the same model with one slide, and the closing card lives on the TRIP — `roadtrip.md`.
 - The QR code is encoded locally (`shared/lib/qr.ts`) rather than fetched, and is verified by decoding the rendered canvas with a decoder installed in the scratchpad, never in the repo — `roadtrip.md`.
 - `drawOverlays` draws one line and never wraps: a sentence is wrapped onto a character budget first (`shared/lib/wrap-text.ts`) — `roadtrip.md`.
+- An animated hook burns into a clip through the Studio's own `exportVariantVideo`, trimmed to START on the chosen frame so `originSeconds` puts the entrance on frame one; the scrim reaches the frame through a new `paintUnderOverlays` hook — `roadtrip.md`, `media-pipeline.md`.
+- Only a deck's content slides reorder; the hook and the call to action are structural — `roadtrip.md`.
 
 ## Open items (dated; remove when done)
 

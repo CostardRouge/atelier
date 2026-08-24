@@ -145,12 +145,26 @@ Read before touching `src/tools/roadtrip/` or `src/shared/roadtrip/`, and before
 
 The Library's "Add files" button filtered to `video/*,.srt` only, so a photo could reach the library through the folder picker or a drag but never through the button — with Photo EXIF, Compare and now Road Trip being photo-first, that was a dead end for half the suite. The accept list now covers every kind `classifyPart` recognises, camera RAW included (the OS dialog greys RAW out otherwise, and the library deliberately keeps handles the browser cannot decode).
 
+## The hook burns in through the Studio's pipeline, not a second exporter (2026-08-24)
+
+**Decision.** "Export hook video" hands the badge's own `OverlayElement[]` to `exportVariantVideo` — the Studio's WebCodecs export — with no LUT and no cues. Nothing about decoding, cover-cropping, cadence or muxing is re-implemented; `shared/roadtrip/hook-video.ts` only decides WHICH slice goes out and under what name, and `hook-video-export.ts` makes the call (same pure/DOM split as `deck.ts` / `deck-export.ts`).
+
+**The clip starts on the frame the author scrubbed to**, as a trim in point. That is not a convenience: `DrawOptions.originSeconds` is the trim's start, so the badge's windows count from the first EXPORTED frame and the entrance lands on frame one. Export the whole rush instead and the entrance has already happened somewhere in the middle. `hookRange` returns null when the whole clip goes out, which the pipeline reads as "no trim" and origin 0 — correct, not a fallback.
+
+**The scrim and vignette needed a hook in the shared pipeline.** They are painted between the picture and the overlays, and `exportVariantVideo` had nowhere to do that, so `VariantRenderOptions` gained `paintUnderOverlays?(ctx, w, h)` (unset by the Studio) and `paintBackdrop` was exported from `badge-render.ts` with a context type widened to include `OffscreenCanvasRenderingContext2D`. A gradient that showed in the PNG and vanished in the reel would be a different picture.
+
+**The hook's LENGTH is session state, not part of the document.** It is derived from the badge's own hold (`defaultHookSeconds` = duration + a beat) and clamped to the clip in hand by `hookSecondsWithin`, so the read-out never claims 5s over a 3s clip. A length is an export choice; storing it would have cost a document version for nothing.
+
+**MP4 and MOV only, said in words.** The pipeline demuxes MP4 boxes; a WebM produced mp4box's own "Invalid data found while parsing box of type…", accurate and unreadable. `hookSourceProblem` refuses first with a sentence naming the file and reminding that the PNG export still works. **Unverified end to end**: this container's Chromium reports `avc1.*` unsupported by `VideoEncoder` (vp8/vp9 only), so no H.264 encode can be driven here — the UI, the guard and the arithmetic were checked in the browser, the encode was not.
+
+## Only the middle of a deck reorders (2026-08-24)
+
+Dragging a slide moves it within `post.slides` (`moveItem` in `deck.ts`, pure and clamped: a drop past the end plainly means "put it last"). The hook and the call to action are not draggable — their positions are structural, and a CTA that came third would not be one. The strip carries deck indices while `post.slides` is content-only, so the handler translates (`ci = i - 1`); getting that wrong silently reorders the wrong slide. Drag is paired with Earlier / Later buttons in the slide panel: HTML5 drag is unreachable by keyboard and undiscoverable on a first look.
+
 ## Open, and decided but not built (2026-08-23)
 
 - **The `.roadtrip.json` export is the safety net the maintainer asked for by name** — he expects to pull a JSON out weekly so a cleared IndexedDB cannot cost him a year of tracking. Follow `projects/project-file.ts` exactly (portable half only, `{ok:false, error}` parsing, refuse a file from a newer version). Agreed shape of the reminder: a **discreet banner** ("last export 12 days ago"), never a blocking prompt. Not built.
 - **The three visual directions drawn in the design pass were never formally chosen.** They now exist as the four title-style presets in the Style picker (the studio's own `StylePanel`, moved to `shared/overlay/` when Road Trip became its second consumer), so the choice is one click rather than a code change — but he has not said which one is the signature.
-- **A badge can be animated but only exports as a still.** The PNG renders at the preview's current time. Burning a moving hook into a clip means handing the same elements to the studio's WebCodecs export, which is the natural next chantier now that the animation model and the hook's duration are both in place.
-- **Slides cannot be reordered.** Adding and removing is there; dragging is not, and a carousel whose order is wrong currently has to be rebuilt from the point of the mistake.
 - **Carousels are a later phase**: a post becomes an ordered list of slides with a role (intro / content / CTA), and the closing call-to-action slide is a **single global template edited once** (his choice), reinjected automatically — not re-authored per post. For a reel the hook rides the Studio's existing intro *scene* rather than a new mechanism, and the CTA stays a separate end card rather than being baked into the export.
 - **Time Machine** (an animated counter winding back to the media's day) and an API into his own geolocated media-triage system are wanted but explicitly last: both were discussed as "after the rest works".
 - Element positioning is **not** fixed to a corner — he rejected a pinned top/side badge; placement is free, which is what the shared overlay engine already gives.

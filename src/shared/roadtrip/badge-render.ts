@@ -289,9 +289,14 @@ function rgba(color: string, alpha: number): string {
 /**
  * Paint the scrim and the vignette over the picture. Both run BEFORE the
  * badge, never after: darkening the text you just drew would defeat the point.
+ *
+ * Exported because the video burn-in needs the same treatment on every frame,
+ * through the Studio's export pipeline rather than through `renderBadge` — a
+ * hook whose gradient appeared in the PNG and vanished in the reel would be a
+ * different picture.
  */
-function paintBackdrop(
-  ctx: CanvasRenderingContext2D,
+export function paintBackdrop(
+  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
   w: number,
   h: number,
   backdrop: BadgeBackdrop,

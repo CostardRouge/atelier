@@ -410,7 +410,20 @@ once and appended to every deck that asks for it. A reel or a single photo is
 the same model with a deck of one, so a piece can be re-cut into a carousel
 without being rebuilt. Export writes the whole deck as numbered PNGs into a
 folder you pick (or downloads them one by one where the folder picker is not
-available), named so a file listing is already in swipe order.
+available), named so a file listing is already in swipe order. The order is
+yours: drag a content slide along the strip, or move it with the Earlier /
+Later buttons. Only the middle moves — a hook that opened third and a call to
+action that came second would stop being either.
+
+**The hook can leave as a moving clip, not only a still.** When the hook sits
+on a video, "Export hook video" burns the animated badge into it through the
+**same WebCodecs pipeline the Studio exports with** — cover-cropped into the
+post's frame, the scrim and vignette applied per frame, audio copied through,
+never re-encoded. The clip starts on the frame you picked with the scrubber, so
+the entrance plays on frame one instead of having already happened; a length
+slider says how much of the rush goes out, defaulting to the badge's own hold
+plus a beat. It reads MP4 and MOV (what the demuxer handles) and says so
+plainly for anything else — the PNG export has no such limit.
 
 The QR code is generated **on your machine** — a ~250-line encoder in
 `shared/lib/qr.ts` rather than a call to a web service, because a card that
@@ -421,9 +434,8 @@ a URL.
 
 Currently in place: the trip, its days and stages, the grid, day-keyed posts,
 the badge — words, temporal line, per-piece styling, animation and picture
-treatments — and the deck through to its PNGs. Burning an animated hook into a
-clip through the Studio's video export and a portable `.json` export of a trip
-are the phases that follow.
+treatments — the deck through to its PNGs, and the animated hook burned into a
+clip. A portable `.json` export of a trip is the phase that follows.
 
 ## Telemetry tool
 

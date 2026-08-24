@@ -146,3 +146,26 @@ export function contentSlideElements(
     return el;
   });
 }
+
+/**
+ * Move one item of an ordered list to another index, returning a new list.
+ *
+ * Used to reorder a deck's content slides by dragging. Indices are into the
+ * POST's own slide list, not into the rendered deck: the hook and the closing
+ * card have fixed places (a call to action that came third would not be one),
+ * so only the middle is reorderable and the caller does that translation.
+ *
+ * Out-of-range indices are clamped rather than rejected — a drop past the last
+ * slide plainly means "put it last", and throwing there would only push the
+ * clamping into the drag handler.
+ */
+export function moveItem<T>(items: readonly T[], from: number, to: number): T[] {
+  const next = items.slice();
+  if (next.length < 2) return next;
+  const src = Math.max(0, Math.min(next.length - 1, Math.trunc(from)));
+  const dst = Math.max(0, Math.min(next.length - 1, Math.trunc(to)));
+  if (src === dst) return next;
+  const [moved] = next.splice(src, 1);
+  next.splice(dst, 0, moved);
+  return next;
+}

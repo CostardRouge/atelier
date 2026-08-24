@@ -29,8 +29,18 @@ import {
   type TimeAgoWords,
 } from '../../shared/roadtrip/time-ago';
 import { ctaLayout } from '../../shared/roadtrip/cta-slide';
-import { contentSlideElements, deckSlides } from '../../shared/roadtrip/deck';
+import { contentSlideElements, deckSlides, moveItem } from '../../shared/roadtrip/deck';
 import { renderDeck } from '../../shared/roadtrip/deck-export';
+import {
+  MAX_HOOK_SECONDS,
+  MIN_HOOK_SECONDS,
+  hookRange,
+  hookSecondsWithin,
+  hookSourceProblem,
+  hookVariant,
+  hookVideoName,
+} from '../../shared/roadtrip/hook-video';
+import { exportHookVideo } from '../../shared/roadtrip/hook-video-export';
 import { formatIsoDate, todayIso } from '../../shared/roadtrip/trip-days';
 import {
   createPostSlide,
@@ -137,7 +147,8 @@ export default function PostEditor({
   const { active } = useActiveAsset(MEDIA_KINDS);
   const [exporting, setExporting] = useState<string | null>(null);
   const [exportNote, setExportNote] = useState<string | null>(null);
-  const [duration, setDuration] = useState(0);
+  const [srcInfo, setSrcInfo] = useState({ width: 0, height: 0, duration: 0 });
+  const duration = srcInfo.duration;
   const [selected, setSelected] = useState(0);
   const [piece, setPiece] = useState<BadgePiece>('kicker');
   const [openFold, setOpenFold] = useState<string | null>('piece');
@@ -274,6 +285,25 @@ export default function PostEditor({
     setSelected(Math.max(0, slideIndex - 1));
   }
 
+  // --- reordering the middle of the deck -----------------------------------
+  // Only the content pictures move: the hook opens the piece and the call to
+  // action closes it, and a deck where either drifted into the middle would
+  // stop working. Indices below are into `post.slides`; the strip adds one for
+  // the hook when it needs a deck position.
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
+
+  function moveSlideTo(from: number, to: number) {
+    if (to < 0 || to >= post.slides.length || from === to) return;
+    onChangePost({ ...post, slides: moveItem(post.slides, from, to) });
+    // Follow the slide that moved, so the stage keeps showing what was dragged.
+    setSelected(to + 1);
+  }
+
+  const contentIndex = slide.slideId
+    ? post.slides.findIndex((s) => s.id === slide.slideId)
+    : -1;
+
   // --- the badge's own clock ------------------------------------------------
   const settle = badgeSettleSeconds(post.badge.pieceStyles);
   const styles = Object.values(post.badge.pieceStyles);
@@ -303,6 +333,17 @@ export default function PostEditor({
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [playing, loopSeconds]);
+
+  // How long the burned-in hook clip runs. Session state, not part of the
+  // document: it is derived from the badge's own hold, so it is never
+  // arbitrary, and a length is an export choice rather than a property of the
+  // piece. Null means "follow the badge".
+  const [hookSeconds, setHookSeconds] = useState<number | null>(null);
+  const hookLength = hookSecondsWithin(
+    hookSeconds,
+    post.badge.durationSeconds,
+    duration,
+  );
 
   const patchBadge = useCallback(
     (patch: Partial<PostBadge>) =>
@@ -359,6 +400,70 @@ export default function PostEditor({
     [lib.assets],
   );
 
+  function download(blob: Blob, name: string) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  /**
+   * Burn the animated hook into the clip, through the Studio's own video
+   * export. The still shows the badge settled; this is the version that plays
+   * it — which is the whole point of an entrance.
+   */
+  async function exportHookClip() {
+    if (!slideFile || !isHook || !isVideo) return;
+    const problem = hookSourceProblem(slideFile.name, slideFile.type);
+    if (problem) {
+      setExportNote(problem);
+      return;
+    }
+    if (!srcInfo.width || !srcInfo.height) {
+      setExportNote('The clip is still loading — try again in a moment.');
+      return;
+    }
+    setExportNote(null);
+    setExporting('Encoding…');
+    try {
+      const variant = hookVariant(post.badge.aspectId);
+      const blob = await exportHookVideo({
+        file: slideFile,
+        variant,
+        elements: hookElements,
+        theme: trip.theme,
+        srcWidth: srcInfo.width,
+        srcHeight: srcInfo.height,
+        range: hookRange(post.badge.videoTimeSeconds, hookLength, duration),
+        backdrop: post.badge.backdrop,
+        block,
+        onProgress: (p) =>
+          setExporting(
+            p.ratio === null
+              ? `${p.phase}…`
+              : `Encoding ${Math.round(p.ratio * 100)}%…`,
+          ),
+      });
+      const name = hookVideoName(
+        trip.name,
+        post.title.trim() || `day-${post.date}`,
+        variant,
+      );
+      download(blob, name);
+      setExportNote(`${name} downloaded`);
+    } catch (err) {
+      // The pipeline's messages already name the cause (an undecodable HEVC
+      // points at the transcode), so they are shown as they come.
+      setExportNote(
+        err instanceof Error ? err.message : 'The clip could not be encoded.',
+      );
+    } finally {
+      setExporting(null);
+    }
+  }
+
   /**
    * Render every slide and hand the set over. A folder keeps the deck in
    * order on disk; where the picker is unavailable each slide is downloaded
@@ -401,14 +506,7 @@ export default function PostEditor({
             (res.errors.length ? ` · ${res.errors.length} failed to write` : ''),
         );
       } else {
-        for (const r of rendered) {
-          const url = URL.createObjectURL(r.blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = r.name;
-          a.click();
-          URL.revokeObjectURL(url);
-        }
+        for (const r of rendered) download(r.blob, r.name);
         setExportNote(
           `${rendered.length} slide${rendered.length === 1 ? '' : 's'} downloaded` +
             (short ? ` · ${short} could not be rendered` : ''),
@@ -476,7 +574,7 @@ export default function PostEditor({
                 ? { ...cta.qr, dark: trip.cta.ink, light: trip.cta.background }
                 : null
             }
-            onSourceLoaded={(info) => setDuration(info.duration)}
+            onSourceLoaded={setSrcInfo}
           />
 
           {isHook && animated && (
@@ -514,22 +612,63 @@ export default function PostEditor({
               Deck · {slides.length} slide{slides.length === 1 ? '' : 's'}
             </span>
             <div className="flex flex-wrap items-center gap-1.5">
-              {slides.map((s, i) => (
-                <button
-                  key={s.slideId ?? s.kind}
-                  type="button"
-                  onClick={() => setSelected(i)}
-                  aria-pressed={i === slideIndex}
-                  title={s.kind === 'content' ? `Slide ${s.position}` : s.kind}
-                  className={`px-2.5 py-1.5 rounded-paper border text-[0.72rem] cursor-pointer transition-colors ${
-                    i === slideIndex
-                      ? 'border-accent bg-accent-wash text-accent-ink font-semibold'
-                      : 'border-line bg-paper text-ink-soft hover:border-line-strong'
-                  }`}
-                >
-                  {s.kind === 'hook' ? 'Hook' : s.kind === 'cta' ? 'Call to action' : s.position}
-                </button>
-              ))}
+              {slides.map((s, i) => {
+                const ci = s.kind === 'content' ? i - 1 : -1;
+                const dropping = ci >= 0 && dragOver === ci && dragFrom !== ci;
+                return (
+                  <button
+                    key={s.slideId ?? s.kind}
+                    type="button"
+                    onClick={() => setSelected(i)}
+                    aria-pressed={i === slideIndex}
+                    title={
+                      s.kind === 'content'
+                        ? `Slide ${s.position} — drag to reorder`
+                        : s.kind
+                    }
+                    draggable={ci >= 0}
+                    onDragStart={(e) => {
+                      if (ci < 0) return;
+                      setDragFrom(ci);
+                      e.dataTransfer.effectAllowed = 'move';
+                      // Firefox starts no drag at all without a payload.
+                      e.dataTransfer.setData('text/plain', String(ci));
+                    }}
+                    onDragOver={(e) => {
+                      if (ci < 0 || dragFrom === null) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                      setDragOver(ci);
+                    }}
+                    onDrop={(e) => {
+                      if (ci < 0 || dragFrom === null) return;
+                      e.preventDefault();
+                      moveSlideTo(dragFrom, ci);
+                      setDragFrom(null);
+                      setDragOver(null);
+                    }}
+                    onDragEnd={() => {
+                      setDragFrom(null);
+                      setDragOver(null);
+                    }}
+                    className={`px-2.5 py-1.5 rounded-paper border text-[0.72rem] transition-colors ${
+                      ci >= 0 ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+                    } ${dragFrom === ci && ci >= 0 ? 'opacity-50 ' : ''}${
+                      dropping
+                        ? 'border-accent border-dashed bg-accent-wash text-accent-ink'
+                        : i === slideIndex
+                          ? 'border-accent bg-accent-wash text-accent-ink font-semibold'
+                          : 'border-line bg-paper text-ink-soft hover:border-line-strong'
+                    }`}
+                  >
+                    {s.kind === 'hook'
+                      ? 'Hook'
+                      : s.kind === 'cta'
+                        ? 'Call to action'
+                        : s.position}
+                  </button>
+                );
+              })}
               <button
                 type="button"
                 onClick={addSlide}
@@ -620,6 +759,34 @@ export default function PostEditor({
                 />
               </label>
             )}
+            {isHook && isVideo && duration > 0 && (
+              <div className="flex flex-col gap-1.5 pt-1 border-t border-line">
+                <label className="flex flex-col gap-1">
+                  <span className={legend}>Hook clip · {hookLength.toFixed(1)}s</span>
+                  <input
+                    type="range"
+                    min={MIN_HOOK_SECONDS}
+                    max={Math.min(MAX_HOOK_SECONDS, Math.max(MIN_HOOK_SECONDS, duration))}
+                    step={0.5}
+                    value={hookLength}
+                    onChange={(e) => setHookSeconds(Number(e.target.value))}
+                    className="accent-accent"
+                  />
+                </label>
+                <p className="m-0 text-[0.72rem] text-muted">
+                  Starts on the frame above, so the badge animates in on the
+                  first frame of the clip. Audio is copied through.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void exportHookClip()}
+                  disabled={exporting !== null}
+                  className="self-start px-3 py-1.5 rounded-full border border-line-strong bg-paper text-[0.76rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink disabled:opacity-60"
+                >
+                  ↓ Export hook video
+                </button>
+              </div>
+            )}
           </div>
 
           {slide.kind === 'content' && (
@@ -633,6 +800,28 @@ export default function PostEditor({
                   className={inputClass}
                 />
               </label>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={legend}>Order</span>
+                <button
+                  type="button"
+                  onClick={() => moveSlideTo(contentIndex, contentIndex - 1)}
+                  disabled={contentIndex <= 0}
+                  aria-label="Move this slide earlier"
+                  className="px-2 py-1 rounded-paper border border-line-strong bg-paper text-[0.72rem] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink disabled:opacity-40 disabled:cursor-default"
+                >
+                  ← Earlier
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveSlideTo(contentIndex, contentIndex + 1)}
+                  disabled={contentIndex < 0 || contentIndex >= post.slides.length - 1}
+                  aria-label="Move this slide later"
+                  className="px-2 py-1 rounded-paper border border-line-strong bg-paper text-[0.72rem] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink disabled:opacity-40 disabled:cursor-default"
+                >
+                  Later →
+                </button>
+                <span className="text-[0.72rem] text-faint">or drag it in the strip</span>
+              </div>
               <button
                 type="button"
                 onClick={removeSlide}
