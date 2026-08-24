@@ -82,6 +82,9 @@ const RATIOS = {
   headline: 1,
   counter: 0.26,
   caption: 0.22,
+  // The WHEN line is the quietest thing on the badge on purpose: it explains
+  // why the post is going out today, which nobody has to read to recognise it.
+  timing: 0.16,
 } as const;
 
 /** Space under each piece, again as a multiple of the headline's size. */
@@ -90,7 +93,8 @@ const GAP_AFTER = {
   label: 0.04,
   headline: 0.06,
   counter: 0.12,
-  caption: 0,
+  caption: 0.08,
+  timing: 0,
 } as const;
 
 const ORDER: readonly BadgePiece[] = [
@@ -99,6 +103,7 @@ const ORDER: readonly BadgePiece[] = [
   'headline',
   'counter',
   'caption',
+  'timing',
 ];
 
 /**

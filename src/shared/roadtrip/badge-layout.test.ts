@@ -16,6 +16,7 @@ const full: BadgeContent = {
   headline: '27',
   counter: 'sur 310',
   caption: 'Kalbarri',
+  timing: 'il y a 9 mois',
 };
 
 const REEL = 9 / 16;
@@ -41,7 +42,7 @@ describe('heightFractionOf', () => {
 describe('badgeElements', () => {
   it('emits one text element per piece, in reading order', () => {
     const els = badgeElements(full, layout(), REEL);
-    expect(els).toHaveLength(5);
+    expect(els).toHaveLength(6);
     expect(els.every((e) => e.kind === 'text')).toBe(true);
     expect(els.map((e) => e.text)).toEqual([
       'Australie',
@@ -49,6 +50,7 @@ describe('badgeElements', () => {
       '27',
       'sur 310',
       'Kalbarri',
+      'il y a 9 mois',
     ]);
   });
 
@@ -81,6 +83,7 @@ describe('badgeElements', () => {
       headline: '27',
       counter: null,
       caption: null,
+      timing: null,
     };
     const els = badgeElements(bare, layout(), REEL);
     expect(els).toHaveLength(1);
@@ -301,6 +304,7 @@ describe('badgeBlockExtent', () => {
       headline: '',
       counter: null,
       caption: null,
+      timing: null,
     };
     expect(badgeBlockExtent(empty, layout(), REEL)).toBeNull();
   });

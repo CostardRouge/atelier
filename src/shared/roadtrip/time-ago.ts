@@ -43,20 +43,53 @@ export type TimeAgoMode =
   /** "since 27 Mar 2025" — a fact with no arithmetic to doubt. */
   | 'since';
 
+/**
+ * The modes, described by what they measure — never by an example of what they
+ * would say. "1 year 4 months ago" as a hint beside a picture taken last week
+ * is a fabricated value; `timeAgoPreviews` gives the real line instead.
+ */
 export const TIME_AGO_MODES: readonly {
   id: TimeAgoMode;
   label: string;
   hint: string;
 }[] = [
-  { id: 'off', label: 'Off', hint: 'The kicker is the trip’s name' },
+  { id: 'off', label: 'Off', hint: 'No line about when' },
   { id: 'auto', label: 'Auto', hint: 'The truest striking line for this gap' },
   { id: 'anniversary', label: 'Anniversary', hint: 'Only on the real anniversary' },
-  { id: 'years-months', label: 'Years + months', hint: '1 year 4 months ago' },
-  { id: 'months-ago', label: 'Months', hint: '17 months ago' },
-  { id: 'weeks-ago', label: 'Weeks', hint: '178 weeks ago' },
-  { id: 'days-ago', label: 'Days', hint: '1247 days ago' },
-  { id: 'since', label: 'Since the date', hint: 'since 27 Mar 2025' },
+  { id: 'years-months', label: 'Years + months', hint: 'Years, then the odd months' },
+  { id: 'months-ago', label: 'Months', hint: 'Whole calendar months' },
+  { id: 'weeks-ago', label: 'Weeks', hint: 'Whole weeks' },
+  { id: 'days-ago', label: 'Days', hint: 'Every day counted' },
+  { id: 'since', label: 'Since the date', hint: 'The picture’s own day, written out' },
 ];
+
+/** One mode, as it would really read for a given picture and reading day. */
+export interface TimeAgoPreview {
+  id: TimeAgoMode;
+  label: string;
+  hint: string;
+  /** The line, or null when this mode has nothing true to say. */
+  text: string | null;
+}
+
+/**
+ * What each mode would actually say about this picture on this day. A mode
+ * with nothing true to say returns null — an anniversary that has not come
+ * round, a gap too short for the unit — and the panel shows that as such
+ * rather than as an example.
+ */
+export function timeAgoPreviews(
+  date: IsoDate,
+  reference: IsoDate,
+  words: TimeAgoWords,
+): TimeAgoPreview[] {
+  return TIME_AGO_MODES.map((mode) => ({
+    id: mode.id,
+    label: mode.label,
+    hint: mode.hint,
+    text: timeAgoLine(date, reference, mode.id, words),
+  }));
+}
 
 /**
  * Every word the temporal line can say. Unit nouns are shared with the

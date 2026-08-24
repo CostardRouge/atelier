@@ -4,7 +4,9 @@ import {
   FRENCH_TIME_AGO_WORDS,
   autoMode,
   timeAgoLine,
+  timeAgoPreviews,
   timeGap,
+  TIME_AGO_MODES,
   type TimeAgoMode,
 } from './time-ago';
 
@@ -183,5 +185,40 @@ describe('timeAgoLine — the words are data', () => {
         agoTemplate: '↺ {n}',
       }),
     ).toBe('↺ 515 days');
+  });
+});
+
+describe('timeAgoPreviews', () => {
+  const W = DEFAULT_TIME_AGO_WORDS;
+
+  it('gives the real line for this picture, not an example', () => {
+    const byId = Object.fromEntries(
+      timeAgoPreviews('2025-03-27', '2026-08-24', W).map((p) => [p.id, p.text]),
+    );
+    expect(byId['days-ago']).toBe('515 days ago');
+    expect(byId['since']).toBe('since 27 Mar 2025');
+    expect(byId['off']).toBeNull();
+  });
+
+  it('is null for a mode with nothing true to say', () => {
+    const byId = Object.fromEntries(
+      timeAgoPreviews('2025-03-27', '2026-08-24', W).map((p) => [p.id, p.text]),
+    );
+    // Not the anniversary on 24 August.
+    expect(byId['anniversary']).toBeNull();
+  });
+
+  it('moves with the picture’s day — nothing here is fixed', () => {
+    const a = timeAgoPreviews('2025-03-27', '2026-08-24', W);
+    const b = timeAgoPreviews('2025-11-17', '2026-08-24', W);
+    expect(a.find((p) => p.id === 'days-ago')!.text).not.toBe(
+      b.find((p) => p.id === 'days-ago')!.text,
+    );
+  });
+
+  it('covers every mode the panel offers', () => {
+    expect(timeAgoPreviews('2025-03-27', '2026-08-24', W)).toHaveLength(
+      TIME_AGO_MODES.length,
+    );
   });
 });

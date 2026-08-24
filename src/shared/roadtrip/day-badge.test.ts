@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  counterPieces,
+  counterPreviews,
   DEFAULT_BADGE_WORDS,
   FRENCH_BADGE_WORDS,
   badgeContent,
@@ -68,6 +70,7 @@ describe('badgeContent — day', () => {
       headline: '27',
       counter: 'of 310',
       caption: null,
+      timing: null,
     });
   });
 
@@ -128,7 +131,7 @@ describe('badgeContent — the words are data, not a language switch', () => {
         },
       }),
     );
-    expect(c!.kicker).toBe('↺ 515 days');
+    expect(c!.timing).toBe('↺ 515 days');
   });
 });
 
@@ -209,6 +212,7 @@ describe('badgeContent — stage modes', () => {
       headline: '3',
       counter: 'of 4',
       caption: 'Western Australia',
+      timing: null,
     });
   });
 
@@ -230,14 +234,18 @@ describe('badgeContent — stage modes', () => {
   });
 });
 
-describe('badgeContent — the temporal kicker', () => {
-  it('replaces the trip name with the elapsed time', () => {
+describe('badgeContent — the WHEN line', () => {
+  it('is a piece of its own — the trip’s name is never displaced', () => {
+    // The first cut put the elapsed time IN the kicker, so switching the
+    // temporal panel on cost the badge the one word that makes a post
+    // recognisable in a feed.
     const c = badgeContent(
       trip(),
       post('2025-03-27'),
       opts({ timeAgo: 'days-ago', today: '2026-08-24' }),
     );
-    expect(c!.kicker).toBe('515 days ago');
+    expect(c!.kicker).toBe('Australia');
+    expect(c!.timing).toBe('515 days ago');
   });
 
   it('speaks on the real anniversary', () => {
@@ -246,17 +254,22 @@ describe('badgeContent — the temporal kicker', () => {
       post('2025-03-27'),
       opts({ timeAgo: 'anniversary', today: '2026-03-27' }),
     );
-    expect(c!.kicker).toBe('1 year ago today');
+    expect(c!.timing).toBe('1 year ago today');
   });
 
-  it('falls back to the trip name when the anniversary is not today', () => {
+  it('is simply absent when the anniversary is not today', () => {
     // The retired boolean announced one on any date a year or more later.
     const c = badgeContent(
       trip(),
       post('2025-03-27'),
       opts({ timeAgo: 'anniversary', today: '2026-08-24' }),
     );
+    expect(c!.timing).toBeNull();
     expect(c!.kicker).toBe('Australia');
+  });
+
+  it('is absent when switched off', () => {
+    expect(badgeContent(trip(), post('2025-03-27'), opts())!.timing).toBeNull();
   });
 
   it('reads the reference day, not the real today', () => {
@@ -267,7 +280,16 @@ describe('badgeContent — the temporal kicker', () => {
       post('2025-03-27'),
       opts({ timeAgo: 'anniversary', referenceDate: '2026-03-27', today: '2026-08-24' }),
     );
-    expect(c!.kicker).toBe('1 year ago today');
+    expect(c!.timing).toBe('1 year ago today');
+  });
+
+  it('counts from the POST’s day, which is the picture’s day', () => {
+    // Everything the badge says is a subtraction from the day the piece is
+    // filed under; a picture filed under the wrong day reads confidently
+    // wrong, which is why the editor measures and offers the real one.
+    const a = badgeContent(trip(), post('2025-03-27'), opts({ timeAgo: 'days-ago', today: '2026-08-24' }));
+    const b = badgeContent(trip(), post('2025-11-17'), opts({ timeAgo: 'days-ago', today: '2026-08-24' }));
+    expect(a!.timing).not.toBe(b!.timing);
   });
 
   it('leaves the headline untouched — the day is still what dominates', () => {
@@ -279,17 +301,17 @@ describe('badgeContent — the temporal kicker', () => {
     expect(c).toMatchObject({ headline: '27', counter: 'of 310' });
   });
 
-  it('yields to an explicit kicker override', () => {
+  it('yields to an explicit override, like every other piece', () => {
     const c = badgeContent(
       trip(),
       post('2025-03-27'),
       opts({
         timeAgo: 'days-ago',
         today: '2026-08-24',
-        overrides: { kicker: 'ONE LAP OF AUSTRALIA' },
+        overrides: { timing: 'A YEAR AND A HALF AGO' },
       }),
     );
-    expect(c!.kicker).toBe('ONE LAP OF AUSTRALIA');
+    expect(c!.timing).toBe('A YEAR AND A HALF AGO');
   });
 });
 
@@ -337,5 +359,83 @@ describe('badgeContent — the place marker', () => {
       opts({ showPin: true, words: { ...DEFAULT_BADGE_WORDS, pin: '  ' } }),
     );
     expect(c?.caption).toBe('Kalbarri');
+  });
+});
+
+describe('counterPieces — a mode that cannot count says why', () => {
+  const doc = trip({ stages: [stage('Kalbarri', '2025-03-25', '2025-03-28')] });
+
+  it('is silent when the mode worked', () => {
+    const p = counterPieces(doc, post('2025-03-27'), 'stage-day', DEFAULT_BADGE_WORDS);
+    expect(p!.unavailable).toBeNull();
+    expect(p!.headline).toBe('3');
+  });
+
+  it('names the day no stage covers, rather than falling back in silence', () => {
+    // Three of the four modes looked broken because they fell back without a
+    // word: clicking them changed nothing and said nothing.
+    const p = counterPieces(doc, post('2025-06-01'), 'stage-day', DEFAULT_BADGE_WORDS);
+    expect(p!.unavailable).toMatch(/No stage covers/);
+    expect(p!.unavailable).toContain('2025');
+    // And it still counts the day of the trip, which is always true.
+    expect(p!.headline).toBe('93');
+  });
+
+  it('says a single-day piece cannot be a range', () => {
+    const p = counterPieces(doc, post('2025-03-27'), 'day-range', DEFAULT_BADGE_WORDS);
+    expect(p!.unavailable).toMatch(/end date/i);
+  });
+
+  it('is silent for a range that really is one', () => {
+    const p = counterPieces(
+      doc,
+      { ...post('2025-03-27'), endDate: '2025-03-29' },
+      'day-range',
+      DEFAULT_BADGE_WORDS,
+    );
+    expect(p!.unavailable).toBeNull();
+    expect(p!.headline).toBe('27–29');
+  });
+
+  it('puts the marker on the place it actually draws', () => {
+    const withPin = counterPieces(doc, post('2025-03-27'), 'day', DEFAULT_BADGE_WORDS, true);
+    expect(withPin!.caption).toBe(`${DEFAULT_BADGE_WORDS.pin} Kalbarri`);
+  });
+});
+
+describe('counterPreviews', () => {
+  const doc = trip({ stages: [stage('Kalbarri', '2025-03-25', '2025-03-28')] });
+
+  it('gives the real line for every mode that has one', () => {
+    const previews = counterPreviews(doc, post('2025-03-27'), DEFAULT_BADGE_WORDS);
+    const byId = Object.fromEntries(previews.map((p) => [p.id, p]));
+    expect(byId.day.text).toBe('Day · 27 · of 310');
+    expect(byId['stage-day'].text).toBe('Kalbarri · 3 · of 4');
+    expect(byId['stage-length'].text).toBe('4 · days in Kalbarri');
+  });
+
+  it('shows a reason instead of a fabricated example', () => {
+    const previews = counterPreviews(trip(), post('2025-03-27'), DEFAULT_BADGE_WORDS);
+    for (const p of previews) {
+      if (p.text === null) expect(p.reason).toBeTruthy();
+      else expect(p.reason).toBeNull();
+    }
+    const stageDay = previews.find((p) => p.id === 'stage-day')!;
+    expect(stageDay.text).toBeNull();
+    expect(stageDay.reason).toMatch(/No stage covers/);
+  });
+
+  it('never invents a place a trip with no stages does not have', () => {
+    const previews = counterPreviews(trip(), post('2025-03-27'), DEFAULT_BADGE_WORDS);
+    expect(previews.map((p) => p.text).join(' ')).not.toMatch(/Kalbarri/);
+  });
+
+  it('follows the trip’s own words', () => {
+    const previews = counterPreviews(trip(), post('2025-03-27'), {
+      ...DEFAULT_BADGE_WORDS,
+      day: 'Jour',
+      of: 'sur',
+    });
+    expect(previews.find((p) => p.id === 'day')!.text).toBe('Jour · 27 · sur 310');
   });
 });

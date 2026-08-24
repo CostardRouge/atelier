@@ -339,9 +339,9 @@ a carousel or a single photo.
 
 **The hook.** Open a piece and you compose its badge over the picture: the
 number the trip gives it, big, with everything else deliberately subordinate —
-"Australia · Day · **27** · of 310 · Kalbarri". It counts four ways (day of
-trip, a range of days, the day at a place, how long you stayed) and can lead
-with "1 year ago today" once a year has actually passed. Pick a frame (9:16,
+"Australia · Day · **27** · of 310 · ◆ Kalbarri · 1 year ago today". It counts
+four ways (day of trip, a range of days, the day at a place, how long you
+stayed), and closes on an optional line about when. Pick a frame (9:16,
 4:5, 1:1, 16:9), place the block on a 3×3 grid, size the numeral, and export a
 PNG — ready as a Reel's opening frame or a carousel's first slide.
 
@@ -354,8 +354,11 @@ scrubber.
 what lets a badge name a place, say "3 days in Kalbarri", or count which day of
 a stop a picture is — and an optional marker sets the place off from the rest.
 
-**The temporal line.** Instead of the trip's name the kicker can say how long
-ago the picture was taken, and this is a set of choices rather than one: the
+**The temporal line.** Under the place, in the badge's quietest type, a line
+can say how long ago the picture was taken — **beside** the trip's name, never
+instead of it: "AUSTRALIA" is what makes a post recognisable in a feed, and a
+badge that traded it for "9 months ago" lost the one word the whole strategy
+rests on. It is a set of choices rather than one: the
 elapsed days, weeks, months, years-and-months, a plain "since 27 Mar 2025", or
 the true anniversary. **Anniversary only ever fires on the actual anniversary** —
 same month, same day — because a line that announces one on a day that is not
@@ -364,6 +367,24 @@ name comes back, and the panel says so. **Auto** picks the truest striking line
 for the gap on the day it is read. The reference day is itself a field: set it
 ahead and the line reads correctly on the day the post goes out, not on the day
 you composed it.
+
+**Every option shows what it would really say.** The counter modes and the
+temporal modes are listed with the line they would draw *for the post in hand* —
+"Day · 27 · of 310", "Kalbarri · 3 · of 4", "515 days ago" — or, when a mode has
+nothing to count, the reason: "No stage covers 27 Mar 2025", "This piece tells a
+single day — give it an end date to count a range". The old fixed examples were
+invented values, and three of the four counter modes looked broken because
+picking one changed nothing and said nothing.
+
+**The day is measured, not guessed.** Everything the badge draws is a
+subtraction from the day the piece is filed under, so the editor reads the
+picture's own date — the camera's `DateTimeOriginal` where there is one, the
+file's date otherwise, and it says which — and offers to file the piece under
+it. A picture dated outside the trip is called out rather than counted: a photo
+from another year will happily read "day 261 of 310", arithmetically correct and
+about a day it has nothing to do with. The piece's day and its "through" date
+are both editable fields, so a range is one input rather than a mode with
+nothing behind it.
 
 **Every word is yours.** The badge is written in English out of the box and
 every word — the counter's, the units, the templates — is a field on the trip,

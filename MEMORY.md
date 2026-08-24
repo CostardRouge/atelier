@@ -65,7 +65,10 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - A badge piece departs from the theme by writing its own value AND pinning that key in `styleOverrides`; casing is applied to the string, never to the element's flag — `roadtrip.md`.
 - `StylePanel` is engine-level (`shared/overlay/`) since Road Trip became its second consumer — a tool never reaches into another tool — `architecture.md`, `roadtrip.md`.
 - `LegibilityStyle` gained a corner radius and an outline, drawn by one shared helper; the radius defaults to what the four call sites used to hard-code, so no stored document changes shape — `roadtrip.md`.
-- A badge's temporal line ("515 days ago") is a MODE, and `anniversary` fires only on the real anniversary; the reference day is an input, never `Date.now()` — `roadtrip.md`.
+- A badge's temporal line ("515 days ago") is a MODE and a PIECE of its own, drawn under the place — it never displaces the trip's name; `anniversary` fires only on the real anniversary, and the reference day is an input, never `Date.now()` — `roadtrip.md`.
+- Every mode in a Road Trip panel shows the line it would really draw for the post in hand, or the reason it cannot: a fabricated example, and a silent fallback, both read as a broken feature — `roadtrip.md`.
+- The day a piece tells is measured from the picture (EXIF, else the file's date, labelled as such) and offered, never applied on its own; a picture dated outside the trip is called out — `roadtrip.md`.
+- `exif-parser.ts` is engine-level (`shared/exif/`) since Road Trip became its second consumer — `architecture.md`, `roadtrip.md`.
 - An overlay EXIT animation needs its window to have an END, or it never plays — the badge's hook duration is what supplies one — `roadtrip.md`.
 - A glyph drawn on canvas must survive a font stack we do not control: an emoji default drew nothing at all where no colour-emoji font existed — `roadtrip.md`.
 - A Road Trip post is a DECK (hook → content → call to action); a reel or a photo is the same model with one slide, and the closing card lives on the TRIP — `roadtrip.md`.

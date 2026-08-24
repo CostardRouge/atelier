@@ -7,7 +7,7 @@ import StylePanel from '../../shared/overlay/StylePanel';
 import type { Anchor } from '../../shared/overlay/overlay-types';
 import {
   BADGE_PIECES,
-  COUNTER_MODES,
+  counterPreviews,
   DEFAULT_BADGE_WORDS,
   FRENCH_BADGE_WORDS,
   WORD_FIELDS,
@@ -23,11 +23,12 @@ import {
 } from '../../shared/roadtrip/badge-layout';
 import type { BadgeBackdrop } from '../../shared/roadtrip/badge-render';
 import {
-  TIME_AGO_MODES,
   TIME_AGO_WORD_FIELDS,
-  timeAgoLine,
+  timeAgoPreviews,
   type TimeAgoWords,
 } from '../../shared/roadtrip/time-ago';
+import { readCaptureDate, type CaptureDate } from '../../shared/roadtrip/media-date';
+import { postDayRange, stageAt } from '../../shared/roadtrip/trip-coverage';
 import { ctaLayout } from '../../shared/roadtrip/cta-slide';
 import { contentSlideElements, deckSlides, moveItem } from '../../shared/roadtrip/deck';
 import { renderDeck } from '../../shared/roadtrip/deck-export';
@@ -41,7 +42,11 @@ import {
   hookVideoName,
 } from '../../shared/roadtrip/hook-video';
 import { exportHookVideo } from '../../shared/roadtrip/hook-video-export';
-import { formatIsoDate, todayIso } from '../../shared/roadtrip/trip-days';
+import {
+  formatIsoDate,
+  isWithin,
+  todayIso,
+} from '../../shared/roadtrip/trip-days';
 import {
   createPostSlide,
   type PostBadge,
@@ -230,6 +235,30 @@ export default function PostEditor({
 
   const cta = useMemo(() => ctaLayout(trip.cta, aspect), [trip.cta, aspect]);
 
+  // --- the day the picture was actually taken -------------------------------
+  // Every number the badge draws is a subtraction from the day the piece is
+  // filed under, so a picture filed under the wrong day reads confidently
+  // wrong. The file is measured and the answer offered; the author still
+  // decides — nothing here rewrites a post on its own.
+  const [captured, setCaptured] = useState<CaptureDate | null>(null);
+  useEffect(() => {
+    if (!slideFile) {
+      setCaptured(null);
+      return;
+    }
+    let alive = true;
+    void readCaptureDate(slideFile).then((d) => {
+      if (alive) setCaptured(d);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [slideFile]);
+
+  const capturedElsewhere = captured !== null && captured.date !== post.date;
+  const capturedOutsideTrip =
+    captured !== null && !isWithin(trip.startDate, trip.endDate, captured.date);
+
   const hookElements = useMemo(
     () =>
       content
@@ -368,12 +397,27 @@ export default function PostEditor({
 
   /** What the temporal line actually says, so the panel shows it rather than
    *  describing it — a mode that has nothing true to say must be visible. */
-  const timeLine = timeAgoLine(
-    post.date,
-    post.badge.referenceDate ?? todayIso(),
-    post.badge.timeAgo,
-    trip.badgeWords.time,
+  const reference = post.badge.referenceDate ?? todayIso();
+  const timePreviews = useMemo(
+    () => timeAgoPreviews(post.date, reference, trip.badgeWords.time),
+    [post.date, reference, trip.badgeWords.time],
   );
+  const timeLine =
+    timePreviews.find((p) => p.id === post.badge.timeAgo)?.text ?? null;
+
+  /** What each counter mode would really say for THIS post — or why it cannot. */
+  const modePreviews = useMemo(
+    () => counterPreviews(trip, post, trip.badgeWords, post.badge.showPin),
+    [trip, post],
+  );
+  const activeMode = modePreviews.find((m) => m.id === post.badge.mode) ?? null;
+
+  /** Where the day lands in the trip, and what the trip calls that place. */
+  const range = postDayRange(trip, post);
+  const dayOfTrip = range
+    ? `day ${range.from}${range.to > range.from ? `–${range.to}` : ''} / ${range.total}`
+    : 'outside the trip';
+  const place = stageAt(trip, post.date)?.name.trim() || null;
 
   const pieceStyle: BadgePieceStyle = post.badge.pieceStyles[piece] ?? {};
   const setPieceStyle = (style: BadgePieceStyle) =>
@@ -835,20 +879,121 @@ export default function PostEditor({
           {isHook && (
           <>
           <div className={section}>
+            <span className={legend}>The day this piece tells</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={post.date}
+                onChange={(e) => onChangePost({ ...post, date: e.target.value })}
+                className={`${inputClass} flex-1 min-w-0`}
+                aria-label="The day this piece tells"
+              />
+              <span className="flex-none font-mono text-[0.68rem] text-muted tabular-nums">
+                {dayOfTrip}
+              </span>
+            </div>
+            {captured ? (
+              <p className="m-0 text-[0.74rem] text-muted">
+                The picture is dated{' '}
+                <span className="text-ink">{formatIsoDate(captured.date)}</span>{' '}
+                {captured.source === 'exif'
+                  ? '(the camera’s own record)'
+                  : '(the file’s date — a copy or an export rewrites it)'}
+                {capturedElsewhere && (
+                  <>
+                    {' · '}
+                    <button
+                      type="button"
+                      onClick={() => onChangePost({ ...post, date: captured.date })}
+                      className="p-0 border-0 bg-transparent text-[0.74rem] text-accent-ink cursor-pointer underline underline-offset-[3px]"
+                    >
+                      file it under that day
+                    </button>
+                  </>
+                )}
+                {capturedOutsideTrip && (
+                  <span className="text-[#9a3a23]">
+                    {' '}
+                    — outside this trip’s dates, so every count here would be
+                    about a day this picture has nothing to do with.
+                  </span>
+                )}
+              </p>
+            ) : (
+              <p className="m-0 text-[0.74rem] text-faint">
+                Everything the badge says is counted from this day.
+              </p>
+            )}
+            <label className="flex flex-col gap-1">
+              <span className={legend}>Through (for a range)</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={post.endDate ?? ''}
+                  min={post.date}
+                  onChange={(e) =>
+                    onChangePost({ ...post, endDate: e.target.value || null })
+                  }
+                  className={`${inputClass} flex-1 min-w-0`}
+                />
+                {post.endDate && (
+                  <button
+                    type="button"
+                    onClick={() => onChangePost({ ...post, endDate: null })}
+                    className="flex-none p-0 border-0 bg-transparent text-[0.74rem] text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink"
+                  >
+                    One day
+                  </button>
+                )}
+              </div>
+            </label>
+          </div>
+
+          <div className={section}>
             <span className={legend}>What it counts</span>
-            <select
-              value={post.badge.mode}
-              onChange={(e) =>
-                patchBadge({ mode: e.target.value as PostBadge['mode'] })
-              }
-              className={`${inputClass} cursor-pointer`}
-            >
-              {COUNTER_MODES.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label} — {m.hint}
-                </option>
+            {/* Each mode shows the line it would really draw for this post, or
+                why it cannot draw one. Fabricated examples made three of the
+                four look inert: clicking changed nothing and said nothing. */}
+            <div className="flex flex-col gap-1.5">
+              {modePreviews.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => patchBadge({ mode: m.id })}
+                  aria-pressed={m.id === post.badge.mode}
+                  className={`px-2.5 py-1.5 rounded-paper border text-left cursor-pointer transition-colors ${
+                    m.id === post.badge.mode
+                      ? 'border-accent bg-accent-wash'
+                      : 'border-line bg-paper hover:border-line-strong'
+                  }`}
+                >
+                  <span
+                    className={`block text-[0.78rem] ${
+                      m.id === post.badge.mode
+                        ? 'text-accent-ink font-semibold'
+                        : 'text-ink-soft'
+                    }`}
+                  >
+                    {m.label}
+                  </span>
+                  <span
+                    className={`block font-mono text-[0.7rem] ${
+                      m.text ? 'text-ink' : 'text-faint'
+                    }`}
+                  >
+                    {m.text ?? m.reason}
+                  </span>
+                </button>
               ))}
-            </select>
+            </div>
+            {activeMode?.reason && (
+              <p className="m-0 px-2.5 py-2 rounded-paper border border-line bg-paper text-[0.75rem] text-muted">
+                {activeMode.reason}{' '}
+                {activeMode.id === 'day-range'
+                  ? 'It counts the single day above meanwhile.'
+                  : 'Stages are edited on the trip’s Overview; the day of the trip is counted meanwhile.'}
+              </p>
+            )}
             <label className="flex items-center gap-2 text-[0.8rem] text-ink-soft cursor-pointer">
               <input
                 type="checkbox"
@@ -858,6 +1003,11 @@ export default function PostEditor({
               />
               Marker before the place
             </label>
+            <p className="m-0 text-[0.72rem] text-faint">
+              {place
+                ? `The place reads “${place}”.`
+                : 'No stage covers this day, so there is no place to mark — add one on the Overview.'}
+            </p>
           </div>
 
           <div className={section}>
@@ -904,23 +1054,42 @@ export default function PostEditor({
             </div>
           </div>
 
-          <Fold title="Time · what the kicker says about when" {...fold('time')}>
+          <Fold title="Time · the line about when, under the place" {...fold('time')}>
             <div className="flex flex-col gap-3">
-              <div className="grid grid-cols-2 gap-1.5">
-                {TIME_AGO_MODES.map((m) => (
+              {/* Each mode shows the line it would really draw for this
+                  picture on the reading day below — never an example. */}
+              <div className="flex flex-col gap-1.5">
+                {timePreviews.map((m) => (
                   <button
                     key={m.id}
                     type="button"
                     onClick={() => patchBadge({ timeAgo: m.id })}
                     title={m.hint}
                     aria-pressed={post.badge.timeAgo === m.id}
-                    className={`px-2 py-1.5 rounded-paper border text-left text-[0.74rem] cursor-pointer transition-colors ${
+                    className={`px-2.5 py-1.5 rounded-paper border text-left cursor-pointer transition-colors ${
                       post.badge.timeAgo === m.id
-                        ? 'border-accent bg-accent-wash text-accent-ink font-semibold'
-                        : 'border-line bg-paper text-ink-soft hover:border-line-strong'
+                        ? 'border-accent bg-accent-wash'
+                        : 'border-line bg-paper hover:border-line-strong'
                     }`}
                   >
-                    {m.label}
+                    <span
+                      className={`block text-[0.78rem] ${
+                        post.badge.timeAgo === m.id
+                          ? 'text-accent-ink font-semibold'
+                          : 'text-ink-soft'
+                      }`}
+                    >
+                      {m.label}
+                    </span>
+                    <span
+                      className={`block font-mono text-[0.7rem] ${
+                        m.text ? 'text-ink' : 'text-faint'
+                      }`}
+                    >
+                      {m.id === 'off'
+                        ? 'no line'
+                        : (m.text ?? 'nothing true to say on that day')}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -956,10 +1125,10 @@ export default function PostEditor({
                 ) : (
                   <span className="text-muted">
                     {post.badge.timeAgo === 'off'
-                      ? 'The kicker stays the trip’s name.'
+                      ? 'No line about when. The trip’s name is on the badge either way.'
                       : post.badge.timeAgo === 'anniversary'
-                        ? 'Not the anniversary on that day — the trip’s name is used instead. Nothing claims a date it is not.'
-                        : 'Nothing true to say about that gap yet — the trip’s name is used instead.'}
+                        ? 'Not the anniversary on that day, so the line is left out. Nothing claims a date it is not.'
+                        : 'Nothing true to say about that gap yet, so the line is left out.'}
                   </span>
                 )}
               </p>

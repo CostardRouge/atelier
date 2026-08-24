@@ -145,6 +145,26 @@ Read before touching `src/tools/roadtrip/` or `src/shared/roadtrip/`, and before
 
 The Library's "Add files" button filtered to `video/*,.srt` only, so a photo could reach the library through the folder picker or a drag but never through the button — with Photo EXIF, Compare and now Road Trip being photo-first, that was a dead end for half the suite. The accept list now covers every kind `classifyPart` recognises, camera RAW included (the OS dialog greys RAW out otherwise, and the library deliberately keeps handles the browser cannot decode).
 
+## The trip's name is never displaced, and the WHEN line is its own piece (2026-08-24)
+
+**Decision, from the maintainer directly.** The temporal line used to REPLACE the kicker, so switching the time panel on cost the badge the word "AUSTRALIA" — the one thing that makes a post recognisable in a feed out of order, which is the entire publishing strategy. `timing` is now a sixth `BadgePiece`, drawn last, under the place, at the smallest ratio (0.16): it explains why the post is going out today, which nobody has to read to recognise the post. The kicker is the trip's name, full stop. Adding the piece needed no document version — `pieceStyles` and `textOverrides` are `Partial` records.
+
+## Never offer a fabricated example — show the real line or the reason (2026-08-24)
+
+**Measured complaint**: three of the four counter modes "didn't work". They worked; they fell back to the day of the trip **in silence**, so clicking one changed nothing and said nothing — and the hints beside them ("Kalbarri · 2 · of 3") were invented values for a trip with no such stage. Same for the temporal hints ("1 year 4 months ago") and for "marker before the place", which appeared dead because no stage covered the day so there was no place to mark.
+
+**The rule** (the overlay palette's, `studio.md`): a preview shows the REAL value or nothing. `counterPieces` now returns an `unavailable` sentence beside the pieces it fell back to; `counterPreviews` and `timeAgoPreviews` give each mode's actual line for the post in hand, or the reason there is none. Every option in the panel renders that line under its label. **How to apply**: any new mode, preset or option that can silently do nothing must say what it would do and why it cannot — a fallback the author cannot see reads as a bug in the tool.
+
+`post.endDate` had no editor at all, which is why "Range of days" could never differ from "Day of trip". Before adding an option that reads a field, check something can WRITE it (the same lesson the stages editor taught).
+
+## The day a piece tells is measured from the picture (2026-08-24)
+
+Every number the badge draws is a subtraction from `post.date`, so a picture filed under the wrong day reads confidently wrong — a Brittany 2026 photo dropped into an Australia 2025 trip renders "day 261 of 310" and "9 months ago", both correct arithmetic about a day the picture has nothing to do with. `media-date.ts` reads EXIF `DateTimeOriginal` (falling back to `File.lastModified`, **labelled as the weaker source** because a copy or an export rewrites it), the editor shows it, offers to file the piece under it and calls out a date outside the trip's span. **It never rewrites a post on its own** — measuring is the tool's job, filing is the author's.
+
+The EXIF date is read as written, never converted: EXIF has no timezone and the day a photo belongs to is the day it was where it was taken. That is the one deliberate exception to the trip's UTC rule.
+
+**`exif-parser.ts` moved to `shared/exif/`** when Road Trip became its second consumer — a tool never reaches into another tool (the same move `StylePanel` made).
+
 ## The hook burns in through the Studio's pipeline, not a second exporter (2026-08-24)
 
 **Decision.** "Export hook video" hands the badge's own `OverlayElement[]` to `exportVariantVideo` — the Studio's WebCodecs export — with no LUT and no cues. Nothing about decoding, cover-cropping, cadence or muxing is re-implemented; `shared/roadtrip/hook-video.ts` only decides WHICH slice goes out and under what name, and `hook-video-export.ts` makes the call (same pure/DOM split as `deck.ts` / `deck-export.ts`).

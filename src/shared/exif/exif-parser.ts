@@ -8,6 +8,11 @@
  * yields an empty result rather than throwing — callers treat "no EXIF" and
  * "couldn't read it" the same way.
  *
+ * It lives in `shared/` because it has two consumers: the Photo EXIF tool and
+ * Road Trip, which reads `dateTimeOriginal` to know the day a picture was
+ * actually taken. A tool never reaches into another tool — the second consumer
+ * is what moves a brick down here (the same move `StylePanel` made).
+ *
  * Pure and DOM-free: it works on an `ArrayBuffer` (the caller reads the first
  * slice of the file), so it runs unchanged in a worker, a Node test, or a
  * future native shell. Every offset is bounds-checked against the buffer, so a

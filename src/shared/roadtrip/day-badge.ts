@@ -10,12 +10,14 @@
  * they differ only in what the pieces count; a mode needing two numbers of
  * equal weight would be a different badge.
  *
- * The TEMPORAL line ("515 days ago", "1 year ago today") is not a counter mode:
- * it takes the kicker's place. It answers "why is this going out now", a
- * different question from "where in the trip is this", and folding it into the
- * counter would cost the day number its place as the headline. Its own rules
- * live in `time-ago.ts`; when it has nothing true to say it returns null and
- * the trip's name comes back.
+ * The TEMPORAL line ("515 days ago", "1 year ago today") is a piece of its
+ * own, drawn last, under the place. It answers "why is this going out now",
+ * a different question from "where in the trip is this" — and it is NOT
+ * allowed to take the kicker's place: the trip's name is what makes a post
+ * recognisable in a feed, so a badge that traded "AUSTRALIA" for "9 months
+ * ago" lost the one word the whole strategy rests on. The two combine. Its
+ * own rules live in `time-ago.ts`; when it has nothing true to say the piece
+ * is simply absent.
  *
  * **The words are English by default and every one of them is editable** — the
  * trip carries its own `BadgeWords`, so a French deck is a handful of fields
@@ -30,7 +32,7 @@
  * Pure and DOM-free.
  */
 
-import { spanLength, todayIso, type IsoDate } from './trip-days';
+import { formatIsoDate, spanLength, todayIso, type IsoDate } from './trip-days';
 import { postDayRange, stageAt, stageDayNumber } from './trip-coverage';
 import {
   DEFAULT_TIME_AGO_WORDS,
@@ -52,19 +54,31 @@ export type CounterMode =
   /** How long the trip stayed there — "3 · days in Kalbarri". */
   | 'stage-length';
 
+/**
+ * The modes, with a description of WHAT each counts — never an example of what
+ * it would say. A hint reading "Kalbarri · 2 · of 3" for a trip with no stage
+ * named Kalbarri is a fabricated value, which is the one thing this tool does
+ * not do; the real line for the post in hand comes from `counterPreviews`.
+ */
 export const COUNTER_MODES: readonly {
   id: CounterMode;
   label: string;
   hint: string;
 }[] = [
-  { id: 'day', label: 'Day of trip', hint: 'Day · 27 · of 310' },
-  { id: 'day-range', label: 'Range of days', hint: 'Days · 27–29 · of 310' },
-  { id: 'stage-day', label: 'Day at the place', hint: 'Kalbarri · 2 · of 3' },
-  { id: 'stage-length', label: 'Days at the place', hint: '3 · days in Kalbarri' },
+  { id: 'day', label: 'Day of trip', hint: 'Where this day sits in the whole trip' },
+  { id: 'day-range', label: 'Range of days', hint: 'A piece covering several days' },
+  { id: 'stage-day', label: 'Day at the place', hint: 'Which day of a stage this is' },
+  { id: 'stage-length', label: 'Days at the place', hint: 'How long the trip stayed there' },
 ];
 
 /** The badge's pieces, top to bottom. */
-export type BadgePiece = 'kicker' | 'label' | 'headline' | 'counter' | 'caption';
+export type BadgePiece =
+  | 'kicker'
+  | 'label'
+  | 'headline'
+  | 'counter'
+  | 'caption'
+  | 'timing';
 
 export const BADGE_PIECES: readonly { id: BadgePiece; label: string }[] = [
   { id: 'kicker', label: 'Trip name' },
@@ -72,6 +86,7 @@ export const BADGE_PIECES: readonly { id: BadgePiece; label: string }[] = [
   { id: 'headline', label: 'Number' },
   { id: 'counter', label: 'Out of' },
   { id: 'caption', label: 'Place' },
+  { id: 'timing', label: 'When' },
 ];
 
 /**
@@ -130,7 +145,7 @@ export const WORD_FIELDS: readonly {
 
 /** The badge's pieces. Any may be absent; the headline never is. */
 export interface BadgeContent {
-  /** Small line above — the trip, or why this is going out today. */
+  /** Small line above — the trip's name. */
   kicker: string | null;
   /** The word the number is of ("Day", or the place for a stage count). */
   label: string | null;
@@ -140,12 +155,14 @@ export interface BadgeContent {
   counter: string | null;
   /** Where it was. */
   caption: string | null;
+  /** Why it is going out now — "9 months ago", "1 year ago today". */
+  timing: string | null;
 }
 
 export interface BadgeOptions {
   mode: CounterMode;
   words: BadgeWords;
-  /** What the kicker says about WHEN, instead of the trip's name. */
+  /** What the WHEN line says. `off` leaves the piece out. */
   timeAgo: TimeAgoMode;
   /** The day the post is read on. Null = the real today. */
   referenceDate?: IsoDate | null;
@@ -164,23 +181,19 @@ export interface BadgeOptions {
 /** An en dash, not a hyphen: it is a range, and it is set beside numerals. */
 const RANGE_DASH = '–';
 
-/**
- * The kicker: the temporal line when there is a true one to say, else the
- * trip's name. `timeAgoLine` returns null precisely when nothing is true —
- * an anniversary that has not come round, a reference day that precedes the
- * picture — and falling back is what keeps the badge from going blank.
- */
-function kickerFor(trip: TripDoc, post: TripPost, opts: BadgeOptions): string | null {
-  const reference = opts.referenceDate ?? opts.today ?? todayIso();
-  const temporal = timeAgoLine(post.date, reference, opts.timeAgo, opts.words.time);
-  return temporal ?? (trip.name.trim() || null);
+/** The kicker is the trip's name, always. */
+function kickerFor(trip: TripDoc): string | null {
+  return trip.name.trim() || null;
 }
 
-/** The place, with its marker when the author asked for one. */
-function placeText(place: string | null, opts: BadgeOptions): string | null {
-  if (!place) return null;
-  const pin = opts.words.pin.trim();
-  return opts.showPin && pin ? `${pin} ${place}` : place;
+/**
+ * The WHEN line, or null when there is nothing true to say — an anniversary
+ * that has not come round, a reference day that precedes the picture. Null
+ * means the piece is absent, not blank: it never displaces anything.
+ */
+function timingFor(post: TripPost, opts: BadgeOptions): string | null {
+  const reference = opts.referenceDate ?? opts.today ?? todayIso();
+  return timeAgoLine(post.date, reference, opts.timeAgo, opts.words.time);
 }
 
 /** Apply the author's free text over the derived pieces. */
@@ -190,11 +203,142 @@ function applyOverrides(
 ): BadgeContent {
   if (!overrides) return content;
   const out = { ...content };
-  for (const piece of ['kicker', 'label', 'headline', 'counter', 'caption'] as const) {
+  for (const piece of [
+    'kicker',
+    'label',
+    'headline',
+    'counter',
+    'caption',
+    'timing',
+  ] as const) {
     const value = overrides[piece]?.trim();
     if (value) out[piece] = value;
   }
   return out;
+}
+
+/** What a counter mode produced, and why it could not produce it. */
+export interface CounterPieces {
+  label: string | null;
+  headline: string;
+  counter: string | null;
+  caption: string | null;
+  /**
+   * Why the mode the author ASKED for could not be honoured, in a sentence,
+   * or null when it was. The pieces above then hold the day of the trip, which
+   * is always true — falling back silently is what made three of the four
+   * modes look broken: clicking them changed nothing and said nothing.
+   */
+  unavailable: string | null;
+}
+
+/**
+ * The counting half of the badge: everything but the trip's name and the WHEN
+ * line. Split out so the panel can ask what a mode WOULD say without building
+ * a whole badge, and so a mode that has nothing to count says why.
+ *
+ * Returns null only when the trip's own span cannot be read (a reversed date
+ * range) — a badge with no trustworthy total says nothing.
+ */
+export function counterPieces(
+  trip: TripDoc,
+  post: TripPost,
+  mode: CounterMode,
+  words: BadgeWords,
+  showPin = false,
+): CounterPieces | null {
+  const w = words;
+  const range = postDayRange(trip, post);
+  if (!range) return null;
+
+  const stage = stageAt(trip, post.date);
+  const place = stage?.name.trim() || null;
+  const pin = (text: string | null) =>
+    text && showPin && w.pin.trim() ? `${w.pin.trim()} ${text}` : text;
+
+  let unavailable: string | null = null;
+
+  if (mode === 'stage-day' || mode === 'stage-length') {
+    const at = stage && place ? stageDayNumber(stage, post.date) : null;
+    if (stage && place && at) {
+      if (mode === 'stage-length') {
+        const total = spanLength(stage.startDate, stage.endDate) ?? at.total;
+        const unit = total === 1 ? w.day.toLowerCase() : w.days.toLowerCase();
+        return {
+          label: null,
+          headline: String(total),
+          counter: `${unit} ${w.at} ${place}`,
+          caption: pin(stage.region.trim() || null),
+          unavailable: null,
+        };
+      }
+      return {
+        label: pin(place),
+        headline: String(at.day),
+        counter: `${w.of} ${at.total}`,
+        caption: pin(stage.region.trim() || null),
+        unavailable: null,
+      };
+    }
+    // Outside every stage there is no place to count within, and inventing one
+    // would be a lie. Say so, and fall through to the day of the trip.
+    unavailable = stage
+      ? `The stage covering ${formatIsoDate(post.date)} has no name.`
+      : `No stage covers ${formatIsoDate(post.date)}.`;
+  }
+
+  const isRange = mode === 'day-range' && range.to > range.from;
+  if (mode === 'day-range' && !isRange) {
+    unavailable = 'This piece tells a single day — give it an end date to count a range.';
+  }
+
+  return {
+    label: isRange ? w.days : w.day,
+    headline: isRange ? `${range.from}${RANGE_DASH}${range.to}` : String(range.from),
+    counter: `${w.of} ${range.total}`,
+    caption: pin(place),
+    unavailable,
+  };
+}
+
+/** One mode, as it would really read for THIS post. */
+export interface CounterPreview {
+  id: CounterMode;
+  label: string;
+  hint: string;
+  /** The line this mode would draw, or null when it cannot draw its own. */
+  text: string | null;
+  /** Why not, when `text` is null. */
+  reason: string | null;
+}
+
+/**
+ * What each mode would actually say for the post in hand — the real value or
+ * nothing, never a fabricated example. This is the overlay palette's rule
+ * (`studio.md`), and it is what turns four buttons that appeared inert into
+ * four visibly different answers.
+ */
+export function counterPreviews(
+  trip: TripDoc,
+  post: TripPost,
+  words: BadgeWords,
+  showPin = false,
+): CounterPreview[] {
+  return COUNTER_MODES.map((mode) => {
+    const pieces = counterPieces(trip, post, mode.id, words, showPin);
+    const usable = pieces && !pieces.unavailable;
+    return {
+      id: mode.id,
+      label: mode.label,
+      hint: mode.hint,
+      text: usable
+        ? [pieces.label, pieces.headline, pieces.counter].filter(Boolean).join(' · ')
+        : null,
+      reason:
+        pieces?.unavailable ??
+        (pieces ? null : 'The trip’s own dates are the wrong way round.'),
+    };
+  });
 }
 
 /**
@@ -206,54 +350,17 @@ export function badgeContent(
   post: TripPost,
   opts: BadgeOptions,
 ): BadgeContent | null {
-  const w = opts.words;
-  const range = postDayRange(trip, post);
-  if (!range) return null;
+  const pieces = counterPieces(trip, post, opts.mode, opts.words, opts.showPin);
+  if (!pieces) return null;
 
-  const kicker = kickerFor(trip, post, opts);
-  const stage = stageAt(trip, post.date);
-  const place = stage?.name.trim() || null;
-
-  if (opts.mode === 'stage-day' || opts.mode === 'stage-length') {
-    const at = stage && place ? stageDayNumber(stage, post.date) : null;
-    if (stage && place && at) {
-      if (opts.mode === 'stage-length') {
-        const total = spanLength(stage.startDate, stage.endDate) ?? at.total;
-        const unit = total === 1 ? w.day.toLowerCase() : w.days.toLowerCase();
-        return applyOverrides(
-          {
-            kicker,
-            label: null,
-            headline: String(total),
-            counter: `${unit} ${w.at} ${place}`,
-            caption: placeText(stage.region.trim() || null, opts),
-          },
-          opts.overrides,
-        );
-      }
-      return applyOverrides(
-        {
-          kicker,
-          label: placeText(place, opts),
-          headline: String(at.day),
-          counter: `${w.of} ${at.total}`,
-          caption: placeText(stage.region.trim() || null, opts),
-        },
-        opts.overrides,
-      );
-    }
-    // Outside every stage: there is no place to count within, and inventing
-    // one would be a lie. The day of the trip is always true — fall through.
-  }
-
-  const isRange = opts.mode === 'day-range' && range.to > range.from;
   return applyOverrides(
     {
-      kicker,
-      label: isRange ? w.days : w.day,
-      headline: isRange ? `${range.from}${RANGE_DASH}${range.to}` : String(range.from),
-      counter: `${w.of} ${range.total}`,
-      caption: placeText(place, opts),
+      kicker: kickerFor(trip),
+      label: pieces.label,
+      headline: pieces.headline,
+      counter: pieces.counter,
+      caption: pieces.caption,
+      timing: timingFor(post, opts),
     },
     opts.overrides,
   );

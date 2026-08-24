@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { EXIF_SLICE_BYTES, parseExif, type ExifData } from './exif-parser';
+import { EXIF_SLICE_BYTES, parseExif, type ExifData } from '../../shared/exif/exif-parser';
 
 /**
  * Read and parse the EXIF block from the head of an image file, lazily and
