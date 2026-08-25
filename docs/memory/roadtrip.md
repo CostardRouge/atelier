@@ -175,9 +175,11 @@ The trip's part is `<slug>-<first 8 of its id>` (`australia-d1060760`): the slug
 
 The Studio bridge and the per-kind defaults were rendered inside the hook-only branch, so opening a carousel's second slide made them vanish — and the maintainer reported both features as missing. **How to apply**: before putting a control inside `isHook`, ask whether it is about the SLIDE (its picture, its caption, the badge's own styling) or about the PIECE (its name, its link, the trip's defaults). Only the first belongs there.
 
-## The whole row opens the piece (2026-08-24)
+## The whole row opens the piece (2026-08-24, rev. 2026-08-25)
 
 A list you sweep through should not make you aim at a 38px thumbnail or a small button. The row is a `div` with `role="button"` (a real `<button>` cannot contain the buttons the row already holds), and **every control inside it stops propagation and prevents default** — without that, marking a piece published also opened the editor and the action was lost behind the screen change. Duplicating carries the look and the slides but never the publication, the Studio link, or any id (piece, slide or shade): two documents sharing an id is how a list starts editing the wrong row.
+
+**The secondary actions are ICON buttons, opening is a filled pill** (maintainer ask, 2026-08-25): ⧉ duplicate · ✓ publish-toggle (accent-washed while published) · × delete, each a small round glyph button carrying its full name in `title`/`aria-label`, plus an ink "Open" pill — three words of button chrome per row drowned the titles the list exists to scan. Delete keeps its inline two-step confirm; only the trigger shrank. The pill does not replace the whole-row gesture, it makes it visible — and it stops propagation like everything else, or `onOpen` fires twice through the bubble. Glyphs are DOM text (full font-fallback chain), so the canvas glyph rule above does not bind here.
 
 ## The bridge to the Studio: the hook is sent as an intro SCENE (2026-08-24)
 
