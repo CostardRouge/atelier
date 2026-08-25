@@ -41,7 +41,7 @@ import TimingPanel from '../../shared/overlay/TimingPanel';
 import { createIntroScene, findScene, type Scene } from '../../shared/overlay/scenes';
 import GuidesControl from '../../shared/overlay/GuidesControl';
 import { exportOverlayVideoViaSeek } from '../../shared/overlay/export-overlay-seek';
-import { exportVariantVideo } from '../../shared/media/export-variant';
+import { exportVariantVideo, outroTail } from '../../shared/media/export-variant';
 import { downloadBlob } from '../../shared/media/save';
 import { frameGrabName, grabFrame } from '../../shared/media/frame-grab';
 import {
@@ -74,6 +74,8 @@ import {
 } from '../../shared/projects/export-variants';
 import { ensureOverlayFonts } from '../../shared/overlay/fonts';
 import { settleForStill } from '../../shared/overlay/still-frame';
+import { createOutroCard, type OutroCard } from '../../shared/overlay/outro-card';
+import OutroPanel from './OutroPanel';
 import { decodePhoto, exportPhotoVariant } from '../../shared/media/photo-frame';
 import { EXIF_SLICE_BYTES, parseExif, type ExifData } from '../../shared/exif/exif-parser';
 import { cueFromExif } from '../../shared/exif/exif-cue';
@@ -257,6 +259,13 @@ export default function StudioEditor({
   // travels with the template, like the elements it lends its window to.
   const [scenes, setScenes] = useState<Scene[]>(() =>
     structuredClone(project.scenes ?? []),
+  );
+  // The outro — the closing card appended after the footage. Portable too:
+  // intro · footage · closing card is the shape of a delivered piece, and
+  // Road Trip fills this slot with the trip's call to action when it briefs
+  // the project (shared/roadtrip/hook-scene.ts).
+  const [outro, setOutro] = useState<OutroCard | null>(() =>
+    structuredClone(project.outro ?? null),
   );
   const [saveState, setSaveState] = useState<SaveState>('saved');
 
@@ -778,6 +787,7 @@ export default function StudioEditor({
           outputTransform: lutStack.output,
           theme,
           scenes,
+          outro,
           exportPrefs: {
             fileName: exportFileName.trim() || null,
             variants,
@@ -810,6 +820,7 @@ export default function StudioEditor({
     timeScale,
     theme,
     scenes,
+    outro,
     exportFileName,
     variants,
     activeId,
@@ -837,6 +848,7 @@ export default function StudioEditor({
       outputTransform: lutStack.output,
       theme,
       scenes,
+      outro,
       exportPrefs: { fileName: exportFileName.trim() || null, variants },
     });
     downloadBlob(
@@ -857,6 +869,7 @@ export default function StudioEditor({
     setGuides(structuredClone(file.guides));
     setTheme(structuredClone(file.theme));
     setScenes(structuredClone(file.scenes ?? []));
+    setOutro(structuredClone(file.outro ?? null));
     setExportFileName(file.exportPrefs.fileName ?? '');
     setVariants(structuredClone(file.exportPrefs.variants));
     void lutStack.restore(file.lutStack, file.outputTransform);
@@ -910,6 +923,7 @@ export default function StudioEditor({
       // null when the whole clip is kept, so an untrimmed export runs the
       // exact path it ran before trimming existed.
       trim: exportTrim(range, duration),
+      outro,
     };
     try {
       return await exportVariantVideo(source, variant, opts, onProgress, controller.signal);
@@ -933,6 +947,9 @@ export default function StudioEditor({
           opts.trim,
           variant.speed,
           scenes,
+          // The fallback runs only at source geometry, so the card composes
+          // for the source frame — the same frame everything else drew for.
+          variant.overlays ? outroTail(outro, srcWidth, srcHeight) : null,
         );
       }
       if (err instanceof DecodeUnsupportedError) {
@@ -1131,6 +1148,13 @@ export default function StudioEditor({
   // The clip's own cadence, when the container probe produced one — used to
   // label "Source fps" and to warn when a variant asks for more than exists.
   const sourceFps = activeInfo.fps && activeInfo.fps > 0 ? activeInfo.fps : null;
+
+  // What the outro's preview composes for: the project's destination format —
+  // the card recomposes per variant frame at export, like every overlay.
+  const outroAspect = (() => {
+    const preset = ASPECT_PRESETS.find((a) => a.id === aspectId);
+    return preset ? preset.w / preset.h : (frameAspect ?? 9 / 16);
+  })();
 
   const selectedElement = elements.find((e) => e.id === selectedElementId) ?? null;
   const activeCue = findCue(cues, time);
@@ -1622,6 +1646,36 @@ export default function StudioEditor({
                       />
                     </div>
                   )}
+
+                  {/* The outro — intro · footage · closing card. The stage
+                      cannot show it (the playhead cannot travel past the
+                      clip), so the block carries its own preview. */}
+                  <div className="pt-3 border-t border-line flex flex-col gap-2">
+                    <h2 className="m-0 flex items-baseline gap-2 font-mono text-[0.7rem] font-medium uppercase tracking-[0.16em] text-muted">
+                      Outro
+                      {outro && (
+                        <span className="ml-auto normal-case tracking-normal text-[0.68rem] text-faint tabular-nums">
+                          + {outro.seconds.toFixed(1)} s after the footage
+                        </span>
+                      )}
+                    </h2>
+                    {outro ? (
+                      <OutroPanel
+                        outro={outro}
+                        aspect={outroAspect}
+                        onChange={setOutro}
+                        onRemove={() => setOutro(null)}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setOutro(createOutroCard(projectName.trim() || 'Merci'))}
+                        className="self-start p-0 border-0 bg-transparent text-[0.78rem] text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] hover:text-accent"
+                      >
+                        Add an outro — a closing card after the footage
+                      </button>
+                    )}
+                  </div>
 
                   <div className="pt-3 border-t border-line flex flex-col gap-2">
                     <button

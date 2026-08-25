@@ -39,6 +39,7 @@ import {
   type ExportFrameRate,
 } from './frame-rate';
 import { safeChunkMetadata } from './colour-tag';
+import { tailFrames, type ExportTail } from './export-tail';
 import type { TrimRange } from './trim';
 
 export interface ExportProgress {
@@ -106,6 +107,13 @@ export interface ExportOptions {
    * desync, which is worse than no track. Callers must say so in the UI.
    */
   speed?: number;
+  /**
+   * Content appended AFTER the footage's last frame — the Studio's outro
+   * card. Nothing already encoded moves and the audio simply ends with the
+   * footage; see `export-tail.ts`. `draw` must return a surface at the
+   * export's output size.
+   */
+  tail?: ExportTail | null;
 }
 
 /**
@@ -563,7 +571,11 @@ export async function exportProcessedVideo(
     // Which slice of the file to encode. Untrimmed exports get the whole thing
     // with a zero offset, i.e. exactly the previous behaviour.
     const win = trimWindow(videoSamples, options.trim);
-    const total = win.frameCount;
+    // The appended card, when there is one — planned up front so the progress
+    // ratio covers the whole run, not just the footage.
+    const tail = options.tail && options.tail.seconds > 0 ? options.tail : null;
+    const tailPlan = tail ? tailFrames(tail.seconds, framerate, 0).length : 0;
+    const total = win.frameCount + tailPlan;
     const gop = Math.max(1, framerate * 2); // keyframe every ~2s
     let processed = 0;
     // Retiming state: the grid is anchored on the first decoded frame, so a clip
@@ -573,6 +585,9 @@ export async function exportProcessedVideo(
     let origin: number | null = null;
     let nextIndex = 0;
     let emitted = 0;
+    // End of the picture on the OUTPUT timeline (timestamp + duration of the
+    // last emitted frame) — where an appended card starts.
+    let outEndMicros = 0;
 
     // Build the per-frame transform once the coded + output sizes are known.
     const processor = makeProcessor({
@@ -641,6 +656,7 @@ export async function exportProcessedVideo(
               encoder.encode(out, { keyFrame: emitted % gop === 0 });
               out.close();
               emitted++;
+              outEndMicros = Math.max(outEndMicros, ts + duration);
             }
             processed++;
             onProgress?.({ phase: 'encoding', ratio: processed / total });
@@ -696,6 +712,28 @@ export async function exportProcessedVideo(
       }
 
       await decoder.flush();
+
+      // The appended card. It runs after the decoder has drained, so every
+      // timestamp of the picture is known and the card starts exactly where
+      // the footage ends — nothing already encoded moves, and the audio copy
+      // below is untouched (the card plays silent, as an outro does).
+      if (tail) {
+        for (const f of tailFrames(tail.seconds, framerate, outEndMicros)) {
+          throwIfAborted();
+          if (pipelineError) throw pipelineError;
+          const out = new VideoFrame(tail.draw(f.tSeconds), {
+            timestamp: f.timestampMicros,
+            duration: f.durationMicros,
+          });
+          encoder.encode(out, { keyFrame: emitted % gop === 0 });
+          out.close();
+          emitted++;
+          processed++;
+          onProgress?.({ phase: 'encoding', ratio: processed / total });
+          await awaitQueue(() => encoder.encodeQueueSize, 24);
+        }
+      }
+
       await encoder.flush();
       if (pipelineError) throw pipelineError;
 

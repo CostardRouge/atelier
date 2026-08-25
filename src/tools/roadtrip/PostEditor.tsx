@@ -813,6 +813,8 @@ export default function PostEditor({
               post={post}
               elements={hookElements}
               shades={post.badge.shades}
+              cta={trip.cta}
+              aspect={aspect}
               file={slideFile}
               onChangePost={onChangePost}
             />

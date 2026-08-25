@@ -38,6 +38,7 @@ import {
   type ExportFrameRate,
 } from '../media/frame-rate';
 import type { CubeLut } from '../lib/cube-parser';
+import { tailFrames, type ExportTail } from '../media/export-tail';
 import type { TrimRange } from '../media/trim';
 import { makeFrameGrader } from '../lut/frame-grader';
 import { drawOverlays } from './draw-overlays';
@@ -116,6 +117,8 @@ export async function exportOverlayVideoViaSeek(
   speed?: number,
   /** The project's scenes — the intro's window, scrim and solo. */
   scenes?: readonly Scene[],
+  /** The outro card appended after the footage; see media/export-tail.ts. */
+  tail?: ExportTail | null,
 ): Promise<Blob> {
   if (!isEncodeSupported()) {
     throw new Error('This browser does not support WebCodecs encoding.');
@@ -263,6 +266,26 @@ export async function exportOverlayVideoViaSeek(
 
       await awaitQueue(() => encoder!.encodeQueueSize, 24);
       onProgress?.({ phase: 'encoding', ratio: (i + 1) / frameCount });
+    }
+
+    // The appended card — same rules as the WebCodecs path: it starts where
+    // the footage ends, nothing already encoded moves, and the audio copy
+    // below stays exactly the footage's (the card plays silent).
+    if (tail && tail.seconds > 0) {
+      const endMicros = Math.round((frameCount / framerate) * 1_000_000);
+      let appended = 0;
+      for (const f of tailFrames(tail.seconds, framerate, endMicros)) {
+        throwIfAborted();
+        if (pipelineError) throw pipelineError;
+        const vf = new VideoFrame(tail.draw(f.tSeconds), {
+          timestamp: f.timestampMicros,
+          duration: f.durationMicros,
+        });
+        encoder.encode(vf, { keyFrame: (frameCount + appended) % gop === 0 });
+        vf.close();
+        appended++;
+        await awaitQueue(() => encoder!.encodeQueueSize, 24);
+      }
     }
 
     await encoder.flush();

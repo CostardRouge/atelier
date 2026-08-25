@@ -199,6 +199,19 @@ on screen at the playhead, it stays drawn as a ghost so it can still be selected
 and dragged. The phone pictogram is drawn into the video like everything else —
 an export is a flat file, so the tipping gesture *is* the instruction.
 
+**The outro.** The other end of the piece: a project can close on an **outro
+card** — a flat ground carrying lines of text and, if you give it a link, a
+locally-encoded QR code — that the export keeps encoding for a few seconds
+**after the footage's last frame**. Appended, never laid over the picture: the
+footage keeps every one of its frames, the audio simply ends with it and the
+card plays silent, which is what an outro is on every platform. The card
+recomposes for each variant's frame like every overlay, and it rides only the
+variants that carry the overlays — a clean master stays clean. The stage
+cannot scrub past the clip, so the Overlay tab's Outro row carries its own
+preview, painted by the very renderer the export uses; edit the lines, the
+hold, the ground and the QR link there. (Road Trip fills this slot with the
+trip's call to action when it briefs a project — see the bridge below.)
+
 **The instruments.** A **heading tape** — the cockpit ribbon: a slice of the
 compass sliding under a fixed sight, ticks dissolving into the image at both
 ends, letters on N/E/S/W. Nearly everything is a knob: width, visible span,
@@ -514,7 +527,13 @@ scene, so a second send replaces the first and never touches the grade, the
 trim, the telemetry elements or your own intro. The one thing that does not
 cross over is the shades — a Studio scene has a flat scrim rather than a
 gradient, so the strongest shade's colour and strength go over as that veil and
-the *shape* stays here, which the panel says out loud.
+the *shape* stays here, which the panel says out loud. When the piece **closes
+with the trip's call to action**, the send also writes that card into the
+project's **outro** — the same closing card the carousel export appends as its
+last slide, appended here after the footage of the reel — under the same
+rules: a resend replaces it, unlinking removes it, and an outro you composed
+yourself in the Studio is never overwritten (the panel tells you the card
+stayed behind instead).
 
 Currently in place: the trip, its days and stages, the grid, day-keyed posts,
 the badge — words, temporal line, per-piece styling, animation and picture
