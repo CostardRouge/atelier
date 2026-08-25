@@ -27,6 +27,10 @@ interface DayPanelProps {
 
 const legend = 'font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted';
 
+/** A row's secondary actions: small round glyph buttons, named by their title. */
+const iconButton =
+  'flex-none w-7 h-7 grid place-items-center rounded-full border border-line bg-paper text-[0.85rem] leading-none text-ink-soft cursor-pointer transition-colors hover:border-accent hover:text-accent-ink';
+
 function formatPublished(ts: number): string {
   return new Date(ts).toLocaleDateString(undefined, {
     day: 'numeric',
@@ -125,16 +129,21 @@ function PostRow({
         </span>
       </span>
 
+      {/* The secondary actions are icons — three words of button chrome per
+          row drowned the titles the list exists to scan. Each one keeps its
+          full name in the title/aria-label, and Delete keeps its two-step
+          confirm; only the trigger shrank. */}
       <button
         type="button"
         onClick={(e) => {
           stopRow(e);
           onDuplicate();
         }}
-        className="flex-none px-3 py-1.5 border border-line rounded-full bg-paper text-[0.75rem] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
-        title="A copy of this piece on the same day"
+        className={iconButton}
+        title="Duplicate — a copy of this piece on the same day"
+        aria-label="Duplicate this piece"
       >
-        Duplicate
+        ⧉
       </button>
 
       <button
@@ -146,9 +155,16 @@ function PostRow({
             publishedAt: post.publishedAt === null ? Date.now() : null,
           });
         }}
-        className="flex-none p-0 border-0 bg-transparent text-[0.75rem] text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink"
+        className={`${iconButton} ${
+          post.publishedAt !== null
+            ? 'border-accent bg-accent-wash text-accent-ink'
+            : ''
+        }`}
+        title={post.publishedAt === null ? 'Mark published' : 'Back to draft'}
+        aria-label={post.publishedAt === null ? 'Mark published' : 'Back to draft'}
+        aria-pressed={post.publishedAt !== null}
       >
-        {post.publishedAt === null ? 'Mark published' : 'Back to draft'}
+        ✓
       </button>
 
       {confirming ? (
@@ -181,12 +197,27 @@ function PostRow({
             stopRow(e);
             setConfirming(true);
           }}
-          className="flex-none p-0 border-0 bg-transparent text-[0.75rem] text-faint cursor-pointer hover:text-[#9a3a23]"
-          aria-label="Delete this post"
+          className={`${iconButton} hover:text-[#9a3a23] hover:border-[#e3b8a9]`}
+          title="Delete this piece"
+          aria-label="Delete this piece"
         >
-          Delete
+          ×
         </button>
       )}
+
+      {/* Opening stays the whole row's gesture; the pill makes it visible.
+          It stops propagation like every other control — onOpen firing twice
+          through the bubble would be sloppy even where it is harmless. */}
+      <button
+        type="button"
+        onClick={(e) => {
+          stopRow(e);
+          onOpen();
+        }}
+        className="flex-none px-3.5 py-1.5 border border-ink rounded-full bg-ink text-paper text-[0.75rem] font-semibold cursor-pointer hover:bg-accent hover:border-accent"
+      >
+        Open
+      </button>
     </li>
   );
 }

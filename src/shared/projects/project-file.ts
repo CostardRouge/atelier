@@ -23,6 +23,7 @@ import type { GuidesState } from '../overlay/guides';
 import { DEFAULT_GUIDES } from '../overlay/guides';
 import type { StyleTheme } from '../overlay/title-styles';
 import type { Scene } from '../overlay/scenes';
+import type { OutroCard } from '../overlay/outro-card';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
 import type { OutputTransform } from '../lut/transfer';
 import { NO_SHIFT } from '../telemetry/time-format';
@@ -53,6 +54,7 @@ export interface ProjectPortable {
   outputTransform: OutputTransform;
   theme: StyleTheme | null;
   scenes: Scene[];
+  outro: OutroCard | null;
   exportPrefs: ExportPrefs;
 }
 
@@ -94,6 +96,7 @@ export function toProjectFile(
     outputTransform: source.outputTransform,
     theme: structuredClone(source.theme),
     scenes: structuredClone(source.scenes ?? []),
+    outro: structuredClone(source.outro ?? null),
     exportPrefs: structuredClone(source.exportPrefs),
   };
 }
@@ -176,6 +179,7 @@ export function parseProjectFile(text: string): ParseResult {
     outputTransform: (raw.outputTransform as OutputTransform) ?? 'none',
     theme: isRecord(raw.theme) ? (raw.theme as unknown as StyleTheme) : null,
     scenes: Array.isArray(raw.scenes) ? (raw.scenes as Scene[]) : [],
+    outro: isRecord(raw.outro) ? (raw.outro as unknown as OutroCard) : null,
     exportPrefs:
       isRecord(raw.exportPrefs) && Array.isArray(raw.exportPrefs.variants)
         ? {
@@ -209,6 +213,7 @@ export function parseProjectFile(text: string): ParseResult {
       outputTransform: migrated.outputTransform,
       theme: migrated.theme,
       scenes: migrated.scenes,
+      outro: migrated.outro,
       exportPrefs: migrated.exportPrefs,
     },
   };
@@ -234,6 +239,11 @@ export function applyProjectFile(
     lutStack: structuredClone(file.lutStack),
     outputTransform: file.outputTransform,
     theme: structuredClone(file.theme),
+    // Scenes were forgotten here when v12 added them, so a file imported as a
+    // NEW project silently lost its intro (the editor's own import path never
+    // did — it writes the live state field by field). The outro joins both.
+    scenes: structuredClone(file.scenes ?? []),
+    outro: structuredClone(file.outro ?? null),
     exportPrefs: structuredClone(file.exportPrefs),
   };
 }

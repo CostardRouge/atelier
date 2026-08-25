@@ -28,8 +28,10 @@
  */
 
 import type { OverlayElement } from '../overlay/overlay-types';
+import { OUTRO_SECONDS_DEFAULT, type OutroCard } from '../overlay/outro-card';
 import { type Scene, type SceneScrim } from '../overlay/scenes';
 import type { ProjectDoc } from '../projects/project-types';
+import { ctaLayout, type CtaSlide } from './cta-slide';
 import type { Shade } from './shades';
 
 /** The scene a sent hook lives in. One per project: a clip has one hook. */
@@ -133,6 +135,82 @@ export function withoutHook(doc: ProjectDoc): ProjectDoc {
     elements: doc.elements.filter((el) => !isHookElement(el)),
     scenes: doc.scenes.filter((s) => s.id !== HOOK_SCENE_ID),
   };
+}
+
+// --- the call to action, as the project's OUTRO ----------------------------
+//
+// The closing card crosses the same bridge the hook does, into the Studio's
+// own outro slot (`shared/overlay/outro-card.ts`): the card the carousel
+// export appends as its last slide becomes, on a reel, the card the video
+// export appends after the footage. Same translation discipline — everything
+// injected is `roadtrip:`-prefixed so a resend replaces rather than stacks,
+// and an outro the author composed THEMSELVES in the Studio is never touched:
+// "nothing else in the project is touched" covers their outro too, and the
+// panel says so instead of silently overwriting it.
+
+/** True when a project's outro is one this bridge put there. */
+export function isRoadtripOutro(outro: OutroCard | null | undefined): boolean {
+  return !!outro && outro.elements.some((el) => el.id.startsWith(HOOK_ELEMENT_PREFIX));
+}
+
+/**
+ * The trip's call to action as an outro card, laid out for the piece's own
+ * frame — the same `ctaLayout` the carousel's closing slide uses, so the two
+ * cards are the same card. Null when the CTA has nothing to say: a blank
+ * end card is worse than none (the deck's own rule).
+ */
+export function ctaOutro(
+  cta: CtaSlide,
+  aspect: number,
+  seconds: number = OUTRO_SECONDS_DEFAULT,
+): OutroCard | null {
+  if (!cta.headline.trim() && !cta.body.trim() && !cta.url.trim()) return null;
+  const layout = ctaLayout(cta, aspect);
+  const qr = layout.qr
+    ? {
+        url: cta.url.trim(),
+        x: layout.qr.x,
+        y: layout.qr.y,
+        sizeFrac: layout.qr.sizeFrac,
+        dark: cta.ink,
+        light: cta.background,
+      }
+    : null;
+  return {
+    seconds,
+    background: cta.background,
+    elements: layout.elements.map((el) => ({
+      ...el,
+      id: `${HOOK_ELEMENT_PREFIX}${el.id}`,
+    })),
+    qr,
+  };
+}
+
+/**
+ * A project with this call-to-action outro — replacing one this bridge sent
+ * before, or filling an empty slot. `card` null means the author unticked the
+ * CTA: a previously sent card is taken back out. Returns null instead of a
+ * document when the project carries an outro of its OWN, which a send must
+ * not overwrite — the caller says so in the panel.
+ */
+export function withCtaOutro(
+  doc: ProjectDoc,
+  card: OutroCard | null,
+): ProjectDoc | null {
+  // `?? null`: a document from before the field existed reads as empty, the
+  // same answer the migration gives it.
+  const current = doc.outro ?? null;
+  const foreign = current !== null && !isRoadtripOutro(current);
+  if (foreign) return card === null ? doc : null;
+  if (card === null && current === null) return doc;
+  return { ...doc, updatedAt: Date.now(), outro: card };
+}
+
+/** The project without a bridge-sent outro; the author's own is left alone. */
+export function withoutCtaOutro(doc: ProjectDoc): ProjectDoc {
+  if (!isRoadtripOutro(doc.outro ?? null)) return doc;
+  return { ...doc, updatedAt: Date.now(), outro: null };
 }
 
 /** Whether a project is currently carrying a sent hook. */
