@@ -1095,8 +1095,8 @@ export default function PostEditor({
             </label>
           </div>
 
-          <div className={section}>
-            <span className={legend}>What it counts</span>
+          <Fold title="Counter · what it counts" {...fold('counter')}>
+            <div className={section}>
             {/* Each mode shows the line it would really draw for this post, or
                 why it cannot draw one. Fabricated examples made three of the
                 four look inert: clicking changed nothing and said nothing. */}
@@ -1154,7 +1154,8 @@ export default function PostEditor({
                 ? `The place reads “${place}”.`
                 : 'No stage covers this day, so there is no place to mark — add one on the Overview.'}
             </p>
-          </div>
+            </div>
+          </Fold>
 
           <div className={section}>
             <span className={legend}>Placement</span>
