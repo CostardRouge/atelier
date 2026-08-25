@@ -959,6 +959,12 @@ export default function StudioEditor({
       );
       return;
     }
+    // A running preview and an export are two consumers of the same machine:
+    // the transport keeps decoding (and, on a conformed clip, at up to 4×)
+    // while WebCodecs decodes the same file again beside it. Pause first —
+    // the element's own `pause` event keeps the transport's state (and the
+    // resume-across-clips ref) honest, so nothing restarts on its own.
+    videoRef.current?.pause();
     setExporting(true);
     setExportRatio(0);
     setExportError(null);
