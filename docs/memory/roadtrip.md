@@ -165,6 +165,18 @@ The EXIF date is read as written, never converted: EXIF has no timezone and the 
 
 **`exif-parser.ts` moved to `shared/exif/`** when Road Trip became its second consumer — a tool never reaches into another tool (the same move `StylePanel` made).
 
+## Scrubbing seeks the open clip; it never re-decodes it (2026-08-24)
+
+**The trap, measured**: `BadgeStage`'s decode effect listed `videoTimeSeconds`, so every nudge of the frame picker tore the `<video>` down (`removeAttribute('src')`, `load()`, `revokeObjectURL`) and built a new one. Choosing a hook frame stuttered and flashed "decoding…" the whole way across. `BadgeSource` now carries an optional `seek(seconds)`; the decode effect depends on the FILE alone and a second effect seeks the element that is already open.
+
+**The paint has to wait for the frame.** Repainting on `videoTimeSeconds` would draw the OLD frame, since the seek has not landed. A `frameSeq` counter is bumped when the seek resolves and the paint depends on that. **Always clamp a seek short of the end**: past the last frame `seeked` never fires, and the preview simply stops updating.
+
+## The hook's frame is chosen on a filmstrip, not a number (2026-08-24)
+
+A slider makes you scrub blind — nudge, look up, nudge again. `FrameStrip` draws the clip as a strip of stills and you point at the moment (`filmstrip.ts` is the pure half: how many cells, which moments, where a time sits).
+
+**A cell is sampled at the MIDDLE of its slice**, never its left edge: the edge puts cell one on frame zero, which on a drone clip is the props spinning up, and leaves the last slice unrepresented. **Frames arrive through `onFrame` one at a time** so the strip fills in instead of staying blank until the last decode lands, and **one video element is seeked from moment to moment** — one element per thumbnail is how a dozen frames become a second of stutter. **The drag is throttled to one change per animation frame**, the rate the preview can repaint; per pointer event queues seeks the element never catches up with. Every thumbnail blob URL is revoked on unmount.
+
 ## Where you are lives in the ROUTE (2026-08-24)
 
 `#/roadtrip/<trip>/<day>/<piece>`, any tail of which may be absent (`trip-route.ts`, pure and tested). It was component state, and coming back from a piece dropped you on the trip's FIRST day — a real loss on a 300-day trip, every time. The route also survives a reload and makes a day linkable.

@@ -11,6 +11,7 @@
 
 import { drawQr, type QrDraw } from '../overlay/draw-qr';
 import { shadeGradient, type HookBlock, type Shade } from './shades';
+import { seek as seekVideo } from './video-frames';
 import { drawOverlays } from '../overlay/draw-overlays';
 import { ensureOverlayFonts } from '../overlay/fonts';
 import type { OverlayElement } from '../overlay/overlay-types';
@@ -23,6 +24,18 @@ export interface BadgeSource {
   height: number;
   /** Frees the decoded bitmap / detaches the video element. */
   release: () => void;
+  /**
+   * Move a CLIP to another moment, resolving once the frame is there. Absent
+   * for a photo, which has only one.
+   *
+   * It exists so scrubbing does not re-decode: tearing the video element down
+   * and building a new one (with a fresh object URL) for every nudge of the
+   * frame picker is what made choosing a hook frame stutter, and it flashed
+   * "decoding…" the whole way across.
+   */
+  seek?: (seconds: number) => Promise<void>;
+  /** The clip's length, or 0 for a photo. */
+  duration?: number;
 }
 
 export interface CoverRect {
@@ -128,13 +141,18 @@ function loadVideoFrame(file: File, timeSeconds: number): Promise<BadgeSource> {
       );
       video.currentTime = target;
     };
-    video.onseeked = () =>
+    video.onseeked = () => {
+      // Handed over once; from here the caller seeks this same element.
+      video.onseeked = null;
       resolve({
         image: video,
         width: video.videoWidth,
         height: video.videoHeight,
+        duration: Number.isFinite(video.duration) ? video.duration : 0,
         release,
+        seek: (seconds) => seekVideo(video, seconds),
       });
+    };
     video.onerror = () =>
       fail(
         `The browser cannot decode ${file.name}. Some HEVC clips need the Studio's transcode first.`,

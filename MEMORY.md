@@ -78,6 +78,8 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - Only a deck's content slides reorder; the hook and the call to action are structural — `roadtrip.md`.
 - Vignette and scrim are ONE stack of shades (direction × reach × strength × colour × invert × follow-the-hook); a middle band must run edge-to-edge with the peak in the centre, or a canvas gradient blacks out the far half — `roadtrip.md`.
 - In an async paint, read the canvas's size AFTER the last await: a stale render that read it before drew a miniature over a resized stage — `roadtrip.md`.
+- A clip's frame picker SEEKS the open video element (`BadgeSource.seek`) and never re-decodes; the paint waits on a `frameSeq` bumped when the seek lands — `roadtrip.md`.
+- A hook's frame is chosen by dragging a filmstrip; cells sample the middle of their slice, frames stream in as they decode, and the drag is throttled to one change per animation frame — `roadtrip.md`.
 - Road Trip addresses everything in the hash (`#/roadtrip/<trip>/<day>/<piece>`), so Back lands on the day you were on and a day is linkable — `roadtrip.md`.
 - A control about the PIECE (its name, its Studio link, the trip's defaults) must never be rendered inside the hook-only branch: on a carousel's second slide it vanishes and reads as missing — `roadtrip.md`.
 - Road Trip briefs the STUDIO: a piece links a project and the badge is sent in as a `roadtrip-hook` scene, so one export carries grade + telemetry + hook; a send replaces the last, and the shades' shape does not cross over — `roadtrip.md`.

@@ -22,6 +22,7 @@ import {
   type BadgePieceStyle,
 } from '../../shared/roadtrip/badge-layout';
 import type { Shade } from '../../shared/roadtrip/shades';
+import FrameStrip from './FrameStrip';
 import ShadesPanel from './ShadesPanel';
 import StudioLink from './StudioLink';
 import {
@@ -931,25 +932,16 @@ export default function PostEditor({
                   : 'Tick a photo or a clip in the Library on the left — this slide composes over whatever is active there.'}
               </p>
             )}
-            {isVideo && duration > 0 && (
-              <label className="flex flex-col gap-1">
-                <span className={legend}>
-                  Frame · {slide.videoTimeSeconds.toFixed(1)}s
-                </span>
-                <input
-                  type="range"
-                  min={0}
-                  max={Math.max(duration - 0.05, 0)}
-                  step={0.1}
-                  value={slide.videoTimeSeconds}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    if (isHook) patchBadge({ videoTimeSeconds: v });
-                    else patchSlide({ videoTimeSeconds: v });
-                  }}
-                  className="accent-accent"
-                />
-              </label>
+            {isVideo && duration > 0 && slideFile && (
+              <FrameStrip
+                file={slideFile}
+                duration={duration}
+                value={slide.videoTimeSeconds}
+                onChange={(v) => {
+                  if (isHook) patchBadge({ videoTimeSeconds: v });
+                  else patchSlide({ videoTimeSeconds: v });
+                }}
+              />
             )}
             {isHook && isVideo && duration > 0 && (
               <div className="flex flex-col gap-1.5 pt-1 border-t border-line">
