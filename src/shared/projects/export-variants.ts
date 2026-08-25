@@ -99,25 +99,52 @@ export function variantOutputSize(
   return { w: even(Math.round(baseW)), h: even(Math.round(baseH)) };
 }
 
+/**
+ * What a variant is rendering. A still uses the same {@link ExportVariant} —
+ * an aspect to reframe into, a resolution to cap at, overlays on or off — but
+ * cadence and speed are meaningless over one frame, so they take no part in
+ * its name and no part in its render.
+ */
+export type VariantMedium = 'video' | 'photo';
+
+/** File extension a medium delivers in. */
+export const MEDIUM_EXTENSION: Record<VariantMedium, string> = {
+  video: 'mp4',
+  photo: 'jpg',
+};
+
 /** The name parts a variant appends: only where it departs from the source. */
-export function variantSuffix(variant: ExportVariant): string {
+export function variantSuffix(
+  variant: ExportVariant,
+  medium: VariantMedium = 'video',
+): string {
   const parts: string[] = [];
   if (variant.aspectId !== 'source') {
     parts.push(variant.aspectId.replace(':', 'x'));
   }
   if (variant.resolution !== 'source') parts.push(`${variant.resolution}p`);
-  if (variant.frameRate !== 'source') parts.push(`${variant.frameRate}fps`);
-  const speed = speedSuffix(variant.speed);
-  if (speed) parts.push(speed);
+  if (medium === 'video') {
+    if (variant.frameRate !== 'source') parts.push(`${variant.frameRate}fps`);
+    const speed = speedSuffix(variant.speed);
+    if (speed) parts.push(speed);
+  }
   if (!variant.overlays) parts.push('clean');
   return parts.join('-');
 }
 
 /** Final download name: the (custom or project) base plus the suffix. */
-export function variantFileName(base: string, variant: ExportVariant): string {
-  const cleanBase = base.trim().replace(/\.mp4$/i, '') || 'export';
-  const suffix = variantSuffix(variant);
-  return suffix ? `${cleanBase}-${suffix}.mp4` : `${cleanBase}.mp4`;
+export function variantFileName(
+  base: string,
+  variant: ExportVariant,
+  medium: VariantMedium = 'video',
+): string {
+  const ext = MEDIUM_EXTENSION[medium];
+  // Strip any delivery extension the base already carries, whichever medium
+  // it named: the file name is a project setting, and stepping from a clip to
+  // a still inside one project must not produce `shot.mp4.jpg`.
+  const cleanBase = base.trim().replace(/\.(mp4|jpe?g)$/i, '') || 'export';
+  const suffix = variantSuffix(variant, medium);
+  return suffix ? `${cleanBase}-${suffix}.${ext}` : `${cleanBase}.${ext}`;
 }
 
 /** True when this variant re-times, and therefore delivers without audio. */
@@ -126,12 +153,15 @@ export function variantIsRetimed(variant: ExportVariant): boolean {
 }
 
 /** Human summary for a variant row ("9:16 · 1080p · 30 fps · 2× speed · clean"). */
-export function describeVariant(variant: ExportVariant): string {
+export function describeVariant(
+  variant: ExportVariant,
+  medium: VariantMedium = 'video',
+): string {
   const parts = [
     variant.aspectId === 'source' ? 'Source frame' : variant.aspectId,
     variant.resolution === 'source' ? 'source res' : `${variant.resolution}p`,
-    describeFrameRate(variant.frameRate),
-    describeSpeed(variant.speed),
+    medium === 'video' ? describeFrameRate(variant.frameRate) : null,
+    medium === 'video' ? describeSpeed(variant.speed) : null,
     variant.overlays ? 'overlays' : 'clean',
   ].filter(Boolean);
   return parts.join(' · ');

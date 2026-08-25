@@ -25,10 +25,15 @@ import type { Interpolation } from './interpolate';
 
 const VERT_SRC = `#version 300 es
 in vec2 a_pos;
+// 1.0 when the source texture was uploaded in image order (an ImageBitmap,
+// whose orientation is fixed at creation — UNPACK_FLIP_Y_WEBGL is IGNORED
+// for it per spec), 0.0 for sources the flag really flips (video, canvas).
+uniform float u_flipY;
 out vec2 v_uv;
 void main() {
   // a_pos spans the [-1,1] clip-space quad; derive [0,1] UVs from it.
   v_uv = a_pos * 0.5 + 0.5;
+  v_uv.y = mix(v_uv.y, 1.0 - v_uv.y, u_flipY);
   gl_Position = vec4(a_pos, 0.0, 1.0);
 }`;
 
@@ -245,6 +250,7 @@ export function createLutRenderer(
   const uTetra = gl.getUniformLocation(program, 'u_tetra');
   const uDomainMin = gl.getUniformLocation(program, 'u_domainMin');
   const uDomainMax = gl.getUniformLocation(program, 'u_domainMax');
+  const uFlipY = gl.getUniformLocation(program, 'u_flipY');
   gl.uniform1i(uVideo, 0); // video on texture unit 0
   gl.uniform1i(uLut, 1); // LUT on texture unit 1
   gl.uniform1f(uSplitX, 0.5);
@@ -352,6 +358,15 @@ export function createLutRenderer(
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, videoTex);
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      // The flag above is IGNORED for an ImageBitmap — its orientation is
+      // fixed at creation, per the WebGL spec — so a decoded photo uploads in
+      // image order while every other source arrives flipped. Compensate in
+      // the vertex shader, or a graded still renders upside down (measured:
+      // the Studio's photo stage and its JPEG export, LUT on).
+      gl.uniform1f(
+        uFlipY,
+        typeof ImageBitmap !== 'undefined' && source instanceof ImageBitmap ? 1 : 0,
+      );
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
 
       if (hasLut && lutTex) {

@@ -4,7 +4,16 @@ import type { OverlayElement } from '../../shared/overlay/overlay-types';
 import { DEFAULT_GUIDES } from '../../shared/overlay/guides';
 import { createProjectDoc, type ProjectDoc } from '../../shared/projects/project-types';
 import { getProject, listProjects, putProject } from '../../shared/projects/project-store';
-import { hasHook, hookInjection, withHook, withoutHook } from '../../shared/roadtrip/hook-scene';
+import {
+  ctaOutro,
+  hasHook,
+  hookInjection,
+  withCtaOutro,
+  withHook,
+  withoutCtaOutro,
+  withoutHook,
+} from '../../shared/roadtrip/hook-scene';
+import type { CtaSlide } from '../../shared/roadtrip/cta-slide';
 import type { Shade } from '../../shared/roadtrip/shades';
 import type { TripPost } from '../../shared/roadtrip/trip-types';
 
@@ -13,6 +22,10 @@ interface StudioLinkProps {
   /** The badge exactly as the stage draws it. */
   elements: OverlayElement[];
   shades: Shade[];
+  /** The trip's closing call to action, sent as the project's outro. */
+  cta: CtaSlide;
+  /** The piece's frame ratio — the card is laid out for its own aspect. */
+  aspect: number;
   /** The clip this piece is composed over, when it is loaded. */
   file: File | null;
   onChangePost: (post: TripPost) => void;
@@ -40,6 +53,8 @@ export default function StudioLink({
   post,
   elements,
   shades,
+  cta,
+  aspect,
   file,
   onChangePost,
 }: StudioLinkProps) {
@@ -70,10 +85,23 @@ export default function StudioLink({
         onChangePost({ ...post, projectId: null });
         return;
       }
-      const next = withHook(
+      let next = withHook(
         doc,
         hookInjection(elements, post.badge.durationSeconds, shades, post.title || 'Road Trip hook'),
       );
+      // The closing card goes with the hook — into the project's outro slot —
+      // when the piece closes with the CTA. Unticked, a previously sent card
+      // is taken back out. An outro the author composed THEMSELVES in the
+      // Studio is never overwritten; it is reported instead.
+      const card = post.includeCta ? ctaOutro(cta, aspect) : null;
+      const applied = withCtaOutro(next, card);
+      let ctaHeld: string | null = null;
+      if (applied === null) {
+        ctaHeld =
+          'The closing card stayed here: the project already has an outro of its own.';
+      } else {
+        next = applied;
+      }
       const ok = await putProject(next);
       if (!ok) {
         setNote('The browser refused to save the project.');
@@ -81,7 +109,7 @@ export default function StudioLink({
       }
       setLinked(next);
       if (openAfter) navigate(`/studio/open/${encodeURIComponent(next.id)}`);
-      else setNote('Sent. Open the Studio to export.');
+      else setNote(ctaHeld ? `Sent. ${ctaHeld}` : 'Sent. Open the Studio to export.');
     } finally {
       setBusy(null);
     }
@@ -124,8 +152,9 @@ export default function StudioLink({
     if (post.projectId) {
       const doc = await getProject(post.projectId);
       // Leave the project as it was before the badge arrived — a link that is
-      // dropped should not leave a hook nobody can edit any more.
-      if (doc) await putProject(withoutHook(doc));
+      // dropped should not leave a hook (or a sent closing card) nobody can
+      // edit any more. The author's own outro survives.
+      if (doc) await putProject(withoutCtaOutro(withoutHook(doc)));
     }
     onChangePost({ ...post, projectId: null });
     setLinked(null);
@@ -138,8 +167,10 @@ export default function StudioLink({
     <div className="flex flex-col gap-2.5">
       <p className="m-0 text-[0.78rem] text-ink-soft">
         Link the Studio project this clip is graded in and the badge can be sent
-        there as an intro scene. One export then carries the grade, the
-        telemetry and the hook — nothing left to join afterwards.
+        there as an intro scene — with the trip's closing card as the
+        project's outro when this piece closes on it. One export then carries
+        the grade, the telemetry, the hook and the end card — nothing left to
+        join afterwards.
       </p>
 
       {linked ? (

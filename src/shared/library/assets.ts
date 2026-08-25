@@ -40,12 +40,15 @@ export interface Asset {
 type PartKind = 'video' | 'srt' | 'image' | 'other';
 
 const VIDEO_EXTENSIONS = ['mp4', 'mov', 'm4v', 'webm'];
-const IMAGE_EXTENSIONS = [
-  // Common encoded formats…
+/** Formats a browser can normally decode and draw. */
+const ENCODED_IMAGE_EXTENSIONS = [
   'jpg', 'jpeg', 'png', 'heic', 'heif', 'webp', 'tif', 'tiff', 'avif', 'gif',
-  // …and camera RAW (handles are kept even if the browser can't decode them).
+];
+/** Camera RAW — handles are kept even though the browser can't decode them. */
+const RAW_EXTENSIONS = [
   'raf', 'arw', 'cr2', 'cr3', 'nef', 'dng', 'orf', 'rw2', 'raw', 'srw', 'pef',
 ];
+const IMAGE_EXTENSIONS = [...ENCODED_IMAGE_EXTENSIONS, ...RAW_EXTENSIONS];
 
 /** Split a filename into `{ base, ext }`; ext is lowercased, no leading dot. */
 function splitName(name: string): { base: string; ext: string } {
@@ -57,6 +60,15 @@ function splitName(name: string): { base: string; ext: string } {
 /** The base name (without extension) of a file, for display/comparison. */
 export function fileBaseName(name: string): string {
   return splitName(name).base;
+}
+
+/**
+ * True for a camera RAW. Exported because "can this be decoded and drawn?" is
+ * a question the library, the metadata reader and the studio all ask, and one
+ * list of extensions must answer it for all three.
+ */
+export function isRawImage(name: string): boolean {
+  return RAW_EXTENSIONS.includes(splitName(name).ext);
 }
 
 /** Classify a file by extension into the part slot it fills. */
@@ -113,7 +125,17 @@ export function buildAssets(files: File[]): Asset[] {
 
     if (part === 'video' && !group.parts.video) group.parts.video = file;
     else if (part === 'srt' && !group.parts.srt) group.parts.srt = file;
-    else if (part === 'image' && !group.parts.image) group.parts.image = file;
+    else if (part === 'image') {
+      // First to claim the slot wins — except that a RAW yields to its own
+      // sidecar JPEG. A `IMG_8801.RAF` + `IMG_8801.JPG` pair is one photo, and
+      // the half the browser can actually decode is the one every tool wants
+      // to show, grade and export; which of the two the directory listed first
+      // must not decide that.
+      const current = group.parts.image;
+      if (!current || (isRawImage(current.name) && !isRawImage(name))) {
+        group.parts.image = file;
+      }
+    }
   }
 
   const assets: Asset[] = [];

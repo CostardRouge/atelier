@@ -41,7 +41,7 @@ import TimingPanel from '../../shared/overlay/TimingPanel';
 import { createIntroScene, findScene, type Scene } from '../../shared/overlay/scenes';
 import GuidesControl from '../../shared/overlay/GuidesControl';
 import { exportOverlayVideoViaSeek } from '../../shared/overlay/export-overlay-seek';
-import { exportVariantVideo } from '../../shared/media/export-variant';
+import { exportVariantVideo, outroTail } from '../../shared/media/export-variant';
 import { downloadBlob } from '../../shared/media/save';
 import { frameGrabName, grabFrame } from '../../shared/media/frame-grab';
 import {
@@ -73,6 +73,12 @@ import {
   type VariantResolution,
 } from '../../shared/projects/export-variants';
 import { ensureOverlayFonts } from '../../shared/overlay/fonts';
+import { settleForStill } from '../../shared/overlay/still-frame';
+import { createOutroCard, type OutroCard } from '../../shared/overlay/outro-card';
+import OutroPanel from './OutroPanel';
+import { decodePhoto, exportPhotoVariant } from '../../shared/media/photo-frame';
+import { EXIF_SLICE_BYTES, parseExif, type ExifData } from '../../shared/exif/exif-parser';
+import { cueFromExif } from '../../shared/exif/exif-cue';
 import {
   defaultElementsPreset,
   type OverlayElement,
@@ -106,8 +112,13 @@ import { savedMediaRef, type ProjectDoc } from '../../shared/projects/project-ty
 import { putProject } from '../../shared/projects/project-store';
 import type { Reconciliation } from '../../shared/projects/reconcile';
 
-/** Clips with or without telemetry — the studio edits both. */
-const STUDIO_KINDS = ['video+telemetry', 'video'] as const;
+/**
+ * Clips with or without telemetry, and stills — the studio edits all three.
+ * A photo is not a second kind of project: it is a media a project can hold
+ * beside its clips, and stepping ‹/› between a rush and a frame you shot the
+ * same day is the point.
+ */
+const STUDIO_KINDS = ['video+telemetry', 'video', 'photo'] as const;
 
 type PanelTab = 'overlay' | 'style' | 'grade' | 'info' | 'export';
 
@@ -181,6 +192,8 @@ export default function StudioEditor({
 
   const activeVideo = active?.parts.video ?? null;
   const activeSrt = active?.parts.srt ?? null;
+  const activeImage = active?.kind === 'photo' ? (active.parts.image ?? null) : null;
+  const isPhoto = !!activeImage;
 
   const [tab, setTab] = useState<PanelTab>('overlay');
   const [activeError, setActiveError] = useState(false);
@@ -247,6 +260,13 @@ export default function StudioEditor({
   const [scenes, setScenes] = useState<Scene[]>(() =>
     structuredClone(project.scenes ?? []),
   );
+  // The outro — the closing card appended after the footage. Portable too:
+  // intro · footage · closing card is the shape of a delivered piece, and
+  // Road Trip fills this slot with the trip's call to action when it briefs
+  // the project (shared/roadtrip/hook-scene.ts).
+  const [outro, setOutro] = useState<OutroCard | null>(() =>
+    structuredClone(project.outro ?? null),
+  );
   const [saveState, setSaveState] = useState<SaveState>('saved');
 
   // Export state.
@@ -273,7 +293,6 @@ export default function StudioEditor({
   );
   const [liveElapsed, setLiveElapsed] = useState(0);
   const exportAbort = useRef<AbortController | null>(null);
-  const exportSupported = isEncodeSupported();
 
   // Tick the in-flight variant's timer. One interval for the whole export, not
   // one per row, and none at all when nothing is rendering.
@@ -286,6 +305,68 @@ export default function StudioEditor({
     );
     return () => clearInterval(id);
   }, [liveExport]);
+
+  // --- the still, when the active media is a photograph --------------------
+  // The decoded picture the stage composes over, and the one cue its EXIF is
+  // worth (exif-cue.ts) — so the exposure, position and time elements read
+  // real values over a photo the way they do over a clip.
+  const [photo, setPhoto] = useState<ImageBitmap | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [photoExif, setPhotoExif] = useState<ExifData | null>(null);
+
+  useEffect(() => {
+    if (!activeImage) {
+      setPhoto(null);
+      setPhotoError(null);
+      setPhotoExif(null);
+      return;
+    }
+    let cancelled = false;
+    setPhotoError(null);
+    setPhotoExif(null);
+    void decodePhoto(activeImage)
+      .then((bitmap) => {
+        if (cancelled) {
+          bitmap.close();
+          return;
+        }
+        setPhoto(bitmap);
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setPhoto(null);
+        setPhotoError(err.message);
+      });
+    // EXIF is read from the head of the file, independently of the decode: a
+    // RAW the browser cannot draw still tells us what it was shot at.
+    void activeImage
+      .slice(0, EXIF_SLICE_BYTES)
+      .arrayBuffer()
+      .then((head) => {
+        if (!cancelled) setPhotoExif(parseExif(head));
+      })
+      .catch(() => {
+        if (!cancelled) setPhotoExif(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeImage]);
+
+  /**
+   * Release a bitmap once the stage has stopped drawing it. Closing it at the
+   * moment the next one is decoded would leave the render loop one frame away
+   * from painting a detached bitmap — this runs after the commit that already
+   * swapped the picture, so the one being closed is unreachable. A full-size
+   * still is tens of megabytes; waiting for the collector is not an option.
+   */
+  const shownPhoto = useRef<ImageBitmap | null>(null);
+  useEffect(() => {
+    const previous = shownPhoto.current;
+    shownPhoto.current = photo;
+    if (previous && previous !== photo) previous.close();
+  }, [photo]);
+  useEffect(() => () => shownPhoto.current?.close(), []);
 
   // If the active clip can't be decoded (often HEVC), the user can transcode it
   // to H.264 in-browser; once ready, the preview and export use that instead.
@@ -351,7 +432,14 @@ export default function StudioEditor({
   // measured elsewhere.
   const overridden = overrideApplies(timeScale, activeId);
   const scale = resolveTimeScale(timeScale, timing, activeId);
-  const cues = useMemo(() => retimeCues(rawCues, scale), [rawCues, scale]);
+  const clipCues = useMemo(() => retimeCues(rawCues, scale), [rawCues, scale]);
+  // A photograph is one cue, built from its EXIF — or none, when the file
+  // carries nothing an element could draw.
+  const photoCues = useMemo(() => {
+    const cue = photoExif ? cueFromExif(photoExif) : null;
+    return cue ? [cue] : [];
+  }, [photoExif]);
+  const cues = isPhoto ? photoCues : clipCues;
   // Undoing the conform is exactly playing at 1/scale: a 4× slow clip at 4×.
   const realtimeRate = clampPlaybackRate(1 / scale);
   // The delivered-speed menu: the standard steps, plus the one that undoes this
@@ -605,11 +693,20 @@ export default function StudioEditor({
     setElements((prev) => prev.map((e) => (e.id === id ? { ...e, x, y } : e)));
   }
 
+  // What the stage and the still export draw: over a photograph the deck is
+  // settled first, because a still has no clock to play an entrance against
+  // (still-frame.ts). Over a clip it is the deck itself, untouched.
+  const stageElements = useMemo(
+    () => (isPhoto ? settleForStill(elements) : elements),
+    [isPhoto, elements],
+  );
+
   const stage = useOverlayStage({
     videoRef,
     canvasRef,
+    still: photo,
     cues,
-    elements,
+    elements: stageElements,
     selectedId: selectedElementId,
     guides,
     lut: lutStack.composed,
@@ -617,13 +714,13 @@ export default function StudioEditor({
     interpolation: lutStack.interpolation,
     theme,
     timeShift,
-    scenes,
+    scenes: isPhoto ? undefined : scenes,
     // Windows run from the first frame the export keeps, so the preview has to
     // count from the in point too — otherwise a trimmed clip shows the intro
     // at a different moment than the file does.
-    originSeconds: range.start,
+    originSeconds: isPhoto ? 0 : range.start,
     compare: compareOn,
-    resetKey: activeUrl,
+    resetKey: activeUrl ?? activeId,
     redrawSignal: fontTick,
     onSelect: selectElement,
     onMove: handleMove,
@@ -690,6 +787,7 @@ export default function StudioEditor({
           outputTransform: lutStack.output,
           theme,
           scenes,
+          outro,
           exportPrefs: {
             fileName: exportFileName.trim() || null,
             variants,
@@ -722,6 +820,7 @@ export default function StudioEditor({
     timeScale,
     theme,
     scenes,
+    outro,
     exportFileName,
     variants,
     activeId,
@@ -749,6 +848,7 @@ export default function StudioEditor({
       outputTransform: lutStack.output,
       theme,
       scenes,
+      outro,
       exportPrefs: { fileName: exportFileName.trim() || null, variants },
     });
     downloadBlob(
@@ -769,6 +869,7 @@ export default function StudioEditor({
     setGuides(structuredClone(file.guides));
     setTheme(structuredClone(file.theme));
     setScenes(structuredClone(file.scenes ?? []));
+    setOutro(structuredClone(file.outro ?? null));
     setExportFileName(file.exportPrefs.fileName ?? '');
     setVariants(structuredClone(file.exportPrefs.variants));
     void lutStack.restore(file.lutStack, file.outputTransform);
@@ -779,16 +880,108 @@ export default function StudioEditor({
 
   // --- export -------------------------------------------------------------
 
+  /**
+   * One variant of a still: a single composite, so there is no decode loop, no
+   * cadence and no cancellation point — the whole thing is one canvas away.
+   */
+  async function renderStillVariant(
+    bitmap: ImageBitmap,
+    variant: ExportVariant,
+  ): Promise<Blob> {
+    const blob = await exportPhotoVariant(bitmap, variant, {
+      elements: stageElements,
+      cue: cues[0] ?? null,
+      lut: lutStack.composed,
+      intensity: 1,
+      theme,
+      timeShift,
+    });
+    setExportRatio(1);
+    return blob;
+  }
+
+  /** One variant of a clip, through WebCodecs — with the seek fallback. */
+  async function renderClipVariant(
+    source: File | null,
+    variant: ExportVariant,
+    srcWidth: number,
+    srcHeight: number,
+    onProgress: (p: { phase: string; ratio: number | null }) => void,
+    controller: AbortController,
+  ): Promise<Blob> {
+    if (!source) throw new Error('This media has nothing to export.');
+    const opts = {
+      elements,
+      cues,
+      lut: lutStack.composed,
+      intensity: 1,
+      theme,
+      timeShift,
+      scenes,
+      srcWidth,
+      srcHeight,
+      // null when the whole clip is kept, so an untrimmed export runs the
+      // exact path it ran before trimming existed.
+      trim: exportTrim(range, duration),
+      outro,
+    };
+    try {
+      return await exportVariantVideo(source, variant, opts, onProgress, controller.signal);
+    } catch (err) {
+      // Source-geometry variants keep the codec-agnostic seek fallback
+      // (playable-but-undecodable HEVC); reframed ones cannot.
+      const sourceGeometry =
+        variant.aspectId === 'source' && variant.resolution === 'source';
+      if (err instanceof DecodeUnsupportedError && sourceGeometry && !activeError) {
+        return await exportOverlayVideoViaSeek(
+          source,
+          cues,
+          variant.overlays ? elements : [],
+          lutStack.composed,
+          1,
+          theme,
+          timeShift,
+          onProgress,
+          controller.signal,
+          variant.frameRate,
+          opts.trim,
+          variant.speed,
+          scenes,
+          // The fallback runs only at source geometry, so the card composes
+          // for the source frame — the same frame everything else drew for.
+          variant.overlays ? outroTail(outro, srcWidth, srcHeight) : null,
+        );
+      }
+      if (err instanceof DecodeUnsupportedError) {
+        throw new Error(
+          "This browser can't decode the source for a reframed export — transcode the clip to H.264 first (Overlay tab banner).",
+        );
+      }
+      throw err;
+    }
+  }
+
   /** Render every requested variant in turn; each downloads as it finishes. */
   async function handleExport() {
-    if (!active || !activeVideo || exporting || variants.length === 0) return;
+    if (!active || exporting || variants.length === 0) return;
+    if (!activeVideo && !photo) return;
     const meta = lib.meta.get(active.id);
-    const srcWidth = meta?.width ?? videoRef.current?.videoWidth ?? 0;
-    const srcHeight = meta?.height ?? videoRef.current?.videoHeight ?? 0;
+    const srcWidth = photo?.width ?? meta?.width ?? videoRef.current?.videoWidth ?? 0;
+    const srcHeight = photo?.height ?? meta?.height ?? videoRef.current?.videoHeight ?? 0;
     if (!srcWidth || !srcHeight) {
-      setExportError('The clip has not produced its dimensions yet — play a frame first.');
+      setExportError(
+        isPhoto
+          ? 'This photo has not been decoded yet.'
+          : 'The clip has not produced its dimensions yet — play a frame first.',
+      );
       return;
     }
+    // A running preview and an export are two consumers of the same machine:
+    // the transport keeps decoding (and, on a conformed clip, at up to 4×)
+    // while WebCodecs decodes the same file again beside it. Pause first —
+    // the element's own `pause` event keeps the transport's state (and the
+    // resume-across-clips ref) honest, so nothing restarts on its own.
+    videoRef.current?.pause();
     setExporting(true);
     setExportRatio(0);
     setExportError(null);
@@ -803,6 +996,11 @@ export default function StudioEditor({
     const base = exportFileName.trim() || active.baseName;
     try {
       for (let i = 0; i < variants.length; i += 1) {
+        // Checked per variant, not only inside the encoder: a still renders in
+        // one pass and never looks at the signal, so a cancelled run of five
+        // stills would otherwise write all five. Returning rather than
+        // breaking, so a cancelled run does not then report "✓ Exported".
+        if (controller.signal.aborted) return;
         const variant = variants[i];
         setExportStep({ index: i + 1, total: variants.length });
         setExportRatio(0);
@@ -810,66 +1008,22 @@ export default function StudioEditor({
         // a folder is part of what the user waited for.
         const startedAt = Date.now();
         setLiveExport({ id: variant.id, startedAt });
-        const opts = {
-          elements,
-          cues,
-          lut: lutStack.composed,
-          intensity: 1,
-          theme,
-          timeShift,
-          scenes,
-          srcWidth,
-          srcHeight,
-          // null when the whole clip is kept, so an untrimmed export runs the
-          // exact path it ran before trimming existed.
-          trim: exportTrim(range, duration),
-        };
         const onProgress = (p: { phase: string; ratio: number | null }) => {
           if (p.phase === 'encoding' && p.ratio != null) setExportRatio(p.ratio);
         };
-        let blob: Blob;
-        try {
-          blob = await exportVariantVideo(source, variant, opts, onProgress, controller.signal);
-        } catch (err) {
-          // Source-geometry variants keep the codec-agnostic seek fallback
-          // (playable-but-undecodable HEVC); reframed ones cannot.
-          const sourceGeometry =
-            variant.aspectId === 'source' && variant.resolution === 'source';
-          if (
-            err instanceof DecodeUnsupportedError &&
-            sourceGeometry &&
-            !activeError
-          ) {
-            blob = await exportOverlayVideoViaSeek(
-              source,
-              cues,
-              variant.overlays ? elements : [],
-              lutStack.composed,
-              1,
-              theme,
-              timeShift,
-              onProgress,
-              controller.signal,
-              variant.frameRate,
-              opts.trim,
-              variant.speed,
-              scenes,
-            );
-          } else if (err instanceof DecodeUnsupportedError) {
-            throw new Error(
-              "This browser can't decode the source for a reframed export — transcode the clip to H.264 first (Overlay tab banner).",
-            );
-          } else {
-            throw err;
-          }
-        }
-        await deliver(blob, variantFileName(base, variant));
+        const blob = photo
+          ? await renderStillVariant(photo, variant)
+          : await renderClipVariant(source, variant, srcWidth, srcHeight, onProgress, controller);
+        await deliver(blob, variantFileName(base, variant, isPhoto ? 'photo' : 'video'));
         const stat: ExportStat = {
           bytes: blob.size,
           seconds: (Date.now() - startedAt) / 1000,
           // What was encoded, not what the clip holds: a trimmed run that
-          // rendered 5 s of a 40 s rush is not 8× realtime.
-          clipSeconds: (trimmed ? trimDuration(range) : durationRef.current) || null,
+          // rendered 5 s of a 40 s rush is not 8× realtime. A still has no
+          // duration at all, so it reports size and wall clock alone.
+          clipSeconds: isPhoto
+            ? null
+            : (trimmed ? trimDuration(range) : durationRef.current) || null,
         };
         measured.push(stat);
         setVariantStats((prev) => ({ ...prev, [variant.id]: stat }));
@@ -973,26 +1127,34 @@ export default function StudioEditor({
   // --- derived ------------------------------------------------------------
 
   const activeMeta = activeId ? lib.meta.get(activeId) : undefined;
-  const activeRes =
-    activeMeta?.width && activeMeta?.height
-      ? `${activeMeta.width}×${activeMeta.height}`
-      : null;
+  // A decoded still knows its own size exactly (and upright); the library's
+  // metadata is the fallback, and the only source for a RAW nothing can decode.
+  const srcW = photo?.width ?? activeMeta?.width;
+  const srcH = photo?.height ?? activeMeta?.height;
+  const activeRes = srcW && srcH ? `${srcW}×${srcH}` : null;
   // The stage draws at source resolution, so the guides' notion of "this
-  // frame" is the clip's own aspect — undefined until the probe lands.
-  const frameAspect =
-    activeMeta?.width && activeMeta?.height
-      ? activeMeta.width / activeMeta.height
-      : undefined;
-  const activeDetail = [
-    activeRes,
-    activeInfo.codec,
-    activeInfo.fps ? `${activeInfo.fps} fps` : null,
-  ]
+  // frame" is the media's own aspect — undefined until the probe lands.
+  const frameAspect = srcW && srcH ? srcW / srcH : undefined;
+  const activeDetail = (
+    isPhoto
+      ? [activeRes, activeMeta?.imageType ?? null]
+      : [activeRes, activeInfo.codec, activeInfo.fps ? `${activeInfo.fps} fps` : null]
+  )
     .filter(Boolean)
     .join(' · ');
+  // Encoding a video needs WebCodecs; composing a still needs a canvas, which
+  // every browser here has — a photo project must not be told to switch browser.
+  const exportSupported = isPhoto || isEncodeSupported();
   // The clip's own cadence, when the container probe produced one — used to
   // label "Source fps" and to warn when a variant asks for more than exists.
   const sourceFps = activeInfo.fps && activeInfo.fps > 0 ? activeInfo.fps : null;
+
+  // What the outro's preview composes for: the project's destination format —
+  // the card recomposes per variant frame at export, like every overlay.
+  const outroAspect = (() => {
+    const preset = ASPECT_PRESETS.find((a) => a.id === aspectId);
+    return preset ? preset.w / preset.h : (frameAspect ?? 9 / 16);
+  })();
 
   const selectedElement = elements.find((e) => e.id === selectedElementId) ?? null;
   const activeCue = findCue(cues, time);
@@ -1029,6 +1191,9 @@ export default function StudioEditor({
       cls: 'text-[#9a3a23] border-[#e3b8a9]',
     },
   };
+
+  /** Something is on the stage: a loaded clip, or a decoded still. */
+  const hasFrame = !!activeUrl || !!photo;
 
   const missingCount = reconciliation?.missing ?? 0;
   const changedCount = reconciliation?.changed ?? 0;
@@ -1175,9 +1340,12 @@ export default function StudioEditor({
               {activeDetail}
             </span>
           )}
-          {!hasTelemetry && activeSrt === null && (
+          {/* Said only once the file has actually been read: a chip that
+              appears while the EXIF block is still being parsed reads as a
+              verdict on a photo nobody has looked at yet. */}
+          {!hasTelemetry && (isPhoto ? photoExif !== null : activeSrt === null) && (
             <span className="font-mono text-[0.66rem] tracking-[0.08em] uppercase text-faint flex-none border border-line rounded-full px-2 py-[2px]">
-              no telemetry
+              {isPhoto ? 'no exif' : 'no telemetry'}
             </span>
           )}
         </div>
@@ -1204,10 +1372,10 @@ export default function StudioEditor({
         <div className="flex flex-col gap-[0.6rem] flex-1 min-w-0 min-h-0">
           <div
             className={`relative rounded-paper overflow-hidden flex-1 min-h-0 flex items-center justify-center @max-[800px]:min-h-[240px] ${
-              activeUrl ? 'bg-frame' : 'bg-transparent'
+              hasFrame ? 'bg-frame' : 'bg-transparent'
             }`}
           >
-            {activeUrl ? (
+            {hasFrame ? (
               <canvas
                 ref={canvasRef}
                 className="block w-auto h-auto max-w-full max-h-full object-contain bg-frame touch-none cursor-grab"
@@ -1219,8 +1387,12 @@ export default function StudioEditor({
             ) : (
               <div className="w-full aspect-video flex items-center justify-center bg-surface border border-line rounded-paper text-muted text-center p-4 font-mono text-[0.85rem]">
                 {clips.length === 0
-                  ? 'No media in this project yet — add clips from the Library, or point a folder from the banner above.'
-                  : 'Select a clip to edit.'}
+                  ? 'No media in this project yet — add clips or photos from the Library, or point a folder from the banner above.'
+                  : photoError
+                    ? 'This photo could not be decoded — see below.'
+                    : isPhoto
+                      ? 'Decoding the photo…'
+                      : 'Select a clip to edit.'}
               </div>
             )}
             {/* Offscreen decoder + audio source. Kept rendered (not
@@ -1379,6 +1551,34 @@ export default function StudioEditor({
             </div>
           )}
 
+          {/* A still has no transport to offer — no play, no trim, no cadence,
+              no shutter (the export IS the still). What survives is the one
+              control that is about the picture rather than about time: the A/B
+              wipe, which is how a grade gets judged. */}
+          {isPhoto && photo && (
+            <div className="flex flex-wrap items-center gap-2 px-[0.85rem] py-[0.6rem] border border-line rounded-paper bg-surface flex-none">
+              <span className="font-mono text-[0.64rem] tracking-[0.1em] uppercase text-faint">
+                Still
+              </span>
+              <span className="flex-1" />
+              <button
+                type="button"
+                onClick={() => setCompareOn((c) => !c)}
+                aria-pressed={compareOn}
+                className={`flex-none px-2.5 py-1 rounded-full border font-mono text-[0.64rem] tracking-[0.1em] cursor-pointer transition-colors ${
+                  compareOn
+                    ? 'border-accent bg-accent-wash text-accent-ink'
+                    : 'border-line-strong bg-paper text-muted hover:text-accent-ink hover:border-accent'
+                }`}
+                title="Compare original vs composed — drag the divider on the stage"
+              >
+                A/B
+              </button>
+            </div>
+          )}
+
+          {photoError && <p className={notice}>{photoError}</p>}
+
           {activeError && (
             <div className={`${notice} flex flex-col gap-3`}>
               <p className="m-0">
@@ -1446,6 +1646,36 @@ export default function StudioEditor({
                       />
                     </div>
                   )}
+
+                  {/* The outro — intro · footage · closing card. The stage
+                      cannot show it (the playhead cannot travel past the
+                      clip), so the block carries its own preview. */}
+                  <div className="pt-3 border-t border-line flex flex-col gap-2">
+                    <h2 className="m-0 flex items-baseline gap-2 font-mono text-[0.7rem] font-medium uppercase tracking-[0.16em] text-muted">
+                      Outro
+                      {outro && (
+                        <span className="ml-auto normal-case tracking-normal text-[0.68rem] text-faint tabular-nums">
+                          + {outro.seconds.toFixed(1)} s after the footage
+                        </span>
+                      )}
+                    </h2>
+                    {outro ? (
+                      <OutroPanel
+                        outro={outro}
+                        aspect={outroAspect}
+                        onChange={setOutro}
+                        onRemove={() => setOutro(null)}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setOutro(createOutroCard(projectName.trim() || 'Merci'))}
+                        className="self-start p-0 border-0 bg-transparent text-[0.78rem] text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] hover:text-accent"
+                      >
+                        Add an outro — a closing card after the footage
+                      </button>
+                    )}
+                  </div>
 
                   <div className="pt-3 border-t border-line flex flex-col gap-2">
                     <button
@@ -1570,7 +1800,7 @@ export default function StudioEditor({
               {tab === 'info' && (
                 <InfoPanel
                   baseName={active.baseName}
-                  video={activeVideo}
+                  file={activeImage ?? activeVideo}
                   detail={activeDetail}
                   duration={duration}
                   cues={cues}
@@ -1578,6 +1808,7 @@ export default function StudioEditor({
                   timing={timing}
                   scale={scale}
                   overridden={overridden}
+                  photo={isPhoto ? (photoExif ?? {}) : null}
                 />
               )}
 
@@ -1650,11 +1881,13 @@ export default function StudioEditor({
 
                   <div className="flex flex-col gap-2">
                     {variants.map((v) => {
-                      const dims =
-                        activeMeta?.width && activeMeta?.height
-                          ? variantOutputSize(v, activeMeta.width, activeMeta.height)
-                          : null;
+                      const dims = srcW && srcH ? variantOutputSize(v, srcW, srcH) : null;
                       const stats = variantStats[v.id];
+                      const fileName = variantFileName(
+                        exportFileName.trim() || active.baseName,
+                        v,
+                        isPhoto ? 'photo' : 'video',
+                      );
                       return (
                         <div
                           key={v.id}
@@ -1702,6 +1935,11 @@ export default function StudioEditor({
                               <option value="1080">1080p</option>
                               <option value="720">720p</option>
                             </select>
+                            {/* A cadence and a speed are about a sequence of
+                                frames; a still has one. Both controls (and the
+                                notes that explain them) leave the row rather
+                                than sit there inert. */}
+                            {!isPhoto && (
                             <select
                               className="flex-1 min-w-0 font-sans text-[0.78rem] px-2 py-[0.35rem] border border-line-strong rounded-paper bg-surface text-ink cursor-pointer focus:outline-none focus:border-accent"
                               value={String(v.frameRate)}
@@ -1724,7 +1962,9 @@ export default function StudioEditor({
                                 </option>
                               ))}
                             </select>
+                            )}
                           </div>
+                          {!isPhoto && (
                           <div className="flex items-center gap-2">
                             <select
                               className="flex-1 min-w-0 font-sans text-[0.78rem] px-2 py-[0.35rem] border border-line-strong rounded-paper bg-surface text-ink cursor-pointer focus:outline-none focus:border-accent"
@@ -1743,9 +1983,10 @@ export default function StudioEditor({
                               ))}
                             </select>
                           </div>
+                          )}
                           {/* A re-time is a real change of duration, and the
                               audio cannot follow it — say both before it runs. */}
-                          {variantIsRetimed(v) && (
+                          {!isPhoto && variantIsRetimed(v) && (
                             <p className="m-0 text-[0.7rem] leading-snug text-muted">
                               {resolveSpeed(v.speed)}× speed
                               {duration > 0
@@ -1757,7 +1998,7 @@ export default function StudioEditor({
                           )}
                           {/* Say what a higher cadence really does: the encoder
                               repeats frames, it does not invent motion. */}
-                          {sourceFps && v.frameRate !== 'source' && v.frameRate > sourceFps && (
+                          {!isPhoto && sourceFps && v.frameRate !== 'source' && v.frameRate > sourceFps && (
                             <p className="m-0 text-[0.7rem] leading-snug text-muted">
                               {v.frameRate} fps from {sourceFps} — frames are
                               duplicated, not interpolated: no new motion.
@@ -1777,10 +2018,10 @@ export default function StudioEditor({
                             </label>
                             <span
                               className="flex-1 min-w-0 text-right font-mono text-[0.68rem] tabular-nums text-faint truncate"
-                              title={variantFileName(exportFileName.trim() || active.baseName, v)}
+                              title={fileName}
                             >
                               {dims ? `${dims.w}×${dims.h} · ` : ''}
-                              {variantFileName(exportFileName.trim() || active.baseName, v)}
+                              {fileName}
                             </span>
                           </div>
                           {/* What this row cost last time it rendered — the
@@ -1863,9 +2104,20 @@ export default function StudioEditor({
                         className="px-[1.1rem] py-2 inline-flex items-center justify-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.82rem] font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent hover:text-white active:scale-[0.98] disabled:opacity-50 disabled:cursor-default"
                         onClick={handleExport}
                         disabled={!active || !exportSupported}
-                        title="Render every variant (H.264 MP4), one after the other"
+                        title={
+                          isPhoto
+                            ? 'Render every variant as a JPEG, one after the other'
+                            : 'Render every variant (H.264 MP4), one after the other'
+                        }
                       >
-                        Export {variants.length > 1 ? `${variants.length} MP4s` : 'MP4'}
+                        Export{' '}
+                        {isPhoto
+                          ? variants.length > 1
+                            ? `${variants.length} JPEGs`
+                            : 'JPEG'
+                          : variants.length > 1
+                            ? `${variants.length} MP4s`
+                            : 'MP4'}
                       </button>
                     </>
                   )}

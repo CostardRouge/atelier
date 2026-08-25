@@ -13,11 +13,13 @@ import {
   type TimeScaleReading,
 } from '../../shared/telemetry/time-scale';
 import { formatBytes, formatDuration } from '../../shared/lib/format';
+import type { ExifData } from '../../shared/exif/exif-parser';
 
 interface InfoPanelProps {
   baseName: string;
-  video: File | null;
-  /** Resolution · codec · fps, already assembled by the editor. */
+  /** The media itself, for its weight on disk. */
+  file: File | null;
+  /** Resolution · codec · fps (or · type, for a still), assembled upstream. */
   detail: string;
   duration: number;
   cues: Cue[];
@@ -29,6 +31,12 @@ interface InfoPanelProps {
   scale: number;
   /** True when that scale came from the settings rather than from the log. */
   overridden: boolean;
+  /**
+   * The active media's EXIF when it is a photograph, null when it is a clip.
+   * An empty object means "a photo whose EXIF is still being read, or holds
+   * nothing" — the difference is not worth a third state here.
+   */
+  photo: ExifData | null;
 }
 
 const dt = 'font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted pt-[2px]';
@@ -65,7 +73,7 @@ function Row({
  */
 export default function InfoPanel({
   baseName,
-  video,
+  file,
   detail,
   duration,
   cues,
@@ -73,8 +81,10 @@ export default function InfoPanel({
   timing,
   scale,
   overridden,
+  photo,
 }: InfoPanelProps) {
   const hasTelemetry = cues.length > 0;
+  const isPhoto = photo !== null;
   // Cadence, and what it implies for every rate below: on conformed footage the
   // speeds are divided by capture seconds, not by the file's. Said here rather
   // than beside each readout — one clip, one cadence. When the log cannot answer
@@ -110,18 +120,62 @@ export default function InfoPanel({
   return (
     <div className="flex flex-col gap-3">
       <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[0.8rem]">
-        <dt className={dt}>Clip</dt>
+        <dt className={dt}>{isPhoto ? 'Photo' : 'Clip'}</dt>
         <dd className="m-0 truncate text-[0.8rem]" title={baseName}>
           {baseName}
         </dd>
-        {video && <Row label="Size" value={formatBytes(video.size)} />}
+        {file && <Row label="Size" value={formatBytes(file.size)} />}
         {detail && <Row label="Detail" value={detail} />}
-        {duration > 0 && <Row label="Duration" value={formatDuration(duration)} />}
-        {cadence && <Row label="Cadence" value={cadence} />}
-        {flightLine && <Row label="Flight" value={flightLine} />}
+        {!isPhoto && duration > 0 && (
+          <Row label="Duration" value={formatDuration(duration)} />
+        )}
+        {!isPhoto && cadence && <Row label="Cadence" value={cadence} />}
+        {!isPhoto && flightLine && <Row label="Flight" value={flightLine} />}
+        {isPhoto && (
+          <Row
+            label="Camera"
+            value={[photo.make, photo.model].filter(Boolean).join(' ') || undefined}
+          />
+        )}
+        {isPhoto && (photo.lensModel || photo.lensMake) && (
+          <Row
+            label="Lens"
+            value={[photo.lensMake, photo.lensModel].filter(Boolean).join(' ')}
+          />
+        )}
       </dl>
 
-      {hasTelemetry ? (
+      {isPhoto ? (
+        /* A photograph's own readings, through the very cue the overlay
+           elements draw from — so what the Info tab states and what a badge
+           burns in can never drift apart. Absent fields read "—": a still has
+           no speed, no heading and no relative altitude. */
+        <div className="flex flex-col gap-2.5 pt-2.5 border-t border-line">
+          <p className="m-0 font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted">
+            {hasTelemetry ? 'From the file’s EXIF' : 'No EXIF in this file'}
+          </p>
+          {hasTelemetry && (
+            <>
+              <p className={`m-0 ${heading}`}>Exposure</p>
+              <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                <Row label="ISO" value={d.iso} />
+                <Row label="Shutter" value={d.shutter} />
+                <Row label="Aperture" value={d.fnum ? `f/${d.fnum}` : undefined} />
+                <Row label="EV" value={d.ev} />
+                <Row label="Focal" value={d.focal_len} suffix=" mm" />
+              </dl>
+
+              <p className={`m-0 mt-1 ${heading}`}>Place and time</p>
+              <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                <Row label="Lat" value={d.latitude} />
+                <Row label="Lon" value={d.longitude} />
+                <Row label="Altitude" value={d.abs_alt} suffix=" m" />
+                <Row label="Taken" value={cue?.timestamp ?? undefined} />
+              </dl>
+            </>
+          )}
+        </div>
+      ) : hasTelemetry ? (
         <div className="flex flex-col gap-2.5 pt-2.5 border-t border-line">
           <p className="m-0 font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted">
             Telemetry at playhead

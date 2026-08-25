@@ -85,6 +85,29 @@ describe('naming', () => {
   });
 });
 
+describe('naming a still', () => {
+  it('delivers a JPEG, reframed and capped like a clip', () => {
+    expect(variantFileName('IMG_8801', variant(), 'photo')).toBe('IMG_8801.jpg');
+    expect(
+      variantFileName('IMG_8801', variant({ aspectId: '4:5', resolution: 1080 }), 'photo'),
+    ).toBe('IMG_8801-4x5-1080p.jpg');
+    expect(variantFileName('IMG_8801', variant({ overlays: false }), 'photo')).toBe(
+      'IMG_8801-clean.jpg',
+    );
+  });
+
+  it('never names a still by a cadence or a speed it cannot have', () => {
+    const v = variant({ frameRate: 30, speed: 2, resolution: 720 });
+    expect(variantSuffix(v, 'photo')).toBe('720p');
+    expect(variantFileName('IMG_8801', v, 'photo')).toBe('IMG_8801-720p.jpg');
+  });
+
+  it('replaces the other medium’s extension rather than stacking on it', () => {
+    expect(variantFileName('shot.mp4', variant(), 'photo')).toBe('shot.jpg');
+    expect(variantFileName('shot.jpg', variant(), 'video')).toBe('shot.mp4');
+  });
+});
+
 describe('defaults', () => {
   it('one source-faithful variant with overlays on', () => {
     const [v, ...rest] = defaultVariants();

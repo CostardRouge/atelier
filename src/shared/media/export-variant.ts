@@ -17,10 +17,12 @@ import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
 import { drawOverlays } from '../overlay/draw-overlays';
 import { ensureOverlayFonts } from '../overlay/fonts';
+import { prepareOutro, type OutroCard } from '../overlay/outro-card';
 import type { OverlayElement } from '../overlay/overlay-types';
 import type { StyleTheme } from '../overlay/title-styles';
 import type { Scene } from '../overlay/scenes';
 import type { TimeShift } from '../telemetry/time-format';
+import type { ExportTail } from './export-tail';
 import type { TrimRange } from './trim';
 import { fitRect } from './compose-layout';
 import {
@@ -50,6 +52,12 @@ export interface VariantRenderOptions {
   /** Encode only this slice of the source; null exports the whole clip. */
   trim?: TrimRange | null;
   /**
+   * The project's outro — a closing card appended after the footage, drawn at
+   * the variant's own output frame like every overlay. Rides only variants
+   * that carry the overlays: a clean master stays truly clean.
+   */
+  outro?: OutroCard | null;
+  /**
    * Painted into the variant's frame after the picture and BEFORE the
    * overlays, once per frame. The Studio leaves it unset; Road Trip uses it
    * for the hook's scrim and vignette, which have to darken the picture rather
@@ -62,6 +70,34 @@ export interface VariantRenderOptions {
   ) => void;
 }
 
+/**
+ * The outro as an export tail: the card prepared once (the QR encode is
+ * deterministic but not free) and painted per appended frame at the output
+ * size, so an animated line plays and a 9:16 cut composes its card for 9:16.
+ * Null when there is no card, no time, or no 2D context to paint with.
+ */
+export function outroTail(
+  outro: OutroCard | null | undefined,
+  outWidth: number,
+  outHeight: number,
+): ExportTail | null {
+  if (!outro || outro.seconds <= 0) return null;
+  const prepared = prepareOutro(outro);
+  const card = makeExportCanvas(outWidth, outHeight);
+  const ctx = card.getContext('2d') as
+    | CanvasRenderingContext2D
+    | OffscreenCanvasRenderingContext2D
+    | null;
+  if (!ctx) return null;
+  return {
+    seconds: outro.seconds,
+    draw(t) {
+      prepared.draw(ctx, outWidth, outHeight, t);
+      return card;
+    },
+  };
+}
+
 export async function exportVariantVideo(
   file: File,
   variant: ExportVariant,
@@ -69,8 +105,15 @@ export async function exportVariantVideo(
   onProgress?: (p: ExportProgress) => void,
   signal?: AbortSignal,
 ): Promise<Blob> {
-  if (variant.overlays) await ensureOverlayFonts(opts.elements, opts.theme);
+  const outro = variant.overlays ? (opts.outro ?? null) : null;
+  if (variant.overlays) {
+    await ensureOverlayFonts(
+      outro ? [...opts.elements, ...outro.elements] : opts.elements,
+      opts.theme,
+    );
+  }
   const out = variantOutputSize(variant, opts.srcWidth, opts.srcHeight);
+  const tail = outroTail(outro, out.w, out.h);
 
   return exportProcessedVideo(
     file,
@@ -132,6 +175,7 @@ export async function exportVariantVideo(
       frameRate: variant.frameRate,
       trim: opts.trim ?? null,
       speed: variant.speed,
+      tail,
     },
   );
 }
