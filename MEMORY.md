@@ -113,3 +113,8 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 | `docs/memory/local-first.md` | anything that could touch the network, read files, or persist data |
 | `docs/memory/studio.md` | the Studio tool, the tool-merge plan, project persistence, title styles, retiring a legacy tool |
 | `docs/memory/roadtrip.md` | the Road Trip tool, trip/day/post model, day badges, publishing cadence and strategy |
+
+Not a memory file, but read it before touching anything about media sources or
+document storage: **`docs/winnow-bridge.md`** — the agreed design for connecting
+Atelier to Winnow (the maintainer's media-triage project), the two adapter seams
+it rests on, and the phases. Nothing in it is built yet.
