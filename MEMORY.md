@@ -88,6 +88,9 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - Road Trip's grid draws its own hover card (fixed-positioned, pointer-transparent) because the native `title` is far too slow to sweep a calendar with — `roadtrip.md`.
 - Each post keeps a small JPEG of its HOOK in a second IndexedDB store, taken from the preview canvas, drawn at the piece's own orientation, and pruned on delete — `roadtrip.md`.
 - A tool that redirects from a route effect must first check the path is its own (`isWithinRoute`): a mounted tool still observes the hash after it has changed to another tool's, and redirecting then makes the switcher do nothing — `architecture.md`.
+- The **connected flavour is the same build**, served by Winnow under `/atelier` (`BASE_PATH`), reusing its session cookie — not a cross-origin app holding a token: Winnow's sessions are `SameSite=Lax`, so a separate origin would mean writing a second credential system in a repo with no tests — `docs/winnow-bridge.md`.
+- Media identity across flavours is **Winnow's `content_hash`** — `sha256(size ‖ first 64 KiB ‖ last 64 KiB)`, reproducible in the browser — so one document resolves the same file from a folder or from Winnow — `docs/winnow-bridge.md`.
+- Winnow media previews on the **proxies** (H.264/AAC/faststart, so no ffmpeg.wasm; WebP for a RAW) and exports from the **originals**, each with a visible switch to the other — `docs/winnow-bridge.md`.
 
 ## Open items (dated; remove when done)
 
@@ -117,4 +120,6 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 Not a memory file, but read it before touching anything about media sources or
 document storage: **`docs/winnow-bridge.md`** — the agreed design for connecting
 Atelier to Winnow (the maintainer's media-triage project), the two adapter seams
-it rests on, and the phases. Nothing in it is built yet.
+it rests on, and the phases. Revised 2026-08-29 against the Winnow repository
+itself (`~/Documents/GitHub/winnow`, `CostardRouge/winnow`), so its claims about
+both sides now carry paths and can be re-checked. Nothing in it is built yet.
