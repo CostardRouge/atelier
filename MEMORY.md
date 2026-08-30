@@ -88,7 +88,9 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - Road Trip's grid draws its own hover card (fixed-positioned, pointer-transparent) because the native `title` is far too slow to sweep a calendar with — `roadtrip.md`.
 - Each post keeps a small JPEG of its HOOK in a second IndexedDB store, taken from the preview canvas, drawn at the piece's own orientation, and pruned on delete — `roadtrip.md`.
 - A tool that redirects from a route effect must first check the path is its own (`isWithinRoute`): a mounted tool still observes the hash after it has changed to another tool's, and redirecting then makes the switcher do nothing — `architecture.md`.
-- The **connected flavour is the same build**, served by Winnow under `/atelier` (`BASE_PATH`), reusing its session cookie — not a cross-origin app holding a token: Winnow's sessions are `SameSite=Lax`, so a separate origin would mean writing a second credential system in a repo with no tests — `docs/winnow-bridge.md`.
+- A **source** is where projects, state and (later) scheduled work live — not a media pool. `local` is source #1 (File System Access + IndexedDB), a Winnow instance is its peer, and **a project belongs to exactly one source**: that limit is what removes sync and merge entirely — `docs/winnow-bridge.md`.
+- **Atelier is a client, never a host** — no backend, no database; persistent state lives in the browser or on a server the user owns. That is what makes multi-device, and later proactive features, possible without becoming a cloud — `docs/winnow-bridge.md`.
+- Topology is **configuration, not a decision**: `SameSite` is judged on the SITE, so `atelier.steeve.website` ↔ `winnow.steeve.website` is cross-origin but *same-site* and the cookie travels with a CORS allowlist. A Bearer credential is only needed for a genuinely foreign instance — `docs/winnow-bridge.md`.
 - Media identity across flavours is **Winnow's `content_hash`** — `sha256(size ‖ first 64 KiB ‖ last 64 KiB)`, reproducible in the browser — so one document resolves the same file from a folder or from Winnow — `docs/winnow-bridge.md`.
 - Winnow media previews on the **proxies** (H.264/AAC/faststart, so no ffmpeg.wasm; WebP for a RAW) and exports from the **originals**, each with a visible switch to the other — `docs/winnow-bridge.md`.
 
@@ -102,6 +104,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - 2026-08-21 — One latent defect left of the four surveyed: the 8-bit LUT fallback clamps LUT *output* to [0,1], destroying the shipped DJI cube's `#Not-Clipped.` highlight rolloff on a GPU without `OES_texture_float_linear`. **Measured on the maintainer's machine: the extension is present**, so this is dead code for him and the float path is always taken — do not re-propose it as a fix for his setup. It would also now be cheap, since the tetrahedral path uses `texelFetch` and needs no linear filtering; the cost is a second texture-format branch in `lut-gl.ts`, the file least visible to CI. The other three (shader ignoring `DOMAIN_MIN`/`DOMAIN_MAX`, mp4-muxer's silent matrix=0, the bake blocking the strength slider) are fixed — see `media-pipeline.md`.
 - 2026-08-22 — Element timing is edited with number fields ("appears at / disappears at", plus From-playhead buttons). The natural follow-up the maintainer will want is a **lane under the TrimBar**, one draggable bar per timed element — the first thing that would make the studio feel like a timeline. Not started; the constraint to respect is that the bar splits into bands, never z-index (`studio.md`).
 - 2026-08-22 — A **pre-roll / freeze-frame intro** (output longer than the source) was explicitly deferred, not rejected: the maintainer chose "over the images" for now. It is the one intro feature that touches the WebCodecs pipeline, the trim arithmetic and the export stats.
+- 2026-08-31 — The Winnow bridge's phase 1 needs **`atelier.steeve.website`** to exist (a DNS record + a `CNAME` file onto the current GitHub Pages build, `BASE_PATH=/`). That one move keeps the cookie same-site and removes the whole credential system from the near term — see `docs/winnow-bridge.md` §3.3. Maintainer's call because it is a domain, not code.
 - No secret has ever been tracked in this repository (checked 2026-08-20 across the working tree), so there is nothing to rotate.
 
 ## Topic files — read before touching the area
@@ -120,6 +123,8 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 Not a memory file, but read it before touching anything about media sources or
 document storage: **`docs/winnow-bridge.md`** — the agreed design for connecting
 Atelier to Winnow (the maintainer's media-triage project), the two adapter seams
-it rests on, and the phases. Revised 2026-08-29 against the Winnow repository
+it rests on, and the phases. Verified 2026-08-29 against the Winnow repository
 itself (`~/Documents/GitHub/winnow`, `CostardRouge/winnow`), so its claims about
-both sides now carry paths and can be re-checked. Nothing in it is built yet.
+both sides carry paths and can be re-checked; rewritten 2026-08-31 around the
+source model, with several instances and scheduling marked *later* but designed
+for. Nothing in it is built yet.
