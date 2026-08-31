@@ -36,8 +36,14 @@ jobs:
       - name: Run tests
         run: npm test
 
+      # The site is served from a custom domain, so it lives at the ROOT — not
+      # under /<repo>/ as a github.io deployment would. Without this override
+      # vite.config.ts derives the base from GITHUB_REPOSITORY and every asset
+      # is requested at /atelier/assets/… , which 404s.
       - name: Build
         run: npm run build
+        env:
+          BASE_PATH: /
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
