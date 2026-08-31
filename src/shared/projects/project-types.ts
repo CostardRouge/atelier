@@ -27,11 +27,31 @@ import type { SavedTrim } from '../media/trim';
 
 export const PROJECT_DOC_VERSION = 13;
 
-/** Identity of one media file, enough to re-match it inside a folder. */
+/**
+ * Identity of one media file, enough to re-match it wherever it lives.
+ *
+ * Resolution goes **id → hash → name** (`reconcile.ts`), most stable key first:
+ *
+ * - `assetId` — the id this file carries in the source holding it (a Winnow
+ *   asset id today). Exact, but only meaningful inside that source.
+ * - `hash` — Winnow's `content_hash`, recomputed locally by `partialHash()`.
+ *   Survives a rename, and is what lets the same media resolve from a plain
+ *   folder and from an instance alike — see `docs/winnow-bridge.md` §4.2.
+ * - `name` + `size` + `lastModified` — the original keys, and still the
+ *   tiebreak when a partial hash collides.
+ *
+ * Both new fields are optional, so a document written before they existed reads
+ * back unchanged and resolves by name exactly as it used to: this is additive,
+ * and needs no migration and no version bump.
+ */
 export interface SavedMediaRef {
   name: string;
   size: number;
   lastModified: number;
+  /** Id in the source that holds this file, when it came from one. */
+  assetId?: string;
+  /** Partial content hash (`shared/lib/partial-hash.ts`), when it was computed. */
+  hash?: string;
 }
 
 export interface AspectPreset {

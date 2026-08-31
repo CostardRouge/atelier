@@ -99,7 +99,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - A **source** is where projects, state and (later) scheduled work live — not a media pool. `local` is source #1 (File System Access + IndexedDB), a Winnow instance is its peer, and **a project belongs to exactly one source**: that limit is what removes sync and merge entirely — `docs/winnow-bridge.md`.
 - **Atelier is a client, never a host** — no backend, no database; persistent state lives in the browser or on a server the user owns. That is what makes multi-device, and later proactive features, possible without becoming a cloud — `docs/winnow-bridge.md`.
 - Topology is **configuration, not a decision**: `SameSite` is judged on the SITE, so `atelier.steeve.website` ↔ `winnow.steeve.website` is cross-origin but *same-site* and the cookie travels with a CORS allowlist. A Bearer credential is only needed for a genuinely foreign instance — `docs/winnow-bridge.md`.
-- Media identity across flavours is **Winnow's `content_hash`** — `sha256(size ‖ first 64 KiB ‖ last 64 KiB)`, reproducible in the browser — so one document resolves the same file from a folder or from Winnow — `docs/winnow-bridge.md`.
+- Media identity resolves **id → hash → name**, and the hash is Winnow's `content_hash` recomputed locally (`shared/lib/partial-hash.ts`, fixtures pinned to Winnow) — so a project survives a rename and resolves the same file from a folder or from an instance — `studio.md`, `docs/winnow-bridge.md`.
 - Winnow media previews on the **proxies** (H.264/AAC/faststart, so no ffmpeg.wasm; WebP for a RAW) and exports from the **originals**, each with a visible switch to the other — `docs/winnow-bridge.md`.
 
 ## Open items (dated; remove when done)

@@ -5,10 +5,10 @@ import {
 } from '../../shared/sources/file-sources';
 import {
   ASPECT_PRESETS,
-  savedMediaRef,
   type ProjectDoc,
   type SavedMediaRef,
 } from '../../shared/projects/project-types';
+import { hashedMediaRefs } from '../../shared/projects/media-identity';
 
 export interface NewProjectChoices {
   name: string;
@@ -70,7 +70,7 @@ export default function NewProjectModal({
         setFolder({
           handle: picked.handle,
           files: picked.files,
-          refs: picked.files.map(savedMediaRef),
+          refs: await hashedMediaRefs(picked.files),
         });
       }
     } finally {

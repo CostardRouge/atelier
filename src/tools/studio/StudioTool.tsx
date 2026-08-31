@@ -5,13 +5,18 @@ import {
   filesFromDirectoryHandle,
   pickDirectoryWithHandle,
 } from '../../shared/sources/file-sources';
-import { savedMediaRef, type ProjectDoc } from '../../shared/projects/project-types';
+import type { ProjectDoc } from '../../shared/projects/project-types';
+import { hashedMediaRefs } from '../../shared/projects/media-identity';
 import {
   getProject,
   putProject,
   requestPersistentStorage,
 } from '../../shared/projects/project-store';
-import { reconcileMedia, type Reconciliation } from '../../shared/projects/reconcile';
+import {
+  adoptRenames,
+  reconcileMedia,
+  type Reconciliation,
+} from '../../shared/projects/reconcile';
 import ProjectGallery from './ProjectGallery';
 import StudioEditor from './StudioEditor';
 
@@ -90,10 +95,17 @@ export default function StudioTool() {
         }
       }
       const reconciliation = doc.media.files.length
-        ? reconcileMedia(doc.media.files, files.map(savedMediaRef))
+        ? reconcileMedia(doc.media.files, await hashedMediaRefs(files))
         : null;
+      // A clip found under a new name is only half-recovered: `activeId` and
+      // every `trims` key address it by base name. Adopt the current names and
+      // persist, so the rename is absorbed once instead of re-detected on
+      // every open.
+      const media = reconciliation ? adoptRenames(doc.media, reconciliation) : null;
+      const opened = media ? { ...doc, updatedAt: Date.now(), media } : doc;
+      if (media) await putProject(opened);
       if (files.length) lib.addFiles(files);
-      setOpen({ doc, reconciliation });
+      setOpen({ doc: opened, reconciliation });
       navigate(BASE_ROUTE);
     },
     [lib.addFiles],
@@ -128,6 +140,8 @@ export default function StudioTool() {
       found: items.filter((item) => item.status === 'found').length,
       changed: items.filter((item) => item.status === 'changed').length,
       missing: 0,
+      renamed: items.filter((item) => item.actual && item.actual.name !== item.ref.name)
+        .length,
     };
     setOpen({ doc, reconciliation });
   }, [open]);
@@ -138,13 +152,14 @@ export default function StudioTool() {
     const picked = await pickDirectoryWithHandle();
     if (!picked.files.length && !picked.handle) return;
     const reconciliation = open.doc.media.files.length
-      ? reconcileMedia(open.doc.media.files, picked.files.map(savedMediaRef))
+      ? reconcileMedia(open.doc.media.files, await hashedMediaRefs(picked.files))
       : null;
     if (picked.files.length) lib.addFiles(picked.files);
+    const renamed = reconciliation ? adoptRenames(open.doc.media, reconciliation) : null;
     const doc: ProjectDoc = {
       ...open.doc,
       updatedAt: Date.now(),
-      media: { ...open.doc.media, dirHandle: picked.handle },
+      media: { ...(renamed ?? open.doc.media), dirHandle: picked.handle },
     };
     await putProject(doc);
     setOpen({ doc, reconciliation });

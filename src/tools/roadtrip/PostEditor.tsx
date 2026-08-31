@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { useActiveAsset } from '../../shared/library/use-active-asset';
 import type { Asset, AssetKind } from '../../shared/library/assets';
-import { ASPECT_PRESETS, savedMediaRef } from '../../shared/projects/project-types';
+import { ASPECT_PRESETS } from '../../shared/projects/project-types';
+import type { SavedMediaRef } from '../../shared/projects/project-types';
+import { findMedia, hashedMediaRef } from '../../shared/projects/media-identity';
 import StylePanel from '../../shared/overlay/StylePanel';
 import type { Anchor } from '../../shared/overlay/overlay-types';
 import {
@@ -181,7 +183,7 @@ export default function PostEditor({
 
   /** Write a picture to whichever slide is open. */
   const setSlideMedia = useCallback(
-    (ref: ReturnType<typeof savedMediaRef> | null) => {
+    (ref: SavedMediaRef | null) => {
       if (slide.kind === 'hook') {
         onChangePost({ ...post, media: ref });
       } else if (slide.slideId) {
@@ -209,19 +211,36 @@ export default function PostEditor({
       return;
     }
     if (!lib.assets.length) return;
-    const want = slide.media.name.toLowerCase();
-    const match = lib.assets.find((a) => {
-      const f = pickable(a);
-      return f && f.name.toLowerCase() === want;
+    // Name first, then the content hash: an export that came back renamed or
+    // re-graded is the same picture, and the slide should still find it.
+    const want = slide.media;
+    const byAsset = new Map<File, string>();
+    for (const asset of lib.assets) {
+      const f = pickable(asset);
+      if (f) byAsset.set(f, asset.id);
+    }
+    let cancelled = false;
+    void findMedia(want, [...byAsset.keys()]).then((file) => {
+      if (cancelled) return;
+      const id = file ? byAsset.get(file) : undefined;
+      if (id) lib.setActive(id);
+      restoredFor.current = slideKey;
     });
-    if (match) lib.setActive(match.id);
-    restoredFor.current = slideKey;
+    return () => {
+      cancelled = true;
+    };
   }, [slideKey, slide.media, isCta, lib.assets, lib.setActive]);
 
   useEffect(() => {
     if (restoredFor.current !== slideKey || !activeFile || isCta) return;
     if (slide.media?.name.toLowerCase() === activeFile.name.toLowerCase()) return;
-    setSlideMedia(savedMediaRef(activeFile));
+    let cancelled = false;
+    void hashedMediaRef(activeFile).then((ref) => {
+      if (!cancelled) setSlideMedia(ref);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [activeFile, slideKey, slide.media, isCta, setSlideMedia]);
 
   const slideFile = isCta ? null : activeFile;
@@ -310,8 +329,8 @@ export default function PostEditor({
     });
   };
 
-  function addSlide() {
-    const ref = activeFile ? savedMediaRef(activeFile) : null;
+  async function addSlide() {
+    const ref = activeFile ? await hashedMediaRef(activeFile) : null;
     onChangePost({ ...post, slides: [...post.slides, createPostSlide(ref)] });
     // Land on what was just added, which is where the author is looking.
     setSelected(post.slides.length + 1);
@@ -786,7 +805,7 @@ export default function PostEditor({
               })}
               <button
                 type="button"
-                onClick={addSlide}
+                onClick={() => void addSlide()}
                 className="px-2.5 py-1.5 rounded-paper border border-line-strong bg-paper text-[0.72rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
               >
                 + Slide
