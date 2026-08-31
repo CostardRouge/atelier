@@ -255,9 +255,22 @@ Three asks from the same session, one theme — the tool has to be readable at a
 
 Dragging a slide moves it within `post.slides` (`moveItem` in `deck.ts`, pure and clamped: a drop past the end plainly means "put it last"). The hook and the call to action are not draggable — their positions are structural, and a CTA that came third would not be one. The strip carries deck indices while `post.slides` is content-only, so the handler translates (`ci = i - 1`); getting that wrong silently reorders the wrong slide. Drag is paired with Earlier / Later buttons in the slide panel: HTML5 drag is unreachable by keyboard and undiscoverable on a first look.
 
+## The trip file is a BACKUP, not a template (2026-08-31)
+
+**Decision.** `shared/roadtrip/trip-file.ts` writes a whole trip to `.roadtrip.json`, and it deliberately does **not** copy the studio's split. A project file carries a *portable half* — a template you can mail. A trip has no such half: its stages, the days it has told, the words its badges say and the look they wear ARE the trip. So the file carries everything except what is meaningless in another browser: the trip `id` (a fresh one is minted, so importing the same file twice gives two trips instead of silently overwriting one), the timestamps, and each post's `projectId`, which addresses a Studio project in *this* store and would otherwise dangle as an "Open in Studio" that opens nothing. Post thumbnails live in their own IndexedDB store and are re-baked from the preview, so they never travel.
+
+**Media refs DO travel**, and that is the point: since they carry a content hash (`studio.md`, «Media identity»), a trip opened elsewhere finds its pictures again in a folder whose files have been renamed or re-graded. This is how a trip crosses from one source to another (`docs/winnow-bridge.md`, invariant 2).
+
+**How to apply.**
+- Everything else follows `projects/project-file.ts` exactly: a `kind` marker so a stray `.json` is rejected, `{ ok: false, error }` parsing that never throws and always says something actionable, and a file from a **newer** version refused rather than half-read.
+- Reading replays `migrateTripDoc` over a document built from `createTripDoc`, so an older file lands on the current shape exactly as an older stored trip does, and anything a past version never wrote gets the same default a new trip gets. Add a field to `TripDoc` → it is carried and defaulted by that path, with nothing to edit here.
+- `projectId` is stripped **twice** — writing and reading — because a hand-edited file could smuggle one in.
+- Import always creates a NEW trip. Merging two trips is not offered, on purpose.
+- Export sits on the gallery card, import in the gallery header — the same places the studio puts them.
+
 ## Open, and decided but not built (2026-08-23)
 
-- **The `.roadtrip.json` export is the safety net the maintainer asked for by name** — he expects to pull a JSON out weekly so a cleared IndexedDB cannot cost him a year of tracking. Follow `projects/project-file.ts` exactly (portable half only, `{ok:false, error}` parsing, refuse a file from a newer version). Agreed shape of the reminder: a **discreet banner** ("last export 12 days ago"), never a blocking prompt. Not built.
+- **The export-reminder banner is still unbuilt.** The `.roadtrip.json` file itself now exists (see below); what is missing is the nudge the maintainer asked for — a **discreet banner** ("last export 12 days ago"), never a blocking prompt, so a cleared IndexedDB cannot cost him a year of tracking.
 - **The three visual directions drawn in the design pass were never formally chosen.** They now exist as the four title-style presets in the Style picker (the studio's own `StylePanel`, moved to `shared/overlay/` when Road Trip became its second consumer), so the choice is one click rather than a code change — but he has not said which one is the signature.
 - **Carousels are a later phase**: a post becomes an ordered list of slides with a role (intro / content / CTA), and the closing call-to-action slide is a **single global template edited once** (his choice), reinjected automatically — not re-authored per post. For a reel the hook rides the Studio's existing intro *scene* rather than a new mechanism. ("The CTA stays a separate end card" was revisited 2026-08-25: on a reel it now crosses the bridge as the Studio's appended outro — see the bridge entry.)
 - **Time Machine** (an animated counter winding back to the media's day) and an API into his own geolocated media-triage system are wanted but explicitly last: both were discussed as "after the rest works".
