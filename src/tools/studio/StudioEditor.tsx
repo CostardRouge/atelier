@@ -108,7 +108,8 @@ import {
   type TimeScaleSetting,
 } from '../../shared/telemetry/time-scale';
 import { retimeCues } from '../../shared/telemetry/motion';
-import { savedMediaRef, type ProjectDoc } from '../../shared/projects/project-types';
+import type { ProjectDoc } from '../../shared/projects/project-types';
+import { hashedMediaRefs } from '../../shared/projects/media-identity';
 import { putProject } from '../../shared/projects/project-store';
 import type { Reconciliation } from '../../shared/projects/reconcile';
 
@@ -771,10 +772,12 @@ export default function StudioEditor({
     saveTimer.current = setTimeout(() => {
       void (async () => {
         setSaveState('saving');
-        const mediaFiles = clips.flatMap((c) =>
-          [c.parts.video, c.parts.srt, c.parts.image]
-            .filter((f): f is File => !!f)
-            .map(savedMediaRef),
+        // Hashing is memoised per file, so only the first save of a folder
+        // pays for it; every later autosave is a cache hit.
+        const mediaFiles = await hashedMediaRefs(
+          clips.flatMap((c) =>
+            [c.parts.video, c.parts.srt, c.parts.image].filter((f): f is File => !!f),
+          ),
         );
         const doc: ProjectDoc = {
           ...docRef.current,
@@ -1197,6 +1200,10 @@ export default function StudioEditor({
 
   const missingCount = reconciliation?.missing ?? 0;
   const changedCount = reconciliation?.changed ?? 0;
+  // Renames are absorbed on open rather than reported as trouble — but say so,
+  // because a file silently changing name under the project is exactly the
+  // kind of thing that should never happen without a word.
+  const renamedCount = reconciliation?.renamed ?? 0;
   const hasMissing = missingCount > 0;
   const hasChanged = changedCount > 0;
   const mediaTrouble = hasMissing || hasChanged;
@@ -1267,6 +1274,15 @@ export default function StudioEditor({
           onExport={exportProjectFile}
           onImport={importProjectFile}
         />
+      )}
+
+      {renamedCount > 0 && (
+        <div className={`${noticeMuted} m-0`}>
+          {renamedCount === 1
+            ? '1 media file was renamed since last save'
+            : `${renamedCount} media files were renamed since last save`}{' '}
+          — recognised by content and adopted under the new name.
+        </div>
       )}
 
       {mediaTrouble && (

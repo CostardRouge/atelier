@@ -3,6 +3,17 @@ import { formatIsoDate, spanLength } from '../../shared/roadtrip/trip-days';
 import { tripCoverage } from '../../shared/roadtrip/trip-coverage';
 import { createTripDoc, type TripDoc } from '../../shared/roadtrip/trip-types';
 import {
+  TRIP_FILE_ACCEPT,
+  TRIP_FILE_EXTENSION,
+  parseTripFile,
+  serializeTripFile,
+  toTripFile,
+  tripDocFromFile,
+  tripFileName,
+} from '../../shared/roadtrip/trip-file';
+import { pickFile } from '../../shared/sources/file-sources';
+import { downloadBlob } from '../../shared/media/save';
+import {
   deleteThumbs,
   deleteTrip,
   listTrips,
@@ -19,11 +30,13 @@ function TripCard({
   trip,
   isOpen,
   onOpen,
+  onExport,
   onDelete,
 }: {
   trip: TripDoc;
   isOpen: boolean;
   onOpen: () => void;
+  onExport: () => void;
   onDelete: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
@@ -77,6 +90,16 @@ function TripCard({
           {isOpen ? 'Resume' : 'Open'}
         </button>
         <span className="flex-1" />
+        {!confirming && (
+          <button
+            type="button"
+            onClick={onExport}
+            className="p-0 border-0 bg-transparent text-[0.75rem] text-faint cursor-pointer hover:text-accent-ink"
+            title={`Save the whole trip as a ${TRIP_FILE_EXTENSION} file`}
+          >
+            Export
+          </button>
+        )}
         {confirming ? (
           <span className="flex items-center gap-2 text-[0.75rem]">
             <button
@@ -117,6 +140,7 @@ function TripCard({
 export default function TripGallery({ openTripId, onOpen }: TripGalleryProps) {
   const [trips, setTrips] = useState<TripDoc[] | null>(null);
   const [creating, setCreating] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
     void listTrips().then(setTrips);
@@ -134,6 +158,36 @@ export default function TripGallery({ openTripId, onOpen }: TripGalleryProps) {
     await putTrip(doc);
     setCreating(false);
     onOpen(doc);
+  }
+
+  /** The whole trip on disk — a backup, and how it reaches another machine. */
+  function handleExport(trip: TripDoc) {
+    downloadBlob(
+      new Blob([serializeTripFile(toTripFile(trip))], { type: 'application/json' }),
+      tripFileName(trip.name),
+    );
+  }
+
+  /**
+   * A trip file always becomes a NEW trip, never an overwrite: importing the
+   * same backup twice must not silently replace the trip you have been telling
+   * for months. Merging two trips is not a thing this offers, deliberately.
+   */
+  async function handleImport() {
+    const picked = await pickFile(TRIP_FILE_ACCEPT);
+    if (!picked) return;
+    setImportError(null);
+    const parsed = parseTripFile(await picked.text());
+    if (!parsed.ok) {
+      setImportError(parsed.error);
+      return;
+    }
+    const doc = tripDocFromFile(parsed.file);
+    if (!doc.name.trim()) {
+      doc.name = picked.name.replace(/\.(roadtrip\.)?json$/i, '') || 'Imported trip';
+    }
+    await putTrip(doc);
+    refresh();
   }
 
   async function handleDelete(id: string) {
@@ -161,12 +215,26 @@ export default function TripGallery({ openTripId, onOpen }: TripGalleryProps) {
         <span className="flex-1" />
         <button
           type="button"
+          onClick={() => void handleImport()}
+          className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-line-strong rounded-full bg-paper text-ink-soft cursor-pointer text-[0.84rem] transition-colors hover:border-accent hover:text-accent-ink"
+          title={`Create a trip from an exported file (${TRIP_FILE_EXTENSION})`}
+        >
+          ↑ Import a trip file
+        </button>
+        <button
+          type="button"
           onClick={() => setCreating(true)}
           className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent active:scale-[0.98]"
         >
           + New trip
         </button>
       </div>
+
+      {importError && (
+        <p className="m-0 text-[0.8rem] text-[#9a3a23]" role="alert">
+          {importError}
+        </p>
+      )}
 
       {trips === null ? (
         <p className="m-0 text-[0.85rem] text-muted font-mono">Loading trips…</p>
@@ -196,6 +264,7 @@ export default function TripGallery({ openTripId, onOpen }: TripGalleryProps) {
               trip={trip}
               isOpen={trip.id === openTripId}
               onOpen={() => onOpen(trip)}
+              onExport={() => handleExport(trip)}
               onDelete={() => void handleDelete(trip.id)}
             />
           ))}
