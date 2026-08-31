@@ -96,6 +96,11 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - Road Trip's call to action crosses the bridge into that outro slot, same rules as the hook (prefix, replace, unlink); an outro the author composed themselves is never overwritten — `roadtrip.md`, `studio.md`.
 - Anything added to a project's portable half must land in FOUR places: `ProjectPortable`, `toProjectFile`, `parseProjectFile` and `applyProjectFile` — the last was forgotten once and the gallery import silently dropped intros — `studio.md`.
 - A tool that redirects from a route effect must first check the path is its own (`isWithinRoute`): a mounted tool still observes the hash after it has changed to another tool's, and redirecting then makes the switcher do nothing — `architecture.md`.
+- A **source** is where projects, state and (later) scheduled work live — not a media pool. `local` is source #1 (File System Access + IndexedDB), a Winnow instance is its peer, and **a project belongs to exactly one source**: that limit is what removes sync and merge entirely — `docs/winnow-bridge.md`.
+- **Atelier is a client, never a host** — no backend, no database; persistent state lives in the browser or on a server the user owns. That is what makes multi-device, and later proactive features, possible without becoming a cloud — `docs/winnow-bridge.md`.
+- Topology is **configuration, not a decision**: `SameSite` is judged on the SITE, so `atelier.steeve.website` ↔ `winnow.steeve.website` is cross-origin but *same-site* and the cookie travels with a CORS allowlist. A Bearer credential is only needed for a genuinely foreign instance — `docs/winnow-bridge.md`.
+- Media identity across flavours is **Winnow's `content_hash`** — `sha256(size ‖ first 64 KiB ‖ last 64 KiB)`, reproducible in the browser — so one document resolves the same file from a folder or from Winnow — `docs/winnow-bridge.md`.
+- Winnow media previews on the **proxies** (H.264/AAC/faststart, so no ffmpeg.wasm; WebP for a RAW) and exports from the **originals**, each with a visible switch to the other — `docs/winnow-bridge.md`.
 
 ## Open items (dated; remove when done)
 
@@ -108,6 +113,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - 2026-08-22 — Element timing is edited with number fields ("appears at / disappears at", plus From-playhead buttons). The natural follow-up the maintainer will want is a **lane under the TrimBar**, one draggable bar per timed element — the first thing that would make the studio feel like a timeline. Not started; the constraint to respect is that the bar splits into bands, never z-index (`studio.md`).
 - 2026-08-22 — A **pre-roll / freeze-frame intro** (output longer than the source) was explicitly deferred, not rejected: the maintainer chose "over the images" for now. Half the mechanism exists since 2026-08-25 — the outro's appended tail (`export-tail.ts`) proves the encoder seam; what remains for a PRE-roll is the timestamp shift every existing frame would need.
 - 2026-08-25 — The outro edits its lines as text inputs; **free element placement on a card stage of its own** (full intro parity: drag, style, animate on the card) is the agreed next step, deferred. The stage cannot scrub past the clip, so it needs a stage mode, not a longer timeline.
+- 2026-08-31 — The Winnow bridge's phase 1 needs **`atelier.steeve.website`** to exist (a DNS record + a `CNAME` file onto the current GitHub Pages build, `BASE_PATH=/`). That one move keeps the cookie same-site and removes the whole credential system from the near term — see `docs/winnow-bridge.md` §3.3. Maintainer's call because it is a domain, not code.
 - No secret has ever been tracked in this repository (checked 2026-08-20 across the working tree), so there is nothing to rotate.
 
 ## Topic files — read before touching the area
@@ -122,3 +128,12 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 | `docs/memory/local-first.md` | anything that could touch the network, read files, or persist data |
 | `docs/memory/studio.md` | the Studio tool, the tool-merge plan, project persistence, title styles, retiring a legacy tool |
 | `docs/memory/roadtrip.md` | the Road Trip tool, trip/day/post model, day badges, publishing cadence and strategy |
+
+Not a memory file, but read it before touching anything about media sources or
+document storage: **`docs/winnow-bridge.md`** — the agreed design for connecting
+Atelier to Winnow (the maintainer's media-triage project), the two adapter seams
+it rests on, and the phases. Verified 2026-08-29 against the Winnow repository
+itself (`~/Documents/GitHub/winnow`, `CostardRouge/winnow`), so its claims about
+both sides carry paths and can be re-checked; rewritten 2026-08-31 around the
+source model, with several instances and scheduling marked *later* but designed
+for. Nothing in it is built yet.
