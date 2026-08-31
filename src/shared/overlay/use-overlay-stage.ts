@@ -34,6 +34,14 @@ import type { TimeShift } from '../telemetry/time-format';
 interface StageParams {
   videoRef: RefObject<HTMLVideoElement | null>;
   canvasRef: RefObject<HTMLCanvasElement | null>;
+  /**
+   * A decoded still to compose instead of the video's current frame — what a
+   * photo project puts on the stage. When it is set the stage has no clock:
+   * the frame never changes on its own, so the loop only repaints on an edit,
+   * and every render happens at t = 0. The deck should reach here already
+   * settled (see still-frame.ts); nothing else about editing changes.
+   */
+  still?: ImageBitmap | null;
   cues: Cue[];
   elements: OverlayElement[];
   selectedId: string | null;
@@ -102,6 +110,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   const scenesRef = useRef(params.scenes);
   const originRef = useRef(params.originSeconds ?? 0);
   const compareRef = useRef(params.compare ?? false);
+  const stillRef = useRef(params.still ?? null);
   const splitRef = useRef(0.5);
   cuesRef.current = params.cues;
   elementsRef.current = params.elements;
@@ -115,8 +124,33 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   scenesRef.current = params.scenes;
   originRef.current = params.originSeconds ?? 0;
   compareRef.current = params.compare ?? false;
+  stillRef.current = params.still ?? null;
 
   const needsRedraw = useRef(true);
+
+  /**
+   * What the stage is composing over: a decoded still when there is one, else
+   * the video's current frame. One reader, so the draw loop, the hit test and
+   * the A/B wipe can never disagree about which picture (and which instant) is
+   * on screen.
+   */
+  const readFrame = useCallback((): {
+    src: CanvasImageSource;
+    w: number;
+    h: number;
+    t: number;
+  } | null => {
+    const still = stillRef.current;
+    if (still) return { src: still, w: still.width, h: still.height, t: 0 };
+    const video = videoRef.current;
+    if (!video || !video.videoWidth) return null;
+    return {
+      src: video,
+      w: video.videoWidth,
+      h: video.videoHeight,
+      t: video.currentTime,
+    };
+  }, [videoRef]);
 
   // Lazily-created GPU grader (the same renderer LUT Studio uses). Reused across
   // frames; the LUT texture is only re-uploaded when the LUT changes.
@@ -187,26 +221,30 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     params.originSeconds,
     params.compare,
     params.cues,
+    // A still never announces itself the way a video's `seeked`/`loadeddata`
+    // do: swapping the decoded picture IS the only signal there is.
+    params.still,
   ]);
 
   // Composite + (optional) selection outline. Returns false if not ready.
   const drawFrame = useCallback((): boolean => {
-    const video = videoRef.current;
     const canvas = canvasRef.current;
-    if (!video || !canvas || !video.videoWidth) return false;
-    if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth;
-    if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
+    const frame = readFrame();
+    if (!canvas || !frame) return false;
+    if (canvas.width !== frame.w) canvas.width = frame.w;
+    if (canvas.height !== frame.h) canvas.height = frame.h;
     const ctx = canvas.getContext('2d');
     if (!ctx) return false;
 
     const vw = canvas.width;
     const vh = canvas.height;
-    const cue = findCue(cuesRef.current, video.currentTime);
+    const cue = findCue(cuesRef.current, frame.t);
 
     // Grade through the LUT first (if any), so the preview matches the export;
-    // the <video> frame is already display-oriented, like the export's output.
+    // the <video> frame (like a bitmap decoded `from-image`) is already
+    // display-oriented, as the export's output is.
     const lut = lutRef.current;
-    let source: CanvasImageSource = video;
+    let source: CanvasImageSource = frame.src;
     if (lut) {
       let g = graderRef.current;
       if (!g) {
@@ -219,7 +257,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       }
       if (g) {
         g.renderer.resize(vw, vh);
-        g.renderer.draw(video);
+        g.renderer.draw(frame.src as TexImageSource);
         source = g.canvas;
       }
     }
@@ -228,7 +266,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       theme: themeRef.current,
       timeShift: shiftRef.current,
       cues: cuesRef.current,
-      timeSeconds: video.currentTime,
+      timeSeconds: frame.t,
       scenes: scenesRef.current,
       originSeconds: originRef.current,
       // The selected element is drawn even outside its window, ghosted: a
@@ -242,7 +280,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     if (compareRef.current) {
       const splitX = Math.round(splitRef.current * vw);
       if (splitX > 0) {
-        ctx.drawImage(video, 0, 0, splitX, vh, 0, 0, splitX, vh);
+        ctx.drawImage(frame.src, 0, 0, splitX, vh, 0, 0, splitX, vh);
       }
       ctx.save();
       ctx.fillStyle = '#d9442a';
@@ -271,7 +309,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
         timeShift: shiftRef.current,
         scenes: scenesRef.current,
         originSeconds: originRef.current,
-        timeSeconds: video.currentTime,
+        timeSeconds: frame.t,
         ghostId: sel,
       });
       const box = boxForId(boxes, sel);
@@ -285,7 +323,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       }
     }
     return true;
-  }, [videoRef, canvasRef, ensureGrader]);
+  }, [canvasRef, readFrame, ensureGrader]);
 
   // The render loop. rAF (not rVFC) so paused edits repaint too; it skips the
   // 4K composite when idle and clean.
@@ -296,7 +334,9 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     let raf = 0;
     const loop = () => {
       const v = videoRef.current;
-      const playing = !!v && !v.paused && !v.ended;
+      // A still is never "playing": it repaints on an edit and stays put,
+      // which is what keeps a 45-megapixel canvas off the rAF treadmill.
+      const playing = !stillRef.current && !!v && !v.paused && !v.ended;
       if (playing || needsRedraw.current) {
         if (drawFrame()) needsRedraw.current = false;
       }
@@ -337,9 +377,9 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
       const canvas = canvasRef.current;
-      const video = videoRef.current;
+      const frame = readFrame();
       const pt = toVideoPixels(e);
-      if (!canvas || !video || !pt) return;
+      if (!canvas || !frame || !pt) return;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
@@ -358,13 +398,13 @@ export function useOverlayStage(params: StageParams): StageHandlers {
         return;
       }
 
-      const cue = findCue(cuesRef.current, video.currentTime);
+      const cue = findCue(cuesRef.current, frame.t);
       const boxes = measureOverlays(ctx, elementsRef.current, cue, canvas.width, canvas.height, {
         theme: themeRef.current,
         timeShift: shiftRef.current,
         scenes: scenesRef.current,
         originSeconds: originRef.current,
-        timeSeconds: video.currentTime,
+        timeSeconds: frame.t,
         ghostId: selectedRef.current,
       });
       const id = hitTest(boxes, pt.px, pt.py);
@@ -384,7 +424,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
         }
       }
     },
-    [canvasRef, videoRef, toVideoPixels, onSelect],
+    [canvasRef, readFrame, toVideoPixels, onSelect],
   );
 
   const onPointerMove = useCallback(

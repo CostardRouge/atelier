@@ -43,9 +43,9 @@ export const TOOLS: Tool[] = [
     label: 'Studio',
     subtitle: 'Unified editor',
     blurb:
-      'One place to edit a clip: overlay telemetry and text, grade through a LUT, and export the result — the editor the whole suite is converging on.',
+      'One place to edit a clip or a photo: overlay telemetry and text, grade through a LUT, and export the result — the editor the whole suite is converging on.',
     Component: StudioTool,
-    accepts: ['video+telemetry', 'video'],
+    accepts: ['video+telemetry', 'video', 'photo'],
   },
   {
     id: 'roadtrip',

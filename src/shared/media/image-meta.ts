@@ -5,15 +5,13 @@
  * browser can't decode) gracefully degrades to a type label with no thumbnail.
  */
 
-const RAW_EXTENSIONS = new Set([
-  'raf', 'arw', 'cr2', 'cr3', 'nef', 'dng', 'orf', 'rw2', 'raw', 'srw', 'pef',
-]);
+import { isRawImage } from '../library/assets';
 
 /** Human label for an image file: `RAW`, `JPEG`, or the bare extension. */
 export function imageTypeLabel(name: string): string {
   const dot = name.lastIndexOf('.');
   const ext = dot >= 0 ? name.slice(dot + 1).toLowerCase() : '';
-  if (RAW_EXTENSIONS.has(ext)) return 'RAW';
+  if (isRawImage(name)) return 'RAW';
   if (ext === 'jpg' || ext === 'jpeg') return 'JPEG';
   return ext ? ext.toUpperCase() : 'image';
 }

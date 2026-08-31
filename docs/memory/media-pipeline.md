@@ -48,9 +48,11 @@ Read before touching video decode/encode, any export, the transcode fallback, LU
 
 **Decision.** `overlay/export-overlay-seek.ts` decodes via a `<video>` element (seek frame-by-frame, draw to canvas, feed the same encoder) when WebCodecs cannot decode the source; `export-overlay.ts` chooses the path and falls back on a late decode failure. **Why**: some browsers *play* HEVC in a `<video>` element while WebCodecs refuses it. **How to apply**: know the trade-offs before extending it — every seek decodes from the prior keyframe (far slower than realtime) and frame timing is approximate (`currentTime = i/fps` lands on the nearest decoded frame ≤ t). Composer export has **no** seek fallback yet: undecodable HEVC there surfaces a clear message instead.
 
-## Grading happens in exactly one place (2026-08-20)
+## Grading happens in exactly one place (2026-08-20, rev. 2026-08-25)
 
 **Decision.** `lut/lut-gl.ts` is a framework-free WebGL2 renderer (frame as 2D texture, `sampler3D` LUT with hardware trilinear interpolation); `frame-grader.ts` wraps it for the exporters so preview and export grade identically. **Why**: two grading implementations would diverge visibly. **How to apply**: LUT texel sampling is mapped onto texel centres (`scale = (N-1)/N`, `offset = 0.5/N`) so cube edges are not clipped — do not "simplify" that. Intensity above 1 extrapolates past the look and the 8-bit canvas clamps the overshoot. Without WebGL2 the grader degrades to pass-through so an export produces un-graded output rather than failing.
+
+**WebGL trap, measured (2026-08-25): `UNPACK_FLIP_Y_WEBGL` is IGNORED for an `ImageBitmap`** — its orientation is fixed at creation, per spec — while every other `TexImageSource` (video, canvas) honours it. The renderer uploads flipped so its UVs line up, so when photo support handed it an `ImageBitmap` the graded still rendered upside down, on the stage AND in the JPEG export, with all four CI gates green. The fix is a `u_flipY` vertex-shader uniform set per draw by `source instanceof ImageBitmap` — compensate in UV space, never by pre-flipping the bitmap (the 2D path needs it upright) and never by copying through a scratch canvas (a 45-megapixel blit per repaint). Any future texture upload path must ask which sources actually obey the flip flag.
 
 ## The output transform: Rec.709 2.4 vs the sRGB canvas (2026-08-21)
 

@@ -42,6 +42,9 @@ describe('migrateProjectDoc', () => {
     // v9: the safe zone follows the frame's orientation. Editor-only chrome,
     // so an old project adopting it changes no rendered pixel.
     expect(migrated.guides.safeZoneOrientation).toBe('auto');
+    // v12/v13: no intro and no outro — an old export ends on the footage.
+    expect(migrated.scenes).toEqual([]);
+    expect(migrated.outro).toBeNull();
   });
 
   it('keeps a safe-zone rotation the author pinned', () => {

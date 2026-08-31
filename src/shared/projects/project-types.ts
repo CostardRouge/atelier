@@ -16,6 +16,7 @@ import type { OverlayElement } from '../overlay/overlay-types';
 import { DEFAULT_GUIDES, type GuidesState } from '../overlay/guides';
 import type { StyleTheme } from '../overlay/title-styles';
 import type { Scene } from '../overlay/scenes';
+import type { OutroCard } from '../overlay/outro-card';
 import type { PersistedDirectoryHandle } from '../sources/file-sources';
 import { defaultVariants, type ExportVariant } from './export-variants';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
@@ -24,7 +25,7 @@ import { AUTO_TIME_SCALE, type TimeScaleSetting } from '../telemetry/time-scale'
 import type { OutputTransform } from '../lut/transfer';
 import type { SavedTrim } from '../media/trim';
 
-export const PROJECT_DOC_VERSION = 12;
+export const PROJECT_DOC_VERSION = 13;
 
 /** Identity of one media file, enough to re-match it inside a folder. */
 export interface SavedMediaRef {
@@ -133,6 +134,13 @@ export interface ProjectDoc {
    * an intro is part of the template, not of the footage.
    */
   scenes: Scene[];
+  /**
+   * The outro — a closing card appended after the footage on every variant
+   * that carries the overlays. Portable like the intro: a closing card is
+   * part of the template, not of the footage. Null = the export ends on the
+   * footage's last frame, exactly as before the card existed.
+   */
+  outro: OutroCard | null;
   /** The export matrix: custom base name + the deliverables one press makes. */
   exportPrefs: ExportPrefs;
   // --- bound half ----------------------------------------------------------
@@ -161,6 +169,7 @@ export function createProjectDoc(
     | 'outputTransform'
     | 'theme'
     | 'scenes'
+    | 'outro'
     | 'exportPrefs'
   >,
 ): ProjectDoc {
@@ -185,6 +194,7 @@ export function createProjectDoc(
     outputTransform: template ? template.outputTransform : 'none',
     theme: template ? structuredClone(template.theme) : null,
     scenes: template ? structuredClone(template.scenes ?? []) : [],
+    outro: template ? structuredClone(template.outro ?? null) : null,
     exportPrefs: template
       ? structuredClone(template.exportPrefs)
       : { fileName: null, variants: defaultVariants() },
@@ -216,7 +226,8 @@ export function createProjectDoc(
  * `manual` is one click away; v10 → v11 gives every stored variant an explicit
  * speed of 1, which is the only speed an export could deliver before it
  * existed; v11 → v12 adds the scene list, empty — no project could have an
- * intro before it existed, and an empty list draws exactly nothing.
+ * intro before it existed, and an empty list draws exactly nothing; v12 → v13
+ * adds the outro card, null, for the same reason.
  * Idempotent; the store runs it on every read.
  */
 export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
@@ -296,6 +307,11 @@ export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
   }
   if (migrated.version < 12) {
     migrated.scenes = migrated.scenes ?? [];
+  }
+  if (migrated.version < 13) {
+    // Null, not a default card: no project could end on an outro before one
+    // existed, and null draws (and appends) exactly nothing.
+    migrated.outro = migrated.outro ?? null;
   }
   migrated.version = PROJECT_DOC_VERSION;
   return migrated;

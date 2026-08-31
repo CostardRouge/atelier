@@ -26,11 +26,26 @@ describe('buildAssets', () => {
     expect(byId).toEqual({ a: 'video', b: 'telemetry', c: 'photo' });
   });
 
-  it('groups a RAW and its JPEG into one photo asset', () => {
+  it('groups a RAW and its JPEG into one photo asset, keeping the decodable half', () => {
     const assets = buildAssets([f('IMG_8801.RAF'), f('IMG_8801.JPG')]);
     expect(assets).toHaveLength(1);
     expect(assets[0].kind).toBe('photo');
+    expect(assets[0].parts.image?.name).toBe('IMG_8801.JPG');
+  });
+
+  it('does not let the listing order decide which half of a pair is shown', () => {
+    const jpegFirst = buildAssets([f('IMG_8801.JPG'), f('IMG_8801.RAF')]);
+    expect(jpegFirst[0].parts.image?.name).toBe('IMG_8801.JPG');
+  });
+
+  it('keeps a RAW as the image when it is the only one', () => {
+    const assets = buildAssets([f('IMG_8801.RAF')]);
     expect(assets[0].parts.image?.name).toBe('IMG_8801.RAF');
+  });
+
+  it('keeps the first of two decodable images, deterministically', () => {
+    const assets = buildAssets([f('IMG_8801.JPG'), f('IMG_8801.PNG')]);
+    expect(assets[0].parts.image?.name).toBe('IMG_8801.JPG');
   });
 
   it('pairs case-insensitively on the base name', () => {

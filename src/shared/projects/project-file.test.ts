@@ -30,6 +30,12 @@ function sampleDoc(): ProjectDoc {
     },
   ];
   doc.outputTransform = 'rec709-to-srgb';
+  doc.outro = {
+    seconds: 4,
+    background: '#100f0d',
+    elements: [],
+    qr: { url: 'https://x.dev', x: 0.35, y: 0.55, sizeFrac: 0.3, dark: '#fff', light: '#111' },
+  };
   doc.exportPrefs = {
     fileName: 'sunset',
     variants: [
@@ -182,6 +188,8 @@ describe('parseProjectFile', () => {
     expect(parsed.file.outputTransform).toBe('none');
     expect(parsed.file.exportPrefs.variants).toHaveLength(1);
     expect(parsed.file.guides).toEqual(DEFAULT_GUIDES);
+    // A file from before the outro existed lands on none, like a migrated doc.
+    expect(parsed.file.outro).toBeNull();
   });
 });
 
@@ -209,6 +217,10 @@ describe('applyProjectFile', () => {
     expect(next.elements).toEqual(file.elements);
     expect(next.lutStack[0].name).toBe('Mon look.cube');
     expect(next.exportPrefs.fileName).toBe('sunset');
+    // Scenes and the outro travel too — importing as a new project used to
+    // silently drop the intro.
+    expect(next.scenes).toEqual(file.scenes);
+    expect(next.outro).toEqual(file.outro);
   });
 
   it('deep-copies, so the imported file cannot be mutated through the project', () => {

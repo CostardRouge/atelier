@@ -2,13 +2,18 @@ import { describe, expect, it } from 'vitest';
 import {
   HOOK_ELEMENT_PREFIX,
   HOOK_SCENE_ID,
+  ctaOutro,
   hasHook,
   hookInjection,
   isHookElement,
+  isRoadtripOutro,
   scrimFromShades,
+  withCtaOutro,
   withHook,
+  withoutCtaOutro,
   withoutHook,
 } from './hook-scene';
+import { DEFAULT_CTA, type CtaSlide } from './cta-slide';
 import { createShade } from './shades';
 import { createTextElement, type OverlayElement } from '../overlay/overlay-types';
 import { createIntroScene } from '../overlay/scenes';
@@ -153,5 +158,66 @@ describe('withoutHook', () => {
   it('is the same document when there was no hook — no pointless save', () => {
     const before = project();
     expect(withoutHook(before)).toBe(before);
+  });
+});
+
+describe('the call to action as the project outro', () => {
+  const cta = (over: Partial<CtaSlide> = {}): CtaSlide => ({
+    ...DEFAULT_CTA,
+    ...over,
+  });
+
+  it('lays the same card the carousel appends, prefixed as the bridge’s', () => {
+    const card = ctaOutro(cta(), 9 / 16)!;
+    expect(card).not.toBeNull();
+    expect(card.background).toBe(DEFAULT_CTA.background);
+    expect(card.elements.length).toBeGreaterThan(0);
+    for (const el of card.elements) {
+      expect(el.id.startsWith(HOOK_ELEMENT_PREFIX)).toBe(true);
+    }
+    expect(isRoadtripOutro(card)).toBe(true);
+  });
+
+  it('carries the QR as its URL, in the card’s own inks', () => {
+    const card = ctaOutro(cta(), 9 / 16)!;
+    expect(card.qr).toMatchObject({
+      url: DEFAULT_CTA.url,
+      dark: DEFAULT_CTA.ink,
+      light: DEFAULT_CTA.background,
+    });
+  });
+
+  it('a CTA with nothing to say makes no card — the deck’s own rule', () => {
+    expect(ctaOutro(cta({ headline: ' ', body: '', url: '' }), 9 / 16)).toBeNull();
+  });
+
+  it('sends into an empty slot and replaces its own card on a resend', () => {
+    const first = withCtaOutro(project(), ctaOutro(cta(), 9 / 16))!;
+    expect(isRoadtripOutro(first.outro)).toBe(true);
+    const second = withCtaOutro(first, ctaOutro(cta({ headline: 'Nouveau' }), 9 / 16))!;
+    expect(second.outro!.elements.some((e) => e.text === 'Nouveau')).toBe(true);
+  });
+
+  it('unticking the CTA takes a sent card back out', () => {
+    const sent = withCtaOutro(project(), ctaOutro(cta(), 9 / 16))!;
+    const cleared = withCtaOutro(sent, null)!;
+    expect(cleared.outro).toBeNull();
+  });
+
+  it('never overwrites an outro the author composed themselves', () => {
+    const own = project({
+      outro: { seconds: 3, background: '#000', elements: [], qr: null },
+    } as Partial<ProjectDoc>);
+    expect(withCtaOutro(own, ctaOutro(cta(), 9 / 16))).toBeNull();
+    // …and unticking the CTA leaves it alone rather than deleting it.
+    expect(withCtaOutro(own, null)).toBe(own);
+    expect(withoutCtaOutro(own)).toBe(own);
+  });
+
+  it('unlinking strips only the bridge’s card', () => {
+    const sent = withCtaOutro(project(), ctaOutro(cta(), 9 / 16))!;
+    expect(withoutCtaOutro(sent).outro).toBeNull();
+    const untouched = project();
+    expect(withoutCtaOutro(untouched)).toBe(untouched);
   });
 });
