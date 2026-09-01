@@ -98,6 +98,24 @@ describe('WinnowClient requests', () => {
     expect(new URL(fetchImpl.mock.calls[2][0]).pathname).toBe('/api/sessions');
   });
 
+  it('collapses an empty span to null — a filter matching nothing crashed the picker', async () => {
+    // Winnow's min()/max() over no rows answer with a row of NULLs, so the
+    // wire carries a bounds OBJECT with null fields. Left as-is it reached
+    // monthKeyOf(null) during render and took the whole library down.
+    const c = client(async () => ok({ days: [], bounds: { min: null, max: null } }));
+    expect(await c.calendar('2026-09-01', '2026-09-30')).toEqual({ days: [], bounds: null });
+  });
+
+  it('keeps a real span, and survives a body missing days or bounds', async () => {
+    const full = client(async () => ok({ days: [{ date: '2025-07-09', count: 3, cover_id: 1 }], bounds: { min: '2010-11-05', max: '2026-08-15' } }));
+    expect(await full.calendar('2025-07-01', '2025-07-31')).toEqual({
+      days: [{ date: '2025-07-09', count: 3, cover_id: 1 }],
+      bounds: { min: '2010-11-05', max: '2026-08-15' },
+    });
+    const empty = client(async () => ok({}));
+    expect(await empty.calendar('2025-07-01', '2025-07-31')).toEqual({ days: [], bounds: null });
+  });
+
   it('reads the facet slice it offers, tolerating a missing key', async () => {
     const c = client(async () => ok({ extensions: [{ value: 'hif', count: 3 }] }));
     expect(await c.facets()).toEqual({ media_types: [], extensions: [{ value: 'hif', count: 3 }], devices: [] });

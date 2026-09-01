@@ -72,7 +72,13 @@ export interface WinnowCalendarDay {
 
 export interface WinnowCalendar {
   days: WinnowCalendarDay[];
-  /** The full filtered span, so a month picker can clamp to where media is. */
+  /**
+   * The full filtered span, so a month picker can clamp to where media is —
+   * or null when nothing dated matches. **Winnow never sends null here**: its
+   * `min()`/`max()` over no rows yield a row of NULLs, so the wire carries
+   * `{ min: null, max: null }`. `calendar()` normalises that away, which is
+   * what lets every reader treat a non-null `bounds` as two real dates.
+   */
   bounds: { min: string; max: string } | null;
 }
 
@@ -290,10 +296,23 @@ export class WinnowClient {
    * Per-day counts + cover in `[from, to]`, one logical media per RAW+JPEG
    * pair — the same collapse the day list uses, so the numbers agree.
    */
-  calendar(from: string, to: string, filter: FilterQuery = {}): Promise<WinnowCalendar> {
-    return this.json(
-      this.url('/api/assets/calendar', { from, to, collapse: 1, ...filterParams(filter) }),
-    );
+  async calendar(
+    from: string,
+    to: string,
+    filter: FilterQuery = {},
+  ): Promise<WinnowCalendar> {
+    const raw = await this.json<{
+      days?: WinnowCalendarDay[];
+      bounds?: { min: string | null; max: string | null } | null;
+    }>(this.url('/api/assets/calendar', { from, to, collapse: 1, ...filterParams(filter) }));
+    // A filter that matches nothing still answers with a bounds OBJECT whose
+    // fields are null. Collapse it to null here, once, rather than making
+    // every reader defend against a half-empty span.
+    const b = raw.bounds;
+    return {
+      days: raw.days ?? [],
+      bounds: b && b.min && b.max ? { min: b.min, max: b.max } : null,
+    };
   }
 
   /** Values + counts for the filter pickers. Library-wide, one request. */
