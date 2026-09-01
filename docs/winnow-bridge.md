@@ -1,6 +1,7 @@
 # Atelier × Winnow — bridge brief
 
-**Status**: design agreed, nothing built.
+**Status**: phases 0, 0.5 and 1 built (2026-09-01), phase 1 not yet proven end to
+end on the deployed pair — see `MEMORY.md` open items.
 Written 2026-08-24 with only Atelier to hand · revised 2026-08-29 against the
 Winnow repository · **rewritten 2026-08-31 around the source model.**
 
@@ -575,7 +576,7 @@ near term entirely by §3.3.
 |---|---|---|---|
 | **0** | `SavedMediaRef` gains `assetId?`/`hash?`; resolve **id → hash → name**; the hash is Winnow's `content_hash` (§4.2) in a small pure module with a test. Plus the missing `.roadtrip.json` portable export | Atelier only | Projects stop losing media on a rename; both flavours already speak one identity, and a project can cross sources |
 | **0.5** | Introduce `Source` with **exactly one implementation (`local`)**: the contract, `ProjectDoc.sourceId`, and a gallery that **groups by source even with one group** | Atelier only | The seam that makes everything below a data question instead of a refactor. Cheap now, expensive later |
-| **1** | `src/shared/sources/winnow/` — client (base URL + auth mode as config), the `#/connect` flow, "Add from Winnow", a date-range browser over `/api/assets/calendar`. Preview on proxies, export by fetch-to-Blob, the two fidelity switches | Atelier + **CORS only** on Winnow | The triage → edit hop stops being manual, with no credential system built |
+| **1** | **Built.** `src/shared/sources/winnow/` — client (base URL + auth mode as config), the `#/connect` flow, "from <host>" in the library sidebar, a day browser over `/api/assets/calendar`. A picked asset is **fetched and wrapped as a `File`** (proxy by default, original on request, `.srt` alongside) rather than previewed by URL — see `docs/memory/architecture.md`, «Remote sources», for why. Winnow side: `CORS_ALLOWED_ORIGINS` + `GET /api/capabilities`. Not built: a per-export switch to re-fetch the original | Atelier + **CORS only** on Winnow | The triage → edit hop stops being manual, with no credential system built |
 | **2** | Write-back: `POST /api/upload` the render into a **finals** root, then let `/api/reconcile` link it to its source | Atelier + optionally one field on `/api/upload` | Winnow's map, calendar and before/after lineage show which captures have been told |
 | **3** | `remote-store.ts` behind the existing four document signatures; boot-time capabilities; stale-write etag guard | Atelier + migration 0040 + one route pair | Projects resumable from another device |
 | *later* | Foreign instances (token, then OAuth+PKCE; `/api/v1` first) · scheduling and proactive Road Trip · an edit-grade proxy | Both | The "little Adobe cloud" |

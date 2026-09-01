@@ -21,9 +21,35 @@ import { savedMediaRef, type SavedMediaRef } from './project-types';
 /** Keyed by `fileIdentity`, holding the promise so concurrent calls share one read. */
 const cache = new Map<string, Promise<string | null>>();
 
-/** The file's partial content hash, or `null` if it could not be read. */
+/**
+ * What a source told us about a file it handed over — consulted BEFORE any
+ * hashing. A file fetched from Winnow is usually a proxy: hashing its own
+ * bytes would give the proxy's identity, which is nobody's `content_hash`. The
+ * source knows the original's hash and id, and those are what the document
+ * must carry, or the same media would never resolve across sources.
+ */
+export interface KnownIdentity {
+  assetId?: string;
+  hash?: string;
+}
+const known = new Map<string, KnownIdentity>();
+
+export function registerMediaIdentity(file: File, identity: KnownIdentity): void {
+  known.set(fileIdentity(file), identity);
+}
+
+export function knownIdentity(file: File): KnownIdentity | null {
+  return known.get(fileIdentity(file)) ?? null;
+}
+
+/**
+ * The file's partial content hash, or `null` if it could not be read. A file
+ * a source vouched for answers with the source's hash and reads nothing.
+ */
 export function mediaHash(file: File): Promise<string | null> {
   const key = fileIdentity(file);
+  const vouched = known.get(key)?.hash;
+  if (vouched) return Promise.resolve(vouched);
   let pending = cache.get(key);
   if (!pending) {
     pending = partialHash(file).catch(() => null);
@@ -32,11 +58,16 @@ export function mediaHash(file: File): Promise<string | null> {
   return pending;
 }
 
-/** A `SavedMediaRef` for `file`, carrying its hash when one could be computed. */
+/** A `SavedMediaRef` for `file`, carrying its hash (and source id) when known. */
 export async function hashedMediaRef(file: File): Promise<SavedMediaRef> {
   const ref = savedMediaRef(file);
+  const identity = knownIdentity(file);
   const hash = await mediaHash(file);
-  return hash ? { ...ref, hash } : ref;
+  return {
+    ...ref,
+    ...(identity?.assetId ? { assetId: identity.assetId } : {}),
+    ...(hash ? { hash } : {}),
+  };
 }
 
 /** The same, for a whole listing. Hashes run concurrently; order is preserved. */

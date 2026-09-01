@@ -61,3 +61,15 @@ Read before touching the shell (`src/app/`), the tool registry, the shared asset
 - `groupBySource` never hides a document whose source this session does not know — it gets its own group and the header says "not connected", following the say-why rule. `local` always leads.
 - `LOCAL_SOURCE.capabilities` answers honestly (`scheduling: false` — a tab cannot run reminders); a UI must read capabilities rather than offer a button that cannot work.
 - The media/document **adapter interfaces are deliberately not typed yet** — phase 1/3 will shape them against the real Winnow client; an interface nothing implements would only be a guess. Do not "complete" the contract speculatively.
+
+## Remote sources: a Winnow is fetched and WRAPPED, not streamed (2026-09-01)
+
+**Decision.** `shared/sources/winnow/` is the first remote source: a client (`client.ts`, `fetch` injected, errors typed `unauthenticated | forbidden | unreachable | protocol`), a `localStorage` store of connections mirrored into `listSources()` (`store.ts` → `setRemoteSources`), and `materialize.ts`, which turns a picked asset into ordinary `File`s — the proxy by default (H.264/AAC mp4 for a clip, WebP for a photo), the original on request, the `.srt` flight log alongside either. The shell owns the entry points: `#/connect?instance=…` (`app/ConnectScreen.tsx`) and the "from <host>" link in `AssetSidebar` that opens `WinnowBrowser` (a month of `/api/assets/calendar`, then a day of `/api/assets`).
+
+**Why fetch-and-wrap**: the whole pipeline holds `File`s — `buildAssets`, the stage, the filmstrip, WebCodecs, the exporter — and a `File` cannot be virtualised over a URL. Wrapping the proxy costs one download per clip and touches nothing downstream; a URL-backed asset would touch every consumer. It is the same trade `transcode-store.ts` already makes. Streaming preview by URL stays possible later, behind the same seam.
+
+**How to apply**:
+- **Never hash a fetched proxy's own bytes.** `materialize` vouches for every file with the ORIGINAL's `content_hash` and Winnow id (`registerMediaIdentity`, consulted by `mediaHash`/`hashedMediaRef` before any read). The `assetId` is `"<host>/<id>"`, scoped to its source. Names keep the original base name so the clip pairs with its `.srt` exactly as from a folder.
+- **No request at boot.** Connecting is the user's click on `#/connect`; the link may *propose* an instance, the person confirms it. A 401 means "sign in there" and the UI says so with the link — it is not an error to hide.
+- The `<img>` thumbnails need `crossOrigin="use-credentials"` or the cookie is not sent; a `fetch` needs `credentials: 'include'`. Both are cross-origin, same-site.
+- `listSources()` in `source.ts` stays pure: it holds what `store.ts` mirrors in, it reads nothing.

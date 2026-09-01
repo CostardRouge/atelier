@@ -616,14 +616,37 @@ Batch-export graded copies (H.264 via WebCodecs). The built-in LUTs live in
 (apple/dji/sony/classic). See [`public/luts/README.md`](./public/luts/README.md)
 to add your own — just drop a `.cube` in, no code to edit.
 
+### Sources — connecting a Winnow
+
+The library's files usually come from a folder on this machine. They can also
+come from a **[Winnow](https://github.com/CostardRouge/winnow)** instance — the
+maintainer's self-hosted triage app, which indexes every capture on a NAS,
+builds a proxy for each one and knows a DJI clip's `.srt` flight log as a
+sidecar. Open `#/connect`, or the "or connect a Winnow" link under the drop
+zone, confirm the instance's address, and it becomes a source: browse it by
+day, tick pictures, and they arrive in the library as ordinary files — the
+**proxy** by default (an H.264 clip or a WebP photo, fast and decodable
+everywhere), or the **original** on request, with its weight shown first. A
+DJI clip brings its flight log along either way.
+
+Plainly, what this changes about the promise above: Atelier still uploads
+nothing and holds no account. It **fetches** from a server you named yourself,
+signed in with that server's own session — nothing runs at boot, and no
+credential is stored here. Your media never leaves machines you own. It works
+when Atelier and the Winnow share a site (e.g. `atelier.example` and
+`winnow.example`) and the Winnow lists Atelier's origin in its
+`CORS_ALLOWED_ORIGINS`; a foreign instance would need a credential of its own,
+which is not built.
+
 ### Online
 
-Deployed via GitHub Pages at `https://costardrouge.github.io/atelier/`.
+Deployed via GitHub Pages at [`atelier.steeve.website`](https://atelier.steeve.website/).
 
 > Base path: `vite.config.ts` derives the Pages base path from the repository
 > name (via `GITHUB_REPOSITORY` in CI, falling back to `atelier` locally), so a
-> repo rename can't 404 the assets. Override with the `BASE_PATH` env var — e.g.
-> `/` when serving from a custom domain.
+> repo rename can't 404 the assets. The deploy workflow overrides it with
+> `BASE_PATH=/` because the custom domain serves the site from the root — the
+> domain itself lives in the repository's Pages settings, not in a `CNAME` file.
 
 ### Local development
 
