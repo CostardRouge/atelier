@@ -49,3 +49,15 @@ Read before touching the shell (`src/app/`), the tool registry, the shared asset
 ## A tool crash must not blank the app (2026-08-20)
 
 **Decision.** `ErrorBoundary` wraps the active tool and resets on route change. **Why**: one tool's exception used to take the whole suite down. **How to apply**: errors are logged to the console only — nothing is reported anywhere, by design (see `local-first.md`).
+
+## The source seam: documents carry a `sourceId` from day one (2026-08-31)
+
+**Decision.** `shared/sources/source.ts` holds the source model the Winnow bridge rests on (`docs/winnow-bridge.md` §3): a source is where projects, state and later scheduled work live, and `local` — this browser, its File System Access layer, its IndexedDB stores — is source #1 and today the only entry in `listSources()`. `ProjectDoc.sourceId` names it (v14; the migration files every older document under `'local'`, the only place it can be), and the studio gallery groups its cards by source **even while local is the only group**, with a `source: local · N projects` header.
+
+**Why**: the seam is the cheap half of multi-instance. Grouping an existing gallery and re-keying documents *after* a second source exists is a refactor across every consumer; carrying the id and the grouping from day one makes "add a Winnow instance" a data change. The maintainer accepted the limit that makes this tractable: **a project belongs to exactly one source**, media and documents co-located, so sync and merge never exist; crossing sources is the portable file, explicitly.
+
+**How to apply**:
+- `sourceId` is **bound-half**: it must never enter `.atelier.json` or its four places — a template mailed to someone comes from no source. `applyProjectFile` keeps the receiving document's own `sourceId` (tested).
+- `groupBySource` never hides a document whose source this session does not know — it gets its own group and the header says "not connected", following the say-why rule. `local` always leads.
+- `LOCAL_SOURCE.capabilities` answers honestly (`scheduling: false` — a tab cannot run reminders); a UI must read capabilities rather than offer a button that cannot work.
+- The media/document **adapter interfaces are deliberately not typed yet** — phase 1/3 will shape them against the real Winnow client; an interface nothing implements would only be a guess. Do not "complete" the contract speculatively.
