@@ -121,11 +121,17 @@ export default function App() {
       >
         {tool ? (
           <>
-            <AssetSidebar
-              tool={tool}
-              collapsed={collapsed}
-              onToggle={() => setCollapsed((c) => !c)}
-            />
+            {/* The library is guarded too, and separately: it is not part of
+                the tool, and a crash in it (or in a source's browser, which it
+                renders) used to blank the whole suite because only the tool
+                sat inside a boundary. Keyed by tool so switching clears it. */}
+            <ErrorBoundary resetKey={`library:${tool.id}`}>
+              <AssetSidebar
+                tool={tool}
+                collapsed={collapsed}
+                onToggle={() => setCollapsed((c) => !c)}
+              />
+            </ErrorBoundary>
             <div className="flex-1 min-w-0 flex flex-col min-h-0">
               {activeContent}
             </div>
