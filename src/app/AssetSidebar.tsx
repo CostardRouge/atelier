@@ -1,5 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { Tool } from './tools';
+import WinnowBrowser from './WinnowBrowser';
+import { navigate } from './use-hash-route';
+import {
+  listWinnowConnections,
+  subscribeWinnowConnections,
+} from '../shared/sources/winnow/store';
 import {
   useAssetLibrary,
   type MediaMeta,
@@ -70,6 +76,10 @@ export default function AssetSidebar({
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState('');
+  // Remote sources are the shell's business, not a tool's: the sidebar is
+  // where files enter, whichever source they come from.
+  const connections = useSyncExternalStore(subscribeWinnowConnections, listWinnowConnections);
+  const [browsing, setBrowsing] = useState(false);
 
   const usableSelectedCount = selectedUsableAssets(
     accepts,
@@ -197,8 +207,37 @@ export default function AssetSidebar({
               a folder
             </button>
           </p>
+          <p className="m-0 mt-1.5 text-[0.78rem]">
+            {connections.length ? (
+              <button
+                type="button"
+                className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent"
+                onClick={() => setBrowsing(true)}
+                title={`Browse ${connections[0].id} by day`}
+              >
+                or from {connections[0].id}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="p-0 border-0 bg-transparent text-faint cursor-pointer underline underline-offset-[3px] hover:text-ink"
+                onClick={() => navigate('/connect')}
+                title="Connect a Winnow instance as a source"
+              >
+                or connect a Winnow
+              </button>
+            )}
+          </p>
         </div>
       </div>
+
+      {browsing && connections[0] && (
+        <WinnowBrowser
+          connection={connections[0]}
+          onAdd={(files) => lib.addFiles(files)}
+          onClose={() => setBrowsing(false)}
+        />
+      )}
 
       {lib.assets.length > 0 && (
         <div className="px-3.5 pb-2 flex items-center gap-2">

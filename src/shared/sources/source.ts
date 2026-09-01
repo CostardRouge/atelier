@@ -58,9 +58,20 @@ export const LOCAL_SOURCE: SourceInfo = {
   capabilities: { media: true, documents: true, scheduling: false },
 };
 
-/** Every source this session knows. One entry today, by design. */
+/**
+ * Remote sources registered by their own store (`winnow/store.ts` mirrors the
+ * connections here). This module stays pure and storage-free: it holds the
+ * list, it never reads it from anywhere.
+ */
+let remote: SourceInfo[] = [];
+
+export function setRemoteSources(sources: readonly SourceInfo[]): void {
+  remote = sources.filter((s) => s.id !== LOCAL_SOURCE.id);
+}
+
+/** Every source this session knows: local first, then what was connected. */
 export function listSources(): SourceInfo[] {
-  return [LOCAL_SOURCE];
+  return [LOCAL_SOURCE, ...remote];
 }
 
 export function sourceById(id: string): SourceInfo | null {

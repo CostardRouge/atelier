@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import AssetSidebar from './AssetSidebar';
+import ConnectScreen from './ConnectScreen';
 import ErrorBoundary from './ErrorBoundary';
 import Home from './Home';
 import { REPO_URL } from './site';
@@ -17,9 +18,13 @@ const COLLAPSE_KEY = 'atelier.library.collapsed';
  */
 export default function App() {
   const path = useHashRoute();
+  // `#/connect?instance=…` is not a tool: it is the one screen that lets a
+  // remote source into the app, and it belongs to the shell so no tool has to
+  // know about sources. The query rides in the hash, after the path.
+  const connect = path === '/connect' || path.startsWith('/connect?');
   // No matching tool → the home page. The wordmark always links back here, so
   // an empty or unknown hash lands on home with nothing to redirect.
-  const tool = toolForPath(path);
+  const tool = connect ? undefined : toolForPath(path);
   const Active = tool?.Component ?? Home;
 
   // The active view, guarded so a single tool's crash shows a recoverable
@@ -27,7 +32,7 @@ export default function App() {
   // another tool clears a prior error and mounts the next one fresh.
   const activeContent = (
     <ErrorBoundary resetKey={path}>
-      <Active />
+      {connect ? <ConnectScreen query={path.slice('/connect'.length + 1)} /> : <Active />}
     </ErrorBoundary>
   );
 

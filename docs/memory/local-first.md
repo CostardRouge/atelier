@@ -15,7 +15,9 @@ Read before adding anything that could touch the network, read files, or persist
 - **Google Fonts** (`fonts.googleapis.com` / `fonts.gstatic.com`, linked in `index.html`) — fetched on every page load, unconditionally. Not mentioned in the README's "one network exception" callout; self-hosting the three faces would make the offline claim literal. Undecided — see the open item in `MEMORY.md`.
 - **An OpenStreetMap map link** built by `exif/exif-format.ts` for a photo's GPS position — a plain `href`, opened only when the user clicks it.
 
-**How to apply**: adding a fourth is a product decision, not an implementation detail. Anything new must be opt-in, off by default, and stated plainly in the UI and the README.
+- **A connected Winnow instance** (`shared/sources/winnow/client.ts`, since 2026-09-01) — the media source the maintainer runs himself. Only ever the base URL the user confirmed on `#/connect`; nothing at boot; the session is Winnow's own cookie (same-site), no credential stored here. Requests: capabilities on connect, a calendar per month, a day's rows, then the bytes of what the user picked. See `architecture.md`, «Remote sources».
+
+**How to apply**: adding another is a product decision, not an implementation detail. Anything new must be opt-in, off by default, and stated plainly in the UI and the README. The promise this preserves is now "your media never leaves machines you own": a Winnow is the user's own server, and Atelier never talks to one it was not given.
 
 ## Three file-access paths, one internal shape (2026-08-20)
 
