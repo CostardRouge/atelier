@@ -618,12 +618,13 @@ to add your own — just drop a `.cube` in, no code to edit.
 
 ### Online
 
-Deployed via GitHub Pages at `https://costardrouge.github.io/atelier/`.
+Deployed via GitHub Pages at [`atelier.steeve.website`](https://atelier.steeve.website/).
 
 > Base path: `vite.config.ts` derives the Pages base path from the repository
 > name (via `GITHUB_REPOSITORY` in CI, falling back to `atelier` locally), so a
-> repo rename can't 404 the assets. Override with the `BASE_PATH` env var — e.g.
-> `/` when serving from a custom domain.
+> repo rename can't 404 the assets. The deploy workflow overrides it with
+> `BASE_PATH=/` because the custom domain serves the site from the root — the
+> domain itself lives in the repository's Pages settings, not in a `CNAME` file.
 
 ### Local development
 
