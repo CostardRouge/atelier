@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { WinnowClient, type WinnowAssetRow } from './client';
 import { identityFor, materialize, plannedFiles } from './materialize';
-import { hashedMediaRef, knownIdentity, mediaHash } from '../../projects/media-identity';
+import {
+  hashedMediaRef,
+  knownIdentity,
+  mediaHash,
+  mediaOrigin,
+} from '../../projects/media-identity';
 
 const BASE = 'https://winnow.example';
 
@@ -88,7 +93,10 @@ describe('materialize', () => {
     expect(seen).toEqual(['1/2 DJI_0001.mp4', '2/2 DJI_0001.SRT']);
 
     // The proxy's own bytes are nobody's identity: the ref carries Winnow's.
-    expect(knownIdentity(files[0])).toEqual({ assetId: 'winnow.example/42', hash: 'abc123' });
+    expect(knownIdentity(files[0])).toMatchObject({
+      assetId: 'winnow.example/42',
+      hash: 'abc123',
+    });
     expect(await mediaHash(files[0])).toBe('abc123');
     expect(await hashedMediaRef(files[0])).toMatchObject({
       name: 'DJI_0001.mp4',
@@ -102,5 +110,47 @@ describe('materialize', () => {
     await expect(
       materialize(c, 'winnow.example', row({ sidecars: [] }), { fidelity: 'proxy' }),
     ).rejects.toMatchObject({ kind: 'protocol', status: 404 });
+  });
+});
+
+describe('the origin a fetched file carries', () => {
+  it('records the CAPTURE\'s size, not the proxy\'s, so an export can size a variant', async () => {
+    const c = clientServing({ '/api/assets/42/proxy': 10, '/api/sidecars/7/download': 3 });
+    const [clip] = await materialize(c, 'winnow.example', row(), { fidelity: 'proxy' });
+    expect(mediaOrigin(clip)).toMatchObject({
+      sourceId: 'winnow.example',
+      fidelity: 'proxy',
+      width: 3840,
+      height: 2160,
+    });
+  });
+
+  it('rides the clip only — "the original" of a .srt would be the video', async () => {
+    const c = clientServing({ '/api/assets/42/proxy': 10, '/api/sidecars/7/download': 3 });
+    const [, log] = await materialize(c, 'winnow.example', row(), { fidelity: 'proxy' });
+    expect(log.name).toBe('DJI_0001.SRT');
+    expect(mediaOrigin(log)).toBeNull();
+  });
+
+  it('offers no fetch when the file already IS the original', async () => {
+    const c = clientServing({ '/api/assets/42/download': 20 });
+    const [clip] = await materialize(c, 'winnow.example', row({ sidecars: [] }), {
+      fidelity: 'original',
+    });
+    const origin = mediaOrigin(clip);
+    expect(origin?.fidelity).toBe('original');
+    expect(origin?.fetchOriginal).toBeUndefined();
+  });
+
+  it('fetches the capture under its real filename when asked', async () => {
+    const c = clientServing({ '/api/assets/42/proxy': 10, '/api/assets/42/download': 500 });
+    const [clip] = await materialize(c, 'winnow.example', row({ sidecars: [] }), {
+      fidelity: 'proxy',
+    });
+    const original = await mediaOrigin(clip)?.fetchOriginal?.();
+    expect(original?.name).toBe('DJI_0001.MP4');
+    expect(original?.size).toBe(500);
+    // Same capture time as the proxy — it is the same shot.
+    expect(original?.lastModified).toBe(clip.lastModified);
   });
 });

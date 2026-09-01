@@ -6,6 +6,7 @@ import {
   variantOutputSize,
   variantSuffix,
   type ExportVariant,
+  resolutionShortfall,
 } from './export-variants';
 
 const variant = (over: Partial<ExportVariant> = {}): ExportVariant => ({
@@ -116,5 +117,49 @@ describe('defaults', () => {
     expect(v.resolution).toBe('source');
     expect(v.frameRate).toBe('source');
     expect(v.overlays).toBe(true);
+  });
+});
+
+describe('resolutionShortfall', () => {
+  const v = (over = {}) => ({
+    id: 'v',
+    aspectId: 'source',
+    resolution: 'source',
+    frameRate: 'source',
+    speed: 1,
+    overlays: true,
+    ...over,
+  }) as Parameters<typeof resolutionShortfall>[0];
+
+  it('says nothing when the variant gets the size it asked for', () => {
+    // A 1920x1080 capture cropped to 9:16 at 1080 delivers 1080x1920.
+    expect(resolutionShortfall(v({ aspectId: '9:16', resolution: 1080 }), 1920, 1080)).toBeNull();
+  });
+
+  it('reports the gap when the source cannot fill the asked-for frame', () => {
+    // The case that matters: editing on a 720p proxy, asking for 1080.
+    expect(resolutionShortfall(v({ aspectId: '9:16', resolution: 1080 }), 1280, 720)).toEqual({
+      asked: 1080,
+      delivered: 720,
+    });
+  });
+
+  it('reports it at the source frame too, not only when reframing', () => {
+    expect(resolutionShortfall(v({ resolution: 1080 }), 1280, 720)).toEqual({
+      asked: 1080,
+      delivered: 720,
+    });
+  });
+
+  it('asking for less than the source has is not a shortfall', () => {
+    expect(resolutionShortfall(v({ resolution: 720 }), 1920, 1080)).toBeNull();
+  });
+
+  it('has nothing to say about a source-resolution variant', () => {
+    expect(resolutionShortfall(v({ aspectId: '9:16' }), 1280, 720)).toBeNull();
+  });
+
+  it('says nothing before the source has produced its dimensions', () => {
+    expect(resolutionShortfall(v({ resolution: 1080 }), 0, 0)).toBeNull();
   });
 });

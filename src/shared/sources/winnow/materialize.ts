@@ -30,7 +30,11 @@
  * of originals is the user's explicit choice.
  */
 
-import { registerMediaIdentity } from '../../projects/media-identity';
+import {
+  registerMediaIdentity,
+  type KnownIdentity,
+  type MediaOrigin,
+} from '../../projects/media-identity';
 import type { WinnowAssetRow, WinnowClient } from './client';
 
 export type Fidelity = 'proxy' | 'original';
@@ -67,7 +71,7 @@ export function plannedFiles(
 }
 
 /** The identity every file of `row` is vouched for with. */
-export function identityFor(sourceId: string, row: WinnowAssetRow) {
+export function identityFor(sourceId: string, row: WinnowAssetRow): KnownIdentity {
   return {
     assetId: `${sourceId}/${row.id}`,
     ...(row.content_hash ? { hash: row.content_hash } : {}),
@@ -85,12 +89,25 @@ export async function materialize(
   // is what a folder's file would have had, and what Road Trip reads.
   const lastModified = row.captured_at ? Date.parse(row.captured_at) || Date.now() : Date.now();
   const identity = identityFor(sourceId, row);
+  // Where this came from, so the export can say what it is holding and fetch
+  // the capture when it is time to deliver. Only on the MAIN file: fetching
+  // "the original" of a `.srt` would hand back the video.
+  const origin: MediaOrigin = {
+    sourceId,
+    fidelity: options.fidelity,
+    width: row.width,
+    height: row.height,
+  };
+  if (options.fidelity === 'proxy') {
+    origin.fetchOriginal = () =>
+      client.fetchFile(client.originalUrl(row.id), row.filename, '', lastModified);
+  }
   const files: File[] = [];
   for (const [i, item] of plan.entries()) {
     const file = await client.fetchFile(item.url, item.name, item.type, lastModified);
     // The clip and its log share one identity: they are one asset in Winnow
     // as in the library, and the hash is the clip's.
-    registerMediaIdentity(file, identity);
+    registerMediaIdentity(file, i === 0 ? { ...identity, origin } : identity);
     files.push(file);
     options.onFile?.(file, i + 1, plan.length);
   }
