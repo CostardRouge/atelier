@@ -102,9 +102,9 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
     setRows(null);
     setChecked(new Set());
     client
-      .assets({ dateFrom: day, dateTo: day })
-      .then((page) => {
-        if (!cancelled) setRows(page.assets);
+      .allAssets({ dateFrom: day, dateTo: day })
+      .then((all) => {
+        if (!cancelled) setRows(all);
       })
       .catch((err: unknown) => {
         if (!cancelled) setProblem(explain(err, client));
@@ -158,7 +158,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-[56rem] max-h-[90vh] flex flex-col gap-4 bg-surface border border-line rounded-paper-lg shadow-paper p-6 overflow-hidden">
+      <div className="w-full max-w-[56rem] h-[min(90vh,52rem)] flex flex-col gap-4 bg-surface border border-line rounded-paper-lg shadow-paper p-6 overflow-hidden">
         <div className="flex items-baseline gap-3 flex-wrap">
           <h2 className="m-0 font-serif text-[1.4rem]">From {connection.id}</h2>
           <span className="text-[0.78rem] text-muted">
@@ -188,7 +188,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
           </p>
         )}
 
-        <div className="grid grid-cols-[18rem_1fr] gap-6 min-h-0 flex-1 max-[820px]:grid-cols-1">
+        <div className="grid grid-cols-[18rem_1fr] gap-6 min-h-0 flex-1 overflow-hidden max-[820px]:grid-cols-1">
           {/* --- the month ------------------------------------------------ */}
           <div className="flex flex-col gap-3 min-h-0">
             <div className="flex items-center gap-2">
@@ -235,7 +235,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
           </div>
 
           {/* --- the day -------------------------------------------------- */}
-          <div className="flex flex-col gap-3 min-h-0">
+          <div className="flex flex-col gap-3 min-h-0 overflow-hidden">
             {!day ? (
               <p className="m-0 text-[0.84rem] text-muted">Choose a day on the left.</p>
             ) : rows === null ? (
@@ -254,7 +254,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
                     {checked.size === rows.length ? 'none' : 'all'}
                   </button>
                 </div>
-                <div className="flex-1 min-h-0 overflow-auto grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-2 content-start">
+                <div className="flex-1 min-h-0 overflow-auto grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] auto-rows-max gap-2 content-start pr-1">
                   {rows.map((r) => {
                     const on = checked.has(r.id);
                     return (
@@ -277,7 +277,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
                         />
                         {/* The thumbnail is served with the session cookie, so
                             the browser must be told to send it cross-origin. */}
-                        <img src={client.thumbUrl(r.id)} crossOrigin="use-credentials" alt="" className="block w-full aspect-[4/3] object-cover" loading="lazy" />
+                        <img src={client.thumbUrl(r.id)} crossOrigin="use-credentials" alt="" className="block w-full h-[90px] object-cover" loading="lazy" />
                         <span className="absolute bottom-0 inset-x-0 px-1.5 py-1 font-mono text-[0.55rem] text-paper bg-[rgba(20,18,15,0.62)] truncate">
                           {r.filename}
                           {r.media_type === 'video' && ' ▶'}

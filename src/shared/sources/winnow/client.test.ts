@@ -83,6 +83,26 @@ describe('WinnowClient requests', () => {
     });
   });
 
+  it('follows next_cursor so a 300-media day is not shown two-thirds full', async () => {
+    const pages: Record<string, unknown> = {
+      '': { assets: [{ id: 1 }, { id: 2 }], next_cursor: 'p2' },
+      p2: { assets: [{ id: 3 }], next_cursor: null },
+    };
+    const fetchImpl = vi.fn<FetchLike>(async (url) =>
+      ok(pages[new URL(url).searchParams.get('cursor') ?? '']),
+    );
+    const rows = await client(fetchImpl).allAssets({ dateFrom: '2025-07-09', dateTo: '2025-07-09' });
+    expect(rows.map((r) => r.id)).toEqual([1, 2, 3]);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops at the cap even when the server keeps offering a cursor', async () => {
+    const fetchImpl = vi.fn<FetchLike>(async () => ok({ assets: [{ id: 1 }, { id: 2 }], next_cursor: 'more' }));
+    const rows = await client(fetchImpl).allAssets({}, 3);
+    expect(rows).toHaveLength(4);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it('maps 401 to unauthenticated — the user must sign in on the instance', async () => {
     const c = client(async () => new Response('', { status: 401 }));
     await expect(c.capabilities()).rejects.toMatchObject({ kind: 'unauthenticated', status: 401 });

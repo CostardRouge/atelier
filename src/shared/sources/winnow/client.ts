@@ -267,6 +267,23 @@ export class WinnowClient {
   }
 
   /**
+   * Every row of a query, following `next_cursor` until the page is short.
+   * A busy day is 300 media and one page is 200: stopping at the first page
+   * would silently show a day two-thirds full. `cap` bounds a runaway query —
+   * nobody adds 2 000 pictures to a library by hand.
+   */
+  async allAssets(query: AssetQuery, cap = 2000): Promise<WinnowAssetRow[]> {
+    const rows: WinnowAssetRow[] = [];
+    let cursor: string | null = null;
+    do {
+      const page: AssetPage = await this.assets({ ...query, cursor });
+      rows.push(...page.assets);
+      cursor = page.next_cursor;
+    } while (cursor && rows.length < cap);
+    return rows;
+  }
+
+  /**
    * The bytes at `url`, as a `File` the rest of the suite can hold like any
    * other. The whole body is read: this is the export/materialise path, not a
    * streaming preview (see `materialize.ts` for why that is the honest phase-1
