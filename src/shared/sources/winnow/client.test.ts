@@ -83,6 +83,26 @@ describe('WinnowClient requests', () => {
     });
   });
 
+  it('carries the same filters to the calendar, the day and the sessions', async () => {
+    const fetchImpl = vi.fn<FetchLike>(async () => ok({ assets: [], next_cursor: null, sessions: [] }));
+    const c = client(fetchImpl);
+    const filter = { mediaType: 'video' as const, ext: 'mp4', device: 'DJI Mini 4 Pro' };
+    await c.calendar('2025-07-01', '2025-07-31', filter);
+    await c.assets({ sessionId: 9, ...filter });
+    await c.sessions(filter);
+    const params = fetchImpl.mock.calls.map((call) => Object.fromEntries(new URL(call[0]).searchParams));
+    for (const p of params) {
+      expect(p).toMatchObject({ media_type: 'video', ext: 'mp4', device: 'DJI Mini 4 Pro' });
+    }
+    expect(params[1].session_id).toBe('9');
+    expect(new URL(fetchImpl.mock.calls[2][0]).pathname).toBe('/api/sessions');
+  });
+
+  it('reads the facet slice it offers, tolerating a missing key', async () => {
+    const c = client(async () => ok({ extensions: [{ value: 'hif', count: 3 }] }));
+    expect(await c.facets()).toEqual({ media_types: [], extensions: [{ value: 'hif', count: 3 }], devices: [] });
+  });
+
   it('follows next_cursor so a 300-media day is not shown two-thirds full', async () => {
     const pages: Record<string, unknown> = {
       '': { assets: [{ id: 1 }, { id: 2 }], next_cursor: 'p2' },

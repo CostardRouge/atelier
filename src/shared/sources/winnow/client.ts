@@ -97,12 +97,59 @@ export interface WinnowCapabilities {
   viewer: { id: number; username: string; role: 'admin' | 'editor' | 'viewer' } | null;
 }
 
-export interface AssetQuery {
+/**
+ * The narrowing every listing honours — the calendar, a day, the sessions.
+ * Winnow applies the same cumulative filters to all three, so a choice made
+ * once narrows the whole browser rather than one pane of it.
+ */
+export interface FilterQuery {
+  mediaType?: 'photo' | 'video';
+  /** Lowercase, no dot — as Winnow stores it (`hif`, `mp4`, `arw`). */
+  ext?: string;
+  /** `make model`, as Winnow derives it from EXIF ("DJI Mini 4 Pro"). */
+  device?: string;
+}
+
+export interface AssetQuery extends FilterQuery {
   dateFrom?: string;
   dateTo?: string;
-  mediaType?: 'photo' | 'video';
+  /** A Winnow shoot session — one folder, in practice. */
+  sessionId?: number;
   cursor?: string | null;
   limit?: number;
+}
+
+export interface ValueCount {
+  value: string | number;
+  count: number;
+}
+
+/** The slice of `/api/facets` the browser offers as filters. */
+export interface WinnowFacets {
+  media_types: ValueCount[];
+  extensions: ValueCount[];
+  devices: ValueCount[];
+}
+
+/**
+ * A Winnow session: one shoot folder as it was ingested, with its span. The
+ * closest thing the instance has to "a folder" — and what a photographer
+ * means by one.
+ */
+export interface WinnowSession {
+  id: number;
+  name: string;
+  source_path: string;
+  device_hint: string | null;
+  captured_at_min: string | null;
+  captured_at_max: string | null;
+  asset_count: number;
+  status: 'empty' | 'to_sort' | 'done';
+  root_kind: string;
+}
+
+function filterParams(f: FilterQuery): Record<string, string | undefined> {
+  return { media_type: f.mediaType, ext: f.ext, device: f.device };
 }
 
 export interface AssetPage {
@@ -243,8 +290,32 @@ export class WinnowClient {
    * Per-day counts + cover in `[from, to]`, one logical media per RAW+JPEG
    * pair — the same collapse the day list uses, so the numbers agree.
    */
-  calendar(from: string, to: string): Promise<WinnowCalendar> {
-    return this.json(this.url('/api/assets/calendar', { from, to, collapse: 1 }));
+  calendar(from: string, to: string, filter: FilterQuery = {}): Promise<WinnowCalendar> {
+    return this.json(
+      this.url('/api/assets/calendar', { from, to, collapse: 1, ...filterParams(filter) }),
+    );
+  }
+
+  /** Values + counts for the filter pickers. Library-wide, one request. */
+  async facets(): Promise<WinnowFacets> {
+    const raw = await this.json<Partial<WinnowFacets>>(this.url('/api/facets'));
+    return {
+      media_types: raw.media_types ?? [],
+      extensions: raw.extensions ?? [],
+      devices: raw.devices ?? [],
+    };
+  }
+
+  /**
+   * The shoot sessions, newest capture first. Winnow keeps a session when at
+   * least one of its assets matches the filters, so the list narrows with the
+   * same choices as the calendar. Ignored folders stay hidden, as in Winnow.
+   */
+  async sessions(filter: FilterQuery = {}): Promise<WinnowSession[]> {
+    const raw = await this.json<{ sessions?: WinnowSession[] }>(
+      this.url('/api/sessions', { sort: 'captured', sort_dir: 'desc', ...filterParams(filter) }),
+    );
+    return raw.sessions ?? [];
   }
 
   /**
@@ -257,7 +328,8 @@ export class WinnowClient {
       this.url('/api/assets', {
         date_from: query.dateFrom,
         date_to: query.dateTo,
-        media_type: query.mediaType,
+        session_id: query.sessionId,
+        ...filterParams(query),
         cursor: query.cursor,
         limit: query.limit ?? 200,
         collapse: 1,

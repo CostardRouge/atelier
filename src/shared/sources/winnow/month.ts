@@ -48,3 +48,35 @@ export function monthLabel(key: string, locale?: string): string {
     timeZone: 'UTC',
   });
 }
+
+export interface YearOptions {
+  year: string;
+  /** Oldest first inside a year — a picker reads January to December. */
+  months: { key: string; label: string }[];
+}
+
+/**
+ * Every month between two dates, grouped by year for a `<select>` with one
+ * `<optgroup>` per year — newest year first, so the recent trip is at the top.
+ * Empty when the bounds are inverted.
+ */
+export function monthOptions(minIso: string, maxIso: string, locale?: string): YearOptions[] {
+  const first = monthKeyOf(minIso);
+  const last = monthKeyOf(maxIso);
+  if (first > last) return [];
+  const byYear = new Map<string, { key: string; label: string }[]>();
+  for (let key = first; key <= last; key = shiftMonth(key, 1)) {
+    const year = key.slice(0, 4);
+    const [, m] = key.split('-').map(Number);
+    const label = new Date(Date.UTC(Number(year), m - 1, 1)).toLocaleDateString(locale, {
+      month: 'long',
+      timeZone: 'UTC',
+    });
+    const bucket = byYear.get(year) ?? [];
+    bucket.push({ key, label });
+    byYear.set(year, bucket);
+  }
+  return [...byYear.entries()]
+    .sort(([a], [b]) => (a < b ? 1 : -1))
+    .map(([year, months]) => ({ year, months }));
+}

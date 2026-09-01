@@ -3,11 +3,20 @@ import { navigate } from './use-hash-route';
 import {
   WinnowClient,
   WinnowError,
+  type FilterQuery,
   type WinnowAssetRow,
   type WinnowCalendar,
+  type WinnowFacets,
+  type WinnowSession,
 } from '../shared/sources/winnow/client';
 import { materialize, type Fidelity } from '../shared/sources/winnow/materialize';
-import { monthKeyOf, monthLabel, monthSpan, shiftMonth } from '../shared/sources/winnow/month';
+import {
+  monthKeyOf,
+  monthLabel,
+  monthOptions,
+  monthSpan,
+  shiftMonth,
+} from '../shared/sources/winnow/month';
 import { type WinnowConnection } from '../shared/sources/winnow/store';
 import { formatBytes } from '../shared/lib/format';
 
@@ -17,9 +26,14 @@ interface WinnowBrowserProps {
   onClose: () => void;
 }
 
+/** How the library is walked: by the day it was shot, or by the folder it was ingested from. */
+type View = 'day' | 'session';
+
 const legend = 'font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted';
 const pill =
   'px-3 py-1 inline-flex items-center border rounded-full cursor-pointer text-[0.78rem] transition-colors';
+const select =
+  'font-sans text-[0.78rem] px-2.5 py-1 border border-line rounded-full bg-paper text-ink focus:outline-none focus:border-accent max-w-[14rem]';
 
 /** One line a person can act on, for whatever the client threw. */
 function explain(err: unknown, client: WinnowClient): { text: string; login?: string } {
@@ -29,12 +43,19 @@ function explain(err: unknown, client: WinnowClient): { text: string; login?: st
   return { text: err instanceof Error ? err.message : String(err) };
 }
 
+function shortDate(iso: string | null): string {
+  return iso ? iso.slice(0, 10) : '—';
+}
+
 /**
- * Browse a connected Winnow by DAY and pull pictures into the library.
+ * Browse a connected Winnow and pull pictures into the library.
  *
- * Day-first because Road Trip is day-keyed: "everything from 9 July" is the
- * question the grid asks, and `/api/assets/calendar` answers it directly with
- * a count and a cover per day. A month is one request; a day is one more.
+ * Two ways in. **By day**, because Road Trip is day-keyed — "everything from
+ * 9 July" is the question the grid asks, and `/api/assets/calendar` answers it
+ * with a count and a cover per day. **By session**, because a Winnow session
+ * is one shoot folder as it was ingested — what a photographer means by "that
+ * folder". One row of filters (type, extension, device) narrows both, and the
+ * calendar counts with them: Winnow applies the same filters everywhere.
  *
  * What lands in the library is a fetched FILE (see `materialize.ts`): the
  * proxy by default — fast, and the codec shape the pipeline wants — or the
@@ -46,9 +67,17 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
     [connection.baseUrl, connection.auth],
   );
 
+  const [view, setView] = useState<View>('day');
+  const [filter, setFilter] = useState<FilterQuery>({});
+  const [facets, setFacets] = useState<WinnowFacets | null>(null);
+
   const [month, setMonth] = useState<string>(() => monthKeyOf(new Date().toISOString()));
   const [calendar, setCalendar] = useState<WinnowCalendar | null>(null);
   const [day, setDay] = useState<string | null>(null);
+
+  const [sessions, setSessions] = useState<WinnowSession[] | null>(null);
+  const [session, setSession] = useState<WinnowSession | null>(null);
+
   const [rows, setRows] = useState<WinnowAssetRow[] | null>(null);
   const [checked, setChecked] = useState<ReadonlySet<number>>(() => new Set());
   const [fidelity, setFidelity] = useState<Fidelity>('proxy');
@@ -64,15 +93,33 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // The month's calendar. On first answer, jump to the newest month that has
-  // media — a fresh view opening on an empty month reads as a broken source.
+  // The filter values, once: the pickers offer what the library actually holds.
   useEffect(() => {
+    let cancelled = false;
+    client
+      .facets()
+      .then((f) => {
+        if (!cancelled) setFacets(f);
+      })
+      .catch(() => {
+        /* the pickers just stay empty — filtering is a convenience */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
+
+  // The month's calendar, under the current filters. On first answer, jump
+  // to the newest month that has media — a fresh view opening on an empty
+  // month reads as a broken source.
+  useEffect(() => {
+    if (view !== 'day') return;
     let cancelled = false;
     const span = monthSpan(month);
     setCalendar(null);
     setProblem(null);
     client
-      .calendar(span.from, span.to)
+      .calendar(span.from, span.to, filter)
       .then((cal) => {
         if (cancelled) return;
         if (!landed) {
@@ -90,19 +137,45 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
     return () => {
       cancelled = true;
     };
-  }, [client, month, landed]);
+  }, [client, view, month, filter, landed]);
 
-  // The chosen day's rows, oldest first.
+  // The sessions, under the current filters — a session stays listed while at
+  // least one of its assets matches.
   useEffect(() => {
-    if (!day) {
+    if (view !== 'session') return;
+    let cancelled = false;
+    setSessions(null);
+    setProblem(null);
+    client
+      .sessions(filter)
+      .then((list) => {
+        if (!cancelled) setSessions(list);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setProblem(explain(err, client));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, view, filter]);
+
+  // The rows of whatever is chosen — a day or a session — oldest first, every
+  // page. A filter change re-reads them under the new narrowing.
+  const chosenDay = view === 'day' ? day : null;
+  const chosenSession = view === 'session' ? session : null;
+  useEffect(() => {
+    if (!chosenDay && !chosenSession) {
       setRows(null);
       return;
     }
     let cancelled = false;
     setRows(null);
     setChecked(new Set());
+    const query = chosenDay
+      ? { dateFrom: chosenDay, dateTo: chosenDay, ...filter }
+      : { sessionId: chosenSession?.id, ...filter };
     client
-      .allAssets({ dateFrom: day, dateTo: day })
+      .allAssets(query)
       .then((all) => {
         if (!cancelled) setRows(all);
       })
@@ -112,19 +185,37 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
     return () => {
       cancelled = true;
     };
-  }, [client, day]);
+  }, [client, chosenDay, chosenSession, filter]);
 
   const span = monthSpan(month);
   const counts = new Map((calendar?.days ?? []).map((d) => [d.date, d.count]));
   const bounds = calendar?.bounds ?? null;
   const canPrev = !bounds || month > monthKeyOf(bounds.min);
   const canNext = !bounds || month < monthKeyOf(bounds.max);
+  // The picker spans what the library holds; the month in view is always
+  // offered even when the filters have emptied it, so the select never shows
+  // a value it does not list.
+  const years = useMemo(() => {
+    const min = bounds ? (bounds.min < `${month}-01` ? bounds.min : `${month}-01`) : `${month}-01`;
+    const max = bounds ? (bounds.max > span.to ? bounds.max : span.to) : span.to;
+    return monthOptions(min, max);
+  }, [bounds, month, span.to]);
 
   const picked = (rows ?? []).filter((r) => checked.has(r.id));
   const pickedBytes = picked.reduce(
     (sum, r) => sum + (fidelity === 'original' ? (r.file_size ?? 0) : 0),
     0,
   );
+  const heading = chosenDay ?? chosenSession?.name ?? null;
+
+  function setFilterKey<K extends keyof FilterQuery>(key: K, value: string) {
+    setFilter((f) => {
+      const next = { ...f };
+      if (value) next[key] = value as FilterQuery[K];
+      else delete next[key];
+      return next;
+    });
+  }
 
   async function add() {
     if (!picked.length) return;
@@ -133,9 +224,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
     try {
       for (const [i, row] of picked.entries()) {
         setProgress(`${i + 1}/${picked.length} · ${row.filename}`);
-        files.push(
-          ...(await materialize(client, connection.id, row, { fidelity })),
-        );
+        files.push(...(await materialize(client, connection.id, row, { fidelity })));
       }
       onAdd(files);
       onClose();
@@ -147,6 +236,17 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
       setProgress(null);
     }
   }
+
+  const viewTab = (v: View, label: string) => (
+    <button
+      type="button"
+      onClick={() => setView(v)}
+      aria-pressed={view === v}
+      className={`${pill} ${view === v ? 'bg-ink text-paper border-ink' : 'bg-paper border-line text-ink-soft hover:border-line-strong'}`}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <div
@@ -162,7 +262,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
         <div className="flex items-baseline gap-3 flex-wrap">
           <h2 className="m-0 font-serif text-[1.4rem]">From {connection.id}</h2>
           <span className="text-[0.78rem] text-muted">
-            pick a day, then the pictures — they arrive as files in the library.
+            pick a day or a folder, then the pictures — they arrive as files in the library.
           </span>
           <span className="flex-1" />
           <button
@@ -177,6 +277,61 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
           </button>
         </div>
 
+        {/* --- view + filters: one row that narrows everything below ------ */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {viewTab('day', 'by day')}
+          {viewTab('session', 'by folder')}
+          <span className="w-px h-5 bg-line mx-1" aria-hidden="true" />
+          <select
+            value={filter.mediaType ?? ''}
+            onChange={(e) => setFilterKey('mediaType', e.target.value)}
+            className={select}
+            aria-label="Media type"
+          >
+            <option value="">photos & videos</option>
+            {(facets?.media_types ?? []).map((v) => (
+              <option key={String(v.value)} value={String(v.value)}>
+                {v.value === 'video' ? 'videos' : 'photos'} · {v.count}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filter.ext ?? ''}
+            onChange={(e) => setFilterKey('ext', e.target.value)}
+            className={select}
+            aria-label="Extension"
+          >
+            <option value="">any extension</option>
+            {(facets?.extensions ?? []).map((v) => (
+              <option key={String(v.value)} value={String(v.value)}>
+                .{v.value} · {v.count}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filter.device ?? ''}
+            onChange={(e) => setFilterKey('device', e.target.value)}
+            className={select}
+            aria-label="Device"
+          >
+            <option value="">any device</option>
+            {(facets?.devices ?? []).map((v) => (
+              <option key={String(v.value)} value={String(v.value)}>
+                {v.value} · {v.count}
+              </option>
+            ))}
+          </select>
+          {Object.keys(filter).length > 0 && (
+            <button
+              type="button"
+              onClick={() => setFilter({})}
+              className="p-0 border-0 bg-transparent text-[0.74rem] text-muted cursor-pointer underline underline-offset-[3px] hover:text-ink"
+            >
+              clear
+            </button>
+          )}
+        </div>
+
         {problem && (
           <p className="m-0 text-[0.84rem] text-[#9a3a23]" role="alert">
             {problem.text}{' '}
@@ -189,61 +344,114 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
         )}
 
         <div className="grid grid-cols-[18rem_1fr] gap-6 min-h-0 flex-1 overflow-hidden max-[820px]:grid-cols-1">
-          {/* --- the month ------------------------------------------------ */}
-          <div className="flex flex-col gap-3 min-h-0">
-            <div className="flex items-center gap-2">
-              <button type="button" disabled={!canPrev} onClick={() => setMonth(shiftMonth(month, -1))} className={`${pill} border-line bg-paper text-ink-soft disabled:opacity-30`} aria-label="Previous month">‹</button>
-              <span className="flex-1 text-center font-serif text-[1.05rem]">{monthLabel(month)}</span>
-              <button type="button" disabled={!canNext} onClick={() => setMonth(shiftMonth(month, 1))} className={`${pill} border-line bg-paper text-ink-soft disabled:opacity-30`} aria-label="Next month">›</button>
+          {/* --- left: the month, or the folders ---------------------------- */}
+          {view === 'day' ? (
+            <div className="flex flex-col gap-3 min-h-0">
+              <div className="flex items-center gap-2">
+                <button type="button" disabled={!canPrev} onClick={() => setMonth(shiftMonth(month, -1))} className={`${pill} border-line bg-paper text-ink-soft disabled:opacity-30`} aria-label="Previous month">‹</button>
+                {/* One picker, years as groups: a library spanning fifteen
+                    years is two clicks away, not a hundred arrow presses. */}
+                <select
+                  value={month}
+                  onChange={(e) => setMonth(e.target.value)}
+                  className={`${select} flex-1 text-center font-serif text-[1rem] rounded-paper`}
+                  aria-label="Month"
+                >
+                  {years.map((y) => (
+                    <optgroup key={y.year} label={y.year}>
+                      {y.months.map((m) => (
+                        <option key={m.key} value={m.key}>
+                          {m.label} {y.year}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                <button type="button" disabled={!canNext} onClick={() => setMonth(shiftMonth(month, 1))} className={`${pill} border-line bg-paper text-ink-soft disabled:opacity-30`} aria-label="Next month">›</button>
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+                  <span key={i} className="text-center font-mono text-[0.58rem] text-faint">{d}</span>
+                ))}
+                {Array.from({ length: span.leading }, (_, i) => <span key={`pad-${i}`} />)}
+                {span.days.map((iso) => {
+                  const n = counts.get(iso) ?? 0;
+                  const active = day === iso;
+                  return (
+                    <button
+                      key={iso}
+                      type="button"
+                      disabled={!n}
+                      onClick={() => setDay(iso)}
+                      title={n ? `${iso} · ${n} media` : iso}
+                      className={`aspect-square rounded-md border text-[0.7rem] tabular-nums transition-colors ${
+                        active
+                          ? 'bg-ink text-paper border-ink'
+                          : n
+                            ? 'bg-accent-wash border-[#eccabf] text-ink cursor-pointer hover:border-accent'
+                            : 'bg-paper border-line text-faint'
+                      }`}
+                    >
+                      {Number(iso.slice(-2))}
+                      {n > 0 && <span className="block font-mono text-[0.52rem] leading-none opacity-70">{n}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="m-0 font-mono text-[0.62rem] text-muted">
+                {calendar === null && !problem
+                  ? 'asking…'
+                  : bounds
+                    ? `${monthLabel(month)} · media from ${bounds.min} to ${bounds.max}`
+                    : 'nothing dated matches these filters'}
+              </p>
             </div>
-            <div className="grid grid-cols-7 gap-1">
-              {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-                <span key={i} className="text-center font-mono text-[0.58rem] text-faint">{d}</span>
-              ))}
-              {Array.from({ length: span.leading }, (_, i) => <span key={`pad-${i}`} />)}
-              {span.days.map((iso) => {
-                const n = counts.get(iso) ?? 0;
-                const active = day === iso;
-                return (
-                  <button
-                    key={iso}
-                    type="button"
-                    disabled={!n}
-                    onClick={() => setDay(iso)}
-                    title={n ? `${iso} · ${n} media` : iso}
-                    className={`aspect-square rounded-md border text-[0.7rem] tabular-nums transition-colors ${
-                      active
-                        ? 'bg-ink text-paper border-ink'
-                        : n
-                          ? 'bg-accent-wash border-[#eccabf] text-ink cursor-pointer hover:border-accent'
-                          : 'bg-paper border-line text-faint'
-                    }`}
-                  >
-                    {Number(iso.slice(-2))}
-                    {n > 0 && <span className="block font-mono text-[0.52rem] leading-none opacity-70">{n}</span>}
-                  </button>
-                );
-              })}
+          ) : (
+            <div className="flex flex-col gap-2 min-h-0 overflow-auto pr-1">
+              {sessions === null ? (
+                <p className="m-0 font-mono text-[0.72rem] text-muted">{problem ? '' : 'asking…'}</p>
+              ) : sessions.length === 0 ? (
+                <p className="m-0 text-[0.8rem] text-muted">No folder matches these filters.</p>
+              ) : (
+                sessions.map((s) => {
+                  const active = session?.id === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setSession(s)}
+                      aria-pressed={active}
+                      title={s.source_path}
+                      className={`text-left px-3 py-2 rounded-paper border transition-colors ${
+                        active ? 'bg-ink text-paper border-ink' : 'bg-paper border-line hover:border-line-strong'
+                      }`}
+                    >
+                      <span className="block text-[0.8rem] font-medium truncate">{s.name}</span>
+                      <span className={`block font-mono text-[0.6rem] tabular-nums ${active ? 'opacity-70' : 'text-muted'}`}>
+                        {shortDate(s.captured_at_min)}
+                        {s.captured_at_max && s.captured_at_max.slice(0, 10) !== shortDate(s.captured_at_min) && ` → ${shortDate(s.captured_at_max)}`}
+                        {' · '}{s.asset_count} media
+                        {s.device_hint && ` · ${s.device_hint}`}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
             </div>
-            <p className="m-0 font-mono text-[0.62rem] text-muted">
-              {calendar === null && !problem
-                ? 'asking…'
-                : bounds
-                  ? `media from ${bounds.min} to ${bounds.max}`
-                  : 'this instance holds no dated media'}
-            </p>
-          </div>
+          )}
 
-          {/* --- the day -------------------------------------------------- */}
+          {/* --- right: the pictures of what was chosen --------------------- */}
           <div className="flex flex-col gap-3 min-h-0 overflow-hidden">
-            {!day ? (
-              <p className="m-0 text-[0.84rem] text-muted">Choose a day on the left.</p>
+            {!heading ? (
+              <p className="m-0 text-[0.84rem] text-muted">
+                {view === 'day' ? 'Choose a day on the left.' : 'Choose a folder on the left.'}
+              </p>
             ) : rows === null ? (
-              <p className="m-0 font-mono text-[0.72rem] text-muted">reading {day}…</p>
+              <p className="m-0 font-mono text-[0.72rem] text-muted">reading {heading}…</p>
             ) : (
               <>
                 <div className="flex items-center gap-3 flex-wrap">
-                  <span className={legend}>{day} · {rows.length} media</span>
+                  <span className={`${legend} truncate max-w-[60%]`}>{heading} · {rows.length} media</span>
                   <button
                     type="button"
                     onClick={() =>
@@ -254,39 +462,43 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
                     {checked.size === rows.length ? 'none' : 'all'}
                   </button>
                 </div>
-                <div className="flex-1 min-h-0 overflow-auto grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] auto-rows-max gap-2 content-start pr-1">
-                  {rows.map((r) => {
-                    const on = checked.has(r.id);
-                    return (
-                      <label
-                        key={r.id}
-                        className={`relative block rounded-md overflow-hidden border cursor-pointer bg-frame ${on ? 'border-accent shadow-[inset_0_0_0_2px_var(--color-accent)]' : 'border-line'}`}
-                        title={`${r.filename}${r.has_telemetry ? ' · flight log' : ''}${r.derivative_status !== 'ready' ? ' · proxy not ready' : ''}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={on}
-                          onChange={() => {
-                            const next = new Set(checked);
-                            if (on) next.delete(r.id);
-                            else next.add(r.id);
-                            setChecked(next);
-                          }}
-                          className="absolute top-1.5 left-1.5 z-[2] w-[15px] h-[15px] accent-ink"
-                          aria-label={`Select ${r.filename}`}
-                        />
-                        {/* The thumbnail is served with the session cookie, so
-                            the browser must be told to send it cross-origin. */}
-                        <img src={client.thumbUrl(r.id)} crossOrigin="use-credentials" alt="" className="block w-full h-[90px] object-cover" loading="lazy" />
-                        <span className="absolute bottom-0 inset-x-0 px-1.5 py-1 font-mono text-[0.55rem] text-paper bg-[rgba(20,18,15,0.62)] truncate">
-                          {r.filename}
-                          {r.media_type === 'video' && ' ▶'}
-                          {r.has_telemetry && ' · srt'}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
+                {rows.length === 0 ? (
+                  <p className="m-0 text-[0.8rem] text-muted">Nothing here matches these filters.</p>
+                ) : (
+                  <div className="flex-1 min-h-0 overflow-auto grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] auto-rows-max gap-2 content-start pr-1">
+                    {rows.map((r) => {
+                      const on = checked.has(r.id);
+                      return (
+                        <label
+                          key={r.id}
+                          className={`relative block rounded-md overflow-hidden border cursor-pointer bg-frame ${on ? 'border-accent shadow-[inset_0_0_0_2px_var(--color-accent)]' : 'border-line'}`}
+                          title={`${r.filename}${r.has_telemetry ? ' · flight log' : ''}${r.derivative_status !== 'ready' ? ' · proxy not ready' : ''}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            onChange={() => {
+                              const next = new Set(checked);
+                              if (on) next.delete(r.id);
+                              else next.add(r.id);
+                              setChecked(next);
+                            }}
+                            className="absolute top-1.5 left-1.5 z-[2] w-[15px] h-[15px] accent-ink"
+                            aria-label={`Select ${r.filename}`}
+                          />
+                          {/* The thumbnail is served with the session cookie, so
+                              the browser must be told to send it cross-origin. */}
+                          <img src={client.thumbUrl(r.id)} crossOrigin="use-credentials" alt="" className="block w-full h-[90px] object-cover" loading="lazy" />
+                          <span className="absolute bottom-0 inset-x-0 px-1.5 py-1 font-mono text-[0.55rem] text-paper bg-[rgba(20,18,15,0.62)] truncate">
+                            {r.filename}
+                            {r.media_type === 'video' && ' ▶'}
+                            {r.has_telemetry && ' · srt'}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
               </>
             )}
           </div>
