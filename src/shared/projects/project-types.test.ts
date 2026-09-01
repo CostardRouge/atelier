@@ -159,6 +159,24 @@ describe('migrateProjectDoc', () => {
     expect(migrateProjectDoc(stored).outputTransform).toBe('rec709-to-srgb');
   });
 
+  it('files a pre-v14 document under this browser — the only place it can be', () => {
+    const stored: Record<string, unknown> = {
+      ...createProjectDoc('here', '16:9', [], DEFAULT_GUIDES),
+      version: 13,
+    };
+    delete stored.sourceId;
+    const migrated = migrateProjectDoc(stored as unknown as ProjectDoc);
+    expect(migrated.sourceId).toBe('local');
+  });
+
+  it('never reassigns a document that already names its source', () => {
+    const doc = {
+      ...createProjectDoc('remote', '16:9', [], DEFAULT_GUIDES),
+      sourceId: 'winnow.steeve.website',
+    };
+    expect(migrateProjectDoc(doc).sourceId).toBe('winnow.steeve.website');
+  });
+
   it('is idempotent and leaves current documents untouched', () => {
     const doc = createProjectDoc('now', '9:16', [], DEFAULT_GUIDES);
     doc.theme = themeFromPreset('or-cine');

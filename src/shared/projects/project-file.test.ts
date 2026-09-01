@@ -245,3 +245,21 @@ describe('projectFileName', () => {
     expect(projectFileName('★')).toBe('project.atelier.json');
   });
 });
+
+describe('the project file and sources', () => {
+  it('never carries a sourceId — a template comes from no source', () => {
+    const doc = createProjectDoc('mine', '16:9', [], DEFAULT_GUIDES);
+    const file = toProjectFile({ ...doc, name: doc.name });
+    expect(file).not.toHaveProperty('sourceId');
+    expect(JSON.parse(serializeProjectFile(file))).not.toHaveProperty('sourceId');
+  });
+
+  it('keeps the receiving project in its own source on import', () => {
+    const doc = {
+      ...createProjectDoc('mine', '16:9', [], DEFAULT_GUIDES),
+      sourceId: 'winnow.steeve.website',
+    };
+    const file = toProjectFile({ ...doc, name: doc.name });
+    expect(applyProjectFile(doc, file).sourceId).toBe('winnow.steeve.website');
+  });
+});

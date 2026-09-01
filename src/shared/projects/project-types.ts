@@ -24,8 +24,9 @@ import { NO_SHIFT, type TimeShift } from '../telemetry/time-format';
 import { AUTO_TIME_SCALE, type TimeScaleSetting } from '../telemetry/time-scale';
 import type { OutputTransform } from '../lut/transfer';
 import type { SavedTrim } from '../media/trim';
+import { DEFAULT_SOURCE_ID } from '../sources/source';
 
-export const PROJECT_DOC_VERSION = 13;
+export const PROJECT_DOC_VERSION = 14;
 
 /**
  * Identity of one media file, enough to re-match it wherever it lives.
@@ -164,6 +165,14 @@ export interface ProjectDoc {
   /** The export matrix: custom base name + the deliverables one press makes. */
   exportPrefs: ExportPrefs;
   // --- bound half ----------------------------------------------------------
+  /**
+   * The source this project belongs to — `'local'` for this browser
+   * (`shared/sources/source.ts`). Bound, never portable: a template mailed to
+   * someone comes from no source, so this must stay OUT of the project file
+   * and its four places. One project, one source (bridge §3.2): its media
+   * live in the same source, and crossing is an explicit export/import.
+   */
+  sourceId: string;
   media: ProjectMedia;
   // --- baked gallery facts (usable without the media) ----------------------
   thumbnail: Blob | null;
@@ -200,6 +209,8 @@ export function createProjectDoc(
     name,
     createdAt: now,
     updatedAt: now,
+    // The only source that exists; a remote one will hand its own id in here.
+    sourceId: DEFAULT_SOURCE_ID,
     settings: {
       aspectId,
       timeShift: { ...NO_SHIFT },
@@ -332,6 +343,10 @@ export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
     // Null, not a default card: no project could end on an outro before one
     // existed, and null draws (and appends) exactly nothing.
     migrated.outro = migrated.outro ?? null;
+  }
+  if (migrated.version < 14) {
+    // Everything written before sources existed lives in this browser.
+    migrated.sourceId = migrated.sourceId ?? DEFAULT_SOURCE_ID;
   }
   migrated.version = PROJECT_DOC_VERSION;
   return migrated;

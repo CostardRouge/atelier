@@ -18,6 +18,7 @@ import {
   parseProjectFile,
 } from '../../shared/projects/project-file';
 import { pickFile } from '../../shared/sources/file-sources';
+import { groupBySource, sourceById } from '../../shared/sources/source';
 import { DEFAULT_GUIDES } from '../../shared/overlay/guides';
 import { defaultElementsPreset } from '../../shared/overlay/overlay-types';
 import NewProjectModal, { type NewProjectChoices } from './NewProjectModal';
@@ -315,17 +316,42 @@ export default function ProjectGallery({
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-5 pb-4">
-          {projects.map((doc) => (
-            <ProjectCard
-              key={doc.id}
-              doc={doc}
-              isOpen={doc.id === openProjectId}
-              onOpen={() => onOpen(doc)}
-              onDelete={() => void handleDelete(doc.id)}
-              onDuplicate={() => handleDuplicate(doc)}
-            />
-          ))}
+        // Grouped by provenance — one group per source, `local` first, even
+        // while local is the only one: the day a Winnow instance appears its
+        // projects land in their own section instead of reshaping this page.
+        <div className="flex flex-col gap-6 pb-4">
+          {groupBySource(projects).map(({ id, items }) => {
+            const source = sourceById(id);
+            return (
+              <section key={id} aria-label={`Projects from ${source?.label ?? id}`}>
+                <p className="m-0 mb-3 font-mono text-[0.66rem] tracking-[0.14em] uppercase text-muted">
+                  source: {source?.label ?? id}
+                  <span className="text-faint"> · </span>
+                  <span className="tabular-nums">
+                    {items.length} project{items.length === 1 ? '' : 's'}
+                  </span>
+                  {!source && (
+                    <span className="text-faint">
+                      {' '}
+                      · not connected — media may be unreachable
+                    </span>
+                  )}
+                </p>
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-5">
+                  {items.map((doc) => (
+                    <ProjectCard
+                      key={doc.id}
+                      doc={doc}
+                      isOpen={doc.id === openProjectId}
+                      onOpen={() => onOpen(doc)}
+                      onDelete={() => void handleDelete(doc.id)}
+                      onDuplicate={() => handleDuplicate(doc)}
+                    />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
         </div>
       )}
 
