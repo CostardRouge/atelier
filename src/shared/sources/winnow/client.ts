@@ -52,6 +52,16 @@ export interface WinnowAssetRow {
   gps_lat: number | null;
   gps_lon: number | null;
   camera_model: string | null;
+  // Exposure, as Winnow read it at ingest. `shutter` is the camera's own text
+  // (`1/240`), not seconds — see `exif-from-row.ts`.
+  iso: number | null;
+  shutter: string | null;
+  aperture: number | null;
+  focal_length: number | null;
+  // Drone stills only (migration 0028): DJI writes these as XMP, and they are
+  // what lets a photograph from a Mini 4 Pro draw its altitude.
+  relative_altitude: number | null;
+  absolute_altitude: number | null;
   derivative_status: 'pending' | 'processing' | 'ready' | 'error' | 'skipped';
   /** True when a DJI `.srt` flight log rides with this clip. */
   has_telemetry: boolean;

@@ -43,6 +43,7 @@ import GuidesControl from '../../shared/overlay/GuidesControl';
 import { exportOverlayVideoViaSeek } from '../../shared/overlay/export-overlay-seek';
 import { exportVariantVideo, outroTail } from '../../shared/media/export-variant';
 import { mediaOrigin } from '../../shared/projects/media-identity';
+import { mergeExif } from '../../shared/exif/merge-exif';
 import { downloadBlob } from '../../shared/media/save';
 import { frameGrabName, grabFrame } from '../../shared/media/frame-grab';
 import {
@@ -457,10 +458,20 @@ export default function StudioEditor({
   const clipCues = useMemo(() => retimeCues(rawCues, scale), [rawCues, scale]);
   // A photograph is one cue, built from its EXIF — or none, when the file
   // carries nothing an element could draw.
+  // A source's editing rendition is a re-encode, and a re-encode drops the
+  // metadata — Winnow's photo proxy is a WebP with no EXIF at all. What the
+  // source parsed at ingest fills those gaps, under whatever the file itself
+  // still says: the bytes in hand are the truth about THIS file, the source is
+  // the truth about the capture it came from.
+  const photoOriginExif = mediaOrigin(activeImage)?.exif ?? null;
+  const effectivePhotoExif = useMemo(
+    () => mergeExif(photoExif, photoOriginExif),
+    [photoExif, photoOriginExif],
+  );
   const photoCues = useMemo(() => {
-    const cue = photoExif ? cueFromExif(photoExif) : null;
+    const cue = effectivePhotoExif ? cueFromExif(effectivePhotoExif) : null;
     return cue ? [cue] : [];
-  }, [photoExif]);
+  }, [effectivePhotoExif]);
   const cues = isPhoto ? photoCues : clipCues;
   // Undoing the conform is exactly playing at 1/scale: a 4× slow clip at 4×.
   const realtimeRate = clampPlaybackRate(1 / scale);
@@ -1869,7 +1880,7 @@ export default function StudioEditor({
                   timing={timing}
                   scale={scale}
                   overridden={overridden}
-                  photo={isPhoto ? (photoExif ?? {}) : null}
+                  photo={isPhoto ? (effectivePhotoExif ?? {}) : null}
                 />
               )}
 

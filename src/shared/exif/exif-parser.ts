@@ -56,6 +56,14 @@ export interface ExifData {
   gps?: GpsCoord;
   /** Metres above sea level (negative below). */
   gpsAltitude?: number;
+  /**
+   * Metres above the take-off point — a DRONE fact, written by DJI as the
+   * XMP tag `drone-dji:RelativeAltitude`. This reader does not walk XMP, so
+   * it arrives from a source that already parsed it (`MediaOrigin.exif`);
+   * the field lives here because it belongs to the same struct, and a future
+   * XMP reader would fill it from the file itself.
+   */
+  relativeAltitude?: number;
 }
 
 /**
