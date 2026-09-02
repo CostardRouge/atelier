@@ -36,6 +36,16 @@ describe('WinnowClient URLs', () => {
     expect(c.sidecarUrl(7)).toBe(`${BASE}/api/sidecars/7/download`);
     expect(c.loginUrl()).toBe(`${BASE}/login`);
   });
+  it('keeps the first thumbnail request plain, so it stays cacheable', () => {
+    expect(c.thumbRetryUrl(12, 0)).toBe(`${BASE}/api/assets/12/thumb`);
+    expect(c.thumbRetryUrl(12, -1)).toBe(`${BASE}/api/assets/12/thumb`);
+  });
+
+  it('discriminates a RETRY, so a failed load is not answered from cache', () => {
+    expect(c.thumbRetryUrl(12, 1)).toBe(`${BASE}/api/assets/12/thumb?retry=1`);
+    expect(c.thumbRetryUrl(12, 3)).toBe(`${BASE}/api/assets/12/thumb?retry=3`);
+  });
+
   it('drops empty query values instead of sending "undefined"', () => {
     expect(c.url('/api/x', { a: 1, b: undefined, c: null, d: '' })).toBe(`${BASE}/api/x?a=1`);
   });

@@ -237,6 +237,21 @@ export class WinnowClient {
   sidecarUrl(id: number): string {
     return this.url(`/api/sidecars/${id}/download`);
   }
+  /**
+   * The same thumbnail, asked for again after a failed load.
+   *
+   * A tile that fails once stays black forever: an `<img>` has no retry, and
+   * the browser will happily reuse a failed entry. Attempt 0 is the plain URL
+   * so the ordinary case is fully cacheable (Winnow serves these `immutable`
+   * for a year); only a RETRY carries a discriminator, which both defeats a
+   * poisoned cache entry and makes the request genuinely new.
+   */
+  thumbRetryUrl(id: number, attempt: number): string {
+    return attempt <= 0
+      ? this.thumbUrl(id)
+      : this.url(`/api/assets/${id}/thumb`, { retry: attempt });
+  }
+
   /** Where to send someone who is not signed in — Winnow's own login page. */
   loginUrl(): string {
     return this.url('/login');
