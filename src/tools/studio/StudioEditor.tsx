@@ -42,6 +42,7 @@ import { createIntroScene, findScene, type Scene } from '../../shared/overlay/sc
 import GuidesControl from '../../shared/overlay/GuidesControl';
 import { exportOverlayVideoViaSeek } from '../../shared/overlay/export-overlay-seek';
 import { exportVariantVideo, outroTail } from '../../shared/media/export-variant';
+import { mediaOrigin } from '../../shared/projects/media-identity';
 import { downloadBlob } from '../../shared/media/save';
 import { frameGrabName, grabFrame } from '../../shared/media/frame-grab';
 import {
@@ -68,6 +69,7 @@ import {
   defaultVariants,
   variantFileName,
   variantIsRetimed,
+  resolutionShortfall,
   variantOutputSize,
   type ExportVariant,
   type VariantResolution,
@@ -275,6 +277,16 @@ export default function StudioEditor({
   const [exportRatio, setExportRatio] = useState(0);
   const [exportStep, setExportStep] = useState<{ index: number; total: number } | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  /**
+   * Render the deliverables from the editing proxy instead of fetching the
+   * capture. Off by default: fidelity is what an export is for, and the
+   * browser that added this media already said "exports can fetch originals
+   * later". On is the escape hatch — a fast test, or a rush too heavy to pull
+   * through the tunnel right now.
+   */
+  const [renderFromProxy, setRenderFromProxy] = useState(false);
+  /** Pulling the capture down happens before the first variant; say so. */
+  const [fetchingOriginal, setFetchingOriginal] = useState(false);
   const [exportDone, setExportDone] = useState(false);
   const [exportFileName, setExportFileName] = useState(project.exportPrefs.fileName ?? '');
   const [variants, setVariants] = useState<ExportVariant[]>(() =>
@@ -372,6 +384,15 @@ export default function StudioEditor({
   // If the active clip can't be decoded (often HEVC), the user can transcode it
   // to H.264 in-browser; once ready, the preview and export use that instead.
   const activeTranscode = useTranscode(activeVideo);
+  // Where the active clip came from. A remote source hands over its editing
+  // rendition by default, and only it knows how to fetch the capture.
+  const origin = mediaOrigin(activeVideo);
+  const proxyWithOriginal =
+    origin?.fidelity === 'proxy' && typeof origin.fetchOriginal === 'function'
+      ? origin
+      : null;
+  /** True when the export will go and get the capture first. */
+  const willFetchOriginal = !!proxyWithOriginal && !renderFromProxy;
   const activeSource = activeTranscode.transcoded ?? activeVideo;
   const activeUrl = useObjectUrl(activeSource);
 
@@ -969,8 +990,8 @@ export default function StudioEditor({
     if (!active || exporting || variants.length === 0) return;
     if (!activeVideo && !photo) return;
     const meta = lib.meta.get(active.id);
-    const srcWidth = photo?.width ?? meta?.width ?? videoRef.current?.videoWidth ?? 0;
-    const srcHeight = photo?.height ?? meta?.height ?? videoRef.current?.videoHeight ?? 0;
+    let srcWidth = photo?.width ?? meta?.width ?? videoRef.current?.videoWidth ?? 0;
+    let srcHeight = photo?.height ?? meta?.height ?? videoRef.current?.videoHeight ?? 0;
     if (!srcWidth || !srcHeight) {
       setExportError(
         isPhoto
@@ -995,9 +1016,24 @@ export default function StudioEditor({
     exportAbort.current = controller;
     // Prefer the transcoded H.264 (if one was made for preview): WebCodecs can
     // decode it directly, where the HEVC original would fail.
-    const source = activeTranscode.transcoded ?? activeVideo;
+    let source = activeTranscode.transcoded ?? activeVideo;
     const base = exportFileName.trim() || active.baseName;
     try {
+      // Editing happened on the source's proxy; delivering should not. Fetch
+      // the capture once, before the first variant, and encode every variant
+      // from it — at ITS dimensions, which is what makes a 1080 variant
+      // actually 1080. Photos never take this path: `origin` is read off the
+      // clip, and a photo's original is often a RAW no browser decodes.
+      if (proxyWithOriginal?.fetchOriginal && !renderFromProxy) {
+        setFetchingOriginal(true);
+        try {
+          source = await proxyWithOriginal.fetchOriginal();
+          srcWidth = proxyWithOriginal.width ?? srcWidth;
+          srcHeight = proxyWithOriginal.height ?? srcHeight;
+        } finally {
+          setFetchingOriginal(false);
+        }
+      }
       for (let i = 0; i < variants.length; i += 1) {
         // Checked per variant, not only inside the encoder: a still renders in
         // one pass and never looks at the signal, so a cancelled run of five
@@ -1132,8 +1168,17 @@ export default function StudioEditor({
   const activeMeta = activeId ? lib.meta.get(activeId) : undefined;
   // A decoded still knows its own size exactly (and upright); the library's
   // metadata is the fallback, and the only source for a RAW nothing can decode.
+  // What is ON THE STAGE — a remote source's proxy, when that is what was
+  // added. The header badge and the frame's aspect describe this, and must
+  // keep describing it: claiming the capture's size for a picture the user is
+  // not looking at is the same lie in the other direction.
   const srcW = photo?.width ?? activeMeta?.width;
   const srcH = photo?.height ?? activeMeta?.height;
+  // What the EXPORT will encode, which is a different file when it fetches the
+  // capture first. Only the variant maths uses this: a variant measured
+  // against the proxy would promise 1080 from a file it is not going to use.
+  const exportW = willFetchOriginal ? (proxyWithOriginal?.width ?? srcW) : srcW;
+  const exportH = willFetchOriginal ? (proxyWithOriginal?.height ?? srcH) : srcH;
   const activeRes = srcW && srcH ? `${srcW}×${srcH}` : null;
   // The stage draws at source resolution, so the guides' notion of "this
   // frame" is the media's own aspect — undefined until the probe lands.
@@ -1882,6 +1927,30 @@ export default function StudioEditor({
                     </div>
                   </div>
 
+                  {proxyWithOriginal && (
+                    <div className={`${noticeMuted} m-0 flex flex-col gap-1.5`}>
+                      <span>
+                        You are editing on {proxyWithOriginal.sourceId}&apos;s proxy
+                        {srcH ? ` (${srcH}p)` : ''}
+                        {willFetchOriginal
+                          ? ' — the export fetches the original first, so the deliverables are full quality.'
+                          : ' — and delivering from it, so the deliverables are proxy quality.'}
+                      </span>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={renderFromProxy}
+                          onChange={(e) => setRenderFromProxy(e.target.checked)}
+                          className="w-[15px] h-[15px] accent-ink cursor-pointer"
+                        />
+                        <span className="text-[0.8rem]">
+                          Render from the proxy — faster, and nothing large crosses the
+                          network. For a quick look, not for delivery.
+                        </span>
+                      </label>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted">
                       Variants · {variants.length}
@@ -1897,7 +1966,14 @@ export default function StudioEditor({
 
                   <div className="flex flex-col gap-2">
                     {variants.map((v) => {
-                      const dims = srcW && srcH ? variantOutputSize(v, srcW, srcH) : null;
+                      const dims =
+                        exportW && exportH ? variantOutputSize(v, exportW, exportH) : null;
+                      // A variant never upscales, so asking for more than the
+                      // source holds silently delivers less. Say which.
+                      const short =
+                        exportW && exportH
+                          ? resolutionShortfall(v, exportW, exportH)
+                          : null;
                       const stats = variantStats[v.id];
                       const fileName = variantFileName(
                         exportFileName.trim() || active.baseName,
@@ -2040,6 +2116,18 @@ export default function StudioEditor({
                               {fileName}
                             </span>
                           </div>
+                          {/* The row says 1080p; the source cannot fill it.
+                              Better said here, beside the setting that made
+                              the promise, than discovered in the file. */}
+                          {short && (
+                            <p className="m-0 text-[0.72rem] text-[#9a3a23] leading-snug">
+                              {short.asked}p was asked for; this source delivers{' '}
+                              {short.delivered}p.
+                              {proxyWithOriginal && renderFromProxy
+                                ? ' Untick “render from the proxy” to export from the original.'
+                                : ''}
+                            </p>
+                          )}
                           {/* What this row cost last time it rendered — the
                               figure sits with the settings that produced it,
                               which is the whole point of showing it. */}
@@ -2075,10 +2163,12 @@ export default function StudioEditor({
                     <div className="flex flex-col gap-2" role="status">
                       <div className="flex items-center gap-3">
                         <span className="font-mono text-[0.74rem] tracking-[0.04em] text-ink-soft flex-none">
-                          {exportStep && exportStep.total > 1
-                            ? `Variant ${exportStep.index}/${exportStep.total} · `
-                            : 'Exporting… '}
-                          {Math.round(exportRatio * 100)}%
+                          {fetchingOriginal
+                            ? `Fetching the original from ${proxyWithOriginal?.sourceId ?? 'the source'}… `
+                            : exportStep && exportStep.total > 1
+                              ? `Variant ${exportStep.index}/${exportStep.total} · `
+                              : 'Exporting… '}
+                          {!fetchingOriginal && `${Math.round(exportRatio * 100)}%`}
                         </span>
                         <progress
                           data-export

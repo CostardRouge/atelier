@@ -31,6 +31,33 @@ const cache = new Map<string, Promise<string | null>>();
 export interface KnownIdentity {
   assetId?: string;
   hash?: string;
+  /** Where this file came from, when a source handed it over. */
+  origin?: MediaOrigin;
+}
+
+/**
+ * What a source says about a file it handed over — enough for the export to
+ * be honest about what it is holding, and to go and get the real thing.
+ *
+ * A remote source usually hands over its EDITING rendition: fast to fetch and
+ * certain to decode, but smaller than the capture. That is the right thing to
+ * scrub and compose on and the wrong thing to deliver from, so the origin
+ * carries the original's true pixel size (for the export to state what a
+ * variant will really produce) and a way to fetch its bytes on demand.
+ *
+ * `fetchOriginal` is a thunk rather than a URL because only the source knows
+ * how to authenticate the request. It is absent when this file already IS the
+ * original — there is nothing better to fetch.
+ */
+export interface MediaOrigin {
+  /** The source that handed it over, e.g. `winnow.steeve.website`. */
+  sourceId: string;
+  /** What this file is: the source's editing rendition, or the capture itself. */
+  fidelity: 'proxy' | 'original';
+  /** The ORIGINAL's pixel size, when the source knows it. */
+  width: number | null;
+  height: number | null;
+  fetchOriginal?: () => Promise<File>;
 }
 const known = new Map<string, KnownIdentity>();
 
@@ -40,6 +67,11 @@ export function registerMediaIdentity(file: File, identity: KnownIdentity): void
 
 export function knownIdentity(file: File): KnownIdentity | null {
   return known.get(fileIdentity(file)) ?? null;
+}
+
+/** Where `file` came from, or null for a file the user opened themselves. */
+export function mediaOrigin(file: File | null): MediaOrigin | null {
+  return (file && known.get(fileIdentity(file))?.origin) ?? null;
 }
 
 /**

@@ -69,6 +69,29 @@ export function defaultVariants(): ExportVariant[] {
  * the resolution caps the short side (never upscaling); both dimensions are
  * forced even for H.264.
  */
+/**
+ * The gap between what a variant ASKS for and what the source can give, or
+ * null when it gets what it asked for.
+ *
+ * `variantOutputSize` never upscales — its scale is `min(1, …)` — so a variant
+ * set to 1080 over a 720p source quietly delivers 720. Quietly is the problem:
+ * the row says 1080p, the file is not, and nothing on screen admits it. This
+ * is the fact the export panel states, and (for a source that is a remote
+ * proxy) the reason it offers the capture instead.
+ */
+export function resolutionShortfall(
+  variant: ExportVariant,
+  srcW: number,
+  srcH: number,
+): { asked: number; delivered: number } | null {
+  if (variant.resolution === 'source' || !srcW || !srcH) return null;
+  const out = variantOutputSize(variant, srcW, srcH);
+  const delivered = Math.min(out.w, out.h);
+  return delivered < variant.resolution
+    ? { asked: variant.resolution, delivered }
+    : null;
+}
+
 export function variantOutputSize(
   variant: ExportVariant,
   srcW: number,
