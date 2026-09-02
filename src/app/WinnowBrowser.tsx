@@ -18,6 +18,7 @@ import {
   shiftMonth,
 } from '../shared/sources/winnow/month';
 import { type WinnowConnection } from '../shared/sources/winnow/store';
+import { readBrowseState, writeBrowseState } from '../shared/sources/winnow/browse-state';
 import { formatBytes } from '../shared/lib/format';
 
 interface WinnowBrowserProps {
@@ -67,23 +68,33 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
     [connection.baseUrl, connection.auth],
   );
 
-  const [view, setView] = useState<View>('day');
-  const [filter, setFilter] = useState<FilterQuery>({});
+  // Where this instance was left last time. Picking a trip's media happens
+  // over several sittings, so the modal reopens where it closed.
+  const remembered = useMemo(() => readBrowseState(connection.id), [connection.id]);
+
+  const [view, setView] = useState<View>(remembered?.view ?? 'day');
+  const [filter, setFilter] = useState<FilterQuery>(remembered?.filter ?? {});
   const [facets, setFacets] = useState<WinnowFacets | null>(null);
 
-  const [month, setMonth] = useState<string>(() => monthKeyOf(new Date().toISOString()));
+  const [month, setMonth] = useState<string>(
+    () => remembered?.month ?? monthKeyOf(new Date().toISOString()),
+  );
   const [calendar, setCalendar] = useState<WinnowCalendar | null>(null);
-  const [day, setDay] = useState<string | null>(null);
+  const [day, setDay] = useState<string | null>(remembered?.day ?? null);
 
   const [sessions, setSessions] = useState<WinnowSession[] | null>(null);
   const [session, setSession] = useState<WinnowSession | null>(null);
+  /** The folder to re-open once the list arrives; cleared after it is found. */
+  const [wantedSessionId, setWantedSessionId] = useState<number | null>(
+    remembered?.sessionId ?? null,
+  );
 
   const [rows, setRows] = useState<WinnowAssetRow[] | null>(null);
   const [checked, setChecked] = useState<ReadonlySet<number>>(() => new Set());
-  const [fidelity, setFidelity] = useState<Fidelity>('proxy');
+  const [fidelity, setFidelity] = useState<Fidelity>(remembered?.fidelity ?? 'proxy');
   const [problem, setProblem] = useState<{ text: string; login?: string } | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
-  const [landed, setLanded] = useState(false);
+  const [landed, setLanded] = useState(() => remembered !== null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -149,7 +160,12 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
     client
       .sessions(filter)
       .then((list) => {
-        if (!cancelled) setSessions(list);
+        if (cancelled) return;
+        setSessions(list);
+        if (wantedSessionId !== null) {
+          setSession(list.find((s) => s.id === wantedSessionId) ?? null);
+          setWantedSessionId(null);
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) setProblem(explain(err, client));
@@ -186,6 +202,17 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
       cancelled = true;
     };
   }, [client, chosenDay, chosenSession, filter]);
+
+  useEffect(() => {
+    writeBrowseState(connection.id, {
+      view,
+      filter,
+      month,
+      day,
+      sessionId: session?.id ?? wantedSessionId,
+      fidelity,
+    });
+  }, [connection.id, view, filter, month, day, session, wantedSessionId, fidelity]);
 
   const span = monthSpan(month);
   const counts = new Map((calendar?.days ?? []).map((d) => [d.date, d.count]));

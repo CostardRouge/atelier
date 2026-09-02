@@ -13,6 +13,7 @@
  */
 
 import { LOCAL_SOURCE, setRemoteSources, type SourceInfo } from '../source';
+import { forgetBrowseState } from './browse-state';
 import type { WinnowAuth, WinnowCapabilities } from './client';
 
 export interface WinnowConnection {
@@ -108,6 +109,9 @@ export function putWinnowConnection(conn: WinnowConnection): void {
 }
 
 export function removeWinnowConnection(id: string): void {
+  // Where you were looking in it goes with it — otherwise reconnecting the
+  // same host later reopens on a month chosen for a library it no longer is.
+  forgetBrowseState(id);
   save(load().filter((c) => c.id !== id));
 }
 
