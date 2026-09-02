@@ -49,3 +49,17 @@ The kind chip (`video+srt`, `video`, `photo`, …) is back to its original full-
 ## Tools own full height; only the inner list scrolls (2026-08-20)
 
 **Decision.** The shell gives each tool a full-height frame and the tool's own gallery scrolls inside it (`349ea08`). **Why**: a page-level scroll fought the stage/preview layouts. **How to apply**: a new tool that needs a scrolling list scrolls it internally rather than growing the page.
+
+## A modal is a full-screen sheet under 820px, and shows ONE pane at a time (2026-09-02)
+
+**Trap, seen on an iPad.** `WinnowBrowser` is a fixed-height card (`h-[min(90vh,52rem)]`, `overflow-hidden`) holding a two-column grid that switched to `grid-cols-1` under 820px. Stacking put two panes in a height that never grew: the pictures pane landed *on top of* the calendar, clipped, and its "Choose a day on the left." sat across the grid. **The shape to keep**: below 820px the modal is the whole screen (`max-w-none h-dvh rounded-none border-0`, overlay `p-0`, `pb-[max(1rem,env(safe-area-inset-bottom))]` so the actions clear the home indicator) and only one pane is rendered — the picker until something is chosen, then the results with a back control (`hidden max-[820px]:inline-flex`). A drill-down, not a stack; the header, the filters and the action row stay pinned around it, and only the middle scrolls.
+
+**A viewport query IS right for a modal** — the container-query rule (`studio.md`, `roadtrip.md`) exists because the Library sidebar eats 288px a tool cannot see; a `position: fixed` overlay spans the viewport, so `max-[820px]:` measures exactly what the sheet gets. Use `dvh`, never `vh`: on iOS Safari `vh` is the *large* viewport, so a `max-h-[90vh]` card can hang behind the toolbar with its Apply button under it.
+
+**`hidden` loses to a base class carrying `inline-flex`.** Tailwind orders `display` utilities in its own layer, not by the order written in `className`, so `` `${pill} hidden max-[820px]:inline-flex` `` rendered the control at every width (measured at 834px). A conditionally-hidden button spells its own classes out rather than borrowing a shared pill.
+
+**Touch sizing, applied at the same breakpoint.** Controls go up a size and any `<select>` or `<input>` reaches **16px** — below that, iOS zooms the page on focus and never zooms back. That is also why two native date fields no longer share a 390px row (`NewTripModal`), and why the filter selects wrap two-per-line on a phone (`basis-[10rem]`) instead of one being squeezed against the tabs. Calendar cells drop `aspect-square` when the calendar owns the full width (100px-tall squares on an iPad) for a `min-h-[3.5rem]` band.
+
+**Long action rows follow the two-group shape** documented above for the transport: `[choice + hint]` with `grow shrink basis-[20rem]`, then `[cancel + go]` with `ml-auto`, so the actions never get stranded alone on a line while the hint keeps the one above. Any modal deep enough to scroll pins that row (`sticky bottom-0 -mx-6 px-6 pb-6 bg-surface`, container `px-6 pt-6`) — `ProjectSettingsModal` already did; `NewProjectModal` and `NewTripModal` now do too.
+
+**Verified** in headless Chromium at 390×844, 744×1133, 834×1112 and 1280×900 against a throwaway harness that mounted the modal with `window.fetch` stubbed for the Winnow endpoints (no instance needed, thumbnails deliberately failing); `scrollWidth - clientWidth` was 0 at every width. Rebuild that harness rather than eyeballing this file — it is the only way to see the modal without a connected Winnow.

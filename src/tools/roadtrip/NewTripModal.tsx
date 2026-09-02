@@ -17,7 +17,7 @@ interface NewTripModalProps {
 const field = 'flex flex-col gap-1.5';
 const legend = 'font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted';
 const input =
-  'font-sans text-[0.95rem] px-3.5 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent';
+  'font-sans text-[0.95rem] px-3.5 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent max-[560px]:text-[1rem]';
 
 /**
  * Naming a trip is naming its span: the two dates are what every later badge
@@ -66,7 +66,7 @@ export default function NewTripModal({ onCancel, onCreate }: NewTripModalProps) 
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="w-full max-w-[30rem] max-h-[90vh] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper p-6">
+      <div className="w-full max-w-[30rem] max-h-[90dvh] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6">
         <div>
           <h2 className="m-0 font-serif text-[1.4rem]">New trip</h2>
           <p className="m-0 mt-1 text-[0.82rem] text-muted">
@@ -104,7 +104,9 @@ export default function NewTripModal({ onCancel, onCreate }: NewTripModalProps) 
           />
         </label>
 
-        <div className="grid grid-cols-2 gap-3">
+        {/* One date per line on a phone: at 16px (the size that stops iOS
+            zooming) two native date fields do not fit 390px side by side. */}
+        <div className="grid grid-cols-2 gap-3 max-[420px]:grid-cols-1">
           <label className={field}>
             <span className={legend}>Left on</span>
             <input
@@ -137,7 +139,8 @@ export default function NewTripModal({ onCancel, onCreate }: NewTripModalProps) 
               : `${length} day${length === 1 ? '' : 's'} — badges will read “day n / ${length}”.`)}
         </p>
 
-        <div className="flex items-center justify-end gap-4 pt-1 border-t border-line">
+        {/* Pinned: the two dates push Create below the fold on a phone. */}
+        <div className="sticky bottom-0 -mx-6 mt-4 px-6 pb-6 flex items-center justify-end gap-4 pt-1 border-t border-line bg-surface">
           <button
             type="button"
             onClick={onCancel}
