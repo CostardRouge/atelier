@@ -9,6 +9,7 @@ import {
   type WinnowConnection,
 } from './store';
 import { listSources, sourceById } from '../source';
+import { readBrowseState, writeBrowseState } from './browse-state';
 
 const conn = (id = 'winnow.example'): WinnowConnection => ({
   id,
@@ -66,6 +67,22 @@ describe('the Winnow connection store', () => {
     putWinnowConnection(conn());
     removeWinnowConnection('winnow.example');
     expect(sourceById('winnow.example')).toBeNull();
+  });
+
+  it('forgets where you were looking when the connection goes', () => {
+    putWinnowConnection(conn());
+    writeBrowseState('winnow.example', {
+      view: 'day',
+      filter: {},
+      month: '2025-07',
+      day: null,
+      sessionId: null,
+      fidelity: 'proxy',
+    });
+    removeWinnowConnection('winnow.example');
+    // Reconnecting the same host later must not reopen on a month chosen for
+    // a library it is no longer browsing.
+    expect(readBrowseState('winnow.example')).toBeNull();
   });
 
   it('refuses to register a remote source called local', () => {
