@@ -14,6 +14,7 @@
  * ref without one rather than an exception, and the caller never has to care.
  */
 
+import type { ExifData } from '../exif/exif-parser';
 import { partialHash } from '../lib/partial-hash';
 import { fileIdentity } from '../library/assets';
 import { savedMediaRef, type SavedMediaRef } from './project-types';
@@ -58,6 +59,18 @@ export interface MediaOrigin {
   width: number | null;
   height: number | null;
   fetchOriginal?: () => Promise<File>;
+  /**
+   * What the source knows about the CAPTURE's EXIF — exposure, position, the
+   * time it was taken, and a drone's height above take-off.
+   *
+   * A source's editing rendition is a re-encode, and a re-encode drops the
+   * metadata: Winnow's photo proxy is a WebP with no EXIF at all, so a picture
+   * edited from it would read `—` on every exposure and position element
+   * despite the source having parsed all of it at ingest. This carries those
+   * facts across, at no network cost, for the file's own EXIF to be preferred
+   * over wherever it has any.
+   */
+  exif?: ExifData;
 }
 const known = new Map<string, KnownIdentity>();
 

@@ -36,6 +36,7 @@ import {
   type MediaOrigin,
 } from '../../projects/media-identity';
 import type { WinnowAssetRow, WinnowClient } from './client';
+import { exifFromRow } from './exif-from-row';
 
 export type Fidelity = 'proxy' | 'original';
 
@@ -101,6 +102,13 @@ export async function materialize(
   if (options.fidelity === 'proxy') {
     origin.fetchOriginal = () =>
       client.fetchFile(client.originalUrl(row.id), row.filename, '', lastModified);
+  }
+  // A photo's proxy is a WebP re-encode with no EXIF, so carry what Winnow
+  // parsed at ingest. Only for stills: a clip's telemetry is its `.srt`, which
+  // travels as a real file and says far more than a row ever could.
+  if (row.media_type === 'photo') {
+    const exif = exifFromRow(row);
+    if (exif) origin.exif = exif;
   }
   const files: File[] = [];
   for (const [i, item] of plan.entries()) {

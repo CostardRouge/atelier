@@ -58,6 +58,19 @@ Read before touching `src/tools/studio/`, `src/shared/overlay/`, anything about 
 - `findMedia(ref, files)` is the live-`File` counterpart used by Road Trip's slide restore: name first (free), hashing only the same-size candidates when the name is gone.
 - **Never regenerate the test fixtures from this repository.** They are the contract with Winnow; regenerate them from Winnow's `src/lib/hash.ts` or the two implementations drift in silence.
 
+## A source vouches for the EXIF its proxy dropped (2026-09-02)
+
+**Decision.** `MediaOrigin.exif` carries what the source parsed at ingest, and the studio merges it **under** the file's own (`shared/exif/merge-exif.ts`): the bytes in hand are the truth about the file on the stage, the source is the truth about the capture it was made from, so the file wins wherever it still says anything.
+
+**Why**: a source's editing rendition is a re-encode, and a re-encode drops metadata — Winnow's photo proxy is a WebP with no EXIF at all. A drone photograph edited from it read `—` on every exposure, position and time element while Winnow had all of it in columns, one request away and already fetched.
+
+**How to apply.**
+- `sources/winnow/exif-from-row.ts` maps the row onto `ExifData` so the existing `cueFromExif` does the rest — **do not build a second path to a `Cue`**; the point of `exif-cue.ts` is that a still speaks the one vocabulary.
+- **The capture time is read from `captured_at`'s UTC components.** Winnow puts the zone-less EXIF string into a `TIMESTAMPTZ`, so Postgres reads it in the SERVER's zone; taking UTC back undoes that exactly when the server runs UTC, which a container does by default. If a badge's hour is ever off by a constant, that assumption is what broke.
+- `ExifData.relativeAltitude` is new and drone-only (DJI writes it as the XMP tag `drone-dji:RelativeAltitude`, which this app's reader does not walk). It lets `cueFromExif` emit `rel_alt`, so a drone STILL can draw its height above take-off — previously declared meaningless for a photo, and it is not, for a drone.
+- **Gimbal attitude is deliberately not carried**: Winnow has pitch/yaw/roll but no overlay element draws them, and adding a `TelemetryFieldKey` to hold a value nobody asked for is how a vocabulary rots.
+- Merge field by field, never object by object: a stripped file is rarely empty (a WebP still declares its pixel size), so taking either whole throws away half the answer.
+
 ## Edit on the proxy, deliver from the capture (2026-09-02)
 
 **Decision.** A file a remote source handed over carries a `MediaOrigin` (`shared/projects/media-identity.ts`): which source, whether it is that source's editing rendition or the capture, the CAPTURE's pixel size, and a `fetchOriginal` thunk. When the active clip is a proxy, the studio's export fetches the capture **once, before the first variant**, and encodes every variant from it. A checkbox in the export panel opts out — "render from the proxy", off by default, for a quick look rather than delivery.

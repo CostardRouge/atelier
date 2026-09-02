@@ -94,9 +94,12 @@ export function cueFromExif(exif: ExifData): Cue | null {
     data.latitude = exif.gps.lat.toFixed(6);
     data.longitude = exif.gps.lon.toFixed(6);
   }
-  // GPS altitude is height above sea level — the absolute one, not the
-  // take-off-relative reading a drone reports and a photo has no reference for.
+  // GPS altitude is height above sea level — the absolute one. A DRONE photo
+  // also knows its height above take-off, which is the reading `rel_alt`
+  // draws for a clip; an ordinary camera has no such reference and leaves it
+  // absent, so the element goes on reading `—`.
   if (finite(exif.gpsAltitude)) data.abs_alt = trim(exif.gpsAltitude);
+  if (finite(exif.relativeAltitude)) data.rel_alt = trim(exif.relativeAltitude);
 
   const timestamp = exifTimestamp(exif.dateTimeOriginal);
   if (!timestamp && Object.keys(data).length === 0) return null;
