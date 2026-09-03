@@ -154,6 +154,7 @@ export default function TripGallery({ openTripId, onOpen }: TripGalleryProps) {
       choices.destination,
       choices.startDate,
       choices.endDate,
+      choices.places,
     );
     await putTrip(doc);
     setCreating(false);

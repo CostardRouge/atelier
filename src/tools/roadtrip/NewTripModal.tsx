@@ -1,12 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import PlaceSearchField from '../../shared/map/PlaceSearchField';
+import { PLACE_ARROW } from '../../shared/roadtrip/trip-places';
 import { spanLength, todayIso } from '../../shared/roadtrip/trip-days';
-import { spanProblem } from '../../shared/roadtrip/trip-types';
+import { createTripPlace, spanProblem, type TripPlace } from '../../shared/roadtrip/trip-types';
 
 export interface NewTripChoices {
   name: string;
   destination: string;
   startDate: string;
   endDate: string;
+  /**
+   * Where the trip set out from and where it ended, in that order and with the
+   * empty ones dropped. Empty seeds no stage at all — see `createTripDoc`.
+   */
+  places: TripPlace[];
 }
 
 interface NewTripModalProps {
@@ -23,10 +30,18 @@ const input =
  * Naming a trip is naming its span: the two dates are what every later badge
  * counts from ("day 27 / 310"), so the length is echoed back live — a
  * mistyped year is invisible as a date and obvious as "3 862 days".
+ *
+ * The old free-text "Destination" ("Australia — Perth to Cairns") is two fields
+ * now, From and To, because a route typed as one string is a route nothing can
+ * read. They cost no height — one row, like the dates below them — and they
+ * seed the trip's first stage, so a badge can name a place from day one instead
+ * of waiting for someone to open the stages panel. Left empty they seed
+ * nothing, and the trip behaves exactly as trips did before places existed.
  */
 export default function NewTripModal({ onCancel, onCreate }: NewTripModalProps) {
   const [name, setName] = useState('');
-  const [destination, setDestination] = useState('');
+  const [from, setFrom] = useState<TripPlace>(() => createTripPlace());
+  const [to, setTo] = useState<TripPlace>(() => createTripPlace());
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState(() => todayIso());
   const nameRef = useRef<HTMLInputElement>(null);
@@ -51,9 +66,17 @@ export default function NewTripModal({ onCancel, onCreate }: NewTripModalProps) 
   );
   const canCreate = !problem && name.trim().length > 0;
 
+  // The prose subtitle the overview header shows. Composed once, at creation,
+  // from the two ends — exactly the snapshot the free-text field used to hold.
+  const destination = useMemo(
+    () => [from.name.trim(), to.name.trim()].filter(Boolean).join(` ${PLACE_ARROW} `),
+    [from.name, to.name],
+  );
+
   function submit() {
     if (!canCreate) return;
-    onCreate({ name, destination, startDate, endDate });
+    const places = [from, to].filter((place) => place.name.trim().length > 0);
+    onCreate({ name, destination, startDate, endDate, places });
   }
 
   return (
@@ -91,18 +114,44 @@ export default function NewTripModal({ onCancel, onCreate }: NewTripModalProps) 
           </span>
         </label>
 
-        <label className={field}>
-          <span className={legend}>Destination</span>
-          <input
-            value={destination}
-            onChange={(e) => setDestination(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') submit();
-            }}
-            placeholder="Australia — Perth to Cairns"
-            className={input}
-          />
-        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <div className={field}>
+            <span className={legend}>From</span>
+            <PlaceSearchField
+              value={from.name}
+              onChange={(next) => setFrom((place) => ({ ...place, name: next }))}
+              onPick={(result) =>
+                setFrom((place) => ({
+                  ...place,
+                  name: result.name,
+                  region: result.region,
+                  coords: { lat: result.lat, lon: result.lon },
+                }))
+              }
+              placeholder="Perth"
+              label="Left from"
+              inputClassName={input}
+            />
+          </div>
+          <div className={field}>
+            <span className={legend}>To</span>
+            <PlaceSearchField
+              value={to.name}
+              onChange={(next) => setTo((place) => ({ ...place, name: next }))}
+              onPick={(result) =>
+                setTo((place) => ({
+                  ...place,
+                  name: result.name,
+                  region: result.region,
+                  coords: { lat: result.lat, lon: result.lon },
+                }))
+              }
+              placeholder="Cairns"
+              label="Ended at"
+              inputClassName={input}
+            />
+          </div>
+        </div>
 
         {/* One date per line on a phone: at 16px (the size that stops iOS
             zooming) two native date fields do not fit 390px side by side. */}

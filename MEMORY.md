@@ -86,6 +86,8 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - Road Trip briefs the STUDIO: a piece links a project and the badge is sent in as a `roadtrip-hook` scene, so one export carries grade + telemetry + hook; a send replaces the last, and the shades' shape does not cross over — `roadtrip.md`.
 - `#/studio/open/<id>` hands a project between tools and rewrites itself on arrival; neither tool reaches into the other's state — `architecture.md`, `roadtrip.md`.
 - A trip remembers the look it gives a new piece of each kind; what belongs to one day is never inherited — `roadtrip.md`.
+- A Road Trip stage is a LEG carrying an ORDERED list of located places; its start and end are the first and the last, derived and never stored, and a place has no dates of its own — `roadtrip.md`.
+- Looking a place up online is the suite's SECOND network exception, taken deliberately: opt-in, off by default, consent in `localStorage` and never on an exportable document, and never as-you-type — `roadtrip.md`, `local-first.md`.
 - Road Trip's grid draws its own hover card (fixed-positioned, pointer-transparent) because the native `title` is far too slow to sweep a calendar with — `roadtrip.md`.
 - Each post keeps a small JPEG of its HOOK in a second IndexedDB store, taken from the preview canvas, drawn at the piece's own orientation, and pruned on delete — `roadtrip.md`.
 - The Studio edits **stills on the same stage as clips** — a photo is a media a project holds beside its rushes, never a second kind of project — `studio.md`.

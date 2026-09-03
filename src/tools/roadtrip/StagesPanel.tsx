@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { formatIsoDate, spanLength } from '../../shared/roadtrip/trip-days';
+import { stageLabel, stageRegionLabel } from '../../shared/roadtrip/trip-places';
 import {
   createTripStage,
   stageProblem,
   type TripDoc,
   type TripStage,
 } from '../../shared/roadtrip/trip-types';
+import PlacesEditor from './PlacesEditor';
 
 interface StagesPanelProps {
   trip: TripDoc;
@@ -30,6 +32,11 @@ function StageRow({
   const [confirming, setConfirming] = useState(false);
   const problem = stageProblem(trip, stage);
   const nights = spanLength(stage.startDate, stage.endDate);
+  // What the badge would REALLY say for this stage as it stands — never an
+  // invented example. An empty name field showing "Perth → Cairns" is how the
+  // author sees that clearing it computes rather than blanks.
+  const derivedName = stageLabel({ ...stage, name: '' });
+  const derivedRegion = stageRegionLabel({ ...stage, region: '' });
 
   return (
     <li className="flex flex-col gap-1.5 py-2.5 border-b border-line last:border-b-0">
@@ -37,14 +44,14 @@ function StageRow({
         <input
           value={stage.name}
           onChange={(e) => onChange({ ...stage, name: e.target.value })}
-          placeholder="Kalbarri"
+          placeholder={derivedName || 'The Red Centre'}
           className={`${inputClass} flex-1 min-w-[8rem]`}
-          aria-label="Place"
+          aria-label="Stage name"
         />
         <input
           value={stage.region}
           onChange={(e) => onChange({ ...stage, region: e.target.value })}
-          placeholder="Western Australia"
+          placeholder={derivedRegion || 'Western Australia'}
           className={`${inputClass} flex-1 min-w-[8rem]`}
           aria-label="Region"
         />
@@ -101,8 +108,18 @@ function StageRow({
         {problem ??
           (nights === null
             ? ''
-            : `${formatIsoDate(stage.startDate)} → ${formatIsoDate(stage.endDate)} · ${nights} day${nights === 1 ? '' : 's'}`)}
+            : [
+                stageLabel(stage),
+                `${formatIsoDate(stage.startDate)} → ${formatIsoDate(stage.endDate)}`,
+                `${nights} day${nights === 1 ? '' : 's'}`,
+              ]
+                .filter(Boolean)
+                .join(' · '))}
       </p>
+      <PlacesEditor
+        stage={stage}
+        onChange={(places) => onChange({ ...stage, places })}
+      />
     </li>
   );
 }
@@ -138,7 +155,7 @@ export default function StagesPanel({ trip, onChange }: StagesPanelProps) {
           className={`flex-1 flex items-center gap-2 p-0 border-0 bg-transparent cursor-pointer text-left ${legend}`}
         >
           <span>
-            Stages · {trip.stages.length} place
+            Stages · {trip.stages.length} leg
             {trip.stages.length === 1 ? '' : 's'}
           </span>
           <span className="text-faint" aria-hidden="true">
@@ -157,9 +174,10 @@ export default function StagesPanel({ trip, onChange }: StagesPanelProps) {
       {open &&
         (trip.stages.length === 0 ? (
           <p className="m-0 text-[0.8rem] text-muted">
-            A stage is a place and the days you were there. Add one and a badge
-            can name it, count the days you stayed, or say which day of the stop
-            a picture is.
+            A stage is a leg of the trip and the days you were on it. Add one
+            and a badge can name it, count the days you stayed, or say which day
+            of the stop a picture is. List the places it went through and its
+            name writes itself — “Perth → Cairns”.
           </p>
         ) : (
           <ul className="m-0 p-0 list-none flex flex-col">

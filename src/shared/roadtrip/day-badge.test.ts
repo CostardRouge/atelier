@@ -36,7 +36,7 @@ const stage = (
   startDate: IsoDate,
   endDate: IsoDate,
   region = 'Western Australia',
-): TripStage => ({ id: `s-${name}`, name, region, startDate, endDate });
+): TripStage => ({ id: `s-${name}`, name, region, startDate, endDate, places: [] });
 
 const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   version: 3,
@@ -439,5 +439,56 @@ describe('counterPreviews', () => {
       of: 'sur',
     });
     expect(previews.find((p) => p.id === 'day')!.text).toBe('Jour · 27 · sur 310');
+  });
+});
+
+describe('a stage names its place through its places, not only its name', () => {
+  const legStage = (places: { name: string; region?: string }[]): TripStage => ({
+    id: 's-leg',
+    name: '',
+    region: '',
+    startDate: '2025-03-25',
+    endDate: '2025-03-28',
+    places: places.map((p, i) => ({
+      id: `pl-${i}`,
+      name: p.name,
+      region: p.region ?? '',
+      coords: null,
+    })),
+  });
+
+  it('draws the leg a stage with no name of its own describes', () => {
+    const doc = trip({ stages: [legStage([{ name: 'Perth' }, { name: 'Cairns' }])] });
+    const pieces = counterPieces(doc, post('2025-03-26'), 'stage-day', DEFAULT_BADGE_WORDS, false);
+    expect(pieces?.label).toBe('Perth → Cairns');
+    expect(pieces?.unavailable).toBeNull();
+  });
+
+  it('carries the region its places agree on into the caption', () => {
+    const doc = trip({
+      stages: [
+        legStage([
+          { name: 'Perth', region: 'Western Australia' },
+          { name: 'Kalbarri', region: 'Western Australia' },
+        ]),
+      ],
+    });
+    const pieces = counterPieces(doc, post('2025-03-26'), 'stage-day', DEFAULT_BADGE_WORDS, false);
+    expect(pieces?.caption).toBe('Western Australia');
+  });
+
+  it('still refuses to invent a place when the stage names none', () => {
+    const doc = trip({ stages: [legStage([])] });
+    const pieces = counterPieces(doc, post('2025-03-26'), 'stage-day', DEFAULT_BADGE_WORDS, false);
+    expect(pieces?.unavailable).toContain('names no place');
+    // Fallen back to the day of the trip, exactly as before.
+    expect(pieces?.label).toBe(DEFAULT_BADGE_WORDS.day);
+  });
+
+  it("a stage's own name still wins over what its places describe", () => {
+    const stageWithBoth = { ...legStage([{ name: 'Perth' }, { name: 'Cairns' }]), name: 'The Long Drive' };
+    const doc = trip({ stages: [stageWithBoth] });
+    const pieces = counterPieces(doc, post('2025-03-26'), 'stage-day', DEFAULT_BADGE_WORDS, false);
+    expect(pieces?.label).toBe('The Long Drive');
   });
 });

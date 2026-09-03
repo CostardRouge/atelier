@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   TRIP_DOC_VERSION,
   createTripDoc,
+  createTripPlace,
   createTripPost,
+  createTripStage,
   defaultPostBadge,
   duplicateTripPost,
   hookDefaultsFrom,
@@ -21,6 +23,7 @@ const stage = (
   id: 's1',
   name: 'Kalbarri',
   region: 'WA',
+  places: [],
   startDate,
   endDate,
 });
@@ -520,5 +523,92 @@ describe('duplicateTripPost', () => {
     copy.slides[0].caption = 'changed';
     expect(from.badge.layout.sizeFrac).not.toBe(0.9);
     expect(from.slides[0].caption).toBe('One');
+  });
+});
+
+describe('createTripDoc — the route the modal asks for', () => {
+  const dates = ['2025-11-02', '2026-02-14'] as const;
+
+  it('seeds NOTHING when both fields were left empty', () => {
+    // A trip whose author skipped them must behave exactly as it did before
+    // places existed: no stage covers any day, and the counters fall back.
+    expect(createTripDoc('Australie', 'Australia', ...dates).stages).toEqual([]);
+  });
+
+  it('seeds one stage covering the whole trip from the two ends', () => {
+    const trip = createTripDoc('Australie', '', ...dates, [
+      createTripPlace('Perth'),
+      createTripPlace('Cairns'),
+    ]);
+    expect(trip.stages).toHaveLength(1);
+    expect(trip.stages[0].startDate).toBe(dates[0]);
+    expect(trip.stages[0].endDate).toBe(dates[1]);
+    expect(trip.stages[0].places.map((p) => p.name)).toEqual(['Perth', 'Cairns']);
+  });
+
+  it('leaves that stage unnamed, so its label derives and stays honest', () => {
+    const trip = createTripDoc('Australie', '', ...dates, [createTripPlace('Perth')]);
+    expect(trip.stages[0].name).toBe('');
+  });
+
+  it('accepts one end alone', () => {
+    const trip = createTripDoc('Australie', '', ...dates, [createTripPlace('Perth')]);
+    expect(trip.stages[0].places.map((p) => p.name)).toEqual(['Perth']);
+  });
+});
+
+describe('migrateTripDoc — v8 → v9', () => {
+  function v8(): TripDoc {
+    const doc = createTripDoc('Australie', 'Australia', '2025-11-02', '2026-02-14');
+    doc.version = 8;
+    doc.stages = [
+      { id: 's1', name: 'Kalbarri', region: 'Western Australia',
+        startDate: '2025-11-05', endDate: '2025-11-09' },
+    ] as unknown as TripStage[];
+    return doc;
+  }
+
+  it('gives every stage an empty list of places', () => {
+    expect(migrateTripDoc(v8()).stages[0].places).toEqual([]);
+  });
+
+  it('changes NOTHING a stage already said', () => {
+    const stage = migrateTripDoc(v8()).stages[0];
+    expect(stage.name).toBe('Kalbarri');
+    expect(stage.region).toBe('Western Australia');
+    expect(stage.startDate).toBe('2025-11-05');
+    expect(stage.endDate).toBe('2025-11-09');
+  });
+
+  it('reaches the current version and is idempotent', () => {
+    const once = migrateTripDoc(v8());
+    expect(once.version).toBe(TRIP_DOC_VERSION);
+    expect(migrateTripDoc(once)).toEqual(once);
+  });
+
+  it('survives a document with no stages at all', () => {
+    const doc = v8();
+    doc.stages = undefined as unknown as TripStage[];
+    expect(migrateTripDoc(doc).stages).toEqual([]);
+  });
+});
+
+describe('createTripStage', () => {
+  it('takes no place by default, so nothing existing changes shape', () => {
+    expect(createTripStage('Kalbarri', 'WA', '2025-11-05', '2025-11-09').places).toEqual([]);
+  });
+
+  it('mints a fresh id per place', () => {
+    const a = createTripPlace('Perth');
+    const b = createTripPlace('Perth');
+    expect(a.id).not.toBe(b.id);
+  });
+
+  it('trims what was typed', () => {
+    expect(createTripPlace('  Perth  ', '  WA  ')).toMatchObject({
+      name: 'Perth',
+      region: 'WA',
+      coords: null,
+    });
   });
 });

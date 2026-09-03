@@ -41,7 +41,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 8;
+export const TRIP_DOC_VERSION = 9;
 
 /**
  * The look every badge of a trip starts with. `neutral` — white with a drop
@@ -67,18 +67,53 @@ export const POST_KINDS: readonly { id: PostKind; label: string; hint: string }[
 ];
 
 /**
- * A place the trip stopped at, with its own span — that span is what lets a
- * badge say "3 days in Kalbarri" or "Kalbarri · day 2/3" instead of only
- * counting from departure.
+ * One point on the map, named. A place is a POINT INSIDE a stage, never a
+ * dated thing of its own: the stage carries the span, so "Uluru on the 12th"
+ * inside a nine-day stage means splitting the stage, not dating the place.
+ * One dated thing, therefore one place `stageAt` has to look.
+ *
+ * `coords` mirrors `GpsCoord` (shared/exif/exif-parser.ts) — decimal degrees,
+ * south and west negative. Beware the neighbouring convention: `TrackPoint`
+ * (shared/telemetry/flight-path.ts) is GeoJSON-ordered `{lon, lat}`. This one
+ * follows EXIF, which is where a photograph's position comes from.
+ *
+ * Null coordinates are the normal case, not a defect: a place typed by hand is
+ * a complete place. Coordinates only arrive when the author asks for them.
+ */
+export interface TripPlace {
+  id: string;
+  /** The place as it is said out loud ("Kalbarri"). */
+  name: string;
+  /** Region or country. Empty means "the stage's own" — never blank. */
+  region: string;
+  /** Where it is, when that is known. */
+  coords: { lat: number; lon: number } | null;
+}
+
+/**
+ * A leg of the trip, with its own span — that span is what lets a badge say
+ * "3 days in Kalbarri" or "Kalbarri · day 2/3" instead of only counting from
+ * departure.
+ *
+ * `places` is the leg as it was LIVED, in order: the first is where it began,
+ * the last where it ended. That ordering is deliberately the only record of a
+ * start and an end — two more fields would be a second source of truth to keep
+ * in sync, the same reason a trip's days are derived rather than stored.
  */
 export interface TripStage {
   id: string;
-  /** The place as it is said out loud ("Kalbarri"), shown on badges. */
+  /**
+   * The leg's own label ("The Red Centre"). EMPTY means computed from the
+   * places ("Perth → Cairns"), never blank — the same rule as a badge's text
+   * overrides, so clearing it is never a one-way door.
+   */
   name: string;
-  /** Freely typed region or country; never geocoded — nothing leaves the machine. */
+  /** Freely typed region or country. Empty = the region its places agree on. */
   region: string;
   startDate: IsoDate;
   endDate: IsoDate;
+  /** The places this leg went through, in the order they were lived. */
+  places: TripPlace[];
 }
 
 /** How one post's badge counts and where it sits. */
@@ -292,11 +327,22 @@ export interface TripDoc {
   updatedAt: number;
 }
 
+/**
+ * `places` seeds ONE stage covering the whole trip — where it set out from and
+ * where it ended, which is what the creation modal asks for. It is left unnamed
+ * on purpose, so its label derives to "Perth → Cairns" and stays honest if the
+ * author later edits either end.
+ *
+ * Empty (the default, and what an import passes) seeds nothing: a trip whose
+ * author skipped those fields keeps today's behaviour exactly, with no stage
+ * covering any day and the badge counters falling back as they always have.
+ */
 export function createTripDoc(
   name: string,
   destination: string,
   startDate: IsoDate,
   endDate: IsoDate,
+  places: TripPlace[] = [],
 ): TripDoc {
   const now = Date.now();
   return {
@@ -306,7 +352,9 @@ export function createTripDoc(
     destination: destination.trim(),
     startDate,
     endDate,
-    stages: [],
+    stages: places.length
+      ? [createTripStage('', '', startDate, endDate, places)]
+      : [],
     posts: [],
     badgeWords: { ...DEFAULT_BADGE_WORDS },
     hookDefaults: {},
@@ -374,14 +422,24 @@ export function createTripStage(
   region: string,
   startDate: IsoDate,
   endDate: IsoDate,
+  places: TripPlace[] = [],
 ): TripStage {
   return {
-    id: crypto.randomUUID(),
+    id: newId(),
     name: name.trim(),
     region: region.trim(),
     startDate,
     endDate,
+    places,
   };
+}
+
+export function createTripPlace(
+  name = '',
+  region = '',
+  coords: { lat: number; lon: number } | null = null,
+): TripPlace {
+  return { id: newId(), name: name.trim(), region: region.trim(), coords };
 }
 
 /**
@@ -432,6 +490,11 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * backdrop, the place marker and the reference day. A post that had the
  * boolean on lands on `auto` — the intent kept, the untrue anniversary dropped.
  *
+ * v8 → v9 gives a stage the ordered list of places it went through, so a leg
+ * can say where it began and where it ended instead of carrying one name. It
+ * starts empty and the stage's own `name` still wins when set, so no stored
+ * trip changes what its badges say.
+ *
  * v7 → v8 lets a piece point at a Studio project, so the graded clip and the
  * day badge can leave as ONE export instead of two files joined on a phone.
  * Nothing existing is linked: a link is a choice, and guessing one from a file
@@ -454,6 +517,15 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
 export function migrateTripDoc(doc: TripDoc): TripDoc {
   if (doc.version >= TRIP_DOC_VERSION) return doc;
   const migrated = { ...doc };
+  if (migrated.version < 9) {
+    // A stage that has no place keeps `name` as its label, so every existing
+    // trip renders exactly the badge it rendered before — the derivation only
+    // takes over once someone adds a place.
+    migrated.stages = (migrated.stages ?? []).map((stage) => ({
+      ...stage,
+      places: stage.places ?? [],
+    }));
+  }
   if (migrated.version < 2) {
     migrated.theme = migrated.theme ?? themeFromPreset(DEFAULT_THEME_PRESET);
     migrated.posts = (migrated.posts ?? []).map((post) => ({

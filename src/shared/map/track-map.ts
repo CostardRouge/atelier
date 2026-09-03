@@ -17,7 +17,11 @@ import { lineCoordinates, type TrackPoint } from '../telemetry/flight-path';
 export const MAP_PAPER_BG = '#e8e2d4';
 /** Accent used for the track line and the aircraft marker. */
 export const MAP_ACCENT = '#d9442a';
-/** The opt-in raster base layer — the only URL the suite ever fetches. */
+/**
+ * The opt-in raster base layer. One of the two URLs this suite ever fetches on
+ * purpose — the other is the equally opt-in place search in `geocode.ts`, kept
+ * in this folder so both are auditable from one place.
+ */
 export const OSM_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 /** A tiles-free base style: just the paper backdrop, the track draws on top. */
