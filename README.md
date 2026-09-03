@@ -31,11 +31,18 @@ Today it ships nine tools, converging into a single studio:
 - **LUT Studio** — preview and batch-apply `.cube` colour LUTs to your footage in
   real time, with a before/after wipe.
 
-> **The one network exception.** Everything above runs offline and uploads
-> nothing. The single feature that can make a network request is the Flight
-> Map's *optional* base map: turning it on fetches map tiles from OpenStreetMap,
-> which reveals the viewed area to that tile server. It's off by default — the
-> flight path itself always draws locally.
+> **The network exceptions.** Everything above runs offline and uploads
+> nothing — no file, no photograph, no position ever leaves the machine. Two
+> *optional* features can make a request, both off by default and both stated
+> where you turn them on:
+>
+> - The Flight Map's **base map**: turning it on fetches map tiles from
+>   OpenStreetMap, which reveals the viewed area to that tile server. The
+>   flight path itself always draws locally.
+> - Road Trip's **place search**: looking a stage's place up sends *the words
+>   you type* to OpenStreetMap's Nominatim service, and gets a name, a region
+>   and coordinates back. Every place can be typed by hand instead, so the
+>   feature is a convenience and never a requirement.
 
 Tools that consume the same kinds of files (photos, videos, DJI clips) share a
 single **asset library**: import a folder once and switch tools freely — each
@@ -410,9 +417,29 @@ on is chosen by **dragging along a filmstrip of the clip itself**, the way a
 phone gallery picks a cover — the thumbnails fill in as they decode, the
 preview follows the drag, and the arrows nudge frame by frame.
 
-**Stages** are the places the trip stopped at, each with its own span. They are
-what lets a badge name a place, say "3 days in Kalbarri", or count which day of
-a stop a picture is — and an optional marker sets the place off from the rest.
+**Stages** are the legs of the trip, each with its own span. They are what lets
+a badge name a place, say "3 days in Kalbarri", or count which day of a stop a
+picture is — and an optional marker sets the place off from the rest.
+
+A stage lists **the places it went through, in the order you lived them**. The
+first is where the leg began and the last is where it ended, so a start and an
+end are the list itself rather than two more fields to keep in step. Leave the
+stage's own name empty and it writes itself from those two ends — "Perth →
+Cairns" — and typing a name over it always wins; clearing that name gives the
+derived one back rather than a blank. A place is a *point inside* a stage and
+carries no dates of its own: the stage is the dated thing, so "Uluru on the
+12th" inside a nine-day leg means splitting the leg, not dating the place.
+
+Each place can carry **coordinates**, and there are two ways to get them: type
+the name and leave it at that (a place that is only a name is a complete
+place), or use the **optional place search**, which sends the words you type to
+OpenStreetMap's Nominatim and fills in the name, the region and the position.
+That search is **off until you turn it on**, it says exactly what it will send
+before it sends anything, and it fires on Enter or the button — never as you
+type. The trip's two ends can be set from the New trip dialog, where **From**
+and **To** replace the old free-text destination; fill them and the trip starts
+with one stage covering its whole span, so a badge can name a place from day
+one. Leave them empty and no stage is created at all.
 
 **The temporal line.** Under the place, in the badge's quietest type, a line
 can say how long ago the picture was taken — **beside** the trip's name, never
@@ -540,8 +567,8 @@ stayed behind instead).
 Currently in place: the trip, its days and stages, the grid, day-keyed posts,
 the badge — words, temporal line, per-piece styling, animation and picture
 treatments — the deck through to its PNGs, the animated hook burned into a
-clip, and the bridge into the Studio. A portable `.json` export of a trip is
-the phase that follows.
+clip, the located places a stage went through, and the bridge into the Studio.
+A portable `.json` export of a trip is the phase that follows.
 
 ## Telemetry tool
 
@@ -686,9 +713,9 @@ the Telemetry panels use, so it stays frame-accurate.
 
 The path always draws **offline**: MapLibre renders the track line on a plain
 backdrop with no tiles, so nothing leaves the machine. A **"Load map
-background"** toggle adds an OpenStreetMap raster layer on demand — the only
-thing in the suite that makes a network request, surfaced explicitly because it
-reveals the viewed area to the tile server.
+background"** toggle adds an OpenStreetMap raster layer on demand — one of the
+suite's two optional network requests (the other is Road Trip's place search),
+surfaced explicitly because it reveals the viewed area to the tile server.
 
 MapLibre is a heavier dependency, so it's **dynamically imported** (JS *and*
 CSS): it stays out of the main bundle and downloads only when you open this

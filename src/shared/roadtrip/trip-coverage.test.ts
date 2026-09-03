@@ -45,6 +45,7 @@ const stage = (
   id: `s-${name}`,
   name,
   region: 'WA',
+  places: [],
   startDate,
   endDate,
 });

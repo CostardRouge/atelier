@@ -34,6 +34,7 @@
 
 import { formatIsoDate, spanLength, todayIso, type IsoDate } from './trip-days';
 import { postDayRange, stageAt, stageDayNumber } from './trip-coverage';
+import { stageLabel, stageRegionLabel } from './trip-places';
 import {
   DEFAULT_TIME_AGO_WORDS,
   FRENCH_TIME_AGO_WORDS,
@@ -252,7 +253,10 @@ export function counterPieces(
   if (!range) return null;
 
   const stage = stageAt(trip, post.date);
-  const place = stage?.name.trim() || null;
+  // The stage's own name when it has one, else the leg its places describe
+  // ("Perth → Cairns"). Still never fabricated: a stage naming nothing gives
+  // null and the caller falls back to the day of the trip.
+  const place = (stage && stageLabel(stage)) || null;
   const pin = (text: string | null) =>
     text && showPin && w.pin.trim() ? `${w.pin.trim()} ${text}` : text;
 
@@ -268,7 +272,7 @@ export function counterPieces(
           label: null,
           headline: String(total),
           counter: `${unit} ${w.at} ${place}`,
-          caption: pin(stage.region.trim() || null),
+          caption: pin(stageRegionLabel(stage) || null),
           unavailable: null,
         };
       }
@@ -276,14 +280,14 @@ export function counterPieces(
         label: pin(place),
         headline: String(at.day),
         counter: `${w.of} ${at.total}`,
-        caption: pin(stage.region.trim() || null),
+        caption: pin(stageRegionLabel(stage) || null),
         unavailable: null,
       };
     }
     // Outside every stage there is no place to count within, and inventing one
     // would be a lie. Say so, and fall through to the day of the trip.
     unavailable = stage
-      ? `The stage covering ${formatIsoDate(post.date)} has no name.`
+      ? `The stage covering ${formatIsoDate(post.date)} names no place.`
       : `No stage covers ${formatIsoDate(post.date)}.`;
   }
 
