@@ -97,7 +97,7 @@ export default function NewProjectModal({
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="w-full max-w-[30rem] max-h-[90vh] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper p-6">
+      <div className="w-full max-w-[30rem] max-h-[90dvh] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6">
         <div>
           <h2 className="m-0 font-serif text-[1.4rem]">New project</h2>
           <p className="m-0 mt-1 text-[0.82rem] text-muted">
@@ -114,13 +114,13 @@ export default function NewProjectModal({
             onKeyDown={(e) => {
               if (e.key === 'Enter') submit();
             }}
-            className="font-sans text-[0.95rem] px-3.5 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
+            className="font-sans text-[0.95rem] px-3.5 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent max-[560px]:text-[1rem]"
           />
         </label>
 
         <fieldset className="m-0 p-0 border-0 flex flex-col gap-1.5">
           <span className={legend}>Format</span>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2 max-[380px]:grid-cols-1">
             {ASPECT_PRESETS.map((a) => (
               <button
                 key={a.id}
@@ -162,7 +162,7 @@ export default function NewProjectModal({
             <select
               value={templateId}
               onChange={(e) => setTemplateId(e.target.value)}
-              className="font-sans text-[0.9rem] px-3 py-2 border border-line-strong rounded-paper bg-paper text-ink cursor-pointer focus:outline-none focus:border-accent"
+              className="font-sans text-[0.9rem] px-3 py-2 border border-line-strong rounded-paper bg-paper text-ink cursor-pointer focus:outline-none focus:border-accent max-[560px]:text-[1rem]"
             >
               <option value="">Blank</option>
               {templates.map((t) => (
@@ -198,7 +198,9 @@ export default function NewProjectModal({
           </p>
         </div>
 
-        <div className="flex items-center justify-end gap-4 pt-1 border-t border-line">
+        {/* Pinned, like the settings modal: on a phone the card scrolls and
+            Create is the one control every visit ends with. */}
+        <div className="sticky bottom-0 -mx-6 mt-4 px-6 pb-6 flex items-center justify-end gap-4 pt-1 border-t border-line bg-surface">
           <button
             type="button"
             onClick={onCancel}

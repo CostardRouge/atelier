@@ -55,7 +55,7 @@ function Thumb({
 
   if (gaveUp || attempt > THUMB_RETRIES) {
     return (
-      <div className="w-full h-[90px] grid place-items-center bg-frame">
+      <div className="w-full h-[90px] max-[820px]:h-[120px] grid place-items-center bg-frame">
         <span className="font-mono text-[0.55rem] uppercase tracking-wide text-[#8a8270]">
           {label}
         </span>
@@ -70,7 +70,7 @@ function Thumb({
       src={src}
       crossOrigin="use-credentials"
       alt=""
-      className="block w-full h-[90px] object-cover"
+      className="block w-full h-[90px] max-[820px]:h-[120px] object-cover"
       loading="lazy"
       decoding="async"
       onError={() => {
@@ -91,10 +91,14 @@ interface WinnowBrowserProps {
 type View = 'day' | 'session';
 
 const legend = 'font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted';
+// Under 820px every control grows: a finger is not a cursor, and a control
+// whose font is under 16px makes iOS zoom the page the moment it is tapped.
 const pill =
-  'px-3 py-1 inline-flex items-center border rounded-full cursor-pointer text-[0.78rem] transition-colors';
+  'px-3 py-1 inline-flex items-center border rounded-full cursor-pointer text-[0.78rem] transition-colors max-[820px]:px-3.5 max-[820px]:py-1.5 max-[820px]:text-[0.85rem]';
 const select =
-  'font-sans text-[0.78rem] px-2.5 py-1 border border-line rounded-full bg-paper text-ink focus:outline-none focus:border-accent max-w-[14rem]';
+  'font-sans text-[0.78rem] px-2.5 py-1 border border-line rounded-full bg-paper text-ink focus:outline-none focus:border-accent max-w-[14rem] min-w-0 max-[820px]:text-[1rem] max-[820px]:py-1.5 max-[820px]:max-w-full';
+/** A filter select shares the row evenly once that row starts wrapping. */
+const filterSelect = `${select} max-[820px]:flex-1 max-[820px]:basis-[10rem]`;
 
 /** One line a person can act on, for whatever the client threw. */
 function explain(err: unknown, client: WinnowClient): { text: string; login?: string } {
@@ -165,7 +169,14 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    // Under 820px this is a full-screen sheet, and a page still scrolling
+    // behind it drags the whole screen while a grid of tiles is swiped.
+    const bodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = bodyOverflow;
+    };
   }, [onClose]);
 
   // The filter values, once: the pickers offer what the library actually holds.
@@ -330,6 +341,19 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
     }
   }
 
+  // The way out of the pictures when only one pane is on screen (<820px).
+  // It cannot borrow `pill`: that class carries `inline-flex`, which outranks
+  // `hidden` in the generated sheet whatever the order here.
+  const backToPicker = (
+    <button
+      type="button"
+      onClick={() => (view === 'day' ? setDay(null) : setSession(null))}
+      className="hidden max-[820px]:inline-flex items-center px-3.5 py-1.5 border border-line rounded-full bg-paper text-ink-soft cursor-pointer text-[0.85rem] transition-colors"
+    >
+      ‹ {view === 'day' ? monthLabel(month) : 'folders'}
+    </button>
+  );
+
   const viewTab = (v: View, label: string) => (
     <button
       type="button"
@@ -343,7 +367,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[rgba(20,18,15,0.45)] backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[rgba(20,18,15,0.45)] backdrop-blur-[2px] max-[820px]:p-0"
       role="dialog"
       aria-modal="true"
       aria-label={`Add from ${connection.id}`}
@@ -351,10 +375,10 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-[56rem] h-[min(90vh,52rem)] flex flex-col gap-4 bg-surface border border-line rounded-paper-lg shadow-paper p-6 overflow-hidden">
+      <div className="w-full max-w-[56rem] h-[min(90dvh,52rem)] flex flex-col gap-4 bg-surface border border-line rounded-paper-lg shadow-paper p-6 overflow-hidden max-[820px]:max-w-none max-[820px]:h-dvh max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:gap-3 max-[820px]:p-4 max-[820px]:pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="flex items-baseline gap-3 flex-wrap">
-          <h2 className="m-0 font-serif text-[1.4rem]">From {connection.id}</h2>
-          <span className="text-[0.78rem] text-muted">
+          <h2 className="m-0 font-serif text-[1.4rem] min-w-0 truncate">From {connection.id}</h2>
+          <span className="text-[0.78rem] text-muted max-[560px]:hidden">
             pick a day or a folder, then the pictures — they arrive as files in the library.
           </span>
           <span className="flex-1" />
@@ -374,11 +398,11 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
         <div className="flex items-center gap-2 flex-wrap">
           {viewTab('day', 'by day')}
           {viewTab('session', 'by folder')}
-          <span className="w-px h-5 bg-line mx-1" aria-hidden="true" />
+          <span className="w-px h-5 bg-line mx-1 max-[820px]:hidden" aria-hidden="true" />
           <select
             value={filter.mediaType ?? ''}
             onChange={(e) => setFilterKey('mediaType', e.target.value)}
-            className={select}
+            className={filterSelect}
             aria-label="Media type"
           >
             <option value="">photos & videos</option>
@@ -391,7 +415,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
           <select
             value={filter.ext ?? ''}
             onChange={(e) => setFilterKey('ext', e.target.value)}
-            className={select}
+            className={filterSelect}
             aria-label="Extension"
           >
             <option value="">any extension</option>
@@ -404,7 +428,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
           <select
             value={filter.device ?? ''}
             onChange={(e) => setFilterKey('device', e.target.value)}
-            className={select}
+            className={filterSelect}
             aria-label="Device"
           >
             <option value="">any device</option>
@@ -436,10 +460,14 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
           </p>
         )}
 
+        {/* Two panes side by side; under 820px only ONE is on screen — the
+            picker until a day or a folder is chosen, then the pictures with a
+            way back. Stacking them instead put two panes in a fixed height,
+            and the second one landed on top of the calendar. */}
         <div className="grid grid-cols-[18rem_1fr] gap-6 min-h-0 flex-1 overflow-hidden max-[820px]:grid-cols-1">
           {/* --- left: the month, or the folders ---------------------------- */}
           {view === 'day' ? (
-            <div className="flex flex-col gap-3 min-h-0">
+            <div className={`flex flex-col gap-3 min-h-0 ${heading ? 'max-[820px]:hidden' : ''}`}>
               <div className="flex items-center gap-2">
                 <button type="button" disabled={!canPrev} onClick={() => setMonth(shiftMonth(month, -1))} className={`${pill} border-line bg-paper text-ink-soft disabled:opacity-30`} aria-label="Previous month">‹</button>
                 {/* One picker, years as groups: a library spanning fifteen
@@ -477,7 +505,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
                       disabled={!n}
                       onClick={() => setDay(iso)}
                       title={n ? `${iso} · ${n} media` : iso}
-                      className={`aspect-square rounded-md border text-[0.7rem] tabular-nums transition-colors ${
+                      className={`aspect-square rounded-md border text-[0.7rem] tabular-nums transition-colors max-[820px]:aspect-auto max-[820px]:min-h-[3.5rem] max-[820px]:text-[0.9rem] ${
                         active
                           ? 'bg-ink text-paper border-ink'
                           : n
@@ -500,7 +528,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
               </p>
             </div>
           ) : (
-            <div className="flex flex-col gap-2 min-h-0 overflow-auto pr-1">
+            <div className={`flex flex-col gap-2 min-h-0 overflow-auto pr-1 ${heading ? 'max-[820px]:hidden' : ''}`}>
               {sessions === null ? (
                 <p className="m-0 font-mono text-[0.72rem] text-muted">{problem ? '' : 'asking…'}</p>
               ) : sessions.length === 0 ? (
@@ -534,17 +562,21 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
           )}
 
           {/* --- right: the pictures of what was chosen --------------------- */}
-          <div className="flex flex-col gap-3 min-h-0 overflow-hidden">
+          <div className={`flex flex-col gap-3 min-h-0 overflow-hidden ${heading ? '' : 'max-[820px]:hidden'}`}>
             {!heading ? (
               <p className="m-0 text-[0.84rem] text-muted">
                 {view === 'day' ? 'Choose a day on the left.' : 'Choose a folder on the left.'}
               </p>
             ) : rows === null ? (
-              <p className="m-0 font-mono text-[0.72rem] text-muted">reading {heading}…</p>
+              <div className="flex items-center gap-3 flex-wrap">
+                {backToPicker}
+                <span className="font-mono text-[0.72rem] text-muted">reading {heading}…</span>
+              </div>
             ) : (
               <>
                 <div className="flex items-center gap-3 flex-wrap">
-                  <span className={`${legend} truncate max-w-[60%]`}>{heading} · {rows.length} media</span>
+                  {backToPicker}
+                  <span className={`${legend} truncate max-w-[60%] max-[820px]:max-w-full`}>{heading} · {rows.length} media</span>
                   <button
                     type="button"
                     onClick={() =>
@@ -576,7 +608,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
                               else next.add(r.id);
                               setChecked(next);
                             }}
-                            className="absolute top-1.5 left-1.5 z-[2] w-[15px] h-[15px] accent-ink"
+                            className="absolute top-1.5 left-1.5 z-[2] w-[15px] h-[15px] accent-ink max-[820px]:w-[20px] max-[820px]:h-[20px]"
                             aria-label={`Select ${r.filename}`}
                           />
                           {/* Served with the session cookie, so the browser is
@@ -616,34 +648,39 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
         </div>
 
         {/* --- fidelity + go ------------------------------------------------ */}
-        <div className="flex items-center gap-3 flex-wrap border-t border-line pt-4">
-          <span className={legend}>bring</span>
-          <button type="button" onClick={() => setFidelity('proxy')} className={`${pill} ${fidelity === 'proxy' ? 'bg-ink text-paper border-ink' : 'bg-paper border-line text-ink-soft'}`} title="Winnow's editing rendition: H.264 video, WebP photo — fast, decodes everywhere">
-            proxies
-          </button>
-          <button type="button" onClick={() => setFidelity('original')} className={`${pill} ${fidelity === 'original' ? 'bg-ink text-paper border-ink' : 'bg-paper border-line text-ink-soft'}`} title="The full files — every byte through the tunnel">
-            originals
-          </button>
-          <span className="text-[0.74rem] text-faint">
-            {fidelity === 'proxy'
-              ? 'proxies are what you edit on; exports can fetch originals later'
-              : picked.length
-                ? `${formatBytes(pickedBytes)} to download`
-                : 'full-size files'}
-          </span>
-          <span className="flex-1" />
-          {progress && <span className="font-mono text-[0.66rem] text-muted">{progress}</span>}
-          <button type="button" onClick={onClose} className="p-0 border-0 bg-transparent text-[0.82rem] text-muted cursor-pointer underline underline-offset-[3px] hover:text-ink">
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => void add()}
-            disabled={!picked.length || progress !== null}
-            className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold hover:bg-accent hover:border-accent disabled:opacity-40 disabled:cursor-default"
-          >
-            Add {picked.length || ''} to library
-          </button>
+        <div className="flex items-center gap-3 gap-y-2 flex-wrap border-t border-line pt-4 max-[560px]:pt-3">
+          {/* Two groups, never one long row: the choice wraps as a block, the
+              two actions stay together on the last line. */}
+          <div className="flex items-center gap-3 gap-y-2 flex-wrap grow shrink basis-[20rem] min-w-0">
+            <span className={legend}>bring</span>
+            <button type="button" onClick={() => setFidelity('proxy')} className={`${pill} ${fidelity === 'proxy' ? 'bg-ink text-paper border-ink' : 'bg-paper border-line text-ink-soft'}`} title="Winnow's editing rendition: H.264 video, WebP photo — fast, decodes everywhere">
+              proxies
+            </button>
+            <button type="button" onClick={() => setFidelity('original')} className={`${pill} ${fidelity === 'original' ? 'bg-ink text-paper border-ink' : 'bg-paper border-line text-ink-soft'}`} title="The full files — every byte through the tunnel">
+              originals
+            </button>
+            <span className="text-[0.74rem] text-faint">
+              {fidelity === 'proxy'
+                ? 'proxies are what you edit on; exports can fetch originals later'
+                : picked.length
+                  ? `${formatBytes(pickedBytes)} to download`
+                  : 'full-size files'}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 gap-y-2 flex-wrap justify-end ml-auto max-[560px]:w-full">
+            {progress && <span className="font-mono text-[0.66rem] text-muted max-[560px]:w-full">{progress}</span>}
+            <button type="button" onClick={onClose} className="p-0 border-0 bg-transparent text-[0.82rem] text-muted cursor-pointer underline underline-offset-[3px] hover:text-ink">
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void add()}
+              disabled={!picked.length || progress !== null}
+              className="px-[1.1rem] py-2 inline-flex items-center justify-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold hover:bg-accent hover:border-accent disabled:opacity-40 disabled:cursor-default max-[560px]:flex-1"
+            >
+              Add {picked.length || ''} to library
+            </button>
+          </div>
         </div>
       </div>
     </div>
