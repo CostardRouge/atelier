@@ -29,8 +29,19 @@ const AFTER_CONNECT = '/studio/home';
  * connection is stored only if it answers. A 401 is not a failure to explain
  * away: it means "sign in there first", and the screen says so with the link.
  */
+/**
+ * Where to go once connected: an in-app path a link asked to come back to
+ * (a Road Trip timeline link whose source was not connected yet), or the
+ * default. Only a hash path of ours is honoured — never an absolute URL.
+ */
+function landing(query: string): string {
+  const back = new URLSearchParams(query).get('return') ?? '';
+  return back.startsWith('/') && !back.startsWith('//') ? back : AFTER_CONNECT;
+}
+
 export default function ConnectScreen({ query }: { query: string }) {
   const proposed = useMemo(() => new URLSearchParams(query).get('instance') ?? '', [query]);
+  const after = useMemo(() => landing(query), [query]);
   const [raw, setRaw] = useState(proposed);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +76,7 @@ export default function ConnectScreen({ query }: { query: string }) {
       });
       setDone(capabilities);
       // Consumed: the route rewrites itself so a reload does not re-propose.
-      navigate(AFTER_CONNECT);
+      navigate(after);
     } catch (err) {
       if (err instanceof WinnowError && err.kind === 'unauthenticated') {
         setNeedsLogin(client.loginUrl());
@@ -129,6 +140,9 @@ export default function ConnectScreen({ query }: { query: string }) {
         >
           Not now
         </button>
+        {after !== AFTER_CONNECT && (
+          <span className="text-[0.74rem] text-faint">then back to where the link was going</span>
+        )}
       </div>
 
       {needsLogin && (

@@ -12,6 +12,9 @@ import PlacesEditor from './PlacesEditor';
 interface StagesPanelProps {
   trip: TripDoc;
   onChange: (stages: TripStage[]) => void;
+  /** Connected Winnows whose timeline can complete the stages; empty shows nothing. */
+  timelineSources?: string[];
+  onCompleteFrom?: (sourceId: string) => void;
 }
 
 const legend = 'font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted';
@@ -132,7 +135,12 @@ function StageRow({
  * Stages may overlap on purpose: a travel day belongs to the place you left
  * and the one you reached, and `stageAt` gives it to where you ended up.
  */
-export default function StagesPanel({ trip, onChange }: StagesPanelProps) {
+export default function StagesPanel({
+  trip,
+  onChange,
+  timelineSources = [],
+  onCompleteFrom,
+}: StagesPanelProps) {
   const [open, setOpen] = useState(false);
 
   function add() {
@@ -162,6 +170,20 @@ export default function StagesPanel({ trip, onChange }: StagesPanelProps) {
             {open ? '−' : '+'}
           </span>
         </button>
+        {/* The timeline of a connected Winnow proposes what this list lacks —
+            a diff the author accepts leg by leg, never a sync. */}
+        {onCompleteFrom &&
+          timelineSources.map((id) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onCompleteFrom(id)}
+              title={`Compare these stages with ${id}'s timeline and take what you want`}
+              className="flex-none px-3 py-1.5 border border-line-strong rounded-full bg-paper text-[0.76rem] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
+            >
+              ↓ From {id}
+            </button>
+          ))}
         <button
           type="button"
           onClick={add}

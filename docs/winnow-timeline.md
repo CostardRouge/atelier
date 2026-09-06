@@ -243,9 +243,14 @@ Atelier's side of the hash is already the pattern (`use-hash-route.ts`,
 arrival**). Two new routes, both **proposals that a person confirms**:
 
 ```
-#/roadtrip/new?source=<host>&timeline=<id>        seed a new trip
-#/roadtrip/<tripRef>/import?source=<host>&timeline=<id>   reconcile into one
+#/roadtrip/new?source=<host>[&chapters=<id>,<id>]     seed a new trip (built)
+#/roadtrip/<tripRef>/import?source=<host>             reconcile into one (built)
 ```
+
+(Built 2026-09-06 with `chapters=` rather than the `timeline=<id>` first
+sketched here: the timeline is read as ONE flat list of chapters, so a link
+narrows a seed to the legs it names — "Make a Road Trip from this leg" — and
+no timeline identity is assumed to exist. `trip-route.ts`, `TimelineLink`.)
 
 The bridge's rule holds unchanged: **the URL may say what to open, never where to
 fetch from.** A `source` naming an instance that is not already connected falls
@@ -397,7 +402,7 @@ whatever Winnow ships.
 | **T0** ✅ 2026-09-06 | `TripDoc.sourceId` (v10) + `TripStage.origin`, with the migration and the `trip-file.ts` split of §5.4. Nothing remote. | Atelier only | Invariant 2 is finally enforced on both documents, and a trip can *record* where it was seeded from before anything can seed it |
 | **T1** ✅ 2026-09-06 | `timeline-import.ts` — the pure mapping, the span derivation, the diff (`add` / `unchanged` / `changed` with the fields that moved / `dropped`, matched id → span → first place), and `applyTimelineDiff` over accepted entries only; 42 specs | Atelier only | The whole feature's arithmetic, testable with no server and no spec risk beyond the shape of a chapter |
 | **T2** ✅ 2026-09-06 (client side, against the ASSUMED wire of `chapterFromWire`) | Browse by chapter in `WinnowBrowser`; add a chapter's media as a prefilled selection | Atelier + `chapter_id` filter + `capabilities.media.timeline` | Ingestion stops being day-by-day for footage that is a leg |
-| **T3** | Seed / complete a trip: the two screens, the two routes, "Make a Road Trip from this leg" on Winnow's side | Atelier + one link on Winnow | The journey structure crosses once, and the trip is a decision surface from day one |
+| **T3** ✅ 2026-09-06 (Atelier's side: `TimelineImportPanel`, the two routes, three entry points; Winnow's verb still open) | Seed / complete a trip: the two screens, the two routes, "Make a Road Trip from this leg" on Winnow's side | Atelier + one link on Winnow | The journey structure crosses once, and the trip is a decision surface from day one |
 | **T4** | Finals home with `original_asset_id` (+ `chapter_id` ⚠) — bridge phase 2, scoped by chapter | Atelier + `/api/upload` fields | The timeline can colour what has been told, from lineage it owns |
 | *later* | The trip document in the phase-3 opaque bucket, which is what makes the backlink real rather than inferred; a leg's route drawn from `/api/assets/geo` on the existing MapLibre pane | Both | Multi-device Road Trip |
 

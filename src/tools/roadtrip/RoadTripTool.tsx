@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { isWithinRoute, navigate, useHashRoute } from '../../app/use-hash-route';
 import { requestPersistentStorage } from '../../shared/projects/project-store';
 import { listTrips, putTrip } from '../../shared/roadtrip/trip-store';
@@ -12,7 +12,15 @@ import {
 } from '../../shared/roadtrip/trip-route';
 import type { IsoDate } from '../../shared/roadtrip/trip-days';
 import type { TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
+import { hasTimeline } from '../../shared/sources/winnow/client';
+import {
+  getWinnowConnection,
+  listWinnowConnections,
+  subscribeWinnowConnections,
+  type WinnowConnection,
+} from '../../shared/sources/winnow/store';
 import PostEditor from './PostEditor';
+import TimelineImportPanel from './TimelineImportPanel';
 import TripGallery from './TripGallery';
 import TripOverview from './TripOverview';
 
@@ -21,6 +29,14 @@ const BASE_ROUTE = ROADTRIP_BASE;
 const HOME_ROUTE = ROADTRIP_HOME;
 
 const SAVE_DEBOUNCE_MS = 800;
+
+/** The timeline screen that is open, if one is: which instance, doing what. */
+interface Importing {
+  connection: WinnowConnection;
+  kind: 'seed' | 'complete';
+  /** Seed only: the legs a link named. */
+  preselect: string[];
+}
 
 /**
  * Road Trip shell — trips-first, the same shape as the studio's:
@@ -34,6 +50,13 @@ const SAVE_DEBOUNCE_MS = 800;
  * linkable. Only the shell knows about documents and persistence; the
  * overview edits a trip and hands it back.
  *
+ * Two more routes are LINKS a Winnow can put behind a verb —
+ * `/roadtrip/new?source=<host>` and `/roadtrip/<trip>/import?source=<host>`.
+ * Both open a screen that proposes and does nothing until confirmed; a host
+ * this browser has not connected falls through to `#/connect`, which comes
+ * back here once allowed. The link rewrites itself on arrival, so a reload
+ * does not re-propose.
+ *
  * Edits autosave on a debounce. A refused write is SAID rather than swallowed:
  * the browser can deny IndexedDB (private window, disk pressure) and a trip
  * being told over a year is exactly the thing you must not silently lose.
@@ -42,7 +65,10 @@ export default function RoadTripTool() {
   const path = useHashRoute();
   const [open, setOpen] = useState<TripDoc | null>(null);
   const [storageFailed, setStorageFailed] = useState(false);
+  const [importing, setImporting] = useState<Importing | null>(null);
+  const [spanNote, setSpanNote] = useState<string | null>(null);
   const route = parseRoadtripPath(path);
+  const connections = useSyncExternalStore(subscribeWinnowConnections, listWinnowConnections);
 
   // Ask the browser (once) not to evict our stores under disk pressure.
   const persistAsked = useRef(false);
@@ -58,11 +84,30 @@ export default function RoadTripTool() {
   // tool's, and without the guard it would read that path, find it
   // incomplete, and navigate straight back here — the switcher doing nothing
   // at all. It only bit with no document open, which is what made it look
-  // intermittent.
+  // intermittent. A link route is handled by its own effect below.
   const mine = isWithinRoute(path, BASE_ROUTE);
   useEffect(() => {
-    if (mine && path !== HOME_ROUTE && !route.ref) navigate(HOME_ROUTE);
-  }, [mine, path, route.ref]);
+    if (mine && path !== HOME_ROUTE && !route.ref && !route.link) navigate(HOME_ROUTE);
+  }, [mine, path, route.ref, route.link]);
+
+  // A timeline link: resolve its host against what is connected, open the
+  // screen, and consume the link. Not connected → the connect screen, told
+  // where to come back to. Consumed once per path, so the rewrite it causes
+  // cannot re-enter it.
+  const consumedLink = useRef<string | null>(null);
+  useEffect(() => {
+    const link = route.link;
+    if (!mine || !link || consumedLink.current === path) return;
+    consumedLink.current = path;
+    const connection = getWinnowConnection(link.source);
+    if (!connection) {
+      const instance = encodeURIComponent(`https://${link.source}`);
+      navigate(`/connect?instance=${instance}&return=${encodeURIComponent(path)}`);
+      return;
+    }
+    setImporting({ connection, kind: link.kind, preselect: link.chapters });
+    navigate(link.kind === 'seed' || !route.ref ? HOME_ROUTE : roadtripPath(route.ref));
+  }, [mine, path, route.link, route.ref]);
 
   /**
    * Load whatever trip the route names. Keyed on the reference, so a link
@@ -142,11 +187,51 @@ export default function RoadTripTool() {
     [open, handleChange],
   );
 
+  const openImport = useCallback(
+    (kind: Importing['kind'], sourceId: string) => {
+      const connection = getWinnowConnection(sourceId);
+      if (connection) setImporting({ connection, kind, preselect: [] });
+    },
+    [],
+  );
+
+  /** A seeded trip is stored and opened like one made by hand. */
+  const handleSeeded = useCallback(
+    async (doc: TripDoc) => {
+      setImporting(null);
+      const ok = await putTrip(doc);
+      setStorageFailed(!ok);
+      handleOpen(doc);
+    },
+    [handleOpen],
+  );
+
+  const handleApplied = useCallback(
+    (doc: TripDoc, spanWidened: boolean) => {
+      setImporting(null);
+      handleChange(doc);
+      setSpanNote(
+        spanWidened
+          ? `The trip now runs ${doc.startDate} → ${doc.endDate}: its dates grew to hold a leg you accepted.`
+          : null,
+      );
+    },
+    [handleChange],
+  );
+
   // By id from the route, never a held copy: editing writes a NEW post into
   // the trip, and a copy would go stale the moment a control moved.
   const editingPost = route.postId
     ? (open?.posts.find((p) => p.id === route.postId) ?? null)
     : null;
+
+  const seedSources = connections.map((c) => ({
+    id: c.id,
+    hasTimeline: hasTimeline(c.capabilities),
+  }));
+  const completeSources = connections
+    .filter((c) => hasTimeline(c.capabilities))
+    .map((c) => c.id);
 
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-3">
@@ -160,9 +245,27 @@ export default function RoadTripTool() {
           anything you need before closing the tab.
         </p>
       )}
+      {spanNote && !showGallery && (
+        <p className="m-0 px-4 py-2.5 border border-line bg-surface rounded-paper text-[0.8rem] text-muted flex items-center gap-3">
+          <span className="flex-1">{spanNote}</span>
+          <button
+            type="button"
+            onClick={() => setSpanNote(null)}
+            className="p-0 border-0 bg-transparent text-faint cursor-pointer hover:text-ink"
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </p>
+      )}
 
       {showGallery ? (
-        <TripGallery openTripId={open?.id ?? null} onOpen={handleOpen} />
+        <TripGallery
+          openTripId={open?.id ?? null}
+          onOpen={handleOpen}
+          timelineSources={seedSources}
+          onSeedFrom={(id) => openImport('seed', id)}
+        />
       ) : editingPost ? (
         <PostEditor
           key={editingPost.id}
@@ -181,6 +284,24 @@ export default function RoadTripTool() {
           onShowTrips={() => navigate(HOME_ROUTE)}
           onChange={handleChange}
           onOpenPost={(post) => go(post.date, post.id)}
+          timelineSources={completeSources}
+          onCompleteFrom={(id) => openImport('complete', id)}
+        />
+      )}
+
+      {/* A completion needs its trip loaded; a seed needs nothing open. */}
+      {importing && (importing.kind === 'seed' || open) && (
+        <TimelineImportPanel
+          key={`${importing.kind}:${importing.connection.id}`}
+          connection={importing.connection}
+          mode={
+            importing.kind === 'seed'
+              ? { kind: 'seed', preselect: importing.preselect }
+              : { kind: 'complete', trip: open! }
+          }
+          onCancel={() => setImporting(null)}
+          onSeed={(doc) => void handleSeeded(doc)}
+          onApply={handleApplied}
         />
       )}
     </div>

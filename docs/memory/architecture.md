@@ -70,7 +70,7 @@ Read before touching the shell (`src/app/`), the tool registry, the shared asset
 
 **How to apply**:
 - **Never hash a fetched proxy's own bytes.** `materialize` vouches for every file with the ORIGINAL's `content_hash` and Winnow id (`registerMediaIdentity`, consulted by `mediaHash`/`hashedMediaRef` before any read). The `assetId` is `"<host>/<id>"`, scoped to its source. Names keep the original base name so the clip pairs with its `.srt` exactly as from a folder.
-- **No request at boot.** Connecting is the user's click on `#/connect`; the link may *propose* an instance, the person confirms it. A 401 means "sign in there" and the UI says so with the link — it is not an error to hide.
+- **No request at boot.** Connecting is the user's click on `#/connect`; the link may *propose* an instance, the person confirms it. A 401 means "sign in there" and the UI says so with the link — it is not an error to hide. Since 2026-09-06 `#/connect` also takes `return=<in-app path>` (a hash path starting with `/`, never `//` or a URL) and lands there once allowed — how a Road Trip timeline link whose host is not yet connected comes back to its proposal.
 - The `<img>` thumbnails need `crossOrigin="use-credentials"` or the cookie is not sent; a `fetch` needs `credentials: 'include'`. Both are cross-origin, same-site.
 - `listSources()` in `source.ts` stays pure: it holds what `store.ts` mirrors in, it reads nothing.
 - **Follow `next_cursor`.** One `/api/assets` page is 200 rows and a shooting day in this library reaches 300+; a browser that reads one page shows the day two-thirds full and says nothing. `WinnowClient.allAssets` walks the cursors (capped at 2 000).
