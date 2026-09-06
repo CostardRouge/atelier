@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   WinnowClient,
   WinnowError,
+  canWriteBack,
   chapterFromWire,
   hasTimeline,
   normalizeBaseUrl,
@@ -284,6 +285,56 @@ describe('WinnowClient requests', () => {
     );
     const chapters = await c.timeline();
     expect(chapters.map((ch) => ch.id)).toEqual(['1']);
+  });
+
+  it('uploads finals as multipart files + parallel paths, with the capture id alongside', async () => {
+    const fetchImpl = vi.fn<FetchLike>(async () => ok({ staged: 2 }));
+    const c = client(fetchImpl);
+    const a = new File([new Uint8Array(3)], 'a.mp4', { type: 'video/mp4' });
+    const b = new File([new Uint8Array(4)], 'b.mp4', { type: 'video/mp4' });
+    const answer = await c.upload(
+      [{ file: a, path: '7/a.mp4' }, { file: b, path: '7/b.mp4' }],
+      { originalAssetId: 42, chapterId: '7' },
+    );
+    expect(answer).toEqual({ staged: 2 });
+    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${BASE}/api/upload`);
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('include');
+    const form = init.body as FormData;
+    expect(form.getAll('files').map((f) => (f as File).name)).toEqual(['a.mp4', 'b.mp4']);
+    expect(form.getAll('paths')).toEqual(['7/a.mp4', '7/b.mp4']);
+    expect(form.get('original_asset_id')).toBe('42');
+    expect(form.get('chapter_id')).toBe('7');
+  });
+
+  it('sends no capture id or chapter it does not have', async () => {
+    const fetchImpl = vi.fn<FetchLike>(async () => new Response(null, { status: 204 }));
+    const c = client(fetchImpl);
+    const answer = await c.upload([{ file: new File([], 'a.mp4'), path: 'a.mp4' }]);
+    expect(answer).toBeNull();
+    const form = (fetchImpl.mock.calls[0] as [string, RequestInit])[1].body as FormData;
+    expect(form.has('original_asset_id')).toBe(false);
+    expect(form.has('chapter_id')).toBe(false);
+  });
+
+  it('reconciles with an empty JSON body', async () => {
+    const fetchImpl = vi.fn<FetchLike>(async () => ok({ linked: 1 }));
+    expect(await client(fetchImpl).reconcile()).toEqual({ linked: 1 });
+    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${BASE}/api/reconcile`);
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe('{}');
+  });
+
+  it('knows a viewer cannot write back', () => {
+    const caps = (role: string | null) =>
+      ({ viewer: role ? { id: 1, username: 'x', role } : null }) as unknown as WinnowCapabilities;
+    expect(canWriteBack(caps('admin'))).toBe(true);
+    expect(canWriteBack(caps('editor'))).toBe(true);
+    expect(canWriteBack(caps('viewer'))).toBe(false);
+    expect(canWriteBack(caps(null))).toBe(false);
+    expect(canWriteBack(null)).toBe(false);
   });
 
   it('turns a body into a File with the name, type and date it was told', async () => {

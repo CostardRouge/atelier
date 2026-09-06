@@ -183,6 +183,33 @@ export function hasTimeline(caps: WinnowCapabilities | null | undefined): boolea
   return caps?.media?.timeline === true;
 }
 
+/**
+ * Whether the signed-in account may send files back. Winnow's `viewer` role
+ * is read-only; a button that would answer 403 is worse than a sentence.
+ */
+export function canWriteBack(caps: WinnowCapabilities | null | undefined): boolean {
+  const role = caps?.viewer?.role;
+  return role === 'admin' || role === 'editor';
+}
+
+/** One file to upload, and where it lands inside the finals root. */
+export interface UploadItem {
+  file: File;
+  /** Relative path — `POST /api/upload`'s `paths[]`, parallel to `files[]`. */
+  path: string;
+}
+
+export interface UploadOptions {
+  /**
+   * ⚠ ASSUMED addition (bridge §7, phase 2): the capture this final was cut
+   * from, so the link is exact instead of reconcile's basename + capture-time
+   * guess. Omitted when unknown.
+   */
+  originalAssetId?: number | null;
+  /** ⚠ ASSUMED (timeline §6): the chapter the final belongs to, if any. */
+  chapterId?: string | null;
+}
+
 function str(value: unknown): string | null {
   if (typeof value === 'string') return value;
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
@@ -516,6 +543,51 @@ export class WinnowClient {
       cursor = page.next_cursor;
     } while (cursor && rows.length < cap);
     return rows;
+  }
+
+  /**
+   * `POST /api/upload` — multipart `files[]` with a parallel `paths[]`, which
+   * Winnow already serves as a staged import (bridge §5.1). One request per
+   * call: the deployment's body limit is per request, so the caller sends the
+   * finals one at a time and a limit bites one file, not the whole run. The
+   * answer's shape is not relied on; it is handed back for a status line.
+   */
+  async upload(items: readonly UploadItem[], options: UploadOptions = {}): Promise<unknown> {
+    const form = new FormData();
+    for (const item of items) {
+      form.append('files', item.file, item.file.name);
+      form.append('paths', item.path);
+    }
+    if (options.originalAssetId != null) {
+      form.append('original_asset_id', String(options.originalAssetId));
+    }
+    if (options.chapterId) form.append('chapter_id', options.chapterId);
+    const res = await this.request(this.url('/api/upload'), { method: 'POST', body: form });
+    return this.bodyOf(res);
+  }
+
+  /**
+   * `POST /api/reconcile` — link what the finals root now holds to the
+   * captures it came from. Idempotent and retroactive on Winnow's side, so
+   * calling it after every send is cheap and never wrong.
+   */
+  async reconcile(): Promise<unknown> {
+    const res = await this.request(this.url('/api/reconcile'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    return this.bodyOf(res);
+  }
+
+  /** A JSON body when there is one; null for an empty or non-JSON answer. */
+  private async bodyOf(res: Response): Promise<unknown> {
+    if (!res.headers.get('content-type')?.includes('json')) return null;
+    try {
+      return await res.json();
+    } catch {
+      return null;
+    }
   }
 
   /**

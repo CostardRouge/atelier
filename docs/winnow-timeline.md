@@ -10,7 +10,12 @@ side** against an assumed wire shape: `GET /api/timeline?<filters>` →
 lon}], revision, asset_count, photo_count, video_count, cover_id }] }`,
 `chapter_id` as an `/api/assets` filter, and `capabilities.media.timeline`.
 All of it is read in ONE function, `chapterFromWire` (`client.ts`); when the
-spec lands, that function changes and nothing else does.
+spec lands, that function changes and nothing else does. **T3 and T4 are built
+on Atelier's side too** (2026-09-06): the seed / complete screens and the two
+link routes, and the finals going home with `original_asset_id`. What remains
+is Winnow's: the timeline itself, `chapter_id` on the asset routes and on
+`/api/upload`, `capabilities.media.timeline`, and the "Make a Road Trip from
+this leg" verb pointing at `#/roadtrip/new?source=<host>&chapters=<id>`.
 
 **What this is.** A companion to `docs/winnow-bridge.md` — read that first: it
 carries the source model, the four invariants, the API inventory and the phases
@@ -403,7 +408,7 @@ whatever Winnow ships.
 | **T1** ✅ 2026-09-06 | `timeline-import.ts` — the pure mapping, the span derivation, the diff (`add` / `unchanged` / `changed` with the fields that moved / `dropped`, matched id → span → first place), and `applyTimelineDiff` over accepted entries only; 42 specs | Atelier only | The whole feature's arithmetic, testable with no server and no spec risk beyond the shape of a chapter |
 | **T2** ✅ 2026-09-06 (client side, against the ASSUMED wire of `chapterFromWire`) | Browse by chapter in `WinnowBrowser`; add a chapter's media as a prefilled selection | Atelier + `chapter_id` filter + `capabilities.media.timeline` | Ingestion stops being day-by-day for footage that is a leg |
 | **T3** ✅ 2026-09-06 (Atelier's side: `TimelineImportPanel`, the two routes, three entry points; Winnow's verb still open) | Seed / complete a trip: the two screens, the two routes, "Make a Road Trip from this leg" on Winnow's side | Atelier + one link on Winnow | The journey structure crosses once, and the trip is a decision surface from day one |
-| **T4** | Finals home with `original_asset_id` (+ `chapter_id` ⚠) — bridge phase 2, scoped by chapter | Atelier + `/api/upload` fields | The timeline can colour what has been told, from lineage it owns |
+| **T4** ✅ 2026-09-06 (Atelier's side: `finals.ts`, `client.upload`/`reconcile`, `SendFinalsPanel` after a Studio export; `chapter_id` is sent only when known, and the Studio knows none today) | Finals home with `original_asset_id` (+ `chapter_id` ⚠) — bridge phase 2, scoped by chapter | Atelier + `/api/upload` fields | The timeline can colour what has been told, from lineage it owns |
 | *later* | The trip document in the phase-3 opaque bucket, which is what makes the backlink real rather than inferred; a leg's route drawn from `/api/assets/geo` on the existing MapLibre pane | Both | Multi-device Road Trip |
 
 **T0 and T1 are worth doing before the spec lands**: both are client-only, both
