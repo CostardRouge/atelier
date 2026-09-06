@@ -105,6 +105,12 @@ export interface WinnowCapabilities {
       photo: { format: string; size: number };
     };
     contentHash: string;
+    /**
+     * ⚠ ASSUMED (docs/winnow-timeline.md §7.9): true once the instance serves
+     * its timeline. Absent on an older instance, which is what lets the
+     * browser show a sentence instead of a broken tab.
+     */
+    timeline?: boolean;
   };
   documents: { bucket: boolean };
   scheduling: { reminders: boolean };
@@ -131,8 +137,103 @@ export interface AssetQuery extends FilterQuery {
   dateTo?: string;
   /** A Winnow shoot session — one folder, in practice. */
   sessionId?: number;
+  /** ⚠ ASSUMED: a timeline chapter, cumulative with the other filters (§7.8). */
+  chapterId?: string;
   cursor?: string | null;
   limit?: number;
+}
+
+/** A place as a chapter names it — `lat`/`lon` in decimal degrees, or null. */
+export interface WinnowChapterPlace {
+  name: string;
+  region: string | null;
+  lat: number | null;
+  lon: number | null;
+}
+
+/**
+ * One chapter of the instance's timeline: media grouped by place and date.
+ *
+ * This is Atelier's reading of the chapter, normalised at the boundary by
+ * `chapterFromWire` — the spec is not written, so every wire key that
+ * function reads is an ASSUMPTION (⚠) held in one place. The field names
+ * deliberately match `TimelineChapter` (`shared/roadtrip/timeline-import.ts`)
+ * so a chapter list can be handed to the import unchanged, without either
+ * module importing the other. `startDate`/`endDate` are the CAPTURE DATES the
+ * instance computed (`YYYY-MM-DD`, camera-local) — never recomputed here from
+ * an instant. Counts and the cover are for drawing the list; they are never
+ * stored in a trip.
+ */
+export interface WinnowChapter {
+  id: string;
+  title: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  places: WinnowChapterPlace[];
+  /** Whatever the instance offers to detect a re-clustering, if anything. */
+  revision: string | null;
+  assetCount: number;
+  photoCount: number | null;
+  videoCount: number | null;
+  coverId: number | null;
+}
+
+/** Whether a connected instance's capabilities say it serves a timeline. */
+export function hasTimeline(caps: WinnowCapabilities | null | undefined): boolean {
+  return caps?.media?.timeline === true;
+}
+
+function str(value: unknown): string | null {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return null;
+}
+
+function num(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/** A calendar day as the wire carries it; an instant is kept whole, so the import can refuse it. */
+function dateStr(value: unknown): string | null {
+  const s = str(value);
+  return s && s.trim() ? s.trim() : null;
+}
+
+/**
+ * ⚠ ASSUMED wire shape of one `/api/timeline` chapter (docs/winnow-timeline.md
+ * §7): `id`, `title`, `start_date` / `end_date` as capture dates, `places` in
+ * lived order with `name` / `region` / `lat` / `lon`, `revision`, and
+ * `asset_count` / `photo_count` / `video_count` / `cover_id`. Change THIS
+ * function when the spec lands; nothing downstream reads the wire.
+ */
+export function chapterFromWire(raw: unknown): WinnowChapter | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const r = raw as Record<string, unknown>;
+  const id = str(r.id);
+  if (id === null) return null;
+  const places = Array.isArray(r.places)
+    ? r.places
+        .map((p): WinnowChapterPlace | null => {
+          if (typeof p !== 'object' || p === null) return null;
+          const q = p as Record<string, unknown>;
+          const name = str(q.name);
+          if (name === null) return null;
+          return { name, region: str(q.region), lat: num(q.lat), lon: num(q.lon) };
+        })
+        .filter((p): p is WinnowChapterPlace => p !== null)
+    : [];
+  return {
+    id,
+    title: str(r.title),
+    startDate: dateStr(r.start_date),
+    endDate: dateStr(r.end_date),
+    places,
+    revision: str(r.revision),
+    assetCount: num(r.asset_count) ?? 0,
+    photoCount: num(r.photo_count),
+    videoCount: num(r.video_count),
+    coverId: num(r.cover_id),
+  };
 }
 
 export interface ValueCount {
@@ -363,6 +464,23 @@ export class WinnowClient {
   }
 
   /**
+   * ⚠ ASSUMED `GET /api/timeline?<filters>` → `{ chapters: [...] }`, chapters
+   * in lived order, narrowed by the same cumulative filters as everything
+   * else (so a chapter's count agrees with the day list). Only call it when
+   * `hasTimeline(capabilities)`; an older instance answers 404 and the caller
+   * should have shown a sentence instead. Rows the normaliser cannot read are
+   * dropped rather than half-shown.
+   */
+  async timeline(filter: FilterQuery = {}): Promise<WinnowChapter[]> {
+    const raw = await this.json<{ chapters?: unknown[] }>(
+      this.url('/api/timeline', filterParams(filter)),
+    );
+    return (raw.chapters ?? [])
+      .map(chapterFromWire)
+      .filter((c): c is WinnowChapter => c !== null);
+  }
+
+  /**
    * One page of assets, oldest first inside the window so a day reads in
    * shooting order. Collapsed: a RAW+JPEG pair is one row, the displayed
    * primary — and Winnow's proxy exists for it whichever half that is.
@@ -373,6 +491,7 @@ export class WinnowClient {
         date_from: query.dateFrom,
         date_to: query.dateTo,
         session_id: query.sessionId,
+        chapter_id: query.chapterId,
         ...filterParams(query),
         cursor: query.cursor,
         limit: query.limit ?? 200,
