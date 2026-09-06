@@ -411,54 +411,59 @@ export default function PostEditor({
   );
 
   return (
-    // Wide: the page holds still and the panel scrolls by itself, so the badge
-    // stays in view while its controls are worked through — the studio's own
-    // layout. Narrow (stacked): the whole page scrolls, because a panel with
-    // its own scrollbar inside a scrolling page is a trap on a phone.
-    <section
-      className="@container flex flex-col flex-1 min-h-0 gap-4 overflow-auto @min-[860px]:overflow-hidden"
-      aria-label="Hook"
-    >
-      <div className="flex items-center gap-3 flex-wrap">
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center h-[1.9rem] px-3 rounded-full border border-line-strong bg-paper text-[0.78rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
-        >
-          ← Overview
-        </button>
-        <div className="min-w-0 flex-1 max-w-[26rem]">
-          {/* Editable in place, like the Studio's project name: a piece is
-              found again by what it is called, and having to go back to the
-              day panel to rename it is the kind of friction that stops you
-              naming things at all. */}
-          <input
-            value={post.title}
-            onChange={(e) => onChangePost({ ...post, title: e.target.value })}
-            placeholder="Untitled piece"
-            aria-label="What this piece shows"
-            className="w-full font-serif text-[1.25rem] leading-tight bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0.5 placeholder:text-faint placeholder:italic"
-          />
-          <p className="m-0 px-1 font-mono text-[0.68rem] text-muted">
-            {formatIsoDate(post.date)} · {post.kind}
-          </p>
+    // Wide: a two-column grid — the stage spans both rows on the left and
+    // takes the section's whole height, the piece's header sits atop the
+    // inspector on the right, and the inspector's body scrolls by itself so
+    // the badge stays in view while its controls are worked through. Nothing
+    // sits above the picture: on a portrait frame height is what decides the
+    // preview's size, and a header row over both columns cost it 60px.
+    // Narrow (stacked): header, stage, inspector in a column, and the whole
+    // page scrolls, because a panel with its own scrollbar inside a scrolling
+    // page is a trap on a phone.
+    // The `@container` is the section and the queried layout is its CHILD: a
+    // container query only ever matches an ancestor, so classes like
+    // `@min-[860px]:grid` on the container element itself never apply.
+    <section className="@container flex-1 min-h-0 flex flex-col" aria-label="Hook">
+    <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-auto @min-[860px]:grid @min-[860px]:grid-cols-[minmax(0,1fr)_22rem] @min-[860px]:grid-rows-[auto_minmax(0,1fr)] @min-[860px]:gap-x-5 @min-[860px]:gap-y-3 @min-[860px]:overflow-hidden">
+      <div className="flex flex-col gap-1 min-w-0 @min-[860px]:col-start-2 @min-[860px]:row-start-1">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex items-center h-[1.9rem] px-3 rounded-full border border-line-strong bg-paper text-[0.78rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
+          >
+            ← Overview
+          </button>
+          <span className="flex-1" />
+          <button
+            type="button"
+            onClick={() => void exports.exportDeck()}
+            disabled={exports.exporting !== null}
+            className="h-[1.9rem] px-[1.1rem] inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.8rem] font-semibold hover:bg-accent hover:border-accent disabled:opacity-60"
+          >
+            {exports.exporting ??
+              (slides.length === 1
+                ? '↓ Export PNG'
+                : `↓ Export ${slides.length} slides`)}
+          </button>
         </div>
-        <span className="flex-1" />
-        <button
-          type="button"
-          onClick={() => void exports.exportDeck()}
-          disabled={exports.exporting !== null}
-          className="px-[1.1rem] py-2 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.82rem] font-semibold hover:bg-accent hover:border-accent disabled:opacity-60"
-        >
-          {exports.exporting ??
-            (slides.length === 1
-              ? '↓ Export PNG'
-              : `↓ Export ${slides.length} slides`)}
-        </button>
+        {/* Editable in place, like the Studio's project name: a piece is
+            found again by what it is called, and having to go back to the
+            day panel to rename it is the kind of friction that stops you
+            naming things at all. */}
+        <input
+          value={post.title}
+          onChange={(e) => onChangePost({ ...post, title: e.target.value })}
+          placeholder="Untitled piece"
+          aria-label="What this piece shows"
+          className="w-full font-serif text-[1.25rem] leading-tight bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0.5 placeholder:text-faint placeholder:italic"
+        />
+        <p className="m-0 px-1 font-mono text-[0.68rem] text-muted">
+          {formatIsoDate(post.date)} · {post.kind}
+        </p>
       </div>
 
-      <div className="flex flex-col @min-[860px]:flex-row gap-5 min-h-0 @min-[860px]:flex-1">
-        <div className="flex-1 min-w-0 flex flex-col items-center gap-3 @min-[860px]:min-h-0">
+      <div className="min-w-0 flex flex-col items-center gap-3 @min-[860px]:min-h-0 @min-[860px]:col-start-1 @min-[860px]:row-start-1 @min-[860px]:row-span-2">
           <BadgeStage
             file={slideFile}
             videoTimeSeconds={slide.videoTimeSeconds}
@@ -515,107 +520,107 @@ export default function PostEditor({
           )}
         </div>
 
-        <div className="flex-none w-full @min-[860px]:w-[22rem] flex flex-col gap-3 @min-[860px]:min-h-0">
-          {/* Six tabs in a 22rem column wrap into two rows rather than
-              squeezing into one: the Studio's five at 340px is already tight. */}
-          <div
-            className="flex-none flex flex-wrap gap-1 p-1 rounded-full border border-line bg-surface"
-            role="tablist"
-            aria-label="Piece inspector"
-          >
-            {TABS.map(tabButton)}
-          </div>
+      <div className="w-full min-w-0 flex flex-col gap-3 @min-[860px]:min-h-0 @min-[860px]:col-start-2 @min-[860px]:row-start-2">
+        {/* Six tabs in a 22rem column wrap into two rows rather than
+            squeezing into one: the Studio's five at 340px is already tight. */}
+        <div
+          className="flex-none flex flex-wrap gap-1 p-1 rounded-full border border-line bg-surface"
+          role="tablist"
+          aria-label="Piece inspector"
+        >
+          {TABS.map(tabButton)}
+        </div>
 
-          <div className="flex flex-col gap-3 @min-[860px]:flex-1 @min-[860px]:min-h-0 @min-[860px]:overflow-y-auto @min-[860px]:overscroll-contain @min-[860px]:pr-1.5">
-            {tab === 'content' && (
-              <ContentTab
-                trip={trip}
-                post={post}
-                slide={slide}
-                content={content}
-                piece={piece}
-                onPiece={selectPiece}
-                slideFile={slideFile}
-                onChangePost={onChangePost}
-                patchBadge={patchBadge}
-                patchSlide={patchSlide}
-                textFieldRef={textFieldRef}
-                onGoToDeck={() => setTab('deck')}
-              />
-            )}
+        <div className="flex flex-col gap-3 @min-[860px]:flex-1 @min-[860px]:min-h-0 @min-[860px]:overflow-y-auto @min-[860px]:overscroll-contain @min-[860px]:pr-1.5">
+          {tab === 'content' && (
+            <ContentTab
+              trip={trip}
+              post={post}
+              slide={slide}
+              content={content}
+              piece={piece}
+              onPiece={selectPiece}
+              slideFile={slideFile}
+              onChangePost={onChangePost}
+              patchBadge={patchBadge}
+              patchSlide={patchSlide}
+              textFieldRef={textFieldRef}
+              onGoToDeck={() => setTab('deck')}
+            />
+          )}
 
-            {tab === 'style' && (
-              <StyleTab
-                trip={trip}
-                post={post}
-                isHook={isHook}
-                piece={piece}
-                onPiece={setPiece}
-                onChangeTrip={onChangeTrip}
-                patchBadge={patchBadge}
-              />
-            )}
+          {tab === 'style' && (
+            <StyleTab
+              trip={trip}
+              post={post}
+              isHook={isHook}
+              piece={piece}
+              onPiece={setPiece}
+              onChangeTrip={onChangeTrip}
+              patchBadge={patchBadge}
+            />
+          )}
 
-            {tab === 'picture' && (
-              <PictureTab
-                post={post}
-                slide={slide}
-                slideFile={slideFile}
-                missing={missing}
-                isVideo={isVideo}
-                duration={duration}
-                patchBadge={patchBadge}
-                patchSlide={patchSlide}
-              />
-            )}
+          {tab === 'picture' && (
+            <PictureTab
+              post={post}
+              slide={slide}
+              slideFile={slideFile}
+              missing={missing}
+              isVideo={isVideo}
+              duration={duration}
+              patchBadge={patchBadge}
+              patchSlide={patchSlide}
+            />
+          )}
 
-            {tab === 'grade' && (
-              <GradeTab grade={grade} linkedToProject={post.projectId !== null} />
-            )}
+          {tab === 'grade' && (
+            <GradeTab grade={grade} linkedToProject={post.projectId !== null} />
+          )}
 
-            {tab === 'deck' && (
-              <DeckTab
-                trip={trip}
-                post={post}
-                slides={slides}
-                slideIndex={slideIndex}
-                contentIndex={contentIndex}
-                cta={cta}
-                onSelectSlide={setSelected}
-                onAddSlide={() => void addSlide()}
-                onRemoveSlide={removeSlide}
-                onMoveSlide={moveSlideTo}
-                onChangePost={onChangePost}
-                onChangeTrip={onChangeTrip}
-                patchBadge={patchBadge}
-                ctaFieldRefs={ctaFieldRefs}
-              />
-            )}
+          {tab === 'deck' && (
+            <DeckTab
+              trip={trip}
+              post={post}
+              slides={slides}
+              slideIndex={slideIndex}
+              contentIndex={contentIndex}
+              cta={cta}
+              onSelectSlide={setSelected}
+              onAddSlide={() => void addSlide()}
+              onRemoveSlide={removeSlide}
+              onMoveSlide={moveSlideTo}
+              onChangePost={onChangePost}
+              onChangeTrip={onChangeTrip}
+              patchBadge={patchBadge}
+              ctaFieldRefs={ctaFieldRefs}
+            />
+          )}
 
-            {tab === 'export' && (
-              <ExportTab
-                trip={trip}
-                post={post}
-                slides={slides}
-                hookElements={hookElements}
-                aspect={aspect}
-                hookFile={hookFile}
-                hookIsVideo={hookIsVideo}
-                duration={hookInfo.duration}
-                hookLength={hookLength}
-                onHookSeconds={setHookSeconds}
-                exporting={exports.exporting}
-                exportNote={exports.note}
-                onExportDeck={() => void exports.exportDeck()}
-                onExportHookClip={() => void exports.exportHookClip()}
-                onChangePost={onChangePost}
-                grade={grade.saved}
-                gradeScope={grade.scope}
-              />
-            )}
-          </div>
+          {tab === 'export' && (
+            <ExportTab
+              trip={trip}
+              post={post}
+              slides={slides}
+              hookElements={hookElements}
+              aspect={aspect}
+              hookFile={hookFile}
+              hookIsVideo={hookIsVideo}
+              duration={hookInfo.duration}
+              hookLength={hookLength}
+              onHookSeconds={setHookSeconds}
+              exporting={exports.exporting}
+              exportNote={exports.note}
+              onExportDeck={() => void exports.exportDeck()}
+              onExportHookClip={() => void exports.exportHookClip()}
+              onChangePost={onChangePost}
+              grade={grade.saved}
+              gradeScope={grade.scope}
+            />
+          )}
         </div>
       </div>
+    </div>
     </section>
   );
 }

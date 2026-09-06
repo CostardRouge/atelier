@@ -6,6 +6,7 @@ import type { OverlayElement } from '../../shared/overlay/overlay-types';
 import type { StyleTheme } from '../../shared/overlay/title-styles';
 import { moveBlock } from '../../shared/roadtrip/badge-layout';
 import {
+  MAX_PREVIEW_LONG_EDGE,
   PREVIEW_LONG_EDGE,
   frameSize,
   loadBadgeSource,
@@ -219,11 +220,44 @@ export default function BadgeStage({
     [],
   );
 
+  // The picture's box is measured, not styled: the largest box of the
+  // frame's aspect that fits the wrapper, set in CSS pixels on the box that
+  // holds both canvases. A canvas is a replaced element and never displays
+  // past its bitmap, and CSS aspect-ratio cannot transfer a max-constraint
+  // back onto a definite axis — so neither could fill the height on its own.
+  // The bitmap then follows the displayed size at the device's pixel ratio
+  // (floored at PREVIEW_LONG_EDGE, capped so a 5K screen does not repaint a
+  // 4K canvas per animation frame), so a bigger preview is sharp, not scaled.
+  const frameRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [longEdge, setLongEdge] = useState(PREVIEW_LONG_EDGE);
+  useLayoutEffect(() => {
+    const frame = frameRef.current;
+    const box = boxRef.current;
+    if (!frame || !box) return;
+    const fit = () => {
+      const { width, height } = frame.getBoundingClientRect();
+      if (width <= 0 || height <= 0) return;
+      const w = Math.min(width, height * aspect);
+      const h = w / aspect;
+      box.style.width = `${w}px`;
+      box.style.height = `${h}px`;
+      const dpr = window.devicePixelRatio || 1;
+      setLongEdge(
+        Math.min(MAX_PREVIEW_LONG_EDGE, Math.max(PREVIEW_LONG_EDGE, Math.round(Math.max(w, h) * dpr))),
+      );
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(frame);
+    return () => ro.disconnect();
+  }, [aspect]);
+
   // Paint. Runs on every change of anything drawn, including after a decode.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const { w, h } = frameSize(aspect, PREVIEW_LONG_EDGE);
+    const { w, h } = frameSize(aspect, longEdge);
     canvas.width = w;
     canvas.height = h;
     const opts: RenderBadgeOptions = {
@@ -259,35 +293,12 @@ export default function BadgeStage({
     loading,
     file,
     frameSeq,
+    longEdge,
     drawChrome,
     graderFor,
   ]);
 
   useEffect(() => () => sourceRef.current?.release(), []);
-
-  // The chrome canvas sits exactly over the picture. The picture's box is
-  // decided by the flex column and two max constraints, so the overlay copies
-  // its rectangle rather than trying to reproduce that layout.
-  const frameRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const canvas = canvasRef.current;
-    const chrome = chromeRef.current;
-    const frame = frameRef.current;
-    if (!canvas || !chrome || !frame) return;
-    const place = () => {
-      const c = canvas.getBoundingClientRect();
-      const f = frame.getBoundingClientRect();
-      chrome.style.left = `${c.left - f.left}px`;
-      chrome.style.top = `${c.top - f.top}px`;
-      chrome.style.width = `${c.width}px`;
-      chrome.style.height = `${c.height}px`;
-    };
-    place();
-    const ro = new ResizeObserver(place);
-    ro.observe(canvas);
-    ro.observe(frame);
-    return () => ro.disconnect();
-  }, []);
 
   // --- pointing at the badge -------------------------------------------------
   const [hovering, setHovering] = useState(false);
@@ -371,30 +382,36 @@ export default function BadgeStage({
       : 'cursor-default';
 
   return (
-    // The picture takes every pixel the column can spare: both max
-    // constraints apply to the canvas, and a replaced element honours them
-    // proportionally, so it fills the box without ever distorting. The 62vh
-    // cap is kept only for the STACKED layout, where the page scrolls and an
-    // unbounded picture would push the controls off a phone screen.
+    // The wrapper decides how much room there is; the box inside takes the
+    // largest aspect-fitting slice of it (measured above). Wide: the wrapper
+    // grows to the column's whole height. Stacked: it is as tall as a
+    // full-width picture, capped at 62vh so it never pushes the controls off
+    // a phone screen — `cqw` is the section's width, the editor's container.
     <div className="flex flex-col items-center gap-2 min-h-0 w-full @min-[860px]:flex-1">
       <div
         ref={frameRef}
-        className="relative flex items-center justify-center min-h-0 w-full @min-[860px]:flex-1"
+        style={{ '--aspect': aspect } as React.CSSProperties}
+        className="relative flex items-center justify-center min-h-0 w-full h-[min(62vh,calc(100cqw/var(--aspect)))] @min-[860px]:h-auto @min-[860px]:flex-1"
       >
-        <canvas
-          ref={canvasRef}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-          onPointerLeave={() => setHovering(false)}
-          className={`max-w-full max-h-[62vh] @min-[860px]:max-h-full object-contain rounded-paper border border-line-strong bg-frame touch-none ${cursor}`}
-        />
-        <canvas
-          ref={chromeRef}
-          aria-hidden="true"
-          className="absolute pointer-events-none rounded-paper"
-        />
+        <div
+          ref={boxRef}
+          className="relative rounded-paper border border-line-strong bg-frame overflow-hidden"
+        >
+          <canvas
+            ref={canvasRef}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            onPointerLeave={() => setHovering(false)}
+            className={`absolute inset-0 w-full h-full touch-none ${cursor}`}
+          />
+          <canvas
+            ref={chromeRef}
+            aria-hidden="true"
+            className="absolute inset-0 w-full h-full pointer-events-none"
+          />
+        </div>
         {loading && (
           <span className="absolute font-mono text-[0.7rem] text-paper bg-[rgba(20,18,15,0.7)] px-3 py-1.5 rounded-full">
             decoding…

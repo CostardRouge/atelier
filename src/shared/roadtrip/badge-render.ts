@@ -83,6 +83,13 @@ export function coverRect(
 export const PREVIEW_LONG_EDGE = 720;
 
 /**
+ * The most a preview bitmap grows to when the stage is large or the screen
+ * dense: beyond this every frame of the badge's transport would repaint a
+ * near-4K canvas for a difference no eye sees at arm's length.
+ */
+export const MAX_PREVIEW_LONG_EDGE = 1600;
+
+/**
  * Pixel size of a frame with the given aspect, whose longest edge is `longEdge`.
  * Rounded to whole pixels — a canvas cannot be 1079.6 wide, and a fractional
  * size silently resamples every element.
