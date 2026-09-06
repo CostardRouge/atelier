@@ -84,6 +84,9 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - Road Trip addresses everything in the hash (`#/roadtrip/<trip>/<day>/<piece>`), so Back lands on the day you were on and a day is linkable — `roadtrip.md`.
 - A control about the PIECE (its name, its Studio link, the trip's defaults) must never be rendered inside the hook-only branch: on a carousel's second slide it vanishes and reads as missing — `roadtrip.md`.
 - Road Trip briefs the STUDIO: a piece links a project and the badge is sent in as a `roadtrip-hook` scene, so one export carries grade + telemetry + hook; a send replaces the last, and the shades' shape does not cross over — `roadtrip.md`.
+- Road Trip GRADES, through the Studio's engine and never a second one: the trip's `grade` (v10) dresses every piece, a post's `grade: null` follows it, `renderBadge` grades at source density before the crop, and the grader is caller-owned because a WebGL2 context per repaint is never reclaimed — `roadtrip.md`.
+- The piece editor is six tabs (Content · Style · Picture · Grade · Deck · Export) over one stage where a click selects a piece and a drag moves the whole block; derived elements carry deterministic ids so a hit-test survives the repaint — `roadtrip.md`.
+- `GradePanel` is engine-level (`shared/lut/`) since Road Trip became its second consumer, exactly as `StylePanel` — `roadtrip.md`.
 - `#/studio/open/<id>` hands a project between tools and rewrites itself on arrival; neither tool reaches into the other's state — `architecture.md`, `roadtrip.md`.
 - A trip remembers the look it gives a new piece of each kind; what belongs to one day is never inherited — `roadtrip.md`.
 - A Road Trip stage is a LEG carrying an ORDERED list of located places; its start and end are the first and the last, derived and never stored, and a place has no dates of its own — `roadtrip.md`.
@@ -153,7 +156,9 @@ document storage:
   from Road Trip through the Studio's own engine** (`useLutStack` +
   `makeFrameGrader` + `exportVariantVideo` — no second exporter, which is what
   the earlier rejection was actually about). Four phases, one commit each.
-  **Nothing in it is built.**
+  **All four phases are built (2026-09-06)**; the decisions they fixed are in
+  `roadtrip.md`. Unverified in the container: the hook clip's graded encode
+  (no H.264 encoder here) — the PNG deck and the preview were checked.
 - **`docs/winnow-timeline.md`** — what Winnow's forthcoming timeline (media
   grouped into chapters by place and date) means for Atelier: the chapter ↔ stage
   mapping, ingesting by chapter, seeding and completing a Road Trip, the finals

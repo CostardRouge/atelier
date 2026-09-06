@@ -1,11 +1,22 @@
+import type { RefObject } from 'react';
 import { QR_MAX_BYTES } from '../../shared/lib/qr';
-import type { CtaSlide } from '../../shared/roadtrip/cta-slide';
+import type { CtaRole, CtaSlide } from '../../shared/roadtrip/cta-slide';
+
+/** One ref per line of the card, so a click on the stage can focus its field. */
+export interface CtaFieldRefs {
+  headline?: RefObject<HTMLInputElement>;
+  body?: RefObject<HTMLTextAreaElement>;
+  url?: RefObject<HTMLInputElement>;
+}
+
+export type { CtaRole };
 
 interface CtaPanelProps {
   cta: CtaSlide;
   onChange: (cta: CtaSlide) => void;
   /** Why the QR could not be drawn, when the author asked for one. */
   problem: string | null;
+  fieldRefs?: CtaFieldRefs;
 }
 
 const legend = 'font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted';
@@ -17,7 +28,7 @@ const inputClass =
  * published copy, so nothing is computed and nothing is fixed — including the
  * two colours, because a QR only scans when it contrasts with its own ground.
  */
-export default function CtaPanel({ cta, onChange, problem }: CtaPanelProps) {
+export default function CtaPanel({ cta, onChange, problem, fieldRefs }: CtaPanelProps) {
   const patch = (p: Partial<CtaSlide>) => onChange({ ...cta, ...p });
   const urlLength = new TextEncoder().encode(cta.url.trim()).length;
 
@@ -26,6 +37,7 @@ export default function CtaPanel({ cta, onChange, problem }: CtaPanelProps) {
       <label className="flex flex-col gap-1">
         <span className={legend}>Headline</span>
         <input
+          ref={fieldRefs?.headline}
           value={cta.headline}
           onChange={(e) => patch({ headline: e.target.value })}
           className={inputClass}
@@ -35,6 +47,7 @@ export default function CtaPanel({ cta, onChange, problem }: CtaPanelProps) {
       <label className="flex flex-col gap-1">
         <span className={legend}>Body</span>
         <textarea
+          ref={fieldRefs?.body}
           value={cta.body}
           rows={3}
           onChange={(e) => patch({ body: e.target.value })}
@@ -45,6 +58,7 @@ export default function CtaPanel({ cta, onChange, problem }: CtaPanelProps) {
       <label className="flex flex-col gap-1">
         <span className={legend}>Link</span>
         <input
+          ref={fieldRefs?.url}
           value={cta.url}
           onChange={(e) => patch({ url: e.target.value })}
           placeholder="https://…"

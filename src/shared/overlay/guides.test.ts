@@ -7,11 +7,30 @@ import {
   resolveSafeZone,
   rotateSafeZone,
   shouldRotateSafeZone,
+  snap,
   snapToGrid,
   targetFrame,
   type GuidesState,
   type SafeZonePreset,
 } from './guides';
+
+describe('snap', () => {
+  it('pulls a coordinate onto an edge or the centre when it is close', () => {
+    expect(snap(0.01)).toBe(0);
+    expect(snap(0.99)).toBe(1);
+    expect(snap(0.51)).toBe(0.5);
+  });
+
+  it('leaves a coordinate alone elsewhere', () => {
+    expect(snap(0.3)).toBe(0.3);
+    expect(snap(0.47)).toBe(0.47);
+  });
+
+  it('takes its tolerance from the caller', () => {
+    expect(snap(0.05, 0.1)).toBe(0);
+    expect(snap(0.05, 0.02)).toBe(0.05);
+  });
+});
 
 describe('snapToGrid', () => {
   it('snaps to the nearest division within tolerance', () => {

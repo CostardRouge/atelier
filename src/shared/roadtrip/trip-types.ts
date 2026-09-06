@@ -19,6 +19,8 @@
 
 import { isIsoDate, isWithin, type IsoDate } from './trip-days';
 import type { SavedMediaRef } from '../projects/project-types';
+import type { SavedLutLayer } from '../lut/use-lut-stack';
+import type { OutputTransform } from '../lut/transfer';
 import { themeFromPreset, type StyleTheme } from '../overlay/title-styles';
 import {
   DEFAULT_BADGE_DURATION,
@@ -41,7 +43,24 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 9;
+export const TRIP_DOC_VERSION = 10;
+
+/**
+ * A grade, in the Studio's own terms: an ordered stack of LUT layers and the
+ * output transform, exactly what `ProjectDoc.lutStack` + `outputTransform`
+ * hold. Road Trip grades THROUGH the Studio's engine (`useLutStack` →
+ * `makeFrameGrader`), so the stored shape is the Studio's and a custom
+ * `.cube` rides as text inside its layer. The interpolation mode is NOT here:
+ * it is a render preference of the machine, never of a document.
+ */
+export interface TripGrade {
+  layers: SavedLutLayer[];
+  output: OutputTransform;
+}
+
+export function emptyGrade(): TripGrade {
+  return { layers: [], output: 'none' };
+}
 
 /**
  * The look every badge of a trip starts with. `neutral` — white with a drop
@@ -283,6 +302,13 @@ export interface TripPost {
    * telemetry and the hook — see `hook-scene.ts`.
    */
   projectId: string | null;
+  /**
+   * This piece's own grade, or null to FOLLOW THE TRIP's — the "empty means
+   * computed, never blank" rule again. A picture needing its own correction
+   * departs; everything else inherits the trip's look. One grade per post
+   * (every slide of the deck); a per-slide grade is a later change.
+   */
+  grade: TripGrade | null;
   publishedAt: number | null;
   createdAt: number;
 }
@@ -323,6 +349,12 @@ export interface TripDoc {
    * is just another factory setting.
    */
   hookDefaults: HookDefaultsByKind;
+  /**
+   * The trip's look on the PICTURE, the way `theme` is its look on the type:
+   * per trip, so a grade chosen once dresses every piece. Empty by default —
+   * a grade nobody chose is a factory setting.
+   */
+  grade: TripGrade;
   createdAt: number;
   updatedAt: number;
 }
@@ -360,6 +392,7 @@ export function createTripDoc(
     hookDefaults: {},
     theme: themeFromPreset(DEFAULT_THEME_PRESET),
     cta: { ...DEFAULT_CTA },
+    grade: emptyGrade(),
     createdAt: now,
     updatedAt: now,
   };
@@ -412,6 +445,7 @@ export function createTripPost(
     // frame is the footage, and a single photo has no last slide to give.
     includeCta: kind === 'carousel',
     projectId: null,
+    grade: null,
     publishedAt: null,
     createdAt: Date.now(),
   };
@@ -517,6 +551,15 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
 export function migrateTripDoc(doc: TripDoc): TripDoc {
   if (doc.version >= TRIP_DOC_VERSION) return doc;
   const migrated = { ...doc };
+  if (migrated.version < 10) {
+    // No trip had a grade before, so every existing picture keeps rendering
+    // exactly as it did: the trip's grade is empty and every post follows it.
+    migrated.grade = migrated.grade ?? emptyGrade();
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      grade: post.grade ?? null,
+    }));
+  }
   if (migrated.version < 9) {
     // A stage that has no place keeps `name` as its label, so every existing
     // trip renders exactly the badge it rendered before — the derivation only

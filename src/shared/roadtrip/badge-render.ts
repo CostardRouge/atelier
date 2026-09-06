@@ -9,10 +9,17 @@
  * difference between the two is the canvas they are handed.
  */
 
+import type { CubeLut } from '../lib/cube-parser';
+import { makeFrameGrader, type FrameGrader } from '../lut/frame-grader';
 import { drawQr, type QrDraw } from '../overlay/draw-qr';
 import { shadeGradient, type HookBlock, type Shade } from './shades';
 import { seek as seekVideo } from './video-frames';
-import { drawOverlays } from '../overlay/draw-overlays';
+import {
+  drawOverlays,
+  measureOverlays,
+  type DrawOptions,
+  type ElementBox,
+} from '../overlay/draw-overlays';
 import { ensureOverlayFonts } from '../overlay/fonts';
 import type { OverlayElement } from '../overlay/overlay-types';
 import type { StyleTheme } from '../overlay/title-styles';
@@ -74,6 +81,13 @@ export function coverRect(
 
 /** Longest edge a preview canvas is worth drawing at. */
 export const PREVIEW_LONG_EDGE = 720;
+
+/**
+ * The most a preview bitmap grows to when the stage is large or the screen
+ * dense: beyond this every frame of the badge's transport would repaint a
+ * near-4K canvas for a difference no eye sees at arm's length.
+ */
+export const MAX_PREVIEW_LONG_EDGE = 1600;
 
 /**
  * Pixel size of a frame with the given aspect, whose longest edge is `longEdge`.
@@ -184,6 +198,44 @@ export interface RenderBadgeOptions {
   block?: HookBlock | null;
   /** A QR square, drawn under the text — the call-to-action slide's hero. */
   qr?: QrDraw | null;
+  /**
+   * The grade, as a grader the CALLER owns, sized to the source's own pixels.
+   * A grader is a WebGL2 context, and a context per repaint would be built and
+   * lost on every frame of the stage's transport (contexts are only reclaimed
+   * on GC or a forced loss): the stage keeps one and re-makes it when the LUT
+   * or the source size changes; `badgeToPng` makes and disposes one per slide.
+   */
+  grader?: FrameGrader | null;
+  /**
+   * EDITOR ONLY: the selected element, drawn faintly even outside its window
+   * so a piece that has exited stays visible and selectable while chosen.
+   * Never set by an export — `badgeToPng` and `renderDeck` do not know it.
+   */
+  ghostId?: string | null;
+}
+
+/** The overlay engine's options for a badge, shared by the paint and the measure. */
+function overlayOptions(opts: RenderBadgeOptions): DrawOptions {
+  return {
+    theme: opts.theme,
+    timeSeconds: opts.timeSeconds ?? 0,
+    originSeconds: 0,
+    ghostId: opts.ghostId ?? null,
+  };
+}
+
+/**
+ * The hit boxes of a badge's elements, measured exactly as `renderBadge`
+ * would draw them — same context, same elements, same options — so a click on
+ * the stage lands on what the eye sees. Pixel space of the canvas.
+ */
+export function measureBadge(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  opts: RenderBadgeOptions,
+): ElementBox[] {
+  return measureOverlays(ctx, opts.elements, null, w, h, overlayOptions(opts));
 }
 
 /** `#rrggbb` → `rgba(r,g,b,a)`; anything else is passed through unchanged. */
@@ -270,26 +322,39 @@ export async function renderBadge(
 
   if (opts.source && opts.source.width > 0 && opts.source.height > 0) {
     const { sx, sy, sw, sh } = coverRect(opts.source.width, opts.source.height, w, h);
-    ctx.drawImage(opts.source.image, sx, sy, sw, sh, 0, 0, w, h);
+    // Grade at the source's own density, THEN crop with the same rectangle:
+    // grading the cropped frame would give a different result at every
+    // output size (the photo-frame rule). Shades, QR and the badge stay after.
+    const picture = opts.grader ? opts.grader.render(opts.source.image) : opts.source.image;
+    ctx.drawImage(picture, sx, sy, sw, sh, 0, 0, w, h);
   }
 
   if (opts.shades?.length) paintShades(ctx, w, h, opts.shades, opts.block ?? null);
   if (opts.qr) drawQr(ctx, w, h, opts.qr);
 
-  drawOverlays(ctx, opts.elements, null, w, h, {
-    theme: opts.theme,
-    timeSeconds: opts.timeSeconds ?? 0,
-    originSeconds: 0,
-  });
+  drawOverlays(ctx, opts.elements, null, w, h, overlayOptions(opts));
 }
 
-/** Render at full size and hand back a PNG — lossless, since text is the point. */
+/**
+ * Render at full size and hand back a PNG — lossless, since text is the point.
+ * A LUT, when given, is applied through a grader made for this one render and
+ * disposed after it: an export is a handful of slides, and a context per slide
+ * is the correct lifetime there.
+ */
 export async function badgeToPng(
-  opts: RenderBadgeOptions & { width: number; height: number },
+  opts: RenderBadgeOptions & { width: number; height: number; lut?: CubeLut | null },
 ): Promise<Blob | null> {
   const canvas = document.createElement('canvas');
   canvas.width = opts.width;
   canvas.height = opts.height;
-  await renderBadge(canvas, opts);
+  const grader =
+    opts.lut && opts.source && opts.source.width > 0
+      ? makeFrameGrader(opts.lut, opts.source.width, opts.source.height)
+      : null;
+  try {
+    await renderBadge(canvas, { ...opts, grader });
+  } finally {
+    grader?.dispose();
+  }
   return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
 }

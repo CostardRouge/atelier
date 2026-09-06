@@ -109,6 +109,24 @@ function slugify(value: string): string {
 const CAPTION = 0.045;
 
 /**
+ * A caption line's element id: `caption:<line index>`. Deterministic because
+ * the elements are rebuilt on every render and a stage that hit-tests them
+ * needs the id to survive the repaint (the same rule as `pieceElementId`).
+ */
+const CAPTION_ID_PREFIX = 'caption:';
+
+export function captionElementId(line: number): string {
+  return `${CAPTION_ID_PREFIX}${line}`;
+}
+
+/** The caption line an element id names, or null for any other id. */
+export function captionLineFromElementId(id: string): number | null {
+  if (!id.startsWith(CAPTION_ID_PREFIX)) return null;
+  const n = Number(id.slice(CAPTION_ID_PREFIX.length));
+  return Number.isInteger(n) && n >= 0 ? n : null;
+}
+
+/**
  * A content slide's overlay: the author's line, or nothing. It is deliberately
  * one plain element — a content picture in a carousel is there to be looked
  * at, and the counter has already done its work on the hook.
@@ -130,6 +148,7 @@ export function contentSlideElements(
   const lineHeight = CAPTION * 1.3 * Math.min(aspect, 1);
   return lines.map((line, i) => {
     const el = createTextElement(line);
+    el.id = captionElementId(i);
     el.anchor = 'top-left';
     el.x = 0.07;
     // The block's foot sits at 0.93 whatever it holds, so a two-line caption
