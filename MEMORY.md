@@ -147,6 +147,13 @@ document storage:
   model, with several instances and scheduling marked *later* but designed for.
   **Phases 0, 0.5 and 1 are built**; 2 (write-back) and 3 (remote documents) are
   not.
+- **`docs/roadtrip-editor.md`** — the agreed plan (2026-09-06) to give the Road
+  Trip piece editor the Studio's shape: six tabs instead of the 16-section
+  accordion, click-to-select and block-drag on the badge stage, and **grading
+  from Road Trip through the Studio's own engine** (`useLutStack` +
+  `makeFrameGrader` + `exportVariantVideo` — no second exporter, which is what
+  the earlier rejection was actually about). Four phases, one commit each.
+  **Nothing in it is built.**
 - **`docs/winnow-timeline.md`** — what Winnow's forthcoming timeline (media
   grouped into chapters by place and date) means for Atelier: the chapter ↔ stage
   mapping, ingesting by chapter, seeding and completing a Road Trip, the finals
