@@ -15,7 +15,7 @@
  * every gallery render while its pictures are wanted only when a day is open.
  *
  * A third store (v3) keeps one SYNC RECORD per trip kept on a connected
- * instance (`trip-sync.ts`): the etag the server last acknowledged and whether
+ * instance (`sources/doc-sync.ts`): the etag the server last acknowledged and whether
  * the mirror is dirty. Beside the document, never on it — on the document it
  * would leak into the trip file and onto the wire — and durable on purpose:
  * `dirtyAt` surviving a closed tab is what lets the next open push the edit.
@@ -27,7 +27,7 @@
  */
 
 import { migrateTripDoc, type TripDoc } from './trip-types';
-import type { SyncRecord } from './trip-sync';
+import type { SyncRecord } from '../sources/doc-sync';
 
 const DB_NAME = 'atelier-roadtrip';
 // Bumped only when an object store is added; a document migration runs on

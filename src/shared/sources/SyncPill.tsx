@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { pillText, type SyncRecord, type SyncStatus } from '../../shared/roadtrip/trip-sync';
+import { pillText, type SyncRecord, type SyncStatus } from './doc-sync';
 
 interface SyncPillProps {
   record: SyncRecord;
@@ -12,7 +12,7 @@ interface SyncPillProps {
   onKeepMine: () => void;
   /** Conflict: replace the mirror with the server's copy, dropping local edits. */
   onTakeTheirs: () => void;
-  /** Gone: keep the trip in this browser as a local one. */
+  /** Gone: keep the document in this browser as a local one. */
   onKeepLocal: () => void;
   /** Gone: delete the mirror here too. */
   onDeleteHere: () => void;
@@ -44,9 +44,9 @@ function useNow(everyMs: number): number {
 }
 
 /**
- * Where a remote trip stands — one sentence, always the true one, and the
- * buttons that state calls for. It reads the same record the shell writes,
- * so the trip header and the piece editor say the same thing.
+ * Where a remote document stands — one sentence, always the true one, and
+ * the buttons that state calls for. It reads the same record the shell
+ * writes, so every screen of a tool says the same thing.
  *
  * "Take theirs" and "Delete here" drop something that cannot be recovered,
  * so each is a two-step inside the pill — the gallery's own confirm pattern,

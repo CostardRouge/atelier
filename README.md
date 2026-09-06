@@ -677,7 +677,8 @@ it is, refuses before a byte moves when the account is read-only or a file is
 over the instance's upload limit, and is never automatic.
 
 A connected Winnow that declares a **document bucket** can also *keep a Road
-Trip* — the other thing Atelier writes to a server, beside the finals. Pick "Keep on
+Trip or a Studio project* — the other thing Atelier writes to a server, beside
+the finals. Pick "Keep on
 winnow.example" when creating or importing a trip and it saves there as you
 edit: locally at once, to the instance after a few seconds of quiet, when the
 tab hides, when you leave the trip, or on "Save now". Open the trip gallery on
@@ -689,7 +690,10 @@ theirs). The trip document holds place names, dates and the text of your
 badges, and only your own account can read it back; the hook thumbnails never
 travel and are re-drawn locally. A trip can be moved between this browser and
 an instance from its card; the `.roadtrip.json` file remains the offline way
-to cross.
+to cross. A Studio project kept on an instance works the same way from the
+project gallery and the project bar; its media folder never travels — only
+the list of clips does, so on another device the project opens and asks you
+to point it at the footage.
 
 Plainly, what this changes about the promise above: Atelier holds no account
 and talks only to a server you named yourself, signed in with that server's own

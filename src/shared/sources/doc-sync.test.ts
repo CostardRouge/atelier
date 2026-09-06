@@ -8,7 +8,7 @@ import {
   shouldFlush,
   type SyncRecord,
   type SyncStatus,
-} from './trip-sync';
+} from './doc-sync';
 
 const HOST = 'winnow.steeve.website';
 

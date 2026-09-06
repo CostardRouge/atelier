@@ -9,6 +9,7 @@ import {
   type SavedMediaRef,
 } from '../../shared/projects/project-types';
 import { hashedMediaRefs } from '../../shared/projects/media-identity';
+import { DEFAULT_SOURCE_ID, type SourceInfo } from '../../shared/sources/source';
 
 export interface NewProjectChoices {
   name: string;
@@ -21,10 +22,17 @@ export interface NewProjectChoices {
     files: File[];
     refs: SavedMediaRef[];
   } | null;
+  /** Where the project is kept — this browser, or a connected instance. */
+  sourceId: string;
 }
 
 interface NewProjectModalProps {
   templates: ProjectDoc[];
+  /**
+   * The sources that can hold a project. With ONE the picker is not shown at
+   * all — the modal must not grow for a choice that does not exist.
+   */
+  sources: readonly SourceInfo[];
   onCancel: () => void;
   onCreate: (choices: NewProjectChoices) => void;
 }
@@ -41,10 +49,14 @@ const legend = 'font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted'
  */
 export default function NewProjectModal({
   templates,
+  sources,
   onCancel,
   onCreate,
 }: NewProjectModalProps) {
   const [name, setName] = useState('Untitled project');
+  const [sourceId, setSourceId] = useState(() =>
+    sources.some((s) => s.id === DEFAULT_SOURCE_ID) ? DEFAULT_SOURCE_ID : (sources[0]?.id ?? DEFAULT_SOURCE_ID),
+  );
   const [aspectId, setAspectId] = useState(ASPECT_PRESETS[0].id);
   const [templateId, setTemplateId] = useState<string>('');
   const [folder, setFolder] = useState<NewProjectChoices['folder']>(null);
@@ -84,6 +96,7 @@ export default function NewProjectModal({
       aspectId,
       templateId: templateId || null,
       folder,
+      sourceId,
     });
   }
 
@@ -171,6 +184,30 @@ export default function NewProjectModal({
                 </option>
               ))}
             </select>
+          </label>
+        )}
+
+        {/* Only when there is a choice — see NewTripModal. A remote project's
+            media stay where they are: the handle never travels, only the refs. */}
+        {sources.length > 1 && (
+          <label className={field}>
+            <span className={legend}>Keep on</span>
+            <select
+              value={sourceId}
+              onChange={(e) => setSourceId(e.target.value)}
+              className="font-sans text-[0.9rem] px-3 py-2 border border-line-strong rounded-paper bg-paper text-ink cursor-pointer focus:outline-none focus:border-accent max-[560px]:text-[1rem]"
+            >
+              {sources.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.id === DEFAULT_SOURCE_ID ? 'this browser (local)' : s.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-[0.7rem] text-faint">
+              {sourceId === DEFAULT_SOURCE_ID
+                ? 'Stays in this browser. Export a project file to share its settings.'
+                : `Saved to ${sourceId} as you edit, so it resumes from another device. The media folder stays on this machine.`}
+            </span>
           </label>
         )}
 

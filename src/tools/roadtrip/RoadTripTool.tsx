@@ -26,7 +26,7 @@ import {
   reduceSync,
   shouldFlush,
   type SyncRecord,
-} from '../../shared/roadtrip/trip-sync';
+} from '../../shared/sources/doc-sync';
 import {
   isRemoteSource,
   outcomeEvent,
@@ -43,7 +43,7 @@ import {
   type WinnowConnection,
 } from '../../shared/sources/winnow/store';
 import PostEditor from './PostEditor';
-import SyncPill from './SyncPill';
+import SyncPill from '../../shared/sources/SyncPill';
 import TimelineImportPanel from './TimelineImportPanel';
 import TripGallery from './TripGallery';
 import TripOverview from './TripOverview';

@@ -1,7 +1,9 @@
 /**
- * The bookkeeping of a trip kept on a connected instance — a reducer.
+ * The bookkeeping of a document kept on a connected instance — a reducer,
+ * shared by trips (`roadtrip/trip-remote.ts`) and projects
+ * (`projects/project-remote.ts`).
  *
- * A remote trip has a local mirror in IndexedDB; the remote copy is the
+ * A remote document has a local mirror in IndexedDB; the remote copy is the
  * authority and the mirror is a cache of that ONE document, never a second
  * truth (`docs/roadtrip-persistence.md` §2). This module decides what the
  * mirror knows about its distance from the authority: whether it is dirty,
@@ -10,10 +12,10 @@
  * last-write-wins, an etag that REFUSES a stale write and says so.
  *
  * The record is NOT on the document. Put there it would leak into the file
- * and onto the wire; it is a sibling row in the same database
- * (`trip-store.ts`, store `sync`). `dirtyAt` persisting is the whole crash
- * story: a tab closed mid-edit leaves the record dirty, and the next open on
- * that device pushes it.
+ * and onto the wire; it is a sibling row in the same database (each store's
+ * `sync` object store). `dirtyAt` persisting is the whole crash story: a tab
+ * closed mid-edit leaves the record dirty, and the next open on that device
+ * pushes it.
  *
  * Pure and DOM-free; every transition is tested.
  */

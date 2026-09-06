@@ -1,7 +1,7 @@
 /**
  * The driver that carries a trip between its mirror and the instance it is
  * kept on — thin and impure (`WinnowClient` + `trip-store`), owning no
- * policy: every decision is `trip-sync.ts`'s reducer, every sentence is its
+ * policy: every decision is `sources/doc-sync.ts`'s reducer, every sentence is its
  * `pillText`. The tool calls these on the triggers `docs/roadtrip-persistence.md`
  * §4 names (idle, tab hidden, leaving, "Save now", opening).
  *
@@ -14,87 +14,37 @@
  * not be persisted is still returned, so the tool keeps working in memory.
  */
 
-import {
-  DOCS_APP,
-  WinnowClient,
-  WinnowError,
-  type WinnowDocRow,
-} from '../sources/winnow/client';
-import { getWinnowConnection } from '../sources/winnow/store';
-import { DEFAULT_SOURCE_ID } from '../sources/source';
+import { DOCS_APP, WinnowError, type WinnowDocRow } from '../sources/winnow/client';
 import { migrateTripDoc, type TripDoc } from './trip-types';
 import { toTripFile, tripDocFromFile } from './trip-file';
 import { deleteSyncRecord, getSyncRecord, putSyncRecord, putTrip } from './trip-store';
+import { newSyncRecord, reduceSync, type SyncRecord } from '../sources/doc-sync';
 import {
-  newSyncRecord,
-  reduceSync,
-  type PushFailure,
-  type SyncEvent,
-  type SyncRecord,
-  type TheirCopy,
-} from './trip-sync';
+  failureOf,
+  isRemoteSource,
+  outcomeEvent,
+  putDocOnce,
+  remoteFor,
+  type PushOutcome,
+  type RemoteFailure,
+  type RemoteSource,
+} from '../sources/doc-remote';
+
+// The generic half lives in `sources/doc-remote.ts`; the tool and the
+// gallery reach it through this module so a trip's callers have one import.
+export {
+  explainFailure,
+  failureOf,
+  isRemoteSource,
+  outcomeEvent,
+  remoteFor,
+  type PushOutcome,
+  type RemoteFailure,
+  type RemoteSource,
+} from '../sources/doc-remote';
 
 /** The kind trips are filed under in the bucket. */
 export const TRIP_DOC_KIND = 'trip';
-
-export interface RemoteSource {
-  sourceId: string;
-  /** What the pill prints — the host. */
-  label: string;
-  client: WinnowClient;
-  /** The instance's body cap, checked before a PUT; null when it declared none. */
-  maxBytes: number | null;
-}
-
-export function isRemoteSource(sourceId: string): boolean {
-  return sourceId !== DEFAULT_SOURCE_ID;
-}
-
-/**
- * The instance a source id names, ready to talk to — or null for `local`, for
- * a host this browser has not connected, and for one whose capabilities say
- * it has no document bucket (a push there would only 404).
- */
-export function remoteFor(sourceId: string): RemoteSource | null {
-  if (!isRemoteSource(sourceId)) return null;
-  const conn = getWinnowConnection(sourceId);
-  if (!conn || !conn.capabilities?.documents.bucket) return null;
-  return {
-    sourceId,
-    label: conn.id,
-    client: new WinnowClient({ baseUrl: conn.baseUrl, auth: conn.auth }),
-    maxBytes: conn.capabilities.documents.maxBytes ?? null,
-  };
-}
-
-export interface RemoteFailure {
-  kind: PushFailure;
-  message: string;
-  theirs: TheirCopy | null;
-}
-
-/** Whatever the client threw, as the reducer's vocabulary plus a sentence. */
-export function failureOf(err: unknown): RemoteFailure {
-  if (err instanceof WinnowError) {
-    const kind: PushFailure = err.kind === 'unreachable' ? 'unreachable' : err.kind;
-    return { kind, message: err.message, theirs: err.theirs };
-  }
-  return { kind: 'protocol', message: err instanceof Error ? err.message : String(err), theirs: null };
-}
-
-/** One line a person can act on, with the sign-in link when that is the fix. */
-export function explainFailure(
-  failure: RemoteFailure,
-  remote: RemoteSource,
-): { text: string; login?: string } {
-  if (failure.kind === 'unauthenticated') {
-    return { text: `Not signed in to ${remote.label}.`, login: remote.client.loginUrl() };
-  }
-  if (failure.kind === 'unreachable') {
-    return { text: `${remote.label} is unreachable — showing what this device holds.` };
-  }
-  return { text: failure.message };
-}
 
 // --- the wire shape ---------------------------------------------------------
 
@@ -123,42 +73,13 @@ export function fromWireDoc(raw: unknown, id: string, sourceId: string): TripDoc
 
 // --- push / pull -----------------------------------------------------------
 
-export type PushOutcome = { ok: true; etag: string } | { ok: false; failure: RemoteFailure };
-
-/**
- * One PUT, guarded by the etag we hold. Never throws: the outcome is what
- * the reducer eats. The tool runs the reducer around this itself, because an
- * edit can land WHILE the request is out and only the live record knows.
- */
-export async function pushOnce(
+/** One PUT of the trip, guarded by the etag we hold. Never throws. */
+export function pushOnce(
   remote: RemoteSource,
   doc: TripDoc,
   etag: string | null,
 ): Promise<PushOutcome> {
-  try {
-    const ack = await remote.client.putDoc(
-      DOCS_APP,
-      doc.id,
-      { kind: TRIP_DOC_KIND, version: doc.version, doc: toWireDoc(doc) },
-      etag,
-      remote.maxBytes,
-    );
-    return { ok: true, etag: ack.etag };
-  } catch (err) {
-    return { ok: false, failure: failureOf(err) };
-  }
-}
-
-/** The reducer event an outcome stands for. */
-export function outcomeEvent(outcome: PushOutcome, now: number): SyncEvent {
-  return outcome.ok
-    ? { type: 'pushOk', etag: outcome.etag, now }
-    : {
-        type: 'pushFailed',
-        kind: outcome.failure.kind,
-        message: outcome.failure.message,
-        theirs: outcome.failure.theirs ?? undefined,
-      };
+  return putDocOnce(remote, TRIP_DOC_KIND, doc.id, doc.version, toWireDoc(doc), etag);
 }
 
 /**

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { WinnowClient, WinnowError } from '../sources/winnow/client';
 import { createTripDoc, TRIP_DOC_VERSION } from './trip-types';
-import { newSyncRecord } from './trip-sync';
+import { newSyncRecord } from '../sources/doc-sync';
 import {
   explainFailure,
   failureOf,
