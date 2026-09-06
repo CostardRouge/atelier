@@ -120,7 +120,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - 2026-08-22 — A **pre-roll / freeze-frame intro** (output longer than the source) was explicitly deferred, not rejected: the maintainer chose "over the images" for now. Half the mechanism exists since 2026-08-25 — the outro's appended tail (`export-tail.ts`) proves the encoder seam; what remains for a PRE-roll is the timestamp shift every existing frame would need.
 - 2026-08-25 — The outro edits its lines as text inputs; **free element placement on a card stage of its own** (full intro parity: drag, style, animate on the card) is the agreed next step, deferred. The stage cannot scrub past the clip, so it needs a stage mode, not a longer timeline.
 - 2026-09-02 — **Winnow's entry points into Atelier are undesigned.** An "Edit in Atelier" verb on an asset, a selection or a calendar day is the cheap half of the integration and the one that would make the bridge daily rather than merely functional — but the maintainer wants to think about the entry points properly rather than bolt a link on. Deferred deliberately, not forgotten. Note a local dev server cannot exercise any of it: `localhost` is cross-SITE to `winnow.steeve.website`, so the cookie cannot travel — testing needs the deployed pair, or a `winnow.localhost`-style same-site setup.
-- 2026-09-03 — **Winnow's timeline is being built and nothing on Atelier's side is.** The brief that anticipates it is `docs/winnow-timeline.md` (companion to `winnow-bridge.md`, written before the spec exists, every Winnow-side claim marked as an assumption). Two client-only pieces are worth doing before the spec lands because they are correct under every version of it: `TripDoc.sourceId` + `TripStage.origin` (phase T0), and the pure `timeline-import.ts` mapping and diff (T1). **A gap it uncovered**: phase 0.5 gave `ProjectDoc` a `sourceId` and never gave `TripDoc` one, so invariant 2 is half-enforced on the document this work is about to make remote-flavoured.
+- 2026-09-03 (rev. 2026-09-06: the timeline has shipped; `TripDoc.sourceId` is now phase P0 of `docs/roadtrip-persistence.md`) — **Winnow's timeline is being built and nothing on Atelier's side is.** The brief that anticipates it is `docs/winnow-timeline.md` (companion to `winnow-bridge.md`, written before the spec exists, every Winnow-side claim marked as an assumption). Two client-only pieces are worth doing before the spec lands because they are correct under every version of it: `TripDoc.sourceId` + `TripStage.origin` (phase T0), and the pure `timeline-import.ts` mapping and diff (T1). **A gap it uncovered**: phase 0.5 gave `ProjectDoc` a `sourceId` and never gave `TripDoc` one, so invariant 2 is half-enforced on the document this work is about to make remote-flavoured.
 - No secret has ever been tracked in this repository (checked 2026-08-20 across the working tree), so there is nothing to rotate.
 
 ## Topic files — read before touching the area
@@ -159,4 +159,15 @@ document storage:
   mapping, ingesting by chapter, seeding and completing a Road Trip, the finals
   going home, and the list of questions to check the spec against. Written
   2026-09-03 from Atelier's side alone, so its Winnow claims are assumptions and
-  are marked as such. Nothing in it is built.
+  are marked as such. Nothing in it is built. **Winnow's timeline shipped on
+  2026-09-06** and its chapters turn out to be derived per request (ids are not
+  stable) — the brief's status block records what that changes.
+- **`docs/roadtrip-persistence.md`** — the agreed design (2026-09-06) for
+  keeping a Road Trip on a connected Winnow so it resumes from another device:
+  bridge phase 3 applied to `TripDoc`. Four decisions are fixed there (local
+  write unchanged + remote flush on idle with a status pill; a generic
+  `kind: trip | project` bucket with trips first; own docs for any signed-in
+  role, scoped by `user_id`, foreign rows 404; thumbnails re-baked, never
+  uploaded), plus the security answer, the Winnow migration `0041` + route
+  pair, and five phases. **Only P-doc is landed.** P0/P1 are Atelier-only and
+  verifiable anywhere; P2 is a Winnow-repo session; P3 needs the deployed pair.

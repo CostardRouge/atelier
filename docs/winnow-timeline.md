@@ -1,8 +1,20 @@
 # Atelier × Winnow — the timeline brief
 
-**Status**: nothing built, and deliberately so. Written **2026-09-03**, before
+**Status**: nothing built on Atelier's side. Written **2026-09-03**, before
 Winnow's timeline specification exists, so that the questions are ready when it
 lands and Atelier's side does not close a door in the meantime.
+
+**Update 2026-09-06** — Winnow's timeline **shipped** (`ed48a22`, migration
+`0040_timeline_chapters.sql`). Read from its code, not its spec: a chapter is
+**derived on every request** from capture time + reverse-geocoded place and is
+never stored; what a human edits is stored as a *correction* on top —
+`timeline_chapters` (a named span with an optional place; also the merge
+gesture) and `timeline_breaks` (a forced split). So §7.1 and §7.2 are answered:
+a chapter is derived by default, authored only as a correction, and **a derived
+chapter has no id that survives recomputation** — `TripStage.origin.chapterId`
+is the weak key §8.3 anticipated, and the reconcile diff must match by span and
+place first. The rest of this brief is unrevised; re-check §7 against
+`src/app/api/timeline/*` before building T2.
 
 **What this is.** A companion to `docs/winnow-bridge.md` — read that first: it
 carries the source model, the four invariants, the API inventory and the phases
