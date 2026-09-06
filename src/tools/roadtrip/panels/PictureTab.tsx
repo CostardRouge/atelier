@@ -4,6 +4,7 @@ import type { DeckSlide } from '../../../shared/roadtrip/deck';
 import type { Shade } from '../../../shared/roadtrip/shades';
 import type { PostBadge, PostSlide, TripPost } from '../../../shared/roadtrip/trip-types';
 import type { SlideRecovery } from '../use-slide-library';
+import DayFromWinnow from '../DayFromWinnow';
 import FrameStrip from '../FrameStrip';
 import ShadesPanel from '../ShadesPanel';
 import { chipClass, legend, section } from './ui';
@@ -40,6 +41,11 @@ interface PictureTabProps {
   isVideo: boolean;
   /** The clip's length in seconds; 0 for a photo or while it loads. */
   duration: number;
+  /**
+   * A picture was taken from the day strip: its files, and the Library id
+   * they build into so it becomes the active asset at once.
+   */
+  onPickFromSource: (files: File[], assetId: string) => void;
   patchBadge: (patch: Partial<PostBadge>) => void;
   patchSlide: (patch: Partial<PostSlide>) => void;
 }
@@ -61,6 +67,7 @@ export default function PictureTab({
   recovery,
   isVideo,
   duration,
+  onPickFromSource,
   patchBadge,
   patchSlide,
 }: PictureTabProps) {
@@ -113,6 +120,17 @@ export default function PictureTab({
             />
           )}
         </div>
+      )}
+
+      {/* The day this piece tells, asked of the instance that holds it — so
+          the date is never picked by hand and one picture crosses at a time. */}
+      {!isCta && (
+        <DayFromWinnow
+          day={post.date}
+          onPicked={onPickFromSource}
+          defaultOpen={!slideFile}
+          busy={recovery?.state === 'fetching'}
+        />
       )}
 
       {isCta && (

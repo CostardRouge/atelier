@@ -142,6 +142,19 @@ export default function PostEditor({
     lib.addFiles,
   );
 
+  /**
+   * A picture fetched from the day strip: into the pool, then made active —
+   * from there the ordinary Library ↔ slide machinery records it onto the
+   * slide, so this adds no second path to a piece's picture.
+   */
+  const pickFromSource = useCallback(
+    (files: File[], assetId: string) => {
+      lib.addFiles(files);
+      lib.setActive(assetId);
+    },
+    [lib],
+  );
+
   const slideFile = isCta ? null : activeFile;
   const missing = !isCta && slide.media !== null && activeFile === null;
   const isVideo = Boolean(slideFile && !slideFile.type.startsWith('image/'));
@@ -583,6 +596,7 @@ export default function PostEditor({
               recovery={recovery}
               isVideo={isVideo}
               duration={duration}
+              onPickFromSource={pickFromSource}
               patchBadge={patchBadge}
               patchSlide={patchSlide}
             />
