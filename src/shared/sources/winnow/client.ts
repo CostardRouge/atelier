@@ -622,8 +622,10 @@ export class WinnowClient {
       return raw.asset ?? null;
     } catch (err) {
       // A purged or soft-deleted asset is a 404 — "gone", not a failure of the
-      // instance. Everything else stays what it is.
-      if (err instanceof WinnowError && err.kind === 'protocol' && err.status === 404) return null;
+      // instance. Everything else stays what it is. The kind to read is
+      // `notfound`: `request` maps every 404 to it, so matching on `protocol`
+      // here would rethrow and a missing asset would read as a broken one.
+      if (err instanceof WinnowError && err.kind === 'notfound') return null;
       throw err;
     }
   }
