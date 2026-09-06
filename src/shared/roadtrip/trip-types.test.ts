@@ -593,6 +593,41 @@ describe('migrateTripDoc — v8 → v9', () => {
   });
 });
 
+describe('migrateTripDoc — v9 → v10, the source', () => {
+  function v9(): TripDoc {
+    const doc = createTripDoc('Australie', 'Australia', '2025-11-02', '2026-02-14');
+    doc.version = 9;
+    delete (doc as Partial<TripDoc>).sourceId;
+    return doc;
+  }
+
+  it('files every older trip under this browser — the only place it could be', () => {
+    expect(migrateTripDoc(v9()).sourceId).toBe('local');
+  });
+
+  it('keeps a source a document already names', () => {
+    const doc = { ...v9(), sourceId: 'winnow.steeve.website' };
+    expect(migrateTripDoc(doc).sourceId).toBe('winnow.steeve.website');
+  });
+
+  it('reaches the current version and is idempotent', () => {
+    const once = migrateTripDoc(v9());
+    expect(once.version).toBe(TRIP_DOC_VERSION);
+    expect(migrateTripDoc(once)).toEqual(once);
+  });
+});
+
+describe('createTripDoc — the source', () => {
+  it('lives in this browser unless told otherwise', () => {
+    expect(createTripDoc('A', 'B', '2025-03-01', '2025-03-10').sourceId).toBe('local');
+  });
+
+  it('takes the source it is created on', () => {
+    const doc = createTripDoc('A', 'B', '2025-03-01', '2025-03-10', [], 'winnow.example');
+    expect(doc.sourceId).toBe('winnow.example');
+  });
+});
+
 describe('createTripStage', () => {
   it('takes no place by default, so nothing existing changes shape', () => {
     expect(createTripStage('Kalbarri', 'WA', '2025-11-05', '2025-11-09').places).toEqual([]);

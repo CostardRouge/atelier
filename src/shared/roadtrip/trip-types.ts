@@ -19,6 +19,7 @@
 
 import { isIsoDate, isWithin, type IsoDate } from './trip-days';
 import type { SavedMediaRef } from '../projects/project-types';
+import { DEFAULT_SOURCE_ID } from '../sources/source';
 import { themeFromPreset, type StyleTheme } from '../overlay/title-styles';
 import {
   DEFAULT_BADGE_DURATION,
@@ -41,7 +42,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 9;
+export const TRIP_DOC_VERSION = 10;
 
 /**
  * The look every badge of a trip starts with. `neutral` — white with a drop
@@ -290,6 +291,15 @@ export interface TripPost {
 export interface TripDoc {
   version: number;
   id: string;
+  /**
+   * The source this trip lives in — `'local'` (this browser's IndexedDB) or a
+   * connected Winnow's host (`shared/sources/source.ts`). A trip belongs to
+   * exactly ONE source (bridge invariant 2): a remote trip keeps a local
+   * mirror, but the mirror is a cache of that one document, never a second
+   * truth. BOUND half: it must never enter `.roadtrip.json` — a file opened
+   * elsewhere belongs to whatever imports it (`trip-file.ts`).
+   */
+  sourceId: string;
   /** What the trip is called on a badge ("Australie"). */
   name: string;
   /** Where it happened, for the overview header. */
@@ -336,6 +346,9 @@ export interface TripDoc {
  * Empty (the default, and what an import passes) seeds nothing: a trip whose
  * author skipped those fields keeps today's behaviour exactly, with no stage
  * covering any day and the badge counters falling back as they always have.
+ *
+ * `sourceId` is where the trip will be kept — this browser unless the author
+ * picked a connected instance that can hold documents.
  */
 export function createTripDoc(
   name: string,
@@ -343,11 +356,13 @@ export function createTripDoc(
   startDate: IsoDate,
   endDate: IsoDate,
   places: TripPlace[] = [],
+  sourceId: string = DEFAULT_SOURCE_ID,
 ): TripDoc {
   const now = Date.now();
   return {
     version: TRIP_DOC_VERSION,
     id: crypto.randomUUID(),
+    sourceId,
     name: name.trim(),
     destination: destination.trim(),
     startDate,
@@ -490,6 +505,10 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * backdrop, the place marker and the reference day. A post that had the
  * boolean on lands on `auto` — the intent kept, the untrue anniversary dropped.
  *
+ * v9 → v10 names the SOURCE a trip lives in. Every trip written before the
+ * field existed sits in this browser's IndexedDB, the only place it could be,
+ * so it is filed under `local` — the same migration `ProjectDoc` had at v14.
+ *
  * v8 → v9 gives a stage the ordered list of places it went through, so a leg
  * can say where it began and where it ended instead of carrying one name. It
  * starts empty and the stage's own `name` still wins when set, so no stored
@@ -517,6 +536,9 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
 export function migrateTripDoc(doc: TripDoc): TripDoc {
   if (doc.version >= TRIP_DOC_VERSION) return doc;
   const migrated = { ...doc };
+  if (migrated.version < 10) {
+    migrated.sourceId = migrated.sourceId ?? DEFAULT_SOURCE_ID;
+  }
   if (migrated.version < 9) {
     // A stage that has no place keeps `name` as its label, so every existing
     // trip renders exactly the badge it rendered before — the derivation only

@@ -53,6 +53,7 @@ const stage = (
 const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   version: 1,
   id: 't1',
+  sourceId: 'local',
   name: 'Australie',
   destination: 'Australia',
   startDate: '2025-03-01',

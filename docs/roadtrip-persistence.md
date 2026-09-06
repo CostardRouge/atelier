@@ -1,6 +1,6 @@
 # Road Trip persistence on a Winnow instance — the brief
 
-**Status**: designed 2026-09-06, **phase P-doc landed, nothing else built**.
+**Status**: designed 2026-09-06; **P-doc and P0 landed** (see §9 for the rest).
 Written to be resumed by a cloud session: every claim carries a path and was
 verified on disk that day. Phases and what each can verify are in §9.
 

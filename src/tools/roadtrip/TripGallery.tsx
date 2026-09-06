@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { formatIsoDate, spanLength } from '../../shared/roadtrip/trip-days';
 import { tripCoverage } from '../../shared/roadtrip/trip-coverage';
 import { createTripDoc, type TripDoc } from '../../shared/roadtrip/trip-types';
@@ -12,6 +12,17 @@ import {
   tripFileName,
 } from '../../shared/roadtrip/trip-file';
 import { pickFile } from '../../shared/sources/file-sources';
+import {
+  DEFAULT_SOURCE_ID,
+  groupBySource,
+  listSources,
+  sourceById,
+  type SourceInfo,
+} from '../../shared/sources/source';
+import {
+  listWinnowConnections,
+  subscribeWinnowConnections,
+} from '../../shared/sources/winnow/store';
 import { downloadBlob } from '../../shared/media/save';
 import {
   deleteThumbs,
@@ -24,6 +35,17 @@ import NewTripModal, { type NewTripChoices } from './NewTripModal';
 interface TripGalleryProps {
   openTripId: string | null;
   onOpen: (trip: TripDoc) => void;
+}
+
+/**
+ * The sources that can HOLD a trip: this browser, plus every connected
+ * instance whose capabilities say it has a document bucket. The connection
+ * list is the argument only so a memo re-runs when a connection comes or
+ * goes — `listSources()` is the store's mirror and reads nothing itself.
+ */
+function documentSourcesFor(connections: readonly unknown[]): SourceInfo[] {
+  void connections;
+  return listSources().filter((s) => s.capabilities.documents);
 }
 
 function TripCard({
@@ -148,6 +170,14 @@ export default function TripGallery({ openTripId, onOpen }: TripGalleryProps) {
 
   useEffect(refresh, [refresh]);
 
+  const connections = useSyncExternalStore(subscribeWinnowConnections, listWinnowConnections);
+  const documentSources = useMemo(
+    () => documentSourcesFor(connections),
+    [connections],
+  );
+  // Where an imported file lands. Only offered when there is a choice.
+  const [importTarget, setImportTarget] = useState(DEFAULT_SOURCE_ID);
+
   async function handleCreate(choices: NewTripChoices) {
     const doc = createTripDoc(
       choices.name,
@@ -155,6 +185,7 @@ export default function TripGallery({ openTripId, onOpen }: TripGalleryProps) {
       choices.startDate,
       choices.endDate,
       choices.places,
+      choices.sourceId,
     );
     await putTrip(doc);
     setCreating(false);
@@ -183,7 +214,10 @@ export default function TripGallery({ openTripId, onOpen }: TripGalleryProps) {
       setImportError(parsed.error);
       return;
     }
-    const doc = tripDocFromFile(parsed.file);
+    const target = documentSources.some((s) => s.id === importTarget)
+      ? importTarget
+      : DEFAULT_SOURCE_ID;
+    const doc = tripDocFromFile(parsed.file, Date.now(), target);
     if (!doc.name.trim()) {
       doc.name = picked.name.replace(/\.(roadtrip\.)?json$/i, '') || 'Imported trip';
     }
@@ -214,6 +248,23 @@ export default function TripGallery({ openTripId, onOpen }: TripGalleryProps) {
           </p>
         </div>
         <span className="flex-1" />
+        {documentSources.length > 1 && (
+          <label className="inline-flex items-center gap-2 font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted">
+            import to
+            <select
+              value={importTarget}
+              onChange={(e) => setImportTarget(e.target.value)}
+              className="font-sans normal-case tracking-normal text-[0.8rem] px-2.5 py-1 border border-line rounded-full bg-paper text-ink focus:outline-none focus:border-accent"
+              aria-label="Where an imported trip is kept"
+            >
+              {documentSources.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.id === DEFAULT_SOURCE_ID ? 'this browser' : s.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <button
           type="button"
           onClick={() => void handleImport()}
@@ -258,22 +309,50 @@ export default function TripGallery({ openTripId, onOpen }: TripGalleryProps) {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5 pb-4">
-          {trips.map((trip) => (
-            <TripCard
-              key={trip.id}
-              trip={trip}
-              isOpen={trip.id === openTripId}
-              onOpen={() => onOpen(trip)}
-              onExport={() => handleExport(trip)}
-              onDelete={() => void handleDelete(trip.id)}
-            />
-          ))}
+        // Grouped by provenance — one group per source, `local` first, even
+        // while local is the only one: the studio gallery's own shape, so a
+        // trip kept on a Winnow lands in its own section instead of reshaping
+        // this page. A source this session does not know still shows its
+        // trips, with the reason — never hidden.
+        <div className="flex flex-col gap-6 pb-4">
+          {groupBySource(trips).map(({ id, items }) => {
+            const source = sourceById(id);
+            return (
+              <section key={id} aria-label={`Trips from ${source?.label ?? id}`}>
+                <p className="m-0 mb-3 font-mono text-[0.66rem] tracking-[0.14em] uppercase text-muted">
+                  source: {source?.label ?? id}
+                  <span className="text-faint"> · </span>
+                  <span className="tabular-nums">
+                    {items.length} trip{items.length === 1 ? '' : 's'}
+                  </span>
+                  {!source && (
+                    <span className="text-faint">
+                      {' '}
+                      · not connected — showing what this device holds
+                    </span>
+                  )}
+                </p>
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5">
+                  {items.map((trip) => (
+                    <TripCard
+                      key={trip.id}
+                      trip={trip}
+                      isOpen={trip.id === openTripId}
+                      onOpen={() => onOpen(trip)}
+                      onExport={() => handleExport(trip)}
+                      onDelete={() => void handleDelete(trip.id)}
+                    />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
         </div>
       )}
 
       {creating && (
         <NewTripModal
+          sources={documentSources}
           onCancel={() => setCreating(false)}
           onCreate={(choices) => void handleCreate(choices)}
         />

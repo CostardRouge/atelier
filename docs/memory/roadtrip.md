@@ -300,6 +300,12 @@ Dragging a slide moves it within `post.slides` (`moveItem` in `deck.ts`, pure an
 - Import always creates a NEW trip. Merging two trips is not offered, on purpose.
 - Export sits on the gallery card, import in the gallery header — the same places the studio puts them.
 
+## A trip belongs to exactly one source, and the file never says which (2026-09-06)
+
+**Decision.** `TripDoc.sourceId` (v10) names where a trip is KEPT — `'local'` or a connected Winnow's host — closing the gap phase 0.5 left when only `ProjectDoc` got the field. The migration files every older trip under `local`, the only place it could have been. It is the **bound half**: `TripPortable` lists it in its `Omit`, `tripDocFromFile(file, now, sourceId)` gives an imported trip to the source that imports it, and a `sourceId` smuggled into a file is ignored (tested). **Trap**: `TripPortable` is `Omit<TripDoc, …>`, so a new `TripDoc` field lands in `.roadtrip.json` automatically unless the `Omit` is widened — list anything bound to one browser or one instance.
+
+**The gallery groups by source even with one group** (`groupBySource`, the studio's shape), and the New-trip modal's "Keep on" picker is rendered **only when more than one source can hold documents** — the maintainer does not want that modal to grow, and a picker with one option is a question with no choice. `documents` comes from the instance's capabilities snapshot, so a Winnow without the bucket (P2 not deployed) never appears in it. The full design — remote flush on idle, the mirror/etag rule, the Winnow side — is `docs/roadtrip-persistence.md`.
+
 ## Open, and decided but not built (2026-08-23)
 
 - **The export-reminder banner is still unbuilt.** The `.roadtrip.json` file itself now exists (see below); what is missing is the nudge the maintainer asked for — a **discreet banner** ("last export 12 days ago"), never a blocking prompt, so a cleared IndexedDB cannot cost him a year of tracking.

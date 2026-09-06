@@ -29,6 +29,7 @@ const post = (over: Partial<TripPost> = {}, kind: PostKind = 'carousel'): TripPo
 const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   version: 5,
   id: 't1',
+  sourceId: 'local',
   name: 'Australia',
   destination: 'Australia',
   startDate: '2025-03-01',
