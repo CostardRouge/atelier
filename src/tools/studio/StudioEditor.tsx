@@ -91,7 +91,7 @@ import { reanchorInPlace } from '../../shared/overlay/draw-overlays';
 import { DEFAULT_GUIDES, type GuidesState } from '../../shared/overlay/guides';
 import { useOverlayStage } from '../../shared/overlay/use-overlay-stage';
 import { useLutStack } from '../../shared/lut/use-lut-stack';
-import GradePanel from './GradePanel';
+import GradePanel from '../../shared/lut/GradePanel';
 import type { StyleTheme } from '../../shared/overlay/title-styles';
 import StylePanel from '../../shared/overlay/StylePanel';
 import ProjectSettingsModal, { type ProjectSettingsDraft } from './ProjectSettingsModal';

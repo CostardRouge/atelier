@@ -15,7 +15,8 @@ import {
 } from '../../shared/roadtrip/hook-scene';
 import type { CtaSlide } from '../../shared/roadtrip/cta-slide';
 import type { Shade } from '../../shared/roadtrip/shades';
-import type { TripPost } from '../../shared/roadtrip/trip-types';
+import type { TripGrade, TripPost } from '../../shared/roadtrip/trip-types';
+import type { GradeScope } from './use-trip-grade';
 
 interface StudioLinkProps {
   post: TripPost;
@@ -29,6 +30,15 @@ interface StudioLinkProps {
   /** The clip this piece is composed over, when it is loaded. */
   file: File | null;
   onChangePost: (post: TripPost) => void;
+  /**
+   * The grade Road Trip renders this piece with, and whose it is. A linked
+   * project has a grade of its own, and the two never double-apply — the
+   * badge crosses the bridge ungraded and the Studio export uses the
+   * project's — but they can DISAGREE, which the author must learn here
+   * rather than in the delivered file.
+   */
+  grade: TripGrade;
+  gradeScope: GradeScope;
 }
 
 const button =
@@ -56,6 +66,8 @@ export default function StudioLink({
   aspect,
   file,
   onChangePost,
+  grade,
+  gradeScope,
 }: StudioLinkProps) {
   const [projects, setProjects] = useState<ProjectDoc[] | null>(null);
   const [linked, setLinked] = useState<ProjectDoc | null>(null);
@@ -160,7 +172,42 @@ export default function StudioLink({
     setNote(null);
   }
 
+  /** Give a project that has no grade this piece's, so both exports agree. */
+  async function pushGrade() {
+    if (!linked) return;
+    setNote(null);
+    setBusy('Sending the grade…');
+    try {
+      const doc = await getProject(linked.id);
+      if (!doc) {
+        setNote('That project is gone from this browser. Link another one.');
+        return;
+      }
+      // Never over an existing grade: the project's is the author's, exactly
+      // as their own outro is (see withCtaOutro).
+      if (doc.lutStack.length) {
+        setNote('The project already has a grade of its own; it was left as it is.');
+        setLinked(doc);
+        return;
+      }
+      const next = {
+        ...doc,
+        lutStack: structuredClone(grade.layers),
+        outputTransform: grade.output,
+        updatedAt: Date.now(),
+      };
+      const ok = await putProject(next);
+      setNote(ok ? 'The grade is in the project now.' : 'The browser refused to save the project.');
+      if (ok) setLinked(next);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const candidates = projects ?? [];
+  const hereGraded = grade.layers.some((l) => l.enabled && l.intensity > 0);
+  const projectGraded = Boolean(linked?.lutStack.length);
+  const whose = gradeScope === 'post' ? 'this piece’s own grade' : 'the trip’s grade';
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -238,6 +285,30 @@ export default function StudioLink({
               There is no badge to send — the trip&rsquo;s dates cannot be read.
             </span>
           )}
+
+          {/* Two grades, one file: say which one the Studio export will use. */}
+          <p className="m-0 px-2.5 py-2 rounded-paper border border-line bg-paper text-[0.74rem] text-ink-soft leading-snug">
+            {projectGraded
+              ? `A reel exported from this project uses the project’s own grade${
+                  hereGraded ? `, not ${whose} shown here` : ''
+                }. The badge crosses over ungraded, so nothing is graded twice.`
+              : hereGraded
+                ? `This project has no grade, so a reel exported from it would go out as shot while the preview here wears ${whose}.`
+                : 'Neither this piece nor the project has a grade; a reel from the project goes out as shot.'}
+            {!projectGraded && hereGraded && (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  className={link}
+                  disabled={busy !== null}
+                  onClick={() => void pushGrade()}
+                >
+                  Give the project {whose}
+                </button>
+              </>
+            )}
+          </p>
           <p className="m-0 text-[0.7rem] text-faint leading-snug">
             One export from the Studio then carries the grade, the telemetry
             and the hook. Sending again replaces the last one and touches

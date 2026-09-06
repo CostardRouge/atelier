@@ -5,6 +5,9 @@ import {
   badgeElements,
   badgeSettleSeconds,
   heightFractionOf,
+  moveBlock,
+  pieceElementId,
+  pieceFromElementId,
   type BadgeLayout,
   type BadgePieceStyles,
 } from './badge-layout';
@@ -88,6 +91,44 @@ describe('badgeElements', () => {
     const els = badgeElements(bare, layout(), REEL);
     expect(els).toHaveLength(1);
     expect(els[0].text).toBe('27');
+  });
+
+  it('gives every piece a stable id, so a hit-test survives the next repaint', () => {
+    const a = badgeElements(full, layout(), REEL);
+    const b = badgeElements(full, layout(), REEL);
+    expect(a.map((e) => e.id)).toEqual(b.map((e) => e.id));
+    expect(new Set(a.map((e) => e.id)).size).toBe(a.length);
+    for (const el of a) {
+      const piece = pieceFromElementId(el.id);
+      expect(piece).not.toBeNull();
+      expect(pieceElementId(piece!)).toBe(el.id);
+    }
+    expect(a.map((e) => pieceFromElementId(e.id))).toEqual([
+      'kicker',
+      'label',
+      'headline',
+      'counter',
+      'caption',
+      'timing',
+    ]);
+  });
+
+  it('keeps each id on its piece when other pieces are absent', () => {
+    const bare: BadgeContent = { ...full, label: null, counter: null };
+    const els = badgeElements(bare, layout(), REEL);
+    expect(els.map((e) => e.id)).toEqual([
+      pieceElementId('kicker'),
+      pieceElementId('headline'),
+      pieceElementId('caption'),
+      pieceElementId('timing'),
+    ]);
+    expect(new Set(els.map((e) => e.id)).size).toBe(els.length);
+  });
+
+  it('refuses an id that is not a piece’s', () => {
+    expect(pieceFromElementId('piece:nope')).toBeNull();
+    expect(pieceFromElementId('caption:0')).toBeNull();
+    expect(pieceFromElementId('')).toBeNull();
   });
 
   it('hangs the block above a bottom anchor, so it never runs off the frame', () => {
@@ -212,6 +253,29 @@ describe('badgeElements — per-piece styles', () => {
     const headline = els.find((e) => e.text === '27')!;
     expect(headline.styleOverrides).toEqual([]);
     expect(headline.window).toBeUndefined();
+  });
+});
+
+describe('moveBlock', () => {
+  it('adds the pointer’s travel to where the anchor started', () => {
+    const moved = moveBlock({ x: 0.2, y: 0.3 }, 0.1, 0.15);
+    expect(moved.x).toBeCloseTo(0.3, 6);
+    expect(moved.y).toBeCloseTo(0.45, 6);
+  });
+
+  it('never leaves the frame', () => {
+    expect(moveBlock({ x: 0.9, y: 0.1 }, 0.5, -0.5)).toEqual({ x: 1, y: 0 });
+  });
+
+  it('pulls onto an edge or the centre when close, unless asked not to', () => {
+    expect(moveBlock({ x: 0.48, y: 0.1 }, 0.01, -0.09)).toEqual({ x: 0.5, y: 0 });
+    const free = moveBlock({ x: 0.48, y: 0.1 }, 0.01, -0.09, false);
+    expect(free.x).toBeCloseTo(0.49, 6);
+    expect(free.y).toBeCloseTo(0.01, 6);
+  });
+
+  it('leaves a position alone when nothing is close', () => {
+    expect(moveBlock({ x: 0.3, y: 0.7 }, 0, 0)).toEqual({ x: 0.3, y: 0.7 });
   });
 });
 

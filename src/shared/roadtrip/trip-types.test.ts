@@ -593,30 +593,36 @@ describe('migrateTripDoc — v8 → v9', () => {
   });
 });
 
-describe('migrateTripDoc — v9 → v10, the source', () => {
-  function v9(): TripDoc {
+describe('migrateTripDoc — v10 → v11, the source', () => {
+  function v10(): TripDoc {
     const doc = createTripDoc('Australie', 'Australia', '2025-11-02', '2026-02-14');
-    doc.version = 9;
+    doc.version = 10;
     doc.stages = [createTripStage('Kalbarri', 'WA', '2025-11-05', '2025-11-09')];
     delete (doc as Partial<TripDoc>).sourceId;
     return doc;
   }
 
   it('files every trip written before sources existed under this browser', () => {
-    expect(migrateTripDoc(v9()).sourceId).toBe('local');
+    expect(migrateTripDoc(v10()).sourceId).toBe('local');
   });
 
   it('gives no existing stage an origin — none was seeded from anywhere', () => {
-    expect('origin' in migrateTripDoc(v9()).stages[0]).toBe(false);
+    expect('origin' in migrateTripDoc(v10()).stages[0]).toBe(false);
   });
 
   it('keeps a sourceId a document already carries', () => {
-    const doc = { ...v9(), sourceId: 'winnow.example' };
+    const doc = { ...v10(), sourceId: 'winnow.example' };
     expect(migrateTripDoc(doc).sourceId).toBe('winnow.example');
   });
 
+  it('keeps the grade a v10 document already carries', () => {
+    const doc = v10();
+    doc.grade = { layers: [], output: 'rec709-to-srgb' };
+    expect(migrateTripDoc(doc).grade).toEqual({ layers: [], output: 'rec709-to-srgb' });
+  });
+
   it('reaches the current version and is idempotent', () => {
-    const once = migrateTripDoc(v9());
+    const once = migrateTripDoc(v10());
     expect(once.version).toBe(TRIP_DOC_VERSION);
     expect(migrateTripDoc(once)).toEqual(once);
   });
@@ -630,6 +636,44 @@ describe('createTripDoc — the source it belongs to', () => {
   it('takes the source it is created in', () => {
     const doc = createTripDoc('A', 'B', '2025-03-01', '2025-03-10', [], 'winnow.example');
     expect(doc.sourceId).toBe('winnow.example');
+  });
+});
+
+describe('migrateTripDoc — v9 → v10, the grade', () => {
+  function v9(): TripDoc {
+    const doc = createTripDoc('Australie', 'Australia', '2025-11-02', '2026-02-14');
+    doc.version = 9;
+    delete (doc as Partial<TripDoc>).grade;
+    const post = createTripPost('reel', '2025-11-05', 'Kalbarri');
+    delete (post as Partial<typeof post>).grade;
+    doc.posts = [post];
+    return doc;
+  }
+
+  it('gives the trip an empty grade and every post follows it', () => {
+    const doc = migrateTripDoc(v9());
+    expect(doc.grade).toEqual({ layers: [], output: 'none' });
+    expect(doc.posts[0].grade).toBeNull();
+  });
+
+  it('keeps a grade a document already carries', () => {
+    const doc = v9();
+    doc.grade = {
+      layers: [
+        { id: 'l1', source: 'builtin:x', name: 'X', customText: null, intensity: 0.8, enabled: true },
+      ],
+      output: 'rec709-to-srgb',
+    };
+    doc.posts[0].grade = { layers: [], output: 'none' };
+    const migrated = migrateTripDoc(doc);
+    expect(migrated.grade).toEqual(doc.grade);
+    expect(migrated.posts[0].grade).toEqual({ layers: [], output: 'none' });
+  });
+
+  it('reaches the current version and is idempotent', () => {
+    const once = migrateTripDoc(v9());
+    expect(once.version).toBe(TRIP_DOC_VERSION);
+    expect(migrateTripDoc(once)).toEqual(once);
   });
 });
 

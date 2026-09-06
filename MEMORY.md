@@ -84,6 +84,9 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - Road Trip addresses everything in the hash (`#/roadtrip/<trip>/<day>/<piece>`), so Back lands on the day you were on and a day is linkable — `roadtrip.md`.
 - A control about the PIECE (its name, its Studio link, the trip's defaults) must never be rendered inside the hook-only branch: on a carousel's second slide it vanishes and reads as missing — `roadtrip.md`.
 - Road Trip briefs the STUDIO: a piece links a project and the badge is sent in as a `roadtrip-hook` scene, so one export carries grade + telemetry + hook; a send replaces the last, and the shades' shape does not cross over — `roadtrip.md`.
+- Road Trip GRADES, through the Studio's engine and never a second one: the trip's `grade` (v10) dresses every piece, a post's `grade: null` follows it, `renderBadge` grades at source density before the crop, and the grader is caller-owned because a WebGL2 context per repaint is never reclaimed — `roadtrip.md`.
+- The piece editor is six tabs (Content · Style · Picture · Grade · Deck · Export) over one stage where a click selects a piece and a drag moves the whole block; derived elements carry deterministic ids so a hit-test survives the repaint — `roadtrip.md`.
+- `GradePanel` is engine-level (`shared/lut/`) since Road Trip became its second consumer, exactly as `StylePanel` — `roadtrip.md`.
 - `#/studio/open/<id>` hands a project between tools and rewrites itself on arrival; neither tool reaches into the other's state — `architecture.md`, `roadtrip.md`.
 - A trip remembers the look it gives a new piece of each kind; what belongs to one day is never inherited — `roadtrip.md`.
 - A Road Trip stage is a LEG carrying an ORDERED list of located places; its start and end are the first and the last, derived and never stored, and a place has no dates of its own — `roadtrip.md`.
@@ -121,7 +124,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - 2026-08-22 — A **pre-roll / freeze-frame intro** (output longer than the source) was explicitly deferred, not rejected: the maintainer chose "over the images" for now. Half the mechanism exists since 2026-08-25 — the outro's appended tail (`export-tail.ts`) proves the encoder seam; what remains for a PRE-roll is the timestamp shift every existing frame would need.
 - 2026-08-25 — The outro edits its lines as text inputs; **free element placement on a card stage of its own** (full intro parity: drag, style, animate on the card) is the agreed next step, deferred. The stage cannot scrub past the clip, so it needs a stage mode, not a longer timeline.
 - 2026-09-02 — **Winnow's entry points into Atelier are undesigned.** An "Edit in Atelier" verb on an asset, a selection or a calendar day is the cheap half of the integration and the one that would make the bridge daily rather than merely functional — but the maintainer wants to think about the entry points properly rather than bolt a link on. Deferred deliberately, not forgotten. Note a local dev server cannot exercise any of it: `localhost` is cross-SITE to `winnow.steeve.website`, so the cookie cannot travel — testing needs the deployed pair, or a `winnow.localhost`-style same-site setup.
-- 2026-09-03 (rev. 2026-09-06) — **Winnow's timeline is being built; Atelier's client-only half is under way.** The brief is `docs/winnow-timeline.md` (companion to `winnow-bridge.md`, written before the spec exists, every Winnow-side claim marked as an assumption). **All five phases are built on Atelier's side** (T0–T4: the document fields, the pure import/diff, browse by leg, seed / complete a trip with the two link routes, and finals sent home with `original_asset_id`). They rest on an ASSUMED wire shape held in one function, `chapterFromWire` (`client.ts`), plus two assumed upload fields (`original_asset_id`, `chapter_id` in `client.upload`) — when Winnow's spec lands, re-check them against §7 of the brief and change those alone. **Verified only against a stubbed instance** (recipe in `testing.md`): no Winnow serves a timeline or reads `original_asset_id` yet. Still Winnow's to do: the timeline routes and capability flag, `chapter_id` as a filter and on upload, reading `original_asset_id`, and the "Make a Road Trip from this leg" verb pointing at `#/roadtrip/new?source=<host>&chapters=<id>`.
+- 2026-09-03 (rev. 2026-09-06) — **Winnow's timeline has shipped; Atelier's whole client side of it is built, against an API shape not yet checked.** The brief is `docs/winnow-timeline.md` (companion to `winnow-bridge.md`, written before the spec existed, every Winnow-side claim marked as an assumption). **All five phases are built on Atelier's side** (T0–T4: the document fields, the pure import/diff, browse by leg, seed / complete a trip with the two link routes, and finals sent home with `original_asset_id`). They rest on an ASSUMED wire shape held in one function, `chapterFromWire` (`client.ts`), plus two assumed upload fields (`original_asset_id`, `chapter_id` in `client.upload`) — re-check them against §7 of the brief and Winnow's real routes, and change those alone. What Winnow's shipped timeline already told us: chapters are **derived per request, ids not stable**, so `origin.chapterId` is the weak key and the diff's span/place fallback is the real path. **Verified only against a stubbed instance** (recipe in `testing.md`). Still Winnow's to do: the routes checked against `chapterFromWire`, `capabilities.media.timeline`, `chapter_id` as a filter and on upload, reading `original_asset_id`, and the "Make a Road Trip from this leg" verb pointing at `#/roadtrip/new?source=<host>&chapters=<id>`. `TripDoc.sourceId` — phase P0 of `docs/roadtrip-persistence.md` — landed here as **v11** (v10 went to the grade the same day); P0's gallery grouping and "Keep on" picker are still open.
 - No secret has ever been tracked in this repository (checked 2026-08-20 across the working tree), so there is nothing to rotate.
 
 ## Topic files — read before touching the area
@@ -154,10 +157,24 @@ document storage:
   from Road Trip through the Studio's own engine** (`useLutStack` +
   `makeFrameGrader` + `exportVariantVideo` — no second exporter, which is what
   the earlier rejection was actually about). Four phases, one commit each.
-  **Nothing in it is built.**
+  **All four phases are built (2026-09-06)**; the decisions they fixed are in
+  `roadtrip.md`. Unverified in the container: the hook clip's graded encode
+  (no H.264 encoder here) — the PNG deck and the preview were checked.
 - **`docs/winnow-timeline.md`** — what Winnow's forthcoming timeline (media
   grouped into chapters by place and date) means for Atelier: the chapter ↔ stage
   mapping, ingesting by chapter, seeding and completing a Road Trip, the finals
   going home, and the list of questions to check the spec against. Written
   2026-09-03 from Atelier's side alone, so its Winnow claims are assumptions and
-  are marked as such. Nothing in it is built.
+  are marked as such. **All five phases are built on Atelier's side (2026-09-06)**,
+  verified against a stubbed instance only. **Winnow's timeline shipped the same
+  day** and its chapters turn out to be derived per request (ids are not stable)
+  — the brief's status block and §7.1–7.2 record what that changes.
+- **`docs/roadtrip-persistence.md`** — the agreed design (2026-09-06) for
+  keeping a Road Trip on a connected Winnow so it resumes from another device:
+  bridge phase 3 applied to `TripDoc`. Four decisions are fixed there (local
+  write unchanged + remote flush on idle with a status pill; a generic
+  `kind: trip | project` bucket with trips first; own docs for any signed-in
+  role, scoped by `user_id`, foreign rows 404; thumbnails re-baked, never
+  uploaded), plus the security answer, the Winnow migration `0041` + route
+  pair, and five phases. **Only P-doc is landed.** P0/P1 are Atelier-only and
+  verifiable anywhere; P2 is a Winnow-repo session; P3 needs the deployed pair.

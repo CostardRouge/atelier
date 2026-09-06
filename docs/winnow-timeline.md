@@ -1,21 +1,45 @@
 # Atelier × Winnow — the timeline brief
 
 **Status**: written **2026-09-03**, before Winnow's timeline specification
-exists, so that the questions are ready when it lands and Atelier's side does
-not close a door in the meantime. **Phases T0 and T1 are built** (2026-09-06:
-`TripDoc.sourceId`, `TripStage.origin`, the `.roadtrip.json` split of §5.4, and
-`shared/roadtrip/timeline-import.ts` with its spec). **T2 is built on Atelier's
-side** against an assumed wire shape: `GET /api/timeline?<filters>` →
-`{ chapters: [{ id, title, start_date, end_date, places[{name, region, lat,
-lon}], revision, asset_count, photo_count, video_count, cover_id }] }`,
-`chapter_id` as an `/api/assets` filter, and `capabilities.media.timeline`.
-All of it is read in ONE function, `chapterFromWire` (`client.ts`); when the
-spec lands, that function changes and nothing else does. **T3 and T4 are built
-on Atelier's side too** (2026-09-06): the seed / complete screens and the two
-link routes, and the finals going home with `original_asset_id`. What remains
-is Winnow's: the timeline itself, `chapter_id` on the asset routes and on
-`/api/upload`, `capabilities.media.timeline`, and the "Make a Road Trip from
-this leg" verb pointing at `#/roadtrip/new?source=<host>&chapters=<id>`.
+existed, so that the questions were ready when it landed and Atelier's side did
+not close a door in the meantime. **All five phases are built on Atelier's side**
+(2026-09-06): T0 `TripDoc.sourceId` (v11 — v10 went to the grade the same day)
+and `TripStage.origin` with the `.roadtrip.json` split of §5.4; T1
+`shared/roadtrip/timeline-import.ts` with its spec; T2 browse by leg; T3 the
+seed / complete screens and the two link routes; T4 the finals going home with
+`original_asset_id`. T2–T4 rest on an assumed wire shape: `GET
+/api/timeline?<filters>` → `{ chapters: [{ id, title, start_date, end_date,
+places[{name, region, lat, lon}], revision, asset_count, photo_count,
+video_count, cover_id }] }`, `chapter_id` as an `/api/assets` filter and an
+`/api/upload` field, and `capabilities.media.timeline`. All of it is read in ONE
+function, `chapterFromWire` (`client.ts`), plus `client.upload`; when the real
+routes are checked, those change and nothing else does.
+
+**Winnow's timeline shipped on 2026-09-06** (`ed48a22` there, migration
+`0040_timeline_chapters.sql`), learned from the other repository while this was
+being built: chapters are **derived on every request**, and only human
+corrections are stored (`timeline_chapters` named spans, `timeline_breaks`). So
+§7.1 and §7.2 are answered — derived by default, authored only as a correction,
+and a chapter has **no stable id across recomputation**. `TripStage.origin.
+chapterId` is therefore the weak key §8.3 anticipated; `diffTimeline` already
+matches id → identical span → first place with an overlapping span, so the id
+is only ever the fast path. What remains is Winnow's: the API shape checked
+against `chapterFromWire`, `chapter_id` on the asset routes and on
+`/api/upload`, `capabilities.media.timeline`, reading `original_asset_id`, and
+the "Make a Road Trip from this leg" verb pointing at
+`#/roadtrip/new?source=<host>&chapters=<id>`.
+
+**Update 2026-09-06** — Winnow's timeline **shipped** (`ed48a22`, migration
+`0040_timeline_chapters.sql`). Read from its code, not its spec: a chapter is
+**derived on every request** from capture time + reverse-geocoded place and is
+never stored; what a human edits is stored as a *correction* on top —
+`timeline_chapters` (a named span with an optional place; also the merge
+gesture) and `timeline_breaks` (a forced split). So §7.1 and §7.2 are answered:
+a chapter is derived by default, authored only as a correction, and **a derived
+chapter has no id that survives recomputation** — `TripStage.origin.chapterId`
+is the weak key §8.3 anticipated, and the reconcile diff must match by span and
+place first. The rest of this brief is unrevised; re-check §7 against
+`src/app/api/timeline/*` before building T2.
 
 **What this is.** A companion to `docs/winnow-bridge.md` — read that first: it
 carries the source model, the four invariants, the API inventory and the phases
@@ -313,9 +337,16 @@ by what breaks without it.
    Atelier can *detect* that a chapter it stored was re-clustered. §5.4 stores the
    id; if ids are regenerated on every recompute, `origin` matches nothing and
    the reconcile diff proposes to re-add every leg the author already has.
+   **Answered 2026-09-06: ids are NOT stable** — chapters are derived per request.
+   `diffTimeline` treats the id as a fast path and falls back to span, then to
+   first place + overlap, so nothing is re-added; the panel labels those rows
+   "matched by span" / "matched by place".
 2. **Derived or authored?** A chapter the author drew by hand is stable and can
    be trusted; one produced by clustering can change under the trip. The reconcile
    screen wants to say which it is looking at, and to weight the two differently.
+   **Answered 2026-09-06: derived by default; an authored chapter is a stored
+   correction** (a named span or a break). The wire does not yet tell the two
+   apart to `chapterFromWire`; when it does, carry it as `revision` or a flag.
 3. **Dates as capture dates** (`YYYY-MM-DD`, camera-local), not instants — §8.1.
 4. **Ordering**: chapters returned in lived order, and whether two chapters may
    overlap. Road Trip resolves overlap to the **last** match (`stageAt`, `trip-coverage.ts`), so an

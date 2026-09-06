@@ -1,7 +1,8 @@
 # Atelier × Winnow — bridge brief
 
 **Status**: phases 0, 0.5 and 1 built (2026-09-01), phase 1 not yet proven end to
-end on the deployed pair — see `MEMORY.md` open items.
+end on the deployed pair — see `MEMORY.md` open items. Phase 3 is designed for
+trips in `docs/roadtrip-persistence.md` (2026-09-06).
 Written 2026-08-24 with only Atelier to hand · revised 2026-08-29 against the
 Winnow repository · **rewritten 2026-08-31 around the source model.**
 
@@ -524,7 +525,7 @@ grid draws.
    originals do not (`src/app/api/assets/[id]/download/route.ts` streams whole,
    `Content-Disposition: attachment`). Copying the 206 branch of `src/lib/serve.ts`
    is a small, boring diff — the kind a test-free gate can absorb.
-4. **The opaque document bucket** (phase 3): migration **0040** and one route pair,
+4. **The opaque document bucket** (phase 3): migration **0041** and one route pair,
    `GET`/`PUT /api/apps/atelier/docs/:id`, JSON Atelier owns entirely, an etag that
    **refuses** a stale write, scoped to the authenticated user.
 5. **A versioned public surface — `/api/v1/…` — before any foreign instance
@@ -546,7 +547,8 @@ grid draws.
    touches no credential path at all. Housekeeping for whoever writes SQL: **two
    duplicate migration prefixes already sit on Winnow's `main`** (`0010_*` ×2,
    `0013_*` ×2), migrations are append-only and uniquely numbered, and the next
-   free number is **0040** — read `db/migrations/README.md` first.
+   free number is **0041** (`0040` went to the timeline chapters, 2026-09-06) —
+   read `db/migrations/README.md` first.
 2. **CORS with credentials widens a surface with no CSRF protection.** Single
    exact origin, never a wildcard. And the expose-header omission that makes Range
    fail *silently* is the single most likely mistake in this whole project.
@@ -578,7 +580,7 @@ near term entirely by §3.3.
 | **0.5** | Introduce `Source` with **exactly one implementation (`local`)**: the contract, `ProjectDoc.sourceId`, and a gallery that **groups by source even with one group** | Atelier only | The seam that makes everything below a data question instead of a refactor. Cheap now, expensive later |
 | **1** | **Built.** `src/shared/sources/winnow/` — client (base URL + auth mode as config), the `#/connect` flow, "from <host>" in the library sidebar, a day browser over `/api/assets/calendar`. A picked asset is **fetched and wrapped as a `File`** (proxy by default, original on request, `.srt` alongside) rather than previewed by URL — see `docs/memory/architecture.md`, «Remote sources», for why. Winnow side: `CORS_ALLOWED_ORIGINS` + `GET /api/capabilities`. | Atelier + **CORS only** on Winnow | The triage → edit hop stops being manual, with no credential system built |
 | **2** | **Built on Atelier's side (2026-09-06)**: after a Studio export of media that came from a Winnow, `SendFinalsPanel` sends the rendered files into the **finals** root (`POST /api/upload`, one request per file, `original_asset_id` alongside — the field this row proposed) and calls `/api/reconcile` once. Refuses up front on a viewer account, a clip from another instance, or a file over `limits.maxUploadBytes` (`sources/winnow/finals.ts`). Winnow side still to do: read `original_asset_id` on upload. | Atelier + optionally one field on `/api/upload` | Winnow's map, calendar and before/after lineage show which captures have been told |
-| **3** | `remote-store.ts` behind the existing four document signatures; boot-time capabilities; stale-write etag guard | Atelier + migration 0040 + one route pair | Projects resumable from another device |
+| **3** | `remote-store.ts` behind the existing four document signatures; boot-time capabilities; stale-write etag guard | Atelier + migration 0041 + one route pair | Projects resumable from another device |
 | *later* | Foreign instances (token, then OAuth+PKCE; `/api/v1` first) · scheduling and proactive Road Trip · an edit-grade proxy | Both | The "little Adobe cloud" |
 
 **Phase 0 and 0.5 are the ones to start regardless of everything else**: both are
@@ -675,7 +677,7 @@ and not on the originals · sidecars are first-class and already inlined in the 
 response · `assets.content_hash` exists and phase 0 adopts it verbatim · auth is a
 `SameSite=Lax` cookie with roles and no Bearer · proxies are already generated for
 every asset, in the codec shape Atelier wants · there is nowhere for opaque
-documents, so phase 3 needs migration 0040 · Winnow has no trip concept, so Road
+documents, so phase 3 needs migration 0041 · Winnow has no trip concept, so Road
 Trip keeps the calendar and phase 2's write-back is what makes it visible from the
 media side.
 
@@ -738,7 +740,7 @@ src/lib/reconcile.ts                    finals → sources lineage
 src/lib/queue.ts                        BullMQ queues — where scheduling would live
 src/lib/storage/                        the S3-shaped driver (disk | s3)
 src/app/api/**                          ~90 routes; README.md tabulates them all
-db/migrations/                          append-only, uniquely numbered (next: 0040)
+db/migrations/                          append-only, uniquely numbered (next: 0041)
 docs/memory/                            that repo's long-term memory
 docs/ARCHITECTURE-REVIEW.md             its own graded weaknesses + P1 backlog
 ```

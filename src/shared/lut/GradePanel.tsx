@@ -2,9 +2,9 @@ import { useState } from 'react';
 import {
   LUT_GROUPS,
   UNGROUPED_LUTS,
-} from '../../shared/lut/builtin-luts';
-import { OUTPUT_TRANSFORM_OPTIONS } from '../../shared/lut/transfer';
-import type { LutStack } from '../../shared/lut/use-lut-stack';
+} from './builtin-luts';
+import { OUTPUT_TRANSFORM_OPTIONS } from './transfer';
+import type { LutStack } from './use-lut-stack';
 
 interface GradePanelProps {
   stack: LutStack;

@@ -1,9 +1,11 @@
 # Road Trip gets the Studio's editor shape
 
-Agreed plan, written 2026-09-06 with the maintainer, **not yet built**. It is a
-brief for the session that implements it, in the same spirit as
-`winnow-bridge.md`: every claim about the current code carries a path and a line
-so it can be re-checked rather than trusted.
+Agreed plan, written 2026-09-06 with the maintainer, and **built the same day in
+four commits, one per phase** (ids → tabs → selection → grade). It is kept as
+the record of why the editor has this shape; every claim about the code it
+found carries a path and a line as of before the change, so the line numbers
+below describe the pre-change `PostEditor.tsx` and are stale by design. The
+decisions each phase fixed live in `docs/memory/roadtrip.md`.
 
 Read `docs/memory/roadtrip.md` and `docs/memory/studio.md` before acting on this
 — the constraints quoted below are drawn from them and are not repeated in full.
