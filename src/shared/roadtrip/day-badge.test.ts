@@ -53,6 +53,7 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   cta: { ...DEFAULT_CTA },
   hookDefaults: {},
   grade: { layers: [], output: 'none' },
+  sourceId: 'local',
   createdAt: 0,
   updatedAt: 0,
   ...over,

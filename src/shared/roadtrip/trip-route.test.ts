@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   parseRoadtripPath,
   roadtripPath,
+  timelineLinkPath,
   tripFromRef,
   tripRef,
   tripSlug,
@@ -116,5 +117,54 @@ describe('roadtripPath / parseRoadtripPath', () => {
   it('survives a piece id that needs escaping', () => {
     const path = roadtripPath(ref, '2025-07-09', 'a/b c');
     expect(parseRoadtripPath(path).postId).toBe('a/b c');
+  });
+});
+
+describe('the timeline links — proposals a person confirms', () => {
+  const ref = tripRef(trip);
+
+  it('reads a seed link, with the legs it names', () => {
+    expect(parseRoadtripPath('/roadtrip/new?source=Winnow.Example&chapters=3,7')).toEqual({
+      ref: null,
+      date: null,
+      postId: null,
+      link: { kind: 'seed', source: 'winnow.example', chapters: ['3', '7'] },
+    });
+  });
+
+  it('reads a complete link against a trip', () => {
+    expect(parseRoadtripPath(`/roadtrip/${ref}/import?source=winnow.example`)).toEqual({
+      ref,
+      date: null,
+      postId: null,
+      link: { kind: 'complete', source: 'winnow.example', chapters: [] },
+    });
+  });
+
+  it('round-trips through the builder', () => {
+    const seed = { kind: 'seed' as const, source: 'winnow.example', chapters: ['42'] };
+    expect(parseRoadtripPath(timelineLinkPath(seed)).link).toEqual(seed);
+    const complete = { kind: 'complete' as const, source: 'winnow.example', chapters: [] };
+    const path = timelineLinkPath(complete, ref);
+    expect(path).toBe(`/roadtrip/${ref}/import?source=winnow.example`);
+    expect(parseRoadtripPath(path)).toMatchObject({ ref, link: complete });
+  });
+
+  it('refuses a source that is not a bare host — the URL never says where to fetch from', () => {
+    for (const bad of ['https://winnow.example', 'winnow.example/api', 'a b', '']) {
+      const path = `/roadtrip/new?source=${encodeURIComponent(bad)}`;
+      expect(parseRoadtripPath(path).link, bad).toBeUndefined();
+    }
+    // …and the complete link then reads as the plain trip route.
+    expect(parseRoadtripPath(`/roadtrip/${ref}/import?source=`)).toEqual({
+      ref,
+      date: null,
+      postId: null,
+    });
+  });
+
+  it('leaves the ordinary routes untouched', () => {
+    expect(parseRoadtripPath(`/roadtrip/${ref}/2025-07-09`).link).toBeUndefined();
+    expect(parseRoadtripPath('/roadtrip/home?source=winnow.example').link).toBeUndefined();
   });
 });

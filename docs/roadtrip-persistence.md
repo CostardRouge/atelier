@@ -58,14 +58,13 @@ Do not re-open these; design inside them.
 the field `ProjectDoc` got at v14:
 
 ```ts
-// trip-types.ts — TRIP_DOC_VERSION = 10
+// trip-types.ts — TRIP_DOC_VERSION = 11   (built 2026-09-06; v10 is the grade)
 interface TripDoc { sourceId: string; /* … */ }   // bound half, default 'local'
-// migrateTripDoc: if (version < 10) sourceId ??= DEFAULT_SOURCE_ID
+// migrateTripDoc: if (version < 11) sourceId ??= DEFAULT_SOURCE_ID
 ```
 
-- `trip-file.ts`: `TripPortable = Omit<TripDoc, … | 'sourceId'>`; `tripDocFromFile(file, now, sourceId = DEFAULT_SOURCE_ID)` — an imported trip belongs to the source that imports it. Test: the serialized file has no `sourceId` key; a v9 file still parses.
-- `createTripDoc(...)` gains `sourceId` (default local).
-- `TripStage.origin` (timeline brief T0) may ride in the same v10 bump **only if done in the same commit**; otherwise it is v11 later. Not required here.
+- **Built** (timeline T0, same day as the grade's v10, hence v11): `trip-file.ts` has `TripPortable = Omit<TripDoc, … | 'sourceId'>` and `tripDocFromFile(file, now, sourceId?)` — an imported trip belongs to the source that imports it; the serialized file has no `sourceId` key and a v9/v10 file still parses (tested). `createTripDoc(...)` takes `sourceId` as a trailing argument (default local). `TripStage.origin` rode in the same bump.
+- Still to do from P0: `TripGallery` grouped by source, and the `NewTripModal` "Keep on" picker.
 
 **The remote copy is authoritative; the IndexedDB copy is the working mirror.**
 A remote trip always has a local mirror once opened on a device. This is what
@@ -233,7 +232,7 @@ Nothing new is stored in the browser: no token, the session stays Winnow's cooki
 | Phase | What | Where | Verifiable in a cloud container? |
 |---|---|---|---|
 | **P-doc** | Land this file as `docs/roadtrip-persistence.md`; `MEMORY.md` pointer (the "not memory files" list); fix `winnow-bridge.md` "next free is 0040" → 0041 and mark the timeline as shipped | Atelier | yes |
-| **P0** | `TripDoc.sourceId` v10 + migration + `trip-file.ts` Omit widening + tests; `TripGallery` grouped by source via `groupBySource`; `NewTripModal` "Keep on" picker (hidden with one source) | Atelier only | yes |
+| **P0** | `TripDoc.sourceId` (**built as v11**, timeline T0) + migration + `trip-file.ts` Omit widening + tests — done; **still open**: `TripGallery` grouped by source via `groupBySource`; `NewTripModal` "Keep on" picker (hidden with one source) | Atelier only | yes |
 | **P1** | `trip-sync.ts` reducer + tests; `WinnowClient` doc methods + `conflict`/`notfound` kinds + fake-fetch tests; `trip-store.ts` v3 `sync` store | Atelier only | yes — dead until P2 |
 | **P2** | Migration 0041, the route pair, `authz.ts`, capabilities; check `corsPreflightHeaders` lists PUT/DELETE | **Winnow repo** — a separate session on `CostardRouge/winnow` | typecheck+migrate+build only |
 | **P3** | `trip-remote.ts` driver; `RoadTripTool` wiring; gallery remote list + states; pill + Save now; conflict/gone UX; move verb; remote delete | Atelier | **no** — needs the deployed pair (§10) |
@@ -250,6 +249,6 @@ Memory updates per phase (CLAUDE.md rule 2): `roadtrip.md` (the decisions D1–D
 
 ## 11. Also learned on the way (not this task's scope)
 
-- Winnow's timeline **shipped** (`ed48a22`): chapters are **derived on every request**; only human corrections are stored (`timeline_chapters` named spans, `timeline_breaks`). So a chapter has **no stable id across recomputation** — `winnow-timeline.md` §7.1/§7.2 are answered: derived by default, authored only as a correction, and `TripStage.origin.chapterId` must be the weak key §8.3 anticipated (match by span + place first). Update that brief when T-work resumes.
+- Winnow's timeline **shipped** (`ed48a22`): chapters are **derived on every request**; only human corrections are stored (`timeline_chapters` named spans, `timeline_breaks`). So a chapter has **no stable id across recomputation** — `winnow-timeline.md` §7.1/§7.2 are answered: derived by default, authored only as a correction, and `TripStage.origin.chapterId` must be the weak key §8.3 anticipated (match by span + place first). The brief's §7.1–7.2 now record this, and `diffTimeline` matches id → span → first place.
 - `RoadTripTool.tsx:72-82` loads with a full `listTrips()` scan per route change though `getTrip(id)` exists; P3 should switch to `getTrip` since the ref carries the id's tail.
 - `AssetSidebar.tsx:210-232` is hard-wired to `connections[0]`; no UI removes a connection. Not needed for this plan, worth an open item.

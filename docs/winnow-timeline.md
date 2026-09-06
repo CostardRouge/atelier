@@ -1,8 +1,33 @@
 # Atelier × Winnow — the timeline brief
 
-**Status**: nothing built on Atelier's side. Written **2026-09-03**, before
-Winnow's timeline specification exists, so that the questions are ready when it
-lands and Atelier's side does not close a door in the meantime.
+**Status**: written **2026-09-03**, before Winnow's timeline specification
+existed, so that the questions were ready when it landed and Atelier's side did
+not close a door in the meantime. **All five phases are built on Atelier's side**
+(2026-09-06): T0 `TripDoc.sourceId` (v11 — v10 went to the grade the same day)
+and `TripStage.origin` with the `.roadtrip.json` split of §5.4; T1
+`shared/roadtrip/timeline-import.ts` with its spec; T2 browse by leg; T3 the
+seed / complete screens and the two link routes; T4 the finals going home with
+`original_asset_id`. T2–T4 rest on an assumed wire shape: `GET
+/api/timeline?<filters>` → `{ chapters: [{ id, title, start_date, end_date,
+places[{name, region, lat, lon}], revision, asset_count, photo_count,
+video_count, cover_id }] }`, `chapter_id` as an `/api/assets` filter and an
+`/api/upload` field, and `capabilities.media.timeline`. All of it is read in ONE
+function, `chapterFromWire` (`client.ts`), plus `client.upload`; when the real
+routes are checked, those change and nothing else does.
+
+**Winnow's timeline shipped on 2026-09-06** (`ed48a22` there, migration
+`0040_timeline_chapters.sql`), learned from the other repository while this was
+being built: chapters are **derived on every request**, and only human
+corrections are stored (`timeline_chapters` named spans, `timeline_breaks`). So
+§7.1 and §7.2 are answered — derived by default, authored only as a correction,
+and a chapter has **no stable id across recomputation**. `TripStage.origin.
+chapterId` is therefore the weak key §8.3 anticipated; `diffTimeline` already
+matches id → identical span → first place with an overlapping span, so the id
+is only ever the fast path. What remains is Winnow's: the API shape checked
+against `chapterFromWire`, `chapter_id` on the asset routes and on
+`/api/upload`, `capabilities.media.timeline`, reading `original_asset_id`, and
+the "Make a Road Trip from this leg" verb pointing at
+`#/roadtrip/new?source=<host>&chapters=<id>`.
 
 **Update 2026-09-06** — Winnow's timeline **shipped** (`ed48a22`, migration
 `0040_timeline_chapters.sql`). Read from its code, not its spec: a chapter is
@@ -74,11 +99,14 @@ half acquires a server.
 | region / country | `TripPlace.region` | empty when the places disagree; `stageRegionLabel` already refuses to print one they do not share |
 | asset counts, cover asset | **nothing stored** | shown live from the source; never written into the trip — §3.1 |
 
-**One pure module owns that table**: `shared/roadtrip/timeline-import.ts`,
-`(chapters, options) → { stages, span, warnings }`, DOM-free and unit-tested
-beside its source, like every other piece of Road Trip's arithmetic. The mapping
-must not be re-derived inside a panel, and `shared/` must not learn to fetch —
-the client stays `shared/sources/winnow/client.ts`.
+**One pure module owns that table**: `shared/roadtrip/timeline-import.ts`
+(built 2026-09-06), `importTimeline(chapters, options) → { stages, span,
+uncovered, destination, warnings }`, DOM-free and unit-tested beside its source,
+like every other piece of Road Trip's arithmetic. Its input, `TimelineChapter`,
+is **Atelier's own shape**, not the wire's: when the spec lands, the client
+normalises whatever arrives into it at the boundary. The mapping must not be
+re-derived inside a panel, and `shared/` must not learn to fetch — the client
+stays `shared/sources/winnow/client.ts`.
 
 ---
 
@@ -220,12 +248,10 @@ interface TripStage {
 }
 ```
 
-**The gap**: phase 0.5 put `sourceId` on `ProjectDoc` (v14) and **not on
-`TripDoc`** — verified 2026-09-03, there is no `sourceId` anywhere under
-`src/shared/roadtrip/`. Invariant 2 ("a document belongs to exactly one source")
-is therefore only half-enforced, and the trip is the document the timeline work
-is about to make remote-flavoured. Add it with the same default (`'local'`) and
-the same rule: **bound half, never in the portable file.**
+**The gap, now closed**: phase 0.5 put `sourceId` on `ProjectDoc` (v14) and
+**not on `TripDoc`** — found 2026-09-03, fixed 2026-09-06 by T0. It carries the
+same default (`'local'`) and the same rule: **bound half, never in the portable
+file.** `StageOrigin` is the exported name of the `origin` shape above.
 
 `trip-file.ts` (`.roadtrip.json`) strips what addresses *this browser*: the id,
 the timestamps, and `TripPost.projectId`. The new fields split:
@@ -246,9 +272,14 @@ Atelier's side of the hash is already the pattern (`use-hash-route.ts`,
 arrival**). Two new routes, both **proposals that a person confirms**:
 
 ```
-#/roadtrip/new?source=<host>&timeline=<id>        seed a new trip
-#/roadtrip/<tripRef>/import?source=<host>&timeline=<id>   reconcile into one
+#/roadtrip/new?source=<host>[&chapters=<id>,<id>]     seed a new trip (built)
+#/roadtrip/<tripRef>/import?source=<host>             reconcile into one (built)
 ```
+
+(Built 2026-09-06 with `chapters=` rather than the `timeline=<id>` first
+sketched here: the timeline is read as ONE flat list of chapters, so a link
+narrows a seed to the legs it names — "Make a Road Trip from this leg" — and
+no timeline identity is assumed to exist. `trip-route.ts`, `TimelineLink`.)
 
 The bridge's rule holds unchanged: **the URL may say what to open, never where to
 fetch from.** A `source` naming an instance that is not already connected falls
@@ -306,9 +337,16 @@ by what breaks without it.
    Atelier can *detect* that a chapter it stored was re-clustered. §5.4 stores the
    id; if ids are regenerated on every recompute, `origin` matches nothing and
    the reconcile diff proposes to re-add every leg the author already has.
+   **Answered 2026-09-06: ids are NOT stable** — chapters are derived per request.
+   `diffTimeline` treats the id as a fast path and falls back to span, then to
+   first place + overlap, so nothing is re-added; the panel labels those rows
+   "matched by span" / "matched by place".
 2. **Derived or authored?** A chapter the author drew by hand is stable and can
    be trusted; one produced by clustering can change under the trip. The reconcile
    screen wants to say which it is looking at, and to weight the two differently.
+   **Answered 2026-09-06: derived by default; an authored chapter is a stored
+   correction** (a named span or a break). The wire does not yet tell the two
+   apart to `chapterFromWire`; when it does, carry it as `revision` or a flag.
 3. **Dates as capture dates** (`YYYY-MM-DD`, camera-local), not instants — §8.1.
 4. **Ordering**: chapters returned in lived order, and whether two chapters may
    overlap. Road Trip resolves overlap to the **last** match (`stageAt`, `trip-coverage.ts`), so an
@@ -397,11 +435,11 @@ whatever Winnow ships.
 
 | Phase | What | Where | Value if you stop there |
 |---|---|---|---|
-| **T0** | `TripDoc.sourceId` (v10) + `TripStage.origin`, with the migration and the `trip-file.ts` split of §5.4. Nothing remote. | Atelier only | Invariant 2 is finally enforced on both documents, and a trip can *record* where it was seeded from before anything can seed it |
-| **T1** | `timeline-import.ts` — the pure mapping, the span derivation, the diff (`add` / `unchanged` / `renamed` / `dropped`), fully tested against fixtures | Atelier only | The whole feature's arithmetic, testable with no server and no spec risk beyond the shape of a chapter |
-| **T2** | Browse by chapter in `WinnowBrowser`; add a chapter's media as a prefilled selection | Atelier + `chapter_id` filter + `capabilities.media.timeline` | Ingestion stops being day-by-day for footage that is a leg |
-| **T3** | Seed / complete a trip: the two screens, the two routes, "Make a Road Trip from this leg" on Winnow's side | Atelier + one link on Winnow | The journey structure crosses once, and the trip is a decision surface from day one |
-| **T4** | Finals home with `original_asset_id` (+ `chapter_id` ⚠) — bridge phase 2, scoped by chapter | Atelier + `/api/upload` fields | The timeline can colour what has been told, from lineage it owns |
+| **T0** ✅ 2026-09-06 | `TripDoc.sourceId` (v10) + `TripStage.origin`, with the migration and the `trip-file.ts` split of §5.4. Nothing remote. | Atelier only | Invariant 2 is finally enforced on both documents, and a trip can *record* where it was seeded from before anything can seed it |
+| **T1** ✅ 2026-09-06 | `timeline-import.ts` — the pure mapping, the span derivation, the diff (`add` / `unchanged` / `changed` with the fields that moved / `dropped`, matched id → span → first place), and `applyTimelineDiff` over accepted entries only; 42 specs | Atelier only | The whole feature's arithmetic, testable with no server and no spec risk beyond the shape of a chapter |
+| **T2** ✅ 2026-09-06 (client side, against the ASSUMED wire of `chapterFromWire`) | Browse by chapter in `WinnowBrowser`; add a chapter's media as a prefilled selection | Atelier + `chapter_id` filter + `capabilities.media.timeline` | Ingestion stops being day-by-day for footage that is a leg |
+| **T3** ✅ 2026-09-06 (Atelier's side: `TimelineImportPanel`, the two routes, three entry points; Winnow's verb still open) | Seed / complete a trip: the two screens, the two routes, "Make a Road Trip from this leg" on Winnow's side | Atelier + one link on Winnow | The journey structure crosses once, and the trip is a decision surface from day one |
+| **T4** ✅ 2026-09-06 (Atelier's side: `finals.ts`, `client.upload`/`reconcile`, `SendFinalsPanel` after a Studio export; `chapter_id` is sent only when known, and the Studio knows none today) | Finals home with `original_asset_id` (+ `chapter_id` ⚠) — bridge phase 2, scoped by chapter | Atelier + `/api/upload` fields | The timeline can colour what has been told, from lineage it owns |
 | *later* | The trip document in the phase-3 opaque bucket, which is what makes the backlink real rather than inferred; a leg's route drawn from `/api/assets/geo` on the existing MapLibre pane | Both | Multi-device Road Trip |
 
 **T0 and T1 are worth doing before the spec lands**: both are client-only, both

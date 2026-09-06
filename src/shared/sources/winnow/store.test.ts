@@ -74,6 +74,7 @@ describe('the Winnow connection store', () => {
     writeBrowseState('winnow.example', {
       view: 'day',
       filter: {},
+      chapterId: null,
       month: '2025-07',
       day: null,
       sessionId: null,

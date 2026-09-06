@@ -16,6 +16,9 @@ interface TripOverviewProps {
   onChange: (trip: TripDoc) => void;
   /** Open a piece's hook composer. */
   onOpenPost: (post: TripPost) => void;
+  /** Connected Winnows with a timeline, offered on the stages panel. */
+  timelineSources?: string[];
+  onCompleteFrom?: (sourceId: string) => void;
 }
 
 const barPill =
@@ -45,6 +48,8 @@ export default function TripOverview({
   onShowTrips,
   onChange,
   onOpenPost,
+  timelineSources,
+  onCompleteFrom,
 }: TripOverviewProps) {
   const coverage = useMemo(() => tripCoverage(trip), [trip]);
   // The day lives in the route, so coming back from a piece lands on the day
@@ -131,7 +136,12 @@ export default function TripOverview({
         </p>
       )}
 
-      <StagesPanel trip={trip} onChange={setStages} />
+      <StagesPanel
+        trip={trip}
+        onChange={setStages}
+        timelineSources={timelineSources}
+        onCompleteFrom={onCompleteFrom}
+      />
 
       {selected && (
         <DayPanel

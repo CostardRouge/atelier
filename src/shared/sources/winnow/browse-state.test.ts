@@ -14,6 +14,7 @@ const place = (over: Partial<BrowseState> = {}): BrowseState => ({
   month: '2025-07',
   day: '2025-07-09',
   sessionId: null,
+  chapterId: null,
   fidelity: 'proxy',
   ...over,
 });
@@ -54,6 +55,13 @@ describe('the browser\'s remembered place', () => {
     writeBrowseState('b.example', place({ month: '2024-01', view: 'session', sessionId: 9 }));
     expect(readBrowseState('a.example')?.month).toBe('2025-07');
     expect(readBrowseState('b.example')).toMatchObject({ month: '2024-01', sessionId: 9 });
+  });
+
+  it('remembers the open chapter, and a view it does not know falls back to the day', () => {
+    writeBrowseState('a.example', place({ view: 'chapter', chapterId: '42' }));
+    expect(readBrowseState('a.example')).toMatchObject({ view: 'chapter', chapterId: '42' });
+    localStorage.setItem(KEY, JSON.stringify({ 'b.example': { ...place(), view: 'galaxy', chapterId: 7 } }));
+    expect(readBrowseState('b.example')).toMatchObject({ view: 'day', chapterId: null });
   });
 
   it('rejects a month that is not one — it would build a calendar of nothing', () => {

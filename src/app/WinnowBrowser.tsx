@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { navigate } from './use-hash-route';
 import {
   WinnowClient,
   WinnowError,
+  hasTimeline,
   type FilterQuery,
   type WinnowAssetRow,
   type WinnowCalendar,
+  type WinnowChapter,
   type WinnowFacets,
   type WinnowSession,
 } from '../shared/sources/winnow/client';
+import { PLACE_ARROW } from '../shared/roadtrip/trip-places';
 import { materialize, type Fidelity } from '../shared/sources/winnow/materialize';
 import {
   monthKeyOf,
@@ -18,7 +21,11 @@ import {
   shiftMonth,
 } from '../shared/sources/winnow/month';
 import { type WinnowConnection } from '../shared/sources/winnow/store';
-import { readBrowseState, writeBrowseState } from '../shared/sources/winnow/browse-state';
+import {
+  readBrowseState,
+  writeBrowseState,
+  type BrowseView,
+} from '../shared/sources/winnow/browse-state';
 import { formatBytes } from '../shared/lib/format';
 
 /** How many times a thumbnail is asked for again before the tile gives up. */
@@ -87,8 +94,22 @@ interface WinnowBrowserProps {
   onClose: () => void;
 }
 
-/** How the library is walked: by the day it was shot, or by the folder it was ingested from. */
-type View = 'day' | 'session';
+/**
+ * How the library is walked: by the day it was shot, by the folder it was
+ * ingested from, or by the leg of the journey the timeline grouped it into.
+ */
+type View = BrowseView;
+
+/** What a chapter is called in the list: its title, else its route, else its id. */
+export function chapterLabel(chapter: WinnowChapter): string {
+  const title = chapter.title?.trim();
+  if (title) return title;
+  const names = chapter.places.map((p) => p.name.trim()).filter(Boolean);
+  if (!names.length) return `chapter ${chapter.id}`;
+  const first = names[0];
+  const last = names[names.length - 1];
+  return first === last ? first : `${first} ${PLACE_ARROW} ${last}`;
+}
 
 const legend = 'font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted';
 // Under 820px every control grows: a finger is not a cursor, and a control
@@ -115,12 +136,16 @@ function shortDate(iso: string | null): string {
 /**
  * Browse a connected Winnow and pull pictures into the library.
  *
- * Two ways in. **By day**, because Road Trip is day-keyed — "everything from
+ * Three ways in. **By day**, because Road Trip is day-keyed — "everything from
  * 9 July" is the question the grid asks, and `/api/assets/calendar` answers it
  * with a count and a cover per day. **By session**, because a Winnow session
  * is one shoot folder as it was ingested — what a photographer means by "that
- * folder". One row of filters (type, extension, device) narrows both, and the
- * calendar counts with them: Winnow applies the same filters everywhere.
+ * folder". **By leg**, when the instance serves its timeline: a chapter is the
+ * unit a piece is actually cut from ("the three days at Kalbarri"), one click
+ * instead of three days picked across a month boundary. One row of filters
+ * (type, extension, device) narrows all three, and the counts agree: Winnow
+ * applies the same filters everywhere. A chapter is a prefilled LIST, never an
+ * automatic download — ticking is still the user's.
  *
  * What lands in the library is a fetched FILE (see `materialize.ts`): the
  * proxy by default — fast, and the codec shape the pipeline wants — or the
@@ -135,8 +160,14 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
   // Where this instance was left last time. Picking a trip's media happens
   // over several sittings, so the modal reopens where it closed.
   const remembered = useMemo(() => readBrowseState(connection.id), [connection.id]);
+  // Said by the instance at connect time; an older Winnow has no timeline and
+  // the tab says so instead of asking for a route that is not there.
+  const timelineOffered = hasTimeline(connection.capabilities);
 
-  const [view, setView] = useState<View>(remembered?.view ?? 'day');
+  const [view, setView] = useState<View>(() => {
+    const wanted = remembered?.view ?? 'day';
+    return wanted === 'chapter' && !timelineOffered ? 'day' : wanted;
+  });
   const [filter, setFilter] = useState<FilterQuery>(remembered?.filter ?? {});
   const [facets, setFacets] = useState<WinnowFacets | null>(null);
 
@@ -151,6 +182,18 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
   /** The folder to re-open once the list arrives; cleared after it is found. */
   const [wantedSessionId, setWantedSessionId] = useState<number | null>(
     remembered?.sessionId ?? null,
+  );
+
+  const [chapters, setChapters] = useState<WinnowChapter[] | null>(null);
+  const [chapter, setChapter] = useState<WinnowChapter | null>(null);
+  // The open leg's id, readable from the timeline effect without making it a
+  // dependency: re-fetching the timeline on every pick would loop, since the
+  // pick is then re-pointed at the fresh list's object.
+  const chapterIdRef = useRef<string | null>(null);
+  chapterIdRef.current = chapter?.id ?? null;
+  /** The leg to re-open once the timeline arrives; cleared after it is found. */
+  const [wantedChapterId, setWantedChapterId] = useState<string | null>(
+    remembered?.chapterId ?? null,
   );
 
   const [rows, setRows] = useState<WinnowAssetRow[] | null>(null);
@@ -250,12 +293,41 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
     };
   }, [client, view, filter]);
 
-  // The rows of whatever is chosen — a day or a session — oldest first, every
-  // page. A filter change re-reads them under the new narrowing.
+  // The timeline's chapters, under the current filters — the same narrowing,
+  // so a leg's count agrees with what its days would list.
+  useEffect(() => {
+    if (view !== 'chapter' || !timelineOffered) return;
+    let cancelled = false;
+    setChapters(null);
+    setProblem(null);
+    client
+      .timeline(filter)
+      .then((list) => {
+        if (cancelled) return;
+        setChapters(list);
+        if (wantedChapterId !== null) {
+          setChapter(list.find((c) => c.id === wantedChapterId) ?? null);
+          setWantedChapterId(null);
+        } else if (chapterIdRef.current !== null) {
+          // Re-point at the same leg under the new filters, or let it go.
+          setChapter(list.find((c) => c.id === chapterIdRef.current) ?? null);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setProblem(explain(err, client));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, view, filter, timelineOffered, wantedChapterId]);
+
+  // The rows of whatever is chosen — a day, a session or a leg — oldest
+  // first, every page. A filter change re-reads them under the new narrowing.
   const chosenDay = view === 'day' ? day : null;
   const chosenSession = view === 'session' ? session : null;
+  const chosenChapter = view === 'chapter' ? chapter : null;
   useEffect(() => {
-    if (!chosenDay && !chosenSession) {
+    if (!chosenDay && !chosenSession && !chosenChapter) {
       setRows(null);
       return;
     }
@@ -266,7 +338,9 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
     setThumbAttempt(new Map());
     const query = chosenDay
       ? { dateFrom: chosenDay, dateTo: chosenDay, ...filter }
-      : { sessionId: chosenSession?.id, ...filter };
+      : chosenChapter
+        ? { chapterId: chosenChapter.id, ...filter }
+        : { sessionId: chosenSession?.id, ...filter };
     client
       .allAssets(query)
       .then((all) => {
@@ -278,7 +352,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
     return () => {
       cancelled = true;
     };
-  }, [client, chosenDay, chosenSession, filter]);
+  }, [client, chosenDay, chosenSession, chosenChapter, filter]);
 
   useEffect(() => {
     writeBrowseState(connection.id, {
@@ -287,9 +361,21 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
       month,
       day,
       sessionId: session?.id ?? wantedSessionId,
+      chapterId: chapter?.id ?? wantedChapterId,
       fidelity,
     });
-  }, [connection.id, view, filter, month, day, session, wantedSessionId, fidelity]);
+  }, [
+    connection.id,
+    view,
+    filter,
+    month,
+    day,
+    session,
+    wantedSessionId,
+    chapter,
+    wantedChapterId,
+    fidelity,
+  ]);
 
   const span = monthSpan(month);
   const counts = new Map((calendar?.days ?? []).map((d) => [d.date, d.count]));
@@ -310,7 +396,8 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
     (sum, r) => sum + (fidelity === 'original' ? (r.file_size ?? 0) : 0),
     0,
   );
-  const heading = chosenDay ?? chosenSession?.name ?? null;
+  const heading =
+    chosenDay ?? chosenSession?.name ?? (chosenChapter ? chapterLabel(chosenChapter) : null);
 
   function setFilterKey<K extends keyof FilterQuery>(key: K, value: string) {
     setFilter((f) => {
@@ -347,23 +434,33 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
   const backToPicker = (
     <button
       type="button"
-      onClick={() => (view === 'day' ? setDay(null) : setSession(null))}
+      onClick={() =>
+        view === 'day' ? setDay(null) : view === 'session' ? setSession(null) : setChapter(null)
+      }
       className="hidden max-[820px]:inline-flex items-center px-3.5 py-1.5 border border-line rounded-full bg-paper text-ink-soft cursor-pointer text-[0.85rem] transition-colors"
     >
-      ‹ {view === 'day' ? monthLabel(month) : 'folders'}
+      ‹ {view === 'day' ? monthLabel(month) : view === 'session' ? 'folders' : 'legs'}
     </button>
   );
 
-  const viewTab = (v: View, label: string) => (
+  const viewTab = (v: View, label: string, disabledWhy?: string) => (
     <button
       type="button"
       onClick={() => setView(v)}
       aria-pressed={view === v}
-      className={`${pill} ${view === v ? 'bg-ink text-paper border-ink' : 'bg-paper border-line text-ink-soft hover:border-line-strong'}`}
+      disabled={disabledWhy !== undefined}
+      title={disabledWhy}
+      className={`${pill} ${view === v ? 'bg-ink text-paper border-ink' : 'bg-paper border-line text-ink-soft hover:border-line-strong'} disabled:opacity-40 disabled:cursor-default`}
     >
       {label}
     </button>
   );
+
+  /** `5 – 8 Nov 2025`, or one day, or nothing when the chapter is undated. */
+  const chapterDates = (c: WinnowChapter) =>
+    c.startDate && c.endDate && c.startDate !== c.endDate
+      ? `${shortDate(c.startDate)} → ${shortDate(c.endDate)}`
+      : shortDate(c.startDate ?? c.endDate);
 
   return (
     <div
@@ -379,7 +476,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
         <div className="flex items-baseline gap-3 flex-wrap">
           <h2 className="m-0 font-serif text-[1.4rem] min-w-0 truncate">From {connection.id}</h2>
           <span className="text-[0.78rem] text-muted max-[560px]:hidden">
-            pick a day or a folder, then the pictures — they arrive as files in the library.
+            pick a day, a folder{timelineOffered ? ' or a leg' : ''}, then the pictures — they arrive as files in the library.
           </span>
           <span className="flex-1" />
           <button
@@ -398,6 +495,13 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
         <div className="flex items-center gap-2 flex-wrap">
           {viewTab('day', 'by day')}
           {viewTab('session', 'by folder')}
+          {viewTab(
+            'chapter',
+            'by leg',
+            timelineOffered
+              ? undefined
+              : `${connection.id} has no timeline yet — reconnect once it does.`,
+          )}
           <span className="w-px h-5 bg-line mx-1 max-[820px]:hidden" aria-hidden="true" />
           <select
             value={filter.mediaType ?? ''}
@@ -527,6 +631,38 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
                     : 'nothing dated matches these filters'}
               </p>
             </div>
+          ) : view === 'chapter' ? (
+            <div className={`flex flex-col gap-2 min-h-0 overflow-auto pr-1 ${heading ? 'max-[820px]:hidden' : ''}`}>
+              {chapters === null ? (
+                <p className="m-0 font-mono text-[0.72rem] text-muted">{problem ? '' : 'asking…'}</p>
+              ) : chapters.length === 0 ? (
+                <p className="m-0 text-[0.8rem] text-muted">No leg matches these filters.</p>
+              ) : (
+                chapters.map((c) => {
+                  const active = chapter?.id === c.id;
+                  const route = c.places.map((p) => p.name).filter(Boolean).join(` ${PLACE_ARROW} `);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setChapter(c)}
+                      aria-pressed={active}
+                      title={route || undefined}
+                      className={`text-left px-3 py-2 rounded-paper border transition-colors ${
+                        active ? 'bg-ink text-paper border-ink' : 'bg-paper border-line hover:border-line-strong'
+                      }`}
+                    >
+                      <span className="block text-[0.8rem] font-medium truncate">{chapterLabel(c)}</span>
+                      <span className={`block font-mono text-[0.6rem] tabular-nums ${active ? 'opacity-70' : 'text-muted'}`}>
+                        {chapterDates(c)}
+                        {' · '}{c.assetCount} media
+                        {c.videoCount ? ` · ${c.videoCount} ▶` : ''}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
           ) : (
             <div className={`flex flex-col gap-2 min-h-0 overflow-auto pr-1 ${heading ? 'max-[820px]:hidden' : ''}`}>
               {sessions === null ? (
@@ -565,7 +701,11 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
           <div className={`flex flex-col gap-3 min-h-0 overflow-hidden ${heading ? '' : 'max-[820px]:hidden'}`}>
             {!heading ? (
               <p className="m-0 text-[0.84rem] text-muted">
-                {view === 'day' ? 'Choose a day on the left.' : 'Choose a folder on the left.'}
+                {view === 'day'
+                  ? 'Choose a day on the left.'
+                  : view === 'session'
+                    ? 'Choose a folder on the left.'
+                    : 'Choose a leg on the left — its pictures are listed, nothing is downloaded until you add them.'}
               </p>
             ) : rows === null ? (
               <div className="flex items-center gap-3 flex-wrap">

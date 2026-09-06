@@ -12,8 +12,16 @@
  *   without the second read overwriting the first.
  * - `TripPost.projectId` — it addresses a Studio project in *this* browser's
  *   store. Carried across, it would dangle and offer to open nothing.
+ * - `sourceId` — where the document lives. An imported trip belongs to the
+ *   source that imports it, the same rule as the project file's.
  * - the post thumbnails, which live in their own IndexedDB store and are
  *   re-baked from the preview anyway.
+ *
+ * `TripStage.origin` DOES travel, and it is the one thing in the file that
+ * points outside the browser that wrote it — on purpose. It names an instance
+ * by its host and a chapter by that instance's own id, so on another machine
+ * connected to the same Winnow the next reconcile still works, and where the
+ * instance is unknown it dangles harmlessly (`docs/winnow-timeline.md` §5.4).
  *
  * Media refs DO travel. Since they carry a content hash (`SavedMediaRef.hash`),
  * a trip opened on another machine can find its pictures again in a folder
@@ -48,7 +56,10 @@ export const TRIP_FILE_EXTENSION = '.roadtrip.json';
 export const TRIP_FILE_ACCEPT = '.json,application/json';
 
 /** Everything a trip file carries — the document minus what is machine-bound. */
-export type TripPortable = Omit<TripDoc, 'version' | 'id' | 'createdAt' | 'updatedAt'>;
+export type TripPortable = Omit<
+  TripDoc,
+  'version' | 'id' | 'sourceId' | 'createdAt' | 'updatedAt'
+>;
 
 export interface TripFile extends TripPortable {
   kind: typeof TRIP_FILE_KIND;
@@ -204,10 +215,23 @@ export function parseTripFile(text: string): ParseResult {
 /**
  * A brand-new trip document from a file — the import path. A fresh `id` and
  * fresh timestamps, so importing the same file twice gives two trips instead
- * of silently overwriting one.
+ * of silently overwriting one. It belongs to the source that imports it
+ * (`sourceId`, this browser unless told otherwise), never to the one that
+ * wrote the file.
  */
-export function tripDocFromFile(file: TripFile, now: number = Date.now()): TripDoc {
-  const doc = createTripDoc(file.name, file.destination, file.startDate, file.endDate);
+export function tripDocFromFile(
+  file: TripFile,
+  now: number = Date.now(),
+  sourceId?: string,
+): TripDoc {
+  const doc = createTripDoc(
+    file.name,
+    file.destination,
+    file.startDate,
+    file.endDate,
+    [],
+    sourceId,
+  );
   return {
     ...doc,
     createdAt: now,

@@ -91,7 +91,7 @@ export function placeRegionLabel(place: TripPlace, stage: TripStage): string {
  * its last stage. Stages are kept in the order the trip was lived, so this is
  * simply where it set out from and where it ended.
  */
-export function tripRouteLabel(trip: TripDoc): string {
+export function tripRouteLabel(trip: Pick<TripDoc, 'stages'>): string {
   const stages = trip.stages ?? [];
   let from: TripPlace | null = null;
   let to: TripPlace | null = null;

@@ -19,6 +19,7 @@
 
 import { isIsoDate, isWithin, type IsoDate } from './trip-days';
 import type { SavedMediaRef } from '../projects/project-types';
+import { DEFAULT_SOURCE_ID } from '../sources/source';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
 import type { OutputTransform } from '../lut/transfer';
 import { themeFromPreset, type StyleTheme } from '../overlay/title-styles';
@@ -43,7 +44,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 10;
+export const TRIP_DOC_VERSION = 11;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers and the
@@ -110,6 +111,36 @@ export interface TripPlace {
 }
 
 /**
+ * Where a stage was SEEDED from — a Winnow timeline chapter, reached through
+ * `timeline-import.ts` (`docs/winnow-timeline.md` §5.4).
+ *
+ * A HINT for the next reconcile, never a pointer the reader dereferences: the
+ * stage keeps its own name, span and places as plain values, so a seeded trip
+ * opens exactly the same with the instance switched off, deleted, or never
+ * connected on this machine (bridge invariant 3). Nothing in the tool reads
+ * this except the diff that proposes what the timeline has gained or renamed.
+ *
+ * It DOES travel in `.roadtrip.json` — the one thing in the file that points
+ * outside this browser, on purpose: `sourceId` is the instance's host and
+ * `chapterId` is that instance's own, so on another machine connected to the
+ * same Winnow the next reconcile still works, and where the instance is
+ * unknown it dangles harmlessly.
+ */
+export interface StageOrigin {
+  /** The host, as `sourceIdFor()` mints it (`shared/sources/winnow/client.ts`). */
+  sourceId: string;
+  /** The chapter's id on that instance — never reused as `TripStage.id`. */
+  chapterId: string;
+  /**
+   * Whatever the instance offers to detect that a chapter was re-clustered
+   * under the trip. Absent until the timeline spec says what that is.
+   */
+  revision?: string;
+  /** When this stage was last seeded or accepted from the chapter. */
+  importedAt: number;
+}
+
+/**
  * A leg of the trip, with its own span — that span is what lets a badge say
  * "3 days in Kalbarri" or "Kalbarri · day 2/3" instead of only counting from
  * departure.
@@ -133,6 +164,8 @@ export interface TripStage {
   endDate: IsoDate;
   /** The places this leg went through, in the order they were lived. */
   places: TripPlace[];
+  /** Set when the stage was seeded from a timeline chapter; absent by hand. */
+  origin?: StageOrigin;
 }
 
 /** How one post's badge counts and where it sits. */
@@ -355,6 +388,15 @@ export interface TripDoc {
    * a grade nobody chose is a factory setting.
    */
   grade: TripGrade;
+  // --- bound half ----------------------------------------------------------
+  /**
+   * The source this trip belongs to — `'local'` for this browser
+   * (`shared/sources/source.ts`), the same seam `ProjectDoc.sourceId` sits on.
+   * Bound, never portable: it stays OUT of `.roadtrip.json`, because an
+   * imported trip belongs to the source that imports it. One trip, one source
+   * (bridge invariant 2) — this is what keeps sync and merge out of the model.
+   */
+  sourceId: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -368,6 +410,9 @@ export interface TripDoc {
  * Empty (the default, and what an import passes) seeds nothing: a trip whose
  * author skipped those fields keeps today's behaviour exactly, with no stage
  * covering any day and the badge counters falling back as they always have.
+ *
+ * `sourceId` is where the document will LIVE; only `local` exists today, and a
+ * remote document store (bridge phase 3) will hand its own id in here.
  */
 export function createTripDoc(
   name: string,
@@ -375,6 +420,7 @@ export function createTripDoc(
   startDate: IsoDate,
   endDate: IsoDate,
   places: TripPlace[] = [],
+  sourceId: string = DEFAULT_SOURCE_ID,
 ): TripDoc {
   const now = Date.now();
   return {
@@ -387,6 +433,7 @@ export function createTripDoc(
     stages: places.length
       ? [createTripStage('', '', startDate, endDate, places)]
       : [],
+    sourceId,
     posts: [],
     badgeWords: { ...DEFAULT_BADGE_WORDS },
     hookDefaults: {},
@@ -524,6 +571,12 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * backdrop, the place marker and the reference day. A post that had the
  * boolean on lands on `auto` — the intent kept, the untrue anniversary dropped.
  *
+ * v10 → v11 gives the trip the `sourceId` the project document has carried
+ * since its v14: everything written before sources existed lives in this
+ * browser, so every older trip files under `local`. A stage's `origin` is
+ * optional and arrives with the same version — no existing stage gains one,
+ * since none was seeded from anywhere.
+ *
  * v8 → v9 gives a stage the ordered list of places it went through, so a leg
  * can say where it began and where it ended instead of carrying one name. It
  * starts empty and the stage's own `name` still wins when set, so no stored
@@ -559,6 +612,10 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
       ...post,
       grade: post.grade ?? null,
     }));
+  }
+  if (migrated.version < 11) {
+    // Everything written before sources existed lives in this browser.
+    migrated.sourceId = migrated.sourceId ?? DEFAULT_SOURCE_ID;
   }
   if (migrated.version < 9) {
     // A stage that has no place keeps `name` as its label, so every existing

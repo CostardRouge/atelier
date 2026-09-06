@@ -19,11 +19,14 @@ import {
   listTrips,
   putTrip,
 } from '../../shared/roadtrip/trip-store';
-import NewTripModal, { type NewTripChoices } from './NewTripModal';
+import NewTripModal, { type NewTripChoices, type TimelineSourceOption } from './NewTripModal';
 
 interface TripGalleryProps {
   openTripId: string | null;
   onOpen: (trip: TripDoc) => void;
+  /** Connected Winnows the New trip modal may offer as a seed. */
+  timelineSources?: TimelineSourceOption[];
+  onSeedFrom?: (sourceId: string) => void;
 }
 
 function TripCard({
@@ -137,7 +140,12 @@ function TripCard({
  * has been told. Deleting is a two-step confirm inside the card — the same
  * pattern as the studio gallery, no modal.
  */
-export default function TripGallery({ openTripId, onOpen }: TripGalleryProps) {
+export default function TripGallery({
+  openTripId,
+  onOpen,
+  timelineSources,
+  onSeedFrom,
+}: TripGalleryProps) {
   const [trips, setTrips] = useState<TripDoc[] | null>(null);
   const [creating, setCreating] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
@@ -276,6 +284,15 @@ export default function TripGallery({ openTripId, onOpen }: TripGalleryProps) {
         <NewTripModal
           onCancel={() => setCreating(false)}
           onCreate={(choices) => void handleCreate(choices)}
+          timelineSources={timelineSources}
+          onSeedFrom={
+            onSeedFrom
+              ? (id) => {
+                  setCreating(false);
+                  onSeedFrom(id);
+                }
+              : undefined
+          }
         />
       )}
     </section>

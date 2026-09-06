@@ -16,9 +16,20 @@ export interface NewTripChoices {
   places: TripPlace[];
 }
 
+/** A connected Winnow the modal can offer as a seed, and whether it can. */
+export interface TimelineSourceOption {
+  id: string;
+  /** False on an instance that has no timeline yet — offered greyed, with the reason. */
+  hasTimeline: boolean;
+}
+
 interface NewTripModalProps {
   onCancel: () => void;
   onCreate: (choices: NewTripChoices) => void;
+  /** The Winnows this browser is connected to; empty hides the seed row entirely. */
+  timelineSources?: TimelineSourceOption[];
+  /** Hand over to the timeline screen for that source. */
+  onSeedFrom?: (sourceId: string) => void;
 }
 
 const field = 'flex flex-col gap-1.5';
@@ -38,7 +49,12 @@ const input =
  * of waiting for someone to open the stages panel. Left empty they seed
  * nothing, and the trip behaves exactly as trips did before places existed.
  */
-export default function NewTripModal({ onCancel, onCreate }: NewTripModalProps) {
+export default function NewTripModal({
+  onCancel,
+  onCreate,
+  timelineSources = [],
+  onSeedFrom,
+}: NewTripModalProps) {
   const [name, setName] = useState('');
   const [from, setFrom] = useState<TripPlace>(() => createTripPlace());
   const [to, setTo] = useState<TripPlace>(() => createTripPlace());
@@ -96,6 +112,27 @@ export default function NewTripModal({ onCancel, onCreate }: NewTripModalProps) 
             The dates are what every badge counts from. All of it stays editable.
           </p>
         </div>
+
+        {/* A connected Winnow can seed the trip from its timeline — the legs,
+            the span, the places — instead of two dates typed by hand. One row,
+            shown only when there is such a source, so the modal stays light. */}
+        {timelineSources.length > 0 && onSeedFrom && (
+          <div className="flex items-center gap-2 flex-wrap text-[0.78rem] text-muted">
+            <span>or seed it from</span>
+            {timelineSources.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                disabled={!s.hasTimeline}
+                title={s.hasTimeline ? `Create the trip from ${s.id}'s timeline` : `${s.id} has no timeline yet`}
+                onClick={() => onSeedFrom(s.id)}
+                className="px-3 py-1 inline-flex items-center border border-line-strong rounded-full bg-paper text-ink-soft cursor-pointer text-[0.76rem] font-semibold hover:border-accent hover:text-accent-ink disabled:opacity-40 disabled:cursor-default disabled:hover:border-line-strong disabled:hover:text-ink-soft"
+              >
+                {s.id}
+              </button>
+            ))}
+          </div>
+        )}
 
         <label className={field}>
           <span className={legend}>Name</span>
