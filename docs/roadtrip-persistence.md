@@ -1,6 +1,10 @@
 # Road Trip persistence on a Winnow instance — the brief
 
-**Status**: designed 2026-09-06; **P-doc and P0 landed** (see §9 for the rest).
+**Status**: designed 2026-09-06; **P-doc, P0 and P1 landed** (see §9 for the rest).
+P1 note: the sync record gained `pushStartedAt` (an edit during an in-flight
+push must leave the record dirty after the push lands) and `theirs` (the
+server's etag + `updated_at` behind a conflict, which "keep mine" re-PUTs
+over); the reducer is `trip-sync.ts`, the store is `trip-store.ts` v3.
 Written to be resumed by a cloud session: every claim carries a path and was
 verified on disk that day. Phases and what each can verify are in §9.
 
