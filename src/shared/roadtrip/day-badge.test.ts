@@ -27,6 +27,7 @@ const post = (date: IsoDate, end: IsoDate | null = null): TripPost => ({
   slides: [],
   includeCta: false,
   projectId: null,
+  grade: null,
   publishedAt: null,
   createdAt: 0,
 });
@@ -52,6 +53,7 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   theme: null,
   cta: { ...DEFAULT_CTA },
   hookDefaults: {},
+  grade: { layers: [], output: 'none' },
   createdAt: 0,
   updatedAt: 0,
   ...over,

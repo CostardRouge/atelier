@@ -25,7 +25,7 @@ import {
   measureOverlays,
 } from './draw-overlays';
 import { drawGuides } from './draw-guides';
-import { snapToGrid, type GuidesState } from './guides';
+import { snap, snapToGrid, type GuidesState } from './guides';
 import type { OverlayElement } from './overlay-types';
 import type { StyleTheme } from './title-styles';
 import type { Scene } from './scenes';
@@ -83,14 +83,6 @@ interface StageHandlers {
   onPointerDown: (e: React.PointerEvent) => void;
   onPointerMove: (e: React.PointerEvent) => void;
   onPointerUp: (e: React.PointerEvent) => void;
-}
-
-/** Snap a normalized coordinate to 0 / 0.5 / 1 when within `tol`. */
-function snap(value: number, tol = 0.02): number {
-  if (Math.abs(value) < tol) return 0;
-  if (Math.abs(value - 1) < tol) return 1;
-  if (Math.abs(value - 0.5) < tol) return 0.5;
-  return value;
 }
 
 export function useOverlayStage(params: StageParams): StageHandlers {

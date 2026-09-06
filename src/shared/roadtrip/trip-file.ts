@@ -91,6 +91,9 @@ export function toTripFile(trip: TripDoc, exportedAt: number = Date.now()): Trip
     theme: structuredClone(trip.theme),
     cta: structuredClone(trip.cta),
     hookDefaults: structuredClone(trip.hookDefaults),
+    // The grade travels: a custom .cube rides as text inside its layer, so a
+    // trip opened elsewhere renders its pictures with the same look.
+    grade: structuredClone(trip.grade),
   };
 }
 
@@ -183,6 +186,7 @@ export function parseTripFile(text: string): ParseResult {
     hookDefaults: isRecord(raw.hookDefaults)
       ? (raw.hookDefaults as unknown as TripDoc['hookDefaults'])
       : base.hookDefaults,
+    grade: isRecord(raw.grade) ? (raw.grade as unknown as TripDoc['grade']) : base.grade,
   });
 
   return {
@@ -203,6 +207,7 @@ export function parseTripFile(text: string): ParseResult {
       theme: migrated.theme,
       cta: migrated.cta,
       hookDefaults: migrated.hookDefaults,
+      grade: migrated.grade,
     },
   };
 }
@@ -236,5 +241,6 @@ export function tripDocFromFile(
     theme: structuredClone(file.theme),
     cta: structuredClone(file.cta),
     hookDefaults: structuredClone(file.hookDefaults),
+    grade: structuredClone(file.grade),
   };
 }

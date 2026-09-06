@@ -5,10 +5,11 @@
  * Nothing is re-implemented here on purpose: `exportVariantVideo` already
  * decodes, cover-crops into the post's frame, burns the overlays in at the
  * clip's cadence and muxes with the audio copied through. A hook is that same
- * export with no LUT, no telemetry cues and a scrim painted between the
- * picture and the badge.
+ * export with the trip's (or the piece's) grade, no telemetry cues and a scrim
+ * painted between the picture and the badge.
  */
 
+import type { CubeLut } from '../lib/cube-parser';
 import { exportVariantVideo } from '../media/export-variant';
 import type { ExportProgress } from '../media/webcodecs-export';
 import type { TrimRange } from '../media/trim';
@@ -31,6 +32,12 @@ export interface HookVideoOptions {
   shades?: readonly Shade[];
   /** The badge block's extent, for a shade that follows the hook. */
   block?: HookBlock | null;
+  /**
+   * The composed grade, applied by the pipeline's own shader before the
+   * shades and the badge — the Studio's export, the Studio's grade. Null
+   * leaves the clip as shot.
+   */
+  lut?: CubeLut | null;
   onProgress?: (p: ExportProgress) => void;
   signal?: AbortSignal;
 }
@@ -43,7 +50,7 @@ export function exportHookVideo(opts: HookVideoOptions): Promise<Blob> {
     {
       elements: opts.elements,
       cues: [],
-      lut: null,
+      lut: opts.lut ?? null,
       intensity: 1,
       theme: opts.theme,
       srcWidth: opts.srcWidth,

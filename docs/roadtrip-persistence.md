@@ -68,9 +68,9 @@ Do not re-open these; design inside them.
 the field `ProjectDoc` got at v14:
 
 ```ts
-// trip-types.ts — TRIP_DOC_VERSION = 10
+// trip-types.ts — TRIP_DOC_VERSION = 11 (v10 went to the grade, #70)
 interface TripDoc { sourceId: string; /* … */ }   // bound half, default 'local'
-// migrateTripDoc: if (version < 10) sourceId ??= DEFAULT_SOURCE_ID
+// migrateTripDoc: if (version < 11) sourceId ??= DEFAULT_SOURCE_ID
 ```
 
 - `trip-file.ts`: `TripPortable = Omit<TripDoc, … | 'sourceId'>`; `tripDocFromFile(file, now, sourceId = DEFAULT_SOURCE_ID)` — an imported trip belongs to the source that imports it. Test: the serialized file has no `sourceId` key; a v9 file still parses.
@@ -255,7 +255,7 @@ Nothing new is stored in the browser: no token, the session stays Winnow's cooki
 | Phase | What | Where | Verifiable in a cloud container? |
 |---|---|---|---|
 | **P-doc** | Land this file as `docs/roadtrip-persistence.md`; `MEMORY.md` pointer (the "not memory files" list); fix `winnow-bridge.md` "next free is 0040" → 0041 and mark the timeline as shipped | Atelier | yes |
-| **P0** | `TripDoc.sourceId` v10 + migration + `trip-file.ts` Omit widening + tests; `TripGallery` grouped by source via `groupBySource`; `NewTripModal` "Keep on" picker (hidden with one source) | Atelier only | yes |
+| **P0** | `TripDoc.sourceId` v11 (v10 went to the grade, #70) + migration + `trip-file.ts` Omit widening + tests; `TripGallery` grouped by source via `groupBySource`; `NewTripModal` "Keep on" picker (hidden with one source) | Atelier only | yes |
 | **P1** | `trip-sync.ts` reducer + tests; `WinnowClient` doc methods + `conflict`/`notfound` kinds + fake-fetch tests; `trip-store.ts` v3 `sync` store | Atelier only | yes — dead until P2 |
 | **P2** | Migration 0041, the route pair, `authz.ts`, capabilities; check `corsPreflightHeaders` lists PUT/DELETE | **Winnow repo** — a separate session on `CostardRouge/winnow` | typecheck+migrate+build only |
 | **P3** | `trip-remote.ts` driver; `RoadTripTool` wiring; gallery remote list + states; pill + Save now; conflict/gone UX; move verb; remote delete | Atelier | **no** — needs the deployed pair (§10) |
@@ -266,7 +266,7 @@ Memory updates per phase (CLAUDE.md rule 2): `roadtrip.md` (the decisions D1–D
 ## 10. Verification
 
 - `npm run typecheck && npm run lint && npm test && npm run build` on every phase.
-- Unit: `trip-types.test.ts` (v9 → v10 migration, default `local`), `trip-file.test.ts` (no `sourceId` in the file; import sets the target), `trip-sync.test.ts` (every event × status, `shouldFlush` idle arithmetic, every `pillText` line), `client.test.ts` (headers `If-Match`/`If-None-Match`, 304/412/404/413 mapping, body cap).
+- Unit: `trip-types.test.ts` (v10 → v11 migration, default `local`), `trip-file.test.ts` (no `sourceId` in the file; import sets the target), `trip-sync.test.ts` (every event × status, `shouldFlush` idle arithmetic, every `pillText` line), `client.test.ts` (headers `If-Match`/`If-None-Match`, 304/412/404/413 mapping, body cap).
 - Browser (P0): `npm run dev`, gallery shows "source: local", NewTripModal shows no picker with one source.
 - **P3 only on the deployed pair** (`atelier.steeve.website` ↔ `winnow.steeve.website`): `localhost` is cross-SITE, the cookie cannot travel. Script: create remote trip on A → open on B (pull, mirror) → edit on B → edit on A without reload → A's push 412s → Keep mine / Take theirs → delete on B → A's next push says "gone". Then: sign out on Winnow, edit → pill says sign in; airplane mode, edit, reload → dirty survives and pushes on reconnect.
 

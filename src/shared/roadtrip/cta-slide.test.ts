@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CTA, ctaLayout, type CtaSlide } from './cta-slide';
+import {
+  DEFAULT_CTA,
+  ctaElementId,
+  ctaLayout,
+  ctaRoleFromElementId,
+  type CtaSlide,
+} from './cta-slide';
 
 const REEL = 9 / 16;
 const SQUARE = 1;
@@ -89,6 +95,35 @@ describe('ctaLayout', () => {
       );
       expect(el.glowAmount).toBe(0);
     }
+  });
+
+  it('gives every line a stable id that names its role and line', () => {
+    const a = ctaLayout(cta(), PORTRAIT).elements;
+    const b = ctaLayout(cta(), PORTRAIT).elements;
+    expect(a.map((e) => e.id)).toEqual(b.map((e) => e.id));
+    expect(new Set(a.map((e) => e.id)).size).toBe(a.length);
+    for (const el of a) {
+      const parsed = ctaRoleFromElementId(el.id);
+      expect(parsed).not.toBeNull();
+      expect(ctaElementId(parsed!.role, parsed!.line)).toBe(el.id);
+    }
+    expect(ctaRoleFromElementId(a[0].id)).toEqual({ role: 'headline', line: 0 });
+    expect(ctaRoleFromElementId(a[a.length - 1].id)).toEqual({ role: 'url', line: 0 });
+    // The body wraps, so its lines are numbered in order.
+    const body = a.map((e) => ctaRoleFromElementId(e.id)!).filter((r) => r.role === 'body');
+    expect(body.map((r) => r.line)).toEqual(body.map((_, i) => i));
+  });
+
+  it('keeps ids unique and on their role when a line is left empty', () => {
+    const els = ctaLayout(cta({ headline: '' }), PORTRAIT).elements;
+    expect(els.some((e) => ctaRoleFromElementId(e.id)?.role === 'headline')).toBe(false);
+    expect(new Set(els.map((e) => e.id)).size).toBe(els.length);
+  });
+
+  it('refuses an id that is not a card line’s', () => {
+    expect(ctaRoleFromElementId('piece:kicker')).toBeNull();
+    expect(ctaRoleFromElementId('cta:footer:0')).toBeNull();
+    expect(ctaRoleFromElementId('cta:body:x')).toBeNull();
   });
 });
 

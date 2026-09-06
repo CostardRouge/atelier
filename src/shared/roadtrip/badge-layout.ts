@@ -18,6 +18,7 @@
  */
 
 import type { ElementAnimation } from '../overlay/animation';
+import { snap } from '../overlay/guides';
 import {
   createTextElement,
   type Anchor,
@@ -105,6 +106,26 @@ const ORDER: readonly BadgePiece[] = [
   'caption',
   'timing',
 ];
+
+/**
+ * The badge's elements are DERIVED on every render, never stored, so their ids
+ * must be a function of the piece rather than a fresh `uid()` — a stage that
+ * hit-tests the canvas gets an id back, and that id has to still mean the same
+ * piece on the next repaint. `piece:<key>` is that function; `pieceFromElementId`
+ * is its inverse.
+ */
+const PIECE_ID_PREFIX = 'piece:';
+
+export function pieceElementId(piece: BadgePiece): string {
+  return `${PIECE_ID_PREFIX}${piece}`;
+}
+
+/** The piece an element id names, or null for an id that is not a badge piece's. */
+export function pieceFromElementId(id: string): BadgePiece | null {
+  if (!id.startsWith(PIECE_ID_PREFIX)) return null;
+  const key = id.slice(PIECE_ID_PREFIX.length);
+  return (ORDER as readonly string[]).includes(key) ? (key as BadgePiece) : null;
+}
 
 /**
  * A size expressed as a fraction of the SHORTER side, converted to a fraction
@@ -266,6 +287,7 @@ export function badgeElements(
   return pieces.map((piece, i) => {
     const style = styles[piece.key];
     const el = createTextElement(casedText(piece.text, style));
+    el.id = pieceElementId(piece.key);
     el.anchor = lineAnchor;
     el.x = layout.x;
     el.y = cursor;
@@ -274,6 +296,27 @@ export function badgeElements(
     cursor += heights[i] + gaps[i];
     return el;
   });
+}
+
+/**
+ * Where a drag lands the badge's anchor: the position it started from plus
+ * the pointer's travel as fractions of the frame, kept inside the frame and —
+ * unless the author holds Alt — softly pulled onto an edge or the centre.
+ *
+ * The BLOCK moves, never one piece: the stack's hierarchy is the badge, and a
+ * line dragged out of it would be a different design. The 3×3 anchor grid
+ * stays the coarse tool; this is the fine one.
+ */
+export function moveBlock(
+  start: { x: number; y: number },
+  dxFrac: number,
+  dyFrac: number,
+  snapping = true,
+): { x: number; y: number } {
+  const clamp = (v: number) => Math.min(1, Math.max(0, v));
+  const x = clamp(start.x + dxFrac);
+  const y = clamp(start.y + dyFrac);
+  return snapping ? { x: snap(x), y: snap(y) } : { x, y };
 }
 
 /**
