@@ -139,6 +139,8 @@ export interface AssetQuery extends FilterQuery {
   sessionId?: number;
   /** ⚠ ASSUMED: a timeline chapter, cumulative with the other filters (§7.8). */
   chapterId?: string;
+  /** An explicit set of assets — how a document's refs are re-resolved. */
+  ids?: readonly number[];
   cursor?: string | null;
   limit?: number;
 }
@@ -519,6 +521,8 @@ export class WinnowClient {
         date_to: query.dateTo,
         session_id: query.sessionId,
         chapter_id: query.chapterId,
+        // Winnow's `intList`: comma-separated, whitespace tolerated.
+        ids: query.ids?.length ? query.ids.join(',') : undefined,
         ...filterParams(query),
         cursor: query.cursor,
         limit: query.limit ?? 200,
@@ -543,6 +547,40 @@ export class WinnowClient {
       cursor = page.next_cursor;
     } while (cursor && rows.length < cap);
     return rows;
+  }
+
+  /** One asset's row — the same shape the list serves, wrapped as `{ asset }`. */
+  async asset(id: number): Promise<WinnowAssetRow | null> {
+    try {
+      const raw = await this.json<{ asset?: WinnowAssetRow }>(this.url(`/api/assets/${id}`));
+      return raw.asset ?? null;
+    } catch (err) {
+      // A purged or soft-deleted asset is a 404 — "gone", not a failure of the
+      // instance. Everything else stays what it is.
+      if (err instanceof WinnowError && err.kind === 'protocol' && err.status === 404) return null;
+      throw err;
+    }
+  }
+
+  /**
+   * The rows for an explicit set of ids, in the order asked, absent ones
+   * skipped — how a document's remote refs are re-resolved after a reload.
+   * One list request answers the whole set; an id the collapsed list did not
+   * return (the RAW half of a pair, say) is asked for on its own.
+   */
+  async assetsByIds(ids: readonly number[]): Promise<WinnowAssetRow[]> {
+    if (!ids.length) return [];
+    const found = new Map<number, WinnowAssetRow>();
+    for (const row of await this.allAssets({ ids })) found.set(row.id, row);
+    for (const id of ids) {
+      if (found.has(id)) continue;
+      const row = await this.asset(id);
+      if (row) found.set(id, row);
+    }
+    return ids.flatMap((id) => {
+      const row = found.get(id);
+      return row ? [row] : [];
+    });
   }
 
   /**
