@@ -127,8 +127,17 @@ export default function PostEditor({
     [slide, post, onChangePost],
   );
 
-  // The Library and the open slide point at the same picture, both ways.
-  useSlideLibrary(slide, lib.assets, lib.setActive, activeFile, setSlideMedia);
+  // The Library and the open slide point at the same picture, both ways —
+  // and a picture the pool lost to a reload is fetched back from the instance
+  // that holds it, rather than reported missing.
+  const recovery = useSlideLibrary(
+    slide,
+    lib.assets,
+    lib.setActive,
+    activeFile,
+    setSlideMedia,
+    lib.addFiles,
+  );
 
   const slideFile = isCta ? null : activeFile;
   const missing = !isCta && slide.media !== null && activeFile === null;
@@ -567,6 +576,7 @@ export default function PostEditor({
               slide={slide}
               slideFile={slideFile}
               missing={missing}
+              recovery={recovery}
               isVideo={isVideo}
               duration={duration}
               patchBadge={patchBadge}

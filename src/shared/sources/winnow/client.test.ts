@@ -238,6 +238,37 @@ describe('WinnowClient requests', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
+  it("sends an explicit id set the way Winnow's intList reads it: comma-separated", async () => {
+    const fetchImpl = vi.fn<FetchLike>(async () => ok({ assets: [], next_cursor: null }));
+    await client(fetchImpl).assets({ ids: [42, 7] });
+    const params = Object.fromEntries(new URL(fetchImpl.mock.calls[0][0]).searchParams);
+    expect(params.ids).toBe('42,7');
+    // An empty set sends nothing — `ids=` would be "match nothing" server-side.
+    await client(fetchImpl).assets({ ids: [] });
+    expect(new URL(fetchImpl.mock.calls[1][0]).searchParams.has('ids')).toBe(false);
+  });
+
+  it('re-resolves a set of ids in the order asked, fetching a collapsed-away one on its own', async () => {
+    const fetchImpl = vi.fn<FetchLike>(async (url) => {
+      const u = new URL(url);
+      if (u.pathname === '/api/assets') return ok({ assets: [{ id: 7 }], next_cursor: null });
+      if (u.pathname === '/api/assets/42') return ok({ asset: { id: 42 } });
+      return new Response('', { status: 404 });
+    });
+    const rows = await client(fetchImpl).assetsByIds([42, 7, 99]);
+    expect(rows.map((r) => r.id)).toEqual([42, 7]);
+    const paths = fetchImpl.mock.calls.map((call) => new URL(call[0]).pathname);
+    expect(paths).toEqual(['/api/assets', '/api/assets/42', '/api/assets/99']);
+  });
+
+  it('reads a single asset as { asset }, and a 404 as gone rather than an error', async () => {
+    expect(await client(async () => ok({ asset: { id: 3 } })).asset(3)).toEqual({ id: 3 });
+    expect(await client(async () => new Response('', { status: 404 })).asset(3)).toBeNull();
+    await expect(
+      client(async () => new Response('', { status: 500 })).asset(3),
+    ).rejects.toMatchObject({ kind: 'protocol', status: 500 });
+  });
+
   it('maps 401 to unauthenticated — the user must sign in on the instance', async () => {
     const c = client(async () => new Response('', { status: 401 }));
     await expect(c.capabilities()).rejects.toMatchObject({ kind: 'unauthenticated', status: 401 });

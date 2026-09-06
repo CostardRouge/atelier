@@ -3,6 +3,7 @@ import { ASPECT_PRESETS } from '../../../shared/projects/project-types';
 import type { DeckSlide } from '../../../shared/roadtrip/deck';
 import type { Shade } from '../../../shared/roadtrip/shades';
 import type { PostBadge, PostSlide, TripPost } from '../../../shared/roadtrip/trip-types';
+import type { SlideRecovery } from '../use-slide-library';
 import FrameStrip from '../FrameStrip';
 import ShadesPanel from '../ShadesPanel';
 import { chipClass, legend, section } from './ui';
@@ -34,6 +35,8 @@ interface PictureTabProps {
   slideFile: File | null;
   /** The slide names a picture the Library does not hold right now. */
   missing: boolean;
+  /** What became of a picture being fetched back from its instance. */
+  recovery: SlideRecovery | null;
   isVideo: boolean;
   /** The clip's length in seconds; 0 for a photo or while it loads. */
   duration: number;
@@ -55,6 +58,7 @@ export default function PictureTab({
   slide,
   slideFile,
   missing,
+  recovery,
   isVideo,
   duration,
   patchBadge,
@@ -75,9 +79,26 @@ export default function PictureTab({
             </p>
           ) : (
             <p className="m-0 text-[0.78rem] text-muted">
-              {missing
-                ? `“${slide.media?.name}” is not in the Library right now. The slide keeps its place in the deck.`
-                : 'Tick a photo or a clip in the Library on the left — this slide composes over whatever is active there.'}
+              {recovery?.state === 'fetching'
+                ? `“${slide.media?.name}” lives on ${recovery.sourceId} — fetching it back…`
+                : missing
+                  ? `“${slide.media?.name}” is not in the Library right now. The slide keeps its place in the deck.`
+                  : 'Tick a photo or a clip in the Library on the left — this slide composes over whatever is active there.'}
+            </p>
+          )}
+          {recovery?.state === 'failed' && (
+            <p className="m-0 text-[0.78rem] text-[#9a3a23]" role="alert">
+              {recovery.problem}{' '}
+              {recovery.loginUrl && (
+                <a
+                  className="font-semibold underline underline-offset-[3px]"
+                  href={recovery.loginUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Sign in there
+                </a>
+              )}
             </p>
           )}
           {isVideo && duration > 0 && slideFile && (
