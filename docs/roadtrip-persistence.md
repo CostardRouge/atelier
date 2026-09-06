@@ -1,6 +1,10 @@
 # Road Trip persistence on a Winnow instance — the brief
 
-**Status**: designed 2026-09-06; **P-doc, P0 and P1 landed** (see §9 for the rest).
+**Status**: designed 2026-09-06; **P-doc, P0 and P1 landed; P2 is written as
+`docs/winnow-patches/0001-app-documents-bucket.patch`** (the authoring session
+could read `CostardRouge/winnow` and not push to it — apply with `git am`;
+`typecheck` and `build` passed there, `migrate` needs the Postgres the
+container did not have). See §9.
 P1 note: the sync record gained `pushStartedAt` (an edit during an in-flight
 push must leave the record dirty after the push lands) and `theirs` (the
 server's etag + `updated_at` behind a conflict, which "keep mine" re-PUTs
@@ -217,8 +221,20 @@ CREATE INDEX IF NOT EXISTS app_documents_owner_idx
 - `PUT …/docs/:id` body `{ kind, version, doc }`, `Content-Type: application/json` required (forces a preflight). Row exists and `If-Match` missing or stale → **412** with `{ error, etag, updated_at }`. Body over the cap → 413. OK → 200 `{ etag, updated_at }`. Cap: 1 MiB.
 - `DELETE …/docs/:id` with `If-Match` → 204; 404 when not owned.
 
-**`authz.ts`**: add `'/api/apps/'` to `SELF_SERVICE_PREFIXES` (D3).
+**`authz.ts`**: add `'/api/apps'` to `SELF_SERVICE_PREFIXES` (D3).
 **`capabilities`**: `documents: { bucket: true, kinds: ['trip', 'project'], maxBytes: 1048576 }` — fields added, no `API_VERSION` bump.
+
+As written (P2, in the patch): the rules live in `src/lib/appDocuments.ts` and
+the two route files only map outcomes to status codes, the lib/ + api/ split
+that repo uses everywhere. Three details the sketch above did not fix: a `PUT`
+whose id collides with **another user's** row answers 404 (a 412 would leak
+that row's revision); a client holding an `If-Match` for a row that no longer
+exists gets 404 (deleted elsewhere → `gone`), while no `If-Match` on a missing
+row is a create (201); and the etag is checked again in the `UPDATE`'s `WHERE`,
+so two devices racing past the ownership `SELECT` cannot both succeed. ETags
+are sent quoted and compared after stripping quotes and `W/`, so a client
+echoing the header verbatim matches. `DELETE` with a stale or missing
+`If-Match` is 412, like a write.
 
 ## 8. Security — the honest answer to question 3
 
