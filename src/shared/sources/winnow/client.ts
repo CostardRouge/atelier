@@ -28,6 +28,8 @@
  * unit-testable without a network.
  */
 
+import { TIMELINE_SYNC_ENABLED } from './features';
+
 export type WinnowAuth =
   /** Same-site: the browser sends Winnow's session cookie. */
   | { mode: 'cookie' }
@@ -218,13 +220,21 @@ export interface WinnowChapter {
 }
 
 /**
- * Whether browsing by leg is worth offering. The flag is absent on every
- * instance shipped so far, and requiring it hid a timeline that works — so
- * the rule is "offer unless the instance says no", and a `notfound` from
- * `timeline()` is what an instance without one answers. The connection is
- * still the gate: nothing is asked of a source the user has not allowed.
+ * Whether browsing by leg is worth offering.
+ *
+ * **`TIMELINE_SYNC_ENABLED` decides first, and it is off** — Winnow's
+ * timeline is young and Atelier does not lean on it (`features.ts` carries
+ * the reasoning). Every caller of this function is an entry point, so one
+ * switch closes them all and nothing asks an immature route for anything.
+ *
+ * Were it on, the rule would be "offer unless the instance says no": no
+ * shipped Winnow sends this capability, so requiring it hid a timeline that
+ * does answer, and a `notfound` from `timeline()` is what an instance
+ * without one says. The connection stays the other gate either way: nothing
+ * is asked of a source the user has not allowed.
  */
 export function hasTimeline(caps: WinnowCapabilities | null | undefined): boolean {
+  if (!TIMELINE_SYNC_ENABLED) return false;
   return caps?.media?.timeline !== false;
 }
 

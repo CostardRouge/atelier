@@ -36,6 +36,7 @@ import {
 } from '../../shared/roadtrip/trip-remote';
 import { DEFAULT_SOURCE_ID } from '../../shared/sources/source';
 import { hasTimeline } from '../../shared/sources/winnow/client';
+import { TIMELINE_SYNC_ENABLED } from '../../shared/sources/winnow/features';
 import {
   getWinnowConnection,
   listWinnowConnections,
@@ -132,6 +133,13 @@ export default function RoadTripTool() {
     const link = route.link;
     if (!mine || !link || consumedLink.current === path) return;
     consumedLink.current = path;
+    // Asleep: a link is still consumed — the URL must not stay on a proposal
+    // nothing will answer — but it opens the ordinary screen, and no instance
+    // is asked for a timeline.
+    if (!TIMELINE_SYNC_ENABLED) {
+      navigate(link.kind === 'seed' || !route.ref ? HOME_ROUTE : roadtripPath(route.ref));
+      return;
+    }
     const connection = getWinnowConnection(link.source);
     if (!connection) {
       const instance = encodeURIComponent(`https://${link.source}`);
@@ -479,10 +487,13 @@ export default function RoadTripTool() {
     ? (open?.posts.find((p) => p.id === route.postId) ?? null)
     : null;
 
-  const seedSources = connections.map((c) => ({
-    id: c.id,
-    hasTimeline: hasTimeline(c.capabilities),
-  }));
+  // Asleep: an empty list removes the modal's whole "or seed it from" row,
+  // rather than leaving a greyed button for something that cannot light up.
+  // With the switch on, every connection is offered again and the greying
+  // goes back to meaning "this instance has no timeline".
+  const seedSources = TIMELINE_SYNC_ENABLED
+    ? connections.map((c) => ({ id: c.id, hasTimeline: hasTimeline(c.capabilities) }))
+    : [];
   const completeSources = connections
     .filter((c) => hasTimeline(c.capabilities))
     .map((c) => c.id);

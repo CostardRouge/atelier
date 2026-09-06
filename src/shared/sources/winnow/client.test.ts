@@ -11,6 +11,7 @@ import {
   type WinnowCapabilities,
   type WinnowChapter,
 } from './client';
+import { TIMELINE_SYNC_ENABLED } from './features';
 import type { TimelineChapter } from '../../roadtrip/timeline-import';
 
 const BASE = 'https://winnow.example';
@@ -174,13 +175,16 @@ describe('the timeline chapter, normalised at the boundary', () => {
     expect(asImport.startDate).toBe('2025-11-05');
   });
 
-  it('offers the leg tab unless the instance says it has no timeline', () => {
-    // Winnow ships a timeline and no flag for it, so absence cannot mean no.
+  it('offers no leg anywhere while the timeline switch is off', () => {
+    // The switch is the first word: Winnow's timeline is young and Atelier
+    // does not lean on it (`features.ts`). Every entry point asks this
+    // function, so an instance that would answer is still not asked.
     const caps = (media: Record<string, unknown>) =>
       ({ media }) as unknown as WinnowCapabilities;
-    expect(hasTimeline(caps({ timeline: true }))).toBe(true);
-    expect(hasTimeline(caps({}))).toBe(true);
-    expect(hasTimeline(null)).toBe(true);
+    expect(TIMELINE_SYNC_ENABLED).toBe(false);
+    expect(hasTimeline(caps({ timeline: true }))).toBe(false);
+    expect(hasTimeline(caps({}))).toBe(false);
+    expect(hasTimeline(null)).toBe(false);
     expect(hasTimeline(caps({ timeline: false }))).toBe(false);
   });
 
