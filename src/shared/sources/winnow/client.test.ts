@@ -274,9 +274,11 @@ describe('WinnowClient requests', () => {
     await expect(c.capabilities()).rejects.toMatchObject({ kind: 'unauthenticated', status: 401 });
   });
 
-  it('maps 403 to forbidden and other failures to protocol', async () => {
+  it('maps 403 to forbidden, 404 to notfound and other failures to protocol', async () => {
     await expect(client(async () => new Response('', { status: 403 })).capabilities())
       .rejects.toMatchObject({ kind: 'forbidden' });
+    await expect(client(async () => new Response('', { status: 404 })).capabilities())
+      .rejects.toMatchObject({ kind: 'notfound', status: 404 });
     await expect(client(async () => new Response('', { status: 500 })).capabilities())
       .rejects.toMatchObject({ kind: 'protocol', status: 500 });
   });
@@ -294,6 +296,130 @@ describe('WinnowClient requests', () => {
   it('rejects a 200 that is not JSON as a protocol error', async () => {
     const c = client(async () => new Response('<html>', { status: 200 }));
     await expect(c.capabilities()).rejects.toMatchObject({ kind: 'protocol' });
+  });
+
+  describe('the document bucket', () => {
+    const row = { id: 't1', kind: 'trip', version: 10, updated_at: '2026-09-06T10:00:00Z', etag: 'e1', doc: { name: 'A' } };
+
+    it('lists one kind under the app namespace, with the cookie', async () => {
+      const fetchImpl = vi.fn<FetchLike>(async () => ok({ docs: [row] }));
+      const docs = await client(fetchImpl).listDocs('atelier', 'trip');
+      expect(docs).toEqual([row]);
+      const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+      const u = new URL(url);
+      expect(u.pathname).toBe('/api/apps/atelier/docs');
+      expect(u.searchParams.get('kind')).toBe('trip');
+      expect(init.credentials).toBe('include');
+    });
+
+    it('lists nothing when the body has no docs', async () => {
+      expect(await client(async () => ok({})).listDocs('atelier', 'trip')).toEqual([]);
+    });
+
+    it('gets a row and trusts the ETag header over the body', async () => {
+      const fetchImpl = vi.fn<FetchLike>(
+        async () => new Response(JSON.stringify(row), { status: 200, headers: { etag: '"e2"' } }),
+      );
+      const r = await client(fetchImpl).getDoc('atelier', 't1', '"e1"');
+      expect(r).toEqual({ row: { ...row, etag: '"e2"' } });
+      const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+      expect(new URL(url).pathname).toBe('/api/apps/atelier/docs/t1');
+      expect(new Headers(init.headers).get('if-none-match')).toBe('"e1"');
+    });
+
+    it('sends no If-None-Match when it holds no etag', async () => {
+      const fetchImpl = vi.fn<FetchLike>(async () => ok(row));
+      await client(fetchImpl).getDoc('atelier', 't1');
+      const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+      expect(new Headers(init.headers).has('if-none-match')).toBe(false);
+    });
+
+    it('reads a 304 as "ours is current" — nothing downloaded', async () => {
+      const c = client(async () => new Response(null, { status: 304 }));
+      expect(await c.getDoc('atelier', 't1', 'e1')).toBe('not-modified');
+    });
+
+    it('a row that is not ours is notfound, never forbidden', async () => {
+      const c = client(async () => new Response('{"error":"Not found"}', { status: 404 }));
+      await expect(c.getDoc('atelier', 'someone-elses')).rejects.toMatchObject({ kind: 'notfound' });
+    });
+
+    it('PUTs JSON with If-Match and returns the acknowledged revision', async () => {
+      const fetchImpl = vi.fn<FetchLike>(
+        async () =>
+          new Response(JSON.stringify({ etag: 'e2', updated_at: '2026-09-06T10:01:00Z' }), {
+            status: 200,
+            headers: { etag: 'e2' },
+          }),
+      );
+      const r = await client(fetchImpl).putDoc('atelier', 't1', { kind: 'trip', version: 10, doc: { name: 'A' } }, 'e1');
+      expect(r).toEqual({ etag: 'e2', updatedAt: '2026-09-06T10:01:00Z' });
+      const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+      expect(init.method).toBe('PUT');
+      const h = new Headers(init.headers);
+      expect(h.get('if-match')).toBe('e1');
+      expect(h.get('content-type')).toBe('application/json');
+      expect(JSON.parse(init.body as string)).toEqual({ kind: 'trip', version: 10, doc: { name: 'A' } });
+    });
+
+    it('a first push carries no If-Match — the server refuses if a row exists', async () => {
+      const fetchImpl = vi.fn<FetchLike>(async () => ok({ etag: 'e1', updated_at: 'x' }));
+      await client(fetchImpl).putDoc('atelier', 't1', { kind: 'trip', version: 10, doc: {} }, null);
+      const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+      expect(new Headers(init.headers).has('if-match')).toBe(false);
+    });
+
+    it('maps a 412 to conflict, carrying the server’s revision', async () => {
+      const c = client(
+        async () =>
+          new Response(JSON.stringify({ error: 'stale', etag: 'e9', updated_at: '2026-09-06T14:02:00Z' }), {
+            status: 412,
+          }),
+      );
+      const err = await c.putDoc('atelier', 't1', { kind: 'trip', version: 10, doc: {} }, 'e1').catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(WinnowError);
+      expect(err).toMatchObject({
+        kind: 'conflict',
+        status: 412,
+        theirs: { etag: 'e9', updatedAt: '2026-09-06T14:02:00Z' },
+      });
+    });
+
+    it('refuses an oversize body BEFORE any bytes travel', async () => {
+      const fetchImpl = vi.fn<FetchLike>(async () => ok({}));
+      const big = { kind: 'trip', version: 10, doc: { pad: 'x'.repeat(2000) } };
+      await expect(client(fetchImpl).putDoc('atelier', 't1', big, null, 1024)).rejects.toMatchObject({
+        kind: 'protocol',
+        status: 413,
+      });
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
+    it('maps the server’s own 413 to protocol', async () => {
+      const c = client(async () => new Response('', { status: 413 }));
+      await expect(c.putDoc('atelier', 't1', { kind: 'trip', version: 10, doc: {} }, null)).rejects.toMatchObject({
+        kind: 'protocol',
+        status: 413,
+      });
+    });
+
+    it('a PUT acknowledged without an etag is a protocol error — nothing to guard the next write with', async () => {
+      const c = client(async () => ok({ updated_at: 'x' }));
+      await expect(c.putDoc('atelier', 't1', { kind: 'trip', version: 10, doc: {} }, null)).rejects.toMatchObject({
+        kind: 'protocol',
+      });
+    });
+
+    it('DELETEs with If-Match; a row already gone is notfound', async () => {
+      const fetchImpl = vi.fn<FetchLike>(async () => new Response(null, { status: 204 }));
+      await client(fetchImpl).deleteDoc('atelier', 't1', 'e1');
+      const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+      expect(init.method).toBe('DELETE');
+      expect(new URL(url).pathname).toBe('/api/apps/atelier/docs/t1');
+      expect(new Headers(init.headers).get('if-match')).toBe('e1');
+      const gone = client(async () => new Response('', { status: 404 }));
+      await expect(gone.deleteDoc('atelier', 't1', 'e1')).rejects.toMatchObject({ kind: 'notfound' });
+    });
   });
 
   it('asks the timeline under the same filters, and narrows a chapter\'s rows by it', async () => {

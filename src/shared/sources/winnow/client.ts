@@ -7,6 +7,11 @@
  * that API; it never writes (phase 2 will). What it relies on was verified
  * against Winnow's code and is recorded in `docs/winnow-bridge.md` §5.
  *
+ * Since phase 3 of the bridge it also WRITES, in one place: the opaque
+ * document bucket (`/api/apps/:app/docs`), JSON Atelier owns entirely, guarded
+ * by an etag the server uses to refuse a stale write. See `docs/
+ * roadtrip-persistence.md` §7 for the route contract.
+ *
  * Two facts shape everything here:
  *
  * - **Auth is Winnow's own session cookie.** Atelier at `atelier.steeve.website`
@@ -112,7 +117,13 @@ export interface WinnowCapabilities {
      */
     timeline?: boolean;
   };
-  documents: { bucket: boolean };
+  documents: {
+    bucket: boolean;
+    /** The `kind`s the bucket lists by. Absent on an instance without the bucket. */
+    kinds?: string[];
+    /** The body cap per document, in bytes; the client checks it BEFORE a PUT. */
+    maxBytes?: number | null;
+  };
   scheduling: { reminders: boolean };
   limits: { maxUploadBytes: number | null };
   storage: { driver: string; signedRedirects: boolean };
@@ -308,20 +319,63 @@ export type WinnowErrorKind =
   | 'unauthenticated'
   /** 403 — signed in, but this account may not do that. */
   | 'forbidden'
+  /** 404 — no such thing, or not this account's (the bucket never says which). */
+  | 'notfound'
+  /** 412 — the document changed there since the etag we hold; nothing was written. */
+  | 'conflict'
   /** The request never got an answer: offline, wrong URL, or CORS refused. */
   | 'unreachable'
   /** Any other non-2xx, or a body that is not what we expect. */
   | 'protocol';
 
+/** What the server holds when it refuses a write with 412. */
+export interface ConflictInfo {
+  etag: string;
+  updatedAt: string | null;
+}
+
 export class WinnowError extends Error {
+  /** Set on a `conflict`: the server's current revision, so "keep mine" can re-PUT over it. */
+  readonly theirs: ConflictInfo | null;
+
   constructor(
     public readonly kind: WinnowErrorKind,
     message: string,
     public readonly status?: number,
+    theirs: ConflictInfo | null = null,
   ) {
     super(message);
     this.name = 'WinnowError';
+    this.theirs = theirs;
   }
+}
+
+/** The app namespace this client writes under — opaque to Winnow. */
+export const DOCS_APP = 'atelier';
+
+/** One row of the document bucket, as the list and the get return it. */
+export interface WinnowDocRow<T = unknown> {
+  id: string;
+  kind: string;
+  /** The client's own document version, stored beside the body. */
+  version: number;
+  updated_at: string;
+  etag: string;
+  doc: T;
+}
+
+export interface DocBody<T = unknown> {
+  kind: string;
+  version: number;
+  doc: T;
+}
+
+/** What a GET hands back: the row, or word that ours is still current. */
+export type GetDocResult<T = unknown> = { row: WinnowDocRow<T> } | 'not-modified';
+
+export interface PutDocResult {
+  etag: string;
+  updatedAt: string;
 }
 
 /** `https://Winnow.example/` → `https://winnow.example`; throws on a path. */
@@ -428,7 +482,19 @@ export class WinnowClient {
     if (res.status === 403) {
       throw new WinnowError('forbidden', 'This account is not allowed to do that.', 403);
     }
-    if (!res.ok) {
+    if (res.status === 404) {
+      throw new WinnowError('notfound', 'Not there — or not this account’s.', 404);
+    }
+    if (res.status === 412) {
+      throw new WinnowError(
+        'conflict',
+        'Changed there since this device last saw it; nothing was written.',
+        412,
+        await conflictInfo(res),
+      );
+    }
+    // 304 is an answer, not a failure: "what you hold is still current".
+    if (!res.ok && res.status !== 304) {
       throw new WinnowError('protocol', `${url} answered ${res.status}.`, res.status);
     }
     return res;
@@ -639,4 +705,118 @@ export class WinnowClient {
     const blob = await res.blob();
     return new File([blob], name, { type, lastModified });
   }
+
+  // --- the document bucket ------------------------------------------------
+  //
+  // `GET /api/apps/:app/docs?kind=` lists the caller's OWN rows; a row that
+  // belongs to another account answers 404, never 403, so its existence is
+  // not revealed. Every write is guarded by `If-Match`: a stale etag is a 412
+  // carrying the server's revision, and the caller decides — the client never
+  // retries a write on its own.
+
+  private docsUrl(app: string, id?: string, params: Record<string, string | undefined> = {}) {
+    const base = `/api/apps/${encodeURIComponent(app)}/docs`;
+    return this.url(id === undefined ? base : `${base}/${encodeURIComponent(id)}`, params);
+  }
+
+  /** Every document of one kind this account holds there, body included. */
+  async listDocs<T = unknown>(app: string, kind: string): Promise<WinnowDocRow<T>[]> {
+    const raw = await this.json<{ docs?: WinnowDocRow<T>[] }>(this.docsUrl(app, undefined, { kind }));
+    return raw.docs ?? [];
+  }
+
+  /**
+   * One document. With `ifNoneMatch` — the etag we hold — a 304 means ours is
+   * still the server's, and nothing is downloaded.
+   */
+  async getDoc<T = unknown>(
+    app: string,
+    id: string,
+    ifNoneMatch: string | null = null,
+  ): Promise<GetDocResult<T>> {
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (ifNoneMatch) headers['If-None-Match'] = ifNoneMatch;
+    const url = this.docsUrl(app, id);
+    const res = await this.request(url, { headers });
+    if (res.status === 304) return 'not-modified';
+    let row: WinnowDocRow<T>;
+    try {
+      row = (await res.json()) as WinnowDocRow<T>;
+    } catch {
+      throw new WinnowError('protocol', `${url} did not return JSON.`, res.status);
+    }
+    // The header is the authority on the revision; the body echoes it.
+    const etag = res.headers.get('etag') ?? row.etag;
+    return { row: { ...row, etag } };
+  }
+
+  /**
+   * Create or replace. `ifMatch` is the etag we hold — null for a document
+   * that has never been pushed, in which case the server refuses if a row
+   * already exists (412), which is what stops two devices creating one trip.
+   * `maxBytes` is the instance's cap (`capabilities.documents.maxBytes`),
+   * checked here so an oversize trip is refused with a sentence before any
+   * bytes travel.
+   */
+  async putDoc<T = unknown>(
+    app: string,
+    id: string,
+    body: DocBody<T>,
+    ifMatch: string | null,
+    maxBytes: number | null = null,
+  ): Promise<PutDocResult> {
+    const text = JSON.stringify(body);
+    const size = new TextEncoder().encode(text).byteLength;
+    if (maxBytes !== null && size > maxBytes) {
+      throw new WinnowError(
+        'protocol',
+        `This document is ${formatBytes(size)}, over the instance’s cap of ${formatBytes(maxBytes)}.`,
+        413,
+      );
+    }
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      // Required by the route: forces a CORS preflight only the allowlisted
+      // origin passes, which is what keeps a cross-site form from writing.
+      'Content-Type': 'application/json',
+    };
+    if (ifMatch) headers['If-Match'] = ifMatch;
+    const url = this.docsUrl(app, id);
+    const res = await this.request(url, { method: 'PUT', headers, body: text });
+    let raw: { etag?: string; updated_at?: string };
+    try {
+      raw = (await res.json()) as { etag?: string; updated_at?: string };
+    } catch {
+      throw new WinnowError('protocol', `${url} did not return JSON.`, res.status);
+    }
+    const etag = res.headers.get('etag') ?? raw.etag;
+    if (!etag) throw new WinnowError('protocol', `${url} acknowledged without an etag.`, res.status);
+    return { etag, updatedAt: raw.updated_at ?? new Date().toISOString() };
+  }
+
+  /** Delete, guarded like a write. A row already gone is a 404 (`notfound`). */
+  async deleteDoc(app: string, id: string, ifMatch: string | null): Promise<void> {
+    const headers: Record<string, string> = {};
+    if (ifMatch) headers['If-Match'] = ifMatch;
+    await this.request(this.docsUrl(app, id), { method: 'DELETE', headers });
+  }
+}
+
+/** What a 412 carries: `{ error, etag, updated_at }` — read leniently. */
+async function conflictInfo(res: Response): Promise<ConflictInfo | null> {
+  try {
+    const raw = (await res.json()) as { etag?: unknown; updated_at?: unknown };
+    const etag = typeof raw.etag === 'string' ? raw.etag : res.headers.get('etag');
+    if (!etag) return null;
+    return { etag, updatedAt: typeof raw.updated_at === 'string' ? raw.updated_at : null };
+  } catch {
+    const etag = res.headers.get('etag');
+    return etag ? { etag, updatedAt: null } : null;
+  }
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }

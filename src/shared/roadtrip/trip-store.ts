@@ -14,6 +14,12 @@
  * purpose: they are the only large values here, and a trip document is read on
  * every gallery render while its pictures are wanted only when a day is open.
  *
+ * A third store (v3) keeps one SYNC RECORD per trip kept on a connected
+ * instance (`sources/doc-sync.ts`): the etag the server last acknowledged and whether
+ * the mirror is dirty. Beside the document, never on it — on the document it
+ * would leak into the trip file and onto the wire — and durable on purpose:
+ * `dirtyAt` surviving a closed tab is what lets the next open push the edit.
+ *
  * Every entry point catches storage failures and degrades (empty list / no-op)
  * rather than throwing into the UI — the browser may deny or evict IndexedDB
  * (private windows, disk pressure), and the tool must keep working in memory
@@ -21,11 +27,15 @@
  */
 
 import { migrateTripDoc, type TripDoc } from './trip-types';
+import type { SyncRecord } from '../sources/doc-sync';
 
 const DB_NAME = 'atelier-roadtrip';
-const DB_VERSION = 2;
+// Bumped only when an object store is added; a document migration runs on
+// read and never needs an upgrade transaction.
+const DB_VERSION = 3;
 const STORE = 'trips';
 const THUMBS = 'thumbs';
+const SYNC = 'sync';
 
 /** One post's hook, as a small JPEG. Blobs are structured-cloneable. */
 interface ThumbRecord {
@@ -44,6 +54,9 @@ function openDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(THUMBS)) {
         db.createObjectStore(THUMBS, { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains(SYNC)) {
+        db.createObjectStore(SYNC, { keyPath: 'id' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -105,6 +118,49 @@ export async function deleteTrip(id: string): Promise<void> {
     await withStore('readwrite', (s) => s.delete(id));
   } catch {
     /* already gone or storage unusable — nothing to surface */
+  }
+}
+
+// --- sync records -----------------------------------------------------------
+
+/** The record for a trip, or null when it has none (a local trip, or storage down). */
+export async function getSyncRecord(id: string): Promise<SyncRecord | null> {
+  try {
+    const rec = await withStore(
+      'readonly',
+      (s) => s.get(id) as IDBRequest<SyncRecord | undefined>,
+      SYNC,
+    );
+    return rec ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Every record — the trips this device mirrors from an instance. */
+export async function listSyncRecords(): Promise<SyncRecord[]> {
+  try {
+    return await withStore('readonly', (s) => s.getAll() as IDBRequest<SyncRecord[]>, SYNC);
+  } catch {
+    return [];
+  }
+}
+
+/** Returns false when the write failed — the caller keeps the record in memory. */
+export async function putSyncRecord(record: SyncRecord): Promise<boolean> {
+  try {
+    await withStore('readwrite', (s) => s.put(record), SYNC);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteSyncRecord(id: string): Promise<void> {
+  try {
+    await withStore('readwrite', (s) => s.delete(id), SYNC);
+  } catch {
+    /* already gone or storage unusable */
   }
 }
 

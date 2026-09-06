@@ -8,13 +8,22 @@
  * failures and degrades (empty list / no-op) rather than throwing into the
  * UI — the browser may deny or evict IndexedDB (private windows, disk
  * pressure), and the studio must keep editing in memory when it does.
+ *
+ * A second store (v2) keeps one SYNC RECORD per project kept on a connected
+ * instance (`sources/doc-sync.ts`): the etag the server last acknowledged and
+ * whether the mirror is dirty — beside the document, never on it, and
+ * durable, the same shape as the road-trip store's.
  */
 
 import { migrateProjectDoc, type ProjectDoc } from './project-types';
+import type { SyncRecord } from '../sources/doc-sync';
 
 const DB_NAME = 'atelier-studio';
-const DB_VERSION = 1;
+// Bumped only when an object store is added; a document migration runs on
+// read and never needs an upgrade transaction.
+const DB_VERSION = 2;
 const STORE = 'projects';
+const SYNC = 'sync';
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -23,6 +32,9 @@ function openDb(): Promise<IDBDatabase> {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE)) {
         db.createObjectStore(STORE, { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains(SYNC)) {
+        db.createObjectStore(SYNC, { keyPath: 'id' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -40,10 +52,11 @@ function requestAsPromise<T>(req: IDBRequest<T>): Promise<T> {
 async function withStore<T>(
   mode: IDBTransactionMode,
   fn: (store: IDBObjectStore) => IDBRequest<T>,
+  name: string = STORE,
 ): Promise<T> {
   const db = await openDb();
   try {
-    return await requestAsPromise(fn(db.transaction(STORE, mode).objectStore(STORE)));
+    return await requestAsPromise(fn(db.transaction(name, mode).objectStore(name)));
   } finally {
     db.close();
   }
@@ -83,6 +96,40 @@ export async function deleteProject(id: string): Promise<void> {
     await withStore('readwrite', (s) => s.delete(id));
   } catch {
     /* already gone or storage unusable — nothing to surface */
+  }
+}
+
+// --- sync records -----------------------------------------------------------
+
+/** The record for a project, or null when it has none (a local project, or storage down). */
+export async function getSyncRecord(id: string): Promise<SyncRecord | null> {
+  try {
+    const rec = await withStore(
+      'readonly',
+      (s) => s.get(id) as IDBRequest<SyncRecord | undefined>,
+      SYNC,
+    );
+    return rec ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Returns false when the write failed — the caller keeps the record in memory. */
+export async function putSyncRecord(record: SyncRecord): Promise<boolean> {
+  try {
+    await withStore('readwrite', (s) => s.put(record), SYNC);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteSyncRecord(id: string): Promise<void> {
+  try {
+    await withStore('readwrite', (s) => s.delete(id), SYNC);
+  } catch {
+    /* already gone or storage unusable */
   }
 }
 

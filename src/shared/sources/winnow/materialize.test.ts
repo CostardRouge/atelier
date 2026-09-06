@@ -115,7 +115,7 @@ describe('materialize', () => {
     const c = clientServing({});
     await expect(
       materialize(c, 'winnow.example', row({ sidecars: [] }), { fidelity: 'proxy' }),
-    ).rejects.toMatchObject({ kind: 'protocol', status: 404 });
+    ).rejects.toMatchObject({ kind: 'notfound', status: 404 });
   });
 });
 

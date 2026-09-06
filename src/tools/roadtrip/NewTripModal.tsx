@@ -3,6 +3,7 @@ import PlaceSearchField from '../../shared/map/PlaceSearchField';
 import { PLACE_ARROW } from '../../shared/roadtrip/trip-places';
 import { spanLength, todayIso } from '../../shared/roadtrip/trip-days';
 import { createTripPlace, spanProblem, type TripPlace } from '../../shared/roadtrip/trip-types';
+import { DEFAULT_SOURCE_ID, type SourceInfo } from '../../shared/sources/source';
 
 export interface NewTripChoices {
   name: string;
@@ -14,6 +15,8 @@ export interface NewTripChoices {
    * empty ones dropped. Empty seeds no stage at all — see `createTripDoc`.
    */
   places: TripPlace[];
+  /** Where the trip is kept — this browser, or a connected instance. */
+  sourceId: string;
 }
 
 /** A connected Winnow the modal can offer as a seed, and whether it can. */
@@ -24,6 +27,11 @@ export interface TimelineSourceOption {
 }
 
 interface NewTripModalProps {
+  /**
+   * The sources that can hold a trip. With ONE the picker is not shown at all
+   * — the modal must not grow for a choice that does not exist.
+   */
+  sources: readonly SourceInfo[];
   onCancel: () => void;
   onCreate: (choices: NewTripChoices) => void;
   /** The Winnows this browser is connected to; empty hides the seed row entirely. */
@@ -50,12 +58,16 @@ const input =
  * nothing, and the trip behaves exactly as trips did before places existed.
  */
 export default function NewTripModal({
+  sources,
   onCancel,
   onCreate,
   timelineSources = [],
   onSeedFrom,
 }: NewTripModalProps) {
   const [name, setName] = useState('');
+  const [sourceId, setSourceId] = useState(() =>
+    sources.some((s) => s.id === DEFAULT_SOURCE_ID) ? DEFAULT_SOURCE_ID : (sources[0]?.id ?? DEFAULT_SOURCE_ID),
+  );
   const [from, setFrom] = useState<TripPlace>(() => createTripPlace());
   const [to, setTo] = useState<TripPlace>(() => createTripPlace());
   const [startDate, setStartDate] = useState('');
@@ -92,7 +104,7 @@ export default function NewTripModal({
   function submit() {
     if (!canCreate) return;
     const places = [from, to].filter((place) => place.name.trim().length > 0);
-    onCreate({ name, destination, startDate, endDate, places });
+    onCreate({ name, destination, startDate, endDate, places, sourceId });
   }
 
   return (
@@ -214,6 +226,31 @@ export default function NewTripModal({
             />
           </label>
         </div>
+
+        {/* Only when there is a choice: with this browser alone there is
+            nothing to pick, and the modal must not grow for it. A remote trip
+            is pushed the moment it is created — one gesture, one request. */}
+        {sources.length > 1 && (
+          <label className={field}>
+            <span className={legend}>Keep on</span>
+            <select
+              value={sourceId}
+              onChange={(e) => setSourceId(e.target.value)}
+              className={input}
+            >
+              {sources.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.id === DEFAULT_SOURCE_ID ? 'this browser (local)' : s.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-[0.7rem] text-faint">
+              {sourceId === DEFAULT_SOURCE_ID
+                ? 'Stays in this browser. Export a file to move it elsewhere.'
+                : `Saved to ${sourceId} as you edit, so it resumes from another device.`}
+            </span>
+          </label>
+        )}
 
         <p
           className={`m-0 text-[0.78rem] ${problem ? 'text-[#9a3a23]' : 'text-muted'}`}

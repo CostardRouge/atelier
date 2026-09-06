@@ -1,6 +1,16 @@
 # Road Trip persistence on a Winnow instance — the brief
 
-**Status**: designed 2026-09-06, **phase P-doc landed, nothing else built**.
+**Status**: designed 2026-09-06; **P-doc, P0, P1, P3 and P4 landed in Atelier;
+P2 is written as `docs/winnow-patches/0001-app-documents-bucket.patch`** (the
+authoring session could read `CostardRouge/winnow` and not push to it — apply
+with `git am`; `typecheck` and `build` passed there, `migrate` needs the
+Postgres the container did not have). P3 was exercised against a stubbed
+instance only, as was P4 (the Studio half of it); §10's script on the
+deployed pair is still owed. See §9.
+P1 note: the sync record gained `pushStartedAt` (an edit during an in-flight
+push must leave the record dirty after the push lands) and `theirs` (the
+server's etag + `updated_at` behind a conflict, which "keep mine" re-PUTs
+over); the reducer is `shared/sources/doc-sync.ts` (born as `trip-sync.ts`, moved when the Studio became its second consumer), the store is `trip-store.ts` v3.
 Written to be resumed by a cloud session: every claim carries a path and was
 verified on disk that day. Phases and what each can verify are in §9.
 
@@ -64,7 +74,7 @@ interface TripDoc { sourceId: string; /* … */ }   // bound half, default 'loca
 ```
 
 - **Built** (timeline T0, same day as the grade's v10, hence v11): `trip-file.ts` has `TripPortable = Omit<TripDoc, … | 'sourceId'>` and `tripDocFromFile(file, now, sourceId?)` — an imported trip belongs to the source that imports it; the serialized file has no `sourceId` key and a v9/v10 file still parses (tested). `createTripDoc(...)` takes `sourceId` as a trailing argument (default local). `TripStage.origin` rode in the same bump.
-- Still to do from P0: `TripGallery` grouped by source, and the `NewTripModal` "Keep on" picker.
+- Also built (P0, this branch): `TripGallery` grouped by source, and the `NewTripModal` "Keep on" picker, shown only with a second document-capable source.
 
 **The remote copy is authoritative; the IndexedDB copy is the working mirror.**
 A remote trip always has a local mirror once opened on a device. This is what
@@ -102,7 +112,7 @@ No `keepalive` fetch on unload (64 KB body cap; a trip can exceed it).
 
 ## 3. Pure logic first (DOM-free, `.test.ts` beside)
 
-- **`src/shared/roadtrip/trip-sync.ts`** — the reducer.
+- **`src/shared/sources/doc-sync.ts`** (designed as `trip-sync.ts`) — the reducer.
   `reduceSync(record, event) → record` with events `edited(now)`,
   `pushStarted`, `pushOk(etag, now)`, `pushFailed(kind)`, `pulled(etag, now)`,
   `resolvedKeepMine`, `resolvedTakeTheirs(etag, now)`.
@@ -212,8 +222,20 @@ CREATE INDEX IF NOT EXISTS app_documents_owner_idx
 - `PUT …/docs/:id` body `{ kind, version, doc }`, `Content-Type: application/json` required (forces a preflight). Row exists and `If-Match` missing or stale → **412** with `{ error, etag, updated_at }`. Body over the cap → 413. OK → 200 `{ etag, updated_at }`. Cap: 1 MiB.
 - `DELETE …/docs/:id` with `If-Match` → 204; 404 when not owned.
 
-**`authz.ts`**: add `'/api/apps/'` to `SELF_SERVICE_PREFIXES` (D3).
+**`authz.ts`**: add `'/api/apps'` to `SELF_SERVICE_PREFIXES` (D3).
 **`capabilities`**: `documents: { bucket: true, kinds: ['trip', 'project'], maxBytes: 1048576 }` — fields added, no `API_VERSION` bump.
+
+As written (P2, in the patch): the rules live in `src/lib/appDocuments.ts` and
+the two route files only map outcomes to status codes, the lib/ + api/ split
+that repo uses everywhere. Three details the sketch above did not fix: a `PUT`
+whose id collides with **another user's** row answers 404 (a 412 would leak
+that row's revision); a client holding an `If-Match` for a row that no longer
+exists gets 404 (deleted elsewhere → `gone`), while no `If-Match` on a missing
+row is a create (201); and the etag is checked again in the `UPDATE`'s `WHERE`,
+so two devices racing past the ownership `SELECT` cannot both succeed. ETags
+are sent quoted and compared after stripping quotes and `W/`, so a client
+echoing the header verbatim matches. `DELETE` with a stale or missing
+`If-Match` is 412, like a write.
 
 ## 8. Security — the honest answer to question 3
 
@@ -232,18 +254,18 @@ Nothing new is stored in the browser: no token, the session stays Winnow's cooki
 | Phase | What | Where | Verifiable in a cloud container? |
 |---|---|---|---|
 | **P-doc** | Land this file as `docs/roadtrip-persistence.md`; `MEMORY.md` pointer (the "not memory files" list); fix `winnow-bridge.md` "next free is 0040" → 0041 and mark the timeline as shipped | Atelier | yes |
-| **P0** | `TripDoc.sourceId` (**built as v11**, timeline T0) + migration + `trip-file.ts` Omit widening + tests — done; **still open**: `TripGallery` grouped by source via `groupBySource`; `NewTripModal` "Keep on" picker (hidden with one source) | Atelier only | yes |
-| **P1** | `trip-sync.ts` reducer + tests; `WinnowClient` doc methods + `conflict`/`notfound` kinds + fake-fetch tests; `trip-store.ts` v3 `sync` store | Atelier only | yes — dead until P2 |
+| **P0** | `TripDoc.sourceId` (**built as v11**: timeline T0 and this branch converged on it; v10 is the grade) + migration + `trip-file.ts` Omit widening + tests; `TripGallery` grouped by source via `groupBySource`; `NewTripModal` "Keep on" picker (hidden with one source) — **all built** | Atelier only | yes |
+| **P1** | `doc-sync.ts` reducer + tests; `WinnowClient` doc methods + `conflict`/`notfound` kinds + fake-fetch tests; `trip-store.ts` v3 `sync` store | Atelier only | yes — dead until P2 |
 | **P2** | Migration 0041, the route pair, `authz.ts`, capabilities; check `corsPreflightHeaders` lists PUT/DELETE | **Winnow repo** — a separate session on `CostardRouge/winnow` | typecheck+migrate+build only |
 | **P3** | `trip-remote.ts` driver; `RoadTripTool` wiring; gallery remote list + states; pill + Save now; conflict/gone UX; move verb; remote delete | Atelier | **no** — needs the deployed pair (§10) |
-| **P4** *later* | Projects in the same bucket (`kind: 'project'`; dirHandles and baked thumbnails stay local); `TripStage.origin` | both | — |
+| **P4** | **Built.** Projects in the same bucket (`kind: 'project'`; `projects/project-remote.ts`, `project-store.ts` v2 `sync` store, `StudioTool` wiring, `ProjectGallery` remote list + move + guarded delete, `NewProjectModal` "Keep on"); the handle and the baked thumbnail stay local, the media refs travel and the mirror keeps its own handle on a pull. `TripStage.origin` landed with the timeline (T0). The reducer, pill and plumbing moved to `shared/sources/` for the second consumer | Atelier (Winnow's bucket already accepts the kind) | stubbed instance only |
 
 Memory updates per phase (CLAUDE.md rule 2): `roadtrip.md` (the decisions D1–D4 and the mirror/etag rule), `local-first.md` (the network list gains "documents to a connected Winnow, own account, on idle"), `architecture.md` "Remote sources" (the client now writes), README's network callout.
 
 ## 10. Verification
 
 - `npm run typecheck && npm run lint && npm test && npm run build` on every phase.
-- Unit: `trip-types.test.ts` (v9 → v10 migration, default `local`), `trip-file.test.ts` (no `sourceId` in the file; import sets the target), `trip-sync.test.ts` (every event × status, `shouldFlush` idle arithmetic, every `pillText` line), `client.test.ts` (headers `If-Match`/`If-None-Match`, 304/412/404/413 mapping, body cap).
+- Unit: `trip-types.test.ts` (v10 → v11 migration, default `local`), `trip-file.test.ts` (no `sourceId` in the file; import sets the target), `doc-sync.test.ts` (every event × status, `shouldFlush` idle arithmetic, every `pillText` line), `project-remote.test.ts` (the wire shape keeps the handle and the thumbnail home), `client.test.ts` (headers `If-Match`/`If-None-Match`, 304/412/404/413 mapping, body cap).
 - Browser (P0): `npm run dev`, gallery shows "source: local", NewTripModal shows no picker with one source.
 - **P3 only on the deployed pair** (`atelier.steeve.website` ↔ `winnow.steeve.website`): `localhost` is cross-SITE, the cookie cannot travel. Script: create remote trip on A → open on B (pull, mirror) → edit on B → edit on A without reload → A's push 412s → Keep mine / Take theirs → delete on B → A's next push says "gone". Then: sign out on Winnow, edit → pill says sign in; airplane mode, edit, reload → dirty survives and pushes on reconnect.
 

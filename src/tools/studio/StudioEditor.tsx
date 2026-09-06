@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { useActiveAsset } from '../../shared/library/use-active-asset';
 import { useObjectUrl } from '../../shared/media/use-object-url';
@@ -167,6 +167,8 @@ interface StudioEditorProps {
   /** Drop the currently-missing media from this project's known list, so it
    * stops being flagged next time the project opens (see the banner below). */
   onForgetMissing: () => void;
+  /** What the shell wants in the project bar — the sync pill of a remote project. */
+  headerExtra?: ReactNode;
 }
 
 /**
@@ -183,6 +185,7 @@ export default function StudioEditor({
   reconciliation,
   onShowProjects,
   onDocSaved,
+  headerExtra,
   onRepoint,
   onForgetMissing,
 }: StudioEditorProps) {
@@ -1299,6 +1302,7 @@ export default function StudioEditor({
           className="flex-1 min-w-0 max-w-[24rem] font-serif text-[1.15rem] bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0.5"
         />
         <span className="flex-1" />
+        {headerExtra}
         <span
           className={`${barPill} font-mono text-[0.64rem] tracking-[0.1em] uppercase ${saveBadge[saveState].cls}`}
           role="status"

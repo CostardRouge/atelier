@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, type ReactNode } from 'react';
 import { deleteThumbs } from '../../shared/roadtrip/trip-store';
 import { formatIsoDate, type IsoDate } from '../../shared/roadtrip/trip-days';
 import { tripCoverage } from '../../shared/roadtrip/trip-coverage';
@@ -16,6 +16,8 @@ interface TripOverviewProps {
   onChange: (trip: TripDoc) => void;
   /** Open a piece's hook composer. */
   onOpenPost: (post: TripPost) => void;
+  /** What the shell wants in the header row — the sync pill of a remote trip. */
+  headerExtra?: ReactNode;
   /** Connected Winnows with a timeline, offered on the stages panel. */
   timelineSources?: string[];
   onCompleteFrom?: (sourceId: string) => void;
@@ -48,6 +50,7 @@ export default function TripOverview({
   onShowTrips,
   onChange,
   onOpenPost,
+  headerExtra,
   timelineSources,
   onCompleteFrom,
 }: TripOverviewProps) {
@@ -93,6 +96,12 @@ export default function TripOverview({
             {formatIsoDate(trip.startDate)} → {formatIsoDate(trip.endDate)}
           </p>
         </div>
+        {headerExtra && (
+          <>
+            <span className="flex-1" />
+            {headerExtra}
+          </>
+        )}
       </div>
 
       <div className="flex flex-wrap items-start gap-x-10 gap-y-4 bg-surface border border-line rounded-paper-lg p-5">

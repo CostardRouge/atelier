@@ -1,0 +1,563 @@
+From 4f8dde1c3fca76281bfe1e8045ce120857c4d126 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 6 Sep 2026 10:43:33 +0000
+Subject: [PATCH] Add an opaque document bucket so a client app can keep its
+ own documents
+
+Bridge phase 3 (Atelier's docs/roadtrip-persistence.md, P2): a Road Trip
+kept on this instance resumes from another device. Winnow stores JSON it
+never reads.
+
+- Migration 0041: app_documents (app, id) PK, user_id NOT NULL -> users ON
+  DELETE CASCADE, kind, version, doc JSONB, etag; one owner index. Retention
+  stated in the file: owner gestures only, no janitor.
+- lib/appDocuments.ts holds every rule; the two routes under
+  api/apps/[app]/docs map outcomes to status codes. Ownership is a column:
+  every query carries user_id, a foreign row answers 404 (never 403), so its
+  existence is not revealed. Writes need If-Match; stale or missing on an
+  existing row is a 412 carrying the current revision and the client
+  decides. The etag is checked again in the UPDATE's WHERE so two racing
+  devices cannot both succeed. 1 MiB body cap (413), application/json
+  required (415) so the browser preflights and only an allowlisted origin
+  passes.
+- authz: /api/apps joins the self-service prefixes, any signed-in role owns
+  its documents without gaining a library write.
+- capabilities: documents = { bucket: true, kinds, maxBytes }; fields added,
+  no API_VERSION bump.
+- README route table + docs/memory/database.md entry.
+
+Verified: typecheck and build. migrate could not run in the authoring
+container (no Postgres); run it before merging.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ README.md                                 |   4 +-
+ db/migrations/0041_app_documents.sql      |  39 +++++
+ docs/memory/database.md                   |  10 ++
+ src/app/api/apps/[app]/docs/[id]/route.ts | 150 +++++++++++++++++
+ src/app/api/apps/[app]/docs/route.ts      |  35 ++++
+ src/app/api/capabilities/route.ts         |   7 +-
+ src/lib/appDocuments.ts                   | 189 ++++++++++++++++++++++
+ src/lib/authz.ts                          |   7 +-
+ 8 files changed, 436 insertions(+), 5 deletions(-)
+ create mode 100644 db/migrations/0041_app_documents.sql
+ create mode 100644 src/app/api/apps/[app]/docs/[id]/route.ts
+ create mode 100644 src/app/api/apps/[app]/docs/route.ts
+ create mode 100644 src/lib/appDocuments.ts
+
+diff --git a/README.md b/README.md
+index 896f1c7..35d2ee6 100644
+--- a/README.md
++++ b/README.md
+@@ -180,7 +180,9 @@ offending variable — instead of silently degrading in production.
+ |---|---|
+ | `POST /api/index/scan` `{ path }` | Registers the root and enqueues an indexing run |
+ | `GET /api/stats` | Counters (media / scan / analyzed / pending) + queue activity + pause + rates |
+-| `GET /api/capabilities` | What **this instance** can do, for a client app (Atelier): API version, auth methods + whether CORS is on, media facts (sidecars, Range on derivatives / not on originals, proxy codec & size, the partial `content_hash`), unbuilt-yet flags (document bucket, reminders), storage driver, and the caller's role. Facts about the code as it is — a client decides from these rather than guessing |
++| `GET /api/capabilities` | What **this instance** can do, for a client app (Atelier): API version, auth methods + whether CORS is on, media facts (sidecars, Range on derivatives / not on originals, proxy codec & size, the partial `content_hash`), the document bucket (kinds + body cap), the unbuilt reminders flag, storage driver, and the caller's role. Facts about the code as it is — a client decides from these rather than guessing |
++| `GET /api/apps/:app/docs` `?kind=trip\|project` | A client app's **own documents** (Atelier's road trips, later its projects): opaque JSON Winnow never reads, scoped to the signed-in user — any role, since a viewer owns its trips as it owns its password. Bodies inlined, newest first |
++| `GET` · `PUT` · `DELETE /api/apps/:app/docs/:id` | One document, guarded by a revision: `GET` answers with an `ETag` (`If-None-Match` → 304); `PUT` `{ kind, version, doc }` (`application/json` required, 1 MiB cap → 413) needs `If-Match` on an existing row — stale or missing → **412** `{ etag, updated_at }` so the client decides, never a merge; `DELETE` with `If-Match` → 204. A row that is not the caller's answers **404**, never 403 |
+ | `GET /api/settings` · `PATCH /api/settings` `{ scanPerHour?, analyzePerHour?, geocodePerHour?, geocodePrecisionM?, rescanMinutes? }` | Hourly scan/analyze/geocode rates (0 = unlimited) + geocode cell precision (metres) + periodic re-scan interval (minutes, 0 = off) |
+ | `POST /api/scan/control` `{ action: pause\|resume }` | Suspends/resumes indexing + derivative generation |
+ | `GET /api/failures` | Everything that failed (scan / analyze / import) + the deduplication audit (each duplicate joined to its kept asset for thumbnail/compare) + the **missing originals** awaiting triage |
+diff --git a/db/migrations/0041_app_documents.sql b/db/migrations/0041_app_documents.sql
+new file mode 100644
+index 0000000..31761d0
+--- /dev/null
++++ b/db/migrations/0041_app_documents.sql
+@@ -0,0 +1,39 @@
++-- An opaque document bucket for a client app (Atelier, first), cf.
++-- api/apps/[app]/docs/*. Bridge phase 3 (Atelier's docs/winnow-bridge.md,
++-- docs/roadtrip-persistence.md): a Road Trip kept here resumes from another
++-- device, Winnow storing JSON it never reads.
++--
++-- Ownership is a COLUMN, not a role. Every GET on this instance is
++-- viewer-visible, so without user_id scoping each trip would be readable by
++-- every account on the instance. Every query on these rows carries
++-- `AND user_id = $me`, and a row that is not the caller's answers 404 — never
++-- 403 — so its existence is not revealed.
++--
++-- The etag is an opaque revision regenerated on every write. A client sends
++-- it back as If-Match; a stale one is refused (412) with the current
++-- revision, and the client decides. Last-write-wins with a refusal, not a
++-- sync engine: one document, one writer at a time.
++--
++-- Retention (docs/memory/database.md asks every new table to say): rows
++-- exist only by the owner's explicit gestures (create, move, delete) and go
++-- with the user (ON DELETE CASCADE). No automatic writer, so no janitor.
++-- Documents are tens of KB and a person keeps a handful; the route caps a
++-- body at 1 MiB.
++
++CREATE TABLE IF NOT EXISTS app_documents (
++  app        TEXT    NOT NULL,   -- 'atelier'; opaque to Winnow
++  id         TEXT    NOT NULL,   -- client-minted (a UUID in practice)
++  user_id    BIGINT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
++  kind       TEXT    NOT NULL,   -- 'trip' | 'project'; listed by, never read
++  version    INTEGER NOT NULL,   -- the client's own document version
++  doc        JSONB   NOT NULL,
++  etag       TEXT    NOT NULL,   -- opaque revision, regenerated on every write
++  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
++  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
++  PRIMARY KEY (app, id)
++);
++
++-- The list is "my documents of one kind, newest first" — one index answers
++-- it and the ownership check on a single row alike.
++CREATE INDEX IF NOT EXISTS app_documents_owner_idx
++  ON app_documents (user_id, app, kind, updated_at DESC);
+diff --git a/docs/memory/database.md b/docs/memory/database.md
+index 206186e..3f47c71 100644
+--- a/docs/memory/database.md
++++ b/docs/memory/database.md
+@@ -53,3 +53,13 @@ Seeded 2026-08-20 from `db/migrations/README.md`, `src/lib/migrate.ts`, `docs/AR
+ **Retention**: both tables grow only by a human clicking Rename / Split / Merge and shrink from the same dialog — tens of rows, no automatic writer, hence no janitor (the migration says so, per the rule above).
+ 
+ **How to apply**: a new kind of chapter edit is a new correction folded in by `lib/timeline.ts`, not a new column on a stored chapter. A span's location is the *chapter's*: nothing in these tables or their routes writes GPS onto assets (`docs/memory/architecture.md`, "A deduced location never writes into an original").
++
++## A client app's documents are opaque rows owned by a user (2026-09-06)
++
++**Decision**: migration `0041_app_documents.sql` adds `app_documents (app, id) PK, user_id NOT NULL → users ON DELETE CASCADE, kind, version, doc JSONB, etag` — the bucket Atelier keeps its road trips in so they resume from another device (its `docs/roadtrip-persistence.md`). `lib/appDocuments.ts` holds every rule; the routes under `api/apps/[app]/docs` only map outcomes to status codes.
++
++**Why the shape**: ownership is a **column, not a role**. Every GET on this instance is viewer-visible, so without `user_id` on every query each trip would be readable by every account; a foreign row answers **404, never 403**, so its existence is not revealed — including on a `PUT` whose id collides with another user's row. Writes are **self-service** (`/api/apps` joined `SELF_SERVICE_PREFIXES` in `lib/authz.ts`): a viewer owns its documents the way it owns its password, and never gains a library write. The `etag` is regenerated on every write and checked in the `UPDATE`'s `WHERE`, so two devices racing cannot both succeed; a stale `If-Match` is a 412 carrying the current revision and the client decides — last-write-wins with a refusal, no merge. `PUT` requires `Content-Type: application/json` on purpose: this is the first **mutating** cross-origin route, and the forced preflight (only an allowlisted origin passes, `lib/cors.ts`) is what stands in for the CSRF token Winnow does not have.
++
++**Retention**: rows exist only by the owner's explicit gestures and go with the user (CASCADE); 1 MiB cap per body (`MAX_DOC_BYTES`, advertised in `/api/capabilities`). No automatic writer, no janitor.
++
++**How to apply**: never read `doc` server-side — Winnow stays ignorant of what a trip is; a second client app is a new `app` value, not a new table; a new `kind` is one entry in `DOC_KINDS`.
+diff --git a/src/app/api/apps/[app]/docs/[id]/route.ts b/src/app/api/apps/[app]/docs/[id]/route.ts
+new file mode 100644
+index 0000000..20482a5
+--- /dev/null
++++ b/src/app/api/apps/[app]/docs/[id]/route.ts
+@@ -0,0 +1,150 @@
++// GET    /api/apps/:app/docs/:id → 200 + ETag; If-None-Match current → 304;
++//                                  404 when the row is not the caller's.
++// PUT    /api/apps/:app/docs/:id { kind, version, doc } → 200 { etag,
++//                                  updated_at } (+ ETag). Existing row and
++//                                  If-Match missing or stale → 412 { error,
++//                                  etag, updated_at }. Body over the cap → 413.
++//                                  Not application/json → 415.
++// DELETE /api/apps/:app/docs/:id  with If-Match → 204; stale → 412; 404 when
++//                                  not owned.
++//
++// The revision dance is the whole point: a client on another device that
++// holds a stale etag is REFUSED and told the current one, and it decides —
++// last-write-wins with a refusal, never a merge. The rules and the SQL live
++// in lib/appDocuments.ts; this file only maps outcomes to status codes.
++//
++// `Content-Type: application/json` is required on the PUT on purpose: it
++// forces the browser to preflight, and only an allowlisted origin passes
++// (lib/cors.ts) — the CSRF story for the first mutating cross-origin route.
++import { NextRequest, NextResponse } from "next/server";
++import { identityFromHeaders } from "@/lib/auth";
++import { json, badRequest, notFound, serverError } from "@/lib/api";
++import {
++  MAX_DOC_BYTES,
++  deleteDocument,
++  getDocument,
++  isDocKind,
++  isValidApp,
++  isValidDocId,
++  normalizeEtag,
++  putDocument,
++  quoteEtag,
++} from "@/lib/appDocuments";
++
++// DB-backed route: never pre-rendered/cached at build time.
++export const dynamic = "force-dynamic";
++
++type Params = { params: Promise<{ app: string; id: string }> };
++
++function conflict(etag: string, updated_at: string) {
++  return NextResponse.json(
++    { error: "changed since the revision you hold", etag, updated_at },
++    { status: 412, headers: { ETag: quoteEtag(etag) } },
++  );
++}
++
++async function resolve(req: NextRequest, params: Params["params"]) {
++  const me = identityFromHeaders(req.headers);
++  if (!me) return { error: json({ error: "authentication required" }, 401) };
++  const { app, id } = await params;
++  if (!isValidApp(app)) return { error: badRequest("bad app") };
++  if (!isValidDocId(id)) return { error: badRequest("bad id") };
++  return { me, app, id };
++}
++
++export async function GET(req: NextRequest, { params }: Params) {
++  try {
++    const r = await resolve(req, params);
++    if ("error" in r) return r.error;
++    const row = await getDocument(r.me.id, r.app, r.id);
++    if (!row) return notFound();
++    const etag = quoteEtag(row.etag);
++    if (normalizeEtag(req.headers.get("if-none-match")) === row.etag) {
++      return new NextResponse(null, { status: 304, headers: { ETag: etag } });
++    }
++    return NextResponse.json(row, { headers: { ETag: etag } });
++  } catch (err) {
++    return serverError(err);
++  }
++}
++
++export async function PUT(req: NextRequest, { params }: Params) {
++  try {
++    const r = await resolve(req, params);
++    if ("error" in r) return r.error;
++
++    const type = req.headers.get("content-type") ?? "";
++    if (!/^application\/json\b/i.test(type)) {
++      return json({ error: "Content-Type must be application/json" }, 415);
++    }
++    // The declared length first (cheap, refuses before reading), then the
++    // real one: a client can lie about the header, not about the bytes.
++    const declared = Number.parseInt(req.headers.get("content-length") ?? "", 10);
++    if (Number.isFinite(declared) && declared > MAX_DOC_BYTES) {
++      return json({ error: `body over ${MAX_DOC_BYTES} bytes` }, 413);
++    }
++    const text = await req.text();
++    if (Buffer.byteLength(text, "utf8") > MAX_DOC_BYTES) {
++      return json({ error: `body over ${MAX_DOC_BYTES} bytes` }, 413);
++    }
++    let parsed: unknown;
++    try {
++      parsed = JSON.parse(text);
++    } catch {
++      return badRequest("body is not JSON");
++    }
++    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
++      return badRequest("body must be an object");
++    }
++    const b = parsed as { kind?: unknown; version?: unknown; doc?: unknown };
++    if (!isDocKind(b.kind)) return badRequest("unknown kind");
++    if (typeof b.version !== "number" || !Number.isInteger(b.version) || b.version < 0) {
++      return badRequest("version must be a non-negative integer");
++    }
++    if (typeof b.doc !== "object" || b.doc === null) return badRequest("doc must be an object");
++
++    const outcome = await putDocument(
++      r.me.id,
++      r.app,
++      r.id,
++      { kind: b.kind, version: b.version, doc: b.doc },
++      normalizeEtag(req.headers.get("if-match")),
++    );
++    switch (outcome.status) {
++      case "notfound":
++        return notFound();
++      case "conflict":
++        return conflict(outcome.etag, outcome.updated_at);
++      case "ok":
++        return NextResponse.json(
++          { etag: outcome.etag, updated_at: outcome.updated_at },
++          { status: outcome.created ? 201 : 200, headers: { ETag: quoteEtag(outcome.etag) } },
++        );
++    }
++  } catch (err) {
++    return serverError(err);
++  }
++}
++
++export async function DELETE(req: NextRequest, { params }: Params) {
++  try {
++    const r = await resolve(req, params);
++    if ("error" in r) return r.error;
++    const outcome = await deleteDocument(
++      r.me.id,
++      r.app,
++      r.id,
++      normalizeEtag(req.headers.get("if-match")),
++    );
++    switch (outcome.status) {
++      case "notfound":
++        return notFound();
++      case "conflict":
++        return conflict(outcome.etag, outcome.updated_at);
++      case "ok":
++        return new NextResponse(null, { status: 204 });
++    }
++  } catch (err) {
++    return serverError(err);
++  }
++}
+diff --git a/src/app/api/apps/[app]/docs/route.ts b/src/app/api/apps/[app]/docs/route.ts
+new file mode 100644
+index 0000000..bbf81ad
+--- /dev/null
++++ b/src/app/api/apps/[app]/docs/route.ts
+@@ -0,0 +1,35 @@
++// GET /api/apps/:app/docs ?kind=trip → { docs: [{ id, kind, version,
++//                                       updated_at, etag, doc }] }
++//
++// The caller's OWN documents under one app namespace, newest first, bodies
++// included — a trip is tens of KB and a person keeps a handful, so a summary
++// column would buy nothing. Winnow never reads `doc`; see lib/appDocuments.ts
++// for the ownership and revision rules, migration 0041 for the table.
++//
++// Self-service (lib/authz.ts): any signed-in role owns its documents, the
++// same way it owns its password — a viewer keeps trips too.
++import { NextRequest } from "next/server";
++import { identityFromHeaders } from "@/lib/auth";
++import { json, badRequest, serverError } from "@/lib/api";
++import { isDocKind, isValidApp, listDocuments } from "@/lib/appDocuments";
++
++// DB-backed route: never pre-rendered/cached at build time.
++export const dynamic = "force-dynamic";
++
++export async function GET(
++  req: NextRequest,
++  { params }: { params: Promise<{ app: string }> },
++) {
++  try {
++    const me = identityFromHeaders(req.headers);
++    if (!me) return json({ error: "authentication required" }, 401);
++    const { app } = await params;
++    if (!isValidApp(app)) return badRequest("bad app");
++    const kind = req.nextUrl.searchParams.get("kind");
++    if (kind !== null && !isDocKind(kind)) return badRequest("unknown kind");
++    const docs = await listDocuments(me.id, app, kind);
++    return json({ docs });
++  } catch (err) {
++    return serverError(err);
++  }
++}
+diff --git a/src/app/api/capabilities/route.ts b/src/app/api/capabilities/route.ts
+index a79824d..43fa522 100644
+--- a/src/app/api/capabilities/route.ts
++++ b/src/app/api/capabilities/route.ts
+@@ -16,6 +16,7 @@ import type { NextRequest } from "next/server";
+ import { config } from "@/lib/config";
+ import { identityFromHeaders } from "@/lib/auth";
+ import { json, serverError } from "@/lib/api";
++import { DOC_KINDS, MAX_DOC_BYTES } from "@/lib/appDocuments";
+ 
+ export const dynamic = "force-dynamic";
+ 
+@@ -57,8 +58,10 @@ export async function GET(req: NextRequest) {
+         // recompute locally from a file.
+         contentHash: "partial-sha256",
+       },
+-      // Where a client app could keep its own documents. Not built.
+-      documents: { bucket: false },
++      // Where a client app keeps its own documents (api/apps/[app]/docs,
++      // migration 0041): own rows for any signed-in role, an etag that
++      // refuses a stale write, a body cap the client checks before sending.
++      documents: { bucket: true, kinds: [...DOC_KINDS], maxBytes: MAX_DOC_BYTES },
+       // Server-side reminders / proactive work. Not built, and a browser tab
+       // cannot do it alone — so a client shows nothing rather than a button.
+       scheduling: { reminders: false },
+diff --git a/src/lib/appDocuments.ts b/src/lib/appDocuments.ts
+new file mode 100644
+index 0000000..5136698
+--- /dev/null
++++ b/src/lib/appDocuments.ts
+@@ -0,0 +1,189 @@
++// The opaque document bucket a client app keeps here (migration 0041).
++//
++// Winnow stores JSON it never reads, scoped to the signed-in user, guarded by
++// an etag. Atelier is the first client: a Road Trip kept here resumes from
++// another device. Everything that decides an answer lives in this module so
++// the two route files stay thin wrappers, like every other lib/ + api/ pair.
++//
++// The three rules, in the order they matter:
++//   1. Every query carries `user_id = $me`. A row that is not the caller's
++//      does not exist as far as the answer goes: 404, never 403.
++//   2. A write needs the revision the client holds (If-Match). Stale or
++//      missing on an existing row → 412 carrying the current revision. A
++//      client that holds an etag for a row that is gone → 404 (deleted
++//      elsewhere). No If-Match on a row that does not exist → create.
++//   3. The body is bounded (MAX_DOC_BYTES) and must be JSON. The route
++//      requires `Content-Type: application/json`, which forces a CORS
++//      preflight only an allowlisted origin passes (lib/cors.ts).
++import { randomUUID } from "node:crypto";
++import { many, one } from "./db";
++
++export const DOC_KINDS = ["trip", "project"] as const;
++export type DocKind = (typeof DOC_KINDS)[number];
++
++// Tens of KB is a big trip; 1 MiB is a generous ceiling that still keeps a
++// runaway client from filling the table. Advertised in /api/capabilities.
++export const MAX_DOC_BYTES = 1024 * 1024;
++
++// The namespace a client writes under. Lowercase slug, so it can never be a
++// path trick, and short, so it stays an index key rather than a payload.
++const APP_RE = /^[a-z][a-z0-9-]{0,31}$/;
++// A client-minted id — a UUID in practice, but anything a URL segment holds.
++const ID_RE = /^[A-Za-z0-9._-]{1,128}$/;
++
++export function isValidApp(app: string): boolean {
++  return APP_RE.test(app);
++}
++
++export function isValidDocId(id: string): boolean {
++  return ID_RE.test(id);
++}
++
++export function isDocKind(kind: unknown): kind is DocKind {
++  return typeof kind === "string" && (DOC_KINDS as readonly string[]).includes(kind);
++}
++
++export type AppDocumentRow = {
++  id: string;
++  kind: DocKind;
++  version: number;
++  updated_at: string;
++  etag: string;
++  doc: unknown;
++};
++
++const ROW_SELECT = "id, kind, version, updated_at, etag, doc";
++
++// Strong-validator ETag as HTTP writes it: quoted. Compared after stripping
++// the quotes and a `W/` prefix, so a client echoing the header verbatim and
++// one sending the bare revision both match.
++export function quoteEtag(etag: string): string {
++  return `"${etag}"`;
++}
++
++export function normalizeEtag(raw: string | null): string | null {
++  if (!raw) return null;
++  const trimmed = raw.trim().replace(/^W\//i, "");
++  const unquoted = trimmed.replace(/^"(.*)"$/, "$1");
++  return unquoted || null;
++}
++
++function newEtag(): string {
++  return randomUUID().replace(/-/g, "");
++}
++
++export async function listDocuments(
++  userId: number,
++  app: string,
++  kind: DocKind | null,
++): Promise<AppDocumentRow[]> {
++  return many<AppDocumentRow>(
++    `SELECT ${ROW_SELECT} FROM app_documents
++     WHERE user_id = $1 AND app = $2 AND ($3::text IS NULL OR kind = $3)
++     ORDER BY updated_at DESC`,
++    [userId, app, kind],
++  );
++}
++
++export async function getDocument(
++  userId: number,
++  app: string,
++  id: string,
++): Promise<AppDocumentRow | null> {
++  return one<AppDocumentRow>(
++    `SELECT ${ROW_SELECT} FROM app_documents
++     WHERE user_id = $1 AND app = $2 AND id = $3`,
++    [userId, app, id],
++  );
++}
++
++export type PutOutcome =
++  | { status: "ok"; etag: string; updated_at: string; created: boolean }
++  // Exists, and the revision the client holds is not the current one (or it
++  // holds none). Carries the current revision so the client can decide.
++  | { status: "conflict"; etag: string; updated_at: string }
++  // Not the caller's row, or the client holds a revision for a row that is
++  // gone. Both are "not found" to the caller — the first must not say more.
++  | { status: "notfound" };
++
++export async function putDocument(
++  userId: number,
++  app: string,
++  id: string,
++  body: { kind: DocKind; version: number; doc: unknown },
++  ifMatch: string | null,
++): Promise<PutOutcome> {
++  // The primary key is (app, id) across every user, so another user's row
++  // with this id blocks a create — answered as 404, not 412, so nothing
++  // about that row (not even its revision) leaks.
++  const current = await one<{ user_id: number; etag: string; updated_at: string }>(
++    `SELECT user_id, etag, updated_at FROM app_documents WHERE app = $1 AND id = $2`,
++    [app, id],
++  );
++  if (current && current.user_id !== userId) return { status: "notfound" };
++
++  const etag = newEtag();
++  const docJson = JSON.stringify(body.doc);
++
++  if (!current) {
++    if (ifMatch) return { status: "notfound" };
++    const row = await one<{ updated_at: string }>(
++      `INSERT INTO app_documents (app, id, user_id, kind, version, doc, etag)
++       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
++       RETURNING updated_at`,
++      [app, id, userId, body.kind, body.version, docJson, etag],
++    );
++    return { status: "ok", etag, updated_at: row!.updated_at, created: true };
++  }
++
++  if (!ifMatch || ifMatch !== current.etag) {
++    return { status: "conflict", etag: current.etag, updated_at: current.updated_at };
++  }
++
++  // The etag in the WHERE is what makes the check atomic: two writers racing
++  // past the SELECT above cannot both succeed here.
++  const row = await one<{ updated_at: string }>(
++    `UPDATE app_documents
++     SET kind = $4, version = $5, doc = $6::jsonb, etag = $7, updated_at = now()
++     WHERE app = $1 AND id = $2 AND user_id = $3 AND etag = $8
++     RETURNING updated_at`,
++    [app, id, userId, body.kind, body.version, docJson, etag, ifMatch],
++  );
++  if (!row) {
++    const latest = await one<{ etag: string; updated_at: string }>(
++      `SELECT etag, updated_at FROM app_documents WHERE app = $1 AND id = $2 AND user_id = $3`,
++      [app, id, userId],
++    );
++    return latest
++      ? { status: "conflict", etag: latest.etag, updated_at: latest.updated_at }
++      : { status: "notfound" };
++  }
++  return { status: "ok", etag, updated_at: row.updated_at, created: false };
++}
++
++export type DeleteOutcome =
++  | { status: "ok" }
++  | { status: "conflict"; etag: string; updated_at: string }
++  | { status: "notfound" };
++
++export async function deleteDocument(
++  userId: number,
++  app: string,
++  id: string,
++  ifMatch: string | null,
++): Promise<DeleteOutcome> {
++  const current = await one<{ etag: string; updated_at: string }>(
++    `SELECT etag, updated_at FROM app_documents WHERE app = $1 AND id = $2 AND user_id = $3`,
++    [app, id, userId],
++  );
++  if (!current) return { status: "notfound" };
++  if (!ifMatch || ifMatch !== current.etag) {
++    return { status: "conflict", etag: current.etag, updated_at: current.updated_at };
++  }
++  const r = await many<{ id: string }>(
++    `DELETE FROM app_documents WHERE app = $1 AND id = $2 AND user_id = $3 AND etag = $4
++     RETURNING id`,
++    [app, id, userId, ifMatch],
++  );
++  return r.length ? { status: "ok" } : { status: "notfound" };
++}
+diff --git a/src/lib/authz.ts b/src/lib/authz.ts
+index 2ef009a..baf35e2 100644
+--- a/src/lib/authz.ts
++++ b/src/lib/authz.ts
+@@ -61,8 +61,11 @@ const ADMIN_ONLY_PREFIXES = ["/api/auth/users", "/users", "/api/db/backup"];
+ // Account self-service: any signed-in role, mutations included. Signing out
+ // and changing one's OWN password/display name are not library writes — a
+ // viewer must be able to do both (the "am I really me" proof is the current
+-// password, checked by the route itself, not the role).
+-const SELF_SERVICE_PREFIXES = ["/api/auth/logout", "/api/auth/me"];
++// password, checked by the route itself, not the role). A client app's
++// document bucket (/api/apps/…, migration 0041) is the same kind of thing:
++// rows are scoped to user_id by the route, so a viewer owns its trips
++// without being able to touch the library.
++const SELF_SERVICE_PREFIXES = ["/api/auth/logout", "/api/auth/me", "/api/apps"];
+ 
+ const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+ 
+-- 
+2.43.0
+
