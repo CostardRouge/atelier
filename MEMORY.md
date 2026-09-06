@@ -107,6 +107,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - Winnow media previews on the **proxies** (H.264/AAC/faststart, so no ffmpeg.wasm; WebP for a RAW) and the Studio export **fetches the capture before the first variant**, with a checkbox to render from the proxy instead; a variant never upscales, so the panel states what it will really deliver — `studio.md`, `docs/winnow-bridge.md`.
 - A modal is a full-screen sheet under 820px showing ONE pane at a time (drill-down, never a stack in a fixed height); `dvh` not `vh`, 16px controls so iOS does not zoom — `frontend.md`.
 - A Winnow asset enters the library **fetched and wrapped as a `File`** (proxy by default, original on request, `.srt` alongside), vouched for with the original's hash — never streamed by URL, never hashed on its own bytes; connecting is the user's click on `#/connect`, and nothing runs at boot — `architecture.md`, `local-first.md`.
+- A Winnow **timeline chapter** and a Road Trip **stage** are the same object reached from two ends, so an import SEEDS stages and never posts, re-running it is a diff the author accepts leg by leg (never a sync), and Atelier writes back in Winnow's nouns only — `roadtrip.md`, `docs/winnow-timeline.md`.
 
 ## Open items (dated; remove when done)
 
@@ -119,6 +120,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - 2026-08-22 — A **pre-roll / freeze-frame intro** (output longer than the source) was explicitly deferred, not rejected: the maintainer chose "over the images" for now. Half the mechanism exists since 2026-08-25 — the outro's appended tail (`export-tail.ts`) proves the encoder seam; what remains for a PRE-roll is the timestamp shift every existing frame would need.
 - 2026-08-25 — The outro edits its lines as text inputs; **free element placement on a card stage of its own** (full intro parity: drag, style, animate on the card) is the agreed next step, deferred. The stage cannot scrub past the clip, so it needs a stage mode, not a longer timeline.
 - 2026-09-02 — **Winnow's entry points into Atelier are undesigned.** An "Edit in Atelier" verb on an asset, a selection or a calendar day is the cheap half of the integration and the one that would make the bridge daily rather than merely functional — but the maintainer wants to think about the entry points properly rather than bolt a link on. Deferred deliberately, not forgotten. Note a local dev server cannot exercise any of it: `localhost` is cross-SITE to `winnow.steeve.website`, so the cookie cannot travel — testing needs the deployed pair, or a `winnow.localhost`-style same-site setup.
+- 2026-09-03 — **Winnow's timeline is being built and nothing on Atelier's side is.** The brief that anticipates it is `docs/winnow-timeline.md` (companion to `winnow-bridge.md`, written before the spec exists, every Winnow-side claim marked as an assumption). Two client-only pieces are worth doing before the spec lands because they are correct under every version of it: `TripDoc.sourceId` + `TripStage.origin` (phase T0), and the pure `timeline-import.ts` mapping and diff (T1). **A gap it uncovered**: phase 0.5 gave `ProjectDoc` a `sourceId` and never gave `TripDoc` one, so invariant 2 is half-enforced on the document this work is about to make remote-flavoured.
 - No secret has ever been tracked in this repository (checked 2026-08-20 across the working tree), so there is nothing to rotate.
 
 ## Topic files — read before touching the area
@@ -134,11 +136,27 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 | `docs/memory/studio.md` | the Studio tool, the tool-merge plan, project persistence, title styles, retiring a legacy tool |
 | `docs/memory/roadtrip.md` | the Road Trip tool, trip/day/post model, day badges, publishing cadence and strategy |
 
-Not a memory file, but read it before touching anything about media sources or
-document storage: **`docs/winnow-bridge.md`** — the agreed design for connecting
-Atelier to Winnow (the maintainer's media-triage project), the two adapter seams
-it rests on, and the phases. Verified 2026-08-29 against the Winnow repository
-itself (`~/Documents/GitHub/winnow`, `CostardRouge/winnow`), so its claims about
-both sides carry paths and can be re-checked; rewritten 2026-08-31 around the
-source model, with several instances and scheduling marked *later* but designed
-for. Nothing in it is built yet.
+Not memory files, but read them before touching anything about media sources or
+document storage:
+
+- **`docs/winnow-bridge.md`** — the agreed design for connecting Atelier to
+  Winnow (the maintainer's media-triage project), the two adapter seams it rests
+  on, and the phases. Verified 2026-08-29 against the Winnow repository itself
+  (`~/Documents/GitHub/winnow`, `CostardRouge/winnow`), so its claims about both
+  sides carry paths and can be re-checked; rewritten 2026-08-31 around the source
+  model, with several instances and scheduling marked *later* but designed for.
+  **Phases 0, 0.5 and 1 are built**; 2 (write-back) and 3 (remote documents) are
+  not.
+- **`docs/roadtrip-editor.md`** — the agreed plan (2026-09-06) to give the Road
+  Trip piece editor the Studio's shape: six tabs instead of the 16-section
+  accordion, click-to-select and block-drag on the badge stage, and **grading
+  from Road Trip through the Studio's own engine** (`useLutStack` +
+  `makeFrameGrader` + `exportVariantVideo` — no second exporter, which is what
+  the earlier rejection was actually about). Four phases, one commit each.
+  **Nothing in it is built.**
+- **`docs/winnow-timeline.md`** — what Winnow's forthcoming timeline (media
+  grouped into chapters by place and date) means for Atelier: the chapter ↔ stage
+  mapping, ingesting by chapter, seeding and completing a Road Trip, the finals
+  going home, and the list of questions to check the spec against. Written
+  2026-09-03 from Atelier's side alone, so its Winnow claims are assumptions and
+  are marked as such. Nothing in it is built.
