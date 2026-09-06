@@ -111,9 +111,11 @@ export interface WinnowCapabilities {
     };
     contentHash: string;
     /**
-     * ⚠ ASSUMED (docs/winnow-timeline.md §7.9): true once the instance serves
-     * its timeline. Absent on an older instance, which is what lets the
-     * browser show a sentence instead of a broken tab.
+     * Whether the instance serves a timeline. **Winnow does not send this
+     * field today** (checked 2026-09-06 against its `api/capabilities`), and
+     * its timeline nonetheless shipped — so absence means "ask and see", not
+     * "no timeline". Only an explicit `false` hides the leg tab; see
+     * `hasTimeline`.
      */
     timeline?: boolean;
   };
@@ -148,8 +150,6 @@ export interface AssetQuery extends FilterQuery {
   dateTo?: string;
   /** A Winnow shoot session — one folder, in practice. */
   sessionId?: number;
-  /** ⚠ ASSUMED: a timeline chapter, cumulative with the other filters (§7.8). */
-  chapterId?: string;
   /** An explicit set of assets — how a document's refs are re-resolved. */
   ids?: readonly number[];
   cursor?: string | null;
@@ -183,17 +183,73 @@ export interface WinnowChapter {
   startDate: string | null;
   endDate: string | null;
   places: WinnowChapterPlace[];
-  /** Whatever the instance offers to detect a re-clustering, if anything. */
+  /**
+   * A fingerprint of the chapter's extent (`started_at|ended_at|count`),
+   * computed HERE — Winnow offers no revision of its own, and its chapters
+   * are re-derived on every request. Stored in `StageOrigin.revision`, it is
+   * what lets a later reconcile see that a leg was re-clustered.
+   */
   revision: string | null;
   assetCount: number;
   photoCount: number | null;
   videoCount: number | null;
   coverId: number | null;
+  /**
+   * Hours to add to UTC to read this chapter's days as they were lived —
+   * Winnow's own reading, from the median longitude of its geotagged media.
+   * Null when nothing in it carries a position: the days below were then
+   * read at UTC, and a UI must say so rather than show a different day
+   * silently (Winnow's own timeline prints the offset it used).
+   */
+  tzOffsetHours: number | null;
+  /**
+   * The chapter holds no position at all and its place was inferred from its
+   * neighbours in time. A place to show, never a place to write into a trip
+   * without the user seeing where it came from.
+   */
+  placeInferred: boolean;
+  /**
+   * A human named, merged or located this chapter on the instance (Winnow's
+   * `override_id`). A derived chapter is recomputed on every request and its
+   * name is only its dominant place; an authored one is a decision, and the
+   * reconcile diff can weigh the two differently.
+   */
+  authored: boolean;
 }
 
-/** Whether a connected instance's capabilities say it serves a timeline. */
+/**
+ * Whether browsing by leg is worth offering. The flag is absent on every
+ * instance shipped so far, and requiring it hid a timeline that works — so
+ * the rule is "offer unless the instance says no", and a `notfound` from
+ * `timeline()` is what an instance without one answers. The connection is
+ * still the gate: nothing is asked of a source the user has not allowed.
+ */
 export function hasTimeline(caps: WinnowCapabilities | null | undefined): boolean {
-  return caps?.media?.timeline === true;
+  return caps?.media?.timeline !== false;
+}
+
+/**
+ * The day range a leg's media is asked for. **Winnow has no `chapter_id`
+ * filter** (checked against its `lib/filter.ts`, whose schema strips unknown
+ * keys — so sending one narrowed nothing and quietly listed the whole
+ * library), and no instant filter either: `date_from` / `date_to` over
+ * `capture_date` is what exists.
+ *
+ * So a leg is asked for by its calendar days, which is a slightly WIDER net
+ * than the chapter: on a travel day shared with the next leg, both legs'
+ * media carry the same date. That is why `assetCount` is shown beside the
+ * rows rather than as their count — a number that disagrees with the list
+ * reads as a bug, and the honest fix is to say which is which.
+ */
+export function chapterDays(
+  chapter: WinnowChapter,
+): { dateFrom: string; dateTo: string } | null {
+  if (!chapter.startDate || !chapter.endDate) return null;
+  const [dateFrom, dateTo] =
+    chapter.startDate <= chapter.endDate
+      ? [chapter.startDate, chapter.endDate]
+      : [chapter.endDate, chapter.startDate];
+  return { dateFrom, dateTo };
 }
 
 /**
@@ -233,46 +289,106 @@ function num(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-/** A calendar day as the wire carries it; an instant is kept whole, so the import can refuse it. */
-function dateStr(value: unknown): string | null {
-  const s = str(value);
-  return s && s.trim() ? s.trim() : null;
+const HOUR_MS = 3_600_000;
+
+/**
+ * A capture instant read as the calendar day it was lived: shift by the
+ * chapter's own offset, then take the UTC parts. This is Winnow's `localDay`
+ * (`app/timeline/ChapterCard.tsx`) reproduced exactly, and it is the ONE
+ * place Atelier turns an instant into a day.
+ *
+ * The standing rule is "take Winnow's `capture_date`, never recompute it from
+ * `captured_at`". The timeline route is the one place that offers no date: a
+ * chapter carries instants and the offset to read them by. Converting HERE,
+ * with the instance's own offset and its own arithmetic, is what honours the
+ * rule; converting in a panel, or ignoring the offset, is what walks a third
+ * of an Australian trip back a day.
+ */
+export function localDayOf(instant: unknown, offsetHours: number | null): string | null {
+  const raw = str(instant);
+  if (raw === null) return null;
+  const t = Date.parse(raw);
+  if (!Number.isFinite(t)) return null;
+  const d = new Date(t + (offsetHours ?? 0) * HOUR_MS);
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${mm}-${dd}`;
 }
 
 /**
- * ⚠ ASSUMED wire shape of one `/api/timeline` chapter (docs/winnow-timeline.md
- * §7): `id`, `title`, `start_date` / `end_date` as capture dates, `places` in
- * lived order with `name` / `region` / `lat` / `lon`, `revision`, and
- * `asset_count` / `photo_count` / `video_count` / `cover_id`. Change THIS
- * function when the spec lands; nothing downstream reads the wire.
+ * One chapter of `GET /api/assets/timeline`, normalised into Atelier's shape.
+ *
+ * **Verified against Winnow's own `src/lib/timeline.ts`** (2026-09-06), not
+ * assumed: `key` (the ISO start, stable only within one request — chapters
+ * are DERIVED per request), `name`, `started_at` / `ended_at` as instants
+ * with `tz_offset_hours` to read them by, `places` as bare strings, the
+ * authored `place_label` / `place_lat` / `place_lon` from a named span,
+ * `count`, `override_id`, `place_inferred`, `cover_id`.
+ *
+ * Two mappings are judgement calls, and both refuse to fabricate:
+ *
+ * - **A derived name is not a title.** Winnow names a chapter after its
+ *   dominant place (`span?.name ?? places[0] ?? "Lieu inconnu"`), so only an
+ *   authored one (`override_id`) becomes a title. Importing a derived name
+ *   would pin as a decision what the place already says, and a stage's empty
+ *   name is what keeps its label deriving.
+ * - **One place, not a route.** Winnow orders a chapter's places by how much
+ *   media each holds, NOT by the order they were lived — while a Road Trip
+ *   stage's first and last places are its start and end. Carrying the list
+ *   would invent a route, and possibly a reversed one, so the chapter yields
+ *   its dominant place alone (the authored location when a human chose one,
+ *   which is also the only place that comes with coordinates).
  */
 export function chapterFromWire(raw: unknown): WinnowChapter | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const r = raw as Record<string, unknown>;
-  const id = str(r.id);
+  const id = str(r.key);
   if (id === null) return null;
-  const places = Array.isArray(r.places)
-    ? r.places
-        .map((p): WinnowChapterPlace | null => {
-          if (typeof p !== 'object' || p === null) return null;
-          const q = p as Record<string, unknown>;
-          const name = str(q.name);
-          if (name === null) return null;
-          return { name, region: str(q.region), lat: num(q.lat), lon: num(q.lon) };
-        })
-        .filter((p): p is WinnowChapterPlace => p !== null)
+
+  const tzOffsetHours = num(r.tz_offset_hours);
+  const startDate = localDayOf(r.started_at, tzOffsetHours);
+  const endDate = localDayOf(r.ended_at, tzOffsetHours);
+  const authored = num(r.override_id) !== null;
+
+  // The dominant place, or the one a human chose for the chapter — which is
+  // the only one Winnow gives coordinates for.
+  const named = Array.isArray(r.places)
+    ? r.places.map(str).find((n): n is string => n !== null && n.trim() !== '')
+    : undefined;
+  const label = str(r.place_label)?.trim() || null;
+  const name = label ?? named?.trim() ?? null;
+  const places: WinnowChapterPlace[] = name
+    ? [
+        {
+          name,
+          // Winnow reverse-geocodes to one level (city / county / region) and
+          // sends no second label, so a stage's region keeps deriving.
+          region: null,
+          lat: label ? num(r.place_lat) : null,
+          lon: label ? num(r.place_lon) : null,
+        },
+      ]
     : [];
+
+  const count = num(r.count) ?? 0;
   return {
     id,
-    title: str(r.title),
-    startDate: dateStr(r.start_date),
-    endDate: dateStr(r.end_date),
+    title: authored ? str(r.name) : null,
+    startDate,
+    endDate,
     places,
-    revision: str(r.revision),
-    assetCount: num(r.asset_count) ?? 0,
-    photoCount: num(r.photo_count),
-    videoCount: num(r.video_count),
+    // Winnow has no revision of its own: fingerprint what defines the
+    // chapter's extent, so a re-clustering is visible to a later reconcile.
+    revision: `${str(r.started_at) ?? ''}|${str(r.ended_at) ?? ''}|${count}`,
+    assetCount: count,
+    // Winnow counts a chapter's media as one number; a photo/video split
+    // would have to be invented, and the panel draws nothing rather than that.
+    photoCount: null,
+    videoCount: null,
     coverId: num(r.cover_id),
+    tzOffsetHours,
+    placeInferred: r.place_inferred === true,
+    authored,
   };
 }
 
@@ -559,16 +675,20 @@ export class WinnowClient {
   }
 
   /**
-   * ⚠ ASSUMED `GET /api/timeline?<filters>` → `{ chapters: [...] }`, chapters
-   * in lived order, narrowed by the same cumulative filters as everything
-   * else (so a chapter's count agrees with the day list). Only call it when
-   * `hasTimeline(capabilities)`; an older instance answers 404 and the caller
-   * should have shown a sentence instead. Rows the normaliser cannot read are
-   * dropped rather than half-shown.
+   * `GET /api/assets/timeline?<filters>` → `{ chapters, granularity, … }` —
+   * the library read as a story, chapters in lived order and narrowed by the
+   * same cumulative filters as everything else, so a leg's count agrees with
+   * what its days would list. **Chapters are derived on every request**: an
+   * id holds only for that answer, which is why `origin` matches by span and
+   * place before it trusts one.
+   *
+   * An instance too old to serve a timeline answers 404 (`notfound`) and the
+   * caller says so. Rows the normaliser cannot read are dropped rather than
+   * half-shown.
    */
   async timeline(filter: FilterQuery = {}): Promise<WinnowChapter[]> {
     const raw = await this.json<{ chapters?: unknown[] }>(
-      this.url('/api/timeline', filterParams(filter)),
+      this.url('/api/assets/timeline', filterParams(filter)),
     );
     return (raw.chapters ?? [])
       .map(chapterFromWire)
@@ -586,7 +706,6 @@ export class WinnowClient {
         date_from: query.dateFrom,
         date_to: query.dateTo,
         session_id: query.sessionId,
-        chapter_id: query.chapterId,
         // Winnow's `intList`: comma-separated, whitespace tolerated.
         ids: query.ids?.length ? query.ids.join(',') : undefined,
         ...filterParams(query),

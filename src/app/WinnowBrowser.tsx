@@ -3,6 +3,7 @@ import { navigate } from './use-hash-route';
 import {
   WinnowClient,
   WinnowError,
+  chapterDays,
   hasTimeline,
   type FilterQuery,
   type WinnowAssetRow,
@@ -125,6 +126,12 @@ const filterSelect = `${select} max-[820px]:flex-1 max-[820px]:basis-[10rem]`;
 function explain(err: unknown, client: WinnowClient): { text: string; login?: string } {
   if (err instanceof WinnowError && err.kind === 'unauthenticated') {
     return { text: `Not signed in to ${client.config.baseUrl}.`, login: client.loginUrl() };
+  }
+  // The timeline is the one route an instance can simply not have: no
+  // capability flag announces it, so a 404 here means "too old for legs",
+  // not "gone".
+  if (err instanceof WinnowError && err.kind === 'notfound') {
+    return { text: `${client.config.baseUrl} does not serve a timeline — it has no legs to read.` };
   }
   return { text: err instanceof Error ? err.message : String(err) };
 }
@@ -336,11 +343,23 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
     setChecked(new Set());
     // A new day is a new set of tiles: last day's failures must not silence them.
     setThumbAttempt(new Map());
+    // A leg is asked for by its calendar days: Winnow has no chapter filter
+    // (cf. `chapterDays`), so a day shared with the next leg brings both
+    // legs' media — which is why the leg's own count is shown beside them.
+    const legDays = chosenChapter ? chapterDays(chosenChapter) : null;
     const query = chosenDay
       ? { dateFrom: chosenDay, dateTo: chosenDay, ...filter }
-      : chosenChapter
-        ? { chapterId: chosenChapter.id, ...filter }
-        : { sessionId: chosenSession?.id, ...filter };
+      : legDays
+        ? { ...legDays, ...filter }
+        : chosenChapter
+          ? null
+          : { sessionId: chosenSession?.id, ...filter };
+    // An undated leg has no days to ask for; show nothing rather than the
+    // whole library, which is what an unfiltered query would have listed.
+    if (!query) {
+      setRows([]);
+      return;
+    }
     client
       .allAssets(query)
       .then((all) => {
@@ -398,6 +417,27 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
   );
   const heading =
     chosenDay ?? chosenSession?.name ?? (chosenChapter ? chapterLabel(chosenChapter) : null);
+
+  /**
+   * What a leg's rows really are. Winnow serves no chapter filter, so the
+   * rows are its calendar DAYS — on a travel day shared with the next leg,
+   * both legs' media carry the same date. Say it where the two numbers
+   * disagree rather than let a count that does not match read as a bug.
+   */
+  const legNote = ((): { text: string; why: string } | null => {
+    if (!chosenChapter || rows === null) return null;
+    const zone =
+      chosenChapter.tzOffsetHours === null
+        ? 'days read at UTC — nothing in this leg carries a position'
+        : `days as lived · UTC${chosenChapter.tzOffsetHours >= 0 ? '+' : ''}${chosenChapter.tzOffsetHours}`;
+    if (rows.length === chosenChapter.assetCount) return { text: zone, why: zone };
+    return {
+      text: `the leg holds ${chosenChapter.assetCount} · ${zone}`,
+      why:
+        `This instance filters by calendar day, not by leg, so a day this leg ` +
+        `shares with its neighbour brings that leg's media too.`,
+    };
+  })();
 
   function setFilterKey<K extends keyof FilterQuery>(key: K, value: string) {
     setFilter((f) => {
@@ -717,6 +757,11 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
                 <div className="flex items-center gap-3 flex-wrap">
                   {backToPicker}
                   <span className={`${legend} truncate max-w-[60%] max-[820px]:max-w-full`}>{heading} · {rows.length} media</span>
+                  {legNote && (
+                    <span className="font-mono text-[0.58rem] text-muted normal-case" title={legNote.why}>
+                      {legNote.text}
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={() =>

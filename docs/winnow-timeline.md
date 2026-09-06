@@ -7,39 +7,39 @@ not close a door in the meantime. **All five phases are built on Atelier's side*
 and `TripStage.origin` with the `.roadtrip.json` split of §5.4; T1
 `shared/roadtrip/timeline-import.ts` with its spec; T2 browse by leg; T3 the
 seed / complete screens and the two link routes; T4 the finals going home with
-`original_asset_id`. T2–T4 rest on an assumed wire shape: `GET
-/api/timeline?<filters>` → `{ chapters: [{ id, title, start_date, end_date,
-places[{name, region, lat, lon}], revision, asset_count, photo_count,
-video_count, cover_id }] }`, `chapter_id` as an `/api/assets` filter and an
-`/api/upload` field, and `capabilities.media.timeline`. All of it is read in ONE
-function, `chapterFromWire` (`client.ts`), plus `client.upload`; when the real
-routes are checked, those change and nothing else does.
+`original_asset_id`.
 
-**Winnow's timeline shipped on 2026-09-06** (`ed48a22` there, migration
-`0040_timeline_chapters.sql`), learned from the other repository while this was
-being built: chapters are **derived on every request**, and only human
-corrections are stored (`timeline_chapters` named spans, `timeline_breaks`). So
-§7.1 and §7.2 are answered — derived by default, authored only as a correction,
-and a chapter has **no stable id across recomputation**. `TripStage.origin.
-chapterId` is therefore the weak key §8.3 anticipated; `diffTimeline` already
-matches id → identical span → first place with an overlapping span, so the id
-is only ever the fast path. What remains is Winnow's: the API shape checked
-against `chapterFromWire`, `chapter_id` on the asset routes and on
-`/api/upload`, `capabilities.media.timeline`, reading `original_asset_id`, and
-the "Make a Road Trip from this leg" verb pointing at
+**The wire is no longer assumed (2026-09-06).** The read path was written
+against a guessed shape and then checked against Winnow's own code, where it
+was wrong in every key — enough that no chapter survived the boundary and the
+leg tab was empty against a real instance. `chapterFromWire` (`client.ts`) now
+reads what `winnow/src/lib/timeline.ts` really assembles, and §7's answers are
+recorded below. What remains assumed is only the WRITE half: `original_asset_id`
+and `chapter_id` on `/api/upload`, which Winnow's upload route does not read
+yet (checked the same day).
+
+| Atelier asked for | Winnow serves | Read as |
+| --- | --- | --- |
+| `GET /api/timeline` | `GET /api/assets/timeline?mode&gran&gap&absorb` | same cumulative filters |
+| `id` | `key` — the ISO start, stable **within one request only** | `WinnowChapter.id`, the weak key §8.3 planned for |
+| `title` | `name` = `span?.name ?? places[0] ?? "Lieu inconnu"` | a title **only when `override_id` is set**; a derived name is just the dominant place, and pinning it as a stage name would kill the derivation (§8.4) |
+| `start_date` / `end_date` | `started_at` / `ended_at` **instants** + `tz_offset_hours` | converted by `localDayOf`, Winnow's own `localDay` reproduced — the one place Atelier turns an instant into a day, and the §8.1 trap defused with the instance's own offset rather than the browser's zone |
+| `places[{name, region, lat, lon}]` in lived order | `places: string[]` ordered **by media count**, plus an authored `place_label` / `place_lat` / `place_lon` | **one place**: the authored location, else the dominant one. Winnow's order is dominance and a stage's first and last places are its start and end — carrying the list would invent a route, possibly reversed (§8.5) |
+| `revision` | nothing | a local fingerprint, `started_at\|ended_at\|count`, so a re-clustering is still visible to the reconcile |
+| `asset_count` / `photo_count` / `video_count` | `count` only | `assetCount`; the photo/video split draws nothing rather than an invented number |
+| `chapter_id` filter on `/api/assets` | **does not exist**, and the filter schema `.strip()`s unknown keys | a leg is asked for by its calendar days (`chapterDays`); the panel says the leg's own count beside the rows, because a shared travel day makes the day query wider |
+| `capabilities.media.timeline` | absent, though the timeline shipped | `hasTimeline` offers the tab unless the instance says `false`; a 404 from the route is "this instance serves no timeline" |
+
+Two facts worth carrying: chapters are **derived on every request** (only human
+corrections are stored — `timeline_chapters` named spans, `timeline_breaks`),
+and `override_id` is what answers §7.2, so an authored leg can be weighed
+differently from a computed one. `place_inferred` says the place came from the
+neighbouring chapters rather than from a measurement, and the seed panel prints
+that before it becomes a stage's place.
+
+Still Winnow's to do: `original_asset_id` and `chapter_id` read on
+`/api/upload`, and the "Make a Road Trip from this leg" verb pointing at
 `#/roadtrip/new?source=<host>&chapters=<id>`.
-
-**Update 2026-09-06** — Winnow's timeline **shipped** (`ed48a22`, migration
-`0040_timeline_chapters.sql`). Read from its code, not its spec: a chapter is
-**derived on every request** from capture time + reverse-geocoded place and is
-never stored; what a human edits is stored as a *correction* on top —
-`timeline_chapters` (a named span with an optional place; also the merge
-gesture) and `timeline_breaks` (a forced split). So §7.1 and §7.2 are answered:
-a chapter is derived by default, authored only as a correction, and **a derived
-chapter has no id that survives recomputation** — `TripStage.origin.chapterId`
-is the weak key §8.3 anticipated, and the reconcile diff must match by span and
-place first. The rest of this brief is unrevised; re-check §7 against
-`src/app/api/timeline/*` before building T2.
 
 **What this is.** A companion to `docs/winnow-bridge.md` — read that first: it
 carries the source model, the four invariants, the API inventory and the phases
@@ -330,8 +330,13 @@ anywhere near it (§3.3).
 
 ## 7. What Atelier needs the timeline API to answer
 
-The specification is not written; this is the list to check it against. Ordered
-by what breaks without it.
+**Answered 2026-09-06** — the status table at the top of this file is the
+record of what Winnow actually serves and how each item below was resolved.
+The list is kept because it is the right list to re-ask of any future
+source; the annotations inside it are the answers.
+
+The specification was not written when this was drafted; this is the list it
+was checked against. Ordered by what breaks without it.
 
 1. **A chapter id that survives recomputation** — or an explicit revision/hash so
    Atelier can *detect* that a chapter it stored was re-clustered. §5.4 stores the
@@ -512,6 +517,7 @@ src/shared/roadtrip/trip-file.ts       .roadtrip.json — what travels and what 
 src/shared/roadtrip/trip-route.ts      #/roadtrip/<tripRef>/<day>/<piece>
 src/shared/sources/source.ts           SourceInfo, listSources()
 src/shared/sources/winnow/client.ts    the only place Atelier speaks HTTP to a source
+                                       chapterFromWire · localDayOf · chapterDays
 src/shared/sources/winnow/materialize.ts  asset → File[], and the identity it vouches with
 src/shared/sources/winnow/browse-state.ts what the browser remembers between sittings
 src/app/WinnowBrowser.tsx              by day · by folder · (by chapter)

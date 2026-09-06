@@ -49,6 +49,12 @@ function explain(err: unknown, client: WinnowClient): { text: string; login?: st
   if (err instanceof WinnowError && err.kind === 'unauthenticated') {
     return { text: `Not signed in to ${client.config.baseUrl}.`, login: client.loginUrl() };
   }
+  // The timeline is the one route an instance can simply not have: no
+  // capability flag announces it, so a 404 here means "too old for legs",
+  // not "gone".
+  if (err instanceof WinnowError && err.kind === 'notfound') {
+    return { text: `${client.config.baseUrl} does not serve a timeline — it has no legs to read.` };
+  }
   return { text: err instanceof Error ? err.message : String(err) };
 }
 
@@ -296,6 +302,11 @@ export default function TimelineImportPanel({
                       <span className="block font-mono text-[0.62rem] text-muted tabular-nums">
                         {c.startDate && c.endDate ? spanText(c.startDate, c.endDate) : 'undated'}
                         {' · '}{c.assetCount} media
+                        {/* Where the place came from, when it was not measured: a
+                            leg named after its neighbours is about to become a
+                            stage's place, and that must be visible before it is. */}
+                        {c.placeInferred && c.places.length > 0 && ' · place guessed from the legs around it'}
+                        {c.tzOffsetHours === null && c.startDate && ' · days read at UTC'}
                       </span>
                     </span>
                   </li>

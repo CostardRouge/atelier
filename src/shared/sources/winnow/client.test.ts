@@ -3,6 +3,7 @@ import {
   WinnowClient,
   WinnowError,
   canWriteBack,
+  chapterDays,
   chapterFromWire,
   hasTimeline,
   normalizeBaseUrl,
@@ -63,62 +64,106 @@ describe('WinnowClient URLs', () => {
 });
 
 describe('the timeline chapter, normalised at the boundary', () => {
+  // One chapter of `GET /api/assets/timeline`, exactly as Winnow's
+  // `lib/timeline.ts` assembles it — instants, a dominance-ordered list of
+  // bare place names, and the offset to read the days by.
   const wire = {
-    id: 42,
-    title: 'Kalbarri',
-    start_date: '2025-11-05',
-    end_date: '2025-11-08',
-    revision: 7,
-    asset_count: 120,
-    photo_count: 100,
-    video_count: 20,
+    key: '2025-11-04T22:00:00.000Z',
+    name: 'Kalbarri',
+    started_at: '2025-11-04T22:00:00.000Z',
+    ended_at: '2025-11-08T09:30:00.000Z',
+    count: 120,
+    places: ['Kalbarri', 'Northampton'],
+    devices: ['DJI Mini 4 Pro'],
+    sessions: [{ id: 3, name: 'nov-kalbarri' }],
+    tz_offset_hours: 8,
+    place_inferred: false,
+    ungeotagged: 4,
+    absorbed: 0,
+    override_id: null,
+    place_label: null,
+    place_lat: null,
+    place_lon: null,
+    break_id: null,
     cover_id: 9001,
-    places: [
-      { name: 'Kalbarri', region: 'Western Australia', lat: -27.71, lon: 114.16 },
-      { name: 'Nowhere', region: null, lat: null, lon: null },
-      { region: 'no name' },
-      'junk',
-    ],
+    sample_ids: [1, 2, 3],
   };
 
-  it('reads the assumed wire keys into Atelier\'s own shape', () => {
+  it('reads the wire keys Winnow really sends into Atelier’s own shape', () => {
     expect(chapterFromWire(wire)).toEqual({
-      id: '42',
-      title: 'Kalbarri',
+      id: '2025-11-04T22:00:00.000Z',
+      // Derived, so the name is only the dominant place: not a title.
+      title: null,
+      // 22:00 UTC is already the 5th at UTC+8.
       startDate: '2025-11-05',
       endDate: '2025-11-08',
-      places: [
-        { name: 'Kalbarri', region: 'Western Australia', lat: -27.71, lon: 114.16 },
-        { name: 'Nowhere', region: null, lat: null, lon: null },
-      ],
-      revision: '7',
+      places: [{ name: 'Kalbarri', region: null, lat: null, lon: null }],
+      revision: '2025-11-04T22:00:00.000Z|2025-11-08T09:30:00.000Z|120',
       assetCount: 120,
-      photoCount: 100,
-      videoCount: 20,
+      photoCount: null,
+      videoCount: null,
       coverId: 9001,
+      tzOffsetHours: 8,
+      placeInferred: false,
+      authored: false,
     });
   });
 
-  it('keeps an instant whole rather than slicing a day out of it — the import refuses it', () => {
-    expect(chapterFromWire({ id: 1, start_date: '2026-02-11T23:00:00Z' })?.startDate).toBe(
-      '2026-02-11T23:00:00Z',
-    );
+  it('turns an instant into the day it was LIVED, with the chapter’s own offset', () => {
+    // The trap this exists for: 23:00 UTC on the 11th is the 12th in Perth,
+    // and reading it at UTC walks a third of an Australian trip back a day.
+    const perth = chapterFromWire({ ...wire, started_at: '2026-02-11T23:00:00Z' });
+    expect(perth?.startDate).toBe('2026-02-12');
+    // With no position there is no offset to apply: UTC, and the null says so.
+    const nowhere = chapterFromWire({
+      ...wire,
+      started_at: '2026-02-11T23:00:00Z',
+      tz_offset_hours: null,
+    });
+    expect(nowhere?.startDate).toBe('2026-02-11');
+    expect(nowhere?.tzOffsetHours).toBeNull();
   });
 
-  it('is null without an id, and empty-handed but sound with nothing else', () => {
-    expect(chapterFromWire({ title: 'x' })).toBeNull();
+  it('carries one place: Winnow orders them by weight, and a route would be invented', () => {
+    // `places[0]` and the last are a stage's start and end. Winnow's order is
+    // "most media first", so importing the list could reverse the leg.
+    expect(chapterFromWire(wire)?.places.map((p) => p.name)).toEqual(['Kalbarri']);
+  });
+
+  it('takes an authored chapter as a decision: its title, and the located place', () => {
+    const named = chapterFromWire({
+      ...wire,
+      name: 'The Red Centre',
+      override_id: 4,
+      places: ['Uluru'],
+      place_label: 'Uluru-Kata Tjuta',
+      place_lat: -25.34,
+      place_lon: 131.03,
+    });
+    expect(named?.authored).toBe(true);
+    expect(named?.title).toBe('The Red Centre');
+    expect(named?.places).toEqual([
+      { name: 'Uluru-Kata Tjuta', region: null, lat: -25.34, lon: 131.03 },
+    ]);
+  });
+
+  it('is null without a key, and empty-handed but sound with nothing else', () => {
+    expect(chapterFromWire({ name: 'x' })).toBeNull();
     expect(chapterFromWire(null)).toBeNull();
-    expect(chapterFromWire({ id: 'a' })).toEqual({
+    expect(chapterFromWire({ key: 'a' })).toEqual({
       id: 'a',
       title: null,
       startDate: null,
       endDate: null,
       places: [],
-      revision: null,
+      revision: '||0',
       assetCount: 0,
       photoCount: null,
       videoCount: null,
       coverId: null,
+      tzOffsetHours: null,
+      placeInferred: false,
+      authored: false,
     });
   });
 
@@ -126,15 +171,25 @@ describe('the timeline chapter, normalised at the boundary', () => {
     // Structural, not nominal: neither module imports the other.
     const chapter = chapterFromWire(wire) as WinnowChapter;
     const asImport: TimelineChapter = chapter;
-    expect(asImport.id).toBe('42');
+    expect(asImport.startDate).toBe('2025-11-05');
   });
 
-  it('is offered only when the instance says it has a timeline', () => {
+  it('offers the leg tab unless the instance says it has no timeline', () => {
+    // Winnow ships a timeline and no flag for it, so absence cannot mean no.
     const caps = (media: Record<string, unknown>) =>
       ({ media }) as unknown as WinnowCapabilities;
     expect(hasTimeline(caps({ timeline: true }))).toBe(true);
-    expect(hasTimeline(caps({}))).toBe(false);
-    expect(hasTimeline(null)).toBe(false);
+    expect(hasTimeline(caps({}))).toBe(true);
+    expect(hasTimeline(null)).toBe(true);
+    expect(hasTimeline(caps({ timeline: false }))).toBe(false);
+  });
+
+  it('asks for a leg by its calendar days — there is no chapter filter', () => {
+    expect(chapterDays(chapterFromWire(wire) as WinnowChapter)).toEqual({
+      dateFrom: '2025-11-05',
+      dateTo: '2025-11-08',
+    });
+    expect(chapterDays(chapterFromWire({ key: 'a' }) as WinnowChapter)).toBeNull();
   });
 });
 
@@ -422,26 +477,107 @@ describe('WinnowClient requests', () => {
     });
   });
 
-  it('asks the timeline under the same filters, and narrows a chapter\'s rows by it', async () => {
-    const fetchImpl = vi.fn<FetchLike>(async () => ok({ chapters: [], assets: [], next_cursor: null }));
-    const c = client(fetchImpl);
-    await c.timeline({ mediaType: 'video' });
-    await c.assets({ chapterId: '42', mediaType: 'video' });
-    const urls = fetchImpl.mock.calls.map((call) => new URL(call[0]));
-    expect(urls[0].pathname).toBe('/api/timeline');
-    expect(Object.fromEntries(urls[0].searchParams)).toEqual({ media_type: 'video' });
-    expect(Object.fromEntries(urls[1].searchParams)).toMatchObject({
-      chapter_id: '42',
-      media_type: 'video',
-    });
+  it('asks the real timeline route, under the same filters', async () => {
+    const fetchImpl = vi.fn<FetchLike>(async () => ok({ chapters: [] }));
+    await client(fetchImpl).timeline({ mediaType: 'video' });
+    const url = new URL(fetchImpl.mock.calls[0][0]);
+    expect(url.pathname).toBe('/api/assets/timeline');
+    expect(Object.fromEntries(url.searchParams)).toEqual({ media_type: 'video' });
   });
 
   it('drops a chapter it cannot read rather than half-showing it', async () => {
     const c = client(async () =>
-      ok({ chapters: [{ id: 1, title: 'Perth' }, { title: 'no id' }, 'junk'] }),
+      ok({ chapters: [{ key: '2026-02-12T00:00:00Z' }, { name: 'no key' }, 'junk'] }),
     );
     const chapters = await c.timeline();
-    expect(chapters.map((ch) => ch.id)).toEqual(['1']);
+    expect(chapters.map((ch) => ch.id)).toEqual(['2026-02-12T00:00:00Z']);
+  });
+
+  it('reads a chapter as Winnow really sends one: key, instants, dominant place', async () => {
+    const c = client(async () =>
+      ok({
+        chapters: [
+          {
+            key: '2026-02-11T23:10:00.000Z',
+            name: 'Kalbarri',
+            started_at: '2026-02-11T23:10:00.000Z',
+            ended_at: '2026-02-14T08:00:00.000Z',
+            count: 214,
+            // Ordered by how much media each holds, NOT by lived order.
+            places: ['Kalbarri', 'Northampton'],
+            tz_offset_hours: 8,
+            place_inferred: false,
+            override_id: null,
+            cover_id: 91,
+          },
+        ],
+      }),
+    );
+    const [ch] = await c.timeline();
+    // 23:10 UTC is already the 12th where the photographer stood.
+    expect(ch.startDate).toBe('2026-02-12');
+    expect(ch.endDate).toBe('2026-02-14');
+    expect(ch.tzOffsetHours).toBe(8);
+    // A derived name is the dominant place, not a decision: no title.
+    expect(ch.title).toBeNull();
+    expect(ch.authored).toBe(false);
+    // One place: the order Winnow gives is dominance, and a stage's first and
+    // last places are its start and end — a route here would be invented.
+    expect(ch.places).toEqual([{ name: 'Kalbarri', region: null, lat: null, lon: null }]);
+    expect(ch.assetCount).toBe(214);
+    expect(ch.photoCount).toBeNull();
+    expect(ch.coverId).toBe(91);
+    expect(ch.revision).toBe('2026-02-11T23:10:00.000Z|2026-02-14T08:00:00.000Z|214');
+  });
+
+  it('takes a human-named chapter as a title, with the location they chose', async () => {
+    const c = client(async () =>
+      ok({
+        chapters: [
+          {
+            key: 'k',
+            name: 'The Red Centre',
+            started_at: '2026-03-01T02:00:00.000Z',
+            ended_at: '2026-03-02T02:00:00.000Z',
+            count: 12,
+            places: ['Uluru'],
+            place_label: 'Uluru-Kata Tjuta',
+            place_lat: -25.34,
+            place_lon: 131.03,
+            tz_offset_hours: 9,
+            override_id: 4,
+          },
+        ],
+      }),
+    );
+    const [ch] = await c.timeline();
+    expect(ch.authored).toBe(true);
+    expect(ch.title).toBe('The Red Centre');
+    expect(ch.places).toEqual([
+      { name: 'Uluru-Kata Tjuta', region: null, lat: -25.34, lon: 131.03 },
+    ]);
+  });
+
+  it('reads a chapter with no position at UTC, and says the offset is unknown', async () => {
+    const c = client(async () =>
+      ok({
+        chapters: [
+          {
+            key: 'k',
+            started_at: '2026-02-11T23:10:00.000Z',
+            ended_at: '2026-02-11T23:40:00.000Z',
+            count: 3,
+            places: ['Kalbarri'],
+            tz_offset_hours: null,
+            place_inferred: true,
+          },
+        ],
+      }),
+    );
+    const [ch] = await c.timeline();
+    expect(ch.tzOffsetHours).toBeNull();
+    expect(ch.startDate).toBe('2026-02-11');
+    expect(ch.placeInferred).toBe(true);
   });
 
   it('uploads finals as multipart files + parallel paths, with the capture id alongside', async () => {
