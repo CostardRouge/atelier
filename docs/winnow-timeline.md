@@ -2,8 +2,9 @@
 
 **Status**: written **2026-09-03**, before Winnow's timeline specification
 exists, so that the questions are ready when it lands and Atelier's side does
-not close a door in the meantime. **Phase T0 is built** (2026-09-06:
-`TripDoc.sourceId`, `TripStage.origin`, the `.roadtrip.json` split of §5.4);
+not close a door in the meantime. **Phases T0 and T1 are built** (2026-09-06:
+`TripDoc.sourceId`, `TripStage.origin`, the `.roadtrip.json` split of §5.4, and
+`shared/roadtrip/timeline-import.ts` with its spec); nothing calls T1 yet, and
 everything else in §4–§6 is still on paper.
 
 **What this is.** A companion to `docs/winnow-bridge.md` — read that first: it
@@ -64,11 +65,14 @@ half acquires a server.
 | region / country | `TripPlace.region` | empty when the places disagree; `stageRegionLabel` already refuses to print one they do not share |
 | asset counts, cover asset | **nothing stored** | shown live from the source; never written into the trip — §3.1 |
 
-**One pure module owns that table**: `shared/roadtrip/timeline-import.ts`,
-`(chapters, options) → { stages, span, warnings }`, DOM-free and unit-tested
-beside its source, like every other piece of Road Trip's arithmetic. The mapping
-must not be re-derived inside a panel, and `shared/` must not learn to fetch —
-the client stays `shared/sources/winnow/client.ts`.
+**One pure module owns that table**: `shared/roadtrip/timeline-import.ts`
+(built 2026-09-06), `importTimeline(chapters, options) → { stages, span,
+uncovered, destination, warnings }`, DOM-free and unit-tested beside its source,
+like every other piece of Road Trip's arithmetic. Its input, `TimelineChapter`,
+is **Atelier's own shape**, not the wire's: when the spec lands, the client
+normalises whatever arrives into it at the boundary. The mapping must not be
+re-derived inside a panel, and `shared/` must not learn to fetch — the client
+stays `shared/sources/winnow/client.ts`.
 
 ---
 
@@ -386,7 +390,7 @@ whatever Winnow ships.
 | Phase | What | Where | Value if you stop there |
 |---|---|---|---|
 | **T0** ✅ 2026-09-06 | `TripDoc.sourceId` (v10) + `TripStage.origin`, with the migration and the `trip-file.ts` split of §5.4. Nothing remote. | Atelier only | Invariant 2 is finally enforced on both documents, and a trip can *record* where it was seeded from before anything can seed it |
-| **T1** | `timeline-import.ts` — the pure mapping, the span derivation, the diff (`add` / `unchanged` / `renamed` / `dropped`), fully tested against fixtures | Atelier only | The whole feature's arithmetic, testable with no server and no spec risk beyond the shape of a chapter |
+| **T1** ✅ 2026-09-06 | `timeline-import.ts` — the pure mapping, the span derivation, the diff (`add` / `unchanged` / `changed` with the fields that moved / `dropped`, matched id → span → first place), and `applyTimelineDiff` over accepted entries only; 42 specs | Atelier only | The whole feature's arithmetic, testable with no server and no spec risk beyond the shape of a chapter |
 | **T2** | Browse by chapter in `WinnowBrowser`; add a chapter's media as a prefilled selection | Atelier + `chapter_id` filter + `capabilities.media.timeline` | Ingestion stops being day-by-day for footage that is a leg |
 | **T3** | Seed / complete a trip: the two screens, the two routes, "Make a Road Trip from this leg" on Winnow's side | Atelier + one link on Winnow | The journey structure crosses once, and the trip is a decision surface from day one |
 | **T4** | Finals home with `original_asset_id` (+ `chapter_id` ⚠) — bridge phase 2, scoped by chapter | Atelier + `/api/upload` fields | The timeline can colour what has been told, from lineage it owns |
