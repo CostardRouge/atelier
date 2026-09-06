@@ -451,27 +451,24 @@ export default function PostEditor({
     <section className="@container flex-1 min-h-0 flex flex-col" aria-label="Hook">
     <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-auto @min-[860px]:grid @min-[860px]:grid-cols-[minmax(0,1fr)_22rem] @min-[860px]:grid-rows-[auto_minmax(0,1fr)] @min-[860px]:gap-x-5 @min-[860px]:gap-y-3 @min-[860px]:overflow-hidden">
       <div className="flex flex-col gap-1 min-w-0 @min-[860px]:col-start-2 @min-[860px]:row-start-1">
-        <div className="flex items-center gap-3">
+        {/* `flex-wrap`: under 860px the "Overview" pill, the sync status and
+            (until the deck tab makes room) more can no longer share one row.
+            Without it a fixed-height button had no room to keep its own text
+            on one line and spilled a second line outside its own box, over
+            whatever sat below — the exact trap `TripOverview`'s header (and
+            `WinnowBrowser`'s) already avoids the same way. Exporting has its
+            own button on the Export tab now — this row is navigation and
+            status only, never a second place to trigger the same action. */}
+        <div className="flex items-center gap-3 flex-wrap">
           <button
             type="button"
             onClick={onBack}
-            className="inline-flex items-center h-[1.9rem] px-3 rounded-full border border-line-strong bg-paper text-[0.78rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
+            className="inline-flex items-center shrink-0 whitespace-nowrap h-[1.9rem] px-3 rounded-full border border-line-strong bg-paper text-[0.78rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
           >
             ← Overview
           </button>
-          {headerExtra}
           <span className="flex-1" />
-          <button
-            type="button"
-            onClick={() => void exports.exportDeck()}
-            disabled={exports.exporting !== null}
-            className="h-[1.9rem] px-[1.1rem] inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.8rem] font-semibold hover:bg-accent hover:border-accent disabled:opacity-60"
-          >
-            {exports.exporting ??
-              (slides.length === 1
-                ? '↓ Export PNG'
-                : `↓ Export ${slides.length} slides`)}
-          </button>
+          {headerExtra}
         </div>
         {/* Editable in place, like the Studio's project name: a piece is
             found again by what it is called, and having to go back to the
@@ -548,9 +545,13 @@ export default function PostEditor({
 
       <div className="w-full min-w-0 flex flex-col gap-3 @min-[860px]:min-h-0 @min-[860px]:col-start-2 @min-[860px]:row-start-2">
         {/* Six tabs in a 22rem column wrap into two rows rather than
-            squeezing into one: the Studio's five at 340px is already tight. */}
+            squeezing into one: the Studio's five at 340px is already tight.
+            The container stays a soft rectangle (`rounded-paper`), not a
+            pill: a `rounded-full` box stretched over two rows of buttons
+            reads as a badly-shaped blob, not a toolbar — the individual
+            buttons keep their own pill shape regardless. */}
         <div
-          className="flex-none flex flex-wrap gap-1 p-1 rounded-full border border-line bg-surface"
+          className="flex-none flex flex-wrap gap-1 p-1 rounded-paper border border-line bg-surface"
           role="tablist"
           aria-label="Piece inspector"
         >
