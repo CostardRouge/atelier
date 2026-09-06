@@ -1,10 +1,12 @@
 # Road Trip persistence on a Winnow instance — the brief
 
-**Status**: designed 2026-09-06; **P-doc, P0 and P1 landed; P2 is written as
-`docs/winnow-patches/0001-app-documents-bucket.patch`** (the authoring session
-could read `CostardRouge/winnow` and not push to it — apply with `git am`;
-`typecheck` and `build` passed there, `migrate` needs the Postgres the
-container did not have). See §9.
+**Status**: designed 2026-09-06; **P-doc, P0, P1 and P3 landed in Atelier;
+P2 is written as `docs/winnow-patches/0001-app-documents-bucket.patch`** (the
+authoring session could read `CostardRouge/winnow` and not push to it — apply
+with `git am`; `typecheck` and `build` passed there, `migrate` needs the
+Postgres the container did not have). P3 was exercised against a stubbed
+instance only; §10's script on the deployed pair is still owed. P4 is later.
+See §9.
 P1 note: the sync record gained `pushStartedAt` (an edit during an in-flight
 push must leave the record dirty after the push lands) and `theirs` (the
 server's etag + `updated_at` behind a conflict, which "keep mine" re-PUTs

@@ -43,6 +43,11 @@ Today it ships nine tools, converging into a single studio:
 >   you type* to OpenStreetMap's Nominatim service, and gets a name, a region
 >   and coordinates back. Every place can be typed by hand instead, so the
 >   feature is a convenience and never a requirement.
+>
+> A third kind of request exists only once you have connected a **Winnow**
+> instance of your own (see "Sources" under the Studio): media is fetched from
+> it, and a Road Trip can be kept on it, under your account there. Nothing is
+> sent to a server you did not name yourself.
 
 Tools that consume the same kinds of files (photos, videos, DJI clips) share a
 single **asset library**: import a folder once and switch tools freely — each
@@ -656,14 +661,30 @@ day, tick pictures, and they arrive in the library as ordinary files — the
 everywhere), or the **original** on request, with its weight shown first. A
 DJI clip brings its flight log along either way.
 
-Plainly, what this changes about the promise above: Atelier still uploads
-nothing and holds no account. It **fetches** from a server you named yourself,
+A connected Winnow that declares a **document bucket** can also *keep a Road
+Trip* — the one thing Atelier ever writes to a server. Pick "Keep on
+winnow.example" when creating or importing a trip and it saves there as you
+edit: locally at once, to the instance after a few seconds of quiet, when the
+tab hides, when you leave the trip, or on "Save now". Open the trip gallery on
+another device signed in to the same Winnow and the trip is there; opening it
+pulls the latest copy. A status pill always says where the trip stands —
+saved, saving, offline and kept here, sign in to keep saving, or refused
+because another device changed it since (then you choose: keep mine, or take
+theirs). The trip document holds place names, dates and the text of your
+badges, and only your own account can read it back; the hook thumbnails never
+travel and are re-drawn locally. A trip can be moved between this browser and
+an instance from its card; the `.roadtrip.json` file remains the offline way
+to cross.
+
+Plainly, what this changes about the promise above: Atelier still uploads no
+media and holds no account. It **fetches** from a server you named yourself,
 signed in with that server's own session — nothing runs at boot, and no
-credential is stored here. Your media never leaves machines you own. It works
-when Atelier and the Winnow share a site (e.g. `atelier.example` and
-`winnow.example`) and the Winnow lists Atelier's origin in its
-`CORS_ALLOWED_ORIGINS`; a foreign instance would need a credential of its own,
-which is not built.
+credential is stored here — and, if you ask it to, keeps a trip's document on
+that same server, under your account there. Your media never leaves machines
+you own. It works when Atelier and the Winnow share a site (e.g.
+`atelier.example` and `winnow.example`) and the Winnow lists Atelier's origin
+in its `CORS_ALLOWED_ORIGINS`; a foreign instance would need a credential of
+its own, which is not built.
 
 ### Online
 

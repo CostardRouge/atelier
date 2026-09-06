@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { useActiveAsset } from '../../shared/library/use-active-asset';
 import type { Asset, AssetKind } from '../../shared/library/assets';
@@ -78,6 +78,8 @@ interface PostEditorProps {
   onBack: () => void;
   onChangePost: (post: TripPost) => void;
   onChangeTrip: (trip: TripDoc) => void;
+  /** What the shell wants in the top bar — the sync pill of a remote trip. */
+  headerExtra?: ReactNode;
 }
 
 const legend = 'font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted';
@@ -161,6 +163,7 @@ export default function PostEditor({
   onBack,
   onChangePost,
   onChangeTrip,
+  headerExtra,
 }: PostEditorProps) {
   const lib = useAssetLibrary();
   const { active } = useActiveAsset(MEDIA_KINDS);
@@ -675,6 +678,7 @@ export default function PostEditor({
             {formatIsoDate(post.date)} · {post.kind}
           </p>
         </div>
+        {headerExtra}
         <span className="flex-1" />
         <button
           type="button"

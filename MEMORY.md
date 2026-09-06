@@ -56,6 +56,8 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - A project's settings export to / import from `.atelier.json` — the portable half exactly, media and trims never; export + overwrite-this-project live in the settings modal, import-as-new-project in the gallery — `studio.md`.
 - A trip exports to / imports from `.roadtrip.json`, and it is a **backup, not a template**: the whole document minus the trip id, the timestamps, its `sourceId` and each post's `projectId`; media refs travel because their hash is what finds the pictures elsewhere; import always makes a new trip, on the source that imports it — `roadtrip.md`.
 - `TripDoc.sourceId` (v10) names the ONE source a trip is kept in, like `ProjectDoc`'s; the trip gallery groups by source even with one group, and the New-trip "Keep on" picker only appears with a second document-capable source — `roadtrip.md`, `docs/roadtrip-persistence.md`.
+- A trip kept on a Winnow saves **local now, remote on idle**: the remote copy is the authority, the IndexedDB copy its mirror, the bookkeeping a reducer beside the document (`trip-sync.ts`, store `sync`), an etag that REFUSES a stale write and a pill that says every state — never a sync engine; the Winnow side (migration 0041 + `/api/apps/:app/docs`) is a patch under `docs/winnow-patches/` until it lands there — `roadtrip.md`, `docs/roadtrip-persistence.md`.
+- The Winnow client WRITES in exactly one place, the document bucket, with `If-Match`; 404 is `notfound` (never revealing a foreign row), 412 is `conflict` carrying the server's revision — `architecture.md`.
 - Conformed footage (slow motion, time-lapse) is corrected by ONE measured number — capture seconds per media second — applied in `attachMotion`; physics runs on capture seconds, aesthetics on timeline seconds — `studio.md`.
 - The intro is a **scene** (a shared window + optional scrim + solo) over ordinary elements that gained a `window` and an `animation`, not a second class of element; it plays over the running footage and the export stays 1:1 with the source — `studio.md`.
 - The DJI video `.srt` carries no battery level (Mini 4 Pro included): the gauge takes an authored value or a named telemetry key, and draws empty rather than inventing one — `studio.md`.
@@ -170,5 +172,8 @@ document storage:
   `kind: trip | project` bucket with trips first; own docs for any signed-in
   role, scoped by `user_id`, foreign rows 404; thumbnails re-baked, never
   uploaded), plus the security answer, the Winnow migration `0041` + route
-  pair, and five phases. **Only P-doc is landed.** P0/P1 are Atelier-only and
-  verifiable anywhere; P2 is a Winnow-repo session; P3 needs the deployed pair.
+  pair, and five phases. **P-doc, P0, P1 and P3 are landed here; P2 is
+  written as `docs/winnow-patches/0001-app-documents-bucket.patch`** (apply
+  with `git am` on Winnow; typecheck + build passed there, migrate needs
+  Postgres). P3 is verified only against a stubbed instance — the deployed
+  pair still has to run §10's script once P2 is live.

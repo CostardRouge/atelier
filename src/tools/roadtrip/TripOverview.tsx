@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, type ReactNode } from 'react';
 import { deleteThumbs } from '../../shared/roadtrip/trip-store';
 import { formatIsoDate, type IsoDate } from '../../shared/roadtrip/trip-days';
 import { tripCoverage } from '../../shared/roadtrip/trip-coverage';
@@ -16,6 +16,8 @@ interface TripOverviewProps {
   onChange: (trip: TripDoc) => void;
   /** Open a piece's hook composer. */
   onOpenPost: (post: TripPost) => void;
+  /** What the shell wants in the header row — the sync pill of a remote trip. */
+  headerExtra?: ReactNode;
 }
 
 const barPill =
@@ -45,6 +47,7 @@ export default function TripOverview({
   onShowTrips,
   onChange,
   onOpenPost,
+  headerExtra,
 }: TripOverviewProps) {
   const coverage = useMemo(() => tripCoverage(trip), [trip]);
   // The day lives in the route, so coming back from a piece lands on the day
@@ -88,6 +91,12 @@ export default function TripOverview({
             {formatIsoDate(trip.startDate)} → {formatIsoDate(trip.endDate)}
           </p>
         </div>
+        {headerExtra && (
+          <>
+            <span className="flex-1" />
+            {headerExtra}
+          </>
+        )}
       </div>
 
       <div className="flex flex-wrap items-start gap-x-10 gap-y-4 bg-surface border border-line rounded-paper-lg p-5">
