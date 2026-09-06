@@ -35,11 +35,13 @@ import type { CtaFieldRefs } from './CtaPanel';
 import ContentTab from './panels/ContentTab';
 import DeckTab from './panels/DeckTab';
 import ExportTab from './panels/ExportTab';
+import GradeTab from './panels/GradeTab';
 import PictureTab from './panels/PictureTab';
 import StyleTab from './panels/StyleTab';
 import { useBadgeClock } from './use-badge-clock';
 import { usePostExports } from './use-post-exports';
 import { pickable, useSlideLibrary } from './use-slide-library';
+import { useTripGrade } from './use-trip-grade';
 
 interface PostEditorProps {
   trip: TripDoc;
@@ -54,12 +56,13 @@ interface PostEditorProps {
  * state is component state, not part of the route: the route says WHERE you
  * are (trip, day, piece), the tab says what you are looking at there.
  */
-type PanelTab = 'content' | 'style' | 'picture' | 'deck' | 'export';
+type PanelTab = 'content' | 'style' | 'picture' | 'grade' | 'deck' | 'export';
 
 const TABS: Array<{ id: PanelTab; label: string }> = [
   { id: 'content', label: 'Content' },
   { id: 'style', label: 'Style' },
   { id: 'picture', label: 'Picture' },
+  { id: 'grade', label: 'Grade' },
   { id: 'deck', label: 'Deck' },
   { id: 'export', label: 'Export' },
 ];
@@ -271,6 +274,10 @@ export default function PostEditor({
     }
   }, [isHook, duration, post.badge.videoTimeSeconds, patchBadge]);
 
+  // --- the grade: the Studio's stack, bound to the trip or to this piece ----
+  const grade = useTripGrade(trip, post, onChangeTrip, onChangePost);
+  const lut = grade.stack.composed;
+
   const exports = usePostExports({
     trip,
     post,
@@ -284,6 +291,7 @@ export default function PostEditor({
     hookElements,
     block,
     hookLength,
+    lut,
     // The outcome is reported on the Export tab, so that is where to be.
     onStart: () => setTab('export'),
   });
@@ -466,6 +474,7 @@ export default function PostEditor({
                 ? { ...cta.qr, dark: trip.cta.ink, light: trip.cta.background }
                 : null
             }
+            lut={isCta ? null : lut}
             selectedId={selectedId}
             onSelect={selectElement}
             // Only the hook's block has somewhere to be written back to; a
@@ -560,6 +569,10 @@ export default function PostEditor({
               />
             )}
 
+            {tab === 'grade' && (
+              <GradeTab grade={grade} linkedToProject={post.projectId !== null} />
+            )}
+
             {tab === 'deck' && (
               <DeckTab
                 trip={trip}
@@ -596,6 +609,8 @@ export default function PostEditor({
                 onExportDeck={() => void exports.exportDeck()}
                 onExportHookClip={() => void exports.exportHookClip()}
                 onChangePost={onChangePost}
+                grade={grade.saved}
+                gradeScope={grade.scope}
               />
             )}
           </div>

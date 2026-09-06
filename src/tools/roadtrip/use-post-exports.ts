@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { CubeLut } from '../../shared/lib/cube-parser';
 import type { OverlayElement } from '../../shared/overlay/overlay-types';
 import { renderDeck } from '../../shared/roadtrip/deck-export';
 import {
@@ -31,6 +32,8 @@ export interface PostExportInputs {
   block: HookBlock | null;
   /** How long the burned-in clip runs, already clamped to the clip. */
   hookLength: number;
+  /** The composed grade every picture goes through; null leaves them as shot. */
+  lut: CubeLut | null;
   /** Called as an export starts, so the caller can bring the report into view. */
   onStart?: () => void;
 }
@@ -95,6 +98,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         range: hookRange(post.badge.videoTimeSeconds, inputs.hookLength, hookInfo.duration),
         shades: post.badge.shades,
         block: inputs.block,
+        lut: inputs.lut,
         onProgress: (p) =>
           setExporting(
             p.ratio === null ? `${p.phase}…` : `Encoding ${Math.round(p.ratio * 100)}%…`,
@@ -129,6 +133,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         longEdge: 1920,
         timeSeconds: inputs.timeSeconds,
         resolve: inputs.resolve,
+        lut: inputs.lut,
         onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`),
       });
       if (!rendered.length) {

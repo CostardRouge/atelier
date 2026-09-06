@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { CubeLut } from '../../shared/lib/cube-parser';
+import { makeFrameGrader, type FrameGrader } from '../../shared/lut/frame-grader';
 import { boxForId, hitTest, type ElementBox } from '../../shared/overlay/draw-overlays';
 import type { OverlayElement } from '../../shared/overlay/overlay-types';
 import type { StyleTheme } from '../../shared/overlay/title-styles';
@@ -32,6 +34,8 @@ interface BadgeStageProps {
   background?: string;
   /** A QR square under the text. */
   qr?: QrDraw | null;
+  /** The composed grade the picture goes through, or null for the picture as shot. */
+  lut?: CubeLut | null;
   /** The element outlined on the stage, and kept visible past its window. */
   selectedId?: string | null;
   /** A click on the stage: the element under the pointer, or null for the picture. */
@@ -73,6 +77,7 @@ export default function BadgeStage({
   block,
   background,
   qr,
+  lut = null,
   selectedId = null,
   onSelect,
   blockAnchor = null,
@@ -184,6 +189,36 @@ export default function BadgeStage({
     ctx.restore();
   }, []);
 
+  // One grader, kept across repaints and re-made only when the LUT or the
+  // source's pixel size changes. A grader is a WebGL2 context; making one per
+  // paint would build and lose a context on every frame of the transport, and
+  // contexts are only reclaimed on GC or a forced loss.
+  const graderRef = useRef<{ lut: CubeLut; w: number; h: number; grader: FrameGrader } | null>(
+    null,
+  );
+  const graderFor = useCallback((source: BadgeSource | null): FrameGrader | null => {
+    const cur = graderRef.current;
+    if (!lut || !source || source.width <= 0) {
+      cur?.grader.dispose();
+      graderRef.current = null;
+      return null;
+    }
+    if (cur && cur.lut === lut && cur.w === source.width && cur.h === source.height) {
+      return cur.grader;
+    }
+    cur?.grader.dispose();
+    const grader = makeFrameGrader(lut, source.width, source.height);
+    graderRef.current = { lut, w: source.width, h: source.height, grader };
+    return grader;
+  }, [lut]);
+  useEffect(
+    () => () => {
+      graderRef.current?.grader.dispose();
+      graderRef.current = null;
+    },
+    [],
+  );
+
   // Paint. Runs on every change of anything drawn, including after a decode.
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -200,6 +235,7 @@ export default function BadgeStage({
       block,
       background,
       qr,
+      grader: graderFor(sourceRef.current),
       ghostId: selectedId,
     };
     void renderBadge(canvas, opts).then(() => {
@@ -224,6 +260,7 @@ export default function BadgeStage({
     file,
     frameSeq,
     drawChrome,
+    graderFor,
   ]);
 
   useEffect(() => () => sourceRef.current?.release(), []);

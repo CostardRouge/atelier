@@ -9,6 +9,7 @@
  * ground — because losing a file must never cost the piece.
  */
 
+import type { CubeLut } from '../lib/cube-parser';
 import type { StyleTheme } from '../overlay/title-styles';
 import type { SavedMediaRef } from '../projects/project-types';
 import { badgeElements } from './badge-layout';
@@ -38,6 +39,12 @@ export interface RenderDeckOptions {
   timeSeconds: number;
   /** Find a library file for a stored reference, or null when it is gone. */
   resolve: (ref: SavedMediaRef | null) => File | null;
+  /**
+   * The composed grade every picture of the deck goes through — the post's
+   * own, or the trip's. Null leaves the pictures as shot. The closing card
+   * carries no picture, so it is never graded.
+   */
+  lut?: CubeLut | null;
   onProgress?: (done: number, total: number) => void;
 }
 
@@ -107,6 +114,7 @@ export async function renderDeck(
           : null,
         width: w,
         height: h,
+        lut: opts.lut ?? null,
       });
       if (blob) {
         out.push({

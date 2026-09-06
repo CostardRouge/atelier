@@ -593,6 +593,44 @@ describe('migrateTripDoc — v8 → v9', () => {
   });
 });
 
+describe('migrateTripDoc — v9 → v10, the grade', () => {
+  function v9(): TripDoc {
+    const doc = createTripDoc('Australie', 'Australia', '2025-11-02', '2026-02-14');
+    doc.version = 9;
+    delete (doc as Partial<TripDoc>).grade;
+    const post = createTripPost('reel', '2025-11-05', 'Kalbarri');
+    delete (post as Partial<typeof post>).grade;
+    doc.posts = [post];
+    return doc;
+  }
+
+  it('gives the trip an empty grade and every post follows it', () => {
+    const doc = migrateTripDoc(v9());
+    expect(doc.grade).toEqual({ layers: [], output: 'none' });
+    expect(doc.posts[0].grade).toBeNull();
+  });
+
+  it('keeps a grade a document already carries', () => {
+    const doc = v9();
+    doc.grade = {
+      layers: [
+        { id: 'l1', source: 'builtin:x', name: 'X', customText: null, intensity: 0.8, enabled: true },
+      ],
+      output: 'rec709-to-srgb',
+    };
+    doc.posts[0].grade = { layers: [], output: 'none' };
+    const migrated = migrateTripDoc(doc);
+    expect(migrated.grade).toEqual(doc.grade);
+    expect(migrated.posts[0].grade).toEqual({ layers: [], output: 'none' });
+  });
+
+  it('reaches the current version and is idempotent', () => {
+    const once = migrateTripDoc(v9());
+    expect(once.version).toBe(TRIP_DOC_VERSION);
+    expect(migrateTripDoc(once)).toEqual(once);
+  });
+});
+
 describe('createTripStage', () => {
   it('takes no place by default, so nothing existing changes shape', () => {
     expect(createTripStage('Kalbarri', 'WA', '2025-11-05', '2025-11-09').places).toEqual([]);

@@ -1,8 +1,9 @@
 import type { OverlayElement } from '../../../shared/overlay/overlay-types';
 import type { DeckSlide } from '../../../shared/roadtrip/deck';
 import { MAX_HOOK_SECONDS, MIN_HOOK_SECONDS } from '../../../shared/roadtrip/hook-video';
-import type { TripDoc, TripPost } from '../../../shared/roadtrip/trip-types';
+import type { TripDoc, TripGrade, TripPost } from '../../../shared/roadtrip/trip-types';
 import StudioLink from '../StudioLink';
+import type { GradeScope } from '../use-trip-grade';
 import { legend, note, section, smallButton } from './ui';
 
 interface ExportTabProps {
@@ -26,6 +27,9 @@ interface ExportTabProps {
   onExportDeck: () => void;
   onExportHookClip: () => void;
   onChangePost: (post: TripPost) => void;
+  /** The grade the piece wears here, and whose it is — the bridge says which grade a Studio export uses. */
+  grade: TripGrade;
+  gradeScope: GradeScope;
 }
 
 /**
@@ -50,7 +54,10 @@ export default function ExportTab({
   onExportDeck,
   onExportHookClip,
   onChangePost,
+  grade,
+  gradeScope,
 }: ExportTabProps) {
+  const graded = grade.layers.some((l) => l.enabled && l.intensity > 0);
   return (
     <div className="flex flex-col gap-4">
       {exportNote && <p className={note}>{exportNote}</p>}
@@ -62,6 +69,9 @@ export default function ExportTab({
         <p className="m-0 text-[0.74rem] text-muted">
           Every slide at 1920 on its long edge, named in swipe order. An animated badge
           is rendered settled, never mid-slide.
+          {graded
+            ? ` Every picture goes through ${gradeScope === 'post' ? 'this piece’s own' : 'the trip’s'} grade.`
+            : ' The pictures go out as shot — no grade is set.'}
         </p>
         <button
           type="button"
@@ -91,7 +101,8 @@ export default function ExportTab({
             />
             <p className="m-0 text-[0.72rem] text-muted">
               Starts on the hook’s frame, so the badge animates in on the first frame of
-              the clip. Audio is copied through.
+              the clip. Audio is copied through
+              {graded ? ', and the clip is graded like the preview.' : '; the clip is not graded.'}
             </p>
             <button
               type="button"
@@ -121,6 +132,8 @@ export default function ExportTab({
           aspect={aspect}
           file={hookFile}
           onChangePost={onChangePost}
+          grade={grade}
+          gradeScope={gradeScope}
         />
       </div>
     </div>

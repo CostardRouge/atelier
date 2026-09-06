@@ -60,6 +60,32 @@ describe('the trip file', () => {
     expect(roundTrip(trip()).posts[0].projectId).toBeNull();
   });
 
+  it('carries the grade, a custom .cube as text inside its layer', () => {
+    const doc = trip();
+    doc.grade = {
+      layers: [
+        { id: 'l1', source: 'builtin:dji-d-log-to-rec709', name: 'D-Log', customText: null, intensity: 1, enabled: true },
+        { id: 'l2', source: 'custom', name: 'mine.cube', customText: 'TITLE "mine"\nLUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n', intensity: 0.6, enabled: false },
+      ],
+      output: 'rec709-to-srgb',
+    };
+    doc.posts[0].grade = { layers: [], output: 'none' };
+    const file = roundTrip(doc);
+    expect(file.grade).toEqual(doc.grade);
+    expect(file.posts[0].grade).toEqual({ layers: [], output: 'none' });
+    expect(tripDocFromFile(file).grade).toEqual(doc.grade);
+  });
+
+  it('lands a file written before grades existed on an empty grade', () => {
+    const file = { ...toTripFile(trip()), version: 9 } as Record<string, unknown>;
+    delete file.grade;
+    (file.posts as Record<string, unknown>[]).forEach((p) => delete p.grade);
+    const r = parseTripFile(JSON.stringify(file));
+    if (!r.ok) throw new Error(r.error);
+    expect(r.file.grade).toEqual({ layers: [], output: 'none' });
+    expect(r.file.posts[0].grade).toBeNull();
+  });
+
   it('writes readable, newline-terminated JSON', () => {
     const text = serializeTripFile(toTripFile(trip()));
     expect(text.endsWith('\n')).toBe(true);
