@@ -42,7 +42,8 @@ import { createIntroScene, findScene, type Scene } from '../../shared/overlay/sc
 import GuidesControl from '../../shared/overlay/GuidesControl';
 import { exportOverlayVideoViaSeek } from '../../shared/overlay/export-overlay-seek';
 import { exportVariantVideo, outroTail } from '../../shared/media/export-variant';
-import { mediaOrigin } from '../../shared/projects/media-identity';
+import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
+import SendFinalsPanel from './SendFinalsPanel';
 import { mergeExif } from '../../shared/exif/merge-exif';
 import { downloadBlob } from '../../shared/media/save';
 import { frameGrabName, grabFrame } from '../../shared/media/frame-grab';
@@ -289,6 +290,12 @@ export default function StudioEditor({
   /** Pulling the capture down happens before the first variant; say so. */
   const [fetchingOriginal, setFetchingOriginal] = useState(false);
   const [exportDone, setExportDone] = useState(false);
+  /**
+   * The deliverables of the last run, kept so they can be sent back to the
+   * source they were cut from. Memory-backed like every rendered blob; let go
+   * on the next run and when the active media changes.
+   */
+  const [lastRun, setLastRun] = useState<File[]>([]);
   const [exportFileName, setExportFileName] = useState(project.exportPrefs.fileName ?? '');
   const [variants, setVariants] = useState<ExportVariant[]>(() =>
     project.exportPrefs.variants.length
@@ -394,6 +401,11 @@ export default function StudioEditor({
       : null;
   /** True when the export will go and get the capture first. */
   const willFetchOriginal = !!proxyWithOriginal && !renderFromProxy;
+  // Where the finals of the active media would go home to — a clip or a
+  // still, whichever is open — and the identity the source vouched for it.
+  const finalsMedia = activeVideo ?? activeImage ?? null;
+  const finalsOrigin = mediaOrigin(finalsMedia);
+  const finalsIdentity = finalsMedia ? knownIdentity(finalsMedia) : null;
   const activeSource = activeTranscode.transcoded ?? activeVideo;
   const activeUrl = useObjectUrl(activeSource);
 
@@ -423,6 +435,7 @@ export default function StudioEditor({
     setExportError(null);
     setVariantStats({});
     setRunStats([]);
+    setLastRun([]);
   }, [activeId]);
 
   // Parse the active clip's telemetry — clips without an .srt just get no cues.
@@ -1022,7 +1035,9 @@ export default function StudioEditor({
     setExportError(null);
     setExportDone(false);
     setRunStats([]);
+    setLastRun([]);
     const measured: ExportStat[] = [];
+    const rendered: File[] = [];
     const controller = new AbortController();
     exportAbort.current = controller;
     // Prefer the transcoded H.264 (if one was made for preview): WebCodecs can
@@ -1064,7 +1079,10 @@ export default function StudioEditor({
         const blob = photo
           ? await renderStillVariant(photo, variant)
           : await renderClipVariant(source, variant, srcWidth, srcHeight, onProgress, controller);
-        await deliver(blob, variantFileName(base, variant, isPhoto ? 'photo' : 'video'));
+        const name = variantFileName(base, variant, isPhoto ? 'photo' : 'video');
+        const file = new File([blob], name, { type: blob.type });
+        await deliver(file);
+        rendered.push(file);
         const stat: ExportStat = {
           bytes: blob.size,
           seconds: (Date.now() - startedAt) / 1000,
@@ -1079,6 +1097,7 @@ export default function StudioEditor({
         setVariantStats((prev) => ({ ...prev, [variant.id]: stat }));
         setRunStats([...measured]);
       }
+      setLastRun(rendered);
       setExportDone(true);
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
@@ -1131,15 +1150,13 @@ export default function StudioEditor({
   }
 
   /** Write one finished file: into the chosen folder, else download it. */
-  async function deliver(blob: Blob, name: string): Promise<void> {
+  async function deliver(file: File): Promise<void> {
     if (destDir) {
-      const res = await writeItems(destDir, [
-        { name, file: new File([blob], name, { type: blob.type }) },
-      ]);
+      const res = await writeItems(destDir, [{ name: file.name, file }]);
       if (res.errors.length) throw new Error(res.errors[0].message);
       return;
     }
-    downloadBlob(blob, name);
+    downloadBlob(file, file.name);
   }
 
   /** Capture the composed frame under the playhead as a JPEG still. */
@@ -1160,10 +1177,8 @@ export default function StudioEditor({
         overlays: true,
       });
       if (blob) {
-        await deliver(
-          blob,
-          frameGrabName(exportFileName.trim() || active.baseName, video.currentTime),
-        );
+        const name = frameGrabName(exportFileName.trim() || active.baseName, video.currentTime);
+        await deliver(new File([blob], name, { type: blob.type }));
       } else {
         setExportError('No decoded frame to capture yet — play or scrub first.');
       }
@@ -2210,6 +2225,17 @@ export default function StudioEditor({
                             {describeExportRun(runStats)}
                           </span>
                         </div>
+                      )}
+                      {/* A clip that came from a Winnow can send its finals
+                          home, so the instance's lineage records that this
+                          capture has been told. Only offered for what was just
+                          rendered, only to the instance it came from. */}
+                      {exportDone && lastRun.length > 0 && finalsOrigin && (
+                        <SendFinalsPanel
+                          files={lastRun}
+                          sourceId={finalsOrigin.sourceId}
+                          assetId={finalsIdentity?.assetId ?? null}
+                        />
                       )}
                       {exportError && (
                         <span className="text-[0.78rem] text-[#9a3a23]" role="status">

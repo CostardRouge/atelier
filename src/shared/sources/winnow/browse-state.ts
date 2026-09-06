@@ -19,8 +19,10 @@
 
 import type { FilterQuery } from './client';
 
+export type BrowseView = 'day' | 'session' | 'chapter';
+
 export interface BrowseState {
-  view: 'day' | 'session';
+  view: BrowseView;
   filter: FilterQuery;
   /** `YYYY-MM`. */
   month: string;
@@ -28,6 +30,8 @@ export interface BrowseState {
   day: string | null;
   /** The open folder's Winnow session id, or null. */
   sessionId: number | null;
+  /** The open timeline chapter's id, or null. */
+  chapterId: string | null;
   fidelity: 'proxy' | 'original';
 }
 
@@ -65,7 +69,7 @@ export function readBrowseState(sourceId: string): BrowseState | null {
   const filter = typeof s.filter === 'object' && s.filter !== null ? s.filter : {};
   const f = filter as Record<string, unknown>;
   return {
-    view: s.view === 'session' ? 'session' : 'day',
+    view: s.view === 'session' || s.view === 'chapter' ? s.view : 'day',
     filter: {
       ...(f.mediaType === 'photo' || f.mediaType === 'video'
         ? { mediaType: f.mediaType }
@@ -78,6 +82,7 @@ export function readBrowseState(sourceId: string): BrowseState | null {
     sessionId: typeof s.sessionId === 'number' && Number.isFinite(s.sessionId)
       ? s.sessionId
       : null,
+    chapterId: typeof s.chapterId === 'string' && s.chapterId ? s.chapterId : null,
     fidelity: s.fidelity === 'original' ? 'original' : 'proxy',
   };
 }

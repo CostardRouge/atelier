@@ -661,8 +661,23 @@ day, tick pictures, and they arrive in the library as ordinary files — the
 everywhere), or the **original** on request, with its weight shown first. A
 DJI clip brings its flight log along either way.
 
+When the Winnow serves its **timeline** (media grouped into legs by place and
+date), the browser gains a third way in, **by leg**, and Road Trip can be seeded
+from it: the legs become the trip's stages — span, places, order — and nothing
+else; no post is created, so the grid of days still to tell stays yours. Re-run
+it later and it proposes what the timeline gained, renamed or lost, one tick
+per leg, never a sync. A Winnow can link straight into either screen
+(`#/roadtrip/new?source=<host>`); the link is a proposal you confirm.
+
+After a Studio export of a clip or photo that came from a Winnow, one button
+**sends the finals back** to that instance — the files you just rendered, into
+its finals root, linked to the capture they were cut from — so its lineage
+records that the capture has been told. It says what will leave and how heavy
+it is, refuses before a byte moves when the account is read-only or a file is
+over the instance's upload limit, and is never automatic.
+
 A connected Winnow that declares a **document bucket** can also *keep a Road
-Trip* — the one thing Atelier ever writes to a server. Pick "Keep on
+Trip* — the other thing Atelier writes to a server, beside the finals. Pick "Keep on
 winnow.example" when creating or importing a trip and it saves there as you
 edit: locally at once, to the instance after a few seconds of quiet, when the
 tab hides, when you leave the trip, or on "Save now". Open the trip gallery on
@@ -676,15 +691,18 @@ travel and are re-drawn locally. A trip can be moved between this browser and
 an instance from its card; the `.roadtrip.json` file remains the offline way
 to cross.
 
-Plainly, what this changes about the promise above: Atelier still uploads no
-media and holds no account. It **fetches** from a server you named yourself,
-signed in with that server's own session — nothing runs at boot, and no
-credential is stored here — and, if you ask it to, keeps a trip's document on
-that same server, under your account there. Your media never leaves machines
-you own. It works when Atelier and the Winnow share a site (e.g.
-`atelier.example` and `winnow.example`) and the Winnow lists Atelier's origin
-in its `CORS_ALLOWED_ORIGINS`; a foreign instance would need a credential of
-its own, which is not built.
+Plainly, what this changes about the promise above: Atelier holds no account
+and talks only to a server you named yourself, signed in with that server's own
+session — nothing runs at boot, and no credential is stored here. It **fetches**
+from it; **uploads to it** only on that one button, only what you just
+rendered; and, if you ask it to, **keeps a trip's document** on it, under your
+account there. Your media never leaves machines you own. It works when Atelier
+and the Winnow share a site (e.g. `atelier.example` and `winnow.example`) and
+the Winnow lists Atelier's origin in its `CORS_ALLOWED_ORIGINS`; a foreign
+instance would need a credential of its own, which is not built. The timeline
+and the write-back are built against Winnow's forthcoming API and will be
+re-checked when it lands; the trip bucket is the patch under
+`docs/winnow-patches/` until it does.
 
 ### Online
 

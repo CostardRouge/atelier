@@ -10,13 +10,18 @@
  *
  * - `id` — a fresh one is minted on import, so a file can be read twice
  *   without the second read overwriting the first.
- * - `sourceId` — where the trip was KEPT is a fact about the browser or the
- *   instance that held it, not about the trip. An imported trip belongs to
- *   whichever source imports it (`tripDocFromFile`'s third argument).
  * - `TripPost.projectId` — it addresses a Studio project in *this* browser's
  *   store. Carried across, it would dangle and offer to open nothing.
+ * - `sourceId` — where the document lives. An imported trip belongs to the
+ *   source that imports it, the same rule as the project file's.
  * - the post thumbnails, which live in their own IndexedDB store and are
  *   re-baked from the preview anyway.
+ *
+ * `TripStage.origin` DOES travel, and it is the one thing in the file that
+ * points outside the browser that wrote it — on purpose. It names an instance
+ * by its host and a chapter by that instance's own id, so on another machine
+ * connected to the same Winnow the next reconcile still works, and where the
+ * instance is unknown it dangles harmlessly (`docs/winnow-timeline.md` §5.4).
  *
  * Media refs DO travel. Since they carry a content hash (`SavedMediaRef.hash`),
  * a trip opened on another machine can find its pictures again in a folder
@@ -33,7 +38,6 @@
  */
 
 import { isIsoDate } from './trip-days';
-import { DEFAULT_SOURCE_ID } from '../sources/source';
 import {
   TRIP_DOC_VERSION,
   createTripDoc,
@@ -51,14 +55,10 @@ export const TRIP_FILE_EXTENSION = '.roadtrip.json';
 /** What the file picker accepts. */
 export const TRIP_FILE_ACCEPT = '.json,application/json';
 
-/**
- * Everything a trip file carries — the document minus what is machine-bound.
- * TRAP: a new `TripDoc` field lands in the file automatically unless it is
- * listed here; list it when it is bound to one browser or one instance.
- */
+/** Everything a trip file carries — the document minus what is machine-bound. */
 export type TripPortable = Omit<
   TripDoc,
-  'version' | 'id' | 'createdAt' | 'updatedAt' | 'sourceId'
+  'version' | 'id' | 'sourceId' | 'createdAt' | 'updatedAt'
 >;
 
 export interface TripFile extends TripPortable {
@@ -215,13 +215,14 @@ export function parseTripFile(text: string): ParseResult {
 /**
  * A brand-new trip document from a file — the import path. A fresh `id` and
  * fresh timestamps, so importing the same file twice gives two trips instead
- * of silently overwriting one. The trip belongs to `sourceId` — the source
- * that imports it, this browser unless the author chose an instance.
+ * of silently overwriting one. It belongs to the source that imports it
+ * (`sourceId`, this browser unless told otherwise), never to the one that
+ * wrote the file.
  */
 export function tripDocFromFile(
   file: TripFile,
   now: number = Date.now(),
-  sourceId: string = DEFAULT_SOURCE_ID,
+  sourceId?: string,
 ): TripDoc {
   const doc = createTripDoc(
     file.name,

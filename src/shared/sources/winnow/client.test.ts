@@ -1,5 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
-import { WinnowClient, WinnowError, normalizeBaseUrl, sourceIdFor } from './client';
+import {
+  WinnowClient,
+  WinnowError,
+  canWriteBack,
+  chapterFromWire,
+  hasTimeline,
+  normalizeBaseUrl,
+  sourceIdFor,
+  type WinnowCapabilities,
+  type WinnowChapter,
+} from './client';
+import type { TimelineChapter } from '../../roadtrip/timeline-import';
 
 const BASE = 'https://winnow.example';
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
@@ -48,6 +59,82 @@ describe('WinnowClient URLs', () => {
 
   it('drops empty query values instead of sending "undefined"', () => {
     expect(c.url('/api/x', { a: 1, b: undefined, c: null, d: '' })).toBe(`${BASE}/api/x?a=1`);
+  });
+});
+
+describe('the timeline chapter, normalised at the boundary', () => {
+  const wire = {
+    id: 42,
+    title: 'Kalbarri',
+    start_date: '2025-11-05',
+    end_date: '2025-11-08',
+    revision: 7,
+    asset_count: 120,
+    photo_count: 100,
+    video_count: 20,
+    cover_id: 9001,
+    places: [
+      { name: 'Kalbarri', region: 'Western Australia', lat: -27.71, lon: 114.16 },
+      { name: 'Nowhere', region: null, lat: null, lon: null },
+      { region: 'no name' },
+      'junk',
+    ],
+  };
+
+  it('reads the assumed wire keys into Atelier\'s own shape', () => {
+    expect(chapterFromWire(wire)).toEqual({
+      id: '42',
+      title: 'Kalbarri',
+      startDate: '2025-11-05',
+      endDate: '2025-11-08',
+      places: [
+        { name: 'Kalbarri', region: 'Western Australia', lat: -27.71, lon: 114.16 },
+        { name: 'Nowhere', region: null, lat: null, lon: null },
+      ],
+      revision: '7',
+      assetCount: 120,
+      photoCount: 100,
+      videoCount: 20,
+      coverId: 9001,
+    });
+  });
+
+  it('keeps an instant whole rather than slicing a day out of it — the import refuses it', () => {
+    expect(chapterFromWire({ id: 1, start_date: '2026-02-11T23:00:00Z' })?.startDate).toBe(
+      '2026-02-11T23:00:00Z',
+    );
+  });
+
+  it('is null without an id, and empty-handed but sound with nothing else', () => {
+    expect(chapterFromWire({ title: 'x' })).toBeNull();
+    expect(chapterFromWire(null)).toBeNull();
+    expect(chapterFromWire({ id: 'a' })).toEqual({
+      id: 'a',
+      title: null,
+      startDate: null,
+      endDate: null,
+      places: [],
+      revision: null,
+      assetCount: 0,
+      photoCount: null,
+      videoCount: null,
+      coverId: null,
+    });
+  });
+
+  it('is what the Road Trip import takes, unchanged', () => {
+    // Structural, not nominal: neither module imports the other.
+    const chapter = chapterFromWire(wire) as WinnowChapter;
+    const asImport: TimelineChapter = chapter;
+    expect(asImport.id).toBe('42');
+  });
+
+  it('is offered only when the instance says it has a timeline', () => {
+    const caps = (media: Record<string, unknown>) =>
+      ({ media }) as unknown as WinnowCapabilities;
+    expect(hasTimeline(caps({ timeline: true }))).toBe(true);
+    expect(hasTimeline(caps({}))).toBe(false);
+    expect(hasTimeline(null)).toBe(false);
   });
 });
 
@@ -302,6 +389,78 @@ describe('WinnowClient requests', () => {
       const gone = client(async () => new Response('', { status: 404 }));
       await expect(gone.deleteDoc('atelier', 't1', 'e1')).rejects.toMatchObject({ kind: 'notfound' });
     });
+  });
+
+  it('asks the timeline under the same filters, and narrows a chapter\'s rows by it', async () => {
+    const fetchImpl = vi.fn<FetchLike>(async () => ok({ chapters: [], assets: [], next_cursor: null }));
+    const c = client(fetchImpl);
+    await c.timeline({ mediaType: 'video' });
+    await c.assets({ chapterId: '42', mediaType: 'video' });
+    const urls = fetchImpl.mock.calls.map((call) => new URL(call[0]));
+    expect(urls[0].pathname).toBe('/api/timeline');
+    expect(Object.fromEntries(urls[0].searchParams)).toEqual({ media_type: 'video' });
+    expect(Object.fromEntries(urls[1].searchParams)).toMatchObject({
+      chapter_id: '42',
+      media_type: 'video',
+    });
+  });
+
+  it('drops a chapter it cannot read rather than half-showing it', async () => {
+    const c = client(async () =>
+      ok({ chapters: [{ id: 1, title: 'Perth' }, { title: 'no id' }, 'junk'] }),
+    );
+    const chapters = await c.timeline();
+    expect(chapters.map((ch) => ch.id)).toEqual(['1']);
+  });
+
+  it('uploads finals as multipart files + parallel paths, with the capture id alongside', async () => {
+    const fetchImpl = vi.fn<FetchLike>(async () => ok({ staged: 2 }));
+    const c = client(fetchImpl);
+    const a = new File([new Uint8Array(3)], 'a.mp4', { type: 'video/mp4' });
+    const b = new File([new Uint8Array(4)], 'b.mp4', { type: 'video/mp4' });
+    const answer = await c.upload(
+      [{ file: a, path: '7/a.mp4' }, { file: b, path: '7/b.mp4' }],
+      { originalAssetId: 42, chapterId: '7' },
+    );
+    expect(answer).toEqual({ staged: 2 });
+    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${BASE}/api/upload`);
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('include');
+    const form = init.body as FormData;
+    expect(form.getAll('files').map((f) => (f as File).name)).toEqual(['a.mp4', 'b.mp4']);
+    expect(form.getAll('paths')).toEqual(['7/a.mp4', '7/b.mp4']);
+    expect(form.get('original_asset_id')).toBe('42');
+    expect(form.get('chapter_id')).toBe('7');
+  });
+
+  it('sends no capture id or chapter it does not have', async () => {
+    const fetchImpl = vi.fn<FetchLike>(async () => new Response(null, { status: 204 }));
+    const c = client(fetchImpl);
+    const answer = await c.upload([{ file: new File([], 'a.mp4'), path: 'a.mp4' }]);
+    expect(answer).toBeNull();
+    const form = (fetchImpl.mock.calls[0] as [string, RequestInit])[1].body as FormData;
+    expect(form.has('original_asset_id')).toBe(false);
+    expect(form.has('chapter_id')).toBe(false);
+  });
+
+  it('reconciles with an empty JSON body', async () => {
+    const fetchImpl = vi.fn<FetchLike>(async () => ok({ linked: 1 }));
+    expect(await client(fetchImpl).reconcile()).toEqual({ linked: 1 });
+    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${BASE}/api/reconcile`);
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe('{}');
+  });
+
+  it('knows a viewer cannot write back', () => {
+    const caps = (role: string | null) =>
+      ({ viewer: role ? { id: 1, username: 'x', role } : null }) as unknown as WinnowCapabilities;
+    expect(canWriteBack(caps('admin'))).toBe(true);
+    expect(canWriteBack(caps('editor'))).toBe(true);
+    expect(canWriteBack(caps('viewer'))).toBe(false);
+    expect(canWriteBack(caps(null))).toBe(false);
+    expect(canWriteBack(null)).toBe(false);
   });
 
   it('turns a body into a File with the name, type and date it was told', async () => {

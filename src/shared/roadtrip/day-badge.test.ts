@@ -42,7 +42,6 @@ const stage = (
 const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   version: 3,
   id: 't1',
-  sourceId: 'local',
   name: 'Australia',
   destination: 'Australia',
   startDate: '2025-03-01',
@@ -54,6 +53,7 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   cta: { ...DEFAULT_CTA },
   hookDefaults: {},
   grade: { layers: [], output: 'none' },
+  sourceId: 'local',
   createdAt: 0,
   updatedAt: 0,
   ...over,

@@ -44,11 +44,14 @@ import {
   remoteFor,
   type RemoteTripRow,
 } from '../../shared/roadtrip/trip-remote';
-import NewTripModal, { type NewTripChoices } from './NewTripModal';
+import NewTripModal, { type NewTripChoices, type TimelineSourceOption } from './NewTripModal';
 
 interface TripGalleryProps {
   openTripId: string | null;
   onOpen: (trip: TripDoc) => void;
+  /** Connected Winnows the New trip modal may offer as a seed. */
+  timelineSources?: TimelineSourceOption[];
+  onSeedFrom?: (sourceId: string) => void;
 }
 
 /**
@@ -263,7 +266,12 @@ function TripCard({
  * show with "checking…"; when it cannot, the header says so and the mirrors
  * stay — never hidden.
  */
-export default function TripGallery({ openTripId, onOpen }: TripGalleryProps) {
+export default function TripGallery({
+  openTripId,
+  onOpen,
+  timelineSources,
+  onSeedFrom,
+}: TripGalleryProps) {
   const [trips, setTrips] = useState<TripDoc[] | null>(null);
   const [creating, setCreating] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -622,6 +630,15 @@ export default function TripGallery({ openTripId, onOpen }: TripGalleryProps) {
           sources={documentSources}
           onCancel={() => setCreating(false)}
           onCreate={(choices) => void handleCreate(choices)}
+          timelineSources={timelineSources}
+          onSeedFrom={
+            onSeedFrom
+              ? (id) => {
+                  setCreating(false);
+                  onSeedFrom(id);
+                }
+              : undefined
+          }
         />
       )}
     </section>

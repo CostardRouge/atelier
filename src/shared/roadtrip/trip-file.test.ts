@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   TRIP_DOC_VERSION,
   createTripDoc,
+  createTripPlace,
   createTripPost,
+  createTripStage,
   type TripDoc,
 } from './trip-types';
 import {
@@ -60,6 +62,27 @@ describe('the trip file', () => {
     expect(roundTrip(trip()).posts[0].projectId).toBeNull();
   });
 
+  it('never writes sourceId — an imported trip belongs to the source that imports it', () => {
+    const doc = { ...trip(), sourceId: 'winnow.example' };
+    expect('sourceId' in toTripFile(doc)).toBe(false);
+    expect(serializeTripFile(toTripFile(doc))).not.toContain('sourceId');
+  });
+
+  it('carries a stage origin — the one pointer outside the browser, kept on purpose', () => {
+    const doc = trip();
+    doc.stages = [
+      {
+        ...createTripStage('', '', '2025-07-02', '2025-07-04', [createTripPlace('Kalbarri')]),
+        origin: { sourceId: 'winnow.example', chapterId: '42', importedAt: 1 },
+      },
+    ];
+    expect(roundTrip(doc).stages[0].origin).toEqual({
+      sourceId: 'winnow.example',
+      chapterId: '42',
+      importedAt: 1,
+    });
+  });
+
   it('carries the grade, a custom .cube as text inside its layer', () => {
     const doc = trip();
     doc.grade = {
@@ -84,20 +107,6 @@ describe('the trip file', () => {
     if (!r.ok) throw new Error(r.error);
     expect(r.file.grade).toEqual({ layers: [], output: 'none' });
     expect(r.file.posts[0].grade).toBeNull();
-  });
-
-  it('never carries a sourceId — where a trip was KEPT is not part of the trip', () => {
-    const doc = { ...trip(), sourceId: 'winnow.steeve.website' };
-    const file = toTripFile(doc);
-    expect(file).not.toHaveProperty('sourceId');
-    expect(JSON.parse(serializeTripFile(file))).not.toHaveProperty('sourceId');
-  });
-
-  it('still reads a file written before the source existed (format 10)', () => {
-    const file = { ...toTripFile(trip()), version: 10 } as Record<string, unknown>;
-    const r = parseTripFile(JSON.stringify(file));
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.file.version).toBe(TRIP_DOC_VERSION);
   });
 
   it('writes readable, newline-terminated JSON', () => {
@@ -158,6 +167,23 @@ describe('parseTripFile — every rejection says something actionable', () => {
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.file.posts[0].projectId).toBeNull();
   });
+
+  it('ignores a hand-edited sourceId on the way in', () => {
+    const file = { ...toTripFile(trip()), sourceId: 'smuggled.example' };
+    const r = parseTripFile(JSON.stringify(file));
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect('sourceId' in r.file).toBe(false);
+      expect(tripDocFromFile(r.file).sourceId).toBe('local');
+    }
+  });
+
+  it('reads a file written before the document had a source', () => {
+    const file = { ...toTripFile(trip()), version: 9 };
+    const r = parseTripFile(JSON.stringify(file));
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.file.version).toBe(TRIP_DOC_VERSION);
+  });
 });
 
 describe('tripDocFromFile', () => {
@@ -179,27 +205,17 @@ describe('tripDocFromFile', () => {
     expect(doc.posts[0].projectId).toBeNull();
   });
 
-  it('belongs to the source that imports it, this browser by default', () => {
-    const file = roundTrip(trip());
-    expect(tripDocFromFile(file).sourceId).toBe('local');
-    expect(tripDocFromFile(file, 1, 'winnow.example').sourceId).toBe('winnow.example');
-  });
-
-  it('ignores a sourceId smuggled into the file', () => {
-    const raw = { ...toTripFile(trip()), sourceId: 'somewhere.else' };
-    const r = parseTripFile(JSON.stringify(raw));
-    expect(r.ok).toBe(true);
-    if (r.ok) {
-      expect(r.file).not.toHaveProperty('sourceId');
-      expect(tripDocFromFile(r.file).sourceId).toBe('local');
-    }
-  });
-
   it('does not share structure with the file it came from', () => {
     const file = roundTrip(trip());
     const doc = tripDocFromFile(file);
     doc.posts[0].title = 'changed';
     expect(file.posts[0].title).toBe('Sunset over the gorge');
+  });
+
+  it('belongs to the source that imports it — this browser by default', () => {
+    const file = roundTrip(trip());
+    expect(tripDocFromFile(file).sourceId).toBe('local');
+    expect(tripDocFromFile(file, 1, 'winnow.example').sourceId).toBe('winnow.example');
   });
 });
 
