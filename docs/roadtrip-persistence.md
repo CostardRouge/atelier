@@ -1,12 +1,16 @@
 # Road Trip persistence on a Winnow instance — the brief
 
-**Status**: designed 2026-09-06; **P-doc, P0, P1, P3 and P4 landed in Atelier;
-P2 is written as `docs/winnow-patches/0001-app-documents-bucket.patch`** (the
-authoring session could read `CostardRouge/winnow` and not push to it — apply
-with `git am`; `typecheck` and `build` passed there, `migrate` needs the
-Postgres the container did not have). P3 was exercised against a stubbed
-instance only, as was P4 (the Studio half of it); §10's script on the
-deployed pair is still owed. See §9.
+**Status**: **DONE — every phase shipped, and the maintainer confirmed it
+working on the deployed pair on 2026-09-07.** P-doc, P0, P1, P3 and P4 landed
+in Atelier; P2 landed in Winnow (migration `0041`, `lib/appDocuments.ts`, the
+`api/apps/[app]/docs` route pair), merged and deployed by the maintainer. §10's
+script was run in full against a real instance the day before, locally — the
+belief that it needed the deployed pair was wrong, and why is in
+`docs/memory/testing.md`. Two cases were never exercised: a network drop and a
+401 mid-edit, both designed to keep the edit here and retry.
+
+**Keep this file** as the record of the four decisions and the security answer
+(§0, §8); the phases below are history now.
 P1 note: the sync record gained `pushStartedAt` (an edit during an in-flight
 push must leave the record dirty after the push lands) and `theirs` (the
 server's etag + `updated_at` behind a conflict, which "keep mine" re-PUTs
