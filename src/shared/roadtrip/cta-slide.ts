@@ -84,14 +84,41 @@ function wrapForFrame(text: string, sizeFrac: number, aspect: number): string[] 
   return wrapText(text, charBudget(w * TEXT_WIDTH, fontPx));
 }
 
+/** The three things a closing card says, each possibly wrapped over lines. */
+export type CtaRole = 'headline' | 'body' | 'url';
+
+const CTA_ROLES: readonly CtaRole[] = ['headline', 'body', 'url'];
+const CTA_ID_PREFIX = 'cta:';
+
+/**
+ * A card line's element id: `cta:<role>:<line index>`. Deterministic, like
+ * `pieceElementId`, because the card is rebuilt on every render and a stage
+ * that hit-tests it needs the id to still name the same line afterwards.
+ */
+export function ctaElementId(role: CtaRole, line: number): string {
+  return `${CTA_ID_PREFIX}${role}:${line}`;
+}
+
+/** The role and line an element id names, or null for any other id. */
+export function ctaRoleFromElementId(id: string): { role: CtaRole; line: number } | null {
+  if (!id.startsWith(CTA_ID_PREFIX)) return null;
+  const [role, index] = id.slice(CTA_ID_PREFIX.length).split(':');
+  const line = Number(index);
+  if (!(CTA_ROLES as readonly string[]).includes(role)) return null;
+  if (!Number.isInteger(line) || line < 0) return null;
+  return { role: role as CtaRole, line };
+}
+
 function line(
   text: string,
+  id: string,
   y: number,
   sizeFrac: number,
   color: string,
   anchor: Anchor = 'top-center',
 ): OverlayElement {
   const el = createTextElement(text);
+  el.id = id;
   el.anchor = anchor;
   el.x = 0.5;
   el.y = y;
@@ -149,14 +176,14 @@ export function ctaLayout(cta: CtaSlide, aspect: number): CtaLayout {
 
   let cursor = 0.5 - blockHeight / 2;
 
-  const place = (lines: string[], sizeFrac: number) => {
-    for (const text of lines) {
-      elements.push(line(text, cursor, sizeFrac, cta.ink));
+  const place = (lines: string[], role: CtaRole, sizeFrac: number) => {
+    lines.forEach((text, i) => {
+      elements.push(line(text, ctaElementId(role, i), cursor, sizeFrac, cta.ink));
       cursor += toHeight(sizeFrac) * LINE_HEIGHT;
-    }
+    });
   };
 
-  place(headline, HEADLINE);
+  place(headline, 'headline', HEADLINE);
   if (headline.length) cursor += GAP;
 
   let qr: QrPlacement | null = null;
@@ -168,9 +195,9 @@ export function ctaLayout(cta: CtaSlide, aspect: number): CtaLayout {
     cursor += qrSide + GAP;
   }
 
-  place(body, BODY);
+  place(body, 'body', BODY);
   if (body.length) cursor += GAP * 0.6;
-  if (url) place([url], URL);
+  if (url) place([url], 'url', URL);
 
   return { elements, qr, qrProblem };
 }

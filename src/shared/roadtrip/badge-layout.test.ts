@@ -5,6 +5,8 @@ import {
   badgeElements,
   badgeSettleSeconds,
   heightFractionOf,
+  pieceElementId,
+  pieceFromElementId,
   type BadgeLayout,
   type BadgePieceStyles,
 } from './badge-layout';
@@ -88,6 +90,44 @@ describe('badgeElements', () => {
     const els = badgeElements(bare, layout(), REEL);
     expect(els).toHaveLength(1);
     expect(els[0].text).toBe('27');
+  });
+
+  it('gives every piece a stable id, so a hit-test survives the next repaint', () => {
+    const a = badgeElements(full, layout(), REEL);
+    const b = badgeElements(full, layout(), REEL);
+    expect(a.map((e) => e.id)).toEqual(b.map((e) => e.id));
+    expect(new Set(a.map((e) => e.id)).size).toBe(a.length);
+    for (const el of a) {
+      const piece = pieceFromElementId(el.id);
+      expect(piece).not.toBeNull();
+      expect(pieceElementId(piece!)).toBe(el.id);
+    }
+    expect(a.map((e) => pieceFromElementId(e.id))).toEqual([
+      'kicker',
+      'label',
+      'headline',
+      'counter',
+      'caption',
+      'timing',
+    ]);
+  });
+
+  it('keeps each id on its piece when other pieces are absent', () => {
+    const bare: BadgeContent = { ...full, label: null, counter: null };
+    const els = badgeElements(bare, layout(), REEL);
+    expect(els.map((e) => e.id)).toEqual([
+      pieceElementId('kicker'),
+      pieceElementId('headline'),
+      pieceElementId('caption'),
+      pieceElementId('timing'),
+    ]);
+    expect(new Set(els.map((e) => e.id)).size).toBe(els.length);
+  });
+
+  it('refuses an id that is not a piece’s', () => {
+    expect(pieceFromElementId('piece:nope')).toBeNull();
+    expect(pieceFromElementId('caption:0')).toBeNull();
+    expect(pieceFromElementId('')).toBeNull();
   });
 
   it('hangs the block above a bottom anchor, so it never runs off the frame', () => {

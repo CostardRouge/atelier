@@ -77,6 +77,10 @@ Read before touching `src/tools/roadtrip/` or `src/shared/roadtrip/`, and before
 
 **Animation is the engine's own model, with no translation layer** (`shared/overlay/animation.ts`): the same fade / slide / scale / typewriter / wipe the studio's intro titles use, so a look authored on a badge means the same thing there. An animated piece is given `window = {start: 0, end: null}` — an animation needs a life to play inside, and a badge lives for the whole shot. `badgeSettleSeconds` is what a still defaults to, so a PNG is never caught mid-slide; it ignores exits deliberately (a still wants the badge settled, not gone).
 
+## A derived element's id is a function of what it stands for (2026-09-06)
+
+**Decision.** Road Trip's `OverlayElement[]` are rebuilt on every render and never stored, so `createTextElement`'s `uid()` gave each line a NEW id per repaint — useless to a stage that hit-tests the canvas and hands back an id. Every derived layout now mints a deterministic id and exports its inverse: `piece:<key>` (`pieceElementId` / `pieceFromElementId`, `badge-layout.ts`), `caption:<line>` (`deck.ts`), `cta:<role>:<line>` (`cta-slide.ts`). Safe because no document ever sees these ids; the Studio bridge prefixes them `roadtrip:` on the way over, so a resend still replaces. **How to apply**: any new derived element gets an id its module can parse back, and a test that two calls agree and the ids stay unique when a piece is absent.
+
 ## The engine's legibility box gained a radius and an outline (2026-08-23)
 
 **Decision.** `LegibilityStyle` grew optional `radiusFrac`, `borderColor` and `borderWidthFrac`, and all four draw sites now go through one `paintLegibilityBox` helper. Before this each site hard-coded `pad * 0.5` and none could stroke. `radiusFrac` is a fraction of the PADDING and defaults to 0.5 precisely so every stored document keeps the exact shape it had. **How to apply**: the memory rule about `measureOverlays` still holds — the stroke sits on the box's own path, so half of it lies outside, and the grab box was widened by that half.

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { contentSlideElements, deckSlides, moveItem, slideFileName } from './deck';
+import {
+  captionElementId,
+  captionLineFromElementId,
+  contentSlideElements,
+  deckSlides,
+  moveItem,
+  slideFileName,
+} from './deck';
 import { DEFAULT_CTA } from './cta-slide';
 import { DEFAULT_BADGE_WORDS } from './day-badge';
 import {
@@ -159,6 +166,25 @@ describe('contentSlideElements', () => {
 
   it('keeps a shadow, since it lands on an unvetted photograph', () => {
     expect(contentSlideElements('x')[0].legibility?.mode).toBe('shadow');
+  });
+
+  it('gives each line a stable id that names its line', () => {
+    const long = 'A sentence long enough to be wrapped onto more than one line of the frame';
+    const a = contentSlideElements(long, 9 / 16);
+    const b = contentSlideElements(long, 9 / 16);
+    expect(a.length).toBeGreaterThan(1);
+    expect(a.map((e) => e.id)).toEqual(b.map((e) => e.id));
+    expect(new Set(a.map((e) => e.id)).size).toBe(a.length);
+    a.forEach((el, i) => {
+      expect(el.id).toBe(captionElementId(i));
+      expect(captionLineFromElementId(el.id)).toBe(i);
+    });
+  });
+
+  it('refuses an id that is not a caption line’s', () => {
+    expect(captionLineFromElementId('piece:kicker')).toBeNull();
+    expect(captionLineFromElementId('caption:x')).toBeNull();
+    expect(captionLineFromElementId('caption:-1')).toBeNull();
   });
 });
 
