@@ -5,6 +5,7 @@ import {
   badgeElements,
   badgeSettleSeconds,
   heightFractionOf,
+  moveBlock,
   pieceElementId,
   pieceFromElementId,
   type BadgeLayout,
@@ -252,6 +253,29 @@ describe('badgeElements — per-piece styles', () => {
     const headline = els.find((e) => e.text === '27')!;
     expect(headline.styleOverrides).toEqual([]);
     expect(headline.window).toBeUndefined();
+  });
+});
+
+describe('moveBlock', () => {
+  it('adds the pointer’s travel to where the anchor started', () => {
+    const moved = moveBlock({ x: 0.2, y: 0.3 }, 0.1, 0.15);
+    expect(moved.x).toBeCloseTo(0.3, 6);
+    expect(moved.y).toBeCloseTo(0.45, 6);
+  });
+
+  it('never leaves the frame', () => {
+    expect(moveBlock({ x: 0.9, y: 0.1 }, 0.5, -0.5)).toEqual({ x: 1, y: 0 });
+  });
+
+  it('pulls onto an edge or the centre when close, unless asked not to', () => {
+    expect(moveBlock({ x: 0.48, y: 0.1 }, 0.01, -0.09)).toEqual({ x: 0.5, y: 0 });
+    const free = moveBlock({ x: 0.48, y: 0.1 }, 0.01, -0.09, false);
+    expect(free.x).toBeCloseTo(0.49, 6);
+    expect(free.y).toBeCloseTo(0.01, 6);
+  });
+
+  it('leaves a position alone when nothing is close', () => {
+    expect(moveBlock({ x: 0.3, y: 0.7 }, 0, 0)).toEqual({ x: 0.3, y: 0.7 });
   });
 });
 

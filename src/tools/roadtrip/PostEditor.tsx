@@ -6,9 +6,19 @@ import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import type { SavedMediaRef } from '../../shared/projects/project-types';
 import { hashedMediaRef } from '../../shared/projects/media-identity';
 import { badgeContent, type BadgePiece } from '../../shared/roadtrip/day-badge';
-import { badgeBlockExtent, badgeElements } from '../../shared/roadtrip/badge-layout';
-import { ctaLayout } from '../../shared/roadtrip/cta-slide';
-import { contentSlideElements, deckSlides, moveItem } from '../../shared/roadtrip/deck';
+import {
+  badgeBlockExtent,
+  badgeElements,
+  pieceElementId,
+  pieceFromElementId,
+} from '../../shared/roadtrip/badge-layout';
+import { ctaLayout, ctaRoleFromElementId, type CtaRole } from '../../shared/roadtrip/cta-slide';
+import {
+  captionLineFromElementId,
+  contentSlideElements,
+  deckSlides,
+  moveItem,
+} from '../../shared/roadtrip/deck';
 import { hookSecondsWithin } from '../../shared/roadtrip/hook-video';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
 import {
@@ -289,15 +299,66 @@ export default function PostEditor({
     url: ctaUrlRef,
   };
 
+  // --- selection: the stage and the chips name the same thing --------------
+  // `selectedId` is the outlined element (null = nothing outlined); `piece` is
+  // the badge piece the Content and Style tabs edit, which survives a click
+  // on the empty picture. Both come from `selectElement`, never set apart.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [focusSeq, setFocusSeq] = useState(0);
+  const focusTarget = useRef<'text' | CtaRole | null>(null);
+
   /**
-   * Picking a piece is a request to edit it, wherever the inspector happens
-   * to be: its text lives on the Content tab, so the tab comes back with the
-   * selection. Everything that selects a piece goes through here.
+   * Picking an element is a request to edit it, wherever the inspector
+   * happens to be: its field lives on one tab, so that tab comes back with
+   * the selection and the field takes focus. Everything that selects goes
+   * through here — a stage click, a chip — or the tab stays put.
    */
-  function selectPiece(next: BadgePiece) {
-    setPiece(next);
-    setTab('content');
+  function selectElement(id: string | null) {
+    setSelectedId(id);
+    if (!id) return;
+    const badgePiece = pieceFromElementId(id);
+    if (badgePiece) {
+      setPiece(badgePiece);
+      setTab('content');
+      focusTarget.current = 'text';
+    } else if (captionLineFromElementId(id) !== null) {
+      setTab('content');
+      focusTarget.current = 'text';
+    } else {
+      const role = ctaRoleFromElementId(id)?.role;
+      if (!role) return;
+      // The closing card is edited on the Deck tab, shared by the whole trip.
+      setTab('deck');
+      focusTarget.current = role;
+    }
+    setFocusSeq((n) => n + 1);
   }
+
+  const selectPiece = (next: BadgePiece) => selectElement(pieceElementId(next));
+
+  // Keyed on the tab as well as the request: the field only exists once its
+  // tab is mounted, and clicking the already-selected piece from another tab
+  // changes no id.
+  useEffect(() => {
+    const target = focusTarget.current;
+    if (!target) return;
+    const field =
+      target === 'text' ? textFieldRef.current : ctaFieldRefs[target]?.current ?? null;
+    if (!field) return;
+    focusTarget.current = null;
+    field.focus({ preventScroll: true });
+    field.scrollIntoView({ block: 'nearest' });
+  }, [focusSeq, tab]);
+
+  // A selection names an element of ONE slide; another slide has other ids.
+  useEffect(() => {
+    setSelectedId(null);
+  }, [slideIndex]);
+
+  const moveBlockTo = useCallback(
+    (x: number, y: number) => patchBadge({ layout: { ...post.badge.layout, x, y } }),
+    [patchBadge, post.badge.layout],
+  );
 
   /**
    * Keep a small picture of the hook beside the trip, so a day opened months
@@ -405,6 +466,12 @@ export default function PostEditor({
                 ? { ...cta.qr, dark: trip.cta.ink, light: trip.cta.background }
                 : null
             }
+            selectedId={selectedId}
+            onSelect={selectElement}
+            // Only the hook's block has somewhere to be written back to; a
+            // caption and the closing card sit at fixed positions.
+            blockAnchor={isHook ? post.badge.layout : null}
+            onMoveBlock={isHook ? moveBlockTo : undefined}
             onSourceLoaded={onSourceLoaded}
             onRendered={captureThumb}
           />

@@ -166,6 +166,10 @@ export default function PictureTab({
                 />
               </label>
             </div>
+            <span className="text-[0.68rem] text-faint">
+              The grid is the coarse tool; drag the badge on the picture to place it
+              exactly — hold Alt to skip the snap.
+            </span>
           </div>
 
           <label className="flex flex-col gap-1">

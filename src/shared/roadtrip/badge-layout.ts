@@ -18,6 +18,7 @@
  */
 
 import type { ElementAnimation } from '../overlay/animation';
+import { snap } from '../overlay/guides';
 import {
   createTextElement,
   type Anchor,
@@ -295,6 +296,27 @@ export function badgeElements(
     cursor += heights[i] + gaps[i];
     return el;
   });
+}
+
+/**
+ * Where a drag lands the badge's anchor: the position it started from plus
+ * the pointer's travel as fractions of the frame, kept inside the frame and —
+ * unless the author holds Alt — softly pulled onto an edge or the centre.
+ *
+ * The BLOCK moves, never one piece: the stack's hierarchy is the badge, and a
+ * line dragged out of it would be a different design. The 3×3 anchor grid
+ * stays the coarse tool; this is the fine one.
+ */
+export function moveBlock(
+  start: { x: number; y: number },
+  dxFrac: number,
+  dyFrac: number,
+  snapping = true,
+): { x: number; y: number } {
+  const clamp = (v: number) => Math.min(1, Math.max(0, v));
+  const x = clamp(start.x + dxFrac);
+  const y = clamp(start.y + dyFrac);
+  return snapping ? { x: snap(x), y: snap(y) } : { x, y };
 }
 
 /**

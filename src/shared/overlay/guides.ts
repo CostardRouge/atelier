@@ -180,6 +180,17 @@ export function clampDivisions(n: number): number {
 }
 
 /**
+ * Snap a normalized coordinate to 0 / 0.5 / 1 when within `tol` — the light
+ * edge-and-centre snap every stage uses while dragging, with Alt to bypass.
+ */
+export function snap(value: number, tol = 0.02): number {
+  if (Math.abs(value) < tol) return 0;
+  if (Math.abs(value - 1) < tol) return 1;
+  if (Math.abs(value - 0.5) < tol) return 0.5;
+  return value;
+}
+
+/**
  * Snap a normalized coordinate to the nearest of `divisions` grid lines (a
  * 3-division axis has lines at 0, 1/3, 2/3, 1) when within `tol`. Returns the
  * input unchanged when no line is close enough or `divisions` < 1.

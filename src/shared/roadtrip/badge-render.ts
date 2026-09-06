@@ -12,7 +12,12 @@
 import { drawQr, type QrDraw } from '../overlay/draw-qr';
 import { shadeGradient, type HookBlock, type Shade } from './shades';
 import { seek as seekVideo } from './video-frames';
-import { drawOverlays } from '../overlay/draw-overlays';
+import {
+  drawOverlays,
+  measureOverlays,
+  type DrawOptions,
+  type ElementBox,
+} from '../overlay/draw-overlays';
 import { ensureOverlayFonts } from '../overlay/fonts';
 import type { OverlayElement } from '../overlay/overlay-types';
 import type { StyleTheme } from '../overlay/title-styles';
@@ -184,6 +189,36 @@ export interface RenderBadgeOptions {
   block?: HookBlock | null;
   /** A QR square, drawn under the text — the call-to-action slide's hero. */
   qr?: QrDraw | null;
+  /**
+   * EDITOR ONLY: the selected element, drawn faintly even outside its window
+   * so a piece that has exited stays visible and selectable while chosen.
+   * Never set by an export — `badgeToPng` and `renderDeck` do not know it.
+   */
+  ghostId?: string | null;
+}
+
+/** The overlay engine's options for a badge, shared by the paint and the measure. */
+function overlayOptions(opts: RenderBadgeOptions): DrawOptions {
+  return {
+    theme: opts.theme,
+    timeSeconds: opts.timeSeconds ?? 0,
+    originSeconds: 0,
+    ghostId: opts.ghostId ?? null,
+  };
+}
+
+/**
+ * The hit boxes of a badge's elements, measured exactly as `renderBadge`
+ * would draw them — same context, same elements, same options — so a click on
+ * the stage lands on what the eye sees. Pixel space of the canvas.
+ */
+export function measureBadge(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  opts: RenderBadgeOptions,
+): ElementBox[] {
+  return measureOverlays(ctx, opts.elements, null, w, h, overlayOptions(opts));
 }
 
 /** `#rrggbb` → `rgba(r,g,b,a)`; anything else is passed through unchanged. */
@@ -276,11 +311,7 @@ export async function renderBadge(
   if (opts.shades?.length) paintShades(ctx, w, h, opts.shades, opts.block ?? null);
   if (opts.qr) drawQr(ctx, w, h, opts.qr);
 
-  drawOverlays(ctx, opts.elements, null, w, h, {
-    theme: opts.theme,
-    timeSeconds: opts.timeSeconds ?? 0,
-    originSeconds: 0,
-  });
+  drawOverlays(ctx, opts.elements, null, w, h, overlayOptions(opts));
 }
 
 /** Render at full size and hand back a PNG — lossless, since text is the point. */
