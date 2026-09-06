@@ -593,6 +593,46 @@ describe('migrateTripDoc — v8 → v9', () => {
   });
 });
 
+describe('migrateTripDoc — v9 → v10, the source', () => {
+  function v9(): TripDoc {
+    const doc = createTripDoc('Australie', 'Australia', '2025-11-02', '2026-02-14');
+    doc.version = 9;
+    doc.stages = [createTripStage('Kalbarri', 'WA', '2025-11-05', '2025-11-09')];
+    delete (doc as Partial<TripDoc>).sourceId;
+    return doc;
+  }
+
+  it('files every trip written before sources existed under this browser', () => {
+    expect(migrateTripDoc(v9()).sourceId).toBe('local');
+  });
+
+  it('gives no existing stage an origin — none was seeded from anywhere', () => {
+    expect('origin' in migrateTripDoc(v9()).stages[0]).toBe(false);
+  });
+
+  it('keeps a sourceId a document already carries', () => {
+    const doc = { ...v9(), sourceId: 'winnow.example' };
+    expect(migrateTripDoc(doc).sourceId).toBe('winnow.example');
+  });
+
+  it('reaches the current version and is idempotent', () => {
+    const once = migrateTripDoc(v9());
+    expect(once.version).toBe(TRIP_DOC_VERSION);
+    expect(migrateTripDoc(once)).toEqual(once);
+  });
+});
+
+describe('createTripDoc — the source it belongs to', () => {
+  it('is this browser unless told otherwise', () => {
+    expect(createTripDoc('A', 'B', '2025-03-01', '2025-03-10').sourceId).toBe('local');
+  });
+
+  it('takes the source it is created in', () => {
+    const doc = createTripDoc('A', 'B', '2025-03-01', '2025-03-10', [], 'winnow.example');
+    expect(doc.sourceId).toBe('winnow.example');
+  });
+});
+
 describe('createTripStage', () => {
   it('takes no place by default, so nothing existing changes shape', () => {
     expect(createTripStage('Kalbarri', 'WA', '2025-11-05', '2025-11-09').places).toEqual([]);

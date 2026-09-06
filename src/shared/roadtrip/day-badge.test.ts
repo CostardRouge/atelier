@@ -51,6 +51,7 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   theme: null,
   cta: { ...DEFAULT_CTA },
   hookDefaults: {},
+  sourceId: 'local',
   createdAt: 0,
   updatedAt: 0,
   ...over,

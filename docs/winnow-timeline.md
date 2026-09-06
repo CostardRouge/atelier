@@ -1,8 +1,10 @@
 # Atelier × Winnow — the timeline brief
 
-**Status**: nothing built, and deliberately so. Written **2026-09-03**, before
-Winnow's timeline specification exists, so that the questions are ready when it
-lands and Atelier's side does not close a door in the meantime.
+**Status**: written **2026-09-03**, before Winnow's timeline specification
+exists, so that the questions are ready when it lands and Atelier's side does
+not close a door in the meantime. **Phase T0 is built** (2026-09-06:
+`TripDoc.sourceId`, `TripStage.origin`, the `.roadtrip.json` split of §5.4);
+everything else in §4–§6 is still on paper.
 
 **What this is.** A companion to `docs/winnow-bridge.md` — read that first: it
 carries the source model, the four invariants, the API inventory and the phases
@@ -208,12 +210,10 @@ interface TripStage {
 }
 ```
 
-**The gap**: phase 0.5 put `sourceId` on `ProjectDoc` (v14) and **not on
-`TripDoc`** — verified 2026-09-03, there is no `sourceId` anywhere under
-`src/shared/roadtrip/`. Invariant 2 ("a document belongs to exactly one source")
-is therefore only half-enforced, and the trip is the document the timeline work
-is about to make remote-flavoured. Add it with the same default (`'local'`) and
-the same rule: **bound half, never in the portable file.**
+**The gap, now closed**: phase 0.5 put `sourceId` on `ProjectDoc` (v14) and
+**not on `TripDoc`** — found 2026-09-03, fixed 2026-09-06 by T0. It carries the
+same default (`'local'`) and the same rule: **bound half, never in the portable
+file.** `StageOrigin` is the exported name of the `origin` shape above.
 
 `trip-file.ts` (`.roadtrip.json`) strips what addresses *this browser*: the id,
 the timestamps, and `TripPost.projectId`. The new fields split:
@@ -385,7 +385,7 @@ whatever Winnow ships.
 
 | Phase | What | Where | Value if you stop there |
 |---|---|---|---|
-| **T0** | `TripDoc.sourceId` (v10) + `TripStage.origin`, with the migration and the `trip-file.ts` split of §5.4. Nothing remote. | Atelier only | Invariant 2 is finally enforced on both documents, and a trip can *record* where it was seeded from before anything can seed it |
+| **T0** ✅ 2026-09-06 | `TripDoc.sourceId` (v10) + `TripStage.origin`, with the migration and the `trip-file.ts` split of §5.4. Nothing remote. | Atelier only | Invariant 2 is finally enforced on both documents, and a trip can *record* where it was seeded from before anything can seed it |
 | **T1** | `timeline-import.ts` — the pure mapping, the span derivation, the diff (`add` / `unchanged` / `renamed` / `dropped`), fully tested against fixtures | Atelier only | The whole feature's arithmetic, testable with no server and no spec risk beyond the shape of a chapter |
 | **T2** | Browse by chapter in `WinnowBrowser`; add a chapter's media as a prefilled selection | Atelier + `chapter_id` filter + `capabilities.media.timeline` | Ingestion stops being day-by-day for footage that is a leg |
 | **T3** | Seed / complete a trip: the two screens, the two routes, "Make a Road Trip from this leg" on Winnow's side | Atelier + one link on Winnow | The journey structure crosses once, and the trip is a decision surface from day one |
