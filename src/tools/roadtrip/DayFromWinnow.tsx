@@ -169,7 +169,7 @@ export default function DayFromWinnow({ day, onPicked, defaultOpen, busy }: DayF
         </p>
       ) : (
         <div
-          className="grid grid-cols-[repeat(auto-fill,minmax(74px,1fr))] gap-1.5 max-h-[13rem] overflow-auto pr-1"
+          className="w-full grid grid-cols-[repeat(auto-fill,minmax(74px,1fr))] gap-1.5 max-h-[13rem] overflow-auto pr-1"
           title={busy ? 'Waiting for this slide’s own picture to come back' : undefined}
         >
           {rows.map((r) => (
@@ -181,13 +181,18 @@ export default function DayFromWinnow({ day, onPicked, defaultOpen, busy }: DayF
               title={`${r.filename}${r.has_telemetry ? ' · flight log' : ''}`}
               className="relative block rounded-md overflow-hidden border border-line bg-frame cursor-pointer p-0 disabled:cursor-wait hover:border-line-strong"
             >
-              {/* Cross-origin and cookie-served, exactly as the browser's tiles. */}
+              {/* Fixed height, not `aspect-square`: the calendar cells in
+                  WinnowBrowser hit exactly this trap (aspect-ratio collapsing
+                  a tile in an auto-fill/minmax grid once the panel's own width
+                  turns indefinite — the stacked, sub-820px editor layout is
+                  one such case) and were fixed the same way. A `1fr` track
+                  cannot be trusted to carry a ratio; a pixel height can. */}
               <img
                 src={client.thumbUrl(r.id)}
                 alt={r.filename}
                 crossOrigin="use-credentials"
                 loading="lazy"
-                className="block w-full aspect-square object-cover"
+                className="block w-full h-[74px] object-cover"
               />
               {fetching === r.id && (
                 <span className="absolute inset-0 grid place-items-center bg-[rgba(20,18,15,0.55)] font-mono text-[0.58rem] text-paper">
