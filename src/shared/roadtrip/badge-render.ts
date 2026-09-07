@@ -10,6 +10,7 @@
  */
 
 import type { CubeLut } from '../lib/cube-parser';
+import { DEFAULT_FRAMING, drawFramed, type Framing } from '../media/framing';
 import { makeFrameGrader, type FrameGrader } from '../lut/frame-grader';
 import { drawQr, type QrDraw } from '../overlay/draw-qr';
 import { shadeGradient, type HookBlock, type Shade } from './shades';
@@ -43,40 +44,6 @@ export interface BadgeSource {
   seek?: (seconds: number) => Promise<void>;
   /** The clip's length, or 0 for a photo. */
   duration?: number;
-}
-
-export interface CoverRect {
-  sx: number;
-  sy: number;
-  sw: number;
-  sh: number;
-}
-
-/**
- * The source rectangle to draw so the picture COVERS the frame without
- * distortion — the crop Instagram would apply, computed here so the preview
- * shows the same framing the export writes. Centred: a badge author reframes
- * by choosing a different picture, not by nudging a crop we invented for them.
- */
-export function coverRect(
-  srcW: number,
-  srcH: number,
-  dstW: number,
-  dstH: number,
-): CoverRect {
-  if (srcW <= 0 || srcH <= 0 || dstW <= 0 || dstH <= 0) {
-    return { sx: 0, sy: 0, sw: Math.max(srcW, 0), sh: Math.max(srcH, 0) };
-  }
-  const srcAspect = srcW / srcH;
-  const dstAspect = dstW / dstH;
-  if (srcAspect > dstAspect) {
-    // Source is wider: keep its full height, crop the sides.
-    const sw = srcH * dstAspect;
-    return { sx: (srcW - sw) / 2, sy: 0, sw, sh: srcH };
-  }
-  // Source is taller (or equal): keep its full width, crop top and bottom.
-  const sh = srcW / dstAspect;
-  return { sx: 0, sy: (srcH - sh) / 2, sw: srcW, sh };
 }
 
 /** Longest edge a preview canvas is worth drawing at. */
@@ -207,6 +174,11 @@ export interface RenderBadgeOptions {
    */
   grader?: FrameGrader | null;
   /**
+   * How the picture sits in the frame — pan, zoom, rotation over the
+   * cover-crop. Absent is the centred cover this always did.
+   */
+  framing?: Framing | null;
+  /**
    * EDITOR ONLY: the selected element, drawn faintly even outside its window
    * so a piece that has exited stays visible and selectable while chosen.
    * Never set by an export — `badgeToPng` and `renderDeck` do not know it.
@@ -321,12 +293,19 @@ export async function renderBadge(
   ctx.fillRect(0, 0, w, h);
 
   if (opts.source && opts.source.width > 0 && opts.source.height > 0) {
-    const { sx, sy, sw, sh } = coverRect(opts.source.width, opts.source.height, w, h);
-    // Grade at the source's own density, THEN crop with the same rectangle:
-    // grading the cropped frame would give a different result at every
-    // output size (the photo-frame rule). Shades, QR and the badge stay after.
+    // Grade at the source's own density, THEN frame it: grading the cropped
+    // frame would give a different result at every output size (the
+    // photo-frame rule). Shades, QR and the badge stay after.
     const picture = opts.grader ? opts.grader.render(opts.source.image) : opts.source.image;
-    ctx.drawImage(picture, sx, sy, sw, sh, 0, 0, w, h);
+    drawFramed(
+      ctx,
+      picture,
+      opts.source.width,
+      opts.source.height,
+      w,
+      h,
+      opts.framing ?? DEFAULT_FRAMING,
+    );
   }
 
   if (opts.shades?.length) paintShades(ctx, w, h, opts.shades, opts.block ?? null);

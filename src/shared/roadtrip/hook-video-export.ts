@@ -10,6 +10,7 @@
  */
 
 import type { CubeLut } from '../lib/cube-parser';
+import type { Framing } from '../media/framing';
 import { exportVariantVideo } from '../media/export-variant';
 import type { ExportProgress } from '../media/webcodecs-export';
 import type { TrimRange } from '../media/trim';
@@ -29,6 +30,8 @@ export interface HookVideoOptions {
   srcHeight: number;
   /** The slice to encode; null sends the whole clip. */
   range: TrimRange | null;
+  /** How the hook's picture sits in the frame — the same one the preview drew. */
+  framing?: Framing | null;
   shades?: readonly Shade[];
   /** The badge block's extent, for a shade that follows the hook. */
   block?: HookBlock | null;
@@ -56,6 +59,7 @@ export function exportHookVideo(opts: HookVideoOptions): Promise<Blob> {
       srcWidth: opts.srcWidth,
       srcHeight: opts.srcHeight,
       trim: opts.range,
+      framing: opts.framing ?? null,
       // The badge's windows count from the first exported frame, and the
       // pipeline reads that from the trim's in point — so the entrance plays
       // on frame one of the delivered clip, not wherever it fell in the rush.

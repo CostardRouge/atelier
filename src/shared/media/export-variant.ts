@@ -24,7 +24,7 @@ import type { Scene } from '../overlay/scenes';
 import type { TimeShift } from '../telemetry/time-format';
 import type { ExportTail } from './export-tail';
 import type { TrimRange } from './trim';
-import { fitRect } from './compose-layout';
+import { DEFAULT_FRAMING, drawFramed, type Framing } from './framing';
 import {
   drawRotatedFrame,
   exportProcessedVideo,
@@ -51,6 +51,12 @@ export interface VariantRenderOptions {
   srcHeight: number;
   /** Encode only this slice of the source; null exports the whole clip. */
   trim?: TrimRange | null;
+  /**
+   * How the picture sits in the variant's frame — pan, zoom and rotation over
+   * the cover-crop. Absent is the centred cover, which is what every Studio
+   * export does and every clip did before Road Trip could reframe a hook.
+   */
+  framing?: Framing | null;
   /**
    * The project's outro — a closing card appended after the footage, drawn at
    * the variant's own output frame like every overlay. Rides only variants
@@ -137,16 +143,18 @@ export async function exportVariantVideo(
       const grade = opts.lut
         ? makeFrameGrader(opts.lut, codedWidth, codedHeight, opts.intensity)
         : null;
-      const frame = { x: 0, y: 0, w: out.w, h: out.h };
+      const framing = opts.framing ?? DEFAULT_FRAMING;
 
       return {
         draw(videoFrame, tMicros) {
           const source = grade ? grade.render(videoFrame) : videoFrame;
           drawRotatedFrame(uctx, source, codedWidth, codedHeight, rotation, displayW, displayH);
-          // Cover-crop the upright frame into the variant's canvas: the frame
-          // fills it fully, the excess is cropped symmetrically.
-          const f = fitRect(displayW, displayH, frame, 'cover');
-          ctx.drawImage(upright, f.sx, f.sy, f.sw, f.sh, f.dx, f.dy, f.dw, f.dh);
+          // Frame the upright picture into the variant's canvas. With no
+          // framing given this is the centred cover-crop it has always been —
+          // the frame fills it fully, the excess cropped symmetrically — and
+          // with one it is the author's pan, zoom and rotation. Same maths as
+          // the badge preview, so a hook burns in where it was composed.
+          drawFramed(ctx, upright, displayW, displayH, out.w, out.h, framing);
           opts.paintUnderOverlays?.(ctx, out.w, out.h);
           if (variant.overlays) {
             const t = tMicros / 1_000_000;

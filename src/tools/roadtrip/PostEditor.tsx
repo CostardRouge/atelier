@@ -5,6 +5,7 @@ import type { AssetKind } from '../../shared/library/assets';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import type { SavedMediaRef } from '../../shared/projects/project-types';
 import { hashedMediaRef } from '../../shared/projects/media-identity';
+import { normaliseFraming, type Framing } from '../../shared/media/framing';
 import { badgeContent, type BadgePiece } from '../../shared/roadtrip/day-badge';
 import {
   badgeBlockExtent,
@@ -240,6 +241,28 @@ export default function PostEditor({
     (patch: Partial<PostBadge>) =>
       onChangePost({ ...post, badge: { ...post.badge, ...patch } }),
     [post, onChangePost],
+  );
+
+  /**
+   * Where the OPEN slide's picture sits. The hook's lives on the badge beside
+   * its frame choice, a carousel picture's on the slide — the same split
+   * `videoTimeSeconds` already makes, because both are about one photograph
+   * rather than about the piece.
+   */
+  const setFraming = useCallback(
+    (framing: Framing) => {
+      if (slide.kind === 'hook') {
+        onChangePost({ ...post, badge: { ...post.badge, framing } });
+      } else if (slide.slideId) {
+        onChangePost({
+          ...post,
+          slides: post.slides.map((s) =>
+            s.id === slide.slideId ? { ...s, framing } : s,
+          ),
+        });
+      }
+    },
+    [slide, post, onChangePost],
   );
 
   const patchSlide = (patch: Partial<PostSlide>) => {
@@ -572,6 +595,10 @@ export default function PostEditor({
             // caption and the closing card sit at fixed positions.
             blockAnchor={isHook ? post.badge.layout : null}
             onMoveBlock={isHook ? moveBlockTo : undefined}
+            framing={slide.framing}
+            // The closing card carries no photograph, so there is nothing to
+            // reframe there and a drag must not pretend otherwise.
+            onFraming={isCta ? undefined : setFraming}
             onSourceLoaded={onSourceLoaded}
             onRendered={captureThumb}
           />
@@ -677,6 +704,8 @@ export default function PostEditor({
               onPickFromSource={pickFromSource}
               patchBadge={patchBadge}
               patchSlide={patchSlide}
+              framing={normaliseFraming(slide.framing)}
+              onFraming={setFraming}
               grade={grade}
               linkedToProject={post.projectId !== null}
             />

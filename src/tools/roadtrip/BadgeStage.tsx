@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CubeLut } from '../../shared/lib/cube-parser';
 import { makeFrameGrader, type FrameGrader } from '../../shared/lut/frame-grader';
+import {
+  DEFAULT_FRAMING,
+  MAX_FRAMING_SCALE,
+  canPan,
+  panBy,
+  type Framing,
+} from '../../shared/media/framing';
 import { boxForId, hitTest, type ElementBox } from '../../shared/overlay/draw-overlays';
 import type { OverlayElement } from '../../shared/overlay/overlay-types';
 import type { StyleTheme } from '../../shared/overlay/title-styles';
@@ -37,6 +44,13 @@ interface BadgeStageProps {
   qr?: QrDraw | null;
   /** The composed grade the picture goes through, or null for the picture as shot. */
   lut?: CubeLut | null;
+  /** How the picture sits in the frame. */
+  framing?: Framing | null;
+  /**
+   * Reframing the picture: dragging where no element sits pans it, the wheel
+   * zooms. Absent, the picture is fixed and only the badge moves.
+   */
+  onFraming?: (framing: Framing) => void;
   /** The element outlined on the stage, and kept visible past its window. */
   selectedId?: string | null;
   /** A click on the stage: the element under the pointer, or null for the picture. */
@@ -79,6 +93,8 @@ export default function BadgeStage({
   background,
   qr,
   lut = null,
+  framing = null,
+  onFraming,
   selectedId = null,
   onSelect,
   blockAnchor = null,
@@ -269,6 +285,7 @@ export default function BadgeStage({
       block,
       background,
       qr,
+      framing,
       grader: graderFor(sourceRef.current),
       ghostId: selectedId,
     };
@@ -278,6 +295,11 @@ export default function BadgeStage({
       onRenderedRef.current?.(canvas);
       const ctx = canvas.getContext('2d');
       boxesRef.current = ctx ? measureBadge(ctx, canvas.width, canvas.height, opts) : [];
+      const src = sourceRef.current;
+      setPannable(
+        !!src &&
+          canPan(src.width, src.height, canvas.width, canvas.height, framing ?? DEFAULT_FRAMING),
+      );
       drawChrome();
     });
   }, [
@@ -289,6 +311,7 @@ export default function BadgeStage({
     block,
     background,
     qr,
+    framing,
     selectedId,
     loading,
     file,
@@ -302,12 +325,48 @@ export default function BadgeStage({
 
   // --- pointing at the badge -------------------------------------------------
   const [hovering, setHovering] = useState(false);
-  const drag = useRef<{
-    startPx: number;
-    startPy: number;
-    start: { x: number; y: number };
-    moved: boolean;
-  } | null>(null);
+  /** Whether the picture has any room to be dragged at its current framing. */
+  const [pannable, setPannable] = useState(false);
+  const framingRef = useRef(framing);
+  framingRef.current = framing;
+  const onFramingRef = useRef(onFraming);
+  onFramingRef.current = onFraming;
+
+  /**
+   * Zooming with the wheel, and with a trackpad pinch (which arrives as a
+   * ctrl-wheel). Attached natively and NOT passively: React's own wheel
+   * handler is passive, so `preventDefault` there is ignored and the page
+   * scrolls away under the picture you are trying to frame.
+   */
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !onFraming) return;
+    const onWheel = (e: WheelEvent) => {
+      const source = sourceRef.current;
+      if (!source) return;
+      e.preventDefault();
+      const f = framingRef.current ?? DEFAULT_FRAMING;
+      const scale = Math.min(
+        MAX_FRAMING_SCALE,
+        Math.max(1, f.scale * Math.exp(-e.deltaY / 400)),
+      );
+      if (scale === f.scale) return;
+      onFramingRef.current?.({ ...f, scale });
+    };
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', onWheel);
+  }, [onFraming]);
+  const drag = useRef<
+    | {
+        kind: 'block';
+        startPx: number;
+        startPy: number;
+        start: { x: number; y: number };
+        moved: boolean;
+      }
+    | { kind: 'picture'; lastPx: number; lastPy: number }
+    | null
+  >(null);
 
   /** A pointer event in the canvas's own pixel space. */
   const toPixels = useCallback((e: React.PointerEvent) => {
@@ -333,11 +392,25 @@ export default function BadgeStage({
       const id = hitTest(boxesRef.current, pt.px, pt.py);
       onSelect(id);
       if (id && blockAnchor && onMoveBlock) {
-        drag.current = { startPx: pt.px, startPy: pt.py, start: blockAnchor, moved: false };
+        drag.current = {
+          kind: 'block',
+          startPx: pt.px,
+          startPy: pt.py,
+          start: blockAnchor,
+          moved: false,
+        };
+        canvasRef.current?.setPointerCapture(e.pointerId);
+        return;
+      }
+      // Nothing under the pointer: the gesture is about the PICTURE. The
+      // badge keeps first claim on a press — a hook is composed far more
+      // often than it is reframed — so this only ever runs on bare picture.
+      if (!id && onFraming) {
+        drag.current = { kind: 'picture', lastPx: pt.px, lastPy: pt.py };
         canvasRef.current?.setPointerCapture(e.pointerId);
       }
     },
-    [onSelect, blockAnchor, onMoveBlock, toPixels],
+    [onSelect, blockAnchor, onMoveBlock, onFraming, toPixels],
   );
 
   const onPointerMove = useCallback(
@@ -350,6 +423,27 @@ export default function BadgeStage({
         if (onSelect) setHovering(hitTest(boxesRef.current, pt.px, pt.py) !== null);
         return;
       }
+      if (d.kind === 'picture') {
+        const source = sourceRef.current;
+        if (!source || !onFraming) return;
+        // Deltas are in the canvas's own pixels, which IS the output frame —
+        // `panBy` turns them into the picture's axes and clamps them, so no
+        // drag can ever open a gap at the edge.
+        onFraming(
+          panBy(
+            framing ?? DEFAULT_FRAMING,
+            source.width,
+            source.height,
+            canvas.width,
+            canvas.height,
+            pt.px - d.lastPx,
+            pt.py - d.lastPy,
+          ),
+        );
+        d.lastPx = pt.px;
+        d.lastPy = pt.py;
+        return;
+      }
       d.moved = true;
       const next = moveBlock(
         d.start,
@@ -359,7 +453,7 @@ export default function BadgeStage({
       );
       onMoveBlock?.(next.x, next.y);
     },
-    [onSelect, onMoveBlock, toPixels],
+    [onSelect, onMoveBlock, onFraming, framing, toPixels],
   );
 
   const onPointerUp = useCallback((e: React.PointerEvent) => {
@@ -379,7 +473,9 @@ export default function BadgeStage({
       ? blockAnchor
         ? 'cursor-grab active:cursor-grabbing'
         : 'cursor-pointer'
-      : 'cursor-default';
+      : onFraming && pannable
+        ? 'cursor-grab active:cursor-grabbing'
+        : 'cursor-default';
 
   return (
     // The wrapper decides how much room there is; the box inside takes the

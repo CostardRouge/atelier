@@ -1,4 +1,11 @@
 import GradePanel from '../../../shared/lut/GradePanel';
+import {
+  DEFAULT_FRAMING,
+  MAX_FRAMING_SCALE,
+  isDefaultFraming,
+  wrapDegrees,
+  type Framing,
+} from '../../../shared/media/framing';
 import { ASPECT_PRESETS } from '../../../shared/projects/project-types';
 import type { DeckSlide } from '../../../shared/roadtrip/deck';
 import type { PostBadge, PostSlide, TripPost } from '../../../shared/roadtrip/trip-types';
@@ -7,7 +14,7 @@ import type { SlideRecovery } from '../use-slide-library';
 import type { TripGradeBinding } from '../use-trip-grade';
 import DayFromWinnow from '../DayFromWinnow';
 import FrameStrip from '../FrameStrip';
-import { chipClass } from './ui';
+import { chipClass, legend, linkButton, smallButton } from './ui';
 
 interface PictureTabProps {
   post: TripPost;
@@ -28,6 +35,9 @@ interface PictureTabProps {
   onPickFromSource: (files: File[], assetId: string) => void;
   patchBadge: (patch: Partial<PostBadge>) => void;
   patchSlide: (patch: Partial<PostSlide>) => void;
+  /** How the open slide's picture sits in the frame, and how to change it. */
+  framing: Framing;
+  onFraming: (framing: Framing) => void;
   /** The grade, bound either to the trip or to this piece. */
   grade: TripGradeBinding;
   /** A reel from the linked project wears that project's grade, not this one. */
@@ -58,6 +68,8 @@ export default function PictureTab({
   onPickFromSource,
   patchBadge,
   patchSlide,
+  framing,
+  onFraming,
   grade,
   linkedToProject,
 }: PictureTabProps) {
@@ -133,6 +145,93 @@ export default function PictureTab({
           The closing card carries no photograph: a flat ground is what keeps the QR
           readable and the sentence unmissable.
         </p>
+      )}
+
+      {!isCta && (
+        <div className="flex flex-col gap-2">
+          <SectionLegend label="Framing">
+            <p>
+              Where the picture sits inside the frame. Drag it on the stage to move it,
+              the wheel (or a trackpad pinch) to zoom; the badge keeps first claim on a
+              press, so grab the picture where no text is.
+            </p>
+            <p>
+              It can never be zoomed out past covering the frame or dragged off its
+              edge — a deliverable with a gap in it is not one.
+            </p>
+            {linkedToProject && (
+              <p>
+                A reel exported from the linked Studio project is framed there, over
+                that project's own footage — this reframes the PNG deck and the hook
+                clip.
+              </p>
+            )}
+          </SectionLegend>
+          <label className="flex flex-col gap-1">
+            <span className={legend}>Zoom · {framing.scale.toFixed(2)}×</span>
+            <input
+              type="range"
+              min={1}
+              max={MAX_FRAMING_SCALE}
+              step={0.01}
+              value={framing.scale}
+              onChange={(e) => onFraming({ ...framing, scale: Number(e.target.value) })}
+              className="accent-accent"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className={legend}>Rotation · {Math.round(framing.rotation)}°</span>
+            <input
+              type="range"
+              min={-180}
+              max={180}
+              step={0.5}
+              value={framing.rotation}
+              onChange={(e) =>
+                onFraming({ ...framing, rotation: Number(e.target.value) })
+              }
+              className="accent-accent"
+            />
+          </label>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() =>
+                onFraming({ ...framing, rotation: wrapDegrees(framing.rotation - 90) })
+              }
+              title="Turn a quarter anticlockwise"
+              className={smallButton}
+            >
+              ⟲ 90°
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                onFraming({ ...framing, rotation: wrapDegrees(framing.rotation + 90) })
+              }
+              title="Turn a quarter clockwise"
+              className={smallButton}
+            >
+              ⟳ 90°
+            </button>
+            <button
+              type="button"
+              onClick={() => onFraming({ ...framing, rotation: 0 })}
+              disabled={framing.rotation === 0}
+              className={`${smallButton} font-normal`}
+            >
+              Straight
+            </button>
+            <button
+              type="button"
+              onClick={() => onFraming({ ...DEFAULT_FRAMING })}
+              disabled={isDefaultFraming(framing)}
+              className={`ml-auto ${linkButton}`}
+            >
+              Reset the framing
+            </button>
+          </div>
+        </div>
       )}
 
       <div className="flex flex-col gap-2">

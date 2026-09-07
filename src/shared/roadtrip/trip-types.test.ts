@@ -3,6 +3,7 @@ import {
   TRIP_DOC_VERSION,
   createTripDoc,
   createTripPlace,
+  createPostSlide,
   createTripPost,
   createTripStage,
   defaultPostBadge,
@@ -477,8 +478,8 @@ describe('duplicateTripPost', () => {
         shades: [createShade({ strength: 0.4 })],
       },
       slides: [
-        { id: 's1', media: null, videoTimeSeconds: 0, caption: 'One' },
-        { id: 's2', media: null, videoTimeSeconds: 2, caption: 'Two' },
+        { ...createPostSlide(), id: 's1', caption: 'One' },
+        { ...createPostSlide(), id: 's2', videoTimeSeconds: 2, caption: 'Two' },
       ],
     };
   };
@@ -693,6 +694,54 @@ describe('createTripStage', () => {
       name: 'Perth',
       region: 'WA',
       coords: null,
+    });
+  });
+});
+
+describe('framing (v12)', () => {
+  /** A v11 document: decks and grades exist, framing does not. */
+  const v11 = (): TripDoc =>
+    ({
+      ...createTripDoc('Australia', 'Perth', '2025-08-24', '2025-09-23'),
+      version: 11,
+      posts: [
+        {
+          ...createTripPost('carousel', '2025-08-24', 'Kalbarri'),
+          badge: { ...defaultPostBadge('carousel'), framing: undefined },
+          slides: [{ id: 's1', media: null, videoTimeSeconds: 0, caption: '' }],
+        },
+      ],
+    }) as unknown as TripDoc;
+
+  it('gives every picture the centred cover-crop it already had', () => {
+    const doc = migrateTripDoc(v11());
+    expect(doc.posts[0].badge.framing).toEqual({ scale: 1, x: 0, y: 0, rotation: 0 });
+    expect(doc.posts[0].slides[0].framing).toEqual({ scale: 1, x: 0, y: 0, rotation: 0 });
+  });
+
+  it('leaves the rest of the badge alone', () => {
+    // The migration blocks run in source order, not version order: this is
+    // the regression that catches a framing block placed before the one that
+    // builds the badge.
+    const doc = migrateTripDoc(v11());
+    expect(doc.posts[0].badge.mode).toBe('day');
+    expect(doc.posts[0].badge.aspectId).toBe('4:5');
+  });
+
+  it('is never inherited by the next piece of the same kind', () => {
+    // A crop is about ONE photograph's subject; carrying it onto the next
+    // picture is how a subject ends up out of frame.
+    const badge = {
+      ...defaultPostBadge('reel'),
+      framing: { scale: 2.5, x: 0.2, y: -0.1, rotation: 12 },
+    };
+    const defaults = hookDefaultsFrom(badge);
+    expect('framing' in defaults).toBe(false);
+    expect(defaultPostBadge('reel', defaults).framing).toEqual({
+      scale: 1,
+      x: 0,
+      y: 0,
+      rotation: 0,
     });
   });
 });

@@ -18,6 +18,7 @@
  */
 
 import { isIsoDate, isWithin, type IsoDate } from './trip-days';
+import { DEFAULT_FRAMING, normaliseFraming, type Framing } from '../media/framing';
 import type { SavedMediaRef } from '../projects/project-types';
 import { DEFAULT_SOURCE_ID } from '../sources/source';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
@@ -44,7 +45,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 11;
+export const TRIP_DOC_VERSION = 12;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers and the
@@ -199,6 +200,13 @@ export interface PostBadge {
   /** Frame of a video clip the badge sits on; ignored for a photo. */
   videoTimeSeconds: number;
   /**
+   * How the hook's picture sits in the frame — pan, zoom, rotation over the
+   * cover-crop. Belongs to the piece and not to the trip's defaults: it is
+   * about THIS photograph's subject, and inheriting one picture's crop onto
+   * the next is how a subject ends up out of frame.
+   */
+  framing: Framing;
+  /**
    * Free text replacing a computed piece, per piece. An empty string means
    * "computed", never "blank": clearing the field gives the derived value
    * back, so an override is never a one-way door.
@@ -275,6 +283,7 @@ export function defaultPostBadge(
     shades: (defaults?.shades ?? []).map((shade) => ({ ...shade, id: newId() })),
     aspectId: defaults?.aspectId ?? ASPECT_FOR_KIND[kind],
     videoTimeSeconds: 0,
+    framing: { ...DEFAULT_FRAMING },
     textOverrides: {},
     pieceStyles: defaults ? structuredClone(defaults.pieceStyles) : {},
   };
@@ -289,12 +298,20 @@ export interface PostSlide {
   id: string;
   media: SavedMediaRef | null;
   videoTimeSeconds: number;
+  /** How this picture sits in the frame — see `PostBadge.framing`. */
+  framing: Framing;
   /** The author's own line over this picture; empty draws nothing. */
   caption: string;
 }
 
 export function createPostSlide(media: SavedMediaRef | null = null): PostSlide {
-  return { id: crypto.randomUUID(), media, videoTimeSeconds: 0, caption: '' };
+  return {
+    id: crypto.randomUUID(),
+    media,
+    videoTimeSeconds: 0,
+    framing: { ...DEFAULT_FRAMING },
+    caption: '',
+  };
 }
 
 export interface TripPost {
@@ -746,6 +763,24 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
       },
     }));
   }
+  // LAST, and it matters: these blocks run in SOURCE order, not version
+  // order, and the badge itself is only created by the v2 block above while
+  // slides arrive with v5. Filling a field on an object an earlier line has
+  // not built yet writes `{ framing }` over nothing and leaves the rest of
+  // the badge undefined — measured, on a v1 document.
+  if (migrated.version < 12) {
+    // Nothing was reframed before this existed, so every picture keeps the
+    // centred cover-crop it has always had — which is what the default is.
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      badge: { ...post.badge, framing: normaliseFraming(post.badge?.framing) },
+      slides: (post.slides ?? []).map((slide) => ({
+        ...slide,
+        framing: normaliseFraming(slide.framing),
+      })),
+    }));
+  }
+
   migrated.version = TRIP_DOC_VERSION;
   return migrated;
 }

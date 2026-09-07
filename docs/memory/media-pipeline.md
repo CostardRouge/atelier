@@ -6,6 +6,11 @@ Read before touching video decode/encode, any export, the transcode fallback, LU
 
 **Decision.** `shared/media/webcodecs-export.ts` owns the whole demux → decode → transform → encode → mux machinery (mp4box.js → `VideoDecoder` → processor → `VideoEncoder` H.264 → mp4-muxer). Tools supply only a `FrameProcessor`. **Why**: the machinery is subtle and was being duplicated per export path. **How to apply**: a new export is a new processor, not a new pipeline. The processor **must not** close the frame it is given — the pipeline closes it after `draw` returns. Audio is **remuxed, never re-encoded**, so it stays bit-for-bit identical.
 
+## How a source sits in an output frame is one shared transform (2026-09-07)
+
+**Decision.** `shared/media/framing.ts` owns pan, zoom and rotation over the cover-crop: `framingTransform` (pure, tested) and `drawFramed`, called by Road Trip's `renderBadge` and by `exportVariantVideo`. `VariantRenderOptions.framing` is optional and defaults to the centred cover, so every Studio export renders exactly as before. **Why one module**: the preview, the PNG deck and the burned-in clip are three renderers of the same picture, and a second copy of the transform is how they start disagreeing about where the picture is. **How to apply**: a new renderer that composites a source into a frame calls `drawFramed` rather than `fitRect(..., 'cover')` plus its own drawImage; the crop invariants (never below covering, pan clamped to the slack, long-edge units) live there and must not be re-derived at a call site. The reasoning behind the value itself is in `roadtrip.md`.
+
+
 ## A failed export can silently break every export after it in the same tab (2026-08-22)
 
 **Decision.** `exportProcessedVideo` now creates the `VideoEncoder` and `VideoDecoder`, and everything that can throw between their creation and the final `flush()`/`finalize()`, inside one `try/finally` that always calls `.close()` on both. `createLutRenderer`'s `dispose()` now also calls `gl.getExtension('WEBGL_lose_context')?.loseContext()`, not just `gl.delete*` on the individual objects.

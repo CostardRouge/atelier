@@ -19,6 +19,7 @@ import {
   type OverlayElement,
 } from '../overlay/overlay-types';
 import { charBudget, wrapText } from '../lib/wrap-text';
+import { DEFAULT_FRAMING, normaliseFraming, type Framing } from '../media/framing';
 import type { SavedMediaRef } from '../projects/project-types';
 import type { TripDoc, TripPost } from './trip-types';
 
@@ -33,6 +34,8 @@ export interface DeckSlide {
   slideId: string | null;
   media: SavedMediaRef | null;
   videoTimeSeconds: number;
+  /** How this slide's picture sits in the frame. The closing card has none. */
+  framing: Framing;
   /** The author's own line over a content picture. */
   caption: string;
 }
@@ -49,6 +52,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       slideId: null,
       media: post.media,
       videoTimeSeconds: post.badge.videoTimeSeconds,
+      framing: normaliseFraming(post.badge.framing),
       caption: '',
     },
   ];
@@ -60,6 +64,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       slideId: slide.id,
       media: slide.media,
       videoTimeSeconds: slide.videoTimeSeconds,
+      framing: normaliseFraming(slide.framing),
       caption: slide.caption,
     });
   }
@@ -75,6 +80,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       slideId: null,
       media: null,
       videoTimeSeconds: 0,
+      framing: { ...DEFAULT_FRAMING },
       caption: '',
     });
   }

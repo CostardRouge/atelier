@@ -98,6 +98,9 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         range: hookRange(post.badge.videoTimeSeconds, inputs.hookLength, hookInfo.duration),
         shades: post.badge.shades,
         block: inputs.block,
+        // The hook's own framing, so the burned-in clip is cropped where the
+        // preview showed it — the PNG deck goes through the same value.
+        framing: post.badge.framing,
         lut: inputs.lut,
         onProgress: (p) =>
           setExporting(
