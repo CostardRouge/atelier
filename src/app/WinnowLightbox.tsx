@@ -108,7 +108,7 @@ export default function WinnowLightbox({
       disabled={rows.length < 2}
       aria-label={label}
       title={`${label} (${delta < 0 ? '←' : '→'})`}
-      className="flex-none w-9 h-9 grid place-items-center rounded-full border border-line bg-surface text-ink-soft hover:text-accent hover:border-line-strong disabled:opacity-40 disabled:cursor-default cursor-pointer transition-colors"
+      className="flex-none self-center w-9 h-9 grid place-items-center rounded-full border border-line bg-surface text-ink-soft hover:text-accent hover:border-line-strong disabled:opacity-40 disabled:cursor-default cursor-pointer transition-colors"
     >
       <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
         <path
@@ -156,10 +156,17 @@ export default function WinnowLightbox({
           {facts.join(' · ')}
         </p>
 
-        {/* The frame. Fixed by the panel, so paging never resizes the sheet. */}
-        <div className="flex-1 min-h-0 flex items-center justify-center gap-3">
+        {/* The frame. Fixed by the panel, so paging never resizes the sheet.
+            `items-stretch` + `self-stretch`, never `h-full`: a percentage
+            height inside a `flex-1 min-h-0` column has nothing definite to
+            resolve against, so `max-h-full` measured nothing and the picture
+            was cut by the `overflow-hidden` instead of fitting in it. The
+            media then fills that box and is CONTAINED by `object-contain`,
+            which is also what gives a clip its aspect ratio — a `<video>`
+            with no fit takes its own default box and drew square. */}
+        <div className="flex-1 min-h-0 flex items-stretch justify-center gap-3">
           {arrow('Previous', -1, 'M10 3.5 5.5 8 10 12.5')}
-          <div className="relative flex-1 min-w-0 h-full grid place-items-center bg-frame rounded-paper overflow-hidden">
+          <div className="relative flex-1 min-w-0 min-h-0 self-stretch bg-frame rounded-paper overflow-hidden">
             {isVideo ? (
               <video
                 key={row.id}
@@ -169,7 +176,7 @@ export default function WinnowLightbox({
                 controls
                 // Metadata only: opening a day should not stream every clip.
                 preload="metadata"
-                className="max-w-full max-h-full"
+                className="absolute inset-0 w-full h-full object-contain"
               />
             ) : (
               <>
@@ -179,12 +186,14 @@ export default function WinnowLightbox({
                   alt={row.filename}
                   crossOrigin="use-credentials"
                   onLoad={() => setLoaded(true)}
-                  className={`max-w-full max-h-full object-contain block transition-opacity ${
+                  className={`absolute inset-0 w-full h-full object-contain block transition-opacity ${
                     loaded ? 'opacity-100' : 'opacity-0'
                   }`}
                 />
                 {!loaded && (
-                  <span className="absolute font-mono text-[0.66rem] text-muted">loading…</span>
+                  <span className="absolute inset-0 grid place-items-center font-mono text-[0.66rem] text-muted">
+                    loading…
+                  </span>
                 )}
               </>
             )}

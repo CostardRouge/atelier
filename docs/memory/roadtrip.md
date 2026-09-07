@@ -446,6 +446,10 @@ Dragging a slide moves it within `post.slides` (`moveItem` in `deck.ts`, pure an
 
 **The trap that hides a shipped capability: the capabilities sheet is a SNAPSHOT taken at connect time and nothing refreshes it** (`client.capabilities()` has exactly one caller, `ConnectScreen`). A browser that connected before the instance grew the document bucket goes on believing it has none, so the «Keep on» picker, «Move to» and the remote list all stay hidden and Atelier tries nothing — a shipped feature that looks unshipped, on every device that connected early. The cure is the `reconnect` link in the media browser's header, which re-runs `#/connect` and replaces the stored sheet. **How to apply**: any feature gated on a capability needs that sentence in its release note, and a capability that turns on later is a reason to re-read the sheet, not to assume the stored one is current.
 
+## Import target folded into a modal, not a standing header select (2026-09-07)
+
+**Decision.** `TripGallery`'s "import to" `<select>` used to sit in the header at all times, useful only during the rare import gesture. It is now `ImportTripModal`, opened by the "Import a trip file" button — same "Keep on" picker as `NewTripModal`, shown only when `documentSources.length > 1`. With one source the button skips the modal and picks the file directly, so the common case stays one click. **How to apply**: a control that is only relevant during one gesture belongs behind that gesture's modal, not permanently in the header — the gallery header's job is the trip list, not import plumbing.
+
 ## Open, and decided but not built (2026-08-23)
 
 - **The export-reminder banner is still unbuilt.** The `.roadtrip.json` file itself now exists (see below); what is missing is the nudge the maintainer asked for — a **discreet banner** ("last export 12 days ago"), never a blocking prompt, so a cleared IndexedDB cannot cost him a year of tracking.
