@@ -7,6 +7,13 @@ found carries a path and a line as of before the change, so the line numbers
 below describe the pre-change `PostEditor.tsx` and are stale by design. The
 decisions each phase fixed live in `docs/memory/roadtrip.md`.
 
+**Superseded in part, 2026-09-07.** A declutter pass took the six tabs below
+down to four — Grade folded into Picture, the Deck tab became a slide rail
+beside the stage, and everything trip-wide (words, closing card, per-kind
+defaults) moved to a ⚙ Trip sheet. Read the tabs section here as the shape that
+was built first, not the one on screen; `docs/memory/roadtrip.md` carries the
+current one and why it changed.
+
 Read `docs/memory/roadtrip.md` and `docs/memory/studio.md` before acting on this
 — the constraints quoted below are drawn from them and are not repeated in full.
 

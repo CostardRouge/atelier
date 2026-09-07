@@ -6,7 +6,7 @@ import {
   type ProjectFile,
 } from '../../shared/projects/project-file';
 import { pickFile } from '../../shared/sources/file-sources';
-import SectionLegend from './SectionLegend';
+import SectionLegend from '../../shared/ui/SectionLegend';
 import { NO_SHIFT, type TimeShift } from '../../shared/telemetry/time-format';
 import {
   describeTimeScale,

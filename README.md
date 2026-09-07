@@ -525,14 +525,15 @@ is said out loud rather than swallowed.
 **A post is a deck.** The hook is slide one; add as many content pictures after
 it as you like, each with its own optional caption, and close on the trip's
 **call-to-action card** — headline, sentence, link and a **QR code**, edited
-once and appended to every deck that asks for it. A reel or a single photo is
-the same model with a deck of one, so a piece can be re-cut into a carousel
-without being rebuilt. Export writes the whole deck as numbered PNGs into a
+once in the trip's own settings and appended to every deck that asks for it. A
+reel or a single photo is the same model with a deck of one, so a piece can be
+re-cut into a carousel without being rebuilt. Export writes the whole deck as numbered PNGs into a
 folder you pick (or downloads them one by one where the folder picker is not
 available), named so a file listing is already in swipe order. The order is
-yours: drag a content slide along the strip, or move it with the Earlier /
-Later buttons. Only the middle moves — a hook that opened third and a call to
-action that came second would stop being either.
+yours: the deck is a **rail of slides beside the picture** — a column on a wide
+screen, a row when the editor stacks — so drag one along it, or move it with the
+arrow keys while it has focus. Only the middle moves — a hook that opened third
+and a call to action that came second would stop being either.
 
 **The hook can leave as a moving clip, not only a still.** When the hook sits
 on a video, "Export hook video" burns the animated badge into it through the

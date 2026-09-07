@@ -1,33 +1,13 @@
-import type { Anchor } from '../../../shared/overlay/overlay-types';
+import GradePanel from '../../../shared/lut/GradePanel';
 import { ASPECT_PRESETS } from '../../../shared/projects/project-types';
 import type { DeckSlide } from '../../../shared/roadtrip/deck';
-import type { Shade } from '../../../shared/roadtrip/shades';
 import type { PostBadge, PostSlide, TripPost } from '../../../shared/roadtrip/trip-types';
+import SectionLegend from '../../../shared/ui/SectionLegend';
 import type { SlideRecovery } from '../use-slide-library';
+import type { TripGradeBinding } from '../use-trip-grade';
 import DayFromWinnow from '../DayFromWinnow';
 import FrameStrip from '../FrameStrip';
-import ShadesPanel from '../ShadesPanel';
-import { chipClass, legend, section } from './ui';
-
-/** The nine anchors, laid out as the 3×3 grid they are. */
-const ANCHORS: Anchor[] = [
-  'top-left',
-  'top-center',
-  'top-right',
-  'center-left',
-  'center',
-  'center-right',
-  'bottom-left',
-  'bottom-center',
-  'bottom-right',
-];
-
-/** Where an anchor's default position sits, so picking one actually moves it. */
-export function positionFor(anchor: Anchor): { x: number; y: number } {
-  const x = anchor.endsWith('-left') ? 0.07 : anchor.endsWith('-right') ? 0.93 : 0.5;
-  const y = anchor.startsWith('top-') ? 0.08 : anchor.startsWith('bottom-') ? 0.92 : 0.5;
-  return { x, y };
-}
+import { chipClass } from './ui';
 
 interface PictureTabProps {
   post: TripPost;
@@ -48,16 +28,24 @@ interface PictureTabProps {
   onPickFromSource: (files: File[], assetId: string) => void;
   patchBadge: (patch: Partial<PostBadge>) => void;
   patchSlide: (patch: Partial<PostSlide>) => void;
+  /** The grade, bound either to the trip or to this piece. */
+  grade: TripGradeBinding;
+  /** A reel from the linked project wears that project's grade, not this one. */
+  linkedToProject: boolean;
 }
 
 /**
- * The picture and what sits on it: which file and which frame, the frame's
- * shape, where the badge block lands and how big its numeral is, the shades
- * that lift the text off a bright sky, and how long the hook holds.
+ * WHICH picture, what shape it is delivered in, and how it is treated: the
+ * file and the frame it opens on, the day's pictures asked of the instance
+ * that holds them, the deck's aspect, and the grade.
+ *
+ * The grade sits here rather than on a tab of its own because it is the
+ * picture that gets treated, not the typography — and because a tab holding
+ * one scope switch and a LUT stack was a tab paying for itself in nothing.
+ * Where the badge SITS and how it looks is the Look tab's business.
  *
  * The frame is a property of the PIECE (one deck, one shape) and shows on
- * every slide; the placement, the shades and the duration are the badge's
- * and show on the hook only.
+ * every slide.
  */
 export default function PictureTab({
   post,
@@ -70,16 +58,23 @@ export default function PictureTab({
   onPickFromSource,
   patchBadge,
   patchSlide,
+  grade,
+  linkedToProject,
 }: PictureTabProps) {
   const isHook = slide.kind === 'hook';
   const isCta = slide.kind === 'cta';
-  const setShades = (shades: Shade[]) => patchBadge({ shades });
+  const { stack, scope, setScope } = grade;
 
   return (
     <div className="flex flex-col gap-4">
       {!isCta && (
-        <div className={section}>
-          <span className={legend}>Picture · from the Library</span>
+        <div className="flex flex-col gap-2">
+          <SectionLegend label="Picture">
+            <p>
+              This slide composes over whatever is ticked in the Library on the left,
+              and picking another one there re-points the slide.
+            </p>
+          </SectionLegend>
           {slideFile ? (
             <p className="m-0 text-[0.8rem] text-ink-soft truncate" title={slideFile.name}>
               {slideFile.name}
@@ -140,8 +135,10 @@ export default function PictureTab({
         </p>
       )}
 
-      <div className={section}>
-        <span className={legend}>Frame · the whole deck</span>
+      <div className="flex flex-col gap-2">
+        <SectionLegend label="Format">
+          <p>The shape every slide of this deck is delivered in.</p>
+        </SectionLegend>
         <div className="grid grid-cols-4 gap-1.5">
           {ASPECT_PRESETS.map((a) => (
             <button
@@ -149,6 +146,7 @@ export default function PictureTab({
               type="button"
               onClick={() => patchBadge({ aspectId: a.id })}
               aria-pressed={a.id === post.badge.aspectId}
+              title={a.label}
               className={chipClass(a.id === post.badge.aspectId)}
             >
               {a.id}
@@ -157,84 +155,54 @@ export default function PictureTab({
         </div>
       </div>
 
-      {isHook && (
-        <>
-          <div className={section}>
-            <span className={legend}>Placement</span>
-            <div className="flex items-start gap-3">
-              <div
-                className="grid grid-cols-3 gap-1.5 w-[6.5rem] flex-none"
-                role="group"
-                aria-label="Anchor"
-              >
-                {ANCHORS.map((anchor) => (
-                  <button
-                    key={anchor}
-                    type="button"
-                    onClick={() =>
-                      patchBadge({
-                        layout: { ...post.badge.layout, anchor, ...positionFor(anchor) },
-                      })
-                    }
-                    aria-label={anchor}
-                    aria-pressed={anchor === post.badge.layout.anchor}
-                    className={`h-7 rounded-[4px] border cursor-pointer transition-colors ${
-                      anchor === post.badge.layout.anchor
-                        ? 'border-accent bg-accent'
-                        : 'border-line bg-paper hover:border-line-strong'
-                    }`}
-                  />
-                ))}
-              </div>
-              <label className="flex-1 flex flex-col gap-1">
-                <span className={legend}>
-                  Numeral · {Math.round(post.badge.layout.sizeFrac * 100)}%
-                </span>
-                <input
-                  type="range"
-                  min={0.05}
-                  max={0.4}
-                  step={0.005}
-                  value={post.badge.layout.sizeFrac}
-                  onChange={(e) =>
-                    patchBadge({
-                      layout: { ...post.badge.layout, sizeFrac: Number(e.target.value) },
-                    })
-                  }
-                  className="accent-accent"
-                />
-              </label>
-            </div>
-            <span className="text-[0.68rem] text-faint">
-              The grid is the coarse tool; drag the badge on the picture to place it
-              exactly — hold Alt to skip the snap.
+      {/* The grade, through the Studio's own engine — one per piece, on every
+          picture of the deck. The closing card carries no photograph. */}
+      <div className="flex flex-col gap-2">
+        <span className="flex items-center gap-2">
+          <SectionLegend label="Grade">
+            <p>
+              {scope === 'trip'
+                ? 'Every piece of the trip that has no grade of its own wears this one — the look that makes the feed read as one journey.'
+                : 'A picture that needs its own correction. It started from the trip’s grade; “The trip’s” sends it back and drops this one.'}
+            </p>
+            <p>
+              The preview, the PNG deck and the hook clip all grade through the Studio’s
+              own shader. A different grade per slide is not offered yet.
+              {linkedToProject &&
+                ' A reel exported from the linked Studio project uses that project’s grade, not this one — the Export tab says which.'}
+            </p>
+          </SectionLegend>
+          {scope === 'trip' && (
+            <span className="font-mono text-[0.55rem] tracking-[0.12em] uppercase text-muted border border-line-strong rounded-full px-1.5 py-px">
+              Trip
             </span>
-          </div>
-
-          <label className="flex flex-col gap-1">
-            <span className={legend}>
-              Hook duration · {post.badge.durationSeconds.toFixed(1)}s
-            </span>
-            <input
-              type="range"
-              min={1}
-              max={15}
-              step={0.5}
-              value={post.badge.durationSeconds}
-              onChange={(e) => patchBadge({ durationSeconds: Number(e.target.value) })}
-              className="accent-accent"
-            />
-            <span className="text-[0.68rem] text-faint">
-              How long the hook lasts — what an exit animation lands on.
-            </span>
-          </label>
-
-          <div className={section}>
-            <span className={legend}>Shades over the picture</span>
-            <ShadesPanel shades={post.badge.shades} onChange={setShades} />
-          </div>
-        </>
-      )}
+          )}
+        </span>
+        <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="Grade scope">
+          <button
+            type="button"
+            onClick={() => setScope('trip')}
+            aria-pressed={scope === 'trip'}
+            className={chipClass(scope === 'trip')}
+          >
+            The trip’s
+          </button>
+          <button
+            type="button"
+            onClick={() => setScope('post')}
+            aria-pressed={scope === 'post'}
+            className={chipClass(scope === 'post')}
+          >
+            This piece’s own
+          </button>
+        </div>
+        <GradePanel stack={stack} />
+        {stack.error && (
+          <p className="m-0 text-[0.76rem] text-[#9a3a23]" role="alert">
+            {stack.error}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

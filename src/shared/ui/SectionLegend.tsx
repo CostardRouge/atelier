@@ -9,6 +9,10 @@ import { useId, useState, type ReactNode } from 'react';
  * is not noise and it is not deleted: it is one tap away, and the tap is next
  * to the word it explains.
  *
+ * It lives in `shared/` because Road Trip's piece editor became its second
+ * consumer — same move `StylePanel` and `GradePanel` already made, and
+ * `shared/` never imports `tools/`.
+ *
  * Omit `children` and the section gets a plain legend, no button — a control
  * that needs no explanation should not advertise one.
  */

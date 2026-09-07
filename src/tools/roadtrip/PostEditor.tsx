@@ -32,12 +32,13 @@ import { canvasThumbnail } from '../../shared/roadtrip/thumbnail';
 import { putThumb } from '../../shared/roadtrip/trip-store';
 import BadgeStage from './BadgeStage';
 import type { CtaFieldRefs } from './CtaPanel';
+import SlideRail from './SlideRail';
+import TripSettingsModal, { type TripSettingsSection } from './TripSettingsModal';
 import ContentTab from './panels/ContentTab';
-import DeckTab from './panels/DeckTab';
 import ExportTab from './panels/ExportTab';
-import GradeTab from './panels/GradeTab';
+import LookTab from './panels/LookTab';
 import PictureTab from './panels/PictureTab';
-import StyleTab from './panels/StyleTab';
+import PiecePicker from './panels/PiecePicker';
 import { useBadgeClock } from './use-badge-clock';
 import { usePostExports } from './use-post-exports';
 import { pickable, useSlideLibrary } from './use-slide-library';
@@ -57,15 +58,21 @@ interface PostEditorProps {
  * The inspector's tabs — Road Trip's own nouns, not the Studio's five. Tab
  * state is component state, not part of the route: the route says WHERE you
  * are (trip, day, piece), the tab says what you are looking at there.
+ *
+ * Four, on one row. Six wrapped onto two rows in a 22rem column, and two of
+ * them were paying for themselves in very little: Grade was one scope switch
+ * over the Studio's own panel, so it joined the Picture it treats, and the
+ * Deck was a list of slides you could not see while working on them, so it
+ * became the rail beside the stage. What was left of the Deck tab — the
+ * closing card, the per-kind defaults — belongs to the TRIP, and went to the
+ * trip's own settings sheet with the words.
  */
-type PanelTab = 'content' | 'style' | 'picture' | 'grade' | 'deck' | 'export';
+type PanelTab = 'content' | 'look' | 'picture' | 'export';
 
 const TABS: Array<{ id: PanelTab; label: string }> = [
   { id: 'content', label: 'Content' },
-  { id: 'style', label: 'Style' },
+  { id: 'look', label: 'Look' },
   { id: 'picture', label: 'Picture' },
-  { id: 'grade', label: 'Grade' },
-  { id: 'deck', label: 'Deck' },
   { id: 'export', label: 'Export' },
 ];
 
@@ -103,6 +110,8 @@ export default function PostEditor({
   const [selected, setSelected] = useState(0);
   const [piece, setPiece] = useState<BadgePiece>('kicker');
   const [tab, setTab] = useState<PanelTab>('content');
+  /** The trip-wide sheet, and which of its sections was asked for. */
+  const [tripSheet, setTripSheet] = useState<TripSettingsSection | null>(null);
 
   const activeFile = active ? pickable(active) : null;
 
@@ -246,10 +255,6 @@ export default function PostEditor({
     setSelected(to + 1);
   }
 
-  const contentIndex = slide.slideId
-    ? post.slides.findIndex((s) => s.id === slide.slideId)
-    : -1;
-
   // --- the badge's own clock ------------------------------------------------
   const clock = useBadgeClock(post.badge.pieceStyles, post.badge.durationSeconds, isHook);
 
@@ -269,6 +274,13 @@ export default function PostEditor({
     },
     [lib.assets],
   );
+  /** The picture behind any slide, for the rail's own thumbnails. */
+  const fileForSlide = useCallback(
+    (s: { kind: string; media: SavedMediaRef | null }) =>
+      s.kind === 'hook' ? resolve(post.media) : resolve(s.media),
+    [resolve, post.media],
+  );
+
   const hookFile = isHook ? slideFile : resolve(post.media);
   const hookIsVideo = Boolean(hookFile && !hookFile.type.startsWith('image/'));
   const [hookInfo, setHookInfo] = useState(NO_SOURCE);
@@ -360,8 +372,9 @@ export default function PostEditor({
     } else {
       const role = ctaRoleFromElementId(id)?.role;
       if (!role) return;
-      // The closing card is edited on the Deck tab, shared by the whole trip.
-      setTab('deck');
+      // The closing card belongs to the whole trip, so it is edited in the
+      // trip's own sheet rather than on a tab about this piece.
+      setTripSheet('cta');
       focusTarget.current = role;
     }
     setFocusSeq((n) => n + 1);
@@ -369,9 +382,9 @@ export default function PostEditor({
 
   const selectPiece = (next: BadgePiece) => selectElement(pieceElementId(next));
 
-  // Keyed on the tab as well as the request: the field only exists once its
-  // tab is mounted, and clicking the already-selected piece from another tab
-  // changes no id.
+  // Keyed on the tab (and the sheet) as well as the request: the field only
+  // exists once whatever holds it is mounted, and clicking the
+  // already-selected piece from another tab changes no id.
   useEffect(() => {
     const target = focusTarget.current;
     if (!target) return;
@@ -381,7 +394,7 @@ export default function PostEditor({
     focusTarget.current = null;
     field.focus({ preventScroll: true });
     field.scrollIntoView({ block: 'nearest' });
-  }, [focusSeq, tab]);
+  }, [focusSeq, tab, tripSheet]);
 
   // A selection names an element of ONE slide; another slide has other ids.
   useEffect(() => {
@@ -424,7 +437,7 @@ export default function PostEditor({
       key={t.id}
       type="button"
       onClick={() => setTab(t.id)}
-      className={`px-2 py-[0.45rem] font-mono text-[0.66rem] tracking-[0.14em] uppercase rounded-full cursor-pointer transition-colors ${
+      className={`flex-1 px-2 py-[0.45rem] font-mono text-[0.66rem] tracking-[0.14em] uppercase rounded-full cursor-pointer transition-colors ${
         tab === t.id
           ? 'bg-ink text-paper'
           : 'bg-transparent text-muted hover:text-accent-ink'
@@ -469,6 +482,20 @@ export default function PostEditor({
           </button>
           <span className="flex-1" />
           {headerExtra}
+          {/* What is true of the WHOLE trip lives behind this, exactly where
+              the Studio keeps a project's own settings — so the inspector on
+              the right is about the piece and nothing else. */}
+          <button
+            type="button"
+            onClick={() => setTripSheet('words')}
+            title="Trip settings — the words, the closing card, what a new piece starts from"
+            className="inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap h-[1.9rem] px-2.5 rounded-full border border-line-strong bg-paper font-mono text-[0.66rem] tracking-[0.06em] uppercase text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
+          >
+            Trip
+            <span className="text-[0.95rem] leading-none" aria-hidden="true">
+              ⚙
+            </span>
+          </button>
         </div>
         {/* Editable in place, like the Studio's project name: a piece is
             found again by what it is called, and having to go back to the
@@ -486,7 +513,25 @@ export default function PostEditor({
         </p>
       </div>
 
-      <div className="min-w-0 flex flex-col items-center gap-3 @min-[860px]:min-h-0 @min-[860px]:col-start-1 @min-[860px]:row-start-1 @min-[860px]:row-span-2">
+      {/* The deck sits beside the picture, not behind a tab: a carousel is
+          the one thing about a piece you cannot see while you work on it.
+          Wide it is a column against the stage; stacked it is a row under it,
+          which is also why the rail is a child of the queried layout. */}
+      <div className="min-w-0 flex flex-col gap-3 @min-[860px]:min-h-0 @min-[860px]:col-start-1 @min-[860px]:row-start-1 @min-[860px]:row-span-2">
+        <div className="flex-1 min-h-0 flex flex-col-reverse gap-3 @min-[860px]:flex-row @min-[860px]:items-stretch @min-[860px]:gap-4">
+          <SlideRail
+            slides={slides}
+            index={slideIndex}
+            aspect={aspect}
+            includeCta={post.includeCta}
+            fileFor={fileForSlide}
+            onSelect={setSelected}
+            onAdd={() => void addSlide()}
+            onRemove={removeSlide}
+            onMove={moveSlideTo}
+            onIncludeCta={(on) => onChangePost({ ...post, includeCta: on })}
+          />
+          <div className="flex-1 min-w-0 min-h-0 flex flex-col items-center gap-3">
           <BadgeStage
             file={slideFile}
             videoTimeSeconds={slide.videoTimeSeconds}
@@ -541,22 +586,37 @@ export default function PostEditor({
               </span>
             </div>
           )}
+          </div>
         </div>
+      </div>
 
       <div className="w-full min-w-0 flex flex-col gap-3 @min-[860px]:min-h-0 @min-[860px]:col-start-2 @min-[860px]:row-start-2">
-        {/* Six tabs in a 22rem column wrap into two rows rather than
-            squeezing into one: the Studio's five at 340px is already tight.
-            The container stays a soft rectangle (`rounded-paper`), not a
-            pill: a `rounded-full` box stretched over two rows of buttons
-            reads as a badly-shaped blob, not a toolbar — the individual
-            buttons keep their own pill shape regardless. */}
+        {/* Four tabs share one row, so the container is a pill again: it was
+            a soft rectangle only because six of them wrapped onto two rows,
+            and a `rounded-full` box stretched over two rows reads as a blob
+            rather than a toolbar. */}
         <div
-          className="flex-none flex flex-wrap gap-1 p-1 rounded-paper border border-line bg-surface"
+          className="flex-none flex gap-1 p-1 rounded-full border border-line bg-surface"
           role="tablist"
           aria-label="Piece inspector"
         >
           {TABS.map(tabButton)}
         </div>
+
+        {/* The piece in hand, rendered ONCE above the body: the Content and
+            Look tabs both edit it, and two copies of the same six chips read
+            as two different controls. A click on the stage picks one too. */}
+        {isHook && (tab === 'content' || tab === 'look') && (
+          <div className="flex-none flex flex-col gap-1.5">
+            <span className="flex items-center gap-2">
+              <span className="font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted">
+                Piece
+              </span>
+              <span className="text-[0.68rem] text-faint">or click it on the picture</span>
+            </span>
+            <PiecePicker piece={piece} onPiece={selectPiece} />
+          </div>
+        )}
 
         <div className="flex flex-col gap-3 @min-[860px]:flex-1 @min-[860px]:min-h-0 @min-[860px]:overflow-y-auto @min-[860px]:overscroll-contain @min-[860px]:pr-1.5">
           {tab === 'content' && (
@@ -566,25 +626,24 @@ export default function PostEditor({
               slide={slide}
               content={content}
               piece={piece}
-              onPiece={selectPiece}
               slideFile={slideFile}
               onChangePost={onChangePost}
               patchBadge={patchBadge}
               patchSlide={patchSlide}
               textFieldRef={textFieldRef}
-              onGoToDeck={() => setTab('deck')}
+              onEditClosingCard={() => setTripSheet('cta')}
             />
           )}
 
-          {tab === 'style' && (
-            <StyleTab
+          {tab === 'look' && (
+            <LookTab
               trip={trip}
               post={post}
               isHook={isHook}
               piece={piece}
-              onPiece={setPiece}
               onChangeTrip={onChangeTrip}
               patchBadge={patchBadge}
+              onOpenTripSettings={() => setTripSheet('words')}
             />
           )}
 
@@ -600,29 +659,8 @@ export default function PostEditor({
               onPickFromSource={pickFromSource}
               patchBadge={patchBadge}
               patchSlide={patchSlide}
-            />
-          )}
-
-          {tab === 'grade' && (
-            <GradeTab grade={grade} linkedToProject={post.projectId !== null} />
-          )}
-
-          {tab === 'deck' && (
-            <DeckTab
-              trip={trip}
-              post={post}
-              slides={slides}
-              slideIndex={slideIndex}
-              contentIndex={contentIndex}
-              cta={cta}
-              onSelectSlide={setSelected}
-              onAddSlide={() => void addSlide()}
-              onRemoveSlide={removeSlide}
-              onMoveSlide={moveSlideTo}
-              onChangePost={onChangePost}
-              onChangeTrip={onChangeTrip}
-              patchBadge={patchBadge}
-              ctaFieldRefs={ctaFieldRefs}
+              grade={grade}
+              linkedToProject={post.projectId !== null}
             />
           )}
 
@@ -650,6 +688,19 @@ export default function PostEditor({
         </div>
       </div>
     </div>
+
+    {tripSheet && (
+      <TripSettingsModal
+        trip={trip}
+        post={post}
+        cta={cta}
+        section={tripSheet}
+        ctaFieldRefs={ctaFieldRefs}
+        onChangeTrip={onChangeTrip}
+        patchBadge={patchBadge}
+        onClose={() => setTripSheet(null)}
+      />
+    )}
     </section>
   );
 }

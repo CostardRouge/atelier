@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useState, type RefObject } from 'react';
+import SectionLegend from '../../../shared/ui/SectionLegend';
 import {
   counterPreviews,
   type BadgeContent,
   type BadgePiece,
+  type CounterMode,
 } from '../../../shared/roadtrip/day-badge';
 import type { DeckSlide } from '../../../shared/roadtrip/deck';
 import { readCaptureDate, type CaptureDate } from '../../../shared/roadtrip/media-date';
-import { timeAgoPreviews } from '../../../shared/roadtrip/time-ago';
+import { timeAgoPreviews, type TimeAgoMode } from '../../../shared/roadtrip/time-ago';
 import { postDayRange, stageAt } from '../../../shared/roadtrip/trip-coverage';
 import { formatIsoDate, isWithin, todayIso } from '../../../shared/roadtrip/trip-days';
 import type { PostBadge, TripDoc, TripPost } from '../../../shared/roadtrip/trip-types';
-import PiecePicker from './PiecePicker';
-import { inputClass, legend, linkButton, note, optionClass, section, smallButton } from './ui';
+import ModeChoice, { type ChoiceOption } from './ModeChoice';
+import { inputClass, legend, linkButton, note, smallButton } from './ui';
 
 interface ContentTabProps {
   trip: TripDoc;
@@ -19,8 +21,8 @@ interface ContentTabProps {
   slide: DeckSlide;
   /** The badge's words for this post, or null when the trip cannot be counted. */
   content: BadgeContent | null;
+  /** The piece in hand — chosen above the tabs, or by a click on the stage. */
   piece: BadgePiece;
-  onPiece: (piece: BadgePiece) => void;
   /** The picture the open slide composes over, for its capture date. */
   slideFile: File | null;
   onChangePost: (post: TripPost) => void;
@@ -28,15 +30,16 @@ interface ContentTabProps {
   patchSlide: (patch: { caption?: string }) => void;
   /** The field a stage click focuses: the piece's text on the hook, the caption elsewhere. */
   textFieldRef: RefObject<HTMLInputElement>;
-  /** The closing card is edited on the Deck tab; a click on it goes there. */
-  onGoToDeck: () => void;
+  /** The closing card belongs to the trip; a click on it opens that sheet. */
+  onEditClosingCard: () => void;
 }
 
 /**
  * What the piece SAYS: the badge's words on the hook, the caption on a
- * content picture, and the day every number is counted from. Each counter
- * and temporal mode shows the line it would really draw for this post, or
- * why it cannot — a fabricated example reads as a broken feature.
+ * content picture, and the day every number is counted from. Each counter and
+ * temporal mode still shows the line it would really draw for this post, or
+ * why it cannot — a fabricated example reads as a broken feature — but only
+ * the chosen one is on screen until you ask for the others (`ModeChoice`).
  */
 export default function ContentTab({
   trip,
@@ -44,13 +47,12 @@ export default function ContentTab({
   slide,
   content,
   piece,
-  onPiece,
   slideFile,
   onChangePost,
   patchBadge,
   patchSlide,
   textFieldRef,
-  onGoToDeck,
+  onEditClosingCard,
 }: ContentTabProps) {
   const isHook = slide.kind === 'hook';
 
@@ -74,6 +76,11 @@ export default function ContentTab({
     };
   }, [slideFile]);
 
+  // A range is the rare case: the field only appears once there is one, or
+  // once it is asked for.
+  const [wantRange, setWantRange] = useState(false);
+  const showRange = wantRange || post.endDate !== null;
+
   const capturedElsewhere = captured !== null && captured.date !== post.date;
   const capturedOutsideTrip =
     captured !== null && !isWithin(trip.startDate, trip.endDate, captured.date);
@@ -86,81 +93,97 @@ export default function ContentTab({
   const place = stageAt(trip, post.date)?.name.trim() || null;
 
   /** What each counter mode would really say for THIS post — or why it cannot. */
-  const modePreviews = useMemo(
-    () => counterPreviews(trip, post, trip.badgeWords, post.badge.showPin),
+  const counterOptions = useMemo<ChoiceOption<CounterMode>[]>(
+    () =>
+      counterPreviews(trip, post, trip.badgeWords, post.badge.showPin).map((m) => ({
+        id: m.id,
+        label: m.label,
+        hint: m.hint,
+        text: m.text,
+        otherwise: m.reason ?? 'nothing to count here',
+      })),
     [trip, post],
   );
-  const activeMode = modePreviews.find((m) => m.id === post.badge.mode) ?? null;
+  const activeCounter = counterOptions.find((m) => m.id === post.badge.mode) ?? null;
+  const counterReason = activeCounter?.text === null ? activeCounter.otherwise : null;
 
   /** What the temporal line actually says, so the panel shows it rather than
    *  describing it — a mode that has nothing true to say must be visible. */
   const reference = post.badge.referenceDate ?? todayIso();
-  const timePreviews = useMemo(
-    () => timeAgoPreviews(post.date, reference, trip.badgeWords.time),
+  const timeOptions = useMemo<ChoiceOption<TimeAgoMode>[]>(
+    () =>
+      timeAgoPreviews(post.date, reference, trip.badgeWords.time).map((m) => ({
+        id: m.id,
+        label: m.label,
+        hint: m.hint,
+        text: m.id === 'off' ? null : m.text,
+        otherwise: m.id === 'off' ? 'no line' : 'nothing true to say on that day',
+      })),
     [post.date, reference, trip.badgeWords.time],
   );
-  const timeLine = timePreviews.find((p) => p.id === post.badge.timeAgo)?.text ?? null;
+  const timeLine = timeOptions.find((p) => p.id === post.badge.timeAgo)?.text ?? null;
 
   return (
     <div className="flex flex-col gap-4">
       {isHook && (
-        <div className={section}>
-          <span className={legend}>Piece · what it says</span>
-          <PiecePicker piece={piece} onPiece={onPiece} />
-          <label className="flex flex-col gap-1">
-            <span className={legend}>Text</span>
-            <input
-              ref={textFieldRef}
-              value={post.badge.textOverrides[piece] ?? ''}
-              placeholder={content?.[piece] ?? '(nothing here)'}
-              onChange={(e) =>
-                patchBadge({
-                  textOverrides: { ...post.badge.textOverrides, [piece]: e.target.value },
-                })
-              }
-              className={inputClass}
-            />
-            <span className="text-[0.68rem] text-faint">
-              Empty follows the trip — clearing it always gives the computed value back.
-            </span>
-          </label>
+        <label className="flex flex-col gap-1.5">
+          <SectionLegend label="Text">
+            <p>
+              What this piece of the badge says. Leave it empty and it follows the
+              trip — clearing it always gives the computed value back.
+            </p>
+          </SectionLegend>
+          <input
+            ref={textFieldRef}
+            value={post.badge.textOverrides[piece] ?? ''}
+            placeholder={content?.[piece] ?? '(nothing here)'}
+            onChange={(e) =>
+              patchBadge({
+                textOverrides: { ...post.badge.textOverrides, [piece]: e.target.value },
+              })
+            }
+            className={inputClass}
+          />
           {!content && (
-            <p className="m-0 text-[0.78rem] text-[#9a3a23]" role="alert">
+            <span className="text-[0.78rem] text-[#9a3a23]" role="alert">
               This trip’s dates read backwards, so there is no total to count towards.
               Fix them and the badge comes back.
-            </p>
+            </span>
           )}
-        </div>
+        </label>
       )}
 
       {slide.kind === 'content' && (
-        <div className={section}>
-          <label className="flex flex-col gap-1">
-            <span className={legend}>Caption</span>
-            <input
-              ref={textFieldRef}
-              value={slide.caption}
-              onChange={(e) => patchSlide({ caption: e.target.value })}
-              placeholder="A line over this picture — optional"
-              className={inputClass}
-            />
-          </label>
-          <span className="text-[0.68rem] text-faint">
-            The counter did its work on the hook; a content picture carries a line at
-            most.
-          </span>
-        </div>
+        <label className="flex flex-col gap-1.5">
+          <SectionLegend label="Caption">
+            <p>
+              The counter did its work on the hook; a content picture carries a line at
+              most.
+            </p>
+          </SectionLegend>
+          <input
+            ref={textFieldRef}
+            value={slide.caption}
+            onChange={(e) => patchSlide({ caption: e.target.value })}
+            placeholder="A line over this picture — optional"
+            className={inputClass}
+          />
+        </label>
       )}
 
       {slide.kind === 'cta' && (
-        <div className={section}>
+        <div className="flex flex-col gap-2">
           <span className={legend}>Closing card</span>
           <p className="m-0 text-[0.78rem] text-ink-soft">
             This slide is the trip’s call to action, shared by every deck that closes
             with it.
           </p>
-          <button type="button" onClick={onGoToDeck} className={`self-start ${smallButton}`}>
-            Edit it on the Deck tab
+          <button
+            type="button"
+            onClick={onEditClosingCard}
+            className={`self-start ${smallButton}`}
+          >
+            Edit it in the trip’s settings
           </button>
         </div>
       )}
@@ -168,8 +191,10 @@ export default function ContentTab({
       {/* The day belongs to the PIECE, not to a slide: it is what every
           number on the badge is counted from, and it must not vanish on a
           carousel's second picture. */}
-      <div className={section}>
-        <span className={legend}>The day this piece tells</span>
+      <div className="flex flex-col gap-2">
+        <SectionLegend label="The day this piece tells">
+          <p>Everything the badge says is counted from this day.</p>
+        </SectionLegend>
         <div className="flex items-center gap-2">
           <input
             type="date"
@@ -182,7 +207,7 @@ export default function ContentTab({
             {dayOfTrip}
           </span>
         </div>
-        {captured ? (
+        {captured && (
           <p className="m-0 text-[0.74rem] text-muted">
             The picture is dated{' '}
             <span className="text-ink">{formatIsoDate(captured.date)}</span>{' '}
@@ -209,69 +234,61 @@ export default function ContentTab({
               </span>
             )}
           </p>
-        ) : (
-          <p className="m-0 text-[0.74rem] text-faint">
-            Everything the badge says is counted from this day.
-          </p>
         )}
-        <label className="flex flex-col gap-1">
-          <span className={legend}>Through (for a range)</span>
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={post.endDate ?? ''}
-              min={post.date}
-              onChange={(e) => onChangePost({ ...post, endDate: e.target.value || null })}
-              className={`${inputClass} flex-1 min-w-0`}
-            />
-            {post.endDate && (
+        {showRange ? (
+          <label className="flex flex-col gap-1">
+            <span className={legend}>Through (for a range)</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={post.endDate ?? ''}
+                min={post.date}
+                onChange={(e) =>
+                  onChangePost({ ...post, endDate: e.target.value || null })
+                }
+                className={`${inputClass} flex-1 min-w-0`}
+              />
               <button
                 type="button"
-                onClick={() => onChangePost({ ...post, endDate: null })}
+                onClick={() => {
+                  onChangePost({ ...post, endDate: null });
+                  setWantRange(false);
+                }}
                 className={`flex-none ${linkButton}`}
               >
                 One day
               </button>
-            )}
-          </div>
-        </label>
+            </div>
+          </label>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setWantRange(true)}
+            className={`self-start ${linkButton}`}
+          >
+            This piece covers several days…
+          </button>
+        )}
       </div>
 
       {isHook && (
         <>
-          <div className={section}>
-            <span className={legend}>Counter · what it counts</span>
-            {/* Each mode shows the line it would really draw for this post, or
-                why it cannot draw one. Fabricated examples made three of the
-                four look inert: clicking changed nothing and said nothing. */}
-            <div className="flex flex-col gap-1.5">
-              {modePreviews.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => patchBadge({ mode: m.id })}
-                  aria-pressed={m.id === post.badge.mode}
-                  className={optionClass(m.id === post.badge.mode)}
-                >
-                  <span
-                    className={`block text-[0.78rem] ${
-                      m.id === post.badge.mode ? 'text-accent-ink font-semibold' : 'text-ink-soft'
-                    }`}
-                  >
-                    {m.label}
-                  </span>
-                  <span
-                    className={`block font-mono text-[0.7rem] ${m.text ? 'text-ink' : 'text-faint'}`}
-                  >
-                    {m.text ?? m.reason}
-                  </span>
-                </button>
-              ))}
-            </div>
-            {activeMode?.reason && (
+          <div className="flex flex-col gap-2">
+            <ModeChoice
+              label="Counter"
+              options={counterOptions}
+              value={post.badge.mode}
+              onChange={(mode) => patchBadge({ mode })}
+            >
+              <p>
+                The number the badge leads with. Every way of counting shows the line it
+                would really draw for this piece, or the reason it cannot draw one.
+              </p>
+            </ModeChoice>
+            {counterReason && (
               <p className={`${note} text-muted`}>
-                {activeMode.reason}{' '}
-                {activeMode.id === 'day-range'
+                {counterReason}{' '}
+                {post.badge.mode === 'day-range'
                   ? 'It counts the single day above meanwhile.'
                   : 'Stages are edited on the trip’s Overview; the day of the trip is counted meanwhile.'}
               </p>
@@ -292,37 +309,19 @@ export default function ContentTab({
             </p>
           </div>
 
-          <div className={section}>
-            <span className={legend}>Time · the line about when, under the place</span>
-            {/* Each mode shows the line it would really draw for this
-                picture on the reading day below — never an example. */}
-            <div className="flex flex-col gap-1.5">
-              {timePreviews.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => patchBadge({ timeAgo: m.id })}
-                  title={m.hint}
-                  aria-pressed={post.badge.timeAgo === m.id}
-                  className={optionClass(post.badge.timeAgo === m.id)}
-                >
-                  <span
-                    className={`block text-[0.78rem] ${
-                      post.badge.timeAgo === m.id
-                        ? 'text-accent-ink font-semibold'
-                        : 'text-ink-soft'
-                    }`}
-                  >
-                    {m.label}
-                  </span>
-                  <span
-                    className={`block font-mono text-[0.7rem] ${m.text ? 'text-ink' : 'text-faint'}`}
-                  >
-                    {m.id === 'off' ? 'no line' : (m.text ?? 'nothing true to say on that day')}
-                  </span>
-                </button>
-              ))}
-            </div>
+          <div className="flex flex-col gap-2">
+            <ModeChoice
+              label="Time"
+              options={timeOptions}
+              value={post.badge.timeAgo}
+              onChange={(timeAgo) => patchBadge({ timeAgo })}
+            >
+              <p>
+                The line about when, drawn under the place. It is worked out for the day
+                the piece goes out — set that day ahead and it reads correctly then, not
+                now.
+              </p>
+            </ModeChoice>
 
             <label className="flex flex-col gap-1">
               <span className={legend}>Read on</span>
@@ -343,10 +342,6 @@ export default function ContentTab({
                   </button>
                 )}
               </div>
-              <span className="text-[0.68rem] text-faint">
-                The day this goes out. Set it ahead and the line reads correctly then,
-                not now.
-              </span>
             </label>
 
             <p className="m-0 px-2.5 py-2 rounded-paper bg-paper border border-line text-[0.8rem]">

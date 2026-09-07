@@ -12,7 +12,7 @@ import {
   type TitleStyle,
 } from './title-styles';
 import { previewTextStyle } from './style-preview';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 /**
  * The title-style picker: preset cards, then the theme's own knobs (font,
@@ -28,6 +28,12 @@ import { useState } from 'react';
 interface StylePanelProps {
   theme: StyleTheme | null;
   onChange: (theme: StyleTheme | null) => void;
+  /**
+   * What sits above the preset cards. Omitted, it is the panel's own "Style"
+   * legend; a consumer that already titles the section (Road Trip's Look tab
+   * says whose style it is) passes its own so the two do not stack.
+   */
+  heading?: ReactNode;
 }
 
 const labelClass =
@@ -70,7 +76,7 @@ const ADVANCED_FIELDS: Array<{
  * per-layer advanced disclosure for the fine hand. Elements follow the theme
  * unless they override a property (see ElementPanel).
  */
-export default function StylePanel({ theme, onChange }: StylePanelProps) {
+export default function StylePanel({ theme, onChange, heading }: StylePanelProps) {
   const [advanced, setAdvanced] = useState(false);
 
   function patchStyle(patch: Partial<StyleTheme['style']>) {
@@ -85,7 +91,7 @@ export default function StylePanel({ theme, onChange }: StylePanelProps) {
     <div className="flex flex-col gap-4">
       {/* Preset cards */}
       <div className="flex flex-col gap-1.5">
-        <span className={labelClass}>Style</span>
+        {heading ?? <span className={labelClass}>Style</span>}
         <button
           type="button"
           onClick={() => onChange(null)}
