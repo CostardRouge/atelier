@@ -14,6 +14,10 @@ interface StagesPanelProps {
   /** The day open on the overview, drawn on the ruler as a playhead. */
   cursorDate: IsoDate | null;
   onSelect: (id: string | null) => void;
+  /** A leg was clicked on the ruler: open it, and go to the day it began. */
+  onOpenStage: (stage: TripStage) => void;
+  /** The playhead was moved on the ruler. */
+  onScrub: (date: IsoDate) => void;
   onChange: (stages: TripStage[]) => void;
   /** Connected Winnows whose timeline can complete the stages; empty shows nothing. */
   timelineSources?: string[];
@@ -174,6 +178,8 @@ export default function StagesPanel({
   selectedId,
   cursorDate,
   onSelect,
+  onOpenStage,
+  onScrub,
   onChange,
   timelineSources = [],
   onCompleteFrom,
@@ -187,7 +193,8 @@ export default function StagesPanel({
     const gap = rulerGaps(trip, rulerBars(trip))[0];
     const result = startStageAt(trip, gap ? gap.startDate : trip.endDate);
     onChange(result.stages);
-    onSelect(result.selectedId);
+    const added = result.stages.find((s) => s.id === result.selectedId);
+    if (added) onOpenStage(added);
   }
 
   return (
@@ -223,7 +230,8 @@ export default function StagesPanel({
         trip={trip}
         selectedId={selected?.id ?? null}
         cursorDate={cursorDate}
-        onSelect={(id) => onSelect(id === selectedId ? null : id)}
+        onOpenStage={onOpenStage}
+        onScrub={onScrub}
         onChange={onChange}
       />
 
@@ -238,7 +246,7 @@ export default function StagesPanel({
       ) : (
         !selected && (
           <p className="m-0 font-mono text-[0.66rem] text-faint">
-            Click a leg to edit it · drag its edges to move its dates · right-click a day on the calendar to start or end one there
+            Click a leg to edit it and go to its first day · drag its edges to move its dates · drag the strip above to move through the trip · right-click a day on the calendar to start or end one there
           </p>
         )
       )}

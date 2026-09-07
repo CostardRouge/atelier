@@ -6,6 +6,7 @@ import {
   stageOverGap,
 } from '../../shared/roadtrip/stage-edit';
 import {
+  dayAtOffset,
   dayOffset,
   laneCount,
   rulerBars,
@@ -14,19 +15,29 @@ import {
   stageTint,
   type RulerBar,
 } from '../../shared/roadtrip/stage-ruler';
-import { addDays, formatIsoDate, spanLength, type IsoDate } from '../../shared/roadtrip/trip-days';
+import {
+  addDays,
+  formatIsoDate,
+  spanLength,
+  type IsoDate,
+} from '../../shared/roadtrip/trip-days';
 import { stageLabel } from '../../shared/roadtrip/trip-places';
 import type { TripDoc, TripStage } from '../../shared/roadtrip/trip-types';
 
 interface StageRulerProps {
   trip: TripDoc;
   selectedId: string | null;
-  /** The day open below, drawn as a playhead so the grid and the ruler agree. */
+  /** The day open below — the playhead, and what a scrub moves. */
   cursorDate: IsoDate | null;
-  onSelect: (id: string) => void;
+  /** A leg was clicked: open it, and go to the day it began. */
+  onOpenStage: (stage: TripStage) => void;
+  /** The playhead was moved — a click on the track, a drag, or an arrow key. */
+  onScrub: (date: IsoDate) => void;
   onChange: (stages: TripStage[]) => void;
 }
 
+/** The scrub strip above the lanes — a video editor's time ruler. */
+const HEAD = 16;
 const BAR = 34;
 const LANE_GAP = 4;
 const AXIS = 18;
@@ -39,7 +50,16 @@ interface Drag {
   mode: 'start' | 'end' | 'move';
   originX: number;
   origin: TripStage;
+  /** Where the pin sits, in viewport coordinates: the top of what is dragged. */
+  y: number;
   moved: boolean;
+}
+
+/** What the floating pin says, and where it points. */
+interface Pin {
+  x: number;
+  y: number;
+  text: string;
 }
 
 /**
@@ -47,27 +67,40 @@ interface Drag {
  * editor's timeline, scaled to days. A leg is a bar you drag by either edge
  * to change when it began or ended, or by its middle to slide it whole; a
  * run of days no leg covers offers a `+` that adds one over exactly that run.
- * Every gesture snaps to whole days, because a leg has no hours.
+ * Every gesture snaps to whole days, because a leg has no hours, and a pin
+ * follows the pointer saying the date it would land on.
+ *
+ * The strip above the lanes is the playhead's: click or drag it to move the
+ * day the overview has open, the way a time ruler scrubs. Clicking a leg
+ * opens it AND goes to the day it began — the ruler and the calendar are the
+ * same calendar seen twice, so a gesture on one moves the other.
  *
  * The track is the trip: a leg cannot be dragged past the trip's edges, and
  * what a drag writes is the stage's two dates — the same fields the date
  * inputs below edit, so the two never disagree. Nothing is drag-only: a
- * focused edge moves a day with the arrow keys (a week with Shift), and so
- * does a focused bar.
+ * focused edge, bar or playhead moves with the arrow keys.
  */
 export default function StageRuler({
   trip,
   selectedId,
   cursorDate,
-  onSelect,
+  onOpenStage,
+  onScrub,
   onChange,
 }: StageRulerProps) {
   const total = spanLength(trip.startDate, trip.endDate);
   const scroller = useRef<HTMLDivElement>(null);
+  const track = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const drag = useRef<Drag | null>(null);
+  const [pin, setPin] = useState<Pin | null>(null);
+  // Where the playhead is while it is being dragged. The route is written on
+  // release, not per day: `navigate` pushes a history entry, and a scrub
+  // across a month would otherwise bury the day you came from under thirty.
+  const [scrub, setScrub] = useState<IsoDate | null>(null);
+  const scrubbing = useRef(false);
   // A drag ends in a click on the same button; this swallows that click so
-  // sliding a leg does not also toggle its selection.
+  // sliding a leg does not also open it.
   const swallowClick = useRef(false);
 
   useEffect(() => {
@@ -88,8 +121,11 @@ export default function StageRuler({
   const lanes = Math.max(1, laneCount(bars));
   const dayW = Math.max(MIN_DAY, width > 0 ? width / total : MIN_DAY);
   const trackW = dayW * total;
+  const lanesTop = HEAD;
   const lanesH = lanes * BAR + (lanes - 1) * LANE_GAP;
-  const cursor = cursorDate ? dayOffset(trip, cursorDate) : null;
+  const bodyH = lanesTop + lanesH;
+  const playDate = scrub ?? cursorDate;
+  const playAt = playDate ? dayOffset(trip, playDate) : null;
 
   const update = (next: TripStage) => {
     const current = trip.stages.find((s) => s.id === next.id);
@@ -106,15 +142,19 @@ export default function StageRuler({
 
   const begin = (e: PointerEvent<HTMLElement>, stage: TripStage, mode: Drag['mode']) => {
     if (e.button !== 0) return;
-    drag.current = { id: stage.id, mode, originX: e.clientX, origin: stage, moved: false };
+    const y = e.currentTarget.getBoundingClientRect().top;
+    drag.current = { id: stage.id, mode, originX: e.clientX, origin: stage, y, moved: false };
     e.currentTarget.setPointerCapture(e.pointerId);
+    setPin({ x: e.clientX, y, text: pinText(mode, stage) });
   };
   const move = (e: PointerEvent<HTMLElement>) => {
     const d = drag.current;
     if (!d) return;
     const days = Math.round((e.clientX - d.originX) / dayW);
     if (days !== 0) d.moved = true;
-    update(applyDelta(d, days));
+    const next = applyDelta(d, days);
+    update(next);
+    setPin({ x: e.clientX, y: d.y, text: pinText(d.mode, next) });
   };
   const end = (e: PointerEvent<HTMLElement>) => {
     const d = drag.current;
@@ -124,6 +164,7 @@ export default function StageRuler({
     }
     swallowClick.current = d.moved;
     drag.current = null;
+    setPin(null);
   };
 
   const nudge = (e: KeyboardEvent<HTMLElement>, stage: TripStage, mode: Drag['mode']) => {
@@ -133,24 +174,86 @@ export default function StageRuler({
     if (!back && !on) return;
     e.preventDefault();
     const days = (e.shiftKey ? 7 : 1) * (back ? -1 : 1);
-    update(applyDelta({ id: stage.id, mode, originX: 0, origin: stage, moved: true }, days));
+    update(applyDelta({ id: stage.id, mode, originX: 0, origin: stage, y: 0, moved: true }, days));
+  };
+
+  /** The day under a viewport x, read against the track's own box. */
+  const dayUnder = (clientX: number): IsoDate | null => {
+    const el = track.current;
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    return dayAtOffset(trip, (clientX - rect.left) / dayW);
+  };
+
+  const showScrubPin = (date: IsoDate, clientX: number) => {
+    const at = dayOffset(trip, date);
+    const top = track.current?.getBoundingClientRect().top ?? 0;
+    setPin({
+      x: clientX,
+      y: top,
+      text: at === null ? formatIsoDate(date) : `day ${at + 1} · ${formatIsoDate(date)}`,
+    });
+  };
+
+  const beginScrub = (e: PointerEvent<HTMLElement>) => {
+    if (e.button !== 0) return;
+    const date = dayUnder(e.clientX);
+    if (!date) return;
+    scrubbing.current = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setScrub(date);
+    showScrubPin(date, e.clientX);
+  };
+  const moveScrub = (e: PointerEvent<HTMLElement>) => {
+    if (!scrubbing.current) return;
+    const date = dayUnder(e.clientX);
+    if (!date) return;
+    setScrub(date);
+    showScrubPin(date, e.clientX);
+  };
+  const endScrub = (e: PointerEvent<HTMLElement>) => {
+    if (!scrubbing.current) return;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+    scrubbing.current = false;
+    const date = dayUnder(e.clientX) ?? scrub;
+    setScrub(null);
+    setPin(null);
+    if (date) onScrub(date);
   };
 
   const addOver = (startDate: IsoDate, endDate: IsoDate) => {
     const stage = stageOverGap(trip, startDate, endDate);
     onChange(insertStageInOrder(trip.stages, stage));
-    onSelect(stage.id);
+    onOpenStage(stage);
   };
 
   return (
     <div ref={scroller} className="overflow-x-auto pb-1" aria-label="Stage timeline">
-      <div className="relative" style={{ width: trackW, height: lanesH + AXIS + 6 }}>
+      <div ref={track} className="relative" style={{ width: trackW, height: bodyH + AXIS + 6 }}>
+        {/* The scrub surface, behind everything: the head strip and the empty
+            track both move the playhead, the way a time ruler does. */}
+        <div
+          className="absolute inset-0 cursor-col-resize touch-none"
+          onPointerDown={beginScrub}
+          onPointerMove={moveScrub}
+          onPointerUp={endScrub}
+          onPointerCancel={endScrub}
+          aria-hidden="true"
+        />
+        <div
+          className="absolute left-0 right-0 top-0 border-b border-line pointer-events-none"
+          style={{ height: HEAD }}
+          aria-hidden="true"
+        />
+
         {/* Month rules and their labels, the scale of the track. */}
         {months.map((m) => (
           <span
             key={`${m.offset}-${m.label}`}
-            className="absolute top-0 border-l border-line pointer-events-none"
-            style={{ left: m.offset * dayW, height: lanesH + 6 }}
+            className="absolute border-l border-line pointer-events-none"
+            style={{ left: m.offset * dayW, top: lanesTop, height: lanesH + 6 }}
             aria-hidden="true"
           >
             <span
@@ -163,7 +266,7 @@ export default function StageRuler({
         ))}
         <span
           className="absolute left-0 right-0 border-t border-line pointer-events-none"
-          style={{ top: lanesH + 4 }}
+          style={{ top: bodyH + 4 }}
           aria-hidden="true"
         />
 
@@ -178,7 +281,7 @@ export default function StageRuler({
               className="absolute w-[18px] h-[18px] grid place-items-center rounded-full border border-dashed border-line-strong bg-paper text-[0.8rem] leading-none text-faint cursor-pointer hover:border-accent hover:text-accent-ink"
               style={{
                 left: gap.from * dayW + (gap.length * dayW) / 2 - 9,
-                top: BAR / 2 - 9,
+                top: lanesTop + BAR / 2 - 9,
               }}
             >
               +
@@ -191,13 +294,14 @@ export default function StageRuler({
             key={bar.stage.id}
             bar={bar}
             dayW={dayW}
+            top={lanesTop + bar.lane * (BAR + LANE_GAP)}
             selected={bar.stage.id === selectedId}
             onSelect={() => {
               if (swallowClick.current) {
                 swallowClick.current = false;
                 return;
               }
-              onSelect(bar.stage.id);
+              onOpenStage(bar.stage);
             }}
             begin={begin}
             move={move}
@@ -206,21 +310,90 @@ export default function StageRuler({
           />
         ))}
 
-        {cursor !== null && (
-          <span
-            className="absolute top-0 w-[2px] bg-ink/50 pointer-events-none"
-            style={{ left: (cursor + 0.5) * dayW - 1, height: lanesH + 6 }}
-            aria-hidden="true"
-          />
+        {playAt !== null && playDate && (
+          <>
+            <span
+              className="absolute top-0 w-[2px] bg-ink/50 pointer-events-none"
+              style={{ left: (playAt + 0.5) * dayW - 1, height: bodyH + 6 }}
+              aria-hidden="true"
+            />
+            <button
+              type="button"
+              role="slider"
+              aria-label="The day open below"
+              aria-valuemin={1}
+              aria-valuemax={total}
+              aria-valuenow={playAt + 1}
+              aria-valuetext={formatIsoDate(playDate)}
+              title={`${formatIsoDate(playDate)} — drag to move through the trip`}
+              onPointerDown={beginScrub}
+              onPointerMove={moveScrub}
+              onPointerUp={endScrub}
+              onPointerCancel={endScrub}
+              onKeyDown={(e) => {
+                if (e.altKey || e.metaKey || e.ctrlKey) return;
+                const back = e.key === 'ArrowLeft';
+                const on = e.key === 'ArrowRight';
+                if (!back && !on) return;
+                e.preventDefault();
+                const next = addDays(playDate, (e.shiftKey ? 7 : 1) * (back ? -1 : 1));
+                const at = next ? dayOffset(trip, next) : null;
+                if (next && at !== null) onScrub(next);
+              }}
+              className="absolute p-0 border-0 bg-transparent cursor-col-resize touch-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ink rounded-[3px]"
+              style={{ left: (playAt + 0.5) * dayW - 6, top: 0, width: 12, height: HEAD }}
+            >
+              <span
+                className="block w-[10px] h-[10px] mx-auto rounded-[3px] border-2 border-ink bg-paper"
+                aria-hidden="true"
+              />
+            </button>
+          </>
         )}
       </div>
+      {pin && <DatePin pin={pin} />}
     </div>
   );
+}
+
+/**
+ * What a drag says while it is happening. Fixed to the viewport and clamped
+ * to it, for the grid's own reason (`DayCard`): the track scrolls sideways
+ * inside its box, so a pin positioned inside it would be clipped by that box
+ * on the very drag that reaches its edge.
+ */
+function DatePin({ pin }: { pin: Pin }) {
+  const HALF = 108;
+  const x = Math.min(Math.max(pin.x, HALF + 6), window.innerWidth - HALF - 6);
+  return (
+    <div
+      role="presentation"
+      className="fixed z-50 pointer-events-none -translate-x-1/2 -translate-y-full"
+      style={{ left: x, top: pin.y - 6 }}
+    >
+      <div className="px-2.5 py-1 rounded-paper border border-frame bg-frame text-paper shadow-[0_6px_18px_rgba(16,15,13,0.28)] font-mono text-[0.68rem] tabular-nums whitespace-nowrap">
+        {pin.text}
+      </div>
+      <span className="block mx-auto w-2 h-2 -mt-1 rotate-45 bg-frame" aria-hidden="true" />
+    </div>
+  );
+}
+
+/** The date a drag would land on, and what the leg would then be. */
+function pinText(mode: Drag['mode'], stage: TripStage): string {
+  const len = spanLength(stage.startDate, stage.endDate);
+  const days = len === null ? '' : ` · ${len} day${len === 1 ? '' : 's'}`;
+  if (mode === 'move') {
+    return `${formatIsoDate(stage.startDate)} → ${formatIsoDate(stage.endDate)}${days}`;
+  }
+  const edge = mode === 'start' ? stage.startDate : stage.endDate;
+  return `${formatIsoDate(edge)}${days}`;
 }
 
 function Bar({
   bar,
   dayW,
+  top,
   selected,
   onSelect,
   begin,
@@ -230,6 +403,7 @@ function Bar({
 }: {
   bar: RulerBar;
   dayW: number;
+  top: number;
   selected: boolean;
   onSelect: () => void;
   begin: (e: PointerEvent<HTMLElement>, stage: TripStage, mode: Drag['mode']) => void;
@@ -261,7 +435,7 @@ function Bar({
       }`}
       style={{
         left: bar.from * dayW,
-        top: bar.lane * (BAR + LANE_GAP),
+        top,
         height: BAR,
         background: `color-mix(in oklch, ${tint} 22%, var(--color-surface))`,
         borderColor: selected ? undefined : tint,

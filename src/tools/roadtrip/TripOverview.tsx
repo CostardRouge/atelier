@@ -174,6 +174,17 @@ export default function TripOverview({
     [trip, onSelectDate],
   );
 
+  // Opening a leg goes to the day it began, and says WHICH leg rather than
+  // deriving one from that day: on a travel day two legs overlap and
+  // `stageAt` answers with the later one, which is not the one clicked.
+  const openStage = useCallback(
+    (stage: TripStage) => {
+      setStageId(stage.id);
+      onSelectDate(stage.startDate);
+    },
+    [onSelectDate],
+  );
+
   // Each day's tint is its stage's — the LAST covering stage, as `stageAt`
   // resolves it, so a travel day wears the leg it ended in.
   const tints = useMemo(() => {
@@ -277,6 +288,8 @@ export default function TripOverview({
         selectedId={selectedStageId}
         cursorDate={selected}
         onSelect={setStageId}
+        onOpenStage={openStage}
+        onScrub={selectDate}
         onChange={setStages}
         timelineSources={timelineSources}
         onCompleteFrom={onCompleteFrom}

@@ -430,16 +430,19 @@ picture is — and an optional marker sets the place off from the rest.
 
 They live on a **ruler under the grid** — a video editor's timeline scaled to
 days. Each leg is a bar: drag either edge to change when it began or ended,
-drag its middle to slide it whole, and every move snaps to a day. A run of
-days no leg covers offers a `+` that adds one over exactly that run; legs
-that overlap on a travel day stack in a second row rather than hiding one
-another. The grid and the ruler are the same calendar seen twice: each day's
-cell wears a stripe in its leg's tint, the day you have open is a playhead on
-the ruler, and **right-clicking a day** offers the edits that make sense
-there, worded with the leg they would touch — start a stage here (inside a
-leg, that cuts it in two), end "Perth → Kalbarri" here, extend it to here.
-Clicking a bar, or a day a leg covers, opens that one leg's fields beneath the
-ruler; nothing is drag-only, a focused edge or bar moves with the arrow keys.
+drag its middle to slide it whole, and every move snaps to a day while a pin
+follows the pointer saying the date it would land on and how long the leg
+would then be. A run of days no leg covers offers a `+` that adds one over
+exactly that run; legs that overlap on a travel day stack in a second row
+rather than hiding one another. The grid and the ruler are the same calendar
+seen twice: each day's cell wears a stripe in its leg's tint, the day you have
+open is a **playhead you can scrub** — click or drag the strip along the top
+to travel through the trip — and **right-clicking a day** offers the edits
+that make sense there, worded with the leg they would touch: start a stage
+here (inside a leg, that cuts it in two), end "Perth → Kalbarri" here, extend
+it to here. Clicking a bar opens that leg's fields beneath the ruler and goes
+to the day it began; clicking a day a leg covers opens that leg. Nothing is
+drag-only — a focused edge, bar or playhead moves with the arrow keys.
 
 A stage lists **the places it went through, in the order you lived them**,
 as a row of chips joined by the badge's own arrow. The first is where the leg
