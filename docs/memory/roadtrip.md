@@ -45,6 +45,10 @@ Nothing else moves with it: the trip's `id` is a uuid, and `tripFromRef` matches
 
 Verified in headless Chromium: the sheet opens on the trip's own values, the impact line reads "1 leg will be trimmed to fit", saving trims the leg and renames the chip, and 0px document overflow at 390px with the sheet open.
 
+## The whole trip card opens the trip (2026-09-07)
+
+**Decision, from the maintainer** (*"ability to click on the trip card to open it (pointer on hover, no need to translate up)"*). `TripCard`'s body is the click target — a card showing a name, its dates and how much of it is told is the thing you point at — with `cursor-pointer` and **no `hover:-translate-y-1`**: the lift was decoration on something that was not clickable, and it is the one card in the suite that now is. The **Open / Resume / Open here button stays**: it is the keyboard and screen-reader path and the only thing that says which of the three it is. Everything else in the card keeps its own click through one guard on the card's handler — `(e.target).closest('button, select, input, label, a')` — rather than `stopPropagation` sprinkled over the export, delete and move controls; a busy card (a move or a delete in flight) does not open at all. Verified: Delete opens its confirm without opening the trip, a click on the card's body opens it.
+
 ## Dates are calendar days, and the arithmetic runs in UTC (2026-08-23)
 
 **Decision.** `IsoDate` is a plain `YYYY-MM-DD` string and every subtraction in `trip-days.ts` goes through `Date.UTC` / `getUTC*`, never a local `Date`. **Why**: the same rule `telemetry/time-format.ts` follows — parsing locally lets the *reading* machine's timezone move a value, so a trip planned in France and reviewed in Australia would disagree about which day a photo belongs to. UTC also has no DST, so stepping a day is one constant; a local-`Date` implementation lands on 30 March 2025 twice or skips it (both cases are tested). The one place a LOCAL reading is correct is `todayIso()` — "today" is the date on the wall behind the person, not an instant — and it is frozen into an `IsoDate` immediately.

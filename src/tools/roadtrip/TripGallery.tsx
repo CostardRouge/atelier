@@ -107,9 +107,22 @@ function TripCard({
 
   return (
     <div
-      className={`flex flex-col gap-3 p-5 bg-surface border rounded-paper-lg shadow-paper-soft transition-[transform,box-shadow,border-color] duration-300 ease-paper hover:-translate-y-1 hover:shadow-paper ${
-        isOpen ? 'border-accent' : 'border-line hover:border-line-strong'
-      } ${remoteOnly ? 'opacity-75' : ''}`}
+      // The whole card opens the trip — a card that shows a trip's name, its
+      // dates and how much of it is told is the thing you point at, and the
+      // "Open" button below stays as the keyboard and screen-reader path (and
+      // as the one that says "Resume" or "Open here"). Anything already
+      // interactive keeps its own click: the confirm rows, the export and the
+      // move select all sit inside this card.
+      onClick={(e) => {
+        if (busy !== null) return;
+        if ((e.target as HTMLElement).closest('button, select, input, label, a')) return;
+        onOpen();
+      }}
+      className={`flex flex-col gap-3 p-5 bg-surface border rounded-paper-lg shadow-paper-soft transition-[box-shadow,border-color] duration-300 ease-paper hover:shadow-paper ${
+        busy === null ? 'cursor-pointer' : ''
+      } ${isOpen ? 'border-accent' : 'border-line hover:border-line-strong'} ${
+        remoteOnly ? 'opacity-75' : ''
+      }`}
     >
       <div className="min-w-0">
         <h3 className="m-0 font-serif text-[1.2rem] truncate" title={trip.name}>
