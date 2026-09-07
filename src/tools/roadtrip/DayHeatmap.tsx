@@ -16,14 +16,29 @@ export interface DayMenuItem {
   run: () => void;
 }
 
+/** The leg a day belongs to, as the grid needs to draw and name it. */
+export interface DayStage {
+  /**
+   * What the leg is called — `stageLabel`, so an unnamed one reading
+   * "Perth → Cairns" is fine and one that names nothing at all is empty.
+   * The card then says where the day sits and nothing more, rather than
+   * inventing a place.
+   */
+  label: string;
+  tint: string;
+  /** Where the day sits inside the leg, 1-based, for "day 2/3". */
+  day: number;
+  total: number;
+}
+
 interface DayHeatmapProps {
   startDate: IsoDate;
   endDate: IsoDate;
   days: DayCell[];
   selected: IsoDate | null;
   onSelect: (date: IsoDate) => void;
-  /** A colour to underline the day with — the tint of the stage it belongs to. */
-  tintOf?: (date: IsoDate) => string | null;
+  /** The stage the day belongs to: its tint underlines the cell, its name reads on the card. */
+  stageOf?: (date: IsoDate) => DayStage | null;
   /** What a right-click on the day offers; none or empty leaves the browser's menu. */
   menuFor?: (date: IsoDate) => DayMenuItem[];
 }
@@ -56,19 +71,28 @@ function levelOf(cell: DayCell): number {
 /** What the card says about a day, in the order it is read. */
 interface Hovered {
   cell: DayCell;
+  /** The leg it belongs to, when one covers it. */
+  stage: DayStage | null;
   /** Viewport coordinates of the cell — the card is positioned fixed. */
   x: number;
   y: number;
 }
 
-function cellTitle(cell: DayCell): string {
-  const when = `${formatIsoDate(cell.date)} · day ${cell.dayNumber}`;
+function cellTitle(cell: DayCell, stage: DayStage | null): string {
+  const leg = stage ? ` · ${stageLine(stage)}` : '';
+  const when = `${formatIsoDate(cell.date)} · day ${cell.dayNumber}${leg}`;
   if (cell.posts.length === 0) return `${when} — nothing told yet`;
   const drafts = cell.posts.length - cell.published;
   const parts = [];
   if (cell.published) parts.push(`${cell.published} published`);
   if (drafts) parts.push(`${drafts} draft${drafts === 1 ? '' : 's'}`);
   return `${when} — ${parts.join(', ')}`;
+}
+
+/** What the card and the label say about the leg: "Kalbarri · day 2/3". */
+function stageLine(stage: DayStage): string {
+  const where = `day ${stage.day}/${stage.total}`;
+  return stage.label ? `${stage.label} · ${where}` : where;
 }
 
 /**
@@ -86,7 +110,7 @@ export default function DayHeatmap({
   days,
   selected,
   onSelect,
-  tintOf,
+  stageOf,
   menuFor,
 }: DayHeatmapProps) {
   const weeks = useMemo(() => heatmapWeeks(startDate, endDate), [startDate, endDate]);
@@ -153,10 +177,11 @@ export default function DayHeatmap({
                   if (!cell) return <span key={row} style={{ width: CELL, height: CELL }} />;
                   const isSelected = date === selected;
                   const isToday = date === today;
-                  const tint = tintOf?.(date) ?? null;
+                  const stage = stageOf?.(date) ?? null;
+                  const tint = stage?.tint ?? null;
                   const show = (el: HTMLElement) => {
                     const r = el.getBoundingClientRect();
-                    setHovered({ cell, x: r.left + r.width / 2, y: r.top });
+                    setHovered({ cell, stage, x: r.left + r.width / 2, y: r.top });
                   };
                   return (
                     <button
@@ -175,7 +200,7 @@ export default function DayHeatmap({
                       onPointerLeave={() => setHovered((h) => (h?.cell === cell ? null : h))}
                       onFocus={(e) => show(e.currentTarget)}
                       onBlur={() => setHovered((h) => (h?.cell === cell ? null : h))}
-                      aria-label={cellTitle(cell)}
+                      aria-label={cellTitle(cell, stage)}
                       aria-selected={isSelected}
                       className="p-0 border cursor-pointer rounded-[3px] transition-[transform,box-shadow] duration-150 ease-paper hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink"
                       style={{
@@ -299,7 +324,7 @@ function DayMenu({ menu, onClose }: { menu: Menu; onClose: () => void }) {
  * It never takes the pointer, so sweeping across the grid is uninterrupted.
  */
 function DayCard({ hovered }: { hovered: Hovered }) {
-  const { cell } = hovered;
+  const { cell, stage } = hovered;
   const drafts = cell.posts.length - cell.published;
   const kinds = POST_KINDS.map((k) => ({
     label: k.label,
@@ -323,6 +348,20 @@ function DayCard({ hovered }: { hovered: Hovered }) {
         <span className="block text-[0.82rem] leading-tight">
           {formatIsoDate(cell.date)}
         </span>
+        {/* The leg, under the date and above what was told: the day's place
+            is what the maintainer sweeps the grid to remember. Its tint is
+            repeated as a dot so the card and the cell's stripe read as the
+            same leg. */}
+        {stage && (
+          <span className="flex items-center gap-1.5 mt-0.5 text-[0.72rem] leading-tight text-[rgba(244,240,231,0.82)]">
+            <span
+              className="flex-none w-1.5 h-1.5 rounded-full"
+              style={{ background: stage.tint }}
+              aria-hidden="true"
+            />
+            <span className="min-w-0 truncate">{stageLine(stage)}</span>
+          </span>
+        )}
         {cell.posts.length === 0 ? (
           <span className="block mt-1 font-mono text-[0.66rem] text-[rgba(244,240,231,0.62)]">
             nothing told yet

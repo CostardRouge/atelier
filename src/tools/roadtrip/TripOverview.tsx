@@ -3,10 +3,11 @@ import { deleteThumbs } from '../../shared/roadtrip/trip-store';
 import { dayStageActions } from '../../shared/roadtrip/stage-edit';
 import { stageTint } from '../../shared/roadtrip/stage-ruler';
 import { enumerateDays, formatIsoDate, isWithin, type IsoDate } from '../../shared/roadtrip/trip-days';
-import { stageAt, tripCoverage } from '../../shared/roadtrip/trip-coverage';
+import { stageAt, stageDayNumber, tripCoverage } from '../../shared/roadtrip/trip-coverage';
+import { stageLabel } from '../../shared/roadtrip/trip-places';
 import { usePublishMediaScope, type MediaScope } from '../../shared/sources/media-scope';
 import type { TripDoc, TripPost, TripStage } from '../../shared/roadtrip/trip-types';
-import DayHeatmap, { type DayMenuItem } from './DayHeatmap';
+import DayHeatmap, { type DayMenuItem, type DayStage } from './DayHeatmap';
 import DayPanel from './DayPanel';
 import StagesPanel from './StagesPanel';
 
@@ -193,13 +194,19 @@ export default function TripOverview({
     [onSelectDate],
   );
 
-  // Each day's tint is its stage's — the LAST covering stage, as `stageAt`
-  // resolves it, so a travel day wears the leg it ended in.
-  const tints = useMemo(() => {
-    const map = new Map<IsoDate, string>();
+  // Each day's leg — its tint on the cell, its name and its rank on the hover
+  // card. The LAST covering stage wins, as `stageAt` resolves it, so a travel
+  // day wears the leg it ended in.
+  const dayStages = useMemo(() => {
+    const map = new Map<IsoDate, DayStage>();
     trip.stages.forEach((stage, index) => {
+      const label = stageLabel(stage);
+      const tint = stageTint(index);
       for (const day of enumerateDays(stage.startDate, stage.endDate)) {
-        if (isWithin(trip.startDate, trip.endDate, day)) map.set(day, stageTint(index));
+        if (!isWithin(trip.startDate, trip.endDate, day)) continue;
+        const where = stageDayNumber(stage, day);
+        if (!where) continue;
+        map.set(day, { label, tint, day: where.day, total: where.total });
       }
     });
     return map;
@@ -271,7 +278,7 @@ export default function TripOverview({
           days={coverage.days}
           selected={selected}
           onSelect={selectDate}
-          tintOf={(date) => tints.get(date) ?? null}
+          stageOf={(date) => dayStages.get(date) ?? null}
           menuFor={menuFor}
         />
       </div>
