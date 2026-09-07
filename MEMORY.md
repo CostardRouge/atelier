@@ -147,9 +147,16 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 | `docs/memory/studio.md` | the Studio tool, the tool-merge plan, project persistence, title styles, retiring a legacy tool |
 | `docs/memory/roadtrip.md` | the Road Trip tool, trip/day/post model, day badges, publishing cadence and strategy |
 
-Not memory files, but read them before touching anything about media sources or
-document storage:
+Not memory files, but read them before starting new work, or before touching
+anything about media sources or document storage:
 
+- **`docs/roadmap.md`** — twelve proposed features (2026-09-07), each traced to
+  the open item, deferred decision or stated direction it comes from, with its
+  constraints, deliverables and size. **A proposal, not a set of decisions**:
+  nothing in it has been agreed with the maintainer, so read it to find the next
+  piece of work and its rules, never as an authority on what was chosen. It also
+  carries a table of ideas deliberately left off, which duplicates no memory
+  entry but points at them.
 - **`docs/winnow-bridge.md`** — the agreed design for connecting Atelier to
   Winnow (the maintainer's media-triage project), the two adapter seams it rests
   on, and the phases. Verified 2026-08-29 against the Winnow repository itself
