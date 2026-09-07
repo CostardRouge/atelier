@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { deleteThumbs } from '../../shared/roadtrip/trip-store';
+import { applyTripDetails } from '../../shared/roadtrip/trip-edit';
 import { dayStageActions } from '../../shared/roadtrip/stage-edit';
 import { stageTint } from '../../shared/roadtrip/stage-ruler';
 import { enumerateDays, formatIsoDate, isWithin, type IsoDate } from '../../shared/roadtrip/trip-days';
@@ -9,6 +10,7 @@ import type { TripDoc, TripPost, TripStage } from '../../shared/roadtrip/trip-ty
 import DayHeatmap, { type DayMenuItem } from './DayHeatmap';
 import DayPanel from './DayPanel';
 import StagesPanel from './StagesPanel';
+import TripDetailsModal, { type TripDetails } from './TripDetailsModal';
 
 interface TripOverviewProps {
   trip: TripDoc;
@@ -220,6 +222,28 @@ export default function TripOverview({
 
   const untold = coverage.totalDays - coverage.toldDays;
 
+  // The dates-and-route sheet, the creation modal reopened on this trip.
+  const [editingDetails, setEditingDetails] = useState(false);
+  const saveDetails = useCallback(
+    (details: TripDetails) => {
+      setEditingDetails(false);
+      const next = applyTripDetails(trip, {
+        startDate: details.startDate,
+        endDate: details.endDate,
+        from: details.from,
+        to: details.to,
+      });
+      onChange({ ...next, updatedAt: Date.now() });
+      // The open day may no longer be in the trip: the route says where you
+      // are, so it has to follow rather than leave the panel on a day the
+      // calendar no longer draws.
+      if (selected && !isWithin(next.startDate, next.endDate, selected)) {
+        onSelectDate(next.startDate);
+      }
+    },
+    [trip, onChange, onSelectDate, selected],
+  );
+
   return (
     <section
       className="flex flex-col flex-1 min-h-0 gap-5 overflow-auto"
@@ -235,10 +259,18 @@ export default function TripOverview({
         </button>
         <div className="min-w-0">
           <TripTitle name={trip.name} onRename={rename} />
-          <p className="m-0 font-mono text-[0.72rem] text-muted">
+          {/* The subtitle is the way back into the two facts that were only
+              askable at creation. Same sheet, so there is one place where a
+              trip's dates and route are said. */}
+          <button
+            type="button"
+            onClick={() => setEditingDetails(true)}
+            title="Change the trip's dates and route"
+            className="p-0 border-0 bg-transparent font-mono text-[0.72rem] text-muted text-left cursor-pointer hover:text-accent-ink hover:underline underline-offset-[3px]"
+          >
             {trip.destination && <>{trip.destination} · </>}
             {formatIsoDate(trip.startDate)} → {formatIsoDate(trip.endDate)}
-          </p>
+          </button>
         </div>
         {headerExtra && (
           <>
@@ -317,6 +349,14 @@ export default function TripOverview({
             mutate(trip.posts.filter((p) => p.id !== id));
           }}
           onOpenPost={onOpenPost}
+        />
+      )}
+
+      {editingDetails && (
+        <TripDetailsModal
+          trip={trip}
+          onCancel={() => setEditingDetails(false)}
+          onSubmit={saveDetails}
         />
       )}
     </section>

@@ -31,6 +31,20 @@ Read before touching `src/tools/roadtrip/` or `src/shared/roadtrip/`, and before
 
 Nothing else moves with it: the trip's `id` is a uuid, and `tripFromRef` matches on the id fragment alone, so the slug in `#/roadtrip/<slug>-<id8>` is decoration that goes stale until the next navigation and every link ever made still resolves. Badge text derived from the trip's name (the headline fallback, the sub-year kicker) re-derives on the next paint — a rename is meant to reach the pieces.
 
+## The dates and the route are re-edited in the sheet that asked for them (2026-09-07)
+
+**Decision, from the maintainer** (*"i need the ability to change the trip date and initial places, maybe use the same modal to avoid recreating the same ui"*). `NewTripModal` is `TripDetailsModal`: given a `trip` it opens on that trip's span and route instead of creating one, reached by clicking the **line under the heading** on the Overview (the destination · dates line), beside the click-to-rename `<h1>`. Editing hides three things and nothing else moves: the **name** (renamed in place on that heading — two ways to rename one thing on one screen is clutter), the **Keep on** picker (moving a trip is the gallery's verb and the pill is what says where it stands) and the **seed from a timeline** row.
+
+**The arithmetic is pure and lives in `shared/roadtrip/trip-edit.ts`**, not in the component, because a span that moves has consequences. The rules, all tested:
+
+- The span is the ruler's own frame, so **legs follow it**: one that overhangs is trimmed, one the new span does not reach at all is dropped (`retimeStages`). **Posts are NEVER touched** — a post's date is the key of the whole model and the work is the author's; one left outside simply stops being drawn (`postDays` already clamps).
+- `spanImpact` counts what would happen and the sheet **says it before saving**, in one accent line — a trip told over a year must not lose a leg silently. Nothing is said when the span only grows, which is the normal case.
+- The route is `tripRouteEnds` (moved into `trip-places.ts` beside `tripRouteLabel`, which now derives from it), so editing an end **writes back into the leg that holds it**: no third copy of where the trip went. Emptying a field removes that place and the leg keeps its dates and derives its label; naming an end the trip had none of adds one; with no leg at all the pair seeds one over the whole span, exactly as `createTripDoc` does. The trap: a trip naming ONE place is its own start and end (`from.id === to.id`), so the "To" field opens EMPTY and an added end is minted with a fresh id — writing `to` onto that place would rename the start, and reusing its id would list it twice.
+- `destination` — the prose subtitle composed from the two ends at creation — follows the route **only when the route actually changed**, so fixing a year keeps a line the author (or a timeline import) wrote.
+- The open day is in the route, so a shrunk span moves it to the trip's new first day rather than leaving `DayPanel` on a day the calendar no longer draws.
+
+Verified in headless Chromium: the sheet opens on the trip's own values, the impact line reads "1 leg will be trimmed to fit", saving trims the leg and renames the chip, and 0px document overflow at 390px with the sheet open.
+
 ## Dates are calendar days, and the arithmetic runs in UTC (2026-08-23)
 
 **Decision.** `IsoDate` is a plain `YYYY-MM-DD` string and every subtraction in `trip-days.ts` goes through `Date.UTC` / `getUTC*`, never a local `Date`. **Why**: the same rule `telemetry/time-format.ts` follows — parsing locally lets the *reading* machine's timezone move a value, so a trip planned in France and reviewed in Australia would disagree about which day a photo belongs to. UTC also has no DST, so stepping a day is one constant; a local-`Date` implementation lands on 30 March 2025 twice or skips it (both cases are tested). The one place a LOCAL reading is correct is `todayIso()` — "today" is the date on the wall behind the person, not an instant — and it is frozen into an `IsoDate` immediately.

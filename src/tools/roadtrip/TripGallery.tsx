@@ -44,7 +44,7 @@ import {
   remoteFor,
   type RemoteTripRow,
 } from '../../shared/roadtrip/trip-remote';
-import NewTripModal, { type NewTripChoices, type TimelineSourceOption } from './NewTripModal';
+import TripDetailsModal, { type TripDetails, type TimelineSourceOption } from './TripDetailsModal';
 
 interface TripGalleryProps {
   openTripId: string | null;
@@ -338,14 +338,17 @@ export default function TripGallery({
     return true;
   }
 
-  async function handleCreate(choices: NewTripChoices) {
+  async function handleCreate(choices: TripDetails) {
     setNotice(null);
+    // The two ends, with the empty ones dropped: filled they seed one leg over
+    // the whole trip, empty they seed nothing at all — see `createTripDoc`.
+    const places = [choices.from, choices.to].filter((p) => p.name.trim().length > 0);
     const doc = createTripDoc(
       choices.name,
       choices.destination,
       choices.startDate,
       choices.endDate,
-      choices.places,
+      places,
       choices.sourceId,
     );
     setCreating(false);
@@ -626,10 +629,10 @@ export default function TripGallery({
       )}
 
       {creating && (
-        <NewTripModal
+        <TripDetailsModal
           sources={documentSources}
           onCancel={() => setCreating(false)}
-          onCreate={(choices) => void handleCreate(choices)}
+          onSubmit={(choices) => void handleCreate(choices)}
           timelineSources={timelineSources}
           onSeedFrom={
             onSeedFrom
