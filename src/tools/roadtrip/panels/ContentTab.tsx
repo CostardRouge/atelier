@@ -213,7 +213,9 @@ export default function ContentTab({
             <span className="text-ink">{formatIsoDate(captured.date)}</span>{' '}
             {captured.source === 'exif'
               ? '(the camera’s own record)'
-              : '(the file’s date — a copy or an export rewrites it)'}
+              : captured.source === 'source'
+                ? `(the capture time ${captured.via ?? 'the source'} read at ingest)`
+                : '(the file’s date — a copy or an export rewrites it)'}
             {capturedElsewhere && (
               <>
                 {' · '}

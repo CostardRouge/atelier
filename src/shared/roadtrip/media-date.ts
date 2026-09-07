@@ -9,8 +9,16 @@
  * picture has nothing to do with. Nothing here changes a post on its own —
  * the tool SHOWS what it measured and offers it; the author still decides.
  *
- * Two sources, and which one it was is part of the answer:
- *   - `exif` — `DateTimeOriginal`, the camera's own record of the shutter.
+ * Three sources, and which one it was is part of the answer:
+ *   - `exif` — `DateTimeOriginal`, the camera's own record of the shutter,
+ *     read from the file in hand.
+ *   - `source` — the same field, as the instance the picture came from parsed
+ *     it at ingest (`MediaOrigin.exif`). A Winnow photo proxy is a WebP
+ *     re-encode with no EXIF at all, so without this every fetched picture
+ *     fell through to its `lastModified` and was labelled a weak guess while
+ *     the camera's own answer sat one field away. It is a notch below the
+ *     first case on purpose: an instance that found no EXIF stores the file's
+ *     mtime in the same column, and the wire cannot tell the two apart.
  *   - `file` — the file's modified time. This is a fallback, and a weak one:
  *     a copy, an export or a re-grade rewrites it, so it can easily be the
  *     day the file was made rather than the day the picture was. It is
@@ -21,11 +29,14 @@
  */
 
 import { EXIF_SLICE_BYTES, parseExif } from '../exif/exif-parser';
+import { mediaOrigin } from '../projects/media-identity';
 import { parseIsoDate, type IsoDate } from './trip-days';
 
 export interface CaptureDate {
   date: IsoDate;
-  source: 'exif' | 'file';
+  source: 'exif' | 'source' | 'file';
+  /** For `source`: which instance vouched for it, so the panel can say so. */
+  via?: string;
 }
 
 /**
@@ -62,8 +73,13 @@ export function isoFromTimestamp(ms: number): IsoDate | null {
 
 /**
  * Read the day a file was captured. Only the first slice is read — EXIF sits
- * at the head of a JPEG or a TIFF-based RAW — and a video, a PNG or an
- * unreadable block simply falls through to the file's own timestamp.
+ * at the head of a JPEG or a TIFF-based RAW — then the source's own reading of
+ * the capture is consulted, and a video, a PNG or an unreadable block falls
+ * through to the file's own timestamp.
+ *
+ * The file's own EXIF wins over the source's, the general rule for vouched
+ * metadata (`architecture.md`): the bytes in hand are the picture, the column
+ * is a record of it.
  */
 export async function readCaptureDate(file: File): Promise<CaptureDate | null> {
   try {
@@ -71,9 +87,12 @@ export async function readCaptureDate(file: File): Promise<CaptureDate | null> {
     const exif = isoFromExifDateTime(parseExif(head).dateTimeOriginal);
     if (exif) return { date: exif, source: 'exif' };
   } catch {
-    // An unreadable slice is not an error worth surfacing: the fallback below
-    // answers the question, just less confidently.
+    // An unreadable slice is not an error worth surfacing: the fallbacks below
+    // answer the question, just less confidently.
   }
+  const origin = mediaOrigin(file);
+  const vouched = isoFromExifDateTime(origin?.exif?.dateTimeOriginal);
+  if (vouched) return { date: vouched, source: 'source', via: origin?.sourceId };
   const stamp = isoFromTimestamp(file.lastModified);
   return stamp ? { date: stamp, source: 'file' } : null;
 }
