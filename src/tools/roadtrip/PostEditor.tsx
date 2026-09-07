@@ -392,6 +392,10 @@ export default function PostEditor({
   // the badge piece the Content and Style tabs edit, which survives a click
   // on the empty picture. Both come from `selectElement`, never set apart.
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // The width the picture takes from the height it is given — the stage
+  // measures it and the column wears it as a cap, so the rail sits against
+  // the picture instead of against the edge of the section.
+  const [fitWidth, setFitWidth] = useState<number | null>(null);
   const [focusSeq, setFocusSeq] = useState(0);
   const focusTarget = useRef<'text' | CtaRole | null>(null);
 
@@ -561,7 +565,12 @@ export default function PostEditor({
           Wide it is a column against the stage; stacked it is a row under it,
           which is also why the rail is a child of the queried layout. */}
       <div className="min-w-0 flex flex-col gap-3 @min-[860px]:min-h-0 @min-[860px]:col-start-1 @min-[860px]:row-start-1 @min-[860px]:row-span-2">
-        <div className="flex-1 min-h-0 flex flex-col-reverse gap-3 @min-[860px]:flex-row @min-[860px]:items-stretch @min-[860px]:gap-4">
+        {/* Centred as a PAIR, and the picture's column capped to the width
+            the picture actually takes (reported by the stage from the height
+            it was given): a portrait frame on a wide screen used to centre
+            itself inside a full-width column, leaving the rail stranded a
+            third of a screen away from the thumbnails it belongs to. */}
+        <div className="flex-1 min-h-0 flex flex-col-reverse items-center gap-3 @min-[860px]:flex-row @min-[860px]:items-stretch @min-[860px]:justify-center @min-[860px]:gap-3">
           <SlideRail
             slides={slides}
             index={slideIndex}
@@ -574,7 +583,10 @@ export default function PostEditor({
             onMove={moveSlideTo}
             onIncludeCta={(on) => onChangePost({ ...post, includeCta: on })}
           />
-          <div className="flex-1 min-w-0 min-h-0 flex flex-col items-center gap-3">
+          <div
+            style={{ '--fit': fitWidth === null ? '100%' : `${Math.round(fitWidth)}px` } as React.CSSProperties}
+            className="flex-1 min-w-0 min-h-0 flex flex-col items-center gap-3 @min-[860px]:max-w-[min(100%,var(--fit))]"
+          >
           <BadgeStage
             file={slideFile}
             videoTimeSeconds={slide.videoTimeSeconds}
@@ -603,6 +615,7 @@ export default function PostEditor({
             onFraming={isCta ? undefined : setFraming}
             onSourceLoaded={onSourceLoaded}
             onRendered={captureThumb}
+            onFit={setFitWidth}
           />
 
           {isHook && clock.animated && (

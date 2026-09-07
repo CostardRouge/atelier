@@ -64,6 +64,15 @@ interface BadgeStageProps {
   onMoveBlock?: (x: number, y: number) => void;
   onSourceLoaded?: (info: { width: number; height: number; duration: number }) => void;
   /**
+   * The width the picture wants from the height it was given (height ×
+   * aspect), reported on every measure. The editor caps the stage column with
+   * it so a portrait frame on a wide screen does not leave the slide rail
+   * stranded a third of a screen away. Height-derived on purpose: the column's
+   * height does not depend on its width, so capping the width cannot feed
+   * back into the measurement.
+   */
+  onFit?: (widthPx: number) => void;
+  /**
    * Fired after each successful paint, with the canvas that was just drawn.
    * Used to keep a thumbnail of the hook — the picture has to be taken here,
    * because this is the only place it already exists.
@@ -101,6 +110,7 @@ export default function BadgeStage({
   onMoveBlock,
   onSourceLoaded,
   onRendered,
+  onFit,
 }: BadgeStageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chromeRef = useRef<HTMLCanvasElement>(null);
@@ -244,6 +254,9 @@ export default function BadgeStage({
   // The bitmap then follows the displayed size at the device's pixel ratio
   // (floored at PREVIEW_LONG_EDGE, capped so a 5K screen does not repaint a
   // 4K canvas per animation frame), so a bigger preview is sharp, not scaled.
+  // Read through a ref: the fit callback must not re-run the observer.
+  const onFitRef = useRef(onFit);
+  onFitRef.current = onFit;
   const frameRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const [longEdge, setLongEdge] = useState(PREVIEW_LONG_EDGE);
@@ -254,6 +267,7 @@ export default function BadgeStage({
     const fit = () => {
       const { width, height } = frame.getBoundingClientRect();
       if (width <= 0 || height <= 0) return;
+      onFitRef.current?.(height * aspect);
       const w = Math.min(width, height * aspect);
       const h = w / aspect;
       box.style.width = `${w}px`;
