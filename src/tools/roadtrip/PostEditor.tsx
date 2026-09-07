@@ -505,15 +505,16 @@ export default function PostEditor({
     <section className="@container flex-1 min-h-0 flex flex-col" aria-label="Hook">
     <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-auto @min-[860px]:grid @min-[860px]:grid-cols-[minmax(0,1fr)_22rem] @min-[860px]:grid-rows-[auto_minmax(0,1fr)] @min-[860px]:gap-x-5 @min-[860px]:gap-y-3 @min-[860px]:overflow-hidden">
       <div className="flex flex-col gap-1 min-w-0 @min-[860px]:col-start-2 @min-[860px]:row-start-1">
-        {/* `flex-wrap`: under 860px the "Overview" pill, the sync status and
-            (until the deck tab makes room) more can no longer share one row.
-            Without it a fixed-height button had no room to keep its own text
-            on one line and spilled a second line outside its own box, over
-            whatever sat below — the exact trap `TripOverview`'s header (and
-            `WinnowBrowser`'s) already avoids the same way. Exporting has its
-            own button on the Export tab now — this row is navigation and
-            status only, never a second place to trigger the same action. */}
-        <div className="flex items-center gap-3 flex-wrap">
+        {/* Two rows, not one wrapping row: the two buttons are NAVIGATION and
+            stay together and short, while the sync status is a sentence whose
+            length nobody controls (a host name, a relative time, up to three
+            actions). Sharing a row made the three fixed-height pills wrap one
+            per line in a ragged stack, each with a different height and
+            border; giving the status its own full-width row is what keeps it
+            legible at every width. Exporting has its own button on the Export
+            tab — this block is navigation and status only, never a second
+            place to trigger the same action. */}
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
             onClick={onBack}
@@ -521,8 +522,6 @@ export default function PostEditor({
           >
             ← Overview
           </button>
-          <span className="flex-1" />
-          {headerExtra}
           {/* What is true of the WHOLE trip lives behind this, exactly where
               the Studio keeps a project's own settings — so the inspector on
               the right is about the piece and nothing else. */}
@@ -538,6 +537,7 @@ export default function PostEditor({
             </span>
           </button>
         </div>
+        {headerExtra && <div className="flex min-w-0">{headerExtra}</div>}
         {/* Editable in place, like the Studio's project name: a piece is
             found again by what it is called, and having to go back to the
             day panel to rename it is the kind of friction that stops you

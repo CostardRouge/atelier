@@ -70,68 +70,80 @@ export default function SyncPill({
     (record.status === 'dirty' || record.status === 'offline' || record.status === 'unauthenticated');
 
   return (
+    // The shape has to survive two lines. `rounded-full` on a box that grows
+    // turns a status line into a fat lozenge as soon as the sentence wraps
+    // (a long host name plus "Save now" is enough), so the radius is pinned
+    // to half the one-line height: identical to a stadium while it fits on
+    // one line, an ordinary rounded box once it does not. Same border weight
+    // and same 1.9rem line as the buttons it sits with, so a header row of
+    // pills reads as one family. `items-start` + the dot's offset keep the
+    // dot on the FIRST line rather than floating beside the middle.
     <div
-      className="inline-flex items-center gap-2 flex-wrap max-w-full px-3 h-auto min-h-[1.9rem] py-1 rounded-full border border-line bg-paper font-mono text-[0.68rem] text-muted"
+      className="inline-flex items-start gap-2 max-w-full px-3 py-[0.25rem] rounded-[0.95rem] border border-line-strong bg-paper font-mono text-[0.68rem] leading-[1.3rem] text-muted"
       role="status"
       aria-live="polite"
     >
-      <span className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${DOT[record.status]}`} />
-      <span className="min-w-0">{text}</span>
+      <span
+        className={`inline-block w-[7px] h-[7px] mt-[0.4rem] rounded-full shrink-0 ${DOT[record.status]}`}
+      />
+      <div className="min-w-0 flex flex-wrap items-baseline gap-x-3">
+        <span className="min-w-0">{text}</span>
 
-      {canSaveNow && (
-        <button type="button" onClick={onSaveNow} className={linkBtn}>
-          Save now
-        </button>
-      )}
-      {record.status === 'unauthenticated' && loginUrl && (
-        <a href={loginUrl} target="_blank" rel="noreferrer" className={linkBtn}>
-          Sign in
-        </a>
-      )}
+        {canSaveNow && (
+          <button type="button" onClick={onSaveNow} className={linkBtn}>
+            Save now
+          </button>
+        )}
+        {record.status === 'unauthenticated' && loginUrl && (
+          <a href={loginUrl} target="_blank" rel="noreferrer" className={linkBtn}>
+            Sign in
+          </a>
+        )}
 
-      {record.status === 'conflict' &&
-        (confirming === 'theirs' ? (
-          <span className="inline-flex items-center gap-2">
-            drop the edits made here?
-            <button type="button" onClick={() => { setConfirming(null); onTakeTheirs(); }} className={`${linkBtn} text-[#9a3a23]`}>
-              Yes, take theirs
-            </button>
-            <button type="button" onClick={() => setConfirming(null)} className={linkBtn}>
-              No
-            </button>
-          </span>
-        ) : (
-          <>
-            <button type="button" onClick={onKeepMine} className={linkBtn}>
-              Keep mine
-            </button>
-            <button type="button" onClick={() => setConfirming('theirs')} className={linkBtn}>
-              Take theirs
-            </button>
-          </>
-        ))}
+        {record.status === 'conflict' &&
+          (confirming === 'theirs' ? (
+            <span className="inline-flex items-center gap-2">
+              drop the edits made here?
+              <button type="button" onClick={() => { setConfirming(null); onTakeTheirs(); }} className={`${linkBtn} text-[#9a3a23]`}>
+                Yes, take theirs
+              </button>
+              <button type="button" onClick={() => setConfirming(null)} className={linkBtn}>
+                No
+              </button>
+            </span>
+          ) : (
+            <>
+              <button type="button" onClick={onKeepMine} className={linkBtn}>
+                Keep mine
+              </button>
+              <button type="button" onClick={() => setConfirming('theirs')} className={linkBtn}>
+                Take theirs
+              </button>
+            </>
+          ))}
 
-      {record.status === 'gone' &&
-        (confirming === 'delete' ? (
-          <span className="inline-flex items-center gap-2">
-            delete it here too?
-            <button type="button" onClick={() => { setConfirming(null); onDeleteHere(); }} className={`${linkBtn} text-[#9a3a23]`}>
-              Yes, delete
-            </button>
-            <button type="button" onClick={() => setConfirming(null)} className={linkBtn}>
-              No
-            </button>
-          </span>
-        ) : (
-          <>
-            <button type="button" onClick={onKeepLocal} className={linkBtn}>
-              Keep here as local
-            </button>
-            <button type="button" onClick={() => setConfirming('delete')} className={linkBtn}>
-              Delete here
-            </button>
-          </>
-        ))}
+        {record.status === 'gone' &&
+          (confirming === 'delete' ? (
+            <span className="inline-flex items-center gap-2">
+              delete it here too?
+              <button type="button" onClick={() => { setConfirming(null); onDeleteHere(); }} className={`${linkBtn} text-[#9a3a23]`}>
+                Yes, delete
+              </button>
+              <button type="button" onClick={() => setConfirming(null)} className={linkBtn}>
+                No
+              </button>
+            </span>
+          ) : (
+            <>
+              <button type="button" onClick={onKeepLocal} className={linkBtn}>
+                Keep here as local
+              </button>
+              <button type="button" onClick={() => setConfirming('delete')} className={linkBtn}>
+                Delete here
+              </button>
+            </>
+          ))}
+      </div>
     </div>
   );
 }
