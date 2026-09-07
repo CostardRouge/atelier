@@ -63,12 +63,21 @@ export function scrollAfterZoom(
   anchor: { x: number; y: number },
   prevScale: number,
   nextScale: number,
+  /**
+   * Pixels of content before the part that scales — the day grid's weekday
+   * rail, which keeps its width at every zoom. Without it the correction
+   * treats the rail as if it grew too, and the day under the pointer slides by
+   * the rail's width times the zoom.
+   */
+  fixed: { x?: number; y?: number } = {},
 ): StageScroll {
   if (prevScale <= 0) return scroll;
   const k = nextScale / prevScale;
+  const fx = fixed.x ?? 0;
+  const fy = fixed.y ?? 0;
   return {
-    left: Math.max(0, (scroll.left + anchor.x) * k - anchor.x),
-    top: Math.max(0, (scroll.top + anchor.y) * k - anchor.y),
+    left: Math.max(0, fx + (scroll.left + anchor.x - fx) * k - anchor.x),
+    top: Math.max(0, fy + (scroll.top + anchor.y - fy) * k - anchor.y),
   };
 }
 

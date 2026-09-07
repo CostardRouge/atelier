@@ -55,6 +55,8 @@ interface Menu {
 /** The cell and its gutter at 100%; both follow the grid's zoom. */
 const CELL = 14;
 const GAP = 3;
+/** The weekday rail and the gap after it — the width the zoom never touches. */
+const RAIL = { x: 26 + 8 };
 
 /**
  * Five steps from bare paper to the vermilion accent. The rungs are the
@@ -129,7 +131,10 @@ export default function DayHeatmap({
   // what the maintainer sweeps. Zooming in gives a cell big enough to aim at;
   // zooming out puts a long trip on one screen. Rounded to whole pixels, so
   // the cells and their gutters stay on the same lattice at every scale.
-  const zoom = useStageZoom({ wheel: 'any' });
+  // `fixed`: the weekday rail (26px) and the gap after it keep their width at
+  // every zoom, so the zoom's scroll correction must not count them as content
+  // that grew — else the day under the pointer slides by that much.
+  const zoom = useStageZoom({ wheel: 'any', fixed: RAIL });
   const cellPx = Math.max(4, Math.round(CELL * zoom.scale));
   const gapPx = Math.max(1, Math.round(GAP * zoom.scale));
 

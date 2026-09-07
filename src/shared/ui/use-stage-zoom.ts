@@ -44,6 +44,11 @@ export interface StageZoomOptions {
    * overview's zones pass `any`: nothing else there wants the wheel.
    */
   wheel?: WheelZoom;
+  /**
+   * Pixels of content that do NOT scale, before the part that does — the day
+   * grid's weekday rail. Only affects where the zoom leaves the scroll.
+   */
+  fixed?: { x?: number; y?: number };
 }
 
 export interface StageZoom {
@@ -65,7 +70,11 @@ export interface StageZoom {
   fit: { maxWidth: string; maxHeight: string };
 }
 
-export function useStageZoom({ wheel = 'modifier' }: StageZoomOptions = {}): StageZoom {
+export function useStageZoom({ wheel = 'modifier', fixed }: StageZoomOptions = {}): StageZoom {
+  // Read through a ref so a caller passing a fresh object literal cannot
+  // re-run the layout effect.
+  const fixedRef = useRef(fixed);
+  fixedRef.current = fixed;
   const viewportRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const scaleRef = useRef(1);
@@ -93,7 +102,8 @@ export function useStageZoom({ wheel = 'modifier' }: StageZoomOptions = {}): Sta
   }, []);
 
   // The scroll correction owed to the next layout: where the anchor was, and
-  // the scale it was measured at. Applied after React has resized the stage.
+  // the scale the scroll box is STILL showing. Applied after React has resized
+  // the stage.
   const pending = useRef<{ x: number; y: number; prev: number } | null>(null);
 
   const zoomTo = useCallback((next: number, anchor?: { clientX: number; clientY: number }) => {
@@ -106,7 +116,12 @@ export function useStageZoom({ wheel = 'modifier' }: StageZoomOptions = {}): Sta
       pending.current = {
         x: anchor ? anchor.clientX - rect.left : el.clientWidth / 2,
         y: anchor ? anchor.clientY - rect.top : el.clientHeight / 2,
-        prev,
+        // A wheel spins out several events before React renders once, and each
+        // of them raises the scale. The correction is measured from the scale
+        // the box is still LAID OUT at — the first of the batch — not from the
+        // one the last event started from, or a fast scroll drifts a little
+        // further off the pointer with every notch.
+        prev: pending.current?.prev ?? prev,
       };
     }
     scaleRef.current = z;
@@ -123,6 +138,7 @@ export function useStageZoom({ wheel = 'modifier' }: StageZoomOptions = {}): Sta
       owed,
       owed.prev,
       scale,
+      fixedRef.current,
     );
     el.scrollLeft = next.left;
     el.scrollTop = next.top;

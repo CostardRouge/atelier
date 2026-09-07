@@ -87,6 +87,14 @@ describe('scrollAfterZoom', () => {
     expect(next).toEqual({ left: 0, top: 0 });
   });
 
+  it('holds the anchor past content that does not scale', () => {
+    // A 30px rail, the pointer 100px into the viewport, 70px of scaled content
+    // before it: doubling puts that content at 140, so the scroll is 30 + 140
+    // - 100 = 70 — not the 100 the rail-less formula would give.
+    const next = scrollAfterZoom({ left: 0, top: 0 }, { x: 100, y: 0 }, 1, 2, { x: 30 });
+    expect(next.left).toBe(70);
+  });
+
   it('leaves the scroll alone on a nonsense previous scale', () => {
     const scroll = { left: 12, top: 34 };
     expect(scrollAfterZoom(scroll, { x: 0, y: 0 }, 0, 2)).toBe(scroll);
