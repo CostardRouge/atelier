@@ -22,6 +22,11 @@ const wheel = (over: Partial<Parameters<typeof wheelZooms>[0]> = {}) => ({
 });
 
 describe('clampZoom', () => {
+  it('runs from a quarter to sixteen times', () => {
+    expect(zoomLabel(MIN_STAGE_ZOOM)).toBe('25%');
+    expect(zoomLabel(MAX_STAGE_ZOOM)).toBe('1600%');
+  });
+
   it('holds the range', () => {
     expect(clampZoom(100)).toBe(MAX_STAGE_ZOOM);
     expect(clampZoom(0.01)).toBe(MIN_STAGE_ZOOM);

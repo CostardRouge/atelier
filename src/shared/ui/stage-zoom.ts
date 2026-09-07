@@ -8,9 +8,14 @@
  * around it.
  */
 
-/** Below 1 the picture is smaller than its fit — rarely wanted, but harmless. */
-export const MIN_STAGE_ZOOM = 0.5;
-export const MAX_STAGE_ZOOM = 8;
+/**
+ * Below 1 the content is smaller than its fit — which is how a 600-day grid
+ * gets onto one screen; above it, how a single day gets big enough to aim at.
+ * The zone itself sets the real floor when it has one (the ruler will not draw
+ * a day under 6px, the grid a cell under 4).
+ */
+export const MIN_STAGE_ZOOM = 0.25;
+export const MAX_STAGE_ZOOM = 16;
 /** One press of + or −. */
 export const STAGE_ZOOM_STEP = 1.25;
 
