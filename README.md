@@ -372,7 +372,12 @@ left and came back, and everything else derives from that: day 27 of 310 is a
 subtraction, not something you record. Dates are handled as plain calendar days
 (`YYYY-MM-DD`) and every subtraction runs in UTC, so a trip planned in one
 timezone and reviewed in another never disagrees about which day a photo
-belongs to — and a daylight-saving change cannot shift a day number.
+belongs to — and a daylight-saving change cannot shift a day number. None of it
+is fixed at creation: the name is edited by clicking it on the trip's heading,
+and the dates and the route are reopened by clicking the line under it — the
+same sheet that asked for them, which says before saving what a shorter span
+does to the legs it no longer covers (trimmed, or removed when they fall
+outside it entirely). Pieces are never moved and never deleted.
 
 **The grid is the point.** `#/roadtrip` shows every day of the trip as a cell in
 a contribution-style grid, one column per week, Monday at the top. Its job is

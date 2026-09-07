@@ -44,7 +44,8 @@ import {
   remoteFor,
   type RemoteTripRow,
 } from '../../shared/roadtrip/trip-remote';
-import NewTripModal, { type NewTripChoices, type TimelineSourceOption } from './NewTripModal';
+import TripDetailsModal, { type TripDetails, type TimelineSourceOption } from './TripDetailsModal';
+import ImportTripModal from './ImportTripModal';
 
 interface TripGalleryProps {
   openTripId: string | null;
@@ -107,9 +108,22 @@ function TripCard({
 
   return (
     <div
-      className={`flex flex-col gap-3 p-5 bg-surface border rounded-paper-lg shadow-paper-soft transition-[transform,box-shadow,border-color] duration-300 ease-paper hover:-translate-y-1 hover:shadow-paper ${
-        isOpen ? 'border-accent' : 'border-line hover:border-line-strong'
-      } ${remoteOnly ? 'opacity-75' : ''}`}
+      // The whole card opens the trip — a card that shows a trip's name, its
+      // dates and how much of it is told is the thing you point at, and the
+      // "Open" button below stays as the keyboard and screen-reader path (and
+      // as the one that says "Resume" or "Open here"). Anything already
+      // interactive keeps its own click: the confirm rows, the export and the
+      // move select all sit inside this card.
+      onClick={(e) => {
+        if (busy !== null) return;
+        if ((e.target as HTMLElement).closest('button, select, input, label, a')) return;
+        onOpen();
+      }}
+      className={`flex flex-col gap-3 p-5 bg-surface border rounded-paper-lg shadow-paper-soft transition-[box-shadow,border-color] duration-300 ease-paper hover:shadow-paper ${
+        busy === null ? 'cursor-pointer' : ''
+      } ${isOpen ? 'border-accent' : 'border-line hover:border-line-strong'} ${
+        remoteOnly ? 'opacity-75' : ''
+      }`}
     >
       <div className="min-w-0">
         <h3 className="m-0 font-serif text-[1.2rem] truncate" title={trip.name}>
@@ -274,6 +288,7 @@ export default function TripGallery({
 }: TripGalleryProps) {
   const [trips, setTrips] = useState<TripDoc[] | null>(null);
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [remoteLists, setRemoteLists] = useState<Record<string, RemoteList>>({});
   const [busy, setBusy] = useState<Record<string, string>>({});
@@ -284,8 +299,6 @@ export default function TripGallery({
     () => documentSources.filter((s) => isRemoteSource(s.id)).map((s) => s.id),
     [documentSources],
   );
-  // Where an imported file lands. Only offered when there is a choice.
-  const [importTarget, setImportTarget] = useState(DEFAULT_SOURCE_ID);
 
   const refresh = useCallback(() => {
     void listTrips().then(setTrips);
@@ -338,14 +351,17 @@ export default function TripGallery({
     return true;
   }
 
-  async function handleCreate(choices: NewTripChoices) {
+  async function handleCreate(choices: TripDetails) {
     setNotice(null);
+    // The two ends, with the empty ones dropped: filled they seed one leg over
+    // the whole trip, empty they seed nothing at all — see `createTripDoc`.
+    const places = [choices.from, choices.to].filter((p) => p.name.trim().length > 0);
     const doc = createTripDoc(
       choices.name,
       choices.destination,
       choices.startDate,
       choices.endDate,
-      choices.places,
+      places,
       choices.sourceId,
     );
     setCreating(false);
@@ -365,7 +381,7 @@ export default function TripGallery({
    * same backup twice must not silently replace the trip you have been telling
    * for months. Merging two trips is not a thing this offers, deliberately.
    */
-  async function handleImport() {
+  async function handleImport(targetSourceId: string) {
     const picked = await pickFile(TRIP_FILE_ACCEPT);
     if (!picked) return;
     setNotice(null);
@@ -374,8 +390,8 @@ export default function TripGallery({
       setNotice(parsed.error);
       return;
     }
-    const target = documentSources.some((s) => s.id === importTarget)
-      ? importTarget
+    const target = documentSources.some((s) => s.id === targetSourceId)
+      ? targetSourceId
       : DEFAULT_SOURCE_ID;
     const doc = tripDocFromFile(parsed.file, Date.now(), target);
     if (!doc.name.trim()) {
@@ -479,26 +495,12 @@ export default function TripGallery({
           </p>
         </div>
         <span className="flex-1" />
-        {documentSources.length > 1 && (
-          <label className="inline-flex items-center gap-2 font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted">
-            import to
-            <select
-              value={importTarget}
-              onChange={(e) => setImportTarget(e.target.value)}
-              className="font-sans normal-case tracking-normal text-[0.8rem] px-2.5 py-1 border border-line rounded-full bg-paper text-ink focus:outline-none focus:border-accent"
-              aria-label="Where an imported trip is kept"
-            >
-              {documentSources.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {sourceLabel(s.id)}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
         <button
           type="button"
-          onClick={() => void handleImport()}
+          onClick={() => {
+            if (documentSources.length > 1) setImporting(true);
+            else void handleImport(DEFAULT_SOURCE_ID);
+          }}
           className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-line-strong rounded-full bg-paper text-ink-soft cursor-pointer text-[0.84rem] transition-colors hover:border-accent hover:text-accent-ink"
           title={`Create a trip from an exported file (${TRIP_FILE_EXTENSION})`}
         >
@@ -625,11 +627,22 @@ export default function TripGallery({
         </div>
       )}
 
+      {importing && (
+        <ImportTripModal
+          sources={documentSources}
+          onCancel={() => setImporting(false)}
+          onChooseFile={(target) => {
+            setImporting(false);
+            void handleImport(target);
+          }}
+        />
+      )}
+
       {creating && (
-        <NewTripModal
+        <TripDetailsModal
           sources={documentSources}
           onCancel={() => setCreating(false)}
-          onCreate={(choices) => void handleCreate(choices)}
+          onSubmit={(choices) => void handleCreate(choices)}
           timelineSources={timelineSources}
           onSeedFrom={
             onSeedFrom

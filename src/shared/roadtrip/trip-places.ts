@@ -87,18 +87,32 @@ export function placeRegionLabel(place: TripPlace, stage: TripStage): string {
 }
 
 /**
- * The trip's route: the first place of its first stage to the last place of
- * its last stage. Stages are kept in the order the trip was lived, so this is
- * simply where it set out from and where it ended.
+ * The trip's two ends: the first place of its first stage that names one, and
+ * the last place of its last. Stages are kept in the order the trip was lived,
+ * so this is simply where it set out from and where it ended — derived, like
+ * a stage's own ends, never stored beside them.
+ *
+ * With a single named place the two are the SAME object (`from.id === to.id`),
+ * which is the truth and what an editor must check before writing an end.
  */
-export function tripRouteLabel(trip: Pick<TripDoc, 'stages'>): string {
-  const stages = trip.stages ?? [];
+export function tripRouteEnds(trip: Pick<TripDoc, 'stages'>): {
+  from: TripPlace | null;
+  to: TripPlace | null;
+} {
   let from: TripPlace | null = null;
   let to: TripPlace | null = null;
-  for (const stage of stages) {
+  for (const stage of trip.stages ?? []) {
     from = from ?? stageStart(stage);
     to = stageEnd(stage) ?? to;
   }
+  return { from, to };
+}
+
+/**
+ * The trip's route as a badge or a header reads it: "Perth → Cairns".
+ */
+export function tripRouteLabel(trip: Pick<TripDoc, 'stages'>): string {
+  const { from, to } = tripRouteEnds(trip);
   if (!from) return '';
   if (!to || to.id === from.id) return named(from);
   return `${named(from)} ${PLACE_ARROW} ${named(to)}`;
