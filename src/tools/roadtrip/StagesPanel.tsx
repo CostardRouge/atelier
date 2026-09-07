@@ -4,6 +4,8 @@ import { rulerBars, rulerGaps, stageTint } from '../../shared/roadtrip/stage-rul
 import { formatIsoDate, spanLength, type IsoDate } from '../../shared/roadtrip/trip-days';
 import { stageLabel, stageRegionLabel } from '../../shared/roadtrip/trip-places';
 import { stageProblem, type TripDoc, type TripStage } from '../../shared/roadtrip/trip-types';
+import StageZoomControl from '../../shared/ui/StageZoomControl';
+import { useStageZoom } from '../../shared/ui/use-stage-zoom';
 import PlacesEditor from './PlacesEditor';
 import StageRuler from './StageRuler';
 
@@ -27,8 +29,17 @@ interface StagesPanelProps {
 const legend = 'font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted';
 const inputClass =
   'font-sans text-[0.84rem] px-2.5 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent';
+/** The header row's controls all stand 34px tall, the zoom pill's own height. */
 const pill =
-  'flex-none px-3 py-1.5 border border-line-strong rounded-full bg-paper text-[0.76rem] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink';
+  'flex-none h-[2.125rem] inline-flex items-center px-3 border border-line-strong rounded-full bg-paper text-[0.76rem] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink';
+/**
+ * Adding a leg is the panel's one creative act, so it is the gallery's own
+ * primary button at header size — ink-filled, vermilion on hover — rather than
+ * a bordered pill indistinguishable from the status ones beside it. The `+` is
+ * its own span so it keeps the monospace weight of a glyph, not of the word.
+ */
+const addButton =
+  'flex-none h-[2.125rem] inline-flex items-center gap-1.5 pl-3 pr-3.5 border border-ink rounded-full bg-ink text-paper text-[0.78rem] font-semibold cursor-pointer transition-[transform,background-color,border-color] duration-200 ease-paper hover:bg-accent hover:border-accent active:scale-[0.98]';
 
 function StageCard({
   trip,
@@ -184,6 +195,9 @@ export default function StagesPanel({
   timelineSources = [],
   onCompleteFrom,
 }: StagesPanelProps) {
+  // The ruler's zoom lives here so its control can ride this row instead of
+  // costing the track a row of its own beneath it.
+  const zoom = useStageZoom();
   const selectedIndex = trip.stages.findIndex((s) => s.id === selectedId);
   const selected = selectedIndex >= 0 ? trip.stages[selectedIndex] : null;
 
@@ -221,8 +235,12 @@ export default function StagesPanel({
               ↓ From {id}
             </button>
           ))}
-        <button type="button" onClick={add} className={`${pill} font-semibold`}>
-          + Stage
+        <StageZoomControl zoom={zoom} className="flex-none" />
+        <button type="button" onClick={add} className={addButton}>
+          <span className="font-mono text-[0.95rem] leading-none" aria-hidden="true">
+            +
+          </span>
+          Stage
         </button>
       </div>
 
@@ -233,6 +251,7 @@ export default function StagesPanel({
         onOpenStage={onOpenStage}
         onScrub={onScrub}
         onChange={onChange}
+        zoom={zoom}
       />
 
       {trip.stages.length === 0 ? (

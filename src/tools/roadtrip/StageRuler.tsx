@@ -23,8 +23,7 @@ import {
 } from '../../shared/roadtrip/trip-days';
 import { stageLabel } from '../../shared/roadtrip/trip-places';
 import type { TripDoc, TripStage } from '../../shared/roadtrip/trip-types';
-import StageZoomControl from '../../shared/ui/StageZoomControl';
-import { useStageZoom } from '../../shared/ui/use-stage-zoom';
+import type { StageZoom } from '../../shared/ui/use-stage-zoom';
 
 interface StageRulerProps {
   trip: TripDoc;
@@ -36,6 +35,12 @@ interface StageRulerProps {
   /** The playhead was moved — a click on the track, a drag, or an arrow key. */
   onScrub: (date: IsoDate) => void;
   onChange: (stages: TripStage[]) => void;
+  /**
+   * The track's zoom, owned by the panel above so its control can ride the
+   * "+ Stage" row: `viewportRef` goes on this scroller, and `scale` multiplies
+   * the fitted day width.
+   */
+  zoom: StageZoom;
 }
 
 /** The scrub strip above the lanes — a video editor's time ruler. */
@@ -89,11 +94,13 @@ export default function StageRuler({
   onOpenStage,
   onScrub,
   onChange,
+  zoom,
 }: StageRulerProps) {
   const total = spanLength(trip.startDate, trip.endDate);
-  const zoom = useStageZoom();
   // The scroll box IS the zoom's viewport: one element, measured for the
-  // fitted day width and scrolled by the zoom.
+  // fitted day width and scrolled by the zoom. The zoom itself is the PANEL's,
+  // so its control can sit in the header row beside "+ Stage" instead of
+  // costing the ruler a row of its own.
   const scroller = zoom.viewportRef;
   const track = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -239,7 +246,6 @@ export default function StageRuler({
   };
 
   return (
-    <div className="flex flex-col gap-1">
     <div ref={scroller} className="overflow-x-auto pb-1" aria-label="Stage timeline">
       <div ref={track} className="relative" style={{ width: trackW, height: bodyH + AXIS + 6 }}>
         {/* The scrub surface, behind everything: the head strip and the empty
@@ -362,13 +368,6 @@ export default function StageRuler({
         )}
       </div>
       {pin && <DatePin pin={pin} />}
-    </div>
-      {/* Under the track, on the right: the same pill the day grid carries,
-          in the same corner, so the two zones of the overview read as one
-          control learned once. */}
-      <div className="flex justify-end">
-        <StageZoomControl zoom={zoom} />
-      </div>
     </div>
   );
 }
