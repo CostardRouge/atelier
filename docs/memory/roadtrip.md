@@ -175,6 +175,8 @@ Nothing else moves with it: the trip's `id` is a uuid, and `tripFromRef` matches
 
 **Its tiles shipped with `aspect-square` on a `1fr` auto-fill track (2026-09-07 fix)** — the exact trap `frontend.md` already names for the calendar cells in `WinnowBrowser`, struck a second time because the lesson lived only in the file that had already learned it. A tile's `<img>` now takes a fixed `h-[74px]` instead, matching the browser's own `Thumb`. See `frontend.md`, «A `1fr` grid track cannot be trusted to carry `aspect-ratio`».
 
+**Since the Library's Winnow tab (2026-09-07) the strip is the SECOND consumer of the same two hooks** — `winnow/use-connection.ts` (which instance) and `winnow/use-scope-rows.ts` (its rows for a span, forgotten before re-asked) — so the piece editor and the sidebar cannot drift on which instance they ask or how. Road Trip is what makes the sidebar's tab follow a day at all: `PostEditor` publishes the piece's `date`→`endDate ?? date` and `TripOverview` the selected day through `usePublishMediaScope` (`shared/sources/media-scope.tsx`), taken back on unmount. **How to apply**: a Road Trip screen that shows a day or a span publishes it; a stage/leg would publish `stage.startDate`→`stage.endDate` the same way — the sidebar needs no new code for that, only a publisher. Whether the strip stays now that the tab shows the same day is the maintainer's call ("si elle est réparée elle pourrait finalement servir"); it was kept.
+
 
 ## The timeline is ASLEEP, and Atelier does not lean on it (2026-09-07)
 

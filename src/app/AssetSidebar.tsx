@@ -1,21 +1,23 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Tool } from './tools';
 import WinnowBrowser from './WinnowBrowser';
+import WinnowScopeGrid from './WinnowScopeGrid';
 import { navigate } from './use-hash-route';
-import {
-  listWinnowConnections,
-  subscribeWinnowConnections,
-} from '../shared/sources/winnow/store';
+import { useWinnowConnection } from '../shared/sources/winnow/use-connection';
+import { useScopeRows } from '../shared/sources/winnow/use-scope-rows';
+import { useMediaScope } from '../shared/sources/media-scope';
 import {
   useAssetLibrary,
   type MediaMeta,
 } from '../shared/library/AssetLibraryContext';
 import type { Asset, AssetKind } from '../shared/library/assets';
+import { assetRemoteId, splitAssetsBySource } from '../shared/library/asset-source';
 import {
   assetUsableBy,
   selectedUsableAssets,
 } from '../shared/library/capabilities';
 import { formatBytes, formatDuration } from '../shared/lib/format';
+import { todayIso } from '../shared/roadtrip/trip-days';
 import {
   describeTimeScale,
   formatCadence,
@@ -55,6 +57,22 @@ function chipClass(kind: AssetKind): string {
   }
 }
 
+/** Which of the two tabs is open — remembered, like the collapse flag. */
+type SourceTab = 'local' | 'remote';
+const TAB_KEY = 'atelier.library.tab';
+
+function readTab(): SourceTab {
+  try {
+    return localStorage.getItem(TAB_KEY) === 'remote' ? 'remote' : 'local';
+  } catch {
+    return 'local';
+  }
+}
+
+const legend = 'font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted';
+const linkBtn =
+  'p-0 border-0 bg-transparent text-[0.74rem] text-muted cursor-pointer underline underline-offset-[3px] hover:text-ink';
+
 interface AssetSidebarProps {
   tool: Tool;
   collapsed: boolean;
@@ -65,6 +83,16 @@ interface AssetSidebarProps {
  * The global asset library, shown to the left of any tool that declares
  * `accepts`. Import once here, select assets, switch tools. Collapses to a thin
  * rail so editor-style (full-height) tools keep their width.
+ *
+ * With a Winnow connected it has TWO tabs, and they never mix — the
+ * maintainer's design for what had become one pile: **Local** is the pool of
+ * files opened from this machine, exactly as before; **the instance** is a
+ * VIEW of what it holds for the span the active tool is on (a Road Trip
+ * piece's day), asked live and re-asked when the span changes, so nothing
+ * accumulates and nothing needs cleaning. What a click on a tile fetches
+ * lands in the pool as an ordinary asset — listed under that tab, never under
+ * Local — and the tab shows it marked, or below the tiles when it is out of
+ * the current span, so nothing the pool holds is ever invisible.
  */
 export default function AssetSidebar({
   tool,
@@ -78,8 +106,53 @@ export default function AssetSidebar({
   const [query, setQuery] = useState('');
   // Remote sources are the shell's business, not a tool's: the sidebar is
   // where files enter, whichever source they come from.
-  const connections = useSyncExternalStore(subscribeWinnowConnections, listWinnowConnections);
+  const { connection, client } = useWinnowConnection();
   const [browsing, setBrowsing] = useState(false);
+
+  const [tab, setTab] = useState<SourceTab>(readTab);
+  useEffect(() => {
+    try {
+      localStorage.setItem(TAB_KEY, tab);
+    } catch {
+      /* preference only */
+    }
+  }, [tab]);
+  // No instance, no second tab — whatever was remembered.
+  const remoteTab = tab === 'remote' && connection !== null;
+
+  // The span the active tool is on, or the day picked here when no tool says.
+  const published = useMediaScope();
+  const [manualDay, setManualDay] = useState<string>(() => todayIso());
+  const from = published?.from ?? manualDay;
+  const to = published?.to ?? manualDay;
+  // Asked only while the tab is open: a tab nobody looks at costs no request.
+  const scopeRows = useScopeRows(client, connection?.id ?? null, from, to, remoteTab);
+
+  // The pool, split by where each asset came from.
+  const split = useMemo(() => splitAssetsBySource(lib.assets), [lib.assets]);
+  const remoteAssets = useMemo(
+    () => (connection ? (split.remote.get(connection.id) ?? []) : []),
+    [split, connection],
+  );
+  /** `"<host>/<id>"` → the Library asset id it became. */
+  const inLibrary = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const a of remoteAssets) {
+      const rid = assetRemoteId(a);
+      if (rid) m.set(rid, a.id);
+    }
+    return m;
+  }, [remoteAssets]);
+  /** Pool assets from the instance that the current span does not list. */
+  const outOfScope = useMemo(() => {
+    if (!connection) return [];
+    if (!scopeRows.rows) return remoteAssets;
+    const listed = new Set(scopeRows.rows.map((r) => `${connection.id}/${r.id}`));
+    return remoteAssets.filter((a) => {
+      const rid = assetRemoteId(a);
+      return !rid || !listed.has(rid);
+    });
+  }, [connection, remoteAssets, scopeRows.rows]);
 
   const usableSelectedCount = selectedUsableAssets(
     accepts,
@@ -101,6 +174,12 @@ export default function AssetSidebar({
   function activate(id: string) {
     if (!lib.selection.has(id)) lib.toggle(id);
     lib.setActive(id);
+  }
+
+  /** A picture fetched from the tiles: into the pool, then active. */
+  function pickFromSource(files: File[], assetId: string) {
+    lib.addFiles(files);
+    lib.setActive(assetId);
   }
 
   async function handleDrop(e: React.DragEvent) {
@@ -157,9 +236,32 @@ export default function AssetSidebar({
 
   // --- Expanded panel -------------------------------------------------------
   const q = query.trim().toLowerCase();
-  const shown = q
-    ? lib.assets.filter((a) => a.baseName.toLowerCase().includes(q))
-    : lib.assets;
+  const matches = (a: Asset) => !q || a.baseName.toLowerCase().includes(q);
+  // The rows this tab lists: the local pool, or the instance's assets the
+  // span does not already show as tiles.
+  const tabAssets = remoteTab ? outOfScope : split.local;
+  const shown = tabAssets.filter(matches);
+  const tabPool = remoteTab ? remoteAssets : split.local;
+  const allSelected =
+    tabPool.length > 0 && tabPool.every((a) => lib.selection.has(a.id));
+
+  const tabButton = (id: SourceTab, label: string, count: number) => (
+    <button
+      key={id}
+      type="button"
+      onClick={() => setTab(id)}
+      aria-pressed={remoteTab === (id === 'remote')}
+      className={`min-w-0 flex-1 px-2 py-[0.4rem] font-mono text-[0.62rem] tracking-[0.12em] uppercase rounded-full cursor-pointer transition-colors truncate ${
+        remoteTab === (id === 'remote')
+          ? 'bg-ink text-paper'
+          : 'bg-transparent text-muted hover:text-accent-ink'
+      }`}
+      title={label}
+    >
+      {label}
+      {count > 0 && <span className="ml-1 opacity-70">{count}</span>}
+    </button>
+  );
 
   return (
     <aside className="flex-none w-72 max-w-[78vw] flex flex-col min-h-0 border border-line rounded-paper-lg bg-surface shadow-paper overflow-hidden max-[820px]:w-full max-[820px]:max-w-none max-[820px]:max-h-[55vh]">
@@ -175,94 +277,171 @@ export default function AssetSidebar({
         </button>
       </div>
 
-      <div className="px-3.5 pb-3">
+      {/* Two sources, two tabs, never one pile. Only with an instance
+          connected: the local pool alone needs no tab to tell it apart. */}
+      {connection && (
         <div
-          className={`border-[1.5px] border-dashed rounded-paper text-center px-3 py-3.5 text-[0.82rem] leading-snug bg-paper/40 transition-colors ${
-            dragging ? 'border-accent bg-accent-wash' : 'border-line-strong'
-          }`}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={handleDrop}
+          className="mx-3.5 mb-3 flex gap-1 p-1 rounded-full border border-line bg-paper/60"
+          role="tablist"
+          aria-label="Where the library's files come from"
         >
-          <p className="m-0 text-ink-soft">Drop files or a folder</p>
-          <p className="m-0 mt-1.5 flex items-center justify-center gap-2">
-            <button
-              type="button"
-              className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent disabled:text-faint disabled:no-underline"
-              onClick={() => run(pickFiles)}
-              disabled={busy}
-            >
-              {busy ? 'opening…' : 'Add files'}
-            </button>
-            <span className="text-faint text-[0.8rem]">or</span>
-            <button
-              type="button"
-              className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent disabled:text-faint disabled:no-underline"
-              onClick={() => run(pickDirectory)}
-              disabled={busy}
-            >
-              a folder
-            </button>
-          </p>
-          <p className="m-0 mt-1.5 text-[0.78rem]">
-            {connections.length ? (
-              <button
-                type="button"
-                className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent"
-                onClick={() => setBrowsing(true)}
-                title={`Browse ${connections[0].id} by day`}
-              >
-                or from {connections[0].id}
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="p-0 border-0 bg-transparent text-faint cursor-pointer underline underline-offset-[3px] hover:text-ink"
-                onClick={() => navigate('/connect')}
-                title="Connect a Winnow instance as a source"
-              >
-                or connect a Winnow
-              </button>
-            )}
-          </p>
+          {tabButton('local', 'Local', split.local.length)}
+          {tabButton('remote', connection.id, remoteAssets.length)}
         </div>
-      </div>
+      )}
 
-      {browsing && connections[0] && (
+      {!remoteTab && (
+        <div className="px-3.5 pb-3">
+          <div
+            className={`border-[1.5px] border-dashed rounded-paper text-center px-3 py-3.5 text-[0.82rem] leading-snug bg-paper/40 transition-colors ${
+              dragging ? 'border-accent bg-accent-wash' : 'border-line-strong'
+            }`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={handleDrop}
+          >
+            <p className="m-0 text-ink-soft">Drop files or a folder</p>
+            <p className="m-0 mt-1.5 flex items-center justify-center gap-2">
+              <button
+                type="button"
+                className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent disabled:text-faint disabled:no-underline"
+                onClick={() => run(pickFiles)}
+                disabled={busy}
+              >
+                {busy ? 'opening…' : 'Add files'}
+              </button>
+              <span className="text-faint text-[0.8rem]">or</span>
+              <button
+                type="button"
+                className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent disabled:text-faint disabled:no-underline"
+                onClick={() => run(pickDirectory)}
+                disabled={busy}
+              >
+                a folder
+              </button>
+            </p>
+            {!connection && (
+              <p className="m-0 mt-1.5 text-[0.78rem]">
+                <button
+                  type="button"
+                  className="p-0 border-0 bg-transparent text-faint cursor-pointer underline underline-offset-[3px] hover:text-ink"
+                  onClick={() => navigate('/connect')}
+                  title="Connect a Winnow instance as a source"
+                >
+                  or connect a Winnow
+                </button>
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {remoteTab && connection && (
+        <div className="px-3.5 pb-3 flex flex-col gap-1.5">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className={`${legend} min-w-0 truncate`} title={published ? `${published.label} — what ${published.publisher} has open` : 'A day, picked here'}>
+              {published ? `${published.label} · ${published.publisher}` : 'A day'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setBrowsing(true)}
+              className={`${linkBtn} whitespace-nowrap`}
+              title={`Browse all of ${connection.id}: by day, by folder, with filters`}
+            >
+              browse all
+            </button>
+          </div>
+          {published ? (
+            <p className="m-0 text-[0.74rem] text-muted">
+              Follows the {published.from === published.to ? 'day' : 'days'} {published.publisher} has
+              open. One picture crosses per click.
+            </p>
+          ) : (
+            // Nothing open that names a day (the Studio, a gallery): pick one.
+            // 16px so iOS does not zoom on focus (frontend.md).
+            <input
+              type="date"
+              value={manualDay}
+              onChange={(e) => {
+                if (e.target.value) setManualDay(e.target.value);
+              }}
+              aria-label="Day to list from the instance"
+              className="font-sans text-[16px] px-2.5 py-1 border border-line rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
+            />
+          )}
+        </div>
+      )}
+
+      {browsing && connection && (
         <WinnowBrowser
-          connection={connections[0]}
+          connection={connection}
           onAdd={(files) => lib.addFiles(files)}
           onClose={() => setBrowsing(false)}
         />
       )}
 
-      {lib.assets.length > 0 && (
+      {(tabPool.length > 0 || remoteTab) && (
         <div className="px-3.5 pb-2 flex items-center gap-2">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={`Filter ${lib.assets.length} assets…`}
+            placeholder={
+              remoteTab
+                ? 'Filter by file name…'
+                : `Filter ${tabPool.length} asset${tabPool.length === 1 ? '' : 's'}…`
+            }
             className="flex-1 min-w-0 font-sans text-[0.78rem] px-3 py-1.5 border border-line rounded-full bg-white text-ink placeholder:text-faint focus:outline-none focus:border-line-strong"
           />
-          <button
-            type="button"
-            onClick={
-              lib.selection.size === lib.assets.length
-                ? lib.selectNone
-                : lib.selectAll
-            }
-            className="font-mono text-[0.58rem] tracking-[0.1em] uppercase text-muted hover:text-accent whitespace-nowrap"
-          >
-            {lib.selection.size === lib.assets.length ? 'none' : 'all'}
-          </button>
+          {tabPool.length > 0 && (
+            <button
+              type="button"
+              onClick={() =>
+                lib.select(
+                  tabPool.map((a) => a.id),
+                  !allSelected,
+                )
+              }
+              className="font-mono text-[0.58rem] tracking-[0.1em] uppercase text-muted hover:text-accent whitespace-nowrap"
+              title={
+                remoteTab
+                  ? `${allSelected ? 'Deselect' : 'Select'} every asset from ${connection?.id}`
+                  : `${allSelected ? 'Deselect' : 'Select'} every local asset`
+              }
+            >
+              {allSelected ? 'none' : 'all'}
+            </button>
+          )}
         </div>
       )}
 
       <div className="flex-1 overflow-auto px-2 pb-2 min-h-0">
-        {lib.assets.length === 0 ? (
+        {remoteTab && connection && client && (
+          <div className="px-1.5 pb-2">
+            <WinnowScopeGrid
+              connection={connection}
+              client={client}
+              from={from}
+              to={to}
+              scope={scopeRows}
+              query={q}
+              inLibrary={inLibrary}
+              activeId={lib.activeId}
+              onPicked={pickFromSource}
+              onActivate={activate}
+            />
+          </div>
+        )}
+
+        {remoteTab && shown.length > 0 && (
+          <p className={`${legend} px-2 pt-2 pb-1`}>
+            Also in the library · {shown.length}
+          </p>
+        )}
+
+        {!remoteTab && tabPool.length === 0 ? (
           <p className="px-2 py-6 text-center text-[0.78rem] text-muted">
             Nothing here yet. Add some assets above — they stay on your machine.
           </p>
@@ -291,7 +470,9 @@ export default function AssetSidebar({
           {usableSelectedCount} usable by {tool.label}
         </span>
         <span className="font-mono text-[0.6rem] tracking-[0.02em] text-muted">
-          handles only — nothing uploaded, nothing decoded yet
+          {remoteTab
+            ? 'proxies, fetched one at a time — nothing at boot'
+            : 'handles only — nothing uploaded, nothing decoded yet'}
         </span>
       </div>
     </aside>
