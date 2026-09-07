@@ -23,6 +23,8 @@ import {
 } from '../../shared/roadtrip/trip-days';
 import { stageLabel } from '../../shared/roadtrip/trip-places';
 import type { TripDoc, TripStage } from '../../shared/roadtrip/trip-types';
+import StageZoomControl from '../../shared/ui/StageZoomControl';
+import { useStageZoom } from '../../shared/ui/use-stage-zoom';
 
 interface StageRulerProps {
   trip: TripDoc;
@@ -89,7 +91,10 @@ export default function StageRuler({
   onChange,
 }: StageRulerProps) {
   const total = spanLength(trip.startDate, trip.endDate);
-  const scroller = useRef<HTMLDivElement>(null);
+  const zoom = useStageZoom();
+  // The scroll box IS the zoom's viewport: one element, measured for the
+  // fitted day width and scrolled by the zoom.
+  const scroller = zoom.viewportRef;
   const track = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const drag = useRef<Drag | null>(null);
@@ -111,7 +116,7 @@ export default function StageRuler({
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [scroller]);
 
   if (total === null) return null;
 
@@ -119,7 +124,11 @@ export default function StageRuler({
   const gaps = rulerGaps(trip, bars);
   const months = rulerMonths(trip);
   const lanes = Math.max(1, laneCount(bars));
-  const dayW = Math.max(MIN_DAY, width > 0 ? width / total : MIN_DAY);
+  // A day is as wide as the ruler's share of the track, times the zoom: at
+  // 100% the whole trip fits, and zooming in makes a single day wide enough to
+  // grab an edge on. The 6px floor stays the floor at every scale — a bar
+  // thinner than that cannot be dragged.
+  const dayW = Math.max(MIN_DAY, width > 0 ? (width / total) * zoom.scale : MIN_DAY);
   const trackW = dayW * total;
   const lanesTop = HEAD;
   const lanesH = lanes * BAR + (lanes - 1) * LANE_GAP;
@@ -230,6 +239,7 @@ export default function StageRuler({
   };
 
   return (
+    <div className="flex flex-col gap-1">
     <div ref={scroller} className="overflow-x-auto pb-1" aria-label="Stage timeline">
       <div ref={track} className="relative" style={{ width: trackW, height: bodyH + AXIS + 6 }}>
         {/* The scrub surface, behind everything: the head strip and the empty
@@ -352,6 +362,13 @@ export default function StageRuler({
         )}
       </div>
       {pin && <DatePin pin={pin} />}
+    </div>
+      {/* Under the track, on the right: the same pill the day grid carries,
+          in the same corner, so the two zones of the overview read as one
+          control learned once. */}
+      <div className="flex justify-end">
+        <StageZoomControl zoom={zoom} />
+      </div>
     </div>
   );
 }

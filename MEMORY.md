@@ -98,6 +98,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - A Road Trip stage is a LEG carrying an ORDERED list of located places; its start and end are the first and the last, derived and never stored, and a place has no dates of its own — `roadtrip.md`.
 - The legs are a horizontal RULER under the calendar grid (drag an edge or a bar, whole days only, one leg open beneath), the grid's cells wear their leg's tint, and a right-click on a day starts/ends/extends a leg by name — "start here" inside a leg is a cut. Geometry and edits are pure (`stage-ruler.ts`, `stage-edit.ts`); every drag has a keyboard twin — `roadtrip.md`.
 - Looking a place up online is the suite's SECOND network exception, taken deliberately: opt-in, off by default, consent in `localStorage` and never on an exportable document, and never as-you-type — `roadtrip.md`, `local-first.md`.
+- The trip overview's day grid and stage ruler zoom too, multiplying their own unit (cell size, day width) with the editor's pill — `roadtrip.md`.
 - Road Trip's grid draws its own hover card (fixed-positioned, pointer-transparent) because the native `title` is far too slow to sweep a calendar with — `roadtrip.md`.
 - Each post keeps a small JPEG of its HOOK in a second IndexedDB store, taken from the preview canvas, drawn at the piece's own orientation, and pruned on delete — `roadtrip.md`.
 - The Studio edits **stills on the same stage as clips** — a photo is a media a project holds beside its rushes, never a second kind of project — `studio.md`.

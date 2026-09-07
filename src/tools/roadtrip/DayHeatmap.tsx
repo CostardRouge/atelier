@@ -8,6 +8,8 @@ import {
   type IsoDate,
 } from '../../shared/roadtrip/trip-days';
 import { POST_KINDS } from '../../shared/roadtrip/trip-types';
+import StageZoomControl from '../../shared/ui/StageZoomControl';
+import { useStageZoom } from '../../shared/ui/use-stage-zoom';
 import type { DayCell } from '../../shared/roadtrip/trip-coverage';
 
 /** One line of the day's context menu: what it says, and what it does. */
@@ -50,6 +52,7 @@ interface Menu {
   y: number;
 }
 
+/** The cell and its gutter at 100%; both follow the grid's zoom. */
 const CELL = 14;
 const GAP = 3;
 
@@ -122,25 +125,32 @@ export default function DayHeatmap({
   // for a grid meant to be swept over, and it cannot show the kinds.
   const [hovered, setHovered] = useState<Hovered | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
+  // The grid's zoom: a 310-day trip is 45 columns of 14px, and the days are
+  // what the maintainer sweeps. Zooming in gives a cell big enough to aim at;
+  // zooming out puts a long trip on one screen. Rounded to whole pixels, so
+  // the cells and their gutters stay on the same lattice at every scale.
+  const zoom = useStageZoom();
+  const cellPx = Math.max(4, Math.round(CELL * zoom.scale));
+  const gapPx = Math.max(1, Math.round(GAP * zoom.scale));
 
   if (!weeks.length) return null;
 
-  const columnWidth = CELL + GAP;
+  const columnWidth = cellPx + gapPx;
 
   return (
-    <div className="overflow-x-auto pb-1">
+    <div ref={zoom.viewportRef} className="overflow-x-auto pb-1">
       <div className="inline-flex gap-2">
         {/* Weekday rail — every other row, the way a calendar is skimmed. */}
         <div
           className="flex flex-col flex-none pt-[18px]"
-          style={{ gap: GAP }}
+          style={{ gap: gapPx }}
           aria-hidden="true"
         >
           {WEEKDAYS.map((label, row) => (
             <span
               key={label}
               className="font-mono text-[0.58rem] text-faint leading-none flex items-center justify-end pr-1"
-              style={{ height: CELL, width: 26 }}
+              style={{ height: cellPx, width: 26 }}
             >
               {row % 2 === 0 ? label : ''}
             </span>
@@ -160,21 +170,21 @@ export default function DayHeatmap({
             ))}
           </div>
 
-          <div className="flex" style={{ gap: GAP }} role="grid" aria-label="Trip days">
+          <div className="flex" style={{ gap: gapPx }} role="grid" aria-label="Trip days">
             {weeks.map((week, w) => (
-              <div key={w} className="flex flex-col" style={{ gap: GAP }} role="row">
+              <div key={w} className="flex flex-col" style={{ gap: gapPx }} role="row">
                 {week.map((date, row) => {
                   if (!date) {
                     return (
                       <span
                         key={row}
-                        style={{ width: CELL, height: CELL }}
+                        style={{ width: cellPx, height: cellPx }}
                         aria-hidden="true"
                       />
                     );
                   }
                   const cell = byDate.get(date);
-                  if (!cell) return <span key={row} style={{ width: CELL, height: CELL }} />;
+                  if (!cell) return <span key={row} style={{ width: cellPx, height: cellPx }} />;
                   const isSelected = date === selected;
                   const isToday = date === today;
                   const stage = stageOf?.(date) ?? null;
@@ -204,8 +214,8 @@ export default function DayHeatmap({
                       aria-selected={isSelected}
                       className="p-0 border cursor-pointer rounded-[3px] transition-[transform,box-shadow] duration-150 ease-paper hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink"
                       style={{
-                        width: CELL,
-                        height: CELL,
+                        width: cellPx,
+                        height: cellPx,
                         background: LEVELS[levelOf(cell)],
                         borderColor: isSelected
                           ? '#1b1813'
@@ -247,6 +257,12 @@ export default function DayHeatmap({
             · right-click a day to start or end a stage there
           </span>
         )}
+        {/* The zoom rides the legend row rather than a row of its own: the
+            grid is already a tall block, and the scale belongs with the key
+            that says what the colours mean. */}
+        <span className="ml-auto flex-none">
+          <StageZoomControl zoom={zoom} />
+        </span>
       </div>
     </div>
   );
