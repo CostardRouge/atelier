@@ -24,6 +24,15 @@ export interface WinnowConnection {
   /** What the instance said it could do, the last time it was asked. */
   capabilities: WinnowCapabilities | null;
   connectedAt: number;
+  /**
+   * When that sheet was last read. A capabilities sheet is a SNAPSHOT: a
+   * browser that connected before an instance grew the document bucket keeps
+   * hiding the feature until someone asks again, which reads as a bug and has
+   * been one. The sources screen re-asks on open and stamps this, so the row
+   * can say how old what it shows is. Absent on a connection stored before
+   * this field existed — treat it as `connectedAt`.
+   */
+  refreshedAt?: number;
 }
 
 const KEY = 'atelier.sources.winnow.v1';

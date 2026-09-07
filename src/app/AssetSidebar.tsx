@@ -8,6 +8,7 @@ import { useWinnowConnection } from '../shared/sources/winnow/use-connection';
 import { useScopeRows } from '../shared/sources/winnow/use-scope-rows';
 import { usePickFromInstance } from '../shared/sources/winnow/use-pick';
 import { useMediaScope } from '../shared/sources/media-scope';
+import { shortHost } from '../shared/sources/source-ledger';
 import {
   useAssetLibrary,
   type MediaMeta,
@@ -274,7 +275,7 @@ export default function AssetSidebar({
   const allSelected =
     tabPool.length > 0 && tabPool.every((a) => lib.selection.has(a.id));
 
-  const tabButton = (id: SourceTab, label: string, count: number) => (
+  const tabButton = (id: SourceTab, label: string, count: number, hint: string) => (
     <button
       key={id}
       type="button"
@@ -285,7 +286,7 @@ export default function AssetSidebar({
           ? 'bg-ink text-paper'
           : 'bg-transparent text-muted hover:text-accent-ink'
       }`}
-      title={label}
+      title={hint}
     >
       {label}
       {count > 0 && <span className="ml-1 opacity-70">{count}</span>}
@@ -294,16 +295,42 @@ export default function AssetSidebar({
 
   return (
     <aside className="flex-none w-72 max-w-[78vw] flex flex-col min-h-0 border border-line rounded-paper-lg bg-surface shadow-paper overflow-hidden max-[820px]:w-full max-[820px]:max-w-none max-[820px]:max-h-[55vh]">
-      <div className="flex items-center justify-between px-4 pt-3.5 pb-2.5">
+      <div className="flex items-center justify-between gap-2 px-4 pt-3.5 pb-2.5">
         <span className="font-serif text-[1.15rem]">Library</span>
-        <button
-          type="button"
-          onClick={onToggle}
-          className="font-mono text-[0.6rem] tracking-[0.12em] uppercase text-muted border border-line rounded-full px-2 py-[3px] hover:text-accent hover:border-line-strong transition-colors"
-          aria-label="Collapse asset library"
-        >
-          collapse ⟨
-        </button>
+        <span className="flex items-center gap-1.5">
+          {/* Sources are the shell's business, and this rail is where they are
+              felt — so the way to them is here, not buried in a tool. */}
+          <button
+            type="button"
+            onClick={() => navigate('/sources')}
+            className="inline-flex items-center text-muted border border-line rounded-full p-[3px] hover:text-accent hover:border-line-strong transition-colors"
+            aria-label="Sources — connect and manage Winnow instances"
+            title={
+              connection
+                ? `Sources — ${connection.id} and anything else you connect`
+                : 'Sources — connect a Winnow instance'
+            }
+          >
+            <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Zm0 1.4a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2Z"
+              />
+              <path
+                fill="currentColor"
+                d="m6.9.9 2.2 0 .3 1.6c.4.13.78.29 1.12.5l1.35-.92 1.55 1.55-.92 1.35c.21.34.37.72.5 1.12l1.6.3v2.2l-1.6.3c-.13.4-.29.78-.5 1.12l.92 1.35-1.55 1.55-1.35-.92c-.34.21-.72.37-1.12.5l-.3 1.6H6.9l-.3-1.6a4.9 4.9 0 0 1-1.12-.5l-1.35.92L2.58 12l.92-1.35a4.9 4.9 0 0 1-.5-1.12L1.4 9.23V7.03l1.6-.3c.13-.4.29-.78.5-1.12L2.58 4.26 4.13 2.7l1.35.92c.34-.21.72-.37 1.12-.5L6.9.9Zm1.02 1.4-.24 1.32-.63.16c-.5.13-.96.32-1.37.6l-.55.36-1.1-.75-.3.3.75 1.1-.36.55c-.28.41-.47.87-.6 1.37l-.16.63-1.32.24v.42l1.32.24.16.63c.13.5.32.96.6 1.37l.36.55-.75 1.1.3.3 1.1-.75.55.36c.41.28.87.47 1.37.6l.63.16.24 1.32h.42l.24-1.32.63-.16c.5-.13.96-.32 1.37-.6l.55-.36 1.1.75.3-.3-.75-1.1.36-.55c.28-.41.47-.87.6-1.37l.16-.63 1.32-.24v-.42l-1.32-.24-.16-.63a4.5 4.5 0 0 0-.6-1.37l-.36-.55.75-1.1-.3-.3-1.1.75-.55-.36a4.5 4.5 0 0 0-1.37-.6l-.63-.16-.24-1.32h-.42Z"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={onToggle}
+            className="font-mono text-[0.6rem] tracking-[0.12em] uppercase text-muted border border-line rounded-full px-2 py-[3px] hover:text-accent hover:border-line-strong transition-colors"
+            aria-label="Collapse asset library"
+          >
+            collapse ⟨
+          </button>
+        </span>
       </div>
 
       {/* Two sources, two tabs, never one pile. Only with an instance
@@ -314,8 +341,12 @@ export default function AssetSidebar({
           role="tablist"
           aria-label="Where the library's files come from"
         >
-          {tabButton('local', 'Local', split.local.length)}
-          {tabButton('remote', connection.id, remoteAssets.length)}
+          {tabButton('local', 'Local', split.local.length, 'Files opened from this machine')}
+          {/* The instance goes by its first label: `winnow.steeve.website` in
+              a 288px tab truncated to `WINNOW.STEEVE.…`, which reads as a
+              defect rather than as a name. The full host stays in the title,
+              and on the sources screen. */}
+          {tabButton('remote', shortHost(connection.id), remoteAssets.length, connection.id)}
         </div>
       )}
 
@@ -357,7 +388,7 @@ export default function AssetSidebar({
                 <button
                   type="button"
                   className="p-0 border-0 bg-transparent text-faint cursor-pointer underline underline-offset-[3px] hover:text-ink"
-                  onClick={() => navigate('/connect')}
+                  onClick={() => navigate('/sources')}
                   title="Connect a Winnow instance as a source"
                 >
                   or connect a Winnow

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import AssetSidebar from './AssetSidebar';
-import ConnectScreen from './ConnectScreen';
+import SourcesScreen from './SourcesScreen';
 import ErrorBoundary from './ErrorBoundary';
 import Home from './Home';
 import { REPO_URL } from './site';
@@ -18,13 +18,17 @@ const COLLAPSE_KEY = 'atelier.library.collapsed';
  */
 export default function App() {
   const path = useHashRoute();
-  // `#/connect?instance=…` is not a tool: it is the one screen that lets a
-  // remote source into the app, and it belongs to the shell so no tool has to
-  // know about sources. The query rides in the hash, after the path.
-  const connect = path === '/connect' || path.startsWith('/connect?');
+  // `#/sources` — and `#/connect?instance=…`, the older name an instance's
+  // own app rail links to — is not a tool: it is the one screen that lets a
+  // remote source into the app, lists what is connected and takes one out
+  // again. It belongs to the shell so no tool has to know about sources. The
+  // query rides in the hash, after the path.
+  const sourcesPath = ['/sources', '/connect'].find(
+    (base) => path === base || path.startsWith(`${base}?`),
+  );
   // No matching tool → the home page. The wordmark always links back here, so
   // an empty or unknown hash lands on home with nothing to redirect.
-  const tool = connect ? undefined : toolForPath(path);
+  const tool = sourcesPath ? undefined : toolForPath(path);
   const Active = tool?.Component ?? Home;
 
   // The active view, guarded so a single tool's crash shows a recoverable
@@ -32,7 +36,11 @@ export default function App() {
   // another tool clears a prior error and mounts the next one fresh.
   const activeContent = (
     <ErrorBoundary resetKey={path}>
-      {connect ? <ConnectScreen query={path.slice('/connect'.length + 1)} /> : <Active />}
+      {sourcesPath ? (
+        <SourcesScreen query={path.slice(sourcesPath.length + 1)} />
+      ) : (
+        <Active />
+      )}
     </ErrorBoundary>
   );
 
