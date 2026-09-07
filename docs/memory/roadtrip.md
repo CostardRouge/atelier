@@ -147,6 +147,8 @@ Read before touching `src/tools/roadtrip/` or `src/shared/roadtrip/`, and before
 
 **What it deliberately is not**: a second pool, a bulk import, or a second browser. One picture crosses per click, at proxy fidelity; it lands in the ordinary Library through `addFiles` and is then made the active asset, so the existing Library ↔ slide machinery records it onto the slide and no second path to a piece's picture exists. `WinnowBrowser` stays the way to bring a whole day in; this is the way to dress ONE piece, and that is what stops the pool filling with a day the author has moved past. **How to apply**: the strip opens by itself only when the slide has no picture — the case the friction is about — and its tiles wait while `SlideRecovery` is fetching, or the two races for which picture the slide ends up with.
 
+**Its tiles shipped with `aspect-square` on a `1fr` auto-fill track (2026-09-07 fix)** — the exact trap `frontend.md` already names for the calendar cells in `WinnowBrowser`, struck a second time because the lesson lived only in the file that had already learned it. A tile's `<img>` now takes a fixed `h-[74px]` instead, matching the browser's own `Thumb`. See `frontend.md`, «A `1fr` grid track cannot be trusted to carry `aspect-ratio`».
+
 
 ## The timeline is ASLEEP, and Atelier does not lean on it (2026-09-07)
 
