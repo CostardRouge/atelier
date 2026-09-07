@@ -60,7 +60,9 @@ Read before touching `src/tools/studio/`, `src/shared/overlay/`, anything about 
 
 ## A source vouches for the EXIF its proxy dropped (2026-09-02)
 
-**Decision.** `MediaOrigin.exif` carries what the source parsed at ingest, and the studio merges it **under** the file's own (`shared/exif/merge-exif.ts`): the bytes in hand are the truth about the file on the stage, the source is the truth about the capture it was made from, so the file wins wherever it still says anything.
+**Decision.** `MediaOrigin.exif` carries what the source parsed at ingest, and it is merged **under** the file's own (`shared/exif/merge-exif.ts`): the bytes in hand are the truth about the file on the stage, the source is the truth about the capture it was made from, so the file wins wherever it still says anything.
+
+**That combination is made in ONE place** (2026-09-08): `shared/exif/read-exif.ts` — read the head of the file, merge the vouched account under it, and report `via` (which instance vouched) plus the file's own account, so a panel can say where a value came from instead of presenting a column as if it had been in the bytes. The Studio and the EXIF viewer (`tools/exif/use-exif.ts`) both read through it; a third consumer must not re-implement the merge. Road Trip's `readCaptureDate` stays separate on purpose: it needs to know WHICH account supplied the day, and a merged object has lost that.
 
 **Why**: a source's editing rendition is a re-encode, and a re-encode drops metadata — Winnow's photo proxy is a WebP with no EXIF at all. A drone photograph edited from it read `—` on every exposure, position and time element while Winnow had all of it in columns, one request away and already fetched.
 

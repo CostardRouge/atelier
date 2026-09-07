@@ -44,7 +44,7 @@ import { exportOverlayVideoViaSeek } from '../../shared/overlay/export-overlay-s
 import { exportVariantVideo, outroTail } from '../../shared/media/export-variant';
 import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
 import SendFinalsPanel from './SendFinalsPanel';
-import { mergeExif } from '../../shared/exif/merge-exif';
+import { readEffectiveExif } from '../../shared/exif/read-exif';
 import { downloadBlob } from '../../shared/media/save';
 import { frameGrabName, grabFrame } from '../../shared/media/frame-grab';
 import {
@@ -81,7 +81,7 @@ import { settleForStill } from '../../shared/overlay/still-frame';
 import { createOutroCard, type OutroCard } from '../../shared/overlay/outro-card';
 import OutroPanel from './OutroPanel';
 import { decodePhoto, exportPhotoVariant } from '../../shared/media/photo-frame';
-import { EXIF_SLICE_BYTES, parseExif, type ExifData } from '../../shared/exif/exif-parser';
+import type { ExifData } from '../../shared/exif/exif-parser';
 import { cueFromExif } from '../../shared/exif/exif-cue';
 import {
   defaultElementsPreset,
@@ -362,16 +362,13 @@ export default function StudioEditor({
         setPhotoError(err.message);
       });
     // EXIF is read from the head of the file, independently of the decode: a
-    // RAW the browser cannot draw still tells us what it was shot at.
-    void activeImage
-      .slice(0, EXIF_SLICE_BYTES)
-      .arrayBuffer()
-      .then((head) => {
-        if (!cancelled) setPhotoExif(parseExif(head));
-      })
-      .catch(() => {
-        if (!cancelled) setPhotoExif(null);
-      });
+    // RAW the browser cannot draw still tells us what it was shot at. What the
+    // source that handed the file over parsed at ingest fills the gaps, under
+    // whatever the bytes still say (`read-exif.ts`) — a Winnow photo proxy is
+    // a WebP with no EXIF at all.
+    void readEffectiveExif(activeImage).then((read) => {
+      if (!cancelled) setPhotoExif(read.exif);
+    });
     return () => {
       cancelled = true;
     };
@@ -472,22 +469,13 @@ export default function StudioEditor({
   const overridden = overrideApplies(timeScale, activeId);
   const scale = resolveTimeScale(timeScale, timing, activeId);
   const clipCues = useMemo(() => retimeCues(rawCues, scale), [rawCues, scale]);
-  // A photograph is one cue, built from its EXIF — or none, when the file
-  // carries nothing an element could draw.
-  // A source's editing rendition is a re-encode, and a re-encode drops the
-  // metadata — Winnow's photo proxy is a WebP with no EXIF at all. What the
-  // source parsed at ingest fills those gaps, under whatever the file itself
-  // still says: the bytes in hand are the truth about THIS file, the source is
-  // the truth about the capture it came from.
-  const photoOriginExif = mediaOrigin(activeImage)?.exif ?? null;
-  const effectivePhotoExif = useMemo(
-    () => mergeExif(photoExif, photoOriginExif),
-    [photoExif, photoOriginExif],
-  );
+  // A photograph is one cue, built from its EXIF — the file's own, under what
+  // the source vouched for — or none, when neither carries anything an element
+  // could draw.
   const photoCues = useMemo(() => {
-    const cue = effectivePhotoExif ? cueFromExif(effectivePhotoExif) : null;
+    const cue = photoExif ? cueFromExif(photoExif) : null;
     return cue ? [cue] : [];
-  }, [effectivePhotoExif]);
+  }, [photoExif]);
   const cues = isPhoto ? photoCues : clipCues;
   // Undoing the conform is exactly playing at 1/scale: a 4× slow clip at 4×.
   const realtimeRate = clampPlaybackRate(1 / scale);
@@ -1899,7 +1887,7 @@ export default function StudioEditor({
                   timing={timing}
                   scale={scale}
                   overridden={overridden}
-                  photo={isPhoto ? (effectivePhotoExif ?? {}) : null}
+                  photo={isPhoto ? (photoExif ?? {}) : null}
                 />
               )}
 

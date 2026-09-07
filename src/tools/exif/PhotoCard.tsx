@@ -3,7 +3,7 @@ import { useInViewport } from '../../shared/lib/use-in-viewport';
 import { useObjectUrl } from '../../shared/media/use-object-url';
 import { formatBytes } from '../../shared/lib/format';
 import { imageTypeLabel } from '../../shared/media/image-meta';
-import { cameraLine, exposureLine } from './exif-format';
+import { cameraLine, exposureLine, formatCaptured } from './exif-format';
 import { isEmptyExif } from '../../shared/exif/exif-parser';
 import { useExif } from './use-exif';
 import type { Photo } from './photo';
@@ -17,7 +17,8 @@ interface PhotoCardProps {
 export default function PhotoCard({ photo, index, onOpen }: PhotoCardProps) {
   const [ref, inView] = useInViewport<HTMLDivElement>();
   const [decodeError, setDecodeError] = useState(false);
-  const exif = useExif(photo.image, inView);
+  const read = useExif(photo.image, inView);
+  const exif = read?.exif;
 
   // Create the preview object URL only once visible; revoke on change/unmount.
   const url = useObjectUrl(inView ? photo.image : null);
@@ -27,6 +28,7 @@ export default function PhotoCard({ photo, index, onOpen }: PhotoCardProps) {
 
   const camera = exif && cameraLine(exif);
   const exposure = exif && exposureLine(exif);
+  const captured = exif && formatCaptured(exif.dateTimeOriginal);
   const located = !!exif?.gps;
   const typeLabel = imageTypeLabel(photo.image.name);
 
@@ -94,6 +96,16 @@ export default function PhotoCard({ photo, index, onOpen }: PhotoCardProps) {
             {exposure && (
               <p className="m-0 font-mono text-[0.76rem] tabular-nums text-ink-soft">
                 {exposure}
+              </p>
+            )}
+            {/* The shutter's own moment, not the file's mtime — a re-export
+                rewrites the second and never the first. */}
+            {captured && (
+              <p className="m-0 font-mono text-[0.72rem] tabular-nums text-muted">
+                {captured}
+                {read?.via && isEmptyExif(read.file) && (
+                  <span className="text-faint"> · via {read.via}</span>
+                )}
               </p>
             )}
           </div>

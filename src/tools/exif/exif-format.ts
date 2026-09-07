@@ -5,6 +5,7 @@
  */
 
 import type { ExifData, GpsCoord } from '../../shared/exif/exif-parser';
+import { exifTimestamp } from '../../shared/exif/exif-cue';
 
 /** Trim a float to at most 2 decimals, dropping trailing zeros (24.0 → "24"). */
 function trim(n: number): string {
@@ -143,4 +144,17 @@ export function exposureLine(data: ExifData): string | undefined {
     formatIso(data.iso),
   ].filter(Boolean);
   return parts.length ? parts.join('  ·  ') : undefined;
+}
+
+/**
+ * The capture time as the camera wrote it, in the suite's spelling
+ * (`2026-05-30 05:49`) — the day and hour the shutter fired, never the file's
+ * modified time, which a copy or a re-export rewrites.
+ *
+ * Taken as written: EXIF carries no timezone, and the hour on the picture is
+ * the hour it was where it was taken (`exif-cue.ts`).
+ */
+export function formatCaptured(value?: string): string | undefined {
+  const stamp = exifTimestamp(value);
+  return stamp ? stamp.slice(0, 16) : undefined;
 }

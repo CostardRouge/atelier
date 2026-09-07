@@ -79,6 +79,27 @@ export function identityFor(sourceId: string, row: WinnowAssetRow): KnownIdentit
   };
 }
 
+/**
+ * The mtime a fetched file carries: the CAPTURE's instant, never the moment it
+ * was copied. It is what a folder's file would have had, and it is what every
+ * fallback in the suite reads — Road Trip's day, the library's ordering — so
+ * `Date.now()` here would file a 2025 photograph under today.
+ *
+ * `captured_at` is the answer whenever the instance has one. When it has only
+ * a `capture_date` (an asset whose EXIF held a day and no clock), the day is
+ * taken at LOCAL NOON: midnight would land on the day before in any zone west
+ * of the parser, which is the one mistake the whole date path exists to avoid.
+ * Only a row that knows neither falls through to now, and it is the honest
+ * last resort — nothing knows when that file was made.
+ */
+export function captureMtime(row: WinnowAssetRow): number {
+  const instant = row.captured_at ? Date.parse(row.captured_at) : NaN;
+  if (Number.isFinite(instant)) return instant;
+  const day = /^(\d{4})-(\d{2})-(\d{2})/.exec(row.capture_date ?? '');
+  if (day) return new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]), 12).getTime();
+  return Date.now();
+}
+
 export async function materialize(
   client: WinnowClient,
   sourceId: string,
@@ -86,9 +107,7 @@ export async function materialize(
   options: MaterializeOptions,
 ): Promise<File[]> {
   const plan = plannedFiles(client, row, options.fidelity);
-  // The capture time is the most useful mtime a fetched file can carry — it
-  // is what a folder's file would have had, and what Road Trip reads.
-  const lastModified = row.captured_at ? Date.parse(row.captured_at) || Date.now() : Date.now();
+  const lastModified = captureMtime(row);
   const identity = identityFor(sourceId, row);
   // Where this came from, so the export can say what it is holding and fetch
   // the capture when it is time to deliver. Only on the MAIN file: fetching

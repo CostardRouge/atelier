@@ -5,6 +5,7 @@ import {
   flashLabel,
   formatAltitude,
   formatAperture,
+  formatCaptured,
   formatCoord,
   formatExposureBias,
   formatFocal,
@@ -105,5 +106,20 @@ describe('summary lines', () => {
   it('returns undefined when nothing is present', () => {
     expect(cameraLine({})).toBeUndefined();
     expect(exposureLine({})).toBeUndefined();
+  });
+});
+
+describe('formatCaptured', () => {
+  it('reads the camera’s own spelling as the suite’s', () => {
+    expect(formatCaptured('2026:05:30 05:49:34')).toBe('2026-05-30 05:49');
+  });
+
+  it('takes the hour as written, never converted', () => {
+    expect(formatCaptured('2026:05:30 23:59:59')).toBe('2026-05-30 23:59');
+  });
+
+  it('is undefined for a flat clock battery, or for nothing at all', () => {
+    expect(formatCaptured('0000:00:00 00:00:00')).toBeUndefined();
+    expect(formatCaptured(undefined)).toBeUndefined();
   });
 });

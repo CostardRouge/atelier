@@ -22,7 +22,8 @@ export default function DetailView({ photo, onBack }: DetailViewProps) {
   const url = useObjectUrl(photo.image);
   const [decodeError, setDecodeError] = useState(false);
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
-  const exif = useExif(photo.image, true);
+  const read = useExif(photo.image, true);
+  const exif = read?.exif;
 
   useEffect(() => {
     setDecodeError(false);
@@ -87,6 +88,17 @@ export default function DetailView({ photo, onBack }: DetailViewProps) {
             <p className={notice}>
               No EXIF metadata found in this file. Dimensions (if shown) come
               from the decoded image.
+            </p>
+          )}
+          {/* Where the values came from, when they did not come from the
+              bytes on screen: an instance's editing rendition is a re-encode
+              that carries no EXIF, and presenting its columns as the file's
+              own would be a quiet lie about what was read. */}
+          {read?.via && !isEmptyExif(read.exif) && isEmptyExif(read.file) && (
+            <p className={notice}>
+              This file is {read.via}&rsquo;s editing rendition and carries no
+              EXIF of its own. The values below are what {read.via} read from
+              the original capture.
             </p>
           )}
           <ExifPanels data={data} />

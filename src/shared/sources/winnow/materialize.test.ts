@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { WinnowClient, type WinnowAssetRow } from './client';
-import { identityFor, materialize, plannedFiles } from './materialize';
+import { captureMtime, identityFor, materialize, plannedFiles } from './materialize';
 import {
   hashedMediaRef,
   knownIdentity,
@@ -83,6 +83,30 @@ describe('identityFor', () => {
     expect(identityFor('winnow.example', row({ content_hash: null }))).toEqual({
       assetId: 'winnow.example/42',
     });
+  });
+});
+
+describe('captureMtime', () => {
+  it('is the capture instant when the instance has one', () => {
+    expect(captureMtime(row())).toBe(Date.parse('2025-07-09T08:30:00.000Z'));
+  });
+
+  it('falls back to the capture DAY at local noon, never to midnight', () => {
+    // Midnight would fall on the day before in any zone west of the reader,
+    // and the day is the whole point of the fallback.
+    expect(captureMtime(row({ captured_at: null }))).toBe(new Date(2025, 6, 9, 12).getTime());
+  });
+
+  it('is now only when the row knows neither', () => {
+    const before = Date.now();
+    const at = captureMtime(row({ captured_at: null, capture_date: null }));
+    expect(at).toBeGreaterThanOrEqual(before);
+  });
+
+  it('refuses an unparseable instant rather than dating the file by it', () => {
+    expect(captureMtime(row({ captured_at: 'not a date' }))).toBe(
+      new Date(2025, 6, 9, 12).getTime(),
+    );
   });
 });
 

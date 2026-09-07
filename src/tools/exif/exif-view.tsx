@@ -5,6 +5,7 @@ import {
   flashLabel,
   formatAltitude,
   formatAperture,
+  formatCaptured,
   formatCoord,
   formatExposureBias,
   formatFocal,
@@ -78,7 +79,7 @@ export function ExifPanels({ data }: { data: ExifData }) {
       <Panel title="Image">
         <Field label="Dimensions" value={dims} />
         <Field label="Orientation" value={orientationLabel(data.orientation)} />
-        <Field label="Captured" value={data.dateTimeOriginal} />
+        <Field label="Captured" value={formatCaptured(data.dateTimeOriginal)} />
       </Panel>
 
       <Panel title="Location">
