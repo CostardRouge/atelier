@@ -417,7 +417,9 @@ Studio project's name.
 
 **The picture is whatever is ticked in the Library**, and the two stay in step:
 opening a piece points the Library at its picture, and picking another one
-there re-points the piece. Videos work as well as photos: the frame the hook sits
+there re-points the piece. With a Winnow connected, the Library's instance tab
+lists that piece's day by itself — the day is the piece's, so it is never
+typed — and one click brings a picture across. Videos work as well as photos: the frame the hook sits
 on is chosen by **dragging along a filmstrip of the clip itself**, the way a
 phone gallery picks a cover — the thumbnails fill in as they decode, the
 preview follows the drag, and the arrows nudge frame by frame.
@@ -656,11 +658,18 @@ come from a **[Winnow](https://github.com/CostardRouge/winnow)** instance — th
 maintainer's self-hosted triage app, which indexes every capture on a NAS,
 builds a proxy for each one and knows a DJI clip's `.srt` flight log as a
 sidecar. Open `#/connect`, or the "or connect a Winnow" link under the drop
-zone, confirm the instance's address, and it becomes a source: browse it by
-day, tick pictures, and they arrive in the library as ordinary files — the
-**proxy** by default (an H.264 clip or a WebP photo, fast and decodable
-everywhere), or the **original** on request, with its weight shown first. A
-DJI clip brings its flight log along either way.
+zone, confirm the instance's address, and it becomes a source with **its own
+tab in the Library**, beside `Local` — the two never mix. The instance's tab
+is a *view*, not a pile: it lists what the instance holds for **the day the
+active tool has open** (a Road Trip piece's day, or the day selected in the
+trip overview; a date field when nothing is open), and re-asks when that day
+changes, so nothing accumulates and nothing needs clearing. One click on a
+tile fetches that picture into the library as an ordinary file — the
+**proxy** (an H.264 clip or a WebP photo, fast and decodable everywhere) — and
+makes it the active one; a tile already fetched is marked and only
+re-activates. "Browse all" opens the full browser — by day or by folder, with
+filters — to tick many at once, or to take the **original** instead, with its
+weight shown first. A DJI clip brings its flight log along either way.
 
 When the Winnow serves its **timeline** (media grouped into legs by place and
 date), the browser gains a third way in, **by leg**, and Road Trip can be seeded

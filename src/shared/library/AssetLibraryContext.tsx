@@ -84,6 +84,12 @@ export interface AssetLibrary {
   /** Select / deselect every asset. */
   selectAll: () => void;
   selectNone: () => void;
+  /**
+   * Select or deselect a set of assets in one commit, leaving the rest as they
+   * are — how a sidebar tab's "all / none" acts on its own assets without
+   * touching another tab's.
+   */
+  select: (ids: Iterable<string>, on: boolean) => void;
 }
 
 const AssetLibraryContext = createContext<AssetLibrary | null>(null);
@@ -281,6 +287,17 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
 
   const selectNone = useCallback(() => setSelection(new Set()), []);
 
+  const select = useCallback((ids: Iterable<string>, on: boolean) => {
+    setSelection((sel) => {
+      const s = new Set(sel);
+      for (const id of ids) {
+        if (on) s.add(id);
+        else s.delete(id);
+      }
+      return s;
+    });
+  }, []);
+
   const value = useMemo<AssetLibrary>(
     () => ({
       assets,
@@ -296,6 +313,7 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
       toggle,
       selectAll,
       selectNone,
+      select,
     }),
     [
       assets,
@@ -311,6 +329,7 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
       toggle,
       selectAll,
       selectNone,
+      select,
     ],
   );
 

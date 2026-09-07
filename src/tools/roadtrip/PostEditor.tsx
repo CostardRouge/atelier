@@ -21,6 +21,7 @@ import {
 } from '../../shared/roadtrip/deck';
 import { hookSecondsWithin } from '../../shared/roadtrip/hook-video';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
+import { usePublishMediaScope, type MediaScope } from '../../shared/sources/media-scope';
 import {
   createPostSlide,
   type PostBadge,
@@ -114,6 +115,23 @@ export default function PostEditor({
   const [tripSheet, setTripSheet] = useState<TripSettingsSection | null>(null);
 
   const activeFile = active ? pickable(active) : null;
+
+  // Tell the shell which day(s) this piece tells, so the Library's Winnow tab
+  // can list them without a date being picked by hand. A post is keyed by
+  // its day, so the day IS the query (roadtrip.md); a multi-day post is its
+  // span. Taken back on unmount by the hook.
+  const mediaScope = useMemo<MediaScope>(
+    () => ({
+      from: post.date,
+      to: post.endDate ?? post.date,
+      label: post.endDate
+        ? `${formatIsoDate(post.date)} → ${formatIsoDate(post.endDate)}`
+        : formatIsoDate(post.date),
+      publisher: 'Road Trip',
+    }),
+    [post.date, post.endDate],
+  );
+  usePublishMediaScope(mediaScope);
 
   // --- the deck: the hook, any content pictures, and the closing card ------
   const slides = useMemo(() => deckSlides(trip, post), [trip, post]);
