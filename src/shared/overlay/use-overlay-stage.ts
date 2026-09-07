@@ -83,6 +83,12 @@ interface StageHandlers {
   onPointerDown: (e: React.PointerEvent) => void;
   onPointerMove: (e: React.PointerEvent) => void;
   onPointerUp: (e: React.PointerEvent) => void;
+  /**
+   * Drop whatever drag is in flight, without an event to end it — what a
+   * gesture that TAKES OVER the canvas (a two-finger view zoom) needs, since
+   * the finger that started the drag never lifts on the stage's own terms.
+   */
+  cancelDrag: () => void;
 }
 
 export function useOverlayStage(params: StageParams): StageHandlers {
@@ -466,5 +472,9 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     [canvasRef],
   );
 
-  return { onPointerDown, onPointerMove, onPointerUp };
+  const cancelDrag = useCallback(() => {
+    drag.current = null;
+  }, []);
+
+  return { onPointerDown, onPointerMove, onPointerUp, cancelDrag };
 }

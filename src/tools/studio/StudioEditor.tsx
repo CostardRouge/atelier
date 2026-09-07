@@ -90,6 +90,8 @@ import {
 import { reanchorInPlace } from '../../shared/overlay/draw-overlays';
 import { DEFAULT_GUIDES, type GuidesState } from '../../shared/overlay/guides';
 import { useOverlayStage } from '../../shared/overlay/use-overlay-stage';
+import StageZoomControl from '../../shared/ui/StageZoomControl';
+import { useStageZoom } from '../../shared/ui/use-stage-zoom';
 import { useLutStack } from '../../shared/lut/use-lut-stack';
 import GradePanel from '../../shared/lut/GradePanel';
 import type { StyleTheme } from '../../shared/overlay/title-styles';
@@ -762,6 +764,16 @@ export default function StudioEditor({
     onSelect: selectElement,
     onMove: handleMove,
   });
+
+  // View zoom over that stage. A pinch puts two fingers on the canvas, and the
+  // first of them is a perfectly good element drag as far as the stage is
+  // concerned — so while the gesture runs, the stage's own pointer handling
+  // stands down rather than walking a title across the frame.
+  const zoom = useStageZoom();
+  const cancelDrag = stage.cancelDrag;
+  useEffect(() => {
+    if (zoom.pinching) cancelDrag();
+  }, [zoom.pinching, cancelDrag]);
 
   function handleScrub(value: number) {
     setTime(value);
@@ -1450,16 +1462,25 @@ export default function StudioEditor({
         {/* Stage */}
         <div className="flex flex-col gap-[0.6rem] flex-1 min-w-0 min-h-0">
           <div
-            className={`relative rounded-paper overflow-hidden flex-1 min-h-0 flex items-center justify-center @max-[800px]:min-h-[240px] ${
+            className={`relative rounded-paper overflow-hidden flex-1 min-h-0 @max-[800px]:min-h-[240px] ${
               hasFrame ? 'bg-frame' : 'bg-transparent'
             }`}
           >
+            {/* The stage is a SCROLL box: the zoom grows the canvas's own
+                layout size, so panning a zoomed picture is ordinary scrolling
+                and the extent is the browser's arithmetic. The wrapper's
+                min-w/min-h keep the picture centred while it still fits, and
+                let it start at the top-left corner once it does not — flex
+                centring alone would put the overflow out of reach. */}
+            <div ref={zoom.viewportRef} className="w-full h-full overflow-auto">
+              <div className="w-fit h-fit min-w-full min-h-full flex items-center justify-center">
             {hasFrame ? (
               <canvas
                 ref={canvasRef}
-                className="block w-auto h-auto max-w-full max-h-full object-contain bg-frame touch-none cursor-grab"
-                onPointerDown={stage.onPointerDown}
-                onPointerMove={stage.onPointerMove}
+                style={zoom.fit}
+                className="block w-auto h-auto shrink-0 object-contain bg-frame touch-none cursor-grab"
+                onPointerDown={zoom.pinching ? undefined : stage.onPointerDown}
+                onPointerMove={zoom.pinching ? undefined : stage.onPointerMove}
                 onPointerUp={stage.onPointerUp}
                 onPointerCancel={stage.onPointerUp}
               />
@@ -1473,6 +1494,11 @@ export default function StudioEditor({
                       ? 'Decoding the photo…'
                       : 'Select a clip to edit.'}
               </div>
+            )}
+              </div>
+            </div>
+            {hasFrame && (
+              <StageZoomControl zoom={zoom} className="absolute right-2 bottom-2 z-10" />
             )}
             {/* Offscreen decoder + audio source. Kept rendered (not
                 display:none) so the browser keeps producing frames. */}

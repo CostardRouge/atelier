@@ -24,6 +24,8 @@ import {
   type RenderBadgeOptions,
 } from '../../shared/roadtrip/badge-render';
 import type { HookBlock, Shade } from '../../shared/roadtrip/shades';
+import StageZoomControl from '../../shared/ui/StageZoomControl';
+import { useStageZoom } from '../../shared/ui/use-stage-zoom';
 
 interface BadgeStageProps {
   file: File | null;
@@ -257,18 +259,33 @@ export default function BadgeStage({
   // Read through a ref: the fit callback must not re-run the observer.
   const onFitRef = useRef(onFit);
   onFitRef.current = onFit;
-  const frameRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const [longEdge, setLongEdge] = useState(PREVIEW_LONG_EDGE);
+
+  /**
+   * The stage's VIEW zoom: the same fitted box, multiplied. The wrapper it
+   * lives in scrolls, so a zoomed picture is panned by ordinary scrolling and
+   * the bitmap follows the displayed size — zooming in gives real pixels, not
+   * a magnified preview (up to `MAX_PREVIEW_LONG_EDGE`).
+   */
+  const zoom = useStageZoom();
+  const frameRef = zoom.viewportRef;
+  const scale = zoom.scale;
+
   useLayoutEffect(() => {
     const frame = frameRef.current;
     const box = boxRef.current;
     if (!frame || !box) return;
     const fit = () => {
-      const { width, height } = frame.getBoundingClientRect();
+      // The scroll box's client size, not its bounding rect: a scrollbar's
+      // gutter is room the picture does not have.
+      const width = frame.clientWidth;
+      const height = frame.clientHeight;
       if (width <= 0 || height <= 0) return;
+      // What the column is capped with is the FITTED width, never the zoomed
+      // one: zooming in is a way of looking closer, not a claim on the screen.
       onFitRef.current?.(height * aspect);
-      const w = Math.min(width, height * aspect);
+      const w = Math.min(width, height * aspect) * scale;
       const h = w / aspect;
       box.style.width = `${w}px`;
       box.style.height = `${h}px`;
@@ -281,7 +298,7 @@ export default function BadgeStage({
     const ro = new ResizeObserver(fit);
     ro.observe(frame);
     return () => ro.disconnect();
-  }, [aspect]);
+  }, [aspect, scale, frameRef]);
 
   // Paint. Runs on every change of anything drawn, including after a decode.
   useEffect(() => {
@@ -347,10 +364,14 @@ export default function BadgeStage({
   onFramingRef.current = onFraming;
 
   /**
-   * Zooming with the wheel, and with a trackpad pinch (which arrives as a
-   * ctrl-wheel). Attached natively and NOT passively: React's own wheel
-   * handler is passive, so `preventDefault` there is ignored and the page
-   * scrolls away under the picture you are trying to frame.
+   * Zooming the picture INSIDE its frame with the wheel. Attached natively and
+   * NOT passively: React's own wheel handler is passive, so `preventDefault`
+   * there is ignored and the page scrolls away under the picture you are
+   * trying to frame.
+   *
+   * A ctrl/⌘-wheel — which is also what a trackpad pinch sends — is left for
+   * the stage's VIEW zoom instead: the two gestures were the same one, and a
+   * pinch that edits the document is not what a pinch means anywhere else.
    */
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -358,6 +379,7 @@ export default function BadgeStage({
     const onWheel = (e: WheelEvent) => {
       const source = sourceRef.current;
       if (!source) return;
+      if (e.ctrlKey || e.metaKey) return;
       e.preventDefault();
       const f = framingRef.current ?? DEFAULT_FRAMING;
       const scale = Math.min(
@@ -381,6 +403,13 @@ export default function BadgeStage({
     | { kind: 'picture'; lastPx: number; lastPy: number }
     | null
   >(null);
+
+  // Two fingers on the stage are a view zoom, not a drag: the first of them
+  // would otherwise carry the badge (or the picture) across the frame under
+  // the gesture, and it never lifts on the canvas's own terms.
+  useEffect(() => {
+    if (zoom.pinching) drag.current = null;
+  }, [zoom.pinching]);
 
   /** A pointer event in the canvas's own pixel space. */
   const toPixels = useCallback((e: React.PointerEvent) => {
@@ -493,37 +522,48 @@ export default function BadgeStage({
 
   return (
     // The wrapper decides how much room there is; the box inside takes the
-    // largest aspect-fitting slice of it (measured above). Wide: the wrapper
-    // grows to the column's whole height. Stacked: it is as tall as a
-    // full-width picture, capped at 62vh so it never pushes the controls off
-    // a phone screen — `cqw` is the section's width, the editor's container.
+    // largest aspect-fitting slice of it (measured above), times the view
+    // zoom. Wide: the wrapper grows to the column's whole height. Stacked: it
+    // is as tall as a full-width picture, capped at 62vh so it never pushes
+    // the controls off a phone screen — `cqw` is the section's width, the
+    // editor's container.
     <div className="flex flex-col items-center gap-2 min-h-0 w-full @min-[860px]:flex-1">
       <div
-        ref={frameRef}
         style={{ '--aspect': aspect } as React.CSSProperties}
-        className="relative flex items-center justify-center min-h-0 w-full h-[min(62vh,calc(100cqw/var(--aspect)))] @min-[860px]:h-auto @min-[860px]:flex-1"
+        className="relative min-h-0 w-full h-[min(62vh,calc(100cqw/var(--aspect)))] @min-[860px]:h-auto @min-[860px]:flex-1"
       >
-        <div
-          ref={boxRef}
-          className="relative rounded-paper border border-line-strong bg-frame overflow-hidden"
-        >
-          <canvas
-            ref={canvasRef}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
-            onPointerLeave={() => setHovering(false)}
-            className={`absolute inset-0 w-full h-full touch-none ${cursor}`}
-          />
-          <canvas
-            ref={chromeRef}
-            aria-hidden="true"
-            className="absolute inset-0 w-full h-full pointer-events-none"
-          />
+        {/* The scroll box. Its inner wrapper's min-w/min-h keep the picture
+            centred while it fits and let it start at the corner once it does
+            not — flex centring alone puts the overflow out of reach. */}
+        <div ref={frameRef} className="w-full h-full overflow-auto">
+          <div className="w-fit h-fit min-w-full min-h-full flex items-center justify-center">
+            {/* `shrink-0`: the measured box is a flex item, and a zoomed
+                picture is wider than the scroll box it must overflow — left
+                shrinkable it is squeezed back to the viewport instead. */}
+            <div
+              ref={boxRef}
+              className="relative shrink-0 rounded-paper border border-line-strong bg-frame overflow-hidden"
+            >
+              <canvas
+                ref={canvasRef}
+                onPointerDown={zoom.pinching ? undefined : onPointerDown}
+                onPointerMove={zoom.pinching ? undefined : onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerUp}
+                onPointerLeave={() => setHovering(false)}
+                className={`absolute inset-0 w-full h-full touch-none ${cursor}`}
+              />
+              <canvas
+                ref={chromeRef}
+                aria-hidden="true"
+                className="absolute inset-0 w-full h-full pointer-events-none"
+              />
+            </div>
+          </div>
         </div>
+        <StageZoomControl zoom={zoom} className="absolute right-2 bottom-2 z-10" />
         {loading && (
-          <span className="absolute font-mono text-[0.7rem] text-paper bg-[rgba(20,18,15,0.7)] px-3 py-1.5 rounded-full">
+          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-mono text-[0.7rem] text-paper bg-[rgba(20,18,15,0.7)] px-3 py-1.5 rounded-full">
             decoding…
           </span>
         )}
