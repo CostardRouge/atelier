@@ -15,6 +15,10 @@ describe('sameScope', () => {
     expect(sameScope(day, null)).toBe(false);
     expect(sameScope(null, day)).toBe(false);
   });
+  it('reads a missing intent as `browse`, so an old publisher does not churn', () => {
+    expect(sameScope(day, { ...day, intent: 'browse' })).toBe(true);
+    expect(sameScope(day, { ...day, intent: 'pick' })).toBe(false);
+  });
 });
 
 describe('isSingleDay', () => {

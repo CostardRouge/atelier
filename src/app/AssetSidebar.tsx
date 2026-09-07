@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Tool } from './tools';
 import WinnowBrowser from './WinnowBrowser';
+import WinnowLightbox from './WinnowLightbox';
 import WinnowScopeGrid from './WinnowScopeGrid';
 import { navigate } from './use-hash-route';
 import { useWinnowConnection } from '../shared/sources/winnow/use-connection';
 import { useScopeRows } from '../shared/sources/winnow/use-scope-rows';
+import { usePickFromInstance } from '../shared/sources/winnow/use-pick';
 import { useMediaScope } from '../shared/sources/media-scope';
 import {
   useAssetLibrary,
@@ -154,6 +156,34 @@ export default function AssetSidebar({
     });
   }, [connection, remoteAssets, scopeRows.rows]);
 
+  const q = query.trim().toLowerCase();
+  /** The instance's rows past the filter box — the grid draws these, the
+   *  lightbox pages through them, so an index means one thing. */
+  const remoteShown = useMemo(
+    () => (scopeRows.rows ?? []).filter((r) => !q || r.filename.toLowerCase().includes(q)),
+    [scopeRows.rows, q],
+  );
+  // Which of those is open large, or null. Closed by anything that changes
+  // what the list IS: another span, another tab, another filter.
+  const [preview, setPreview] = useState<number | null>(null);
+  useEffect(() => setPreview(null), [from, to, remoteTab, q]);
+  /**
+   * A click on a tile shows the picture rather than fetching it, unless the
+   * tool that named the span says a slide is waiting for one
+   * (`MediaScope.intent`). With no publisher at all — a day picked here, the
+   * Studio's gallery — looking IS the reason the tab is open, so: preview.
+   */
+  const previewFirst = published?.intent !== 'pick';
+
+  /** A picture the instance holds, brought across — grid and lightbox alike. */
+  const picker = usePickFromInstance(
+    client,
+    connection?.id ?? null,
+    inLibrary,
+    pickFromSource,
+    activate,
+  );
+
   const usableSelectedCount = selectedUsableAssets(
     accepts,
     lib.assets,
@@ -235,7 +265,6 @@ export default function AssetSidebar({
   }
 
   // --- Expanded panel -------------------------------------------------------
-  const q = query.trim().toLowerCase();
   const matches = (a: Asset) => !q || a.baseName.toLowerCase().includes(q);
   // The rows this tab lists: the local pool, or the instance's assets the
   // span does not already show as tiles.
@@ -375,6 +404,19 @@ export default function AssetSidebar({
         </div>
       )}
 
+      {preview !== null && connection && client && remoteShown[preview] && (
+        <WinnowLightbox
+          connection={connection}
+          client={client}
+          rows={remoteShown}
+          index={preview}
+          onIndex={setPreview}
+          onClose={() => setPreview(null)}
+          inLibrary={inLibrary}
+          picker={picker}
+        />
+      )}
+
       {browsing && connection && (
         <WinnowBrowser
           connection={connection}
@@ -426,11 +468,11 @@ export default function AssetSidebar({
               from={from}
               to={to}
               scope={scopeRows}
-              query={q}
+              shown={remoteShown}
               inLibrary={inLibrary}
               activeId={lib.activeId}
-              onPicked={pickFromSource}
-              onActivate={activate}
+              picker={picker}
+              onPreview={previewFirst ? setPreview : null}
             />
           </div>
         )}

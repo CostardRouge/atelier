@@ -129,6 +129,8 @@ export default function PostEditor({
         ? `${formatIsoDate(post.date)} → ${formatIsoDate(post.endDate)}`
         : formatIsoDate(post.date),
       publisher: 'Road Trip',
+      // A slide is waiting for a picture: a click should put one on it.
+      intent: 'pick',
     }),
     [post.date, post.endDate],
   );

@@ -96,6 +96,20 @@ Read before touching the shell (`src/app/`), the tool registry, the shared asset
 - Both media surfaces take the instance from ONE hook (`winnow/use-connection.ts`); multi-instance is answered there once, and is deferred.
 - Tiles are fixed-height (`h-[74px]`), never `aspect-square` — `frontend.md`.
 
+## A click on an instance's tile means what the TOOL says it means (2026-09-07)
+
+**Decision.** `MediaScope` carries an `intent`: `pick` when something on screen is waiting for a picture (a piece's slide — `PostEditor`), `browse` otherwise (a trip's overview, a day picked by hand in the sidebar; absent reads as `browse`). With `pick`, a click on a tile fetches it and makes it active, as before. With `browse`, it opens `WinnowLightbox` — the picture large, ← / → across the same filtered list the grid draws, `Add to library` as a button in there.
+
+**Why**: a 74px tile is enough to recognise a frame you already know and not enough to choose between two of them, and outside the editor there is nothing to fetch INTO — the maintainer's own framing, "dans l'overview cette barre peut avoir un comportement différent". The intent lives on the scope because only the publisher knows whether anything is waiting; the sidebar must not guess from the route, and `shared/` cannot ask a tool.
+
+**How to apply**:
+- The sidebar owns the filtering (`remoteShown`) and hands the same array to the grid and the lightbox: two copies of the predicate would eventually disagree about which picture index 3 is.
+- Bringing one picture across is `usePickFromInstance` (`winnow/use-pick.ts`), above both surfaces — one answer to "is this already here?", one in-flight tile, one sign-in link on a 401.
+- The lightbox shows the **proxy**, never the original: it is the rendition the pool would hold, so what is on screen is what the editor would get, and looking at a day pulls no captures. A clip is `preload="metadata"` for the same reason.
+- The preview closes on anything that changes what the list IS (span, tab, filter) — an index into a list that has been replaced points at another picture.
+
+**The bug that prompted it, worth not re-deriving**: the ✓ badge ("in the library") was drawn only when the tile was NOT active, so clicking B moved the ring to B and made A's ✓ appear. Every click looked like it had ticked the PREVIOUS picture, and the maintainer read the badge as a selection he could not explain. **Two independent facts must be drawn independently** — the ✓ now shows on the active tile too, in the accent colour. A state hidden by another state is not a simplification; it is a third state nobody designed.
+
 ## A remote ref is re-FETCHED, never cached (2026-09-06)
 
 **Decision, taken with the maintainer.** The library is `File`s in memory and a reload empties it. A folder file survives that (the document keeps a directory handle, one permission click re-reads it); a file fetched from a Winnow does not, so every restart used to mean finding the day on the calendar and ticking it again. `shared/sources/winnow/resolve-media.ts` answers it from the DOCUMENT instead: since phase 0 a `SavedMediaRef` carries `assetId = "<host>/<id>"`, so `refetchMedia` asks the instance for that row and runs it back through `materialize`.

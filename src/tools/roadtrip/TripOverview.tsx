@@ -135,7 +135,15 @@ export default function TripOverview({
   const mediaScope = useMemo<MediaScope | null>(
     () =>
       selected
-        ? { from: selected, to: selected, label: formatIsoDate(selected), publisher: 'Road Trip' }
+        ? {
+            from: selected,
+            to: selected,
+            label: formatIsoDate(selected),
+            publisher: 'Road Trip',
+            // Nothing here is waiting for a picture: looking at the day's
+            // media is the point, so a click should show it large.
+            intent: 'browse',
+          }
         : null,
     [selected],
   );

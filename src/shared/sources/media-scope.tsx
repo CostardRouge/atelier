@@ -37,13 +37,33 @@ export interface MediaScope {
   label: string;
   /** Who is asking, for the sidebar to say — "Road Trip". */
   publisher: string;
+  /**
+   * What a click on one of the source's tiles MEANS while this is open.
+   *
+   * `pick` — something on screen is waiting for a picture (a piece's slide),
+   * so a click should fetch it and make it active: the fastest path, and the
+   * one the editor was built around. `browse` — nothing is waiting (a trip's
+   * overview, a gallery, a day picked by hand), so a click should show the
+   * picture large instead of downloading it, and the fetch becomes a button
+   * inside that view.
+   *
+   * Only the publisher knows which it is, the same reason it owns the label.
+   * Absent means `browse`: nobody said anything is waiting.
+   */
+  intent?: 'pick' | 'browse';
 }
 
 /** True when both name the same span with the same words. Pure. */
 export function sameScope(a: MediaScope | null, b: MediaScope | null): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
-  return a.from === b.from && a.to === b.to && a.label === b.label && a.publisher === b.publisher;
+  return (
+    a.from === b.from &&
+    a.to === b.to &&
+    a.label === b.label &&
+    a.publisher === b.publisher &&
+    (a.intent ?? 'browse') === (b.intent ?? 'browse')
+  );
 }
 
 /** A single day is a span that starts where it ends. Pure. */

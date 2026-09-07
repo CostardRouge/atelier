@@ -1,11 +1,7 @@
-import { useCallback, useState } from 'react';
 import type { WinnowAssetRow, WinnowClient } from '../shared/sources/winnow/client';
-import { WinnowError } from '../shared/sources/winnow/client';
-import { materialize } from '../shared/sources/winnow/materialize';
 import type { WinnowConnection } from '../shared/sources/winnow/store';
 import type { ScopeRows } from '../shared/sources/winnow/use-scope-rows';
-import type { RowsProblem } from '../shared/sources/winnow/use-scope-rows';
-import { fileBaseName } from '../shared/library/assets';
+import type { InstancePicker } from '../shared/sources/winnow/use-pick';
 
 interface WinnowScopeGridProps {
   connection: WinnowConnection;
@@ -15,8 +11,13 @@ interface WinnowScopeGridProps {
   to: string;
   /** The instance's answer for that span, owned by the sidebar (it subtracts it from the pool list). */
   scope: ScopeRows;
-  /** Filter typed in the sidebar's box — matched against the file name. */
-  query: string;
+  /**
+   * The rows to draw: `scope.rows` past the sidebar's filter box. The sidebar
+   * owns the filtering because the lightbox pages through exactly this list,
+   * and two copies of the same predicate would eventually disagree about
+   * which picture index 3 is.
+   */
+  shown: readonly WinnowAssetRow[];
   /**
    * The remote ids (`"<host>/<id>"`) already in the pool, mapped to the
    * Library asset id they became — so a tile that is already here activates
@@ -25,10 +26,15 @@ interface WinnowScopeGridProps {
   inLibrary: ReadonlyMap<string, string>;
   /** The Library's active asset id, so its tile is the one with the ring. */
   activeId: string | null;
-  /** A fetched picture: its files, and the Library id they build into. */
-  onPicked: (files: File[], assetId: string) => void;
-  /** A tile already in the pool was clicked: make it the active asset. */
-  onActivate: (assetId: string) => void;
+  /** Bringing one picture across, shared with the lightbox. */
+  picker: InstancePicker;
+  /**
+   * What a click does. `pick` fetches the picture and makes it active — a
+   * slide is waiting for it. `preview` opens it large instead, and the fetch
+   * becomes a button in there. The active tool decides, through
+   * `MediaScope.intent`; the grid only obeys.
+   */
+  onPreview: ((index: number) => void) | null;
 }
 
 /**
@@ -44,6 +50,11 @@ interface WinnowScopeGridProps {
  * itself after a reload (`resolve-media.ts`). A tile whose picture is already
  * in the pool is marked and only re-activates it.
  *
+ * What a click DOES depends on what the active tool has open: with a slide
+ * waiting for a picture it fetches, and otherwise it opens the lightbox
+ * (`onPreview`) so a day can be read at a readable size. The tool says which
+ * through `MediaScope.intent`; nothing is decided here.
+ *
  * Fixed-height tiles, not `aspect-square` — the trap `frontend.md` records
  * for exactly this kind of grid.
  */
@@ -53,45 +64,15 @@ export default function WinnowScopeGrid({
   from,
   to,
   scope,
-  query,
+  shown,
   inLibrary,
   activeId,
-  onPicked,
-  onActivate,
+  picker,
+  onPreview,
 }: WinnowScopeGridProps) {
   const { rows, problem, reload } = scope;
-  const [fetching, setFetching] = useState<number | null>(null);
-  const [pickProblem, setPickProblem] = useState<RowsProblem | null>(null);
-
-  const pick = useCallback(
-    async (row: WinnowAssetRow) => {
-      const have = inLibrary.get(`${connection.id}/${row.id}`);
-      if (have) {
-        onActivate(have);
-        return;
-      }
-      setFetching(row.id);
-      setPickProblem(null);
-      try {
-        const files = await materialize(client, connection.id, row, { fidelity: 'proxy' });
-        if (files.length) onPicked(files, fileBaseName(files[0].name).toLowerCase());
-      } catch (err) {
-        setPickProblem(
-          err instanceof WinnowError && err.kind === 'unauthenticated'
-            ? { text: `Not signed in to ${connection.id}.`, login: client.loginUrl() }
-            : { text: err instanceof Error ? err.message : String(err) },
-        );
-      } finally {
-        setFetching(null);
-      }
-    },
-    [client, connection.id, inLibrary, onActivate, onPicked],
-  );
-
-  const shown = (rows ?? []).filter(
-    (r) => !query || r.filename.toLowerCase().includes(query),
-  );
-  const shownProblem = pickProblem ?? problem;
+  const { pick, fetching } = picker;
+  const shownProblem = picker.problem ?? problem;
 
   return (
     <div className="flex flex-col gap-2">
@@ -105,19 +86,19 @@ export default function WinnowScopeGrid({
         <p className="m-0 text-[0.78rem] text-muted">Nothing here matches the filter.</p>
       ) : (
         <div className="w-full grid grid-cols-[repeat(auto-fill,minmax(74px,1fr))] gap-1.5">
-          {shown.map((r) => {
+          {shown.map((r, i) => {
             const have = inLibrary.get(`${connection.id}/${r.id}`);
             const active = have !== undefined && have === activeId;
             return (
               <button
                 key={r.id}
                 type="button"
-                onClick={() => void pick(r)}
+                onClick={() => (onPreview ? onPreview(i) : void pick(r))}
                 disabled={fetching !== null}
                 aria-pressed={active}
-                title={`${r.filename}${r.has_telemetry ? ' · flight log' : ''}${
-                  have ? ' · in the library' : ''
-                }`}
+                title={`${onPreview ? 'Look at' : 'Use'} ${r.filename}${
+                  r.has_telemetry ? ' · flight log' : ''
+                }${have ? ' · in the library' : ''}`}
                 className={`relative block rounded-md overflow-hidden border bg-frame cursor-pointer p-0 disabled:cursor-wait transition-colors ${
                   active
                     ? 'border-accent shadow-[inset_0_0_0_2px_var(--color-accent)]'
@@ -141,9 +122,18 @@ export default function WinnowScopeGrid({
                     ▶{r.has_telemetry ? ' srt' : ''}
                   </span>
                 )}
-                {have && !active && (
+                {/* Two independent facts, so both are always drawn: the ✓
+                    says the picture is in the pool, the ring says it is the
+                    one the tool is on. Hiding the ✓ under the ring made a
+                    click look like it had ticked the PREVIOUS tile — the
+                    badge only ever appeared where the ring had just left. */}
+                {have && (
                   <span
-                    className="absolute bottom-1 right-1 w-[14px] h-[14px] grid place-items-center rounded-full bg-paper text-ink text-[0.6rem] leading-none border border-line-strong"
+                    className={`absolute bottom-1 right-1 w-[14px] h-[14px] grid place-items-center rounded-full text-[0.6rem] leading-none border ${
+                      active
+                        ? 'bg-accent text-paper border-accent'
+                        : 'bg-paper text-ink border-line-strong'
+                    }`}
                     aria-hidden="true"
                     title="In the library"
                   >
@@ -177,7 +167,7 @@ export default function WinnowScopeGrid({
           <button
             type="button"
             onClick={() => {
-              setPickProblem(null);
+              picker.clearProblem();
               reload();
             }}
             className="p-0 border-0 bg-transparent text-[0.74rem] text-muted cursor-pointer underline underline-offset-[3px] hover:text-ink"
