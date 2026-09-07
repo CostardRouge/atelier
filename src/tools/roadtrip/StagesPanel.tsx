@@ -197,7 +197,7 @@ export default function StagesPanel({
 }: StagesPanelProps) {
   // The ruler's zoom lives here so its control can ride this row instead of
   // costing the track a row of its own beneath it.
-  const zoom = useStageZoom();
+  const zoom = useStageZoom({ wheel: 'any' });
   const selectedIndex = trip.stages.findIndex((s) => s.id === selectedId);
   const selected = selectedIndex >= 0 ? trip.stages[selectedIndex] : null;
 

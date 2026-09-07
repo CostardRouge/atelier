@@ -30,10 +30,21 @@ import {
   scrollAfterZoom,
   stepZoom,
   zoomByPinch,
+  wheelZooms,
   zoomByWheel,
   zoomLabel,
   zoomedFit,
+  type WheelZoom,
 } from './stage-zoom';
+
+export interface StageZoomOptions {
+  /**
+   * What a bare wheel does. Defaults to `modifier` — the editor stages leave
+   * it to the page and to the badge stage's own framing zoom. The trip
+   * overview's zones pass `any`: nothing else there wants the wheel.
+   */
+  wheel?: WheelZoom;
+}
 
 export interface StageZoom {
   /** 1 = the picture at its fitted size. */
@@ -54,7 +65,7 @@ export interface StageZoom {
   fit: { maxWidth: string; maxHeight: string };
 }
 
-export function useStageZoom(): StageZoom {
+export function useStageZoom({ wheel = 'modifier' }: StageZoomOptions = {}): StageZoom {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const scaleRef = useRef(1);
@@ -124,13 +135,13 @@ export function useStageZoom(): StageZoom {
     const el = viewportRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return;
+      if (!wheelZooms(e, wheel)) return;
       e.preventDefault();
       zoomTo(zoomByWheel(scaleRef.current, e.deltaY), e);
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [zoomTo]);
+  }, [zoomTo, wheel]);
 
   // Touch pinch. Listened for in the CAPTURE phase, so the stage's canvas —
   // which stops nothing but does capture the first pointer — cannot hide the

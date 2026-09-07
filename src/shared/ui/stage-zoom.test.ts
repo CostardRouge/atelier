@@ -6,10 +6,20 @@ import {
   scrollAfterZoom,
   stepZoom,
   zoomByPinch,
+  wheelZooms,
   zoomByWheel,
   zoomLabel,
   zoomedFit,
 } from './stage-zoom';
+
+const wheel = (over: Partial<Parameters<typeof wheelZooms>[0]> = {}) => ({
+  deltaX: 0,
+  deltaY: -100,
+  ctrlKey: false,
+  metaKey: false,
+  shiftKey: false,
+  ...over,
+});
 
 describe('clampZoom', () => {
   it('holds the range', () => {
@@ -80,6 +90,29 @@ describe('scrollAfterZoom', () => {
   it('leaves the scroll alone on a nonsense previous scale', () => {
     const scroll = { left: 12, top: 34 };
     expect(scrollAfterZoom(scroll, { x: 0, y: 0 }, 0, 2)).toBe(scroll);
+  });
+});
+
+describe('wheelZooms', () => {
+  it('always zooms on ⌘/ctrl, whatever the mode', () => {
+    expect(wheelZooms(wheel({ ctrlKey: true }), 'modifier')).toBe(true);
+    expect(wheelZooms(wheel({ metaKey: true }), 'modifier')).toBe(true);
+  });
+
+  it('leaves a bare wheel alone under `modifier`', () => {
+    expect(wheelZooms(wheel(), 'modifier')).toBe(false);
+  });
+
+  it('zooms on a bare vertical wheel under `any`', () => {
+    expect(wheelZooms(wheel(), 'any')).toBe(true);
+  });
+
+  it('leaves horizontal panning to the browser under `any`', () => {
+    expect(wheelZooms(wheel({ shiftKey: true }), 'any')).toBe(false);
+    expect(wheelZooms(wheel({ deltaX: -120, deltaY: 0 }), 'any')).toBe(false);
+    // A trackpad swipe is never purely one axis; the dominant one decides.
+    expect(wheelZooms(wheel({ deltaX: -80, deltaY: -6 }), 'any')).toBe(false);
+    expect(wheelZooms(wheel({ deltaX: -6, deltaY: -80 }), 'any')).toBe(true);
   });
 });
 

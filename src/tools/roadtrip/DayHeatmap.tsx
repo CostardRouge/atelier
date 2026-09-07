@@ -129,7 +129,7 @@ export default function DayHeatmap({
   // what the maintainer sweeps. Zooming in gives a cell big enough to aim at;
   // zooming out puts a long trip on one screen. Rounded to whole pixels, so
   // the cells and their gutters stay on the same lattice at every scale.
-  const zoom = useStageZoom();
+  const zoom = useStageZoom({ wheel: 'any' });
   const cellPx = Math.max(4, Math.round(CELL * zoom.scale));
   const gapPx = Math.max(1, Math.round(GAP * zoom.scale));
 

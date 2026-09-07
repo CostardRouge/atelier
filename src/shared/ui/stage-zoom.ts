@@ -72,6 +72,39 @@ export function scrollAfterZoom(
   };
 }
 
+/**
+ * What a bare wheel means over a zone.
+ *
+ * `modifier` — only ⌘/ctrl (and the trackpad pinch that arrives as one) zooms;
+ * a bare wheel is left to the page, or to whatever the zone already does with
+ * it (the badge stage frames its picture).
+ * `any` — a bare wheel zooms too, for a zone that has nothing else to do with
+ * it: the trip's day grid and its stage ruler are day-sized things you zoom far
+ * more often than you scroll the page from.
+ */
+export type WheelZoom = 'modifier' | 'any';
+
+/** The bits of a wheel event the decision needs. */
+export interface WheelLike {
+  deltaX: number;
+  deltaY: number;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+}
+
+/**
+ * Whether this wheel event zooms. ⌘/ctrl always does. Under `any`, a bare
+ * vertical wheel does too — but a shift-wheel and a sideways trackpad swipe
+ * stay the browser's horizontal scroll, which is how a zoomed-in track is
+ * panned in the first place.
+ */
+export function wheelZooms(e: WheelLike, mode: WheelZoom): boolean {
+  if (e.ctrlKey || e.metaKey) return true;
+  if (mode === 'modifier' || e.shiftKey) return false;
+  return Math.abs(e.deltaY) > Math.abs(e.deltaX);
+}
+
 /** "100%" — what the control shows between its two buttons. */
 export function zoomLabel(scale: number): string {
   return `${Math.round(scale * 100)}%`;
