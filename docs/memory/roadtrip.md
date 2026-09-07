@@ -25,6 +25,12 @@ Read before touching `src/tools/roadtrip/` or `src/shared/roadtrip/`, and before
 
 **Stage overlap resolves to the LAST match** (`stageAt`): stages are kept in the order the trip was lived, so on a travel day the later stage is where you ended up, which is what a badge should name.
 
+## A trip is renamed on its heading (2026-09-07)
+
+**Decision.** The name is edited in place on the Overview's `<h1>` (click the title, Enter or blur commits, Escape cancels, an emptied field gives the old name back — the "empty means computed" rule the text overrides follow). **Not in `TripSettingsModal`**, even though the name is as trip-wide as the words: that sheet is reached from a PIECE, so a trip with no piece yet could never be renamed from it. A rename is an ordinary `onChange` with a fresh `updatedAt`, so it debounce-saves and flushes to a remote trip like any other edit.
+
+Nothing else moves with it: the trip's `id` is a uuid, and `tripFromRef` matches on the id fragment alone, so the slug in `#/roadtrip/<slug>-<id8>` is decoration that goes stale until the next navigation and every link ever made still resolves. Badge text derived from the trip's name (the headline fallback, the sub-year kicker) re-derives on the next paint — a rename is meant to reach the pieces.
+
 ## Dates are calendar days, and the arithmetic runs in UTC (2026-08-23)
 
 **Decision.** `IsoDate` is a plain `YYYY-MM-DD` string and every subtraction in `trip-days.ts` goes through `Date.UTC` / `getUTC*`, never a local `Date`. **Why**: the same rule `telemetry/time-format.ts` follows — parsing locally lets the *reading* machine's timezone move a value, so a trip planned in France and reviewed in Australia would disagree about which day a photo belongs to. UTC also has no DST, so stepping a day is one constant; a local-`Date` implementation lands on 30 March 2025 twice or skips it (both cases are tested). The one place a LOCAL reading is correct is `todayIso()` — "today" is the date on the wall behind the person, not an instant — and it is frozen into an `IsoDate` immediately.
