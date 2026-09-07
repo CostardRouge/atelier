@@ -22,6 +22,8 @@ export interface PlaceSearchFieldProps {
   onPick: (result: PlaceResult) => void;
   placeholder?: string;
   label: string;
+  /** Focus the name on mount — for a place the author has just added. */
+  autoFocus?: boolean;
   className?: string;
   inputClassName?: string;
 }
@@ -34,6 +36,7 @@ export default function PlaceSearchField({
   onPick,
   placeholder,
   label,
+  autoFocus = false,
   className = '',
   inputClassName = '',
 }: PlaceSearchFieldProps) {
@@ -92,6 +95,7 @@ export default function PlaceSearchField({
           }}
           placeholder={placeholder}
           aria-label={label}
+          autoFocus={autoFocus}
           className={`flex-1 min-w-0 ${inputClassName}`}
         />
         <button

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   WEEKDAYS,
   formatIsoDate,
@@ -10,12 +10,29 @@ import {
 import { POST_KINDS } from '../../shared/roadtrip/trip-types';
 import type { DayCell } from '../../shared/roadtrip/trip-coverage';
 
+/** One line of the day's context menu: what it says, and what it does. */
+export interface DayMenuItem {
+  label: string;
+  run: () => void;
+}
+
 interface DayHeatmapProps {
   startDate: IsoDate;
   endDate: IsoDate;
   days: DayCell[];
   selected: IsoDate | null;
   onSelect: (date: IsoDate) => void;
+  /** A colour to underline the day with — the tint of the stage it belongs to. */
+  tintOf?: (date: IsoDate) => string | null;
+  /** What a right-click on the day offers; none or empty leaves the browser's menu. */
+  menuFor?: (date: IsoDate) => DayMenuItem[];
+}
+
+interface Menu {
+  cell: DayCell;
+  items: DayMenuItem[];
+  x: number;
+  y: number;
 }
 
 const CELL = 14;
@@ -69,6 +86,8 @@ export default function DayHeatmap({
   days,
   selected,
   onSelect,
+  tintOf,
+  menuFor,
 }: DayHeatmapProps) {
   const weeks = useMemo(() => heatmapWeeks(startDate, endDate), [startDate, endDate]);
   const months = useMemo(() => monthLabels(weeks), [weeks]);
@@ -78,6 +97,7 @@ export default function DayHeatmap({
   // takes about a second to appear on the first cell, which is far too slow
   // for a grid meant to be swept over, and it cannot show the kinds.
   const [hovered, setHovered] = useState<Hovered | null>(null);
+  const [menu, setMenu] = useState<Menu | null>(null);
 
   if (!weeks.length) return null;
 
@@ -133,6 +153,7 @@ export default function DayHeatmap({
                   if (!cell) return <span key={row} style={{ width: CELL, height: CELL }} />;
                   const isSelected = date === selected;
                   const isToday = date === today;
+                  const tint = tintOf?.(date) ?? null;
                   const show = (el: HTMLElement) => {
                     const r = el.getBoundingClientRect();
                     setHovered({ cell, x: r.left + r.width / 2, y: r.top });
@@ -143,6 +164,13 @@ export default function DayHeatmap({
                       type="button"
                       role="gridcell"
                       onClick={() => onSelect(date)}
+                      onContextMenu={(e) => {
+                        const items = menuFor?.(date) ?? [];
+                        if (!items.length) return;
+                        e.preventDefault();
+                        setHovered(null);
+                        setMenu({ cell, items, x: e.clientX, y: e.clientY });
+                      }}
                       onPointerEnter={(e) => show(e.currentTarget)}
                       onPointerLeave={() => setHovered((h) => (h?.cell === cell ? null : h))}
                       onFocus={(e) => show(e.currentTarget)}
@@ -160,6 +188,10 @@ export default function DayHeatmap({
                             ? '#938b7c'
                             : 'rgba(43,33,18,0.10)',
                         borderWidth: isSelected || isToday ? 2 : 1,
+                        // The stage's tint as a stripe along the foot of the
+                        // cell, so a leg reads as a run of matching feet
+                        // without touching the rung that says what was told.
+                        boxShadow: tint ? `inset 0 -3px 0 0 ${tint}` : undefined,
                       }}
                     />
                   );
@@ -170,9 +202,10 @@ export default function DayHeatmap({
         </div>
       </div>
 
-      {hovered && <DayCard hovered={hovered} />}
+      {hovered && !menu && <DayCard hovered={hovered} />}
+      {menu && <DayMenu menu={menu} onClose={() => setMenu(null)} />}
 
-      <div className="flex items-center gap-2 mt-3 font-mono text-[0.6rem] text-faint">
+      <div className="flex items-center gap-2 mt-3 font-mono text-[0.6rem] text-faint whitespace-nowrap">
         <span>Nothing</span>
         {LEVELS.map((bg, i) => (
           <span
@@ -183,8 +216,78 @@ export default function DayHeatmap({
           />
         ))}
         <span>Told often</span>
+        {/* A hint for a pointer, so it is not shown where there is none. */}
+        {menuFor && (
+          <span className="ml-3 max-[600px]:hidden">
+            · right-click a day to start or end a stage there
+          </span>
+        )}
       </div>
     </div>
+  );
+}
+
+/**
+ * The day's own menu, on a right-click: the stage edits that make sense on
+ * this day, worded with the real leg they would touch. Fixed to the pointer
+ * and clamped to the viewport for the same reason the hover card is; unlike
+ * the card it takes the pointer, so a scrim behind it closes it on any
+ * click outside, and Escape does the same.
+ */
+function DayMenu({ menu, onClose }: { menu: Menu; onClose: () => void }) {
+  const first = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    first.current?.focus();
+  }, []);
+
+  const WIDTH = 230;
+  const height = 38 + menu.items.length * 32;
+  const x = Math.min(menu.x, window.innerWidth - WIDTH - 8);
+  const y = Math.min(menu.y, window.innerHeight - height - 8);
+
+  return (
+    <>
+      <div
+        className="fixed inset-0 z-40"
+        onPointerDown={onClose}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onClose();
+        }}
+        aria-hidden="true"
+      />
+      <div
+        role="menu"
+        aria-label={`${formatIsoDate(menu.cell.date)} · day ${menu.cell.dayNumber}`}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            onClose();
+          }
+        }}
+        className="fixed z-50 p-1.5 rounded-paper border border-frame bg-frame text-paper shadow-[0_12px_26px_rgba(16,15,13,0.32)]"
+        style={{ left: x, top: y, width: WIDTH }}
+      >
+        <span className="block px-2.5 pt-1 pb-1.5 font-mono text-[0.62rem] tracking-[0.12em] uppercase text-[rgba(244,240,231,0.62)]">
+          day {menu.cell.dayNumber} · {formatIsoDate(menu.cell.date)}
+        </span>
+        {menu.items.map((item, i) => (
+          <button
+            key={item.label}
+            ref={i === 0 ? first : undefined}
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              onClose();
+              item.run();
+            }}
+            className="block w-full px-2.5 py-1.5 border-0 rounded-[8px] bg-transparent text-left text-[0.78rem] text-paper cursor-pointer hover:bg-[rgba(244,240,231,0.12)] focus:outline-none focus-visible:bg-[rgba(244,240,231,0.12)]"
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </>
   );
 }
 

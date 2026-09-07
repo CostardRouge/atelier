@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { deleteThumbs } from '../../shared/roadtrip/trip-store';
-import { formatIsoDate, type IsoDate } from '../../shared/roadtrip/trip-days';
-import { tripCoverage } from '../../shared/roadtrip/trip-coverage';
+import { dayStageActions } from '../../shared/roadtrip/stage-edit';
+import { stageTint } from '../../shared/roadtrip/stage-ruler';
+import { enumerateDays, formatIsoDate, isWithin, type IsoDate } from '../../shared/roadtrip/trip-days';
+import { stageAt, tripCoverage } from '../../shared/roadtrip/trip-coverage';
 import type { TripDoc, TripPost, TripStage } from '../../shared/roadtrip/trip-types';
-import DayHeatmap from './DayHeatmap';
+import DayHeatmap, { type DayMenuItem } from './DayHeatmap';
 import DayPanel from './DayPanel';
 import StagesPanel from './StagesPanel';
 
@@ -142,6 +144,49 @@ export default function TripOverview({
     [trip, onChange],
   );
 
+  // The leg open under the ruler. It starts on the leg covering the open day
+  // and follows every day clicked on the calendar that a leg covers — the
+  // calendar is the other way into a stage — while a click on an uncovered
+  // day leaves it as it was rather than closing what was being edited.
+  const [stageId, setStageId] = useState<string | null>(
+    () => (selected ? (stageAt(trip, selected)?.id ?? null) : null),
+  );
+  const selectedStageId = trip.stages.some((s) => s.id === stageId) ? stageId : null;
+
+  const selectDate = useCallback(
+    (date: IsoDate) => {
+      onSelectDate(date);
+      const covering = stageAt(trip, date);
+      if (covering) setStageId(covering.id);
+    },
+    [trip, onSelectDate],
+  );
+
+  // Each day's tint is its stage's — the LAST covering stage, as `stageAt`
+  // resolves it, so a travel day wears the leg it ended in.
+  const tints = useMemo(() => {
+    const map = new Map<IsoDate, string>();
+    trip.stages.forEach((stage, index) => {
+      for (const day of enumerateDays(stage.startDate, stage.endDate)) {
+        if (isWithin(trip.startDate, trip.endDate, day)) map.set(day, stageTint(index));
+      }
+    });
+    return map;
+  }, [trip]);
+
+  const menuFor = useCallback(
+    (date: IsoDate): DayMenuItem[] =>
+      dayStageActions(trip, date).map((action) => ({
+        label: action.label,
+        run: () => {
+          const result = action.apply(trip);
+          setStages(result.stages);
+          setStageId(result.selectedId);
+        },
+      })),
+    [trip, setStages],
+  );
+
   const untold = coverage.totalDays - coverage.toldDays;
 
   return (
@@ -194,7 +239,9 @@ export default function TripOverview({
           endDate={trip.endDate}
           days={coverage.days}
           selected={selected}
-          onSelect={onSelectDate}
+          onSelect={selectDate}
+          tintOf={(date) => tints.get(date) ?? null}
+          menuFor={menuFor}
         />
       </div>
 
@@ -203,7 +250,7 @@ export default function TripOverview({
           The longest stretch nothing has been told from runs{' '}
           <button
             type="button"
-            onClick={() => onSelectDate(coverage.longestGap!.start)}
+            onClick={() => selectDate(coverage.longestGap!.start)}
             className="p-0 border-0 bg-transparent text-accent-ink underline underline-offset-[3px] cursor-pointer font-semibold"
           >
             {formatIsoDate(coverage.longestGap.start)} →{' '}
@@ -215,6 +262,9 @@ export default function TripOverview({
 
       <StagesPanel
         trip={trip}
+        selectedId={selectedStageId}
+        cursorDate={selected}
+        onSelect={setStageId}
         onChange={setStages}
         timelineSources={timelineSources}
         onCompleteFrom={onCompleteFrom}

@@ -94,6 +94,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - `#/studio/open/<id>` hands a project between tools and rewrites itself on arrival; neither tool reaches into the other's state — `architecture.md`, `roadtrip.md`.
 - A trip remembers the look it gives a new piece of each kind; what belongs to one day is never inherited — `roadtrip.md`.
 - A Road Trip stage is a LEG carrying an ORDERED list of located places; its start and end are the first and the last, derived and never stored, and a place has no dates of its own — `roadtrip.md`.
+- The legs are a horizontal RULER under the calendar grid (drag an edge or a bar, whole days only, one leg open beneath), the grid's cells wear their leg's tint, and a right-click on a day starts/ends/extends a leg by name — "start here" inside a leg is a cut. Geometry and edits are pure (`stage-ruler.ts`, `stage-edit.ts`); every drag has a keyboard twin — `roadtrip.md`.
 - Looking a place up online is the suite's SECOND network exception, taken deliberately: opt-in, off by default, consent in `localStorage` and never on an exportable document, and never as-you-type — `roadtrip.md`, `local-first.md`.
 - Road Trip's grid draws its own hover card (fixed-positioned, pointer-transparent) because the native `title` is far too slow to sweep a calendar with — `roadtrip.md`.
 - Each post keeps a small JPEG of its HOOK in a second IndexedDB store, taken from the preview canvas, drawn at the piece's own orientation, and pruned on delete — `roadtrip.md`.
