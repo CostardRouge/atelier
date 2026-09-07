@@ -1,10 +1,12 @@
-import { useCallback, useMemo, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { deleteThumbs } from '../../shared/roadtrip/trip-store';
-import { formatIsoDate, type IsoDate } from '../../shared/roadtrip/trip-days';
-import { tripCoverage } from '../../shared/roadtrip/trip-coverage';
+import { dayStageActions } from '../../shared/roadtrip/stage-edit';
+import { stageTint } from '../../shared/roadtrip/stage-ruler';
+import { enumerateDays, formatIsoDate, isWithin, type IsoDate } from '../../shared/roadtrip/trip-days';
+import { stageAt, tripCoverage } from '../../shared/roadtrip/trip-coverage';
 import { usePublishMediaScope, type MediaScope } from '../../shared/sources/media-scope';
 import type { TripDoc, TripPost, TripStage } from '../../shared/roadtrip/trip-types';
-import DayHeatmap from './DayHeatmap';
+import DayHeatmap, { type DayMenuItem } from './DayHeatmap';
 import DayPanel from './DayPanel';
 import StagesPanel from './StagesPanel';
 
@@ -26,6 +28,69 @@ interface TripOverviewProps {
 
 const barPill =
   'inline-flex items-center h-[1.9rem] px-3 rounded-full border whitespace-nowrap';
+
+/**
+ * The trip's name, renamed in place.
+ *
+ * A trip is named once in the creation modal and then lived with for months —
+ * a typo, a working title ("Australia") that wants to become the real one, or
+ * a badge that reads better with a shorter word, all need a way back. It sits
+ * on the heading rather than in the trip sheet because that sheet is reached
+ * from a PIECE: a trip that has no piece yet could never be renamed from it.
+ *
+ * An emptied field gives the old name back rather than saving a blank — the
+ * same rule the badge's text overrides follow, and a nameless trip is a row of
+ * nothing in the gallery.
+ */
+function TripTitle({ name, onRename }: { name: string; onRename: (name: string) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const editing = draft !== null;
+
+  useEffect(() => {
+    if (editing) inputRef.current?.select();
+    // Select on entry only, so typing replaces a name rather than appending.
+  }, [editing]);
+
+  function commit() {
+    const next = (draft ?? '').trim();
+    if (next && next !== name) onRename(next);
+    setDraft(null);
+  }
+
+  if (draft !== null) {
+    return (
+      <input
+        ref={inputRef}
+        value={draft}
+        aria-label="Trip name"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') {
+            e.stopPropagation();
+            setDraft(null);
+          }
+        }}
+        className="w-full max-w-[22rem] font-serif text-[1.5rem] leading-tight px-1.5 py-0.5 -mx-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent max-[560px]:text-[1.15rem]"
+      />
+    );
+  }
+
+  return (
+    <h1 className="m-0 font-serif text-[1.5rem] leading-tight">
+      <button
+        type="button"
+        onClick={() => setDraft(name)}
+        title="Rename the trip"
+        className="p-0 border-0 bg-transparent font-serif text-[1.5rem] leading-tight text-ink text-left cursor-text hover:text-accent-ink"
+      >
+        {name}
+      </button>
+    </h1>
+  );
+}
 
 function Stat({ value, label }: { value: string; label: string }) {
   return (
@@ -81,9 +146,57 @@ export default function TripOverview({
     [trip, onChange],
   );
 
+  const rename = useCallback(
+    (name: string) => onChange({ ...trip, name, updatedAt: Date.now() }),
+    [trip, onChange],
+  );
+
   const setStages = useCallback(
     (stages: TripStage[]) => onChange({ ...trip, stages, updatedAt: Date.now() }),
     [trip, onChange],
+  );
+
+  // The leg open under the ruler. It starts on the leg covering the open day
+  // and follows every day clicked on the calendar that a leg covers — the
+  // calendar is the other way into a stage — while a click on an uncovered
+  // day leaves it as it was rather than closing what was being edited.
+  const [stageId, setStageId] = useState<string | null>(
+    () => (selected ? (stageAt(trip, selected)?.id ?? null) : null),
+  );
+  const selectedStageId = trip.stages.some((s) => s.id === stageId) ? stageId : null;
+
+  const selectDate = useCallback(
+    (date: IsoDate) => {
+      onSelectDate(date);
+      const covering = stageAt(trip, date);
+      if (covering) setStageId(covering.id);
+    },
+    [trip, onSelectDate],
+  );
+
+  // Each day's tint is its stage's — the LAST covering stage, as `stageAt`
+  // resolves it, so a travel day wears the leg it ended in.
+  const tints = useMemo(() => {
+    const map = new Map<IsoDate, string>();
+    trip.stages.forEach((stage, index) => {
+      for (const day of enumerateDays(stage.startDate, stage.endDate)) {
+        if (isWithin(trip.startDate, trip.endDate, day)) map.set(day, stageTint(index));
+      }
+    });
+    return map;
+  }, [trip]);
+
+  const menuFor = useCallback(
+    (date: IsoDate): DayMenuItem[] =>
+      dayStageActions(trip, date).map((action) => ({
+        label: action.label,
+        run: () => {
+          const result = action.apply(trip);
+          setStages(result.stages);
+          setStageId(result.selectedId);
+        },
+      })),
+    [trip, setStages],
   );
 
   const untold = coverage.totalDays - coverage.toldDays;
@@ -102,7 +215,7 @@ export default function TripOverview({
           ← Trips
         </button>
         <div className="min-w-0">
-          <h1 className="m-0 font-serif text-[1.5rem] leading-tight">{trip.name}</h1>
+          <TripTitle name={trip.name} onRename={rename} />
           <p className="m-0 font-mono text-[0.72rem] text-muted">
             {trip.destination && <>{trip.destination} · </>}
             {formatIsoDate(trip.startDate)} → {formatIsoDate(trip.endDate)}
@@ -138,7 +251,9 @@ export default function TripOverview({
           endDate={trip.endDate}
           days={coverage.days}
           selected={selected}
-          onSelect={onSelectDate}
+          onSelect={selectDate}
+          tintOf={(date) => tints.get(date) ?? null}
+          menuFor={menuFor}
         />
       </div>
 
@@ -147,7 +262,7 @@ export default function TripOverview({
           The longest stretch nothing has been told from runs{' '}
           <button
             type="button"
-            onClick={() => onSelectDate(coverage.longestGap!.start)}
+            onClick={() => selectDate(coverage.longestGap!.start)}
             className="p-0 border-0 bg-transparent text-accent-ink underline underline-offset-[3px] cursor-pointer font-semibold"
           >
             {formatIsoDate(coverage.longestGap.start)} →{' '}
@@ -159,6 +274,9 @@ export default function TripOverview({
 
       <StagesPanel
         trip={trip}
+        selectedId={selectedStageId}
+        cursorDate={selected}
+        onSelect={setStageId}
         onChange={setStages}
         timelineSources={timelineSources}
         onCompleteFrom={onCompleteFrom}

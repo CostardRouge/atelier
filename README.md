@@ -428,14 +428,30 @@ preview follows the drag, and the arrows nudge frame by frame.
 a badge name a place, say "3 days in Kalbarri", or count which day of a stop a
 picture is — and an optional marker sets the place off from the rest.
 
-A stage lists **the places it went through, in the order you lived them**. The
-first is where the leg began and the last is where it ended, so a start and an
-end are the list itself rather than two more fields to keep in step. Leave the
-stage's own name empty and it writes itself from those two ends — "Perth →
-Cairns" — and typing a name over it always wins; clearing that name gives the
-derived one back rather than a blank. A place is a *point inside* a stage and
-carries no dates of its own: the stage is the dated thing, so "Uluru on the
-12th" inside a nine-day leg means splitting the leg, not dating the place.
+They live on a **ruler under the grid** — a video editor's timeline scaled to
+days. Each leg is a bar: drag either edge to change when it began or ended,
+drag its middle to slide it whole, and every move snaps to a day. A run of
+days no leg covers offers a `+` that adds one over exactly that run; legs
+that overlap on a travel day stack in a second row rather than hiding one
+another. The grid and the ruler are the same calendar seen twice: each day's
+cell wears a stripe in its leg's tint, the day you have open is a playhead on
+the ruler, and **right-clicking a day** offers the edits that make sense
+there, worded with the leg they would touch — start a stage here (inside a
+leg, that cuts it in two), end "Perth → Kalbarri" here, extend it to here.
+Clicking a bar, or a day a leg covers, opens that one leg's fields beneath the
+ruler; nothing is drag-only, a focused edge or bar moves with the arrow keys.
+
+A stage lists **the places it went through, in the order you lived them**,
+as a row of chips joined by the badge's own arrow. The first is where the leg
+began and the last is where it ended, so a start and an end are the list
+itself rather than two more fields to keep in step; drag a chip (or move it
+with the arrow keys) to reorder, click one to edit it. Leave the stage's own
+name empty and it writes itself from those two ends — "Perth → Cairns" — and
+typing a name over it always wins; clearing that name gives the derived one
+back rather than a blank. A place is a *point inside* a stage and carries no
+dates of its own: the stage is the dated thing, so "Uluru on the 12th" inside
+a nine-day leg means splitting the leg, not dating the place — which is what
+"start a stage here" on that day does.
 
 Each place can carry **coordinates**, and there are two ways to get them: type
 the name and leave it at that (a place that is only a name is a complete

@@ -1,16 +1,19 @@
 import { useState } from 'react';
-import { formatIsoDate, spanLength } from '../../shared/roadtrip/trip-days';
+import { startStageAt } from '../../shared/roadtrip/stage-edit';
+import { rulerBars, rulerGaps, stageTint } from '../../shared/roadtrip/stage-ruler';
+import { formatIsoDate, spanLength, type IsoDate } from '../../shared/roadtrip/trip-days';
 import { stageLabel, stageRegionLabel } from '../../shared/roadtrip/trip-places';
-import {
-  createTripStage,
-  stageProblem,
-  type TripDoc,
-  type TripStage,
-} from '../../shared/roadtrip/trip-types';
+import { stageProblem, type TripDoc, type TripStage } from '../../shared/roadtrip/trip-types';
 import PlacesEditor from './PlacesEditor';
+import StageRuler from './StageRuler';
 
 interface StagesPanelProps {
   trip: TripDoc;
+  /** The leg open in the editor below the ruler; null shows the ruler alone. */
+  selectedId: string | null;
+  /** The day open on the overview, drawn on the ruler as a playhead. */
+  cursorDate: IsoDate | null;
+  onSelect: (id: string | null) => void;
   onChange: (stages: TripStage[]) => void;
   /** Connected Winnows whose timeline can complete the stages; empty shows nothing. */
   timelineSources?: string[];
@@ -20,21 +23,27 @@ interface StagesPanelProps {
 const legend = 'font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted';
 const inputClass =
   'font-sans text-[0.84rem] px-2.5 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent';
+const pill =
+  'flex-none px-3 py-1.5 border border-line-strong rounded-full bg-paper text-[0.76rem] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink';
 
-function StageRow({
+function StageCard({
   trip,
   stage,
+  index,
   onChange,
   onDelete,
+  onClose,
 }: {
   trip: TripDoc;
   stage: TripStage;
+  index: number;
   onChange: (stage: TripStage) => void;
   onDelete: () => void;
+  onClose: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
   const problem = stageProblem(trip, stage);
-  const nights = spanLength(stage.startDate, stage.endDate);
+  const days = spanLength(stage.startDate, stage.endDate);
   // What the badge would REALLY say for this stage as it stands — never an
   // invented example. An empty name field showing "Perth → Cairns" is how the
   // author sees that clearing it computes rather than blanks.
@@ -42,40 +51,20 @@ function StageRow({
   const derivedRegion = stageRegionLabel({ ...stage, region: '' });
 
   return (
-    <li className="flex flex-col gap-1.5 py-2.5 border-b border-line last:border-b-0">
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          value={stage.name}
-          onChange={(e) => onChange({ ...stage, name: e.target.value })}
-          placeholder={derivedName || 'The Red Centre'}
-          className={`${inputClass} flex-1 min-w-[8rem]`}
-          aria-label="Stage name"
+    <div
+      className="flex flex-col gap-3 bg-paper border border-line-strong rounded-paper-lg p-4"
+      aria-label={`Stage ${index + 1}`}
+    >
+      <div className="flex items-center gap-2">
+        <span
+          className="flex-none w-2.5 h-2.5 rounded-full"
+          style={{ background: stageTint(index) }}
+          aria-hidden="true"
         />
-        <input
-          value={stage.region}
-          onChange={(e) => onChange({ ...stage, region: e.target.value })}
-          placeholder={derivedRegion || 'Western Australia'}
-          className={`${inputClass} flex-1 min-w-[8rem]`}
-          aria-label="Region"
-        />
-        <input
-          type="date"
-          value={stage.startDate}
-          min={trip.startDate}
-          max={trip.endDate}
-          onChange={(e) => onChange({ ...stage, startDate: e.target.value })}
-          className={inputClass}
-          aria-label="Arrived"
-        />
-        <input
-          type="date"
-          value={stage.endDate}
-          min={trip.startDate}
-          max={trip.endDate}
-          onChange={(e) => onChange({ ...stage, endDate: e.target.value })}
-          className={inputClass}
-          aria-label="Left"
-        />
+        <span className={`${legend} flex-1 truncate`}>
+          Stage {index + 1}
+          {days !== null && ` · ${days} day${days === 1 ? '' : 's'}`}
+        </span>
         {confirming ? (
           <span className="flex items-center gap-2 text-[0.75rem]">
             <button
@@ -103,27 +92,67 @@ function StageRow({
             Delete
           </button>
         )}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close this stage"
+          title="Close"
+          className="flex-none w-6 h-6 grid place-items-center border border-line rounded-full bg-surface text-[0.75rem] leading-none text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
+        >
+          ×
+        </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={stage.name}
+          onChange={(e) => onChange({ ...stage, name: e.target.value })}
+          placeholder={derivedName || 'The Red Centre'}
+          className={`${inputClass} flex-1 min-w-[8rem]`}
+          aria-label="Stage name"
+        />
+        <input
+          value={stage.region}
+          onChange={(e) => onChange({ ...stage, region: e.target.value })}
+          placeholder={derivedRegion || 'Western Australia'}
+          className={`${inputClass} flex-1 min-w-[8rem]`}
+          aria-label="Region"
+        />
+        <input
+          type="date"
+          value={stage.startDate}
+          min={trip.startDate}
+          max={trip.endDate}
+          onChange={(e) => onChange({ ...stage, startDate: e.target.value })}
+          className={inputClass}
+          aria-label="Arrived"
+        />
+        <span className="font-mono text-faint" aria-hidden="true">
+          →
+        </span>
+        <input
+          type="date"
+          value={stage.endDate}
+          min={trip.startDate}
+          max={trip.endDate}
+          onChange={(e) => onChange({ ...stage, endDate: e.target.value })}
+          className={inputClass}
+          aria-label="Left"
+        />
       </div>
       <p
         className={`m-0 font-mono text-[0.68rem] ${problem ? 'text-[#9a3a23]' : 'text-faint'}`}
         role={problem ? 'alert' : undefined}
       >
         {problem ??
-          (nights === null
+          (days === null
             ? ''
-            : [
-                stageLabel(stage),
-                `${formatIsoDate(stage.startDate)} → ${formatIsoDate(stage.endDate)}`,
-                `${nights} day${nights === 1 ? '' : 's'}`,
-              ]
+            : [stageLabel(stage), `${formatIsoDate(stage.startDate)} → ${formatIsoDate(stage.endDate)}`]
                 .filter(Boolean)
                 .join(' · '))}
       </p>
-      <PlacesEditor
-        stage={stage}
-        onChange={(places) => onChange({ ...stage, places })}
-      />
-    </li>
+      <PlacesEditor stage={stage} onChange={(places) => onChange({ ...stage, places })} />
+    </div>
   );
 }
 
@@ -132,44 +161,45 @@ function StageRow({
  * and the "day at the place" counters have nothing to count inside — so this
  * is not a nicety, it is what makes half the badge modes reachable.
  *
+ * The legs live on a ruler (`StageRuler`) and ONE of them is open at a time
+ * beneath it: the accordion of every stage with every field used to be the
+ * widest thing on the page. Selection is the overview's, not this panel's,
+ * because clicking a day on the calendar is another way to open its leg.
+ *
  * Stages may overlap on purpose: a travel day belongs to the place you left
  * and the one you reached, and `stageAt` gives it to where you ended up.
  */
 export default function StagesPanel({
   trip,
+  selectedId,
+  cursorDate,
+  onSelect,
   onChange,
   timelineSources = [],
   onCompleteFrom,
 }: StagesPanelProps) {
-  const [open, setOpen] = useState(false);
+  const selectedIndex = trip.stages.findIndex((s) => s.id === selectedId);
+  const selected = selectedIndex >= 0 ? trip.stages[selectedIndex] : null;
 
   function add() {
-    const last = trip.stages[trip.stages.length - 1];
-    const start = last ? last.endDate : trip.startDate;
-    onChange([...trip.stages, createTripStage('', '', start, start)]);
-    setOpen(true);
+    // The first day no leg covers, else the trip's end: a new leg starts where
+    // the story has a hole, and the ruler's own `+` does the same per gap.
+    const gap = rulerGaps(trip, rulerBars(trip))[0];
+    const result = startStageAt(trip, gap ? gap.startDate : trip.endDate);
+    onChange(result.stages);
+    onSelect(result.selectedId);
   }
 
   return (
     <section
-      className="flex flex-col gap-2 bg-surface border border-line rounded-paper-lg p-5"
+      className="flex flex-col gap-3 bg-surface border border-line rounded-paper-lg p-5"
       aria-label="Stages"
     >
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          aria-expanded={open}
-          className={`flex-1 flex items-center gap-2 p-0 border-0 bg-transparent cursor-pointer text-left ${legend}`}
-        >
-          <span>
-            Stages · {trip.stages.length} leg
-            {trip.stages.length === 1 ? '' : 's'}
-          </span>
-          <span className="text-faint" aria-hidden="true">
-            {open ? '−' : '+'}
-          </span>
-        </button>
+        <span className={`flex-1 ${legend}`}>
+          Stages · {trip.stages.length} leg
+          {trip.stages.length === 1 ? '' : 's'}
+        </span>
         {/* The timeline of a connected Winnow proposes what this list lacks —
             a diff the author accepts leg by leg, never a sync. */}
         {onCompleteFrom &&
@@ -179,43 +209,54 @@ export default function StagesPanel({
               type="button"
               onClick={() => onCompleteFrom(id)}
               title={`Compare these stages with ${id}'s timeline and take what you want`}
-              className="flex-none px-3 py-1.5 border border-line-strong rounded-full bg-paper text-[0.76rem] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
+              className={pill}
             >
               ↓ From {id}
             </button>
           ))}
-        <button
-          type="button"
-          onClick={add}
-          className="flex-none px-3 py-1.5 border border-line-strong rounded-full bg-paper text-[0.76rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
-        >
+        <button type="button" onClick={add} className={`${pill} font-semibold`}>
           + Stage
         </button>
       </div>
 
-      {open &&
-        (trip.stages.length === 0 ? (
-          <p className="m-0 text-[0.8rem] text-muted">
-            A stage is a leg of the trip and the days you were on it. Add one
-            and a badge can name it, count the days you stayed, or say which day
-            of the stop a picture is. List the places it went through and its
-            name writes itself — “Perth → Cairns”.
+      <StageRuler
+        trip={trip}
+        selectedId={selected?.id ?? null}
+        cursorDate={cursorDate}
+        onSelect={(id) => onSelect(id === selectedId ? null : id)}
+        onChange={onChange}
+      />
+
+      {trip.stages.length === 0 ? (
+        <p className="m-0 text-[0.8rem] text-muted">
+          A stage is a leg of the trip and the days you were on it. Add one
+          with the + above, or right-click a day on the calendar, and a badge
+          can name it, count the days you stayed, or say which day of the stop
+          a picture is. List the places it went through and its name writes
+          itself — “Perth → Cairns”.
+        </p>
+      ) : (
+        !selected && (
+          <p className="m-0 font-mono text-[0.66rem] text-faint">
+            Click a leg to edit it · drag its edges to move its dates · right-click a day on the calendar to start or end one there
           </p>
-        ) : (
-          <ul className="m-0 p-0 list-none flex flex-col">
-            {trip.stages.map((stage) => (
-              <StageRow
-                key={stage.id}
-                trip={trip}
-                stage={stage}
-                onChange={(next) =>
-                  onChange(trip.stages.map((s) => (s.id === next.id ? next : s)))
-                }
-                onDelete={() => onChange(trip.stages.filter((s) => s.id !== stage.id))}
-              />
-            ))}
-          </ul>
-        ))}
+        )
+      )}
+
+      {selected && (
+        <StageCard
+          key={selected.id}
+          trip={trip}
+          stage={selected}
+          index={selectedIndex}
+          onChange={(next) => onChange(trip.stages.map((s) => (s.id === next.id ? next : s)))}
+          onDelete={() => {
+            onChange(trip.stages.filter((s) => s.id !== selected.id));
+            onSelect(null);
+          }}
+          onClose={() => onSelect(null)}
+        />
+      )}
     </section>
   );
 }
