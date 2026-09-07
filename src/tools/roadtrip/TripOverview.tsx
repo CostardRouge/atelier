@@ -4,6 +4,7 @@ import { dayStageActions } from '../../shared/roadtrip/stage-edit';
 import { stageTint } from '../../shared/roadtrip/stage-ruler';
 import { enumerateDays, formatIsoDate, isWithin, type IsoDate } from '../../shared/roadtrip/trip-days';
 import { stageAt, tripCoverage } from '../../shared/roadtrip/trip-coverage';
+import { usePublishMediaScope, type MediaScope } from '../../shared/sources/media-scope';
 import type { TripDoc, TripPost, TripStage } from '../../shared/roadtrip/trip-types';
 import DayHeatmap, { type DayMenuItem } from './DayHeatmap';
 import DayPanel from './DayPanel';
@@ -128,6 +129,17 @@ export default function TripOverview({
     () => coverage.days.find((d) => d.date === selected) ?? null,
     [coverage.days, selected],
   );
+
+  // The selected day is what the Library's Winnow tab lists — so the pictures
+  // of a day can be looked at before a piece exists for it.
+  const mediaScope = useMemo<MediaScope | null>(
+    () =>
+      selected
+        ? { from: selected, to: selected, label: formatIsoDate(selected), publisher: 'Road Trip' }
+        : null,
+    [selected],
+  );
+  usePublishMediaScope(mediaScope);
 
   const mutate = useCallback(
     (posts: TripPost[]) => onChange({ ...trip, posts, updatedAt: Date.now() }),

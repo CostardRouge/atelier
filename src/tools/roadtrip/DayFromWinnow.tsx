@@ -1,16 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { fileBaseName } from '../../shared/library/assets';
-import {
-  WinnowClient,
-  WinnowError,
-  type WinnowAssetRow,
-} from '../../shared/sources/winnow/client';
+import { WinnowError, type WinnowAssetRow } from '../../shared/sources/winnow/client';
 import { materialize } from '../../shared/sources/winnow/materialize';
-import {
-  listWinnowConnections,
-  subscribeWinnowConnections,
-  type WinnowConnection,
-} from '../../shared/sources/winnow/store';
+import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
+import { useScopeRows, type RowsProblem } from '../../shared/sources/winnow/use-scope-rows';
 import { legend, section } from './panels/ui';
 
 interface DayFromWinnowProps {
@@ -62,75 +55,35 @@ interface DayFromWinnowProps {
  *   connection the user confirmed on `#/connect`.
  */
 export default function DayFromWinnow({ day, onPicked, defaultOpen, busy }: DayFromWinnowProps) {
-  const [connections, setConnections] = useState<WinnowConnection[]>(() =>
-    listWinnowConnections(),
-  );
-  useEffect(
-    () => subscribeWinnowConnections(() => setConnections(listWinnowConnections())),
-    [],
-  );
-
-  // The first connection — the same limitation `AssetSidebar` has, kept
-  // rather than quietly diverging: every Winnow serves media, and choosing
-  // between several instances is one open item for both places at once.
-  const connection = connections[0] ?? null;
-  const client = useMemo(
-    () =>
-      connection
-        ? new WinnowClient({ baseUrl: connection.baseUrl, auth: connection.auth })
-        : null,
-    [connection],
-  );
+  // The same connection and the same read as the Library's Winnow tab
+  // (`use-connection.ts`, `use-scope-rows.ts`): one place says which instance
+  // and one place asks it, so the two surfaces cannot drift apart.
+  const { connection, client } = useWinnowConnection();
 
   const [open, setOpen] = useState(defaultOpen);
-  const [rows, setRows] = useState<WinnowAssetRow[] | null>(null);
-  const [problem, setProblem] = useState<{ text: string; login?: string } | null>(null);
-  const [fetching, setFetching] = useState<number | null>(null);
-
-  // The strip follows the piece: a new day is a new question, and the answer
-  // to the last one must not sit under it.
-  useEffect(() => {
-    setRows(null);
-    setProblem(null);
-  }, [day, connection?.id]);
-
   useEffect(() => {
     setOpen(defaultOpen);
   }, [day, defaultOpen]);
 
-  useEffect(() => {
-    if (!open || !client || rows !== null) return;
-    let cancelled = false;
-    client
-      .allAssets({ dateFrom: day, dateTo: day }, 400)
-      .then((all) => {
-        if (!cancelled) setRows(all);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setRows([]);
-        setProblem(
-          err instanceof WinnowError && err.kind === 'unauthenticated'
-            ? { text: `Not signed in to ${connection?.id}.`, login: client.loginUrl() }
-            : { text: err instanceof Error ? err.message : String(err) },
-        );
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, client, rows, day, connection?.id]);
+  // Asked only while open: a folded strip costs no request. The hook forgets
+  // the last day's answer before asking for the new one.
+  const scope = useScopeRows(client, connection?.id ?? null, day, day, open);
+  const [fetching, setFetching] = useState<number | null>(null);
+  const [pickProblem, setPickProblem] = useState<RowsProblem | null>(null);
+  const rows = scope.rows;
+  const problem = pickProblem ?? scope.problem;
 
   const pick = useCallback(
     async (row: WinnowAssetRow) => {
       if (!client || !connection) return;
       setFetching(row.id);
-      setProblem(null);
+      setPickProblem(null);
       try {
         const files = await materialize(client, connection.id, row, { fidelity: 'proxy' });
         if (!files.length) return;
         onPicked(files, fileBaseName(files[0].name).toLowerCase());
       } catch (err) {
-        setProblem(
+        setPickProblem(
           err instanceof WinnowError && err.kind === 'unauthenticated'
             ? { text: `Not signed in to ${connection.id}.`, login: client.loginUrl() }
             : { text: err instanceof Error ? err.message : String(err) },
