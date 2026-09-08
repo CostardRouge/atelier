@@ -45,7 +45,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 12;
+export const TRIP_DOC_VERSION = 13;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers and the
@@ -363,6 +363,40 @@ export interface TripPost {
   createdAt: number;
 }
 
+/**
+ * How a trip draws itself in the gallery. Four layouts, and each one falls
+ * back to the next when the pictures it wants do not exist — so the choice is
+ * a preference and never a promise the card cannot keep.
+ */
+export type CoverLayout = 'mosaic' | 'cover' | 'rhythm' | 'none';
+
+/** How many pictures a layout draws. `rhythm` and `none` draw none. */
+export const COVER_TILES: Record<CoverLayout, number> = {
+  mosaic: 3,
+  cover: 1,
+  rhythm: 0,
+  none: 0,
+};
+
+export interface TripCover {
+  layout: CoverLayout;
+  /**
+   * Pieces that LEAD the cover, in order — a preference, never a dependency.
+   * Anything short is filled from the trip's busiest days, so a pinned id that
+   * names no post (deleted, never imported) is simply skipped: there is no
+   * dangling reference to repair and no state where the card cannot draw. Same
+   * rule as an emptied text override — empty means computed, never blank.
+   */
+  pinned: string[];
+}
+
+export const DEFAULT_TRIP_COVER: TripCover = { layout: 'mosaic', pinned: [] };
+
+/** A fresh cover, safe to mutate. */
+export function defaultTripCover(): TripCover {
+  return { ...DEFAULT_TRIP_COVER, pinned: [] };
+}
+
 export interface TripDoc {
   version: number;
   id: string;
@@ -405,6 +439,13 @@ export interface TripDoc {
    * a grade nobody chose is a factory setting.
    */
   grade: TripGrade;
+  /**
+   * How the gallery card shows the trip. Portable: it is authoring intent, and
+   * the pinned ids are post ids, which travel in the file — a re-imported trip
+   * keeps the pieces it was pinned to and lights them up as their thumbnails
+   * are re-baked.
+   */
+  cover: TripCover;
   // --- bound half ----------------------------------------------------------
   /**
    * The source this trip belongs to — `'local'` for this browser
@@ -457,6 +498,7 @@ export function createTripDoc(
     theme: themeFromPreset(DEFAULT_THEME_PRESET),
     cta: { ...DEFAULT_CTA },
     grade: emptyGrade(),
+    cover: defaultTripCover(),
     createdAt: now,
     updatedAt: now,
   };
@@ -587,6 +629,11 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * duration (an exit animation had nothing to land on without it), the picture
  * backdrop, the place marker and the reference day. A post that had the
  * boolean on lands on `auto` — the intent kept, the untrue anniversary dropped.
+ *
+ * v12 → v13 gives the trip its cover: a layout and the pieces pinned to it.
+ * Every stored trip lands on the mosaic with nothing pinned, which is fully
+ * derived from what the trip already holds — so no document gains a choice
+ * nobody made and no card changes what it could already draw.
  *
  * v10 → v11 gives the trip the `sourceId` the project document has carried
  * since its v14: everything written before sources existed lives in this
@@ -779,6 +826,12 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
         framing: normaliseFraming(slide.framing),
       })),
     }));
+  }
+
+  if (migrated.version < 13) {
+    // Every existing trip starts on the mosaic with nothing pinned, which is
+    // entirely derived: no stored document gains a choice nobody made.
+    migrated.cover = migrated.cover ?? defaultTripCover();
   }
 
   migrated.version = TRIP_DOC_VERSION;

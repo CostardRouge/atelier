@@ -16,6 +16,7 @@ import {
   type TripDoc,
   type TripPost,
   type TripStage,
+  defaultTripCover,
 } from './trip-types';
 
 let seq = 0;
@@ -66,6 +67,7 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   hookDefaults: {},
   grade: { layers: [], output: 'none' },
   sourceId: 'local',
+  cover: defaultTripCover(),
   createdAt: 0,
   updatedAt: 0,
   ...over,

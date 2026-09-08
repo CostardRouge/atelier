@@ -15,6 +15,7 @@ import {
   type PostKind,
   type TripDoc,
   type TripPost,
+  defaultTripCover,
 } from './trip-types';
 
 const post = (over: Partial<TripPost> = {}, kind: PostKind = 'carousel'): TripPost => ({
@@ -49,6 +50,7 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   hookDefaults: {},
   grade: { layers: [], output: 'none' },
   sourceId: 'local',
+  cover: defaultTripCover(),
   createdAt: 0,
   updatedAt: 0,
   ...over,

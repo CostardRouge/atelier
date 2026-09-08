@@ -94,6 +94,11 @@ export function toTripFile(trip: TripDoc, exportedAt: number = Date.now()): Trip
     // The grade travels: a custom .cube rides as text inside its layer, so a
     // trip opened elsewhere renders its pictures with the same look.
     grade: structuredClone(trip.grade),
+    // The cover travels too, pins and all: they are post ids, and posts are in
+    // the file. The thumbnails are not — so an imported trip draws its rhythm
+    // until its pictures have been re-baked, then lights up on the pieces it
+    // was already pinned to.
+    cover: structuredClone(trip.cover),
   };
 }
 
@@ -187,6 +192,7 @@ export function parseTripFile(text: string): ParseResult {
       ? (raw.hookDefaults as unknown as TripDoc['hookDefaults'])
       : base.hookDefaults,
     grade: isRecord(raw.grade) ? (raw.grade as unknown as TripDoc['grade']) : base.grade,
+    cover: isRecord(raw.cover) ? (raw.cover as unknown as TripDoc['cover']) : base.cover,
   });
 
   return {
@@ -208,6 +214,7 @@ export function parseTripFile(text: string): ParseResult {
       cta: migrated.cta,
       hookDefaults: migrated.hookDefaults,
       grade: migrated.grade,
+      cover: migrated.cover,
     },
   };
 }
@@ -243,5 +250,10 @@ export function tripDocFromFile(
     cta: structuredClone(file.cta),
     hookDefaults: structuredClone(file.hookDefaults),
     grade: structuredClone(file.grade),
+    // Spelled out rather than left to the spread above: `createTripDoc` gives
+    // a default for every portable field, so a line forgotten HERE compiles
+    // and silently drops what the file carried — the fault `applyProjectFile`
+    // once had on the studio's intros.
+    cover: structuredClone(file.cover),
   };
 }
