@@ -6,10 +6,14 @@ import { hasImpact, spanImpact } from '../../shared/roadtrip/trip-edit';
 import { spanLength, todayIso } from '../../shared/roadtrip/trip-days';
 import {
   createTripPlace,
+  defaultTripCover,
   spanProblem,
+  type TripCover,
   type TripDoc,
   type TripPlace,
 } from '../../shared/roadtrip/trip-types';
+import { prunePins } from '../../shared/roadtrip/trip-cover';
+import CoverPanel from './CoverPanel';
 import { DEFAULT_SOURCE_ID, type SourceInfo } from '../../shared/sources/source';
 
 export interface TripDetails {
@@ -23,6 +27,8 @@ export interface TripDetails {
   to: TripPlace;
   /** Where the trip is kept — this browser, or a connected instance. */
   sourceId: string;
+  /** How the trip shows itself in the gallery. Editing only. */
+  cover: TripCover;
 }
 
 /** A connected Winnow the modal can offer as a seed, and whether it can. */
@@ -97,6 +103,7 @@ export default function TripDetailsModal({
   const ends = useMemo(() => (trip ? tripRouteEnds(trip) : null), [trip]);
 
   const [name, setName] = useState(trip?.name ?? '');
+  const [cover, setCover] = useState<TripCover>(() => trip?.cover ?? defaultTripCover());
   const [sourceId, setSourceId] = useState(() =>
     sources.some((s) => s.id === DEFAULT_SOURCE_ID) ? DEFAULT_SOURCE_ID : (sources[0]?.id ?? DEFAULT_SOURCE_ID),
   );
@@ -142,7 +149,16 @@ export default function TripDetailsModal({
 
   function submit() {
     if (!canSubmit) return;
-    onSubmit({ name, destination, startDate, endDate, from, to, sourceId });
+    onSubmit({
+      name,
+      destination,
+      startDate,
+      endDate,
+      from,
+      to,
+      sourceId,
+      cover: trip ? prunePins(trip, cover) : cover,
+    });
   }
 
   // Enter saves from any field — the dates are the reason: typing one and
@@ -159,7 +175,7 @@ export default function TripDetailsModal({
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="w-full max-w-[30rem] max-h-[90dvh] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6">
+      <div className="w-full max-w-[34rem] max-h-[90dvh] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6">
         <div>
           <h2 className="m-0 font-serif text-[1.4rem]">
             {editing ? 'Dates and route' : 'New trip'}
@@ -337,6 +353,20 @@ export default function TripDetailsModal({
               .join(' · ')}
             .
           </p>
+        )}
+
+        {/* The cover is a property of the TRIP, like its name and its dates, so
+            it is settled in the sheet that holds them — the maintainer's own
+            call. It stays reachable from the gallery card too (`TripCoverModal`
+            over the same panel): a cover is looked at there, and a layout that
+            draws no picture would otherwise have nowhere to be undone from.
+            Creation does not offer it: a trip with no piece has nothing to show
+            yet, and a form must not ask for what cannot be answered. */}
+        {editing && trip && (
+          <div className={field}>
+            <span className={legend}>Cover</span>
+            <CoverPanel trip={trip} value={cover} onChange={setCover} />
+          </div>
         )}
 
         {/* Pinned: the two dates push the button below the fold on a phone. */}

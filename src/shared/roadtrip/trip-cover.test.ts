@@ -4,6 +4,7 @@ import {
   coverTiles,
   dayNumberOf,
   droppedPins,
+  prunePins,
   rankedCoverDays,
   rhythmBuckets,
   rhythmLevel,
@@ -319,5 +320,23 @@ describe('coverCandidateIds', () => {
       posts: [post('2025-03-02'), post('2025-03-05'), post('2025-03-08')],
     });
     expect(coverCandidateIds(doc, tripCoverage(doc), 1)).toHaveLength(1);
+  });
+});
+
+describe('prunePins', () => {
+  it('drops the pins that name nothing and keeps the rest in order', () => {
+    const doc = trip({
+      posts: [post('2025-03-02', { id: 'a' }), post('2025-03-05', { id: 'b' })],
+      cover: { layout: 'mosaic', pinned: ['a', 'gone', 'b'] },
+    });
+    expect(prunePins(doc, doc.cover)).toEqual({ layout: 'mosaic', pinned: ['a', 'b'] });
+  });
+
+  it('returns the same object when every pin still names a piece', () => {
+    const doc = trip({
+      posts: [post('2025-03-02', { id: 'a' })],
+      cover: { layout: 'cover', pinned: ['a'] },
+    });
+    expect(prunePins(doc, doc.cover)).toBe(doc.cover);
   });
 });

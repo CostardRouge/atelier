@@ -27,7 +27,13 @@
 
 import { daysBetween, type IsoDate } from './trip-days';
 import type { DayCell, TripCoverage } from './trip-coverage';
-import { COVER_TILES, type CoverLayout, type TripDoc, type TripPost } from './trip-types';
+import {
+  COVER_TILES,
+  type CoverLayout,
+  type TripCover,
+  type TripDoc,
+  type TripPost,
+} from './trip-types';
 
 /** One picture of the cover, in draw order. */
 export interface CoverTile {
@@ -159,6 +165,18 @@ export function dayNumberOf(trip: TripDoc, date: IsoDate): number | null {
 export function droppedPins(trip: TripDoc): string[] {
   const ids = new Set(trip.posts.map((post) => post.id));
   return trip.cover.pinned.filter((id) => !ids.has(id));
+}
+
+/**
+ * `cover` with every pin that names no piece of `trip` removed. Called when an
+ * edit is COMMITTED, never while it is being made: the panel says a pin was
+ * dropped, and a note that cleared itself the moment you touched anything else
+ * would never be read.
+ */
+export function prunePins(trip: TripDoc, cover: TripCover): TripCover {
+  const gone = new Set(droppedPins({ ...trip, cover }));
+  if (gone.size === 0) return cover;
+  return { ...cover, pinned: cover.pinned.filter((id) => !gone.has(id)) };
 }
 
 /** `trip.cover.pinned` with `postId` added or removed, capped at `max`. */

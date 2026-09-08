@@ -400,6 +400,20 @@ function TripCard({
           </button>
           <span className="flex-1" />
 
+          {/* With no cover there is no cover zone to hang the chip on, and a
+              layout that draws nothing must never be a one-way door. The verb
+              moves into the row instead — the trip's details sheet holds the
+              same panel, so this is the second way back, not the only one. */}
+          {trip.cover.layout === 'none' && confirming === null && busy === null && (
+            <button
+              type="button"
+              onClick={onChooseCover}
+              className="p-0 border-0 bg-transparent font-mono text-[0.58rem] tracking-[0.08em] uppercase text-faint cursor-pointer opacity-0 transition-opacity duration-200 ease-paper group-hover:opacity-100 focus-visible:opacity-100 hover:text-accent-ink"
+            >
+              Cover
+            </button>
+          )}
+
           {confirming === null && busy === null && (
             <button
               type="button"
