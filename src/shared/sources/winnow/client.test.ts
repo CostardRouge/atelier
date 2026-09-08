@@ -254,6 +254,22 @@ describe('WinnowClient requests', () => {
     expect(new URL(fetchImpl.mock.calls[2][0]).pathname).toBe('/api/sessions');
   });
 
+  it('sends the half of the library as Winnow\'s `kind`, everywhere the filters go', async () => {
+    // `half` is renamed on the wire on purpose: `kind` is also what a Winnow
+    // root's own column is called, so the two words are kept apart here and
+    // nowhere else.
+    const fetchImpl = vi.fn<FetchLike>(async () => ok({ assets: [], next_cursor: null, sessions: [] }));
+    const c = client(fetchImpl);
+    await c.calendar('2025-07-01', '2025-07-31', { half: 'final' });
+    await c.assets({ dateFrom: '2025-07-09', dateTo: '2025-07-09', half: 'incoming' });
+    await c.assets({ dateFrom: '2025-07-09', dateTo: '2025-07-09' });
+    const params = fetchImpl.mock.calls.map((call) => Object.fromEntries(new URL(call[0]).searchParams));
+    expect(params[0].kind).toBe('final');
+    expect(params[1].kind).toBe('incoming');
+    // No half asked for is BOTH halves: the parameter must be absent, not empty.
+    expect(params[2].kind).toBeUndefined();
+  });
+
   it('collapses an empty span to null — a filter matching nothing crashed the picker', async () => {
     // Winnow's min()/max() over no rows answer with a row of NULLs, so the
     // wire carries a bounds OBJECT with null fields. Left as-is it reached

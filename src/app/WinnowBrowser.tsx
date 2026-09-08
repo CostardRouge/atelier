@@ -546,6 +546,23 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
               : `${connection.id} has no timeline yet — reconnect once it does.`,
           )}
           <span className="w-px h-5 bg-line mx-1 max-[820px]:hidden" aria-hidden="true" />
+          {/* Which half of the library, in Winnow's own words. A scope rather
+              than a property of a file, so it comes first — and, like every
+              filter here, it narrows the calendar, the folders and the legs
+              alike. */}
+          <select
+            value={filter.half ?? ''}
+            onChange={(e) => setFilterKey('half', e.target.value)}
+            className={filterSelect}
+            aria-label="Which half of the library"
+          >
+            {/* Not "all media": beside the type picker that would read as a
+                second word for photos-and-videos. Naming both halves says
+                what the default really is. */}
+            <option value="">incoming + gallery</option>
+            <option value="incoming">incoming · to cull</option>
+            <option value="final">gallery · finished</option>
+          </select>
           <select
             value={filter.mediaType ?? ''}
             onChange={(e) => setFilterKey('mediaType', e.target.value)}

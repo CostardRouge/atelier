@@ -84,6 +84,16 @@ describe('the browser\'s remembered place', () => {
     expect(readBrowseState('a.example')?.filter).toEqual({ device: 'DJI' });
   });
 
+  it('remembers the half of the library, and only the two words Winnow takes', () => {
+    writeBrowseState('a.example', place({ filter: { half: 'final' } }));
+    expect(readBrowseState('a.example')?.filter).toEqual({ half: 'final' });
+    localStorage.setItem(
+      KEY,
+      JSON.stringify({ 'b.example': { ...place(), filter: { half: 'gallery' } } }),
+    );
+    expect(readBrowseState('b.example')?.filter).toEqual({});
+  });
+
   it('survives garbage in storage', () => {
     localStorage.setItem(KEY, '{not json');
     expect(readBrowseState('a.example')).toBeNull();

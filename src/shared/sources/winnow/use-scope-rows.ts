@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { WinnowError, type WinnowAssetRow, type WinnowClient } from './client';
+import {
+  WinnowError,
+  type LibraryHalf,
+  type WinnowAssetRow,
+  type WinnowClient,
+} from './client';
 
 /** One line a person can act on, and the sign-in link when that is the answer. */
 export interface RowsProblem {
@@ -23,10 +28,17 @@ const ROW_CAP = 400;
  * Winnow tab and the piece editor's day strip, so both ask the same question
  * the same way (`date_from` / `date_to`, never a chapter: `roadtrip.md`).
  *
- * A change of span, connection or `enabled` forgets the last answer before
- * asking again, so a new day never shows the previous day's pictures for a
- * frame. Nothing is asked while `enabled` is false or the span is null: a
- * closed strip and a tab nobody is looking at cost no request.
+ * A change of span, half, connection or `enabled` forgets the last answer
+ * before asking again, so a new day never shows the previous day's pictures
+ * for a frame. Nothing is asked while `enabled` is false or the span is null:
+ * a closed strip and a tab nobody is looking at cost no request.
+ *
+ * `half` narrows to one side of the instance's library (`incoming` / `final`),
+ * null being both. It is sent to the instance rather than applied to the
+ * answer: `ROW_CAP` truncates a busy span, so filtering here would quietly
+ * drop rows the instance would have listed. A primitive, not a `FilterQuery`
+ * object, so it can be an effect dependency without every caller having to
+ * memoise one.
  */
 export function useScopeRows(
   client: WinnowClient | null,
@@ -34,6 +46,7 @@ export function useScopeRows(
   from: string | null,
   to: string | null,
   enabled: boolean,
+  half: LibraryHalf | null = null,
 ): ScopeRows {
   const [rows, setRows] = useState<WinnowAssetRow[] | null>(null);
   const [problem, setProblem] = useState<RowsProblem | null>(null);
@@ -46,7 +59,7 @@ export function useScopeRows(
     if (!enabled || !client || !connectionId || !from || !to) return;
     let cancelled = false;
     client
-      .allAssets({ dateFrom: from, dateTo: to }, ROW_CAP)
+      .allAssets({ dateFrom: from, dateTo: to, ...(half ? { half } : {}) }, ROW_CAP)
       .then((all) => {
         if (!cancelled) setRows(all);
       })
@@ -62,7 +75,7 @@ export function useScopeRows(
     return () => {
       cancelled = true;
     };
-  }, [client, connectionId, from, to, enabled, generation]);
+  }, [client, connectionId, from, to, enabled, half, generation]);
 
   return { rows, problem, reload };
 }

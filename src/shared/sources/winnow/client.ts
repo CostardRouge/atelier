@@ -145,7 +145,19 @@ export interface FilterQuery {
   ext?: string;
   /** `make model`, as Winnow derives it from EXIF ("DJI Mini 4 Pro"). */
   device?: string;
+  /** Which half of the library, or absent for both. */
+  half?: LibraryHalf;
 }
+
+/**
+ * Which half of a Winnow's library a listing is about — its own split, not a
+ * notion invented here: a root is `incoming` (still to cull: the `source` and
+ * `inbox` kinds) or `final` (finished exports, the Gallery), and its
+ * `/api/assets?kind=` takes exactly these two words, absent meaning both.
+ * Winnow's own picker says **All · Incoming · Gallery**, so Atelier says the
+ * same rather than inventing a third vocabulary for the same shelf.
+ */
+export type LibraryHalf = 'incoming' | 'final';
 
 export interface AssetQuery extends FilterQuery {
   dateFrom?: string;
@@ -431,8 +443,15 @@ export interface WinnowSession {
   root_kind: string;
 }
 
+/**
+ * The cumulative narrowing, in Winnow's own query names. `half` goes out as
+ * `kind` — Winnow's word for the incoming/final split, which is not the
+ * `kind` a root carries in its table (`source`/`inbox`/`finals`/`export`);
+ * the name is kept on the wire and renamed on this side so nothing here
+ * reads `kind` and means two things.
+ */
 function filterParams(f: FilterQuery): Record<string, string | undefined> {
-  return { media_type: f.mediaType, ext: f.ext, device: f.device };
+  return { media_type: f.mediaType, ext: f.ext, device: f.device, kind: f.half };
 }
 
 export interface AssetPage {

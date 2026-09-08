@@ -76,6 +76,7 @@ export function readBrowseState(sourceId: string): BrowseState | null {
         : {}),
       ...(typeof f.ext === 'string' && f.ext ? { ext: f.ext } : {}),
       ...(typeof f.device === 'string' && f.device ? { device: f.device } : {}),
+      ...(f.half === 'incoming' || f.half === 'final' ? { half: f.half } : {}),
     },
     month: s.month,
     day: typeof s.day === 'string' && DAY_RE.test(s.day) ? s.day : null,
