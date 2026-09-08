@@ -3,6 +3,7 @@ import {
   addDays,
   dayNumber,
   daysBetween,
+  describeRelativeDay,
   enumerateDays,
   formatIsoDate,
   heatmapWeeks,
@@ -241,5 +242,23 @@ describe('formatIsoDate', () => {
 
   it('hands back anything it cannot parse rather than inventing one', () => {
     expect(formatIsoDate('not-a-date')).toBe('not-a-date');
+  });
+});
+
+describe('describeRelativeDay', () => {
+  it('names the three days that have a word of their own', () => {
+    expect(describeRelativeDay('2026-09-08', '2026-09-08')).toBe('today');
+    expect(describeRelativeDay('2026-09-07', '2026-09-08')).toBe('yesterday');
+    expect(describeRelativeDay('2026-09-09', '2026-09-08')).toBe('tomorrow');
+  });
+
+  it('counts whole days either side, across a month boundary', () => {
+    expect(describeRelativeDay('2026-08-31', '2026-09-08')).toBe('8 days ago');
+    expect(describeRelativeDay('2026-09-14', '2026-09-08')).toBe('in 6 days');
+  });
+
+  it('says nothing at all about a date it cannot read', () => {
+    expect(describeRelativeDay('2026-02-30', '2026-09-08')).toBeNull();
+    expect(describeRelativeDay('whenever', '2026-09-08')).toBeNull();
   });
 });

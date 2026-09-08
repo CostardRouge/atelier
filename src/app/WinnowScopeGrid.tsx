@@ -35,6 +35,13 @@ interface WinnowScopeGridProps {
    * `MediaScope.intent`; the grid only obeys.
    */
   onPreview: ((index: number) => void) | null;
+  /**
+   * Whether the grid states the two quiet cases itself — asking, and a span
+   * the instance holds nothing on. False when the sidebar's day stepper
+   * already carries that reading under the control, so the fact is stated
+   * once. A real problem is never quiet: it is drawn here either way.
+   */
+  announce: boolean;
 }
 
 /**
@@ -69,6 +76,7 @@ export default function WinnowScopeGrid({
   activeId,
   picker,
   onPreview,
+  announce,
 }: WinnowScopeGridProps) {
   const { rows, problem, reload } = scope;
   const { pick, fetching } = picker;
@@ -77,11 +85,16 @@ export default function WinnowScopeGrid({
   return (
     <div className="flex flex-col gap-2">
       {rows === null && !problem ? (
-        <p className="m-0 font-mono text-[0.68rem] text-muted">asking {connection.id}…</p>
+        announce ? (
+          <p className="m-0 font-mono text-[0.68rem] text-muted">asking {connection.id}…</p>
+        ) : null
       ) : rows !== null && rows.length === 0 && !problem ? (
-        <p className="m-0 text-[0.78rem] text-muted">
-          {connection.id} holds nothing shot {from === to ? `on ${from}` : `from ${from} to ${to}`}.
-        </p>
+        announce ? (
+          <p className="m-0 text-[0.78rem] text-muted">
+            {connection.id} holds nothing shot{' '}
+            {from === to ? `on ${from}` : `from ${from} to ${to}`}.
+          </p>
+        ) : null
       ) : shown.length === 0 && rows && rows.length > 0 ? (
         <p className="m-0 text-[0.78rem] text-muted">Nothing here matches the filter.</p>
       ) : (

@@ -247,6 +247,25 @@ export function monthLabels(
   return out;
 }
 
+/**
+ * How a day reads against the one being lived — `today`, `yesterday`,
+ * `3 days ago`, `in 2 days`. The reference day is an INPUT, for the same
+ * reason `time-ago.ts` takes one: the phrase has to be true on the day it is
+ * read, not on the day it was composed. Null for a date that does not parse,
+ * so a caller falls back to the date itself rather than printing a lie.
+ */
+export function describeRelativeDay(
+  iso: IsoDate,
+  today: IsoDate = todayIso(),
+): string | null {
+  const delta = daysBetween(iso, today);
+  if (delta === null) return null;
+  if (delta === 0) return 'today';
+  if (delta === 1) return 'yesterday';
+  if (delta === -1) return 'tomorrow';
+  return delta > 0 ? `${delta} days ago` : `in ${-delta} days`;
+}
+
 /** `14 Mar 2025` — a date read by a human, never parsed back. */
 export function formatIsoDate(iso: IsoDate): string {
   const ms = parseIsoDate(iso);

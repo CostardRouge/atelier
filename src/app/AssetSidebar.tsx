@@ -20,7 +20,14 @@ import {
   selectedUsableAssets,
 } from '../shared/library/capabilities';
 import { formatBytes, formatDuration } from '../shared/lib/format';
-import { todayIso } from '../shared/roadtrip/trip-days';
+import {
+  addDays,
+  describeRelativeDay,
+  formatIsoDate,
+  todayIso,
+  WEEKDAYS,
+  weekdayIndex,
+} from '../shared/roadtrip/trip-days';
 import {
   describeTimeScale,
   formatCadence,
@@ -421,15 +428,11 @@ export default function AssetSidebar({
             </p>
           ) : (
             // Nothing open that names a day (the Studio, a gallery): pick one.
-            // 16px so iOS does not zoom on focus (frontend.md).
-            <input
-              type="date"
-              value={manualDay}
-              onChange={(e) => {
-                if (e.target.value) setManualDay(e.target.value);
-              }}
-              aria-label="Day to list from the instance"
-              className="font-sans text-[16px] px-2.5 py-1 border border-line rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
+            <DayStepper
+              day={manualDay}
+              onDay={setManualDay}
+              asking={scopeRows.rows === null && scopeRows.problem === null}
+              count={scopeRows.rows?.length ?? null}
             />
           )}
         </div>
@@ -500,6 +503,7 @@ export default function AssetSidebar({
               to={to}
               scope={scopeRows}
               shown={remoteShown}
+              announce={published !== null}
               inLibrary={inLibrary}
               activeId={lib.activeId}
               picker={picker}
@@ -549,6 +553,108 @@ export default function AssetSidebar({
         </span>
       </div>
     </aside>
+  );
+}
+
+interface DayStepperProps {
+  /** The day being asked about, `YYYY-MM-DD`. */
+  day: string;
+  onDay: (iso: string) => void;
+  /** Whether the instance's answer for that day is still coming. */
+  asking: boolean;
+  /** How many files it holds that day; null while asking, or after a failure. */
+  count: number | null;
+}
+
+/**
+ * The day the Winnow tab is asking about, when no tool publishes a span.
+ *
+ * A **stepper**, not a bare date field: the verb here is *browse the days
+ * around a shoot*, so the two arrows are the common move and the calendar is
+ * the exception. The exception is still the browser's own — a real
+ * `<input type="date">` lies invisible over the VALUE, so the OS picker, the
+ * keyboard and the screen reader all keep working with no custom calendar to
+ * maintain. Over the value only: stretched across the whole row it would
+ * swallow the arrows' clicks. It keeps `font-size: 16px` even at zero opacity,
+ * or iOS zooms the page on focus and never zooms back (`frontend.md`).
+ *
+ * The value is drawn from the ISO string through `trip-days` (UTC, like every
+ * date in the suite) rather than by the field's own locale rendering, which is
+ * where `08/09/2026` came from — a date whose day and month swap by machine.
+ *
+ * Underneath, one line replaces the paragraph the sidebar used to spend on the
+ * same fact: a dot for whether the instance holds anything that day, the day in
+ * words, then the count. `WinnowScopeGrid` therefore stops announcing it
+ * (`announce={false}`); a real problem still comes from there, in red.
+ */
+function DayStepper({ day, onDay, asking, count }: DayStepperProps) {
+  const today = todayIso();
+  const weekday = WEEKDAYS[weekdayIndex(day) ?? 0];
+  const step = (days: number) => {
+    const next = addDays(day, days);
+    if (next) onDay(next);
+  };
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex h-8 items-stretch overflow-hidden rounded-paper border border-line bg-paper focus-within:border-accent">
+        <button
+          type="button"
+          onClick={() => step(-1)}
+          aria-label="The day before"
+          title="The day before"
+          className="w-8 shrink-0 border-0 bg-transparent text-muted cursor-pointer hover:bg-paper-2 hover:text-ink"
+        >
+          ‹
+        </button>
+        <span className="relative flex-1 min-w-0 flex items-center justify-center overflow-hidden border-x border-line">
+          <span className="px-1 font-mono text-[0.78rem] tabular-nums text-ink truncate">
+            <span className="text-muted">{weekday} </span>
+            {formatIsoDate(day)}
+          </span>
+          <input
+            type="date"
+            value={day}
+            max={today}
+            onChange={(e) => {
+              if (e.target.value) onDay(e.target.value);
+            }}
+            aria-label="Day to list from the instance"
+            className="absolute inset-0 w-full h-full m-0 p-0 border-0 bg-transparent text-[16px] opacity-0 cursor-pointer"
+          />
+        </span>
+        <button
+          type="button"
+          onClick={() => step(1)}
+          // Nothing was shot after today; the arrow says so rather than
+          // asking the instance about a day it cannot hold anything on.
+          disabled={day >= today}
+          aria-label="The day after"
+          title="The day after"
+          className="w-8 shrink-0 border-0 bg-transparent text-muted cursor-pointer hover:bg-paper-2 hover:text-ink disabled:text-faint disabled:cursor-default disabled:hover:bg-transparent"
+        >
+          ›
+        </button>
+      </div>
+      <p className="m-0 flex items-center gap-1.5 text-[0.7rem] text-muted">
+        <span
+          aria-hidden="true"
+          className={`w-1.5 h-1.5 shrink-0 rounded-full ${
+            count ? 'bg-accent' : 'bg-faint'
+          }`}
+        />
+        <span className="truncate">
+          {describeRelativeDay(day, today) ?? day} ·{' '}
+          {asking
+            ? 'asking…'
+            : count === null
+              ? 'no answer'
+              : count === 0
+                ? 'nothing here'
+                : `${count} file${count === 1 ? '' : 's'}`}
+        </span>
+      </p>
+    </div>
   );
 }
 
