@@ -123,6 +123,26 @@ export function coverTiles(
 }
 
 /**
+ * The pieces whose thumbnails must be in hand before a cover can be resolved:
+ * the pins, plus every piece of the busiest days down to `depth`. Deeper than
+ * the layout asks for, because a day whose pieces have no picture is passed
+ * over and the next day has to be ready — and wider than one piece per day,
+ * because which piece a day puts forward depends on which pictures exist.
+ * Bounded on purpose: a trip is 250 pieces and the store reads them one by one.
+ */
+export function coverCandidateIds(
+  trip: TripDoc,
+  coverage: TripCoverage,
+  depth = 6,
+): string[] {
+  const ids = new Set<string>(trip.cover.pinned);
+  for (const day of rankedCoverDays(coverage).slice(0, depth)) {
+    for (const post of day.posts) ids.add(post.id);
+  }
+  return [...ids];
+}
+
+/**
  * The 1-based day of the trip a date falls on, or null when the span does not
  * reach it — which happens to a pinned piece after the dates are edited, since
  * a post is never touched by that edit and simply stops being drawn.

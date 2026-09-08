@@ -12,6 +12,7 @@ import { POST_KINDS } from '../../shared/roadtrip/trip-types';
 import StageZoomControl from '../../shared/ui/StageZoomControl';
 import { useStageZoom } from '../../shared/ui/use-stage-zoom';
 import type { DayCell } from '../../shared/roadtrip/trip-coverage';
+import { HEATMAP_LEVELS as LEVELS } from './heatmap-ramp';
 
 /** One line of the day's context menu: what it says, and what it does. */
 export interface DayMenuItem {
@@ -54,14 +55,6 @@ interface Menu {
 }
 
 
-/**
- * Five steps from bare paper to the vermilion accent. The rungs are the
- * question the maintainer asks the grid, in order: nothing here · something
- * drafted but never sent · sent once · twice · more. So a drafted day is
- * visibly NOT an empty one (there is work sitting there) and just as visibly
- * not a published one.
- */
-const LEVELS = ['#efe9dd', '#f4cdbd', '#eb9878', '#e26a45', '#d9442a'];
 
 function levelOf(cell: DayCell): number {
   if (cell.posts.length === 0) return 0;

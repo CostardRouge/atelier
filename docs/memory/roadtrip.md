@@ -59,6 +59,14 @@ Verified in headless Chromium: the sheet opens on the trip's own values, the imp
 
 **A layout is what the card asks for, not what it promises.** `mosaic` (3) falls to `cover` (1) falls to `rhythm` (0) on what actually exists — a mosaic of one *is* a cover, and no layout can fail to render. `rhythm` draws the trip's own days from `tripCoverage`, so it is right on a trip created ten seconds ago and on a freshly imported one whose pictures have not been re-baked; `none` is chosen, never fallen back to.
 
+**The chooser is opened from the GALLERY, never from `TripSettingsModal`** (`TripCoverModal`, reached from the card's overflow). That sheet is reached from a PIECE, so a trip with no piece could never be settled from it — the same reason the rename and the dates live on the overview's heading. A cover is looked at in the gallery, so it is chosen there. It loads every thumbnail of the trip, not the handful the card needs, and revokes them on close: seeing the pieces IS the screen. The **open** trip's cover is handed back to `RoadTripTool.handleChange` (`onChangeOpenTrip`) rather than written to the store — the tool's save machine holds that document while the gallery shows, and would flush over anything written behind it. A cover on a remote trip takes the same road a creation does: written **there** first, mirrored here after.
+
+**Three things the browser caught that no CI gate could**, all now fixed and worth not repeating:
+
+- A grid item's `min-height` is `auto`, so an `<img>` taller than its cell **refuses to shrink** and bleeds over the card's own text. It looked fine at desktop width only because the card clips. Any picture in a grid or flex cell needs `min-h-0` (`min-w-0` for the row axis).
+- A `pointerdown` listener that closes a menu fires **before** the `click` on the item inside it, so every row silently did nothing but shut the menu. Close on a press only when it lands OUTSIDE the menu.
+- The rhythm strip cannot sit on `paper-2`: that colour **is** the ramp's bottom rung, so a trip with nothing told drew an empty box. It goes on the card's own surface, keeping the grid's relationship (bare cells against the page behind them), and an untold day is a 12px stub rather than a 4px one — a told day RISES from a ruler that is always drawn.
+
 **The cover is portable and the pins travel with it**, because they are post ids and posts are in the file — an imported trip lights up on the pieces it was pinned to as its thumbnails come back. The trap this re-proved: `tripDocFromFile` spreads `createTripDoc`, so a portable field forgotten *there* compiles and drops silently. TypeScript caught the other three write/read paths in `trip-file.ts`; that one it cannot. Same fault `applyProjectFile` once had on the studio's intros (`studio.md`).
 
 ## Dates are calendar days, and the arithmetic runs in UTC (2026-08-23)

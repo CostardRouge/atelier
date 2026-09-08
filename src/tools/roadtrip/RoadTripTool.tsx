@@ -530,6 +530,7 @@ export default function RoadTripTool() {
           onOpen={handleOpen}
           timelineSources={seedSources}
           onSeedFrom={(id) => openImport('seed', id)}
+          onChangeOpenTrip={handleChange}
         />
       ) : editingPost ? (
         <PostEditor

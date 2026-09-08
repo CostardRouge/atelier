@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  coverCandidateIds,
   coverTiles,
   dayNumberOf,
   droppedPins,
@@ -290,5 +291,33 @@ describe('rhythmLevel', () => {
     expect(bar(4)).toBe(3);
     expect(bar(7)).toBe(4);
     expect(bar(1, 1)).toBe(4);
+  });
+});
+
+describe('coverCandidateIds', () => {
+  it('asks for the pins and every piece of the busiest days', () => {
+    const doc = trip({
+      posts: [
+        post('2025-03-05', { id: 'a' }),
+        post('2025-03-05', { id: 'b' }),
+        post('2025-03-08', { id: 'c' }),
+        post('2025-03-02', { id: 'quiet' }),
+      ],
+      cover: { layout: 'mosaic', pinned: ['quiet', 'gone'] },
+    });
+    expect(coverCandidateIds(doc, tripCoverage(doc), 2).sort()).toEqual([
+      'a',
+      'b',
+      'c',
+      'gone',
+      'quiet',
+    ]);
+  });
+
+  it('stops at the depth asked for', () => {
+    const doc = trip({
+      posts: [post('2025-03-02'), post('2025-03-05'), post('2025-03-08')],
+    });
+    expect(coverCandidateIds(doc, tripCoverage(doc), 1)).toHaveLength(1);
   });
 });

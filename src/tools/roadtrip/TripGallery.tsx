@@ -1,7 +1,20 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { formatIsoDate, spanLength } from '../../shared/roadtrip/trip-days';
-import { tripCoverage } from '../../shared/roadtrip/trip-coverage';
-import { createTripDoc, type TripDoc } from '../../shared/roadtrip/trip-types';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
+import { formatIsoDate } from '../../shared/roadtrip/trip-days';
+import { tripCoverage, type TripCoverage } from '../../shared/roadtrip/trip-coverage';
+import {
+  coverTiles,
+  rhythmBuckets,
+  rhythmLevel,
+  type CoverTile,
+} from '../../shared/roadtrip/trip-cover';
+import { createTripDoc, type TripCover, type TripDoc } from '../../shared/roadtrip/trip-types';
 import {
   TRIP_FILE_ACCEPT,
   TRIP_FILE_EXTENSION,
@@ -46,6 +59,9 @@ import {
 } from '../../shared/roadtrip/trip-remote';
 import TripDetailsModal, { type TripDetails, type TimelineSourceOption } from './TripDetailsModal';
 import ImportTripModal from './ImportTripModal';
+import TripCoverModal from './TripCoverModal';
+import { HEATMAP_LEVELS } from './heatmap-ramp';
+import useCoverThumbs from './use-cover-thumbs';
 
 interface TripGalleryProps {
   openTripId: string | null;
@@ -53,6 +69,12 @@ interface TripGalleryProps {
   /** Connected Winnows the New trip modal may offer as a seed. */
   timelineSources?: TimelineSourceOption[];
   onSeedFrom?: (sourceId: string) => void;
+  /**
+   * How an edit to the OPEN trip is saved. The tool keeps that document in its
+   * own save machine while the gallery is showing, so a cover written straight
+   * to the store here would be overwritten by its next flush.
+   */
+  onChangeOpenTrip?: (doc: TripDoc) => void;
 }
 
 /**
@@ -76,16 +98,146 @@ function sourceLabel(id: string): string {
   return id === DEFAULT_SOURCE_ID ? 'this browser' : (sourceById(id)?.label ?? id);
 }
 
+/** One row of the card's overflow menu. */
+const menuItem =
+  'text-left font-sans text-[0.78rem] text-ink-soft bg-transparent border-0 px-2.5 py-2 rounded-[10px] cursor-pointer hover:bg-paper-2 hover:text-ink';
+
+/** The bottom-left caption on a picture cover: which day it is looking at. */
+function tileCaption(tile: CoverTile): string {
+  return tile.dayNumber === null ? formatIsoDate(tile.date) : `day ${tile.dayNumber}`;
+}
+
+/**
+ * The trip's own weeks, for a card with no picture to show — a new trip, a
+ * fresh import, an instance whose thumbnails are not mirrored here. Derived
+ * from the coverage the overview already builds, on the same five-rung ramp as
+ * the grid: a trip's card and its grid must not disagree about a day.
+ */
+function RhythmBand({ coverage }: { coverage: TripCoverage }) {
+  const bars = rhythmBuckets(coverage);
+  const gap = coverage.longestGap;
+  return (
+    // On the card's own surface, never on `paper-2`: the ramp's bottom rung IS
+    // `paper-2`, so a trip with nothing told drew an empty box. The strip keeps
+    // the grid's relationship — bare cells against the page behind them.
+    <div className="h-[168px] bg-surface border-b border-line px-3.5 py-3 flex flex-col justify-between">
+      <p className="m-0 font-mono text-[0.62rem] tracking-[0.08em] uppercase text-muted truncate">
+        {coverage.toldDays === 0 ? (
+          `${coverage.totalDays} days, none told yet`
+        ) : gap && gap.length > 1 ? (
+          <>
+            <span className="text-accent-ink">{gap.length} days never told</span>
+            <span className="text-faint"> · </span>
+            {formatIsoDate(gap.start)}
+          </>
+        ) : (
+          `${coverage.toldDays} of ${coverage.totalDays} days told`
+        )}
+      </p>
+      <div className="flex items-end gap-[2px] h-[92px]" aria-hidden="true">
+        {bars.map((bar) => {
+          const level = rhythmLevel(bar);
+          return (
+            <i
+              key={bar.from}
+              className="flex-1 min-w-[3px] rounded-[2px]"
+              // A told day RISES from a ruler that is always drawn: a 4px stub
+              // read as an empty box on a trip with nothing told yet, which is
+              // every trip on its first day.
+              style={{ height: `${12 + (level / 4) * 76}px`, background: HEATMAP_LEVELS[level] }}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * What the card shows of the trip. The layout is what it ASKS for, never a
+ * promise: a mosaic of one is a cover, and a mosaic of none is the rhythm —
+ * `coverTiles` has already resolved which pictures exist, so nothing here can
+ * fail to draw.
+ */
+function CoverArt({
+  trip,
+  coverage,
+  tiles,
+  urls,
+  remoteOnly,
+}: {
+  trip: TripDoc;
+  coverage: TripCoverage;
+  tiles: readonly CoverTile[];
+  urls: ReadonlyMap<string, string>;
+  remoteOnly: boolean;
+}) {
+  if (trip.cover.layout === 'none') return null;
+
+  if (tiles.length === 0) {
+    // A trip kept there and not here holds no thumbnail at all. Saying where
+    // the pictures are beats drawing a shape this device does not own.
+    if (remoteOnly) {
+      return (
+        <div className="h-[168px] bg-paper-2 flex items-center justify-center px-4">
+          <p className="m-0 font-mono text-[0.62rem] tracking-[0.08em] uppercase text-faint text-center leading-[1.7]">
+            pictures live on
+            <br />
+            {sourceLabel(trip.sourceId)}
+          </p>
+        </div>
+      );
+    }
+    return <RhythmBand coverage={coverage} />;
+  }
+
+  const pic = (tile: CoverTile, className: string) => (
+    <img
+      key={tile.postId}
+      src={urls.get(tile.postId)}
+      alt=""
+      loading="lazy"
+      // `min-h-0`: a grid item's `min-height` is `auto`, so an image taller
+      // than its cell refuses to shrink and bleeds over the card's own text —
+      // clipped by the card on a wide screen, plainly visible on a narrow one.
+      className={`block w-full h-full min-h-0 min-w-0 object-cover ${className}`}
+    />
+  );
+
+  return (
+    <div className="relative h-[168px] overflow-hidden bg-paper-2">
+      {tiles.length === 1 ? (
+        pic(tiles[0], '')
+      ) : (
+        <div
+          className={`h-full grid gap-[2px] ${
+            tiles.length === 2 ? 'grid-cols-2' : 'grid-cols-[1.7fr_1fr] grid-rows-2'
+          }`}
+        >
+          {tiles.map((tile, i) => pic(tile, i === 0 && tiles.length > 2 ? 'row-span-2' : ''))}
+        </div>
+      )}
+      <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-b from-transparent to-[rgba(16,15,13,0.52)] pointer-events-none" />
+      <span className="absolute left-3 bottom-2.5 font-mono text-[0.62rem] tracking-[0.1em] uppercase text-paper [text-shadow:0_1px_3px_rgba(0,0,0,0.5)]">
+        {tileCaption(tiles[0])}
+      </span>
+    </div>
+  );
+}
+
 function TripCard({
   trip,
   isOpen,
   remoteOnly,
   moveTargets,
   busy,
+  urls,
+  hasThumb,
   onOpen,
   onExport,
   onDelete,
   onMove,
+  onChooseCover,
 }: {
   trip: TripDoc;
   isOpen: boolean;
@@ -95,16 +247,37 @@ function TripCard({
   moveTargets: readonly SourceInfo[];
   /** A sentence while a move or a delete is under way, or null. */
   busy: string | null;
+  /** The hook pictures this device holds, by post id. */
+  urls: ReadonlyMap<string, string>;
+  hasThumb: (postId: string) => boolean;
   onOpen: () => void;
   onExport: () => void;
   onDelete: () => void;
   onMove: (targetSourceId: string) => void;
+  onChooseCover: () => void;
 }) {
   const [confirming, setConfirming] = useState<'delete' | 'move' | null>(null);
+  const [menu, setMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [moveTo, setMoveTo] = useState(moveTargets[0]?.id ?? '');
   const coverage = tripCoverage(trip);
-  const total = spanLength(trip.startDate, trip.endDate) ?? 0;
+  const total = coverage.totalDays;
   const pct = total > 0 ? Math.round((coverage.toldDays / total) * 100) : 0;
+  const tiles = coverTiles(trip, coverage, hasThumb);
+
+  // A menu that only closes on its own items is a menu you cannot dismiss —
+  // but it must not close on a press INSIDE itself: `pointerdown` lands before
+  // `click`, so unmounting there swallows the item you were pressing (every
+  // row silently did nothing but shut the menu).
+  useEffect(() => {
+    if (!menu) return;
+    const close = (e: PointerEvent) => {
+      if (menuRef.current?.contains(e.target as Node)) return;
+      setMenu(false);
+    };
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
+  }, [menu]);
 
   return (
     <div
@@ -112,158 +285,235 @@ function TripCard({
       // dates and how much of it is told is the thing you point at, and the
       // "Open" button below stays as the keyboard and screen-reader path (and
       // as the one that says "Resume" or "Open here"). Anything already
-      // interactive keeps its own click: the confirm rows, the export and the
-      // move select all sit inside this card.
+      // interactive keeps its own click, through one guard rather than
+      // `stopPropagation` sprinkled over every control: the confirm rows, the
+      // move select, and the overflow menu's own padding.
       onClick={(e) => {
         if (busy !== null) return;
-        if ((e.target as HTMLElement).closest('button, select, input, label, a')) return;
+        if ((e.target as HTMLElement).closest('button, select, input, label, a, [role="menu"]')) {
+          return;
+        }
         onOpen();
       }}
-      className={`flex flex-col gap-3 p-5 bg-surface border rounded-paper-lg shadow-paper-soft transition-[box-shadow,border-color] duration-300 ease-paper hover:shadow-paper ${
+      className={`flex flex-col bg-surface border rounded-paper-lg shadow-paper-soft overflow-hidden transition-[box-shadow,border-color] duration-300 ease-paper hover:shadow-paper ${
         busy === null ? 'cursor-pointer' : ''
       } ${isOpen ? 'border-accent' : 'border-line hover:border-line-strong'} ${
         remoteOnly ? 'opacity-75' : ''
       }`}
     >
-      <div className="min-w-0">
-        <h3 className="m-0 font-serif text-[1.2rem] truncate" title={trip.name}>
-          {trip.name}
-        </h3>
-        <p className="m-0 font-mono text-[0.68rem] text-muted truncate">
-          {trip.destination || 'No destination set'}
-        </p>
+      <div className="relative">
+        <CoverArt
+          trip={trip}
+          coverage={coverage}
+          tiles={tiles}
+          urls={urls}
+          remoteOnly={remoteOnly}
+        />
+        {(isOpen || remoteOnly) && trip.cover.layout !== 'none' && (
+          <span
+            className={`absolute top-2.5 right-2.5 px-2 py-[3px] rounded-full border font-mono text-[0.58rem] tracking-[0.08em] uppercase bg-[rgba(251,248,241,0.92)] ${
+              isOpen ? 'border-accent text-accent-ink' : 'border-line text-muted'
+            }`}
+          >
+            {isOpen ? 'open' : 'not here yet'}
+          </span>
+        )}
       </div>
 
-      <p className="m-0 font-mono text-[0.7rem] tabular-nums text-muted">
-        {formatIsoDate(trip.startDate)} → {formatIsoDate(trip.endDate)}
-        <span className="text-faint"> · </span>
-        {total} day{total === 1 ? '' : 's'}
-      </p>
-
-      {/* Progress reads as "how much of the trip has been told", which is the
-          number the maintainer actually tracks — not how many files exist. */}
-      <div>
-        <div className="h-[6px] rounded-full bg-paper-2 overflow-hidden">
-          <div
-            className="h-full bg-accent transition-[width] duration-500 ease-paper"
-            style={{ width: `${pct}%` }}
-          />
+      <div className="flex flex-col gap-3 p-5">
+        <div className="min-w-0">
+          <h3 className="m-0 font-serif text-[1.2rem] truncate" title={trip.name}>
+            {trip.name}
+          </h3>
+          <p className="m-0 font-mono text-[0.68rem] text-muted truncate">
+            {trip.destination || 'No destination set'}
+          </p>
         </div>
-        <p className="m-0 mt-1.5 font-mono text-[0.66rem] text-muted tabular-nums">
-          {coverage.toldDays}/{total} days told
-          <span className="text-faint"> · </span>
-          {coverage.publishedPosts} published
-        </p>
-      </div>
 
-      {remoteOnly && (
-        <p className="m-0 font-mono text-[0.66rem] text-faint">
-          on {sourceLabel(trip.sourceId)} · not yet on this device
+        {/* The day count moved down to the coverage line: with it here the date
+            line wrapped onto two rows on a narrow card, for a number that
+            belongs beside the days told anyway. */}
+        <p className="m-0 font-mono text-[0.7rem] tabular-nums text-muted truncate">
+          {formatIsoDate(trip.startDate)} → {formatIsoDate(trip.endDate)}
         </p>
-      )}
-      {busy && (
-        <p className="m-0 font-mono text-[0.66rem] text-muted" role="status">
-          {busy}
-        </p>
-      )}
 
-      <div className="flex items-center gap-3 pt-1 flex-wrap">
-        <button
-          type="button"
-          onClick={onOpen}
-          disabled={busy !== null}
-          className="px-3.5 py-[0.45rem] inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.78rem] font-semibold transition-colors duration-200 ease-paper hover:bg-accent hover:border-accent disabled:opacity-50"
-        >
-          {isOpen ? 'Resume' : remoteOnly ? 'Open here' : 'Open'}
-        </button>
-        <span className="flex-1" />
-        {confirming === null && (
-          <>
+        {/* Progress reads as "how much of the trip has been told", which is the
+            number the maintainer actually tracks — not how many files exist. */}
+        <div>
+          <div className="h-[6px] rounded-full bg-paper-2 overflow-hidden">
+            <div
+              className="h-full bg-accent transition-[width] duration-500 ease-paper"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <p className="m-0 mt-1.5 font-mono text-[0.66rem] text-muted tabular-nums">
+            {coverage.toldDays} of {total} day{total === 1 ? '' : 's'} told
+            <span className="text-faint"> · </span>
+            {coverage.publishedPosts} published
+          </p>
+        </div>
+
+        {busy && (
+          <p className="m-0 font-mono text-[0.66rem] text-muted" role="status">
+            {busy}
+          </p>
+        )}
+
+        <div className="relative flex items-center gap-3 pt-1 flex-wrap">
+          <button
+            type="button"
+            onClick={onOpen}
+            disabled={busy !== null}
+            className="px-3.5 py-[0.45rem] inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.78rem] font-semibold transition-colors duration-200 ease-paper hover:bg-accent hover:border-accent disabled:opacity-50"
+          >
+            {isOpen ? 'Resume' : remoteOnly ? 'Open here' : 'Open'}
+          </button>
+          <span className="flex-1" />
+
+          {confirming === null && busy === null && (
             <button
               type="button"
-              onClick={onExport}
-              className="p-0 border-0 bg-transparent text-[0.75rem] text-faint cursor-pointer hover:text-accent-ink"
-              title={`Save the whole trip as a ${TRIP_FILE_EXTENSION} file`}
+              aria-label={`More actions for ${trip.name}`}
+              aria-expanded={menu}
+              aria-haspopup="menu"
+              onClick={(e) => {
+                // The window listener that closes it would swallow this click.
+                e.stopPropagation();
+                setMenu((open) => !open);
+              }}
+              className={`w-[30px] h-[30px] inline-flex items-center justify-center rounded-full border bg-transparent cursor-pointer transition-colors ${
+                menu
+                  ? 'border-line-strong bg-paper-2 text-ink'
+                  : 'border-transparent text-faint hover:border-line hover:bg-paper hover:text-ink-soft'
+              }`}
             >
-              Export
+              <svg width="16" height="16" viewBox="0 0 20 20" aria-hidden="true">
+                <circle cx="4" cy="10" r="1.5" fill="currentColor" />
+                <circle cx="10" cy="10" r="1.5" fill="currentColor" />
+                <circle cx="16" cy="10" r="1.5" fill="currentColor" />
+              </svg>
             </button>
-            {moveTargets.length > 0 && !remoteOnly && (
+          )}
+
+          {menu && (
+            <div
+              ref={menuRef}
+              role="menu"
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setMenu(false);
+              }}
+              className="absolute right-0 bottom-full mb-2 z-10 w-[13rem] flex flex-col p-1.5 bg-surface border border-line-strong rounded-paper shadow-paper"
+            >
               <button
                 type="button"
-                onClick={() => setConfirming('move')}
-                className="p-0 border-0 bg-transparent text-[0.75rem] text-faint cursor-pointer hover:text-accent-ink"
-                title="Keep this trip on another source"
+                role="menuitem"
+                className={menuItem}
+                onClick={() => {
+                  setMenu(false);
+                  onChooseCover();
+                }}
               >
-                Move…
+                Choose a cover…
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setConfirming('delete')}
-              className="p-0 border-0 bg-transparent text-[0.75rem] text-faint cursor-pointer hover:text-[#9a3a23]"
-              aria-label={`Delete ${trip.name}`}
-            >
-              Delete
-            </button>
-          </>
-        )}
-        {confirming === 'delete' && (
-          <span className="flex items-center gap-2 text-[0.75rem]">
-            <button
-              type="button"
-              onClick={() => {
-                setConfirming(null);
-                onDelete();
-              }}
-              className="p-0 border-0 bg-transparent text-[#9a3a23] font-semibold cursor-pointer underline underline-offset-[3px]"
-            >
-              Delete
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirming(null)}
-              className="p-0 border-0 bg-transparent text-muted cursor-pointer"
-            >
-              Keep
-            </button>
-          </span>
-        )}
-        {confirming === 'move' && (
-          <span className="flex items-center gap-2 text-[0.75rem] flex-wrap">
-            <label className="inline-flex items-center gap-1.5 text-muted">
-              to
-              <select
-                value={moveTo}
-                onChange={(e) => setMoveTo(e.target.value)}
-                className="font-sans text-[0.75rem] px-2 py-0.5 border border-line rounded-full bg-paper text-ink focus:outline-none focus:border-accent"
-                aria-label="Move this trip to"
+              <button
+                type="button"
+                role="menuitem"
+                className={menuItem}
+                onClick={() => {
+                  setMenu(false);
+                  onExport();
+                }}
+                title={`Save the whole trip as a ${TRIP_FILE_EXTENSION} file`}
               >
-                {moveTargets.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {sourceLabel(s.id)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              onClick={() => {
-                setConfirming(null);
-                if (moveTo) onMove(moveTo);
-              }}
-              className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px]"
-            >
-              Move
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirming(null)}
-              className="p-0 border-0 bg-transparent text-muted cursor-pointer"
-            >
-              Cancel
-            </button>
-          </span>
-        )}
+                Export the trip file
+              </button>
+              {moveTargets.length > 0 && !remoteOnly && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={menuItem}
+                  onClick={() => {
+                    setMenu(false);
+                    setConfirming('move');
+                  }}
+                >
+                  Keep on another source…
+                </button>
+              )}
+              <span className="h-px bg-line mx-2 my-1.5" />
+              <button
+                type="button"
+                role="menuitem"
+                className={`${menuItem} text-[#9a3a23] hover:bg-accent-wash`}
+                onClick={() => {
+                  setMenu(false);
+                  setConfirming('delete');
+                }}
+              >
+                Delete this trip
+              </button>
+            </div>
+          )}
+
+          {confirming === 'delete' && (
+            <span className="flex items-center gap-2 text-[0.75rem]">
+              <span className="text-muted">Delete for good?</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirming(null);
+                  onDelete();
+                }}
+                className="p-0 border-0 bg-transparent text-[#9a3a23] font-semibold cursor-pointer underline underline-offset-[3px]"
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirming(null)}
+                className="p-0 border-0 bg-transparent text-muted cursor-pointer"
+              >
+                Keep
+              </button>
+            </span>
+          )}
+          {confirming === 'move' && (
+            <span className="flex items-center gap-2 text-[0.75rem] flex-wrap">
+              <label className="inline-flex items-center gap-1.5 text-muted">
+                to
+                <select
+                  value={moveTo}
+                  onChange={(e) => setMoveTo(e.target.value)}
+                  className="font-sans text-[0.75rem] px-2 py-0.5 border border-line rounded-full bg-paper text-ink focus:outline-none focus:border-accent"
+                  aria-label="Move this trip to"
+                >
+                  {moveTargets.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {sourceLabel(s.id)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirming(null);
+                  if (moveTo) onMove(moveTo);
+                }}
+                className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px]"
+              >
+                Move
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirming(null)}
+                className="p-0 border-0 bg-transparent text-muted cursor-pointer"
+              >
+                Cancel
+              </button>
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -285,6 +535,7 @@ export default function TripGallery({
   onOpen,
   timelineSources,
   onSeedFrom,
+  onChangeOpenTrip,
 }: TripGalleryProps) {
   const [trips, setTrips] = useState<TripDoc[] | null>(null);
   const [creating, setCreating] = useState(false);
@@ -292,6 +543,7 @@ export default function TripGallery({
   const [notice, setNotice] = useState<string | null>(null);
   const [remoteLists, setRemoteLists] = useState<Record<string, RemoteList>>({});
   const [busy, setBusy] = useState<Record<string, string>>({});
+  const [covering, setCovering] = useState<TripDoc | null>(null);
 
   const connections = useSyncExternalStore(subscribeWinnowConnections, listWinnowConnections);
   const documentSources = useMemo(() => documentSourcesFor(connections), [connections]);
@@ -299,6 +551,8 @@ export default function TripGallery({
     () => documentSources.filter((s) => isRemoteSource(s.id)).map((s) => s.id),
     [documentSources],
   );
+
+  const { urls, hasThumb } = useCoverThumbs(trips);
 
   const refresh = useCallback(() => {
     void listTrips().then(setTrips);
@@ -438,6 +692,40 @@ export default function TripGallery({
     await deleteThumbs(trip.posts.map((p) => p.id));
     await deleteSyncRecord(trip.id);
     setBusyFor(trip.id, null);
+    refresh();
+  }
+
+  /**
+   * A cover is a trip edit made from the gallery, so it takes the same road a
+   * creation does: written where the trip is KEPT first, mirrored here after.
+   * The open trip is handed back to the tool instead — its save machine holds
+   * that document and would flush over anything written behind it.
+   */
+  async function handleCover(trip: TripDoc, cover: TripCover) {
+    setCovering(null);
+    setNotice(null);
+    const next: TripDoc = { ...trip, cover, updatedAt: Date.now() };
+    if (onChangeOpenTrip && trip.id === openTripId) {
+      onChangeOpenTrip(next);
+      setTrips((cur) => cur?.map((t) => (t.id === next.id ? next : t)) ?? cur);
+      return;
+    }
+    if (isRemoteSource(next.sourceId)) {
+      const remote = remoteFor(next.sourceId);
+      if (!remote) {
+        setNotice(`Connect ${next.sourceId} to change this cover — the trip is kept there.`);
+        return;
+      }
+      setBusyFor(next.id, `saving on ${remote.label}…`);
+      const rec = await pushTrip(remote, next, (await getSyncRecord(next.id)) ?? null);
+      setBusyFor(next.id, null);
+      if (rec.status !== 'synced') {
+        const why = rec.error ? `: ${rec.error}` : '';
+        setNotice(`Could not save to ${remote.label}${why} — the cover is unchanged.`);
+        return;
+      }
+    }
+    await putTrip(next);
     refresh();
   }
 
@@ -599,10 +887,13 @@ export default function TripGallery({
                         remoteOnly={false}
                         moveTargets={moveTargets}
                         busy={busy[trip.id] ?? null}
+                        urls={urls}
+                        hasThumb={hasThumb}
                         onOpen={() => onOpen(trip)}
                         onExport={() => handleExport(trip)}
                         onDelete={() => void handleDelete(trip, null)}
                         onMove={(target) => void handleMove(trip, target)}
+                        onChooseCover={() => setCovering(trip)}
                       />
                     ))}
                     {remoteOnly.map((row) => (
@@ -613,10 +904,13 @@ export default function TripGallery({
                         remoteOnly
                         moveTargets={[]}
                         busy={busy[row.doc.id] ?? null}
+                        urls={urls}
+                        hasThumb={hasThumb}
                         onOpen={() => void handleOpenRemote(row)}
                         onExport={() => handleExport(row.doc)}
                         onDelete={() => void handleDelete(row.doc, row.etag)}
                         onMove={() => undefined}
+                        onChooseCover={() => setCovering(row.doc)}
                       />
                     ))}
                   </div>
@@ -625,6 +919,14 @@ export default function TripGallery({
             );
           })}
         </div>
+      )}
+
+      {covering && (
+        <TripCoverModal
+          trip={covering}
+          onCancel={() => setCovering(null)}
+          onSave={(cover) => void handleCover(covering, cover)}
+        />
       )}
 
       {importing && (
