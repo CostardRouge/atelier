@@ -17,6 +17,7 @@ import {
 import { formatIsoDate, spanLength } from '../../shared/roadtrip/trip-days';
 import { PLACE_ARROW, stageLabel } from '../../shared/roadtrip/trip-places';
 import type { TripDoc, TripStage } from '../../shared/roadtrip/trip-types';
+import useDialogKeys from '../../shared/ui/use-dialog-keys';
 
 /**
  * What the panel is for: creating a trip from the timeline, narrowed to the
@@ -156,13 +157,6 @@ export default function TimelineImportPanel({
   const [selected, setSelected] = useState<ReadonlySet<string> | null>(null);
   const [accepted, setAccepted] = useState<ReadonlySet<string> | null>(null);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onCancel]);
 
   // One request, on open: the chapters. Nothing else crosses the wire here.
   useEffect(() => {
@@ -229,6 +223,18 @@ export default function TimelineImportPanel({
     const result = applyTimelineDiff(mode.trip, entries, ticked);
     onApply(result.trip, result.spanWidened);
   }
+
+  // Enter runs whichever of the two the panel is showing, and only when its
+  // button would be enabled — the same conditions, read once.
+  const tickedActionable = [...ticked].filter((k) => actionable.some((e) => e.key === k)).length;
+  const canGo =
+    mode.kind === 'seed'
+      ? Boolean(imported?.span) && name.trim().length > 0
+      : entries.length > 0 && tickedActionable > 0;
+  useDialogKeys({
+    onCancel,
+    onConfirm: !canGo ? null : mode.kind === 'seed' ? seed : apply,
+  });
 
   const title = mode.kind === 'seed' ? `New trip from ${connection.id}` : `Complete from ${connection.id}`;
   const warnings = imported?.warnings ?? [];
@@ -351,9 +357,6 @@ export default function TimelineImportPanel({
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') seed();
-                }}
                 placeholder="Australie"
                 className={input}
               />
@@ -416,7 +419,7 @@ export default function TimelineImportPanel({
             <button
               type="button"
               onClick={seed}
-              disabled={!imported?.span || !name.trim()}
+              disabled={!canGo}
               className="mt-4 px-[1.1rem] py-2 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold hover:bg-accent hover:border-accent disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Create trip
@@ -425,10 +428,10 @@ export default function TimelineImportPanel({
             <button
               type="button"
               onClick={apply}
-              disabled={!entries.length || [...ticked].filter((k) => actionable.some((e) => e.key === k)).length === 0}
+              disabled={!canGo}
               className="mt-4 px-[1.1rem] py-2 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold hover:bg-accent hover:border-accent disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Apply {[...ticked].filter((k) => actionable.some((e) => e.key === k)).length || ''}
+              Apply {tickedActionable || ''}
             </button>
           )}
         </div>

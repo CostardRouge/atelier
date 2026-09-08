@@ -6,6 +6,7 @@ import { exifTimestampFromIso } from '../shared/sources/winnow/exif-from-row';
 import { isoFromExifDateTime } from '../shared/roadtrip/media-date';
 import { formatIsoDate } from '../shared/roadtrip/trip-days';
 import { formatBytes, formatDuration } from '../shared/lib/format';
+import useDialogKeys from '../shared/ui/use-dialog-keys';
 
 interface WinnowLightboxProps {
   connection: WinnowConnection;
@@ -64,8 +65,7 @@ export default function WinnowLightbox({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-      else if (e.key === 'ArrowLeft') step(-1);
+      if (e.key === 'ArrowLeft') step(-1);
       else if (e.key === 'ArrowRight') step(1);
       else return;
       e.preventDefault();
@@ -80,10 +80,17 @@ export default function WinnowLightbox({
     };
   }, [onClose, step]);
 
-  if (!row) return null;
-
-  const have = inLibrary.get(`${connection.id}/${row.id}`);
+  const have = row ? inLibrary.get(`${connection.id}/${row.id}`) : undefined;
   const busy = picker.fetching !== null;
+
+  // Escape closes the lightbox; Enter does the one thing it offers — and
+  // nothing at all once the picture is already in the library.
+  useDialogKeys({
+    onCancel: onClose,
+    onConfirm: row && !have && !busy ? () => void picker.pick(row) : null,
+  });
+
+  if (!row) return null;
   const isVideo = row.media_type === 'video';
 
   // The capture as the camera wrote it — the app's standing rule: the hour on

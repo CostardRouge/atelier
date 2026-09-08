@@ -28,6 +28,7 @@ import {
   type BrowseView,
 } from '../shared/sources/winnow/browse-state';
 import { formatBytes } from '../shared/lib/format';
+import useDialogKeys from '../shared/ui/use-dialog-keys';
 
 /** How many times a thumbnail is asked for again before the tile gives up. */
 const THUMB_RETRIES = 3;
@@ -215,19 +216,14 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
   const [landed, setLanded] = useState(() => remembered !== null);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
     // Under 820px this is a full-screen sheet, and a page still scrolling
     // behind it drags the whole screen while a grid of tiles is swiped.
     const bodyOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
-      window.removeEventListener('keydown', onKey);
       document.body.style.overflow = bodyOverflow;
     };
-  }, [onClose]);
+  }, []);
 
   // The filter values, once: the pickers offer what the library actually holds.
   useEffect(() => {
@@ -417,6 +413,13 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
   );
   const heading =
     chosenDay ?? chosenSession?.name ?? (chosenChapter ? chapterLabel(chosenChapter) : null);
+
+  // Escape closes the sheet; Enter runs its one action, on exactly the
+  // condition the button carries — nothing ticked, nothing to fetch.
+  useDialogKeys({
+    onCancel: onClose,
+    onConfirm: picked.length && progress === null ? () => void add() : null,
+  });
 
   /**
    * What a leg's rows really are. Winnow serves no chapter filter, so the

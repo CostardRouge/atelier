@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import PlaceSearchField from '../../shared/map/PlaceSearchField';
+import useDialogKeys from '../../shared/ui/use-dialog-keys';
 import { PLACE_ARROW, tripRouteEnds } from '../../shared/roadtrip/trip-places';
 import { hasImpact, spanImpact } from '../../shared/roadtrip/trip-edit';
 import { spanLength, todayIso } from '../../shared/roadtrip/trip-days';
@@ -110,11 +111,6 @@ export default function TripDetailsModal({
 
   useEffect(() => {
     (nameRef.current ?? startRef.current)?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
     // Mount-only: the modal is short-lived.
   }, []);
 
@@ -148,6 +144,10 @@ export default function TripDetailsModal({
     if (!canSubmit) return;
     onSubmit({ name, destination, startDate, endDate, from, to, sourceId });
   }
+
+  // Enter saves from any field — the dates are the reason: typing one and
+  // reaching for the mouse is the gesture this sheet is all about.
+  useDialogKeys({ onCancel, onConfirm: canSubmit ? submit : null });
 
   return (
     <div
@@ -201,9 +201,6 @@ export default function TripDetailsModal({
               ref={nameRef}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') submit();
-              }}
               placeholder="Australie"
               className={input}
             />

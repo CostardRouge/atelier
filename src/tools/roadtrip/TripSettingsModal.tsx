@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { downloadBlob } from '../../shared/media/save';
 import SectionLegend from '../../shared/ui/SectionLegend';
+import useDialogKeys from '../../shared/ui/use-dialog-keys';
 import type { CtaLayout } from '../../shared/roadtrip/cta-slide';
 import {
   DEFAULT_BADGE_WORDS,
@@ -90,14 +91,10 @@ export default function TripSettingsModal({
     setShowRail(false);
   }, [section]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-    // Mount-only: the sheet is short-lived, like the studio's own modals.
-  }, [onClose]);
+  // Nothing here is applied on a button — the trip is written on every
+  // keystroke — so the sheet's primary action IS closing it: Enter says
+  // "done" from any field, and Escape dismisses it.
+  useDialogKeys({ onCancel: onClose, onConfirm: onClose });
 
   const patchWords = (patch: Partial<BadgeWords>) =>
     onChangeTrip({ ...trip, badgeWords: { ...trip.badgeWords, ...patch } });

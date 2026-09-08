@@ -7,6 +7,7 @@ import {
 } from '../../shared/projects/project-file';
 import { pickFile } from '../../shared/sources/file-sources';
 import SectionLegend from '../../shared/ui/SectionLegend';
+import useDialogKeys from '../../shared/ui/use-dialog-keys';
 import { NO_SHIFT, type TimeShift } from '../../shared/telemetry/time-format';
 import {
   describeTimeScale,
@@ -97,11 +98,6 @@ export default function ProjectSettingsModal({
 
   useEffect(() => {
     nameRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
     // Mount-only: the modal is short-lived.
   }, []);
 
@@ -128,6 +124,11 @@ export default function ProjectSettingsModal({
   function apply() {
     onApply(draft());
   }
+
+  // Enter applies from any field. Never while an imported file is waiting for
+  // its own answer ("Replace the settings" / "Keep mine"): a question on
+  // screen is what Enter would be answering, and it must not guess.
+  useDialogKeys({ onCancel, onConfirm: pending ? null : apply });
 
   /** Read a chosen file; a bad one explains itself instead of throwing. */
   async function chooseFile() {
@@ -170,9 +171,6 @@ export default function ProjectSettingsModal({
             ref={nameRef}
             value={draftName}
             onChange={(e) => setDraftName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') apply();
-            }}
             className="font-sans text-[0.95rem] px-3.5 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent max-[560px]:text-[1rem]"
           />
         </label>

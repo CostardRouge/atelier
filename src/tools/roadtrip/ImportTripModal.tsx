@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { TRIP_FILE_EXTENSION } from '../../shared/roadtrip/trip-file';
 import { DEFAULT_SOURCE_ID, type SourceInfo } from '../../shared/sources/source';
+import useDialogKeys from '../../shared/ui/use-dialog-keys';
 
 interface ImportTripModalProps {
   /**
@@ -32,13 +33,12 @@ export default function ImportTripModal({ sources, onCancel, onChooseFile }: Imp
 
   useEffect(() => {
     buttonRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
     // Mount-only: the modal is short-lived.
   }, []);
+
+  // The CTA starts focused, so Enter usually fires it natively; this is for
+  // the press that lands anywhere else — the source picker, mostly.
+  useDialogKeys({ onCancel, onConfirm: () => onChooseFile(target) });
 
   return (
     <div

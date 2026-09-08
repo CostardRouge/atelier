@@ -10,6 +10,7 @@ import {
 } from '../../shared/projects/project-types';
 import { hashedMediaRefs } from '../../shared/projects/media-identity';
 import { DEFAULT_SOURCE_ID, type SourceInfo } from '../../shared/sources/source';
+import useDialogKeys from '../../shared/ui/use-dialog-keys';
 
 export interface NewProjectChoices {
   name: string;
@@ -66,11 +67,6 @@ export default function NewProjectModal({
   useEffect(() => {
     nameRef.current?.focus();
     nameRef.current?.select();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
     // Mount-only: the modal is short-lived.
   }, []);
 
@@ -100,6 +96,10 @@ export default function NewProjectModal({
     });
   }
 
+  // Enter creates from any field; Escape cancels. Not while the folder picker
+  // is open — the native dialog owns the keyboard then.
+  useDialogKeys({ onCancel, onConfirm: picking ? null : submit });
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[rgba(20,18,15,0.45)] backdrop-blur-[2px]"
@@ -124,9 +124,6 @@ export default function NewProjectModal({
             ref={nameRef}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') submit();
-            }}
             className="font-sans text-[0.95rem] px-3.5 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent max-[560px]:text-[1rem]"
           />
         </label>
