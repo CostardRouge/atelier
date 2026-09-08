@@ -5,8 +5,11 @@ import {
   clampZoom,
   scrollAfterZoom,
   stepZoom,
+  growthRatio,
+  minScaleToFill,
   zoomByPinch,
   wheelZooms,
+  zoomFloor,
   zoomByWheel,
   zoomLabel,
   zoomedFit,
@@ -96,13 +99,81 @@ describe('scrollAfterZoom', () => {
     // A 30px rail, the pointer 100px into the viewport, 70px of scaled content
     // before it: doubling puts that content at 140, so the scroll is 30 + 140
     // - 100 = 70 — not the 100 the rail-less formula would give.
-    const next = scrollAfterZoom({ left: 0, top: 0 }, { x: 100, y: 0 }, 1, 2, { x: 30 });
+    const next = scrollAfterZoom({ left: 0, top: 0 }, { x: 100, y: 0 }, 1, 2, {
+      fixed: { x: 30 },
+    });
     expect(next.left).toBe(70);
+  });
+
+  it('follows the content, not the scale, when a zone is frozen', () => {
+    // The ruler at its 6px floor: the track did not move, so neither may the
+    // scroll — the scale ratio alone would have yanked it by a quarter.
+    const scroll = { left: 500, top: 0 };
+    const next = scrollAfterZoom(scroll, { x: 200, y: 0 }, 1, 1.25, { grew: { x: 1 } });
+    expect(next.left).toBe(500);
   });
 
   it('leaves the scroll alone on a nonsense previous scale', () => {
     const scroll = { left: 12, top: 34 };
     expect(scrollAfterZoom(scroll, { x: 0, y: 0 }, 0, 2)).toBe(scroll);
+  });
+});
+
+describe('a zone floor', () => {
+  it('is held inside the range and never above fit', () => {
+    expect(zoomFloor()).toBe(MIN_STAGE_ZOOM);
+    expect(zoomFloor(0.1)).toBe(MIN_STAGE_ZOOM);
+    expect(zoomFloor(2)).toBe(1);
+    expect(zoomFloor(0.6)).toBe(0.6);
+  });
+
+  it('stops every way of zooming out', () => {
+    expect(clampZoom(0.3, 0.6)).toBe(0.6);
+    expect(stepZoom(0.62, -1, 0.6)).toBe(0.6);
+    expect(zoomByWheel(0.6, 200, 0.6)).toBe(0.6);
+    expect(zoomByPinch(0.6, 0.5, 0.6)).toBe(0.6);
+  });
+});
+
+describe('minScaleToFill', () => {
+  it('lands on 1 for a zone whose fit IS 100%', () => {
+    // The stage ruler: its day width is the box's own share of the trip.
+    expect(minScaleToFill((s) => 800 * s, 800)).toBe(1);
+  });
+
+  it('floors nothing when the content already overflows at the bottom', () => {
+    // A 616-day ruler is 3696px wide at every scale down there.
+    expect(minScaleToFill(() => 3696, 460)).toBe(MIN_STAGE_ZOOM);
+  });
+
+  it('stops at 1 for content that never fills the box', () => {
+    // A short trip's grid on a wide screen: 2 columns of 17px.
+    expect(minScaleToFill((s) => 2 * 17 * s, 900)).toBe(1);
+  });
+
+  it('finds a staircase\'s step, and never lands a pixel short', () => {
+    const width = (s: number) => 45 * (Math.max(4, Math.round(14 * s)) + Math.max(1, Math.round(3 * s)));
+    const floor = minScaleToFill(width, 390);
+    expect(width(floor)).toBeGreaterThanOrEqual(390);
+    expect(width(floor - 0.02)).toBeLessThan(390);
+  });
+
+  it('floors nothing before the box is measured', () => {
+    expect(minScaleToFill((s) => 800 * s, 0)).toBe(MIN_STAGE_ZOOM);
+  });
+});
+
+describe('growthRatio', () => {
+  it('is how much the content really grew', () => {
+    expect(growthRatio(100, 250, 9)).toBe(2.5);
+  });
+
+  it('is 1 for content that did not move, whatever the scales did', () => {
+    expect(growthRatio(3696, 3696, 1.25)).toBe(1);
+  });
+
+  it('falls back on a zone that has not measured yet', () => {
+    expect(growthRatio(0, 100, 1.25)).toBe(1.25);
   });
 });
 

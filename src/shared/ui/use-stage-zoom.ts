@@ -27,8 +27,11 @@ import {
   MAX_STAGE_ZOOM,
   MIN_STAGE_ZOOM,
   clampZoom,
+  growthRatio,
+  minScaleToFill,
   scrollAfterZoom,
   stepZoom,
+  zoomFloor,
   zoomByPinch,
   wheelZooms,
   zoomByWheel,
@@ -49,6 +52,20 @@ export interface StageZoomOptions {
    * grid's weekday rail. Only affects where the zoom leaves the scroll.
    */
   fixed?: { x?: number; y?: number };
+  /**
+   * The zone's own content width at a scale, rail excluded. Two things come
+   * out of it: the zoom stops going out once the content no longer fills the
+   * box (below that the browser has no scroll to give, so nothing can hold the
+   * thing under the pointer), and the scroll correction learns how much the
+   * content REALLY grew — a staircase, wherever a zone rounds to whole pixels.
+   */
+  contentWidth?: (scale: number, viewport: { width: number; height: number }) => number;
+  /**
+   * A floor the zone declares outright, for one it knows without measuring:
+   * the stage ruler will not go under 100%, where a day is already as narrow
+   * as it may be drawn. Held inside the range and never above 1.
+   */
+  minScale?: number;
 }
 
 export interface StageZoom {
@@ -70,11 +87,18 @@ export interface StageZoom {
   fit: { maxWidth: string; maxHeight: string };
 }
 
-export function useStageZoom({ wheel = 'modifier', fixed }: StageZoomOptions = {}): StageZoom {
-  // Read through a ref so a caller passing a fresh object literal cannot
-  // re-run the layout effect.
+export function useStageZoom({
+  wheel = 'modifier',
+  fixed,
+  contentWidth,
+  minScale,
+}: StageZoomOptions = {}): StageZoom {
+  // Read through refs so a caller passing a fresh object or arrow literal
+  // cannot re-run the effects.
   const fixedRef = useRef(fixed);
   fixedRef.current = fixed;
+  const contentRef = useRef(contentWidth);
+  contentRef.current = contentWidth;
   const viewportRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const scaleRef = useRef(1);
@@ -101,14 +125,35 @@ export function useStageZoom({ wheel = 'modifier', fixed }: StageZoomOptions = {
     return () => ro.disconnect();
   }, []);
 
-  // The scroll correction owed to the next layout: where the anchor was, and
-  // the scale the scroll box is STILL showing. Applied after React has resized
-  // the stage.
-  const pending = useRef<{ x: number; y: number; prev: number } | null>(null);
+  // How far out this zone may go: whichever is higher of the floor it declares
+  // and the scale at which its content stops filling the box. Derived every
+  // render — the viewport is state, so a resize moves it — and kept in a ref
+  // for the gesture handlers, which are attached once.
+  const fx = fixed?.x ?? 0;
+  const floor = zoomFloor(
+    Math.max(
+      minScale ?? MIN_STAGE_ZOOM,
+      contentWidth
+        ? minScaleToFill((s) => fx + contentWidth(s, viewport), viewport.width)
+        : MIN_STAGE_ZOOM,
+    ),
+  );
+  const floorRef = useRef(floor);
+  floorRef.current = floor;
+
+  // The scroll correction owed to the next layout: where the anchor was, the
+  // scale the scroll box is STILL showing, and the scroll it was showing it
+  // at. Applied after React has resized the stage.
+  const pending = useRef<{
+    x: number;
+    y: number;
+    prev: number;
+    scroll: { left: number; top: number };
+  } | null>(null);
 
   const zoomTo = useCallback((next: number, anchor?: { clientX: number; clientY: number }) => {
     const prev = scaleRef.current;
-    const z = clampZoom(next);
+    const z = clampZoom(next, floorRef.current);
     if (z === prev) return;
     const el = viewportRef.current;
     if (el) {
@@ -122,6 +167,12 @@ export function useStageZoom({ wheel = 'modifier', fixed }: StageZoomOptions = {
         // one the last event started from, or a fast scroll drifts a little
         // further off the pointer with every notch.
         prev: pending.current?.prev ?? prev,
+        // And from the scroll it had THEN. Reading it back after the layout
+        // works while the content grows and lies when it shrinks: the browser
+        // has already clamped the scroll into the smaller content, so the
+        // correction projects a position that was never asked for — measured,
+        // a zoom-out that overshot the floor jumped to the start of the track.
+        scroll: pending.current?.scroll ?? { left: el.scrollLeft, top: el.scrollTop },
       };
     }
     scaleRef.current = z;
@@ -133,12 +184,26 @@ export function useStageZoom({ wheel = 'modifier', fixed }: StageZoomOptions = {
     const owed = pending.current;
     pending.current = null;
     if (!el || !owed) return;
+    // How much the content actually grew between the scale the box is still
+    // laid out at and the one it is going to. A zone that is proportional to
+    // the scale says nothing and gets the scale ratio.
+    const content = contentRef.current;
+    const box = { width: el.clientWidth, height: el.clientHeight };
+    const grew = content
+      ? {
+          x: growthRatio(
+            content(owed.prev, box),
+            content(scale, box),
+            scale / owed.prev,
+          ),
+        }
+      : undefined;
     const next = scrollAfterZoom(
-      { left: el.scrollLeft, top: el.scrollTop },
+      owed.scroll,
       owed,
       owed.prev,
       scale,
-      fixedRef.current,
+      { fixed: fixedRef.current, grew },
     );
     el.scrollLeft = next.left;
     el.scrollTop = next.top;
@@ -153,7 +218,7 @@ export function useStageZoom({ wheel = 'modifier', fixed }: StageZoomOptions = {
     const onWheel = (e: WheelEvent) => {
       if (!wheelZooms(e, wheel)) return;
       e.preventDefault();
-      zoomTo(zoomByWheel(scaleRef.current, e.deltaY), e);
+      zoomTo(zoomByWheel(scaleRef.current, e.deltaY, floorRef.current), e);
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
@@ -201,7 +266,7 @@ export function useStageZoom({ wheel = 'modifier', fixed }: StageZoomOptions = {
       el.scrollTop -= after.y - before.y;
       const distance = spread();
       if (gesture.distance > 0) {
-        zoomTo(zoomByPinch(gesture.scale, distance / gesture.distance), {
+        zoomTo(zoomByPinch(gesture.scale, distance / gesture.distance, floorRef.current), {
           clientX: after.x,
           clientY: after.y,
         });
@@ -227,15 +292,26 @@ export function useStageZoom({ wheel = 'modifier', fixed }: StageZoomOptions = {
     };
   }, [zoomTo]);
 
-  const zoomIn = useCallback(() => zoomTo(stepZoom(scaleRef.current, 1)), [zoomTo]);
-  const zoomOut = useCallback(() => zoomTo(stepZoom(scaleRef.current, -1)), [zoomTo]);
+  const zoomIn = useCallback(() => zoomTo(stepZoom(scaleRef.current, 1, floorRef.current)), [zoomTo]);
+  const zoomOut = useCallback(
+    () => zoomTo(stepZoom(scaleRef.current, -1, floorRef.current)),
+    [zoomTo],
+  );
   const reset = useCallback(() => zoomTo(1), [zoomTo]);
+
+  // A box that grows under a zoomed-out zone raises the floor. Going back
+  // through `zoomTo` rather than setting the scale queues the usual scroll
+  // correction, anchored on the box's centre, so the content grows back about
+  // its middle instead of snapping to the left edge.
+  useEffect(() => {
+    if (scaleRef.current < floor) zoomTo(floor);
+  }, [floor, zoomTo]);
 
   return {
     scale,
     label: zoomLabel(scale),
     canZoomIn: scale < MAX_STAGE_ZOOM,
-    canZoomOut: scale > MIN_STAGE_ZOOM,
+    canZoomOut: scale > floor,
     zoomIn,
     zoomOut,
     reset,

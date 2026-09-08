@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MIN_DAY,
   STAGE_TINTS,
   dayAtOffset,
   dayOffset,
   laneCount,
   rulerBars,
+  rulerDayWidth,
   rulerGaps,
   rulerMonths,
+  rulerTrackWidth,
   stageTint,
 } from './stage-ruler';
 import { createTripStage, type TripStage } from './trip-types';
@@ -124,5 +127,27 @@ describe('stageTint', () => {
     expect(stageTint(0)).toBe(STAGE_TINTS[0]);
     expect(stageTint(STAGE_TINTS.length)).toBe(STAGE_TINTS[0]);
     for (let i = 0; i < 8; i += 1) expect(stageTint(i)).not.toBe(stageTint(i + 1));
+  });
+});
+
+describe('rulerDayWidth', () => {
+  it('gives the box its exact share of a trip that fits', () => {
+    expect(rulerDayWidth(900, 100, 1)).toBe(9);
+  });
+
+  it('never draws a day under 6px at 100%', () => {
+    // 616 days in a 460px box wants 0.75px a day.
+    expect(rulerDayWidth(460, 616, 1)).toBe(MIN_DAY);
+  });
+
+  it('is strictly proportional to the zoom, floor included', () => {
+    // The old clamp-after-zoom froze this track from 25% to 800%.
+    expect(rulerDayWidth(460, 616, 2)).toBe(MIN_DAY * 2);
+    expect(rulerDayWidth(460, 616, 0.5)).toBe(MIN_DAY / 2);
+    expect(rulerTrackWidth(900, 100, 2) / rulerTrackWidth(900, 100, 1)).toBe(2);
+  });
+
+  it('falls back to the minimum before the box is measured', () => {
+    expect(rulerDayWidth(0, 100, 1)).toBe(MIN_DAY);
   });
 });

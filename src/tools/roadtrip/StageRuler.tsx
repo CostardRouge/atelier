@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import {
   insertStageInOrder,
   resizeStage,
@@ -10,6 +10,7 @@ import {
   dayOffset,
   laneCount,
   rulerBars,
+  rulerDayWidth,
   rulerGaps,
   rulerMonths,
   stageTint,
@@ -49,8 +50,6 @@ const BAR = 34;
 const LANE_GAP = 4;
 const AXIS = 18;
 const HANDLE = 10;
-/** Narrowest a day may get before the track scrolls instead of shrinking. */
-const MIN_DAY = 6;
 
 interface Drag {
   id: string;
@@ -103,7 +102,10 @@ export default function StageRuler({
   // costing the ruler a row of its own.
   const scroller = zoom.viewportRef;
   const track = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
+  // The box's width is the ZOOM's measurement, not a second one of our own:
+  // the day width drawn here and the floor the zoom enforces have to be read
+  // off the same number, or they disagree about when the track fills the box.
+  const width = zoom.viewport.width;
   const drag = useRef<Drag | null>(null);
   const [pin, setPin] = useState<Pin | null>(null);
   // Where the playhead is while it is being dragged. The route is written on
@@ -115,27 +117,17 @@ export default function StageRuler({
   // sliding a leg does not also open it.
   const swallowClick = useRef(false);
 
-  useEffect(() => {
-    const el = scroller.current;
-    if (!el) return;
-    const measure = () => setWidth(el.clientWidth);
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [scroller]);
-
   if (total === null) return null;
 
   const bars = rulerBars(trip);
   const gaps = rulerGaps(trip, bars);
   const months = rulerMonths(trip);
   const lanes = Math.max(1, laneCount(bars));
-  // A day is as wide as the ruler's share of the track, times the zoom: at
-  // 100% the whole trip fits, and zooming in makes a single day wide enough to
-  // grab an edge on. The 6px floor stays the floor at every scale — a bar
-  // thinner than that cannot be dragged.
-  const dayW = Math.max(MIN_DAY, width > 0 ? (width / total) * zoom.scale : MIN_DAY);
+  // A day is the box's share of the trip — or 6px, on a trip too long for the
+  // box to give it that — times the zoom (`rulerDayWidth`). The panel floors
+  // the zoom at 100%, so a day is never DRAWN under 6px and a leg can always
+  // be grabbed by an edge.
+  const dayW = rulerDayWidth(width, total, zoom.scale);
   const trackW = dayW * total;
   const lanesTop = HEAD;
   const lanesH = lanes * BAR + (lanes - 1) * LANE_GAP;

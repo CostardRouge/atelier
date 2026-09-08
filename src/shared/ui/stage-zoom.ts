@@ -19,9 +19,22 @@ export const MAX_STAGE_ZOOM = 16;
 /** One press of + or −. */
 export const STAGE_ZOOM_STEP = 1.25;
 
-export function clampZoom(scale: number): number {
+/**
+ * A zone's own floor, held inside the range and never above 1.
+ *
+ * A zone raises the floor when zooming out further would show nothing new —
+ * its content is already smaller than the box it sits in, and below that point
+ * the browser has no scroll to give, so the thing under the pointer cannot be
+ * held still. Capping at 1 is what keeps 100% and the reset button reachable
+ * whatever a zone asks for.
+ */
+export function zoomFloor(min?: number): number {
+  return Math.min(1, Math.max(MIN_STAGE_ZOOM, min ?? MIN_STAGE_ZOOM));
+}
+
+export function clampZoom(scale: number, min?: number): number {
   if (!Number.isFinite(scale)) return 1;
-  return Math.min(MAX_STAGE_ZOOM, Math.max(MIN_STAGE_ZOOM, scale));
+  return Math.min(MAX_STAGE_ZOOM, Math.max(zoomFloor(min), scale));
 }
 
 /**
@@ -29,10 +42,10 @@ export function clampZoom(scale: number): number {
  * value the author keeps coming back to, and a geometric ladder from 1.25
  * never hits it again.
  */
-export function stepZoom(scale: number, direction: 1 | -1): number {
+export function stepZoom(scale: number, direction: 1 | -1, min?: number): number {
   const next = direction === 1 ? scale * STAGE_ZOOM_STEP : scale / STAGE_ZOOM_STEP;
   if ((scale < 1 && next > 1) || (scale > 1 && next < 1)) return 1;
-  return clampZoom(next);
+  return clampZoom(next, min);
 }
 
 /**
@@ -40,14 +53,53 @@ export function stepZoom(scale: number, direction: 1 | -1): number {
  * multiplier. Exponential so the gesture feels the same at every scale, and
  * the same 400-unit divisor the picture's own framing zoom uses.
  */
-export function zoomByWheel(scale: number, deltaY: number): number {
-  return clampZoom(scale * Math.exp(-deltaY / 400));
+export function zoomByWheel(scale: number, deltaY: number, min?: number): number {
+  return clampZoom(scale * Math.exp(-deltaY / 400), min);
 }
 
 /** A pinch's finger-distance ratio applied to the scale it started from. */
-export function zoomByPinch(startScale: number, ratio: number): number {
-  if (!Number.isFinite(ratio) || ratio <= 0) return clampZoom(startScale);
-  return clampZoom(startScale * ratio);
+export function zoomByPinch(startScale: number, ratio: number, min?: number): number {
+  if (!Number.isFinite(ratio) || ratio <= 0) return clampZoom(startScale, min);
+  return clampZoom(startScale * ratio, min);
+}
+
+/**
+ * The smallest scale at which a zone still fills its box — its floor.
+ *
+ * `width` is the zone's own content width at a scale, and must never shrink as
+ * the scale grows (both zones are built from `max` and `round`, which hold
+ * that). A bisection rather than algebra because a zone's width is a staircase,
+ * not a line: the grid rounds its cells to whole pixels. The invariant is that
+ * `hi` always fills, so the answer never lands a pixel short of filling.
+ *
+ * A box that has not been measured yet floors nothing.
+ */
+export function minScaleToFill(
+  width: (scale: number) => number,
+  viewportWidth: number,
+): number {
+  if (!(viewportWidth > 0)) return MIN_STAGE_ZOOM;
+  if (width(MIN_STAGE_ZOOM) >= viewportWidth) return MIN_STAGE_ZOOM;
+  if (width(1) < viewportWidth) return 1;
+  let lo = MIN_STAGE_ZOOM;
+  let hi = 1;
+  for (let i = 0; i < 24; i += 1) {
+    const mid = (lo + hi) / 2;
+    if (width(mid) >= viewportWidth) hi = mid;
+    else lo = mid;
+  }
+  return hi;
+}
+
+/**
+ * How much the scaling content really grew, which is NOT the ratio of the two
+ * scales whenever a zone has a pixel floor or rounds to whole pixels: a ruler
+ * whose days are already at their minimum does not move at all while the scale
+ * doubles. `fallback` is the scale ratio, for a zone that is genuinely linear.
+ */
+export function growthRatio(prevWidth: number, nextWidth: number, fallback: number): number {
+  if (!(prevWidth > 0) || !(nextWidth > 0)) return fallback;
+  return nextWidth / prevWidth;
 }
 
 export interface StageScroll {
@@ -63,26 +115,38 @@ export interface StageScroll {
  * viewport; while it still fits it is centred and the scroll is 0 anyway, which
  * is what the clamp at 0 covers.
  */
-export function scrollAfterZoom(
-  scroll: StageScroll,
-  anchor: { x: number; y: number },
-  prevScale: number,
-  nextScale: number,
+export interface ScrollAfterZoom {
   /**
    * Pixels of content before the part that scales — the day grid's weekday
    * rail, which keeps its width at every zoom. Without it the correction
    * treats the rail as if it grew too, and the day under the pointer slides by
    * the rail's width times the zoom.
    */
-  fixed: { x?: number; y?: number } = {},
+  fixed?: { x?: number; y?: number };
+  /**
+   * How much the scaling content actually grew, when the zone knows (see
+   * `growthRatio`). Absent, the scale ratio is used — right only for a zone
+   * whose content is strictly proportional to the scale.
+   */
+  grew?: { x?: number; y?: number };
+}
+
+export function scrollAfterZoom(
+  scroll: StageScroll,
+  anchor: { x: number; y: number },
+  prevScale: number,
+  nextScale: number,
+  { fixed = {}, grew = {} }: ScrollAfterZoom = {},
 ): StageScroll {
   if (prevScale <= 0) return scroll;
-  const k = nextScale / prevScale;
+  const ratio = nextScale / prevScale;
+  const kx = grew.x ?? ratio;
+  const ky = grew.y ?? ratio;
   const fx = fixed.x ?? 0;
   const fy = fixed.y ?? 0;
   return {
-    left: Math.max(0, fx + (scroll.left + anchor.x - fx) * k - anchor.x),
-    top: Math.max(0, fy + (scroll.top + anchor.y - fy) * k - anchor.y),
+    left: Math.max(0, fx + (scroll.left + anchor.x - fx) * kx - anchor.x),
+    top: Math.max(0, fy + (scroll.top + anchor.y - fy) * ky - anchor.y),
   };
 }
 

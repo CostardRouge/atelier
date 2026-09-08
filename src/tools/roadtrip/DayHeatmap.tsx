@@ -7,6 +7,7 @@ import {
   todayIso,
   type IsoDate,
 } from '../../shared/roadtrip/trip-days';
+import { HEATMAP_FIXED, heatmapColumn, heatmapWidth } from '../../shared/roadtrip/day-grid';
 import { POST_KINDS } from '../../shared/roadtrip/trip-types';
 import StageZoomControl from '../../shared/ui/StageZoomControl';
 import { useStageZoom } from '../../shared/ui/use-stage-zoom';
@@ -52,11 +53,6 @@ interface Menu {
   y: number;
 }
 
-/** The cell and its gutter at 100%; both follow the grid's zoom. */
-const CELL = 14;
-const GAP = 3;
-/** The weekday rail and the gap after it — the width the zoom never touches. */
-const RAIL = { x: 26 + 8 };
 
 /**
  * Five steps from bare paper to the vermilion accent. The rungs are the
@@ -129,21 +125,34 @@ export default function DayHeatmap({
   const [menu, setMenu] = useState<Menu | null>(null);
   // The grid's zoom: a 310-day trip is 45 columns of 14px, and the days are
   // what the maintainer sweeps. Zooming in gives a cell big enough to aim at;
-  // zooming out puts a long trip on one screen. Rounded to whole pixels, so
-  // the cells and their gutters stay on the same lattice at every scale.
-  // `fixed`: the weekday rail (26px) and the gap after it keep their width at
-  // every zoom, so the zoom's scroll correction must not count them as content
-  // that grew — else the day under the pointer slides by that much.
-  const zoom = useStageZoom({ wheel: 'any', fixed: RAIL });
-  const cellPx = Math.max(4, Math.round(CELL * zoom.scale));
-  const gapPx = Math.max(1, Math.round(GAP * zoom.scale));
+  // zooming out puts a long trip on one screen.
+  //
+  // `fixed` — the weekday rail keeps its width at every zoom, so the scroll
+  // correction must not count it as content that grew. `contentWidth` — the
+  // grid rounds its cells to whole pixels, so it is a staircase, not a line:
+  // the zoom needs it both to know how much the grid REALLY grew and to stop
+  // going out once the grid no longer fills the box (`day-grid.ts`).
+  const zoom = useStageZoom({
+    wheel: 'any',
+    fixed: HEATMAP_FIXED,
+    contentWidth: (scale) => heatmapWidth(weeks.length, scale),
+  });
+  const { cellPx, gapPx } = heatmapColumn(zoom.scale);
 
   if (!weeks.length) return null;
 
   const columnWidth = cellPx + gapPx;
 
   return (
+    <div className="flex flex-col">
+    {/* The scroll box holds the GRID alone: the legend and the zoom below it
+        used to ride inside it and scroll away sideways on a zoomed trip. The
+        inner wrapper is `w-fit min-w-full`, so the grid is centred while it is
+        narrower than the box — there is no scroll to hold a day still there,
+        and growing about the middle at least keeps the view where it was —
+        and starts at the corner once it overflows. */}
     <div ref={zoom.viewportRef} className="overflow-x-auto pb-1">
+      <div className="w-fit min-w-full flex justify-center">
       <div className="inline-flex gap-2">
         {/* Weekday rail — every other row, the way a calendar is skimmed. */}
         <div
@@ -241,6 +250,8 @@ export default function DayHeatmap({
           </div>
         </div>
       </div>
+      </div>
+    </div>
 
       {hovered && !menu && <DayCard hovered={hovered} />}
       {menu && <DayMenu menu={menu} onClose={() => setMenu(null)} />}

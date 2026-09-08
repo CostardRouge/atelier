@@ -197,7 +197,14 @@ export default function StagesPanel({
 }: StagesPanelProps) {
   // The ruler's zoom lives here so its control can ride this row instead of
   // costing the track a row of its own beneath it.
-  const zoom = useStageZoom({ wheel: 'any' });
+  //
+  // `minScale: 1` — 100% is as far out as the ruler goes. Its day width is the
+  // box's own share of the trip (or 6px, whichever is larger), so below 100%
+  // either the track stops filling the box, where nothing can hold the day
+  // under the pointer, or days fall under the width a leg's edge can be
+  // grabbed at. Zooming out from there would show nothing the track is not
+  // already showing.
+  const zoom = useStageZoom({ wheel: 'any', minScale: 1 });
   const selectedIndex = trip.stages.findIndex((s) => s.id === selectedId);
   const selected = selectedIndex >= 0 ? trip.stages[selectedIndex] : null;
 

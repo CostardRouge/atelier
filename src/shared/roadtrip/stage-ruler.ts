@@ -147,6 +147,26 @@ export function rulerMonths(trip: Pick<TripDoc, 'startDate' | 'endDate'>): Ruler
   return out;
 }
 
+/**
+ * Narrowest a day may be drawn at 100%. A bar thinner than this cannot be
+ * grabbed by an edge, so it is the BASE the zoom multiplies, not a clamp
+ * applied after it: clamping after froze the whole track — a 616-day trip in a
+ * 460px box drew the same 3696px picture from 25% to 800%, while the zoom's
+ * scroll correction kept moving as if it had grown.
+ */
+export const MIN_DAY = 6;
+
+/** A day's width on the track: the box's share of it, or 6px, times the zoom. */
+export function rulerDayWidth(viewportWidth: number, total: number, scale: number): number {
+  const fitted = viewportWidth > 0 && total > 0 ? viewportWidth / total : MIN_DAY;
+  return Math.max(MIN_DAY, fitted) * scale;
+}
+
+/** The whole track's width — what tells the zoom how much the content grew. */
+export function rulerTrackWidth(viewportWidth: number, total: number, scale: number): number {
+  return rulerDayWidth(viewportWidth, total, scale) * total;
+}
+
 /** The day at a fraction of the track's width, clamped to the trip. */
 export function dayAtOffset(
   trip: Pick<TripDoc, 'startDate' | 'endDate'>,
