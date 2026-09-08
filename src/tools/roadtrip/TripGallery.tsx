@@ -295,7 +295,7 @@ function TripCard({
         }
         onOpen();
       }}
-      className={`flex flex-col bg-surface border rounded-paper-lg shadow-paper-soft overflow-hidden transition-[box-shadow,border-color] duration-300 ease-paper hover:shadow-paper ${
+      className={`group flex flex-col bg-surface border rounded-paper-lg shadow-paper-soft overflow-hidden transition-[box-shadow,border-color] duration-300 ease-paper hover:shadow-paper ${
         busy === null ? 'cursor-pointer' : ''
       } ${isOpen ? 'border-accent' : 'border-line hover:border-line-strong'} ${
         remoteOnly ? 'opacity-75' : ''
@@ -317,6 +317,36 @@ function TripCard({
           >
             {isOpen ? 'open' : 'not here yet'}
           </span>
+        )}
+        {/* The cover offers its own verb. It lived only in the overflow menu,
+            where nothing said a cover was a choice at all — a picker you have
+            to already know about is a picker nobody finds. The menu keeps the
+            item as the keyboard and touch path. */}
+        {trip.cover.layout !== 'none' && busy === null && (
+          <button
+            type="button"
+            onClick={onChooseCover}
+            className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line bg-[rgba(251,248,241,0.92)] text-ink-soft font-mono text-[0.58rem] tracking-[0.08em] uppercase cursor-pointer opacity-0 transition-opacity duration-200 ease-paper group-hover:opacity-100 focus-visible:opacity-100 hover:border-accent hover:text-accent-ink"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect
+                x="3.5"
+                y="5.5"
+                width="17"
+                height="13"
+                rx="2"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+              <path
+                d="M4.5 16.5 9 12.5l3.5 3 3-2.5 4 3.5"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Cover
+          </button>
         )}
       </div>
 

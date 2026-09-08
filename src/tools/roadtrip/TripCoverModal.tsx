@@ -24,11 +24,11 @@ interface TripCoverModalProps {
   onSave: (cover: TripCover) => void;
 }
 
-const LAYOUTS: Array<{ id: CoverLayout; label: string; note: string }> = [
-  { id: 'mosaic', label: 'Mosaic', note: 'Three pieces, so the trip reads as a place.' },
-  { id: 'cover', label: 'Cover', note: 'One picture, filling the card.' },
-  { id: 'rhythm', label: 'Rhythm', note: 'No picture: the trip’s own weeks.' },
-  { id: 'none', label: 'None', note: 'The compact card, for a screen full of trips.' },
+const LAYOUTS: Array<{ id: CoverLayout; label: string; needs: string; note: string }> = [
+  { id: 'mosaic', label: 'Mosaic', needs: '3 pictures', note: 'Three pieces, so the trip reads as a place.' },
+  { id: 'cover', label: 'Cover', needs: '1 picture', note: 'One picture, filling the card.' },
+  { id: 'rhythm', label: 'Rhythm', needs: 'your days', note: 'No picture: the trip’s own weeks.' },
+  { id: 'none', label: 'None', needs: 'no cover', note: 'The compact card, for a screen full of trips.' },
 ];
 
 const legend = 'm-0 font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted';
@@ -127,19 +127,32 @@ export default function TripCoverModal({ trip, onCancel, onSave }: TripCoverModa
                   trip={trip}
                   urls={preview.map((t) => urls.get(t.postId))}
                 />
-                <span
-                  className={`block py-1.5 font-mono text-[0.58rem] tracking-[0.08em] uppercase ${
-                    layout === option.id ? 'text-accent-ink' : 'text-muted'
-                  }`}
-                >
-                  {option.label}
+                <span className="block px-2 py-1.5 border-t border-line">
+                  <span
+                    className={`block font-sans text-[0.78rem] font-semibold ${
+                      layout === option.id ? 'text-accent-ink' : 'text-ink-soft'
+                    }`}
+                  >
+                    {option.label}
+                  </span>
+                  <span className="block font-mono text-[0.56rem] tracking-[0.06em] uppercase text-faint">
+                    {option.needs}
+                  </span>
                 </span>
               </button>
             ))}
           </div>
+          {urls.size === 0 && (
+            <p className="m-0 text-[0.76rem] text-muted leading-relaxed">
+              No piece of this trip has a picture on this device yet, so Mosaic
+              and Cover have nothing to draw — the card falls back to the trip’s
+              rhythm until one does. A piece bakes its picture the first time you
+              open it in the editor.
+            </p>
+          )}
         </div>
 
-        {COVER_TILES[layout] > 0 && (
+        {COVER_TILES[layout] > 0 && choices.length > 0 && (
           <div className="flex flex-col gap-2">
             <p className={legend}>Pinned pieces</p>
             <p className="m-0 text-[0.78rem] text-ink-soft leading-relaxed">
@@ -147,13 +160,7 @@ export default function TripCoverModal({ trip, onCancel, onSave }: TripCoverModa
               busiest days — clear them all and the cover follows the trip on its
               own.
             </p>
-            {choices.length === 0 ? (
-              <p className="m-0 text-[0.78rem] text-muted">
-                No piece of this trip has a picture on this device yet. The card
-                draws the trip’s rhythm until one does.
-              </p>
-            ) : (
-              <div className="flex flex-wrap gap-2 max-h-[13rem] overflow-auto p-0.5">
+            <div className="flex flex-wrap gap-2 max-h-[13rem] overflow-auto p-0.5">
                 {choices.map((post) => {
                   const rank = pinned.indexOf(post.id);
                   const day = dayNumberOf(trip, post.date);
@@ -187,8 +194,7 @@ export default function TripCoverModal({ trip, onCancel, onSave }: TripCoverModa
                     </button>
                   );
                 })}
-              </div>
-            )}
+            </div>
           </div>
         )}
 
@@ -252,7 +258,18 @@ function LayoutPreview({
     url ? (
       <img src={url} alt="" className={`block w-full h-full min-h-0 min-w-0 object-cover ${className}`} />
     ) : (
-      <span className={`block w-full h-full bg-paper-2 ${className}`} />
+      // An empty slot must read as a picture SLOT, not as a blank card: a flat
+      // fill made the whole picker look broken on a trip with no thumbnails
+      // yet, which is every trip before its first piece is composed.
+      <span
+        className={`flex items-center justify-center w-full h-full bg-paper-2 border border-line text-faint ${className}`}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="3.5" y="5.5" width="17" height="13" rx="2" stroke="currentColor" strokeWidth="1.6" />
+          <circle cx="9" cy="10" r="1.6" fill="currentColor" />
+          <path d="M4.5 16.5 9 12.5l3.5 3 3-2.5 4 3.5" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+        </svg>
+      </span>
     );
 
   if (id === 'mosaic') {
