@@ -38,6 +38,7 @@ import {
   zoomLabel,
   zoomedFit,
   type WheelZoom,
+  type ZoomControls,
 } from './stage-zoom';
 
 export interface StageZoomOptions {
@@ -68,15 +69,7 @@ export interface StageZoomOptions {
   minScale?: number;
 }
 
-export interface StageZoom {
-  /** 1 = the picture at its fitted size. */
-  scale: number;
-  label: string;
-  canZoomIn: boolean;
-  canZoomOut: boolean;
-  zoomIn: () => void;
-  zoomOut: () => void;
-  reset: () => void;
+export interface StageZoom extends ZoomControls {
   /** Two fingers are on the stage: ignore drags until they lift. */
   pinching: boolean;
   /** Put this on the scroll box that holds the stage. */

@@ -1,4 +1,4 @@
-import type { StageZoom } from './use-stage-zoom';
+import type { ZoomControls } from './stage-zoom';
 
 /**
  * The − 100% + pill that sits in the corner of an editor stage.
@@ -10,12 +10,17 @@ import type { StageZoom } from './use-stage-zoom';
  * The percentage is a button — pressing it returns to the fitted size — and it
  * is the only place that says a zoom is on, so it stays visible at 100% too:
  * a control that appears only once you are lost is not a way out.
+ *
+ * `hint` is the gesture the surface really offers: the stages zoom on a
+ * modifier only, the lightbox on a bare wheel too.
  */
 export default function StageZoomControl({
   zoom,
+  hint = '⌘/ctrl + wheel, or pinch',
   className = '',
 }: {
-  zoom: StageZoom;
+  zoom: ZoomControls;
+  hint?: string;
   className?: string;
 }) {
   const button =
@@ -33,7 +38,7 @@ export default function StageZoomControl({
         className={button}
         onClick={zoom.zoomOut}
         disabled={!zoom.canZoomOut}
-        title="Zoom out (⌘/ctrl + wheel, or pinch)"
+        title={`Zoom out (${hint})`}
         aria-label="Zoom out"
       >
         −
@@ -53,7 +58,7 @@ export default function StageZoomControl({
         className={button}
         onClick={zoom.zoomIn}
         disabled={!zoom.canZoomIn}
-        title="Zoom in (⌘/ctrl + wheel, or pinch)"
+        title={`Zoom in (${hint})`}
         aria-label="Zoom in"
       >
         +

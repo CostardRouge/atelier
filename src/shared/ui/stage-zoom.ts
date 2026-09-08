@@ -183,6 +183,24 @@ export function wheelZooms(e: WheelLike, mode: WheelZoom): boolean {
   return Math.abs(e.deltaY) > Math.abs(e.deltaX);
 }
 
+/**
+ * What `StageZoomControl` needs to drive a zoom, and all it needs.
+ *
+ * Named apart from `StageZoom` because the pill has a second consumer that is
+ * not a stage: the lightbox's viewer (`use-media-viewer.ts`) zooms by
+ * transform and has no scroll box, no viewport and no fit to hand out.
+ */
+export interface ZoomControls {
+  /** 1 = the content at its fitted size. */
+  scale: number;
+  label: string;
+  canZoomIn: boolean;
+  canZoomOut: boolean;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  reset: () => void;
+}
+
 /** "100%" — what the control shows between its two buttons. */
 export function zoomLabel(scale: number): string {
   return `${Math.round(scale * 100)}%`;

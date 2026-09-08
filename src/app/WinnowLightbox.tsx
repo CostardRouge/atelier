@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { WinnowAssetRow, WinnowClient } from '../shared/sources/winnow/client';
 import type { WinnowConnection } from '../shared/sources/winnow/store';
 import type { InstancePicker } from '../shared/sources/winnow/use-pick';
@@ -7,6 +7,13 @@ import { isoFromExifDateTime } from '../shared/roadtrip/media-date';
 import { formatIsoDate } from '../shared/roadtrip/trip-days';
 import { formatBytes, formatDuration } from '../shared/lib/format';
 import useDialogKeys from '../shared/ui/use-dialog-keys';
+import StageZoomControl from '../shared/ui/StageZoomControl';
+import {
+  DECK_GAP,
+  DECK_SETTLE_MS,
+  useMediaViewer,
+  type MediaViewer,
+} from '../shared/ui/use-media-viewer';
 
 interface WinnowLightboxProps {
   connection: WinnowConnection;
@@ -23,13 +30,14 @@ interface WinnowLightboxProps {
 }
 
 /**
- * One picture from the instance, large.
+ * One picture from the instance, large — and looked at properly: pinch or
+ * wheel to zoom, drag to pan, swipe to the next one.
  *
  * The Library's tiles are 74px, which is enough to recognise a frame you
  * already know and not enough to choose between two of them. Where nothing on
  * screen is waiting for a picture — a trip's overview, a day picked by hand —
  * a click therefore opens this instead of downloading: the day is read here,
- * arrow by arrow, and only the picture that wins gets fetched (the button
+ * gesture by gesture, and only the picture that wins gets fetched (the button
  * below, which is the grid's own `pick`).
  *
  * Which of the two a click does is the publisher's call, not this component's:
@@ -51,22 +59,20 @@ export default function WinnowLightbox({
   picker,
 }: WinnowLightboxProps) {
   const row = rows[index] ?? null;
-  const [loaded, setLoaded] = useState(false);
-  useEffect(() => setLoaded(false), [row?.id]);
 
-  const step = useCallback(
-    (delta: number) => {
-      if (rows.length === 0) return;
-      // Wrapping: a day is a loop you sweep, not a list with two dead ends.
-      onIndex((index + delta + rows.length) % rows.length);
-    },
-    [index, onIndex, rows.length],
-  );
+  // The row already knows the picture's size, so the pan limits are right
+  // before a single byte of it has arrived.
+  const viewer = useMediaViewer({
+    count: rows.length,
+    index,
+    onIndex,
+    natural: row?.width && row?.height ? { width: row.width, height: row.height } : null,
+  });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') step(-1);
-      else if (e.key === 'ArrowRight') step(1);
+      if (e.key === 'ArrowLeft') viewer.pageBy(-1);
+      else if (e.key === 'ArrowRight') viewer.pageBy(1);
       else return;
       e.preventDefault();
     };
@@ -78,7 +84,7 @@ export default function WinnowLightbox({
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = bodyOverflow;
     };
-  }, [onClose, step]);
+  }, [viewer.pageBy]);
 
   const have = row ? inLibrary.get(`${connection.id}/${row.id}`) : undefined;
   const busy = picker.fetching !== null;
@@ -108,14 +114,14 @@ export default function WinnowLightbox({
     row.has_telemetry ? 'flight log' : null,
   ].filter(Boolean);
 
-  const arrow = (label: string, delta: number, d: string) => (
+  const arrow = (label: string, delta: -1 | 1, d: string) => (
     <button
       type="button"
-      onClick={() => step(delta)}
+      onClick={() => viewer.pageBy(delta)}
       disabled={rows.length < 2}
       aria-label={label}
       title={`${label} (${delta < 0 ? '←' : '→'})`}
-      className="flex-none self-center w-9 h-9 grid place-items-center rounded-full border border-line bg-surface text-ink-soft hover:text-accent hover:border-line-strong disabled:opacity-40 disabled:cursor-default cursor-pointer transition-colors"
+      className="flex-none self-center w-9 h-9 grid place-items-center rounded-full border border-line bg-surface text-ink-soft hover:text-accent hover:border-line-strong disabled:opacity-40 disabled:cursor-default cursor-pointer transition-colors max-[820px]:hidden"
     >
       <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
         <path
@@ -163,47 +169,59 @@ export default function WinnowLightbox({
           {facts.join(' · ')}
         </p>
 
-        {/* The frame. Fixed by the panel, so paging never resizes the sheet.
-            `items-stretch` + `self-stretch`, never `h-full`: a percentage
-            height inside a `flex-1 min-h-0` column has nothing definite to
-            resolve against, so `max-h-full` measured nothing and the picture
-            was cut by the `overflow-hidden` instead of fitting in it. The
-            media then fills that box and is CONTAINED by `object-contain`,
-            which is also what gives a clip its aspect ratio — a `<video>`
-            with no fit takes its own default box and drew square. */}
+        {/* The deck. Its slot is fixed by the panel, so paging never resizes
+            the sheet, and it is what the gestures measure themselves against:
+            `absolute inset-0` inside a `flex-1 min-h-0` wrapper, never a
+            percentage height, which has nothing definite to resolve against
+            in a flex column and left the picture cut by `overflow-hidden`. */}
         <div className="flex-1 min-h-0 flex items-stretch justify-center gap-3">
           {arrow('Previous', -1, 'M10 3.5 5.5 8 10 12.5')}
-          <div className="relative flex-1 min-w-0 min-h-0 self-stretch bg-frame rounded-paper overflow-hidden">
-            {isVideo ? (
-              <video
-                key={row.id}
-                src={client.proxyUrl(row.id)}
-                poster={client.thumbUrl(row.id)}
-                crossOrigin="use-credentials"
-                controls
-                // Metadata only: opening a day should not stream every clip.
-                preload="metadata"
-                className="absolute inset-0 w-full h-full object-contain"
-              />
-            ) : (
-              <>
-                <img
-                  key={row.id}
-                  src={client.proxyUrl(row.id)}
-                  alt={row.filename}
-                  crossOrigin="use-credentials"
-                  onLoad={() => setLoaded(true)}
-                  className={`absolute inset-0 w-full h-full object-contain block transition-opacity ${
-                    loaded ? 'opacity-100' : 'opacity-0'
-                  }`}
-                />
-                {!loaded && (
-                  <span className="absolute inset-0 grid place-items-center font-mono text-[0.66rem] text-muted">
-                    loading…
-                  </span>
-                )}
-              </>
-            )}
+          <div className="relative flex-1 min-w-0 min-h-0 self-stretch">
+            <div
+              ref={viewer.viewportRef}
+              // `touch-none`: the deck answers every touch itself, and a
+              // native scroll or page zoom underneath would fight the pinch.
+              className={`absolute inset-0 overflow-hidden bg-frame rounded-paper touch-none select-none ${
+                viewer.zoomed ? (viewer.dragging ? 'cursor-grabbing' : 'cursor-grab') : ''
+              }`}
+            >
+              <div
+                className="absolute inset-0"
+                style={{
+                  transform: `translate3d(${viewer.offset}px, 0, 0)`,
+                  transition: viewer.settling
+                    ? `transform ${DECK_SETTLE_MS}ms var(--ease-paper)`
+                    : undefined,
+                }}
+              >
+                {viewer.slots.map(({ slot, index: at }) => (
+                  <div
+                    // With three media or more each slot holds a different
+                    // row, so keying by it lets React carry the neighbour's
+                    // loaded picture into the middle: the page shows no
+                    // reload. With two, both neighbours ARE the same row and
+                    // the key has to be the slot instead.
+                    key={rows.length >= 3 ? rows[at].id : slot}
+                    className="absolute inset-0"
+                    style={{
+                      transform: `translateX(calc(${slot * 100}% + ${slot * DECK_GAP}px))`,
+                    }}
+                  >
+                    <DeckSlide
+                      row={rows[at]}
+                      client={client}
+                      active={slot === 0}
+                      viewer={viewer}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <StageZoomControl
+              zoom={viewer.zoom}
+              hint="wheel, or pinch"
+              className="absolute bottom-2 right-2 z-10"
+            />
           </div>
           {arrow('Next', 1, 'M6 3.5 10.5 8 6 12.5')}
         </div>
@@ -245,5 +263,88 @@ export default function WinnowLightbox({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * One slot of the deck.
+ *
+ * Only the middle one is the media itself; the two beside it are the still the
+ * instance already has — the proxy for a picture (the very URL the middle slot
+ * will want, so paging costs nothing), the thumbnail for a clip. A neighbour
+ * that mounted a `<video>` would start fetching a second stream to be looked
+ * at for the length of a swipe.
+ */
+function DeckSlide({
+  row,
+  client,
+  active,
+  viewer,
+}: {
+  row: WinnowAssetRow;
+  client: WinnowClient;
+  active: boolean;
+  viewer: MediaViewer;
+}) {
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => setLoaded(false), [row.id]);
+  const isVideo = row.media_type === 'video';
+
+  const framed = {
+    transform: active ? viewer.transform : undefined,
+    // A finger is followed frame by frame; a button is animated.
+    transition:
+      active && viewer.viewSettling ? `transform ${DECK_SETTLE_MS}ms var(--ease-paper)` : undefined,
+  };
+  const fill = 'absolute inset-0 w-full h-full object-contain block';
+
+  if (isVideo && active) {
+    return (
+      <video
+        key={row.id}
+        src={client.proxyUrl(row.id)}
+        poster={client.thumbUrl(row.id)}
+        crossOrigin="use-credentials"
+        controls
+        // Metadata only: opening a day should not stream every clip.
+        preload="metadata"
+        style={framed}
+        onLoadedMetadata={(e) =>
+          viewer.onMeasured({
+            width: e.currentTarget.videoWidth,
+            height: e.currentTarget.videoHeight,
+          })
+        }
+        className={fill}
+      />
+    );
+  }
+
+  return (
+    <>
+      <img
+        key={row.id}
+        src={isVideo ? client.thumbUrl(row.id) : client.proxyUrl(row.id)}
+        alt={row.filename}
+        crossOrigin="use-credentials"
+        draggable={false}
+        style={framed}
+        onLoad={(e) => {
+          setLoaded(true);
+          if (active) {
+            viewer.onMeasured({
+              width: e.currentTarget.naturalWidth,
+              height: e.currentTarget.naturalHeight,
+            });
+          }
+        }}
+        className={`${fill} transition-opacity ${loaded ? 'opacity-100' : 'opacity-0'}`}
+      />
+      {!loaded && active && (
+        <span className="absolute inset-0 grid place-items-center font-mono text-[0.66rem] text-muted">
+          loading…
+        </span>
+      )}
+    </>
   );
 }
