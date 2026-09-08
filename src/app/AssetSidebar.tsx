@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Tool } from './tools';
 import WinnowBrowser from './WinnowBrowser';
 import WinnowLightbox from './WinnowLightbox';
+import MediaLightbox, { type LightboxItem } from '../shared/ui/MediaLightbox';
 import WinnowScopeGrid from './WinnowScopeGrid';
 import { navigate } from './use-hash-route';
 import { useWinnowConnection } from '../shared/sources/winnow/use-connection';
+import type { LibraryHalf } from '../shared/sources/winnow/client';
 import { useScopeRows } from '../shared/sources/winnow/use-scope-rows';
 import { usePickFromInstance } from '../shared/sources/winnow/use-pick';
 import { useMediaScope } from '../shared/sources/media-scope';
@@ -13,7 +15,7 @@ import {
   useAssetLibrary,
   type MediaMeta,
 } from '../shared/library/AssetLibraryContext';
-import type { Asset, AssetKind } from '../shared/library/assets';
+import { isRawImage, type Asset, type AssetKind } from '../shared/library/assets';
 import { assetRemoteId, splitAssetsBySource } from '../shared/library/asset-source';
 import {
   assetUsableBy,
@@ -35,6 +37,7 @@ import {
   timeScaleTag,
 } from '../shared/telemetry/time-scale';
 import { useInViewport } from '../shared/lib/use-in-viewport';
+import { useObjectUrls } from '../shared/lib/use-object-urls';
 import {
   filesFromDataTransfer,
   pickDirectory,
@@ -78,6 +81,30 @@ function readTab(): SourceTab {
     return 'local';
   }
 }
+
+/**
+ * Which half of the instance's library the tab lists, remembered like the tab
+ * itself. `null` is both halves and is the DEFAULT: the tab has always sent no
+ * `kind`, and a remembered narrowing that made yesterday's files disappear
+ * would read as media gone missing rather than as a filter.
+ */
+const HALF_KEY = 'atelier.library.winnow.half';
+
+function readHalf(): LibraryHalf | null {
+  try {
+    const v = localStorage.getItem(HALF_KEY);
+    return v === 'incoming' || v === 'final' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The three cells, in Winnow's own words — see `LibraryHalf`. */
+const HALVES: { key: LibraryHalf | null; label: string; hint: string }[] = [
+  { key: null, label: 'All', hint: 'Incoming and Gallery together' },
+  { key: 'incoming', label: 'Incoming', hint: 'Media still to cull' },
+  { key: 'final', label: 'Gallery', hint: 'Finished exports' },
+];
 
 const legend = 'font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted';
 const linkBtn =
@@ -135,8 +162,18 @@ export default function AssetSidebar({
   const [manualDay, setManualDay] = useState<string>(() => todayIso());
   const from = published?.from ?? manualDay;
   const to = published?.to ?? manualDay;
+  // Which half of the instance's library, sent with the span (never applied to
+  // the answer: the row cap truncates before a local filter could run).
+  const [half, setHalf] = useState<LibraryHalf | null>(readHalf);
+  useEffect(() => {
+    try {
+      localStorage.setItem(HALF_KEY, half ?? 'all');
+    } catch {
+      /* preference only */
+    }
+  }, [half]);
   // Asked only while the tab is open: a tab nobody looks at costs no request.
-  const scopeRows = useScopeRows(client, connection?.id ?? null, from, to, remoteTab);
+  const scopeRows = useScopeRows(client, connection?.id ?? null, from, to, remoteTab, half);
 
   // The pool, split by where each asset came from.
   const split = useMemo(() => splitAssetsBySource(lib.assets), [lib.assets]);
@@ -174,7 +211,7 @@ export default function AssetSidebar({
   // Which of those is open large, or null. Closed by anything that changes
   // what the list IS: another span, another tab, another filter.
   const [preview, setPreview] = useState<number | null>(null);
-  useEffect(() => setPreview(null), [from, to, remoteTab, q]);
+  useEffect(() => setPreview(null), [from, to, remoteTab, q, half]);
   /**
    * A click on a tile shows the picture rather than fetching it, unless the
    * tool that named the span says a slide is waiting for one
@@ -197,6 +234,44 @@ export default function AssetSidebar({
     lib.assets,
     lib.selection,
   ).length;
+
+  // --- What this tab lists, and the pool asset open large over it ----------
+  // Derived up here, before the collapsed rail returns: the preview's hooks
+  // may not sit behind a conditional return.
+  const tabAssets = remoteTab ? outOfScope : split.local;
+  const shown = useMemo(
+    () => tabAssets.filter((a) => !q || a.baseName.toLowerCase().includes(q)),
+    [tabAssets, q],
+  );
+  /** Of those, the ones there is something to look AT — a picture or a clip. */
+  const viewable = useMemo(() => shown.filter((a) => a.parts.image || a.parts.video), [shown]);
+  const [viewing, setViewing] = useState<number | null>(null);
+  useEffect(() => setViewing(null), [remoteTab, q]);
+  /**
+   * Object URLs for the open asset and its neighbours only. The deck mounts
+   * three slots and one more each side covers the settle, so five files are
+   * pinned at a time however large the library is.
+   */
+  const viewWindow = useMemo(() => {
+    const files = new Map<string, File>();
+    if (viewing === null || viewable.length === 0) return files;
+    for (let d = -2; d <= 2; d += 1) {
+      const asset = viewable[(viewing + d + viewable.length) % viewable.length];
+      const file = asset?.parts.image ?? asset?.parts.video;
+      if (asset && file) files.set(asset.id, file);
+    }
+    return files;
+  }, [viewable, viewing]);
+  const viewUrls = useObjectUrls(viewWindow);
+  const viewItems = useMemo(
+    () => viewable.map((a) => lightboxItem(a, lib.meta.get(a.id), viewUrls.get(a.id) ?? null)),
+    [viewable, lib.meta, viewUrls],
+  );
+  /** Open the sheet on one asset, by id — the rows know nothing of indices. */
+  const view = (id: string) => {
+    const at = viewable.findIndex((a) => a.id === id);
+    if (at >= 0) setViewing(at);
+  };
 
   async function run(pick: () => Promise<File[]>) {
     setBusy(true);
@@ -273,11 +348,8 @@ export default function AssetSidebar({
   }
 
   // --- Expanded panel -------------------------------------------------------
-  const matches = (a: Asset) => !q || a.baseName.toLowerCase().includes(q);
-  // The rows this tab lists: the local pool, or the instance's assets the
-  // span does not already show as tiles.
-  const tabAssets = remoteTab ? outOfScope : split.local;
-  const shown = tabAssets.filter(matches);
+  // `shown` — the rows this tab lists: the local pool, or the instance's
+  // assets the span does not already show as tiles — is derived above.
   const tabPool = remoteTab ? remoteAssets : split.local;
   const allSelected =
     tabPool.length > 0 && tabPool.every((a) => lib.selection.has(a.id));
@@ -435,6 +507,7 @@ export default function AssetSidebar({
               count={scopeRows.rows?.length ?? null}
             />
           )}
+          <HalfPicker half={half} onHalf={setHalf} />
         </div>
       )}
 
@@ -448,6 +521,37 @@ export default function AssetSidebar({
           onClose={() => setPreview(null)}
           inLibrary={inLibrary}
           picker={picker}
+        />
+      )}
+
+      {viewing !== null && viewItems[viewing] && (
+        <MediaLightbox
+          items={viewItems}
+          index={viewing}
+          onIndex={setViewing}
+          onClose={() => setViewing(null)}
+          from="in your library"
+          footer={
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                type="button"
+                onClick={() => {
+                  activate(viewable[viewing].id);
+                  setViewing(null);
+                }}
+                className="font-mono text-[0.64rem] tracking-[0.1em] uppercase px-3 py-1.5 rounded-full bg-ink text-paper cursor-pointer"
+              >
+                Use in {tool.label}
+              </button>
+              <span className="text-[0.74rem] text-muted min-w-0 truncate">
+                read from your disk — nothing uploaded
+              </span>
+            </div>
+          }
+          onConfirm={() => {
+            activate(viewable[viewing].id);
+            setViewing(null);
+          }}
         />
       )}
 
@@ -534,6 +638,7 @@ export default function AssetSidebar({
               onEnsure={() => lib.ensureMeta(a.id)}
               onToggle={() => lib.toggle(a.id)}
               onActivate={() => activate(a.id)}
+              onPreview={a.parts.image || a.parts.video ? () => view(a.id) : null}
               onRemove={() => lib.remove(a.id)}
             />
           ))
@@ -553,6 +658,54 @@ export default function AssetSidebar({
         </span>
       </div>
     </aside>
+  );
+}
+
+/**
+ * Which half of the instance's library the tab lists — a segmented row under
+ * the span, in the same box as the day stepper so it reads as its sibling
+ * rather than a second widget family.
+ *
+ * The labels are Winnow's own (**All · Incoming · Gallery**, `LibrarySourceTabs`
+ * there): the same shelf must go by the same name on both screens, and the
+ * shorter pair the split first suggested — "in / out" — collides with what
+ * *out* already means here, where finals go home to the instance.
+ */
+function HalfPicker({
+  half,
+  onHalf,
+}: {
+  half: LibraryHalf | null;
+  onHalf: (half: LibraryHalf | null) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Which half of the library to list"
+      className="flex h-7 items-stretch overflow-hidden rounded-paper border border-line bg-paper"
+    >
+      {HALVES.map((o, i) => {
+        const on = o.key === half;
+        return (
+          <button
+            key={o.label}
+            type="button"
+            onClick={() => onHalf(o.key)}
+            aria-pressed={on}
+            title={o.hint}
+            className={`flex-1 min-w-0 px-1 truncate font-mono text-[0.6rem] tracking-[0.1em] uppercase cursor-pointer transition-colors ${
+              i === 0 ? 'border-0' : 'border-y-0 border-r-0 border-l border-line'
+            } ${
+              on
+                ? 'bg-paper-2 text-ink'
+                : 'bg-transparent text-muted hover:bg-paper-2 hover:text-ink'
+            }`}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -718,6 +871,36 @@ function scrim(corner: string): string {
   return `absolute ${corner} left-[3px] z-[2] font-mono text-[0.5rem] tracking-[0.06em] uppercase text-paper bg-[rgba(20,18,15,0.62)] px-[0.25rem] py-px rounded-[4px] leading-[1.35] whitespace-nowrap backdrop-blur-[3px]`;
 }
 
+/**
+ * A pool asset as the shared lightbox sees it.
+ *
+ * `src` is an object URL off the file itself, and only for the few assets the
+ * deck has mounted (`viewWindow`); `still` is the cover the library already
+ * built, which is what a neighbour slot and a clip's poster draw. A RAW with
+ * no sidecar JPEG says so rather than handing the browser bytes it cannot
+ * decode — the library gives a RAW its JPEG twin when there is one, so this
+ * only fires for a RAW that arrived alone.
+ */
+function lightboxItem(
+  asset: Asset,
+  meta: MediaMeta | undefined,
+  url: string | null,
+): LightboxItem {
+  const image = asset.parts.image;
+  const raw = image ? isRawImage(image.name) : false;
+  const isVideo = !image && !!asset.parts.video;
+  return {
+    id: asset.id,
+    title: asset.baseName,
+    facts: metaFacts(asset, meta),
+    kind: isVideo ? 'video' : 'photo',
+    src: raw ? null : url,
+    still: meta?.thumbUrl ?? (raw || isVideo ? null : url),
+    natural: meta?.width && meta?.height ? { width: meta.width, height: meta.height } : null,
+    unavailable: raw ? `${meta?.imageType ?? 'RAW'} — no browser decodes this; add its JPEG twin` : null,
+  };
+}
+
 interface AssetRowProps {
   asset: Asset;
   meta: MediaMeta | undefined;
@@ -727,6 +910,8 @@ interface AssetRowProps {
   onEnsure: () => void;
   onToggle: () => void;
   onActivate: () => void;
+  /** Look at it, large. Null for an asset there is nothing to look at. */
+  onPreview: (() => void) | null;
   onRemove: () => void;
 }
 
@@ -739,6 +924,7 @@ function AssetRow({
   onEnsure,
   onToggle,
   onActivate,
+  onPreview,
   onRemove,
 }: AssetRowProps) {
   // Build the cover lazily — only when the row scrolls into view, so a library
@@ -778,8 +964,21 @@ function AssetRow({
         className="flex-none w-[15px] h-[15px] accent-ink cursor-pointer"
         aria-label={`Select ${asset.baseName}`}
       />
-      {/* The body is the click target: it focuses this asset in the tool.
-          Disabled for assets this tool can't use (the row is already dimmed). */}
+      {/* The cover is its own click target — looking at a picture and putting
+          it to work are two different verbs, and a button inside a button is
+          not markup. Same 80×56 for every row, always: this is the frame the
+          player letterboxes into, so a portrait clip pillarboxes here too
+          instead of resizing the box, and every title starts at the same x. */}
+      <Cover
+        onPreview={onPreview}
+        label={asset.baseName}
+        fallback={isPhoto ? (meta?.imageType ?? '◇') : '▶'}
+        thumbUrl={meta?.thumbUrl}
+        cadenceTag={cadenceTag}
+        fpsLabel={fpsLabel}
+      />
+      {/* The text column focuses this asset in the tool. Disabled for assets
+          this tool can't use (the row is already dimmed). */}
       <button
         type="button"
         onClick={onActivate}
@@ -795,39 +994,6 @@ function AssetRow({
           .join(' — ')}
         className="flex-1 min-w-0 flex items-center gap-2.5 text-left cursor-pointer disabled:cursor-default"
       >
-        {/* Fixed 80×56 for every row, always — this is the same frame the
-            player letterboxes into, so a portrait clip pillarboxes here too
-            instead of resizing the box. Keeping every thumbnail identical is
-            what keeps every title starting at the same x. */}
-        <div className="relative flex-none w-20 h-14 rounded-sm overflow-hidden bg-frame flex items-center justify-center">
-          {meta?.thumbUrl ? (
-            <img
-              src={meta.thumbUrl}
-              alt=""
-              className="w-full h-full object-contain block"
-            />
-          ) : (
-            <span
-              className="font-mono text-[0.55rem] text-[#8a8270] uppercase tracking-wide"
-              aria-hidden="true"
-            >
-              {isPhoto ? (meta?.imageType ?? '◇') : '▶'}
-            </span>
-          )}
-          {/* Cadence rides on the frame: it's already carrying two facts
-              (speed and fps), so the kind chip lives in the text column
-              instead of crowding a third onto it. */}
-          {cadenceTag && (
-            <span className={scrim('top-[3px]')} aria-hidden="true">
-              {cadenceTag}
-            </span>
-          )}
-          {fpsLabel && (
-            <span className={scrim('bottom-[3px]')} aria-hidden="true">
-              {fpsLabel}
-            </span>
-          )}
-        </div>
         <div className="min-w-0 flex-1 flex flex-col gap-[3px]">
           <div className="text-[0.79rem] font-medium truncate" title={asset.baseName}>
             {asset.baseName}
@@ -854,5 +1020,76 @@ function AssetRow({
         ✕
       </button>
     </div>
+  );
+}
+
+/**
+ * A row's 80×56 cover — a button when there is something to look at, a plain
+ * frame when there is not (a lone `.srt` has no picture to open).
+ */
+function Cover({
+  onPreview,
+  label,
+  fallback,
+  thumbUrl,
+  cadenceTag,
+  fpsLabel,
+}: {
+  onPreview: (() => void) | null;
+  label: string;
+  fallback: string;
+  thumbUrl: string | undefined;
+  cadenceTag: string | null;
+  fpsLabel: string | null;
+}) {
+  const frame = (
+    <>
+      {thumbUrl ? (
+        <img src={thumbUrl} alt="" className="w-full h-full object-contain block" />
+      ) : (
+        <span
+          className="font-mono text-[0.55rem] text-[#8a8270] uppercase tracking-wide"
+          aria-hidden="true"
+        >
+          {fallback}
+        </span>
+      )}
+      {/* Cadence rides on the frame: it's already carrying two facts (speed
+          and fps), so the kind chip lives in the text column instead of
+          crowding a third onto it. */}
+      {cadenceTag && (
+        <span className={scrim('top-[3px]')} aria-hidden="true">
+          {cadenceTag}
+        </span>
+      )}
+      {fpsLabel && (
+        <span className={scrim('bottom-[3px]')} aria-hidden="true">
+          {fpsLabel}
+        </span>
+      )}
+    </>
+  );
+  const box =
+    'relative flex-none w-20 h-14 rounded-sm overflow-hidden bg-frame flex items-center justify-center';
+
+  if (!onPreview) return <div className={box}>{frame}</div>;
+  return (
+    <button
+      type="button"
+      onClick={onPreview}
+      title={`Look at ${label}`}
+      aria-label={`Look at ${label}`}
+      className={`${box} cursor-zoom-in group/cover`}
+    >
+      {frame}
+      {/* The affordance only on hover: a magnifier on every row would read as
+          a badge the cover carries, not as something to press. */}
+      <span
+        className="absolute inset-0 grid place-items-center bg-[rgba(20,18,15,0.35)] text-paper text-[0.8rem] opacity-0 group-hover/cover:opacity-100 transition-opacity"
+        aria-hidden="true"
+      >
+        ⤢
+      </span>
+    </button>
   );
 }
