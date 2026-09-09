@@ -1,6 +1,6 @@
 # Road Trip exports: what leaves the tool, what cannot, and the plan
 
-**Status (2026-09-09): P1 to P4 are BUILT; P5 onwards is the plan.**
+**Status (2026-09-09): P1 to P5 are BUILT; what is left is the combined reel, P6 and P7.**
 
 The direction is the maintainer's — "exporter la vidéo du hook
 plus les autres éléments… un raccourci, qu'on importe et qu'on utilise ce que
@@ -312,21 +312,26 @@ path the other does not have, the preview stops being a preview.
   until P5 a clip slide inside it is **held on its chosen frame**, named, with
   the same escape offered.
 
-### P5 — a content slide can be a clip
+### P5 — a content slide can be a clip — **BUILT with P4, bar the combined reel**
 
-The maintainer's own third phase. **The model already describes it**:
+The maintainer's own third phase, and it cost nothing of its own: `renderSlideVideo`
+routes every slide the same way, so a content clip exports with its caption
+burned in, trimmed to its own in point and length, and the frame picker was
+already offered on any video slide. **Unexercised in the browser** — this
+container has no clip to hand and no encoder to write one. **The model already
+describes it**:
 `videoTimeSeconds` is the in point and `seconds` is the length, which is
 exactly what `hookRange(start, length, duration)` computes for the hook today.
 So the work is renderers and one picker, not a document change:
 
 - the Picture tab offers `FrameStrip` on a content slide, as the hook already
-  has it;
+  has it — it always did, and it writes the slide's own `videoTimeSeconds`;
 - a clip slide exported on its own goes through `exportVariantVideo` like the
-  hook's, with the slide's caption as its overlay;
-- inside a combined reel it stops being held: with the painted encoder, playing
-  it means decoding that clip into the shared timeline, which is a decode job
-  rather than the multi-source MUX `roadtrip.md` rejected. Silent by
-  construction, which the combined reel already is.
+  hook's, with the slide's caption as its overlay — built;
+- **still open**: inside a combined reel it stops being held. With the painted
+  encoder, playing it means decoding that clip into the shared timeline, which
+  is a decode job rather than the multi-source MUX `roadtrip.md` rejected.
+  Silent by construction, which the combined reel already is.
 
 ### P6 — a content slide can animate
 
