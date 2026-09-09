@@ -14,8 +14,12 @@
  *   pointer. A bare wheel is deliberately left alone: over the badge stage it
  *   already frames the picture inside the frame, a document edit;
  * - a two-finger pinch on a touchscreen, anchored on the fingers' centre, which
- *   also pans by that centre's movement (the stages set `touch-none`, so there
- *   is no native scrolling to inherit there).
+ *   also pans by that centre's movement — the editor stages set `touch-none`,
+ *   so there is no native scrolling to inherit there. A zone that deliberately
+ *   does NOT claim the touch (the trip overview's day grid and its stage ruler,
+ *   where one finger has to scroll a track wider than the screen) leaves the
+ *   browser first refusal on any gesture, so the pinch is best-effort there and
+ *   `StageZoomControl` is the way in that always answers.
  *
  * While two fingers are down `pinching` is true and the stage's own drag
  * handlers must stand down, or the first finger would drag an element across

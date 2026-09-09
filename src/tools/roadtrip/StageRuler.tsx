@@ -29,11 +29,11 @@ import type { StageZoom } from '../../shared/ui/use-stage-zoom';
 interface StageRulerProps {
   trip: TripDoc;
   selectedId: string | null;
-  /** The day open below — the playhead, and what a scrub moves. */
+  /** The day open below — where the playhead stands. */
   cursorDate: IsoDate | null;
   /** A leg was clicked: open it, and go to the day it began. */
   onOpenStage: (stage: TripStage) => void;
-  /** The playhead was moved — a click on the track, a drag, or an arrow key. */
+  /** Another day was asked for — a click on the track, or an arrow key. */
   onScrub: (date: IsoDate) => void;
   onChange: (stages: TripStage[]) => void;
   /**
@@ -44,7 +44,11 @@ interface StageRulerProps {
   zoom: StageZoom;
 }
 
-/** The scrub strip above the lanes — a video editor's time ruler. */
+/**
+ * The strip above the lanes — a video editor's time ruler head, where the
+ * playhead stands. It carries no leg, so it is also the widest band of the
+ * track a finger can always swipe to scroll it.
+ */
 const HEAD = 16;
 const BAR = 34;
 const LANE_GAP = 4;
@@ -76,10 +80,14 @@ interface Pin {
  * Every gesture snaps to whole days, because a leg has no hours, and a pin
  * follows the pointer saying the date it would land on.
  *
- * The strip above the lanes is the playhead's: click or drag it to move the
- * day the overview has open, the way a time ruler scrubs. Clicking a leg
- * opens it AND goes to the day it began — the ruler and the calendar are the
- * same calendar seen twice, so a gesture on one moves the other.
+ * **A drag moves a leg and nothing else.** Everywhere else on the track a
+ * press is a plain click: it opens that day below, exactly as clicking a cell
+ * of the calendar does. That is what leaves a finger free to scroll the track
+ * sideways — the track is wider than a phone by construction, and a swipe
+ * across it used to be read as a scrub and moved the day the author was
+ * working on. Clicking a leg opens it AND goes to the day it began: the ruler
+ * and the calendar are the same calendar seen twice, so a gesture on one
+ * moves the other.
  *
  * The track is the trip: a leg cannot be dragged past the trip's edges, and
  * what a drag writes is the stage's two dates — the same fields the date
@@ -108,11 +116,6 @@ export default function StageRuler({
   const width = zoom.viewport.width;
   const drag = useRef<Drag | null>(null);
   const [pin, setPin] = useState<Pin | null>(null);
-  // Where the playhead is while it is being dragged. The route is written on
-  // release, not per day: `navigate` pushes a history entry, and a scrub
-  // across a month would otherwise bury the day you came from under thirty.
-  const [scrub, setScrub] = useState<IsoDate | null>(null);
-  const scrubbing = useRef(false);
   // A drag ends in a click on the same button; this swallows that click so
   // sliding a leg does not also open it.
   const swallowClick = useRef(false);
@@ -132,8 +135,7 @@ export default function StageRuler({
   const lanesTop = HEAD;
   const lanesH = lanes * BAR + (lanes - 1) * LANE_GAP;
   const bodyH = lanesTop + lanesH;
-  const playDate = scrub ?? cursorDate;
-  const playAt = playDate ? dayOffset(trip, playDate) : null;
+  const playAt = cursorDate ? dayOffset(trip, cursorDate) : null;
 
   const update = (next: TripStage) => {
     const current = trip.stages.find((s) => s.id === next.id);
@@ -149,7 +151,9 @@ export default function StageRuler({
   };
 
   const begin = (e: PointerEvent<HTMLElement>, stage: TripStage, mode: Drag['mode']) => {
-    if (e.button !== 0) return;
+    // Two fingers are the zoom's: the first of them must not carry a leg
+    // across the track under the pinch.
+    if (e.button !== 0 || zoom.pinching) return;
     const y = e.currentTarget.getBoundingClientRect().top;
     drag.current = { id: stage.id, mode, originX: e.clientX, origin: stage, y, moved: false };
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -193,41 +197,18 @@ export default function StageRuler({
     return dayAtOffset(trip, (clientX - rect.left) / dayW);
   };
 
-  const showScrubPin = (date: IsoDate, clientX: number) => {
-    const at = dayOffset(trip, date);
-    const top = track.current?.getBoundingClientRect().top ?? 0;
-    setPin({
-      x: clientX,
-      y: top,
-      text: at === null ? formatIsoDate(date) : `day ${at + 1} · ${formatIsoDate(date)}`,
-    });
-  };
-
-  const beginScrub = (e: PointerEvent<HTMLElement>) => {
-    if (e.button !== 0) return;
-    const date = dayUnder(e.clientX);
-    if (!date) return;
-    scrubbing.current = true;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    setScrub(date);
-    showScrubPin(date, e.clientX);
-  };
-  const moveScrub = (e: PointerEvent<HTMLElement>) => {
-    if (!scrubbing.current) return;
-    const date = dayUnder(e.clientX);
-    if (!date) return;
-    setScrub(date);
-    showScrubPin(date, e.clientX);
-  };
-  const endScrub = (e: PointerEvent<HTMLElement>) => {
-    if (!scrubbing.current) return;
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    }
-    scrubbing.current = false;
-    const date = dayUnder(e.clientX) ?? scrub;
-    setScrub(null);
-    setPin(null);
+  /**
+   * A click or a tap on the track opens that day below — one discrete
+   * gesture, the calendar cell's own. It replaced a press-and-drag scrub, and
+   * the reason is not only that a tap is the plainer way to name a day: the
+   * scrub surface had to claim the whole track and forbid touch panning to
+   * receive its drags, which left a phone no way to reach a track wider than
+   * the screen. Nothing needs deferring to a release any more either — a
+   * click is one `navigate`, so it cannot bury the day you came from under a
+   * month of history entries.
+   */
+  const pickDay = (clientX: number) => {
+    const date = dayUnder(clientX);
     if (date) onScrub(date);
   };
 
@@ -237,17 +218,26 @@ export default function StageRuler({
     onOpenStage(stage);
   };
 
+  // `overscroll-x-contain`: a track scrolled to its first day would otherwise
+  // hand the next swipe to the browser, which reads it as Back — the one
+  // gesture that must not fall out of scrolling a calendar sideways.
   return (
-    <div ref={scroller} className="overflow-x-auto pb-1" aria-label="Stage timeline">
+    <div
+      ref={scroller}
+      className="overflow-x-auto overscroll-x-contain pb-1"
+      aria-label="Stage timeline"
+    >
       <div ref={track} className="relative" style={{ width: trackW, height: bodyH + AXIS + 6 }}>
-        {/* The scrub surface, behind everything: the head strip and the empty
-            track both move the playhead, the way a time ruler does. */}
+        {/* The track's own surface, behind everything: a click or a tap on it
+            opens that day below. It claims NO `touch-action`, deliberately —
+            that is what lets a finger scroll the track sideways, exactly as it
+            scrolls the calendar above, and it is why the day is picked on a
+            click rather than on a drag. The keyboard path is the playhead's
+            arrow keys and the calendar's own cells, so this stays hidden from
+            assistive technology rather than becoming a 310-day tab stop. */}
         <div
-          className="absolute inset-0 cursor-col-resize touch-none"
-          onPointerDown={beginScrub}
-          onPointerMove={moveScrub}
-          onPointerUp={endScrub}
-          onPointerCancel={endScrub}
+          className="absolute inset-0 cursor-pointer"
+          onClick={(e) => pickDay(e.clientX)}
           aria-hidden="true"
         />
         <div
@@ -318,13 +308,16 @@ export default function StageRuler({
           />
         ))}
 
-        {playAt !== null && playDate && (
+        {playAt !== null && cursorDate && (
           <>
             <span
               className="absolute top-0 w-[2px] bg-ink/50 pointer-events-none"
               style={{ left: (playAt + 0.5) * dayW - 1, height: bodyH + 6 }}
               aria-hidden="true"
             />
+            {/* The playhead marks the day open below and is the keyboard's way
+                through the trip. It is deliberately NOT dragged: a drag on this
+                ruler moves a leg, and only a leg. */}
             <button
               type="button"
               role="slider"
@@ -332,23 +325,20 @@ export default function StageRuler({
               aria-valuemin={1}
               aria-valuemax={total}
               aria-valuenow={playAt + 1}
-              aria-valuetext={formatIsoDate(playDate)}
-              title={`${formatIsoDate(playDate)} — drag to move through the trip`}
-              onPointerDown={beginScrub}
-              onPointerMove={moveScrub}
-              onPointerUp={endScrub}
-              onPointerCancel={endScrub}
+              aria-valuetext={formatIsoDate(cursorDate)}
+              title={`${formatIsoDate(cursorDate)} — the day open below; the arrow keys move it`}
+              onClick={(e) => pickDay(e.clientX)}
               onKeyDown={(e) => {
                 if (e.altKey || e.metaKey || e.ctrlKey) return;
                 const back = e.key === 'ArrowLeft';
                 const on = e.key === 'ArrowRight';
                 if (!back && !on) return;
                 e.preventDefault();
-                const next = addDays(playDate, (e.shiftKey ? 7 : 1) * (back ? -1 : 1));
+                const next = addDays(cursorDate, (e.shiftKey ? 7 : 1) * (back ? -1 : 1));
                 const at = next ? dayOffset(trip, next) : null;
                 if (next && at !== null) onScrub(next);
               }}
-              className="absolute p-0 border-0 bg-transparent cursor-col-resize touch-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ink rounded-[3px]"
+              className="absolute p-0 border-0 bg-transparent cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ink rounded-[3px]"
               style={{ left: (playAt + 0.5) * dayW - 6, top: 0, width: 12, height: HEAD }}
             >
               <span
@@ -425,8 +415,12 @@ function Bar({
   const days = spanLength(stage.startDate, stage.endDate) ?? 0;
   const places = stage.places?.length ?? 0;
   const title = `${label || 'Unnamed stage'} · ${formatIsoDate(stage.startDate)} → ${formatIsoDate(stage.endDate)} · ${days} day${days === 1 ? '' : 's'}`;
+  // `touch-pan-y`, not `touch-none`: sideways is the axis this drag writes, so
+  // the browser must leave it to us — but a finger travelling UP a bar is
+  // reading the page, and forbidding that made the ruler a dead zone the page
+  // could not be scrolled through.
   const handleClass =
-    'absolute top-0 bottom-0 grid place-items-center p-0 border-0 bg-transparent cursor-ew-resize touch-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ink rounded-[6px]';
+    'absolute top-0 bottom-0 grid place-items-center p-0 border-0 bg-transparent cursor-ew-resize touch-pan-y select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ink rounded-[6px]';
   const grip = (
     <span
       className={`block w-[3px] h-[14px] rounded-full ${selected ? 'bg-accent-ink' : 'bg-ink/25'}`}
@@ -460,7 +454,7 @@ function Bar({
         onKeyDown={(e) => nudge(e, stage, 'move')}
         title={`${title} — drag to slide it, or move it with the arrow keys`}
         aria-pressed={selected}
-        className="absolute inset-0 w-full p-0 border-0 bg-transparent text-left cursor-grab active:cursor-grabbing touch-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ink rounded-[10px]"
+        className="absolute inset-0 w-full p-0 border-0 bg-transparent text-left cursor-grab active:cursor-grabbing touch-pan-y select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ink rounded-[10px]"
         style={{ paddingLeft: HANDLE + 4, paddingRight: HANDLE + 4 }}
       >
         <span className="block truncate text-[0.76rem] leading-none">
