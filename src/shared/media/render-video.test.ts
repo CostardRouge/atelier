@@ -217,6 +217,25 @@ describe('encodeFrames', () => {
     ).rejects.toThrow(/zero frames/i);
   });
 
+  it('says so when the browser has an encoder but no H.264', async () => {
+    // The real shape of this container's Chromium, and of any browser with
+    // WebCodecs but no AVC: the object exists, every config is refused, and
+    // `configure` would otherwise fail with the platform's own opaque message.
+    stubWebCodecs();
+    const Encoder = globalThis.VideoEncoder as unknown as {
+      isConfigSupported: (c: VideoEncoderConfig) => Promise<{ supported: boolean }>;
+    };
+    Encoder.isConfigSupported = async () => ({ supported: false });
+    await expect(
+      encodeFrames({
+        width: 64,
+        height: 64,
+        seconds: 1,
+        draw: () => ({}) as unknown as CanvasImageSource,
+      }),
+    ).rejects.toThrow(/cannot encode H\.264/i);
+  });
+
   it('says what is missing when the browser cannot encode', async () => {
     vi.stubGlobal('VideoEncoder', undefined);
     vi.stubGlobal('VideoFrame', undefined);

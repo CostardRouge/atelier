@@ -1,6 +1,6 @@
 # Road Trip exports: what leaves the tool, what cannot, and the plan
 
-**Status (2026-09-09): P1 and P2 are BUILT; P3 onwards is the plan.**
+**Status (2026-09-09): P1, P2 and P3 are BUILT; P4 onwards is the plan.**
 
 The direction is the maintainer's — "exporter la vidéo du hook
 plus les autres éléments… un raccourci, qu'on importe et qu'on utilise ce que
@@ -263,7 +263,7 @@ Document **v14**, and the whole of §5's stored half.
   until there is a reason for a trip-wide number.
 - Nothing renders differently yet: an image slide is still the PNG it was.
 
-### P3 — the hook leaves as a video whatever its picture
+### P3 — the hook leaves as a video whatever its picture — **BUILT**
 
 The old P2, now driven by the slide's resolved medium rather than by the file
 type. `exportHookClip` routes on the source:

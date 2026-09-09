@@ -8,7 +8,14 @@ import {
   hookVariant,
   hookVideoName,
 } from '../../shared/roadtrip/hook-video';
-import { exportHookVideo } from '../../shared/roadtrip/hook-video-export';
+import {
+  exportHookStillVideo,
+  exportHookVideo,
+} from '../../shared/roadtrip/hook-video-export';
+import {
+  isEncodeSupported,
+  type ExportProgress,
+} from '../../shared/media/webcodecs-export';
 import type { HookBlock } from '../../shared/roadtrip/shades';
 import type { TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
 import { canWriteToDisk, pickWritableDirectory, writeItems } from '../../shared/sources/write-files';
@@ -67,46 +74,72 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
   const [note, setNote] = useState<string | null>(null);
 
   /**
-   * Burn the animated hook into the clip. The still shows the badge settled;
+   * Burn the animated hook into a video. The still shows the badge settled;
    * this is the version that plays it — which is the whole point of an
    * entrance.
+   *
+   * Two sources, one composition: a clip is re-encoded through the Studio's
+   * pipeline with its audio copied, a PHOTOGRAPH is painted frame by frame
+   * through `renderBadge` and comes out silent. Which one is decided by the
+   * file, not by the author — the author decided whether this slide is a video
+   * at all, on the Content tab.
    */
   async function exportHookClip() {
     const { hookFile, hookIsVideo, hookInfo, post, trip } = inputs;
-    if (!hookFile || !hookIsVideo) return;
+    if (!hookFile) return;
     inputs.onStart?.();
-    const problem = hookSourceProblem(hookFile.name, hookFile.type);
-    if (problem) {
-      setNote(problem);
+    if (!isEncodeSupported()) {
+      setNote(
+        'This browser has no video encoder (WebCodecs), so a clip cannot be written here. The slides still export as images.',
+      );
       return;
     }
-    if (!hookInfo.width || !hookInfo.height) {
-      setNote('The clip is still loading — try again in a moment.');
-      return;
+    if (hookIsVideo) {
+      const problem = hookSourceProblem(hookFile.name, hookFile.type);
+      if (problem) {
+        setNote(problem);
+        return;
+      }
+      if (!hookInfo.width || !hookInfo.height) {
+        setNote('The clip is still loading — try again in a moment.');
+        return;
+      }
     }
     setNote(null);
     setExporting('Encoding…');
+    const onProgress = (p: ExportProgress) =>
+      setExporting(p.ratio === null ? `${p.phase}…` : `Encoding ${Math.round(p.ratio * 100)}%…`);
     try {
       const variant = hookVariant(post.badge.aspectId);
-      const blob = await exportHookVideo({
-        file: hookFile,
+      const shared = {
         variant,
         elements: inputs.hookElements,
         theme: trip.theme,
-        srcWidth: hookInfo.width,
-        srcHeight: hookInfo.height,
-        range: hookRange(post.badge.videoTimeSeconds, inputs.hookLength, hookInfo.duration),
         shades: post.badge.shades,
         block: inputs.block,
-        // The hook's own framing, so the burned-in clip is cropped where the
-        // preview showed it — the PNG deck goes through the same value.
+        // The hook's own framing, so the burned-in picture is cropped where
+        // the preview showed it — the PNG deck goes through the same value.
         framing: post.badge.framing,
         lut: inputs.lut,
-        onProgress: (p) =>
-          setExporting(
-            p.ratio === null ? `${p.phase}…` : `Encoding ${Math.round(p.ratio * 100)}%…`,
-          ),
-      });
+        onProgress,
+      };
+      const blob = hookIsVideo
+        ? await exportHookVideo({
+            ...shared,
+            file: hookFile,
+            srcWidth: hookInfo.width,
+            srcHeight: hookInfo.height,
+            range: hookRange(
+              post.badge.videoTimeSeconds,
+              inputs.hookLength,
+              hookInfo.duration,
+            ),
+          })
+        : await exportHookStillVideo({
+            ...shared,
+            file: hookFile,
+            seconds: inputs.hookLength,
+          });
       const name = hookVideoName(trip.name, post.title.trim() || `day-${post.date}`, variant);
       download(blob, name);
       setNote(`${name} downloaded`);

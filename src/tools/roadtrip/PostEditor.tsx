@@ -741,7 +741,6 @@ export default function PostEditor({
               aspect={aspect}
               hookFile={hookFile}
               hookIsVideo={hookIsVideo}
-              duration={hookInfo.duration}
               hookLength={hookLength}
               exporting={exports.exporting}
               exportNote={exports.note}

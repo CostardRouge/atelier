@@ -128,6 +128,20 @@ export async function encodeFrames(opts: EncodeFramesOptions): Promise<Blob> {
     framerate: fps,
   };
   const codec = await pickAvcCodec(encoderConfig);
+  // `pickAvcCodec` falls back to a baseline string when it finds nothing
+  // supported, which is right for the decode pipeline (the encoder may still
+  // take it) and wrong to rely on here: a browser with a `VideoEncoder` object
+  // but no H.264 at all then fails inside `configure` with the platform's own
+  // "Encoder creation error", which tells the author nothing they can act on.
+  // Asking once more costs a probe and buys a sentence.
+  const usable = await VideoEncoder.isConfigSupported({ codec, ...encoderConfig }).catch(
+    () => null,
+  );
+  if (!usable?.supported) {
+    throw new Error(
+      `This browser cannot encode H.264 video at ${w}×${h}, so no clip can be written here. The slides still export as images.`,
+    );
+  }
 
   // The encoder is created before the try so that EVERY exit path below closes
   // it: an encoder left open still holds a hardware encode session, the

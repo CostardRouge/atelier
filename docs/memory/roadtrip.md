@@ -309,6 +309,18 @@ The shape it was given, which any future network feature should copy: the client
 
 **Where the controls go, and the rule behind it**: the medium and the duration are about the SLIDE, so they sit on the Content tab and show for whichever slide is open — never inside the hook-only branch (the «A panel that belongs to the PIECE» rule, read the other way). The closing card is left out entirely: its medium is structural.
 
+## The hook leaves as a video whatever its picture (2026-09-09)
+
+**The report that caused it**: an animated hook could only be exported as slides, so the animation never left the editor. The cause was not a lost button — `5d11245` removed a duplicate of the PNG deck's — but a path that had never existed: `exportProcessedVideo` needs decoded samples, and the Studio's photo branch delivers a JPEG, so a badge animated over a PHOTOGRAPH had nowhere to go in the whole suite.
+
+**`exportHookStillVideo` (`hook-video-export.ts`) is that path**, and it is the same composition as everything else: `encodeFrames` (`shared/media/render-video.ts`) with **`renderBadge` as the painter**, at a clock instead of settled. The clip path is untouched. Two rules make it cheap and correct: the picture is decoded ONCE and **graded once into a bitmap** — grading per frame would be a WebGL2 render per frame for a result that cannot change, and a grader per repaint is never reclaimed — and the grade is applied at the source's own density BEFORE the crop, the same order `renderBadge` uses, so the video and the PNG are the same picture. A painted clip is silent and takes a delivered cadence, both said in the panel.
+
+**The Export tab follows the SLIDE's medium, never the file type**: `slides[0].medium === 'video'`. A photograph with an animated badge offers the export; a clip the author set to Image does not, and says where to change it.
+
+**`isEncodeSupported()` is not enough of a guard, measured.** It answers "does `VideoEncoder` exist", and a browser can have the object while refusing every H.264 config — this container's Chromium is exactly that. The result was the platform's own "Encoder creation error", which tells an author nothing. `encodeFrames` now re-probes `isConfigSupported` for the codec `pickAvcCodec` chose and refuses with a sentence naming the size. **Do not remove that second probe**: `pickAvcCodec` falls back to a baseline string when it finds nothing, which is right for the decode pipeline and wrong to trust here.
+
+**Verified in headless Chromium** on a real trip and a real photograph: the badge draws over the picture, the stage canvas CHANGES between two clocks (the invariant the exporter rests on — a painter that does not move exports a still), the button appears with the photograph's own sentence, and pressing it reports the honest encoder refusal. **The encode itself is still unverified anywhere**: no runner here has H.264.
+
 ## The QR is generated here, and it is verified by decoding (2026-08-24)
 
 **Decision.** `shared/lib/qr.ts` is a hand-rolled encoder (byte mode, EC level M, versions 1–10). **Why not a library**: a card that fetched its own QR from a service would be the single place this suite phoned home, and the local-first line is the product. It is ~250 lines against a spec that has not moved since 2000 — unlike Dexie, it earns the code it costs.
