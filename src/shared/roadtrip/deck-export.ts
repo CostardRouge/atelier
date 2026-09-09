@@ -20,7 +20,7 @@ import {
   type BadgeSource,
 } from './badge-render';
 import { ctaLayout } from './cta-slide';
-import { contentSlideElements, deckSlides, slideFileName } from './deck';
+import { contentSlideElements, deckSlides, slideFileName, type DeckSlide } from './deck';
 import { badgeContent } from './day-badge';
 import type { TripDoc, TripPost } from './trip-types';
 
@@ -45,6 +45,12 @@ export interface RenderDeckOptions {
    * carries no picture, so it is never graded.
    */
   lut?: CubeLut | null;
+  /**
+   * Which slides to render. Absent renders the whole deck, which is what the
+   * PNG export has always done; the piece export passes the stills only,
+   * because the rest of the deck is going out as video.
+   */
+  include?: (slide: DeckSlide) => boolean;
   onProgress?: (done: number, total: number) => void;
 }
 
@@ -57,7 +63,8 @@ export async function renderDeck(
   opts: RenderDeckOptions,
 ): Promise<RenderedSlide[]> {
   const { trip, post, aspect, longEdge } = opts;
-  const slides = deckSlides(trip, post);
+  const all = deckSlides(trip, post);
+  const slides = opts.include ? all.filter(opts.include) : all;
   const { w, h } = frameSize(aspect, longEdge);
   const slug = post.title.trim() || `day-${post.date}`;
   const out: RenderedSlide[] = [];
@@ -121,7 +128,10 @@ export async function renderDeck(
       });
       if (blob) {
         out.push({
-          name: slideFileName(trip.name, slug, slide, slides.length),
+          // Numbered against the WHOLE deck, never against the subset: a
+          // carousel's third picture is `03` even when it is the only still
+          // being written, or the files stop reading in swipe order.
+          name: slideFileName(trip.name, slug, slide, all.length),
           blob,
         });
       }

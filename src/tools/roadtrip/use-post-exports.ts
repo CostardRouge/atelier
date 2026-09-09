@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import type { CubeLut } from '../../shared/lib/cube-parser';
 import type { OverlayElement } from '../../shared/overlay/overlay-types';
+import { classifyPart } from '../../shared/library/assets';
+import { loadClipMeta } from '../../shared/media/video-metadata';
+import { contentSlideElements } from '../../shared/roadtrip/deck';
 import { renderDeck } from '../../shared/roadtrip/deck-export';
+import { exportPlan, type PlanItem } from '../../shared/roadtrip/export-plan';
 import {
   hookRange,
   hookSourceProblem,
@@ -50,6 +54,8 @@ export interface PostExports {
   exporting: string | null;
   /** The last export's outcome, in a sentence. */
   note: string | null;
+  /** The piece's ONE primary export: every slide in the format it is. */
+  exportPiece: (imagesOnly?: boolean) => Promise<void>;
   exportDeck: () => Promise<void>;
   exportHookClip: () => Promise<void>;
 }
@@ -153,6 +159,167 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
   }
 
   /**
+   * ONE video for one slide, whatever it is made of.
+   *
+   * The four cases collapse into two calls: a clip goes through the Studio's
+   * export (audio copied, trimmed to the slide's own in point and length), a
+   * still is painted frame by frame. What differs between the hook and a
+   * content picture is only which elements are burned in and whether the
+   * shades apply — the hook owns those, a content picture carries its caption.
+   */
+  async function renderSlideVideo(
+    item: PlanItem,
+    onProgress: (p: ExportProgress) => void,
+  ): Promise<Blob> {
+    const { post, trip, aspect } = inputs;
+    const { slide } = item;
+    const isHook = slide.kind === 'hook';
+    const file = inputs.resolve(slide.media);
+    if (!file) throw new Error(`${slide.media?.name ?? 'This slide'} is not in the Library.`);
+    const variant = hookVariant(post.badge.aspectId);
+    const shared = {
+      variant,
+      elements: isHook ? inputs.hookElements : contentSlideElements(slide.caption, aspect),
+      theme: isHook ? trip.theme : null,
+      shades: isHook ? post.badge.shades : undefined,
+      block: isHook ? inputs.block : null,
+      framing: slide.framing,
+      lut: inputs.lut,
+      onProgress,
+    };
+    if (classifyPart(file.name) !== 'video') {
+      return exportHookStillVideo({ ...shared, file, seconds: item.seconds });
+    }
+    // A content clip's own size has to be read here; the hook's is already
+    // measured by the stage that is showing it.
+    const meta = isHook
+      ? inputs.hookInfo
+      : await loadClipMeta(file, { thumbnail: false });
+    return exportHookVideo({
+      ...shared,
+      file,
+      srcWidth: meta.width,
+      srcHeight: meta.height,
+      range: hookRange(slide.videoTimeSeconds, item.seconds, meta.duration),
+    });
+  }
+
+  /**
+   * The whole piece, each slide in the format the deck says it is: PNGs for
+   * the stills, MP4s for what moves, in one folder and in swipe order.
+   *
+   * This is the piece's ONE primary export, and it is why the plan exists —
+   * the author sees what it will write before pressing it, and a slide that
+   * cannot be written says why instead of failing silently in the middle.
+   */
+  async function exportPiece(imagesOnly = false) {
+    inputs.onStart?.();
+    setNote(null);
+    const plan = exportPlan(inputs.trip, inputs.post, {
+      canEncode: isEncodeSupported(),
+      hasPicture: (slide) => inputs.resolve(slide.media) !== null || slide.media === null,
+      imagesOnly,
+    });
+    if (plan.files === 0) {
+      setNote(plan.blockers[0] ?? 'Nothing in this piece can be written.');
+      return;
+    }
+
+    const items = plan.items.filter((i) => i.blocker === null);
+    const rendered: { name: string; blob: Blob }[] = [];
+    setExporting('Rendering…');
+    try {
+      // The stills go through the deck renderer in one pass, so a carousel of
+      // photographs costs one decode each and not one per call.
+      const stills = items.filter((i) => i.medium === 'image');
+      if (stills.length) {
+        const wanted = new Set(stills.map((i) => i.position));
+        const out = await renderDeck({
+          trip: inputs.trip,
+          post: inputs.post,
+          aspect: inputs.aspect,
+          longEdge: 1920,
+          timeSeconds: inputs.timeSeconds,
+          resolve: inputs.resolve,
+          lut: inputs.lut,
+          include: (slide) => wanted.has(slide.position),
+          onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`),
+        });
+        rendered.push(...out);
+      }
+
+      // A clip that fails must not cost the slides that already rendered:
+      // each one is caught, and what went wrong is said with the delivery
+      // rather than instead of it.
+      const failures: string[] = [];
+      const clips = items.filter((i) => i.medium === 'video');
+      for (const [i, item] of clips.entries()) {
+        try {
+          const blob = await renderSlideVideo(item, (p) =>
+            setExporting(
+              p.ratio === null
+                ? `${p.phase}…`
+                : `Encoding ${i + 1}/${clips.length} · ${Math.round(p.ratio * 100)}%…`,
+            ),
+          );
+          rendered.push({ name: item.name, blob });
+        } catch (err) {
+          failures.push(err instanceof Error ? err.message : `${item.name} could not be encoded.`);
+        }
+      }
+
+      if (!rendered.length) {
+        setNote(failures[0] ?? 'Nothing could be rendered — check the pictures are loaded.');
+        return;
+      }
+      setExporting('Writing…');
+      const short = plan.items.length - rendered.length;
+      await deliver(rendered, short, [...plan.blockers, ...failures]);
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : 'The piece could not be exported.');
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  /**
+   * Hand a rendered set over: a folder keeps the deck in order on disk, and
+   * where the picker is unavailable each file is downloaded in turn, which is
+   * the only thing a non-Chromium browser can do.
+   */
+  async function deliver(
+    rendered: { name: string; blob: Blob }[],
+    short: number,
+    blockers: string[] = [],
+  ) {
+    const tail =
+      (short ? ` · ${short} could not be written` : '') +
+      (blockers.length ? ` — ${blockers[0]}` : '');
+    if (canWriteToDisk()) {
+      let dir: FileSystemDirectoryHandle;
+      try {
+        dir = await pickWritableDirectory();
+      } catch {
+        return; // dismissed
+      }
+      const res = await writeItems(
+        dir,
+        rendered.map((r) => ({ name: r.name, file: new File([r.blob], r.name) })),
+      );
+      setNote(
+        `${res.written} file${res.written === 1 ? '' : 's'} written` +
+          (res.errors.length ? ` · ${res.errors.length} failed to write` : '') +
+          tail,
+      );
+      return;
+    }
+    for (const r of rendered) download(r.blob, r.name);
+    setNote(
+      `${rendered.length} file${rendered.length === 1 ? '' : 's'} downloaded` + tail,
+    );
+  }
+
+  /**
    * Render every slide and hand the set over. A folder keeps the deck in
    * order on disk; where the picker is unavailable each slide is downloaded
    * in turn, which is the only thing a non-Chromium browser can do.
@@ -207,5 +374,5 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     }
   }
 
-  return { exporting, note, exportDeck, exportHookClip };
+  return { exporting, note, exportPiece, exportDeck, exportHookClip };
 }

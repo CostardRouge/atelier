@@ -1,6 +1,6 @@
 # Road Trip exports: what leaves the tool, what cannot, and the plan
 
-**Status (2026-09-09): P1, P2 and P3 are BUILT; P4 onwards is the plan.**
+**Status (2026-09-09): P1 to P4 are BUILT; P5 onwards is the plan.**
 
 The direction is the maintainer's — "exporter la vidéo du hook
 plus les autres éléments… un raccourci, qu'on importe et qu'on utilise ce que
@@ -286,7 +286,7 @@ composition at two clocks.** Both go through `renderBadge`; the PNG is that
 render settled, the video is it at t. If a future change gives one of them a
 path the other does not have, the preview stops being a preview.
 
-### P4 — the export executes the deck, and the general button comes back
+### P4 — the export executes the deck, and the general button comes back — **BUILT** (bar the combined reel)
 
 - `shared/roadtrip/export-plan.ts` — §5's reading half, pure, tested.
 - `ExportTab` leads with the plan (one line per slide: format, seconds,

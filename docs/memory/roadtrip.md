@@ -317,9 +317,19 @@ The shape it was given, which any future network feature should copy: the client
 
 **The Export tab follows the SLIDE's medium, never the file type**: `slides[0].medium === 'video'`. A photograph with an animated badge offers the export; a clip the author set to Image does not, and says where to change it.
 
-**`isEncodeSupported()` is not enough of a guard, measured.** It answers "does `VideoEncoder` exist", and a browser can have the object while refusing every H.264 config — this container's Chromium is exactly that. The result was the platform's own "Encoder creation error", which tells an author nothing. `encodeFrames` now re-probes `isConfigSupported` for the codec `pickAvcCodec` chose and refuses with a sentence naming the size. **Do not remove that second probe**: `pickAvcCodec` falls back to a baseline string when it finds nothing, which is right for the decode pipeline and wrong to trust here.
+**`isEncodeSupported()` is not enough of a guard** — it answers "does `VideoEncoder` exist", not "can it encode H.264", and the difference is measured. The rule and both remedies are in `media-pipeline.md`, «Having a VideoEncoder is not being able to encode».
 
 **Verified in headless Chromium** on a real trip and a real photograph: the badge draws over the picture, the stage canvas CHANGES between two clocks (the invariant the exporter rests on — a painter that does not move exports a still), the button appears with the photograph's own sentence, and pressing it reports the honest encoder refusal. **The encode itself is still unverified anywhere**: no runner here has H.264.
+
+## The export READS the deck and delivers it, and the header carries it (2026-09-09)
+
+**Decision.** `shared/roadtrip/export-plan.ts` turns a post into the list of files it would write — one item per slide, its medium, its seconds, its name and what would stop it — and the Export tab draws that list before anything runs. It decides nothing: every medium comes from `deckSlides`, so the panel is a reading of the composition, not a second opinion about it. `slideFileName` takes the extension, so a mixed deck writes `01-hook.mp4` beside `02.png` under one numbering — the swipe order is what makes a mixed carousel uploadable.
+
+**The general button is back, and it is the piece's ONE primary action** — which amends rather than breaks the rule `5d11245` recorded. The amendment: *the header carries the piece's primary action; a tab's buttons are the escapes from it.* So the header's ↓ Export writes the whole deck in the formats the slides say they are, and the Export tab keeps "all slides as PNGs" and "the hook as a video" as named escapes. Pressing the header still switches to that tab, where the report is written.
+
+**One override survives, and it is not a mode**: *Everything as images*. It is what a browser with no encoder can still do and what a contact sheet of a reel is. It changes the MEDIUM of every item and never the `reason` — the deck's own answer does not change because of how it is being written today.
+
+**A blocked item stays visible, struck through, with its sentence.** Hiding it would answer "why is my hook not in the folder" with silence. And a clip that fails mid-run costs only itself: each is caught, the stills already rendered are still delivered, and the failures are named alongside them. **The check that a container can be demuxed applies only to a CLIP** — running `hookSourceProblem` over a photograph blocks every animated hook that sits on a still, which is the whole feature (caught by a test, not by reading).
 
 ## The QR is generated here, and it is verified by decoding (2026-08-24)
 

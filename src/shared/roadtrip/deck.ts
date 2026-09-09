@@ -184,18 +184,25 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
   return slides;
 }
 
-/** `australia-day-27-01-hook.png` — ordered, so a file listing swipes right. */
+/**
+ * `australia-day-27-01-hook.png` — ordered, so a file listing swipes right.
+ *
+ * The extension follows what the slide DELIVERS, not what the deck is made
+ * of: a mixed deck writes `01-hook.mp4` beside `02.png`, and the numbering is
+ * what keeps them in swipe order for whoever uploads them.
+ */
 export function slideFileName(
   tripName: string,
   postSlug: string,
   slide: DeckSlide,
   total: number,
+  extension: 'png' | 'mp4' = 'png',
 ): string {
   const width = String(total).length;
   const n = String(slide.position).padStart(Math.max(2, width), '0');
   const suffix = slide.kind === 'content' ? '' : `-${slide.kind}`;
   const stem = [tripName, postSlug].map(slugify).filter(Boolean).join('-');
-  return `${stem ? `${stem}-` : ''}${n}${suffix}.png`;
+  return `${stem ? `${stem}-` : ''}${n}${suffix}.${extension}`;
 }
 
 function slugify(value: string): string {
