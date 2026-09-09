@@ -1,7 +1,8 @@
 /**
- * The frame plan for an export TAIL — content appended after the footage's
- * last frame, today the Studio's outro card. Pure and DOM-free; the encoding
- * itself happens in `webcodecs-export.ts` and `export-overlay-seek.ts`.
+ * Content appended AFTER the footage's last frame — today the Studio's outro
+ * card. Pure and DOM-free; the encoding itself happens in
+ * `webcodecs-export.ts` and `export-overlay-seek.ts`, and the frames it plans
+ * come from `frame-plan.ts`, which a clip painted from nothing shares.
  *
  * Appending is deliberately the whole feature: nothing already encoded moves,
  * the audio is still copied bit-for-bit and simply ends with the footage (the
@@ -21,41 +22,4 @@ export interface ExportTail {
    * and an animated one plays.
    */
   draw: (tSeconds: number) => CanvasImageSource;
-}
-
-export interface TailFrame {
-  /** Seconds into the tail's own life — what `draw` receives. */
-  tSeconds: number;
-  /** Encoder timestamp in microseconds, continuing the footage's timeline. */
-  timestampMicros: number;
-  durationMicros: number;
-}
-
-/**
- * The appended frames: `seconds` of card at `fps`, starting exactly where the
- * footage ended. `endMicros` is the end of the last encoded frame (timestamp
- * plus duration) — passing the last timestamp alone would overlap the final
- * frame of the picture with the first frame of the card.
- */
-export function tailFrames(
-  seconds: number,
-  fps: number,
-  endMicros: number,
-): TailFrame[] {
-  if (!Number.isFinite(seconds) || seconds <= 0) return [];
-  if (!Number.isFinite(fps) || fps <= 0) return [];
-  const count = Math.max(1, Math.round(seconds * fps));
-  const frames: TailFrame[] = [];
-  for (let i = 0; i < count; i += 1) {
-    // Rounded per frame against the true rate, so NTSC-ish rates do not
-    // accumulate drift over a long card.
-    const start = Math.round((i * 1_000_000) / fps);
-    const end = Math.round(((i + 1) * 1_000_000) / fps);
-    frames.push({
-      tSeconds: i / fps,
-      timestampMicros: endMicros + start,
-      durationMicros: end - start,
-    });
-  }
-  return frames;
 }
