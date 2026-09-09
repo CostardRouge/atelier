@@ -272,7 +272,14 @@ export default function StagesPanel({
       ) : (
         !selected && (
           <p className="m-0 font-mono text-[0.66rem] text-faint">
-            Click a leg to edit it and go to its first day · drag its edges to move its dates · drag the strip above to move through the trip · right-click a day on the calendar to start or end one there
+            Tap a leg to edit it and go to its first day · drag a leg, or either
+            of its edges, to move its dates · tap anywhere else on the track to
+            open that day, and swipe the track sideways to see the rest
+            {/* A gesture a phone does not have, hidden where there is none —
+                the calendar's own hint above does the same. */}
+            <span className="max-[600px]:hidden">
+              {' '}· right-click a day on the calendar to start or end a stage there
+            </span>
           </p>
         )
       )}
