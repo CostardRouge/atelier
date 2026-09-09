@@ -335,13 +335,13 @@ export default function PostEditor({
     [isHook],
   );
 
-  // How long the burned-in hook clip runs. Session state, not part of the
-  // document: it is derived from the badge's own hold, so it is never
-  // arbitrary, and a length is an export choice rather than a property of the
-  // piece. Null means "follow the badge".
-  const [hookSeconds, setHookSeconds] = useState<number | null>(null);
+  // How long the burned-in hook clip runs. It lives on the DOCUMENT since
+  // 2026-09-09 (`badge.hookSeconds`): it was session state while a length was
+  // only an export choice, and it stopped being only that when every slide
+  // gained a screen time. Still clamped on read — a stored 8s over a 3s clip
+  // must not claim a file it cannot write.
   const hookLength = hookSecondsWithin(
-    hookSeconds,
+    post.badge.hookSeconds,
     post.badge.durationSeconds,
     hookInfo.duration,
   );
@@ -692,6 +692,7 @@ export default function PostEditor({
               content={content}
               piece={piece}
               slideFile={slideFile}
+              clipSeconds={isVideo ? duration : 0}
               onChangePost={onChangePost}
               patchBadge={patchBadge}
               patchSlide={patchSlide}
@@ -742,7 +743,6 @@ export default function PostEditor({
               hookIsVideo={hookIsVideo}
               duration={hookInfo.duration}
               hookLength={hookLength}
-              onHookSeconds={setHookSeconds}
               exporting={exports.exporting}
               exportNote={exports.note}
               onExportDeck={() => void exports.exportDeck()}

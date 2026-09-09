@@ -1,6 +1,5 @@
 import type { OverlayElement } from '../../../shared/overlay/overlay-types';
 import type { DeckSlide } from '../../../shared/roadtrip/deck';
-import { MAX_HOOK_SECONDS, MIN_HOOK_SECONDS } from '../../../shared/roadtrip/hook-video';
 import type { TripDoc, TripGrade, TripPost } from '../../../shared/roadtrip/trip-types';
 import StudioLink from '../StudioLink';
 import type { GradeScope } from '../use-trip-grade';
@@ -20,7 +19,6 @@ interface ExportTabProps {
   duration: number;
   /** How long the burned-in hook clip runs, already clamped to the clip. */
   hookLength: number;
-  onHookSeconds: (seconds: number) => void;
   /** A running export's progress line, or null when idle. */
   exporting: string | null;
   exportNote: string | null;
@@ -48,7 +46,6 @@ export default function ExportTab({
   hookIsVideo,
   duration,
   hookLength,
-  onHookSeconds,
   exporting,
   exportNote,
   onExportDeck,
@@ -89,20 +86,12 @@ export default function ExportTab({
         </span>
         {hookIsVideo && duration > 0 ? (
           <>
-            <input
-              type="range"
-              min={MIN_HOOK_SECONDS}
-              max={Math.min(MAX_HOOK_SECONDS, Math.max(MIN_HOOK_SECONDS, duration))}
-              step={0.5}
-              value={hookLength}
-              onChange={(e) => onHookSeconds(Number(e.target.value))}
-              className="accent-accent"
-              aria-label="Hook clip length"
-            />
             <p className="m-0 text-[0.72rem] text-muted">
               Starts on the hook’s frame, so the badge animates in on the first frame of
               the clip. Audio is copied through
               {graded ? ', and the clip is graded like the preview.' : '; the clip is not graded.'}
+              {' '}How long it runs is the hook slide’s own screen time, set on the
+              Content tab.
             </p>
             <button
               type="button"

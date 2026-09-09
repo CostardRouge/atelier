@@ -65,13 +65,17 @@ export default function SlideRail({
                 onClick={() => onSelect(i)}
                 role="option"
                 aria-selected={open}
-                title={
+                title={`${
                   s.kind === 'content'
                     ? `Picture ${s.position} — drag it, or move it with the arrow keys`
                     : s.kind === 'hook'
                       ? 'The hook — the picture that opens the piece'
                       : 'The closing card, shared by the whole trip'
-                }
+                }\n${
+                  s.medium === 'video'
+                    ? `Goes out as ${s.seconds.toFixed(1)}s of video`
+                    : 'Goes out as an image'
+                }`}
                 draggable={ci >= 0}
                 onDragStart={(e) => {
                   if (ci < 0) return;
@@ -125,6 +129,16 @@ export default function SlideRail({
                   </span>
                 ) : (
                   <SlidePreview file={fileFor(s)} />
+                )}
+                {/* The shape of the deck, readable without opening a slide: a
+                    cell that carries its length is one that leaves as video.
+                    It is the whole point of deciding the medium here rather
+                    than at the door — a carousel mixing a clip and three
+                    stills must say so at a glance. */}
+                {s.medium === 'video' && (
+                  <span className="absolute bottom-0 inset-x-0 py-[1px] bg-[rgba(16,15,13,0.68)] font-mono text-[0.5rem] leading-none text-center text-[#f4efe6] tabular-nums">
+                    {s.seconds.toFixed(1).replace(/\.0$/, '')}s
+                  </span>
                 )}
               </button>
               {open && ci >= 0 && (

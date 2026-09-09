@@ -295,6 +295,20 @@ The shape it was given, which any future network feature should copy: the client
 
 **Content slides carry no badge.** The counter has done its work on slide one; repeating it would stop the hook being a hook. A caption keeps the trip's font but pins `glow` and `legibility` off — the glow is the badge's signature.
 
+## A slide says what it IS, and the export only delivers it (2026-09-09)
+
+**Decision, the maintainer's** (*"si j'ai l'ambition de gérer des types vidéo dans les slides, c'est un choix qu'on doit plutôt faire en amont, à la création du contenu du post… plutôt que de l'imposer à la dernière étape d'export qui va faire un choix à notre place"*). Every slide carries a **medium** (`auto | image | video`) and a **screen time** — `PostSlide.medium` / `.seconds`, `PostBadge.medium` / `.hookSeconds`, **v14** — and `deckSlides()` is the one place `auto` is resolved, handing back `medium`, `chosen`, `reason` and `seconds` on each `DeckSlide`. `auto` is video when something on the slide animates or its media is a clip (`classifyPart`, so the deck and the Library cannot disagree about what a clip is), image otherwise.
+
+**It replaces an export-mode picker agreed hours earlier the same day** (Images · Video · Mixed at the door). The reason it lost: video content slides and animated captions are both coming, and a format decided at the door would have had to learn about each of them, while a format that belongs to the slide costs nothing later — the model is the test. What survives at export time is delivery only: combine into one file or not, plus an images override for a browser that cannot encode.
+
+**A forced choice is obeyed and its cost is stated, never refused**: `image` over an animated hook is how a piece gets its grid picture (`reason: 'settled'`), `image` over a clip is its chosen frame (`'frozen'`), `video` over a photograph is a held card (`'forced-video'`). Each of the three chips shows what it would really do for THIS slide — and a chip whose hint would repeat its own label shows nothing instead, since "Image · image" is a control saying nothing.
+
+**This reverses «The hook has a duration»'s session-state call.** The hook's length was deliberately not stored, on the reasoning that a length is an export choice. That stopped being true when every slide gained a screen time: it is `badge.hookSeconds` now, edited on the Content tab beside the medium, and `hookSecondsWithin` still clamps it on read so a stored 8s over a 3s clip never claims a file it cannot write. `badge.durationSeconds` is untouched and is a DIFFERENT number — the badge's own hold, what an exit animation lands on.
+
+**The rail is where the shape of the deck is read**: a cell that leaves as video wears its length. A carousel mixing a video hook and three stills says so at a glance, which is the whole point of deciding this upstream. Verified in the browser: a `.MP4` content slide resolves to video with no clicking, forcing the hook to an image drops its badge from the rail, and the document overflows nothing at 390px.
+
+**Where the controls go, and the rule behind it**: the medium and the duration are about the SLIDE, so they sit on the Content tab and show for whichever slide is open — never inside the hook-only branch (the «A panel that belongs to the PIECE» rule, read the other way). The closing card is left out entirely: its medium is structural.
+
 ## The QR is generated here, and it is verified by decoding (2026-08-24)
 
 **Decision.** `shared/lib/qr.ts` is a hand-rolled encoder (byte mode, EC level M, versions 1–10). **Why not a library**: a card that fetched its own QR from a service would be the single place this suite phoned home, and the local-first line is the product. It is ~250 lines against a spec that has not moved since 2000 — unlike Dexie, it earns the code it costs.

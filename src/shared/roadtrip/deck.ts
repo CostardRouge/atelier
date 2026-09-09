@@ -19,11 +19,34 @@ import {
   type OverlayElement,
 } from '../overlay/overlay-types';
 import { charBudget, wrapText } from '../lib/wrap-text';
+import { classifyPart } from '../library/assets';
 import { DEFAULT_FRAMING, normaliseFraming, type Framing } from '../media/framing';
+import { OUTRO_SECONDS_DEFAULT } from '../overlay/outro-card';
 import type { SavedMediaRef } from '../projects/project-types';
-import type { TripDoc, TripPost } from './trip-types';
+import type { BadgePieceStyles } from './badge-layout';
+import type { SlideMedium, TripDoc, TripPost } from './trip-types';
 
 export type DeckSlideKind = 'hook' | 'content' | 'cta';
+
+/**
+ * Why a slide comes out as it does. One enum over both media, so a panel can
+ * say the real reason for every line instead of showing a format with no
+ * explanation — the tool's standing rule that an option states what it would
+ * really do (`roadtrip.md`, «Never offer a fabricated example»).
+ */
+export type SlideReason =
+  /** A still picture, delivered as one. */
+  | 'plain'
+  /** Video: something on the slide is animated. */
+  | 'animated'
+  /** Video: the picture is a clip. */
+  | 'moving'
+  /** Video: a still held for its seconds, because the author asked. */
+  | 'forced-video'
+  /** Image: it animates, but the author asked for a still — drawn settled. */
+  | 'settled'
+  /** Image: it is a clip, but the author asked for a still — its chosen frame. */
+  | 'frozen';
 
 /** One picture of the deck, in the order it is swiped. */
 export interface DeckSlide {
@@ -38,6 +61,60 @@ export interface DeckSlide {
   framing: Framing;
   /** The author's own line over a content picture. */
   caption: string;
+  /** What this slide is delivered as, `auto` already resolved. */
+  medium: 'image' | 'video';
+  /**
+   * What the author CHOSE, before resolution — so a panel can show which of
+   * the three is pressed without knowing whether this slide's value lives on
+   * the badge or on a `PostSlide`. Always `image` for the closing card, whose
+   * medium is structural.
+   */
+  chosen: SlideMedium;
+  /** Why it came out that way. */
+  reason: SlideReason;
+  /**
+   * How long it is on screen as a video. Meaningless for an image, and kept
+   * anyway: the same slide becomes a video the moment it is combined into a
+   * reel, and a duration that only existed in one branch would be a second
+   * value to keep in step.
+   */
+  seconds: number;
+}
+
+/**
+ * What a slide is delivered as, and why: the one place `auto` is resolved.
+ *
+ * `moving` is decided from the file NAME, which is all a pure module can see
+ * and all it needs — the library's own `classifyPart` answers it, so the deck
+ * and the sidebar cannot disagree about what a clip is.
+ *
+ * An author who forces `image` over something that moves is obeyed, never
+ * refused: a still of an animated hook is how a piece gets its grid picture.
+ * The reason says so, and the panel prints it.
+ */
+export function resolveSlideMedium(
+  medium: SlideMedium,
+  animated: boolean,
+  mediaName: string | null,
+): { medium: 'image' | 'video'; reason: SlideReason } {
+  const moving = mediaName !== null && classifyPart(mediaName) === 'video';
+  if (medium === 'image') {
+    if (animated) return { medium: 'image', reason: 'settled' };
+    if (moving) return { medium: 'image', reason: 'frozen' };
+    return { medium: 'image', reason: 'plain' };
+  }
+  // Forced video and auto agree wherever something already moves; the reason
+  // then names what actually moves rather than the author's click, which is
+  // the more useful sentence.
+  if (animated) return { medium: 'video', reason: 'animated' };
+  if (moving) return { medium: 'video', reason: 'moving' };
+  if (medium === 'video') return { medium: 'video', reason: 'forced-video' };
+  return { medium: 'image', reason: 'plain' };
+}
+
+/** True when any badge piece carries an animation — what makes a hook move. */
+export function hookAnimates(styles: BadgePieceStyles): boolean {
+  return Object.values(styles).some((style) => Boolean(style?.animation));
 }
 
 /**
@@ -54,6 +131,13 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       videoTimeSeconds: post.badge.videoTimeSeconds,
       framing: normaliseFraming(post.badge.framing),
       caption: '',
+      ...resolveSlideMedium(
+        post.badge.medium,
+        hookAnimates(post.badge.pieceStyles),
+        post.media?.name ?? null,
+      ),
+      chosen: post.badge.medium,
+      seconds: post.badge.hookSeconds,
     },
   ];
 
@@ -66,6 +150,11 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       videoTimeSeconds: slide.videoTimeSeconds,
       framing: normaliseFraming(slide.framing),
       caption: slide.caption,
+      // A content slide has nothing animated on it yet; when a caption gains
+      // an animation, that flag is the only thing that changes here.
+      ...resolveSlideMedium(slide.medium, false, slide.media?.name ?? null),
+      chosen: slide.medium,
+      seconds: slide.seconds,
     });
   }
 
@@ -82,6 +171,13 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       videoTimeSeconds: 0,
       framing: { ...DEFAULT_FRAMING },
       caption: '',
+      // The closing card carries no picture and nothing animated, so it is a
+      // still — and, inside a reel, the tail the Studio already appends, at
+      // the length that outro has always used.
+      medium: 'image',
+      reason: 'plain',
+      chosen: 'image',
+      seconds: OUTRO_SECONDS_DEFAULT,
     });
   }
 

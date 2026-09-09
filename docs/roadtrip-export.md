@@ -1,7 +1,8 @@
 # Road Trip exports: what leaves the tool, what cannot, and the plan
 
-**Status (2026-09-09): analysis, plus a plan whose shape the maintainer has
-settled. Nothing is built.** The direction is his — "exporter la vidéo du hook
+**Status (2026-09-09): P1 and P2 are BUILT; P3 onwards is the plan.**
+
+The direction is the maintainer's — "exporter la vidéo du hook
 plus les autres éléments… un raccourci, qu'on importe et qu'on utilise ce que
 l'on a déjà dans le studio… générer des vidéos à partir du road trip" — and so
 is the model in §5: **a slide carries its own medium and its own duration,
@@ -199,7 +200,7 @@ only renderers. That is the test a model should pass.
 
 ## 6. Phases (one commit each)
 
-### P1 — the encoder brick: frames in, MP4 out
+### P1 — the encoder brick: frames in, MP4 out — **BUILT**
 
 `shared/media/render-video.ts`: encode a sequence of painted canvases to an MP4
 with no source file — no demux, no decoder, no audio track.
@@ -230,7 +231,7 @@ depends on it. P2 could equally go first (it is model and UI only); what must
 not happen is P2 shipping alone for long, with a rail promising a video the
 tool cannot yet deliver.
 
-### P2 — the slide model: a medium and a duration, chosen where the piece is composed
+### P2 — the slide model: a medium and a duration, chosen where the piece is composed — **BUILT**
 
 Document **v14**, and the whole of §5's stored half.
 

@@ -4,7 +4,9 @@ import {
   captionLineFromElementId,
   contentSlideElements,
   deckSlides,
+  hookAnimates,
   moveItem,
+  resolveSlideMedium,
   slideFileName,
 } from './deck';
 import { DEFAULT_CTA } from './cta-slide';
@@ -230,5 +232,110 @@ describe('moveItem', () => {
   it('is a no-op on a list too short to reorder', () => {
     expect(moveItem(['only'], 0, 1)).toEqual(['only']);
     expect(moveItem([], 0, 0)).toEqual([]);
+  });
+});
+
+// --- what a slide is delivered as ------------------------------------------
+
+describe('resolveSlideMedium', () => {
+  it('leaves a plain photograph an image', () => {
+    expect(resolveSlideMedium('auto', false, 'IMG_1.JPG')).toEqual({
+      medium: 'image',
+      reason: 'plain',
+    });
+  });
+
+  it('makes an animated slide a video', () => {
+    expect(resolveSlideMedium('auto', true, 'IMG_1.JPG')).toEqual({
+      medium: 'video',
+      reason: 'animated',
+    });
+  });
+
+  it('makes a clip a video, animated or not', () => {
+    expect(resolveSlideMedium('auto', false, 'DJI_0001.MP4')).toEqual({
+      medium: 'video',
+      reason: 'moving',
+    });
+  });
+
+  it('holds a still as video when the author asks', () => {
+    expect(resolveSlideMedium('video', false, 'IMG_1.JPG')).toEqual({
+      medium: 'video',
+      reason: 'forced-video',
+    });
+  });
+
+  it('names what really moves rather than the click, when both agree', () => {
+    expect(resolveSlideMedium('video', true, 'IMG_1.JPG').reason).toBe('animated');
+    expect(resolveSlideMedium('video', false, 'a.mov').reason).toBe('moving');
+  });
+
+  it('obeys a forced image, and says what it costs', () => {
+    expect(resolveSlideMedium('image', true, 'IMG_1.JPG')).toEqual({
+      medium: 'image',
+      reason: 'settled',
+    });
+    expect(resolveSlideMedium('image', false, 'DJI_0001.MP4')).toEqual({
+      medium: 'image',
+      reason: 'frozen',
+    });
+  });
+
+  it('treats a slide with no picture as a still', () => {
+    expect(resolveSlideMedium('auto', false, null).medium).toBe('image');
+  });
+});
+
+describe('hookAnimates', () => {
+  it('is false for an unstyled badge', () => {
+    expect(hookAnimates({})).toBe(false);
+    expect(hookAnimates({ headline: { textCase: 'upper' } })).toBe(false);
+  });
+  it('is true as soon as one piece animates', () => {
+    expect(
+      hookAnimates({
+        headline: { animation: { in: { preset: 'fade', duration: 0.5, easing: 'out' } } },
+      }),
+    ).toBe(true);
+  });
+});
+
+describe('deckSlides — medium and screen time', () => {
+  it('resolves the hook from its badge and its picture', () => {
+    const p = post({
+      media: { name: 'DJI_0001.MP4', size: 1, lastModified: 1 },
+    });
+    const [hook] = deckSlides(trip(), p);
+    expect(hook.medium).toBe('video');
+    expect(hook.reason).toBe('moving');
+    expect(hook.chosen).toBe('auto');
+    expect(hook.seconds).toBe(p.badge.hookSeconds);
+  });
+
+  it('follows an animated badge over a photograph — the case that started this', () => {
+    const p = post();
+    p.badge.pieceStyles = {
+      headline: { animation: { in: { preset: 'slide', duration: 0.5, easing: 'out' } } },
+    };
+    expect(deckSlides(trip(), p)[0]).toMatchObject({
+      medium: 'video',
+      reason: 'animated',
+    });
+  });
+
+  it('carries each content slide’s own choice and length', () => {
+    const slide = createPostSlide({ name: 'IMG_2.JPG', size: 1, lastModified: 1 });
+    slide.medium = 'video';
+    slide.seconds = 4.5;
+    const deck = deckSlides(trip(), post({ slides: [slide] }));
+    expect(deck[1]).toMatchObject({ medium: 'video', chosen: 'video', seconds: 4.5 });
+  });
+
+  it('keeps the closing card a still, whatever else the deck does', () => {
+    const p = post({ includeCta: true });
+    p.badge.medium = 'video';
+    const deck = deckSlides(trip({ cta: { ...DEFAULT_CTA, headline: 'Follow' } }), p);
+    expect(deck.at(-1)).toMatchObject({ kind: 'cta', medium: 'image', reason: 'plain' });
   });
 });
