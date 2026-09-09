@@ -458,13 +458,27 @@ export default function PostEditor({
    * later shows what is sitting in it rather than a file name. Debounced and
    * taken only from the hook — the stage redraws on every frame of the badge's
    * transport, and writing each one would be a write per animation frame.
+   *
+   * Never while the piece's picture is MISSING. A piece that names no picture
+   * is a badge over nothing and is worth storing as it is; a piece that names
+   * one the Library cannot resolve right now is drawing a placeholder, and
+   * baking that black frame destroys the good thumbnail the trip already had.
+   * Measured: opening a piece before its folder is loaded emptied its card.
+   *
+   * Read through a ref, and checked again when the timer fires: the picture
+   * can go between the paint that scheduled the write and the write itself.
    */
   const thumbTimer = useRef<number | null>(null);
+  const missingRef = useRef(missing);
+  useEffect(() => {
+    missingRef.current = missing;
+  }, [missing]);
   const captureThumb = useCallback(
     (canvas: HTMLCanvasElement) => {
-      if (!isHook) return;
+      if (!isHook || missingRef.current) return;
       if (thumbTimer.current !== null) window.clearTimeout(thumbTimer.current);
       thumbTimer.current = window.setTimeout(() => {
+        if (missingRef.current) return;
         void canvasThumbnail(canvas).then((blob) => {
           if (blob) void putThumb(post.id, blob);
         });
