@@ -6,6 +6,7 @@ import type { WinnowAssetRow } from './client';
 const row = (over: Partial<WinnowAssetRow> = {}): WinnowAssetRow => ({
   id: 1,
   filename: 'DJI_0001.JPG',
+  session_id: 3,
   ext: 'jpg',
   media_type: 'photo',
   captured_at: '2025-07-09T08:30:15.000Z',

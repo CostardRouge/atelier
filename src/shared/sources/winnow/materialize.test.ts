@@ -13,6 +13,7 @@ const BASE = 'https://winnow.example';
 const row = (over: Partial<WinnowAssetRow> = {}): WinnowAssetRow => ({
   id: 42,
   filename: 'DJI_0001.MP4',
+  session_id: 3,
   ext: 'mp4',
   media_type: 'video',
   captured_at: '2025-07-09T08:30:00.000Z',
