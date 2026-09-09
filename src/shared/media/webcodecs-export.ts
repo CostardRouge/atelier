@@ -39,7 +39,8 @@ import {
   type ExportFrameRate,
 } from './frame-rate';
 import { safeChunkMetadata } from './colour-tag';
-import { tailFrames, type ExportTail } from './export-tail';
+import { type ExportTail } from './export-tail';
+import { framePlan } from './frame-plan';
 import type { TrimRange } from './trim';
 
 export interface ExportProgress {
@@ -574,7 +575,7 @@ export async function exportProcessedVideo(
     // The appended card, when there is one — planned up front so the progress
     // ratio covers the whole run, not just the footage.
     const tail = options.tail && options.tail.seconds > 0 ? options.tail : null;
-    const tailPlan = tail ? tailFrames(tail.seconds, framerate, 0).length : 0;
+    const tailPlan = tail ? framePlan(tail.seconds, framerate, 0).length : 0;
     const total = win.frameCount + tailPlan;
     const gop = Math.max(1, framerate * 2); // keyframe every ~2s
     let processed = 0;
@@ -718,7 +719,7 @@ export async function exportProcessedVideo(
       // the footage ends — nothing already encoded moves, and the audio copy
       // below is untouched (the card plays silent, as an outro does).
       if (tail) {
-        for (const f of tailFrames(tail.seconds, framerate, outEndMicros)) {
+        for (const f of framePlan(tail.seconds, framerate, outEndMicros)) {
           throwIfAborted();
           if (pipelineError) throw pipelineError;
           const out = new VideoFrame(tail.draw(f.tSeconds), {
