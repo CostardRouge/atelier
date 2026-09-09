@@ -9,6 +9,8 @@ import { formatBytes, formatDuration } from '../shared/lib/format';
 import { exifFromRow } from '../shared/sources/winnow/exif-from-row';
 import { exposureSummary } from '../shared/exif/exif-summary';
 import MediaLightbox, { type LightboxItem } from '../shared/ui/MediaLightbox';
+import MediaActionRow from '../shared/ui/MediaActionRow';
+import { useMediaActions, type MediaAction } from '../shared/sources/media-scope';
 
 interface WinnowLightboxProps {
   connection: WinnowConnection;
@@ -61,6 +63,20 @@ export default function WinnowLightbox({
   const row = rows[index] ?? null;
   const have = row ? inLibrary.get(`${connection.id}/${row.id}`) : undefined;
   const busy = picker.fetching !== null;
+
+  // What the active tool can start from this picture. The fetch comes first
+  // and the verb runs only if it landed: a piece made from a picture that
+  // never arrived would open on a placeholder, which is the one thing the
+  // thumbnail rule (`roadtrip.md`) says must not be composed over.
+  const offer = useMediaActions();
+  const start = async (action: MediaAction) => {
+    if (!row) return;
+    const assetId = await picker.pick(row);
+    if (!assetId) return; // the sheet stays open on the problem the picker set
+    action.run();
+    onClose();
+  };
+
   if (!row) return null;
 
   return (
@@ -107,6 +123,11 @@ export default function WinnowLightbox({
               the proxy, from {connection.id} — nothing leaves your machine
             </span>
           </div>
+
+          {/* Starting a piece from here brings the picture across on the way,
+              so the two-step (add, then go and make something of it) is one
+              gesture. */}
+          <MediaActionRow offer={offer} onRun={(a) => void start(a)} busy={busy} />
 
           {picker.problem && (
             <p className="m-0 text-[0.78rem] text-[#9a3a23]" role="alert">
