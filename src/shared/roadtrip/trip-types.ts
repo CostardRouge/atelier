@@ -29,6 +29,7 @@ import {
   DEFAULT_BADGE_DURATION,
   DEFAULT_BADGE_LAYOUT,
   type BadgeLayout,
+  type BadgePieceStyle,
   type BadgePieceStyles,
 } from './badge-layout';
 import { createShade, vignetteShade, type Shade } from './shades';
@@ -46,7 +47,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 14;
+export const TRIP_DOC_VERSION = 15;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers and the
@@ -355,6 +356,13 @@ export interface PostSlide {
   medium: SlideMedium;
   /** How long it is on screen when it is delivered as a video. */
   seconds: number;
+  /**
+   * How the caption departs from the trip's theme — case, ink, panel, and an
+   * ANIMATION. The same model a badge piece uses, so a caption that slides in
+   * means the same thing a badge piece sliding in does, and `auto` reads the
+   * animation to make the slide a video. Empty = fully themed, as it was.
+   */
+  captionStyle: BadgePieceStyle;
 }
 
 export function createPostSlide(media: SavedMediaRef | null = null): PostSlide {
@@ -366,6 +374,7 @@ export function createPostSlide(media: SavedMediaRef | null = null): PostSlide {
     caption: '',
     medium: 'auto',
     seconds: DEFAULT_SLIDE_SECONDS,
+    captionStyle: {},
   };
 }
 
@@ -923,6 +932,18 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
           : defaults,
       ]),
     ) as HookDefaultsByKind;
+  }
+
+  if (migrated.version < 15) {
+    // No caption had a style before this existed: an empty one is exactly
+    // the fully themed caption every slide already drew.
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      slides: (post.slides ?? []).map((slide) => ({
+        ...slide,
+        captionStyle: slide.captionStyle ?? {},
+      })),
+    }));
   }
 
   migrated.version = TRIP_DOC_VERSION;

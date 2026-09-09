@@ -827,3 +827,39 @@ describe('migrateTripDoc — v13 → v14 (a slide says what it is)', () => {
     expect(again.posts[0].slides[0].seconds).toBe(8);
   });
 });
+
+describe('migrateTripDoc — v14 → v15 (a caption may animate)', () => {
+  const v14 = () => {
+    const doc = createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04');
+    // Built by REMOVING what v15 added — a fixture carrying the new field
+    // proves nothing about a document written before it existed.
+    const slide = createPostSlide(null) as unknown as Record<string, unknown>;
+    delete slide.captionStyle;
+    const post = {
+      id: 'p1',
+      kind: 'carousel',
+      date: '2025-03-27',
+      endDate: null,
+      title: 'Cliffs',
+      media: null,
+      badge: defaultPostBadge('carousel'),
+      slides: [slide],
+      includeCta: false,
+      projectId: null,
+      grade: null,
+      publishedAt: null,
+      createdAt: 0,
+    };
+    return { ...doc, version: 14, posts: [post] } as unknown as TripDoc;
+  };
+
+  it('gives every existing caption an empty style — the fully themed one it drew', () => {
+    expect(migrateTripDoc(v14()).posts[0].slides[0].captionStyle).toEqual({});
+  });
+
+  it('keeps a style a document already carries', () => {
+    const doc = v14();
+    (doc.posts[0].slides[0] as { captionStyle?: unknown }).captionStyle = { color: '#123456' };
+    expect(migrateTripDoc(doc).posts[0].slides[0].captionStyle).toEqual({ color: '#123456' });
+  });
+});

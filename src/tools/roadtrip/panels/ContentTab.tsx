@@ -6,7 +6,7 @@ import {
   type BadgePiece,
   type CounterMode,
 } from '../../../shared/roadtrip/day-badge';
-import { hookAnimates, type DeckSlide } from '../../../shared/roadtrip/deck';
+import type { DeckSlide } from '../../../shared/roadtrip/deck';
 import { readCaptureDate, type CaptureDate } from '../../../shared/roadtrip/media-date';
 import { timeAgoPreviews, type TimeAgoMode } from '../../../shared/roadtrip/time-ago';
 import { postDayRange, stageAt } from '../../../shared/roadtrip/trip-coverage';
@@ -204,7 +204,6 @@ export default function ContentTab({
       {slide.kind !== 'cta' && (
         <SlideDelivery
           slide={slide}
-          animated={isHook && hookAnimates(post.badge.pieceStyles)}
           clipSeconds={clipSeconds}
           onMedium={(medium) =>
             isHook ? patchBadge({ medium }) : patchSlide({ medium })

@@ -328,6 +328,28 @@ describe('deckSlides — medium and screen time', () => {
     });
   });
 
+  it('makes a content slide a video when its caption animates', () => {
+    const slide = createPostSlide({ name: 'IMG_2.JPG', size: 1, lastModified: 1 });
+    slide.caption = 'A line';
+    slide.captionStyle = {
+      animation: { in: { preset: 'fade', duration: 0.5, easing: 'out' } },
+    };
+    const deck = deckSlides(trip(), post({ slides: [slide] }));
+    expect(deck[1]).toMatchObject({ animated: true, medium: 'video', reason: 'animated' });
+    // And the caption's elements carry the animation, with the slide's own
+    // screen time as the life it plays inside.
+    const els = contentSlideElements('A line', 4 / 5, undefined, slide.captionStyle, 3);
+    expect(els[0].animation).toEqual(slide.captionStyle.animation);
+    expect(els[0].styleOverrides).toEqual(expect.arrayContaining(['legibility', 'glow']));
+  });
+
+  it('keeps a caption a still when its style only recolours it', () => {
+    const slide = createPostSlide({ name: 'IMG_2.JPG', size: 1, lastModified: 1 });
+    slide.captionStyle = { color: '#ff0000' };
+    const deck = deckSlides(trip(), post({ slides: [slide] }));
+    expect(deck[1]).toMatchObject({ animated: false, medium: 'image' });
+  });
+
   it('carries each content slide’s own choice and length', () => {
     const slide = createPostSlide({ name: 'IMG_2.JPG', size: 1, lastModified: 1 });
     slide.medium = 'video';

@@ -15,6 +15,7 @@ import { makeFrameGrader, type FrameGrader } from '../lut/frame-grader';
 import { encodeFrames, paintedOutputSize } from '../media/render-video';
 import type { ExportProgress } from '../media/webcodecs-export';
 import type { OverlayElement } from '../overlay/overlay-types';
+import { settleForStill } from '../overlay/still-frame';
 import type { SavedMediaRef } from '../projects/project-types';
 import { badgeElements } from './badge-layout';
 import {
@@ -103,7 +104,7 @@ function composeSlide(
         : []
       : isCta
         ? cta!.elements
-        : contentSlideElements(slide.caption, aspect);
+        : contentSlideElements(slide.caption, aspect, undefined, slide.captionStyle, slide.seconds);
   const qr: QrDraw | null = cta?.qr
     ? { ...cta.qr, dark: trip.cta.ink, light: trip.cta.background }
     : null;
@@ -156,8 +157,15 @@ export async function renderDeck(
       const file = opts.resolve(slide.media);
       if (file) source = await loadBadgeSource(file, slide.videoTimeSeconds);
 
+      const composed = composeSlide(trip, post, slide, aspect, content);
       const blob = await badgeToPng({
-        ...composeSlide(trip, post, slide, aspect, content),
+        ...composed,
+        // A content caption that animates is drawn SETTLED in a still — at
+        // t = 0 its entrance would put it off frame (the Studio's own rule
+        // for a photograph, `still-frame.ts`). The hook is settled by the
+        // stage's clock, handed in.
+        elements:
+          slide.kind === 'content' ? settleForStill(composed.elements) : composed.elements,
         source,
         timeSeconds: slide.kind === 'hook' ? opts.timeSeconds : 0,
         width: w,

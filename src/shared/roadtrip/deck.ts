@@ -23,8 +23,8 @@ import { classifyPart } from '../library/assets';
 import { DEFAULT_FRAMING, normaliseFraming, type Framing } from '../media/framing';
 import { OUTRO_SECONDS_DEFAULT } from '../overlay/outro-card';
 import type { SavedMediaRef } from '../projects/project-types';
-import type { BadgePieceStyles } from './badge-layout';
-import type { SlideMedium, TripDoc, TripPost } from './trip-types';
+import { applyPieceStyle, type BadgePieceStyle, type BadgePieceStyles } from './badge-layout';
+import { DEFAULT_SLIDE_SECONDS, type SlideMedium, type TripDoc, type TripPost } from './trip-types';
 
 export type DeckSlideKind = 'hook' | 'content' | 'cta';
 
@@ -61,6 +61,14 @@ export interface DeckSlide {
   framing: Framing;
   /** The author's own line over a content picture. */
   caption: string;
+  /** How that line departs from the theme — and whether it animates. */
+  captionStyle: BadgePieceStyle;
+  /**
+   * True when something on this slide is animated — a badge piece on the
+   * hook, the caption on a content picture. The input `auto` was resolved
+   * from, kept so a panel can explain the resolution without re-deriving it.
+   */
+  animated: boolean;
   /** What this slide is delivered as, `auto` already resolved. */
   medium: 'image' | 'video';
   /**
@@ -131,6 +139,8 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       videoTimeSeconds: post.badge.videoTimeSeconds,
       framing: normaliseFraming(post.badge.framing),
       caption: '',
+      captionStyle: {},
+      animated: hookAnimates(post.badge.pieceStyles),
       ...resolveSlideMedium(
         post.badge.medium,
         hookAnimates(post.badge.pieceStyles),
@@ -142,6 +152,9 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
   ];
 
   for (const slide of post.slides) {
+    // A caption animates the way a badge piece does, and that is all it takes
+    // for `auto` to make the slide a video — no rule of its own.
+    const animated = Boolean(slide.captionStyle?.animation);
     slides.push({
       kind: 'content',
       position: slides.length + 1,
@@ -150,9 +163,9 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       videoTimeSeconds: slide.videoTimeSeconds,
       framing: normaliseFraming(slide.framing),
       caption: slide.caption,
-      // A content slide has nothing animated on it yet; when a caption gains
-      // an animation, that flag is the only thing that changes here.
-      ...resolveSlideMedium(slide.medium, false, slide.media?.name ?? null),
+      captionStyle: slide.captionStyle ?? {},
+      animated,
+      ...resolveSlideMedium(slide.medium, animated, slide.media?.name ?? null),
       chosen: slide.medium,
       seconds: slide.seconds,
     });
@@ -171,6 +184,8 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       videoTimeSeconds: 0,
       framing: { ...DEFAULT_FRAMING },
       caption: '',
+      captionStyle: {},
+      animated: false,
       // The closing card carries no picture and nothing animated, so it is a
       // still — and, inside a reel, the tail the Studio already appends, at
       // the length that outro has always used.
@@ -244,6 +259,8 @@ export function contentSlideElements(
   caption: string,
   aspect = 4 / 5,
   color = '#ffffff',
+  style: BadgePieceStyle = {},
+  seconds: number = DEFAULT_SLIDE_SECONDS,
 ): OverlayElement[] {
   const text = caption.trim();
   if (!text) return [];
@@ -266,11 +283,17 @@ export function contentSlideElements(
     el.sizeFrac = CAPTION;
     el.color = color;
     el.legibility = { mode: 'shadow', color: 'rgba(0,0,0,0.7)', padFrac: 0.35 };
+    el.glowAmount = 0;
+    // The caption's own departure — case, ink, a panel, an ANIMATION — applied
+    // the way a badge piece's is, after the defaults so a panel the author
+    // chose replaces the shadow. The window it opens is the slide's own screen
+    // time, which is what an exit lands on.
+    applyPieceStyle(el, style, seconds);
     // A caption follows the trip's font and weight but never its glow or its
     // panel: those are the badge's signature, and repeating them on every
-    // slide would make the hook stop being one.
-    el.styleOverrides = ['legibility', 'glow'];
-    el.glowAmount = 0;
+    // slide would make the hook stop being one. Pinned AFTER the piece style,
+    // which rewrites the pin list.
+    el.styleOverrides = [...new Set([...(el.styleOverrides ?? []), 'legibility', 'glow'])];
     return el;
   });
 }

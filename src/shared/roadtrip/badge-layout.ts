@@ -166,7 +166,7 @@ function casedText(text: string, style: BadgePieceStyle | undefined): string {
  * against the theme. Casing is applied to the TEXT and then `uppercase` is
  * pinned off, so a theme that uppercases cannot undo a deliberate lowercase.
  */
-function applyPieceStyle(
+export function applyPieceStyle(
   el: OverlayElement,
   style: BadgePieceStyle | undefined,
   durationSeconds: number,

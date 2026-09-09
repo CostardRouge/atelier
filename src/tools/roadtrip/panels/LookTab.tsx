@@ -3,7 +3,13 @@ import StylePanel from '../../../shared/overlay/StylePanel';
 import type { Shade } from '../../../shared/roadtrip/shades';
 import type { BadgePieceStyle } from '../../../shared/roadtrip/badge-layout';
 import type { BadgePiece } from '../../../shared/roadtrip/day-badge';
-import type { PostBadge, TripDoc, TripPost } from '../../../shared/roadtrip/trip-types';
+import type { DeckSlide } from '../../../shared/roadtrip/deck';
+import type {
+  PostBadge,
+  PostSlide,
+  TripDoc,
+  TripPost,
+} from '../../../shared/roadtrip/trip-types';
 import SectionLegend from '../../../shared/ui/SectionLegend';
 import PieceStylePanel from '../PieceStylePanel';
 import ShadesPanel from '../ShadesPanel';
@@ -32,12 +38,15 @@ export function positionFor(anchor: Anchor): { x: number; y: number } {
 interface LookTabProps {
   trip: TripDoc;
   post: TripPost;
-  /** The badge only exists on the hook, and so does everything here but the theme. */
+  /** The slide on the stage — a content slide's caption departs like a piece. */
+  slide: DeckSlide;
+  /** The badge only exists on the hook, and so do its placement and shades. */
   isHook: boolean;
   /** The piece in hand — chosen above the tabs, or by a click on the stage. */
   piece: BadgePiece;
   onChangeTrip: (trip: TripDoc) => void;
   patchBadge: (patch: Partial<PostBadge>) => void;
+  patchSlide: (patch: Partial<Pick<PostSlide, 'captionStyle'>>) => void;
   /** The trip's words live in its settings sheet now. */
   onOpenTripSettings: () => void;
 }
@@ -59,10 +68,12 @@ interface LookTabProps {
 export default function LookTab({
   trip,
   post,
+  slide,
   isHook,
   piece,
   onChangeTrip,
   patchBadge,
+  patchSlide,
   onOpenTripSettings,
 }: LookTabProps) {
   const pieceStyle: BadgePieceStyle = post.badge.pieceStyles[piece] ?? {};
@@ -187,10 +198,24 @@ export default function LookTab({
             <ShadesPanel shades={post.badge.shades} onChange={setShades} />
           </div>
         </>
+      ) : slide.kind === 'content' ? (
+        <div className="flex flex-col gap-2">
+          <SectionLegend label="This caption departs">
+            <p>
+              Colour, panel, casing and animation for this picture’s caption — the same
+              model a badge piece uses, so a caption that slides in means what a piece
+              sliding in does. Give it an animation and the slide becomes a video.
+              Placement and shades stay with the badge on the hook.
+            </p>
+          </SectionLegend>
+          <PieceStylePanel
+            style={slide.captionStyle}
+            onChange={(captionStyle) => patchSlide({ captionStyle })}
+          />
+        </div>
       ) : (
         <p className="m-0 text-[0.72rem] text-faint">
-          A caption and the closing card keep a fixed look; per-piece styling, placement
-          and shades belong to the badge on the hook.
+          The closing card keeps a fixed look; it is settled in the trip’s settings.
         </p>
       )}
     </div>

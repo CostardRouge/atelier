@@ -231,8 +231,25 @@ export default function PostEditor({
   const elements = useMemo(() => {
     if (isHook) return hookElements;
     if (isCta) return cta.elements;
-    return contentSlideElements(slide.caption, aspect);
-  }, [isHook, isCta, hookElements, cta.elements, slide.caption, aspect]);
+    // The caption's own departure and the slide's screen time: the same two
+    // things the exporters hand in, so the stage shows what will be written.
+    return contentSlideElements(
+      slide.caption,
+      aspect,
+      undefined,
+      slide.captionStyle,
+      slide.seconds,
+    );
+  }, [
+    isHook,
+    isCta,
+    hookElements,
+    cta.elements,
+    slide.caption,
+    slide.captionStyle,
+    slide.seconds,
+    aspect,
+  ]);
 
   const block = useMemo(
     () => (content ? badgeBlockExtent(content, post.badge.layout, aspect) : null),
@@ -298,8 +315,15 @@ export default function PostEditor({
     setSelected(to + 1);
   }
 
-  // --- the badge's own clock ------------------------------------------------
-  const clock = useBadgeClock(post.badge.pieceStyles, post.badge.durationSeconds, isHook);
+  // --- the slide's own clock ------------------------------------------------
+  // The hook's clock runs over its badge pieces; a content slide's over its
+  // caption, which animates the way a piece does and whose life is the
+  // slide's own screen time. The closing card has no clock.
+  const clock = useBadgeClock(
+    isHook ? post.badge.pieceStyles : { caption: slide.captionStyle },
+    isHook ? post.badge.durationSeconds : slide.seconds,
+    !isCta,
+  );
 
   // --- the hook's own picture, whichever slide is open ---------------------
   // The stage reports the OPEN slide's source; the hook clip export and the
@@ -623,7 +647,7 @@ export default function PostEditor({
             aspect={aspect}
             elements={elements}
             theme={isCta ? null : trip.theme}
-            timeSeconds={isHook ? clock.time : 0}
+            timeSeconds={isCta ? 0 : clock.time}
             shades={isHook ? post.badge.shades : undefined}
             block={isHook ? block : null}
             background={isCta ? trip.cta.background : undefined}
@@ -648,7 +672,7 @@ export default function PostEditor({
             onFit={setFitWidth}
           />
 
-          {isHook && clock.animated && (
+          {!isCta && clock.animated && (
             <div className="flex-none flex items-center gap-3 w-full max-w-[26rem]">
               <button
                 type="button"
@@ -730,10 +754,12 @@ export default function PostEditor({
             <LookTab
               trip={trip}
               post={post}
+              slide={slide}
               isHook={isHook}
               piece={piece}
               onChangeTrip={onChangeTrip}
               patchBadge={patchBadge}
+              patchSlide={patchSlide}
               onOpenTripSettings={() => setTripSheet('words')}
             />
           )}

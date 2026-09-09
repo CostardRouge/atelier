@@ -187,7 +187,9 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     const variant = hookVariant(post.badge.aspectId);
     const shared = {
       variant,
-      elements: isHook ? inputs.hookElements : contentSlideElements(slide.caption, aspect),
+      elements: isHook
+        ? inputs.hookElements
+        : contentSlideElements(slide.caption, aspect, undefined, slide.captionStyle, item.seconds),
       theme: isHook ? trip.theme : null,
       shades: isHook ? post.badge.shades : undefined,
       block: isHook ? inputs.block : null,

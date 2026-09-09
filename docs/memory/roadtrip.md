@@ -339,6 +339,14 @@ The shape it was given, which any future network feature should copy: the client
 
 **`composeSlide` is the one composition** the PNG deck and the reel share — elements, theme, shades, the closing card's ground and QR, framing — extracted so the two cannot compose a slide two different ways. A still is decoded once and graded once into a bitmap for the whole reel; a clip keeps one grader for its span, because its frame changes and a grader per frame is a WebGL2 context per frame. **Trap kept out**: the reel's "written as one file" sentence must not print beside a blocker — with no encoder, the legend says nothing can be written and the sentence contradicted it one line down.
 
+## A caption animates the way a badge piece does, and that makes its slide a video (2026-09-09)
+
+**Decision, the maintainer's** (*"les slides deviennent à la fois des images ou des vidéos en fonction de s'ils sont animés… peut-être du texte animé"*). `PostSlide.captionStyle` (**v15**, `{}` by default) is a `BadgePieceStyle` — case, ink, panel, animation — applied by the same `applyPieceStyle` the badge uses, so a caption that slides in means what a piece sliding in does and no second animation model exists. `deckSlides` reads `Boolean(captionStyle.animation)` as the slide's `animated` flag and `auto` resolves it to video with **no new rule**: that was the test the slide model was built to pass, and it passed. The Look tab shows `PieceStylePanel` bound to the caption on a content slide; the transport and the stage clock now run on any slide but the closing card.
+
+**Two orderings matter in `contentSlideElements`.** The caption's defaults (shadow, no glow) go on FIRST so a panel the author chose replaces the shadow rather than being overwritten by it; and the caption's own pins (`legibility`, `glow`) are unioned AFTER `applyPieceStyle`, which rewrites `styleOverrides` wholesale — pinning before it silently un-pins them and the badge's glow leaks onto every slide. The window an animated caption opens is the SLIDE's screen time, which is what an exit lands on.
+
+**A still of an animated caption is drawn settled** (`settleForStill` in `renderDeck`), the Studio's own rule for a photograph: at t = 0 an entrance would put the line off frame, and the PNG deck has no clock to hand a content slide. `DeckSlide.animated` is carried so `SlideDelivery` explains the resolution without re-deriving it — the hook's from its pieces, a content slide's from its caption, never a prop a panel has to compute.
+
 ## The QR is generated here, and it is verified by decoding (2026-08-24)
 
 **Decision.** `shared/lib/qr.ts` is a hand-rolled encoder (byte mode, EC level M, versions 1–10). **Why not a library**: a card that fetched its own QR from a service would be the single place this suite phoned home, and the local-first line is the product. It is ~250 lines against a spec that has not moved since 2000 — unlike Dexie, it earns the code it costs.

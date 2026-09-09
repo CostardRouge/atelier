@@ -1,6 +1,6 @@
 # Road Trip exports: what leaves the tool, what cannot, and the plan
 
-**Status (2026-09-09): P1 to P5 and the combined reel are BUILT; what is left is P6 and P7.**
+**Status (2026-09-09): P1 to P6 and the combined reel are BUILT; what is left is P7, the Studio bridge's style.**
 
 The direction is the maintainer's — "exporter la vidéo du hook
 plus les autres éléments… un raccourci, qu'on importe et qu'on utilise ce que
@@ -334,7 +334,7 @@ So the work is renderers and one picker, not a document change:
   decode pipeline, but real motion with no second source muxed. Silent by
   construction, which the combined reel already is.
 
-### P6 — a content slide can animate
+### P6 — a content slide can animate — **BUILT**
 
 Also the maintainer's, stated as the reason the model must be right now: *"il y
 aura quand même des animations, peut-être du texte animé, peut-être un élément

@@ -10,8 +10,6 @@ import { chipClass, legend } from './ui';
 
 interface SlideDeliveryProps {
   slide: DeckSlide;
-  /** True when something on this slide is animated — a badge piece, today. */
-  animated: boolean;
   /** The clip's length when this slide holds one and it has loaded; else 0. */
   clipSeconds: number;
   onMedium: (medium: SlideMedium) => void;
@@ -94,7 +92,6 @@ function shortAnswer(reason: SlideReason): string {
  */
 export default function SlideDelivery({
   slide,
-  animated,
   clipSeconds,
   onMedium,
   onSeconds,
@@ -118,7 +115,7 @@ export default function SlideDelivery({
 
       <div className="grid grid-cols-3 gap-1">
         {CHOICES.map((choice) => {
-          const would = resolveSlideMedium(choice.id, animated, name);
+          const would = resolveSlideMedium(choice.id, slide.animated, name);
           const hint = choiceHint(choice.id, would.reason, would.medium);
           return (
             <button
