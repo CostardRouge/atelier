@@ -620,6 +620,7 @@ export default function PostEditor({
             onRemove={removeSlide}
             onMove={moveSlideTo}
             onIncludeCta={(on) => onChangePost({ ...post, includeCta: on })}
+            onEditClosingCard={() => setTripSheet('cta')}
           />
           <div
             style={{ '--fit': fitWidth === null ? '100%' : `${Math.round(fitWidth)}px` } as React.CSSProperties}

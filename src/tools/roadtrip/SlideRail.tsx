@@ -19,6 +19,8 @@ interface SlideRailProps {
   /** Indices into `post.slides`, content pictures only. */
   onMove: (from: number, to: number) => void;
   onIncludeCta: (on: boolean) => void;
+  /** Where the closing card's words are written — the trip's own sheet. */
+  onEditClosingCard: () => void;
 }
 
 /**
@@ -51,17 +53,23 @@ export default function SlideRail({
   onRemove,
   onMove,
   onIncludeCta,
+  onEditClosingCard,
 }: SlideRailProps) {
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
 
-  return (
-    <div
-      className="flex-none flex flex-row gap-2 overflow-x-auto pb-1 @min-[860px]:flex-col @min-[860px]:w-[4.6rem] @min-[860px]:overflow-x-visible @min-[860px]:overflow-y-auto @min-[860px]:pb-0 @min-[860px]:pr-1"
-      role="listbox"
-      aria-label="The slides of this piece"
-    >
-      {slides.map((s, i) => {
+  /**
+   * The deck as the rail lays it out: the pictures, then the way to add
+   * another, and the closing card LAST — either the card itself or the offer
+   * of one. `+` used to come after the card, so the piece read as ending on
+   * the button that adds a picture before it, and a carousel arrived with a
+   * card it had never been asked for. Adding always inserts before the card
+   * (the deck's own order); the rail now says so.
+   */
+  const pictures = slides.filter((s) => s.kind !== 'cta');
+  const card = slides.find((s) => s.kind === 'cta') ?? null;
+
+  const cell = (s: DeckSlide, i: number) => {
         const ci = s.kind === 'content' ? i - 1 : -1;
         const open = i === index;
         const dropping = ci >= 0 && dragOver === ci && dragFrom !== ci;
@@ -143,12 +151,24 @@ export default function SlideRail({
                   </span>
                 )}
               </button>
-              {open && ci >= 0 && (
+              {/* The closing card comes off the same way a picture does. It
+                  is added by choice, so it has to be droppable by choice —
+                  a cell you can only turn on is the one-way door the cover
+                  panel already had to be taught out of. */}
+              {open && (ci >= 0 || s.kind === 'cta') && (
                 <button
                   type="button"
-                  onClick={onRemove}
-                  aria-label={`Remove picture ${s.position} from this piece`}
-                  title="Remove this picture from the deck"
+                  onClick={s.kind === 'cta' ? () => onIncludeCta(false) : onRemove}
+                  aria-label={
+                    s.kind === 'cta'
+                      ? 'Take the closing card off this piece'
+                      : `Remove picture ${s.position} from this piece`
+                  }
+                  title={
+                    s.kind === 'cta'
+                      ? 'End this piece on its last picture instead'
+                      : 'Remove this picture from the deck'
+                  }
                   className="absolute -top-1.5 -right-1.5 w-[1.15rem] h-[1.15rem] grid place-items-center rounded-full border border-line-strong bg-paper text-[0.7rem] leading-none text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
                 >
                   ×
@@ -164,7 +184,17 @@ export default function SlideRail({
             </span>
           </div>
         );
-      })}
+  };
+
+  return (
+    <div
+      className="flex-none flex flex-row gap-2 overflow-x-auto pb-1 @min-[860px]:flex-col @min-[860px]:w-[4.6rem] @min-[860px]:overflow-x-visible @min-[860px]:overflow-y-auto @min-[860px]:pb-0 @min-[860px]:pr-1"
+      role="listbox"
+      aria-label="The slides of this piece"
+    >
+      {/* The index a cell reports is its place in the DECK, never its place
+          in the rail: the two differ by the card the rail draws last. */}
+      {pictures.map((s) => cell(s, slides.indexOf(s)))}
 
       <div className="flex-none flex flex-col items-center gap-1">
         <button
@@ -181,12 +211,22 @@ export default function SlideRail({
         </span>
       </div>
 
-      {!includeCta && (
+      {card ? (
+        cell(card, slides.indexOf(card))
+      ) : (
         <div className="flex-none flex flex-col items-center gap-1">
+          {/* Asked for but empty: the trip's card has no words yet, so the
+              deck has no last slide to draw. The offer then leads to where
+              those words are written rather than repeating a click that
+              has already been made. */}
           <button
             type="button"
-            onClick={() => onIncludeCta(true)}
-            title="Close this piece with the trip’s call to action"
+            onClick={includeCta ? onEditClosingCard : () => onIncludeCta(true)}
+            title={
+              includeCta
+                ? 'This piece ends on the trip’s closing card, and the card has no words yet — write them in ⚙ Trip'
+                : 'Close this piece with the trip’s call to action'
+            }
             style={{ aspectRatio: String(aspect) }}
             className="h-14 w-auto grid place-items-center rounded-[5px] border border-dashed border-line-strong bg-paper text-[0.95rem] leading-none text-faint cursor-pointer hover:border-accent hover:text-accent-ink @min-[860px]:h-auto @min-[860px]:w-11"
           >

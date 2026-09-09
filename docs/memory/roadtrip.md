@@ -145,6 +145,16 @@ Verified in headless Chromium: the sheet opens on the trip's own values, the imp
 
 **Allocation rule, still binding** (the invariant from «A panel that belongs to the PIECE»): the day, the frame, the Studio bridge and the closing card show on EVERY slide; the badge's own pieces, counter, time, placement, shades and duration on the hook only; a caption on a content slide only. The hook clip export and the bridge read the HOOK's file and dimensions (`hookFile`, `hookInfo`, kept apart from the open slide's) so they still work from a carousel's second picture. An export started from the header switches to the Export tab so its note is seen.
 
+## The closing card is the LAST thing the rail offers, and it is opt-in (2026-09-09)
+
+**From the maintainer**, who found a carousel arriving as hook · closing card · `+`: the way to add a picture sat *after* the card, while adding one inserts it *before* the card — so the rail contradicted the deck it draws. **Decisions, and they apply to every kind alike** (his instruction: take the reel's behaviour everywhere): the rail is pictures → `+ Add` → the closing card, which is either the card itself or the offer of one and is always last; and `createTripPost` gives **no** piece a closing card, carousel included. A slide nobody composed does not belong in a deck by default, and it is one click to add, on the rail, where it is seen — the same rule the v5 migration already followed ("nothing existing gains a call to action").
+
+**A card that can be turned on has to be turnable off**: the open card carries the same `×` a picture does. That is the one-way-door rule the cover panel had to be taught (see above), met a second time — check what happens when the control that adds a thing is the only control there is.
+
+**The index a cell reports is its place in the DECK, not in the rail** (`slides.indexOf(s)`): the two now differ by the card the rail draws last, and a cell reporting its rail position would open a different slide.
+
+**The offer leads somewhere when it cannot be taken.** With `includeCta` on but the trip's card emptied, `deckSlides` yields no last slide, so the rail would show a `+` whose click repeats a click already made; it opens the trip sheet at the closing card instead. `DEFAULT_CTA` is filled, so this is only reachable by clearing all three fields.
+
 ## A rail cell is the SLIDE, not the file behind it (2026-09-09)
 
 **The maintainer's report**: a zoom or a crop on a picture, and a caption added to a slide, never reached the rail's thumbnails — so the strip showed a picture the piece does not deliver. It was literally true: a cell drew the raw `File` through an `<img>` with `object-cover`, which is a different picture from the composed slide the moment anything is framed, captioned, shaded or graded. **Decision**: a cell goes through `renderBadge`, the one renderer the stage and the PNG deck already share, at cell size (`use-rail-thumbs.ts`). A preview that is a cheap approximation of the deliverable is the fault this tool keeps re-learning — the same rule as `BadgeStage`'s own comment, applied one level down.
