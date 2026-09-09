@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { WinnowClient } from '../shared/sources/winnow/client';
-import { densityStrip } from '../shared/sources/winnow/day-density';
+import { densityStrip, type DayBar } from '../shared/sources/winnow/day-density';
 import {
   monthKeyOf,
   monthLabel,
@@ -35,6 +35,35 @@ const STRIP_HEIGHT = 44;
 /** The stub an empty day keeps, so the month has a baseline to read against. */
 const EMPTY_HEIGHT = 3;
 
+/** The month's two readings; which one is up is a preference, not state. */
+type MonthView = 'strip' | 'calendar';
+const VIEW_KEY = 'atelier.library.month-view';
+
+function readMonthView(): MonthView {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'calendar' ? 'calendar' : 'strip';
+  } catch {
+    return 'strip';
+  }
+}
+
+function writeMonthView(view: MonthView) {
+  try {
+    localStorage.setItem(VIEW_KEY, view);
+  } catch {
+    /* preference only */
+  }
+}
+
+/** What the month's answer is, once it comes. */
+interface MonthAnswer {
+  counts: Map<string, number>;
+  bounds: { min: string; max: string } | null;
+}
+
+const monthBtn =
+  'w-6 h-6 shrink-0 rounded-lg border border-line bg-paper text-ink-soft cursor-pointer hover:border-line-strong disabled:opacity-30 disabled:cursor-default';
+
 /**
  * The day the Winnow tab is asking about, when no tool publishes a span.
  *
@@ -47,11 +76,16 @@ const EMPTY_HEIGHT = 3;
  * newest dated media in the whole library (independent of the window asked
  * for), which is what stops the month arrows at the edge of what exists.
  *
- * The strip replaces the invisible `<input type="date">` that used to lend the
- * OS picker: a native calendar cannot show counts, and the counts are the
+ * The same month reads **two ways**, one click apart in the popover's header
+ * and remembered in `localStorage`: the strip says where the shooting was, the
+ * calendar says which weekday it fell on. Neither answers the other's
+ * question, so neither replaces the other.
+ *
+ * The popover replaces the invisible `<input type="date">` that used to lend
+ * the OS picker: a native calendar cannot show counts, and the counts are the
  * point. Which means this owns the popover contract in exchange — Escape and a
  * click outside close it, focus returns to the value, and the arrow keys walk
- * the month (`tabIndex` roves, so Tab does not visit thirty-one bars).
+ * the month (`tabIndex` roves, so Tab does not visit thirty-one days).
  *
  * The value is drawn from the ISO string through `trip-days` (UTC, like every
  * date in the suite), never by a field's locale rendering — which is where
@@ -142,7 +176,7 @@ export default function DayPicker({
       </div>
 
       {open && (
-        <MonthStrip
+        <MonthPanel
           day={day}
           today={today}
           client={client}
@@ -158,7 +192,11 @@ export default function DayPicker({
       <p className="m-0 flex items-center gap-1.5 text-[0.7rem] text-muted">
         <span
           aria-hidden="true"
-          className={`w-1.5 h-1.5 shrink-0 rounded-full ${count ? 'bg-accent' : 'bg-faint'}`}
+          // The dot pulses while the answer is out: a still grey dot beside
+          // "asking…" is the same picture as a day holding nothing.
+          className={`w-1.5 h-1.5 shrink-0 rounded-full ${
+            asking ? 'bg-faint animate-pulse-dot motion-reduce:animate-none' : count ? 'bg-accent' : 'bg-faint'
+          }`}
         />
         <span className="truncate">
           {describeRelativeDay(day, today) ?? day} ·{' '}
@@ -175,7 +213,7 @@ export default function DayPicker({
   );
 }
 
-interface MonthStripProps {
+interface MonthPanelProps {
   day: string;
   today: string;
   client: WinnowClient | null;
@@ -184,24 +222,26 @@ interface MonthStripProps {
 }
 
 /**
- * One month of the instance, as bars.
+ * One month of the instance, drawn either way.
  *
  * A month is one `calendar()` request, kept for as long as the popover lives
  * (a month walked back to is not asked for twice) and thrown away with it —
  * counts move as the instance ingests, and a picker is open for seconds.
  * Nothing is asked while it is closed, the same rule the tab itself follows.
+ *
+ * **While a month is in flight the body says so**: the days are drawn at a
+ * uniform height, dimmed, pulsing and inert (`aria-busy`). An empty-looking
+ * month that is merely unanswered is the one reading this control must never
+ * give — the maintainer walked three months believing they held nothing, and
+ * the media arrived after he had moved on.
  */
-function MonthStrip({ day, today, client, connectionId, onPick }: MonthStripProps) {
+function MonthPanel({ day, today, client, connectionId, onPick }: MonthPanelProps) {
   const [month, setMonth] = useState(() => monthKeyOf(day));
-  const [answer, setAnswer] = useState<{
-    counts: Map<string, number>;
-    bounds: { min: string; max: string } | null;
-  } | null>(null);
+  const [view, setView] = useState<MonthView>(readMonthView);
+  const [answer, setAnswer] = useState<MonthAnswer | null>(null);
   const [failed, setFailed] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
-  const cache = useRef(
-    new Map<string, { counts: Map<string, number>; bounds: { min: string; max: string } | null }>(),
-  );
+  const cache = useRef(new Map<string, MonthAnswer>());
 
   const span = useMemo(() => monthSpan(month), [month]);
 
@@ -238,46 +278,38 @@ function MonthStrip({ day, today, client, connectionId, onPick }: MonthStripProp
     };
   }, [client, month, span.from, span.to]);
 
+  /** Waiting on this month — not the same thing as a month holding nothing. */
+  const busy = !answer && !failed;
   const strip = densityStrip(span.days, answer?.counts ?? new Map());
   const bounds = answer?.bounds ?? null;
   // Only what the instance itself says it holds bounds the walk; with no
   // answer yet, both arrows stay live rather than pretending to know.
   const canPrev = !bounds || month > monthKeyOf(bounds.min);
   const canNext = !bounds || month < monthKeyOf(bounds.max);
-  /** The one bar Tab reaches: the picked day, else the month's first. */
+  /** The one day Tab reaches: the picked one, else the month's first. */
   const roving = strip.bars.some((b) => b.date === day) ? day : span.from;
 
-  function walk(e: React.KeyboardEvent<HTMLDivElement>) {
-    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
-    const bars = [
-      ...e.currentTarget.querySelectorAll<HTMLButtonElement>('button:not([disabled])'),
-    ];
-    const at = bars.indexOf(document.activeElement as HTMLButtonElement);
-    if (at < 0) return;
-    const to =
-      e.key === 'ArrowLeft'
-        ? at - 1
-        : e.key === 'ArrowRight'
-          ? at + 1
-          : e.key === 'Home'
-            ? 0
-            : bars.length - 1;
-    const next = bars[Math.min(Math.max(to, 0), bars.length - 1)];
-    if (!next) return;
-    e.preventDefault();
-    next.focus();
-  }
-
   const read = ((): string => {
+    if (busy) return `asking ${connectionId}…`;
     if (hovered) {
       const n = strip.bars.find((b) => b.date === hovered)?.count ?? 0;
       return `${formatIsoDate(hovered)} · ${n ? `${n} file${n === 1 ? '' : 's'}` : 'nothing'}`;
     }
     if (failed) return `could not ask ${connectionId}`;
-    if (!answer) return `asking ${connectionId}…`;
     if (!strip.total) return `nothing in ${monthLabel(month)}`;
     return `${strip.total} file${strip.total === 1 ? '' : 's'} · busiest day ${strip.peak}`;
   })();
+
+  const bodyProps: MonthBodyProps = {
+    bars: strip.bars,
+    day,
+    today,
+    roving,
+    busy,
+    leading: span.leading,
+    onPick,
+    onHover: setHovered,
+  };
 
   return (
     <div
@@ -291,13 +323,15 @@ function MonthStrip({ day, today, client, connectionId, onPick }: MonthStripProp
           onClick={() => setMonth(shiftMonth(month, -1))}
           disabled={!canPrev}
           aria-label="The month before"
-          className="w-6 h-6 shrink-0 rounded-lg border border-line bg-paper text-ink-soft cursor-pointer hover:border-line-strong disabled:opacity-30 disabled:cursor-default"
+          className={monthBtn}
         >
           ‹
         </button>
         <span
           className="flex-1 min-w-0 truncate text-center font-mono text-[0.68rem] text-ink"
-          title={bounds ? `${connectionId} holds media from ${bounds.min} to ${bounds.max}` : undefined}
+          title={
+            bounds ? `${connectionId} holds media from ${bounds.min} to ${bounds.max}` : undefined
+          }
         >
           {monthLabel(month)}
         </span>
@@ -306,66 +340,244 @@ function MonthStrip({ day, today, client, connectionId, onPick }: MonthStripProp
           onClick={() => setMonth(shiftMonth(month, 1))}
           disabled={!canNext}
           aria-label="The month after"
-          className="w-6 h-6 shrink-0 rounded-lg border border-line bg-paper text-ink-soft cursor-pointer hover:border-line-strong disabled:opacity-30 disabled:cursor-default"
+          className={monthBtn}
         >
           ›
         </button>
+        {/* The two readings of the same month, one click apart and remembered:
+            the strip says where the shooting was, the calendar says which
+            weekday it fell on. Neither answers the other's question. */}
+        <button
+          type="button"
+          onClick={() => {
+            const next = view === 'strip' ? 'calendar' : 'strip';
+            setView(next);
+            writeMonthView(next);
+          }}
+          aria-label={view === 'strip' ? 'Show the month as a calendar' : 'Show the month as a strip'}
+          title={view === 'strip' ? 'Show the month as a calendar' : 'Show the month as a strip'}
+          className={`${monthBtn} ml-0.5 grid place-items-center`}
+        >
+          {view === 'strip' ? <CalendarGlyph /> : <StripGlyph />}
+        </button>
       </div>
 
-      {/* One bar per day. The button is the full height of the strip, so a
-          six-pixel-wide day is still a comfortable target vertically; the
-          arrows remain the fine adjustment. */}
-      <div
-        role="group"
-        aria-label={`Days of ${monthLabel(month)}`}
-        onKeyDown={walk}
-        onPointerLeave={() => setHovered(null)}
-        className="flex items-end gap-[2px]"
-        style={{ height: `${STRIP_HEIGHT}px` }}
-      >
-        {strip.bars.map((bar) => {
-          const future = bar.date > today;
-          const picked = bar.date === day;
-          return (
-            <button
-              key={bar.date}
-              type="button"
-              disabled={future}
-              tabIndex={bar.date === roving ? 0 : -1}
-              onClick={() => onPick(bar.date)}
-              onPointerEnter={() => setHovered(bar.date)}
-              onFocus={() => setHovered(bar.date)}
-              onBlur={() => setHovered(null)}
-              aria-pressed={picked}
-              aria-label={`${WEEKDAYS[weekdayIndex(bar.date) ?? 0]} ${formatIsoDate(bar.date)}, ${
-                bar.count ? `${bar.count} files` : 'nothing'
-              }`}
-              title={`${bar.date}${bar.count ? ` · ${bar.count} files` : ''}`}
-              // The picked day carries a full-height wash as well as its bar:
-              // on a day the instance holds nothing, the bar is a 3px stub and
-              // "you are here" would otherwise be invisible.
-              className={`flex-1 min-w-0 h-full flex flex-col justify-end border-0 p-0 cursor-pointer disabled:cursor-default disabled:opacity-40 group rounded-t-[3px] ${
-                picked ? 'bg-[rgba(27,24,19,0.08)]' : 'bg-transparent'
-              }`}
-            >
-              <span
-                className={`w-full rounded-t-[2px] border border-b-0 transition-colors ${
-                  picked
-                    ? 'bg-ink border-ink'
-                    : bar.count
-                      ? 'bg-accent-wash border-[#eccabf] group-hover:border-accent'
-                      : 'bg-paper-2 border-line group-hover:border-line-strong'
-                }`}
-                style={{
-                  height: `${bar.count ? Math.round(bar.fill * STRIP_HEIGHT) : EMPTY_HEIGHT}px`,
-                }}
-              />
-            </button>
-          );
-        })}
-      </div>
+      {view === 'strip' ? <StripBody {...bodyProps} /> : <CalendarBody {...bodyProps} />}
 
       <p className="m-0 truncate text-center font-mono text-[0.58rem] text-muted">{read}</p>
     </div>
+  );
+}
+
+interface MonthBodyProps {
+  bars: readonly DayBar[];
+  day: string;
+  today: string;
+  /** The one day carrying `tabIndex=0`, so Tab does not visit thirty-one. */
+  roving: string;
+  /** Waiting on the instance: draw the month, but never as an answer. */
+  busy: boolean;
+  /** Blank cells before the 1st, so the calendar starts on the right weekday. */
+  leading: number;
+  onPick: (iso: string) => void;
+  onHover: (iso: string | null) => void;
+}
+
+/**
+ * Arrow-key walking, shared by both bodies: `columns` is 1 for the strip (a
+ * single row, so up and down have nothing to say) and 7 for the calendar,
+ * where they step a week. Focus moves; Enter and space still do the picking,
+ * because these are ordinary buttons.
+ *
+ * The step is counted over **every** day, disabled ones included, or the
+ * geometry lies: with the rest of the month out of reach (the future), a
+ * seventh *enabled* button is not the same weekday a week later. Landing on
+ * one of those is simply refused — Home and End are the two that search
+ * inward for a day the walk may have.
+ */
+function walkDays(e: React.KeyboardEvent<HTMLDivElement>, columns: number) {
+  const steps: Record<string, number> = {
+    ArrowLeft: -1,
+    ArrowRight: 1,
+    ...(columns > 1 ? { ArrowUp: -columns, ArrowDown: columns } : {}),
+  };
+  const jump = steps[e.key];
+  const ends = e.key === 'Home' || e.key === 'End';
+  if (jump === undefined && !ends) return;
+  const days = [...e.currentTarget.querySelectorAll<HTMLButtonElement>('button')];
+  const at = days.indexOf(document.activeElement as HTMLButtonElement);
+  if (at < 0) return;
+  e.preventDefault();
+  if (ends) {
+    const inward = e.key === 'Home' ? 1 : -1;
+    let to = e.key === 'Home' ? 0 : days.length - 1;
+    while (to >= 0 && to < days.length && days[to].disabled) to += inward;
+    days[to]?.focus();
+    return;
+  }
+  const to = at + jump;
+  if (to < 0 || to >= days.length || days[to].disabled) return;
+  days[to].focus();
+}
+
+/** The busy dress: dimmed, pulsing, and nothing to click. */
+const busyClass = 'opacity-50 animate-pulse motion-reduce:animate-none pointer-events-none';
+
+/**
+ * The month as bars — one per day, height by count.
+ *
+ * The button is the full height of the strip, so a six-pixel-wide day is still
+ * a comfortable target vertically; the stepper's arrows remain the fine
+ * adjustment. A picked day carries a full-height wash as well as its bar: on a
+ * day the instance holds nothing the bar is a stub, and "you are here" would
+ * otherwise be invisible.
+ */
+function StripBody({ bars, day, today, roving, busy, onPick, onHover }: MonthBodyProps) {
+  return (
+    <div
+      role="group"
+      aria-label="Days of the month"
+      aria-busy={busy}
+      onKeyDown={(e) => walkDays(e, 1)}
+      onPointerLeave={() => onHover(null)}
+      className={`flex items-end gap-[2px] ${busy ? busyClass : ''}`}
+      style={{ height: `${STRIP_HEIGHT}px` }}
+    >
+      {bars.map((bar) => {
+        const picked = bar.date === day;
+        // Waiting: every day the same height, or a month nobody has answered
+        // for reads exactly like a month holding nothing.
+        const height = busy
+          ? Math.round(STRIP_HEIGHT * 0.4)
+          : bar.count
+            ? Math.round(bar.fill * STRIP_HEIGHT)
+            : EMPTY_HEIGHT;
+        return (
+          <button
+            key={bar.date}
+            type="button"
+            disabled={bar.date > today}
+            tabIndex={bar.date === roving ? 0 : -1}
+            onClick={() => onPick(bar.date)}
+            onPointerEnter={() => onHover(bar.date)}
+            onFocus={() => onHover(bar.date)}
+            onBlur={() => onHover(null)}
+            aria-pressed={picked}
+            aria-label={dayLabel(bar)}
+            title={`${bar.date}${bar.count ? ` · ${bar.count} files` : ''}`}
+            className={`flex-1 min-w-0 h-full flex flex-col justify-end border-0 p-0 cursor-pointer disabled:cursor-default disabled:opacity-40 group rounded-t-[3px] ${
+              picked ? 'bg-[rgba(27,24,19,0.08)]' : 'bg-transparent'
+            }`}
+          >
+            <span
+              className={`w-full rounded-t-[2px] border border-b-0 transition-colors ${
+                picked && !busy
+                  ? 'bg-ink border-ink'
+                  : bar.count && !busy
+                    ? 'bg-accent-wash border-[#eccabf] group-hover:border-accent'
+                    : 'bg-paper-2 border-line group-hover:border-line-strong'
+              }`}
+              style={{ height: `${height}px` }}
+            />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * The month as a calendar — the same counts, read by weekday.
+ *
+ * Fixed-height cells, never `aspect-square`: a `1fr` grid track's width is
+ * indefinite and the ratio resolves against it however the browser likes
+ * (`frontend.md`). An empty day stays clickable here, unlike the browse-all
+ * sheet's grid: the stepper's arrows can already step onto one, and a picker
+ * refusing what the arrows allow reads as broken.
+ */
+function CalendarBody({
+  bars,
+  day,
+  today,
+  roving,
+  busy,
+  leading,
+  onPick,
+  onHover,
+}: MonthBodyProps) {
+  return (
+    <div
+      role="group"
+      aria-label="Days of the month"
+      aria-busy={busy}
+      onKeyDown={(e) => walkDays(e, 7)}
+      onPointerLeave={() => onHover(null)}
+      className={`grid grid-cols-7 gap-[3px] ${busy ? busyClass : ''}`}
+    >
+      {WEEKDAYS.map((name, i) => (
+        <span key={i} className="text-center font-mono text-[0.5rem] text-faint">
+          {name[0]}
+        </span>
+      ))}
+      {Array.from({ length: leading }, (_, i) => (
+        <span key={`lead-${i}`} />
+      ))}
+      {bars.map((bar) => {
+        const picked = bar.date === day;
+        return (
+          <button
+            key={bar.date}
+            type="button"
+            disabled={bar.date > today}
+            tabIndex={bar.date === roving ? 0 : -1}
+            onClick={() => onPick(bar.date)}
+            onPointerEnter={() => onHover(bar.date)}
+            onFocus={() => onHover(bar.date)}
+            onBlur={() => onHover(null)}
+            aria-pressed={picked}
+            aria-label={dayLabel(bar)}
+            title={`${bar.date}${bar.count ? ` · ${bar.count} files` : ''}`}
+            className={`h-[30px] flex flex-col items-center justify-center gap-[1px] rounded-md border font-mono text-[0.62rem] tabular-nums cursor-pointer transition-colors disabled:cursor-default disabled:opacity-40 ${
+              picked
+                ? 'bg-ink border-ink text-paper'
+                : bar.count && !busy
+                  ? 'bg-accent-wash border-[#eccabf] text-ink hover:border-accent'
+                  : 'bg-paper border-line text-faint hover:border-line-strong'
+            } ${bar.date === today && !picked ? 'shadow-[inset_0_0_0_1px_var(--color-line-strong)]' : ''}`}
+          >
+            {Number(bar.date.slice(-2))}
+            {bar.count > 0 && !busy && (
+              <span className="text-[0.44rem] leading-none opacity-70">{bar.count}</span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function dayLabel(bar: DayBar): string {
+  return `${WEEKDAYS[weekdayIndex(bar.date) ?? 0]} ${formatIsoDate(bar.date)}, ${
+    bar.count ? `${bar.count} files` : 'nothing'
+  }`;
+}
+
+function CalendarGlyph() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+      <rect x="1.8" y="3" width="12.4" height="11" rx="2" />
+      <path d="M1.8 6.4h12.4M5.4 1.6v2.6M10.6 1.6v2.6" />
+    </svg>
+  );
+}
+
+function StripGlyph() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <rect x="1.5" y="9" width="2.4" height="5" rx="0.6" />
+      <rect x="5.3" y="4.5" width="2.4" height="9.5" rx="0.6" />
+      <rect x="9.1" y="7" width="2.4" height="7" rx="0.6" />
+      <rect x="12.9" y="11" width="2.4" height="3" rx="0.6" />
+    </svg>
   );
 }

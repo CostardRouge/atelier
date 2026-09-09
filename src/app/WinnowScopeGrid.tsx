@@ -85,9 +85,24 @@ export default function WinnowScopeGrid({
   return (
     <div className="flex flex-col gap-2">
       {rows === null && !problem ? (
-        announce ? (
-          <p className="m-0 font-mono text-[0.68rem] text-muted">asking {connection.id}…</p>
-        ) : null
+        // Waiting on a span. Skeleton tiles, not an empty grid: the day arrows
+        // and the month arrows both answer slowly enough that a blank pane
+        // reads as "nothing here", and the pictures then arrive after the
+        // reader has moved on. The sentence stays optional (`announce`); the
+        // skeleton is not a sentence, so it is drawn either way.
+        <div className="flex flex-col gap-2" aria-busy="true">
+          {announce && (
+            <p className="m-0 font-mono text-[0.68rem] text-muted">asking {connection.id}…</p>
+          )}
+          <div className="w-full grid grid-cols-[repeat(auto-fill,minmax(74px,1fr))] gap-1.5">
+            {Array.from({ length: 8 }, (_, i) => (
+              <span
+                key={i}
+                className="block h-[74px] rounded-md border border-line bg-paper-2 animate-pulse motion-reduce:animate-none"
+              />
+            ))}
+          </div>
+        </div>
       ) : rows !== null && rows.length === 0 && !problem ? (
         announce ? (
           <p className="m-0 text-[0.78rem] text-muted">
