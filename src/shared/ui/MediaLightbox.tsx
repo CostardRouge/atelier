@@ -14,15 +14,21 @@ import { DECK_GAP, DECK_SETTLE_MS, useMediaViewer, type MediaViewer } from './us
 export interface LightboxItem {
   id: string;
   title: string;
-  /** The one line of facts under the title. */
+  /** The one line of facts under the title — when, how big, how heavy. */
   facts: string;
+  /**
+   * The exposure line under it — body, lens, focal length, aperture, shutter,
+   * ISO (`shared/exif/exif-summary.ts`). Empty or absent draws no line at
+   * all: a picture that says nothing about how it was taken says nothing.
+   */
+  camera?: string | null;
   kind: 'photo' | 'video';
   /** What the middle slot draws. Null while it cannot be drawn. */
   src: string | null;
   /**
-   * A still for the two slots beside the middle one, and a clip's poster. For
-   * a picture it should be the SAME url as `src` — the browser then has it
-   * cached and paging to it costs nothing.
+   * The CHEAP rendition — a thumbnail. It is drawn under the full one and
+   * under a clip's poster, so a page always shows the picture at once and
+   * sharpens when the real bytes land, rather than opening on black.
    */
   still: string | null;
   /** The media's own pixel size, when the caller already knows it. */
@@ -99,6 +105,12 @@ export default function MediaLightbox({
     };
   }, [viewer.pageBy]);
 
+  // Whether the media in the middle slot has its full bytes. Reported by that
+  // slot rather than tracked here: a picture that already loaded as a
+  // NEIGHBOUR keeps its element when it slides into the middle, so no second
+  // load event would ever come.
+  const [ready, setReady] = useState(false);
+
   // Escape closes; Enter does the one thing the caller offers, if any.
   useDialogKeys({ onCancel: onClose, onConfirm: onConfirm ?? null });
 
@@ -158,6 +170,14 @@ export default function MediaLightbox({
         <p className="m-0 font-mono text-[0.64rem] text-muted truncate" title={item.facts}>
           {item.facts}
         </p>
+        {item.camera && (
+          <p
+            className="m-0 -mt-2 font-mono text-[0.64rem] text-faint truncate"
+            title={item.camera}
+          >
+            {item.camera}
+          </p>
+        )}
 
         {/* The deck. Its slot is fixed by the panel, so paging never resizes
             the sheet, and it is what the gestures measure themselves against:
@@ -171,6 +191,7 @@ export default function MediaLightbox({
               ref={viewer.viewportRef}
               // `touch-none`: the deck answers every touch itself, and a
               // native scroll or page zoom underneath would fight the pinch.
+              aria-busy={!ready}
               className={`absolute inset-0 overflow-hidden bg-frame rounded-paper touch-none select-none ${
                 viewer.zoomed ? (viewer.dragging ? 'cursor-grabbing' : 'cursor-grab') : ''
               }`}
@@ -197,10 +218,28 @@ export default function MediaLightbox({
                       transform: `translateX(calc(${slot * 100}% + ${slot * DECK_GAP}px))`,
                     }}
                   >
-                    <DeckSlide item={items[at]} active={slot === 0} viewer={viewer} />
+                    <DeckSlide
+                      item={items[at]}
+                      active={slot === 0}
+                      viewer={viewer}
+                      onReady={setReady}
+                    />
                   </div>
                 ))}
               </div>
+              {/* Nothing is ever blocked while this shows — the deck keeps
+                  answering, and a page in flight is landed rather than
+                  dropped (`use-media-viewer.ts`). It only says that what is
+                  on screen is still the thumbnail. */}
+              {!ready && (
+                <div
+                  className="absolute top-0 inset-x-0 h-[2px] overflow-hidden pointer-events-none"
+                  role="progressbar"
+                  aria-label="Loading the full picture"
+                >
+                  <div className="h-full w-1/4 bg-accent animate-deck-load" />
+                </div>
+              )}
             </div>
             <StageZoomControl
               zoom={viewer.zoom}
@@ -220,22 +259,35 @@ export default function MediaLightbox({
 /**
  * One slot of the deck.
  *
- * Only the middle one is the media itself; the two beside it are the still —
- * for a picture the very URL the middle slot will want, so paging costs
- * nothing, for a clip its poster. A neighbour that mounted a `<video>` would
- * start decoding a second stream to be looked at for the length of a swipe.
+ * A picture is drawn TWICE: the cheap still underneath, which is on screen the
+ * moment the slot exists, and the full rendition fading in over it. That is
+ * the whole answer to "why is it black while it loads" — it never is, and the
+ * bar above says the sharp one is still coming.
+ *
+ * And the full one is mounted in EVERY slot, not only the middle: rendering
+ * the neighbours is what preloads them, so a swipe lands on a picture that is
+ * already there. Three requests instead of one, which is the point. A clip is
+ * the exception — only the middle slot mounts a `<video>`, because a neighbour
+ * would start decoding a second stream to be looked at for the length of a
+ * swipe.
  */
 function DeckSlide({
   item,
   active,
   viewer,
+  onReady,
 }: {
   item: LightboxItem;
   active: boolean;
   viewer: MediaViewer;
+  /** Only the middle slot reports, and it reports whenever it becomes it. */
+  onReady: (ready: boolean) => void;
 }) {
   const [loaded, setLoaded] = useState(false);
-  useEffect(() => setLoaded(false), [item.id]);
+  useEffect(() => setLoaded(false), [item.id, item.src]);
+  useEffect(() => {
+    if (active) onReady(loaded || !item.src);
+  }, [active, loaded, item.src, onReady]);
 
   const framed = {
     transform: active ? viewer.transform : undefined,
@@ -244,10 +296,9 @@ function DeckSlide({
       active && viewer.viewSettling ? `transform ${DECK_SETTLE_MS}ms var(--ease-paper)` : undefined,
   };
   const fill = 'absolute inset-0 w-full h-full object-contain block';
+  const cors = item.credentialed ? 'use-credentials' : undefined;
 
-  const still = active ? (item.src ?? item.still) : (item.still ?? item.src);
-
-  if (item.unavailable || !still) {
+  if (item.unavailable || (!item.src && !item.still)) {
     return (
       <span className="absolute inset-0 grid place-items-center px-6 text-center font-mono text-[0.66rem] text-muted">
         {item.unavailable ?? 'nothing to show'}
@@ -255,52 +306,76 @@ function DeckSlide({
     );
   }
 
-  if (item.kind === 'video' && active && item.src) {
+  // The thumbnail, under everything. `aria-hidden`: it is the same picture as
+  // the layer above, and a screen reader should hear about it once.
+  const under = item.still ? (
+    <img
+      src={item.still}
+      alt=""
+      aria-hidden="true"
+      crossOrigin={cors}
+      draggable={false}
+      style={framed}
+      className={fill}
+    />
+  ) : null;
+
+  if (item.kind === 'video' && item.src) {
     return (
-      <video
-        key={item.id}
-        src={item.src}
-        poster={item.still ?? undefined}
-        crossOrigin={item.credentialed ? 'use-credentials' : undefined}
-        controls
-        // Metadata only: opening a day should not stream every clip.
-        preload="metadata"
-        style={framed}
-        onLoadedMetadata={(e) =>
-          viewer.onMeasured({
-            width: e.currentTarget.videoWidth,
-            height: e.currentTarget.videoHeight,
-          })
-        }
-        className={fill}
-      />
+      <>
+        {under}
+        {active ? (
+          <video
+            key={item.id}
+            src={item.src}
+            poster={item.still ?? undefined}
+            crossOrigin={cors}
+            controls
+            // Metadata only: opening a day should not stream every clip.
+            preload="metadata"
+            style={framed}
+            // Metadata, not `loadeddata`: with `preload="metadata"` a browser
+            // may hold the first frame back until play, and a bar that never
+            // stops is worse than no bar. The size is known here, the poster
+            // is already up, and that is what "ready to look at" means.
+            onLoadedMetadata={(e) => {
+              setLoaded(true);
+              viewer.onMeasured({
+                width: e.currentTarget.videoWidth,
+                height: e.currentTarget.videoHeight,
+              });
+            }}
+            className={fill}
+          />
+        ) : null}
+      </>
     );
   }
 
   return (
     <>
-      <img
-        key={item.id}
-        src={still}
-        alt={item.title}
-        crossOrigin={item.credentialed ? 'use-credentials' : undefined}
-        draggable={false}
-        style={framed}
-        onLoad={(e) => {
-          setLoaded(true);
-          if (active) {
-            viewer.onMeasured({
-              width: e.currentTarget.naturalWidth,
-              height: e.currentTarget.naturalHeight,
-            });
-          }
-        }}
-        className={`${fill} transition-opacity ${loaded ? 'opacity-100' : 'opacity-0'}`}
-      />
-      {!loaded && active && (
-        <span className="absolute inset-0 grid place-items-center font-mono text-[0.66rem] text-muted">
-          loading…
-        </span>
+      {under}
+      {item.src && (
+        <img
+          key={item.id}
+          src={item.src}
+          alt={item.title}
+          crossOrigin={cors}
+          draggable={false}
+          style={framed}
+          onLoad={(e) => {
+            setLoaded(true);
+            if (active) {
+              viewer.onMeasured({
+                width: e.currentTarget.naturalWidth,
+                height: e.currentTarget.naturalHeight,
+              });
+            }
+          }}
+          className={`${fill} transition-opacity duration-200 ${
+            loaded ? 'opacity-100' : 'opacity-0'
+          }`}
+        />
       )}
     </>
   );

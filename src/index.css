@@ -39,6 +39,19 @@
   --ease-paper: cubic-bezier(0.16, 1, 0.3, 1);
 
   --animate-pulse-dot: pulse-dot 2.4s var(--ease-paper) infinite;
+  /* The indeterminate bar over a media still loading (`MediaLightbox`). */
+  --animate-deck-load: deck-load 1.15s ease-in-out infinite;
+}
+
+/* A sliver sweeping the width, twice as fast at the ends as in the middle —
+   an indeterminate bar, for a load whose length nothing can know. */
+@keyframes deck-load {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(410%);
+  }
 }
 
 @keyframes pulse-dot {

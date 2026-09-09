@@ -6,6 +6,8 @@ import { exifTimestampFromIso } from '../shared/sources/winnow/exif-from-row';
 import { isoFromExifDateTime } from '../shared/roadtrip/media-date';
 import { formatIsoDate } from '../shared/roadtrip/trip-days';
 import { formatBytes, formatDuration } from '../shared/lib/format';
+import { exifFromRow } from '../shared/sources/winnow/exif-from-row';
+import { exposureSummary } from '../shared/exif/exif-summary';
 import MediaLightbox, { type LightboxItem } from '../shared/ui/MediaLightbox';
 
 interface WinnowLightboxProps {
@@ -88,6 +90,19 @@ export default function WinnowLightbox({
                 {picker.fetching === row.id ? 'fetching…' : 'Add to library'}
               </button>
             )}
+            {/* Secondary: the media itself, on the instance, in a tab of its
+                own. Winnow has no page per asset, so this is the proxy's own
+                URL — the rendition the sheet is already showing, at full size
+                and outside the app. */}
+            <a
+              href={client.proxyUrl(row.id)}
+              target="_blank"
+              rel="noreferrer"
+              title={`Open this ${row.media_type} on ${connection.id}, in a new tab`}
+              className="font-mono text-[0.64rem] tracking-[0.1em] uppercase px-3 py-1.5 rounded-full border border-line-strong text-ink no-underline hover:border-accent hover:text-accent-ink transition-colors"
+            >
+              Open ↗
+            </a>
             <span className="text-[0.74rem] text-muted min-w-0 truncate">
               the proxy, from {connection.id} — nothing leaves your machine
             </span>
@@ -126,19 +141,29 @@ function itemFromRow(row: WinnowAssetRow, client: WinnowClient): LightboxItem {
     day ? `${formatIsoDate(day)}${clock ? ` · ${clock}` : ''}` : 'no capture time',
     row.width && row.height ? `${row.width}×${row.height}` : null,
     isVideo && row.duration_s ? formatDuration(row.duration_s) : null,
-    row.camera_model,
     row.file_size ? formatBytes(row.file_size) : null,
     row.has_telemetry ? 'flight log' : null,
   ].filter(Boolean);
+
+  // The body and the glass move to their own line. `exifFromRow` is the one
+  // reading of those columns in the app — it deliberately leaves out the two
+  // display labels (the camera's name, the lens), which are not part of a cue
+  // and are added here, where they are read rather than drawn.
+  const camera = exposureSummary(
+    { ...(exifFromRow(row) ?? {}), lensModel: row.lens ?? undefined },
+    row.camera_model,
+  );
 
   return {
     id: String(row.id),
     title: row.filename,
     facts: facts.join(' · '),
+    camera,
     kind: isVideo ? 'video' : 'photo',
     src: client.proxyUrl(row.id),
-    // A clip's poster, and the very picture the middle slot will draw.
-    still: isVideo ? client.thumbUrl(row.id) : client.proxyUrl(row.id),
+    // The thumbnail, drawn under the proxy while it arrives — and all a
+    // neighbour slot ever draws for a clip.
+    still: client.thumbUrl(row.id),
     natural: row.width && row.height ? { width: row.width, height: row.height } : null,
     credentialed: true,
   };

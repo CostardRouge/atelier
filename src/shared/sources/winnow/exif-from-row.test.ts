@@ -18,6 +18,7 @@ const row = (over: Partial<WinnowAssetRow> = {}): WinnowAssetRow => ({
   gps_lat: -25.344428,
   gps_lon: 131.036882,
   camera_model: 'DJI Mini 4 Pro',
+  lens: null,
   iso: 100,
   shutter: '1/240',
   aperture: 1.7,

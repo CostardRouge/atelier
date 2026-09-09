@@ -59,6 +59,8 @@ export interface WinnowAssetRow {
   gps_lat: number | null;
   gps_lon: number | null;
   camera_model: string | null;
+  /** The lens, as the file named it — often absent (fixed-lens, most video). */
+  lens: string | null;
   // Exposure, as Winnow read it at ingest. `shutter` is the camera's own text
   // (`1/240`), not seconds — see `exif-from-row.ts`.
   iso: number | null;

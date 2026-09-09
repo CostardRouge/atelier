@@ -137,8 +137,14 @@ export function useMediaViewer({
   countRef.current = count;
   const onIndexRef = useRef(onIndex);
   onIndexRef.current = onIndex;
-  /** A page is in flight: ignore every gesture until it lands. */
+  /**
+   * A page is in flight. A gesture arriving now does not wait for it and is
+   * not dropped: it LANDS it (`land`) and starts from there. Dropping was the
+   * one place the deck genuinely refused a swipe, and it read as the picture
+   * not being loaded yet.
+   */
   const busy = useRef(false);
+  const pending = useRef<-1 | 1 | null>(null);
   const settleTimer = useRef<number | null>(null);
 
   // A new picture is looked at whole, and the last one's measurement is not
@@ -183,6 +189,28 @@ export function useMediaViewer({
     settleTimer.current = null;
   };
 
+  /**
+   * The end of a page, whenever it comes: on the timer, or early because a
+   * new gesture wants the deck. The neighbour is already where the middle
+   * slot is, so swapping the slots and dropping the offset in one commit
+   * shows no seam.
+   */
+  const land = useCallback(() => {
+    const dir = pending.current;
+    clearSettle();
+    pending.current = null;
+    busy.current = false;
+    if (dir === null) return;
+    setSettling(false);
+    setOffset(0);
+    setView(FITTED);
+    const at = (indexRef.current + dir + countRef.current) % countRef.current;
+    // Eagerly, because a gesture that landed this page reads the index again
+    // in the same event, before React has re-rendered and refreshed the ref.
+    indexRef.current = at;
+    onIndexRef.current(at);
+  }, []);
+
   /** Back to rest, animated — a drag that did not earn a page. */
   const settleBack = useCallback(() => {
     clearSettle();
@@ -195,9 +223,7 @@ export function useMediaViewer({
   }, []);
 
   /**
-   * Page by one. The deck slides a whole slot, and only THEN does the index
-   * move: the neighbour is already where the current slot is, so swapping the
-   * three slots and dropping the offset in the same commit shows no seam.
+   * Page by one: slide the deck a whole slot, and let `land` finish it.
    *
    * A timer rather than `transitionend`, which does not fire when the offset
    * is already at its target and would leave the deck stuck.
@@ -211,20 +237,12 @@ export function useMediaViewer({
       }
       clearSettle();
       busy.current = true;
+      pending.current = dir;
       setSettling(true);
       setOffset(-dir * travel);
-      settleTimer.current = window.setTimeout(() => {
-        settleTimer.current = null;
-        busy.current = false;
-        setSettling(false);
-        setOffset(0);
-        setView(FITTED);
-        onIndexRef.current(
-          (indexRef.current + dir + countRef.current) % countRef.current,
-        );
-      }, DECK_SETTLE_MS);
+      settleTimer.current = window.setTimeout(land, DECK_SETTLE_MS);
     },
-    [settleBack, slotTravel],
+    [land, settleBack, slotTravel],
   );
 
   useEffect(() => clearSettle, []);
@@ -282,7 +300,7 @@ export function useMediaViewer({
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      if (busy.current) return;
+      if (busy.current) land();
       setViewSettling(false);
       const sideways = Math.abs(e.deltaX) > Math.abs(e.deltaY);
       // A trackpad pinch arrives as a ctrl-wheel; so does a real one.
@@ -305,7 +323,7 @@ export function useMediaViewer({
       el.removeEventListener('wheel', onWheel);
       if (idle !== null) window.clearTimeout(idle);
     };
-  }, [dragTo, page, panBy, settleBack, slotTravel, zoomTo]);
+  }, [dragTo, land, page, panBy, settleBack, slotTravel, zoomTo]);
 
   // Pointers: one drag pans or swipes, two fingers pinch.
   useEffect(() => {
@@ -343,7 +361,7 @@ export function useMediaViewer({
     };
 
     const onDown = (e: PointerEvent) => {
-      if (busy.current) return;
+      if (busy.current) land();
       setViewSettling(false);
       if (e.pointerType === 'touch') {
         touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -458,7 +476,7 @@ export function useMediaViewer({
       el.removeEventListener('pointerup', onUp, true);
       el.removeEventListener('pointercancel', onUp, true);
     };
-  }, [dragTo, page, panBy, settleBack, slotTravel, zoomTo]);
+  }, [dragTo, land, page, panBy, settleBack, slotTravel, zoomTo]);
 
   const byButton = useCallback(
     (next: number) => {

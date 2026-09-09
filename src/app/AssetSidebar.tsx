@@ -32,6 +32,8 @@ import {
 } from '../shared/telemetry/time-scale';
 import { useInViewport } from '../shared/lib/use-in-viewport';
 import { useObjectUrls } from '../shared/lib/use-object-urls';
+import { readEffectiveExif, vouchedExif } from '../shared/exif/read-exif';
+import { exposureSummary } from '../shared/exif/exif-summary';
 import {
   filesFromDataTransfer,
   pickDirectory,
@@ -260,6 +262,42 @@ export default function AssetSidebar({
   const viewItems = useMemo(
     () => viewable.map((a) => lightboxItem(a, lib.meta.get(a.id), viewUrls.get(a.id) ?? null)),
     [viewable, lib.meta, viewUrls],
+  );
+  /**
+   * How the open picture was taken, read once when it opens: the head of the
+   * file for a photograph (`readEffectiveExif` — 256 KB, never the picture),
+   * and for a clip only what the source that handed it over vouched for,
+   * since an MP4 has no EXIF to find and reading a quarter megabyte to learn
+   * that is a waste. Kept beside the item rather than in it: `lightboxItem`
+   * stays pure and every other asset is untouched.
+   */
+  const [exposure, setExposure] = useState<{ id: string; line: string } | null>(null);
+  useEffect(() => {
+    const asset = viewing === null ? null : (viewable[viewing] ?? null);
+    const image = asset?.parts.image;
+    const file = image ?? asset?.parts.video;
+    if (!asset || !file) {
+      setExposure(null);
+      return;
+    }
+    if (!image) {
+      setExposure({ id: asset.id, line: exposureSummary(vouchedExif(file)?.exif) });
+      return;
+    }
+    let alive = true;
+    void readEffectiveExif(image).then(({ exif }) => {
+      if (alive) setExposure({ id: asset.id, line: exposureSummary(exif) });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [viewing, viewable]);
+  const viewShown = useMemo(
+    () =>
+      exposure
+        ? viewItems.map((i) => (i.id === exposure.id ? { ...i, camera: exposure.line } : i))
+        : viewItems,
+    [viewItems, exposure],
   );
   /** Open the sheet on one asset, by id — the rows know nothing of indices. */
   const view = (id: string) => {
@@ -520,9 +558,9 @@ export default function AssetSidebar({
         />
       )}
 
-      {viewing !== null && viewItems[viewing] && (
+      {viewing !== null && viewShown[viewing] && (
         <MediaLightbox
-          items={viewItems}
+          items={viewShown}
           index={viewing}
           onIndex={setViewing}
           onClose={() => setViewing(null)}
@@ -789,7 +827,8 @@ function lightboxItem(
     facts: metaFacts(asset, meta),
     kind: isVideo ? 'video' : 'photo',
     src: raw ? null : url,
-    still: meta?.thumbUrl ?? (raw || isVideo ? null : url),
+    // The cover the library already built, drawn under the file itself.
+    still: meta?.thumbUrl ?? null,
     natural: meta?.width && meta?.height ? { width: meta.width, height: meta.height } : null,
     unavailable: raw ? `${meta?.imageType ?? 'RAW'} — no browser decodes this; add its JPEG twin` : null,
   };
