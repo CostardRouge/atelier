@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { PREVIEW_LONG_EDGE } from './badge-render';
 import { THUMB_LONG_EDGE, thumbSize } from './thumbnail';
 
 describe('thumbSize', () => {
@@ -12,7 +13,15 @@ describe('thumbSize', () => {
   });
 
   it('keeps a square square', () => {
-    expect(thumbSize(600, 600)).toEqual({ w: THUMB_LONG_EDGE, h: THUMB_LONG_EDGE });
+    expect(thumbSize(900, 900)).toEqual({ w: THUMB_LONG_EDGE, h: THUMB_LONG_EDGE });
+  });
+
+  // The badge preview canvas is at least PREVIEW_LONG_EDGE (720), so the
+  // stored size is always actually reached — this is what makes raising
+  // THUMB_LONG_EDGE do anything at all, since it never upscales.
+  it('is fully reached from the smallest preview the stage ever paints', () => {
+    expect(THUMB_LONG_EDGE).toBeLessThanOrEqual(PREVIEW_LONG_EDGE);
+    expect(Math.max(...Object.values(thumbSize(405, PREVIEW_LONG_EDGE)))).toBe(THUMB_LONG_EDGE);
   });
 
   it('never returns a zero side for a very wide source', () => {

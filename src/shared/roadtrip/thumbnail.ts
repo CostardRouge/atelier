@@ -12,8 +12,25 @@
  * picture, never the post.
  */
 
-/** Longest edge of a stored thumbnail. Two rows of these are ~30 KB. */
-export const THUMB_LONG_EDGE = 224;
+/**
+ * Longest edge of a stored thumbnail — sized for the LARGEST consumer, which
+ * is the gallery card's cover, not the day row it was first written for.
+ *
+ * The day panel draws it 38×48 CSS (76×96 device px at 2×) and a pin tile
+ * 62×82, so 224 was already generous there; the card's mosaic wants ~378×336
+ * device px on its big tile and a full-bleed cover ~600×336, which 224 could
+ * only reach by upscaling three times over. Every display size is CSS and none
+ * is derived from the picture, so raising this changes nothing anywhere but
+ * the sharpness and the bytes: ~3.6 KB per piece becomes ~25 KB.
+ *
+ * It is never upscaled past the source, and the badge preview canvas is at
+ * least `PREVIEW_LONG_EDGE` (720), so this is always actually reached.
+ *
+ * A thumbnail already stored at the old size stays at it — it is a cache, and
+ * it is re-baked the next time that piece is opened. There is no migration:
+ * the canvas it comes from only exists in the editor.
+ */
+export const THUMB_LONG_EDGE = 640;
 
 /** JPEG rather than PNG: photographic, and a tenth of the bytes. */
 export const THUMB_QUALITY = 0.72;
