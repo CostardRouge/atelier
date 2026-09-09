@@ -141,3 +141,20 @@ Read before touching the shell (`src/app/`), the tool registry, the shared asset
 - `addFiles` is read through a ref inside the effect, never listed as a dependency: it is a fresh callback on some renders and re-running the restore would re-download.
 - `client.asset(id)` and `client.assetsByIds(ids)` exist for this. `assetsByIds` sends Winnow's `ids` filter (its `intList`: comma-separated) and falls back to the detail route for an id the collapsed list did not return — a RAW's half of a pair, say. **Verified against Winnow's `src/lib/filter.ts` and `src/app/api/assets/[id]/route.ts`**, which answers `{ asset }`, not a bare row.
 - One reading of `"<host>/<id>"` in the codebase: `finals.ts`'s `splitAssetId`, reused here rather than copied.
+
+## Winnow already holds the triage verdict Atelier ignores (2026-09-09)
+
+**Fact, read from Winnow's own source** (`~/Documents/GitHub/winnow`), so it does
+not have to be re-derived: an asset carries a **rating** — `ratings.verdict IN
+('pick','reject','skip','unrated')` plus a `star` 0–5 (migration `0016`, written
+through `POST /api/ratings/bulk`) — and `GET /api/assets` filters on it:
+`verdict`, `star_min`, and `has_edit` (whether a derivative was made from it) are
+all accepted by `filterFromSearchParams` (`src/lib/filter.ts`).
+
+Atelier's `FilterQuery` (`shared/sources/winnow/client.ts`) exposes four keys —
+`mediaType`, `ext`, `device`, `half` — and none of these. **How to apply**: any
+feature that needs to know which pictures are *worth* using (a publishing
+proposal, a day's candidate slides, a batch grade) must forward `verdict` and
+`star_min` rather than invent a quality score of its own. The maintainer's triage
+already IS the judgement; scoring pictures in Atelier would be a second, worse
+opinion — the same anti-fabrication line the badge and the battery gauge hold.

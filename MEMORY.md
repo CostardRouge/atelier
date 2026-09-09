@@ -19,6 +19,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
      what he wants when an audit finds problems, what annoys him. -->
 
 - 2026-08-20 — Observed from history, not yet confirmed in conversation: work lands as focused, self-describing commits (one tool or one fix per commit, prose imperative titles, a body explaining the *why*), and most agent work reaches `main` through a pull request (`(#NN)` merge titles) rather than a direct push. Assume a PR is expected for anything non-trivial in a cloud session.
+- 2026-09-09 — **Never size work in human developer days.** The agent writes the code, in this session; the maintainer's words: *"you are going to do as you did all of my development across multiple of my repos during the last four months — this is not going to take days, it could be done tonight if I instruct you right"*. A "one week" estimate on a feature reads as a refusal to start. **How to apply**: size a plan in COMMITS and passes (one commit = one task, CLAUDE.md rule 1), name what each one delivers and what verifies it, and let him stop the run wherever he wants. The scarce resource is his instruction and his review, never engineering time.
 - 2026-08-20 — Documentation is kept current with the code: the README describes every tool, its trade-offs and its browser caveats, and a commit that changed the tool line-up also refreshed the README (`aade8e2`). Treat a user-visible feature as unfinished until the README says the same thing as the code.
 
 ## Direction in five lines
