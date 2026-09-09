@@ -10,7 +10,8 @@ import { useWinnowConnection } from '../shared/sources/winnow/use-connection';
 import type { LibraryHalf } from '../shared/sources/winnow/client';
 import { useScopeRows } from '../shared/sources/winnow/use-scope-rows';
 import { usePickFromInstance } from '../shared/sources/winnow/use-pick';
-import { useMediaScope } from '../shared/sources/media-scope';
+import { useMediaActions, useMediaScope } from '../shared/sources/media-scope';
+import MediaActionRow from '../shared/ui/MediaActionRow';
 import { shortHost } from '../shared/sources/source-ledger';
 import {
   useAssetLibrary,
@@ -155,6 +156,9 @@ export default function AssetSidebar({
 
   // The span the active tool is on, or the day picked here when no tool says.
   const published = useMediaScope();
+  // And what it can make out of one of these pictures, offered in the sheet
+  // that shows one large — where the decision is actually taken.
+  const offer = useMediaActions();
   const [manualDay, setManualDay] = useState<string>(() => todayIso());
   const from = published?.from ?? manualDay;
   const to = published?.to ?? manualDay;
@@ -566,21 +570,33 @@ export default function AssetSidebar({
           onClose={() => setViewing(null)}
           from="in your library"
           footer={
-            <div className="flex items-center gap-3 flex-wrap">
-              <button
-                type="button"
-                onClick={() => {
+            <>
+              <div className="flex items-center gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    activate(viewable[viewing].id);
+                    setViewing(null);
+                  }}
+                  className="font-mono text-[0.64rem] tracking-[0.1em] uppercase px-3 py-1.5 rounded-full bg-ink text-paper cursor-pointer"
+                >
+                  Use in {tool.label}
+                </button>
+                <span className="text-[0.74rem] text-muted min-w-0 truncate">
+                  read from your disk — nothing uploaded
+                </span>
+              </div>
+              {/* The picture is already here: making it active is all a verb
+                  needs, and it is what carries it onto the new piece. */}
+              <MediaActionRow
+                offer={offer}
+                onRun={(action) => {
                   activate(viewable[viewing].id);
                   setViewing(null);
+                  action.run();
                 }}
-                className="font-mono text-[0.64rem] tracking-[0.1em] uppercase px-3 py-1.5 rounded-full bg-ink text-paper cursor-pointer"
-              >
-                Use in {tool.label}
-              </button>
-              <span className="text-[0.74rem] text-muted min-w-0 truncate">
-                read from your disk — nothing uploaded
-              </span>
-            </div>
+              />
+            </>
           }
           onConfirm={() => {
             activate(viewable[viewing].id);

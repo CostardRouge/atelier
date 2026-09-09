@@ -391,6 +391,16 @@ A list you sweep through should not make you aim at a 38px thumbnail or a small 
 
 **Trap**: creating a project with a media ref but no directory handle greets a brand-new project with "1 media file not in this folder" — `reconcileMedia` runs whenever `media.files` is non-empty and finds nothing. A project created from Road Trip records NO media; the clip is already in the shared Library, which is where the Studio picks it up.
 
+## Starting a piece is ONE click, and it can be started from the picture (2026-09-09)
+
+**Decision, from the maintainer** (*"we first have to pick reel, photo or carousel and then add, we could directly have these button open and create the thing directly… we could also have these action button in the media preview modal so its even quicker to start a content"*). The day panel's kind chips + name field + **Add** are gone: each kind is its OWN button, it creates the piece with `hookDefaults` as before, and it **opens it**. The two dropped steps were asking for what the editor asks better — a kind is what the button says, and a piece is named where you can see what it shows (`PostEditor`'s header field, which already existed). A piece created and left in a list is a stub; composing it is the reason it was made.
+
+**The same three verbs are published to the shell** (`usePublishMediaActions`, the seam in `architecture.md`, «A tool publishes VERBS for a picture»), so they also sit under a picture opened large — the Library's local sheet and the instance's alike. That sheet is where "this one is worth a piece" is actually decided, and it was three screens from anything that could act on it.
+
+**Only `TripOverview` publishes them, never `PostEditor`.** A verb that navigates away from a piece being composed, offered from a sidebar over that piece, is a trap; and deciding what to make next is the overview's question, which is what this tool is for. The heading names the DAY the piece would land on (`Start a piece on 1 Nov 2025`) because the local tab holds pictures from any day and a post is keyed by the day it TELLS — the editor's own "the picture is dated…" line then offers the picture's day, unchanged.
+
+**No new path to a piece's picture.** The verb writes no media ref: the shell makes the picture active, `createTripPost` is called with an empty title, and the Library↔slide machinery records it on the first paint. Verified end to end in headless Chromium — dropped file → sheet → *Reel* → the editor open with the badge composed over that picture, and the trip's own "dated outside this trip" warning intact.
+
 ## A trip remembers the look it gives a new piece (2026-08-24)
 
 `TripDoc.hookDefaults` keeps, per post kind, everything about how a hook is composed — frame, placement, shades, per-piece styling, counter mode, temporal mode. Saved from a piece by hand, never inferred, and empty until asked for: a default nobody chose is another factory setting. What belongs to one day is never inherited (reference day, the clip's frame, the author's own text overrides) — that distinction is the whole point of the feature, and `defaultPostBadge` enforces it.

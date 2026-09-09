@@ -6,8 +6,20 @@ import { stageTint } from '../../shared/roadtrip/stage-ruler';
 import { enumerateDays, formatIsoDate, isWithin, type IsoDate } from '../../shared/roadtrip/trip-days';
 import { stageAt, stageDayNumber, tripCoverage } from '../../shared/roadtrip/trip-coverage';
 import { stageLabel } from '../../shared/roadtrip/trip-places';
-import { usePublishMediaScope, type MediaScope } from '../../shared/sources/media-scope';
-import type { TripDoc, TripPost, TripStage } from '../../shared/roadtrip/trip-types';
+import {
+  usePublishMediaActions,
+  usePublishMediaScope,
+  type MediaActions,
+  type MediaScope,
+} from '../../shared/sources/media-scope';
+import {
+  POST_KINDS,
+  createTripPost,
+  type PostKind,
+  type TripDoc,
+  type TripPost,
+  type TripStage,
+} from '../../shared/roadtrip/trip-types';
 import DayHeatmap, { type DayMenuItem, type DayStage } from './DayHeatmap';
 import DayPanel from './DayPanel';
 import StagesPanel from './StagesPanel';
@@ -156,6 +168,50 @@ export default function TripOverview({
     (posts: TripPost[]) => onChange({ ...trip, posts, updatedAt: Date.now() }),
     [trip, onChange],
   );
+
+  /**
+   * Start a piece from the open day and go straight to it.
+   *
+   * One gesture, two places: the day panel's three buttons and the verbs the
+   * shell draws under a picture being looked at (`usePublishMediaActions`
+   * below). Both land here so there is one answer to what a new piece is — the
+   * look the trip last gave that kind, no name yet (it is named in the editor,
+   * where you can see what it shows), and no picture written onto it: the
+   * active Library asset reaches the slide by the path that already exists,
+   * never by a second one.
+   */
+  const startPiece = useCallback(
+    (kind: PostKind) => {
+      if (!selected) return;
+      const post = createTripPost(kind, selected, '', null, trip.hookDefaults[kind]);
+      mutate([...trip.posts, post]);
+      onOpenPost(post);
+    },
+    [selected, trip.hookDefaults, trip.posts, mutate, onOpenPost],
+  );
+
+  // The same three verbs, offered wherever the shell shows one of this day's
+  // pictures large — the sheet is where "this one is worth a piece" is
+  // actually decided, and it used to be three screens from anything that
+  // could act on it. The heading names the DAY the piece would land on: the
+  // Library's local tab holds pictures from any day, and a piece is keyed by
+  // the day it tells, not by the file it shows.
+  const offer = useMemo<MediaActions | null>(
+    () =>
+      selected
+        ? {
+            heading: `Start a piece on ${formatIsoDate(selected)}`,
+            actions: POST_KINDS.map((k) => ({
+              id: k.id,
+              label: k.label,
+              hint: `${k.hint} — from this picture`,
+              run: () => startPiece(k.id),
+            })),
+          }
+        : null,
+    [selected, startPiece],
+  );
+  usePublishMediaActions(offer);
 
   const rename = useCallback(
     (name: string) => onChange({ ...trip, name, updatedAt: Date.now() }),
@@ -347,6 +403,7 @@ export default function TripOverview({
           trip={trip}
           date={selected}
           cell={selectedCell}
+          onStartPost={startPiece}
           onAddPost={(post) => mutate([...trip.posts, post])}
           onUpdatePost={(post) =>
             mutate(trip.posts.map((p) => (p.id === post.id ? post : p)))

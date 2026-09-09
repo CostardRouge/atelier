@@ -8,7 +8,6 @@ import {
 import { getThumbs } from '../../shared/roadtrip/trip-store';
 import {
   POST_KINDS,
-  createTripPost,
   duplicateTripPost,
   type PostKind,
   type TripDoc,
@@ -19,6 +18,8 @@ interface DayPanelProps {
   trip: TripDoc;
   date: IsoDate;
   cell: DayCell | null;
+  /** Make a piece of this kind from this day, and open it. */
+  onStartPost: (kind: PostKind) => void;
   onAddPost: (post: TripPost) => void;
   onUpdatePost: (post: TripPost) => void;
   onDeletePost: (id: string) => void;
@@ -224,22 +225,25 @@ function PostRow({
 
 /**
  * One day of the trip, opened from the grid: what has already been told from
- * it, and the one gesture that matters here — adding another piece. Composing
- * a piece's hook is a screen of its own (`PostEditor`), reached from its row;
- * this panel stays a list. Slides and the closing call to action come later.
+ * it, and the one gesture that matters here — starting another piece.
+ *
+ * Starting one is ONE click. It used to be three (pick a kind, type a name,
+ * press Add) and the two extra ones asked for what the editor asks better: a
+ * kind is what the button says, and a piece is named once you can see what it
+ * shows. So each kind is its own button, it creates the piece with the look
+ * the trip last gave that kind, and it opens it — a piece left in a list is a
+ * stub, and composing it is why it was made.
  */
 export default function DayPanel({
   trip,
   date,
   cell,
+  onStartPost,
   onAddPost,
   onUpdatePost,
   onDeletePost,
   onOpenPost,
 }: DayPanelProps) {
-  const [kind, setKind] = useState<PostKind>('reel');
-  const [title, setTitle] = useState('');
-
   const posts = cell?.posts ?? [];
   const ids = useMemo(() => posts.map((p) => p.id).join('|'), [posts]);
 
@@ -271,13 +275,6 @@ export default function DayPanel({
   const stage = stageAt(trip, date);
   const atStage = stage ? stageDayNumber(stage, date) : null;
   const totalDays = spanLength(trip.startDate, trip.endDate);
-
-  function add() {
-    // A new piece starts from the look the trip was last happy with for this
-    // kind, so the second reel does not begin at the factory settings.
-    onAddPost(createTripPost(kind, date, title, null, trip.hookDefaults[kind]));
-    setTitle('');
-  }
 
   return (
     <section
@@ -321,42 +318,22 @@ export default function DayPanel({
       )}
 
       <div className="flex flex-col gap-2 pt-1 border-t border-line">
-        <span className={`${legend} pt-3`}>Add a piece from this day</span>
+        <span className={`${legend} pt-3`}>Tell this day</span>
         <div className="flex flex-wrap items-center gap-2">
           {POST_KINDS.map((k) => (
             <button
               key={k.id}
               type="button"
-              onClick={() => setKind(k.id)}
-              title={k.hint}
-              aria-pressed={kind === k.id}
-              className={`px-3 py-1.5 rounded-full border text-[0.78rem] cursor-pointer transition-colors ${
-                kind === k.id
-                  ? 'border-accent bg-accent-wash text-accent-ink font-semibold'
-                  : 'border-line bg-paper text-ink-soft hover:border-line-strong'
-              }`}
+              onClick={() => onStartPost(k.id)}
+              title={`${k.hint} — opens straight away`}
+              className="px-3.5 py-2 rounded-full border border-ink bg-ink text-paper text-[0.8rem] font-semibold cursor-pointer transition-colors hover:bg-accent hover:border-accent"
             >
               {k.label}
             </button>
           ))}
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') add();
-            }}
-            placeholder="What it shows — for finding it again"
-            className="flex-1 min-w-0 font-sans text-[0.88rem] px-3 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
-          />
-          <button
-            type="button"
-            onClick={add}
-            className="flex-none px-4 py-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.8rem] font-semibold hover:bg-accent hover:border-accent"
-          >
-            Add
-          </button>
+          <span className="text-[0.74rem] text-muted">
+            It opens straight away — name it and dress it there.
+          </span>
         </div>
       </div>
     </section>
