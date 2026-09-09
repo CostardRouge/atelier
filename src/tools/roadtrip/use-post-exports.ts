@@ -4,7 +4,7 @@ import type { OverlayElement } from '../../shared/overlay/overlay-types';
 import { classifyPart } from '../../shared/library/assets';
 import { loadClipMeta } from '../../shared/media/video-metadata';
 import { contentSlideElements } from '../../shared/roadtrip/deck';
-import { renderDeck } from '../../shared/roadtrip/deck-export';
+import { renderDeck, renderDeckReel } from '../../shared/roadtrip/deck-export';
 import { exportPlan, type PlanItem } from '../../shared/roadtrip/export-plan';
 import {
   hookRange,
@@ -55,9 +55,17 @@ export interface PostExports {
   /** The last export's outcome, in a sentence. */
   note: string | null;
   /** The piece's ONE primary export: every slide in the format it is. */
-  exportPiece: (imagesOnly?: boolean) => Promise<void>;
+  exportPiece: (opts?: PieceExportOptions) => Promise<void>;
   exportDeck: () => Promise<void>;
   exportHookClip: () => Promise<void>;
+}
+
+/** The two delivery choices the export keeps; neither is a format. */
+export interface PieceExportOptions {
+  /** Every slide as an image, whatever the deck says. */
+  imagesOnly?: boolean;
+  /** The whole deck as one silent reel. Ignored under `imagesOnly`. */
+  combine?: boolean;
 }
 
 function download(blob: Blob, name: string) {
@@ -212,16 +220,44 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
    * the author sees what it will write before pressing it, and a slide that
    * cannot be written says why instead of failing silently in the middle.
    */
-  async function exportPiece(imagesOnly = false) {
+  async function exportPiece(opts: PieceExportOptions = {}) {
     inputs.onStart?.();
     setNote(null);
     const plan = exportPlan(inputs.trip, inputs.post, {
       canEncode: isEncodeSupported(),
       hasPicture: (slide) => inputs.resolve(slide.media) !== null || slide.media === null,
-      imagesOnly,
+      imagesOnly: opts.imagesOnly,
+      combine: opts.combine,
     });
     if (plan.files === 0) {
       setNote(plan.blockers[0] ?? 'Nothing in this piece can be written.');
+      return;
+    }
+
+    // One reel: the deck painted in order through the same encoder a still
+    // hook goes through. A single file, so a single delivery.
+    if (plan.reel) {
+      setExporting('Rendering…');
+      try {
+        const blob = await renderDeckReel({
+          trip: inputs.trip,
+          post: inputs.post,
+          aspect: inputs.aspect,
+          longEdge: 1920,
+          resolve: inputs.resolve,
+          lut: inputs.lut,
+          onProgress: (p) =>
+            setExporting(
+              p.ratio === null ? `${p.phase}…` : `Encoding ${Math.round(p.ratio * 100)}%…`,
+            ),
+        });
+        setExporting('Writing…');
+        await deliver([{ name: plan.reel.name, blob }], 0, plan.blockers);
+      } catch (err) {
+        setNote(err instanceof Error ? err.message : 'The reel could not be encoded.');
+      } finally {
+        setExporting(null);
+      }
       return;
     }
 

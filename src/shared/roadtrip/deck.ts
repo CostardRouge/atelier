@@ -297,3 +297,54 @@ export function moveItem<T>(items: readonly T[], from: number, to: number): T[] 
   next.splice(dst, 0, moved);
   return next;
 }
+
+// --- the deck as ONE timeline ---------------------------------------------
+//
+// A combined reel plays the deck in order, each slide for its own seconds.
+// The arithmetic is here, pure, so the painter only has to ask "which slide
+// is on at t, and how far into it are we" — and so the panel can say how long
+// the reel will be before anything is encoded.
+
+/** One slide's span on the reel's timeline, in seconds. */
+export interface DeckCue {
+  slide: DeckSlide;
+  start: number;
+  end: number;
+}
+
+/** Every slide laid end to end, in swipe order. */
+export function deckTimeline(slides: readonly DeckSlide[]): DeckCue[] {
+  const cues: DeckCue[] = [];
+  let at = 0;
+  for (const slide of slides) {
+    const seconds = Number.isFinite(slide.seconds) && slide.seconds > 0 ? slide.seconds : 0;
+    cues.push({ slide, start: at, end: at + seconds });
+    at += seconds;
+  }
+  return cues;
+}
+
+/** How long the whole reel runs. */
+export function deckReelSeconds(slides: readonly DeckSlide[]): number {
+  const cues = deckTimeline(slides);
+  return cues.length ? cues[cues.length - 1].end : 0;
+}
+
+/**
+ * The cue playing at `t`, or the last one once the timeline is over — a
+ * painter asked for a frame a rounding past the end must still draw the last
+ * slide, never nothing. Null only for an empty deck.
+ */
+export function slideAtTime(cues: readonly DeckCue[], t: number): DeckCue | null {
+  if (!cues.length) return null;
+  for (const cue of cues) {
+    if (t < cue.end) return cue;
+  }
+  return cues[cues.length - 1];
+}
+
+/** `australia-day-27-reel.mp4` — the deck as one file. */
+export function deckReelName(tripName: string, postSlug: string): string {
+  const stem = [tripName, postSlug].map(slugify).filter(Boolean).join('-');
+  return `${stem ? `${stem}-` : ''}reel.mp4`;
+}

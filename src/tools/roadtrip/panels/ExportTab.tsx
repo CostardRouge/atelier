@@ -28,7 +28,7 @@ interface ExportTabProps {
   /** A running export's progress line, or null when idle. */
   exporting: string | null;
   exportNote: string | null;
-  onExportPiece: (imagesOnly: boolean) => void;
+  onExportPiece: (opts: { imagesOnly: boolean; combine: boolean }) => void;
   onExportDeck: () => void;
   onExportHookClip: () => void;
   onChangePost: (post: TripPost) => void;
@@ -80,9 +80,12 @@ export default function ExportTab({
   // The one override the export keeps. It is not a mode: it is what a browser
   // with no encoder can still do, and what a contact sheet of a reel is.
   const [imagesOnly, setImagesOnly] = useState(false);
+  // The other delivery choice: the deck as ONE reel. Session state like the
+  // override — how a piece is written today is not a property of the piece.
+  const [combine, setCombine] = useState(false);
   const plan = useMemo(
-    () => exportPlan(trip, post, { canEncode, hasPicture, imagesOnly }),
-    [trip, post, canEncode, hasPicture, imagesOnly],
+    () => exportPlan(trip, post, { canEncode, hasPicture, imagesOnly, combine }),
+    [trip, post, canEncode, hasPicture, imagesOnly, combine],
   );
 
   return (
@@ -116,11 +119,23 @@ export default function ExportTab({
                 {item.name}
               </span>
               <span className="flex-none font-mono text-[0.62rem] tracking-[0.06em] uppercase text-muted">
-                {item.medium === 'video' ? `${item.seconds.toFixed(1)}s` : 'still'}
+                {/* Inside a reel every slide is on screen for its seconds,
+                    a still included — that is what a held card is. */}
+                {plan.reel || item.medium === 'video' ? `${item.seconds.toFixed(1)}s` : 'still'}
               </span>
             </li>
           ))}
         </ul>
+        {/* Only while the reel CAN be written: beside a blocker, "written as
+            one file" would contradict the legend one line above it. */}
+        {plan.reel && plan.files > 0 && (
+          <p className="m-0 text-[0.72rem] text-ink-soft">
+            Written as one file, <span className="text-ink">{plan.reel.name}</span>: each
+            slide for its own seconds, the hook playing its entrance. The reel is silent,
+            and a clip slide is played by seeking its frames, which is slower than
+            exporting that clip on its own.
+          </p>
+        )}
 
         {/* The hook's own reason, spelled out: it is the line an author
             changes most, and a word in a column does not explain itself. */}
@@ -139,7 +154,7 @@ export default function ExportTab({
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <button
             type="button"
-            onClick={() => onExportPiece(imagesOnly)}
+            onClick={() => onExportPiece({ imagesOnly, combine })}
             disabled={exporting !== null || plan.files === 0}
             className="px-[1.1rem] py-1.5 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.8rem] font-semibold hover:bg-accent hover:border-accent disabled:opacity-60 disabled:cursor-default"
           >
@@ -157,6 +172,27 @@ export default function ExportTab({
             />
             Everything as images
           </label>
+          {slides.length > 1 && (
+            <label
+              className={`flex items-center gap-1.5 text-[0.74rem] cursor-pointer ${
+                imagesOnly ? 'text-faint' : 'text-ink-soft'
+              }`}
+              title={
+                imagesOnly
+                  ? 'Images and a reel ask for opposite things; untick the other one first.'
+                  : undefined
+              }
+            >
+              <input
+                type="checkbox"
+                checked={combine && !imagesOnly}
+                disabled={imagesOnly}
+                onChange={(e) => setCombine(e.target.checked)}
+                className="accent-accent"
+              />
+              Combine into one reel
+            </label>
+          )}
         </div>
       </div>
 

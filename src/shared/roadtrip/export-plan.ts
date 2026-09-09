@@ -18,6 +18,8 @@
 
 import { classifyPart } from '../library/assets';
 import {
+  deckReelName,
+  deckReelSeconds,
   deckSlides,
   slideFileName,
   type DeckSlide,
@@ -48,6 +50,12 @@ export interface PieceExportPlan {
   files: number;
   images: number;
   videos: number;
+  /**
+   * Set when the deck goes out as ONE reel: its name and its length. The
+   * items are still listed, because the reel is made of them and the panel
+   * shows how long each is on screen.
+   */
+  reel: { name: string; seconds: number } | null;
   /** Every distinct reason something cannot be written, in order met. */
   blockers: string[];
 }
@@ -63,6 +71,13 @@ export interface ExportPlanOptions {
    * encoder can still do, and what a contact sheet of a reel is.
    */
   imagesOnly?: boolean;
+  /**
+   * The whole deck as one silent MP4, each slide held for its own seconds, a
+   * clip played by seeking. A DELIVERY choice, never a format: every slide
+   * keeps what it is, the reel only plays them in order. Ignored under
+   * `imagesOnly`, which asks for the opposite thing.
+   */
+  combine?: boolean;
 }
 
 /** What the piece delivers, item by item. */
@@ -79,11 +94,24 @@ export function exportPlan(
     return sentence;
   };
 
+  const combine = Boolean(opts.combine) && !opts.imagesOnly;
+  if (combine && !opts.canEncode) {
+    note(
+      'This browser cannot encode video, so the deck cannot be combined into a reel. Everything still exports as images.',
+    );
+  }
+
   const items = slides.map((slide): PlanItem => {
     const medium = opts.imagesOnly ? 'image' : slide.medium;
     let blocker: string | null = null;
 
-    if (medium === 'video') {
+    if (combine) {
+      // Inside a reel every slide is painted, so nothing about a single
+      // slide can block it: a missing picture draws over the flat ground and
+      // a clip is played by seeking, whatever its container. Only the
+      // encoder can refuse, and it refuses the whole reel.
+      blocker = opts.canEncode ? null : blockers[0];
+    } else if (medium === 'video') {
       if (!opts.canEncode) {
         blocker = note(
           'This browser cannot encode video, so nothing here can be delivered as a clip. Everything still exports as images.',
@@ -119,11 +147,23 @@ export function exportPlan(
   });
 
   const live = items.filter((i) => i.blocker === null);
+  if (combine) {
+    const writable = opts.canEncode ? 1 : 0;
+    return {
+      items,
+      files: writable,
+      images: 0,
+      videos: writable,
+      reel: { name: deckReelName(trip.name, slug), seconds: deckReelSeconds(slides) },
+      blockers,
+    };
+  }
   return {
     items,
     files: live.length,
     images: live.filter((i) => i.medium === 'image').length,
     videos: live.filter((i) => i.medium === 'video').length,
+    reel: null,
     blockers,
   };
 }
@@ -131,6 +171,10 @@ export function exportPlan(
 /** "3 files · 2 images and 1 clip" — what the button is about to write. */
 export function describePlan(plan: PieceExportPlan): string {
   if (plan.files === 0) return 'nothing can be written';
+  if (plan.reel) {
+    const n = plan.items.length;
+    return `1 file · one reel of ${n} slide${n === 1 ? '' : 's'} · ${plan.reel.seconds.toFixed(1)}s`;
+  }
   const parts: string[] = [];
   if (plan.images) parts.push(`${plan.images} image${plan.images === 1 ? '' : 's'}`);
   if (plan.videos) parts.push(`${plan.videos} clip${plan.videos === 1 ? '' : 's'}`);

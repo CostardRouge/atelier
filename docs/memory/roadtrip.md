@@ -331,6 +331,14 @@ The shape it was given, which any future network feature should copy: the client
 
 **A blocked item stays visible, struck through, with its sentence.** Hiding it would answer "why is my hook not in the folder" with silence. And a clip that fails mid-run costs only itself: each is caught, the stills already rendered are still delivered, and the failures are named alongside them. **The check that a container can be demuxed applies only to a CLIP** — running `hookSourceProblem` over a photograph blocks every animated hook that sits on a still, which is the whole feature (caught by a test, not by reading).
 
+## The deck as ONE reel: painted in order, silent, a clip played by seeking (2026-09-09)
+
+**Decision.** `renderDeckReel` (`deck-export.ts`) writes the whole deck as one MP4 through `encodeFrames`: `deckTimeline` (pure, `deck.ts`) lays the slides end to end, `slideAtTime` says which one is on at `t`, and every slide is painted at ITS OWN clock — the hook's entrance plays on the hook's first frame, not the reel's. It is a **delivery choice** beside the images override, never a format: session state in the Export tab, ignored under images-only, offered only when the deck has more than one slide.
+
+**Three things it does that the plan must say before the run.** It is **silent** (the encoder's own property). **A clip slide is PLAYED by seeking** the same video element the preview scrubs — one seek per output frame, which is slower than exporting that clip through the decode pipeline, and which needs no second source decoded into the encoder's timeline. And because everything is painted, **nothing about one slide can block the reel**: a WebM the demuxer refuses on its own plays fine here, a missing picture draws over the flat ground. Only the encoder can refuse, and it refuses the whole reel.
+
+**`composeSlide` is the one composition** the PNG deck and the reel share — elements, theme, shades, the closing card's ground and QR, framing — extracted so the two cannot compose a slide two different ways. A still is decoded once and graded once into a bitmap for the whole reel; a clip keeps one grader for its span, because its frame changes and a grader per frame is a WebGL2 context per frame. **Trap kept out**: the reel's "written as one file" sentence must not print beside a blocker — with no encoder, the legend says nothing can be written and the sentence contradicted it one line down.
+
 ## The QR is generated here, and it is verified by decoding (2026-08-24)
 
 **Decision.** `shared/lib/qr.ts` is a hand-rolled encoder (byte mode, EC level M, versions 1–10). **Why not a library**: a card that fetched its own QR from a service would be the single place this suite phoned home, and the local-first line is the product. It is ~250 lines against a spec that has not moved since 2000 — unlike Dexie, it earns the code it costs.

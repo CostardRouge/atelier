@@ -3,10 +3,14 @@ import {
   captionElementId,
   captionLineFromElementId,
   contentSlideElements,
+  deckReelName,
+  deckReelSeconds,
   deckSlides,
+  deckTimeline,
   hookAnimates,
   moveItem,
   resolveSlideMedium,
+  slideAtTime,
   slideFileName,
 } from './deck';
 import { DEFAULT_CTA } from './cta-slide';
@@ -337,5 +341,48 @@ describe('deckSlides — medium and screen time', () => {
     p.badge.medium = 'video';
     const deck = deckSlides(trip({ cta: { ...DEFAULT_CTA, headline: 'Follow' } }), p);
     expect(deck.at(-1)).toMatchObject({ kind: 'cta', medium: 'image', reason: 'plain' });
+  });
+});
+
+// --- the deck as one timeline ---------------------------------------------
+
+describe('deckTimeline', () => {
+  const p = post({
+    slides: [
+      { ...createPostSlide(null), seconds: 2 },
+      { ...createPostSlide(null), seconds: 4.5 },
+    ],
+  });
+  p.badge.hookSeconds = 3;
+
+  it('lays the slides end to end in swipe order', () => {
+    const cues = deckTimeline(deckSlides(trip(), p));
+    expect(cues.map((c) => [c.start, c.end])).toEqual([
+      [0, 3],
+      [3, 5],
+      [5, 9.5],
+    ]);
+    expect(deckReelSeconds(deckSlides(trip(), p))).toBe(9.5);
+  });
+
+  it('finds the slide playing at a moment, and holds the last one past the end', () => {
+    const cues = deckTimeline(deckSlides(trip(), p));
+    expect(slideAtTime(cues, 0)?.slide.position).toBe(1);
+    expect(slideAtTime(cues, 2.99)?.slide.position).toBe(1);
+    expect(slideAtTime(cues, 3)?.slide.position).toBe(2);
+    expect(slideAtTime(cues, 9.5)?.slide.position).toBe(3);
+    expect(slideAtTime(cues, 42)?.slide.position).toBe(3);
+    expect(slideAtTime([], 0)).toBeNull();
+  });
+
+  it('gives a slide with no usable length no time at all', () => {
+    const q = post({ slides: [{ ...createPostSlide(null), seconds: Number.NaN }] });
+    const cues = deckTimeline(deckSlides(trip(), q));
+    expect(cues[1].start).toBe(cues[1].end);
+  });
+
+  it('names the reel after the trip and the piece', () => {
+    expect(deckReelName('Australia', 'Kalbarri cliffs')).toBe('australia-kalbarri-cliffs-reel.mp4');
+    expect(deckReelName('', '')).toBe('reel.mp4');
   });
 });

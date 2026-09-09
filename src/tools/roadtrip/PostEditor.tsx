@@ -770,7 +770,7 @@ export default function PostEditor({
               hasPicture={hasPicture}
               exporting={exports.exporting}
               exportNote={exports.note}
-              onExportPiece={(imagesOnly) => void exports.exportPiece(imagesOnly)}
+              onExportPiece={(opts) => void exports.exportPiece(opts)}
               onExportDeck={() => void exports.exportDeck()}
               onExportHookClip={() => void exports.exportHookClip()}
               onChangePost={onChangePost}

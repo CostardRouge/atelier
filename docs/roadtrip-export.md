@@ -1,6 +1,6 @@
 # Road Trip exports: what leaves the tool, what cannot, and the plan
 
-**Status (2026-09-09): P1 to P5 are BUILT; what is left is the combined reel, P6 and P7.**
+**Status (2026-09-09): P1 to P5 and the combined reel are BUILT; what is left is P6 and P7.**
 
 The direction is the maintainer's — "exporter la vidéo du hook
 plus les autres éléments… un raccourci, qu'on importe et qu'on utilise ce que
@@ -286,7 +286,7 @@ composition at two clocks.** Both go through `renderBadge`; the PNG is that
 render settled, the video is it at t. If a future change gives one of them a
 path the other does not have, the preview stops being a preview.
 
-### P4 — the export executes the deck, and the general button comes back — **BUILT** (bar the combined reel)
+### P4 — the export executes the deck, and the general button comes back — **BUILT**, combined reel included
 
 - `shared/roadtrip/export-plan.ts` — §5's reading half, pure, tested.
 - `ExportTab` leads with the plan (one line per slide: format, seconds,
@@ -303,16 +303,17 @@ path the other does not have, the preview stops being a preview.
   plan and the report are (`onStart`).
 - F4 is fixed here: `isEncodeSupported()` becomes a blocker in the plan, so a
   video slide says why it cannot be delivered instead of failing late.
-- **The combined reel** rides the same commit or the next one: a painter over
-  the deck's own timeline, each slide held for its own seconds, the hook
-  playing its animation, the closing card as the tail the Studio already knows
-  (`outroTail`). Two limits it must state before running: it is **silent**
-  (audio is copied and never re-encoded, and a painted timeline has nothing to
-  copy — un-ticking combine gives the hook its own clip with its sound), and
-  until P5 a clip slide inside it is **held on its chosen frame**, named, with
-  the same escape offered.
+- **The combined reel** — built. `renderDeckReel` paints the deck in order
+  through `encodeFrames`, each slide for its own seconds at its own clock, the
+  closing card painted like any slide. Two things the panel says before the
+  run: it is **silent** (audio is copied and never re-encoded, and a painted
+  timeline has nothing to copy — un-ticking combine gives the hook its own
+  clip with its sound), and a clip slide inside it is **played by seeking**
+  the preview's own video element, which is slower than exporting that clip
+  on its own. Nothing about one slide can block the reel; only the encoder
+  can, and it refuses the whole file.
 
-### P5 — a content slide can be a clip — **BUILT with P4, bar the combined reel**
+### P5 — a content slide can be a clip — **BUILT**
 
 The maintainer's own third phase, and it cost nothing of its own: `renderSlideVideo`
 routes every slide the same way, so a content clip exports with its caption
@@ -328,10 +329,10 @@ So the work is renderers and one picker, not a document change:
   has it — it always did, and it writes the slide's own `videoTimeSeconds`;
 - a clip slide exported on its own goes through `exportVariantVideo` like the
   hook's, with the slide's caption as its overlay — built;
-- **still open**: inside a combined reel it stops being held. With the painted
-  encoder, playing it means decoding that clip into the shared timeline, which
-  is a decode job rather than the multi-source MUX `roadtrip.md` rejected.
-  Silent by construction, which the combined reel already is.
+- inside a combined reel it is PLAYED, not held — by seeking the same video
+  element the preview scrubs, one seek per output frame: slower than the
+  decode pipeline, but real motion with no second source muxed. Silent by
+  construction, which the combined reel already is.
 
 ### P6 — a content slide can animate
 

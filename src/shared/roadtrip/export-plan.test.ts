@@ -132,6 +132,37 @@ describe('exportPlan', () => {
     expect(plan.items.at(-1)).toMatchObject({ kind: 'cta', medium: 'image' });
   });
 
+  it('combines the deck into one reel, and counts it as one file', () => {
+    const p = post({
+      slides: [createPostSlide({ name: 'CLIP.WEBM', size: 1, lastModified: 1 })],
+    });
+    p.badge.hookSeconds = 4;
+    p.slides[0].seconds = 3;
+    const plan = exportPlan(trip(), p, { ...ALL_THERE, combine: true });
+    expect(plan.reel).toEqual({ name: 'australia-kalbarri-cliffs-reel.mp4', seconds: 7 });
+    expect(plan.files).toBe(1);
+    expect(plan.videos).toBe(1);
+    expect(plan.images).toBe(0);
+    // A WebM cannot be demuxed for a clip of its own, but inside the reel it
+    // is played by seeking, so nothing about it blocks the reel.
+    expect(plan.items.every((i) => i.blocker === null)).toBe(true);
+    expect(describePlan(plan)).toBe('1 file · one reel of 2 slides · 7.0s');
+  });
+
+  it('refuses the whole reel when the browser cannot encode', () => {
+    const plan = exportPlan(trip(), post(), { ...ALL_THERE, canEncode: false, combine: true });
+    expect(plan.files).toBe(0);
+    expect(plan.reel).not.toBeNull();
+    expect(plan.blockers[0]).toMatch(/cannot be combined/);
+    expect(plan.items[0].blocker).toBe(plan.blockers[0]);
+  });
+
+  it('lets the images override win over combine', () => {
+    const plan = exportPlan(trip(), post(), { ...ALL_THERE, combine: true, imagesOnly: true });
+    expect(plan.reel).toBeNull();
+    expect(plan.items[0].medium).toBe('image');
+  });
+
   it('says plainly when nothing can be written', () => {
     const p = post({ media: { name: 'CLIP.WEBM', size: 1, lastModified: 1 } });
     expect(describePlan(exportPlan(trip(), p, ALL_THERE))).toBe('nothing can be written');
