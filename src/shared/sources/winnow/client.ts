@@ -46,6 +46,16 @@ export interface WinnowConfig {
 export interface WinnowAssetRow {
   id: number;
   filename: string;
+  /**
+   * The shoot session this media was ingested in — one folder, in practice.
+   *
+   * `assets.session_id` is `NOT NULL` in Winnow's schema and its two asset
+   * routes both select `a.*`, so it is already on every row we read (checked
+   * against the instance's own code, per the rule the timeline boundary
+   * taught). Typed nullable all the same: a link is the only thing that
+   * depends on it, and it falls back rather than pointing nowhere.
+   */
+  session_id: number | null;
   ext: string;
   media_type: 'photo' | 'video';
   captured_at: string | null;
@@ -596,6 +606,21 @@ export class WinnowClient {
   /** Where to send someone who is not signed in — Winnow's own login page. */
   loginUrl(): string {
     return this.url('/login');
+  }
+
+  /**
+   * The instance's own page for a shoot session — its grid of media.
+   *
+   * The nearest thing Winnow has to a page for ONE media. Its viewer is an
+   * overlay every consumer holds in local React state (`SessionGrid`,
+   * `GalleryShell`, `TimelinePanel`…) and no route carries an asset, so a link
+   * can land you in the grid the picture lives in but cannot open it on that
+   * frame. Opening the frame itself needs a parameter on Winnow's side; do not
+   * invent one here — a guessed key is what made the timeline boundary silently
+   * list the whole library (`docs/winnow-timeline.md`).
+   */
+  sessionUrl(sessionId: number): string {
+    return this.url(`/sessions/${sessionId}`);
   }
 
   private init(extra: RequestInit = {}): RequestInit {

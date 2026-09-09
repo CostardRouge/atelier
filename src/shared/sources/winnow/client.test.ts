@@ -48,6 +48,8 @@ describe('WinnowClient URLs', () => {
     expect(c.originalUrl(12)).toBe(`${BASE}/api/assets/12/download`);
     expect(c.sidecarUrl(7)).toBe(`${BASE}/api/sidecars/7/download`);
     expect(c.loginUrl()).toBe(`${BASE}/login`);
+    // A PAGE, not an API route: where "Open in Winnow" sends you.
+    expect(c.sessionUrl(31)).toBe(`${BASE}/sessions/31`);
   });
   it('keeps the first thumbnail request plain, so it stays cacheable', () => {
     expect(c.thumbRetryUrl(12, 0)).toBe(`${BASE}/api/assets/12/thumb`);
