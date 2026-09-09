@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { useActiveAsset } from '../../shared/library/use-active-asset';
 import { useObjectUrl } from '../../shared/media/use-object-url';
@@ -1461,8 +1468,26 @@ export default function StudioEditor({
       <div className="flex flex-col @min-[800px]:flex-row gap-4 flex-1 min-h-0">
         {/* Stage */}
         <div className="flex flex-col gap-[0.6rem] flex-1 min-w-0 min-h-0">
+          {/*
+            The stage box, and its height is the whole of the zoom's
+            arithmetic: `useStageZoom` measures this box and fits the picture
+            into `viewport × scale`, so the box must never be sized by the
+            picture it holds — the measurement would be the zoom's own output
+            and each gesture would feed the next.
+
+            Above 820px the flex chain from the shell's `h-dvh` hands it a
+            real height and `flex-1` is right. Under it the shell gives up
+            that fixed height so the page scrolls (App.tsx) and nothing above
+            is definite any more, so the height is stated outright — as tall
+            as a full-width picture, never under 240px nor past 62dvh — the
+            way Road Trip's badge stage does it. A VIEWPORT query, not the
+            container one the layout splits on: what changes at 820px is the
+            shell's height model, which no container knows. `cqw` is the
+            editor's container, so the Library sidebar is already out of it.
+          */}
           <div
-            className={`relative rounded-paper overflow-hidden flex-1 min-h-0 @max-[800px]:min-h-[240px] ${
+            style={{ '--aspect': frameAspect ?? 16 / 9 } as CSSProperties}
+            className={`relative rounded-paper overflow-hidden flex-1 min-h-0 @max-[800px]:min-h-[240px] max-[820px]:flex-none max-[820px]:h-[max(240px,min(62dvh,calc(100cqw/var(--aspect))))] ${
               hasFrame ? 'bg-frame' : 'bg-transparent'
             }`}
           >
@@ -1471,8 +1496,14 @@ export default function StudioEditor({
                 and the extent is the browser's arithmetic. The wrapper's
                 min-w/min-h keep the picture centred while it still fits, and
                 let it start at the top-left corner once it does not — flex
-                centring alone would put the overflow out of reach. */}
-            <div ref={zoom.viewportRef} className="w-full h-full overflow-auto">
+                centring alone would put the overflow out of reach.
+
+                `absolute inset-0`, not `w-full h-full`: a percentage height
+                resolves against a parent whose own height is definite, and in
+                the stacked layout the box above is a flex item in a column
+                that has no definite height to hand down. The scroll box then
+                fell back to its content — the canvas — and measured it. */}
+            <div ref={zoom.viewportRef} className="absolute inset-0 overflow-auto">
               <div className="w-fit h-fit min-w-full min-h-full flex items-center justify-center">
             {hasFrame ? (
               <canvas

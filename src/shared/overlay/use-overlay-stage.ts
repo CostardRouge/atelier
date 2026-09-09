@@ -25,6 +25,7 @@ import {
   measureOverlays,
 } from './draw-overlays';
 import { drawGuides } from './draw-guides';
+import { stageFrameSize } from './stage-size';
 import { snap, snapToGrid, type GuidesState } from './guides';
 import type { OverlayElement } from './overlay-types';
 import type { StyleTheme } from './title-styles';
@@ -229,13 +230,22 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     const canvas = canvasRef.current;
     const frame = readFrame();
     if (!canvas || !frame) return false;
-    if (canvas.width !== frame.w) canvas.width = frame.w;
-    if (canvas.height !== frame.h) canvas.height = frame.h;
+    // Not the media's own density: the stage's pixel budget (`stage-size.ts`).
+    // A clip is inside it and unchanged; a 48-megapixel still is not, and drawn
+    // at its own size it costs a 194 MB canvas plus, with a LUT on, a texture
+    // and a drawing buffer of the same size — which is the whole of an
+    // iPhone's budget. Everything below reads the CANVAS's size, so the
+    // overlays, the hit test and the wipe all follow it.
+    const stage = stageFrameSize(frame.w, frame.h);
+    if (canvas.width !== stage.w) canvas.width = stage.w;
+    if (canvas.height !== stage.h) canvas.height = stage.h;
     const ctx = canvas.getContext('2d');
     if (!ctx) return false;
 
     const vw = canvas.width;
     const vh = canvas.height;
+    // Source pixels per stage pixel: 1 for anything inside the budget.
+    const density = vw > 0 ? frame.w / vw : 1;
     const cue = findCue(cuesRef.current, frame.t);
 
     // Grade through the LUT first (if any), so the preview matches the export;
@@ -254,8 +264,22 @@ export function useOverlayStage(params: StageParams): StageHandlers {
         }
       }
       if (g) {
+        // What the grader uploads. A frame inside the budget goes straight to
+        // the texture — that is the fast path, and the one a <video> wants.
+        // A bigger one is scaled into the stage canvas first and uploaded from
+        // there, so the texture is the stage's size and not the media's: a
+        // 48-megapixel photograph uploaded whole is 194 MB of GPU memory, and
+        // past `MAX_TEXTURE_SIZE` on an older phone it is not uploadable at
+        // all. Handing over the canvas keeps the picture the right way up on
+        // its own: `UNPACK_FLIP_Y_WEBGL` applies to a canvas, which is exactly
+        // what the shader's ImageBitmap compensation expects (`lut-gl.ts`).
+        let graded: CanvasImageSource = frame.src;
+        if (density > 1) {
+          ctx.drawImage(frame.src, 0, 0, vw, vh);
+          graded = canvas;
+        }
         g.renderer.resize(vw, vh);
-        g.renderer.draw(frame.src as TexImageSource);
+        g.renderer.draw(graded as TexImageSource);
         source = g.canvas;
       }
     }
@@ -278,7 +302,21 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     if (compareRef.current) {
       const splitX = Math.round(splitRef.current * vw);
       if (splitX > 0) {
-        ctx.drawImage(frame.src, 0, 0, splitX, vh, 0, 0, splitX, vh);
+        // The source rectangle is in the MEDIA's pixels, the destination in
+        // the stage's: they are the same number only while the frame is inside
+        // the budget, so the cut has to be converted or a scaled-down still
+        // would show the left tenth of itself blown across the divider.
+        ctx.drawImage(
+          frame.src,
+          0,
+          0,
+          Math.min(frame.w, Math.round(splitX * density)),
+          frame.h,
+          0,
+          0,
+          splitX,
+          vh,
+        );
       }
       ctx.save();
       ctx.fillStyle = '#d9442a';
