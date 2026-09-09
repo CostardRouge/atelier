@@ -5,8 +5,13 @@ import { fileBaseName } from '../../library/assets';
 import type { RowsProblem } from './use-scope-rows';
 
 export interface InstancePicker {
-  /** Fetch this row into the pool, or re-activate it when it is already there. */
-  pick: (row: WinnowAssetRow) => Promise<void>;
+  /**
+   * Fetch this row into the pool, or re-activate it when it is already there.
+   * Resolves with the Library asset id it landed on, or null when nothing
+   * arrived — the caller that chains something onto the picture (starting a
+   * piece from it) must not act on a fetch that failed.
+   */
+  pick: (row: WinnowAssetRow) => Promise<string | null>;
   /** The row being fetched right now, so a tile can say so and the rest wait. */
   fetching: number | null;
   problem: RowsProblem | null;
@@ -39,23 +44,27 @@ export function usePickFromInstance(
 
   const pick = useCallback(
     async (row: WinnowAssetRow) => {
-      if (!client || !connectionId) return;
+      if (!client || !connectionId) return null;
       const have = inLibrary.get(`${connectionId}/${row.id}`);
       if (have) {
         onActivate(have);
-        return;
+        return have;
       }
       setFetching(row.id);
       setProblem(null);
       try {
         const files = await materialize(client, connectionId, row, { fidelity: 'proxy' });
-        if (files.length) onPicked(files, fileBaseName(files[0].name).toLowerCase());
+        if (!files.length) return null;
+        const assetId = fileBaseName(files[0].name).toLowerCase();
+        onPicked(files, assetId);
+        return assetId;
       } catch (err) {
         setProblem(
           err instanceof WinnowError && err.kind === 'unauthenticated'
             ? { text: `Not signed in to ${connectionId}.`, login: client.loginUrl() }
             : { text: err instanceof Error ? err.message : String(err) },
         );
+        return null;
       } finally {
         setFetching(null);
       }

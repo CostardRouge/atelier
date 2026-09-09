@@ -18,6 +18,7 @@
  */
 
 import { isIsoDate, isWithin, type IsoDate } from './trip-days';
+import { defaultHookSeconds } from './hook-video';
 import { DEFAULT_FRAMING, normaliseFraming, type Framing } from '../media/framing';
 import type { SavedMediaRef } from '../projects/project-types';
 import { DEFAULT_SOURCE_ID } from '../sources/source';
@@ -45,7 +46,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 13;
+export const TRIP_DOC_VERSION = 14;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers and the
@@ -169,6 +170,27 @@ export interface TripStage {
   origin?: StageOrigin;
 }
 
+/**
+ * What a slide is DELIVERED as. `auto` is the default and the honest answer
+ * for almost every slide: it comes out a video when something on it moves — an
+ * animated badge, a clip — and an image otherwise, resolved once in
+ * `deckSlides()`.
+ *
+ * The two explicit values exist because the author sometimes knows better than
+ * the deck. `image` on an animated slide is a real choice (a still for the
+ * grid), so it is obeyed and its cost is stated rather than refused; `video`
+ * on a plain photograph is the held card a reel is sometimes made of.
+ *
+ * It lives on the slide and not on the export because the format is a property
+ * of what was composed, not a decision taken at the door — the maintainer's
+ * own call (2026-09-09), and what makes clip slides and animated captions
+ * cost no further document change.
+ */
+export type SlideMedium = 'auto' | 'image' | 'video';
+
+/** How long a slide is on screen, when nothing says otherwise. */
+export const DEFAULT_SLIDE_SECONDS = 3;
+
 /** How one post's badge counts and where it sits. */
 export interface PostBadge {
   mode: CounterMode;
@@ -189,6 +211,19 @@ export interface PostBadge {
   showPin: boolean;
   /** How long the hook lasts, in seconds — what an exit animation lands on. */
   durationSeconds: number;
+  /** What the hook slide is delivered as; see {@link SlideMedium}. */
+  medium: SlideMedium;
+  /**
+   * How long the hook slide is ON SCREEN, which is NOT `durationSeconds`: the
+   * badge may settle at 4s inside a hook that runs for 6, and on a clip this
+   * is also how much of it is encoded. `defaultHookSeconds` derives one from
+   * the other and stays the default.
+   *
+   * It was session state until 2026-09-09, on the reasoning that a length is
+   * an export choice. That stopped being true when every slide gained a screen
+   * time: the hook's is part of the composition like the rest.
+   */
+  hookSeconds: number;
   /**
    * The darkening laid over the picture, under the badge — up to a handful of
    * layers. Replaces the old single vignette + single scrim, which were the
@@ -233,6 +268,9 @@ export interface HookDefaults {
   timeAgo: TimeAgoMode;
   showPin: boolean;
   durationSeconds: number;
+  /** How the hook is delivered, and how long it is on screen — see `PostBadge`. */
+  medium: SlideMedium;
+  hookSeconds: number;
   layout: BadgeLayout;
   pieceStyles: BadgePieceStyles;
   shades: Shade[];
@@ -248,6 +286,8 @@ export function hookDefaultsFrom(badge: PostBadge): HookDefaults {
     timeAgo: badge.timeAgo,
     showPin: badge.showPin,
     durationSeconds: badge.durationSeconds,
+    medium: badge.medium,
+    hookSeconds: badge.hookSeconds,
     layout: { ...badge.layout },
     pieceStyles: structuredClone(badge.pieceStyles),
     shades: badge.shades.map((shade) => ({ ...shade, id: newId() })),
@@ -280,6 +320,10 @@ export function defaultPostBadge(
     referenceDate: null,
     showPin: defaults?.showPin ?? false,
     durationSeconds: defaults?.durationSeconds ?? DEFAULT_BADGE_DURATION,
+    medium: defaults?.medium ?? 'auto',
+    hookSeconds:
+      defaults?.hookSeconds ??
+      defaultHookSeconds(defaults?.durationSeconds ?? DEFAULT_BADGE_DURATION),
     shades: (defaults?.shades ?? []).map((shade) => ({ ...shade, id: newId() })),
     aspectId: defaults?.aspectId ?? ASPECT_FOR_KIND[kind],
     videoTimeSeconds: 0,
@@ -297,11 +341,20 @@ export function defaultPostBadge(
 export interface PostSlide {
   id: string;
   media: SavedMediaRef | null;
+  /**
+   * Where this slide's picture is taken from its clip — and, once the slide is
+   * delivered as a video, the IN point of the stretch that is encoded, with
+   * `seconds` as its length.
+   */
   videoTimeSeconds: number;
   /** How this picture sits in the frame — see `PostBadge.framing`. */
   framing: Framing;
   /** The author's own line over this picture; empty draws nothing. */
   caption: string;
+  /** What this slide is delivered as; see {@link SlideMedium}. */
+  medium: SlideMedium;
+  /** How long it is on screen when it is delivered as a video. */
+  seconds: number;
 }
 
 export function createPostSlide(media: SavedMediaRef | null = null): PostSlide {
@@ -311,6 +364,8 @@ export function createPostSlide(media: SavedMediaRef | null = null): PostSlide {
     videoTimeSeconds: 0,
     framing: { ...DEFAULT_FRAMING },
     caption: '',
+    medium: 'auto',
+    seconds: DEFAULT_SLIDE_SECONDS,
   };
 }
 
@@ -832,6 +887,42 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
     // Every existing trip starts on the mosaic with nothing pinned, which is
     // entirely derived: no stored document gains a choice nobody made.
     migrated.cover = migrated.cover ?? defaultTripCover();
+  }
+
+  if (migrated.version < 14) {
+    // Every slide composed before this existed is `auto`, which resolves to
+    // exactly what it already delivered: an image, unless its badge animates
+    // or its media is a clip. The hook's screen time was session state, so
+    // there is no stored value to carry — it takes the same default the
+    // slider used to offer, derived from the badge's own hold.
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      badge: {
+        ...post.badge,
+        medium: post.badge?.medium ?? 'auto',
+        hookSeconds:
+          post.badge?.hookSeconds ??
+          defaultHookSeconds(post.badge?.durationSeconds ?? DEFAULT_BADGE_DURATION),
+      },
+      slides: (post.slides ?? []).map((slide) => ({
+        ...slide,
+        medium: slide.medium ?? 'auto',
+        seconds: slide.seconds ?? DEFAULT_SLIDE_SECONDS,
+      })),
+    }));
+    migrated.hookDefaults = Object.fromEntries(
+      Object.entries(migrated.hookDefaults ?? {}).map(([kind, defaults]) => [
+        kind,
+        defaults
+          ? {
+              ...defaults,
+              medium: defaults.medium ?? 'auto',
+              hookSeconds:
+                defaults.hookSeconds ?? defaultHookSeconds(defaults.durationSeconds),
+            }
+          : defaults,
+      ]),
+    ) as HookDefaultsByKind;
   }
 
   migrated.version = TRIP_DOC_VERSION;

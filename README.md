@@ -389,8 +389,14 @@ silence is called out with a link that jumps to it. Hovering a cell raises a
 card — the day, its number, what is sitting there and whether any of it went
 out — drawn immediately rather than after the browser's own tooltip delay, so
 the grid can be swept rather than interrogated. Clicking a day opens it: what
-has already come out of it, and one gesture to add another piece — a reel, a
-carousel or a single photo. Any row in that list opens its piece — the whole
+has already come out of it, and three buttons to tell it — **Reel**,
+**Carousel**, **Single photo**. Each one is a single click: the piece is
+created with the look the trip last gave that kind and **opens straight away**,
+where it is named and dressed. The same three verbs also sit under a picture
+you are looking at large, in the Library's preview sheet — the moment "this one
+is worth a piece" is actually decided — and starting one there brings the
+picture across (fetching it from a connected Winnow if that is where it lives)
+and composes the new piece over it. Any row in that list opens its piece — the whole
 row, not just the thumbnail — and a piece can be **duplicated** on the spot,
 carrying its look and its slides but neither its publication nor its Studio
 link. **Where you are is in the URL**: `#/roadtrip/australia-d1060760/2025-07-09`

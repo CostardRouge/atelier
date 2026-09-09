@@ -324,6 +324,12 @@ export default function PostEditor({
     [resolve, post.media],
   );
 
+  /** Whether the Library holds a slide's picture — what the export plan reads. */
+  const hasPicture = useCallback(
+    (s: { media: SavedMediaRef | null }) => s.media === null || resolve(s.media) !== null,
+    [resolve],
+  );
+
   const hookFile = isHook ? slideFile : resolve(post.media);
   const hookIsVideo = Boolean(hookFile && !hookFile.type.startsWith('image/'));
   const [hookInfo, setHookInfo] = useState(NO_SOURCE);
@@ -335,13 +341,13 @@ export default function PostEditor({
     [isHook],
   );
 
-  // How long the burned-in hook clip runs. Session state, not part of the
-  // document: it is derived from the badge's own hold, so it is never
-  // arbitrary, and a length is an export choice rather than a property of the
-  // piece. Null means "follow the badge".
-  const [hookSeconds, setHookSeconds] = useState<number | null>(null);
+  // How long the burned-in hook clip runs. It lives on the DOCUMENT since
+  // 2026-09-09 (`badge.hookSeconds`): it was session state while a length was
+  // only an export choice, and it stopped being only that when every slide
+  // gained a screen time. Still clamped on read — a stored 8s over a 3s clip
+  // must not claim a file it cannot write.
   const hookLength = hookSecondsWithin(
-    hookSeconds,
+    post.badge.hookSeconds,
     post.badge.durationSeconds,
     hookInfo.duration,
   );
@@ -556,6 +562,25 @@ export default function PostEditor({
               ⚙
             </span>
           </button>
+          <span className="flex-1" />
+          {/* The piece's ONE primary action, back in the header where the
+              maintainer looked for it. It is not the duplicate that was
+              removed in `5d11245`: the Export tab's buttons are the
+              per-format escapes FROM this one, which delivers the whole deck
+              in the formats the slides say they are. Pressing it switches to
+              that tab, so the report is read where it is written.
+              `shrink-0 whitespace-nowrap` for the reason the Overview pill
+              carries it — a fixed-height button with nowhere to put its text
+              spills a second line outside its own box. */}
+          <button
+            type="button"
+            onClick={() => void exports.exportPiece()}
+            disabled={exports.exporting !== null}
+            title="Every slide of this piece, in the format it is"
+            className="inline-flex items-center shrink-0 whitespace-nowrap h-[1.9rem] px-[1.1rem] border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.78rem] font-semibold hover:bg-accent hover:border-accent disabled:opacity-60 disabled:cursor-default"
+          >
+            {exports.exporting ?? '↓ Export'}
+          </button>
         </div>
         {headerExtra && <div className="flex min-w-0">{headerExtra}</div>}
         {/* Editable in place, like the Studio's project name: a piece is
@@ -706,6 +731,7 @@ export default function PostEditor({
               content={content}
               piece={piece}
               slideFile={slideFile}
+              clipSeconds={isVideo ? duration : 0}
               onChangePost={onChangePost}
               patchBadge={patchBadge}
               patchSlide={patchSlide}
@@ -754,11 +780,11 @@ export default function PostEditor({
               aspect={aspect}
               hookFile={hookFile}
               hookIsVideo={hookIsVideo}
-              duration={hookInfo.duration}
               hookLength={hookLength}
-              onHookSeconds={setHookSeconds}
+              hasPicture={hasPicture}
               exporting={exports.exporting}
               exportNote={exports.note}
+              onExportPiece={(imagesOnly) => void exports.exportPiece(imagesOnly)}
               onExportDeck={() => void exports.exportDeck()}
               onExportHookClip={() => void exports.exportHookClip()}
               onChangePost={onChangePost}

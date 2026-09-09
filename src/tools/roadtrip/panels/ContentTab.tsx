@@ -6,13 +6,19 @@ import {
   type BadgePiece,
   type CounterMode,
 } from '../../../shared/roadtrip/day-badge';
-import type { DeckSlide } from '../../../shared/roadtrip/deck';
+import { hookAnimates, type DeckSlide } from '../../../shared/roadtrip/deck';
 import { readCaptureDate, type CaptureDate } from '../../../shared/roadtrip/media-date';
 import { timeAgoPreviews, type TimeAgoMode } from '../../../shared/roadtrip/time-ago';
 import { postDayRange, stageAt } from '../../../shared/roadtrip/trip-coverage';
 import { formatIsoDate, isWithin, todayIso } from '../../../shared/roadtrip/trip-days';
-import type { PostBadge, TripDoc, TripPost } from '../../../shared/roadtrip/trip-types';
+import type {
+  PostBadge,
+  PostSlide,
+  TripDoc,
+  TripPost,
+} from '../../../shared/roadtrip/trip-types';
 import ModeChoice, { type ChoiceOption } from './ModeChoice';
+import SlideDelivery from './SlideDelivery';
 import { inputClass, legend, linkButton, note, smallButton } from './ui';
 
 interface ContentTabProps {
@@ -25,9 +31,11 @@ interface ContentTabProps {
   piece: BadgePiece;
   /** The picture the open slide composes over, for its capture date. */
   slideFile: File | null;
+  /** The open slide's clip length, or 0 when its picture is not one. */
+  clipSeconds: number;
   onChangePost: (post: TripPost) => void;
   patchBadge: (patch: Partial<PostBadge>) => void;
-  patchSlide: (patch: { caption?: string }) => void;
+  patchSlide: (patch: Partial<Pick<PostSlide, 'caption' | 'medium' | 'seconds'>>) => void;
   /** The field a stage click focuses: the piece's text on the hook, the caption elsewhere. */
   textFieldRef: RefObject<HTMLInputElement>;
   /** The closing card belongs to the trip; a click on it opens that sheet. */
@@ -48,6 +56,7 @@ export default function ContentTab({
   content,
   piece,
   slideFile,
+  clipSeconds,
   onChangePost,
   patchBadge,
   patchSlide,
@@ -186,6 +195,24 @@ export default function ContentTab({
             Edit it in the trip’s settings
           </button>
         </div>
+      )}
+
+      {/* What this slide is DELIVERED as, decided where it is composed. The
+          closing card is left out on purpose: its medium is structural — a
+          card with no picture and nothing animated is a still, and inside a
+          reel it is the tail the export already appends. */}
+      {slide.kind !== 'cta' && (
+        <SlideDelivery
+          slide={slide}
+          animated={isHook && hookAnimates(post.badge.pieceStyles)}
+          clipSeconds={clipSeconds}
+          onMedium={(medium) =>
+            isHook ? patchBadge({ medium }) : patchSlide({ medium })
+          }
+          onSeconds={(seconds) =>
+            isHook ? patchBadge({ hookSeconds: seconds }) : patchSlide({ seconds })
+          }
+        />
       )}
 
       {/* The day belongs to the PIECE, not to a slide: it is what every

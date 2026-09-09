@@ -299,6 +299,42 @@ The shape it was given, which any future network feature should copy: the client
 
 **Content slides carry no badge.** The counter has done its work on slide one; repeating it would stop the hook being a hook. A caption keeps the trip's font but pins `glow` and `legibility` off — the glow is the badge's signature.
 
+## A slide says what it IS, and the export only delivers it (2026-09-09)
+
+**Decision, the maintainer's** (*"si j'ai l'ambition de gérer des types vidéo dans les slides, c'est un choix qu'on doit plutôt faire en amont, à la création du contenu du post… plutôt que de l'imposer à la dernière étape d'export qui va faire un choix à notre place"*). Every slide carries a **medium** (`auto | image | video`) and a **screen time** — `PostSlide.medium` / `.seconds`, `PostBadge.medium` / `.hookSeconds`, **v14** — and `deckSlides()` is the one place `auto` is resolved, handing back `medium`, `chosen`, `reason` and `seconds` on each `DeckSlide`. `auto` is video when something on the slide animates or its media is a clip (`classifyPart`, so the deck and the Library cannot disagree about what a clip is), image otherwise.
+
+**It replaces an export-mode picker agreed hours earlier the same day** (Images · Video · Mixed at the door). The reason it lost: video content slides and animated captions are both coming, and a format decided at the door would have had to learn about each of them, while a format that belongs to the slide costs nothing later — the model is the test. What survives at export time is delivery only: combine into one file or not, plus an images override for a browser that cannot encode.
+
+**A forced choice is obeyed and its cost is stated, never refused**: `image` over an animated hook is how a piece gets its grid picture (`reason: 'settled'`), `image` over a clip is its chosen frame (`'frozen'`), `video` over a photograph is a held card (`'forced-video'`). Each of the three chips shows what it would really do for THIS slide — and a chip whose hint would repeat its own label shows nothing instead, since "Image · image" is a control saying nothing.
+
+**This reverses «The hook has a duration»'s session-state call.** The hook's length was deliberately not stored, on the reasoning that a length is an export choice. That stopped being true when every slide gained a screen time: it is `badge.hookSeconds` now, edited on the Content tab beside the medium, and `hookSecondsWithin` still clamps it on read so a stored 8s over a 3s clip never claims a file it cannot write. `badge.durationSeconds` is untouched and is a DIFFERENT number — the badge's own hold, what an exit animation lands on.
+
+**The rail is where the shape of the deck is read**: a cell that leaves as video wears its length. A carousel mixing a video hook and three stills says so at a glance, which is the whole point of deciding this upstream. Verified in the browser: a `.MP4` content slide resolves to video with no clicking, forcing the hook to an image drops its badge from the rail, and the document overflows nothing at 390px.
+
+**Where the controls go, and the rule behind it**: the medium and the duration are about the SLIDE, so they sit on the Content tab and show for whichever slide is open — never inside the hook-only branch (the «A panel that belongs to the PIECE» rule, read the other way). The closing card is left out entirely: its medium is structural.
+
+## The hook leaves as a video whatever its picture (2026-09-09)
+
+**The report that caused it**: an animated hook could only be exported as slides, so the animation never left the editor. The cause was not a lost button — `5d11245` removed a duplicate of the PNG deck's — but a path that had never existed: `exportProcessedVideo` needs decoded samples, and the Studio's photo branch delivers a JPEG, so a badge animated over a PHOTOGRAPH had nowhere to go in the whole suite.
+
+**`exportHookStillVideo` (`hook-video-export.ts`) is that path**, and it is the same composition as everything else: `encodeFrames` (`shared/media/render-video.ts`) with **`renderBadge` as the painter**, at a clock instead of settled. The clip path is untouched. Two rules make it cheap and correct: the picture is decoded ONCE and **graded once into a bitmap** — grading per frame would be a WebGL2 render per frame for a result that cannot change, and a grader per repaint is never reclaimed — and the grade is applied at the source's own density BEFORE the crop, the same order `renderBadge` uses, so the video and the PNG are the same picture. A painted clip is silent and takes a delivered cadence, both said in the panel.
+
+**The Export tab follows the SLIDE's medium, never the file type**: `slides[0].medium === 'video'`. A photograph with an animated badge offers the export; a clip the author set to Image does not, and says where to change it.
+
+**`isEncodeSupported()` is not enough of a guard** — it answers "does `VideoEncoder` exist", not "can it encode H.264", and the difference is measured. The rule and both remedies are in `media-pipeline.md`, «Having a VideoEncoder is not being able to encode».
+
+**Verified in headless Chromium** on a real trip and a real photograph: the badge draws over the picture, the stage canvas CHANGES between two clocks (the invariant the exporter rests on — a painter that does not move exports a still), the button appears with the photograph's own sentence, and pressing it reports the honest encoder refusal. **The encode itself is still unverified anywhere**: no runner here has H.264.
+
+## The export READS the deck and delivers it, and the header carries it (2026-09-09)
+
+**Decision.** `shared/roadtrip/export-plan.ts` turns a post into the list of files it would write — one item per slide, its medium, its seconds, its name and what would stop it — and the Export tab draws that list before anything runs. It decides nothing: every medium comes from `deckSlides`, so the panel is a reading of the composition, not a second opinion about it. `slideFileName` takes the extension, so a mixed deck writes `01-hook.mp4` beside `02.png` under one numbering — the swipe order is what makes a mixed carousel uploadable.
+
+**The general button is back, and it is the piece's ONE primary action** — which amends rather than breaks the rule `5d11245` recorded. The amendment: *the header carries the piece's primary action; a tab's buttons are the escapes from it.* So the header's ↓ Export writes the whole deck in the formats the slides say they are, and the Export tab keeps "all slides as PNGs" and "the hook as a video" as named escapes. Pressing the header still switches to that tab, where the report is written.
+
+**One override survives, and it is not a mode**: *Everything as images*. It is what a browser with no encoder can still do and what a contact sheet of a reel is. It changes the MEDIUM of every item and never the `reason` — the deck's own answer does not change because of how it is being written today.
+
+**A blocked item stays visible, struck through, with its sentence.** Hiding it would answer "why is my hook not in the folder" with silence. And a clip that fails mid-run costs only itself: each is caught, the stills already rendered are still delivered, and the failures are named alongside them. **The check that a container can be demuxed applies only to a CLIP** — running `hookSourceProblem` over a photograph blocks every animated hook that sits on a still, which is the whole feature (caught by a test, not by reading).
+
 ## The QR is generated here, and it is verified by decoding (2026-08-24)
 
 **Decision.** `shared/lib/qr.ts` is a hand-rolled encoder (byte mode, EC level M, versions 1–10). **Why not a library**: a card that fetched its own QR from a service would be the single place this suite phoned home, and the local-first line is the product. It is ~250 lines against a spec that has not moved since 2000 — unlike Dexie, it earns the code it costs.
@@ -390,6 +426,16 @@ A list you sweep through should not make you aim at a 38px thumbnail or a small 
 **Handover route**: `#/studio/open/<id>` opens a project and rewrites itself to `/studio` on arrival, so a reload does not re-run the open and Back does not bounce. It exists so neither tool reaches into the other's state.
 
 **Trap**: creating a project with a media ref but no directory handle greets a brand-new project with "1 media file not in this folder" — `reconcileMedia` runs whenever `media.files` is non-empty and finds nothing. A project created from Road Trip records NO media; the clip is already in the shared Library, which is where the Studio picks it up.
+
+## Starting a piece is ONE click, and it can be started from the picture (2026-09-09)
+
+**Decision, from the maintainer** (*"we first have to pick reel, photo or carousel and then add, we could directly have these button open and create the thing directly… we could also have these action button in the media preview modal so its even quicker to start a content"*). The day panel's kind chips + name field + **Add** are gone: each kind is its OWN button, it creates the piece with `hookDefaults` as before, and it **opens it**. The two dropped steps were asking for what the editor asks better — a kind is what the button says, and a piece is named where you can see what it shows (`PostEditor`'s header field, which already existed). A piece created and left in a list is a stub; composing it is the reason it was made.
+
+**The same three verbs are published to the shell** (`usePublishMediaActions`, the seam in `architecture.md`, «A tool publishes VERBS for a picture»), so they also sit under a picture opened large — the Library's local sheet and the instance's alike. That sheet is where "this one is worth a piece" is actually decided, and it was three screens from anything that could act on it.
+
+**Only `TripOverview` publishes them, never `PostEditor`.** A verb that navigates away from a piece being composed, offered from a sidebar over that piece, is a trap; and deciding what to make next is the overview's question, which is what this tool is for. The heading names the DAY the piece would land on (`Start a piece on 1 Nov 2025`) because the local tab holds pictures from any day and a post is keyed by the day it TELLS — the editor's own "the picture is dated…" line then offers the picture's day, unchanged.
+
+**No new path to a piece's picture.** The verb writes no media ref: the shell makes the picture active, `createTripPost` is called with an empty title, and the Library↔slide machinery records it on the first paint. Verified end to end in headless Chromium — dropped file → sheet → *Reel* → the editor open with the badge composed over that picture, and the trip's own "dated outside this trip" warning intact.
 
 ## A trip remembers the look it gives a new piece (2026-08-24)
 

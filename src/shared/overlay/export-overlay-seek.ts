@@ -38,7 +38,8 @@ import {
   type ExportFrameRate,
 } from '../media/frame-rate';
 import type { CubeLut } from '../lib/cube-parser';
-import { tailFrames, type ExportTail } from '../media/export-tail';
+import { type ExportTail } from '../media/export-tail';
+import { framePlan } from '../media/frame-plan';
 import type { TrimRange } from '../media/trim';
 import { makeFrameGrader } from '../lut/frame-grader';
 import { drawOverlays } from './draw-overlays';
@@ -274,7 +275,7 @@ export async function exportOverlayVideoViaSeek(
     if (tail && tail.seconds > 0) {
       const endMicros = Math.round((frameCount / framerate) * 1_000_000);
       let appended = 0;
-      for (const f of tailFrames(tail.seconds, framerate, endMicros)) {
+      for (const f of framePlan(tail.seconds, framerate, endMicros)) {
         throwIfAborted();
         if (pipelineError) throw pipelineError;
         const vf = new VideoFrame(tail.draw(f.tSeconds), {

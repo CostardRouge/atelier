@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_SLIDE_SECONDS,
   TRIP_DOC_VERSION,
   createTripDoc,
   createTripPlace,
@@ -743,5 +744,86 @@ describe('framing (v12)', () => {
       y: 0,
       rotation: 0,
     });
+  });
+});
+
+describe('migrateTripDoc — v13 → v14 (a slide says what it is)', () => {
+  /** A v13 document: slides and a badge, but no medium and no screen time. */
+  const v13 = () => {
+    // Built by REMOVING what v14 added, rather than by trusting today's
+    // factory: a fixture that carries the new fields proves nothing about a
+    // document written before they existed.
+    const badge = { ...defaultPostBadge('carousel'), durationSeconds: 6 } as Record<
+      string,
+      unknown
+    >;
+    delete badge.medium;
+    delete badge.hookSeconds;
+    const defaults = { ...hookDefaultsFrom(defaultPostBadge('reel')) } as Record<
+      string,
+      unknown
+    >;
+    delete defaults.medium;
+    delete defaults.hookSeconds;
+    return {
+      version: 13,
+      id: 't1',
+      name: 'Australie',
+      destination: 'Australia',
+      startDate: '2025-03-01',
+      endDate: '2026-01-04',
+      stages: [],
+      posts: [
+        {
+          id: 'p1',
+          kind: 'carousel',
+          date: '2025-03-27',
+          endDate: null,
+          title: 'Cliffs',
+          media: null,
+          badge,
+          slides: [{ id: 's1', media: null, videoTimeSeconds: 0, caption: '' }],
+          includeCta: false,
+          projectId: null,
+          grade: null,
+          publishedAt: null,
+          createdAt: 0,
+        },
+      ],
+      hookDefaults: { reel: defaults },
+      createdAt: 0,
+      updatedAt: 0,
+    } as unknown as TripDoc;
+  };
+
+  it('files every slide as `auto`, which delivers exactly what it did before', () => {
+    const doc = migrateTripDoc(v13());
+    expect(doc.posts[0].badge.medium).toBe('auto');
+    expect(doc.posts[0].slides[0].medium).toBe('auto');
+  });
+
+  it('gives the hook the screen time the slider used to offer', () => {
+    // duration + a beat: the badge's own hold is what it was always derived
+    // from, so no stored piece changes length.
+    expect(migrateTripDoc(v13()).posts[0].badge.hookSeconds).toBe(7);
+  });
+
+  it('gives a content slide the default screen time', () => {
+    expect(migrateTripDoc(v13()).posts[0].slides[0].seconds).toBe(DEFAULT_SLIDE_SECONDS);
+  });
+
+  it('fills the trip’s remembered defaults too', () => {
+    const kept = migrateTripDoc(v13()).hookDefaults.reel;
+    expect(kept?.medium).toBe('auto');
+    expect(kept?.hookSeconds).toBeGreaterThan(0);
+  });
+
+  it('leaves a document that already says so untouched', () => {
+    const doc = migrateTripDoc(v13());
+    doc.posts[0].badge.medium = 'image';
+    doc.posts[0].slides[0].seconds = 8;
+    const again = migrateTripDoc({ ...doc, version: 13 });
+    expect(again.posts[0].badge.medium).toBe('image');
+    expect(again.posts[0].slides[0].seconds).toBe(8);
   });
 });

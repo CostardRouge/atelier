@@ -127,6 +127,14 @@ Read before touching the shell (`src/app/`), the tool registry, the shared asset
 
 **The bug that prompted it, worth not re-deriving**: the ✓ badge ("in the library") was drawn only when the tile was NOT active, so clicking B moved the ring to B and made A's ✓ appear. Every click looked like it had ticked the PREVIOUS picture, and the maintainer read the badge as a selection he could not explain. **Two independent facts must be drawn independently** — the ✓ now shows on the active tile too, in the accent colour. A state hidden by another state is not a simplification; it is a third state nobody designed.
 
+## A tool publishes VERBS for a picture, the shell draws them (2026-09-09)
+
+**Decision.** `media-scope.tsx` carries a second publication beside the span: `MediaActions` — a heading and a list of `{ id, label, hint, run }` the active tool offers to START from a media. The shell's two preview sheets draw them through one component (`shared/ui/MediaActionRow.tsx`); a tool that publishes none draws nothing. Same direction and same reason as the scope: the sheet where a picture is looked at large belongs to the shell, and what is worth making of that picture is the tool's business alone, so `shared/` still never asks about `tools/`.
+
+**The contract that keeps it thin: `run` is called with the media already in the library and ACTIVE.** The publisher never learns where the bytes came from — a pool asset is activated, an instance's row is fetched first — and the picture reaches whatever is created by the ONE path that already exists (the Library's active asset, `use-slide-library.ts`), never by a second one. So no verb takes a media argument, and none of them writes a media ref.
+
+**Two consequences, both load-bearing.** `usePickFromInstance().pick` now resolves with the Library asset id it landed on, or **null** when nothing arrived: a verb chained onto a fetch must not run on a fetch that failed, or the new piece opens over a placeholder (the thumbnail rule in `roadtrip.md`). And the record is compared by IDENTITY, not field by field like `sameScope` — it carries closures — so the publisher memoises it; only one screen of one tool is ever mounted to publish.
+
 ## A remote ref is re-FETCHED, never cached (2026-09-06)
 
 **Decision, taken with the maintainer.** The library is `File`s in memory and a reload empties it. A folder file survives that (the document keeps a directory handle, one permission click re-reads it); a file fetched from a Winnow does not, so every restart used to mean finding the day on the calendar and ticking it again. `shared/sources/winnow/resolve-media.ts` answers it from the DOCUMENT instead: since phase 0 a `SavedMediaRef` carries `assetId = "<host>/<id>"`, so `refetchMedia` asks the instance for that row and runs it back through `materialize`.
