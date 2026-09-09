@@ -106,18 +106,28 @@ export default function WinnowLightbox({
                 {picker.fetching === row.id ? 'fetching…' : 'Add to library'}
               </button>
             )}
-            {/* Secondary: the media itself, on the instance, in a tab of its
-                own. Winnow has no page per asset, so this is the proxy's own
-                URL — the rendition the sheet is already showing, at full size
-                and outside the app. */}
+            {/* Secondary: this media back in the app it came from, in a tab of
+                its own — the point being to look at what surrounds it there
+                (its neighbours in the shoot, its verdicts, its exports), which
+                is the one thing this sheet cannot show.
+
+                It lands on the media's SESSION, not on the media: Winnow's
+                viewer is an overlay held in local state and no route carries an
+                asset, so the grid it lives in is the closest a link can get
+                (`client.sessionUrl`). A row that somehow has no session falls
+                back to what this button used to be, the proxy's own URL. */}
             <a
-              href={client.proxyUrl(row.id)}
+              href={row.session_id ? client.sessionUrl(row.session_id) : client.proxyUrl(row.id)}
               target="_blank"
               rel="noreferrer"
-              title={`Open this ${row.media_type} on ${connection.id}, in a new tab`}
+              title={
+                row.session_id
+                  ? `Open this ${row.media_type}'s session on ${connection.id}, in a new tab`
+                  : `Open this ${row.media_type} on ${connection.id}, in a new tab`
+              }
               className="font-mono text-[0.64rem] tracking-[0.1em] uppercase px-3 py-1.5 rounded-full border border-line-strong text-ink no-underline hover:border-accent hover:text-accent-ink transition-colors"
             >
-              Open ↗
+              Open in Winnow ↗
             </a>
             <span className="text-[0.74rem] text-muted min-w-0 truncate">
               the proxy, from {connection.id} — nothing leaves your machine

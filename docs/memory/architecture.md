@@ -82,6 +82,7 @@ Read before touching the shell (`src/app/`), the tool registry, the shared asset
 - **A thumbnail retries; a tile that gives up says so.** A busy day fires a hundred-odd image requests at once down a tunnel to a home server, and an `<img>` has no answer to a lost one: it fires `error` once and stays a black rectangle for the session. Reported from production on a day of 132, intermittent, and "it loads as soon as I open the inspector" — i.e. timing, not logic. The tile now retries with a widening delay (the failures are load-shaped; retrying at once makes the pile-up worse), then falls back to a legible label. **Attempt 0 uses the plain URL** so the ordinary path stays cacheable — Winnow serves derivatives `immutable` for a year — and only a retry carries a `?retry=N` discriminator, which also defeats a poisoned cache entry. Do not "fix" flaky media loading by disabling the cache; make the failure self-healing and visible instead.
 - Ruled out while chasing that one, worth not re-deriving: **Next middleware response headers DO reach a route handler's response** — measured against the deployed instance, `GET /api/health` with an `Origin` comes back with the full CORS set. So a derivative's `304` is not silently losing them.
 - **The client writes DOCUMENTS in exactly one place** (since 2026-09-06; the finals write-back above is the other write, media only): the opaque document bucket `/api/apps/:app/docs[/:id]` (`listDocs`/`getDoc`/`putDoc`/`deleteDoc`, app namespace `atelier`, kinds `trip` and `project`; the shared reducer, pill and plumbing sit beside it in `shared/sources/`). Every write carries `If-Match`, a stale etag is a 412 mapped to `WinnowError.kind === 'conflict'` with `theirs` (the server's etag + `updated_at`) so the caller can decide; the client never retries a write by itself. 404 is `notfound` for every route now (it was `protocol`), 304 is an answer, and `Content-Type: application/json` on the PUT is deliberate — it forces the preflight only the allowlisted origin passes. Who consumes it and why: `roadtrip.md`, «The mirror's bookkeeping»; the server side: `docs/roadtrip-persistence.md` §7.
+- **"Open in Winnow" lands on the media's SESSION, because Winnow has no page for one asset** (2026-09-09, read in its own repo at `009ff02`). Its `MediaViewer` is an overlay that every consumer holds in local React state (`SessionGrid`, `GalleryShell`, `TimelinePanel`, `SwipeDeck`…) and no route carries an asset id — the only per-asset URLs are API routes. So `client.sessionUrl(session_id)` → `/sessions/<id>` is the closest a link gets: the grid the picture lives in, which is what the verb is actually for (its neighbours in the shoot, its verdicts, its exports — the one thing the lightbox cannot show). `assets.session_id` is `NOT NULL` and both asset routes select `a.*`, so the id was already on every row and merely missing from `WinnowAssetRow`, the same miss `lens` was. **Do not invent a deep-link parameter** to open the frame itself: that is Winnow's to add, and a guessed key is precisely what made `chapter_id` narrow nothing and list the whole library.
 - **Tiles own their height** (`h-[90px]`, `auto-rows-max`), and the day column is the element with the bounded height + `overflow-auto`. An `aspect-ratio` tile inside a height-constrained flex/grid chain gets squashed to whatever the rows are dealt — that was a real bug at 132 media, and it looked like a data problem.
 
 ## Connecting and managing a source are ONE screen (2026-09-08)
@@ -149,3 +150,20 @@ Read before touching the shell (`src/app/`), the tool registry, the shared asset
 - `addFiles` is read through a ref inside the effect, never listed as a dependency: it is a fresh callback on some renders and re-running the restore would re-download.
 - `client.asset(id)` and `client.assetsByIds(ids)` exist for this. `assetsByIds` sends Winnow's `ids` filter (its `intList`: comma-separated) and falls back to the detail route for an id the collapsed list did not return — a RAW's half of a pair, say. **Verified against Winnow's `src/lib/filter.ts` and `src/app/api/assets/[id]/route.ts`**, which answers `{ asset }`, not a bare row.
 - One reading of `"<host>/<id>"` in the codebase: `finals.ts`'s `splitAssetId`, reused here rather than copied.
+
+## Winnow already holds the triage verdict Atelier ignores (2026-09-09)
+
+**Fact, read from Winnow's own source** (`~/Documents/GitHub/winnow`), so it does
+not have to be re-derived: an asset carries a **rating** — `ratings.verdict IN
+('pick','reject','skip','unrated')` plus a `star` 0–5 (migration `0016`, written
+through `POST /api/ratings/bulk`) — and `GET /api/assets` filters on it:
+`verdict`, `star_min`, and `has_edit` (whether a derivative was made from it) are
+all accepted by `filterFromSearchParams` (`src/lib/filter.ts`).
+
+Atelier's `FilterQuery` (`shared/sources/winnow/client.ts`) exposes four keys —
+`mediaType`, `ext`, `device`, `half` — and none of these. **How to apply**: any
+feature that needs to know which pictures are *worth* using (a publishing
+proposal, a day's candidate slides, a batch grade) must forward `verdict` and
+`star_min` rather than invent a quality score of its own. The maintainer's triage
+already IS the judgement; scoring pictures in Atelier would be a second, worse
+opinion — the same anti-fabrication line the badge and the battery gauge hold.

@@ -79,12 +79,24 @@ export function frameSize(aspect: number, longEdge: number): { w: number; h: num
 export async function loadBadgeSource(
   file: File,
   videoTimeSeconds = 0,
+  maxWidth?: number,
 ): Promise<BadgeSource> {
   if (file.type.startsWith('video/') || /\.(mp4|mov|m4v|webm)$/i.test(file.name)) {
     return loadVideoFrame(file, videoTimeSeconds);
   }
   try {
-    const bitmap = await createImageBitmap(file);
+    // `maxWidth` bounds the DECODE, for a caller that only needs a small
+    // picture (the slide rail's thumbnails): a 48-megapixel still is 194 MB
+    // decoded, and a carousel would put one up per cell. The WIDTH alone,
+    // because the natural size is unknown until the decode happens and the
+    // browser preserves the aspect from the one dimension given — a 9:16
+    // frame comes out under twice the cap, which is the point. It can enlarge
+    // a picture smaller than the cap; harmless at thumbnail sizes, and a
+    // browser that ignores the option simply decodes at full size.
+    const bitmap = await createImageBitmap(
+      file,
+      maxWidth ? { resizeWidth: maxWidth, resizeQuality: 'high' } : undefined,
+    );
     return {
       image: bitmap,
       width: bitmap.width,

@@ -116,14 +116,25 @@ export default function MediaLightbox({
 
   if (!item) return null;
 
-  const arrow = (label: string, delta: -1 | 1, d: string) => (
+  /**
+   * The pager, floating IN the frame rather than beside it.
+   *
+   * In the row it cost the deck two columns and a gap, so the black frame
+   * stopped short of the sheet's own padding and sat out of line with the
+   * title above and the footer below. Over the picture it costs nothing, and
+   * covering a sliver of the image is the cheaper price. The pill is the one
+   * `StageZoomControl` already floats in the opposite corner — translucent
+   * paper, so it reads over a white sky as well as over the frame's black.
+   *
+   * Still hidden under 820px, where the swipe is the gesture.
+   */
+  const arrow = (label: string, delta: -1 | 1, d: string, side: string) => (
     <button
       type="button"
       onClick={() => viewer.pageBy(delta)}
-      disabled={items.length < 2}
       aria-label={label}
       title={`${label} (${delta < 0 ? '←' : '→'})`}
-      className="flex-none self-center w-9 h-9 grid place-items-center rounded-full border border-line bg-surface text-ink-soft hover:text-accent hover:border-line-strong disabled:opacity-40 disabled:cursor-default cursor-pointer transition-colors max-[820px]:hidden"
+      className={`absolute ${side} top-1/2 -translate-y-1/2 z-10 w-9 h-9 grid place-items-center rounded-full border border-line bg-[rgba(250,247,242,0.86)] backdrop-blur-[2px] text-ink-soft hover:text-accent hover:border-line-strong cursor-pointer transition-colors max-[820px]:hidden`}
     >
       <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
         <path
@@ -184,70 +195,76 @@ export default function MediaLightbox({
             `absolute inset-0` inside a `flex-1 min-h-0` wrapper, never a
             percentage height, which has nothing definite to resolve against
             in a flex column and left the picture cut by `overflow-hidden`. */}
-        <div className="flex-1 min-h-0 flex items-stretch justify-center gap-3">
-          {arrow('Previous', -1, 'M10 3.5 5.5 8 10 12.5')}
-          <div className="relative flex-1 min-w-0 min-h-0 self-stretch">
+        <div className="relative flex-1 min-w-0 min-h-0">
+          <div
+            ref={viewer.viewportRef}
+            // `touch-none`: the deck answers every touch itself, and a
+            // native scroll or page zoom underneath would fight the pinch.
+            aria-busy={!ready}
+            className={`absolute inset-0 overflow-hidden bg-frame rounded-paper touch-none select-none ${
+              viewer.zoomed ? (viewer.dragging ? 'cursor-grabbing' : 'cursor-grab') : ''
+            }`}
+          >
             <div
-              ref={viewer.viewportRef}
-              // `touch-none`: the deck answers every touch itself, and a
-              // native scroll or page zoom underneath would fight the pinch.
-              aria-busy={!ready}
-              className={`absolute inset-0 overflow-hidden bg-frame rounded-paper touch-none select-none ${
-                viewer.zoomed ? (viewer.dragging ? 'cursor-grabbing' : 'cursor-grab') : ''
-              }`}
+              className="absolute inset-0"
+              style={{
+                transform: `translate3d(${viewer.offset}px, 0, 0)`,
+                transition: viewer.settling
+                  ? `transform ${DECK_SETTLE_MS}ms var(--ease-paper)`
+                  : undefined,
+              }}
             >
-              <div
-                className="absolute inset-0"
-                style={{
-                  transform: `translate3d(${viewer.offset}px, 0, 0)`,
-                  transition: viewer.settling
-                    ? `transform ${DECK_SETTLE_MS}ms var(--ease-paper)`
-                    : undefined,
-                }}
-              >
-                {viewer.slots.map(({ slot, index: at }) => (
-                  <div
-                    // With three media or more each slot holds a different
-                    // item, so keying by it lets React carry the neighbour's
-                    // loaded picture into the middle: the page shows no
-                    // reload. With two, both neighbours ARE the same item and
-                    // the key has to be the slot instead.
-                    key={items.length >= 3 ? items[at].id : slot}
-                    className="absolute inset-0"
-                    style={{
-                      transform: `translateX(calc(${slot * 100}% + ${slot * DECK_GAP}px))`,
-                    }}
-                  >
-                    <DeckSlide
-                      item={items[at]}
-                      active={slot === 0}
-                      viewer={viewer}
-                      onReady={setReady}
-                    />
-                  </div>
-                ))}
-              </div>
-              {/* Nothing is ever blocked while this shows — the deck keeps
-                  answering, and a page in flight is landed rather than
-                  dropped (`use-media-viewer.ts`). It only says that what is
-                  on screen is still the thumbnail. */}
-              {!ready && (
+              {viewer.slots.map(({ slot, index: at }) => (
                 <div
-                  className="absolute top-0 inset-x-0 h-[2px] overflow-hidden pointer-events-none"
-                  role="progressbar"
-                  aria-label="Loading the full picture"
+                  // With three media or more each slot holds a different
+                  // item, so keying by it lets React carry the neighbour's
+                  // loaded picture into the middle: the page shows no
+                  // reload. With two, both neighbours ARE the same item and
+                  // the key has to be the slot instead.
+                  key={items.length >= 3 ? items[at].id : slot}
+                  className="absolute inset-0"
+                  style={{
+                    transform: `translateX(calc(${slot * 100}% + ${slot * DECK_GAP}px))`,
+                  }}
                 >
-                  <div className="h-full w-1/4 bg-accent animate-deck-load" />
+                  <DeckSlide
+                    item={items[at]}
+                    active={slot === 0}
+                    viewer={viewer}
+                    onReady={setReady}
+                  />
                 </div>
-              )}
+              ))}
             </div>
-            <StageZoomControl
-              zoom={viewer.zoom}
-              hint="wheel, or pinch"
-              className="absolute bottom-2 right-2 z-10"
-            />
+            {/* Nothing is ever blocked while this shows — the deck keeps
+                answering, and a page in flight is landed rather than
+                dropped (`use-media-viewer.ts`). It only says that what is
+                on screen is still the thumbnail. */}
+            {!ready && (
+              <div
+                className="absolute top-0 inset-x-0 h-[2px] overflow-hidden pointer-events-none"
+                role="progressbar"
+                aria-label="Loading the full picture"
+              >
+                <div className="h-full w-1/4 bg-accent animate-deck-load" />
+              </div>
+            )}
           </div>
-          {arrow('Next', 1, 'M6 3.5 10.5 8 6 12.5')}
+          {/* Outside the viewport, never inside it: that element answers every
+              pointer event itself, in the capture phase. A single media draws
+              no pager at all — a dead control over the picture is noise, and
+              the header already says `1 / 1`. */}
+          {items.length > 1 && (
+            <>
+              {arrow('Previous', -1, 'M10 3.5 5.5 8 10 12.5', 'left-2')}
+              {arrow('Next', 1, 'M6 3.5 10.5 8 6 12.5', 'right-2')}
+            </>
+          )}
+          <StageZoomControl
+            zoom={viewer.zoom}
+            hint="wheel, or pinch"
+            className="absolute bottom-2 right-2 z-10"
+          />
         </div>
 
         {footer}
