@@ -60,6 +60,14 @@ describe('createTripPost', () => {
     a.badge.layout.x = 0.5;
     expect(b.badge.layout.x).not.toBe(0.5);
   });
+
+  it('never starts with a closing card, whatever the kind', () => {
+    // A carousel used to arrive with one. It is one click on the rail, and a
+    // slide nobody composed does not belong in a deck by default.
+    for (const kind of ['reel', 'carousel', 'photo'] as const) {
+      expect(createTripPost(kind, '2025-03-27', 'A').includeCta).toBe(false);
+    }
+  });
 });
 
 describe('migrateTripDoc', () => {

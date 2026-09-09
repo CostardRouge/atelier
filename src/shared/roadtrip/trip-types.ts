@@ -602,9 +602,13 @@ export function createTripPost(
     media: null,
     badge: defaultPostBadge(kind, defaults),
     slides: [],
-    // A carousel is the shape that ends on a call to action; a reel's last
-    // frame is the footage, and a single photo has no last slide to give.
-    includeCta: kind === 'carousel',
+    // Never, whatever the kind. A carousel IS the shape that most often ends
+    // on a call to action, but starting one with a card nobody asked for put
+    // a slide the author had not composed between the pictures and the way to
+    // add another — and it is one click to add, on the rail, where it is
+    // seen. Same rule as the migration's: nothing gains a call to action on
+    // its own.
+    includeCta: false,
     projectId: null,
     grade: null,
     publishedAt: null,
