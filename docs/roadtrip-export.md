@@ -1,18 +1,17 @@
 # Road Trip exports: what leaves the tool, what cannot, and the plan
 
-**Status (2026-09-09): analysis, plus a plan whose three shape decisions the
-maintainer has now taken. Nothing is built.** The direction is his —
-"exporter la vidéo du hook plus les autres éléments… un raccourci, qu'on
-importe et qu'on utilise ce que l'on a déjà dans le studio… générer des vidéos
-à partir du road trip" — and so are the three answers recorded in §5 and §9:
-the header carries the piece's primary export, a mixed deck ships PNGs and
-MP4s together, and **the format is a MODE the author picks, not something the
-tool decides alone** ("proposer des options pour me laisser le choix dans
-l'ui: mode image, mode video avec option pour combiner ou pas les videos, mode
-mixte hook video + images"). Read §2 and §3 as fact (they are traced to
-files), §4 onwards as the plan. The style loss across the Studio bridge (§8)
-is his explicit "second temps": diagnosed here, deliberately not phased in
-with the rest.
+**Status (2026-09-09): analysis, plus a plan whose shape the maintainer has
+settled. Nothing is built.** The direction is his — "exporter la vidéo du hook
+plus les autres éléments… un raccourci, qu'on importe et qu'on utilise ce que
+l'on a déjà dans le studio… générer des vidéos à partir du road trip" — and so
+is the model in §5: **a slide carries its own medium and its own duration,
+decided where the piece is composed, and the export only delivers what the
+deck says**. That decision arrived after, and replaces, an export-mode picker
+agreed earlier the same day; §9 records both so the reversal is legible. Read
+§2 and §3 as fact (they are traced to files), §4 onwards as the plan. The
+style loss across the Studio bridge (§8) is his explicit "second temps":
+diagnosed here, last in the phase list and callable forward whenever he wants
+it.
 
 ---
 
@@ -113,66 +112,90 @@ The rule to carry: **one video pipeline, several entry points; never a second
 exporter.** A change to cadence, colour tagging or muxing must keep landing in
 `shared/media/`.
 
-## 5. The model: a MODE the author picks, over a plan that is computed
+## 5. The model: the SLIDE says what it is, the export only delivers it
 
-**The maintainer's decision (2026-09-09): the tool proposes, the author
-disposes.** A format guessed silently is the fault F2 wearing better clothes —
-the author would still have no way to say "this one goes out as a video". So
-the export is a **mode**, defaulted from what the piece contains, and every
-mode says what it would really deliver for the piece in hand:
+**The maintainer's design (2026-09-09), and it replaces the export-mode picker
+proposed earlier the same day.** His argument, kept because it is the reason:
+*"si j'ai l'ambition de gérer des types vidéo dans les slides, c'est un choix
+qu'on doit plutôt faire en amont, à la création du contenu du post… plutôt que
+de l'imposer à la dernière étape d'export qui va faire un choix à notre
+place"*. A deck is composed, not guessed at the door.
 
-```ts
-type ExportMode =
-  | { kind: 'images' }                    // every slide a PNG
-  | { kind: 'video'; combine: boolean }   // every slide a clip; combined = one reel
-  | { kind: 'mixed' };                    // each slide in the format it needs
-```
-
-The plan under it stays pure — given the trip, the post and what is known
-about each slide's media, `exportPlan(trip, post, mode, facts)` answers what
-comes out and why:
+So **a slide is a timed unit with a medium**, and both are stored:
 
 ```ts
-type SlideDelivery =
-  | { medium: 'png' }
-  | { medium: 'video'; seconds: number;
-      reason: 'the badge animates' | 'the picture moves' | 'held card' };
+type SlideMedium = 'auto' | 'image' | 'video';
 
-interface PieceExportPlan {
-  items: { position: number; kind: DeckSlideKind; name: string;
-           delivery: SlideDelivery; note: string | null }[];
-  /** One file when a combined video is asked for, else one per item. */
-  files: number;
-  /** What stops an item being delivered as asked, in a sentence each. */
-  blockers: string[];
+interface PostSlide {          // + the fields it already has
+  medium: SlideMedium;         // 'auto' by default
+  seconds: number;             // screen time; for a clip, also its length
+}
+
+interface PostBadge {          // the hook is a slide too
+  medium: SlideMedium;
+  hookSeconds: number;         // screen time of the hook slide
+  durationSeconds: number;     // UNCHANGED: the badge's own hold
 }
 ```
 
-Rules, all decidable without touching the DOM:
+`hookSeconds` and `durationSeconds` are two different numbers on purpose and
+the doc comments must say so: the badge may settle at 4s inside a hook that
+stays on screen for 6. `defaultHookSeconds` already computes one from the
+other, and stays the default.
 
-- a slide is **animated** when a badge piece carries an `animation` (hook only,
-  today); it **moves** when its media is a video the pipeline can read
+**`auto` resolves in `deckSlides()`**, which is already the one function that
+assembles hook · content · closing card, so the rail, the export and the
+renderer read ONE answer:
+
+```ts
+interface DeckSlide {          // + the fields it already has
+  medium: 'image' | 'video';   // resolved — no 'auto' survives this function
+  seconds: number;
+  /** Why it came out video, for the line the panel prints. */
+  reason: 'forced' | 'the badge animates' | 'the picture moves' | null;
+}
+```
+
+The rules, pure and tested:
+
+- `video` when the author forced it, when anything on the slide is animated
+  (today a badge piece with an `animation`; tomorrow a caption or a free
+  element, §P6), or when its media is a clip the pipeline can read
   (`hookSourceProblem` is already that predicate);
-- **the default mode** is `mixed` when anything animates or moves, `images`
-  otherwise — so the piece that caused this report opens on the mode that
-  delivers its animation, without taking the choice away;
-- `images` renders every slide settled, exactly as today, and **says that the
-  animation is not in a PNG** rather than letting it be discovered;
-- `mixed` gives the animated and moving slides an MP4 and the rest a PNG, in
-  one folder, under the existing `NN-hook / NN / NN-cta` names — already padded
-  so a listing is in swipe order (`deck.ts`). Platforms take mixed carousels;
-  this is the maintainer's answer to what a mixed deck should deliver;
-- `video` with `combine: false` gives every slide its own clip — a still slide
-  becomes a card held for its own seconds, which is a deliberate rendering, not
-  a fallback, because the author asked for video;
-- `video` with `combine: true` is ONE file, the deck played in order (§P4);
-- blockers are stated up front, never discovered at encode time: no H.264
-  encoder in this browser (F4), a hook clip the demuxer cannot read (WebM), a
-  picture the Library has lost.
+- `image` otherwise, and `image` also wins when the author forces it over an
+  animated slide — that is a legitimate choice (a still for the grid), so the
+  panel says what it costs, *"this slide is animated; as an image it goes out
+  settled"*, rather than refusing or obeying in silence;
+- a clip slide forced to `image` is its chosen frame — which is what the deck
+  export already does today (F5), now said out loud instead of implied.
 
-The panel draws the mode row and, under it, one line per slide saying the
-format and the reason — the anti-fabrication rule applied to the export: show
-what will really come out, or why it cannot.
+**What is left at export time is delivery, not format**: whether the deck
+leaves as one file or as one per slide, and one override. `exportPlan` becomes
+the reading of the deck rather than a decision over it:
+
+```ts
+interface PieceExportPlan {
+  items: { position; kind; name; medium; seconds; reason; note }[];
+  files: number;               // 1 when combined, else one per item
+  blockers: string[];          // stated up front, never at encode time
+}
+```
+
+- **Combine** makes ONE file of the whole deck, and a combined deck is a video
+  by definition — offered whenever the deck has more than one slide, including
+  an all-image deck, which is then a slideshow the author asked for.
+- **"Everything as images"** stays as an escape and is labelled as an
+  override: a browser with no H.264 encoder must still deliver something (F4),
+  and a contact sheet of a reel is sometimes exactly what is wanted.
+- Blockers keep their job: no encoder here, a clip the demuxer cannot read
+  (WebM), a picture the Library has lost.
+
+**Why this is better than the mode picker it replaces**, beyond being what was
+asked for: the shape of the piece becomes visible where the piece is composed
+(the rail shows a glyph and a duration per cell), the export stops being a
+place where a decision hides, and the two features the maintainer wants next —
+clip slides and animated content slides — need **no further model change**,
+only renderers. That is the test a model should pass.
 
 ## 6. Phases (one commit each)
 
@@ -202,11 +225,49 @@ with no source file — no demux, no decoder, no audio track.
   evening, the fps clamp and the "zero seconds delivers nothing" case. The
   encode itself is browser work (see §7).
 
-### P2 — the hook is a clip whatever its picture
+It comes first because it is the one risky brick and everything after it
+depends on it. P2 could equally go first (it is model and UI only); what must
+not happen is P2 shipping alone for long, with a rail promising a video the
+tool cannot yet deliver.
 
-`exportHookClip` in `use-post-exports.ts` routes on the source:
+### P2 — the slide model: a medium and a duration, chosen where the piece is composed
 
-- **video** → `exportHookVideo`, exactly as today, untouched;
+Document **v14**, and the whole of §5's stored half.
+
+- `PostSlide.medium` / `PostSlide.seconds`, `PostBadge.medium` /
+  `PostBadge.hookSeconds`; `deckSlides()` resolves `auto` and hands back
+  `medium`, `seconds` and `reason`.
+- **The migration writes them at the END of `migrateTripDoc`** — the trap
+  `roadtrip.md` already records: its blocks run in source order, so a v14 block
+  placed high writes onto a badge the v2 block has not built yet.
+- **This revises a memory decision, and the revision must be recorded**: «The
+  hook's LENGTH is session state, not part of the document» (2026-08-24) rested
+  on "a length is an export choice". Once every slide carries a screen time,
+  the hook's screen time is part of the composition, so the reason no longer
+  holds and `hookSeconds` moves into the document. The Export tab's slider
+  moves with it.
+- **Where the controls live**: a *This slide* section at the top of the Content
+  tab, showing the medium as three choices and the resolved answer in words
+  ("Auto · video, the badge animates"), plus the duration. It shows for
+  whichever slide is open — the allocation rule from `roadtrip.md` («A panel
+  that belongs to the PIECE»): the medium and the screen time are about the
+  SLIDE, so they must never sit in the hook-only branch. The badge's own hold
+  stays on the Look tab, where it belongs to the animation.
+- **The rail shows the deck's shape**: each cell wears its medium glyph and its
+  seconds. That is the payoff — a carousel that mixes a video hook and three
+  stills reads as such at a glance, which is the thing the maintainer said he
+  wants to decide up front.
+- `HookDefaults` gains the hook's medium and screen time, so a trip keeps the
+  habit; a new content slide takes a plain default (recommendation: 3s, `auto`)
+  until there is a reason for a trip-wide number.
+- Nothing renders differently yet: an image slide is still the PNG it was.
+
+### P3 — the hook leaves as a video whatever its picture
+
+The old P2, now driven by the slide's resolved medium rather than by the file
+type. `exportHookClip` routes on the source:
+
+- **clip** → `exportHookVideo`, exactly as today, untouched;
 - **photo** → the new path: decode once with `loadBadgeSource`, grade **once**
   into a bitmap with `makeFrameGrader` (the picture never changes, so grading
   per frame would be 150 WebGL renders for one result — and the grader is
@@ -215,74 +276,80 @@ with no source file — no demux, no decoder, no audio track.
   badge's own elements.
 
 Everything else stays: `hookVariant` for the frame and the 1080 cap,
-`hookVideoName` for the file name, `hookSecondsWithin` for the length (with no
-clip to clamp against, the ceiling is `MAX_HOOK_SECONDS`). Cadence is a
-delivery choice with no source to inherit from: 30 fps, stated in the panel.
+`hookVideoName` for the file name. The length is now `badge.hookSeconds`,
+clamped to the clip when there is one. Cadence has no source to inherit from
+on a photo: 30 fps, stated in the panel.
 
 The one invariant to hold: **the still video and the PNG must be the same
 composition at two clocks.** Both go through `renderBadge`; the PNG is that
 render settled, the video is it at t. If a future change gives one of them a
 path the other does not have, the preview stops being a preview.
 
-### P3 — the mode picker, the plan it draws, and the general button back
+### P4 — the export executes the deck, and the general button comes back
 
-- `shared/roadtrip/export-plan.ts` — §5, pure, tested: the mode, the default,
-  the per-slide delivery, the file count, the blockers.
-- `ExportTab` leads with the **mode row** (Images · Video · Mixed, plus a
-  "combine into one file" tick that only Video shows) over the plan's own
-  lines, then one primary **Export the piece** that runs it. Delivery goes
-  through the existing folder-picker path (`writeItems`), so a mixed deck lands
-  in one folder in swipe order and a single reel is one file. The PNG-deck and
-  hook-clip buttons stay underneath as named escapes.
-- **The mode is session state, not part of the document** — the same call the
-  hook's length already got (`roadtrip.md`, «The hook has a duration»): it is an
-  export choice, and storing it would cost a document version for nothing. What
-  the trip *does* keep is nothing at all until the maintainer asks for a
-  remembered default.
+- `shared/roadtrip/export-plan.ts` — §5's reading half, pure, tested.
+- `ExportTab` leads with the plan (one line per slide: format, seconds,
+  reason), then the delivery row (combine, and the images override), then one
+  primary **Export the piece**. Delivery goes through the existing
+  folder-picker path (`writeItems`) so a mixed deck lands in one folder in
+  swipe order. The PNG-deck and hook-clip buttons stay underneath as escapes.
 - **The header gets its button back**, and it is the piece's primary export,
   not a duplicate of a tab's button — which amends, rather than breaks, the
   rule `5d11245` recorded ("a header action row is navigation and status,
   never a second trigger for a tab's own button"). The amendment to record:
   *the header carries the piece's ONE primary action; a tab's buttons are the
   escapes from it.* Pressing it still switches to the Export tab, where the
-  mode row and the report are (`onStart`).
-- F4 is fixed here: `isEncodeSupported()` becomes a blocker in the plan, so the
-  video modes say why they cannot be delivered instead of failing late.
+  plan and the report are (`onStart`).
+- F4 is fixed here: `isEncodeSupported()` becomes a blocker in the plan, so a
+  video slide says why it cannot be delivered instead of failing late.
+- **The combined reel** rides the same commit or the next one: a painter over
+  the deck's own timeline, each slide held for its own seconds, the hook
+  playing its animation, the closing card as the tail the Studio already knows
+  (`outroTail`). Two limits it must state before running: it is **silent**
+  (audio is copied and never re-encoded, and a painted timeline has nothing to
+  copy — un-ticking combine gives the hook its own clip with its sound), and
+  until P5 a clip slide inside it is **held on its chosen frame**, named, with
+  the same escape offered.
 
-### P4 — the combined reel (the `combine` tick)
+### P5 — a content slide can be a clip
 
-Wanted, and settled as an **option inside the video mode** rather than a mode
-of its own — the maintainer's own framing. With P1 in place it is a painter
-over the deck's own timeline: each slide held for its own seconds, the hook
-playing its animation, the closing card as the tail the Studio already knows
-(`outroTail`).
+The maintainer's own third phase. **The model already describes it**:
+`videoTimeSeconds` is the in point and `seconds` is the length, which is
+exactly what `hookRange(start, length, duration)` computes for the hook today.
+So the work is renderers and one picker, not a document change:
 
-Two limits that must be said in the panel before the run, not discovered in
-the file:
+- the Picture tab offers `FrameStrip` on a content slide, as the hook already
+  has it;
+- a clip slide exported on its own goes through `exportVariantVideo` like the
+  hook's, with the slide's caption as its overlay;
+- inside a combined reel it stops being held: with the painted encoder, playing
+  it means decoding that clip into the shared timeline, which is a decode job
+  rather than the multi-source MUX `roadtrip.md` rejected. Silent by
+  construction, which the combined reel already is.
 
-- **A combined reel is SILENT.** Audio is copied, never re-encoded (the
-  pipeline's founding rule), and a painted timeline has no demuxed track to
-  copy. Un-ticking `combine` gives the hook its own clip *with* its audio
-  through the existing path, so the escape is one tick away. Later, and only
-  if wanted: `copyAudio` could carry the hook clip's own AAC over the hook's
-  span and leave the rest silent — the muxer already takes raw chunks.
-- **A content slide that is a clip is held on its chosen frame.** Inlining it
-  would mean decoding a second source into the same timeline — the
-  multi-source export `roadtrip.md` records as rejected. So the panel names
-  each clip slide, says it will be held, and points at the same escape
-  (un-tick `combine` and that slide keeps its motion). Freezing in silence is
-  the one answer that is not allowed.
+### P6 — a content slide can animate
 
-### P5 — the Studio bridge keeps the trip's look
+Also the maintainer's, stated as the reason the model must be right now: *"il y
+aura quand même des animations, peut-être du texte animé, peut-être un élément
+visuel qui se déplace"*. The engine has carried this since the intro scenes —
+`shared/overlay/animation.ts`, the same fade / slide / scale / typewriter /
+wipe a badge piece uses. So the work is to let a content slide carry a style
+and an animation the way `BadgePieceStyle` does, and `auto` picks it up with no
+rule change. This is the phase that makes "a slide is often a video because it
+is animated" true for the whole deck rather than for the hook alone.
 
-§8. Separate from the export work, and the maintainer's own second step.
+### P7 — the Studio bridge keeps the trip's look
+
+§8. Separate from the export work, and the maintainer's own second step. It is
+last in the list and not in the queue: he can call it forward whenever the
+style loss costs him more than the missing video does.
 
 ## 7. Verifying this, given the container
 
 **This container's Chromium cannot encode H.264** (`avc1.*` unsupported by
 `VideoEncoder`; vp8/vp9 only) — the limit already recorded against the hook
 clip in `roadtrip.md`, and the reason that feature shipped "unverified end to
-end". So P1 and P2 cannot be proven here the way they will run for the
+end". So P1 and P3 cannot be proven here the way they will run for the
 maintainer. What *can* be done, and should be:
 
 - drive the encoder loop in headless Chromium with a **vp9** codec into
@@ -338,20 +405,26 @@ use — the same discipline `StudioLink` already applies to the grade.
 **Taken by the maintainer, 2026-09-09** — do not re-litigate:
 
 1. **The header button comes back as the piece's primary export.** Not a
-   duplicate of a tab button: the tab's buttons become the per-format escapes.
+   duplicate of a tab button: the tab's buttons become the escapes from it.
 2. **A mixed deck ships PNGs and MP4s together**, in one folder, in swipe
-   order.
-3. **The format is a mode the author picks** — Images · Video (with a
-   "combine into one file" tick) · Mixed — defaulted from what the piece
-   contains. The combined reel is wanted, as that tick rather than as a mode.
+   order, and platforms take mixed carousels.
+3. **A slide carries its own medium and its own duration, chosen where the
+   piece is composed** (§5). This SUPERSEDES the export-mode picker agreed
+   earlier the same day: the export no longer decides a format, it reads the
+   deck and delivers it. What survives at export time is delivery — combine
+   into one file or not, plus an "everything as images" override.
+4. **Video content slides and animated content slides are coming** (§P5, §P6),
+   and the model is shaped now so that neither needs a document change later.
+   That is the reason the medium moved upstream in the first place.
 
-**Still open, and small enough to settle when P2 is written:**
+**Still open, small, and settled when the phase that needs them is written:**
 
-4. **Still-video length and cadence**: the badge's hold plus a beat, at 30 fps
-   (recommended — it is what `defaultHookSeconds` already computes), or an
-   author-set length as the clip path offers.
-5. **How long a held slide runs in a video mode**: one trip-wide number, or per
-   slide. Recommendation: one number, session state like the hook's length,
-   until a piece actually needs otherwise.
-6. **Whether a combined reel should later carry the hook's audio** over its own
-   span (§P4). Not in the first cut either way.
+5. **A new content slide's default duration** — a constant (recommended: 3s,
+   `auto`), or a trip-wide number beside the other per-kind defaults. Nothing
+   blocks P2 either way; the constant is one line to replace.
+6. **Cadence for a painted slide**: 30 fps (recommended, and stated in the
+   panel), or offered as a choice. A clip slide keeps its source cadence
+   regardless — that is `hookVariant`'s existing rule.
+7. **Whether a combined reel should carry the hook's audio** over its own span
+   (§P4). Not in the first cut either way; `copyAudio` already takes raw
+   chunks, so it stays cheap to add.
