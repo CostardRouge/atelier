@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { DeckSlide } from '../../shared/roadtrip/deck';
 
 interface SlideRailProps {
@@ -8,8 +8,11 @@ interface SlideRailProps {
   /** The deck's frame, so a cell has the shape of what it holds. */
   aspect: number;
   includeCta: boolean;
-  /** The picture a slide composes over, when the Library holds it. */
-  fileFor: (slide: DeckSlide) => File | null;
+  /**
+   * The slide as it will really go out — crop, caption, badge and grade —
+   * drawn by `use-rail-thumbs`, or null until the first draw lands.
+   */
+  thumbFor: (slide: DeckSlide) => string | null;
   onSelect: (index: number) => void;
   onAdd: () => void;
   onRemove: () => void;
@@ -28,6 +31,11 @@ interface SlideRailProps {
  * deck is BUILT: drag a picture to reorder, `+` to add one, `×` on the open
  * picture to drop it, and the closing card is a cell that turns itself on.
  *
+ * A cell shows the COMPOSED slide, not the file behind it: the raw picture
+ * cropped by CSS is a different picture the moment a slide is zoomed,
+ * straightened or captioned, and a rail that disagrees with the stage is a
+ * rail nobody trusts.
+ *
  * Only the middle of a deck reorders. The hook opens the piece and the call
  * to action closes it; a deck where either drifted into the middle would stop
  * working, so neither is draggable.
@@ -37,7 +45,7 @@ export default function SlideRail({
   index,
   aspect,
   includeCta,
-  fileFor,
+  thumbFor,
   onSelect,
   onAdd,
   onRemove,
@@ -123,13 +131,7 @@ export default function SlideRail({
                       : 'border-line-strong hover:border-accent'
                 }`}
               >
-                {s.kind === 'cta' ? (
-                  <span className="absolute inset-0 grid place-items-center bg-paper-2 font-mono text-[0.5rem] leading-tight text-muted">
-                    card
-                  </span>
-                ) : (
-                  <SlidePreview file={fileFor(s)} />
-                )}
+                <SlidePreview thumb={thumbFor(s)} kind={s.kind} />
                 {/* The shape of the deck, readable without opening a slide: a
                     cell that carries its length is one that leaves as video.
                     It is the whole point of deciding the medium here rather
@@ -200,30 +202,21 @@ export default function SlideRail({
 }
 
 /**
- * A cell's picture. Stills get their own frame; a clip would need a decode per
- * cell, so it shows the film glyph rather than paying for six seeks — the
- * frame a clip opens on is chosen on the Picture tab, over the whole width.
+ * A cell's picture: the slide as it will be delivered, composed by
+ * `use-rail-thumbs` through the one renderer the stage and the export use.
+ *
+ * Until the first draw lands — a decode after an edit settles — the cell says
+ * what it holds rather than flashing a picture that is about to change. That
+ * is also the whole of the old "a clip costs a decode per cell" objection:
+ * every cell is drawn once per CHANGE now, never once per paint.
  */
-function SlidePreview({ file }: { file: File | null }) {
-  const isImage = Boolean(file && file.type.startsWith('image/'));
-  const [url, setUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!file || !isImage) {
-      setUrl(null);
-      return;
-    }
-    const next = URL.createObjectURL(file);
-    setUrl(next);
-    return () => URL.revokeObjectURL(next);
-  }, [file, isImage]);
-
-  if (url) {
-    return <img src={url} alt="" className="absolute inset-0 w-full h-full object-cover" />;
+function SlidePreview({ thumb, kind }: { thumb: string | null; kind: DeckSlide['kind'] }) {
+  if (thumb) {
+    return <img src={thumb} alt="" className="absolute inset-0 w-full h-full object-cover" />;
   }
   return (
-    <span className="absolute inset-0 grid place-items-center text-[0.8rem] leading-none text-[#6b6459]">
-      {file ? '▸' : '·'}
+    <span className="absolute inset-0 grid place-items-center bg-paper-2 font-mono text-[0.5rem] leading-tight text-[#6b6459]">
+      {kind === 'cta' ? 'card' : '·'}
     </span>
   );
 }

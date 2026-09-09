@@ -43,6 +43,7 @@ import PictureTab from './panels/PictureTab';
 import PiecePicker from './panels/PiecePicker';
 import { useBadgeClock } from './use-badge-clock';
 import { usePostExports } from './use-post-exports';
+import useRailThumbs from './use-rail-thumbs';
 import { pickable, useSlideLibrary } from './use-slide-library';
 import { useTripGrade } from './use-trip-grade';
 
@@ -317,13 +318,6 @@ export default function PostEditor({
     },
     [lib.assets],
   );
-  /** The picture behind any slide, for the rail's own thumbnails. */
-  const fileForSlide = useCallback(
-    (s: { kind: string; media: SavedMediaRef | null }) =>
-      s.kind === 'hook' ? resolve(post.media) : resolve(s.media),
-    [resolve, post.media],
-  );
-
   /** Whether the Library holds a slide's picture — what the export plan reads. */
   const hasPicture = useCallback(
     (s: { media: SavedMediaRef | null }) => s.media === null || resolve(s.media) !== null,
@@ -363,6 +357,11 @@ export default function PostEditor({
   // --- the grade: the Studio's stack, bound to the trip or to this piece ----
   const grade = useTripGrade(trip, post, onChangeTrip, onChangePost);
   const lut = grade.stack.composed;
+
+  // Every cell of the rail, composed exactly as it will be delivered — the
+  // crop, the caption, the badge, the grade. It needs the grade, so it sits
+  // here rather than beside the deck above.
+  const railThumb = useRailThumbs({ trip, post, slides, aspect, resolve, lut });
 
   const exports = usePostExports({
     trip,
@@ -615,7 +614,7 @@ export default function PostEditor({
             index={slideIndex}
             aspect={aspect}
             includeCta={post.includeCta}
-            fileFor={fileForSlide}
+            thumbFor={railThumb}
             onSelect={setSelected}
             onAdd={() => void addSlide()}
             onRemove={removeSlide}
