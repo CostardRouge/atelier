@@ -62,6 +62,8 @@ import ImportTripModal from './ImportTripModal';
 import TripCoverModal from './TripCoverModal';
 import { HEATMAP_LEVELS } from './heatmap-ramp';
 import useCoverThumbs from './use-cover-thumbs';
+import { usePublishSectionBar } from '../../shared/ui/section-rail';
+import { useIsCompact } from '../../shared/ui/use-layout-mode';
 
 interface TripGalleryProps {
   openTripId: string | null;
@@ -113,14 +115,31 @@ function tileCaption(tile: CoverTile): string {
  * from the coverage the overview already builds, on the same five-rung ramp as
  * the grid: a trip's card and its grid must not disagree about a day.
  */
-function RhythmBand({ coverage }: { coverage: TripCoverage }) {
+/**
+ * How tall the card's cover zone is, in every one of the shapes that can fill
+ * it — a picture, a rhythm band, or a "kept elsewhere" note. Two cards share a
+ * phone's width, so 168px there is a third of the card before a word of it is
+ * read; the bars inside shrink with it.
+ */
+function coverHeight(compact: boolean) {
+  return compact
+    ? { box: 'h-[112px]', bars: 'h-[56px]' }
+    : { box: 'h-[168px]', bars: 'h-[92px]' };
+}
+
+function RhythmBand({ coverage, compact }: { coverage: TripCoverage; compact: boolean }) {
   const bars = rhythmBuckets(coverage);
   const gap = coverage.longestGap;
+  const h = coverHeight(compact);
   return (
     // On the card's own surface, never on `paper-2`: the ramp's bottom rung IS
     // `paper-2`, so a trip with nothing told drew an empty box. The strip keeps
     // the grid's relationship — bare cells against the page behind them.
-    <div className="h-[168px] bg-surface border-b border-line px-3.5 py-3 flex flex-col justify-between">
+    <div
+      className={`${h.box} bg-surface border-b border-line flex flex-col justify-between ${
+        compact ? 'px-2.5 py-2' : 'px-3.5 py-3'
+      }`}
+    >
       <p className="m-0 font-mono text-[0.62rem] tracking-[0.08em] uppercase text-muted truncate">
         {coverage.toldDays === 0 ? (
           `${coverage.totalDays} days, none told yet`
@@ -134,7 +153,7 @@ function RhythmBand({ coverage }: { coverage: TripCoverage }) {
           `${coverage.toldDays} of ${coverage.totalDays} days told`
         )}
       </p>
-      <div className="flex items-end gap-[2px] h-[92px]" aria-hidden="true">
+      <div className={`flex items-end gap-[2px] ${h.bars}`} aria-hidden="true">
         {bars.map((bar) => {
           const level = rhythmLevel(bar);
           return (
@@ -172,6 +191,11 @@ function CoverArt({
   urls: ReadonlyMap<string, string>;
   remoteOnly: boolean;
 }) {
+  // Read before any branch: a hook after a conditional return changes the hook
+  // ORDER the moment a trip gains its first cover picture.
+  const compact = useIsCompact();
+  const h = coverHeight(compact);
+
   if (trip.cover.layout === 'none') return null;
 
   if (tiles.length === 0) {
@@ -179,7 +203,7 @@ function CoverArt({
     // the pictures are beats drawing a shape this device does not own.
     if (remoteOnly) {
       return (
-        <div className="h-[168px] bg-paper-2 flex items-center justify-center px-4">
+        <div className={`${h.box} bg-paper-2 flex items-center justify-center px-4`}>
           <p className="m-0 font-mono text-[0.62rem] tracking-[0.08em] uppercase text-faint text-center leading-[1.7]">
             pictures live on
             <br />
@@ -188,7 +212,7 @@ function CoverArt({
         </div>
       );
     }
-    return <RhythmBand coverage={coverage} />;
+    return <RhythmBand coverage={coverage} compact={compact} />;
   }
 
   const pic = (tile: CoverTile, className: string) => (
@@ -205,7 +229,7 @@ function CoverArt({
   );
 
   return (
-    <div className="relative h-[168px] overflow-hidden bg-paper-2">
+    <div className={`relative overflow-hidden bg-paper-2 ${h.box}`}>
       {tiles.length === 1 ? (
         pic(tiles[0], '')
       ) : (
@@ -260,6 +284,7 @@ function TripCard({
   const [menu, setMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const [moveTo, setMoveTo] = useState(moveTargets[0]?.id ?? '');
+  const compact = useIsCompact();
   const coverage = tripCoverage(trip);
   const total = coverage.totalDays;
   const pct = total > 0 ? Math.round((coverage.toldDays / total) * 100) : 0;
@@ -350,9 +375,12 @@ function TripCard({
         )}
       </div>
 
-      <div className="flex flex-col gap-3 p-5">
+      <div className={`flex flex-col ${compact ? 'gap-2 p-3.5' : 'gap-3 p-5'}`}>
         <div className="min-w-0">
-          <h3 className="m-0 font-serif text-[1.2rem] truncate" title={trip.name}>
+          <h3
+            className={`m-0 font-serif truncate ${compact ? 'text-[1.05rem]' : 'text-[1.2rem]'}`}
+            title={trip.name}
+          >
             {trip.name}
           </h3>
           <p className="m-0 font-mono text-[0.68rem] text-muted truncate">
@@ -363,7 +391,14 @@ function TripCard({
         {/* The day count moved down to the coverage line: with it here the date
             line wrapped onto two rows on a narrow card, for a number that
             belongs beside the days told anyway. */}
-        <p className="m-0 font-mono text-[0.7rem] tabular-nums text-muted truncate">
+        {/* A truncated date range says nothing — the whole point of the line
+            is the span — so on a phone it steps down a size rather than
+            losing its second half. */}
+        <p
+          className={`m-0 font-mono tabular-nums text-muted truncate ${
+            compact ? 'text-[0.6rem]' : 'text-[0.7rem]'
+          }`}
+        >
           {formatIsoDate(trip.startDate)} → {formatIsoDate(trip.endDate)}
         </p>
 
@@ -591,6 +626,37 @@ export default function TripGallery({
 
   const connections = useSyncExternalStore(subscribeWinnowConnections, listWinnowConnections);
   const documentSources = useMemo(() => documentSourcesFor(connections), [connections]);
+  // `handleImport` is declared further down and is a fresh function on every
+  // render, so the bar reads it through a ref rather than listing it as a
+  // dependency — the same shape the transport and dialog keys use.
+  const handleImportRef = useRef<(sourceId: string) => Promise<void>>(async () => {});
+  // On a phone the gallery's two verbs go in the thumb zone rather than in a
+  // header row that has to share its line with the title. They are STARTING
+  // points, not sections, so the shell adds its own Library cell beside them
+  // and drops the app-bar button — see `SectionBarRole`.
+  const compact = useIsCompact();
+  usePublishSectionBar(
+    useMemo(
+      () =>
+        compact
+          ? {
+              sections: [
+                { id: 'new', label: 'New trip' },
+                { id: 'import', label: 'Import' },
+              ],
+              active: null,
+              label: 'Start a trip',
+              role: 'actions' as const,
+              onSelect: (id: string) => {
+                if (id === 'new') setCreating(true);
+                else if (documentSources.length > 1) setImporting(true);
+                else void handleImportRef.current(DEFAULT_SOURCE_ID);
+              },
+            }
+          : null,
+      [compact, documentSources.length],
+    ),
+  );
   const remoteSourceIds = useMemo(
     () => documentSources.filter((s) => isRemoteSource(s.id)).map((s) => s.id),
     [documentSources],
@@ -697,6 +763,7 @@ export default function TripGallery({
     }
     if (await createOn(doc, 'imported')) refresh();
   }
+  handleImportRef.current = handleImport;
 
   /**
    * Delete here, and there when the trip is kept on an instance — guarded
@@ -827,6 +894,11 @@ export default function TripGallery({
           </p>
         </div>
         <span className="flex-1" />
+        {/* On a phone these two live in the shell's bottom bar instead, where
+            a thumb reaches them — offering them in both places would be the
+            same verb twice on one screen. */}
+        {!compact && (
+        <>
         <button
           type="button"
           onClick={() => {
@@ -845,6 +917,8 @@ export default function TripGallery({
         >
           + New trip
         </button>
+        </>
+        )}
       </div>
 
       {notice && (
@@ -922,7 +996,18 @@ export default function TripGallery({
                 {count === 0 ? (
                   <p className="m-0 text-[0.8rem] text-faint">Nothing kept here yet.</p>
                 ) : (
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5">
+                  <div
+                    className={
+                      // Two columns on a phone: the 260px minimum below gives
+                      // exactly one on a 374px content width, and a column of
+                      // single cards wastes the half of the screen a trip's
+                      // cover does not need. Above compact the auto-fill track
+                      // takes over again.
+                      compact
+                        ? 'grid grid-cols-2 gap-3'
+                        : 'grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5'
+                    }
+                  >
                     {items.map((trip) => (
                       <TripCard
                         key={trip.id}

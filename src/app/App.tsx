@@ -108,6 +108,9 @@ export default function App() {
   // sections of its own (the reading tools) publishes none and gets no bar.
   const sectionBar = useSectionBar();
   const rail = compact && tool ? sectionBar : null;
+  // A bar of STARTING POINTS carries the library itself; a bar of sections
+  // does not, and leaves it in the app bar. Either way it is offered once.
+  const railOpensLibrary = rail?.role === 'actions';
 
   // Every tool runs in a fixed-height, FULL-WIDTH frame — editing wants every
   // pixel (a landscape clip beside two panels eats width fast), so tools run
@@ -161,10 +164,10 @@ export default function App() {
               {tool.subtitle}
             </span>
           )}
-          {/* A phone has no column for the library, so this is the way to it.
-              It stays in the app bar rather than joining the section bar: that
-              bar is the tool's, and the library is the shell's. */}
-          {tool && !libraryDocked && (
+          {/* A phone has no column for the library, so this is the way to it —
+              unless the bar below is a set of starting points, which the
+              library belongs among; then it lives there instead. */}
+          {tool && !libraryDocked && !railOpensLibrary && (
             <button
               type="button"
               onClick={() => setLibraryOpen(true)}
@@ -236,9 +239,13 @@ export default function App() {
         )}
       </main>
 
-      {/* The tool's own sections, in the thumb zone. The library is not one of
-          them — it is the shell's, and it stays in the app bar. */}
-      {rail && <SectionRail bar={rail} />}
+      {/* The tool's own cells, in the thumb zone. */}
+      {rail && (
+        <SectionRail
+          bar={rail}
+          onLibrary={railOpensLibrary ? () => setLibraryOpen(true) : undefined}
+        />
+      )}
 
       {/* The same panel, risen from the bottom instead of docked at the side —
           a phone is the one width with no room for a column at all. It scrolls
