@@ -651,9 +651,9 @@ export default function PostEditor({
             style={{ '--fit': fitWidth === null ? '100%' : `${Math.round(fitWidth)}px` } as React.CSSProperties}
             /* `w-full` is load-bearing on a narrow screen: the row above
                centres its children, so this column used to take its width
-               from the badge's own measured box — and the stage became a
-               SCROLL box (view zoom), whose intrinsic width is zero. Without
-               a width to measure, the picture collapsed to its border. */
+               from the badge's own measured box — the stage then measured a
+               box the picture had sized, which is how a preview ends up
+               measuring its own output. The column states its width instead. */
             className="w-full flex-1 min-w-0 min-h-0 flex flex-col items-center gap-3 @min-[860px]:max-w-[min(100%,var(--fit))]"
           >
           <BadgeStage

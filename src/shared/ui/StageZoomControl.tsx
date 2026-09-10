@@ -1,18 +1,20 @@
 import type { ZoomControls } from './stage-zoom';
 
 /**
- * The − 100% + pill that sits in the corner of an editor stage.
+ * The − 100% + pill that drives a zoom: Road Trip's day grid and stage ruler,
+ * and the lightbox's viewer.
  *
- * It floats over the picture rather than joining the transport row: the zoom
- * belongs to the thing you are looking at, and both stages that carry one
- * (the Studio's, Road Trip's badge) have a different row underneath.
+ * Never over a media PREVIEW, whatever the surface — the two editor stages
+ * carried one and it fought the picture's own framing gestures. A preview fits
+ * the room it is given (`stage-zoom.ts`).
  *
  * The percentage is a button — pressing it returns to the fitted size — and it
  * is the only place that says a zoom is on, so it stays visible at 100% too:
  * a control that appears only once you are lost is not a way out.
  *
- * `hint` is the gesture the surface really offers: the stages zoom on a
- * modifier only, the lightbox on a bare wheel too.
+ * `hint` is the gesture the surface really offers: a zone that wants the wheel
+ * for something else zooms on a modifier only, the lightbox on a bare wheel
+ * too.
  */
 export default function StageZoomControl({
   zoom,
