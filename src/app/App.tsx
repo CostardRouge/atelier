@@ -10,6 +10,7 @@ import { useHashRoute } from './use-hash-route';
 import DockedPanel, { type DockHeight } from '../shared/ui/DockedPanel';
 import SectionRail from '../shared/ui/SectionRail';
 import { useSectionBar } from '../shared/ui/section-rail';
+import { StageRoomProvider } from '../shared/ui/stage-room';
 import { useLayoutMode } from '../shared/ui/use-layout-mode';
 
 /**
@@ -167,10 +168,14 @@ export default function App() {
     : 'h-dvh flex flex-col min-h-0 overflow-hidden w-full px-4 pt-3 pb-3';
 
   return (
-    // The reading pages keep the page scroll and their own rhythm; the only
-    // thing `viewport-fit=cover` changes for them is that their top margin
-    // must never be less than a notch, whatever a launch decides to put there.
-    // Left and right are paid by `body` (`index.css`).
+    // The dock takes 46dvh out of the tool's height, so a tool has to know it
+    // is sharing the screen — or the picture pays for the chrome around it
+    // rather than the other way round (`shared/ui/stage-room.tsx`).
+    <StageRoomProvider room={compact && libraryOpen ? 'shared' : 'full'}>
+    {/* The reading pages keep the page scroll and their own rhythm; the only
+        thing `viewport-fit=cover` changes for them is that their top margin
+        must never be less than a notch, whatever a launch decides to put
+        there. Left and right are paid by `body` (`index.css`). */}
     <div
       className={
         tool
@@ -324,5 +329,6 @@ export default function App() {
         </footer>
       )}
     </div>
+    </StageRoomProvider>
   );
 }

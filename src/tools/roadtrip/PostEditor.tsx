@@ -49,6 +49,7 @@ import { useTripGrade } from './use-trip-grade';
 import PageBar, { barPill } from '../../shared/ui/PageBar';
 import PanelHost from '../../shared/ui/PanelHost';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
+import { useStageRoom } from '../../shared/ui/stage-room';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 
 interface PostEditorProps {
@@ -121,6 +122,16 @@ export default function PostEditor({
   // bottom bar, so picking a section is also what raises the panel. It opens
   // closed: the badge on its picture is what you came to look at.
   const compact = useIsCompact();
+  // The docked library takes 46dvh out of this screen, and on a 9:16 reel the
+  // picture is what pays for it: 86px across, measured. So while it is open the
+  // editor sheds everything that is not the picture — the piece's name and its
+  // date line (both a tap away again the moment the dock closes) and the slide
+  // rail, which stands beside the frame instead of under it, in width the
+  // portrait picture leaves empty anyway. See `shared/ui/stage-room.tsx`.
+  // Read unconditionally — a hook behind a `&&` is a hook that stops being
+  // called the moment the window is widened.
+  const room = useStageRoom();
+  const bare = compact && room === 'shared';
   const [inspectorOpen, setInspectorOpen] = useState(false);
   // The shell draws them, from the SAME `TABS` the docked strip renders from.
   usePublishSectionBar(
@@ -616,7 +627,13 @@ export default function PostEditor({
         {/* Editable in place, like the Studio's project name: a piece is
             found again by what it is called, and having to go back to the
             day panel to rename it is the kind of friction that stops you
-            naming things at all. */}
+            naming things at all.
+
+            Not while the library is docked: naming is not what you are doing
+            with a picture half-chosen, and these two lines are 46px the
+            picture wants far more (`bare`, above). */}
+        {!bare && (
+        <>
         <input
           value={post.title}
           onChange={(e) => onChangePost({ ...post, title: e.target.value })}
@@ -635,6 +652,8 @@ export default function PostEditor({
         >
           {formatIsoDate(post.date)} · {post.kind}
         </p>
+        </>
+        )}
       </div>
 
       {/* The deck sits beside the picture, not behind a tab: a carousel is
@@ -654,8 +673,17 @@ export default function PostEditor({
             it was given): a portrait frame on a wide screen used to centre
             itself inside a full-width column, leaving the rail stranded a
             third of a screen away from the thumbnails it belongs to. */}
-        <div className="flex-1 min-h-0 flex flex-col-reverse items-center gap-3 @min-[860px]:flex-row @min-[860px]:items-stretch @min-[860px]:justify-center @min-[860px]:gap-3">
+        <div
+          className={`flex-1 min-h-0 flex gap-3 @min-[860px]:flex-row @min-[860px]:items-stretch @min-[860px]:justify-center @min-[860px]:gap-3 ${
+            // Under the picture normally, beside it while the dock is open:
+            // a portrait frame in a short column leaves the width empty and
+            // has no height to give (`bare`, above). Both orders put the rail
+            // AFTER the picture in the DOM, so reading order never changes.
+            bare ? 'flex-row-reverse items-stretch' : 'flex-col-reverse items-center'
+          }`}
+        >
           <SlideRail
+            column={bare}
             slides={slides}
             index={slideIndex}
             aspect={aspect}
@@ -708,7 +736,12 @@ export default function PostEditor({
             onFit={setFitWidth}
           />
 
-          {isHook && clock.animated && (
+          {/* Also shed while the dock is open (`bare`): scrubbing the badge's
+              animation is not what you are doing with a picture half-chosen,
+              and this row is another 47px of the picture's height. The badge
+              still draws — it just stops being scrubbable until the library
+              closes. */}
+          {isHook && clock.animated && !bare && (
             <div className="flex-none flex items-center gap-3 w-full max-w-[26rem]">
               <button
                 type="button"
