@@ -361,10 +361,14 @@ export default function AssetSidebar({
 
   // --- Collapsed rail -------------------------------------------------------
   // Only the docked column has a rail: out of the flow there is nothing to
-  // reclaim by narrowing, so the shell closes the panel instead.
+  // reclaim by narrowing, so the shell closes the panel instead. Docked only
+  // happens at `expanded`, so this is only ever drawn above 1180px — which is
+  // why it carries no narrow-screen classes. It used to turn itself into a
+  // horizontal bar under 820px; that state is unreachable now, and dead
+  // responsive classes are worse than none: they read as a supported layout.
   if (collapsed && variant === 'docked') {
     return (
-      <aside className="flex-none w-12 flex flex-col items-center gap-3 py-3 border-r border-line max-[820px]:w-full max-[820px]:flex-row max-[820px]:py-2 max-[820px]:px-3 max-[820px]:border-r-0 max-[820px]:border max-[820px]:rounded-paper-lg max-[820px]:bg-surface max-[820px]:shadow-paper-soft">
+      <aside className="flex-none w-12 flex flex-col items-center gap-3 py-3 border-r border-line">
         <button
           type="button"
           onClick={onToggle}
@@ -377,7 +381,6 @@ export default function AssetSidebar({
             width="14"
             height="14"
             aria-hidden="true"
-            className="max-[820px]:rotate-90"
           >
             <path
               fill="none"
@@ -390,12 +393,12 @@ export default function AssetSidebar({
           </svg>
         </button>
         <span
-          className="w-8 h-8 grid place-items-center rounded-lg bg-ink text-paper font-mono text-[0.66rem] max-[820px]:order-3 max-[820px]:ml-auto"
+          className="w-8 h-8 grid place-items-center rounded-lg bg-ink text-paper font-mono text-[0.66rem]"
           title={`${lib.assets.length} assets`}
         >
           {lib.assets.length}
         </span>
-        <span className="[writing-mode:vertical-rl] font-mono text-[0.58rem] tracking-[0.16em] uppercase text-faint mt-1 max-[820px]:[writing-mode:horizontal-tb] max-[820px]:mt-0 max-[820px]:order-2 max-[820px]:text-[0.66rem]">
+        <span className="[writing-mode:vertical-rl] font-mono text-[0.58rem] tracking-[0.16em] uppercase text-faint mt-1">
           Library
         </span>
       </aside>
