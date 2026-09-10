@@ -16,10 +16,11 @@
  *
  * - **The back pill is the first cell, and the bar is one pill high.** Nothing
  *   in it may be taller, so the pill's own top IS the content's top on every
- *   screen and at every width. A screen whose title does not fit that line
- *   draws it BELOW the bar (the trip overview), where it also gets the full
- *   width — beside the pill on a 390px screen its dates were being clipped.
- *   One that does fit puts it in `children` (the Studio's name field).
+ *   screen and at every width. A screen's NAME goes in `children`, beside the
+ *   pill, at `h-[1.9rem]` like everything else in the row — the Studio's name
+ *   field and the trip's. What does NOT fit that line goes below it: the
+ *   trip's route and dates are their own line under the bar, which is what
+ *   was clipping on a 390px screen, not the name.
  * - **It wraps, and the trailing group is pinned with `ml-auto`.** Both are
  *   the rules `frontend.md` already carries for a row mixing fixed-height
  *   pills with something elastic: an item drops to its own line rather than
@@ -28,6 +29,7 @@
  */
 
 import type { ReactNode } from 'react';
+import { useIsCompact } from './use-layout-mode';
 
 /**
  * One pill of the bar. Exported because a screen's own controls have to match
@@ -56,8 +58,15 @@ interface PageBarProps {
 }
 
 export default function PageBar({ back, children, trailing }: PageBarProps) {
+  // The shell leaves no gutter between the fixed masthead and the content, on
+  // purpose (`App.tsx`): a gap there is paper the content gets clipped
+  // against. So the bar clears the border itself — it is the first thing on
+  // every screen that has one, which makes this the one place to say it. Above
+  // a phone `<main>` already has its own top margin.
+  const compact = useIsCompact();
+
   return (
-    <div className="flex items-center gap-2 flex-wrap min-w-0">
+    <div className={`flex items-center gap-2 flex-wrap min-w-0 ${compact ? 'mt-3' : ''}`}>
       {back && (
         <button
           type="button"
