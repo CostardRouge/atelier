@@ -112,13 +112,19 @@ interface AssetSidebarProps {
   collapsed: boolean;
   onToggle: () => void;
   /**
-   * How the shell is showing it. `docked` is the column beside the tool, with
-   * its own frame and its collapse control. `sheet` is the same panel inside a
-   * {@link BottomSheet} on a phone: the sheet already draws the frame, the
-   * title and the dismissal, so this drops all three and never offers to
-   * collapse — a sheet's "collapsed" state is being closed.
+   * How the shell is showing it.
+   *
+   * - `docked` — the column beside the tool, with its own frame and its
+   *   collapse control.
+   * - `drawer` — the same card, slid over the tool on a middle-sized screen.
+   *   It keeps its frame and its header; "collapse" closes the drawer, which
+   *   is what collapsing means once it is out of the flow. It fills the
+   *   drawer rather than stating a width, since the drawer states one.
+   * - `sheet` — inside a {@link BottomSheet} on a phone. The sheet already
+   *   draws the frame, the title and the dismissal, so this drops all three
+   *   and never offers to collapse.
    */
-  variant?: 'docked' | 'sheet';
+  variant?: 'docked' | 'drawer' | 'sheet';
 }
 
 /**
@@ -143,6 +149,7 @@ export default function AssetSidebar({
   variant = 'docked',
 }: AssetSidebarProps) {
   const asSheet = variant === 'sheet';
+  const asDrawer = variant === 'drawer';
   const lib = useAssetLibrary();
   const accepts = tool.accepts ?? [];
   const [dragging, setDragging] = useState(false);
@@ -353,9 +360,9 @@ export default function AssetSidebar({
   }
 
   // --- Collapsed rail -------------------------------------------------------
-  // A sheet is never collapsed: the shell closes it instead, so the rail is
-  // the docked column's state alone.
-  if (collapsed && !asSheet) {
+  // Only the docked column has a rail: out of the flow there is nothing to
+  // reclaim by narrowing, so the shell closes the panel instead.
+  if (collapsed && variant === 'docked') {
     return (
       <aside className="flex-none w-12 flex flex-col items-center gap-3 py-3 border-r border-line max-[820px]:w-full max-[820px]:flex-row max-[820px]:py-2 max-[820px]:px-3 max-[820px]:border-r-0 max-[820px]:border max-[820px]:rounded-paper-lg max-[820px]:bg-surface max-[820px]:shadow-paper-soft">
         <button
@@ -426,7 +433,9 @@ export default function AssetSidebar({
   const Frame = asSheet ? 'div' : 'aside';
   const frameClass = asSheet
     ? 'flex-1 min-h-0 flex flex-col overflow-hidden'
-    : 'flex-none w-72 max-w-[78vw] flex flex-col min-h-0 border border-line rounded-paper-lg bg-surface shadow-paper overflow-hidden';
+    : asDrawer
+      ? 'flex-1 min-h-0 w-full flex flex-col border border-line rounded-paper-lg bg-surface shadow-paper overflow-hidden'
+      : 'flex-none w-72 max-w-[78vw] flex flex-col min-h-0 border border-line rounded-paper-lg bg-surface shadow-paper overflow-hidden';
 
   return (
     <Frame className={frameClass}>
