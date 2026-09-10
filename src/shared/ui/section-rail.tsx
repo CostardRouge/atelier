@@ -33,14 +33,35 @@ export interface Section {
   label: string;
 }
 
+/**
+ * What the cells MEAN, which decides two things the shell draws.
+ *
+ * - `sections` — places in the document, one of them current. An editor's
+ *   inspector tabs. The library is not one of these: it is not a place in the
+ *   document, so it stays a button in the app bar.
+ * - `actions` — things to START. A gallery's "new" and "import". Here the
+ *   library IS one of them (picking media is how you start), so the shell
+ *   prepends its own cell for it and drops the app-bar button rather than
+ *   offering the same thing twice on one screen.
+ *
+ * A gallery has few verbs, so the added cell costs nothing; an inspector has
+ * five sections, which is exactly why the same cell is refused there.
+ */
+export type SectionBarRole = 'sections' | 'actions';
+
 export interface SectionBar {
   sections: readonly Section[];
-  /** Which one is open, by id. */
-  active: string;
+  /**
+   * Which one is open, by id — or `null` for an `actions` bar, where no cell
+   * is a state to be in and marking one would be a lie.
+   */
+  active: string | null;
   /** Called with a section's id when a cell is tapped. */
   onSelect: (id: string) => void;
   /** What the bar is for, on the nav's accessible name — "Studio inspector". */
   label: string;
+  /** Defaults to `sections`. */
+  role?: SectionBarRole;
 }
 
 interface SectionBarState {
