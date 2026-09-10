@@ -86,18 +86,21 @@ function TripTitle({ name, onRename }: { name: string; onRename: (name: string) 
             setDraft(null);
           }
         }}
-        className="w-full max-w-[22rem] font-serif text-[1.5rem] leading-tight px-1.5 py-0.5 -mx-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent max-[560px]:text-[1.15rem]"
+        /* Exactly the pills' height, or the row centres a taller field
+           against them and pushes the back button down — the whole point of
+           the bar is that it does not move. */
+        className="grow shrink basis-[9rem] min-w-0 max-w-[22rem] h-[1.9rem] font-serif text-[1.15rem] leading-none px-1.5 py-0 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
       />
     );
   }
 
   return (
-    <h1 className="m-0 font-serif text-[1.5rem] leading-tight">
+    <h1 className="m-0 grow shrink basis-[9rem] min-w-0 max-w-[22rem]">
       <button
         type="button"
         onClick={() => setDraft(name)}
         title="Rename the trip"
-        className="p-0 border-0 bg-transparent font-serif text-[1.5rem] leading-tight text-ink text-left cursor-text hover:text-accent-ink"
+        className="w-full h-[1.9rem] p-0 border-0 bg-transparent font-serif text-[1.15rem] leading-none text-ink text-left truncate cursor-text hover:text-accent-ink"
       >
         {name}
       </button>
@@ -310,15 +313,15 @@ export default function TripOverview({
       className="flex flex-col flex-1 min-h-0 gap-4 overflow-auto"
       aria-label={`${trip.name} overview`}
     >
-      {/* Bar, then the trip's name, then one mono line about it — the exact
-          shape the piece editor's head has, so the two screens of this tool
-          are the same object at two scales. The name is BELOW the bar, not
-          beside it: two lines do not fit a band one pill high, and beside the
-          pill they pushed it down the page (the drift `PageBar` exists to end)
-          while clipping the trip's own dates on a phone. */}
+      {/* The trip's NAME sits in the bar, right after the way back — the same
+          shape the Studio's project name has, so a document of either tool is
+          found in the same place. What does not fit that one-pill line is the
+          route and the dates, which keep a line of their own below: they are
+          what was clipping on a 390px screen, not the name. */}
       <div className="flex flex-col gap-1 min-w-0">
-        <PageBar back={{ label: 'Trips', onClick: onShowTrips }} trailing={headerExtra} />
-        <TripTitle name={trip.name} onRename={rename} />
+        <PageBar back={{ label: 'Trips', onClick: onShowTrips }} trailing={headerExtra}>
+          <TripTitle name={trip.name} onRename={rename} />
+        </PageBar>
         {/* The subtitle is the way back into the two facts that were only
             askable at creation. Same sheet, so there is one place where a
             trip's dates and route are said. */}

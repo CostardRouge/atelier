@@ -1275,15 +1275,29 @@ export default function StudioEditor({
     </button>
   );
 
-  const saveBadge: Record<SaveState, { label: string; cls: string }> = {
-    saved: { label: 'Saved', cls: 'text-[#3f6b3f] border-[#c7d6c0]' },
-    saving: { label: 'Saving…', cls: 'text-muted border-line' },
-    unsaved: { label: 'Edited', cls: 'text-muted border-line' },
+  /**
+   * The local save state, drawn the way `SyncPill` draws the remote one: a
+   * coloured dot and one word, collapsing to the dot alone on a phone unless
+   * the state is waiting on the author. A row of fixed pills has no room for
+   * a sentence nobody controls the length of, and "Saved" is a reassurance
+   * rather than a thing to read — while "Storage unavailable" is a decision,
+   * and a decision nobody is asked to make does not get made.
+   *
+   * The full text is announced either way, from the live region below.
+   */
+  const saveBadge: Record<SaveState, { label: string; cls: string; dot: string; act: boolean }> = {
+    saved: { label: 'Saved', cls: 'text-[#3f6b3f] border-[#c7d6c0]', dot: 'bg-[#5b8c5a]', act: false },
+    saving: { label: 'Saving…', cls: 'text-muted border-line', dot: 'bg-faint', act: false },
+    unsaved: { label: 'Edited', cls: 'text-muted border-line', dot: 'bg-line-strong', act: false },
     'storage-error': {
       label: 'Storage unavailable — in-memory only',
       cls: 'text-[#9a3a23] border-[#e3b8a9]',
+      dot: 'bg-[#c0563a]',
+      act: true,
     },
   };
+  const save = saveBadge[saveState];
+  const showSaveLabel = !compact || save.act;
 
   /** Something is on the stage: a loaded clip, or a decoded still. */
   const hasFrame = !!activeUrl || !!photo;
@@ -1314,10 +1328,21 @@ export default function StudioEditor({
           <>
             {headerExtra}
             <span
-              className={`${barPill} font-mono text-[0.64rem] tracking-[0.1em] uppercase ${saveBadge[saveState].cls}`}
-              role="status"
+              className={`${barPill} bg-paper font-mono text-[0.64rem] tracking-[0.1em] uppercase ${
+                showSaveLabel ? 'gap-1.5' : 'justify-center w-[1.9rem] px-0'
+              } ${save.cls}`}
+              aria-label={save.label}
             >
-              {saveBadge[saveState].label}
+              <span
+                className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${save.dot}`}
+                aria-hidden="true"
+              />
+              {showSaveLabel && save.label}
+            </span>
+            {/* The pill is a summary; a live region carries the whole state so
+                a screen reader hears it change whatever the width. */}
+            <span className="sr-only" role="status" aria-live="polite">
+              {save.label}
             </span>
             <button
               type="button"
