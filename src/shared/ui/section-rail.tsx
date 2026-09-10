@@ -34,18 +34,16 @@ export interface Section {
 }
 
 /**
- * What the cells MEAN, which decides two things the shell draws.
+ * What the cells MEAN, which decides whether one of them is marked current.
  *
  * - `sections` — places in the document, one of them current. An editor's
- *   inspector tabs. The library is not one of these: it is not a place in the
- *   document, so it stays a button in the app bar.
- * - `actions` — things to START. A gallery's "new" and "import". Here the
- *   library IS one of them (picking media is how you start), so the shell
- *   prepends its own cell for it and drops the app-bar button rather than
- *   offering the same thing twice on one screen.
+ *   inspector tabs, so the open one is pressed.
+ * - `actions` — things to START. A gallery's "new" and "import". Nothing is
+ *   pressed: a mark on a verb would claim a state the screen is not in.
  *
- * A gallery has few verbs, so the added cell costs nothing; an inspector has
- * five sections, which is exactly why the same cell is refused there.
+ * It no longer decides where the library is offered. The shell prepends its
+ * own library cell to EVERY compact bar and draws a bar even for a tool that
+ * publishes no sections — see `SectionRail.tsx`.
  */
 export type SectionBarRole = 'sections' | 'actions';
 

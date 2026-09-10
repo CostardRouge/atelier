@@ -25,6 +25,7 @@ import DayPanel from './DayPanel';
 import StagesPanel from './StagesPanel';
 import TripDetailsModal, { type TripDetails } from './TripDetailsModal';
 import PageBar from '../../shared/ui/PageBar';
+import { useIsCompact } from '../../shared/ui/use-layout-mode';
 
 interface TripOverviewProps {
   trip: TripDoc;
@@ -108,11 +109,30 @@ function TripTitle({ name, onRename }: { name: string; onRename: (name: string) 
   );
 }
 
-function Stat({ value, label }: { value: string; label: string }) {
+/**
+ * One count of the trip, and the word for it.
+ *
+ * On a phone it is the same figure at a smaller type size and with a shorter
+ * word — five of them laid out to breathe wrapped into three rows of a 390px
+ * screen and cost most of the fold before the calendar, which is the thing the
+ * screen is actually for. The compact version is a fixed three-across grid, so
+ * the block is two rows whatever the labels say.
+ */
+function Stat({ value, label, compact }: { value: string; label: string; compact: boolean }) {
   return (
-    <div className="flex flex-col">
-      <span className="font-mono text-[1.35rem] tabular-nums leading-none">{value}</span>
-      <span className="font-mono text-[0.6rem] tracking-[0.12em] uppercase text-muted mt-1">
+    <div className="flex flex-col min-w-0">
+      <span
+        className={`font-mono tabular-nums leading-none ${
+          compact ? 'text-[1.05rem]' : 'text-[1.35rem]'
+        }`}
+      >
+        {value}
+      </span>
+      <span
+        className={`font-mono tracking-[0.1em] uppercase text-muted truncate ${
+          compact ? 'text-[0.55rem] mt-0.5' : 'text-[0.6rem] mt-1'
+        }`}
+      >
         {label}
       </span>
     </div>
@@ -136,6 +156,7 @@ export default function TripOverview({
   timelineSources,
   onCompleteFrom,
 }: TripOverviewProps) {
+  const compact = useIsCompact();
   const coverage = useMemo(() => tripCoverage(trip), [trip]);
   // The day lives in the route, so coming back from a piece lands on the day
   // you were working on rather than on the first day of a 300-day trip.
@@ -286,6 +307,30 @@ export default function TripOverview({
 
   const untold = coverage.totalDays - coverage.toldDays;
 
+  // Each count twice: the sentence it deserves where there is room, and the one
+  // word that still says it in a third of a phone's width. `short` is also the
+  // key, because it is the one thing that never repeats.
+  const stats = useMemo(() => {
+    const rows = [
+      { value: coverage.totalDays, label: 'days on the road', short: 'days' },
+      {
+        value: coverage.toldDays,
+        label: `days told · ${untold} left`,
+        short: `told · ${untold} left`,
+      },
+      { value: coverage.posts, label: 'pieces', short: 'pieces' },
+      { value: coverage.publishedPosts, label: 'published', short: 'published' },
+    ];
+    if (coverage.longestGap) {
+      rows.push({
+        value: coverage.longestGap.length,
+        label: 'longest silence',
+        short: 'silence',
+      });
+    }
+    return rows;
+  }, [coverage, untold]);
+
   // The dates-and-route sheet, the creation modal reopened on this trip.
   const [editingDetails, setEditingDetails] = useState(false);
   const saveDetails = useCallback(
@@ -336,20 +381,21 @@ export default function TripOverview({
         </button>
       </div>
 
-      <div className="flex flex-wrap items-start gap-x-10 gap-y-4 bg-surface border border-line rounded-paper-lg p-5">
-        <Stat value={String(coverage.totalDays)} label="days on the road" />
-        <Stat
-          value={`${coverage.toldDays}`}
-          label={`days told · ${untold} left`}
-        />
-        <Stat value={String(coverage.posts)} label="pieces" />
-        <Stat value={String(coverage.publishedPosts)} label="published" />
-        {coverage.longestGap && (
+      <div
+        className={`bg-surface border border-line rounded-paper-lg ${
+          compact
+            ? 'grid grid-cols-3 gap-x-3 gap-y-3 p-3'
+            : 'flex flex-wrap items-start gap-x-10 gap-y-4 p-5'
+        }`}
+      >
+        {stats.map((stat) => (
           <Stat
-            value={String(coverage.longestGap.length)}
-            label="longest silence"
+            key={stat.short}
+            value={String(stat.value)}
+            label={compact ? stat.short : stat.label}
+            compact={compact}
           />
-        )}
+        ))}
       </div>
 
       <div className="bg-surface border border-line rounded-paper-lg p-5">

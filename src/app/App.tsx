@@ -132,13 +132,16 @@ export default function App() {
     setLibraryOpen(false);
     setLibraryHeight('half');
   }, [path, mode]);
-  // What the active tool put in the thumb zone, if anything. A tool with no
-  // sections of its own (the reading tools) publishes none and gets no bar.
+  // What the active tool put in the thumb zone, if anything — and, before it,
+  // the library, which the shell adds to every one of these bars.
+  //
+  // **A compact tool screen always has the bar**, even when the tool publishes
+  // no sections: it is the phone's one bottom menu, and the way to the pictures
+  // is in it. It used to be a burger in the app bar on every screen but a
+  // gallery, which is what the maintainer reported from the trip overview —
+  // one tool, two different ways to the same library depending on the screen.
   const sectionBar = useSectionBar();
-  const rail = compact && tool ? sectionBar : null;
-  // A bar of STARTING POINTS carries the library itself; a bar of sections
-  // does not, and leaves it in the app bar. Either way it is offered once.
-  const railOpensLibrary = rail?.role === 'actions';
+  const showRail = compact && !!tool;
 
   // Every tool runs in a fixed-height, FULL-WIDTH frame — editing wants every
   // pixel (a landscape clip beside two panels eats width fast), so tools run
@@ -202,31 +205,6 @@ export default function App() {
               {tool.subtitle}
             </span>
           )}
-          {/* A phone has no column for the library, so this is the way to it —
-              unless the bar below is a set of starting points, which the
-              library belongs among; then it lives there instead. */}
-          {tool && !libraryDocked && !railOpensLibrary && (
-            <button
-              type="button"
-              onClick={() => {
-                setLibraryHeight('half');
-                setLibraryOpen(true);
-              }}
-              aria-label="Open the asset library"
-              aria-expanded={libraryOpen}
-              className="w-9 h-9 grid place-items-center rounded-lg border border-line bg-surface text-ink-soft hover:text-accent hover:border-line-strong transition-colors"
-            >
-              <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
-                <path
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  d="M2.5 4h11M2.5 8h11M2.5 12h11"
-                />
-              </svg>
-            </button>
-          )}
           <a
             className="inline-flex items-center text-muted transition-[color,transform] duration-200 ease-paper hover:text-accent hover:-translate-y-px"
             href={REPO_URL}
@@ -261,11 +239,10 @@ export default function App() {
                 // The sides keep theirs: a card touching the screen edge is a
                 // different fault, and nothing is clipped horizontally.
                 //
-                // With no bar, the bottom inset is still owed to the device —
-                // but only what the device asks for, never a decorative extra.
-                `flex-1 min-h-0 flex flex-col px-2 ${
-                  rail ? '' : 'pb-[env(safe-area-inset-bottom)]'
-                }`
+                // The bar below pays the device's bottom inset, and it is
+                // always there on a compact tool screen — so nothing is owed
+                // here.
+                'flex-1 min-h-0 flex flex-col px-2'
               : 'flex-1 min-h-0 flex mt-3 flex-row gap-4'
             : undefined
         }
@@ -316,18 +293,14 @@ export default function App() {
         </ErrorBoundary>
       )}
 
-      {/* The tool's own cells, in the thumb zone. */}
-      {rail && (
+      {/* The library, then the tool's own cells, in the thumb zone. */}
+      {showRail && (
         <SectionRail
-          bar={rail}
-          onLibrary={
-            railOpensLibrary
-              ? () => {
-                  setLibraryHeight('half');
-                  setLibraryOpen(true);
-                }
-              : undefined
-          }
+          bar={sectionBar}
+          onLibrary={() => {
+            setLibraryHeight('half');
+            setLibraryOpen(true);
+          }}
         />
       )}
 
