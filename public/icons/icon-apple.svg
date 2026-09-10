@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Atelier">
+  <!-- Apple touch icon: FULL-BLEED paper square, no rounded corners of its own
+       — iOS applies its own squircle mask, and a transparent corner is
+       composited onto black, which is what turns a tile icon into a dark
+       vignette on the home screen. The mark is inset further than in icon.svg
+       so that mask never clips a corner of the frame.
+
+       Same 32-unit drawing, scaled 13.5 and offset: the mark spans 121…391. -->
+  <rect width="512" height="512" fill="#f4f0e7"/>
+  <g transform="translate(40 40) scale(13.5)">
+    <path
+      d="M6 11V6h5M26 11V6h-5M6 21v5h5M26 21v5h-5"
+      fill="none"
+      stroke="#1b1813"
+      stroke-width="2.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <circle cx="16" cy="16" r="3" fill="#d9442a"/>
+  </g>
+</svg>

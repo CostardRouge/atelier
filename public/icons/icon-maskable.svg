@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Atelier">
+  <!-- Maskable variant: the ink bleeds to the edges so a platform mask (circle,
+       squircle, rounded rect) never clips the drawing, and the mark inverts —
+       paper frame on ink, the vermilion dot unchanged, because the accent is
+       the one thing that must not move. "Studio Papier" turned over.
+
+       Art stays inside the safe zone: it spans 128…384, whose corners sit 181px
+       from the centre against the 205px radius a mask is allowed to eat. -->
+  <rect width="512" height="512" fill="#1b1813"/>
+  <g transform="translate(51.2 51.2) scale(12.8)">
+    <path
+      d="M6 11V6h5M26 11V6h-5M6 21v5h5M26 21v5h-5"
+      fill="none"
+      stroke="#f4f0e7"
+      stroke-width="2.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <circle cx="16" cy="16" r="3" fill="#d9442a"/>
+  </g>
+</svg>
