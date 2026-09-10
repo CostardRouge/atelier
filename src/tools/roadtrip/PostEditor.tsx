@@ -556,15 +556,14 @@ export default function PostEditor({
     <section className="@container flex-1 min-h-0 flex flex-col" aria-label="Hook">
     <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-auto @min-[860px]:grid @min-[860px]:grid-cols-[minmax(0,1fr)_22rem] @min-[860px]:grid-rows-[auto_minmax(0,1fr)] @min-[860px]:gap-x-5 @min-[860px]:gap-y-3 @min-[860px]:overflow-hidden">
       <div className="flex flex-col gap-1 min-w-0 @min-[860px]:col-start-2 @min-[860px]:row-start-1">
-        {/* Two rows, not one wrapping row: the two buttons are NAVIGATION and
-            stay together and short, while the sync status is a sentence whose
-            length nobody controls (a host name, a relative time, up to three
-            actions). Sharing a row made the three fixed-height pills wrap one
-            per line in a ragged stack, each with a different height and
-            border; giving the status its own full-width row is what keeps it
-            legible at every width. Exporting has its own button on the Export
-            tab — this block is navigation and status only, never a second
-            place to trigger the same action. */}
+        {/* ONE row again, navigation and status together — the status pill is
+            no longer a sentence of uncontrolled length but a 1.9rem lozenge
+            like the buttons beside it (a dot, one word, the sentence in a
+            popover), so the ragged stack that forced it onto a line of its own
+            cannot come back. A whole line for "saved · just now" was a tenth
+            of a phone screen. Exporting has its own button on the Export tab —
+            this block is navigation and status only, never a second place to
+            trigger the same action. */}
         <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
@@ -587,6 +586,7 @@ export default function PostEditor({
               ⚙
             </span>
           </button>
+          {headerExtra}
           <span className="flex-1" />
           {/* The piece's ONE primary action, back in the header where the
               maintainer looked for it. It is not the duplicate that was
@@ -607,7 +607,6 @@ export default function PostEditor({
             {exports.exporting ?? '↓ Export'}
           </button>
         </div>
-        {headerExtra && <div className="flex min-w-0">{headerExtra}</div>}
         {/* Editable in place, like the Studio's project name: a piece is
             found again by what it is called, and having to go back to the
             day panel to rename it is the kind of friction that stops you
