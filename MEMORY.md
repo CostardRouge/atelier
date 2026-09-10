@@ -131,6 +131,8 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - A remote picture lost to a reload is **re-fetched from the ref's own `assetId`**, never cached: a byte cache was offered and declined, and the document already says where its bytes live. Only a connected instance, only when a piece is opened — `architecture.md`, `local-first.md`.
 - A Winnow **timeline chapter** and a Road Trip **stage** are the same object reached from two ends, so an import SEEDS stages and never posts, re-running it is a diff the author accepts leg by leg (never a sync), and Atelier writes back in Winnow's nouns only. The arithmetic is built and pure (`shared/roadtrip/timeline-import.ts`): a date that is not a calendar day is refused, never sliced; a title that is only the route stays an empty name; the diff matches id → span → first place so it survives re-clustering. The screens over it (`TimelineImportPanel`) tick adds and changes by default and never a drop; a timeline link names a HOST the shell resolves, never a URL it fetches — `roadtrip.md`, `docs/winnow-timeline.md`.
 
+- A session that changes code reports this project's state to `PROJETS.md`, at the root of the private `second-brain` repo: the register is that file, never Claude's memory and never `git log` — CLAUDE.md rule 3.
+
 ## Open items (dated; remove when done)
 
 - 2026-08-20 — `scripts/gen-luts.mjs` tells the reader to add an entry to `src/lut/builtin-luts.ts` after regenerating. That path does not exist (it is `src/shared/lut/builtin-luts.ts` since phase 0) and the manual list it describes is gone — `builtin-luts.ts` now just reads the `virtual:luts` manifest. The comment is stale in both halves.
