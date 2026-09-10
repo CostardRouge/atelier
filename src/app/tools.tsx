@@ -50,7 +50,7 @@ export const TOOLS: Tool[] = [
   {
     id: 'roadtrip',
     path: '/roadtrip',
-    label: 'Road Trip',
+    label: 'Trips',
     subtitle: 'Trip · days · posts',
     blurb:
       'Give a trip its dates and every photo knows which day it belongs to — a grid of the whole journey shows what you have told and what you never have.',

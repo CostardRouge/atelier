@@ -2,7 +2,17 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      `viewport-fit=cover` is what makes `env(safe-area-inset-*)` mean anything:
+      without it every inset is 0, the shell's own safe-area padding is dead
+      code, and an installed launch is letterboxed inside the safe area by the
+      system instead of painting its own paper up to the edges.
+
+      No `maximum-scale`, no `user-scalable=no`: pinch-zoom stays. A form that
+      must not zoom the page under it is answered by 16px controls, which is
+      the rule the modals already follow.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta
       name="description"
       content="A quiet, local-first studio for your captures — view flight telemetry in sync with the frame, grade footage with LUTs, and more. Everything stays on your machine."
@@ -25,9 +35,28 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <!-- The paper the shell paints, so the browser chrome matches it. There is
-         one theme (`color-scheme: light` in src/index.css), so one value. -->
+    <!-- The paper the shell paints, so the system chrome matches it. There is
+         one theme (`color-scheme: light` in src/index.css), so one value. It is
+         declared here AND as the manifest's `theme_color`: a tab reads this
+         one, an installed launch reads that one. -->
     <meta name="theme-color" content="#f4f0e7" />
+    <!--
+      Launched from the home screen, Atelier runs as its own app — the manifest
+      says `display: "standalone"` and these two are the iOS half of it, which
+      reads no manifest for this. Without them the status bar stays system
+      white above the paper, which is the whole reason they are here.
+      `default` is the light style: dark glyphs over the theme colour, the only
+      one that suits ink on cream (`black-translucent` would put white glyphs
+      on it and slide the page underneath).
+
+      The cost, and it is real: iOS gives a home-screen app its own storage
+      container, so trips and projects saved in Safari are not in it. Carry one
+      over with a `.roadtrip.json` / `.atelier.json` export, or keep it on a
+      Winnow. `docs/memory/frontend.md` carries the decision.
+    -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <!-- The name under the icon on a home screen; the title is a sentence. -->
     <meta name="apple-mobile-web-app-title" content="Atelier" />
     <meta name="application-name" content="Atelier" />

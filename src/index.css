@@ -112,12 +112,37 @@
   body {
     margin: 0;
     min-height: 100dvh;
+    /* The two edges a notch can eat in landscape. The shell pays the top and
+       bottom itself, where it knows what sits against them; left and right are
+       nobody's in particular, so they are paid once here — 0 everywhere but a
+       phone on its side, and 0 as well without `viewport-fit=cover`. */
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
     font-family: var(--font-sans);
     color: var(--color-ink);
     background-color: var(--color-paper);
     background-image:
       radial-gradient(120% 90% at 100% -10%, var(--color-paper-2) 0%, transparent 55%),
       radial-gradient(90% 70% at -10% 0%, #f7f3ea 0%, transparent 50%);
+  }
+
+  /* A tool screen is an app: nothing outside its own lists may scroll, and the
+     masthead and the section bar are therefore fixed by construction rather
+     than by `position`. The shell sets `data-shell` (see `App.tsx`, which also
+     carries why the `h-dvh` frame is not enough on iOS); the reading pages get
+     `flow` and keep the ordinary page scroll.
+
+     `overflow: hidden` on the ROOT element is what makes the viewport itself
+     unscrollable — on `body` alone the propagation rules hand it back — and
+     the explicit `100dvh` is what stops iOS's larger initial containing block
+     from sticking out below it. `overscroll-behavior: none` is the rubber
+     band and the pull-to-refresh: a page that cannot scroll must not bounce
+     either, or it still reads as a web page. */
+  html[data-shell='fixed'],
+  html[data-shell='fixed'] body {
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
   }
 
   /* Faint paper grain — fixed, never repaints on scroll */

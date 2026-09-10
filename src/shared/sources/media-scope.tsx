@@ -40,7 +40,7 @@ export interface MediaScope {
   to: string;
   /** What to call it, as the publisher would: "12 Feb 2026". */
   label: string;
-  /** Who is asking, for the sidebar to say — "Road Trip". */
+  /** Who is asking, for the sidebar to say — "Trips". */
   publisher: string;
   /**
    * What a click on one of the source's tiles MEANS while this is open.

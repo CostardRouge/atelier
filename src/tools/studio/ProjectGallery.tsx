@@ -517,7 +517,7 @@ export default function ProjectGallery({
 
   return (
     <section
-      className="flex flex-col flex-1 min-h-0 gap-5 overflow-auto"
+      className="flex flex-col flex-1 min-h-0 gap-4 overflow-auto"
       aria-label="Studio projects"
     >
       <div className="flex items-center gap-4 flex-wrap">

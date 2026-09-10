@@ -882,44 +882,41 @@ export default function TripGallery({
 
   return (
     <section
-      className="flex flex-col flex-1 min-h-0 gap-5 overflow-auto"
-      aria-label="Road trips"
+      className="flex flex-col flex-1 min-h-0 gap-4 overflow-auto"
+      aria-label="Trips"
     >
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="min-w-0">
-          <h1 className="m-0 font-serif text-[1.6rem] leading-tight">Trips</h1>
-          <p className="m-0 text-[0.84rem] text-muted">
-            A trip is its dates — everything a badge counts from, and the grid
-            of days you still have to tell.
-          </p>
+      {/* The masthead already says "Atelier / Trips" at every width, so the
+          page does not draw the name a second time — on a phone that pair of
+          lines was the top fifth of the screen, above the trips it names. The
+          heading stays in the document for a screen reader and an outline;
+          only its ink is given back. */}
+      <h1 className="sr-only">Trips</h1>
+      {/* On a phone these two verbs live in the shell's bottom bar instead,
+          where a thumb reaches them — offering them in both places would be
+          the same verb twice on one screen — so the row itself goes with them
+          rather than leaving an empty one above the cards. */}
+      {!compact && (
+        <div className="flex items-center justify-end gap-4 flex-wrap">
+          <button
+            type="button"
+            onClick={() => {
+              if (documentSources.length > 1) setImporting(true);
+              else void handleImport(DEFAULT_SOURCE_ID);
+            }}
+            className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-line-strong rounded-full bg-paper text-ink-soft cursor-pointer text-[0.84rem] transition-colors hover:border-accent hover:text-accent-ink"
+            title={`Create a trip from an exported file (${TRIP_FILE_EXTENSION})`}
+          >
+            ↑ Import a trip file
+          </button>
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent active:scale-[0.98]"
+          >
+            + New trip
+          </button>
         </div>
-        <span className="flex-1" />
-        {/* On a phone these two live in the shell's bottom bar instead, where
-            a thumb reaches them — offering them in both places would be the
-            same verb twice on one screen. */}
-        {!compact && (
-        <>
-        <button
-          type="button"
-          onClick={() => {
-            if (documentSources.length > 1) setImporting(true);
-            else void handleImport(DEFAULT_SOURCE_ID);
-          }}
-          className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-line-strong rounded-full bg-paper text-ink-soft cursor-pointer text-[0.84rem] transition-colors hover:border-accent hover:text-accent-ink"
-          title={`Create a trip from an exported file (${TRIP_FILE_EXTENSION})`}
-        >
-          ↑ Import a trip file
-        </button>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent active:scale-[0.98]"
-        >
-          + New trip
-        </button>
-        </>
-        )}
-      </div>
+      )}
 
       {notice && (
         <p className="m-0 text-[0.8rem] text-[#9a3a23]" role="alert">
