@@ -1322,8 +1322,13 @@ export default function StudioEditor({
     <section className="flex flex-col flex-1 min-h-0 gap-4" aria-label="Studio">
       {/* Project bar: back to gallery, editable name, then — pinned right —
           the save state and the format/settings pill. Every pill shares one
-          height so the row reads as a single band, not a drift of chips. */}
-      <div className="flex items-center gap-3 min-w-0">
+          height so the row reads as a single band, not a drift of chips.
+          It WRAPS, and the status group goes to its own line rather than
+          squeezing: without that, a 390px screen left the name field about
+          six characters wide and "Untitled" read as "Untitl". The documented
+          shape for a row mixing fixed pills with something elastic — the pills
+          keep their width, the whole group drops a line. */}
+      <div className="flex items-center gap-3 min-w-0 flex-wrap">
         <button
           type="button"
           onClick={onShowProjects}
@@ -1335,27 +1340,31 @@ export default function StudioEditor({
           value={projectName}
           onChange={(e) => setProjectName(e.target.value)}
           aria-label="Project name"
-          className="flex-1 min-w-0 max-w-[24rem] font-serif text-[1.15rem] bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0.5"
+          className="grow shrink basis-[9rem] min-w-0 max-w-[24rem] font-serif text-[1.15rem] bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0.5"
         />
-        <span className="flex-1" />
-        {headerExtra}
-        <span
-          className={`${barPill} font-mono text-[0.64rem] tracking-[0.1em] uppercase ${saveBadge[saveState].cls}`}
-          role="status"
-        >
-          {saveBadge[saveState].label}
-        </span>
-        <button
-          type="button"
-          onClick={() => setShowSettings(true)}
-          className={`${barPill} border-line-strong bg-paper font-mono text-[0.68rem] tracking-[0.06em] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink`}
-          title="Project settings — name, format, import/export"
-        >
-          {ASPECT_PRESETS.find((a) => a.id === aspectId)?.id ?? aspectId}
-          <span className="text-[1.05rem] leading-none" aria-hidden="true">
-            ⚙
+        {/* `ml-auto` rather than a `flex-1` spacer: a growing spacer in a
+            wrapping row claims a whole line of its own the moment the row
+            breaks. */}
+        <span className="flex items-center gap-3 ml-auto">
+          {headerExtra}
+          <span
+            className={`${barPill} font-mono text-[0.64rem] tracking-[0.1em] uppercase ${saveBadge[saveState].cls}`}
+            role="status"
+          >
+            {saveBadge[saveState].label}
           </span>
-        </button>
+          <button
+            type="button"
+            onClick={() => setShowSettings(true)}
+            className={`${barPill} border-line-strong bg-paper font-mono text-[0.68rem] tracking-[0.06em] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink`}
+            title="Project settings — name, format, import/export"
+          >
+            {ASPECT_PRESETS.find((a) => a.id === aspectId)?.id ?? aspectId}
+            <span className="text-[1.05rem] leading-none" aria-hidden="true">
+              ⚙
+            </span>
+          </button>
+        </span>
       </div>
 
       {showSettings && (
