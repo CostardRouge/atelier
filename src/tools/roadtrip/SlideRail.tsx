@@ -21,6 +21,17 @@ interface SlideRailProps {
   onIncludeCta: (on: boolean) => void;
   /** Where the closing card's words are written — the trip's own sheet. */
   onEditClosingCard: () => void;
+  /**
+   * Stand the rail on its side whatever the container says.
+   *
+   * The rail turns itself at `@min-[860px]`, which is the right rule while the
+   * only question is whether there is room for two columns. It is the wrong one
+   * on a phone with the library docked: there the stage is short and portrait,
+   * so the width beside the frame is empty and the HEIGHT under it is the thing
+   * being fought over — a row costs the picture 91px it cannot spare and a
+   * column costs it 50px of a margin nothing else wants.
+   */
+  column?: boolean;
 }
 
 /**
@@ -54,9 +65,19 @@ export default function SlideRail({
   onMove,
   onIncludeCta,
   onEditClosingCard,
+  column = false,
 }: SlideRailProps) {
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
+
+  // The two shapes, said once. `column` wins outright rather than layering on
+  // top of the container query: it is only ever set on a compact shell, where
+  // the 860px query cannot match anyway, so there is nothing to fight with.
+  const box = column
+    ? 'flex-none flex flex-col gap-2 w-[3.1rem] overflow-y-auto overflow-x-visible pr-1'
+    : 'flex-none flex flex-row gap-2 overflow-x-auto pb-1 @min-[860px]:flex-col @min-[860px]:w-[4.6rem] @min-[860px]:overflow-x-visible @min-[860px]:overflow-y-auto @min-[860px]:pb-0 @min-[860px]:pr-1';
+  // A cell is sized on ONE axis and takes the other from its aspect ratio.
+  const size = column ? 'w-9 h-auto' : 'h-14 w-auto @min-[860px]:h-auto @min-[860px]:w-11';
 
   /**
    * The deck as the rail lays it out: the pictures, then the way to add
@@ -129,7 +150,7 @@ export default function SlideRail({
                   onMove(ci, back ? ci - 1 : ci + 1);
                 }}
                 style={{ aspectRatio: String(aspect) }}
-                className={`relative block h-14 w-auto overflow-hidden rounded-[5px] border bg-frame transition-colors @min-[860px]:h-auto @min-[860px]:w-11 ${
+                className={`relative block ${size} overflow-hidden rounded-[5px] border bg-frame transition-colors ${
                   ci >= 0 ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
                 } ${dragFrom === ci && ci >= 0 ? 'opacity-50 ' : ''}${
                   dropping
@@ -188,7 +209,7 @@ export default function SlideRail({
 
   return (
     <div
-      className="flex-none flex flex-row gap-2 overflow-x-auto pb-1 @min-[860px]:flex-col @min-[860px]:w-[4.6rem] @min-[860px]:overflow-x-visible @min-[860px]:overflow-y-auto @min-[860px]:pb-0 @min-[860px]:pr-1"
+      className={box}
       role="listbox"
       aria-label="The slides of this piece"
     >
@@ -202,7 +223,7 @@ export default function SlideRail({
           onClick={onAdd}
           title="Add the active picture to this deck"
           style={{ aspectRatio: String(aspect) }}
-          className="h-14 w-auto grid place-items-center rounded-[5px] border border-dashed border-line-strong bg-paper text-[0.95rem] leading-none text-muted cursor-pointer hover:border-accent hover:text-accent-ink @min-[860px]:h-auto @min-[860px]:w-11"
+          className={`${size} grid place-items-center rounded-[5px] border border-dashed border-line-strong bg-paper text-[0.95rem] leading-none text-muted cursor-pointer hover:border-accent hover:text-accent-ink`}
         >
           +
         </button>
@@ -228,7 +249,7 @@ export default function SlideRail({
                 : 'Close this piece with the trip’s call to action'
             }
             style={{ aspectRatio: String(aspect) }}
-            className="h-14 w-auto grid place-items-center rounded-[5px] border border-dashed border-line-strong bg-paper text-[0.95rem] leading-none text-faint cursor-pointer hover:border-accent hover:text-accent-ink @min-[860px]:h-auto @min-[860px]:w-11"
+            className={`${size} grid place-items-center rounded-[5px] border border-dashed border-line-strong bg-paper text-[0.95rem] leading-none text-faint cursor-pointer hover:border-accent hover:text-accent-ink`}
           >
             +
           </button>
