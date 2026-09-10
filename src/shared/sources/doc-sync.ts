@@ -250,3 +250,48 @@ export function pillText(record: SyncRecord, sourceLabel: string, now: number): 
       return `deleted on ${sourceLabel}`;
   }
 }
+
+/**
+ * The ONE word the collapsed pill wears in a header row. The sentence above is
+ * the truth and stays one tap away; this is what fits beside a back button and
+ * a settings gear without costing the row a second line.
+ *
+ * Sentence case, not the mono uppercase of the other header pills' labels —
+ * the pill itself applies the casing, so the string stays readable as the
+ * accessible name of the button too.
+ */
+export function pillLabel(status: SyncStatus): string {
+  switch (status) {
+    case 'synced':
+      return 'Saved';
+    case 'dirty':
+      return 'Unsaved';
+    case 'saving':
+      return 'Saving…';
+    case 'offline':
+      return 'Offline';
+    case 'unauthenticated':
+      return 'Sign in';
+    case 'forbidden':
+      return 'Read-only';
+    case 'conflict':
+      return 'Conflict';
+    case 'gone':
+      return 'Deleted';
+  }
+}
+
+/**
+ * Whether the state is waiting on the author rather than on the clock. These
+ * are the four the pill must never shrink to a bare dot: a decision nobody is
+ * asked to make does not get made. `forbidden` is in for a different reason —
+ * nothing in the app can fix it, so it has to be legible where it happened.
+ */
+export function pillNeedsAction(status: SyncStatus): boolean {
+  return (
+    status === 'unauthenticated' ||
+    status === 'forbidden' ||
+    status === 'conflict' ||
+    status === 'gone'
+  );
+}
