@@ -54,6 +54,40 @@
   }
 }
 
+/* A bottom sheet arriving (`shared/ui/BottomSheet.tsx`). The panel slides its
+   own height up from the bottom edge; the scrim only fades, so the stage stays
+   readable through it the whole way. */
+@keyframes sheet-rise {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes sheet-scrim {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* A sheet that slides is a sheet that is simply THERE for anyone who asked not
+   to be moved — the panel still works, it just stops travelling. */
+@media (prefers-reduced-motion: reduce) {
+  @keyframes sheet-rise {
+    from {
+      transform: none;
+    }
+    to {
+      transform: none;
+    }
+  }
+}
+
 @keyframes pulse-dot {
   0%,
   100% {
