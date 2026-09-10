@@ -783,9 +783,15 @@ The three SVG sources live in `public/icons/` (rounded tile, full-bleed Apple
 square, inverted maskable); `node scripts/gen-icons.mjs` rasterises the seven
 PNGs beside them, and the output is committed — a static host cannot make them
 on the fly. Change the mark in the sources, re-run it, commit both halves.
-Tapping the icon opens Atelier in the browser rather than as a chromeless app,
-on purpose: your projects live in this browser's storage, and a standalone
-launch can be given a container of its own.
+Tapping that icon opens Atelier **as its own app** — no address bar, and the
+status bar takes the paper colour instead of staying system white
+(`display: "standalone"` in the manifest, `apple-mobile-web-app-capable` and
+the `default` status-bar style in `index.html`, since iOS reads no manifest for
+this). The trade-off is worth knowing before you install it: **iOS gives a
+home-screen app a storage container of its own**, so the trips and projects you
+saved in Safari are not in it. Carry one over with a `.roadtrip.json` or
+`.atelier.json` export, or keep it on a Winnow and sign in there. Android has
+no such split — the installed app and the browser share one origin.
 
 ### Local development
 
