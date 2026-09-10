@@ -122,6 +122,7 @@ import type { ProjectDoc } from '../../shared/projects/project-types';
 import { hashedMediaRefs } from '../../shared/projects/media-identity';
 import { putProject } from '../../shared/projects/project-store';
 import type { Reconciliation } from '../../shared/projects/reconcile';
+import PageBar, { barPill } from '../../shared/ui/PageBar';
 import PanelHost from '../../shared/ui/PanelHost';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
@@ -135,14 +136,6 @@ import { useIsCompact } from '../../shared/ui/use-layout-mode';
 const STUDIO_KINDS = ['video+telemetry', 'video', 'photo'] as const;
 
 type PanelTab = 'overlay' | 'style' | 'grade' | 'info' | 'export';
-
-/**
- * The project bar's chips. One fixed height for all of them — the save badge
- * used to be visibly smaller than its neighbours, which made the row look like
- * three unrelated widgets rather than one bar.
- */
-const barPill =
-  'flex-none inline-flex items-center gap-1.5 h-[1.95rem] px-3 rounded-full border transition-colors';
 
 const TABS: Array<{ id: PanelTab; label: string }> = [
   { id: 'overlay', label: 'Overlay' },
@@ -1315,44 +1308,46 @@ export default function StudioEditor({
           six characters wide and "Untitled" read as "Untitl". The documented
           shape for a row mixing fixed pills with something elastic — the pills
           keep their width, the whole group drops a line. */}
-      <div className="flex items-center gap-3 min-w-0 flex-wrap">
-        <button
-          type="button"
-          onClick={onShowProjects}
-          className={`${barPill} border-line-strong bg-paper text-[0.78rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink`}
-        >
-          ‹ Projects
-        </button>
+      <PageBar
+        back={{ label: 'Projects', onClick: onShowProjects }}
+        trailing={
+          <>
+            {headerExtra}
+            <span
+              className={`${barPill} font-mono text-[0.64rem] tracking-[0.1em] uppercase ${saveBadge[saveState].cls}`}
+              role="status"
+            >
+              {saveBadge[saveState].label}
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowSettings(true)}
+              className={`${barPill} gap-1.5 border-line-strong bg-paper font-mono text-[0.68rem] tracking-[0.06em] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink`}
+              title="Project settings — name, format, import/export"
+            >
+              {ASPECT_PRESETS.find((a) => a.id === aspectId)?.id ?? aspectId}
+              <span className="text-[1.05rem] leading-none" aria-hidden="true">
+                ⚙
+              </span>
+            </button>
+          </>
+        }
+      >
+        {/* The one thing in the bar that is NOT a pill, and it is allowed
+            because it is one line high: a project is found again by what it is
+            called, and the field is where the name is read as well as typed.
+            A title that needs two lines goes under the bar instead — see
+            `PageBar` and the trip overview. */}
         <input
           value={projectName}
           onChange={(e) => setProjectName(e.target.value)}
           aria-label="Project name"
-          className="grow shrink basis-[9rem] min-w-0 max-w-[24rem] font-serif text-[1.15rem] bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0.5"
+          /* Exactly the pills' own height, or the row centres a 32px field
+             against a 30px pill and pushes the back button 1px down — the
+             whole point of the bar is that it does not move. */
+          className="grow shrink basis-[9rem] min-w-0 max-w-[24rem] h-[1.9rem] font-serif text-[1.15rem] bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0"
         />
-        {/* `ml-auto` rather than a `flex-1` spacer: a growing spacer in a
-            wrapping row claims a whole line of its own the moment the row
-            breaks. */}
-        <span className="flex items-center gap-3 ml-auto">
-          {headerExtra}
-          <span
-            className={`${barPill} font-mono text-[0.64rem] tracking-[0.1em] uppercase ${saveBadge[saveState].cls}`}
-            role="status"
-          >
-            {saveBadge[saveState].label}
-          </span>
-          <button
-            type="button"
-            onClick={() => setShowSettings(true)}
-            className={`${barPill} border-line-strong bg-paper font-mono text-[0.68rem] tracking-[0.06em] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink`}
-            title="Project settings — name, format, import/export"
-          >
-            {ASPECT_PRESETS.find((a) => a.id === aspectId)?.id ?? aspectId}
-            <span className="text-[1.05rem] leading-none" aria-hidden="true">
-              ⚙
-            </span>
-          </button>
-        </span>
-      </div>
+      </PageBar>
 
       {showSettings && (
         <ProjectSettingsModal

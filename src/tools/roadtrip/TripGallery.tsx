@@ -882,7 +882,7 @@ export default function TripGallery({
 
   return (
     <section
-      className="flex flex-col flex-1 min-h-0 gap-5 overflow-auto"
+      className="flex flex-col flex-1 min-h-0 gap-4 overflow-auto"
       aria-label="Trips"
     >
       {/* The masthead already says "Atelier / Trips" at every width, so the

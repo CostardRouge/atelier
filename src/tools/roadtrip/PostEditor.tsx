@@ -46,6 +46,7 @@ import { usePostExports } from './use-post-exports';
 import useRailThumbs from './use-rail-thumbs';
 import { pickable, useSlideLibrary } from './use-slide-library';
 import { useTripGrade } from './use-trip-grade';
+import PageBar, { barPill } from '../../shared/ui/PageBar';
 import PanelHost from '../../shared/ui/PanelHost';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
@@ -564,14 +565,30 @@ export default function PostEditor({
             of a phone screen. Exporting has its own button on the Export tab —
             this block is navigation and status only, never a second place to
             trigger the same action. */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={onBack}
-            className="inline-flex items-center shrink-0 whitespace-nowrap h-[1.9rem] px-3 rounded-full border border-line-strong bg-paper text-[0.78rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
-          >
-            ← Overview
-          </button>
+        <PageBar
+          back={{ label: 'Overview', onClick: onBack }}
+          trailing={
+            <>
+              {headerExtra}
+              {/* The piece's ONE primary action, in the header where the
+                  maintainer looked for it. It is not the duplicate that was
+                  removed in `5d11245`: the Export tab's buttons are the
+                  per-format escapes FROM this one, which delivers the whole
+                  deck in the formats the slides say they are. Pressing it
+                  switches to that tab, so the report is read where it is
+                  written. */}
+              <button
+                type="button"
+                onClick={() => void exports.exportPiece()}
+                disabled={exports.exporting !== null}
+                title="Every slide of this piece, in the format it is"
+                className={`${barPill} px-[1.1rem] border-ink bg-ink text-paper cursor-pointer text-[0.78rem] font-semibold hover:bg-accent hover:border-accent disabled:opacity-60 disabled:cursor-default`}
+              >
+                {exports.exporting ?? '↓ Export'}
+              </button>
+            </>
+          }
+        >
           {/* What is true of the WHOLE trip lives behind this, exactly where
               the Studio keeps a project's own settings — so the inspector on
               the right is about the piece and nothing else. */}
@@ -579,34 +596,14 @@ export default function PostEditor({
             type="button"
             onClick={() => setTripSheet('words')}
             title="Trip settings — the words, the closing card, what a new piece starts from"
-            className="inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap h-[1.9rem] px-2.5 rounded-full border border-line-strong bg-paper font-mono text-[0.66rem] tracking-[0.06em] uppercase text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
+            className={`${barPill} gap-1.5 px-2.5 border-line-strong bg-paper font-mono text-[0.66rem] tracking-[0.06em] uppercase text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink`}
           >
             Trip
             <span className="text-[0.95rem] leading-none" aria-hidden="true">
               ⚙
             </span>
           </button>
-          {headerExtra}
-          <span className="flex-1" />
-          {/* The piece's ONE primary action, back in the header where the
-              maintainer looked for it. It is not the duplicate that was
-              removed in `5d11245`: the Export tab's buttons are the
-              per-format escapes FROM this one, which delivers the whole deck
-              in the formats the slides say they are. Pressing it switches to
-              that tab, so the report is read where it is written.
-              `shrink-0 whitespace-nowrap` for the reason the Overview pill
-              carries it — a fixed-height button with nowhere to put its text
-              spills a second line outside its own box. */}
-          <button
-            type="button"
-            onClick={() => void exports.exportPiece()}
-            disabled={exports.exporting !== null}
-            title="Every slide of this piece, in the format it is"
-            className="inline-flex items-center shrink-0 whitespace-nowrap h-[1.9rem] px-[1.1rem] border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.78rem] font-semibold hover:bg-accent hover:border-accent disabled:opacity-60 disabled:cursor-default"
-          >
-            {exports.exporting ?? '↓ Export'}
-          </button>
-        </div>
+        </PageBar>
         {/* Editable in place, like the Studio's project name: a piece is
             found again by what it is called, and having to go back to the
             day panel to rename it is the kind of friction that stops you

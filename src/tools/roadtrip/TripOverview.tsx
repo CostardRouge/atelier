@@ -24,6 +24,7 @@ import DayHeatmap, { type DayMenuItem, type DayStage } from './DayHeatmap';
 import DayPanel from './DayPanel';
 import StagesPanel from './StagesPanel';
 import TripDetailsModal, { type TripDetails } from './TripDetailsModal';
+import PageBar from '../../shared/ui/PageBar';
 
 interface TripOverviewProps {
   trip: TripDoc;
@@ -40,9 +41,6 @@ interface TripOverviewProps {
   timelineSources?: string[];
   onCompleteFrom?: (sourceId: string) => void;
 }
-
-const barPill =
-  'inline-flex items-center h-[1.9rem] px-3 rounded-full border whitespace-nowrap';
 
 /**
  * The trip's name, renamed in place.
@@ -309,38 +307,30 @@ export default function TripOverview({
 
   return (
     <section
-      className="flex flex-col flex-1 min-h-0 gap-5 overflow-auto"
+      className="flex flex-col flex-1 min-h-0 gap-4 overflow-auto"
       aria-label={`${trip.name} overview`}
     >
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* Bar, then the trip's name, then one mono line about it — the exact
+          shape the piece editor's head has, so the two screens of this tool
+          are the same object at two scales. The name is BELOW the bar, not
+          beside it: two lines do not fit a band one pill high, and beside the
+          pill they pushed it down the page (the drift `PageBar` exists to end)
+          while clipping the trip's own dates on a phone. */}
+      <div className="flex flex-col gap-1 min-w-0">
+        <PageBar back={{ label: 'Trips', onClick: onShowTrips }} trailing={headerExtra} />
+        <TripTitle name={trip.name} onRename={rename} />
+        {/* The subtitle is the way back into the two facts that were only
+            askable at creation. Same sheet, so there is one place where a
+            trip's dates and route are said. */}
         <button
           type="button"
-          onClick={onShowTrips}
-          className={`${barPill} border-line-strong bg-paper text-[0.78rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink`}
+          onClick={() => setEditingDetails(true)}
+          title="Change the trip's dates and route"
+          className="self-start p-0 border-0 bg-transparent font-mono text-[0.72rem] text-muted text-left cursor-pointer hover:text-accent-ink hover:underline underline-offset-[3px]"
         >
-          ← Trips
+          {trip.destination && <>{trip.destination} · </>}
+          {formatIsoDate(trip.startDate)} → {formatIsoDate(trip.endDate)}
         </button>
-        <div className="min-w-0">
-          <TripTitle name={trip.name} onRename={rename} />
-          {/* The subtitle is the way back into the two facts that were only
-              askable at creation. Same sheet, so there is one place where a
-              trip's dates and route are said. */}
-          <button
-            type="button"
-            onClick={() => setEditingDetails(true)}
-            title="Change the trip's dates and route"
-            className="p-0 border-0 bg-transparent font-mono text-[0.72rem] text-muted text-left cursor-pointer hover:text-accent-ink hover:underline underline-offset-[3px]"
-          >
-            {trip.destination && <>{trip.destination} · </>}
-            {formatIsoDate(trip.startDate)} → {formatIsoDate(trip.endDate)}
-          </button>
-        </div>
-        {headerExtra && (
-          <>
-            <span className="flex-1" />
-            {headerExtra}
-          </>
-        )}
       </div>
 
       <div className="flex flex-wrap items-start gap-x-10 gap-y-4 bg-surface border border-line rounded-paper-lg p-5">
