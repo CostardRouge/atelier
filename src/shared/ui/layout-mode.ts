@@ -25,8 +25,9 @@
 /**
  * - `compact` — a phone. One surface at a time: the stage owns the screen, the
  *   tool's sections sit in a bottom bar, and the panels are sheets over it.
- * - `medium` — a tablet, or a split-screen laptop. An icon rail, the stage,
- *   and panels that slide over it rather than taking a column of their own.
+ * - `medium` — a tablet, or a split-screen laptop. The library is still docked
+ *   at the left, but collapsed to its rail: the full 288px column would leave
+ *   a tool under the 800px its own layout needs to run side by side.
  * - `expanded` — the desktop layout, docked: library column, stage, inspector.
  */
 export type LayoutMode = 'compact' | 'medium' | 'expanded';

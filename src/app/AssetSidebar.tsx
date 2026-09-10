@@ -112,19 +112,13 @@ interface AssetSidebarProps {
   collapsed: boolean;
   onToggle: () => void;
   /**
-   * How the shell is showing it.
-   *
-   * - `docked` — the column beside the tool, with its own frame and its
-   *   collapse control.
-   * - `drawer` — the same card, slid over the tool on a middle-sized screen.
-   *   It keeps its frame and its header; "collapse" closes the drawer, which
-   *   is what collapsing means once it is out of the flow. It fills the
-   *   drawer rather than stating a width, since the drawer states one.
-   * - `sheet` — inside a {@link BottomSheet} on a phone. The sheet already
-   *   draws the frame, the title and the dismissal, so this drops all three
-   *   and never offers to collapse.
+   * How the shell is showing it. `docked` is the column beside the tool, with
+   * its own frame and its collapse rail — every width above a phone. `sheet`
+   * is the same panel inside a {@link BottomSheet}: the sheet already draws
+   * the frame, the title and the dismissal, so this drops all three and never
+   * offers to collapse, a sheet's collapsed state being closed.
    */
-  variant?: 'docked' | 'drawer' | 'sheet';
+  variant?: 'docked' | 'sheet';
 }
 
 /**
@@ -149,7 +143,6 @@ export default function AssetSidebar({
   variant = 'docked',
 }: AssetSidebarProps) {
   const asSheet = variant === 'sheet';
-  const asDrawer = variant === 'drawer';
   const lib = useAssetLibrary();
   const accepts = tool.accepts ?? [];
   const [dragging, setDragging] = useState(false);
@@ -360,12 +353,13 @@ export default function AssetSidebar({
   }
 
   // --- Collapsed rail -------------------------------------------------------
-  // Only the docked column has a rail: out of the flow there is nothing to
-  // reclaim by narrowing, so the shell closes the panel instead. Docked only
-  // happens at `expanded`, so this is only ever drawn above 1180px — which is
-  // why it carries no narrow-screen classes. It used to turn itself into a
-  // horizontal bar under 820px; that state is unreachable now, and dead
-  // responsive classes are worse than none: they read as a supported layout.
+  // Only the docked column has a rail: a sheet has nothing to reclaim by
+  // narrowing, so the shell closes it instead. Docked starts at 820px, and
+  // between there and 1180 the rail is the DEFAULT — see App.tsx — so this is
+  // the shape the library usually wears on a tablet. It carries no
+  // narrow-screen classes: it used to turn itself into a horizontal bar under
+  // 820px, a state now unreachable, and dead responsive classes are worse
+  // than none because they read as a supported layout.
   if (collapsed && variant === 'docked') {
     return (
       <aside className="flex-none w-12 flex flex-col items-center gap-3 py-3 border-r border-line">
@@ -436,9 +430,7 @@ export default function AssetSidebar({
   const Frame = asSheet ? 'div' : 'aside';
   const frameClass = asSheet
     ? 'flex-1 min-h-0 flex flex-col overflow-hidden'
-    : asDrawer
-      ? 'flex-1 min-h-0 w-full flex flex-col border border-line rounded-paper-lg bg-surface shadow-paper overflow-hidden'
-      : 'flex-none w-72 max-w-[78vw] flex flex-col min-h-0 border border-line rounded-paper-lg bg-surface shadow-paper overflow-hidden';
+    : 'flex-none w-72 max-w-[78vw] flex flex-col min-h-0 border border-line rounded-paper-lg bg-surface shadow-paper overflow-hidden';
 
   return (
     <Frame className={frameClass}>

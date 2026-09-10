@@ -8,12 +8,22 @@ import { HOME_PATH, toolForPath } from './tools';
 import ToolSwitcher from './ToolSwitcher';
 import { useHashRoute } from './use-hash-route';
 import BottomSheet from '../shared/ui/BottomSheet';
-import SideDrawer from '../shared/ui/SideDrawer';
 import SectionRail from '../shared/ui/SectionRail';
 import { useSectionBar } from '../shared/ui/section-rail';
 import { useLayoutMode } from '../shared/ui/use-layout-mode';
 
+/**
+ * Whether the library column is collapsed to its rail, remembered PER SIZE.
+ *
+ * Two keys rather than one, because they are two different preferences: what
+ * you want beside a 1440px editor and what you want beside a 900px one are not
+ * the same answer, and a single flag made changing one silently change the
+ * other. The desktop key keeps its original name so an existing choice
+ * survives; the tablet one is new and defaults to collapsed — see the note on
+ * `railByDefault` below.
+ */
 const COLLAPSE_KEY = 'atelier.library.collapsed';
+const COLLAPSE_KEY_MEDIUM = 'atelier.library.collapsed.medium';
 
 /**
  * App shell for the Atelier suite: a masthead whose nav + active tool both
@@ -49,28 +59,47 @@ export default function App() {
     </ErrorBoundary>
   );
 
-  // Every tool reads its assets from the shared library, shown as a left
-  // sidebar. It collapses to a thin rail (the choice is remembered); it
-  // starts expanded so the library is discoverable.
-  const [collapsed, setCollapsed] = useState<boolean>(
-    () => localStorage.getItem(COLLAPSE_KEY) === '1',
-  );
-  useEffect(() => {
-    localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0');
-  }, [collapsed]);
-
   // How much room the shell has, decided once and published by the provider
   // (`shared/ui/layout-mode.ts`). On a phone the library is not a column at
   // all: it rises as a sheet over the stage, summoned from the app bar.
+  // Everywhere else it stays where it has always been — docked at the left.
   const mode = useLayoutMode();
   const compact = mode === 'compact';
-  // Where the library goes, and it is arithmetic rather than taste. The column
-  // is 288px and a tool's own layout splits side-by-side at an 800px
-  // CONTAINER, so a docked library leaves a 900px tablet only 570px for the
-  // Studio — under its threshold, so the editor stacks its inspector beneath a
-  // 240px stage. Taking it out of the flow gives the tool the whole width.
-  // `expanded` starts at 1180 because that is the first width where both fit.
-  const libraryDocked = mode === 'expanded';
+  const libraryDocked = !compact;
+
+  // Every tool reads its assets from the shared library, shown as a left
+  // sidebar that collapses to a thin rail. The choice is remembered per size.
+  //
+  // **Below 1180px the rail is the DEFAULT**, and that is arithmetic rather
+  // than taste: the full column is 288px while a tool's own layout splits
+  // side-by-side at an 800px CONTAINER, so a full library leaves a 900px
+  // tablet only 564px for the Studio and its editor stacks the inspector
+  // beneath a 240px stage. The 48px rail leaves 804px, which is over the line
+  // — measured at 820, 900, 1024, 1100, 1180, 1280 and 1440. So the sidebar is
+  // visible at the left at every one of those widths, just narrow where the
+  // full panel would cost the editor its shape; widening it there is one
+  // click, and stacking the editor is then a choice made in the moment.
+  const railByDefault = mode === 'medium';
+  const [collapsedWide, setCollapsedWide] = useState<boolean>(
+    () => localStorage.getItem(COLLAPSE_KEY) === '1',
+  );
+  const [collapsedMedium, setCollapsedMedium] = useState<boolean>(
+    // Absent means collapsed here, unlike the desktop key: the default IS the
+    // rail, so only an explicit '0' opens it.
+    () => localStorage.getItem(COLLAPSE_KEY_MEDIUM) !== '0',
+  );
+  const collapsed = railByDefault ? collapsedMedium : collapsedWide;
+  const toggleLibrary = () => {
+    if (railByDefault) setCollapsedMedium((c) => !c);
+    else setCollapsedWide((c) => !c);
+  };
+  useEffect(() => {
+    localStorage.setItem(COLLAPSE_KEY, collapsedWide ? '1' : '0');
+  }, [collapsedWide]);
+  useEffect(() => {
+    localStorage.setItem(COLLAPSE_KEY_MEDIUM, collapsedMedium ? '1' : '0');
+  }, [collapsedMedium]);
+
   const [libraryOpen, setLibraryOpen] = useState(false);
   // A sheet belongs to the screen it was opened on: switching tool or growing
   // the window past a phone both make it stale, so it closes.
@@ -132,8 +161,8 @@ export default function App() {
               {tool.subtitle}
             </span>
           )}
-          {/* Wherever the library is not a column, this is the way to it. It
-              stays in the app bar rather than joining the section bar: that
+          {/* A phone has no column for the library, so this is the way to it.
+              It stays in the app bar rather than joining the section bar: that
               bar is the tool's, and the library is the shell's. */}
           {tool && !libraryDocked && (
             <button
@@ -195,11 +224,7 @@ export default function App() {
                 or the sheet below. */}
             {libraryDocked && (
               <ErrorBoundary resetKey={`library:${tool.id}`}>
-                <AssetSidebar
-                  tool={tool}
-                  collapsed={collapsed}
-                  onToggle={() => setCollapsed((c) => !c)}
-                />
+                <AssetSidebar tool={tool} collapsed={collapsed} onToggle={toggleLibrary} />
               </ErrorBoundary>
             )}
             <div className="flex-1 min-w-0 flex flex-col min-h-0">
@@ -215,43 +240,24 @@ export default function App() {
           them — it is the shell's, and it stays in the app bar. */}
       {rail && <SectionRail bar={rail} />}
 
-      {/* The same panel, out of the flow. Risen from the bottom on a phone,
-          slid in from the left on anything between — and it scrolls its own
-          list, so the sheet's body must not scroll as well. */}
-      {tool && !libraryDocked && (
+      {/* The same panel, risen from the bottom instead of docked at the side —
+          a phone is the one width with no room for a column at all. It scrolls
+          its own list, so the sheet's body must not scroll as well. */}
+      {tool && compact && (
         <ErrorBoundary resetKey={`library:${tool.id}`}>
-          {compact ? (
-            <BottomSheet
-              open={libraryOpen}
-              onClose={() => setLibraryOpen(false)}
-              title="Library"
-              bodyScrolls={false}
-            >
-              <AssetSidebar
-                tool={tool}
-                collapsed={false}
-                onToggle={() => setLibraryOpen(false)}
-                variant="sheet"
-              />
-            </BottomSheet>
-          ) : (
-            <SideDrawer
-              open={libraryOpen}
-              onClose={() => setLibraryOpen(false)}
-              label="Asset library"
-            >
-              {/* Docked markup, so the drawer shows the panel with its own
-                  frame — it is a card lifted off the page here, not a sheet
-                  that draws one for it. Its collapse control closes it, which
-                  is what collapsing means when it is not in the flow. */}
-              <AssetSidebar
-                tool={tool}
-                collapsed={false}
-                onToggle={() => setLibraryOpen(false)}
-                variant="drawer"
-              />
-            </SideDrawer>
-          )}
+          <BottomSheet
+            open={libraryOpen}
+            onClose={() => setLibraryOpen(false)}
+            title="Library"
+            bodyScrolls={false}
+          >
+            <AssetSidebar
+              tool={tool}
+              collapsed={false}
+              onToggle={() => setLibraryOpen(false)}
+              variant="sheet"
+            />
+          </BottomSheet>
         </ErrorBoundary>
       )}
 

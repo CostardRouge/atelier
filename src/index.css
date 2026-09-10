@@ -66,16 +66,6 @@
   }
 }
 
-/* A side drawer arriving (`shared/ui/SideDrawer.tsx`). */
-@keyframes drawer-slide {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-
 @keyframes sheet-scrim {
   from {
     opacity: 0;
@@ -89,14 +79,6 @@
    to be moved — the panel still works, it just stops travelling. */
 @media (prefers-reduced-motion: reduce) {
   @keyframes sheet-rise {
-    from {
-      transform: none;
-    }
-    to {
-      transform: none;
-    }
-  }
-  @keyframes drawer-slide {
     from {
       transform: none;
     }
