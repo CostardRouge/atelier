@@ -1,4 +1,5 @@
 import type { WinnowAssetRow, WinnowClient } from '../shared/sources/winnow/client';
+import WinnowThumb from '../shared/sources/winnow/WinnowThumb';
 import type { WinnowConnection } from '../shared/sources/winnow/store';
 import type { ScopeRows } from '../shared/sources/winnow/use-scope-rows';
 import type { InstancePicker } from '../shared/sources/winnow/use-pick';
@@ -135,12 +136,12 @@ export default function WinnowScopeGrid({
                       : 'border-line hover:border-line-strong'
                 }`}
               >
-                <img
-                  src={client.thumbUrl(r.id)}
+                <WinnowThumb
+                  client={client}
+                  id={r.id}
                   alt={r.filename}
-                  crossOrigin="use-credentials"
-                  loading="lazy"
-                  className="block w-full h-[74px] object-cover"
+                  label={r.media_type === 'video' ? 'video' : 'photo'}
+                  box="w-full h-[74px]"
                 />
                 {r.media_type === 'video' && (
                   <span

@@ -4,6 +4,7 @@ import { WinnowError, type WinnowAssetRow } from '../../shared/sources/winnow/cl
 import { materialize } from '../../shared/sources/winnow/materialize';
 import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
 import { useScopeRows, type RowsProblem } from '../../shared/sources/winnow/use-scope-rows';
+import WinnowThumb from '../../shared/sources/winnow/WinnowThumb';
 import { legend, section } from './panels/ui';
 
 interface DayFromWinnowProps {
@@ -140,12 +141,12 @@ export default function DayFromWinnow({ day, onPicked, defaultOpen, busy }: DayF
                   turns indefinite — the stacked, sub-820px editor layout is
                   one such case) and were fixed the same way. A `1fr` track
                   cannot be trusted to carry a ratio; a pixel height can. */}
-              <img
-                src={client.thumbUrl(r.id)}
+              <WinnowThumb
+                client={client}
+                id={r.id}
                 alt={r.filename}
-                crossOrigin="use-credentials"
-                loading="lazy"
-                className="block w-full h-[74px] object-cover"
+                label={r.media_type === 'video' ? 'video' : 'photo'}
+                box="w-full h-[74px]"
               />
               {fetching === r.id && (
                 <span className="absolute inset-0 grid place-items-center bg-[rgba(20,18,15,0.55)] font-mono text-[0.58rem] text-paper">
