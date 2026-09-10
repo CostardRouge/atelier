@@ -119,6 +119,7 @@ function ProjectCard({
   onDuplicate: () => void;
   onMove: (targetSourceId: string) => void;
 }) {
+  const compact = useIsCompact();
   const thumbUrl = useObjectUrl(doc.thumbnail);
   const [confirming, setConfirming] = useState<'delete' | 'move' | null>(null);
   const [moveTo, setMoveTo] = useState(moveTargets[0]?.id ?? '');
@@ -150,22 +151,41 @@ function ProjectCard({
         )}
       </button>
 
-      <div className="flex flex-col gap-[0.55rem] p-[0.9rem_1rem_1rem]">
+      <div
+        className={`flex flex-col ${
+          compact ? 'gap-1.5 p-2.5' : 'gap-[0.55rem] p-[0.9rem_1rem_1rem]'
+        }`}
+      >
         <div className="flex items-center gap-2 min-w-0">
           <h3
-            className="m-0 flex-1 min-w-0 text-[0.95rem] font-semibold whitespace-nowrap overflow-hidden text-ellipsis"
+            className={`m-0 flex-1 min-w-0 font-semibold whitespace-nowrap overflow-hidden text-ellipsis ${
+              compact ? 'text-[0.85rem]' : 'text-[0.95rem]'
+            }`}
             title={doc.name}
           >
             {doc.name}
           </h3>
-          {aspect && (
+          {/* At two columns the chip was taking a third of the title's row,
+              so a project's NAME — the one thing you pick a card by — read as
+              "Sydney har…". It moves down to the facts, which wrap anyway. */}
+          {aspect && !compact && (
             <span className="flex-none font-mono text-[0.62rem] tracking-[0.08em] px-2 py-[2px] rounded-full border border-line text-muted">
               {aspect.id}
             </span>
           )}
         </div>
 
-        <p className="m-0 font-mono text-[0.7rem] tabular-nums text-muted flex flex-wrap items-center gap-x-2">
+        <p
+          className={`m-0 font-mono tabular-nums text-muted flex flex-wrap items-center gap-x-2 ${
+            compact ? 'text-[0.6rem]' : 'text-[0.7rem]'
+          }`}
+        >
+          {aspect && compact && (
+            <>
+              <span className="text-ink-soft">{aspect.id}</span>
+              <span className="text-faint">·</span>
+            </>
+          )}
           <span>{formatWhen(doc.updatedAt)}</span>
           {doc.durationSeconds != null && doc.durationSeconds > 0 && (
             <>
@@ -571,21 +591,28 @@ export default function ProjectGallery({
 
   return (
     <section
-      className="flex flex-col flex-1 min-h-0 gap-4 overflow-auto"
+      // The shell leaves no gutter between the fixed masthead and this
+      // scroller, on purpose (`App.tsx`): a gap there is paper the content
+      // gets clipped against. Breathing room belongs HERE instead, where it
+      // scrolls away with the first row rather than holding it off the edge.
+      className={`flex flex-col flex-1 min-h-0 gap-4 overflow-auto ${
+        compact ? 'pt-3' : ''
+      }`}
       aria-label="Studio projects"
     >
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="min-w-0">
-          <h1 className="m-0 font-serif text-[1.6rem] leading-tight">Projects</h1>
-          <p className="m-0 text-[0.84rem] text-muted">
-            Compositions live here — media stays in your folders, never copied.
-          </p>
-        </div>
-        <span className="flex-1" />
-        {/* On a phone these two live in the shell's bottom bar instead, where
-            a thumb reaches them — offering them in both places would be the
-            same verb twice on one screen. */}
-        {!compact && (
+      {/* The masthead already says "Atelier / Studio", and the gallery IS the
+          Studio's front door — so a serif heading plus a sentence of prose was
+          the top fifth of a phone screen spent introducing the projects it
+          then had no room to show. Trips gave the same pair back; this matches
+          it. The heading stays in the document for a screen reader and an
+          outline, only its ink is given up. */}
+      <h1 className="sr-only">Projects</h1>
+      {/* On a phone these two verbs live in the shell's bottom bar instead,
+          where a thumb reaches them — offering them in both places would be
+          the same verb twice on one screen — so the row itself goes with them
+          rather than leaving an empty one above the cards. */}
+      {!compact && (
+        <div className="flex items-center justify-end gap-4 flex-wrap">
           <>
             <button
               type="button"
@@ -603,8 +630,8 @@ export default function ProjectGallery({
               + New project
             </button>
           </>
-        )}
-      </div>
+        </div>
+      )}
 
       {notice && (
         <p className="m-0 text-[0.8rem] text-[#9a3a23]" role="alert">
@@ -685,7 +712,17 @@ export default function ProjectGallery({
                 {count === 0 ? (
                   <p className="m-0 text-[0.8rem] text-faint">Nothing kept here yet.</p>
                 ) : (
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-5">
+                  <div
+                    className={
+                      // Two columns on a phone, as Trips does: a 240px minimum
+                      // gives exactly one on a 374px content width, and a
+                      // column of single cards wastes the half of the screen a
+                      // 16:9 preview does not need.
+                      compact
+                        ? 'grid grid-cols-2 gap-3'
+                        : 'grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-5'
+                    }
+                  >
                     {items.map((doc) => (
                       <ProjectCard
                         key={doc.id}
