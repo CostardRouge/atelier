@@ -374,7 +374,7 @@ export default function ComposerTool() {
     'inline-flex items-center h-[1.9rem] px-[0.7rem] rounded-full border text-[0.74rem] font-semibold transition-colors aria-pressed:border-accent aria-pressed:text-accent-ink aria-pressed:bg-accent-wash border-line-strong bg-paper text-ink-soft hover:border-faint hover:text-ink';
 
   return (
-    <section className="flex flex-col flex-1 min-h-0 gap-[0.6rem] overflow-y-auto max-[820px]:overflow-visible" aria-label="Composer">
+    <section className="flex flex-col flex-1 min-h-0 gap-[0.6rem] overflow-y-auto" aria-label="Composer">
       {/* Clip + output settings. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-2 py-2 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
         {clips.length === 0 ? (

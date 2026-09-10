@@ -111,6 +111,14 @@ interface AssetSidebarProps {
   tool: Tool;
   collapsed: boolean;
   onToggle: () => void;
+  /**
+   * How the shell is showing it. `docked` is the column beside the tool, with
+   * its own frame and its collapse control. `sheet` is the same panel inside a
+   * {@link BottomSheet} on a phone: the sheet already draws the frame, the
+   * title and the dismissal, so this drops all three and never offers to
+   * collapse — a sheet's "collapsed" state is being closed.
+   */
+  variant?: 'docked' | 'sheet';
 }
 
 /**
@@ -132,7 +140,9 @@ export default function AssetSidebar({
   tool,
   collapsed,
   onToggle,
+  variant = 'docked',
 }: AssetSidebarProps) {
+  const asSheet = variant === 'sheet';
   const lib = useAssetLibrary();
   const accepts = tool.accepts ?? [];
   const [dragging, setDragging] = useState(false);
@@ -343,7 +353,9 @@ export default function AssetSidebar({
   }
 
   // --- Collapsed rail -------------------------------------------------------
-  if (collapsed) {
+  // A sheet is never collapsed: the shell closes it instead, so the rail is
+  // the docked column's state alone.
+  if (collapsed && !asSheet) {
     return (
       <aside className="flex-none w-12 flex flex-col items-center gap-3 py-3 border-r border-line max-[820px]:w-full max-[820px]:flex-row max-[820px]:py-2 max-[820px]:px-3 max-[820px]:border-r-0 max-[820px]:border max-[820px]:rounded-paper-lg max-[820px]:bg-surface max-[820px]:shadow-paper-soft">
         <button
@@ -408,17 +420,38 @@ export default function AssetSidebar({
     </button>
   );
 
+  // Inside a sheet the panel is the sheet's body: no frame, no width, no
+  // shadow — the sheet draws all three, and a card inside a card reads as two
+  // objects where there is one.
+  const Frame = asSheet ? 'div' : 'aside';
+  const frameClass = asSheet
+    ? 'flex-1 min-h-0 flex flex-col overflow-hidden'
+    : 'flex-none w-72 max-w-[78vw] flex flex-col min-h-0 border border-line rounded-paper-lg bg-surface shadow-paper overflow-hidden';
+
   return (
-    <aside className="flex-none w-72 max-w-[78vw] flex flex-col min-h-0 border border-line rounded-paper-lg bg-surface shadow-paper overflow-hidden max-[820px]:w-full max-[820px]:max-w-none max-[820px]:max-h-[55vh]">
-      <div className="flex items-center justify-between gap-2 px-4 pt-3.5 pb-2.5">
-        <span className="font-serif text-[1.15rem]">Library</span>
+    <Frame className={frameClass}>
+      <div
+        className={`flex items-center justify-between gap-2 px-4 ${
+          asSheet ? 'pt-2 pb-2' : 'pt-3.5 pb-2.5'
+        }`}
+      >
+        {/* The sheet's own header already says "Library"; repeating it here
+            would be the second sentence for one fact. */}
+        {!asSheet && <span className="font-serif text-[1.15rem]">Library</span>}
         <span className="flex items-center gap-1.5">
           {/* Sources are the shell's business, and this rail is where they are
-              felt — so the way to them is here, not buried in a tool. */}
+              felt — so the way to them is here, not buried in a tool. In a
+              sheet it is the row's only control, so it wears its name: a lone
+              glyph on an otherwise empty line reads as something left behind
+              rather than as a way in. */}
           <button
             type="button"
             onClick={() => navigate('/sources')}
-            className="inline-flex items-center text-muted border border-line rounded-full p-[3px] hover:text-accent hover:border-line-strong transition-colors"
+            className={`inline-flex items-center text-muted border border-line rounded-full hover:text-accent hover:border-line-strong transition-colors ${
+              asSheet
+                ? 'gap-1.5 pl-2 pr-2.5 py-1 font-mono text-[0.62rem] tracking-[0.12em] uppercase'
+                : 'p-[3px]'
+            }`}
             aria-label="Sources — connect and manage Winnow instances"
             title={
               connection
@@ -436,15 +469,18 @@ export default function AssetSidebar({
                 d="m6.9.9 2.2 0 .3 1.6c.4.13.78.29 1.12.5l1.35-.92 1.55 1.55-.92 1.35c.21.34.37.72.5 1.12l1.6.3v2.2l-1.6.3c-.13.4-.29.78-.5 1.12l.92 1.35-1.55 1.55-1.35-.92c-.34.21-.72.37-1.12.5l-.3 1.6H6.9l-.3-1.6a4.9 4.9 0 0 1-1.12-.5l-1.35.92L2.58 12l.92-1.35a4.9 4.9 0 0 1-.5-1.12L1.4 9.23V7.03l1.6-.3c.13-.4.29-.78.5-1.12L2.58 4.26 4.13 2.7l1.35.92c.34-.21.72-.37 1.12-.5L6.9.9Zm1.02 1.4-.24 1.32-.63.16c-.5.13-.96.32-1.37.6l-.55.36-1.1-.75-.3.3.75 1.1-.36.55c-.28.41-.47.87-.6 1.37l-.16.63-1.32.24v.42l1.32.24.16.63c.13.5.32.96.6 1.37l.36.55-.75 1.1.3.3 1.1-.75.55.36c.41.28.87.47 1.37.6l.63.16.24 1.32h.42l.24-1.32.63-.16c.5-.13.96-.32 1.37-.6l.55-.36 1.1.75.3-.3-.75-1.1.36-.55c.28-.41.47-.87.6-1.37l.16-.63 1.32-.24v-.42l-1.32-.24-.16-.63a4.5 4.5 0 0 0-.6-1.37l-.36-.55.75-1.1-.3-.3-1.1.75-.55-.36a4.5 4.5 0 0 0-1.37-.6l-.63-.16-.24-1.32h-.42Z"
               />
             </svg>
+            {asSheet && 'Sources'}
           </button>
-          <button
-            type="button"
-            onClick={onToggle}
-            className="font-mono text-[0.6rem] tracking-[0.12em] uppercase text-muted border border-line rounded-full px-2 py-[3px] hover:text-accent hover:border-line-strong transition-colors"
-            aria-label="Collapse asset library"
-          >
-            collapse ⟨
-          </button>
+          {!asSheet && (
+            <button
+              type="button"
+              onClick={onToggle}
+              className="font-mono text-[0.6rem] tracking-[0.12em] uppercase text-muted border border-line rounded-full px-2 py-[3px] hover:text-accent hover:border-line-strong transition-colors"
+              aria-label="Collapse asset library"
+            >
+              collapse ⟨
+            </button>
+          )}
         </span>
       </div>
 
@@ -707,7 +743,7 @@ export default function AssetSidebar({
             : 'handles only — nothing uploaded, nothing decoded yet'}
         </span>
       </div>
-    </aside>
+    </Frame>
   );
 }
 

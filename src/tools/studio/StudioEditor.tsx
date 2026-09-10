@@ -1475,19 +1475,16 @@ export default function StudioEditor({
             picture it holds — the measurement would be the zoom's own output
             and each gesture would feed the next.
 
-            Above 820px the flex chain from the shell's `h-dvh` hands it a
-            real height and `flex-1` is right. Under it the shell gives up
-            that fixed height so the page scrolls (App.tsx) and nothing above
-            is definite any more, so the height is stated outright — as tall
-            as a full-width picture, never under 240px nor past 62dvh — the
-            way Road Trip's badge stage does it. A VIEWPORT query, not the
-            container one the layout splits on: what changes at 820px is the
-            shell's height model, which no container knows. `cqw` is the
-            editor's container, so the Library sidebar is already out of it.
+            `flex-1` is right at EVERY width now: the shell keeps its `h-dvh`
+            on a phone too (App.tsx), so the chain above this box is definite
+            all the way up. It used to restate its own height under 820px,
+            because the shell gave up its fixed height there and a measured
+            box with an indefinite ancestor oscillated — one pinch collapsed
+            this canvas to 1×1. That restatement is gone with the cause.
           */}
           <div
             style={{ '--aspect': frameAspect ?? 16 / 9 } as CSSProperties}
-            className={`relative rounded-paper overflow-hidden flex-1 min-h-0 @max-[800px]:min-h-[240px] max-[820px]:flex-none max-[820px]:h-[max(240px,min(62dvh,calc(100cqw/var(--aspect))))] ${
+            className={`relative rounded-paper overflow-hidden flex-1 min-h-0 @max-[800px]:min-h-[240px] ${
               hasFrame ? 'bg-frame' : 'bg-transparent'
             }`}
           >
@@ -1737,7 +1734,7 @@ export default function StudioEditor({
 
         {/* Inspector */}
         {active && (
-          <div className="flex flex-col gap-3 @min-[800px]:w-[340px] flex-none min-h-0 @max-[800px]:max-h-[45vh] border border-line rounded-paper bg-surface p-3">
+          <div className="flex flex-col gap-3 @min-[800px]:w-[340px] flex-none min-h-0 @max-[800px]:max-h-[45dvh] border border-line rounded-paper bg-surface p-3">
             <div
               className="flex gap-1 p-1 rounded-full bg-paper border border-line flex-none"
               role="tablist"

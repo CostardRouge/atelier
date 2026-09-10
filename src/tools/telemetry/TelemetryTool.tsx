@@ -47,11 +47,12 @@ export default function TelemetryTool() {
 
   const selected = pairs.find((p) => p.id === selectedId) ?? null;
 
-  // The tool lives in a fixed-height frame, so its content scrolls here (the
-  // gallery can hold many cards). On narrow screens the whole page scrolls
-  // instead, matching the shell's mobile layout.
+  // The tool lives in a fixed-height frame at every width, so its content
+  // scrolls HERE (the gallery can hold many cards) rather than growing the
+  // page. It used to hand the scroll back to the document under 820px, which
+  // is exactly what the shell no longer does.
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto max-[820px]:overflow-visible pb-4">
+    <div className="flex-1 min-h-0 overflow-y-auto pb-4">
       {selected ? (
         <DetailView
           pair={selected}

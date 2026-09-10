@@ -43,6 +43,13 @@ export interface BottomSheetProps {
   initialSnap?: number;
   /** Pinned under the scrolling body — a CTA row, a filter. */
   footer?: ReactNode;
+  /**
+   * Whether the sheet scrolls its own body. Pass `false` when the child is
+   * already a scrolling panel (the asset library scrolls its list) — two
+   * nested scroll containers give a finger two things to move and neither
+   * of them reliably.
+   */
+  bodyScrolls?: boolean;
   children: ReactNode;
 }
 
@@ -54,6 +61,7 @@ export default function BottomSheet({
   snaps = DEFAULT_SNAPS,
   initialSnap,
   footer,
+  bodyScrolls = true,
   children,
 }: BottomSheetProps) {
   const titleId = useId();
@@ -184,7 +192,11 @@ export default function BottomSheet({
           </button>
         </div>
 
-        <div className="flex-1 min-h-0 flex flex-col overflow-y-auto overscroll-contain">
+        <div
+          className={`flex-1 min-h-0 flex flex-col ${
+            bodyScrolls ? 'overflow-y-auto overscroll-contain' : 'overflow-hidden'
+          }`}
+        >
           {children}
         </div>
 
