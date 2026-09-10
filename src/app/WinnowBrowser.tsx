@@ -29,66 +29,7 @@ import {
 } from '../shared/sources/winnow/browse-state';
 import { formatBytes } from '../shared/lib/format';
 import useDialogKeys from '../shared/ui/use-dialog-keys';
-
-/** How many times a thumbnail is asked for again before the tile gives up. */
-const THUMB_RETRIES = 3;
-
-/**
- * One tile's thumbnail, which retries instead of staying black.
- *
- * A grid of a busy day fires a hundred-odd image requests at once, down a
- * tunnel to a home server. Some lose: a dropped connection, a request shed
- * under load, a cache entry poisoned by a response that arrived without its
- * CORS headers. An `<img>` has no answer to any of that — it fires `error`
- * once and the tile is a black rectangle for the rest of the session, which is
- * exactly what was seen on a day of 132.
- *
- * So: retry with a widening delay (the failures are load-shaped, and hammering
- * makes them worse), then say plainly that the picture would not come. The
- * first attempt uses the plain URL so the ordinary path stays as cacheable as
- * Winnow means it to be — only retries carry a discriminator.
- */
-function Thumb({
-  src,
-  attempt,
-  onFailed,
-  label,
-}: {
-  src: string;
-  attempt: number;
-  onFailed: () => void;
-  label: string;
-}) {
-  const [gaveUp, setGaveUp] = useState(false);
-  useEffect(() => setGaveUp(false), [src]);
-
-  if (gaveUp || attempt > THUMB_RETRIES) {
-    return (
-      <div className="w-full h-[90px] max-[820px]:h-[120px] grid place-items-center bg-frame">
-        <span className="font-mono text-[0.55rem] uppercase tracking-wide text-[#8a8270]">
-          {label}
-        </span>
-      </div>
-    );
-  }
-  return (
-    <img
-      // `key` on the attempt: React must build a NEW element, or swapping the
-      // src on the failed one can be ignored by the browser.
-      key={attempt}
-      src={src}
-      crossOrigin="use-credentials"
-      alt=""
-      className="block w-full h-[90px] max-[820px]:h-[120px] object-cover"
-      loading="lazy"
-      decoding="async"
-      onError={() => {
-        if (attempt >= THUMB_RETRIES) setGaveUp(true);
-        else onFailed();
-      }}
-    />
-  );
-}
+import WinnowThumb from '../shared/sources/winnow/WinnowThumb';
 
 interface WinnowBrowserProps {
   connection: WinnowConnection;
@@ -208,10 +149,6 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
   const [checked, setChecked] = useState<ReadonlySet<number>>(() => new Set());
   const [fidelity, setFidelity] = useState<Fidelity>(remembered?.fidelity ?? 'proxy');
   const [problem, setProblem] = useState<{ text: string; login?: string } | null>(null);
-  /** Per-asset retry count for a thumbnail that failed to load. */
-  const [thumbAttempt, setThumbAttempt] = useState<ReadonlyMap<number, number>>(
-    () => new Map(),
-  );
   const [progress, setProgress] = useState<string | null>(null);
   const [landed, setLanded] = useState(() => remembered !== null);
 
@@ -337,8 +274,6 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
     let cancelled = false;
     setRows(null);
     setChecked(new Set());
-    // A new day is a new set of tiles: last day's failures must not silence them.
-    setThumbAttempt(new Map());
     // A leg is asked for by its calendar days: Winnow has no chapter filter
     // (cf. `chapterDays`), so a day shared with the next leg brings both
     // legs' media — which is why the leg's own count is shown beside them.
@@ -816,26 +751,11 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
                             className="absolute top-1.5 left-1.5 z-[2] w-[15px] h-[15px] accent-ink max-[820px]:w-[20px] max-[820px]:h-[20px]"
                             aria-label={`Select ${r.filename}`}
                           />
-                          {/* Served with the session cookie, so the browser is
-                              told to send it cross-origin — and retried,
-                              because a hundred at once down a tunnel is not
-                              reliable. */}
-                          <Thumb
-                            src={client.thumbRetryUrl(r.id, thumbAttempt.get(r.id) ?? 0)}
-                            attempt={thumbAttempt.get(r.id) ?? 0}
+                          <WinnowThumb
+                            client={client}
+                            id={r.id}
                             label={r.ext || (r.media_type === 'video' ? 'video' : 'photo')}
-                            onFailed={() => {
-                              const next = (thumbAttempt.get(r.id) ?? 0) + 1;
-                              // Widening delay: these failures are load-shaped,
-                              // and retrying at once makes the pile-up worse.
-                              window.setTimeout(() => {
-                                setThumbAttempt((m) => {
-                                  const copy = new Map(m);
-                                  copy.set(r.id, next);
-                                  return copy;
-                                });
-                              }, next * 400);
-                            }}
+                            box="w-full h-[90px] max-[820px]:h-[120px]"
                           />
                           <span className="absolute bottom-0 inset-x-0 px-1.5 py-1 font-mono text-[0.55rem] text-paper bg-[rgba(20,18,15,0.62)] truncate">
                             {r.filename}

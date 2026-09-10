@@ -112,25 +112,27 @@ function TripTitle({ name, onRename }: { name: string; onRename: (name: string) 
 /**
  * One count of the trip, and the word for it.
  *
- * On a phone it is the same figure at a smaller type size and with a shorter
- * word — five of them laid out to breathe wrapped into three rows of a 390px
- * screen and cost most of the fold before the calendar, which is the thing the
- * screen is actually for. The compact version is a fixed three-across grid, so
- * the block is two rows whatever the labels say.
+ * On a phone it is the same figure smaller, with a one-word label, and it
+ * never wraps: the counts are ONE ROW that scrolls sideways. Laid out to
+ * breathe they took three rows of a 390px screen and most of the fold before
+ * the calendar; folded into a three-across grid they still took two. A row
+ * takes one, whatever a trip's numbers turn out to be — and the last figure
+ * cut off at the right edge is what says there are more, which a wrapped grid
+ * could never say.
  */
 function Stat({ value, label, compact }: { value: string; label: string; compact: boolean }) {
   return (
-    <div className="flex flex-col min-w-0">
+    <div className={`flex flex-col ${compact ? 'flex-none' : 'min-w-0'}`}>
       <span
         className={`font-mono tabular-nums leading-none ${
-          compact ? 'text-[1.05rem]' : 'text-[1.35rem]'
+          compact ? 'text-[0.95rem]' : 'text-[1.35rem]'
         }`}
       >
         {value}
       </span>
       <span
-        className={`font-mono tracking-[0.1em] uppercase text-muted truncate ${
-          compact ? 'text-[0.55rem] mt-0.5' : 'text-[0.6rem] mt-1'
+        className={`font-mono tracking-[0.1em] uppercase text-muted ${
+          compact ? 'text-[0.5rem] mt-0.5 whitespace-nowrap' : 'text-[0.6rem] mt-1 truncate'
         }`}
       >
         {label}
@@ -307,29 +309,29 @@ export default function TripOverview({
 
   const untold = coverage.totalDays - coverage.toldDays;
 
-  // Each count twice: the sentence it deserves where there is room, and the one
-  // word that still says it in a third of a phone's width. `short` is also the
-  // key, because it is the one thing that never repeats.
+  // Two lists rather than one with a `short` field, because they differ in
+  // LENGTH and not only in wording: read along a row, "days told · 345 left"
+  // is two figures pretending to be one, so a phone gets them as two. The
+  // sentences are the better label where there is room for them.
   const stats = useMemo(() => {
-    const rows = [
-      { value: coverage.totalDays, label: 'days on the road', short: 'days' },
-      {
-        value: coverage.toldDays,
-        label: `days told · ${untold} left`,
-        short: `told · ${untold} left`,
-      },
-      { value: coverage.posts, label: 'pieces', short: 'pieces' },
-      { value: coverage.publishedPosts, label: 'published', short: 'published' },
-    ];
-    if (coverage.longestGap) {
-      rows.push({
-        value: coverage.longestGap.length,
-        label: 'longest silence',
-        short: 'silence',
-      });
-    }
-    return rows;
-  }, [coverage, untold]);
+    const gap = coverage.longestGap;
+    return compact
+      ? [
+          { key: 'days', value: coverage.totalDays, label: 'days' },
+          { key: 'told', value: coverage.toldDays, label: 'told' },
+          { key: 'left', value: untold, label: 'left' },
+          { key: 'pieces', value: coverage.posts, label: 'pieces' },
+          { key: 'published', value: coverage.publishedPosts, label: 'published' },
+          ...(gap ? [{ key: 'silence', value: gap.length, label: 'silence' }] : []),
+        ]
+      : [
+          { key: 'days', value: coverage.totalDays, label: 'days on the road' },
+          { key: 'told', value: coverage.toldDays, label: `days told · ${untold} left` },
+          { key: 'pieces', value: coverage.posts, label: 'pieces' },
+          { key: 'published', value: coverage.publishedPosts, label: 'published' },
+          ...(gap ? [{ key: 'silence', value: gap.length, label: 'longest silence' }] : []),
+        ];
+  }, [coverage, untold, compact]);
 
   // The dates-and-route sheet, the creation modal reopened on this trip.
   const [editingDetails, setEditingDetails] = useState(false);
@@ -384,15 +386,27 @@ export default function TripOverview({
       <div
         className={`bg-surface border border-line rounded-paper-lg ${
           compact
-            ? 'grid grid-cols-3 gap-x-3 gap-y-3 p-3'
+            ? // One row that scrolls sideways, and NO `touch-action`. The rule
+              // in `frontend.md` is about a surface that WRITES a drag; this
+              // one is an ordinary scroll box, where the browser already does
+              // both axes — declaring `pan-x` would not add horizontal
+              // scrolling, it would remove the vertical swipe that scrolls the
+              // page under a 47px strip.
+              //
+              // `flex-none` is load-bearing, not tidiness: an `overflow` other
+              // than `visible` sets a flex item's AUTOMATIC MINIMUM SIZE to
+              // zero, so the moment this row could scroll sideways it also
+              // became crushable by the column above it — measured at 18px,
+              // the numbers sheared off at the waist.
+              'flex-none flex items-start gap-5 px-3 py-2 overflow-x-auto'
             : 'flex flex-wrap items-start gap-x-10 gap-y-4 p-5'
         }`}
       >
         {stats.map((stat) => (
           <Stat
-            key={stat.short}
+            key={stat.key}
             value={String(stat.value)}
-            label={compact ? stat.short : stat.label}
+            label={stat.label}
             compact={compact}
           />
         ))}
