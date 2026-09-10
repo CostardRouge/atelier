@@ -1,11 +1,13 @@
 /**
- * The arithmetic behind a stage's VIEW zoom — how much of the editor's canvas
- * you are looking at, not anything the document remembers.
+ * The arithmetic behind a zone's VIEW zoom — how much of a day-sized thing you
+ * are looking at, not anything the document remembers.
  *
- * Kept DOM-free so the two consumers (the Studio stage, the Road Trip badge
- * stage) share one feel: the same steps, the same wheel response, and the same
- * rule for keeping the point under the pointer still while the picture grows
- * around it.
+ * Kept DOM-free so the two consumers (Road Trip's day grid, its stage ruler)
+ * share one feel: the same steps, the same wheel response, and the same rule
+ * for keeping the point under the pointer still while the content grows
+ * around it. The editor stages carried one too and no longer do — a view zoom
+ * over a media preview fought the framing gestures the picture itself answers,
+ * so the preview simply fills the room it is given.
  */
 
 /**
@@ -155,7 +157,8 @@ export function scrollAfterZoom(
  *
  * `modifier` — only ⌘/ctrl (and the trackpad pinch that arrives as one) zooms;
  * a bare wheel is left to the page, or to whatever the zone already does with
- * it (the badge stage frames its picture).
+ * it. No zone asks for it today: it is what a zone with its own use for the
+ * wheel would pass.
  * `any` — a bare wheel zooms too, for a zone that has nothing else to do with
  * it: the trip's day grid and its stage ruler are day-sized things you zoom far
  * more often than you scroll the page from.
@@ -187,8 +190,8 @@ export function wheelZooms(e: WheelLike, mode: WheelZoom): boolean {
  * What `StageZoomControl` needs to drive a zoom, and all it needs.
  *
  * Named apart from `StageZoom` because the pill has a second consumer that is
- * not a stage: the lightbox's viewer (`use-media-viewer.ts`) zooms by
- * transform and has no scroll box, no viewport and no fit to hand out.
+ * not a scrolling zone: the lightbox's viewer (`use-media-viewer.ts`) zooms by
+ * transform and has no scroll box and no viewport to hand out.
  */
 export interface ZoomControls {
   /** 1 = the content at its fitted size. */
@@ -204,24 +207,4 @@ export interface ZoomControls {
 /** "100%" — what the control shows between its two buttons. */
 export function zoomLabel(scale: number): string {
   return `${Math.round(scale * 100)}%`;
-}
-
-/**
- * The box a fitted picture may fill at this scale, in PIXELS off the measured
- * viewport — never a percentage. A percentage max-height would resolve against
- * the auto-height wrapper that centres the picture, whose height is what the
- * picture itself decides; the browser drops the constraint and the zoom does
- * nothing. Before the first measurement, plain "fit" is the honest answer.
- */
-export function zoomedFit(
-  viewport: { width: number; height: number },
-  scale: number,
-): { maxWidth: string; maxHeight: string } {
-  if (viewport.width <= 0 || viewport.height <= 0) {
-    return { maxWidth: '100%', maxHeight: '100%' };
-  }
-  return {
-    maxWidth: `${viewport.width * scale}px`,
-    maxHeight: `${viewport.height * scale}px`,
-  };
 }

@@ -12,7 +12,6 @@ import {
   zoomFloor,
   zoomByWheel,
   zoomLabel,
-  zoomedFit,
 } from './stage-zoom';
 
 const wheel = (over: Partial<Parameters<typeof wheelZooms>[0]> = {}) => ({
@@ -197,22 +196,6 @@ describe('wheelZooms', () => {
     // A trackpad swipe is never purely one axis; the dominant one decides.
     expect(wheelZooms(wheel({ deltaX: -80, deltaY: -6 }), 'any')).toBe(false);
     expect(wheelZooms(wheel({ deltaX: -6, deltaY: -80 }), 'any')).toBe(true);
-  });
-});
-
-describe('zoomedFit', () => {
-  it('gives the box in pixels off the measured viewport', () => {
-    expect(zoomedFit({ width: 800, height: 400 }, 1.5)).toEqual({
-      maxWidth: '1200px',
-      maxHeight: '600px',
-    });
-  });
-
-  it('falls back to a plain fit before the first measurement', () => {
-    expect(zoomedFit({ width: 0, height: 0 }, 2)).toEqual({
-      maxWidth: '100%',
-      maxHeight: '100%',
-    });
   });
 });
 

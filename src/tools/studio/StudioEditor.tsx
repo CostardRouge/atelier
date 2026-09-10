@@ -3,7 +3,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type ReactNode,
 } from 'react';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
@@ -97,8 +96,6 @@ import {
 import { reanchorInPlace } from '../../shared/overlay/draw-overlays';
 import { DEFAULT_GUIDES, type GuidesState } from '../../shared/overlay/guides';
 import { useOverlayStage } from '../../shared/overlay/use-overlay-stage';
-import StageZoomControl from '../../shared/ui/StageZoomControl';
-import { useStageZoom } from '../../shared/ui/use-stage-zoom';
 import { useLutStack } from '../../shared/lut/use-lut-stack';
 import GradePanel from '../../shared/lut/GradePanel';
 import type { StyleTheme } from '../../shared/overlay/title-styles';
@@ -801,16 +798,6 @@ export default function StudioEditor({
     onMove: handleMove,
   });
 
-  // View zoom over that stage. A pinch puts two fingers on the canvas, and the
-  // first of them is a perfectly good element drag as far as the stage is
-  // concerned — so while the gesture runs, the stage's own pointer handling
-  // stands down rather than walking a title across the frame.
-  const zoom = useStageZoom();
-  const cancelDrag = stage.cancelDrag;
-  useEffect(() => {
-    if (zoom.pinching) cancelDrag();
-  }, [zoom.pinching, cancelDrag]);
-
   function handleScrub(value: number) {
     setTime(value);
     scrub.to(value);
@@ -1507,46 +1494,28 @@ export default function StudioEditor({
         {/* Stage */}
         <div className="flex flex-col gap-[0.6rem] flex-1 min-w-0 min-h-0">
           {/*
-            The stage box, and its height is the whole of the zoom's
-            arithmetic: `useStageZoom` measures this box and fits the picture
-            into `viewport × scale`, so the box must never be sized by the
-            picture it holds — the measurement would be the zoom's own output
-            and each gesture would feed the next.
+            The stage box takes whatever room the column has, and the picture
+            fits itself into it: a canvas is a replaced element, so centring
+            plus `max-w-full max-h-full` is the whole of the arithmetic. There
+            is no VIEW zoom here — one shipped and was taken back out, because
+            over a media preview it fought the gestures the picture itself
+            answers (`shared/ui/stage-zoom.ts`).
 
-            `flex-1` is right at EVERY width now: the shell keeps its `h-dvh`
-            on a phone too (App.tsx), so the chain above this box is definite
-            all the way up. It used to restate its own height under 820px,
-            because the shell gave up its fixed height there and a measured
-            box with an indefinite ancestor oscillated — one pinch collapsed
-            this canvas to 1×1. That restatement is gone with the cause.
+            `flex-1` is right at EVERY width: the shell keeps its `h-dvh` on a
+            phone too (App.tsx), so the chain above this box is definite all
+            the way up and the picture's height always resolves.
           */}
           <div
-            style={{ '--aspect': frameAspect ?? 16 / 9 } as CSSProperties}
-            className={`relative rounded-paper overflow-hidden flex-1 min-h-0 @max-[800px]:min-h-[240px] ${
+            className={`relative rounded-paper overflow-hidden flex-1 min-h-0 flex items-center justify-center @max-[800px]:min-h-[240px] ${
               hasFrame ? 'bg-frame' : 'bg-transparent'
             }`}
           >
-            {/* The stage is a SCROLL box: the zoom grows the canvas's own
-                layout size, so panning a zoomed picture is ordinary scrolling
-                and the extent is the browser's arithmetic. The wrapper's
-                min-w/min-h keep the picture centred while it still fits, and
-                let it start at the top-left corner once it does not — flex
-                centring alone would put the overflow out of reach.
-
-                `absolute inset-0`, not `w-full h-full`: a percentage height
-                resolves against a parent whose own height is definite, and in
-                the stacked layout the box above is a flex item in a column
-                that has no definite height to hand down. The scroll box then
-                fell back to its content — the canvas — and measured it. */}
-            <div ref={zoom.viewportRef} className="absolute inset-0 overflow-auto">
-              <div className="w-fit h-fit min-w-full min-h-full flex items-center justify-center">
             {hasFrame ? (
               <canvas
                 ref={canvasRef}
-                style={zoom.fit}
-                className="block w-auto h-auto shrink-0 object-contain bg-frame touch-none cursor-grab"
-                onPointerDown={zoom.pinching ? undefined : stage.onPointerDown}
-                onPointerMove={zoom.pinching ? undefined : stage.onPointerMove}
+                className="block w-auto h-auto max-w-full max-h-full object-contain bg-frame touch-none cursor-grab"
+                onPointerDown={stage.onPointerDown}
+                onPointerMove={stage.onPointerMove}
                 onPointerUp={stage.onPointerUp}
                 onPointerCancel={stage.onPointerUp}
               />
@@ -1560,11 +1529,6 @@ export default function StudioEditor({
                       ? 'Decoding the photo…'
                       : 'Select a clip to edit.'}
               </div>
-            )}
-              </div>
-            </div>
-            {hasFrame && (
-              <StageZoomControl zoom={zoom} className="absolute right-2 bottom-2 z-10" />
             )}
             {/* Offscreen decoder + audio source. Kept rendered (not
                 display:none) so the browser keeps producing frames. */}
