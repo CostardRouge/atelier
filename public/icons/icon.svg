@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Atelier">
+  <!-- Atelier app mark: four framing corners in ink on warm paper, one
+       vermilion dot at the centre — the frame you compose in, and the single
+       accent the whole suite spends. Rounded tile, for the browser tab and the
+       "any" manifest icon.
+
+       The geometry is the 32-unit drawing scaled by 16; keep it that way so a
+       change to the mark is made once and re-scaled, never re-traced. -->
+  <rect width="512" height="512" rx="112" fill="#f4f0e7"/>
+  <g transform="scale(16)">
+    <path
+      d="M6 11V6h5M26 11V6h-5M6 21v5h5M26 21v5h-5"
+      fill="none"
+      stroke="#1b1813"
+      stroke-width="2.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <circle cx="16" cy="16" r="3" fill="#d9442a"/>
+  </g>
+</svg>

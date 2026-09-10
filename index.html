@@ -8,7 +8,29 @@
       content="A quiet, local-first studio for your captures — view flight telemetry in sync with the frame, grade footage with LUTs, and more. Everything stays on your machine."
     />
     <title>Atelier — a studio for your captures</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!--
+      Icons. Vite rewrites these `/…` hrefs with the build's base path, so they
+      survive both the custom domain (base `/`) and a `/atelier/` preview.
+
+      `rel="icon"` covers the browser tab and NOTHING else. iOS builds a
+      home-screen icon from `apple-touch-icon` alone — a PNG, square, opaque —
+      and with no such link it screenshots the page instead: that is what a
+      "broken icon on iPhone" is, in Safari and in Chrome for iOS alike, since
+      both are WebKit. The manifest is the Android/Chrome half; it carries no
+      weight on iOS, which is why the touch icon is declared here and not left
+      to it. `docs/memory/frontend.md` carries the whole rule.
+    -->
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- The paper the shell paints, so the browser chrome matches it. There is
+         one theme (`color-scheme: light` in src/index.css), so one value. -->
+    <meta name="theme-color" content="#f4f0e7" />
+    <!-- The name under the icon on a home screen; the title is a sentence. -->
+    <meta name="apple-mobile-web-app-title" content="Atelier" />
+    <meta name="application-name" content="Atelier" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

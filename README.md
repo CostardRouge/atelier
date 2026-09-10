@@ -768,6 +768,23 @@ Deployed via GitHub Pages at [`atelier.steeve.website`](https://atelier.steeve.w
 > `BASE_PATH=/` because the custom domain serves the site from the root — the
 > domain itself lives in the repository's Pages settings, not in a `CNAME` file.
 
+### Icons and the home screen
+
+Add Atelier to a phone's home screen and you get the mark — the ink frame with
+its vermilion dot — not a screenshot of whatever page you were on. That takes a
+real PNG: iOS reads `apple-touch-icon` and nothing else, in Safari and in
+Chrome for iOS alike, since both are WebKit. Android's launcher reads the
+manifest's 192/512 pair, plus a maskable pair so its own shape mask never clips
+the drawing.
+
+The three SVG sources live in `public/icons/` (rounded tile, full-bleed Apple
+square, inverted maskable); `node scripts/gen-icons.mjs` rasterises the seven
+PNGs beside them, and the output is committed — a static host cannot make them
+on the fly. Change the mark in the sources, re-run it, commit both halves.
+Tapping the icon opens Atelier in the browser rather than as a chromeless app,
+on purpose: your projects live in this browser's storage, and a standalone
+launch can be given a container of its own.
+
 ### Local development
 
 ```bash
