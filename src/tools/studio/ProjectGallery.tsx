@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { formatDuration } from '../../shared/lib/format';
 import { useObjectUrl } from '../../shared/media/use-object-url';
 import {
@@ -46,6 +53,9 @@ import {
 import { DEFAULT_GUIDES } from '../../shared/overlay/guides';
 import { defaultElementsPreset } from '../../shared/overlay/overlay-types';
 import NewProjectModal, { type NewProjectChoices } from './NewProjectModal';
+import ImportDocumentModal from '../../shared/ui/ImportDocumentModal';
+import { usePublishSectionBar } from '../../shared/ui/section-rail';
+import { useIsCompact } from '../../shared/ui/use-layout-mode';
 
 interface ProjectGalleryProps {
   /** Project currently loaded in the editor (highlighted, opens instantly). */
@@ -312,6 +322,7 @@ export default function ProjectGallery({
 }: ProjectGalleryProps) {
   const [projects, setProjects] = useState<ProjectDoc[] | null>(null);
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [remoteLists, setRemoteLists] = useState<Record<string, RemoteList>>({});
   const [busy, setBusy] = useState<Record<string, string>>({});
@@ -322,8 +333,50 @@ export default function ProjectGallery({
     () => documentSources.filter((s) => isRemoteSource(s.id)).map((s) => s.id),
     [documentSources],
   );
-  // Where an imported file lands. Only offered when there is a choice.
-  const [importTarget, setImportTarget] = useState(DEFAULT_SOURCE_ID);
+
+  /**
+   * Importing is two steps and the first one is a QUESTION — where the file
+   * lands — so it is asked in a sheet at the moment it is decided, rather
+   * than by a `<select>` that sat in the header at all times for a gesture
+   * made twice a year. With one source there is nothing to ask, so the file
+   * dialog opens straight away and no sheet is drawn.
+   */
+  const startImport = useCallback(() => {
+    if (documentSources.length > 1) setImporting(true);
+    else void handleImportRef.current(DEFAULT_SOURCE_ID);
+  }, [documentSources.length]);
+
+  // `handleImport` is declared below and is a fresh function every render, so
+  // the bar reads it through a ref rather than listing it as a dependency.
+  const handleImportRef = useRef<(sourceId: string) => Promise<void>>(async () => {});
+
+  // On a phone the gallery's two verbs go in the thumb zone rather than in a
+  // header row sharing its line with the title. They are STARTING points, not
+  // sections, so the shell adds its own Library cell beside them and drops the
+  // app-bar button — see `SectionBarRole`.
+  const compact = useIsCompact();
+  usePublishSectionBar(
+    useMemo(
+      () =>
+        compact
+          ? {
+              sections: [
+                { id: 'new', label: 'New project' },
+                { id: 'import', label: 'Import' },
+              ],
+              active: null,
+              label: 'Start a project',
+              role: 'actions' as const,
+              onSelect: (id: string) => {
+                if (id === 'new') setCreating(true);
+                else startImport();
+              },
+            }
+          : null,
+      [compact, startImport],
+    ),
+  );
+
 
   const refresh = useCallback(() => {
     void listProjects().then(setProjects);
@@ -405,7 +458,7 @@ export default function ProjectGallery({
    * the common case is a settings file someone sent you. (Replacing the open
    * project's settings is the other half, in the editor's settings modal.)
    */
-  async function handleImport() {
+  async function handleImport(targetSourceId: string) {
     const picked = await pickFile(PROJECT_FILE_ACCEPT);
     if (!picked) return;
     setNotice(null);
@@ -420,11 +473,12 @@ export default function ProjectGallery({
       createProjectDoc(name, parsed.file.settings.aspectId, [], DEFAULT_GUIDES),
       parsed.file,
     );
-    doc.sourceId = documentSources.some((s) => s.id === importTarget)
-      ? importTarget
+    doc.sourceId = documentSources.some((s) => s.id === targetSourceId)
+      ? targetSourceId
       : DEFAULT_SOURCE_ID;
     if (await createOn(doc, 'imported')) refresh();
   }
+  handleImportRef.current = handleImport;
 
   /**
    * Delete here, and there when the project is kept on an instance — guarded
@@ -528,38 +582,28 @@ export default function ProjectGallery({
           </p>
         </div>
         <span className="flex-1" />
-        {documentSources.length > 1 && (
-          <label className="inline-flex items-center gap-2 font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted">
-            import to
-            <select
-              value={importTarget}
-              onChange={(e) => setImportTarget(e.target.value)}
-              className="font-sans normal-case tracking-normal text-[0.8rem] px-2.5 py-1 border border-line rounded-full bg-paper text-ink focus:outline-none focus:border-accent"
-              aria-label="Where an imported project is kept"
+        {/* On a phone these two live in the shell's bottom bar instead, where
+            a thumb reaches them — offering them in both places would be the
+            same verb twice on one screen. */}
+        {!compact && (
+          <>
+            <button
+              type="button"
+              onClick={startImport}
+              className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-line-strong rounded-full bg-paper text-ink-soft cursor-pointer text-[0.84rem] transition-colors hover:border-accent hover:text-accent-ink"
+              title={`Create a project from an exported settings file (${PROJECT_FILE_EXTENSION})`}
             >
-              {documentSources.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {sourceLabel(s.id)}
-                </option>
-              ))}
-            </select>
-          </label>
+              ↑ Import a project file
+            </button>
+            <button
+              type="button"
+              onClick={() => setCreating(true)}
+              className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent active:scale-[0.98]"
+            >
+              + New project
+            </button>
+          </>
         )}
-        <button
-          type="button"
-          onClick={() => void handleImport()}
-          className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-line-strong rounded-full bg-paper text-ink-soft cursor-pointer text-[0.84rem] transition-colors hover:border-accent hover:text-accent-ink"
-          title={`Create a project from an exported settings file (${PROJECT_FILE_EXTENSION})`}
-        >
-          ↑ Import a project file
-        </button>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent active:scale-[0.98]"
-        >
-          + New project
-        </button>
       </div>
 
       {notice && (
@@ -587,7 +631,7 @@ export default function ProjectGallery({
             </button>
             <button
               type="button"
-              onClick={() => void handleImport()}
+              onClick={startImport}
               className="p-0 border-0 bg-transparent text-[0.78rem] text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink"
             >
               or import a project file
@@ -676,6 +720,19 @@ export default function ProjectGallery({
             );
           })}
         </div>
+      )}
+
+      {importing && (
+        <ImportDocumentModal
+          title="Import a project file"
+          blurb={`Creates a new project from an exported ${PROJECT_FILE_EXTENSION} settings file — it never overwrites one you already have.`}
+          sources={documentSources}
+          onCancel={() => setImporting(false)}
+          onChooseFile={(target) => {
+            setImporting(false);
+            void handleImport(target);
+          }}
+        />
       )}
 
       {creating && (

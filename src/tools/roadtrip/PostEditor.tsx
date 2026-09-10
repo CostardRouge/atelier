@@ -555,7 +555,16 @@ export default function PostEditor({
     // container query only ever matches an ancestor, so classes like
     // `@min-[860px]:grid` on the container element itself never apply.
     <section className="@container flex-1 min-h-0 flex flex-col" aria-label="Hook">
-    <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-auto @min-[860px]:grid @min-[860px]:grid-cols-[minmax(0,1fr)_22rem] @min-[860px]:grid-rows-[auto_minmax(0,1fr)] @min-[860px]:gap-x-5 @min-[860px]:gap-y-3 @min-[860px]:overflow-hidden">
+    <div
+      className={`flex-1 min-h-0 flex flex-col gap-4 ${
+        // Stacked on a TABLET the inspector is still in this column, so the
+        // column scrolls. Stacked on a phone it is a sheet, nothing here
+        // outgrows the screen, and the stage flexes into whatever the docked
+        // library leaves — a scroll container would hand it an indefinite
+        // height again, which is the trap `frontend.md` names.
+        compact ? '' : 'overflow-auto'
+      } @min-[860px]:grid @min-[860px]:grid-cols-[minmax(0,1fr)_22rem] @min-[860px]:grid-rows-[auto_minmax(0,1fr)] @min-[860px]:gap-x-5 @min-[860px]:gap-y-3 @min-[860px]:overflow-hidden`}
+    >
       <div className="flex flex-col gap-1 min-w-0 @min-[860px]:col-start-2 @min-[860px]:row-start-1">
         {/* ONE row again, navigation and status together — the status pill is
             no longer a sentence of uncontrolled length but a 1.9rem lozenge
@@ -613,9 +622,17 @@ export default function PostEditor({
           onChange={(e) => onChangePost({ ...post, title: e.target.value })}
           placeholder="Untitled piece"
           aria-label="What this piece shows"
-          className="w-full font-serif text-[1.25rem] leading-tight bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0.5 placeholder:text-faint placeholder:italic"
+          className={`w-full leading-tight bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0.5 placeholder:text-faint placeholder:italic ${
+            // Every pixel this takes is one the picture does not get, and on a
+            // phone the picture is the whole screen's job.
+            compact ? 'font-serif text-[1rem]' : 'font-serif text-[1.25rem]'
+          }`}
         />
-        <p className="m-0 px-1 font-mono text-[0.68rem] text-muted">
+        <p
+          className={`m-0 px-1 font-mono text-muted ${
+            compact ? 'text-[0.62rem] -mt-0.5' : 'text-[0.68rem]'
+          }`}
+        >
           {formatIsoDate(post.date)} · {post.kind}
         </p>
       </div>
@@ -624,7 +641,14 @@ export default function PostEditor({
           the one thing about a piece you cannot see while you work on it.
           Wide it is a column against the stage; stacked it is a row under it,
           which is also why the rail is a child of the queried layout. */}
-      <div className="min-w-0 flex flex-col gap-3 @min-[860px]:min-h-0 @min-[860px]:col-start-1 @min-[860px]:row-start-1 @min-[860px]:row-span-2">
+      {/* On a compact shell this column FLEXES, so the stage inside it can give
+          up height to the docked library. Stacked on a tablet it keeps its
+          content height and the column scrolls instead. */}
+      <div
+        className={`min-w-0 flex flex-col gap-3 @min-[860px]:min-h-0 @min-[860px]:col-start-1 @min-[860px]:row-start-1 @min-[860px]:row-span-2 ${
+          compact ? 'flex-1 min-h-0' : ''
+        }`}
+      >
         {/* Centred as a PAIR, and the picture's column capped to the width
             the picture actually takes (reported by the stage from the height
             it was given): a portrait frame on a wide screen used to centre

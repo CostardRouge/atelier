@@ -58,7 +58,7 @@ import {
   type RemoteTripRow,
 } from '../../shared/roadtrip/trip-remote';
 import TripDetailsModal, { type TripDetails, type TimelineSourceOption } from './TripDetailsModal';
-import ImportTripModal from './ImportTripModal';
+import ImportDocumentModal from '../../shared/ui/ImportDocumentModal';
 import TripCoverModal from './TripCoverModal';
 import { HEATMAP_LEVELS } from './heatmap-ramp';
 import useCoverThumbs from './use-cover-thumbs';
@@ -1056,7 +1056,9 @@ export default function TripGallery({
       )}
 
       {importing && (
-        <ImportTripModal
+        <ImportDocumentModal
+          title="Import a trip file"
+          blurb={`Creates a new trip from an exported ${TRIP_FILE_EXTENSION} backup — it never overwrites one you already have.`}
           sources={documentSources}
           onCancel={() => setImporting(false)}
           onChooseFile={(target) => {
