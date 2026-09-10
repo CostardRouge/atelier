@@ -8,6 +8,8 @@ import { HOME_PATH, toolForPath } from './tools';
 import ToolSwitcher from './ToolSwitcher';
 import { useHashRoute } from './use-hash-route';
 import BottomSheet from '../shared/ui/BottomSheet';
+import SectionRail from '../shared/ui/SectionRail';
+import { useSectionBar } from '../shared/ui/section-rail';
 import { useLayoutMode } from '../shared/ui/use-layout-mode';
 
 const COLLAPSE_KEY = 'atelier.library.collapsed';
@@ -65,6 +67,10 @@ export default function App() {
   // A sheet belongs to the screen it was opened on: switching tool or growing
   // the window past a phone both make it stale, so it closes.
   useEffect(() => setLibraryOpen(false), [path, compact]);
+  // What the active tool put in the thumb zone, if anything. A tool with no
+  // sections of its own (the reading tools) publishes none and gets no bar.
+  const sectionBar = useSectionBar();
+  const rail = compact && tool ? sectionBar : null;
 
   // Every tool runs in a fixed-height, FULL-WIDTH frame — editing wants every
   // pixel (a landscape clip beside two panels eats width fast), so tools run
@@ -161,7 +167,11 @@ export default function App() {
         className={
           tool
             ? compact
-              ? 'flex-1 min-h-0 flex flex-col px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]'
+              ? // The bar below pays the safe area when there is one, so the
+                // page must not pay it twice.
+                `flex-1 min-h-0 flex flex-col px-2 pt-2 ${
+                  rail ? 'pb-2' : 'pb-[max(0.5rem,env(safe-area-inset-bottom))]'
+                }`
               : 'flex-1 min-h-0 flex mt-3 flex-row gap-4'
             : undefined
         }
@@ -190,6 +200,10 @@ export default function App() {
           activeContent
         )}
       </main>
+
+      {/* The tool's own sections, in the thumb zone. The library is not one of
+          them — it is the shell's, and it stays in the app bar. */}
+      {rail && <SectionRail bar={rail} />}
 
       {/* The same panel, risen from the bottom instead of docked at the side.
           It scrolls its own list, so the sheet's body must not scroll too. */}

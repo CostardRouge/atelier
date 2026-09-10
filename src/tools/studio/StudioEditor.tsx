@@ -125,6 +125,9 @@ import type { ProjectDoc } from '../../shared/projects/project-types';
 import { hashedMediaRefs } from '../../shared/projects/media-identity';
 import { putProject } from '../../shared/projects/project-store';
 import type { Reconciliation } from '../../shared/projects/reconcile';
+import PanelHost from '../../shared/ui/PanelHost';
+import { usePublishSectionBar } from '../../shared/ui/section-rail';
+import { useIsCompact } from '../../shared/ui/use-layout-mode';
 
 /**
  * Clips with or without telemetry, and stills — the studio edits all three.
@@ -213,6 +216,32 @@ export default function StudioEditor({
   const isPhoto = !!activeImage;
 
   const [tab, setTab] = useState<PanelTab>('overlay');
+  // On a phone the inspector is a sheet and its tabs are the shell's bottom
+  // bar, so picking a section is also what raises the panel. It opens closed:
+  // the stage is what you came for, and a sheet over it on arrival would hide
+  // the very thing being edited.
+  const compact = useIsCompact();
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  // The shell draws them; the list is the SAME `TABS` the docked tab strip
+  // renders from, so the two placements can never drift apart. Memoised
+  // because the record carries a callback and is compared by identity.
+  usePublishSectionBar(
+    useMemo(
+      () =>
+        compact && active
+          ? {
+              sections: TABS,
+              active: tab,
+              label: 'Studio inspector',
+              onSelect: (id: string) => {
+                setTab(id as PanelTab);
+                setInspectorOpen(true);
+              },
+            }
+          : null,
+      [compact, active, tab],
+    ),
+  );
   const [activeError, setActiveError] = useState(false);
   const [activeInfo, setActiveInfo] = useState<ContainerInfo>({});
   // Telemetry as parsed, with rates derived against the file's own seconds; the
@@ -1732,16 +1761,26 @@ export default function StudioEditor({
           {lutStack.error && <p className={notice}>{lutStack.error}</p>}
         </div>
 
-        {/* Inspector */}
+        {/* Inspector — a column beside the stage wherever there is width for
+            one, a sheet over it on a phone. Same content either way: the tabs
+            are the only thing that moves, to the shell's bottom bar. */}
         {active && (
-          <div className="flex flex-col gap-3 @min-[800px]:w-[340px] flex-none min-h-0 @max-[800px]:max-h-[45dvh] border border-line rounded-paper bg-surface p-3">
-            <div
-              className="flex gap-1 p-1 rounded-full bg-paper border border-line flex-none"
-              role="tablist"
-              aria-label="Inspector"
-            >
-              {TABS.map(tabButton)}
-            </div>
+          <PanelHost
+            asSheet={compact}
+            open={inspectorOpen}
+            onClose={() => setInspectorOpen(false)}
+            title={TABS.find((t) => t.id === tab)?.label ?? 'Inspector'}
+            className="flex flex-col gap-3 @min-[800px]:w-[340px] flex-none min-h-0 @max-[800px]:max-h-[45dvh] border border-line rounded-paper bg-surface p-3"
+          >
+            {!compact && (
+              <div
+                className="flex gap-1 p-1 rounded-full bg-paper border border-line flex-none"
+                role="tablist"
+                aria-label="Inspector"
+              >
+                {TABS.map(tabButton)}
+              </div>
+            )}
 
             <div className="flex flex-col gap-3 flex-1 min-h-0 overflow-auto">
               {tab === 'overlay' && (
@@ -2313,7 +2352,7 @@ export default function StudioEditor({
                 </div>
               )}
             </div>
-          </div>
+          </PanelHost>
         )}
       </div>
       </div>

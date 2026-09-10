@@ -46,6 +46,9 @@ import { usePostExports } from './use-post-exports';
 import useRailThumbs from './use-rail-thumbs';
 import { pickable, useSlideLibrary } from './use-slide-library';
 import { useTripGrade } from './use-trip-grade';
+import PanelHost from '../../shared/ui/PanelHost';
+import { usePublishSectionBar } from '../../shared/ui/section-rail';
+import { useIsCompact } from '../../shared/ui/use-layout-mode';
 
 interface PostEditorProps {
   trip: TripDoc;
@@ -113,6 +116,29 @@ export default function PostEditor({
   const [selected, setSelected] = useState(0);
   const [piece, setPiece] = useState<BadgePiece>('kicker');
   const [tab, setTab] = useState<PanelTab>('content');
+  // On a phone the inspector is a sheet and its four tabs are the shell's
+  // bottom bar, so picking a section is also what raises the panel. It opens
+  // closed: the badge on its picture is what you came to look at.
+  const compact = useIsCompact();
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  // The shell draws them, from the SAME `TABS` the docked strip renders from.
+  usePublishSectionBar(
+    useMemo(
+      () =>
+        compact
+          ? {
+              sections: TABS,
+              active: tab,
+              label: 'Piece inspector',
+              onSelect: (id: string) => {
+                setTab(id as PanelTab);
+                setInspectorOpen(true);
+              },
+            }
+          : null,
+      [compact, tab],
+    ),
+  );
   /** The trip-wide sheet, and which of its sections was asked for. */
   const [tripSheet, setTripSheet] = useState<TripSettingsSection | null>(null);
 
@@ -694,18 +720,27 @@ export default function PostEditor({
         </div>
       </div>
 
-      <div className="w-full min-w-0 flex flex-col gap-3 @min-[860px]:min-h-0 @min-[860px]:col-start-2 @min-[860px]:row-start-2">
+      <PanelHost
+        asSheet={compact}
+        open={inspectorOpen}
+        onClose={() => setInspectorOpen(false)}
+        title={TABS.find((t) => t.id === tab)?.label ?? 'Piece'}
+        className="w-full min-w-0 flex flex-col gap-3 @min-[860px]:min-h-0 @min-[860px]:col-start-2 @min-[860px]:row-start-2"
+      >
         {/* Four tabs share one row, so the container is a pill again: it was
             a soft rectangle only because six of them wrapped onto two rows,
             and a `rounded-full` box stretched over two rows reads as a blob
-            rather than a toolbar. */}
-        <div
-          className="flex-none flex gap-1 p-1 rounded-full border border-line bg-surface"
-          role="tablist"
-          aria-label="Piece inspector"
-        >
-          {TABS.map(tabButton)}
-        </div>
+            rather than a toolbar. On a phone they are the shell's bottom bar
+            instead, so there is no strip here at all. */}
+        {!compact && (
+          <div
+            className="flex-none flex gap-1 p-1 rounded-full border border-line bg-surface"
+            role="tablist"
+            aria-label="Piece inspector"
+          >
+            {TABS.map(tabButton)}
+          </div>
+        )}
 
         {/* The piece in hand, rendered ONCE above the body: the Content and
             Look tabs both edit it, and two copies of the same six chips read
@@ -793,7 +828,7 @@ export default function PostEditor({
             />
           )}
         </div>
-      </div>
+      </PanelHost>
     </div>
 
     {tripSheet && (
