@@ -2,7 +2,17 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      `viewport-fit=cover` is what makes `env(safe-area-inset-*)` mean anything:
+      without it every inset is 0, the shell's own safe-area padding is dead
+      code, and an installed launch is letterboxed inside the safe area by the
+      system instead of painting its own paper up to the edges.
+
+      No `maximum-scale`, no `user-scalable=no`: pinch-zoom stays. A form that
+      must not zoom the page under it is answered by 16px controls, which is
+      the rule the modals already follow.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta
       name="description"
       content="A quiet, local-first studio for your captures — view flight telemetry in sync with the frame, grade footage with LUTs, and more. Everything stays on your machine."

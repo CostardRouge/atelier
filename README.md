@@ -793,6 +793,14 @@ saved in Safari are not in it. Carry one over with a `.roadtrip.json` or
 `.atelier.json` export, or keep it on a Winnow and sign in there. Android has
 no such split — the installed app and the browser share one origin.
 
+**A tool screen behaves like an app screen, not a web page.** The masthead and
+the section bar at the bottom stay where they are, only the lists between them
+scroll, and the page underneath cannot be dragged or bounced: the shell locks
+the document (`data-shell="fixed"` on `<html>`) for as long as a tool is open
+and hands the scroll back on Home and `#/sources`, which are reading pages. The
+viewport is declared `viewport-fit=cover`, which is what lets the app pay for a
+notch and a home indicator itself. Pinch-zoom is untouched.
+
 ### Local development
 
 ```bash

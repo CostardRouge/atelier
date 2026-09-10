@@ -100,6 +100,28 @@ export default function App() {
     localStorage.setItem(COLLAPSE_KEY_MEDIUM, collapsedMedium ? '1' : '0');
   }, [collapsedMedium]);
 
+  // **A tool screen is an APP, so the document itself must not scroll.**
+  // The frame is already `h-dvh` and clips, and in a fixed-size browser that
+  // is the end of it — measured at 390×844, `scrollHeight === clientHeight`.
+  // On iOS it is not: the initial containing block is the LARGE viewport
+  // (toolbars retracted) while `dvh` is the CURRENT one, so `<html>` stays
+  // about a toolbar taller than the frame inside it and the whole page slides
+  // under a finger — the masthead leaves the top, the section bar lifts off
+  // the bottom, and the paper shows below the frame. Nothing in the app's own
+  // boxes can fix that: the overflow belongs to the document.
+  //
+  // So the shell tells the document which of its two lives it is in, and
+  // `index.css` locks the one that is an app (height, overflow, and the
+  // overscroll that is the rubber band). The reading pages — Home, `#/sources`
+  // — keep the ordinary page scroll they are written for.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.shell = tool ? 'fixed' : 'flow';
+    return () => {
+      delete root.dataset.shell;
+    };
+  }, [tool]);
+
   const [libraryOpen, setLibraryOpen] = useState(false);
   // A sheet belongs to the screen it was opened on: switching tool or growing
   // the window past a phone both make it stale, so it closes.
@@ -136,7 +158,17 @@ export default function App() {
     : 'h-dvh flex flex-col min-h-0 overflow-hidden w-full px-4 pt-3 pb-3';
 
   return (
-    <div className={tool ? toolShell : 'max-w-[1080px] mx-auto px-[clamp(1.25rem,5vw,3.5rem)] pt-[clamp(1.25rem,4vw,3rem)] pb-20'}>
+    // The reading pages keep the page scroll and their own rhythm; the only
+    // thing `viewport-fit=cover` changes for them is that their top margin
+    // must never be less than a notch, whatever a launch decides to put there.
+    // Left and right are paid by `body` (`index.css`).
+    <div
+      className={
+        tool
+          ? toolShell
+          : 'max-w-[1080px] mx-auto px-[clamp(1.25rem,5vw,3.5rem)] pt-[max(clamp(1.25rem,4vw,3rem),env(safe-area-inset-top))] pb-20'
+      }
+    >
       <header
         className={`flex items-baseline justify-between gap-4 border-b border-line ${
           tool ? (compact ? 'flex-none h-12 px-3 items-center' : 'pb-2.5') : 'pb-4'
