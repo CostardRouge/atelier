@@ -36,7 +36,7 @@ export default function ExifTool() {
   const open = photos.find((p) => p.id === openId) ?? null;
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto max-[820px]:overflow-visible pb-4">
+    <div className="flex-1 min-h-0 overflow-y-auto pb-4">
       {open ? (
         <DetailView photo={open} onBack={() => setOpenId(null)} />
       ) : photos.length === 0 ? (
