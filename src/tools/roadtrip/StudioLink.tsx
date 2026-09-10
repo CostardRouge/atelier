@@ -98,7 +98,7 @@ export default function StudioLink({
       }
       let next = withHook(
         doc,
-        hookInjection(elements, post.badge.durationSeconds, shades, post.title || 'Road Trip hook'),
+        hookInjection(elements, post.badge.durationSeconds, shades, post.title || 'Trip hook'),
       );
       // The closing card goes with the hook — into the project's outro slot —
       // when the piece closes with the CTA. Unticked, a previously sent card

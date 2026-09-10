@@ -544,6 +544,10 @@ Dragging a slide moves it within `post.slides` (`moveItem` in `deck.ts`, pure an
 
 **Decision.** `TripGallery`'s "import to" `<select>` used to sit in the header at all times, useful only during the rare import gesture. It is now `ImportTripModal`, opened by the "Import a trip file" button — same "Keep on" picker as `NewTripModal`, shown only when `documentSources.length > 1`. With one source the button skips the modal and picks the file directly, so the common case stays one click. **How to apply**: a control that is only relevant during one gesture belongs behind that gesture's modal, not permanently in the header — the gallery header's job is the trip list, not import plumbing.
 
+## The tool is called Trips; the code keeps `roadtrip` (2026-09-10)
+
+**From the maintainer**: *"roadtrip to be renamed Trips"*. What moved is the NAME on screen — `Tool.label` in the registry (so the masthead, the switcher and the home card follow), the publisher the Library sidebar prints beside a day (`MediaScope.publisher`), the hook scene's default name in the Studio, and the README. What deliberately did NOT move, and must not: the route `#/roadtrip/…`, the tool id, the IndexedDB database name, the `.roadtrip.json` extension, every module path under `roadtrip/`, and the `roadtrip:` prefix the Studio bridge marks its elements with. Renaming any of those breaks every link ever made, every trip file already exported and every project already briefed — for a word. **How to apply**: `roadtrip` is the slug, `Trips` is the name; a new user-visible string says Trips and nothing else moves. A project briefed before this keeps `Road Trip hook` on its stored scene until the next send, which is the ordinary cost of a default.
+
 ## Open, and decided but not built (2026-08-23)
 
 - **The export-reminder banner is still unbuilt.** The `.roadtrip.json` file itself now exists (see below); what is missing is the nudge the maintainer asked for — a **discreet banner** ("last export 12 days ago"), never a blocking prompt, so a cleared IndexedDB cannot cost him a year of tracking.

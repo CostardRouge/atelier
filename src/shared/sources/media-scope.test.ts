@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { isSingleDay, sameScope, type MediaScope } from './media-scope';
 
-const day: MediaScope = { from: '2026-02-12', to: '2026-02-12', label: '12 Feb 2026', publisher: 'Road Trip' };
+const day: MediaScope = { from: '2026-02-12', to: '2026-02-12', label: '12 Feb 2026', publisher: 'Trips' };
 
 describe('sameScope', () => {
   it('is true for the same span, words and publisher — so a re-render publishes nothing new', () => {

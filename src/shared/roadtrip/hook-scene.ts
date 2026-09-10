@@ -82,7 +82,7 @@ export function hookInjection(
   badgeElements: readonly OverlayElement[],
   durationSeconds: number,
   shades: readonly Shade[] = [],
-  name = 'Road Trip hook',
+  name = 'Trip hook',
 ): HookInjection {
   const end = Number.isFinite(durationSeconds) && durationSeconds > 0 ? durationSeconds : 4;
   return {

@@ -154,7 +154,7 @@ export default function TripOverview({
             from: selected,
             to: selected,
             label: formatIsoDate(selected),
-            publisher: 'Road Trip',
+            publisher: 'Trips',
             // Nothing here is waiting for a picture: looking at the day's
             // media is the point, so a click should show it large.
             intent: 'browse',

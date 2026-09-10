@@ -11,7 +11,7 @@ Today it ships nine tools, converging into a single studio:
   its overlays, look and layout, remembers which folder its media lives in,
   and reopens in one click. Edit on one stage — overlays, LUT, export —
   **clips and photographs alike**.
-- **Road Trip** — plan and track how a journey gets told. Give a trip its two
+- **Trips** — plan and track how a journey gets told. Give a trip its two
   dates and every day of it becomes a cell in a contribution-style grid; the
   holes are the days you have never posted from.
 - **DJI Telemetry** — view DJI drone flight telemetry in sync with the video it
@@ -39,14 +39,14 @@ Today it ships nine tools, converging into a single studio:
 > - The Flight Map's **base map**: turning it on fetches map tiles from
 >   OpenStreetMap, which reveals the viewed area to that tile server. The
 >   flight path itself always draws locally.
-> - Road Trip's **place search**: looking a stage's place up sends *the words
+> - The **place search** in Trips: looking a stage's place up sends *the words
 >   you type* to OpenStreetMap's Nominatim service, and gets a name, a region
 >   and coordinates back. Every place can be typed by hand instead, so the
 >   feature is a convenience and never a requirement.
 >
 > A third kind of request exists only once you have connected a **Winnow**
 > instance of your own (see "Sources" under the Studio): media is fetched from
-> it, and a Road Trip can be kept on it, under your account there. Nothing is
+> it, and a trip can be kept on it, under your account there. Nothing is
 > sent to a server you did not name yourself.
 
 Tools that consume the same kinds of files (photos, videos, DJI clips) share a
@@ -221,7 +221,7 @@ recomposes for each variant's frame like every overlay, and it rides only the
 variants that carry the overlays — a clean master stays clean. The stage
 cannot scrub past the clip, so the Overlay tab's Outro row carries its own
 preview, painted by the very renderer the export uses; edit the lines, the
-hold, the ground and the QR link there. (Road Trip fills this slot with the
+hold, the ground and the QR link there. (Trips fills this slot with the
 trip's call to action when it briefs a project — see the bridge below.)
 
 **The instruments.** A **heading tape** — the cockpit ribbon: a slice of the
@@ -362,10 +362,12 @@ breaks a layout.
 
 Next phase: the remaining tools become studio panels.
 
-## Road Trip tool
+## Trips tool
 
 Editing a clip is one problem; telling a whole journey, months after it
-happened, is another. Road Trip (`#/roadtrip`) is about the second one.
+happened, is another. Trips is about the second one. Its route is still
+`#/roadtrip` — the name on screen changed, every link ever made still
+resolves.
 
 **A trip is its two dates.** Give a trip a name, a destination and the days you
 left and came back, and everything else derives from that: day 27 of 310 is a
@@ -594,7 +596,7 @@ error-correction level M, versions 1 to 10 (213 characters); a link that does
 not fit is refused with a reason rather than drawn as a code that scans to half
 a URL.
 
-**The Studio and Road Trip are joined up.** A piece can link the Studio project
+**The Studio and Trips are joined up.** A piece can link the Studio project
 its clip is graded in — pick an existing one or create it from the piece — and
 the badge is then **sent into that project as an intro scene**. One export from
 the Studio carries the grade, the telemetry overlay and the day badge, so there
@@ -701,7 +703,7 @@ sidecar. Open `#/connect`, or the "or connect a Winnow" link under the drop
 zone, confirm the instance's address, and it becomes a source with **its own
 tab in the Library**, beside `Local` — the two never mix. The instance's tab
 is a *view*, not a pile: it lists what the instance holds for **the day the
-active tool has open** (a Road Trip piece's day, or the day selected in the
+active tool has open** (a trip piece's day, or the day selected in the
 trip overview; a date field when nothing is open), and re-asks when that day
 changes, so nothing accumulates and nothing needs clearing. One click on a
 tile fetches that picture into the library as an ordinary file — the
@@ -712,7 +714,7 @@ filters — to tick many at once, or to take the **original** instead, with its
 weight shown first. A DJI clip brings its flight log along either way.
 
 When the Winnow serves its **timeline** (media grouped into legs by place and
-date), the browser gains a third way in, **by leg**, and Road Trip can be seeded
+date), the browser gains a third way in, **by leg**, and a trip can be seeded
 from it: the legs become the trip's stages — span, places, order — and nothing
 else; no post is created, so the grid of days still to tell stays yours. Re-run
 it later and it proposes what the timeline gained, renamed or lost, one tick
@@ -824,7 +826,7 @@ the Telemetry panels use, so it stays frame-accurate.
 The path always draws **offline**: MapLibre renders the track line on a plain
 backdrop with no tiles, so nothing leaves the machine. A **"Load map
 background"** toggle adds an OpenStreetMap raster layer on demand — one of the
-suite's two optional network requests (the other is Road Trip's place search),
+suite's two optional network requests (the other is the place search in Trips),
 surfaced explicitly because it reveals the viewed area to the tile server.
 
 MapLibre is a heavier dependency, so it's **dynamically imported** (JS *and*
