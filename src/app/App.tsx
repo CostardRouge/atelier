@@ -7,7 +7,7 @@ import { REPO_URL } from './site';
 import { HOME_PATH, toolForPath } from './tools';
 import ToolSwitcher from './ToolSwitcher';
 import { useHashRoute } from './use-hash-route';
-import BottomSheet from '../shared/ui/BottomSheet';
+import DockedPanel, { type DockHeight } from '../shared/ui/DockedPanel';
 import SectionRail from '../shared/ui/SectionRail';
 import { useSectionBar } from '../shared/ui/section-rail';
 import { useLayoutMode } from '../shared/ui/use-layout-mode';
@@ -101,9 +101,15 @@ export default function App() {
   }, [collapsedMedium]);
 
   const [libraryOpen, setLibraryOpen] = useState(false);
+  // Which of the dock's two rests it sits at. Half is for choosing, the strip
+  // for composing; it opens at half because opening it IS the choosing.
+  const [libraryHeight, setLibraryHeight] = useState<DockHeight>('half');
   // A sheet belongs to the screen it was opened on: switching tool or growing
   // the window past a phone both make it stale, so it closes.
-  useEffect(() => setLibraryOpen(false), [path, mode]);
+  useEffect(() => {
+    setLibraryOpen(false);
+    setLibraryHeight('half');
+  }, [path, mode]);
   // What the active tool put in the thumb zone, if anything. A tool with no
   // sections of its own (the reading tools) publishes none and gets no bar.
   const sectionBar = useSectionBar();
@@ -170,7 +176,10 @@ export default function App() {
           {tool && !libraryDocked && !railOpensLibrary && (
             <button
               type="button"
-              onClick={() => setLibraryOpen(true)}
+              onClick={() => {
+                setLibraryHeight('half');
+                setLibraryOpen(true);
+              }}
               aria-label="Open the asset library"
               aria-expanded={libraryOpen}
               className="w-9 h-9 grid place-items-center rounded-lg border border-line bg-surface text-ink-soft hover:text-accent hover:border-line-strong transition-colors"
@@ -239,33 +248,43 @@ export default function App() {
         )}
       </main>
 
-      {/* The tool's own cells, in the thumb zone. */}
-      {rail && (
-        <SectionRail
-          bar={rail}
-          onLibrary={railOpensLibrary ? () => setLibraryOpen(true) : undefined}
-        />
-      )}
-
-      {/* The same panel, risen from the bottom instead of docked at the side —
-          a phone is the one width with no room for a column at all. It scrolls
-          its own list, so the sheet's body must not scroll as well. */}
-      {tool && compact && (
+      {/* The same panel, taking a SHARE of the height rather than covering it:
+          on a phone the library and the piece it dresses are both on screen,
+          so choosing a picture is a comparison instead of a guess followed by
+          a check. `<main>` above is `flex-1 min-h-0`, so the stage gives up
+          exactly what this takes and nothing overflows. */}
+      {tool && compact && libraryOpen && (
         <ErrorBoundary resetKey={`library:${tool.id}`}>
-          <BottomSheet
-            open={libraryOpen}
+          <DockedPanel
+            height={libraryHeight}
+            onHeight={setLibraryHeight}
             onClose={() => setLibraryOpen(false)}
             title="Library"
-            bodyScrolls={false}
           >
             <AssetSidebar
               tool={tool}
               collapsed={false}
               onToggle={() => setLibraryOpen(false)}
               variant="sheet"
+              row={libraryHeight === 'strip'}
             />
-          </BottomSheet>
+          </DockedPanel>
         </ErrorBoundary>
+      )}
+
+      {/* The tool's own cells, in the thumb zone. */}
+      {rail && (
+        <SectionRail
+          bar={rail}
+          onLibrary={
+            railOpensLibrary
+              ? () => {
+                  setLibraryHeight('half');
+                  setLibraryOpen(true);
+                }
+              : undefined
+          }
+        />
       )}
 
       {/* Tools run in a fixed-height frame, so the global footer would push it

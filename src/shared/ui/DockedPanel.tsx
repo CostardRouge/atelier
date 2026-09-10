@@ -118,7 +118,7 @@ export default function DockedPanel({
     <section
       aria-label={title}
       style={{ height: `${fraction * 100}dvh` }}
-      className={`flex-none flex flex-col min-h-[5.25rem] border-t border-line-strong bg-surface ${
+      className={`flex-none flex flex-col min-h-[6.5rem] border-t border-line-strong bg-surface ${
         live === null ? 'transition-[height] duration-300 ease-paper' : ''
       }`}
     >
@@ -137,6 +137,10 @@ export default function DockedPanel({
         <span className="block w-9 h-1 rounded-full bg-line-strong" />
       </div>
 
+      {/* At the strip there is no header: 110px of screen has room for one row
+          of candidates OR a title bar, and the row is the reason it is open.
+          The grip goes back up, and the shell's own control closes it. */}
+      {height === 'half' && (
       <div className="flex-none flex items-center gap-2 px-3 pb-1.5">
         <h2 className="m-0 font-mono text-[0.6rem] tracking-[0.14em] uppercase text-muted font-normal">
           {title}
@@ -151,6 +155,7 @@ export default function DockedPanel({
           ✕
         </button>
       </div>
+      )}
 
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">{children}</div>
     </section>

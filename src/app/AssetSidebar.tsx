@@ -114,11 +114,17 @@ interface AssetSidebarProps {
   /**
    * How the shell is showing it. `docked` is the column beside the tool, with
    * its own frame and its collapse rail — every width above a phone. `sheet`
-   * is the same panel inside a {@link BottomSheet}: the sheet already draws
-   * the frame, the title and the dismissal, so this drops all three and never
-   * offers to collapse, a sheet's collapsed state being closed.
+   * is the same panel inside the shell's compact dock, which already draws the
+   * frame, the title and the dismissal, so this drops all three and never
+   * offers to collapse: the dock's collapsed state is its strip.
    */
   variant?: 'docked' | 'sheet';
+  /**
+   * The dock is at its STRIP rest — one row of candidates, nothing else. The
+   * filter, the tabs, the drop zone and the footer all belong to the height
+   * you choose at, not to the one you compose at.
+   */
+  row?: boolean;
 }
 
 /**
@@ -141,8 +147,13 @@ export default function AssetSidebar({
   collapsed,
   onToggle,
   variant = 'docked',
+  row = false,
 }: AssetSidebarProps) {
   const asSheet = variant === 'sheet';
+  // A grid of pictures rather than a list of filenames, wherever the panel is
+  // a picker: a row's width goes on a filename nobody reads while choosing
+  // between two frames of the same moment.
+  const asTiles = asSheet;
   const lib = useAssetLibrary();
   const accepts = tool.accepts ?? [];
   const [dragging, setDragging] = useState(false);
@@ -352,6 +363,38 @@ export default function AssetSidebar({
     }
   }
 
+  // --- The dock's STRIP rest ------------------------------------------------
+  // One row of candidates, out of the way while you compose. Everything that
+  // belongs to choosing — the filter, the tabs, the drop zone, the footer —
+  // belongs to the height you choose at, so none of it is here.
+  if (asSheet && row) {
+    return (
+      <div className="flex-1 min-h-0 flex items-center gap-1.5 px-2 pb-2 overflow-x-auto overscroll-x-contain touch-pan-x">
+        {shown.length === 0 ? (
+          <p className="m-0 px-2 text-[0.74rem] text-muted">
+            Nothing here yet — pull the grip up to add some.
+          </p>
+        ) : (
+          shown.map((a) => (
+            <AssetTile
+              key={a.id}
+              asset={a}
+              meta={lib.meta.get(a.id)}
+              active={lib.activeId === a.id}
+              usable={assetUsableBy(accepts, a)}
+              onEnsure={() => lib.ensureMeta(a.id)}
+              onActivate={() => activate(a.id)}
+              // No corner verb at 58px: it would cover a fifth of the tile,
+              // and looking at one large is what the half rest above is for.
+              onPreview={null}
+              className="flex-none w-[58px] h-[58px]"
+            />
+          ))
+        )}
+      </div>
+    );
+  }
+
   // --- Collapsed rail -------------------------------------------------------
   // Only the docked column has a rail: a sheet has nothing to reclaim by
   // narrowing, so the shell closes it instead. Docked starts at 820px, and
@@ -505,7 +548,42 @@ export default function AssetSidebar({
         </div>
       )}
 
-      {!remoteTab && (
+      {/* Dropping a folder is a DESKTOP gesture. On a phone the panel is a
+          picker and this zone was spending a third of it on something touch
+          cannot do — so there it folds into one line above the grid, and the
+          two links that actually work stay reachable. */}
+      {!remoteTab && asTiles && (
+        <div className="px-3 pb-2 flex items-center gap-2 text-[0.76rem] text-muted">
+          <span className={legend}>Add</span>
+          <button
+            type="button"
+            className={linkBtn}
+            aria-label="Add files"
+            onClick={() => run(pickFiles)}
+          >
+            files
+          </button>
+          <button
+            type="button"
+            className={linkBtn}
+            aria-label="Add a folder"
+            onClick={() => run(pickDirectory)}
+          >
+            a folder
+          </button>
+          {!connection && (
+            <button
+              type="button"
+              className={`${linkBtn} ml-auto`}
+              onClick={() => navigate('/sources')}
+            >
+              connect a Winnow
+            </button>
+          )}
+        </div>
+      )}
+
+      {!remoteTab && !asTiles && (
         <div className="px-3.5 pb-3">
           <div
             className={`border-[1.5px] border-dashed rounded-paper text-center px-3 py-3.5 text-[0.82rem] leading-snug bg-paper/40 transition-colors ${
@@ -717,24 +795,50 @@ export default function AssetSidebar({
             Nothing here yet. Add some assets above — they stay on your machine.
           </p>
         ) : (
-          shown.map((a) => (
-            <AssetRow
-              key={a.id}
-              asset={a}
-              meta={lib.meta.get(a.id)}
-              selected={lib.selection.has(a.id)}
-              active={lib.activeId === a.id}
-              usable={assetUsableBy(accepts, a)}
-              onEnsure={() => lib.ensureMeta(a.id)}
-              onToggle={() => lib.toggle(a.id)}
-              onActivate={() => activate(a.id)}
-              onPreview={a.parts.image || a.parts.video ? () => view(a.id) : null}
-              onRemove={() => lib.remove(a.id)}
-            />
-          ))
+          <div
+            className={
+              asTiles
+                ? 'grid grid-cols-4 gap-1.5 auto-rows-max pt-1'
+                : undefined
+            }
+          >
+            {shown.map((a) =>
+              asTiles ? (
+                <AssetTile
+                  key={a.id}
+                  asset={a}
+                  meta={lib.meta.get(a.id)}
+                  active={lib.activeId === a.id}
+                  usable={assetUsableBy(accepts, a)}
+                  onEnsure={() => lib.ensureMeta(a.id)}
+                  onActivate={() => activate(a.id)}
+                  onPreview={a.parts.image || a.parts.video ? () => view(a.id) : null}
+                  className="h-[66px]"
+                />
+              ) : (
+                <AssetRow
+                  key={a.id}
+                  asset={a}
+                  meta={lib.meta.get(a.id)}
+                  selected={lib.selection.has(a.id)}
+                  active={lib.activeId === a.id}
+                  usable={assetUsableBy(accepts, a)}
+                  onEnsure={() => lib.ensureMeta(a.id)}
+                  onToggle={() => lib.toggle(a.id)}
+                  onActivate={() => activate(a.id)}
+                  onPreview={a.parts.image || a.parts.video ? () => view(a.id) : null}
+                  onRemove={() => lib.remove(a.id)}
+                />
+              ),
+            )}
+          </div>
         )}
       </div>
 
+      {/* The tick count belongs to a LIST, not to a picker: a tool that reads
+          the ACTIVE asset is not told anything by six boxes being ticked, and
+          on a phone that line was two rows of screen saying nothing. */}
+      {!asTiles && (
       <div className="border-t border-line px-4 py-2.5 bg-paper/40 text-[0.74rem] text-ink-soft flex flex-col gap-0.5">
         <span>
           <b className="text-ink">{lib.selection.size} selected</b>
@@ -747,6 +851,7 @@ export default function AssetSidebar({
             : 'handles only — nothing uploaded, nothing decoded yet'}
         </span>
       </div>
+      )}
     </Frame>
   );
 }
@@ -1016,6 +1121,98 @@ function AssetRow({
  * A row's 80×56 cover — a button when there is something to look at, a plain
  * frame when there is not (a lone `.srt` has no picture to open).
  */
+/**
+ * One candidate, thumbnail first.
+ *
+ * The picker's row, and the two verbs are still two buttons — what changes is
+ * which one gets the tile. On a surface whose whole purpose is choosing, the
+ * big obvious target SETS the picture and looking at it large moves to a
+ * corner; on the docked column it is the other way round, because there the
+ * list is a library rather than a picker.
+ *
+ * No filename, no checkbox: the pool's tick decides nothing in a tool that
+ * reads the ACTIVE asset, and a name is not what tells two frames of the same
+ * moment apart.
+ */
+function AssetTile({
+  asset,
+  meta,
+  active,
+  usable,
+  onEnsure,
+  onActivate,
+  onPreview,
+  className,
+}: {
+  asset: Asset;
+  meta: MediaMeta | undefined;
+  active: boolean;
+  usable: boolean;
+  onEnsure: () => void;
+  onActivate: () => void;
+  onPreview: (() => void) | null;
+  className: string;
+}) {
+  // The cover is built only when the tile scrolls into view, like a row's —
+  // a pool of thousands must not decode itself to be listed.
+  const [ref, inView] = useInViewport<HTMLDivElement>();
+  useEffect(() => {
+    if (inView) onEnsure();
+  }, [inView, onEnsure]);
+
+  return (
+    <div
+      ref={ref}
+      className={`relative rounded-[10px] overflow-hidden bg-paper-2 ${className} ${
+        usable ? '' : 'opacity-45'
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onActivate}
+        disabled={!usable}
+        aria-pressed={active}
+        title={
+          usable
+            ? `Use ${asset.baseName} here`
+            : `${asset.baseName} — not usable by this tool`
+        }
+        className="absolute inset-0 w-full h-full p-0 border-0 bg-transparent cursor-pointer disabled:cursor-default flex items-center justify-center"
+      >
+        {meta?.thumbUrl ? (
+          <img src={meta.thumbUrl} alt="" className="w-full h-full object-cover block" />
+        ) : (
+          <span className="font-mono text-[0.5rem] text-[#8a8270] uppercase" aria-hidden="true">
+            {asset.parts.video ? '▶' : (meta?.imageType ?? '◇')}
+          </span>
+        )}
+      </button>
+      {/* The tile is the picture's name here, so the name goes on the tile —
+          quietly, and only where it does not cover the frame's subject. */}
+      <span className="absolute inset-x-0 bottom-0 px-1 pb-[2px] pt-2 bg-gradient-to-b from-transparent to-[rgba(16,15,13,0.6)] font-mono text-[0.5rem] text-paper truncate pointer-events-none">
+        {asset.baseName}
+      </span>
+      {active && (
+        <span
+          className="absolute inset-0 rounded-[10px] border-2 border-accent pointer-events-none"
+          aria-hidden="true"
+        />
+      )}
+      {onPreview && (
+        <button
+          type="button"
+          onClick={onPreview}
+          aria-label={`Look at ${asset.baseName}`}
+          title={`Look at ${asset.baseName}`}
+          className="absolute top-[2px] right-[2px] w-6 h-6 grid place-items-center rounded-md border-0 bg-[rgba(251,248,241,0.85)] text-ink-soft text-[0.66rem] cursor-pointer hover:bg-surface"
+        >
+          ⤢
+        </button>
+      )}
+    </div>
+  );
+}
+
 function Cover({
   onPreview,
   label,

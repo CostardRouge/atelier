@@ -24,6 +24,7 @@ import {
   type RenderBadgeOptions,
 } from '../../shared/roadtrip/badge-render';
 import type { HookBlock, Shade } from '../../shared/roadtrip/shades';
+import { useIsCompact } from '../../shared/ui/use-layout-mode';
 
 interface BadgeStageProps {
   file: File | null;
@@ -112,6 +113,9 @@ export default function BadgeStage({
   onRendered,
   onFit,
 }: BadgeStageProps) {
+  // Whether anything else is competing for this screen's height — see the
+  // wrapper's comment below.
+  const compactShell = useIsCompact();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chromeRef = useRef<HTMLCanvasElement>(null);
   const sourceRef = useRef<BadgeSource | null>(null);
@@ -503,14 +507,30 @@ export default function BadgeStage({
   return (
     // The wrapper decides how much room there is; the box inside takes the
     // largest aspect-fitting slice of it (measured above). Wide: the wrapper
-    // grows to the column's whole height. Stacked: it is as tall as a
-    // full-width picture, capped at 62vh so it never pushes the controls off
-    // a phone screen — `cqw` is the section's width, the editor's container.
-    <div className="flex flex-col items-center gap-2 min-h-0 w-full @min-[860px]:flex-1">
+    // grows to the column's whole height.
+    //
+    // Stacked, it depends on whether anything ELSE is taking height from the
+    // same screen. On a compact shell it FLEXES, because the library docks
+    // under it and the stage has to give up exactly what the dock takes — a
+    // stated `62vh` there stays 62vh and is simply clipped by the bar below.
+    // Everywhere else stacked (a tablet, where the inspector is still in this
+    // column and the column scrolls) it states its own height: as tall as a
+    // full-width picture, capped so it never pushes the controls off screen.
+    // `cqw` is the section's width, the editor's container.
+    //
+    // A VIEWPORT question, not the container one the layout splits on: what
+    // changes is the shell's height model, which no container can see.
+    <div
+      className={`flex flex-col items-center gap-2 min-h-0 w-full @min-[860px]:flex-1 ${
+        compactShell ? 'flex-1' : ''
+      }`}
+    >
       <div
         ref={frameRef}
         style={{ '--aspect': aspect } as React.CSSProperties}
-        className="relative flex items-center justify-center min-h-0 w-full h-[min(62vh,calc(100cqw/var(--aspect)))] @min-[860px]:h-auto @min-[860px]:flex-1"
+        className={`relative flex items-center justify-center min-h-0 w-full @min-[860px]:h-auto @min-[860px]:flex-1 ${
+          compactShell ? 'flex-1' : 'h-[min(62vh,calc(100cqw/var(--aspect)))]'
+        }`}
       >
         <div
           ref={boxRef}
