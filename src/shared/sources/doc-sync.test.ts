@@ -3,6 +3,8 @@ import {
   REMOTE_IDLE_MS,
   describeAgo,
   newSyncRecord,
+  pillLabel,
+  pillNeedsAction,
   pillText,
   reduceSync,
   shouldFlush,
@@ -224,5 +226,51 @@ describe('pillText — every status prints the line it really means', () => {
 
   it('gone', () => {
     expect(pillText(synced({ status: 'gone' }), HOST, now)).toBe(`deleted on ${HOST}`);
+  });
+});
+
+describe('pillLabel — the collapsed pill fits a header row', () => {
+  const ALL: SyncStatus[] = [
+    'synced',
+    'dirty',
+    'saving',
+    'offline',
+    'unauthenticated',
+    'forbidden',
+    'conflict',
+    'gone',
+  ];
+
+  it('every status has a word, and it is short enough to sit beside a button', () => {
+    for (const status of ALL) {
+      const label = pillLabel(status);
+      expect(label).not.toBe('');
+      expect(label.length).toBeLessThanOrEqual(10);
+    }
+  });
+
+  it('no two statuses wear the same word — the pill is the only thing on screen', () => {
+    expect(new Set(ALL.map(pillLabel)).size).toBe(ALL.length);
+  });
+
+  it('never names the host: the sentence does that, and a host is unbounded', () => {
+    for (const status of ALL) expect(pillLabel(status)).not.toContain(HOST);
+  });
+});
+
+describe('pillNeedsAction — what may never shrink to a bare dot', () => {
+  it('the four states waiting on the author', () => {
+    expect(pillNeedsAction('unauthenticated')).toBe(true);
+    expect(pillNeedsAction('forbidden')).toBe(true);
+    expect(pillNeedsAction('conflict')).toBe(true);
+    expect(pillNeedsAction('gone')).toBe(true);
+  });
+
+  it('the ordinary round trip resolves itself and asks nothing', () => {
+    expect(pillNeedsAction('synced')).toBe(false);
+    expect(pillNeedsAction('dirty')).toBe(false);
+    expect(pillNeedsAction('saving')).toBe(false);
+    // Offline retries on its own trigger — `shouldFlush` keeps it in the loop.
+    expect(pillNeedsAction('offline')).toBe(false);
   });
 });
