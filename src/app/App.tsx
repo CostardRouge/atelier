@@ -249,10 +249,22 @@ export default function App() {
         className={
           tool
             ? compact
-              ? // The bar below pays the safe area when there is one, so the
-                // page must not pay it twice.
-                `flex-1 min-h-0 flex flex-col px-2 pt-2 ${
-                  rail ? 'pb-2' : 'pb-[max(0.5rem,env(safe-area-inset-bottom))]'
+              ? // **No vertical gutter here.** The masthead and the section bar
+                // are fixed by construction on a tool screen, so a gap between
+                // them and the SCROLL CONTAINER is 8px of paper that content
+                // is then clipped against — reported from a phone as a stripe
+                // above a half-cut card, which is exactly what it is. Breathing
+                // room belongs INSIDE the scroller, where it scrolls away with
+                // the content; here it can only hold the content off the edge
+                // it is supposed to run to.
+                //
+                // The sides keep theirs: a card touching the screen edge is a
+                // different fault, and nothing is clipped horizontally.
+                //
+                // With no bar, the bottom inset is still owed to the device —
+                // but only what the device asks for, never a decorative extra.
+                `flex-1 min-h-0 flex flex-col px-2 ${
+                  rail ? '' : 'pb-[env(safe-area-inset-bottom)]'
                 }`
               : 'flex-1 min-h-0 flex mt-3 flex-row gap-4'
             : undefined

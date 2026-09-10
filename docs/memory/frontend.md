@@ -24,6 +24,16 @@ Read before touching UI, layout, the design tokens, or any MapLibre pane.
 
 **How to apply**: change the mark in the three sources, then `npm i --no-save sharp` (it must never enter `package.json` — CI would pay for a native install on every job) and `node scripts/gen-icons.mjs`, and commit the PNGs in the same commit. The paper `theme-color` and `apple-mobile-web-app-title` sit beside the links in `index.html`; there is one theme (`color-scheme: light`), so one `theme-color`.
 
+## A fixed edge takes no gutter (2026-09-10)
+
+**Reported from a phone, once the document was locked and the masthead and the section bar became fixed by construction**: a stripe of paper between the masthead's border and the content, with the first card cut across. Measured at 390×844: header `0→48`, the tool's SCROLL CONTAINER `56→779`, the bar `787→844` — `<main>` was paying an 8px vertical gutter, so the scroller began 8px inside the chrome and clipped its content against a gap.
+
+**The rule.** A gutter between a fixed edge and a scroll container is not spacing, it is paper the content gets clipped against: the content scrolls to the SCROLLER's edge, never to the screen's, so whatever sits between the two is permanently visible and permanently cut. Breathing room therefore belongs **inside** the scroller, where it scrolls away with the first row — `pt-3` on the two galleries' own sections, not on `<main>`. The sides keep their gutter (`px-2`): nothing is clipped horizontally, and a card touching the screen edge is a different fault.
+
+**What is still owed at the bottom**: with no section bar, `<main>` pays `env(safe-area-inset-bottom)` and nothing more — what the device asks for, never a decorative extra on top of it. With a bar, the bar pays it.
+
+**Verified** at 390×844 with a list long enough to scroll: the scroller runs `48→787`, flush with both, and scrolled content reaches the masthead's border with no stripe.
+
 ## The shell wears THREE layouts, and names them once (2026-09-10)
 
 **Decision, the maintainer's, taken off an interactive artifact showing all three widths side by side.** How much room the shell has is decided in ONE place — `shared/ui/layout-mode.ts`, DOM-free and tested — and published by the shell through `use-layout-mode.tsx` the way a tool publishes its media scope, inverted: `compact` (< 820px, a phone: the stage owns the screen, the tool's sections sit in a bottom bar, the panels are sheets over it), `medium` (820–1179: the library still docked at the left but collapsed to its rail, so a tool keeps the width its own layout needs), `expanded` (≥ 1180: the docked full library · stage · inspector, unchanged). **Why a published name rather than a utility**: the rule was spread by hand across dozens of literal `max-[820px]:` utilities in fourteen files, each re-deciding what small meant, and none of them able to say what the shell should DRAW at that width.

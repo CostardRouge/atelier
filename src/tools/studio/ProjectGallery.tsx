@@ -571,7 +571,13 @@ export default function ProjectGallery({
 
   return (
     <section
-      className="flex flex-col flex-1 min-h-0 gap-4 overflow-auto"
+      // The shell leaves no gutter between the fixed masthead and this
+      // scroller, on purpose (`App.tsx`): a gap there is paper the content
+      // gets clipped against. Breathing room belongs HERE instead, where it
+      // scrolls away with the first row rather than holding it off the edge.
+      className={`flex flex-col flex-1 min-h-0 gap-4 overflow-auto ${
+        compact ? 'pt-3' : ''
+      }`}
       aria-label="Studio projects"
     >
       <div className="flex items-center gap-4 flex-wrap">
