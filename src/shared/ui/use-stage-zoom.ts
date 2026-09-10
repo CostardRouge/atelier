@@ -1,29 +1,31 @@
 /**
- * View zoom for an editor stage: the picture is drawn bigger or smaller inside
- * a scroll box, and nothing about the document changes.
+ * View zoom for a day-sized zone: its content is drawn bigger or smaller
+ * inside a scroll box, and nothing about the document changes.
  *
- * The scale is applied by the CONSUMER, as layout size — the Studio multiplies
- * the canvas's max width/height, the badge stage multiplies its measured box —
- * so the scroll extent is the browser's own arithmetic and panning is native
- * scrolling (trackpad, scrollbars, shift-wheel). A CSS transform would have
- * left the scroll box measuring the unscaled element.
+ * The scale is applied by the CONSUMER, as layout size — the day grid
+ * multiplies its cell, the stage ruler its day width — so the scroll extent is
+ * the browser's own arithmetic and panning is native scrolling (trackpad,
+ * scrollbars, shift-wheel). A CSS transform would have left the scroll box
+ * measuring the unscaled element.
+ *
+ * A media PREVIEW is deliberately not a consumer: a view zoom over one fought
+ * the framing gestures the picture itself answers, so both editor stages now
+ * just fit their picture into the room they are given (`stage-zoom.ts`).
  *
  * Gestures:
  * - the +/− buttons of `StageZoomControl`, anchored on the viewport's centre;
- * - ctrl/⌘-wheel, which is also what a trackpad pinch sends, anchored on the
- *   pointer. A bare wheel is deliberately left alone: over the badge stage it
- *   already frames the picture inside the frame, a document edit;
+ * - the wheel, anchored on the pointer — ctrl/⌘ always, which is also what a
+ *   trackpad pinch sends, and a bare wheel where the zone asks for it
+ *   (`WheelZoom`);
  * - a two-finger pinch on a touchscreen, anchored on the fingers' centre, which
- *   also pans by that centre's movement — the editor stages set `touch-none`,
- *   so there is no native scrolling to inherit there. A zone that deliberately
- *   does NOT claim the touch (the trip overview's day grid and its stage ruler,
- *   where one finger has to scroll a track wider than the screen) leaves the
- *   browser first refusal on any gesture, so the pinch is best-effort there and
- *   `StageZoomControl` is the way in that always answers.
+ *   also pans by that centre's movement. Both zones deliberately do NOT claim
+ *   the touch (one finger has to scroll a track wider than the screen), which
+ *   leaves the browser first refusal on any gesture: the pinch is best-effort
+ *   there and `StageZoomControl` is the way in that always answers.
  *
- * While two fingers are down `pinching` is true and the stage's own drag
- * handlers must stand down, or the first finger would drag an element across
- * the frame under the gesture.
+ * While two fingers are down `pinching` is true and the zone's own drag
+ * handlers must stand down, or the first finger would drag a leg across the
+ * ruler under the gesture.
  */
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
@@ -40,16 +42,15 @@ import {
   wheelZooms,
   zoomByWheel,
   zoomLabel,
-  zoomedFit,
   type WheelZoom,
   type ZoomControls,
 } from './stage-zoom';
 
 export interface StageZoomOptions {
   /**
-   * What a bare wheel does. Defaults to `modifier` — the editor stages leave
-   * it to the page and to the badge stage's own framing zoom. The trip
-   * overview's zones pass `any`: nothing else there wants the wheel.
+   * What a bare wheel does. Defaults to `modifier`, which leaves it to the
+   * page or to whatever else the zone does with it. Both trip-overview zones
+   * pass `any`: nothing else there wants the wheel.
    */
   wheel?: WheelZoom;
   /**
@@ -74,14 +75,12 @@ export interface StageZoomOptions {
 }
 
 export interface StageZoom extends ZoomControls {
-  /** Two fingers are on the stage: ignore drags until they lift. */
+  /** Two fingers are on the zone: ignore drags until they lift. */
   pinching: boolean;
-  /** Put this on the scroll box that holds the stage. */
+  /** Put this on the scroll box that holds the zone. */
   viewportRef: RefObject<HTMLDivElement>;
   /** The scroll box's own size, measured — 0×0 until the first layout. */
   viewport: { width: number; height: number };
-  /** `max-width`/`max-height` for a picture fitted into that box at `scale`. */
-  fit: { maxWidth: string; maxHeight: string };
 }
 
 export function useStageZoom({
@@ -315,6 +314,5 @@ export function useStageZoom({
     pinching,
     viewportRef,
     viewport,
-    fit: zoomedFit(viewport, scale),
   };
 }
