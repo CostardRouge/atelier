@@ -54,6 +54,7 @@ import { DEFAULT_GUIDES } from '../../shared/overlay/guides';
 import { defaultElementsPreset } from '../../shared/overlay/overlay-types';
 import NewProjectModal, { type NewProjectChoices } from './NewProjectModal';
 import ImportDocumentModal from '../../shared/ui/ImportDocumentModal';
+import { pageScroll } from '../../shared/ui/page-scroll';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 
@@ -595,9 +596,7 @@ export default function ProjectGallery({
       // scroller, on purpose (`App.tsx`): a gap there is paper the content
       // gets clipped against. Breathing room belongs HERE instead, where it
       // scrolls away with the first row rather than holding it off the edge.
-      className={`flex flex-col flex-1 min-h-0 gap-4 overflow-auto ${
-        compact ? 'pt-3' : ''
-      }`}
+      className={`${pageScroll} ${compact ? 'pt-3' : ''}`}
       aria-label="Studio projects"
     >
       {/* The masthead already says "Atelier / Studio", and the gallery IS the

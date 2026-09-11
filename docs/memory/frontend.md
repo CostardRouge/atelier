@@ -32,6 +32,8 @@ Read before touching UI, layout, the design tokens, or any MapLibre pane.
 
 **What is still owed at the bottom**: the bar pays `env(safe-area-inset-bottom)`, and since 2026-09-10 a compact tool screen always has one, so `<main>` owes nothing.
 
+**The same rule read from the other end: a scroller owes air at its END (2026-09-11).** `<main>` paying a gutter is the stripe above; the scroller paying nothing is the complaint that followed — *"in the bottom of the pages we lack of padding"* — because the scroller's bottom edge IS the bar's top, so the last card in a column landed against it with nothing between. A `gap-4` between cards does not put anything after the last one. **`shared/ui/page-scroll.ts` is now the one class the three tool SCREENS scroll in** (the trip overview and the two galleries), `pb-4` included and unconditional: above a phone the frame's own `pb-3` sits OUTSIDE the box, so the last card was landing on the frame's edge there too. They had already written those five classes by hand and already drifted — two paid `pt-3` at compact and the third did not. The TOP deliberately stays out of it: `PageBar` clears the masthead itself, and a screen without one adds its own.
+
 **Verified** at 390×844 with a list long enough to scroll: the scroller runs `48→787`, flush with both, and scrolled content reaches the masthead's border with no stripe.
 
 ## The shell wears THREE layouts, and names them once (2026-09-10)
