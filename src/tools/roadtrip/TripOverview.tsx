@@ -25,6 +25,7 @@ import DayPanel from './DayPanel';
 import StagesPanel from './StagesPanel';
 import TripDetailsModal, { type TripDetails } from './TripDetailsModal';
 import PageBar from '../../shared/ui/PageBar';
+import { pageScroll } from '../../shared/ui/page-scroll';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 
 interface TripOverviewProps {
@@ -357,7 +358,7 @@ export default function TripOverview({
 
   return (
     <section
-      className="flex flex-col flex-1 min-h-0 gap-4 overflow-auto"
+      className={pageScroll}
       aria-label={`${trip.name} overview`}
     >
       {/* The trip's NAME sits in the bar, right after the way back — the same

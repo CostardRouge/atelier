@@ -62,6 +62,7 @@ import ImportDocumentModal from '../../shared/ui/ImportDocumentModal';
 import TripCoverModal from './TripCoverModal';
 import { HEATMAP_LEVELS } from './heatmap-ramp';
 import useCoverThumbs from './use-cover-thumbs';
+import { pageScroll } from '../../shared/ui/page-scroll';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 
@@ -886,9 +887,7 @@ export default function TripGallery({
       // scroller, on purpose (`App.tsx`): a gap there is paper the content
       // gets clipped against. Breathing room belongs HERE instead, where it
       // scrolls away with the first row rather than holding it off the edge.
-      className={`flex flex-col flex-1 min-h-0 gap-4 overflow-auto ${
-        compact ? 'pt-3' : ''
-      }`}
+      className={`${pageScroll} ${compact ? 'pt-3' : ''}`}
       aria-label="Trips"
     >
       {/* The masthead already says "Atelier / Trips" at every width, so the
