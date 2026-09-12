@@ -73,9 +73,15 @@ export default function SlideRail({
   // The two shapes, said once. `column` wins outright rather than layering on
   // top of the container query: it is only ever set on a compact shell, where
   // the 860px query cannot match anyway, so there is nothing to fight with.
+  //
+  // Standing on its side the rail centres on the stage it belongs to, which is
+  // itself centred: a short deck pinned to the top of a tall column reads as a
+  // strip that fell off the picture. The centring is `safe`, so a deck longer
+  // than the column still starts at the top instead of putting its first cells
+  // above the scroller's reach.
   const box = column
-    ? 'flex-none flex flex-col gap-2 w-[3.1rem] overflow-y-auto overflow-x-visible pr-1'
-    : 'flex-none flex flex-row gap-2 overflow-x-auto pb-1 @min-[860px]:flex-col @min-[860px]:w-[4.6rem] @min-[860px]:overflow-x-visible @min-[860px]:overflow-y-auto @min-[860px]:pb-0 @min-[860px]:pr-1';
+    ? 'flex-none flex flex-col justify-center-safe gap-2 w-[3.1rem] overflow-y-auto overflow-x-visible pr-1'
+    : 'flex-none flex flex-row gap-2 overflow-x-auto pb-1 @min-[860px]:flex-col @min-[860px]:justify-center-safe @min-[860px]:w-[4.6rem] @min-[860px]:overflow-x-visible @min-[860px]:overflow-y-auto @min-[860px]:pb-0 @min-[860px]:pr-1';
   // A cell is sized on ONE axis and takes the other from its aspect ratio.
   const size = column ? 'w-9 h-auto' : 'h-14 w-auto @min-[860px]:h-auto @min-[860px]:w-11';
 
