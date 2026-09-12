@@ -11,6 +11,7 @@ import DockedPanel, { type DockHeight } from '../shared/ui/DockedPanel';
 import SectionRail from '../shared/ui/SectionRail';
 import { useSectionBar } from '../shared/ui/section-rail';
 import { StageRoomProvider } from '../shared/ui/stage-room';
+import { useAppHeight } from '../shared/ui/use-app-height';
 import { useLayoutMode } from '../shared/ui/use-layout-mode';
 
 /**
@@ -101,6 +102,11 @@ export default function App() {
     localStorage.setItem(COLLAPSE_KEY_MEDIUM, collapsedMedium ? '1' : '0');
   }, [collapsedMedium]);
 
+  // How tall the screen really is, measured once for the whole app and
+  // published as `--app-h` (`shared/ui/app-height.ts`). Everything below that
+  // means "the whole screen" is sized in it rather than in `100dvh`.
+  useAppHeight();
+
   // **A tool screen is an APP, so the document itself must not scroll.**
   // The frame is already `h-dvh` and clips, and in a fixed-size browser that
   // is the end of it — measured at 390×844, `scrollHeight === clientHeight`.
@@ -149,7 +155,10 @@ export default function App() {
   // edge-to-edge with only a thin breathing margin. Only the Home landing
   // keeps a readable column and the natural page scroll + footer.
   //
-  // **The frame keeps its height at every width**, phones included. It used to
+  // **The frame keeps the screen's height at every width**, phones included,
+  // and takes it from `--app-h` for the same reason the document does: on iOS
+  // `100dvh` can be a retracted toolbar short of the screen and stay that way
+  // (`shared/ui/app-height.ts`). It used to
   // give it up under 820px (`h-auto min-h-dvh`) so the page could scroll, and
   // that is what turned the suite into a stack: the library card first, the
   // editor third, the stage 240px of an 844px screen. It also made every
@@ -164,8 +173,8 @@ export default function App() {
   // the interface drift into the margin. Anything legitimately wider than the
   // screen scrolls inside its own container, untouched by this.
   const toolShell = compact
-    ? 'h-dvh flex flex-col min-h-0 overflow-hidden w-full pt-[env(safe-area-inset-top)]'
-    : 'h-dvh flex flex-col min-h-0 overflow-hidden w-full px-4 pt-3 pb-3';
+    ? 'h-[var(--app-h)] flex flex-col min-h-0 overflow-hidden w-full pt-[env(safe-area-inset-top)]'
+    : 'h-[var(--app-h)] flex flex-col min-h-0 overflow-hidden w-full px-4 pt-3 pb-3';
 
   return (
     // The dock takes 46dvh out of the tool's height, so a tool has to know it

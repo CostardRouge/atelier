@@ -26,6 +26,8 @@
 
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { dragFraction, nextSnap, snapAfterDrag } from './sheet-snap';
+import { APP_HEIGHT } from './app-height';
+import { readAppHeight } from './use-app-height';
 
 /**
  * Choosing, and composing. `0.46` leaves a 9:16 stage about 380px on a phone —
@@ -88,7 +90,7 @@ export default function DockedPanel({
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const d = drag.current;
     if (!d || d.id !== e.pointerId) return;
-    setLive(dragFraction(d.from, e.clientY - d.startY, window.innerHeight));
+    setLive(dragFraction(d.from, e.clientY - d.startY, readAppHeight()));
   }, []);
 
   const end = useCallback(
@@ -105,7 +107,7 @@ export default function DockedPanel({
         return;
       }
       const landed = snapAfterDrag(
-        dragFraction(d.from, e.clientY - d.startY, window.innerHeight),
+        dragFraction(d.from, e.clientY - d.startY, readAppHeight()),
         DOCK_SNAPS,
       );
       if (landed === null) onClose();
@@ -117,7 +119,7 @@ export default function DockedPanel({
   return (
     <section
       aria-label={title}
-      style={{ height: `${fraction * 100}dvh` }}
+      style={{ height: `calc(${fraction} * ${APP_HEIGHT})` }}
       className={`flex-none flex flex-col min-h-[6.5rem] border-t border-line-strong bg-surface ${
         live === null ? 'transition-[height] duration-300 ease-paper' : ''
       }`}

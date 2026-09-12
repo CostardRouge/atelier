@@ -450,7 +450,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-[56rem] h-[min(90dvh,52rem)] flex flex-col gap-4 bg-surface border border-line rounded-paper-lg shadow-paper p-6 overflow-hidden max-[820px]:max-w-none max-[820px]:h-dvh max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:gap-3 max-[820px]:p-4 max-[820px]:pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <div className="w-full max-w-[56rem] h-[min(90dvh,52rem)] flex flex-col gap-4 bg-surface border border-line rounded-paper-lg shadow-paper p-6 overflow-hidden max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:gap-3 max-[820px]:p-4 max-[820px]:pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="flex items-baseline gap-3 flex-wrap">
           <h2 className="m-0 font-serif text-[1.4rem] min-w-0 truncate">From {connection.id}</h2>
           <span className="text-[0.78rem] text-muted max-[560px]:hidden">
