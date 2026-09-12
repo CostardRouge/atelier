@@ -29,6 +29,8 @@ import {
   snapAfterDrag,
   type SnapPoints,
 } from './sheet-snap';
+import { APP_HEIGHT } from './app-height';
+import { readAppHeight } from './use-app-height';
 
 export interface BottomSheetProps {
   open: boolean;
@@ -109,7 +111,7 @@ export default function BottomSheet({
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const d = drag.current;
     if (!d || d.id !== e.pointerId) return;
-    setFraction(dragFraction(d.startFraction, e.clientY - d.startY, window.innerHeight));
+    setFraction(dragFraction(d.startFraction, e.clientY - d.startY, readAppHeight()));
   }, []);
 
   const endDrag = useCallback(
@@ -127,7 +129,7 @@ export default function BottomSheet({
         return;
       }
       const next = snapAfterDrag(
-        dragFraction(d.startFraction, e.clientY - d.startY, window.innerHeight),
+        dragFraction(d.startFraction, e.clientY - d.startY, readAppHeight()),
         snaps,
       );
       if (next === null) onClose();
@@ -154,7 +156,7 @@ export default function BottomSheet({
         aria-modal="false"
         aria-labelledby={titleId}
         tabIndex={-1}
-        style={{ height: `${fraction * 100}dvh` }}
+        style={{ height: `calc(${fraction} * ${APP_HEIGHT})` }}
         className={`fixed inset-x-0 bottom-0 z-50 flex flex-col min-h-0 bg-surface border border-line-strong border-b-0 rounded-t-paper-lg shadow-paper outline-none animate-[sheet-rise_.28s_var(--ease-paper)] ${
           dragging ? '' : 'transition-[height] duration-200 ease-paper'
         }`}

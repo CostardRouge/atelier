@@ -249,7 +249,7 @@ export default function TimelineImportPanel({
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="w-full max-w-[40rem] max-h-[90dvh] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6 max-[820px]:max-w-none max-[820px]:max-h-none max-[820px]:h-dvh max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:px-4 max-[820px]:pt-4">
+      <div className="w-full max-w-[40rem] max-h-[90dvh] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6 max-[820px]:max-w-none max-[820px]:max-h-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:px-4 max-[820px]:pt-4">
         <div>
           <h2 className="m-0 font-serif text-[1.4rem]">{title}</h2>
           <p className="m-0 mt-1 text-[0.82rem] text-muted">

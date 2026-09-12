@@ -7,8 +7,10 @@
  * beside it only turns pointer events into a fraction and back.
  *
  * Heights are FRACTIONS of the viewport (0…1), never pixels: the sheet is
- * sized in `dvh`, so the same number describes a phone in either orientation
- * and survives the iOS toolbar collapsing.
+ * sized against the screen the shell measured (`app-height.ts`), so the same
+ * number describes a phone in either orientation and survives the iOS toolbar
+ * collapsing — the drag reads that same height, or the finger and the sheet
+ * disagree by a toolbar.
  */
 
 /** A sheet's resting heights, smallest first, each a fraction of the screen. */

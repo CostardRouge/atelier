@@ -1521,8 +1521,8 @@ export default function StudioEditor({
             over a media preview it fought the gestures the picture itself
             answers (`shared/ui/stage-zoom.ts`).
 
-            `flex-1` is right at EVERY width: the shell keeps its `h-dvh` on a
-            phone too (App.tsx), so the chain above this box is definite all
+            `flex-1` is right at EVERY width: the shell keeps the screen's
+            height on a phone too (App.tsx), so the chain above is definite all
             the way up and the picture's height always resolves.
           */}
           <div

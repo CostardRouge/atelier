@@ -132,7 +132,7 @@ export default function TripSettingsModal({
       aria-modal="true"
       aria-label="Trip settings"
     >
-      <div className="w-full max-w-[52rem] h-[min(90dvh,40rem)] flex flex-col overflow-hidden bg-surface border border-line rounded-paper-lg shadow-paper max-[820px]:max-w-none max-[820px]:h-dvh max-[820px]:rounded-none max-[820px]:border-0">
+      <div className="w-full max-w-[52rem] h-[min(90dvh,40rem)] flex flex-col overflow-hidden bg-surface border border-line rounded-paper-lg shadow-paper max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0">
         <div className="flex-none flex items-baseline gap-3 px-6 pt-[1.4rem] pb-3.5 border-b border-line">
           <h2 className="m-0 flex-none whitespace-nowrap font-serif text-[1.4rem]">Trip settings</h2>
           <span className="min-w-0 font-mono text-[0.68rem] text-muted truncate">

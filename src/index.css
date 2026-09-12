@@ -107,11 +107,16 @@
     color-scheme: light;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    /* The app's own height, measured and republished by `use-app-height.ts`
+       (which carries the why). `100dvh` is the fallback the first paint uses,
+       and the one an engine that never corrects it keeps — every box that
+       means "the whole screen" reads this variable instead of the unit. */
+    --app-h: 100dvh;
   }
 
   body {
     margin: 0;
-    min-height: 100dvh;
+    min-height: var(--app-h);
     /* The two edges a notch can eat in landscape. The shell pays the top and
        bottom itself, where it knows what sits against them; left and right are
        nobody's in particular, so they are paid once here — 0 everywhere but a
@@ -129,18 +134,23 @@
   /* A tool screen is an app: nothing outside its own lists may scroll, and the
      masthead and the section bar are therefore fixed by construction rather
      than by `position`. The shell sets `data-shell` (see `App.tsx`, which also
-     carries why the `h-dvh` frame is not enough on iOS); the reading pages get
+     carries why a full-height frame is not enough on iOS); the reading pages get
      `flow` and keep the ordinary page scroll.
 
      `overflow: hidden` on the ROOT element is what makes the viewport itself
      unscrollable — on `body` alone the propagation rules hand it back — and
-     the explicit `100dvh` is what stops iOS's larger initial containing block
+     the explicit height is what stops iOS's larger initial containing block
      from sticking out below it. `overscroll-behavior: none` is the rubber
      band and the pull-to-refresh: a page that cannot scroll must not bounce
-     either, or it still reads as a web page. */
+     either, or it still reads as a web page.
+
+     The height is `--app-h` rather than `100dvh` because a locked document is
+     precisely where a stale `dvh` can never be corrected: no scroll, so the
+     engine is never asked again, and the app sits a retracted toolbar short of
+     the screen with paper under its bottom bar (`app-height.ts`). */
   html[data-shell='fixed'],
   html[data-shell='fixed'] body {
-    height: 100dvh;
+    height: var(--app-h);
     overflow: hidden;
     overscroll-behavior: none;
   }
