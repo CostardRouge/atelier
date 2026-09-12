@@ -46,11 +46,12 @@ export interface WinnowThumbProps {
   /** What the tile says when the picture will not come — an extension, a kind. */
   label: string;
   /**
-   * The tile's own box, sizing only — `w-full h-[74px]`. The picture and the
-   * given-up label are drawn in the same box, so a failure never changes the
-   * grid's shape. A fixed pixel height, never `aspect-*`: these grids are all
-   * `auto-fill`/`minmax`, where a ratio resolves against an indefinite track
-   * (`frontend.md`).
+   * The tile's own box, sizing only — `w-full h-[74px]`, or `w-full h-full`
+   * where the grid pins its rows in pixels itself (`DayFromWinnow`). The
+   * picture and the given-up label are drawn in the same box, so a failure
+   * never changes the grid's shape. A pixel height somewhere in the chain,
+   * never `aspect-*`: these grids are all `auto-fill`/`minmax`, where a ratio
+   * resolves against an indefinite track (`frontend.md`).
    */
   box: string;
   alt?: string;
