@@ -5,6 +5,7 @@ import { formatIsoDate, spanLength, type IsoDate } from '../../shared/roadtrip/t
 import { stageLabel, stageRegionLabel } from '../../shared/roadtrip/trip-places';
 import { stageProblem, type TripDoc, type TripStage } from '../../shared/roadtrip/trip-types';
 import SectionLegend from '../../shared/ui/SectionLegend';
+import { useLearnedGesture } from '../../shared/ui/use-learned-gesture';
 import StageZoomControl from '../../shared/ui/StageZoomControl';
 import { useStageZoom } from '../../shared/ui/use-stage-zoom';
 import PlacesEditor from './PlacesEditor';
@@ -206,6 +207,11 @@ export default function StagesPanel({
   // grabbed at. Zooming out from there would show nothing the track is not
   // already showing.
   const zoom = useStageZoom({ wheel: 'any', minScale: 1 });
+  // The track's gestures are spelled out until the track has been USED at all
+  // — a leg opened, a day tapped, a leg dragged, a gap filled — and stay behind
+  // the legend's ⓘ after that. Any of them means the surface has been found,
+  // which is the only thing the hint was there to say.
+  const ruler = useLearnedGesture('roadtrip.stage-ruler');
   const selectedIndex = trip.stages.findIndex((s) => s.id === selectedId);
   const selected = selectedIndex >= 0 ? trip.stages[selectedIndex] : null;
 
@@ -237,6 +243,15 @@ export default function StagesPanel({
               List the places it went through and its name writes itself —
               &ldquo;Perth → Cairns&rdquo;.
             </p>
+            <p>
+              On the track: tap a leg to edit it and go to its first day · drag a leg,
+              or either of its edges, to move its dates · tap anywhere else to open that
+              day, and swipe sideways to see the rest.
+              <span className="max-[600px]:hidden">
+                {' '}
+                Right-click a day on the calendar to start or end a stage there.
+              </span>
+            </p>
           </SectionLegend>
         </span>
         {/* The timeline of a connected Winnow proposes what this list lacks —
@@ -266,9 +281,18 @@ export default function StagesPanel({
         trip={trip}
         selectedId={selected?.id ?? null}
         cursorDate={cursorDate}
-        onOpenStage={onOpenStage}
-        onScrub={onScrub}
-        onChange={onChange}
+        onOpenStage={(stage) => {
+          ruler.learn();
+          onOpenStage(stage);
+        }}
+        onScrub={(date) => {
+          ruler.learn();
+          onScrub(date);
+        }}
+        onChange={(stages) => {
+          ruler.learn();
+          onChange(stages);
+        }}
         zoom={zoom}
       />
 
@@ -283,7 +307,8 @@ export default function StagesPanel({
           .
         </p>
       ) : (
-        !selected && (
+        !selected &&
+        !ruler.learned && (
           <p className="m-0 font-mono text-[0.66rem] text-faint">
             Tap a leg to edit it and go to its first day · drag a leg, or either
             of its edges, to move its dates · tap anywhere else on the track to

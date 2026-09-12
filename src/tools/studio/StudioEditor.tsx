@@ -126,6 +126,7 @@ import PageBar, { barPill } from '../../shared/ui/PageBar';
 import PanelHost from '../../shared/ui/PanelHost';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
+import { useLearnedGesture } from '../../shared/ui/use-learned-gesture';
 
 /**
  * Clips with or without telemetry, and stills — the studio edits all three.
@@ -261,6 +262,8 @@ export default function StudioEditor({
     () => project.media.trims ?? {},
   );
   const [range, setRange] = useState<TrimRange>(() => fullRange(0));
+  // The trim bar's gestures are spelled out under it until one has been used.
+  const trim = useLearnedGesture('studio.trim');
   const [loop, setLoop] = useState(false);
   // The transport wires its listeners once per media, so the live values reach
   // it through refs rather than through captured props.
@@ -578,6 +581,9 @@ export default function StudioEditor({
 
   /** Move the handles and remember them for this clip. */
   function applyRange(next: TrimRange) {
+    // Cutting a clip — by handle or by I / O — is the gesture the hint under
+    // the bar teaches, so it retires the hint the first time it lands.
+    if (isTrimmed(next, duration)) trim.learn();
     setRange(next);
     if (!activeId) return;
     setTrims((prev) => {
@@ -1713,7 +1719,8 @@ export default function StudioEditor({
                  </>
                ) : (
                  <span className="text-faint">
-                   Full clip — drag the handles, or press I / O to cut at the playhead
+                   Full clip
+                   {!trim.learned && ' — drag the handles, or press I / O to cut at the playhead'}
                  </span>
                )}
              </div>
