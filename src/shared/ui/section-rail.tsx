@@ -50,8 +50,10 @@ export type SectionBarRole = 'sections' | 'actions';
 export interface SectionBar {
   sections: readonly Section[];
   /**
-   * Which one is open, by id — or `null` for an `actions` bar, where no cell
-   * is a state to be in and marking one would be a lie.
+   * Which one is OPEN, by id — never merely which one is selected — or `null`
+   * when none is: an `actions` bar, where no cell is a state to be in, and an
+   * inspector whose sheet has been dismissed. A mark that outlives the panel
+   * it stands for says the screen is somewhere it is not.
    */
   active: string | null;
   /** Called with a section's id when a cell is tapped. */

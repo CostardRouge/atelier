@@ -68,8 +68,9 @@ export default function SectionRail({ bar, onLibrary }: SectionRailProps) {
         </>
       )}
       {sections.map((s) => {
-        // An `actions` bar has no current cell, so nothing is pressed: a mark
-        // on a verb would claim a state the screen is not in.
+        // Nothing is pressed unless a cell's own panel is UP: an `actions`
+        // bar has no current cell at all, and an inspector reports `null`
+        // while its sheet is down.
         const on = bar!.active !== null && s.id === bar!.active;
         return (
           <button

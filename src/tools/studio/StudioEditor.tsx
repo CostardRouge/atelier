@@ -222,7 +222,11 @@ export default function StudioEditor({
         compact && active
           ? {
               sections: TABS,
-              active: tab,
+              // Marked only while the panel it opens is UP. A cell left
+              // marked after the sheet was dismissed says the screen is
+              // somewhere it is not — the maintainer's report, from a bar
+              // still showing PICTURE over a closed inspector.
+              active: inspectorOpen ? tab : null,
               label: 'Studio inspector',
               onSelect: (id: string) => {
                 setTab(id as PanelTab);
@@ -230,7 +234,7 @@ export default function StudioEditor({
               },
             }
           : null,
-      [compact, active, tab],
+      [compact, active, tab, inspectorOpen],
     ),
   );
   const [activeError, setActiveError] = useState(false);
