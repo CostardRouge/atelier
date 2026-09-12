@@ -40,6 +40,14 @@ export interface RulerMonth {
   label: string;
 }
 
+/** One stroke of the track's scale — a day, or a week when days crowd. */
+export interface RulerTick {
+  /** Day offset the stroke stands at. */
+  offset: number;
+  /** A Monday or a first of the month — drawn taller. */
+  strong: boolean;
+}
+
 /**
  * Four muted tints, one per leg in turn, so two adjacent legs never share a
  * colour. Chosen in oklch at the same lightness and chroma so no leg shouts
@@ -143,6 +151,40 @@ export function rulerMonths(trip: Pick<TripDoc, 'startDate' | 'endDate'>): Ruler
     if (i === 0 || d.getUTCDate() === 1) {
       out.push({ offset: i, label: MONTHS[d.getUTCMonth()] });
     }
+  }
+  return out;
+}
+
+/**
+ * Narrowest two strokes of the scale may stand apart. Below it a run of day
+ * ticks stops reading as days and becomes a grey band, so the scale steps up
+ * to weeks instead of drawing them all.
+ */
+export const MIN_TICK_GAP = 9;
+
+/**
+ * The day strokes along the track, for the day width actually drawn. Days
+ * while they fit; Mondays alone once they do not — real Mondays, not every
+ * seventh day of the trip, so the rhythm means something to read against.
+ * Offset 0 is never a stroke: it is the trip's own edge, where the first
+ * month rule already stands.
+ */
+export function rulerTicks(
+  trip: Pick<TripDoc, 'startDate' | 'endDate'>,
+  dayWidth: number,
+): RulerTick[] {
+  const total = spanLength(trip.startDate, trip.endDate);
+  const start = parseIsoDate(trip.startDate);
+  if (total === null || start === null) return [];
+  const everyDay = dayWidth >= MIN_TICK_GAP;
+  if (!everyDay && dayWidth * 7 < MIN_TICK_GAP) return [];
+  const out: RulerTick[] = [];
+  for (let i = 1; i < total; i += 1) {
+    const d = new Date(start + i * 86_400_000);
+    const monday = d.getUTCDay() === 1;
+    const firstOfMonth = d.getUTCDate() === 1;
+    if (everyDay) out.push({ offset: i, strong: monday || firstOfMonth });
+    else if (monday) out.push({ offset: i, strong: true });
   }
   return out;
 }

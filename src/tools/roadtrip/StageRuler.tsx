@@ -13,6 +13,7 @@ import {
   rulerDayWidth,
   rulerGaps,
   rulerMonths,
+  rulerTicks,
   stageTint,
   type RulerBar,
 } from '../../shared/roadtrip/stage-ruler';
@@ -52,7 +53,7 @@ interface StageRulerProps {
 const HEAD = 16;
 const BAR = 34;
 const LANE_GAP = 4;
-const AXIS = 18;
+const AXIS = 20;
 const HANDLE = 10;
 
 interface Drag {
@@ -131,6 +132,7 @@ export default function StageRuler({
   // the zoom at 100%, so a day is never DRAWN under 6px and a leg can always
   // be grabbed by an edge.
   const dayW = rulerDayWidth(width, total, zoom.scale);
+  const ticks = rulerTicks(trip, dayW);
   const trackW = dayW * total;
   const lanesTop = HEAD;
   const lanesH = lanes * BAR + (lanes - 1) * LANE_GAP;
@@ -256,7 +258,7 @@ export default function StageRuler({
           >
             <span
               className="absolute font-mono text-[0.6rem] tracking-[0.08em] text-muted leading-none whitespace-nowrap pl-1"
-              style={{ top: lanesH + 8 }}
+              style={{ top: lanesH + 10 }}
             >
               {m.label}
             </span>
@@ -267,6 +269,19 @@ export default function StageRuler({
           style={{ top: bodyH + 4 }}
           aria-hidden="true"
         />
+
+        {/* The scale itself: one stroke a day under the axis rule, a taller
+            one on a Monday or a first of the month, and Mondays alone once a
+            day is too narrow to stand apart (`rulerTicks`). It says how wide
+            a day IS on the track, which the month labels alone never did. */}
+        {ticks.map((t) => (
+          <span
+            key={t.offset}
+            className={`absolute w-px pointer-events-none ${t.strong ? 'bg-faint' : 'bg-line-strong'}`}
+            style={{ left: t.offset * dayW, top: bodyH + 4, height: t.strong ? 6 : 3 }}
+            aria-hidden="true"
+          />
+        ))}
 
         {gaps.map((gap) =>
           gap.length * dayW >= 22 ? (

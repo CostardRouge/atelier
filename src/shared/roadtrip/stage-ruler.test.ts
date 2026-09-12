@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   MIN_DAY,
+  MIN_TICK_GAP,
   STAGE_TINTS,
   dayAtOffset,
   dayOffset,
@@ -9,6 +10,7 @@ import {
   rulerDayWidth,
   rulerGaps,
   rulerMonths,
+  rulerTicks,
   rulerTrackWidth,
   stageTint,
 } from './stage-ruler';
@@ -149,5 +151,33 @@ describe('rulerDayWidth', () => {
 
   it('falls back to the minimum before the box is measured', () => {
     expect(rulerDayWidth(0, 100, 1)).toBe(MIN_DAY);
+  });
+});
+
+describe('rulerTicks', () => {
+  // The trip runs 2025-01-28 (a Tuesday) → 2025-02-10, 14 days.
+  it('strokes every day but the first once a day is wide enough', () => {
+    const ticks = rulerTicks(trip([]), MIN_TICK_GAP);
+    expect(ticks.map((t) => t.offset)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+  });
+
+  it('marks Mondays and firsts of the month as the strong strokes', () => {
+    const strong = rulerTicks(trip([]), 20).filter((t) => t.strong);
+    // 2025-02-01 is offset 4, 2025-02-03 and 2025-02-10 are Mondays.
+    expect(strong.map((t) => t.offset)).toEqual([4, 6, 13]);
+  });
+
+  it('falls back to real Mondays when days would crowd', () => {
+    const ticks = rulerTicks(trip([]), MIN_TICK_GAP - 1);
+    expect(ticks.map((t) => t.offset)).toEqual([6, 13]);
+    expect(ticks.every((t) => t.strong)).toBe(true);
+  });
+
+  it('draws nothing at all when even a week cannot stand apart', () => {
+    expect(rulerTicks(trip([]), 1)).toEqual([]);
+  });
+
+  it('has nothing to draw for a trip with no span', () => {
+    expect(rulerTicks({ startDate: 'nope', endDate: '2025-02-10' }, 20)).toEqual([]);
   });
 });
