@@ -661,8 +661,8 @@ export default function PostEditor({
           It is a column against the stage at every width — slimmer below the
           860px container query, which is why the rail stays a child of the
           queried layout. */}
-      {/* On a compact shell this column FLEXES, so the stage inside it can give
-          up height to the docked library. Stacked on a tablet it keeps its
+      {/* On a compact shell this column FLEXES, so the stage inside it fills a
+          screen whose height is fixed. Stacked on a tablet it keeps its
           content height and the column scrolls instead. */}
       <div
         className={`min-w-0 flex flex-col gap-3 @min-[860px]:min-h-0 @min-[860px]:col-start-1 @min-[860px]:row-start-1 @min-[860px]:row-span-2 ${
@@ -735,14 +735,25 @@ export default function PostEditor({
           />
 
           {isHook && clock.animated && (
-            <div className="flex-none flex items-center gap-3 w-full max-w-[26rem]">
+            <div
+              className={`flex-none flex items-center w-full max-w-[26rem] ${
+                compact ? 'gap-2' : 'gap-3'
+              }`}
+            >
               <button
                 type="button"
                 onClick={() => clock.setPlaying((p) => !p)}
-                className="flex-none px-3 py-1.5 border border-line-strong rounded-full bg-paper text-[0.76rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
+                className={`flex-none border border-line-strong rounded-full bg-paper font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink ${
+                  compact ? 'px-2.5 py-1 text-[0.7rem]' : 'px-3 py-1.5 text-[0.76rem]'
+                }`}
               >
                 {clock.playing ? '❚❚ Pause' : '▶ Play'}
-                <span className="ml-1.5 text-faint font-mono text-[0.62rem]">space</span>
+                {/* The shortcut, only where there is a keyboard to press it
+                    on. A phone has none, so the word is a third of the
+                    button's width spent on something the screen cannot do. */}
+                {!compact && (
+                  <span className="ml-1.5 text-faint font-mono text-[0.62rem]">space</span>
+                )}
               </button>
               <input
                 type="range"

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { DeckSlide } from '../../shared/roadtrip/deck';
+import { useIsCompact } from '../../shared/ui/use-layout-mode';
 
 interface SlideRailProps {
   slides: DeckSlide[];
@@ -57,6 +58,10 @@ export default function SlideRail({
 }: SlideRailProps) {
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
+  // The rail sits where the PICTURE sits, and on a phone the picture is
+  // top-aligned so the transport can hug it (`BadgeStage`). A VIEWPORT
+  // question like that one, not the container query the shape splits on.
+  const compactShell = useIsCompact();
 
   // One shape at every width: a column against the picture, never a row under
   // it. A row was the stacked fallback, and it costs the stage 91px of HEIGHT
@@ -68,9 +73,11 @@ export default function SlideRail({
   // short deck pinned to the top of a tall column reads as a strip that fell
   // off the picture. The centring is `safe`, so a deck longer than the column
   // still starts at the top instead of putting its first cells above the
-  // scroller's reach.
-  const box =
-    'flex-none flex flex-col justify-center-safe gap-2 overflow-y-auto overflow-x-visible pr-1 w-[3.1rem] @min-[860px]:w-[4.6rem]';
+  // scroller's reach — and on a phone, where the picture is top-aligned, so
+  // is the rail, for the same reason in the other direction.
+  const box = `flex-none flex flex-col gap-2 overflow-y-auto overflow-x-visible pr-1 w-[3.1rem] @min-[860px]:w-[4.6rem] ${
+    compactShell ? 'justify-start' : 'justify-center-safe'
+  }`;
   // A cell is sized on ONE axis and takes the other from its aspect ratio.
   const size = 'h-auto w-9 @min-[860px]:w-11';
 

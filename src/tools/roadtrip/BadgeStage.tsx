@@ -527,25 +527,29 @@ export default function BadgeStage({
     // largest aspect-fitting slice of it (measured above). Wide: the wrapper
     // grows to the column's whole height.
     //
-    // Stacked, it depends on whether anything ELSE is taking height from the
-    // same screen. On a compact shell it FLEXES, because the library docks
-    // under it and the stage has to give up exactly what the dock takes — a
-    // stated `62vh` there stays 62vh and is simply clipped by the bar below.
-    // Everywhere else stacked (a tablet, where the inspector is still in this
-    // column and the column scrolls) it states its own height: as tall as a
-    // full-width picture, capped so it never pushes the controls off screen.
+    // Stacked, it depends on the shell's height model. On a compact shell the
+    // wrapper HUGS the picture: it is an aspect box the width of the column,
+    // free to shrink when the column is shorter than that, so its height is
+    // the picture's own height in both cases. That is what puts the transport
+    // under the frame it drives instead of at the foot of the screen — a
+    // `flex-1` wrapper is taller than a width-bound picture, and the slack it
+    // swallowed read as a gap above the controls and no gap at all below them.
+    // The leftover now falls under the whole group, where it is breathing
+    // room. Everywhere else stacked (a tablet, where the inspector is still in
+    // this column and the column scrolls) it states its own height: as tall as
+    // a full-width picture, capped so it never pushes the controls off screen.
     // `cqw` is the section's width, the editor's container.
     //
     // A VIEWPORT question, not the container one the layout splits on: what
     // changes is the shell's height model, which no container can see.
     <div
+      style={{ '--aspect': aspect } as React.CSSProperties}
       className={`flex flex-col items-center gap-2 min-h-0 w-full @min-[860px]:flex-1 ${
-        compactShell ? 'flex-1' : ''
+        compactShell ? 'aspect-[var(--aspect)]' : ''
       }`}
     >
       <div
         ref={frameRef}
-        style={{ '--aspect': aspect } as React.CSSProperties}
         className={`relative flex items-center justify-center min-h-0 w-full @min-[860px]:h-auto @min-[860px]:flex-1 ${
           compactShell ? 'flex-1' : 'h-[min(62vh,calc(100cqw/var(--aspect)))]'
         }`}
