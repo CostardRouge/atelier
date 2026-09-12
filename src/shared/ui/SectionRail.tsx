@@ -37,9 +37,17 @@ export interface SectionRailProps {
   bar: SectionBar | null;
   /** Opens the shell's library. Omitted only if there is no library to open. */
   onLibrary?: () => void;
+  /**
+   * Whether the library is on screen. It is not a section of the document, so
+   * it is never the bar's `active` cell — but a cell that changes nothing it
+   * can see when tapped reads as broken, so it wears the same mark while its
+   * panel is open. Unlike a section it is a TOGGLE, so the mark is a state the
+   * screen is genuinely in and `aria-pressed` says exactly that.
+   */
+  libraryOpen?: boolean;
 }
 
-export default function SectionRail({ bar, onLibrary }: SectionRailProps) {
+export default function SectionRail({ bar, onLibrary, libraryOpen = false }: SectionRailProps) {
   const sections = bar?.sections ?? [];
   if (sections.length === 0 && !onLibrary) return null;
 
@@ -53,9 +61,12 @@ export default function SectionRail({ bar, onLibrary }: SectionRailProps) {
           <button
             type="button"
             onClick={onLibrary}
-            className={`${CELL} bg-transparent text-muted hover:text-ink ${
-              sections.length > 0 ? 'shrink-0 px-2' : 'flex-1 px-3 text-left'
-            }`}
+            aria-pressed={libraryOpen}
+            className={`${CELL} ${
+              libraryOpen
+                ? 'bg-accent-wash text-accent-ink'
+                : 'bg-transparent text-muted hover:text-ink'
+            } ${sections.length > 0 ? 'shrink-0 px-2' : 'flex-1 px-3 text-left'}`}
           >
             Library
           </button>

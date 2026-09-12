@@ -120,7 +120,13 @@ export default function DockedPanel({
     <section
       aria-label={title}
       style={{ height: `calc(${fraction} * ${APP_HEIGHT})` }}
-      className={`flex-none flex flex-col min-h-[6.5rem] border-t border-line-strong bg-surface ${
+      // `mt-2`: the panel and the stage share the height, so without it the
+      // picture's bottom edge and the panel's own rule are the same line and
+      // the split reads as one surface cut in half rather than two things on
+      // screen. It is paid out of the stage, like everything else the dock
+      // takes, and nothing is clipped against it — the panel is a flex sibling
+      // BELOW the scroller, not a gutter inside it.
+      className={`flex-none mt-2 flex flex-col min-h-[6.5rem] border-t border-line-strong bg-surface ${
         live === null ? 'transition-[height] duration-300 ease-paper' : ''
       }`}
     >

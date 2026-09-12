@@ -699,6 +699,19 @@ export default function StudioEditor({
     if (id) setTab('overlay');
   }
 
+  /**
+   * A tap on an element, as opposed to a drag of one. On a phone the inspector
+   * is a sheet, so picking an element on the stage has to RAISE it — otherwise
+   * its settings are behind a bottom-bar cell the tap already switched to, and
+   * the tap reads as having done nothing. Only on release, and only when the
+   * press never travelled: a sheet rising mid-drag would cover the very thing
+   * being moved.
+   */
+  function activateElement(id: string) {
+    selectElement(id);
+    if (compact) setInspectorOpen(true);
+  }
+
   // I and O cut at the playhead, Shift returns a handle to the clip's own end
   // — the gestures of any logging tool. (Space belongs to the shared
   // transport.) Guarded on the event target so both stay ordinary characters
@@ -788,6 +801,7 @@ export default function StudioEditor({
     resetKey: activeUrl ?? activeId,
     redrawSignal: fontTick,
     onSelect: selectElement,
+    onActivate: activateElement,
     onMove: handleMove,
   });
 

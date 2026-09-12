@@ -76,6 +76,14 @@ interface StageParams {
    */
   compare?: boolean;
   onSelect: (id: string | null) => void;
+  /**
+   * A press on an element that never became a drag — a TAP, which is a
+   * request to edit that element and not merely to point at it. Selection
+   * happens on pointer DOWN (the drag has to start from it), so it cannot be
+   * the signal that raises a phone's inspector sheet: the sheet would rise
+   * over the stage the moment a drag began. This fires on release instead.
+   */
+  onActivate?: (id: string) => void;
   /** Commit a dragged element's new normalized position. */
   onMove: (id: string, x: number, y: number) => void;
 }
@@ -87,7 +95,7 @@ interface StageHandlers {
 }
 
 export function useOverlayStage(params: StageParams): StageHandlers {
-  const { videoRef, canvasRef, onSelect, onMove } = params;
+  const { videoRef, canvasRef, onSelect, onActivate, onMove } = params;
 
   // Live refs so the rAF loop and pointer handlers read fresh values without
   // re-subscribing every render.
@@ -187,6 +195,9 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     },
     [],
   );
+  // Where a press landed, in CSS pixels, and on what — so a release can tell
+  // a tap from a drag without the drag state having to survive the release.
+  const press = useRef<{ id: string; x: number; y: number } | null>(null);
   const drag = useRef<{
     id: string;
     startPx: number;
@@ -439,6 +450,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       });
       const id = hitTest(boxes, pt.px, pt.py);
       onSelect(id);
+      press.current = id ? { id, x: e.clientX, y: e.clientY } : null;
 
       if (id) {
         const el = elementsRef.current.find((x) => x.id === id);
@@ -491,6 +503,13 @@ export function useOverlayStage(params: StageParams): StageHandlers {
 
   const onPointerUp = useCallback(
     (e: React.PointerEvent) => {
+      const p = press.current;
+      press.current = null;
+      // 4px, the same threshold every other press-or-drag surface in the
+      // suite uses: a finger never releases on exactly the pixel it landed on.
+      if (p && Math.abs(e.clientX - p.x) <= 4 && Math.abs(e.clientY - p.y) <= 4) {
+        onActivate?.(p.id);
+      }
       const canvas = canvasRef.current;
       if (drag.current && canvas) {
         try {
@@ -501,7 +520,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       }
       drag.current = null;
     },
-    [canvasRef],
+    [canvasRef, onActivate],
   );
 
   return { onPointerDown, onPointerMove, onPointerUp };

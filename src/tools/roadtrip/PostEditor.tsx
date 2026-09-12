@@ -472,6 +472,21 @@ export default function PostEditor({
 
   const selectPiece = (next: BadgePiece) => selectElement(pieceElementId(next));
 
+  /**
+   * A tap on an element, as opposed to a drag of the block. On a phone the
+   * inspector is a sheet, so picking an element has to RAISE it — otherwise
+   * the tab the selection just switched to is behind a bottom-bar cell and
+   * the tap reads as having done nothing. Only on release, and only when the
+   * press never travelled: a sheet rising mid-drag would cover the picture
+   * the block is being moved over.
+   */
+  function activateElement(id: string) {
+    selectElement(id);
+    // The closing card opens the trip's own sheet from `selectElement`; a
+    // second panel over it would be two sheets deep on a phone.
+    if (compact && !ctaRoleFromElementId(id)) setInspectorOpen(true);
+  }
+
   // Keyed on the tab (and the sheet) as well as the request: the field only
   // exists once whatever holds it is mounted, and clicking the
   // already-selected piece from another tab changes no id.
@@ -723,6 +738,7 @@ export default function PostEditor({
             lut={isCta ? null : lut}
             selectedId={selectedId}
             onSelect={selectElement}
+            onActivate={activateElement}
             // Only the hook's block has somewhere to be written back to; a
             // caption and the closing card sit at fixed positions.
             blockAnchor={isHook ? post.badge.layout : null}

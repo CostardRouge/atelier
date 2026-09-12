@@ -57,6 +57,13 @@ interface BadgeStageProps {
   /** A click on the stage: the element under the pointer, or null for the picture. */
   onSelect?: (id: string | null) => void;
   /**
+   * A press on an element that never became a drag — a TAP, which is a request
+   * to EDIT it. Selection happens on pointer down, since a block drag starts
+   * from it, so it cannot be what raises a phone's inspector sheet: the sheet
+   * would rise over the picture the moment a drag began.
+   */
+  onActivate?: (id: string) => void;
+  /**
    * The badge block's anchor, when this slide has one to move. Dragging any
    * element moves the whole block; absent (a caption, the closing card) a
    * click selects and nothing moves.
@@ -107,6 +114,7 @@ export default function BadgeStage({
   onFraming,
   selectedId = null,
   onSelect,
+  onActivate,
   blockAnchor = null,
   onMoveBlock,
   onSourceLoaded,
@@ -383,6 +391,9 @@ export default function BadgeStage({
     canvas.addEventListener('wheel', onWheel, { passive: false });
     return () => canvas.removeEventListener('wheel', onWheel);
   }, [onFraming]);
+  // Where a press landed, in CSS pixels, and on what — so a release can tell
+  // a tap from a drag.
+  const press = useRef<{ id: string; x: number; y: number } | null>(null);
   const drag = useRef<
     | {
         kind: 'block';
@@ -418,6 +429,7 @@ export default function BadgeStage({
       e.preventDefault();
       const id = hitTest(boxesRef.current, pt.px, pt.py);
       onSelect(id);
+      press.current = id ? { id, x: e.clientX, y: e.clientY } : null;
       if (id && blockAnchor && onMoveBlock) {
         drag.current = {
           kind: 'block',
@@ -484,6 +496,12 @@ export default function BadgeStage({
   );
 
   const onPointerUp = useCallback((e: React.PointerEvent) => {
+    const p = press.current;
+    press.current = null;
+    // 4px, the threshold every other press-or-drag surface in the suite uses.
+    if (p && Math.abs(e.clientX - p.x) <= 4 && Math.abs(e.clientY - p.y) <= 4) {
+      onActivate?.(p.id);
+    }
     if (drag.current) {
       try {
         canvasRef.current?.releasePointerCapture(e.pointerId);
@@ -492,7 +510,7 @@ export default function BadgeStage({
       }
     }
     drag.current = null;
-  }, []);
+  }, [onActivate]);
 
   const cursor = !onSelect
     ? ''

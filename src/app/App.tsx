@@ -311,7 +311,15 @@ export default function App() {
       {showRail && (
         <SectionRail
           bar={sectionBar}
+          libraryOpen={libraryOpen}
+          // A toggle, since the cell is marked while the dock is up: the way
+          // out of the library is the cell that opened it, not only the ✕ in
+          // the panel's own header.
           onLibrary={() => {
+            if (libraryOpen) {
+              setLibraryOpen(false);
+              return;
+            }
             setLibraryHeight('half');
             setLibraryOpen(true);
           }}
