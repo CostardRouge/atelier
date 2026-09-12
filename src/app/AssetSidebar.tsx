@@ -24,6 +24,7 @@ import {
   selectedUsableAssets,
 } from '../shared/library/capabilities';
 import { formatBytes, formatDuration } from '../shared/lib/format';
+import InfoDot from '../shared/ui/InfoDot';
 import { todayIso } from '../shared/roadtrip/trip-days';
 import {
   describeTimeScale,
@@ -866,10 +867,16 @@ export default function AssetSidebar({
           {' · '}
           {usableSelectedCount} usable by {tool.label}
         </span>
-        <span className="font-mono text-[0.6rem] tracking-[0.02em] text-muted">
-          {remoteTab
-            ? 'proxies, fetched one at a time — nothing at boot'
-            : 'handles only — nothing uploaded, nothing decoded yet'}
+        {/* The local-first claim is not noise and is not deleted: it is one
+            tap away, under the count it qualifies. */}
+        <span>
+          <InfoDot about="what the library holds">
+            <p>
+              {remoteTab
+                ? 'Proxies, fetched one at a time — nothing at boot.'
+                : 'Handles only — nothing uploaded, nothing decoded yet.'}
+            </p>
+          </InfoDot>
         </span>
       </div>
       )}

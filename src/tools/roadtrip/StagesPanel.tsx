@@ -4,6 +4,7 @@ import { rulerBars, rulerGaps, stageTint } from '../../shared/roadtrip/stage-rul
 import { formatIsoDate, spanLength, type IsoDate } from '../../shared/roadtrip/trip-days';
 import { stageLabel, stageRegionLabel } from '../../shared/roadtrip/trip-places';
 import { stageProblem, type TripDoc, type TripStage } from '../../shared/roadtrip/trip-types';
+import SectionLegend from '../../shared/ui/SectionLegend';
 import StageZoomControl from '../../shared/ui/StageZoomControl';
 import { useStageZoom } from '../../shared/ui/use-stage-zoom';
 import PlacesEditor from './PlacesEditor';
@@ -224,9 +225,19 @@ export default function StagesPanel({
       aria-label="Stages"
     >
       <div className="flex items-center gap-3">
-        <span className={`flex-1 ${legend}`}>
-          Stages · {trip.stages.length} leg
-          {trip.stages.length === 1 ? '' : 's'}
+        <span className="flex-1">
+          <SectionLegend
+            label={`Stages · ${trip.stages.length} leg${trip.stages.length === 1 ? '' : 's'}`}
+          >
+            <p>
+              A stage is a leg of the trip and the days you were on it. A badge can name
+              it, count the days you stayed, or say which day of the stop a picture is.
+            </p>
+            <p>
+              List the places it went through and its name writes itself —
+              &ldquo;Perth → Cairns&rdquo;.
+            </p>
+          </SectionLegend>
         </span>
         {/* The timeline of a connected Winnow proposes what this list lacks —
             a diff the author accepts leg by leg, never a sync. */}
@@ -262,12 +273,14 @@ export default function StagesPanel({
       />
 
       {trip.stages.length === 0 ? (
+        /* The empty state says what to DO; what a stage IS sits behind the
+           legend's ⓘ, where it stops taking five lines on every visit. */
         <p className="m-0 text-[0.8rem] text-muted">
-          A stage is a leg of the trip and the days you were on it. Add one
-          with the + above, or right-click a day on the calendar, and a badge
-          can name it, count the days you stayed, or say which day of the stop
-          a picture is. List the places it went through and its name writes
-          itself — “Perth → Cairns”.
+          No legs yet — add one with the + above
+          <span className="max-[600px]:hidden">
+            , or right-click a day on the calendar
+          </span>
+          .
         </p>
       ) : (
         !selected && (

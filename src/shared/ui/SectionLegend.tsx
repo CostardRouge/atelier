@@ -1,4 +1,5 @@
-import { useId, useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
+import InfoDot from './InfoDot';
 
 /**
  * A settings-section legend, with its explanation folded behind an ⓘ.
@@ -11,7 +12,8 @@ import { useId, useState, type ReactNode } from 'react';
  *
  * It lives in `shared/` because Road Trip's piece editor became its second
  * consumer — same move `StylePanel` and `GradePanel` already made, and
- * `shared/` never imports `tools/`.
+ * `shared/` never imports `tools/`. The dot itself is `InfoDot`, shared in turn
+ * with the surfaces that fold a paragraph away without having a legend.
  *
  * Omit `children` and the section gets a plain legend, no button — a control
  * that needs no explanation should not advertise one.
@@ -24,44 +26,14 @@ export default function SectionLegend({
   /** The long-form why. Absent = no ⓘ at all. */
   children?: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
-  const id = useId();
-
   return (
-    <>
-      <span className="flex items-center gap-1.5">
-        <span className="font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted">
-          {label}
-        </span>
-        {children && (
-          <button
-            type="button"
-            onClick={() => setOpen((o) => !o)}
-            aria-expanded={open}
-            aria-controls={id}
-            aria-label={`About ${label.toLowerCase()}`}
-            title={open ? 'Hide the note' : 'What is this?'}
-            /* The ring is 16px so it sits on the cap height of the legend; the
-               invisible ::after gives it a 32px touch target, which is what a
-               thumb actually needs. */
-            className={`relative flex-none w-4 h-4 grid place-items-center rounded-full border font-serif text-[0.62rem] leading-none cursor-pointer transition-colors after:absolute after:-inset-2 after:content-[''] ${
-              open
-                ? 'border-accent bg-accent-wash text-accent-ink'
-                : 'border-line-strong bg-transparent text-muted hover:text-accent-ink hover:border-accent'
-            }`}
-          >
-            i
-          </button>
-        )}
+    /* The row wraps and the note is `basis-full`, so an open note takes the
+       line under the label rather than squeezing it as a second flex item. */
+    <span className="flex flex-wrap items-center gap-1.5">
+      <span className="font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted">
+        {label}
       </span>
-      {children && open && (
-        <span
-          id={id}
-          className="block text-[0.72rem] leading-relaxed text-muted [&>p]:m-0 [&>p+p]:mt-1.5"
-        >
-          {children}
-        </span>
-      )}
-    </>
+      {children && <InfoDot about={label.toLowerCase()}>{children}</InfoDot>}
+    </span>
   );
 }

@@ -15,6 +15,7 @@ import {
 import { prunePins } from '../../shared/roadtrip/trip-cover';
 import CoverPanel from './CoverPanel';
 import { DEFAULT_SOURCE_ID, type SourceInfo } from '../../shared/sources/source';
+import InfoDot from '../../shared/ui/InfoDot';
 
 export interface TripDetails {
   name: string;
@@ -181,9 +182,14 @@ export default function TripDetailsModal({
             {editing ? 'Dates and route' : 'New trip'}
           </h2>
           <p className="m-0 mt-1 text-[0.82rem] text-muted">
-            {editing
-              ? 'The dates are what every badge counts from. Legs follow them; pieces are never moved.'
-              : 'The dates are what every badge counts from. All of it stays editable.'}
+            {editing ? 'Dates, route — all of it stays editable.' : 'All of it stays editable.'}{' '}
+            <InfoDot about="the dates">
+              <p>
+                The dates are what every badge counts from — &ldquo;day 27&rdquo;, &ldquo;515 days
+                ago&rdquo; are measured off them.
+              </p>
+              {editing && <p>Legs follow them; pieces are never moved.</p>}
+            </InfoDot>
           </p>
         </div>
 
@@ -267,9 +273,13 @@ export default function TripDetailsModal({
 
         {editing && (
           <p className="m-0 -mt-2 text-[0.7rem] text-faint">
-            The two ends of the trip. They are the first and last places of its
-            legs — editing one here edits it there, and the legs themselves are
-            on the ruler under the calendar.
+            The two ends of the trip{' '}
+            <InfoDot about="the route">
+              <p>
+                They are the first and last places of its legs — editing one here edits
+                it there, and the legs themselves are on the ruler under the calendar.
+              </p>
+            </InfoDot>
           </p>
         )}
 

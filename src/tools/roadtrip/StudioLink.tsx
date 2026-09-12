@@ -211,14 +211,6 @@ export default function StudioLink({
 
   return (
     <div className="flex flex-col gap-2.5">
-      <p className="m-0 text-[0.78rem] text-ink-soft">
-        Link the Studio project this clip is graded in and the badge can be sent
-        there as an intro scene — with the trip's closing card as the
-        project's outro when this piece closes on it. One export then carries
-        the grade, the telemetry, the hook and the end card — nothing left to
-        join afterwards.
-      </p>
-
       {linked ? (
         <>
           {/* The project as a card, with the picture it already carries: a
@@ -309,22 +301,9 @@ export default function StudioLink({
               </>
             )}
           </p>
-          <p className="m-0 text-[0.7rem] text-faint leading-snug">
-            One export from the Studio then carries the grade, the telemetry
-            and the hook. Sending again replaces the last one and touches
-            nothing else. The shades stay here: a Studio scene has one flat
-            scrim rather than a gradient, so the strongest shade&rsquo;s colour
-            and strength cross over and its shape does not.
-          </p>
         </>
       ) : (
         <>
-          <p className="m-0 text-[0.78rem] text-ink-soft leading-snug">
-            Link the project this clip is graded in, and the badge can be sent
-            there as an intro scene — one export, grade and telemetry and hook,
-            nothing left to join afterwards.
-          </p>
-
           {candidates.length > 0 && (
             <div className="flex flex-col gap-1 max-h-[13rem] overflow-y-auto -mx-0.5 px-0.5">
               {candidates.map((p) => (

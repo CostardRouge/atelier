@@ -11,6 +11,7 @@ import {
 import { hashedMediaRefs } from '../../shared/projects/media-identity';
 import { DEFAULT_SOURCE_ID, type SourceInfo } from '../../shared/sources/source';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
+import InfoDot from '../../shared/ui/InfoDot';
 
 export interface NewProjectChoices {
   name: string;
@@ -227,8 +228,13 @@ export default function NewProjectModal({
             )}
           </div>
           <p className="m-0 text-[0.7rem] text-faint">
-            The folder is remembered (never copied) so the project reopens in
-            one click. You can also just drop files in the Library later.
+            Optional{' '}
+            <InfoDot about="the folder">
+              <p>
+                The folder is remembered (never copied) so the project reopens in one
+                click. You can also drop files in the Library later.
+              </p>
+            </InfoDot>
           </p>
         </div>
 

@@ -197,7 +197,19 @@ export default function ExportTab({
       </div>
 
       <div className={section}>
-        <span className={legend}>Studio · grade, telemetry, one export</span>
+        <SectionLegend label="Studio · grade, telemetry, one export">
+          <p>
+            Link the Studio project this clip is graded in and the badge can be sent
+            there as an intro scene — with the trip&rsquo;s closing card as the project&rsquo;s
+            outro when this piece closes on it. One export then carries the grade, the
+            telemetry, the hook and the end card, with nothing left to join afterwards.
+          </p>
+          <p>
+            Sending again replaces the last one and touches nothing else. The shades
+            stay here: a Studio scene has one flat scrim rather than a gradient, so the
+            strongest shade&rsquo;s colour and strength cross over and its shape does not.
+          </p>
+        </SectionLegend>
         <StudioLink
           post={post}
           elements={hookElements}
