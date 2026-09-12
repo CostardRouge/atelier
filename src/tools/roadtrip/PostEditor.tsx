@@ -673,8 +673,9 @@ export default function PostEditor({
 
       {/* The deck sits beside the picture, not behind a tab: a carousel is
           the one thing about a piece you cannot see while you work on it.
-          Wide it is a column against the stage; stacked it is a row under it,
-          which is also why the rail is a child of the queried layout. */}
+          It is a column against the stage at every width — slimmer below the
+          860px container query, which is why the rail stays a child of the
+          queried layout. */}
       {/* On a compact shell this column FLEXES, so the stage inside it can give
           up height to the docked library. Stacked on a tablet it keeps its
           content height and the column scrolls instead. */}
@@ -688,17 +689,13 @@ export default function PostEditor({
             it was given): a portrait frame on a wide screen used to centre
             itself inside a full-width column, leaving the rail stranded a
             third of a screen away from the thumbnails it belongs to. */}
-        <div
-          className={`flex-1 min-h-0 flex gap-3 @min-[860px]:flex-row @min-[860px]:items-stretch @min-[860px]:justify-center @min-[860px]:gap-3 ${
-            // Under the picture normally, beside it while the dock is open:
-            // a portrait frame in a short column leaves the width empty and
-            // has no height to give (`bare`, above). Both orders put the rail
-            // AFTER the picture in the DOM, so reading order never changes.
-            bare ? 'flex-row-reverse items-stretch' : 'flex-col-reverse items-center'
-          }`}
-        >
+        {/* Beside the picture at every width, on the left, centred against
+            it — the maintainer's call. A row under the stage was the narrow
+            fallback and it is the wrong trade on a phone: it takes HEIGHT
+            from the one screen that has none, while the width beside a
+            portrait frame goes unused either way. */}
+        <div className="flex-1 min-h-0 flex flex-row items-stretch justify-center gap-3">
           <SlideRail
-            column={bare}
             slides={slides}
             index={slideIndex}
             aspect={aspect}

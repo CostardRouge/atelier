@@ -21,17 +21,6 @@ interface SlideRailProps {
   onIncludeCta: (on: boolean) => void;
   /** Where the closing card's words are written — the trip's own sheet. */
   onEditClosingCard: () => void;
-  /**
-   * Stand the rail on its side whatever the container says.
-   *
-   * The rail turns itself at `@min-[860px]`, which is the right rule while the
-   * only question is whether there is room for two columns. It is the wrong one
-   * on a phone with the library docked: there the stage is short and portrait,
-   * so the width beside the frame is empty and the HEIGHT under it is the thing
-   * being fought over — a row costs the picture 91px it cannot spare and a
-   * column costs it 50px of a margin nothing else wants.
-   */
-  column?: boolean;
 }
 
 /**
@@ -40,8 +29,8 @@ interface SlideRailProps {
  * A carousel is the one thing about a piece you cannot see while you work on
  * it: the slide strip used to live on a Deck tab, so on any other tab the
  * piece looked like a single image. Here it sits next to the stage — a column
- * on a wide screen, a row when the editor stacks — and it is also where the
- * deck is BUILT: drag a picture to reorder, `+` to add one, `×` on the open
+ * at every width, centred against the picture — and it is also where the deck
+ * is BUILT: drag a picture to reorder, `+` to add one, `×` on the open
  * picture to drop it, and the closing card is a cell that turns itself on.
  *
  * A cell shows the COMPOSED slide, not the file behind it: the raw picture
@@ -65,25 +54,25 @@ export default function SlideRail({
   onMove,
   onIncludeCta,
   onEditClosingCard,
-  column = false,
 }: SlideRailProps) {
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
 
-  // The two shapes, said once. `column` wins outright rather than layering on
-  // top of the container query: it is only ever set on a compact shell, where
-  // the 860px query cannot match anyway, so there is nothing to fight with.
+  // One shape at every width: a column against the picture, never a row under
+  // it. A row was the stacked fallback, and it costs the stage 91px of HEIGHT
+  // on the screen with the least of it, while the width beside a portrait
+  // frame is empty anyway — so the narrow shell now gets the same rail as the
+  // wide one, only slimmer.
   //
-  // Standing on its side the rail centres on the stage it belongs to, which is
-  // itself centred: a short deck pinned to the top of a tall column reads as a
-  // strip that fell off the picture. The centring is `safe`, so a deck longer
-  // than the column still starts at the top instead of putting its first cells
-  // above the scroller's reach.
-  const box = column
-    ? 'flex-none flex flex-col justify-center-safe gap-2 w-[3.1rem] overflow-y-auto overflow-x-visible pr-1'
-    : 'flex-none flex flex-row gap-2 overflow-x-auto pb-1 @min-[860px]:flex-col @min-[860px]:justify-center-safe @min-[860px]:w-[4.6rem] @min-[860px]:overflow-x-visible @min-[860px]:overflow-y-auto @min-[860px]:pb-0 @min-[860px]:pr-1';
+  // The rail centres on the stage it belongs to, which is itself centred: a
+  // short deck pinned to the top of a tall column reads as a strip that fell
+  // off the picture. The centring is `safe`, so a deck longer than the column
+  // still starts at the top instead of putting its first cells above the
+  // scroller's reach.
+  const box =
+    'flex-none flex flex-col justify-center-safe gap-2 overflow-y-auto overflow-x-visible pr-1 w-[3.1rem] @min-[860px]:w-[4.6rem]';
   // A cell is sized on ONE axis and takes the other from its aspect ratio.
-  const size = column ? 'w-9 h-auto' : 'h-14 w-auto @min-[860px]:h-auto @min-[860px]:w-11';
+  const size = 'h-auto w-9 @min-[860px]:w-11';
 
   /**
    * The deck as the rail lays it out: the pictures, then the way to add
