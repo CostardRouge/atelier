@@ -7,10 +7,10 @@ import { REPO_URL } from './site';
 import { HOME_PATH, toolForPath } from './tools';
 import ToolSwitcher from './ToolSwitcher';
 import { useHashRoute } from './use-hash-route';
-import DockedPanel, { type DockHeight } from '../shared/ui/DockedPanel';
+import BottomSheet from '../shared/ui/BottomSheet';
 import SectionRail from '../shared/ui/SectionRail';
+import { DEFAULT_SNAPS } from '../shared/ui/sheet-snap';
 import { useSectionBar } from '../shared/ui/section-rail';
-import { StageRoomProvider } from '../shared/ui/stage-room';
 import { useAppHeight } from '../shared/ui/use-app-height';
 import { useLayoutMode } from '../shared/ui/use-layout-mode';
 
@@ -130,14 +130,10 @@ export default function App() {
   }, [tool]);
 
   const [libraryOpen, setLibraryOpen] = useState(false);
-  // Which of the dock's two rests it sits at. Half is for choosing, the strip
-  // for composing; it opens at half because opening it IS the choosing.
-  const [libraryHeight, setLibraryHeight] = useState<DockHeight>('half');
   // A sheet belongs to the screen it was opened on: switching tool or growing
   // the window past a phone both make it stale, so it closes.
   useEffect(() => {
     setLibraryOpen(false);
-    setLibraryHeight('half');
   }, [path, mode]);
   // What the active tool put in the thumb zone, if anything — and, before it,
   // the library, which the shell adds to every one of these bars.
@@ -177,10 +173,7 @@ export default function App() {
     : 'h-[var(--app-h)] flex flex-col min-h-0 overflow-hidden w-full px-4 pt-3 pb-3';
 
   return (
-    // The dock takes 46dvh out of the tool's height, so a tool has to know it
-    // is sharing the screen — or the picture pays for the chrome around it
-    // rather than the other way round (`shared/ui/stage-room.tsx`).
-    <StageRoomProvider room={compact && libraryOpen ? 'shared' : 'full'}>
+    <>
     {/* The reading pages keep the page scroll and their own rhythm; the only
         thing `viewport-fit=cover` changes for them is that their top margin
         must never be less than a notch, whatever a launch decides to put
@@ -283,47 +276,40 @@ export default function App() {
         )}
       </main>
 
-      {/* The same panel, taking a SHARE of the height rather than covering it:
-          on a phone the library and the piece it dresses are both on screen,
-          so choosing a picture is a comparison instead of a guess followed by
-          a check. `<main>` above is `flex-1 min-h-0`, so the stage gives up
-          exactly what this takes and nothing overflows. */}
+      {/* The library is a cell of the bottom menu like any other, so it opens
+          the way the others do: a sheet, over the stage, at the tallest rest
+          it has. It used to be a DOCK taking a share of the height, on the
+          argument that picking a picture is a comparison with the piece
+          behind it — the maintainer's answer is that half a phone screen is
+          not enough library to pick from AND not enough stage to compare
+          against, and that a menu whose cells behave differently from each
+          other is the worse fault. `initialSnap` is the big rest: this is a
+          grid of pictures, and 55% of a phone shows two rows of it. */}
       {tool && compact && libraryOpen && (
         <ErrorBoundary resetKey={`library:${tool.id}`}>
-          <DockedPanel
-            height={libraryHeight}
-            onHeight={setLibraryHeight}
+          <BottomSheet
+            open
             onClose={() => setLibraryOpen(false)}
             title="Library"
+            initialSnap={DEFAULT_SNAPS[DEFAULT_SNAPS.length - 1]}
+            // The panel scrolls its own list, so the sheet must not scroll as
+            // well — two nested scrollers give a finger two things to move and
+            // neither of them reliably.
+            bodyScrolls={false}
           >
             <AssetSidebar
               tool={tool}
               collapsed={false}
               onToggle={() => setLibraryOpen(false)}
               variant="sheet"
-              row={libraryHeight === 'strip'}
             />
-          </DockedPanel>
+          </BottomSheet>
         </ErrorBoundary>
       )}
 
       {/* The library, then the tool's own cells, in the thumb zone. */}
       {showRail && (
-        <SectionRail
-          bar={sectionBar}
-          libraryOpen={libraryOpen}
-          // A toggle, since the cell is marked while the dock is up: the way
-          // out of the library is the cell that opened it, not only the ✕ in
-          // the panel's own header.
-          onLibrary={() => {
-            if (libraryOpen) {
-              setLibraryOpen(false);
-              return;
-            }
-            setLibraryHeight('half');
-            setLibraryOpen(true);
-          }}
-        />
+        <SectionRail bar={sectionBar} onLibrary={() => setLibraryOpen(true)} />
       )}
 
       {/* Tools run in a fixed-height frame, so the global footer would push it
@@ -346,6 +332,6 @@ export default function App() {
         </footer>
       )}
     </div>
-    </StageRoomProvider>
+    </>
   );
 }

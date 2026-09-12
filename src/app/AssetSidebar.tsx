@@ -115,17 +115,11 @@ interface AssetSidebarProps {
   /**
    * How the shell is showing it. `docked` is the column beside the tool, with
    * its own frame and its collapse rail — every width above a phone. `sheet`
-   * is the same panel inside the shell's compact dock, which already draws the
+   * is the same panel inside the shell's bottom sheet, which already draws the
    * frame, the title and the dismissal, so this drops all three and never
-   * offers to collapse: the dock's collapsed state is its strip.
+   * offers to collapse: the sheet's own rests are how it gets out of the way.
    */
   variant?: 'docked' | 'sheet';
-  /**
-   * The dock is at its STRIP rest — one row of candidates, nothing else. The
-   * filter, the tabs, the drop zone and the footer all belong to the height
-   * you choose at, not to the one you compose at.
-   */
-  row?: boolean;
 }
 
 /**
@@ -148,7 +142,6 @@ export default function AssetSidebar({
   collapsed,
   onToggle,
   variant = 'docked',
-  row = false,
 }: AssetSidebarProps) {
   const asSheet = variant === 'sheet';
   // A grid of pictures rather than a list of filenames, wherever the panel is
@@ -362,38 +355,6 @@ export default function AssetSidebar({
     } finally {
       setBusy(false);
     }
-  }
-
-  // --- The dock's STRIP rest ------------------------------------------------
-  // One row of candidates, out of the way while you compose. Everything that
-  // belongs to choosing — the filter, the tabs, the drop zone, the footer —
-  // belongs to the height you choose at, so none of it is here.
-  if (asSheet && row) {
-    return (
-      <div className="flex-1 min-h-0 flex items-center gap-1.5 px-2 pb-2 overflow-x-auto overscroll-x-contain touch-pan-x">
-        {shown.length === 0 ? (
-          <p className="m-0 px-2 text-[0.74rem] text-muted">
-            Nothing here yet — pull the grip up to add some.
-          </p>
-        ) : (
-          shown.map((a) => (
-            <AssetTile
-              key={a.id}
-              asset={a}
-              meta={lib.meta.get(a.id)}
-              active={lib.activeId === a.id}
-              usable={assetUsableBy(accepts, a)}
-              onEnsure={() => lib.ensureMeta(a.id)}
-              onActivate={() => activate(a.id)}
-              // No corner verb at 58px: it would cover a fifth of the tile,
-              // and looking at one large is what the half rest above is for.
-              onPreview={null}
-              className="flex-none w-[58px] h-[58px]"
-            />
-          ))
-        )}
-      </div>
-    );
   }
 
   // --- Collapsed rail -------------------------------------------------------
