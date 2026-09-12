@@ -123,7 +123,19 @@ export default function DayFromWinnow({ day, onPicked, defaultOpen, busy }: DayF
         </p>
       ) : (
         <div
-          className="w-full grid grid-cols-[repeat(auto-fill,minmax(74px,1fr))] gap-1.5 max-h-[13rem] overflow-auto pr-1"
+          /* The ROWS are a pixel track, not `auto`, and the box never shrinks.
+             Both say the same thing: a tile's height must not be a share of
+             anything. A grid whose own height turns definite — a `max-height`
+             WebKit reads as definite, or a flex parent shrinking this one on a
+             short sheet — divides that height among its auto rows, and a
+             hundred pictures then draw as 6px slices of themselves inside a
+             tile that clips them (reported from a phone, reproduced here at
+             15px a row). A pixel row cannot be divided: the strip scrolls
+             instead, which is what a scroller is for. Same family as the
+             `aspect-square` trap the tiles already avoid (`frontend.md`).
+             Bigger on a phone, where a 74px tile is neither a target nor a
+             picture — WinnowBrowser's grid learned that first. */
+          className="w-full shrink-0 grid grid-cols-[repeat(auto-fill,minmax(74px,1fr))] auto-rows-[74px] gap-1.5 max-h-[13rem] overflow-auto pr-1 max-[820px]:grid-cols-[repeat(auto-fill,minmax(92px,1fr))] max-[820px]:auto-rows-[104px] max-[820px]:max-h-[17rem]"
           title={busy ? 'Waiting for this slide’s own picture to come back' : undefined}
         >
           {rows.map((r) => (
@@ -135,18 +147,18 @@ export default function DayFromWinnow({ day, onPicked, defaultOpen, busy }: DayF
               title={`${r.filename}${r.has_telemetry ? ' · flight log' : ''}`}
               className="relative block rounded-md overflow-hidden border border-line bg-frame cursor-pointer p-0 disabled:cursor-wait hover:border-line-strong"
             >
-              {/* Fixed height, not `aspect-square`: the calendar cells in
-                  WinnowBrowser hit exactly this trap (aspect-ratio collapsing
-                  a tile in an auto-fill/minmax grid once the panel's own width
-                  turns indefinite — the stacked, sub-820px editor layout is
-                  one such case) and were fixed the same way. A `1fr` track
-                  cannot be trusted to carry a ratio; a pixel height can. */}
+              {/* The tile fills its row, and the row is the pixel track set on
+                  the grid above — never `aspect-square`, which the calendar
+                  cells in WinnowBrowser proved collapses in an
+                  auto-fill/minmax grid once the panel's own width turns
+                  indefinite. A `1fr` track cannot be trusted to carry a ratio;
+                  a pixel track can. */}
               <WinnowThumb
                 client={client}
                 id={r.id}
                 alt={r.filename}
                 label={r.media_type === 'video' ? 'video' : 'photo'}
-                box="w-full h-[74px]"
+                box="w-full h-full"
               />
               {fetching === r.id && (
                 <span className="absolute inset-0 grid place-items-center bg-[rgba(20,18,15,0.55)] font-mono text-[0.58rem] text-paper">
