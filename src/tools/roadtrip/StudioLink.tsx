@@ -17,6 +17,7 @@ import type { CtaSlide } from '../../shared/roadtrip/cta-slide';
 import type { Shade } from '../../shared/roadtrip/shades';
 import type { TripGrade, TripPost } from '../../shared/roadtrip/trip-types';
 import type { GradeScope } from './use-trip-grade';
+import Button, { buttonClass } from '../../shared/ui/Button';
 
 interface StudioLinkProps {
   post: TripPost;
@@ -41,8 +42,8 @@ interface StudioLinkProps {
   gradeScope: GradeScope;
 }
 
-const button =
-  'px-2.5 py-1.5 rounded-paper border border-line-strong bg-paper text-xs font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink disabled:opacity-50 disabled:cursor-default';
+/** A secondary verb — the shared button's recipe, so the bridge matches its panel. */
+const button = buttonClass('default', 'sm');
 const link =
   'p-0 border-0 bg-transparent text-xs text-accent-ink cursor-pointer underline underline-offset-[3px] hover:text-accent disabled:opacity-50 disabled:cursor-default disabled:no-underline';
 
@@ -215,7 +216,7 @@ export default function StudioLink({
         <>
           {/* The project as a card, with the picture it already carries: a
               name alone does not tell you whether this is the right clip. */}
-          <div className="flex items-center gap-3 p-2 rounded-paper border border-line bg-paper">
+          <div className="flex items-center gap-3 p-2 rounded-control border border-line bg-paper">
             <ProjectThumb doc={linked} />
             <span className="flex-1 min-w-0">
               <span className="block text-sm text-ink truncate" title={linked.name}>
@@ -237,14 +238,13 @@ export default function StudioLink({
             </span>
           </div>
 
-          <button
-            type="button"
-            className="px-[1.1rem] py-2 inline-flex items-center justify-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold hover:bg-accent hover:border-accent disabled:opacity-60"
+          <Button
+            variant="primary"
             disabled={busy !== null || !elements.length}
             onClick={() => void send(true)}
           >
             {busy ?? (hasHook(linked) ? 'Update the hook and open the Studio' : 'Send the hook and open the Studio')}
-          </button>
+          </Button>
 
           <div className="flex flex-wrap items-center gap-3">
             <button

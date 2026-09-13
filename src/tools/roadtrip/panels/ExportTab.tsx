@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import SectionLegend from '../../../shared/ui/SectionLegend';
 import type { OverlayElement } from '../../../shared/overlay/overlay-types';
 import TranscodeControl from '../../../shared/media/TranscodeControl';
 import { useAvcEncodeSupport } from '../../../shared/media/use-encode-support';
@@ -10,7 +9,10 @@ import type { TripDoc, TripGrade, TripPost } from '../../../shared/roadtrip/trip
 import StudioLink from '../StudioLink';
 import type { GradeScope } from '../use-trip-grade';
 import { reasonSentence } from './SlideDelivery';
-import { legend, note, section, smallButton } from './ui';
+import { note } from './ui';
+import Button from '../../../shared/ui/Button';
+import { FieldRow, InspectorSection, ToggleField } from '../../../shared/ui/Inspector';
+import { Icons } from '../../../shared/ui/icons';
 
 interface ExportTabProps {
   trip: TripDoc;
@@ -95,54 +97,49 @@ export default function ExportTab({
   );
 
   return (
-    <div className="flex flex-col gap-4">
-      {exportNote && <p className={note}>{exportNote}</p>}
-      {/* A sentence that says "transcode it first" must offer the transcode
-          where it is read, or it is a dead end. Once done, the next export
-          reads the H.264 by itself. */}
-      {undecodable && (
-        <div className={`${note} flex flex-col gap-2`}>
-          <span>
-            {transcode.status === 'done'
-              ? `${undecodable.name} is transcoded to H.264 — export again and it is what goes out.`
-              : `${undecodable.name} cannot be decoded for export here (DJI footage is often HEVC/H.265). Transcode it to H.264 in the browser, then export again.`}
-          </span>
-          {transcode.status !== 'done' && <TranscodeControl state={transcode} />}
-        </div>
-      )}
-
-      <div className={section}>
-        <SectionLegend label={`What goes out · ${describePlan(plan)}`}>
+    <div className="flex flex-col">
+      <InspectorSection
+        id="piece.export.plan"
+        title="What goes out"
+        badge={describePlan(plan)}
+        info={
           <p>
-            Each slide leaves in the format it IS — decided on the Content tab, not
-            here. Files are numbered in swipe order, so a deck mixing a clip and two
-            photographs still uploads in the right one.
+            Each slide leaves in the format it IS — decided on the Content tab, not here.
+            Files are numbered in swipe order, so a deck mixing a clip and two photographs
+            still uploads in the right one.
           </p>
-        </SectionLegend>
+        }
+      >
+        {exportNote && <p className={note}>{exportNote}</p>}
+        {/* A sentence that says "transcode it first" must offer the transcode
+            where it is read, or it is a dead end. Once done, the next export
+            reads the H.264 by itself. */}
+        {undecodable && (
+          <div className={`${note} flex flex-col gap-2`}>
+            <span>
+              {transcode.status === 'done'
+                ? `${undecodable.name} is transcoded to H.264 — export again and it is what goes out.`
+                : `${undecodable.name} cannot be decoded for export here (DJI footage is often HEVC/H.265). Transcode it to H.264 in the browser, then export again.`}
+            </span>
+            {transcode.status !== 'done' && <TranscodeControl state={transcode} />}
+          </div>
+        )}
 
-        <ul className="m-0 p-0 list-none flex flex-col gap-1">
+        <ul className="m-0 p-0 list-none flex flex-col gap-1.5">
           {plan.items.map((item) => (
-            <li
-              key={`${item.kind}-${item.position}`}
-              className="flex items-baseline gap-2 text-xs"
-            >
-              <span className="flex-none font-mono text-2xs tabular-nums text-muted">
-                {String(item.position).padStart(2, '0')}
+            <li key={`${item.kind}-${item.position}`} className="grid grid-cols-[5.75rem_minmax(0,1fr)] gap-x-3 items-baseline">
+              <span className="font-mono text-xs tabular-nums text-muted">
+                {String(item.position).padStart(2, '0')} ·{' '}
+                {item.medium === 'video'
+                  ? `${item.seconds.toFixed(1)}s${item.speed !== 1 ? ` ${item.speed}×` : ''}`
+                  : 'still'}
               </span>
               <span
-                className={`flex-1 min-w-0 truncate ${
-                  item.blocker ? 'text-faint line-through' : 'text-ink'
-                }`}
-                title={item.name}
+                className={`min-w-0 truncate text-sm ${item.blocker ? 'text-faint line-through' : 'text-ink'}`}
+                title={`${item.name}${item.silent ? ' · silent' : ''}`}
               >
                 {item.name}
-              </span>
-              <span className="flex-none font-mono text-2xs tracking-[0.06em] uppercase text-muted">
-                {item.medium === 'video'
-                  ? `${item.seconds.toFixed(1)}s${item.speed !== 1 ? ` · ${item.speed}×` : ''}${
-                      item.silent ? ' · silent' : ''
-                    }`
-                  : 'still'}
+                {item.silent && <span className="text-muted"> · silent</span>}
               </span>
             </li>
           ))}
@@ -155,89 +152,89 @@ export default function ExportTab({
             {reasonSentence(plan.items[0].reason, plan.items[0].seconds, plan.items[0].speed)}
           </p>
         )}
-
         {plan.blockers.map((b) => (
           <p key={b} className="m-0 text-xs text-danger">
             {b}
           </p>
         ))}
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <button
-            type="button"
+        <FieldRow label="As images">
+          <ToggleField label="Everything as images" checked={imagesOnly} onChange={setImagesOnly}>
+            Every slide as a still
+          </ToggleField>
+        </FieldRow>
+        <FieldRow label="">
+          {/* Always "the piece": the file COUNT is what the badge says, and a
+              deck of three whose two clips are blocked is still the piece. */}
+          <Button
+            variant="primary"
+            icon={Icons.export}
             onClick={() => onExportPiece(imagesOnly)}
             disabled={exporting !== null || plan.files === 0}
-            className="px-[1.1rem] py-1.5 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-xs font-semibold hover:bg-accent hover:border-accent disabled:opacity-60 disabled:cursor-default"
           >
-            {/* Always "the piece": the file COUNT is what the legend says,
-                and a deck of three whose two clips are blocked is still the
-                piece being exported, not "this slide". */}
-            {exporting ?? '↓ Export the piece'}
-          </button>
-          <label className="flex items-center gap-1.5 text-xs text-ink-soft cursor-pointer">
-            <input
-              type="checkbox"
-              checked={imagesOnly}
-              onChange={(e) => setImagesOnly(e.target.checked)}
-              className="accent-accent"
-            />
-            Everything as images
-          </label>
-        </div>
-      </div>
+            {exporting ?? 'Export the piece'}
+          </Button>
+        </FieldRow>
+      </InspectorSection>
 
-      <div className={section}>
-        <span className={legend}>Or one format at a time</span>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={onExportDeck}
-            disabled={exporting !== null}
-            className={smallButton}
-          >
-            {slides.length === 1 ? '↓ The slide as a PNG' : `↓ All ${slides.length} slides as PNGs`}
-          </button>
-          {hookIsVideoSlide && (
-            <button
-              type="button"
+      <InspectorSection
+        id="piece.export.formats"
+        title="One format at a time"
+        info={
+          <p>
+            {hookIsVideoSlide
+              ? hookIsVideo
+                ? slides[0].speed !== 1
+                  ? `The hook’s clip starts on its in point and plays at ${slides[0].speed}×, so the badge animates in on the first frame at its own pace. A re-timed clip goes out without sound`
+                  : 'The hook’s clip starts on its in point, so the badge animates in on the first frame. Audio is copied through'
+                : 'The hook is painted over its photograph, frame by frame, so its entrance plays. It comes out silent — there is no track to copy'
+              : hookFile
+                ? 'The hook goes out as an image: nothing on it moves. Give it an animation on the Look tab, or set the slide to Video to hold it as a card'
+                : 'Give the hook a picture from the Library first'}
+            {graded
+              ? `, and every picture goes through ${gradeScope === 'post' ? 'this piece’s own' : 'the trip’s'} grade.`
+              : '; nothing is graded — no grade is set.'}
+          </p>
+        }
+      >
+        <FieldRow label="Stills">
+          <Button size="sm" icon={Icons.download} onClick={onExportDeck} disabled={exporting !== null}>
+            {slides.length === 1 ? 'The slide as a PNG' : `All ${slides.length} slides as PNGs`}
+          </Button>
+        </FieldRow>
+        {hookIsVideoSlide && (
+          <FieldRow label="Hook">
+            <Button
+              size="sm"
+              icon={Icons.download}
               onClick={onExportHookClip}
               disabled={exporting !== null || !canEncode}
-              className={smallButton}
             >
-              ↓ The hook as a video · {hookLength.toFixed(1)}s
-            </button>
-          )}
-        </div>
-        <p className="m-0 text-xs text-muted">
-          {hookIsVideoSlide
-            ? hookIsVideo
-              ? slides[0].speed !== 1
-                ? `The hook’s clip starts on its in point and plays at ${slides[0].speed}×, so the badge animates in on the first frame at its own pace. A re-timed clip goes out without sound`
-                : 'The hook’s clip starts on its in point, so the badge animates in on the first frame. Audio is copied through'
-              : 'The hook is painted over its photograph, frame by frame, so its entrance plays. It comes out silent — there is no track to copy'
-            : hookFile
-              ? 'The hook goes out as an image: nothing on it moves. Give it an animation on the Look tab, or set the slide to Video to hold it as a card'
-              : 'Give the hook a picture from the Library first'}
-          {graded
-            ? `, and every picture goes through ${gradeScope === 'post' ? 'this piece’s own' : 'the trip’s'} grade.`
-            : '; nothing is graded — no grade is set.'}
-        </p>
-      </div>
+              As a video · {hookLength.toFixed(1)}s
+            </Button>
+          </FieldRow>
+        )}
+      </InspectorSection>
 
-      <div className={section}>
-        <SectionLegend label="Studio · grade, telemetry, one export">
-          <p>
-            Link the Studio project this clip is graded in and the badge can be sent
-            there as an intro scene — with the trip&rsquo;s closing card as the project&rsquo;s
-            outro when this piece closes on it. One export then carries the grade, the
-            telemetry, the hook and the end card, with nothing left to join afterwards.
-          </p>
-          <p>
-            Sending again replaces the last one and touches nothing else. The shades
-            stay here: a Studio scene has one flat scrim rather than a gradient, so the
-            strongest shade&rsquo;s colour and strength cross over and its shape does not.
-          </p>
-        </SectionLegend>
+      <InspectorSection
+        id="piece.export.studio"
+        title="Studio"
+        info={
+          <>
+            <p>
+              Link the Studio project this clip is graded in and the badge can be sent
+              there as an intro scene — with the trip&rsquo;s closing card as the project&rsquo;s
+              outro when this piece closes on it. One export then carries the grade, the
+              telemetry, the hook and the end card, with nothing left to join afterwards.
+            </p>
+            <p>
+              Sending again replaces the last one and touches nothing else. The shades
+              stay here: a Studio scene has one flat scrim rather than a gradient, so the
+              strongest shade&rsquo;s colour and strength cross over and its shape does not.
+            </p>
+          </>
+        }
+      >
         <StudioLink
           post={post}
           elements={hookElements}
@@ -249,7 +246,7 @@ export default function ExportTab({
           grade={grade}
           gradeScope={gradeScope}
         />
-      </div>
+      </InspectorSection>
     </div>
   );
 }
