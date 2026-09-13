@@ -115,16 +115,27 @@ export default function PictureTab({
               )}
             </p>
           )}
+          {/* The filmstrip moves the IN point and keeps the slide's length —
+              it slides the whole stretch along the clip. The bar under the
+              picture is where a cut is made (an in handle there keeps the out
+              point), and where the speed is chosen. */}
           {isVideo && duration > 0 && slideFile && (
             <FrameStrip
               file={slideFile}
               duration={duration}
               value={slide.videoTimeSeconds}
+              label="In point"
               onChange={(v) => {
                 if (isHook) patchBadge({ videoTimeSeconds: v });
                 else patchSlide({ videoTimeSeconds: v });
               }}
             />
+          )}
+          {isVideo && duration > 0 && slideFile && (
+            <p className="m-0 text-[0.72rem] text-muted">
+              Where the slide’s stretch of the clip starts; it keeps its length. Cut its
+              end and choose its speed on the bar under the picture.
+            </p>
           )}
         </div>
       )}

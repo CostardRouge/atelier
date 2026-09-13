@@ -4,7 +4,11 @@ import {
   type DeckSlide,
   type SlideReason,
 } from '../../../shared/roadtrip/deck';
-import { MAX_HOOK_SECONDS, MIN_HOOK_SECONDS } from '../../../shared/roadtrip/hook-video';
+import {
+  MAX_HOOK_SECONDS,
+  MIN_HOOK_SECONDS,
+  screenSecondsCeiling,
+} from '../../../shared/roadtrip/hook-video';
 import type { SlideMedium } from '../../../shared/roadtrip/trip-types';
 import { chipClass, legend } from './ui';
 
@@ -25,12 +29,15 @@ const CHOICES: { id: SlideMedium; label: string }[] = [
 ];
 
 /** The sentence a resolved slide deserves — the real one, never a generic. */
-export function reasonSentence(reason: SlideReason, seconds: number): string {
+export function reasonSentence(reason: SlideReason, seconds: number, speed = 1): string {
+  // A re-timed clip has no sound: audio is copied, never re-encoded. Said
+  // here, beside the length, rather than discovered in the file.
+  const pace = speed !== 1 ? ` at ${speed}×, without sound` : '';
   switch (reason) {
     case 'animated':
-      return `This slide animates, so it goes out as a ${seconds.toFixed(1)}s video.`;
+      return `This slide animates, so it goes out as a ${seconds.toFixed(1)}s video${pace}.`;
     case 'moving':
-      return `Its picture is a clip, so it goes out as ${seconds.toFixed(1)}s of video.`;
+      return `Its picture is a clip, so it goes out as ${seconds.toFixed(1)}s of video${pace}.`;
     case 'forced-video':
       return `A still picture, held for ${seconds.toFixed(1)}s of video because you asked.`;
     case 'settled':
@@ -100,9 +107,10 @@ export default function SlideDelivery({
   onSeconds,
 }: SlideDeliveryProps) {
   const name = slide.media?.name ?? null;
-  // A clip cannot be held longer than it lasts, and a read-out that claims 5s
-  // over a 3s clip is lying about the file it will write.
-  const ceiling = clipSeconds > 0 ? Math.max(MIN_HOOK_SECONDS, Math.min(MAX_HOOK_SECONDS, clipSeconds)) : MAX_HOOK_SECONDS;
+  // A clip cannot be held longer than what is left of it after its in point,
+  // at its speed — and a read-out that claims 5s over a 3s clip is lying
+  // about the file it will write.
+  const ceiling = screenSecondsCeiling(slide.videoTimeSeconds, slide.speed, clipSeconds);
   const seconds = Math.min(slide.seconds, ceiling);
 
   return (
@@ -137,12 +145,16 @@ export default function SlideDelivery({
         })}
       </div>
 
-      <p className="m-0 text-[0.76rem] text-ink-soft">{reasonSentence(slide.reason, seconds)}</p>
+      <p className="m-0 text-[0.76rem] text-ink-soft">
+        {reasonSentence(slide.reason, seconds, slide.speed)}
+      </p>
 
       <label className="flex flex-col gap-1">
         <span className={legend}>
           On screen · {seconds.toFixed(1)}s
-          {clipSeconds > 0 && ceiling < MAX_HOOK_SECONDS ? ` of ${clipSeconds.toFixed(1)}s` : ''}
+          {clipSeconds > 0 && ceiling < MAX_HOOK_SECONDS
+            ? ` of ${ceiling.toFixed(1)}s left${slide.speed !== 1 ? ` at ${slide.speed}×` : ''}`
+            : ''}
         </span>
         <input
           type="range"
@@ -156,7 +168,9 @@ export default function SlideDelivery({
         />
         <span className="text-[0.72rem] text-muted">
           {slide.medium === 'video'
-            ? 'The length of the clip this slide delivers.'
+            ? clipSeconds > 0
+              ? 'The length of the clip this slide delivers — the out point on the bar under the picture, where the in point and the speed are cut too.'
+              : 'The length of the clip this slide delivers.'
             : 'An image ignores this, until the deck is combined into one reel.'}
         </span>
       </label>

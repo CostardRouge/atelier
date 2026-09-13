@@ -47,7 +47,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 15;
+export const TRIP_DOC_VERSION = 16;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers and the
@@ -233,8 +233,21 @@ export interface PostBadge {
   shades: Shade[];
   /** The frame the badge is composed for, from `ASPECT_PRESETS`. */
   aspectId: string;
-  /** Frame of a video clip the badge sits on; ignored for a photo. */
+  /**
+   * Where the hook's clip STARTS — the frame the badge sits on for a still,
+   * and the in point of the stretch that is encoded, `hookSeconds` of screen
+   * time long at `videoSpeed`. Ignored for a photo.
+   */
   videoTimeSeconds: number;
+  /**
+   * The speed the hook's clip plays at, on the stage and in the file: 1 as
+   * shot, 2 twice as fast, 0.5 half — the Studio's own steps (`CLIP_SPEEDS`).
+   * The source stretch is `hookSeconds × videoSpeed` long (`clipSlice`), so
+   * changing the speed keeps the footage and moves the screen time. A speed
+   * other than 1 ships without sound: audio is copied, never re-encoded.
+   * Ignored for a photo.
+   */
+  videoSpeed: number;
   /**
    * How the hook's picture sits in the frame — pan, zoom, rotation over the
    * cover-crop. Belongs to the piece and not to the trip's defaults: it is
@@ -343,6 +356,8 @@ export function defaultPostBadge(
     shades: (defaults?.shades ?? []).map((shade) => ({ ...shade, id: newId() })),
     aspectId: defaults?.aspectId ?? ASPECT_FOR_KIND[kind],
     videoTimeSeconds: 0,
+    // Never inherited, like the frame: a speed is about the clip in hand.
+    videoSpeed: 1,
     framing: { ...DEFAULT_FRAMING },
     textOverrides: {},
     pieceStyles: defaults ? structuredClone(defaults.pieceStyles) : {},
@@ -361,9 +376,11 @@ export interface PostSlide {
   /**
    * Where this slide's picture is taken from its clip — and, once the slide is
    * delivered as a video, the IN point of the stretch that is encoded, with
-   * `seconds` as its length.
+   * `seconds` of screen time as its length at `videoSpeed`.
    */
   videoTimeSeconds: number;
+  /** The speed the clip plays at — see `PostBadge.videoSpeed`. */
+  videoSpeed: number;
   /** How this picture sits in the frame — see `PostBadge.framing`. */
   framing: Framing;
   /** The author's own line over this picture; empty draws nothing. */
@@ -379,6 +396,7 @@ export function createPostSlide(media: SavedMediaRef | null = null): PostSlide {
     id: crypto.randomUUID(),
     media,
     videoTimeSeconds: 0,
+    videoSpeed: 1,
     framing: { ...DEFAULT_FRAMING },
     caption: '',
     medium: 'auto',
@@ -706,6 +724,10 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * backdrop, the place marker and the reference day. A post that had the
  * boolean on lands on `auto` — the intent kept, the untrue anniversary dropped.
  *
+ * v15 → v16 gives every clip slide a speed. Every existing slide lands on 1,
+ * which is exactly what it delivered: the same footage over the same screen
+ * time. Nothing about a still changes, and the hook defaults carry no speed.
+ *
  * v14 → v15 gives every piece its OPENER (`PostBadge.hook`), a list holding
  * the `badge` variant — the one that draws nothing extra — so no stored trip
  * changes. See `docs/hook-engine.md`.
@@ -970,6 +992,21 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
           : defaults,
       ]),
     ) as HookDefaultsByKind;
+  }
+
+  if (migrated.version < 16) {
+    // Every clip composed before this played as shot, so every slide lands on
+    // 1: the same footage, over the same screen time, as it always delivered.
+    // The hook's remembered defaults are untouched — a speed belongs to the
+    // clip in hand, and is never inherited (like its frame).
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      badge: { ...post.badge, videoSpeed: post.badge?.videoSpeed ?? 1 },
+      slides: (post.slides ?? []).map((slide) => ({
+        ...slide,
+        videoSpeed: slide.videoSpeed ?? 1,
+      })),
+    }));
   }
 
   migrated.version = TRIP_DOC_VERSION;

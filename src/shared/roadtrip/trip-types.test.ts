@@ -8,7 +8,9 @@ import {
   createTripPost,
   createTripStage,
   defaultPostBadge,
+  defaultTripCover,
   duplicateTripPost,
+  emptyGrade,
   hookDefaultsFrom,
   migrateTripDoc,
   spanProblem,
@@ -17,6 +19,8 @@ import {
   type TripStage,
 } from './trip-types';
 import { createShade } from './shades';
+import { DEFAULT_CTA } from './cta-slide';
+import { DEFAULT_BADGE_WORDS } from './day-badge';
 
 const stage = (
   startDate: string,
@@ -833,5 +837,103 @@ describe('migrateTripDoc — v13 → v14 (a slide says what it is)', () => {
     const again = migrateTripDoc({ ...doc, version: 13 });
     expect(again.posts[0].badge.medium).toBe('image');
     expect(again.posts[0].slides[0].seconds).toBe(8);
+  });
+});
+
+describe('migrateTripDoc — v15 → v16 (a clip slide has a speed)', () => {
+  /** A v15 document: a hook on a clip and a content clip, no speed anywhere. */
+  const v15 = () => {
+    const badge = {
+      ...defaultPostBadge('reel'),
+      videoTimeSeconds: 2,
+      hookSeconds: 5,
+    } as Record<string, unknown>;
+    delete badge.videoSpeed;
+    const slide = { ...createPostSlide({ name: 'B.MP4', size: 1, lastModified: 1 }) } as Record<
+      string,
+      unknown
+    >;
+    delete slide.videoSpeed;
+    return {
+      version: 15,
+      id: 't1',
+      name: 'Australie',
+      destination: 'Australia',
+      startDate: '2025-03-01',
+      endDate: '2026-01-04',
+      stages: [],
+      posts: [
+        {
+          id: 'p1',
+          kind: 'reel',
+          date: '2025-03-27',
+          endDate: null,
+          title: 'Cliffs',
+          media: { name: 'A.MP4', size: 1, lastModified: 1 },
+          badge,
+          slides: [slide],
+          includeCta: false,
+          projectId: null,
+          grade: null,
+          publishedAt: null,
+          createdAt: 0,
+        },
+      ],
+      hookDefaults: { reel: hookDefaultsFrom(defaultPostBadge('reel')) },
+      cover: defaultTripCover(),
+      grade: emptyGrade(),
+      sourceId: 'local',
+      badgeWords: DEFAULT_BADGE_WORDS,
+      cta: DEFAULT_CTA,
+      theme: null,
+      createdAt: 0,
+      updatedAt: 0,
+    } as unknown as TripDoc;
+  };
+
+  it('plays every existing clip as shot, so nothing changes length', () => {
+    const doc = migrateTripDoc(v15());
+    expect(doc.version).toBe(TRIP_DOC_VERSION);
+    expect(doc.posts[0].badge.videoSpeed).toBe(1);
+    expect(doc.posts[0].slides[0].videoSpeed).toBe(1);
+    // The in point and the screen time are exactly what they were.
+    expect(doc.posts[0].badge.videoTimeSeconds).toBe(2);
+    expect(doc.posts[0].badge.hookSeconds).toBe(5);
+  });
+
+  it('gives the hook defaults no speed — it is never inherited', () => {
+    const kept = migrateTripDoc(v15()).hookDefaults.reel as unknown as Record<string, unknown>;
+    expect(kept).not.toHaveProperty('videoSpeed');
+  });
+
+  it('keeps a speed a document already carries', () => {
+    const doc = migrateTripDoc(v15());
+    doc.posts[0].badge.videoSpeed = 2;
+    const again = migrateTripDoc({ ...doc, version: 15 });
+    expect(again.posts[0].badge.videoSpeed).toBe(2);
+  });
+
+  it('fills a v1 document all the way up without leaving a hole', () => {
+    // The v16 block runs LAST: on a v1 document the badge does not exist
+    // until the v2 block builds it, and a block placed above would write
+    // `{ videoSpeed }` over nothing.
+    const v1 = {
+      version: 1,
+      id: 't1',
+      name: 'A',
+      destination: '',
+      startDate: '2025-03-01',
+      endDate: '2025-03-10',
+      stages: [],
+      posts: [
+        { id: 'p1', kind: 'photo', date: '2025-03-02', endDate: null, title: '', publishedAt: null, createdAt: 0 },
+      ],
+      createdAt: 0,
+      updatedAt: 0,
+    } as unknown as TripDoc;
+    const doc = migrateTripDoc(v1);
+    expect(doc.posts[0].badge.videoSpeed).toBe(1);
+    expect(doc.posts[0].badge.mode).toBe('day');
+    expect(doc.posts[0].badge.hookSeconds).toBeGreaterThan(0);
   });
 });
