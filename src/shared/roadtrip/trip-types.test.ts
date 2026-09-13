@@ -840,9 +840,9 @@ describe('migrateTripDoc — v13 → v14 (a slide says what it is)', () => {
   });
 });
 
-describe('migrateTripDoc — v14 → v15 (a clip slide has a speed)', () => {
-  /** A v14 document: a hook on a clip and a content clip, no speed anywhere. */
-  const v14 = () => {
+describe('migrateTripDoc — v15 → v16 (a clip slide has a speed)', () => {
+  /** A v15 document: a hook on a clip and a content clip, no speed anywhere. */
+  const v15 = () => {
     const badge = {
       ...defaultPostBadge('reel'),
       videoTimeSeconds: 2,
@@ -855,7 +855,7 @@ describe('migrateTripDoc — v14 → v15 (a clip slide has a speed)', () => {
     >;
     delete slide.videoSpeed;
     return {
-      version: 14,
+      version: 15,
       id: 't1',
       name: 'Australie',
       destination: 'Australia',
@@ -892,7 +892,7 @@ describe('migrateTripDoc — v14 → v15 (a clip slide has a speed)', () => {
   };
 
   it('plays every existing clip as shot, so nothing changes length', () => {
-    const doc = migrateTripDoc(v14());
+    const doc = migrateTripDoc(v15());
     expect(doc.version).toBe(TRIP_DOC_VERSION);
     expect(doc.posts[0].badge.videoSpeed).toBe(1);
     expect(doc.posts[0].slides[0].videoSpeed).toBe(1);
@@ -902,19 +902,19 @@ describe('migrateTripDoc — v14 → v15 (a clip slide has a speed)', () => {
   });
 
   it('gives the hook defaults no speed — it is never inherited', () => {
-    const kept = migrateTripDoc(v14()).hookDefaults.reel as unknown as Record<string, unknown>;
+    const kept = migrateTripDoc(v15()).hookDefaults.reel as unknown as Record<string, unknown>;
     expect(kept).not.toHaveProperty('videoSpeed');
   });
 
   it('keeps a speed a document already carries', () => {
-    const doc = migrateTripDoc(v14());
+    const doc = migrateTripDoc(v15());
     doc.posts[0].badge.videoSpeed = 2;
-    const again = migrateTripDoc({ ...doc, version: 14 });
+    const again = migrateTripDoc({ ...doc, version: 15 });
     expect(again.posts[0].badge.videoSpeed).toBe(2);
   });
 
   it('fills a v1 document all the way up without leaving a hole', () => {
-    // The v15 block runs LAST: on a v1 document the badge does not exist
+    // The v16 block runs LAST: on a v1 document the badge does not exist
     // until the v2 block builds it, and a block placed above would write
     // `{ videoSpeed }` over nothing.
     const v1 = {

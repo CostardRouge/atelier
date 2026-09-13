@@ -14,6 +14,7 @@ import { DEFAULT_FRAMING, drawFramed, type Framing } from '../media/framing';
 import { makeFrameGrader, type FrameGrader } from '../lut/frame-grader';
 import { drawQr, type QrDraw } from '../overlay/draw-qr';
 import { shadeGradient, type HookBlock, type Shade } from './shades';
+import type { ResolvedHook } from './hooks/hook-variant';
 import { seek as seekVideo } from './video-frames';
 import {
   drawOverlays,
@@ -175,6 +176,17 @@ export interface RenderBadgeOptions {
   shades?: readonly Shade[];
   /** The badge block's extent, for a shade that follows the hook. */
   block?: HookBlock | null;
+  /**
+   * The piece's prepared OPENER, painted between the picture and the shades —
+   * so a variant that owns the frame covers the picture, while the shades and
+   * the badge still sit above whatever it drew. Null for every slide that is
+   * not a hook, and a no-op for the badge variant, which draws nothing.
+   *
+   * It is painted at `timeSeconds`: preview and export hand the same clock to
+   * the same closure, which is the only reason the two can be relied on to
+   * agree. See `shared/roadtrip/hooks/`.
+   */
+  hook?: ResolvedHook | null;
   /** A QR square, drawn under the text — the call-to-action slide's hero. */
   qr?: QrDraw | null;
   /**
@@ -319,6 +331,8 @@ export async function renderBadge(
       opts.framing ?? DEFAULT_FRAMING,
     );
   }
+
+  opts.hook?.paint(ctx, opts.timeSeconds ?? 0, { width: w, height: h });
 
   if (opts.shades?.length) paintShades(ctx, w, h, opts.shades, opts.block ?? null);
   if (opts.qr) drawQr(ctx, w, h, opts.qr);

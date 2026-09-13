@@ -32,6 +32,7 @@ import {
   type BadgePieceStyles,
 } from './badge-layout';
 import { createShade, vignetteShade, type Shade } from './shades';
+import { defaultHookLayers, type HookLayer } from './hooks/hook-variant';
 import { DEFAULT_CTA, type CtaSlide } from './cta-slide';
 import {
   DEFAULT_TIME_AGO_WORDS,
@@ -46,7 +47,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 15;
+export const TRIP_DOC_VERSION = 16;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers and the
@@ -262,6 +263,18 @@ export interface PostBadge {
   textOverrides: Partial<Record<BadgePiece, string>>;
   /** How each piece departs from the trip's theme — case, colour, panel, animation. */
   pieceStyles: BadgePieceStyles;
+  /**
+   * The OPENER: which hook variant draws this piece's first slide, and what it
+   * was told. A list from the first version even though only the first entry is
+   * ever written today — the stack (a route trace behind a scrub) is UI that
+   * does not exist yet, and shaping the field for it now costs nothing where a
+   * later migration would run on documents remote trips already carry.
+   *
+   * An id this build does not know is skipped at resolve time and the badge
+   * stands in: a trip written by a newer Atelier opens here and loses its
+   * opener, it never fails to open. See `docs/hook-engine.md`.
+   */
+  hook: HookLayer[];
 }
 
 /**
@@ -287,6 +300,8 @@ export interface HookDefaults {
   layout: BadgeLayout;
   pieceStyles: BadgePieceStyles;
   shades: Shade[];
+  /** The opener a new piece of this kind starts on. */
+  hook: HookLayer[];
 }
 
 export type HookDefaultsByKind = Partial<Record<PostKind, HookDefaults>>;
@@ -304,6 +319,7 @@ export function hookDefaultsFrom(badge: PostBadge): HookDefaults {
     layout: { ...badge.layout },
     pieceStyles: structuredClone(badge.pieceStyles),
     shades: badge.shades.map((shade) => ({ ...shade, id: newId() })),
+    hook: structuredClone(badge.hook),
   };
 }
 
@@ -345,6 +361,7 @@ export function defaultPostBadge(
     framing: { ...DEFAULT_FRAMING },
     textOverrides: {},
     pieceStyles: defaults ? structuredClone(defaults.pieceStyles) : {},
+    hook: defaults?.hook ? structuredClone(defaults.hook) : defaultHookLayers(),
   };
 }
 
@@ -707,9 +724,13 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * backdrop, the place marker and the reference day. A post that had the
  * boolean on lands on `auto` — the intent kept, the untrue anniversary dropped.
  *
- * v14 → v15 gives every clip slide a speed. Every existing slide lands on 1,
+ * v15 → v16 gives every clip slide a speed. Every existing slide lands on 1,
  * which is exactly what it delivered: the same footage over the same screen
  * time. Nothing about a still changes, and the hook defaults carry no speed.
+ *
+ * v14 → v15 gives every piece its OPENER (`PostBadge.hook`), a list holding
+ * the `badge` variant — the one that draws nothing extra — so no stored trip
+ * changes. See `docs/hook-engine.md`.
  *
  * v12 → v13 gives the trip its cover: a layout and the pieces pinned to it.
  * Every stored trip lands on the mosaic with nothing pinned, which is fully
@@ -952,6 +973,28 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
   }
 
   if (migrated.version < 15) {
+    // Every piece composed before hook variants existed is the badge, which is
+    // the variant that draws nothing extra — so no stored trip changes by one
+    // pixel. The trip's saved looks take it too, or the next piece of that kind
+    // would start with no opener at all.
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      badge: {
+        ...post.badge,
+        hook: post.badge?.hook?.length ? post.badge.hook : defaultHookLayers(),
+      },
+    }));
+    migrated.hookDefaults = Object.fromEntries(
+      Object.entries(migrated.hookDefaults ?? {}).map(([kind, defaults]) => [
+        kind,
+        defaults
+          ? { ...defaults, hook: defaults.hook?.length ? defaults.hook : defaultHookLayers() }
+          : defaults,
+      ]),
+    ) as HookDefaultsByKind;
+  }
+
+  if (migrated.version < 16) {
     // Every clip composed before this played as shot, so every slide lands on
     // 1: the same footage, over the same screen time, as it always delivered.
     // The hook's remembered defaults are untouched — a speed belongs to the

@@ -13,6 +13,8 @@ import {
   pieceElementId,
   pieceFromElementId,
 } from '../../shared/roadtrip/badge-layout';
+import { resolveHook } from '../../shared/roadtrip/hooks/registry';
+import type { HookContext } from '../../shared/roadtrip/hooks/hook-variant';
 import { ctaLayout, ctaRoleFromElementId, type CtaRole } from '../../shared/roadtrip/cta-slide';
 import {
   captionLineFromElementId,
@@ -277,6 +279,25 @@ export default function PostEditor({
   const block = useMemo(
     () => (content ? badgeBlockExtent(content, post.badge.layout, aspect) : null),
     [content, post.badge.layout, aspect],
+  );
+
+  // What every hook variant is prepared against — and what the picker hands to
+  // a variant's own options panel, so a control there can say a real value.
+  const hookCtx = useMemo<HookContext>(
+    () => ({
+      aspect,
+      durationSeconds: post.badge.durationSeconds,
+      date: post.date,
+      content,
+    }),
+    [aspect, post.badge.durationSeconds, post.date, content],
+  );
+
+  // The piece's opener, prepared once per change of what it reads — never per
+  // frame: the transport's clock reaches it at PAINT time, inside the stage.
+  const hook = useMemo(
+    () => resolveHook(post.badge.hook, hookCtx),
+    [post.badge.hook, hookCtx],
   );
 
   const patchBadge = useCallback(
@@ -849,6 +870,7 @@ export default function PostEditor({
             timeSeconds={badgeTime}
             shades={isHook ? post.badge.shades : undefined}
             block={isHook ? block : null}
+            hook={isHook ? hook : null}
             background={isCta ? trip.cta.background : undefined}
             qr={
               isCta && cta.qr
@@ -996,6 +1018,7 @@ export default function PostEditor({
               trip={trip}
               post={post}
               isHook={isHook}
+              hookCtx={hookCtx}
               piece={piece}
               onChangeTrip={onChangeTrip}
               patchBadge={patchBadge}

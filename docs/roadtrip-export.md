@@ -2,7 +2,7 @@
 
 **Status (2026-09-13): P1 to P5 are BUILT; P6 onwards is the plan.** P5 went
 further than planned: a clip slide (hook or content) PLAYS on the stage, is
-cut on the Studio's trim bar and carries a SPEED (v15, `videoSpeed`) —
+cut on the Studio's trim bar and carries a SPEED (v16, `videoSpeed`) —
 `roadtrip.md`, «A clip slide has an in point, a screen time and a SPEED». The
 combined reel (P4's last item) is still not built.
 
