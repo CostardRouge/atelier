@@ -44,6 +44,7 @@ describe('trimWindow', () => {
       baseMicros: 0,
       endMicros: Number.POSITIVE_INFINITY,
       frameCount: 30,
+      leadMicros: 0,
     });
   });
 
@@ -76,6 +77,45 @@ describe('trimWindow', () => {
     const win = trimWindow(reordered, { start: 0, end: 0.4 });
     expect(win.decodeTo).toBe(3);
     expect(win.frameCount).toBe(4);
+  });
+
+  it('cuts on the author\'s clock when the samples start late (B-frames)', () => {
+    // ffmpeg's layout at 10 fps: presented 0.2 s late (an edit list mp4box
+    // ignores), and a P-frame decoded ahead of the two B-frames shown before it.
+    const order = [0, 3, 1, 2, 6, 4, 5, 9, 7, 8, 12, 10, 11];
+    const bframed: TrimSample[] = order.map((f, i) => ({
+      cts: 200 + f * 100,
+      duration: 100,
+      timescale: 1000,
+      is_sync: i === 0,
+    }));
+    // In at 0.4 s, out at 1 s: frames 4..9, six of them, as the <video> shows.
+    const win = trimWindow(bframed, { start: 0.4, end: 1 });
+    expect(win.leadMicros).toBe(200_000);
+    expect(win.baseMicros).toBe(600_000);
+    expect(win.endMicros).toBe(1_199_500);
+    expect(win.frameCount).toBe(6);
+    // Frame 9 is sample #7; frames 7 and 8 come after it but reference it.
+    expect(win.decodeTo).toBe(9);
+  });
+
+  it('ignores µs rounding on the edges of a 60 fps clip', () => {
+    // 256 ticks at 15360: 16 666.67 µs a frame, rounded both ways by toMicros.
+    const sixty: TrimSample[] = Array.from({ length: 300 }, (_, i) => ({
+      cts: i * 256,
+      duration: 256,
+      timescale: 15360,
+      is_sync: i % 60 === 0,
+    }));
+    expect(trimWindow(sixty, { start: 1, end: 4 }).frameCount).toBe(180);
+    expect(trimWindow(sixty, { start: 1 / 3, end: 3 + 1 / 3 }).frameCount).toBe(180);
+  });
+
+  it('rebases an untrimmed B-framed clip on its first presented frame', () => {
+    const late = samples(5).map((s) => ({ ...s, cts: s.cts + 200 }));
+    const win = trimWindow(late, null);
+    expect(win.baseMicros).toBe(200_000);
+    expect(win.leadMicros).toBe(200_000);
   });
 
   it('keeps at least one frame when the range collapses onto the last one', () => {

@@ -326,6 +326,9 @@ export function demux(buffer: ArrayBuffer): Promise<DemuxResult> {
   });
 }
 
+/** How far a trim's edge may miss a frame boundary and still be ON it. */
+const EDGE_MICROS = 500;
+
 /** The little a {@link trimWindow} needs of a demuxed sample. */
 export interface TrimSample {
   cts: number;
@@ -351,6 +354,15 @@ export interface TrimWindow {
   endMicros: number;
   /** How many frames get encoded — the progress denominator. */
   frameCount: number;
+  /**
+   * The composition time (µs) of the earliest-presented frame. A file with
+   * B-frames starts its samples' timeline late (ffmpeg: two frames) and says
+   * so in an edit list mp4box does not apply, while the `<video>` element —
+   * and so every in and out point an author picks — counts from that first
+   * frame. The two base/end fields above are in the SAMPLES' time; subtract
+   * this to reach the author's (and the audio track's).
+   */
+  leadMicros: number;
 }
 
 /**
@@ -365,32 +377,54 @@ export interface TrimWindow {
  *     *earlier in decode order*, so nothing beyond it is ever needed, while
  *     frames inside the window that are presented late are still covered.
  *
- * `null` (no trim) returns the whole file with `baseMicros` 0, so timestamps
- * pass through exactly as they did before trimming existed.
+ * Both are measured on the author's clock, which starts at the first
+ * PRESENTED frame (`leadMicros`), not at the samples' zero: read raw, a
+ * B-framed clip was cut two frames short and its sound slid by as much.
+ *
+ * `null` (no trim) returns the whole file rebased on its first presented
+ * frame — 0 for a clip without reordering, so those pass through exactly as
+ * they did before trimming existed.
  */
 export function trimWindow(
   samples: readonly TrimSample[],
   trim: TrimRange | null | undefined,
 ): TrimWindow {
   const last = samples.length - 1;
+  const cts = samples.map((s) => toMicros(s.cts, s.timescale));
+  let leadMicros = Number.POSITIVE_INFINITY;
+  for (const c of cts) leadMicros = Math.min(leadMicros, c);
+  if (!Number.isFinite(leadMicros)) leadMicros = 0;
   if (!trim || samples.length === 0) {
     return {
       decodeFrom: 0,
       decodeTo: last,
-      baseMicros: 0,
+      baseMicros: leadMicros,
       endMicros: Number.POSITIVE_INFINITY,
       frameCount: samples.length,
+      leadMicros,
     };
   }
-  const startMicros = Math.max(0, Math.round(trim.start * 1_000_000));
-  const endMicros = Math.max(startMicros, Math.round(trim.end * 1_000_000));
+  // Half a millisecond either side: µs rounding of a 1/60 s timescale must not
+  // let a frame that ENDS on the in point, or starts on the out point, in.
+  const startMicros = leadMicros + Math.max(0, Math.round(trim.start * 1_000_000)) + EDGE_MICROS;
+  const endMicros = Math.max(
+    startMicros,
+    leadMicros + Math.round(trim.end * 1_000_000) - EDGE_MICROS,
+  );
 
-  const cts = samples.map((s) => toMicros(s.cts, s.timescale));
   const ends = samples.map((s, i) => cts[i] + toMicros(s.duration, s.timescale));
 
-  // The frame under the in handle is the one whose presentation *covers* it.
-  let first = samples.findIndex((_, i) => ends[i] > startMicros);
-  if (first < 0) first = last;
+  // The frame under the in handle is the one whose presentation *covers* it —
+  // the earliest PRESENTED of those, not the first in decode order: a P-frame
+  // decoded ahead of its B-frames would otherwise open the cut and drop them.
+  let first = -1;
+  for (let i = 0; i <= last; i += 1) {
+    if (ends[i] > startMicros && (first < 0 || cts[i] < cts[first])) first = i;
+  }
+  if (first < 0) {
+    first = 0;
+    for (let i = 1; i <= last; i += 1) if (cts[i] > cts[first]) first = i;
+  }
 
   let decodeFrom = 0;
   for (let i = first; i >= 0; i -= 1) {
@@ -415,7 +449,13 @@ export function trimWindow(
     baseMicros: cts[first],
     endMicros,
     frameCount: Math.max(1, frameCount),
+    leadMicros,
   };
+}
+
+/** A window moved onto the author's clock — the one the audio samples share. */
+function presented(win: TrimWindow): Pick<TrimWindow, 'baseMicros' | 'endMicros'> {
+  return { baseMicros: win.baseMicros - win.leadMicros, endMicros: win.endMicros - win.leadMicros };
 }
 
 /** Pick the highest H.264 level the encoder supports for this resolution. */
@@ -571,8 +611,8 @@ export async function exportProcessedVideo(
         const decoded = await decodeAacWindow(
           audioTrack,
           audioSamples,
-          audioWin.baseMicros,
-          audioEndMicros,
+          audioWin.baseMicros - audioWin.leadMicros,
+          audioEndMicros - audioWin.leadMicros,
           buildAacAsc,
         );
         if (decoded.ok) {
@@ -740,7 +780,8 @@ export async function exportProcessedVideo(
               duration = srcDuration;
             }
 
-            const source = processor.draw(frame, timestamp);
+            // The processor reads the author's clock, the one a trim is picked on.
+            const source = processor.draw(frame, timestamp - win.leadMicros);
             frame.close();
             for (const ts of timestamps) {
               const out = new VideoFrame(source, { timestamp: ts, duration });
@@ -834,7 +875,7 @@ export async function exportProcessedVideo(
       if (madeAudio) {
         for (const { chunk, meta } of madeAudio.chunks) muxer.addAudioChunk(chunk, meta);
       } else {
-        copyAudio(muxer, copiedAudio, audioSamples, win);
+        copyAudio(muxer, copiedAudio, audioSamples, presented(win));
       }
 
       onProgress?.({ phase: 'finalizing', ratio: null });
