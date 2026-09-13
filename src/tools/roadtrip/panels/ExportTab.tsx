@@ -116,7 +116,11 @@ export default function ExportTab({
                 {item.name}
               </span>
               <span className="flex-none font-mono text-[0.62rem] tracking-[0.06em] uppercase text-muted">
-                {item.medium === 'video' ? `${item.seconds.toFixed(1)}s` : 'still'}
+                {item.medium === 'video'
+                  ? `${item.seconds.toFixed(1)}s${item.speed !== 1 ? ` · ${item.speed}×` : ''}${
+                      item.silent ? ' · silent' : ''
+                    }`
+                  : 'still'}
               </span>
             </li>
           ))}
@@ -126,7 +130,7 @@ export default function ExportTab({
             changes most, and a word in a column does not explain itself. */}
         {plan.items[0] && (
           <p className="m-0 text-[0.72rem] text-muted">
-            {reasonSentence(plan.items[0].reason, plan.items[0].seconds)}
+            {reasonSentence(plan.items[0].reason, plan.items[0].seconds, plan.items[0].speed)}
           </p>
         )}
 
@@ -185,7 +189,9 @@ export default function ExportTab({
         <p className="m-0 text-[0.72rem] text-muted">
           {hookIsVideoSlide
             ? hookIsVideo
-              ? 'The hook’s clip starts on the frame you chose, so the badge animates in on the first frame. Audio is copied through'
+              ? slides[0].speed !== 1
+                ? `The hook’s clip starts on its in point and plays at ${slides[0].speed}×, so the badge animates in on the first frame at its own pace. A re-timed clip goes out without sound`
+                : 'The hook’s clip starts on its in point, so the badge animates in on the first frame. Audio is copied through'
               : 'The hook is painted over its photograph, frame by frame, so its entrance plays. It comes out silent — there is no track to copy'
             : hookFile
               ? 'The hook goes out as an image: nothing on it moves. Give it an animation on the Look tab, or set the slide to Video to hold it as a card'

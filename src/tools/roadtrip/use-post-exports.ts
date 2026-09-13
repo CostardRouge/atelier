@@ -7,6 +7,7 @@ import { contentSlideElements } from '../../shared/roadtrip/deck';
 import { renderDeck } from '../../shared/roadtrip/deck-export';
 import { exportPlan, type PlanItem } from '../../shared/roadtrip/export-plan';
 import {
+  clipSpeed,
   hookRange,
   hookSourceProblem,
   hookVariant,
@@ -116,7 +117,9 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     const onProgress = (p: ExportProgress) =>
       setExporting(p.ratio === null ? `${p.phase}…` : `Encoding ${Math.round(p.ratio * 100)}%…`);
     try {
-      const variant = hookVariant(post.badge.aspectId);
+      // The slide's own speed, resolved by the deck (1 for a photograph).
+      const speed = hookIsVideo ? clipSpeed(post.badge.videoSpeed) : 1;
+      const variant = hookVariant(post.badge.aspectId, 1080, speed);
       const shared = {
         variant,
         elements: inputs.hookElements,
@@ -139,6 +142,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
               post.badge.videoTimeSeconds,
               inputs.hookLength,
               hookInfo.duration,
+              speed,
             ),
           })
         : await exportHookStillVideo({
@@ -176,7 +180,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     const isHook = slide.kind === 'hook';
     const file = inputs.resolve(slide.media);
     if (!file) throw new Error(`${slide.media?.name ?? 'This slide'} is not in the Library.`);
-    const variant = hookVariant(post.badge.aspectId);
+    const variant = hookVariant(post.badge.aspectId, 1080, slide.speed);
     const shared = {
       variant,
       elements: isHook ? inputs.hookElements : contentSlideElements(slide.caption, aspect),
@@ -190,17 +194,20 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     if (classifyPart(file.name) !== 'video') {
       return exportHookStillVideo({ ...shared, file, seconds: item.seconds });
     }
-    // A content clip's own size has to be read here; the hook's is already
-    // measured by the stage that is showing it.
-    const meta = isHook
-      ? inputs.hookInfo
-      : await loadClipMeta(file, { thumbnail: false });
+    // The hook's size is usually already measured by the stage that showed
+    // it; a content clip's has to be read here — and so has the hook's when
+    // the stage has not shown it yet (a piece opened on another slide), or
+    // the variant would be sized from 0×0 and the encoder refused.
+    const meta =
+      isHook && inputs.hookInfo.width > 0 && inputs.hookInfo.height > 0
+        ? inputs.hookInfo
+        : await loadClipMeta(file, { thumbnail: false });
     return exportHookVideo({
       ...shared,
       file,
       srcWidth: meta.width,
       srcHeight: meta.height,
-      range: hookRange(slide.videoTimeSeconds, item.seconds, meta.duration),
+      range: hookRange(slide.videoTimeSeconds, item.seconds, meta.duration, slide.speed),
     });
   }
 
