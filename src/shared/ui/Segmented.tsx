@@ -30,6 +30,12 @@ interface SegmentedProps<T extends string> {
   size?: ButtonSize;
   /** Stretch across the row, each segment an equal share. */
   fill?: boolean;
+  /**
+   * Lay the options out on this many equal columns, wrapping onto more rows —
+   * for a choice with more options than one row holds (a format picker).
+   * Implies `fill`.
+   */
+  columns?: number;
   /** Names the group for assistive tech. */
   label?: string;
   className?: string;
@@ -47,16 +53,20 @@ export default function Segmented<T extends string>({
   onChange,
   size = 'md',
   fill = false,
+  columns,
   label,
   className = '',
 }: SegmentedProps<T>) {
+  const grid = columns !== undefined && columns > 0;
+  const stretch = fill || grid;
   return (
     <div
       role="group"
       aria-label={label}
-      className={`inline-flex items-center p-0.5 gap-0.5 rounded-control border border-line bg-paper-2 ${
-        fill ? 'flex w-full' : ''
+      className={`${grid ? 'grid w-full' : 'inline-flex items-center'} p-0.5 gap-0.5 rounded-control border border-line bg-paper-2 ${
+        fill && !grid ? 'flex w-full' : ''
       } ${className}`}
+      style={grid ? { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` } : undefined}
     >
       {options.map((option) => {
         const on = option.id === value;
@@ -71,7 +81,7 @@ export default function Segmented<T extends string>({
             onClick={() => onChange(option.id)}
             className={`inline-flex items-center justify-center whitespace-nowrap rounded-[8px] border-0 font-sans cursor-pointer select-none transition-[background-color,color,box-shadow] duration-150 ease-paper focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:opacity-45 disabled:cursor-default ${
               SEG_SIZES[size]
-            } ${fill ? 'flex-1 min-w-0' : ''} ${
+            } ${stretch ? 'flex-1 min-w-0' : ''} ${
               on
                 ? 'bg-surface text-ink font-semibold shadow-[0_1px_3px_rgba(27,24,19,0.12)]'
                 : 'bg-transparent text-ink-soft font-medium hover:text-ink'

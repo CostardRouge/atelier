@@ -20,6 +20,28 @@ import { FieldRow, InspectorSection, RangeField, Readout } from '../../../shared
 import { Icons } from '../../../shared/ui/icons';
 import Segmented from '../../../shared/ui/Segmented';
 
+/**
+ * The formats from tallest to widest, so a shape sits beside its neighbours —
+ * the preset list itself stays in portrait/landscape pairs for the Studio's
+ * two-column cards.
+ */
+const FORMATS = [...ASPECT_PRESETS].sort((a, b) => a.w / a.h - b.w / b.h);
+
+/** A format drawn as its own outline, 12px on its long side. */
+function FormatGlyph({ w, h }: { w: number; h: number }) {
+  const long = 12;
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-block shrink-0 rounded-[1.5px] border-[1.5px] border-current"
+      style={{
+        width: w >= h ? long : Math.round((long * w) / h),
+        height: w >= h ? Math.round((long * h) / w) : long,
+      }}
+    />
+  );
+}
+
 interface PictureTabProps {
   post: TripPost;
   slide: DeckSlide;
@@ -322,12 +344,17 @@ export default function PictureTab({
       >
         <FieldRow label="Frame">
           <Segmented
-            fill
+            columns={4}
             size="sm"
             label="Format"
             value={post.badge.aspectId}
             onChange={(aspectId) => patchBadge({ aspectId })}
-            options={ASPECT_PRESETS.map((a) => ({ id: a.id, label: a.id, title: a.label }))}
+            options={FORMATS.map((a) => ({
+              id: a.id,
+              label: a.id,
+              title: a.label,
+              icon: <FormatGlyph w={a.w} h={a.h} />,
+            }))}
             className="flex-1 min-w-0"
           />
         </FieldRow>

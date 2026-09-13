@@ -449,8 +449,8 @@ keeps the slide rail beside it: the
 number the trip gives it, big, with everything else deliberately subordinate —
 "Australia · Day · **27** · of 310 · ◆ Kalbarri · 1 year ago today". It counts
 four ways (day of trip, a range of days, the day at a place, how long you
-stayed), and closes on an optional line about when. Pick a frame (9:16,
-4:5, 1:1, 16:9), place the block on a 3×3 grid, size the numeral, and export a
+stayed), and closes on an optional line about when. Pick a frame (9:16, 2:3,
+3:4, 4:5, 1:1, 4:3, 3:2, 16:9), place the block on a 3×3 grid, size the numeral, and export a
 PNG — ready as a Reel's opening frame or a carousel's first slide.
 
 The picture takes every pixel the column can spare — it grows with the window
