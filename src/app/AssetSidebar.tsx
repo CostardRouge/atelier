@@ -41,6 +41,7 @@ import {
   pickDirectory,
   pickFiles,
 } from '../shared/sources/file-sources';
+import EmptyState from '../shared/ui/EmptyState';
 
 /** Short, human label for a kind chip. */
 function kindLabel(kind: AssetKind): string {
@@ -774,9 +775,9 @@ export default function AssetSidebar({
         )}
 
         {!remoteTab && tabPool.length === 0 ? (
-          <p className="px-2 py-6 text-center text-xs text-muted">
+          <EmptyState compact>
             Nothing here yet. Add some assets above — they stay on your machine.
-          </p>
+          </EmptyState>
         ) : (
           <div
             className={

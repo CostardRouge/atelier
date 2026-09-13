@@ -57,6 +57,10 @@ import ImportDocumentModal from '../../shared/ui/ImportDocumentModal';
 import { pageScroll } from '../../shared/ui/page-scroll';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
+import Button from '../../shared/ui/Button';
+import LoadingState from '../../shared/ui/LoadingState';
+import EmptyState from '../../shared/ui/EmptyState';
+import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 
 interface ProjectGalleryProps {
   /** Project currently loaded in the editor (highlighted, opens instantly). */
@@ -262,25 +266,21 @@ function ProjectCard({
             </>
           )}
           {confirming === 'delete' && (
-            <span className="flex items-center gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => {
-                  setConfirming(null);
-                  onDelete();
-                }}
-                className="p-0 border-0 bg-transparent text-danger font-semibold cursor-pointer underline underline-offset-[3px]"
-              >
-                Delete
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirming(null)}
-                className="p-0 border-0 bg-transparent text-muted cursor-pointer"
-              >
-                Keep
-              </button>
-            </span>
+            <ConfirmDialog
+              title={`Delete “${doc.name}”?`}
+              confirmLabel="Delete"
+              danger
+              onCancel={() => setConfirming(null)}
+              onConfirm={() => {
+                setConfirming(null);
+                onDelete();
+              }}
+            >
+              <p>
+                Its overlays, look and settings go with it. The media files stay
+                where they are.
+              </p>
+            </ConfirmDialog>
           )}
           {confirming === 'move' && (
             <span className="flex items-center gap-2 text-xs flex-wrap">
@@ -641,31 +641,24 @@ export default function ProjectGallery({
       )}
 
       {projects === null ? (
-        <p className="m-0 text-sm text-muted font-mono">Loading projects…</p>
+        <LoadingState label="Loading projects…" />
       ) : nothingAnywhere && remoteSourceIds.every((id) => remoteLists[id]?.status === 'ok') ? (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center max-w-[42ch] flex flex-col items-center gap-3 border border-dashed border-line-strong rounded-paper-lg px-8 py-10">
-            <p className="m-0 font-serif text-xl">No projects yet</p>
-            <p className="m-0 text-sm text-muted leading-relaxed">
-              A project keeps your overlays, look and layout — and remembers
-              which folder its media lives in, so it reopens in one click.
-            </p>
-            <button
-              type="button"
-              onClick={() => setCreating(true)}
-              className="mt-1 px-[1.1rem] py-2 inline-flex items-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold hover:bg-accent hover:border-accent"
-            >
-              Create the first one
-            </button>
-            <button
-              type="button"
-              onClick={startImport}
-              className="p-0 border-0 bg-transparent text-xs text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink"
-            >
-              or import a project file
-            </button>
-          </div>
-        </div>
+        <EmptyState
+          title="No projects yet"
+          actions={
+            <>
+              <Button variant="primary" onClick={() => setCreating(true)}>
+                Create the first one
+              </Button>
+              <Button variant="ghost" onClick={startImport}>
+                or import a project file
+              </Button>
+            </>
+          }
+        >
+          A project keeps your overlays, look and layout — and remembers which
+          folder its media lives in, so it reopens in one click.
+        </EmptyState>
       ) : (
         // Grouped by provenance — one group per source, `local` first, even
         // while local is the only one: the day a Winnow instance appears its

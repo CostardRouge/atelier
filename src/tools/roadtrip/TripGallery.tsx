@@ -65,6 +65,10 @@ import useCoverThumbs from './use-cover-thumbs';
 import { pageScroll } from '../../shared/ui/page-scroll';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
+import Button from '../../shared/ui/Button';
+import LoadingState from '../../shared/ui/LoadingState';
+import EmptyState from '../../shared/ui/EmptyState';
+import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 
 interface TripGalleryProps {
   openTripId: string | null;
@@ -536,26 +540,21 @@ function TripCard({
           )}
 
           {confirming === 'delete' && (
-            <span className="flex items-center gap-2 text-xs">
-              <span className="text-muted">Delete for good?</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setConfirming(null);
-                  onDelete();
-                }}
-                className="p-0 border-0 bg-transparent text-danger font-semibold cursor-pointer underline underline-offset-[3px]"
-              >
-                Delete
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirming(null)}
-                className="p-0 border-0 bg-transparent text-muted cursor-pointer"
-              >
-                Keep
-              </button>
-            </span>
+            <ConfirmDialog
+              title={`Delete “${trip.name}”?`}
+              confirmLabel="Delete"
+              danger
+              onCancel={() => setConfirming(null)}
+              onConfirm={() => {
+                setConfirming(null);
+                onDelete();
+              }}
+            >
+              <p>
+                Its days, stages and pieces go with it, for good. An exported
+                .roadtrip.json is the only copy that would survive.
+              </p>
+            </ConfirmDialog>
           )}
           {confirming === 'move' && (
             <span className="flex items-center gap-2 text-xs flex-wrap">
@@ -930,25 +929,19 @@ export default function TripGallery({
       )}
 
       {trips === null ? (
-        <p className="m-0 text-sm text-muted font-mono">Loading trips…</p>
+        <LoadingState label="Loading trips…" />
       ) : nothingAnywhere && remoteSourceIds.every((id) => remoteLists[id]?.status === 'ok') ? (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center max-w-[44ch] flex flex-col items-center gap-3 border border-dashed border-line-strong rounded-paper-lg px-8 py-10">
-            <p className="m-0 font-serif text-xl">No trips yet</p>
-            <p className="m-0 text-sm text-muted leading-relaxed">
-              Give a trip its two dates and every photo you post from it knows
-              which day it belongs to — and the grid shows the days you have
-              never told.
-            </p>
-            <button
-              type="button"
-              onClick={() => setCreating(true)}
-              className="mt-1 px-[1.1rem] py-2 inline-flex items-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold hover:bg-accent hover:border-accent"
-            >
+        <EmptyState
+          title="No trips yet"
+          actions={
+            <Button variant="primary" onClick={() => setCreating(true)}>
               Create the first one
-            </button>
-          </div>
-        </div>
+            </Button>
+          }
+        >
+          Give a trip its two dates and every photo you post from it knows which
+          day it belongs to — and the grid shows the days you have never told.
+        </EmptyState>
       ) : (
         // Grouped by provenance — one group per source, `local` first, even
         // while local is the only one: the studio gallery's own shape, so a
