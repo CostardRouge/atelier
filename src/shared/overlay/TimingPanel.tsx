@@ -10,6 +10,8 @@
 import type { AnimDirection, AnimPreset, AnimStep, Easing } from './animation';
 import type { OverlayElement } from './overlay-types';
 import type { Scene } from './scenes';
+import Button from '../ui/Button';
+import { FieldRow, NumberField, RangeField, SelectField, ToggleField } from '../ui/Inspector';
 
 interface TimingPanelProps {
   element: OverlayElement;
@@ -19,12 +21,6 @@ interface TimingPanelProps {
   playhead: number;
   onChange: (patch: Partial<OverlayElement>) => void;
 }
-
-const labelClass = 'font-mono text-2xs tracking-[0.12em] uppercase text-muted';
-const inputClass =
-  'font-sans text-sm text-ink bg-surface border border-line-strong rounded-paper px-[0.6rem] py-[0.4rem] w-full';
-const linkClass =
-  'p-0 border-0 bg-transparent text-accent-ink font-semibold text-2xs cursor-pointer underline underline-offset-[2px] hover:text-accent';
 
 const PRESETS: { value: AnimPreset; label: string }[] = [
   { value: 'none', label: 'Cut — no animation' },
@@ -64,104 +60,75 @@ function StepControls({
 }) {
   const animated = step.preset !== 'none';
   return (
-    <div className="flex flex-col gap-2">
-      <label className="flex flex-col gap-1">
-        <span className={labelClass}>{phase === 'in' ? 'Entrance' : 'Exit'}</span>
-        <select
-          className={`${inputClass} cursor-pointer`}
+    <>
+      <FieldRow label={phase === 'in' ? 'Entrance' : 'Exit'}>
+        <SelectField
+          label={phase === 'in' ? 'Entrance' : 'Exit'}
           value={step.preset}
-          onChange={(e) => onChange({ ...step, preset: e.target.value as AnimPreset })}
-        >
-          {PRESETS.map((p) => (
-            <option key={p.value} value={p.value}>
-              {p.label}
-            </option>
-          ))}
-        </select>
-      </label>
+          onChange={(preset) => onChange({ ...step, preset })}
+          options={PRESETS.map((p) => ({ id: p.value, label: p.label }))}
+        />
+      </FieldRow>
       {animated && (
         <>
-          <label className="flex flex-col gap-1">
-            <span className={labelClass}>Duration · {step.duration.toFixed(2)} s</span>
-            <input
-              type="range"
-              className="w-full accent-accent cursor-pointer"
+          <FieldRow label="Duration">
+            <RangeField
+              label={`${phase === 'in' ? 'Entrance' : 'Exit'} duration`}
               min={0.05}
               max={3}
               step={0.05}
               value={step.duration}
-              onChange={(e) => onChange({ ...step, duration: Number(e.target.value) })}
+              onChange={(duration) => onChange({ ...step, duration })}
+              format={(v) => `${v.toFixed(2)} s`}
             />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className={labelClass}>Curve</span>
-            <select
-              className={`${inputClass} cursor-pointer`}
+          </FieldRow>
+          <FieldRow label="Curve">
+            <SelectField
+              label="Curve"
               value={step.easing}
-              onChange={(e) => onChange({ ...step, easing: e.target.value as Easing })}
-            >
-              {EASINGS.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </label>
+              onChange={(easing) => onChange({ ...step, easing })}
+              options={EASINGS.map((c) => ({ id: c.value, label: c.label }))}
+            />
+          </FieldRow>
           {step.preset === 'slide' && (
-            <div className="flex gap-2">
-              <label className="flex flex-col gap-1 flex-1 min-w-0">
-                <span className={labelClass}>Direction</span>
-                <select
-                  className={`${inputClass} cursor-pointer`}
+            <>
+              <FieldRow label="Direction">
+                <SelectField
+                  label="Direction"
                   value={step.direction ?? 'up'}
-                  onChange={(e) =>
-                    onChange({ ...step, direction: e.target.value as AnimDirection })
-                  }
-                >
-                  {DIRECTIONS.map((d) => (
-                    <option key={d.value} value={d.value}>
-                      {d.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 flex-1 min-w-0">
-                <span className={labelClass}>
-                  Travel · {Math.round((step.distanceFrac ?? 0.06) * 100)}%
-                </span>
-                <input
-                  type="range"
-                  className="w-full accent-accent cursor-pointer"
+                  onChange={(direction) => onChange({ ...step, direction })}
+                  options={DIRECTIONS.map((d) => ({ id: d.value, label: d.label }))}
+                />
+              </FieldRow>
+              <FieldRow label="Travel">
+                <RangeField
+                  label="Travel"
                   min={0.01}
                   max={0.4}
                   step={0.01}
                   value={step.distanceFrac ?? 0.06}
-                  onChange={(e) =>
-                    onChange({ ...step, distanceFrac: Number(e.target.value) })
-                  }
+                  onChange={(distanceFrac) => onChange({ ...step, distanceFrac })}
+                  format={(v) => `${Math.round(v * 100)}%`}
                 />
-              </label>
-            </div>
+              </FieldRow>
+            </>
           )}
           {step.preset === 'scale' && (
-            <label className="flex flex-col gap-1">
-              <span className={labelClass}>
-                {phase === 'in' ? 'From' : 'To'} · {Math.round((step.scaleFrom ?? 0.86) * 100)}%
-              </span>
-              <input
-                type="range"
-                className="w-full accent-accent cursor-pointer"
+            <FieldRow label={phase === 'in' ? 'From' : 'To'}>
+              <RangeField
+                label={phase === 'in' ? 'Scale from' : 'Scale to'}
                 min={0.2}
                 max={2}
                 step={0.02}
                 value={step.scaleFrom ?? 0.86}
-                onChange={(e) => onChange({ ...step, scaleFrom: Number(e.target.value) })}
+                onChange={(scaleFrom) => onChange({ ...step, scaleFrom })}
+                format={(v) => `${Math.round(v * 100)}%`}
               />
-            </label>
+            </FieldRow>
           )}
         </>
       )}
-    </div>
+    </>
   );
 }
 
@@ -192,135 +159,106 @@ export default function TimingPanel({
   }
 
   return (
-    <div className="flex flex-col gap-[0.85rem]">
-      {scene ? (
-        <p className="m-0 text-xs text-muted">
-          In <strong className="font-semibold text-ink">{scene.name}</strong> —
-          times below count from the scene's start ({scene.start.toFixed(1)} s), and it
-          leaves with the scene at {scene.end.toFixed(1)} s at the latest.{' '}
-          <button
-            type="button"
-            className={linkClass}
-            onClick={() => onChange({ sceneId: undefined })}
-          >
+    <div className="flex flex-col gap-2.5">
+      <p className="m-0 text-xs text-muted">
+        {scene ? (
+          <>
+            In <strong className="font-semibold text-ink">{scene.name}</strong> — times count from
+            the scene's start ({scene.start.toFixed(1)} s), and it leaves with the scene at{' '}
+            {scene.end.toFixed(1)} s at the latest.
+          </>
+        ) : (
+          "Times count from the clip's in point — the first frame an export keeps."
+        )}
+      </p>
+      {scene && (
+        <FieldRow label="Scene">
+          <Button size="sm" variant="ghost" onClick={() => onChange({ sceneId: undefined })}>
             Take it out
-          </button>
-        </p>
-      ) : (
-        <p className="m-0 text-xs text-muted">
-          Times count from the clip's in point — the first frame an export keeps.
-        </p>
+          </Button>
+        </FieldRow>
       )}
 
-      {!timed ? (
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted">On screen the whole clip.</span>
-          <button
-            type="button"
-            className={linkClass}
-            onClick={() => onChange({ window: { start: 0, end: scene ? null : 3 } })}
-          >
-            Give it a window
-          </button>
-        </div>
-      ) : (
+      <FieldRow label="Window">
+        <ToggleField
+          label="Give it a window"
+          checked={timed}
+          onChange={(on) =>
+            onChange({ window: on ? { start: 0, end: scene ? null : 3 } : undefined })
+          }
+        >
+          {timed ? 'Timed' : 'The whole clip'}
+        </ToggleField>
+      </FieldRow>
+      {timed && (
         <>
-          <div className="flex gap-2">
-            <label className="flex flex-col gap-1 flex-1 min-w-0">
-              <span className={labelClass}>Appears · s</span>
-              <input
-                type="number"
-                className={inputClass}
-                min={0}
-                step={0.1}
-                value={win.start}
-                onChange={(e) => setWindow({ start: Math.max(0, Number(e.target.value)) })}
-              />
-              <button
-                type="button"
-                className={`${linkClass} self-start`}
-                onClick={() => setWindow({ start: Number(local.toFixed(2)) })}
-              >
-                From playhead
-              </button>
-            </label>
-            <label className="flex flex-col gap-1 flex-1 min-w-0">
-              <span className={labelClass}>Disappears · s</span>
-              <input
-                type="number"
-                className={inputClass}
-                min={0}
-                step={0.1}
-                placeholder={scene ? 'with the scene' : 'end of clip'}
-                value={win.end ?? ''}
-                onChange={(e) =>
-                  setWindow({
-                    end: e.target.value === '' ? null : Number(e.target.value),
-                  })
-                }
-              />
-              <button
-                type="button"
-                className={`${linkClass} self-start`}
-                onClick={() => setWindow({ end: Number(local.toFixed(2)) })}
-              >
-                From playhead
-              </button>
-            </label>
-          </div>
-          <button
-            type="button"
-            className={`${linkClass} self-start`}
-            onClick={() => onChange({ window: undefined })}
-          >
-            Remove the window
-          </button>
+          <FieldRow label="Appears">
+            <NumberField
+              label="Appears"
+              min={0}
+              step={0.1}
+              unit="s"
+              value={win.start}
+              onChange={(v) => setWindow({ start: Math.max(0, v) })}
+            />
+            <Button size="sm" variant="ghost" onClick={() => setWindow({ start: Number(local.toFixed(2)) })}>
+              Playhead
+            </Button>
+          </FieldRow>
+          <FieldRow label="Disappears">
+            <NumberField
+              label="Disappears"
+              min={0}
+              step={0.1}
+              unit="s"
+              placeholder={scene ? 'with the scene' : 'end of clip'}
+              value={win.end}
+              onChange={(v) => setWindow({ end: v })}
+              onClear={() => setWindow({ end: null })}
+            />
+            <Button size="sm" variant="ghost" onClick={() => setWindow({ end: Number(local.toFixed(2)) })}>
+              Playhead
+            </Button>
+          </FieldRow>
         </>
       )}
 
-      <div className="pt-2 border-t border-line flex flex-col gap-3">
-        <StepControls
-          phase="in"
-          step={anim.in ?? { preset: 'none', duration: 0, easing: 'out' }}
-          onChange={(next) => {
-            if (next.preset === 'none') return setStep('in', null);
-            // Turning an animation ON starts from a usable step, not from the
-            // zero-duration placeholder the "Cut" row stands on.
-            setStep('in', anim.in ? next : { ...defaultFor('in'), preset: next.preset });
-          }}
-        />
-        {anim.in && (
-          <label className="flex flex-col gap-1">
-            <span className={labelClass}>
-              Wait before it starts · {(anim.in.delay ?? 0).toFixed(2)} s
-            </span>
-            <input
-              type="range"
-              className="w-full accent-accent cursor-pointer"
-              min={0}
-              max={5}
-              step={0.05}
-              value={anim.in.delay ?? 0}
-              onChange={(e) =>
-                setStep('in', { ...anim.in!, delay: Number(e.target.value) })
-              }
-            />
-          </label>
-        )}
-        <StepControls
-          phase="out"
-          step={anim.out ?? { preset: 'none', duration: 0, easing: 'in' }}
-          onChange={(next) => {
-            if (next.preset === 'none') return setStep('out', null);
-            setStep('out', anim.out ? next : { ...defaultFor('out'), preset: next.preset });
-          }}
-        />
-        {!anim.out && win?.end == null && !scene && (
-          <p className="m-0 text-xs text-faint">
-            An exit needs an end to play against — give the element one above.
-          </p>
-        )}
-      </div>
+      <StepControls
+        phase="in"
+        step={anim.in ?? { preset: 'none', duration: 0, easing: 'out' }}
+        onChange={(next) => {
+          if (next.preset === 'none') return setStep('in', null);
+          // Turning an animation ON starts from a usable step, not from the
+          // zero-duration placeholder the "Cut" row stands on.
+          setStep('in', anim.in ? next : { ...defaultFor('in'), preset: next.preset });
+        }}
+      />
+      {anim.in && (
+        <FieldRow label="Wait">
+          <RangeField
+            label="Wait before it starts"
+            min={0}
+            max={5}
+            step={0.05}
+            value={anim.in.delay ?? 0}
+            onChange={(delay) => setStep('in', { ...anim.in!, delay })}
+            format={(v) => `${v.toFixed(2)} s`}
+          />
+        </FieldRow>
+      )}
+      <StepControls
+        phase="out"
+        step={anim.out ?? { preset: 'none', duration: 0, easing: 'in' }}
+        onChange={(next) => {
+          if (next.preset === 'none') return setStep('out', null);
+          setStep('out', anim.out ? next : { ...defaultFor('out'), preset: next.preset });
+        }}
+      />
+      {!anim.out && win?.end == null && !scene && (
+        <p className="m-0 text-xs text-muted">
+          An exit needs an end to play against — give the element a window above.
+        </p>
+      )}
     </div>
   );
 }

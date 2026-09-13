@@ -14,6 +14,7 @@ import {
 } from '../../shared/telemetry/time-scale';
 import { formatBytes, formatDuration } from '../../shared/lib/format';
 import type { ExifData } from '../../shared/exif/exif-parser';
+import { FieldRow, InspectorSection } from '../../shared/ui/Inspector';
 
 interface InfoPanelProps {
   baseName: string;
@@ -39,12 +40,7 @@ interface InfoPanelProps {
   photo: ExifData | null;
 }
 
-const dt = 'font-mono text-2xs tracking-[0.12em] uppercase text-muted pt-[2px]';
-const dd = 'm-0 font-mono text-xs tabular-nums text-ink';
-const heading =
-  'font-mono text-2xs tracking-[0.12em] uppercase text-muted flex items-center gap-2 before:content-[""] before:w-[14px] before:h-px before:bg-accent';
-
-/** One label/value row; missing values read "—" in the faint ink. */
+/** One label/value row; a missing value reads "—" in the muted ink. */
 function Row({
   label,
   value,
@@ -56,20 +52,22 @@ function Row({
 }) {
   const empty = value === undefined || value === '';
   return (
-    <>
-      <dt className={dt}>{label}</dt>
-      <dd className={`${dd} ${empty ? 'text-faint' : ''}`}>
+    <FieldRow label={label}>
+      <span
+        className={`min-w-0 truncate font-mono text-sm tabular-nums ${empty ? 'text-faint' : 'text-ink'}`}
+        title={empty ? undefined : `${value}${suffix ?? ''}`}
+      >
         {empty ? '—' : suffix ? `${value}${suffix}` : value}
-      </dd>
-    </>
+      </span>
+    </FieldRow>
   );
 }
 
 /**
  * The studio inspector's Info tab: the clip's facts, then the telemetry under
- * the playhead. Everything is one narrow two-column list — Flight and Camera
- * are STACKED sections of the same list, not side-by-side cards: the
- * inspector is a column, and a long live list reads fine vertically.
+ * the playhead, as inspector sections of label/value rows — Flight and Camera
+ * are STACKED sections, not side-by-side cards: the inspector is a column,
+ * and a long live list reads fine vertically.
  */
 export default function InfoPanel({
   baseName,
@@ -118,71 +116,55 @@ export default function InfoPanel({
     : undefined;
 
   return (
-    <div className="flex flex-col gap-3">
-      <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-        <dt className={dt}>{isPhoto ? 'Photo' : 'Clip'}</dt>
-        <dd className="m-0 truncate text-xs" title={baseName}>
-          {baseName}
-        </dd>
+    <>
+      <InspectorSection id="studio.info.media" title={isPhoto ? 'Photo' : 'Clip'}>
+        <FieldRow label="Name">
+          <span className="min-w-0 truncate text-sm text-ink" title={baseName}>
+            {baseName}
+          </span>
+        </FieldRow>
         {file && <Row label="Size" value={formatBytes(file.size)} />}
         {detail && <Row label="Detail" value={detail} />}
-        {!isPhoto && duration > 0 && (
-          <Row label="Duration" value={formatDuration(duration)} />
-        )}
+        {!isPhoto && duration > 0 && <Row label="Duration" value={formatDuration(duration)} />}
         {!isPhoto && cadence && <Row label="Cadence" value={cadence} />}
         {!isPhoto && flightLine && <Row label="Flight" value={flightLine} />}
         {isPhoto && (
-          <Row
-            label="Camera"
-            value={[photo.make, photo.model].filter(Boolean).join(' ') || undefined}
-          />
+          <Row label="Camera" value={[photo.make, photo.model].filter(Boolean).join(' ') || undefined} />
         )}
         {isPhoto && (photo.lensModel || photo.lensMake) && (
-          <Row
-            label="Lens"
-            value={[photo.lensMake, photo.lensModel].filter(Boolean).join(' ')}
-          />
+          <Row label="Lens" value={[photo.lensMake, photo.lensModel].filter(Boolean).join(' ')} />
         )}
-      </dl>
+      </InspectorSection>
 
       {isPhoto ? (
         /* A photograph's own readings, through the very cue the overlay
            elements draw from — so what the Info tab states and what a badge
            burns in can never drift apart. Absent fields read "—": a still has
            no speed, no heading and no relative altitude. */
-        <div className="flex flex-col gap-2.5 pt-2.5 border-t border-line">
-          <p className="m-0 font-mono text-2xs tracking-[0.12em] uppercase text-muted">
-            {hasTelemetry ? 'From the file’s EXIF' : 'No EXIF in this file'}
-          </p>
-          {hasTelemetry && (
-            <>
-              <p className={`m-0 ${heading}`}>Exposure</p>
-              <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                <Row label="ISO" value={d.iso} />
-                <Row label="Shutter" value={d.shutter} />
-                <Row label="Aperture" value={d.fnum ? `f/${d.fnum}` : undefined} />
-                <Row label="EV" value={d.ev} />
-                <Row label="Focal" value={d.focal_len} suffix=" mm" />
-              </dl>
-
-              <p className={`m-0 mt-1 ${heading}`}>Place and time</p>
-              <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                <Row label="Lat" value={d.latitude} />
-                <Row label="Lon" value={d.longitude} />
-                <Row label="Altitude" value={d.abs_alt} suffix=" m" />
-                <Row label="Taken" value={cue?.timestamp ?? undefined} />
-              </dl>
-            </>
-          )}
-        </div>
+        hasTelemetry ? (
+          <>
+            <InspectorSection id="studio.info.exposure" title="Exposure" badge="EXIF">
+              <Row label="ISO" value={d.iso} />
+              <Row label="Shutter" value={d.shutter} />
+              <Row label="Aperture" value={d.fnum ? `f/${d.fnum}` : undefined} />
+              <Row label="EV" value={d.ev} />
+              <Row label="Focal" value={d.focal_len} suffix=" mm" />
+            </InspectorSection>
+            <InspectorSection id="studio.info.place" title="Place and time" badge="EXIF">
+              <Row label="Lat" value={d.latitude} />
+              <Row label="Lon" value={d.longitude} />
+              <Row label="Altitude" value={d.abs_alt} suffix=" m" />
+              <Row label="Taken" value={cue?.timestamp ?? undefined} />
+            </InspectorSection>
+          </>
+        ) : (
+          <InspectorSection id="studio.info.exposure" title="Exposure">
+            <p className="m-0 text-xs text-muted">No EXIF in this file.</p>
+          </InspectorSection>
+        )
       ) : hasTelemetry ? (
-        <div className="flex flex-col gap-2.5 pt-2.5 border-t border-line">
-          <p className="m-0 font-mono text-2xs tracking-[0.12em] uppercase text-muted">
-            Telemetry at playhead
-          </p>
-
-          <p className={`m-0 ${heading}`}>Flight</p>
-          <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+        <>
+          <InspectorSection id="studio.info.flight" title="Flight" badge="At playhead">
             <Row label="Rel. alt" value={d.rel_alt} suffix=" m" />
             <Row label="Abs. alt" value={d.abs_alt} suffix=" m" />
             <Row label="Speed" value={formatGroundSpeed(motionAt(cue).groundSpeed)} />
@@ -190,15 +172,10 @@ export default function InfoPanel({
             <Row label="Heading" value={formatHeading(motionAt(cue).heading)} />
             <Row label="Lat" value={d.latitude} />
             <Row label="Lon" value={d.longitude} />
-            <Row
-              label="Frame"
-              value={cue?.frame != null ? String(cue.frame) : undefined}
-            />
+            <Row label="Frame" value={cue?.frame != null ? String(cue.frame) : undefined} />
             <Row label="Time" value={cue?.timestamp ?? undefined} />
-          </dl>
-
-          <p className={`m-0 mt-1 ${heading}`}>Camera</p>
-          <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+          </InspectorSection>
+          <InspectorSection id="studio.info.camera" title="Camera" badge="At playhead">
             <Row label="ISO" value={d.iso} />
             <Row label="Shutter" value={d.shutter} />
             <Row label="Aperture" value={d.fnum ? `f/${d.fnum}` : undefined} />
@@ -206,14 +183,16 @@ export default function InfoPanel({
             <Row label="Focal" value={d.focal_len} suffix=" mm" />
             <Row label="Profile" value={d.color_md} />
             <Row label="WB" value={d.ct} suffix=" K" />
-          </dl>
-        </div>
+          </InspectorSection>
+        </>
       ) : (
-        <p className="m-0 text-xs text-muted pt-2.5 border-t border-line">
-          No flight log (.srt) with this clip — the inspector shows live
-          telemetry when one is present.
-        </p>
+        <InspectorSection id="studio.info.flight" title="Flight">
+          <p className="m-0 text-xs text-muted">
+            No flight log (.srt) with this clip — the inspector shows live telemetry when one is
+            present.
+          </p>
+        </InspectorSection>
       )}
-    </div>
+    </>
   );
 }

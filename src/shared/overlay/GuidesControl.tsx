@@ -5,6 +5,7 @@ import {
   shouldRotateSafeZone,
   type GuidesState,
 } from './guides';
+import { FieldRow, NumberField, SelectField, ToggleField } from '../ui/Inspector';
 
 interface GuidesControlProps {
   guides: GuidesState;
@@ -16,6 +17,11 @@ interface GuidesControlProps {
    * when the frame's orientation is unknown.
    */
   frameAspect?: number;
+  /**
+   * `toolbar` (the default) drops the controls into a flex row — the legacy
+   * overlay page's toolbar; `rows` lays them out as inspector rows.
+   */
+  layout?: 'toolbar' | 'rows';
 }
 
 const toggle =
@@ -31,6 +37,7 @@ export default function GuidesControl({
   guides,
   onChange,
   frameAspect,
+  layout = 'toolbar',
 }: GuidesControlProps) {
   const { grid } = guides;
   const setGrid = (patch: Partial<typeof grid>) =>
@@ -44,6 +51,59 @@ export default function GuidesControl({
       preset.aspect,
       frameAspect ?? 0,
     );
+
+  if (layout === 'rows') {
+    return (
+      <>
+        <FieldRow label="Safe area">
+          <SelectField
+            label="Safe area"
+            value={guides.safeZone}
+            onChange={(safeZone) =>
+              // Back to 'auto' with the template: a rotation pinned for a
+              // portrait preset means nothing once you pick the landscape one.
+              onChange({ ...guides, safeZone, safeZoneOrientation: 'auto' })
+            }
+            options={[{ id: 'none', label: 'Off' }, ...SAFE_ZONE_PRESETS.map((p) => ({ id: p.id, label: p.label }))]}
+          />
+        </FieldRow>
+        {preset && (
+          <FieldRow label="Rotate" hint="Turns the template a quarter-turn so it spans this frame.">
+            <ToggleField
+              label="Rotate the safe area"
+              checked={rotated}
+              onChange={(on) => onChange({ ...guides, safeZoneOrientation: on ? 'rotated' : 'upright' })}
+            />
+          </FieldRow>
+        )}
+        <FieldRow label="Grid">
+          <ToggleField label="Show a composition grid" checked={grid.show} onChange={(show) => setGrid({ show })} />
+        </FieldRow>
+        <FieldRow label="Divisions">
+          <NumberField
+            label="Grid columns"
+            min={1}
+            max={12}
+            value={grid.cols}
+            onChange={(v) => setGrid({ cols: clampDivisions(v) })}
+          />
+          <span className="text-muted select-none" aria-hidden="true">
+            ×
+          </span>
+          <NumberField
+            label="Grid rows"
+            min={1}
+            max={12}
+            value={grid.rows}
+            onChange={(v) => setGrid({ rows: clampDivisions(v) })}
+          />
+        </FieldRow>
+        <FieldRow label="Snap" hint="Snap elements to the grid while dragging; hold Alt to bypass.">
+          <ToggleField label="Snap to the grid" checked={grid.snap} onChange={(snap) => setGrid({ snap })} />
+        </FieldRow>
+      </>
+    );
+  }
 
   return (
     <>

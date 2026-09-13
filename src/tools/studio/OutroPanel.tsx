@@ -5,6 +5,10 @@ import {
   withOutroLine,
   type OutroCard,
 } from '../../shared/overlay/outro-card';
+import Button from '../../shared/ui/Button';
+import IconButton from '../../shared/ui/IconButton';
+import { FieldRow, NumberField, Readout, TextField } from '../../shared/ui/Inspector';
+import { Icons } from '../../shared/ui/icons';
 
 interface OutroPanelProps {
   outro: OutroCard;
@@ -13,10 +17,6 @@ interface OutroPanelProps {
   onChange: (outro: OutroCard) => void;
   onRemove: () => void;
 }
-
-const legend = 'font-mono text-2xs tracking-[0.12em] uppercase text-muted';
-const input =
-  'font-sans text-xs px-2.5 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent';
 
 /**
  * The outro — the closing card the export appends after the footage. The
@@ -86,97 +86,66 @@ export default function OutroPanel({ outro, aspect, onChange, onRemove }: OutroP
 
   return (
     <div className="flex flex-col gap-2.5">
-      <div className="flex items-start gap-3">
+      <FieldRow label="Preview" align="start">
         <canvas
           ref={canvasRef}
-          className="flex-none w-[7.5rem] h-auto rounded-[4px] border border-line bg-frame"
+          className="flex-none w-[7.5rem] h-auto rounded-[6px] border border-line bg-frame"
           aria-label="Outro card preview"
         />
-        <div className="flex-1 flex flex-col gap-2 min-w-0">
-          <label className="flex items-center gap-2">
-            <span className={`${legend} flex-1`}>Holds for</span>
-            <input
-              type="number"
-              min={1}
-              max={15}
-              step={0.5}
-              value={outro.seconds}
-              onChange={(e) =>
-                onChange({ ...outro, seconds: Math.max(0.5, Number(e.target.value) || 0.5) })
-              }
-              className={`${input} w-[4.2rem] text-right tabular-nums`}
-              aria-label="Outro duration in seconds"
-            />
-            <span className="font-mono text-2xs text-muted">s</span>
-          </label>
-          <label className="flex items-center gap-2">
-            <span className={`${legend} flex-1`}>Ground</span>
-            <input
-              type="color"
-              value={outro.background}
-              onChange={(e) => onChange({ ...outro, background: e.target.value })}
-              className="w-8 h-6 p-0 border border-line-strong rounded cursor-pointer bg-transparent"
-              aria-label="Outro background colour"
-            />
-          </label>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        {lines.map((el) => (
-          <div key={el.id} className="flex items-center gap-1.5">
-            <input
-              value={el.text ?? ''}
-              onChange={(e) => setLineText(el.id, e.target.value)}
-              className={`${input} flex-1 min-w-0`}
-              aria-label="Outro line"
-            />
-            <button
-              type="button"
-              onClick={() => removeLine(el.id)}
-              className="flex-none w-6 h-6 grid place-items-center rounded-full border border-line bg-transparent text-faint cursor-pointer hover:text-danger hover:border-danger-line"
-              aria-label="Remove this line"
-              title="Remove this line"
-            >
-              ×
-            </button>
-          </div>
-        ))}
-        <button
-          type="button"
-          onClick={() => onChange(withOutroLine(outro))}
-          className="self-start p-0 border-0 bg-transparent text-xs text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] hover:text-accent"
-        >
-          + Add a line
-        </button>
-      </div>
-
-      <label className="flex flex-col gap-1">
-        <span className={legend}>QR link</span>
-        <input
-          value={outro.qr?.url ?? ''}
-          onChange={(e) => setQrUrl(e.target.value)}
-          placeholder="https://… — empty means no QR"
-          className={input}
+      </FieldRow>
+      <FieldRow label="Holds for">
+        <NumberField
+          label="Outro duration in seconds"
+          min={1}
+          max={15}
+          step={0.5}
+          unit="s"
+          value={outro.seconds}
+          onChange={(v) => onChange({ ...outro, seconds: Math.max(0.5, v || 0.5) })}
         />
-      </label>
-      {prepared.qrProblem && (
-        <p className="m-0 text-xs text-danger">{prepared.qrProblem}</p>
-      )}
+      </FieldRow>
+      <FieldRow label="Ground">
+        <input
+          type="color"
+          value={outro.background}
+          onChange={(e) => onChange({ ...outro, background: e.target.value })}
+          className="flex-none w-8 h-8 p-0 border border-line-strong rounded-[7px] cursor-pointer bg-transparent"
+          aria-label="Outro background colour"
+        />
+        <Readout muted>{outro.background}</Readout>
+      </FieldRow>
 
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-faint">
-          Appended after the footage on variants that carry the overlays; the
-          card plays silent.
-        </span>
-        <button
-          type="button"
-          onClick={onRemove}
-          className="flex-none p-0 border-0 bg-transparent text-xs text-faint cursor-pointer hover:text-danger"
-        >
-          Remove
-        </button>
-      </div>
+      {lines.map((el, i) => (
+        <FieldRow key={el.id} label={`Line ${i + 1}`}>
+          <TextField label={`Outro line ${i + 1}`} value={el.text ?? ''} onChange={(text) => setLineText(el.id, text)} />
+          <IconButton size="sm" variant="ghost" label="Remove this line" onClick={() => removeLine(el.id)}>
+            {Icons.close}
+          </IconButton>
+        </FieldRow>
+      ))}
+      <FieldRow label="">
+        <Button size="sm" variant="ghost" icon={Icons.plus} onClick={() => onChange(withOutroLine(outro))}>
+          Line
+        </Button>
+      </FieldRow>
+
+      <FieldRow
+        label="QR link"
+        hint={prepared.qrProblem ? <span className="text-danger">{prepared.qrProblem}</span> : undefined}
+      >
+        <TextField
+          label="QR link"
+          value={outro.qr?.url ?? ''}
+          onChange={setQrUrl}
+          placeholder="https://… — empty means no QR"
+        />
+      </FieldRow>
+
+      <FieldRow label="Card" hint="Appended after the footage on variants that carry the overlays; the card plays silent.">
+        <Button size="sm" variant="danger" onClick={onRemove}>
+          Remove the outro
+        </Button>
+      </FieldRow>
     </div>
   );
 }

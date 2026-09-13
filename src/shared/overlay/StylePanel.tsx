@@ -1,8 +1,4 @@
-import {
-  CURATED_FONTS,
-  type FontWeight,
-  type OverlayFontFamily,
-} from './overlay-types';
+import { CURATED_FONTS, type FontWeight } from './overlay-types';
 import {
   glowLayersFor,
   themeFromPreset,
@@ -13,6 +9,9 @@ import {
 } from './title-styles';
 import { previewTextStyle } from './style-preview';
 import { useState, type ReactNode } from 'react';
+import IconButton from '../ui/IconButton';
+import { FieldRow, RangeField, Readout, SelectField, ToggleField } from '../ui/Inspector';
+import { Icons } from '../ui/icons';
 
 /**
  * The title-style picker: preset cards, then the theme's own knobs (font,
@@ -38,8 +37,6 @@ interface StylePanelProps {
 
 const labelClass =
   'font-mono text-2xs tracking-[0.12em] uppercase text-muted';
-const inputClass =
-  'font-sans text-sm text-ink bg-surface border border-line-strong rounded-paper px-[0.6rem] py-[0.4rem] w-full';
 
 const WEIGHTS: { value: FontWeight; label: string }[] = [
   { value: 400, label: 'Regular' },
@@ -136,218 +133,153 @@ export default function StylePanel({ theme, onChange, heading }: StylePanelProps
       </div>
 
       {theme && (
-        <>
-          {/* The bave slider */}
-          <label className="flex flex-col gap-1">
-            <span className={labelClass}>
-              Glow · {Math.round(theme.style.glowAmount * 100)}
-              <span className="normal-case tracking-normal">
-                {' '}
-                — matte → fluo
-              </span>
-            </span>
-            <input
-              type="range"
-              className="w-full accent-accent cursor-pointer"
+        <div className="flex flex-col gap-2.5">
+          {/* The bave slider: one amount drives the four glow layers. */}
+          <FieldRow label="Glow" hint="Matte → fluo.">
+            <RangeField
+              label="Glow"
               min={0}
               max={1}
               step={0.01}
               value={theme.style.glowAmount}
-              onChange={(e) => patchStyle({ glowAmount: Number(e.target.value) })}
+              onChange={(glowAmount) => patchStyle({ glowAmount })}
+              format={(v) => `${Math.round(v * 100)}`}
             />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className={labelClass}>
-              Warmth · {Math.round(theme.style.glowWarmth * 100)}% — halation drift
-            </span>
-            <input
-              type="range"
-              className="w-full accent-accent cursor-pointer"
+          </FieldRow>
+          <FieldRow label="Warmth" hint="Halation drift.">
+            <RangeField
+              label="Warmth"
               min={0}
               max={1}
               step={0.05}
               value={theme.style.glowWarmth}
-              onChange={(e) => patchStyle({ glowWarmth: Number(e.target.value) })}
+              onChange={(glowWarmth) => patchStyle({ glowWarmth })}
+              format={(v) => `${Math.round(v * 100)}%`}
             />
-          </label>
-
-          {/* Theme ink */}
-          <div className="flex items-end gap-3">
-            <label className="flex flex-col gap-1">
-              <span className={labelClass}>Ink</span>
-              <input
-                type="color"
-                className="w-12 h-9 p-0 border border-line-strong rounded-paper bg-surface cursor-pointer"
-                value={theme.style.color}
-                onChange={(e) => patchStyle({ color: e.target.value })}
-              />
-            </label>
-            <label className="flex flex-col gap-1 flex-1">
-              <span className={labelClass}>Font</span>
-              <select
-                className={`${inputClass} cursor-pointer`}
-                value={theme.style.fontFamily}
-                onChange={(e) =>
-                  patchStyle({ fontFamily: e.target.value as OverlayFontFamily })
-                }
-              >
-                {CURATED_FONTS.map((f) => (
-                  <option key={f} value={f}>
-                    {f}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div className="flex items-end gap-3">
-            <label className="flex flex-col gap-1 flex-1">
-              <span className={labelClass}>Weight</span>
-              <select
-                className={`${inputClass} cursor-pointer`}
-                value={theme.style.weight}
-                onChange={(e) =>
-                  patchStyle({ weight: Number(e.target.value) as FontWeight })
-                }
-              >
-                {WEIGHTS.map((w) => (
-                  <option key={w.value} value={w.value}>
-                    {w.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              className="flex-none h-9 px-3 border border-line-strong rounded-paper bg-paper text-ink-soft cursor-pointer italic font-serif text-base aria-pressed:border-accent aria-pressed:text-accent-ink"
-              aria-pressed={theme.style.italic}
-              onClick={() => patchStyle({ italic: !theme.style.italic })}
-              title="Italic"
+          </FieldRow>
+          <FieldRow label="Ink">
+            <input
+              type="color"
+              className="flex-none w-8 h-8 p-0 border border-line-strong rounded-[7px] bg-surface cursor-pointer"
+              value={theme.style.color}
+              onChange={(e) => patchStyle({ color: e.target.value })}
+              aria-label="Ink"
+            />
+            <Readout muted>{theme.style.color}</Readout>
+          </FieldRow>
+          <FieldRow label="Font">
+            <SelectField
+              label="Font"
+              value={theme.style.fontFamily}
+              onChange={(fontFamily) => patchStyle({ fontFamily })}
+              options={CURATED_FONTS.map((f) => ({ id: f, label: f }))}
+            />
+          </FieldRow>
+          <FieldRow label="Weight">
+            <SelectField
+              label="Weight"
+              value={String(theme.style.weight)}
+              onChange={(w) => patchStyle({ weight: Number(w) as FontWeight })}
+              options={WEIGHTS.map((w) => ({ id: String(w.value), label: w.label }))}
+            />
+          </FieldRow>
+          <FieldRow label="Emphasis">
+            <ToggleField
+              label="Italic"
+              checked={theme.style.italic}
+              onChange={(italic) => patchStyle({ italic })}
             >
-              I
-            </button>
-            <button
-              type="button"
-              className="flex-none h-9 px-3 border border-line-strong rounded-paper bg-paper text-ink-soft cursor-pointer font-semibold text-xs aria-pressed:border-accent aria-pressed:text-accent-ink"
-              aria-pressed={theme.style.uppercase}
-              onClick={() => patchStyle({ uppercase: !theme.style.uppercase })}
-              title="Uppercase"
+              <span className="italic font-serif">Italic</span>
+            </ToggleField>
+            <ToggleField
+              label="Uppercase"
+              checked={theme.style.uppercase}
+              onChange={(uppercase) => patchStyle({ uppercase })}
             >
               AA
-            </button>
-          </div>
-
-          <label className="flex flex-col gap-1">
-            <span className={labelClass}>
-              Letter spacing · {(theme.style.letterSpacingEm * 100).toFixed(0)}
-            </span>
-            <input
-              type="range"
-              className="w-full accent-accent cursor-pointer"
+            </ToggleField>
+          </FieldRow>
+          <FieldRow label="Spacing">
+            <RangeField
+              label="Letter spacing"
               min={-0.05}
               max={0.2}
               step={0.005}
               value={theme.style.letterSpacingEm}
-              onChange={(e) =>
-                patchStyle({ letterSpacingEm: Number(e.target.value) })
-              }
+              onChange={(letterSpacingEm) => patchStyle({ letterSpacingEm })}
+              format={(v) => (v * 100).toFixed(0)}
             />
-          </label>
-
-          <label className="flex flex-col gap-1">
-            <span className={labelClass}>
-              Size scale · {Math.round(theme.style.sizeScale * 100)}%
-            </span>
-            <input
-              type="range"
-              className="w-full accent-accent cursor-pointer"
+          </FieldRow>
+          <FieldRow label="Size">
+            <RangeField
+              label="Size scale"
               min={0.5}
               max={2}
               step={0.05}
               value={theme.style.sizeScale}
-              onChange={(e) => patchStyle({ sizeScale: Number(e.target.value) })}
+              onChange={(sizeScale) => patchStyle({ sizeScale })}
+              format={(v) => `${Math.round(v * 100)}%`}
             />
-          </label>
-
-          <label className="flex flex-col gap-1">
-            <span className={labelClass}>Legibility</span>
-            <select
-              className={`${inputClass} cursor-pointer`}
+          </FieldRow>
+          <FieldRow label="Legibility">
+            <SelectField
+              label="Legibility"
               value={theme.style.legibility.mode}
-              onChange={(e) =>
-                patchStyle({
-                  legibility: {
-                    ...theme.style.legibility,
-                    mode: e.target.value as StyleTheme['style']['legibility']['mode'],
-                  },
-                })
+              onChange={(mode) =>
+                patchStyle({ legibility: { ...theme.style.legibility, mode } })
               }
-            >
-              <option value="none">None</option>
-              <option value="shadow">Drop shadow</option>
-              <option value="box">Background box</option>
-            </select>
-          </label>
+              options={[
+                { id: 'none', label: 'None' },
+                { id: 'shadow', label: 'Drop shadow' },
+                { id: 'box', label: 'Background box' },
+              ]}
+            />
+          </FieldRow>
 
-          {/* Advanced: the four layers, hand-tuned */}
-          <div className="flex flex-col gap-2 pt-2 border-t border-line">
-            <button
-              type="button"
-              className="self-start p-0 border-0 bg-transparent text-xs text-muted cursor-pointer underline underline-offset-[2px] hover:text-accent-ink"
-              onClick={() => setAdvanced((a) => !a)}
-              aria-expanded={advanced}
-            >
-              {advanced ? 'Hide' : 'Show'} the four glow layers
-            </button>
-            {advanced && layers && derived && (
-              <div className="flex flex-col gap-2">
-                {ADVANCED_FIELDS.map((f) => (
-                  <label key={f.key} className="flex flex-col gap-1">
-                    <span className={labelClass}>
-                      {f.label} · {layers[f.key].toFixed(3)}
-                      {theme.style.glowLayers?.[f.key] != null && (
-                        <button
-                          type="button"
-                          className="ml-1.5 p-0 border-0 bg-transparent text-accent cursor-pointer text-xs"
-                          title="Back to the slider-derived value"
-                          onClick={() => {
-                            const rest = { ...theme.style.glowLayers };
-                            delete rest[f.key];
-                            patchStyle({
-                              glowLayers: Object.keys(rest).length ? rest : undefined,
-                            });
-                          }}
-                        >
-                          ↺
-                        </button>
-                      )}
-                    </span>
-                    <input
-                      type="range"
-                      className="w-full accent-accent cursor-pointer"
-                      min={0}
-                      max={f.max}
-                      step={f.step}
-                      value={layers[f.key]}
-                      onChange={(e) =>
-                        patchStyle({
-                          glowLayers: {
-                            ...theme.style.glowLayers,
-                            [f.key]: Number(e.target.value),
-                          },
-                        })
-                      }
-                    />
-                  </label>
-                ))}
-                <p className="m-0 text-2xs text-faint leading-relaxed">
-                  Layers follow the glow slider until you touch one; ↺ hands a
-                  layer back to the slider.
-                </p>
-              </div>
-            )}
-          </div>
-        </>
+          {/* Advanced: the four layers, hand-tuned. */}
+          <FieldRow label="Glow layers">
+            <ToggleField label="Show the four glow layers" checked={advanced} onChange={setAdvanced}>
+              Tune by hand
+            </ToggleField>
+          </FieldRow>
+          {advanced && layers && derived && (
+            <>
+              {ADVANCED_FIELDS.map((f) => (
+                <FieldRow key={f.key} label={f.label}>
+                  <RangeField
+                    label={f.label}
+                    min={0}
+                    max={f.max}
+                    step={f.step}
+                    value={layers[f.key]}
+                    onChange={(v) =>
+                      patchStyle({ glowLayers: { ...theme.style.glowLayers, [f.key]: v } })
+                    }
+                    format={(v) => v.toFixed(3)}
+                  />
+                  {theme.style.glowLayers?.[f.key] != null && (
+                    <IconButton
+                      size="sm"
+                      variant="ghost"
+                      label="Back to the slider-derived value"
+                      onClick={() => {
+                        const rest = { ...theme.style.glowLayers };
+                        delete rest[f.key];
+                        patchStyle({ glowLayers: Object.keys(rest).length ? rest : undefined });
+                      }}
+                    >
+                      {Icons.reset}
+                    </IconButton>
+                  )}
+                </FieldRow>
+              ))}
+              <p className="m-0 text-xs text-muted leading-relaxed">
+                Layers follow the glow slider until you touch one; the reset hands a layer back
+                to the slider.
+              </p>
+            </>
+          )}
+        </div>
       )}
     </div>
   );

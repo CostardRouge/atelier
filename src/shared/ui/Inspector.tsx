@@ -20,7 +20,7 @@
  * and a card per block would be the boxes-in-boxes the audit removed.
  */
 
-import { useId, useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode, type SelectHTMLAttributes } from 'react';
 import InfoDot from './InfoDot';
 import { Icons } from './icons';
 
@@ -193,7 +193,7 @@ export function RangeField({ value, min, max, step, onChange, format, label, dis
         aria-label={label}
         className="flex-1 min-w-0 accent-accent disabled:opacity-45"
       />
-      <span className="flex-none w-[3.25rem] text-right font-mono text-xs tabular-nums text-ink-soft">
+      <span className="flex-none min-w-[3.25rem] text-right whitespace-nowrap font-mono text-xs tabular-nums text-ink-soft">
         {format(value)}
       </span>
     </>
@@ -269,5 +269,148 @@ export function ToggleField({ checked, onChange, label, children }: ToggleFieldP
       </button>
       {children && <span className="text-sm text-ink-soft truncate">{children}</span>}
     </label>
+  );
+}
+
+const fieldClass =
+  'w-full min-w-0 font-sans text-sm h-[2.125rem] px-3 border border-line-strong rounded-control bg-surface text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-45';
+
+interface NumberFieldProps {
+  /** `null` draws an empty field — with `onClear`, for a value that may be absent. */
+  value: number | null;
+  onChange: (value: number) => void;
+  label: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  /** A unit written inside the field's right edge: "s", "px", "°". */
+  unit?: string;
+  disabled?: boolean;
+  placeholder?: string;
+  /** Called instead of `onChange` when the field is emptied. */
+  onClear?: () => void;
+}
+
+/** A number typed rather than dragged — a time in seconds, a count. */
+export function NumberField({
+  value,
+  onChange,
+  label,
+  min,
+  max,
+  step,
+  unit,
+  disabled,
+  placeholder,
+  onClear,
+}: NumberFieldProps) {
+  return (
+    <span className="relative flex-1 min-w-0 inline-flex">
+      <input
+        type="number"
+        value={value !== null && Number.isFinite(value) ? value : ''}
+        placeholder={placeholder}
+        min={min}
+        max={max}
+        step={step}
+        disabled={disabled}
+        aria-label={label}
+        onChange={(e) => {
+          if (e.target.value === '' && onClear) onClear();
+          else onChange(Number(e.target.value));
+        }}
+        className={`${fieldClass} font-mono tabular-nums ${unit ? 'pr-8' : ''}`}
+      />
+      {unit && (
+        <span
+          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 font-mono text-xs text-muted"
+          aria-hidden="true"
+        >
+          {unit}
+        </span>
+      )}
+    </span>
+  );
+}
+
+interface TextFieldProps {
+  value: string;
+  onChange: (value: string) => void;
+  label: string;
+  placeholder?: string;
+  disabled?: boolean;
+}
+
+/** One line of text, in the inspector's dress. */
+export function TextField({ value, onChange, label, placeholder, disabled }: TextFieldProps) {
+  return (
+    <input
+      type="text"
+      value={value}
+      placeholder={placeholder}
+      disabled={disabled}
+      aria-label={label}
+      onChange={(e) => onChange(e.target.value)}
+      className={fieldClass}
+    />
+  );
+}
+
+/** The colour swatch every row uses. */
+export const swatchClass =
+  'flex-none w-8 h-8 p-0 border border-line-strong rounded-[7px] bg-surface cursor-pointer disabled:opacity-40 disabled:cursor-default';
+
+interface NativeSelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
+  label: string;
+  children: ReactNode;
+}
+
+/**
+ * `SelectField` for a list that is already written as `<option>`s (optgroups,
+ * mapped keys): the same dress, the options passed straight through.
+ */
+export function NativeSelect({ label, children, className = '', ...rest }: NativeSelectProps) {
+  return (
+    <span className="relative flex-1 min-w-0 inline-flex">
+      <select
+        aria-label={label}
+        className={`w-full appearance-none font-sans text-sm h-[2.125rem] pl-3 pr-9 border border-line-strong rounded-control bg-surface text-ink truncate cursor-pointer focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 ${className}`}
+        {...rest}
+      >
+        {children}
+      </select>
+      <span
+        className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 inline-flex text-muted [&>svg]:w-4 [&>svg]:h-4"
+        aria-hidden="true"
+      >
+        {Icons.down}
+      </span>
+    </span>
+  );
+}
+
+interface SwitchRowProps {
+  /** The setting, as a phrase — it is the row's whole label. */
+  label: ReactNode;
+  /** The accessible name, when `label` is not plain text. */
+  name?: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  hint?: ReactNode;
+}
+
+/**
+ * A setting that is on or off and needs a phrase to say so ("Letters at
+ * N / E / S / W"): the phrase across the row, the switch at its end.
+ */
+export function SwitchRow({ label, name, checked, onChange, hint }: SwitchRowProps) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-3">
+        <span className="flex-1 min-w-0 text-sm text-ink-soft leading-tight">{label}</span>
+        <ToggleField label={name ?? (typeof label === 'string' ? label : 'Toggle')} checked={checked} onChange={onChange} />
+      </div>
+      {hint && <div className="text-xs leading-relaxed text-muted [&>p]:m-0">{hint}</div>}
+    </div>
   );
 }

@@ -2044,9 +2044,7 @@ export default function StudioEditor({
                   )}
 
                   <InspectorSection id="studio.guides" title="Guides">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <GuidesControl guides={guides} onChange={setGuides} frameAspect={frameAspect} />
-                    </div>
+                    <GuidesControl guides={guides} onChange={setGuides} frameAspect={frameAspect} layout="rows" />
                   </InspectorSection>
                 </>
               )}
@@ -2116,20 +2114,18 @@ export default function StudioEditor({
               )}
 
               {tab === 'info' && (
-                <InspectorSection id="studio.info" title="This media">
-                  <InfoPanel
-                    baseName={active.baseName}
-                    file={activeImage ?? activeVideo}
-                    detail={activeDetail}
-                    duration={duration}
-                    cues={cues}
-                    cue={activeCue}
-                    timing={timing}
-                    scale={scale}
-                    overridden={overridden}
-                    photo={isPhoto ? (photoExif ?? {}) : null}
-                  />
-                </InspectorSection>
+                <InfoPanel
+                  baseName={active.baseName}
+                  file={activeImage ?? activeVideo}
+                  detail={activeDetail}
+                  duration={duration}
+                  cues={cues}
+                  cue={activeCue}
+                  timing={timing}
+                  scale={scale}
+                  overridden={overridden}
+                  photo={isPhoto ? (photoExif ?? {}) : null}
+                />
               )}
 
               {tab === 'export' && (
