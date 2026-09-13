@@ -57,6 +57,9 @@
   --font-serif: 'Instrument Serif', Georgia, serif;
   --font-mono: 'JetBrains Mono', monospace;
 
+  /* Controls — Winnow's 11px, so a button reads as the same object in both
+     apps; cards keep the paper radii below. */
+  --radius-control: 11px;
   --radius-paper: 14px;
   --radius-paper-lg: 22px;
 

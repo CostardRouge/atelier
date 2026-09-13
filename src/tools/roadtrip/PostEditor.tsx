@@ -72,7 +72,8 @@ import { usePostExports } from './use-post-exports';
 import useRailThumbs from './use-rail-thumbs';
 import { pickable, useSlideLibrary } from './use-slide-library';
 import { useTripGrade } from './use-trip-grade';
-import PageBar, { barPill } from '../../shared/ui/PageBar';
+import PageBar from '../../shared/ui/PageBar';
+import Button from '../../shared/ui/Button';
 import PanelHost from '../../shared/ui/PanelHost';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
@@ -875,32 +876,32 @@ export default function PostEditor({
                   deck in the formats the slides say they are. Pressing it
                   switches to that tab, so the report is read where it is
                   written. */}
-              <button
-                type="button"
+              <Button
+                variant="primary"
                 onClick={() => void exports.exportPiece()}
                 disabled={exports.exporting !== null}
                 title="Every slide of this piece, in the format it is"
-                className={`${barPill} px-[1.1rem] border-ink bg-ink text-paper cursor-pointer text-xs font-semibold hover:bg-accent hover:border-accent disabled:opacity-60 disabled:cursor-default`}
               >
                 {exports.exporting ?? '↓ Export'}
-              </button>
+              </Button>
             </>
           }
         >
           {/* What is true of the WHOLE trip lives behind this, exactly where
               the Studio keeps a project's own settings — so the inspector on
               the right is about the piece and nothing else. */}
-          <button
-            type="button"
+          <Button
             onClick={() => setTripSheet('words')}
             title="Trip settings — the words, the closing card, what a new piece starts from"
-            className={`${barPill} gap-1.5 px-2.5 border-line-strong bg-paper font-mono text-2xs tracking-[0.06em] uppercase text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink`}
+            className="font-mono text-2xs tracking-[0.06em] uppercase"
+            trailing={
+              <span className="text-base leading-none" aria-hidden="true">
+                ⚙
+              </span>
+            }
           >
             Trip
-            <span className="text-base leading-none" aria-hidden="true">
-              ⚙
-            </span>
-          </button>
+          </Button>
         </PageBar>
         {/* Editable in place, like the Studio's project name: a piece is
             found again by what it is called, and having to go back to the

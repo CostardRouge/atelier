@@ -128,6 +128,7 @@ import { hashedMediaRefs, mediaHash } from '../../shared/projects/media-identity
 import { putProject } from '../../shared/projects/project-store';
 import type { Reconciliation } from '../../shared/projects/reconcile';
 import PageBar, { barPill } from '../../shared/ui/PageBar';
+import Button from '../../shared/ui/Button';
 import PanelHost from '../../shared/ui/PanelHost';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
@@ -1445,7 +1446,7 @@ export default function StudioEditor({
             {headerExtra}
             <span
               className={`${barPill} bg-paper font-mono text-2xs tracking-[0.1em] uppercase ${
-                showSaveLabel ? 'gap-1.5' : 'justify-center w-[1.9rem] px-0'
+                showSaveLabel ? 'gap-1.5' : 'justify-center w-[2.125rem] px-0'
               } ${save.cls}`}
               aria-label={save.label}
             >
@@ -1460,17 +1461,18 @@ export default function StudioEditor({
             <span className="sr-only" role="status" aria-live="polite">
               {save.label}
             </span>
-            <button
-              type="button"
+            <Button
               onClick={() => setShowSettings(true)}
-              className={`${barPill} gap-1.5 border-line-strong bg-paper font-mono text-2xs tracking-[0.06em] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink`}
+              className="font-mono text-2xs tracking-[0.06em]"
               title="Project settings — name, format, import/export"
+              trailing={
+                <span className="text-base leading-none" aria-hidden="true">
+                  ⚙
+                </span>
+              }
             >
               {ASPECT_PRESETS.find((a) => a.id === aspectId)?.id ?? aspectId}
-              <span className="text-base leading-none" aria-hidden="true">
-                ⚙
-              </span>
-            </button>
+            </Button>
           </>
         }
       >
@@ -1486,7 +1488,7 @@ export default function StudioEditor({
           /* Exactly the pills' own height, or the row centres a 32px field
              against a 30px pill and pushes the back button 1px down — the
              whole point of the bar is that it does not move. */
-          className="grow shrink basis-[9rem] min-w-0 max-w-[24rem] h-[1.9rem] font-serif text-lg bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0"
+          className="grow shrink basis-[9rem] min-w-0 max-w-[24rem] h-[2.125rem] font-serif text-lg bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0"
         />
       </PageBar>
 

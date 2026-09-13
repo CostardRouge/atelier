@@ -17,7 +17,7 @@
  * - **The back pill is the first cell, and the bar is one pill high.** Nothing
  *   in it may be taller, so the pill's own top IS the content's top on every
  *   screen and at every width. A screen's NAME goes in `children`, beside the
- *   pill, at `h-[1.9rem]` like everything else in the row — the Studio's name
+ *   pill, at the pill's own height (`barPill`) like everything else in the row — the Studio's name
  *   field and the trip's. What does NOT fit that line goes below it: the
  *   trip's route and dates are their own line under the bar, which is what
  *   was clipping on a 390px screen, not the name.
@@ -29,19 +29,17 @@
  */
 
 import type { ReactNode } from 'react';
+import Button from './Button';
 import { useIsCompact } from './use-layout-mode';
 
 /**
  * One pill of the bar. Exported because a screen's own controls have to match
  * the back pill's height exactly — that is what makes the row read as a band
- * rather than a drift of chips.
+ * rather than a drift of chips. It is `Button`'s `md` geometry (34px, the
+ * control radius) with no skin, for the pills that carry their own.
  */
 export const barPill =
-  'inline-flex items-center shrink-0 whitespace-nowrap h-[1.9rem] px-3 rounded-full border transition-colors';
-
-/** The back pill's own skin, on top of `barPill`. */
-const backSkin =
-  'border-line-strong bg-paper text-xs font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink';
+  'inline-flex items-center shrink-0 whitespace-nowrap h-[2.125rem] px-3.5 rounded-control border transition-colors';
 
 interface PageBarProps {
   /** The way back. Omitted on a screen that is already the way back. */
@@ -68,14 +66,9 @@ export default function PageBar({ back, children, trailing }: PageBarProps) {
   return (
     <div className={`flex items-center gap-2 flex-wrap min-w-0 ${compact ? 'mt-3' : ''}`}>
       {back && (
-        <button
-          type="button"
-          onClick={back.onClick}
-          title={back.title}
-          className={`${barPill} ${backSkin}`}
-        >
-          ← {back.label}
-        </button>
+        <Button onClick={back.onClick} title={back.title} icon={<span aria-hidden="true">←</span>}>
+          {back.label}
+        </Button>
       )}
       {children}
       {trailing && (

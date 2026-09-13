@@ -91,7 +91,7 @@ function TripTitle({ name, onRename }: { name: string; onRename: (name: string) 
         /* Exactly the pills' height, or the row centres a taller field
            against them and pushes the back button down — the whole point of
            the bar is that it does not move. */
-        className="grow shrink basis-[9rem] min-w-0 max-w-[22rem] h-[1.9rem] font-serif text-lg leading-none px-1.5 py-0 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
+        className="grow shrink basis-[9rem] min-w-0 max-w-[22rem] h-[2.125rem] font-serif text-lg leading-none px-1.5 py-0 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
       />
     );
   }
@@ -102,7 +102,7 @@ function TripTitle({ name, onRename }: { name: string; onRename: (name: string) 
         type="button"
         onClick={() => setDraft(name)}
         title="Rename the trip"
-        className="w-full h-[1.9rem] p-0 border-0 bg-transparent font-serif text-lg leading-none text-ink text-left truncate cursor-text hover:text-accent-ink"
+        className="w-full h-[2.125rem] p-0 border-0 bg-transparent font-serif text-lg leading-none text-ink text-left truncate cursor-text hover:text-accent-ink"
       >
         {name}
       </button>
