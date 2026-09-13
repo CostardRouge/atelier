@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { hookDayPosts } from '../../shared/roadtrip/hooks/hook-calendar';
-import type { HookContext, HookLayer, HookPicture } from '../../shared/roadtrip/hooks/hook-variant';
+import type {
+  HookContext,
+  HookLayer,
+  HookPicture,
+  HookPictureWant,
+} from '../../shared/roadtrip/hooks/hook-variant';
 import { hookVariantById } from '../../shared/roadtrip/hooks/registry';
 import type { TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
 import { getThumbs } from '../../shared/roadtrip/trip-store';
@@ -23,8 +28,9 @@ const RELEASE_AFTER_MS = 4000;
  * hook — which is local, already graded and framed the way that piece was
  * composed, and one read per day. A flash lasts a few video frames, so a
  * 640px picture stretched over the frame is not what anyone sees; decoding
- * each day's original capture would be. Only the days the variant WANTS are
- * read (`wantsDays`), never the trip's whole list.
+ * each day's original capture would be. Only the pictures the variant WANTS
+ * are read (`wantsPictures`) — a day each, and the piece it named where it
+ * named one — never the trip's whole list.
  */
 export default function useHookPictures(
   trip: TripDoc,
@@ -35,13 +41,18 @@ export default function useHookPictures(
   // The days wanted, and the piece standing for each — as one string, so the
   // load re-runs when the ANSWER changes and not on every edit of the piece.
   const wanted = useMemo(() => {
-    const dates = new Set<string>();
+    // A later layer naming a piece for a day wins over an earlier one that did
+    // not — the fold's own rule (`foldHook`: the last layer that speaks).
+    const wants = new Map<string, HookPictureWant>();
     for (const layer of layers) {
       const variant = hookVariantById(layer.id);
-      if (variant?.needs.media !== 'day' || !variant.wantsDays) continue;
-      for (const date of variant.wantsDays(layer.options ?? {}, ctx)) dates.add(date);
+      if (variant?.needs.media !== 'day' || !variant.wantsPictures) continue;
+      for (const want of variant.wantsPictures(layer.options ?? {}, ctx)) {
+        const have = wants.get(want.date);
+        wants.set(want.date, { date: want.date, postId: want.postId ?? have?.postId });
+      }
     }
-    const byDay = hookDayPosts(trip, [...dates], post.id);
+    const byDay = hookDayPosts(trip, [...wants.values()], post.id);
     return [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [layers, ctx, trip, post.id]);
   const key = wanted.map(([date, id]) => `${date}:${id}`).join(',');

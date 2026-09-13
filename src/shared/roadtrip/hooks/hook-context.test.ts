@@ -46,10 +46,36 @@ describe('hookCalendar', () => {
   it('lets a published piece stand for its day over a draft', () => {
     const { trip, hero } = fixture();
     const published = trip.posts.find((p) => p.publishedAt !== null);
-    const byDay = hookDayPosts(trip, ['2025-03-05', '2025-03-08'], hero.id);
+    const byDay = hookDayPosts(trip, [{ date: '2025-03-05' }, { date: '2025-03-08' }], hero.id);
     expect(byDay.get('2025-03-05')).toBe(published?.id);
     // The hero's own day has no OTHER piece, so nothing stands for it.
     expect(byDay.has('2025-03-08')).toBe(false);
+  });
+
+  it('lets a variant name the piece for a day, and ignores a name that no longer tells it', () => {
+    const { trip, hero } = fixture();
+    const draft = trip.posts.find((p) => p.date === '2025-03-05' && p.publishedAt === null);
+    const published = trip.posts.find((p) => p.publishedAt !== null);
+    // Named: the draft stands in front of the published piece.
+    expect(hookDayPosts(trip, [{ date: '2025-03-05', postId: draft?.id }], hero.id).get('2025-03-05')).toBe(
+      draft?.id,
+    );
+    // A stale name — a piece deleted, or moved to another day — falls back.
+    expect(hookDayPosts(trip, [{ date: '2025-03-05', postId: 'gone' }], hero.id).get('2025-03-05')).toBe(
+      published?.id,
+    );
+    // The piece being composed can never stand for a day, named or not.
+    expect(hookDayPosts(trip, [{ date: '2025-03-08', postId: hero.id }], hero.id).has('2025-03-08')).toBe(
+      false,
+    );
+  });
+
+  it('lists each day’s OTHER pieces, so a panel can offer a choice', () => {
+    const { trip, hero } = fixture();
+    const cal = hookCalendar(trip, hero.id);
+    expect(cal[4].pieces.map((p) => p.published)).toEqual([false, true]);
+    expect(cal[1].pieces).toHaveLength(1);
+    expect(cal[7].pieces).toEqual([]);
   });
 });
 

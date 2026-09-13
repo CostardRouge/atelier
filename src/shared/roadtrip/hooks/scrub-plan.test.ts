@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { HookDay } from './hook-variant';
 import {
+  EASINGS,
+  EASING_IDS,
   SCRUB_DEFAULTS,
   sampleEvenly,
   scrubOptions,
@@ -17,11 +19,13 @@ import {
 function calendar(total: number, told: number[] = [], legs: number[] = [1]): HookDay[] {
   return Array.from({ length: total }, (_, i) => {
     const d = new Date(Date.UTC(2025, 2, 1 + i));
+    const isTold = told.includes(i + 1);
     return {
       date: d.toISOString().slice(0, 10),
       dayNumber: i + 1,
-      told: told.includes(i + 1),
+      told: isTold,
       legStart: legs.includes(i + 1),
+      pieces: isTold ? [{ id: `p${i + 1}`, title: '', published: false }] : [],
     };
   });
 }
@@ -70,6 +74,42 @@ describe('stopFraction', () => {
   });
 });
 
+describe('EASINGS', () => {
+  it('every curve runs 0 → 1 and its inverse undoes it', () => {
+    for (const id of EASING_IDS) {
+      const { ease, inverse } = EASINGS[id];
+      expect(ease(0)).toBeCloseTo(0, 9);
+      expect(ease(1)).toBeCloseTo(1, 9);
+      for (let k = 0; k <= 20; k++) {
+        const u = k / 20;
+        expect(inverse(ease(u))).toBeCloseTo(u, 6);
+      }
+    }
+  });
+
+  it('every curve is monotonic — a stop is never reached before the one before it', () => {
+    for (const id of EASING_IDS) {
+      const { ease } = EASINGS[id];
+      let last = -1;
+      for (let k = 0; k <= 100; k++) {
+        const v = ease(k / 100);
+        expect(v).toBeGreaterThanOrEqual(last);
+        last = v;
+      }
+    }
+  });
+
+  it('places stops the way each curve says', () => {
+    // Even: equal gaps. Wind up: the gaps SHRINK. Brake: the first gap is tiny.
+    const linear = Array.from({ length: 5 }, (_, i) => stopFraction(i, 5, 'linear'));
+    expect(linear).toEqual([0, 0.25, 0.5, 0.75, 1]);
+    const windUp = Array.from({ length: 5 }, (_, i) => stopFraction(i, 5, 'ease-in'));
+    const gaps = windUp.slice(1).map((t, i) => t - windUp[i]);
+    for (let i = 1; i < gaps.length; i++) expect(gaps[i]).toBeLessThan(gaps[i - 1]);
+    expect(stopFraction(1, 12, 'ease-out-hard')).toBeLessThan(stopFraction(1, 12, 'ease-out'));
+  });
+});
+
 describe('scrubStopDays', () => {
   it('sweeps from day 1 to the hero through told days only', () => {
     const cal = calendar(30, [3, 8, 14, 20]);
@@ -104,6 +144,36 @@ describe('scrubStopDays', () => {
 
   it('refuses a day that is not a day of the trip', () => {
     expect(scrubStopDays(calendar(10), '2031-01-01', opts())).toBeNull();
+  });
+
+  it('sweeps exactly the chosen days, in calendar order, whatever the mode says', () => {
+    const cal = calendar(30, [3, 8, 14, 20]);
+    const days = scrubStopDays(
+      cal,
+      dateOf(cal, 27),
+      opts({ days: 'chosen', mode: 'run-up', chosenDays: [dateOf(cal, 20), dateOf(cal, 3), dateOf(cal, 14)] }),
+    )!;
+    expect(days.map((d) => d.dayNumber)).toEqual([3, 14, 20, 27]);
+  });
+
+  it('drops a chosen day the sweep cannot reach, and keeps a chosen day nobody told as a dark stop', () => {
+    const cal = calendar(30, [3, 8]);
+    const days = scrubStopDays(
+      cal,
+      dateOf(cal, 20),
+      opts({ days: 'chosen', chosenDays: [dateOf(cal, 25), dateOf(cal, 3), dateOf(cal, 11)] }),
+    )!;
+    expect(days.map((d) => d.dayNumber)).toEqual([3, 11, 20]);
+    expect(days[1].told).toBe(false);
+  });
+
+  it('thins a long chosen list evenly rather than truncating it', () => {
+    const cal = calendar(60, Array.from({ length: 40 }, (_, i) => i + 2));
+    const chosen = cal.slice(1, 41).map((d) => d.date);
+    const days = scrubStopDays(cal, dateOf(cal, 50), opts({ days: 'chosen', chosenDays: chosen }))!;
+    expect(days.length).toBe(16);
+    expect(days[0].dayNumber).toBe(2);
+    expect(days[days.length - 2].dayNumber).toBe(41);
   });
 });
 
@@ -145,6 +215,35 @@ describe('scrubPlan', () => {
   it('reads the legs off the calendar', () => {
     const legs = scrubPlan(calendar(30, [], [1, 11, 21]), dateOf(cal, 25), opts())!;
     expect(legs.legStarts).toEqual([1, 11, 21]);
+  });
+
+  it('holds on the first stop for the delay, then sweeps — every stop shifted by it', () => {
+    const held = scrubPlan(cal, dateOf(cal, 27), opts({ sweepSeconds: 2, delaySeconds: 0.5 }))!;
+    expect(held.delaySeconds).toBe(0.5);
+    expect(held.endSeconds).toBeCloseTo(2.5, 9);
+    expect(held.stops[0].at).toBe(0.5);
+    expect(held.stops[held.stops.length - 1].at).toBeCloseTo(2.5, 9);
+    // During the hold the head has not left: first stop, first day, nothing "since".
+    expect(held.stopAt(0.3)).toBe(0);
+    expect(held.headDayAt(0.3)).toBe(held.stops[0].dayNumber);
+    expect(held.sinceStopAt(0.3)).toBeLessThan(0);
+    // The score is shifted with the stops.
+    expect(scrubScore(held)[0].at).toBe(0.5);
+  });
+
+  it('has no delay when there is nowhere to sweep from', () => {
+    const first = scrubPlan(cal, dateOf(cal, 1), opts({ delaySeconds: 1 }))!;
+    expect(first.endSeconds).toBe(0);
+  });
+
+  it('lands the head on every stop at that stop’s time, on every easing', () => {
+    for (const easing of EASING_IDS) {
+      const p = scrubPlan(cal, dateOf(cal, 27), opts({ easing, sweepSeconds: 2 }))!;
+      p.stops.forEach((stop, i) => {
+        expect(p.stopAt(stop.at)).toBe(i);
+        expect(p.headDayAt(stop.at)).toBeCloseTo(stop.dayNumber, 6);
+      });
+    }
   });
 });
 
@@ -225,5 +324,31 @@ describe('scrubScore', () => {
   it('reads the sound switch through the defaults', () => {
     expect(scrubOptions({}).sound).toBe(true);
     expect(scrubOptions({ sound: false }).sound).toBe(false);
+  });
+});
+
+describe('the sweep options a document may hold', () => {
+  it('refuses an easing it does not know, and clamps the hold', () => {
+    expect(scrubOptions({ easing: 'bouncy' }).easing).toBe('ease-out');
+    expect(scrubOptions({ easing: 'linear' }).easing).toBe('linear');
+    expect(scrubOptions({ delaySeconds: 9 }).delaySeconds).toBe(2);
+    expect(scrubOptions({ delaySeconds: 'long' }).delaySeconds).toBe(0);
+  });
+
+  it('keeps only real days in the chosen list, once each', () => {
+    expect(
+      scrubOptions({ days: 'chosen', chosenDays: ['2025-03-04', 'tuesday', 7, '2025-03-04', '2025-03-09'] })
+        .chosenDays,
+    ).toEqual(['2025-03-04', '2025-03-09']);
+    expect(scrubOptions({ chosenDays: 'all' }).chosenDays).toEqual([]);
+    expect(scrubOptions({ days: 'sometimes' }).days).toBe('auto');
+  });
+
+  it('keeps only day → piece pairs it can read', () => {
+    expect(
+      scrubOptions({ pieceByDay: { '2025-03-04': 'p1', bad: 'p2', '2025-03-05': 3, '2025-03-06': '' } })
+        .pieceByDay,
+    ).toEqual({ '2025-03-04': 'p1' });
+    expect(scrubOptions({ pieceByDay: ['p1'] }).pieceByDay).toEqual({});
   });
 });

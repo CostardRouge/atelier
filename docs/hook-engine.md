@@ -238,9 +238,10 @@ sound will add there is an audio track, since it writes none today.
 - **Flashes come from the thumbs store**, one JPEG per day (`hookDayPosts`: the
   published piece stands for its day over a draft). Local, already graded and
   framed, one read a day; a flash lasts a few frames, so a 640px picture
-  stretched over it is not what anyone sees. Only the days `wantsDays` names
-  are decoded, and a replaced set is closed late, since an export may still be
-  drawing it.
+  stretched over it is not what anyone sees. Only the pictures `wantsPictures`
+  names are decoded — a day each, and the PIECE the author chose for a day told
+  several times — and a replaced set is closed late, since an export may still
+  be drawing it.
 - **The numeral steps only under the `day` counter**, and only while the head
   moves; at rest the badge says its own value, a range post's "27–29" too.
   Stepping trip days into a numeral labelled as a day at a place would be a
@@ -252,6 +253,23 @@ sound will add there is an audio track, since it writes none today.
   `ResolvedHook.rewrites` — every other piece keeps elements built once per
   edit. Hit-testing reads the same function, so a click lands on the numeral
   it is showing.
+- **The sweep is authored in three more ways (2026-09-13).** An `easing`
+  (`EASINGS`: settle / brake / even / wind up / glide) — every curve ships with
+  a CLOSED-FORM inverse, because the stops sit on the inverse and the head
+  glides on the curve, and a numeric inverse would put a stop near its time
+  rather than on it; the round-trip is a test, and it caught a wrong `ease-in-
+  out` inverse on the first run. A `delaySeconds` hold on the first stop, with
+  `endSeconds` (hold + sweep) as the opener's life so every reader — the paint,
+  the numeral, the transport, `hookMoves` — agrees where rest is. And
+  `days: 'chosen'` + `chosenDays` + `pieceByDay`: the author names the days
+  and, for a day told twice, which piece flashes; the calendar the shell hands
+  over (`HookDay.pieces`) is what lets the panel offer that choice without the
+  variant reading the store, and a named piece that no longer tells its day
+  falls back to the shell's own rule rather than to a blank. The panel shows
+  the sweep's days as TILES drawing the picture the shell decoded — only the
+  days in the sweep are decoded, the rule that keeps a 250-piece trip from
+  decoding 250 thumbnails, so a day taken out of the sweep shows its number on
+  a dark tile.
 - **Three places had to learn that a hook can move without an animated piece**,
   each a real bug the first render showed: the badge clock (it never started,
   so the stage sat on the sweep's first, dark frame), the thumbnail capture

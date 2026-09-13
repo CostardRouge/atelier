@@ -44,7 +44,7 @@ export function paintScrub(
   const { width: w, height: h } = frame;
   if (w <= 0 || h <= 0) return;
 
-  const sweeping = plan.sweepSeconds > 0 && t < plan.sweepSeconds;
+  const sweeping = plan.sweepSeconds > 0 && t < plan.endSeconds;
   const index = plan.stopAt(t);
 
   if (opts.flash && sweeping) {

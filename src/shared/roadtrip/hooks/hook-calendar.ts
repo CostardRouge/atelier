@@ -8,38 +8,52 @@
  *   whether a leg starts on it. The piece being composed never counts as
  *   telling its own day: a sweep that stopped on the hero's own day as a
  *   "told" day would flash the picture already on the frame.
- * - `hookDayPosts` — for each told day, the ONE piece whose hook picture stands
- *   for it: the published one when there is one, else the first. A day told
- *   three times flashes once.
+ * - `hookDayPosts` — for each wanted day, the ONE piece whose hook picture
+ *   stands for it: the piece the variant named when it still tells that day,
+ *   else the published one, else the first. A day told three times flashes
+ *   once.
  */
 
 import { tripCoverage } from '../trip-coverage';
 import { stageLabel } from '../trip-places';
 import type { TripDoc } from '../trip-types';
-import type { HookDay, HookStage } from './hook-variant';
+import type { HookDay, HookPictureWant, HookStage } from './hook-variant';
 
 export function hookCalendar(trip: TripDoc, excludePostId: string | null): HookDay[] {
   const legStarts = new Set(trip.stages.map((stage) => stage.startDate));
-  return tripCoverage(trip).days.map((cell) => ({
-    date: cell.date,
-    dayNumber: cell.dayNumber,
-    told: cell.posts.some((post) => post.id !== excludePostId),
-    legStart: legStarts.has(cell.date),
-  }));
+  return tripCoverage(trip).days.map((cell) => {
+    const others = cell.posts.filter((post) => post.id !== excludePostId);
+    return {
+      date: cell.date,
+      dayNumber: cell.dayNumber,
+      told: others.length > 0,
+      legStart: legStarts.has(cell.date),
+      pieces: others.map((post) => ({
+        id: post.id,
+        title: post.title.trim(),
+        published: post.publishedAt !== null,
+      })),
+    };
+  });
 }
 
-/** The piece whose hook picture stands for each of `dates`, where one exists. */
+/** The piece whose hook picture stands for each wanted day, where one exists. */
 export function hookDayPosts(
   trip: TripDoc,
-  dates: readonly string[],
+  wants: readonly HookPictureWant[],
   excludePostId: string | null,
 ): Map<string, string> {
-  const wanted = new Set(dates);
+  const preferred = new Map<string, string | undefined>();
+  for (const want of wants) preferred.set(want.date, want.postId);
   const out = new Map<string, string>();
   for (const cell of tripCoverage(trip).days) {
-    if (!wanted.has(cell.date)) continue;
+    if (!preferred.has(cell.date)) continue;
     const others = cell.posts.filter((post) => post.id !== excludePostId);
-    const chosen = others.find((post) => post.publishedAt !== null) ?? others[0];
+    const named = preferred.get(cell.date);
+    const chosen =
+      others.find((post) => post.id === named) ??
+      others.find((post) => post.publishedAt !== null) ??
+      others[0];
     if (chosen) out.set(cell.date, chosen.id);
   }
   return out;

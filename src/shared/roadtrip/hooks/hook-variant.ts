@@ -113,6 +113,30 @@ export interface HookDay {
   told: boolean;
   /** A leg of the trip starts on this day. */
   legStart: boolean;
+  /**
+   * The OTHER pieces telling this day, in the trip's order — what a variant
+   * may offer the author to choose a picture from. Empty when `told` is false.
+   */
+  pieces: readonly HookDayPiece[];
+}
+
+/** One piece telling a day, as far as a hook needs to name it. */
+export interface HookDayPiece {
+  id: string;
+  /** The piece's title, or empty. */
+  title: string;
+  published: boolean;
+}
+
+/** A picture a variant asks the shell for: a day, and optionally WHICH piece's. */
+export interface HookPictureWant {
+  date: string;
+  /**
+   * The piece whose hook picture should stand for the day. Absent, or a piece
+   * that does not tell that day any more, falls back to the shell's own rule
+   * (the published piece, else the first).
+   */
+  postId?: string;
 }
 
 /**
@@ -227,12 +251,12 @@ export interface HookVariant {
   /** Why this variant cannot run on this piece, or null when it can. */
   unmet?(ctx: HookContext): string | null;
   /**
-   * The days whose pictures this variant will actually draw, for `needs.media
-   * === 'day'`. The shell fetches exactly these and nothing else: a trip of
-   * 250 pieces must not decode 250 thumbnails for a sweep that stops twelve
-   * times.
+   * The pictures this variant will actually draw, for `needs.media === 'day'`
+   * — a day each, and optionally which piece's. The shell fetches exactly
+   * these and nothing else: a trip of 250 pieces must not decode 250
+   * thumbnails for a sweep that stops twelve times.
    */
-  wantsDays?(options: HookOptions, ctx: HookContext): string[];
+  wantsPictures?(options: HookOptions, ctx: HookContext): HookPictureWant[];
   /**
    * The picker card's little drawing. It says what the variant DOES — it is
    * not a render of this piece: the stage sits beside the picker showing the
