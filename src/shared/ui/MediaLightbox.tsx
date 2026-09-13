@@ -48,6 +48,12 @@ export interface LightboxItem {
    * mode at all.
    */
   credentialed?: boolean;
+  /**
+   * A card in the deck that is not a media — the "next day" card at the end
+   * of an instance's day. Paged to like any other, but left out of `n / N`,
+   * which counts what there is to look at.
+   */
+  uncounted?: boolean;
 }
 
 interface MediaLightboxProps {
@@ -183,9 +189,12 @@ export default function MediaLightbox({
             <h2 className="m-0 font-serif text-lg min-w-0 truncate" title={named.title}>
               {named.title}
             </h2>
-            <span className="font-mono text-2xs text-muted whitespace-nowrap tabular-nums">
-              {shownAt + 1} / {items.length}
-            </span>
+            {!named.uncounted && (
+              <span className="font-mono text-2xs text-muted whitespace-nowrap tabular-nums">
+                {items.slice(0, shownAt + 1).filter((i) => !i.uncounted).length} /{' '}
+                {items.filter((i) => !i.uncounted).length}
+              </span>
+            )}
           </div>
           <span className="flex-1" />
           {/* The zoom lives up here, never over the frame: in its corner it sat

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Tool } from './tools';
 import DayPicker from './DayPicker';
 import WinnowBrowser from './WinnowBrowser';
@@ -10,6 +10,7 @@ import { useWinnowConnection } from '../shared/sources/winnow/use-connection';
 import type { LibraryHalf } from '../shared/sources/winnow/client';
 import { useScopeRows } from '../shared/sources/winnow/use-scope-rows';
 import { usePickFromInstance } from '../shared/sources/winnow/use-pick';
+import { useNeighbourDays } from '../shared/sources/winnow/use-neighbour-days';
 import { useMediaActions, useMediaScope } from '../shared/sources/media-scope';
 import { overrideTo, viewedSpan, type DayOverride } from '../shared/sources/scope-override';
 import MediaActionRow from '../shared/ui/MediaActionRow';
@@ -240,7 +241,27 @@ export default function AssetSidebar({
   // Which of those is open large, or null. Closed by anything that changes
   // what the list IS: another span, another tab, another filter.
   const [preview, setPreview] = useState<number | null>(null);
-  useEffect(() => setPreview(null), [from, to, remoteTab, q, half]);
+  // Paging past a day's edge in the preview moves the tab to the next day
+  // with media and keeps the sheet open. The rows it was showing are kept to
+  // tell the new day's answer from the old one, which is still in hand for
+  // the render that changes the span.
+  const rolling = useRef<{ edge: 'first' | 'last'; left: unknown } | null>(null);
+  useEffect(() => {
+    if (!rolling.current) setPreview(null);
+  }, [from, to, remoteTab, q, half]);
+  useEffect(() => {
+    const roll = rolling.current;
+    if (!roll || scopeRows.rows === null || scopeRows.rows === roll.left) return;
+    rolling.current = null;
+    setPreview(roll.edge === 'first' ? 0 : Math.max(0, remoteShown.length - 1));
+  }, [scopeRows.rows, remoteShown.length]);
+  const neighbours = useNeighbourDays(
+    client,
+    { from, to },
+    half,
+    todayIso(),
+    remoteTab && preview !== null,
+  );
   /**
    * A click on a tile shows the picture rather than fetching it, unless the
    * tool that named the span says a slide is waiting for one
@@ -696,7 +717,7 @@ export default function AssetSidebar({
         </div>
       )}
 
-      {preview !== null && connection && client && remoteShown[preview] && (
+      {preview !== null && connection && client && (
         <WinnowLightbox
           connection={connection}
           client={client}
@@ -706,6 +727,14 @@ export default function AssetSidebar({
           onClose={() => setPreview(null)}
           inLibrary={inLibrary}
           picker={picker}
+          span={{ from, to }}
+          asking={scopeRows.rows === null && scopeRows.problem === null}
+          filtered={q !== ''}
+          neighbours={neighbours}
+          onRoll={(side, day) => {
+            rolling.current = { edge: side === 'after' ? 'first' : 'last', left: scopeRows.rows };
+            goToDay(day);
+          }}
         />
       )}
 

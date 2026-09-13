@@ -1,10 +1,13 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { WinnowAssetRow, WinnowClient } from '../shared/sources/winnow/client';
 import type { WinnowConnection } from '../shared/sources/winnow/store';
 import type { InstancePicker } from '../shared/sources/winnow/use-pick';
 import { exifTimestampFromIso } from '../shared/sources/winnow/exif-from-row';
 import { isoFromExifDateTime } from '../shared/roadtrip/media-date';
-import { formatIsoDate } from '../shared/roadtrip/trip-days';
+import { formatIsoDate, WEEKDAYS, weekdayIndex } from '../shared/roadtrip/trip-days';
+import type { DaySpan } from '../shared/sources/scope-override';
+import { deckEntry, pageDirection, type Side } from '../shared/sources/winnow/day-walk';
+import type { Neighbour, NeighbourDays } from '../shared/sources/winnow/use-neighbour-days';
 import { formatBytes, formatDuration } from '../shared/lib/format';
 import { exifFromRow } from '../shared/sources/winnow/exif-from-row';
 import { exposureSummary } from '../shared/exif/exif-summary';
@@ -24,6 +27,20 @@ interface WinnowLightboxProps {
   /** `"<host>/<id>"` → the Library asset id it became. */
   inLibrary: ReadonlyMap<string, string>;
   picker: InstancePicker;
+  /** The day (or span) those rows are for. */
+  span: DaySpan;
+  /** True while the rows for `span` are still being asked for. */
+  asking: boolean;
+  /** Whether a file-name filter narrows `rows` — said when it empties them. */
+  filtered: boolean;
+  /** The nearest day with media on each side, as far as it is known. */
+  neighbours: NeighbourDays;
+  /**
+   * Page onto a neighbouring day. The caller moves the tab there and hands
+   * back that day's rows, opened on the first picture when going forward and
+   * on the last when going back.
+   */
+  onRoll: (side: Side, day: string) => void;
 }
 
 /**
@@ -40,6 +57,15 @@ interface WinnowLightboxProps {
  * Which of the two a click does is the publisher's call, not this component's:
  * `MediaScope.intent`. See `media-scope.tsx`.
  *
+ * **Past the last picture of the day, the next day.** The deck is
+ * `[before, ...pictures, after]`: two cards that name the nearest day holding
+ * media on either side (`day-walk.ts`), paged to like any picture. Landing on
+ * one in the direction it points moves the Library's tab to that day — which,
+ * from a tool's day, is the sidebar's own override, drawn as such on the
+ * stepper behind this sheet — and the deck reopens on its first picture (or
+ * its last, going back). Landing on one against its direction, across the
+ * wrap, only shows it: a jump the arrow did not point at would be a surprise.
+ *
  * It shows the PROXY — the same rendition the pool would hold — so what is on
  * screen is what the editor would get, and no original is pulled to look at a
  * day. Winnow's own facts ride along the top; a photo proxy carries no EXIF of
@@ -54,13 +80,74 @@ export default function WinnowLightbox({
   onClose,
   inLibrary,
   picker,
+  span,
+  asking,
+  filtered,
+  neighbours,
+  onRoll,
 }: WinnowLightboxProps) {
+  // The day's own cards: its pictures, or the one card saying why there are
+  // none to show — so the deck always has a middle for the edges to frame.
+  const body = useMemo<LightboxItem[]>(() => {
+    if (asking) return [placeholder(span, 'asking…')];
+    if (rows.length === 0) {
+      return [placeholder(span, filtered ? 'nothing on this day matches the filter' : 'nothing here')];
+    }
+    return rows.map((row) => itemFromRow(row, client));
+    // The span's two strings, not the object the caller builds per render.
+  }, [asking, rows, client, span.from, span.to, filtered]);
   const items = useMemo<LightboxItem[]>(
-    () => rows.map((row) => itemFromRow(row, client)),
-    [rows, client],
+    () => [
+      edgeCard('before', neighbours.before, connection.id),
+      ...body,
+      edgeCard('after', neighbours.after, connection.id),
+    ],
+    [body, neighbours, connection.id],
   );
 
-  const row = rows[index] ?? null;
+  // Sitting on an edge card, which side; and an edge landed on in its own
+  // direction before its day was known, to be followed once it is.
+  const [onEdge, setOnEdge] = useState<Side | null>(null);
+  const [waiting, setWaiting] = useState<Side | null>(null);
+  const bodyAt = Math.min(index, body.length - 1);
+  const deckIndex = onEdge === 'before' ? 0 : onEdge === 'after' ? items.length - 1 : bodyAt + 1;
+
+  const roll = (side: Side, day: string) => {
+    setOnEdge(null);
+    setWaiting(null);
+    onRoll(side, day);
+  };
+
+  const onDeckIndex = (at: number) => {
+    const dir = pageDirection(deckIndex, at, items.length);
+    const entry = deckEntry(at, body.length);
+    if (entry.kind === 'body') {
+      setOnEdge(null);
+      setWaiting(null);
+      onIndex(entry.index);
+      return;
+    }
+    const pointed = (entry.side === 'after') === (dir === 1);
+    const next = neighbours[entry.side];
+    if (pointed && next.state === 'day') {
+      roll(entry.side, next.date);
+      return;
+    }
+    setOnEdge(entry.side);
+    setWaiting(pointed && next.state === 'asking' ? entry.side : null);
+  };
+
+  // The day behind a card that was landed on while still being looked for.
+  useEffect(() => {
+    if (!waiting) return;
+    const next = neighbours[waiting];
+    if (next.state === 'day') roll(waiting, next.date);
+    else if (next.state !== 'asking') setWaiting(null);
+    // Keyed on the answer alone: `roll` is a fresh closure every render, and
+    // re-running on it would roll twice.
+  }, [waiting, neighbours]);
+
+  const row = onEdge || asking ? null : (rows[bodyAt] ?? null);
   const have = row ? inLibrary.get(`${connection.id}/${row.id}`) : undefined;
   const busy = picker.fetching !== null;
 
@@ -77,19 +164,18 @@ export default function WinnowLightbox({
     onClose();
   };
 
-  if (!row) return null;
-
   return (
     <MediaLightbox
       items={items}
-      index={index}
-      onIndex={onIndex}
+      index={deckIndex}
+      onIndex={onDeckIndex}
       onClose={onClose}
       from={`from ${connection.id}`}
       // Enter does the one thing the sheet offers — and nothing at all once
       // the picture is already in the library.
-      onConfirm={!have && !busy ? () => void picker.pick(row) : null}
+      onConfirm={row && !have && !busy ? () => void picker.pick(row) : null}
       footer={
+        row && (
         <>
           <div className="flex items-center gap-3 flex-wrap">
             {have ? (
@@ -155,9 +241,69 @@ export default function WinnowLightbox({
             </p>
           )}
         </>
+        )
       }
     />
   );
+}
+
+const dayName = (iso: string) => `${WEEKDAYS[weekdayIndex(iso) ?? 0]} ${formatIsoDate(iso)}`;
+
+/** The one card of a day with no picture to show, or not yet. */
+function placeholder(span: DaySpan, why: string): LightboxItem {
+  const title = span.from === span.to ? dayName(span.from) : `${formatIsoDate(span.from)} → ${formatIsoDate(span.to)}`;
+  return {
+    id: `day:${span.from}:${span.to}`,
+    title,
+    facts: why,
+    kind: 'photo',
+    src: null,
+    still: null,
+    natural: null,
+    unavailable: why,
+    uncounted: true,
+  };
+}
+
+/**
+ * A card at one end of the day: the nearest day with media that way, or why
+ * there is none to go to. Keyed by its side alone, so the deck keeps the node
+ * while its words change from "looking…" to the day.
+ */
+function edgeCard(side: Side, next: Neighbour, host: string): LightboxItem {
+  const arrow = side === 'after' ? '→' : '←';
+  const way = side === 'after' ? 'next' : 'previous';
+  const said = ((): { title: string; facts: string; line: string } => {
+    switch (next.state) {
+      case 'day':
+        return {
+          title: dayName(next.date),
+          facts: `the ${way} day with media`,
+          line: `${arrow} ${dayName(next.date)} · ${next.count} file${next.count === 1 ? '' : 's'}`,
+        };
+      case 'asking':
+        return { title: `The ${way} day`, facts: 'asking…', line: `looking for the ${way} day with media…` };
+      case 'none':
+        return {
+          title: `No ${way} day`,
+          facts: 'the edge of what it holds',
+          line: `${host} holds nothing ${side === 'after' ? 'after' : 'before'} this day`,
+        };
+      case 'failed':
+        return { title: `The ${way} day`, facts: 'no answer', line: `could not ask ${host}` };
+    }
+  })();
+  return {
+    id: `edge:${side}`,
+    title: said.title,
+    facts: said.facts,
+    kind: 'photo',
+    src: null,
+    still: null,
+    natural: null,
+    unavailable: said.line,
+    uncounted: true,
+  };
 }
 
 function itemFromRow(row: WinnowAssetRow, client: WinnowClient): LightboxItem {
