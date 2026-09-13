@@ -24,6 +24,7 @@ import {
   type RenderBadgeOptions,
 } from '../../shared/roadtrip/badge-render';
 import type { HookBlock, Shade } from '../../shared/roadtrip/shades';
+import type { ResolvedHook } from '../../shared/roadtrip/hooks/hook-variant';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 
 interface BadgeStageProps {
@@ -39,6 +40,12 @@ interface BadgeStageProps {
   shades?: readonly Shade[];
   /** The badge block's extent, for a shade that follows the hook. */
   block?: HookBlock | null;
+  /**
+   * The piece's prepared opener, painted under the shades and the badge. The
+   * stage passes the very object the PNG deck and the burned-in clip paint, so
+   * what is composed here is what is delivered.
+   */
+  hook?: ResolvedHook | null;
   /** Painted where no picture covers the frame — the closing card's ground. */
   background?: string;
   /** A QR square under the text. */
@@ -107,6 +114,7 @@ export default function BadgeStage({
   timeSeconds,
   shades,
   block,
+  hook = null,
   background,
   qr,
   lut = null,
@@ -316,6 +324,7 @@ export default function BadgeStage({
       background,
       qr,
       framing,
+      hook,
       grader: graderFor(sourceRef.current),
       ghostId: selectedId,
     };
@@ -342,6 +351,7 @@ export default function BadgeStage({
     background,
     qr,
     framing,
+    hook,
     selectedId,
     loading,
     file,

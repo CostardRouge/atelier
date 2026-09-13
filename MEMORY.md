@@ -90,6 +90,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - `drawOverlays` draws one line and never wraps: a sentence is wrapped onto a character budget first (`shared/lib/wrap-text.ts`) — `roadtrip.md`.
 - An animated hook burns into a clip through the Studio's own `exportVariantVideo`, trimmed to START on the chosen frame so `originSeconds` puts the entrance on frame one; the scrim reaches the frame through a new `paintUnderOverlays` hook — `roadtrip.md`, `media-pipeline.md`.
 - Only a deck's content slides reorder; the hook and the call to action are structural — `roadtrip.md`.
+- A piece's OPENER is a hook VARIANT from a registry (`shared/roadtrip/hooks/`, `PostBadge.hook` v15): `prepare()` returns a closure so the paint, the content and the sound cannot drift apart, a variant rewrites named badge PIECES instead of building elements, `owns: 'frame' | 'layer'` is declared from the start, and the field is a LIST with one entry so a stack costs no second migration — `roadtrip.md`, `docs/hook-engine.md`.
 - Vignette and scrim are ONE stack of shades (direction × reach × strength × colour × invert × follow-the-hook); a middle band must run edge-to-edge with the peak in the centre, or a canvas gradient blacks out the far half — `roadtrip.md`.
 - In an async paint, read the canvas's size AFTER the last await: a stale render that read it before drew a miniature over a resized stage — `roadtrip.md`.
 - A clip's frame picker SEEKS the open video element (`BadgeSource.seek`) and never re-decodes; the paint waits on a `frameSeq` bumped when the seek lands — `roadtrip.md`.
@@ -211,6 +212,14 @@ anything about media sources or document storage:
   choices to make first. Read it before touching `use-post-exports.ts`,
   `deck-export.ts`, `hook-video*.ts` or anything that encodes frames without a
   source clip.
+- **`docs/hook-engine.md`** — the agreed design (2026-09-13) for many hook
+  variants over one badge: the contract, the three decisions that shaped it,
+  the picker, how a synthesised sound bed reaches the MP4 through the export
+  that already exists (the `p5-templates` pattern minus the server), the
+  missing `exportGeneratedClip` seam, and seven phases of one commit each.
+  **Phase 1 is built**; the rest is not. Read it before touching
+  `shared/roadtrip/hooks/`, `badge-layout.ts` or anything that would add audio
+  to an export.
 - **`docs/winnow-timeline.md`** — what Winnow's forthcoming timeline (media
   grouped into chapters by place and date) means for Atelier: the chapter ↔ stage
   mapping, ingesting by chapter, seeding and completing a Road Trip, the finals

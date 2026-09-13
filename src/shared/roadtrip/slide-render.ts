@@ -25,6 +25,8 @@ import { ctaLayout } from './cta-slide';
 import { badgeContent } from './day-badge';
 import { contentSlideElements, type DeckSlide } from './deck';
 import type { HookBlock, Shade } from './shades';
+import { resolveHook } from './hooks/registry';
+import type { ResolvedHook } from './hooks/hook-variant';
 import type { TripDoc, TripPost } from './trip-types';
 
 /** What one slide is made of, bar its picture, its grade and its clock. */
@@ -41,6 +43,13 @@ export interface SlideRender {
   qr: QrDraw | null;
   /** How this slide's picture sits in its frame. */
   framing: Framing;
+  /**
+   * The piece's OPENER, prepared — the hook slide's alone, null everywhere
+   * else. It is time-parameterised rather than resolved at a moment, which is
+   * what keeps this module free of the badge's clock: the caller paints it at
+   * whatever second it is drawing.
+   */
+  hook: ResolvedHook | null;
 }
 
 export function slideRender(
@@ -63,6 +72,7 @@ export function slideRender(
         ? { ...cta.qr, dark: trip.cta.ink, light: trip.cta.background }
         : null,
       framing: slide.framing,
+      hook: null,
     };
   }
 
@@ -75,6 +85,7 @@ export function slideRender(
       background: undefined,
       qr: null,
       framing: slide.framing,
+      hook: null,
     };
   }
 
@@ -107,5 +118,11 @@ export function slideRender(
     background: undefined,
     qr: null,
     framing: slide.framing,
+    hook: resolveHook(post.badge.hook, {
+      aspect,
+      durationSeconds: post.badge.durationSeconds,
+      date: post.date,
+      content,
+    }),
   };
 }
