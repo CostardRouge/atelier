@@ -36,6 +36,8 @@ import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { Icons } from '../../shared/ui/icons';
 import Button from '../../shared/ui/Button';
 import ShortDayStrip from './ShortDayStrip';
+import { defaultLoupe, loupeContaining, type Loupe } from '../../shared/roadtrip/loupe';
+import LoupeBrush from './LoupeBrush';
 
 interface TripOverviewProps {
   trip: TripDoc;
@@ -352,6 +354,16 @@ export default function TripOverview({
   const drafted = coverage.posts - coverage.publishedPosts;
   const short = isShortTrip(coverage.totalDays);
 
+  // The loupe: the window of a long trip the ruler details (`loupe.ts`). It
+  // opens around the open day, follows the open day when a click leaves it,
+  // and is dragged on the heatmap. Not stored: where you are looking is not
+  // part of the trip.
+  const [loupe, setLoupe] = useState<Loupe>(() => defaultLoupe(trip, selected));
+  useEffect(() => {
+    setLoupe((l) => loupeContaining(trip, l, selected ?? trip.startDate));
+    // Also re-clamps after the trip's dates are edited.
+  }, [trip.startDate, trip.endDate, selected, trip]);
+
   // The dates-and-route sheet, the creation modal reopened on this trip.
   const [editingDetails, setEditingDetails] = useState(false);
   const saveDetails = useCallback(
@@ -480,13 +492,22 @@ export default function TripOverview({
             menuFor={menuFor}
             legs={legs}
             onOpenLeg={openLegById}
+            overlay={(geometry) => (
+              <LoupeBrush
+                trip={trip}
+                loupe={loupe}
+                onChange={setLoupe}
+                geometry={geometry}
+                extraHeight={legs.length > 0 ? 8 + legs.reduce((n, l) => Math.max(n, l.lane + 1), 0) * 21 - 3 : 0}
+              />
+            )}
           />
         )}
       </section>
 
       <StagesPanel
         trip={trip}
-        zoomable={!short}
+        span={short ? undefined : { startDate: loupe.start, endDate: loupe.end }}
         selectedId={selectedStageId}
         cursorDate={selected}
         onSelect={setStageId}

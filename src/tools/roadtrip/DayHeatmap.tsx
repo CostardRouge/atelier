@@ -203,7 +203,7 @@ export default function DayHeatmap({
         </div>
 
         <div className="relative flex-none" style={{ width: gridWidth }}>
-          <div className="relative" style={{ height: LABELS }}>
+          <div className="relative select-none" style={{ height: LABELS }}>
             {months.map((m) => (
               <span
                 key={`${m.column}-${m.label}`}

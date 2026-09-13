@@ -6,8 +6,6 @@ import { stageLabel, stageRegionLabel } from '../../shared/roadtrip/trip-places'
 import { stageProblem, type TripDoc, type TripStage } from '../../shared/roadtrip/trip-types';
 import SectionLegend from '../../shared/ui/SectionLegend';
 import { useLearnedGesture } from '../../shared/ui/use-learned-gesture';
-import StageZoomControl from '../../shared/ui/StageZoomControl';
-import { useStageZoom } from '../../shared/ui/use-stage-zoom';
 import PlacesEditor from './PlacesEditor';
 import StageRuler from './StageRuler';
 import { Icons } from '../../shared/ui/icons';
@@ -18,11 +16,10 @@ import { DateRangeField } from '../../shared/ui/DateField';
 interface StagesPanelProps {
   trip: TripDoc;
   /**
-   * Whether the track offers its zoom. A short trip's strip above already
-   * gives every day its width, and the ruler fits the same box: a zoom would
-   * only pull the two apart.
+   * The days the ruler draws: the loupe's window on a long trip, nothing on
+   * a short one (the whole trip). The header names it.
    */
-  zoomable?: boolean;
+  span?: { startDate: IsoDate; endDate: IsoDate };
   /** The leg open in the editor below the ruler; null shows the ruler alone. */
   selectedId: string | null;
   /** The day open on the overview, drawn on the ruler as a playhead. */
@@ -162,7 +159,7 @@ function StageCard({
  */
 export default function StagesPanel({
   trip,
-  zoomable = true,
+  span,
   selectedId,
   cursorDate,
   onSelect,
@@ -172,16 +169,6 @@ export default function StagesPanel({
   timelineSources = [],
   onCompleteFrom,
 }: StagesPanelProps) {
-  // The ruler's zoom lives here so its control can ride this row instead of
-  // costing the track a row of its own beneath it.
-  //
-  // `minScale: 1` — 100% is as far out as the ruler goes. Its day width is the
-  // box's own share of the trip (or 6px, whichever is larger), so below 100%
-  // either the track stops filling the box, where nothing can hold the day
-  // under the pointer, or days fall under the width a leg's edge can be
-  // grabbed at. Zooming out from there would show nothing the track is not
-  // already showing.
-  const zoom = useStageZoom({ wheel: zoomable ? 'any' : 'modifier', minScale: 1 });
   // The track's gestures are spelled out until the track has been USED at all
   // — a leg opened, a day tapped, a leg dragged, a gap filled — and stay behind
   // the legend's ⓘ after that. Any of them means the surface has been found,
@@ -193,8 +180,11 @@ export default function StagesPanel({
   function add() {
     // The first day no leg covers, else the trip's end: a new leg starts where
     // the story has a hole, and the ruler's own `+` does the same per gap.
-    const gap = rulerGaps(trip, rulerBars(trip))[0];
-    const result = startStageAt(trip, gap ? gap.startDate : trip.endDate);
+    // Inside the loupe when there is one: a leg added off-screen is a leg
+    // the author cannot see appear.
+    const drawn = span ? { ...trip, startDate: span.startDate, endDate: span.endDate } : trip;
+    const gap = rulerGaps(drawn, rulerBars(drawn))[0];
+    const result = startStageAt(trip, gap ? gap.startDate : drawn.endDate);
     onChange(result.stages);
     const added = result.stages.find((s) => s.id === result.selectedId);
     if (added) onOpenStage(added);
@@ -245,7 +235,13 @@ export default function StagesPanel({
               From {id}
             </Button>
           ))}
-        {zoomable && <StageZoomControl zoom={zoom} className="flex-none" />}
+        {span && (
+          <span className="font-mono text-2xs text-muted tabular-nums whitespace-nowrap" title="What the loupe above frames">
+            {formatIsoDate(span.startDate)} → {formatIsoDate(span.endDate)}
+            {' · '}
+            {spanLength(span.startDate, span.endDate)} days
+          </span>
+        )}
         <Button variant="primary" onClick={add} icon={Icons.plus}>
           Stage
         </Button>
@@ -267,7 +263,7 @@ export default function StagesPanel({
           ruler.learn();
           onChange(stages);
         }}
-        zoom={zoom}
+        span={span}
       />
 
       {trip.stages.length === 0 ? (

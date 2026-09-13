@@ -107,7 +107,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - The piece editor is FOUR tabs (Content · Look · Picture · Export) over one stage where a click selects a piece and a drag moves the whole block; the deck is a slide rail beside the picture, everything trip-wide is behind ⚙ Trip, a mode shows the line it really draws with its list one click away, and every standing paragraph folds behind an ⓘ — `roadtrip.md`.
 - `GradePanel` is engine-level (`shared/lut/`) since Road Trip became its second consumer, exactly as `StylePanel` — `roadtrip.md`.
 - `#/studio/open/<id>` hands a project between tools and rewrites itself on arrival; neither tool reaches into the other's state — `architecture.md`, `roadtrip.md`.
-- A trip overview adapts to its LENGTH: a plain day strip for a short trip, the weekday heatmap kept for a long one (the maintainer refused to lose it), and the leg ruler's drag-and-drop kept at every length — `roadtrip.md`.
+- A trip overview adapts to its LENGTH: a plain day strip up to 31 days; past that the weekday heatmap FITTED to its box with a leg lane under it and a LOUPE window the stage ruler details (L1, the maintainer's choice — both zoom pills are gone); the ruler's drag-and-drop is kept at every length — `roadtrip.md`.
 - The trip gallery has TWO views, Cards (with the cover, the default) and Bands (progress rows under a "resume" band); the choice is a `localStorage` preference, never on the document — `roadtrip.md`.
 - A trip remembers the look it gives a new piece of each kind; what belongs to one day is never inherited — `roadtrip.md`.
 - A Road Trip stage is a LEG carrying an ORDERED list of located places; its start and end are the first and the last, derived and never stored, and a place has no dates of its own — `roadtrip.md`.
@@ -116,7 +116,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - A scrolling tile grid pins its ROWS in pixels and never lets them be `auto`: a grid divides a height that turns definite among its auto rows, and the pixel height on the picture inside is then clipped to a sliver — `frontend.md`.
 - A drag surface inside a scroll box claims only the axis it writes (`touch-pan-y`, never `touch-none`), and a surface that is merely pointed at claims nothing: `touch-none` on something that scrolls leaves touch no way in — `frontend.md`.
 - Looking a place up online is the suite's SECOND network exception, taken deliberately: opt-in, off by default, consent in `localStorage` and never on an exportable document, and never as-you-type — `roadtrip.md`, `local-first.md`.
-- The trip overview's day grid and stage ruler zoom, multiplying their own unit (cell size, day width) with the shared pill — `roadtrip.md`.
+- The overview's zoom pills were retired for the loupe on 2026-09-13; `StageZoomControl` survives for the media lightbox alone — `roadtrip.md`, `frontend.md`.
 - Road Trip's grid draws its own hover card (fixed-positioned, pointer-transparent) because the native `title` is far too slow to sweep a calendar with — `roadtrip.md`.
 - Each post keeps a small JPEG of its HOOK in a second IndexedDB store, taken from the preview canvas, drawn at the piece's own orientation, and pruned on delete — `roadtrip.md`.
 - The Studio edits **stills on the same stage as clips** — a photo is a media a project holds beside its rushes, never a second kind of project — `studio.md`.

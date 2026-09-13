@@ -25,7 +25,7 @@ import {
 } from '../../shared/roadtrip/trip-days';
 import { stageLabel } from '../../shared/roadtrip/trip-places';
 import type { TripDoc, TripStage } from '../../shared/roadtrip/trip-types';
-import type { StageZoom } from '../../shared/ui/use-stage-zoom';
+import { useElementWidth } from '../../shared/ui/use-element-width';
 
 interface StageRulerProps {
   trip: TripDoc;
@@ -38,11 +38,12 @@ interface StageRulerProps {
   onScrub: (date: IsoDate) => void;
   onChange: (stages: TripStage[]) => void;
   /**
-   * The track's zoom, owned by the panel above so its control can ride the
-   * "+ Stage" row: `viewportRef` goes on this scroller, and `scale` multiplies
-   * the fitted day width.
+   * The days the track draws — the loupe's window on a long trip, the whole
+   * trip on a short one. Geometry is read against it; the EDITS still write
+   * the real stage dates and clamp to the real trip, so a leg dragged to the
+   * window's edge stops there only because the window does.
    */
-  zoom: StageZoom;
+  span?: { startDate: IsoDate; endDate: IsoDate };
 }
 
 /**
@@ -102,19 +103,16 @@ export default function StageRuler({
   onOpenStage,
   onScrub,
   onChange,
-  zoom,
+  span,
 }: StageRulerProps) {
-  const total = spanLength(trip.startDate, trip.endDate);
-  // The scroll box IS the zoom's viewport: one element, measured for the
-  // fitted day width and scrolled by the zoom. The zoom itself is the PANEL's,
-  // so its control can sit in the header row beside "+ Stage" instead of
-  // costing the ruler a row of its own.
-  const scroller = zoom.viewportRef;
+  // Everything the track MEASURES is measured against the span drawn; the
+  // real trip is what the edits clamp to.
+  const drawn = { startDate: span?.startDate ?? trip.startDate, endDate: span?.endDate ?? trip.endDate, stages: trip.stages };
+  const total = spanLength(drawn.startDate, drawn.endDate);
+  // The track fits its box: a day is the box's share of the span, floored at
+  // the width an edge can be grabbed at, and the box scrolls past that.
+  const [scroller, width] = useElementWidth<HTMLDivElement>();
   const track = useRef<HTMLDivElement>(null);
-  // The box's width is the ZOOM's measurement, not a second one of our own:
-  // the day width drawn here and the floor the zoom enforces have to be read
-  // off the same number, or they disagree about when the track fills the box.
-  const width = zoom.viewport.width;
   const drag = useRef<Drag | null>(null);
   const [pin, setPin] = useState<Pin | null>(null);
   // A drag ends in a click on the same button; this swallows that click so
@@ -123,21 +121,17 @@ export default function StageRuler({
 
   if (total === null) return null;
 
-  const bars = rulerBars(trip);
-  const gaps = rulerGaps(trip, bars);
-  const months = rulerMonths(trip);
+  const bars = rulerBars(drawn);
+  const gaps = rulerGaps(drawn, bars);
+  const months = rulerMonths(drawn);
   const lanes = Math.max(1, laneCount(bars));
-  // A day is the box's share of the trip — or 6px, on a trip too long for the
-  // box to give it that — times the zoom (`rulerDayWidth`). The panel floors
-  // the zoom at 100%, so a day is never DRAWN under 6px and a leg can always
-  // be grabbed by an edge.
-  const dayW = rulerDayWidth(width, total, zoom.scale);
-  const ticks = rulerTicks(trip, dayW);
+  const dayW = rulerDayWidth(width, total, 1);
+  const ticks = rulerTicks(drawn, dayW);
   const trackW = dayW * total;
   const lanesTop = HEAD;
   const lanesH = lanes * BAR + (lanes - 1) * LANE_GAP;
   const bodyH = lanesTop + lanesH;
-  const playAt = cursorDate ? dayOffset(trip, cursorDate) : null;
+  const playAt = cursorDate ? dayOffset(drawn, cursorDate) : null;
 
   const update = (next: TripStage) => {
     const current = trip.stages.find((s) => s.id === next.id);
@@ -153,9 +147,7 @@ export default function StageRuler({
   };
 
   const begin = (e: PointerEvent<HTMLElement>, stage: TripStage, mode: Drag['mode']) => {
-    // Two fingers are the zoom's: the first of them must not carry a leg
-    // across the track under the pinch.
-    if (e.button !== 0 || zoom.pinching) return;
+    if (e.button !== 0) return;
     const y = e.currentTarget.getBoundingClientRect().top;
     drag.current = { id: stage.id, mode, originX: e.clientX, origin: stage, y, moved: false };
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -196,7 +188,7 @@ export default function StageRuler({
     const el = track.current;
     if (!el) return null;
     const rect = el.getBoundingClientRect();
-    return dayAtOffset(trip, (clientX - rect.left) / dayW);
+    return dayAtOffset(drawn, (clientX - rect.left) / dayW);
   };
 
   /**
@@ -350,7 +342,7 @@ export default function StageRuler({
                 if (!back && !on) return;
                 e.preventDefault();
                 const next = addDays(cursorDate, (e.shiftKey ? 7 : 1) * (back ? -1 : 1));
-                const at = next ? dayOffset(trip, next) : null;
+                const at = next ? dayOffset(drawn, next) : null;
                 if (next && at !== null) onScrub(next);
               }}
               className="absolute p-0 border-0 bg-transparent cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ink rounded-[3px]"
@@ -445,7 +437,9 @@ function Bar({
 
   return (
     <div
-      className={`absolute rounded-[10px] border transition-shadow ${
+      className={`absolute border transition-shadow ${
+        bar.clipStart ? 'rounded-l-none' : 'rounded-l-[10px]'
+      } ${bar.clipEnd ? 'rounded-r-none border-r-0' : 'rounded-r-[10px]'} ${bar.clipStart ? 'border-l-0' : ''} ${
         selected
           ? 'border-2 border-accent shadow-[0_6px_14px_-8px_rgba(43,33,18,0.45)]'
           : 'hover:shadow-[0_4px_10px_-8px_rgba(43,33,18,0.4)]'
@@ -481,6 +475,7 @@ function Bar({
           )}
         </span>
       </button>
+      {!bar.clipStart && (
       <button
         type="button"
         onPointerDown={(e) => {
@@ -498,6 +493,8 @@ function Bar({
       >
         {grip}
       </button>
+      )}
+      {!bar.clipEnd && (
       <button
         type="button"
         onPointerDown={(e) => {
@@ -515,6 +512,7 @@ function Bar({
       >
         {grip}
       </button>
+      )}
     </div>
   );
 }
