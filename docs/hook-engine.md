@@ -283,6 +283,19 @@ sound will add there is an audio track, since it writes none today.
   4821 Hz (a coarse estimator on band-passed noise, hence ≈×0.6 and ≈×1.76
   rather than exact octaves), the woodblock kit sits near 880 Hz, a falling
   drift descends monotonically and a rising one spans ×1.39 across a sweep.
+- **The tape's look is authored (2026-09-13)** — its width and distance from
+  the edge, two colours (the ticks ahead; the head and the days passed), tick
+  opacity, height and spacing, the track on or off, a dark band behind it, a
+  fade over both ends, three head shapes and the glow. Two rules in how it is
+  drawn: the geometry and the fade curve are PURE (`tapeGeometry`,
+  `edgeFadeAt`, `hexToRgba` in `scrub-plan.ts`, tested) and the paint only
+  reads them; and the fade is a per-tick alpha and a gradient FILL for the
+  band and the track — never a mask or a composite mode, since a shadow is
+  dropped under `destination-*` and the head's glow is one. The spacing slider
+  is the `minGapPx` `tapeTicks` already thinned a long trip by, so a coarse
+  tape on a long trip and a fine one on a short trip are the same rule; a
+  leg's start and the trip's two ends always draw. Colours are validated
+  `#rrggbb` (anything else falls back, never throws) and reset together.
 - **Three places had to learn that a hook can move without an animated piece**,
   each a real bug the first render showed: the badge clock (it never started,
   so the stage sat on the sweep's first, dark frame), the thumbnail capture
@@ -368,9 +381,10 @@ sound will add there is an audio track, since it writes none today.
   to check before claiming sync there.
 
 - **The tape paints UNDER the shades**, because the seam is between the picture
-  and the shades. A strong scrim at the bottom dims it. Acceptable so far; if it
-  is not, a variant needs a second seam above the shades, not a hack in the
-  paint.
+  and the shades. A strong scrim at the bottom dims it — the tape's own dark
+  band (built 2026-09-13) is the answer for a bright picture, not for a
+  scrim; if a tape must sit over the shades, a variant needs a second seam
+  above them, not a hack in the paint.
 - **The hook's screen time does not grow to fit the sweep.** The panel says so
   when `hookSeconds` would cut it; the document is never changed behind the
   author's back.

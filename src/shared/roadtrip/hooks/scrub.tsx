@@ -23,6 +23,7 @@ import {
   SelectField,
   SwitchRow,
   ToggleField,
+  swatchClass,
 } from '../../ui/Inspector';
 import type { HookContext, HookDay, HookPanelProps, HookPicture, HookVariant } from './hook-variant';
 import { paintScrub } from './scrub-paint';
@@ -367,6 +368,140 @@ function ScrubPanel({ options, onChange, ctx }: HookPanelProps) {
               { id: 'top', label: 'Top' },
             ]}
           />
+        </FieldRow>
+        <FieldRow label="Width">
+          <RangeField
+            label="Tape width"
+            min={SCRUB_LIMITS.tapeWidth.min}
+            max={SCRUB_LIMITS.tapeWidth.max}
+            step={0.02}
+            value={o.tapeWidth}
+            onChange={(tapeWidth) => set({ tapeWidth })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
+        </FieldRow>
+        <FieldRow label="From edge">
+          <RangeField
+            label="Distance from the frame's edge"
+            min={SCRUB_LIMITS.edgeOffset.min}
+            max={SCRUB_LIMITS.edgeOffset.max}
+            step={0.005}
+            value={o.edgeOffset}
+            onChange={(edgeOffset) => set({ edgeOffset })}
+            format={(v) => `${(v * 100).toFixed(1)}%`}
+          />
+        </FieldRow>
+        <FieldRow label="Colours" hint="The ticks ahead, then the head and the days it has passed.">
+          <input
+            type="color"
+            value={o.tickColor}
+            onChange={(e) => set({ tickColor: e.target.value })}
+            className={swatchClass}
+            aria-label="Ticks colour"
+          />
+          <input
+            type="color"
+            value={o.passedColor}
+            onChange={(e) => set({ passedColor: e.target.value })}
+            className={swatchClass}
+            aria-label="Head and passed days colour"
+          />
+          {(o.tickColor !== SCRUB_DEFAULTS.tickColor || o.passedColor !== SCRUB_DEFAULTS.passedColor) && (
+            <button
+              type="button"
+              onClick={() => set({ tickColor: SCRUB_DEFAULTS.tickColor, passedColor: SCRUB_DEFAULTS.passedColor })}
+              className="p-0 border-0 bg-transparent text-xs text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink"
+            >
+              Reset
+            </button>
+          )}
+        </FieldRow>
+        <FieldRow label="Opacity">
+          <RangeField
+            label="Ticks opacity"
+            min={SCRUB_LIMITS.tickOpacity.min}
+            max={SCRUB_LIMITS.tickOpacity.max}
+            step={0.05}
+            value={o.tickOpacity}
+            onChange={(tickOpacity) => set({ tickOpacity })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
+        </FieldRow>
+        <FieldRow label="Height">
+          <RangeField
+            label="Ticks height"
+            min={SCRUB_LIMITS.tickHeight.min}
+            max={SCRUB_LIMITS.tickHeight.max}
+            step={0.1}
+            value={o.tickHeight}
+            onChange={(tickHeight) => set({ tickHeight })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
+        </FieldRow>
+        <FieldRow
+          label="Spacing"
+          hint="The least room between two ticks. A long trip thins its ticks to keep it; a leg's start and the trip's ends always draw."
+        >
+          <RangeField
+            label="Least room between ticks"
+            min={SCRUB_LIMITS.tickGap.min}
+            max={SCRUB_LIMITS.tickGap.max}
+            step={1}
+            value={o.tickGap}
+            onChange={(tickGap) => set({ tickGap })}
+            format={(v) => (v <= 5 ? 'fine' : v <= 12 ? 'normal' : 'coarse')}
+          />
+        </FieldRow>
+        <FieldRow label="Head">
+          <Segmented
+            size="sm"
+            fill
+            label="The shape of the reading head"
+            value={o.headStyle}
+            onChange={(headStyle) => set({ headStyle })}
+            options={[
+              { id: 'bar', label: 'Bar' },
+              { id: 'dot', label: 'Dot' },
+              { id: 'needle', label: 'Needle' },
+            ]}
+          />
+        </FieldRow>
+        <FieldRow label="Glow">
+          <ToggleField label="Glow behind the head" checked={o.headGlow} onChange={(headGlow) => set({ headGlow })}>
+            Behind the head
+          </ToggleField>
+        </FieldRow>
+        <FieldRow label="Track">
+          <ToggleField label="Draw the track line" checked={o.showTrack} onChange={(showTrack) => set({ showTrack })}>
+            The line the ticks stand on
+          </ToggleField>
+        </FieldRow>
+        <FieldRow label="Band" hint={o.tapeBackground ? undefined : 'A dark band behind the tape, for a tape over a bright picture.'}>
+          <ToggleField
+            label="Dark band behind the tape"
+            checked={o.tapeBackground}
+            onChange={(tapeBackground) => set({ tapeBackground })}
+          >
+            Behind the tape
+          </ToggleField>
+        </FieldRow>
+        {o.tapeBackground && (
+          <FieldRow label="Band depth">
+            <RangeField
+              label="Band opacity"
+              min={SCRUB_LIMITS.backgroundOpacity.min}
+              max={SCRUB_LIMITS.backgroundOpacity.max}
+              step={0.05}
+              value={o.backgroundOpacity}
+              onChange={(backgroundOpacity) => set({ backgroundOpacity })}
+              format={(v) => `${Math.round(v * 100)}%`}
+            />
+          </FieldRow>
+        )}
+        <FieldRow label="Ends" hint={o.edgeFade ? 'Ticks, track and band fade out over the tape’s two ends.' : undefined}>
+          <ToggleField label="Fade the tape's ends" checked={o.edgeFade} onChange={(edgeFade) => set({ edgeFade })}>
+            Fade out at both ends
+          </ToggleField>
         </FieldRow>
       </Group>
 

@@ -42,6 +42,8 @@ export type ScrubDays = 'auto' | 'chosen';
 export type ScrubKit = 'ratchet' | 'wood' | 'typewriter' | 'click';
 /** How the ticks' pitch moves along the sweep. */
 export type ScrubDrift = 'flat' | 'rising' | 'falling';
+/** The shape of the reading head. */
+export type ScrubHead = 'bar' | 'dot' | 'needle';
 
 export interface ScrubOptions {
   /** Sweep the whole trip from day 1, or only the days just before this one. */
@@ -70,6 +72,30 @@ export interface ScrubOptions {
   flash: boolean;
   /** Where the tape runs. */
   tape: TapePosition;
+  /** The tape's length as a share of the frame's width, centred. */
+  tapeWidth: number;
+  /** How far the tape sits from its edge, as a share of the frame's height. */
+  edgeOffset: number;
+  /** Ticks and track, `#rrggbb`. */
+  tickColor: string;
+  /** The head and every tick it has passed, `#rrggbb`. */
+  passedColor: string;
+  /** Opacity of the ticks still ahead and of the track. */
+  tickOpacity: number;
+  /** Tick height, 1 as designed. */
+  tickHeight: number;
+  /** The least room between two ticks, in 1080-frame units — the tape's density. */
+  tickGap: number;
+  /** The thin line the ticks stand on. */
+  showTrack: boolean;
+  /** A dark band behind the tape, for a tape over a bright picture. */
+  tapeBackground: boolean;
+  backgroundOpacity: number;
+  /** Ticks and track fading out over the tape's two ends. */
+  edgeFade: boolean;
+  headStyle: ScrubHead;
+  /** The head's glow — one shadow blur a frame. */
+  headGlow: boolean;
   /** Tick at every landing, in the exported video. */
   sound: boolean;
   /** How loud the ticks are: 1 as designed, 0 silent, up to 2. */
@@ -96,6 +122,19 @@ export const SCRUB_DEFAULTS: ScrubOptions = {
   pieceByDay: {},
   flash: true,
   tape: 'bottom',
+  tapeWidth: 0.86,
+  edgeOffset: 0.045,
+  tickColor: '#ffffff',
+  passedColor: '#d9442a',
+  tickOpacity: 0.55,
+  tickHeight: 1,
+  tickGap: 6,
+  showTrack: true,
+  tapeBackground: false,
+  backgroundOpacity: 0.45,
+  edgeFade: false,
+  headStyle: 'bar',
+  headGlow: true,
   sound: true,
   tickVolume: 1,
   kit: 'ratchet',
@@ -112,7 +151,68 @@ export const SCRUB_LIMITS = {
   sweepSeconds: { min: 0.8, max: 4 },
   delaySeconds: { min: 0, max: 2 },
   tickPitch: { min: 0.5, max: 2 },
+  tapeWidth: { min: 0.4, max: 1 },
+  edgeOffset: { min: 0.02, max: 0.2 },
+  tickOpacity: { min: 0.15, max: 1 },
+  tickHeight: { min: 0.4, max: 2.5 },
+  tickGap: { min: 3, max: 30 },
+  backgroundOpacity: { min: 0.1, max: 0.9 },
 } as const;
+
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
+/** `#rrggbb` → `rgba(r,g,b,a)`; anything unreadable is white, never a throw. */
+export function hexToRgba(hex: string, alpha: number): string {
+  const m = HEX_COLOR.test(hex) ? hex : '#ffffff';
+  const r = parseInt(m.slice(1, 3), 16);
+  const g = parseInt(m.slice(3, 5), 16);
+  const b = parseInt(m.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${Math.max(0, Math.min(1, alpha))})`;
+}
+
+/**
+ * Where the tape sits on a frame of `w`×`h`: its two ends, its baseline, and
+ * which way its ticks grow (away from the frame's edge, into the picture).
+ * `u` is the 1080-frame unit every drawn size is in.
+ */
+export function tapeGeometry(
+  w: number,
+  h: number,
+  opts: Pick<ScrubOptions, 'tape' | 'tapeWidth' | 'edgeOffset'>,
+): { x0: number; x1: number; length: number; baseline: number; dir: 1 | -1; u: number } {
+  const length = w * opts.tapeWidth;
+  const x0 = (w - length) / 2;
+  const top = opts.tape === 'top';
+  return {
+    x0,
+    x1: x0 + length,
+    length,
+    baseline: top ? h * opts.edgeOffset : h * (1 - opts.edgeOffset),
+    dir: top ? 1 : -1,
+    u: w / 1080,
+  };
+}
+
+/** How much of the tape's length each end fades over, when the fade is on. */
+export const EDGE_FADE_SHARE = 0.14;
+
+/**
+ * The alpha factor at `x` along a tape from `x0` to `x1`: 1 everywhere with the
+ * fade off; with it on, a smooth ramp from 0 at either end to 1 past
+ * `EDGE_FADE_SHARE` of the length. Ticks, track and band all read it, so they
+ * fade as one thing.
+ */
+export function edgeFadeAt(x: number, x0: number, x1: number, fade: boolean): number {
+  if (!fade) return 1;
+  const length = x1 - x0;
+  if (length <= 0) return 1;
+  const ramp = length * EDGE_FADE_SHARE;
+  const d = Math.min(x - x0, x1 - x);
+  if (d <= 0) return 0;
+  if (d >= ramp) return 1;
+  const t = d / ramp;
+  return t * t * (3 - 2 * t);
+}
 
 /**
  * The voices a sweep may be played on. Each kit names the ordinary landing,
@@ -307,6 +407,19 @@ export function scrubOptions(raw: Readonly<Record<string, unknown>>): ScrubOptio
         : {},
     flash: o.flash !== false,
     tape: o.tape === 'top' ? 'top' : 'bottom',
+    tapeWidth: clampOr(Number(o.tapeWidth), SCRUB_LIMITS.tapeWidth.min, SCRUB_LIMITS.tapeWidth.max, SCRUB_DEFAULTS.tapeWidth),
+    edgeOffset: clampOr(Number(o.edgeOffset), SCRUB_LIMITS.edgeOffset.min, SCRUB_LIMITS.edgeOffset.max, SCRUB_DEFAULTS.edgeOffset),
+    tickColor: typeof o.tickColor === 'string' && HEX_COLOR.test(o.tickColor) ? o.tickColor.toLowerCase() : SCRUB_DEFAULTS.tickColor,
+    passedColor: typeof o.passedColor === 'string' && HEX_COLOR.test(o.passedColor) ? o.passedColor.toLowerCase() : SCRUB_DEFAULTS.passedColor,
+    tickOpacity: clampOr(Number(o.tickOpacity), SCRUB_LIMITS.tickOpacity.min, SCRUB_LIMITS.tickOpacity.max, SCRUB_DEFAULTS.tickOpacity),
+    tickHeight: clampOr(Number(o.tickHeight), SCRUB_LIMITS.tickHeight.min, SCRUB_LIMITS.tickHeight.max, SCRUB_DEFAULTS.tickHeight),
+    tickGap: clampOr(Number(o.tickGap), SCRUB_LIMITS.tickGap.min, SCRUB_LIMITS.tickGap.max, SCRUB_DEFAULTS.tickGap),
+    showTrack: o.showTrack !== false,
+    tapeBackground: o.tapeBackground === true,
+    backgroundOpacity: clampOr(Number(o.backgroundOpacity), SCRUB_LIMITS.backgroundOpacity.min, SCRUB_LIMITS.backgroundOpacity.max, SCRUB_DEFAULTS.backgroundOpacity),
+    edgeFade: o.edgeFade === true,
+    headStyle: o.headStyle === 'dot' || o.headStyle === 'needle' ? o.headStyle : 'bar',
+    headGlow: o.headGlow !== false,
     sound: o.sound !== false,
     tickVolume: clampOr(
       Number(o.tickVolume),

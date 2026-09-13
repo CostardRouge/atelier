@@ -22,10 +22,16 @@
 
 import { drawFramed } from '../../media/framing';
 import type { FrameBox, HookCtx2D, HookPicture } from './hook-variant';
-import { tapeFraction, tapeTicks, type ScrubOptions, type ScrubPlan } from './scrub-plan';
+import {
+  edgeFadeAt,
+  hexToRgba,
+  tapeFraction,
+  tapeGeometry,
+  tapeTicks,
+  type ScrubOptions,
+  type ScrubPlan,
+} from './scrub-plan';
 
-/** The suite's vermilion — the reading head and every day it has passed. */
-const ACCENT = '#d9442a';
 /** What an untold day looks like: the paper's ink, not pure black. */
 const EMPTY_DAY = '#0c0b09';
 /** How long the shutter dip lasts after the head lands, in seconds. */
@@ -97,40 +103,102 @@ function paintTape(
   w: number,
   h: number,
 ): void {
-  const u = w / 1080;
-  const x0 = w * 0.07;
-  const x1 = w * 0.93;
-  const length = x1 - x0;
-  const top = opts.tape === 'top';
-  const baseline = top ? h * 0.045 : h * 0.955;
-  // Ticks grow AWAY from the frame's edge, into the picture.
-  const dir = top ? 1 : -1;
+  const { x0, x1, length, baseline, dir, u } = tapeGeometry(w, h, opts);
   const headDay = plan.headDayAt(t);
   const legs = new Set(plan.legStarts);
   const xOf = (day: number) => x0 + length * tapeFraction(day, plan.totalDays);
+  const fade = (x: number) => edgeFadeAt(x, x0, x1, opts.edgeFade);
+  const shortTick = 13 * u * opts.tickHeight;
+  const tallTick = 26 * u * opts.tickHeight;
+  const headTall = 40 * u * Math.max(0.6, Math.min(1.4, opts.tickHeight));
+  // The band behind the tape covers the tallest thing on it, with room to breathe.
+  const bandDepth = Math.max(tallTick, headTall) + 14 * u;
 
   g.save();
 
-  g.fillStyle = 'rgba(255,255,255,0.55)';
-  g.fillRect(x0, baseline - 0.75 * u, length, 1.5 * u);
-
-  for (const day of tapeTicks(plan.totalDays, length, plan.legStarts, 6 * u)) {
-    const leg = legs.has(day);
-    const tall = (leg ? 26 : 13) * u;
-    const passed = day <= headDay + 1e-6;
-    g.fillStyle = passed ? ACCENT : leg ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.5)';
-    const x = xOf(day) - u;
-    g.fillRect(x, dir < 0 ? baseline - tall : baseline, 2 * u, tall);
+  if (opts.tapeBackground) {
+    // A dark band, rounded, faded at the ends with everything else when the
+    // fade is on — a gradient fill rather than a mask, so no compositing mode
+    // is involved (a shadow is dropped under `destination-*`, `studio.md`).
+    const pad = 16 * u;
+    const bx = x0 - pad;
+    const bw = length + pad * 2;
+    const by = dir < 0 ? baseline - bandDepth - 6 * u : baseline - 6 * u;
+    const bh = bandDepth + 12 * u;
+    if (opts.edgeFade) {
+      const grad = g.createLinearGradient(bx, 0, bx + bw, 0);
+      const stops = 12;
+      for (let i = 0; i <= stops; i++) {
+        const k = i / stops;
+        grad.addColorStop(k, `rgba(0,0,0,${(opts.backgroundOpacity * fade(bx + bw * k)).toFixed(3)})`);
+      }
+      g.fillStyle = grad;
+    } else {
+      g.fillStyle = `rgba(0,0,0,${opts.backgroundOpacity})`;
+    }
+    roundedBar(g, bx, by, bw, bh, 8 * u);
   }
 
-  // The reading head, with a glow — one small shape a frame, so the shadow
-  // blur is affordable here where it is not on every tick.
+  if (opts.showTrack) {
+    if (opts.edgeFade) {
+      const grad = g.createLinearGradient(x0, 0, x1, 0);
+      const stops = 12;
+      for (let i = 0; i <= stops; i++) {
+        const k = i / stops;
+        grad.addColorStop(k, hexToRgba(opts.tickColor, opts.tickOpacity * fade(x0 + length * k)));
+      }
+      g.fillStyle = grad;
+    } else {
+      g.fillStyle = hexToRgba(opts.tickColor, opts.tickOpacity);
+    }
+    g.fillRect(x0, baseline - 0.75 * u, length, 1.5 * u);
+  }
+
+  for (const day of tapeTicks(plan.totalDays, length, plan.legStarts, opts.tickGap * u)) {
+    const leg = legs.has(day);
+    const tall = leg ? tallTick : shortTick;
+    const passed = day <= headDay + 1e-6;
+    const x = xOf(day);
+    const alpha = fade(x) * (passed ? 0.95 : Math.min(1, opts.tickOpacity + (leg ? 0.25 : 0)));
+    if (alpha <= 0) continue;
+    g.fillStyle = hexToRgba(passed ? opts.passedColor : opts.tickColor, alpha);
+    g.fillRect(x - u, dir < 0 ? baseline - tall : baseline, 2 * u, tall);
+  }
+
+  // The reading head. Its glow is one shadow blur a frame — affordable on a
+  // single small shape where it is not on every tick.
   const hx = x0 + length * tapeFraction(headDay, plan.totalDays);
-  const headTall = 40 * u;
-  g.shadowColor = 'rgba(217,68,42,0.75)';
-  g.shadowBlur = 14 * u;
-  g.fillStyle = ACCENT;
-  roundedBar(g, hx - 2.5 * u, dir < 0 ? baseline - headTall + 6 * u : baseline - 6 * u, 5 * u, headTall, 2.5 * u);
+  g.globalAlpha = fade(hx);
+  if (opts.headGlow) {
+    g.shadowColor = hexToRgba(opts.passedColor, 0.75);
+    g.shadowBlur = 14 * u;
+  }
+  g.fillStyle = hexToRgba(opts.passedColor, 1);
+  if (opts.headStyle === 'dot') {
+    const cy = dir < 0 ? baseline - shortTick - 9 * u : baseline + shortTick + 9 * u;
+    g.beginPath();
+    g.arc(hx, cy, 7 * u, 0, Math.PI * 2);
+    g.fill();
+  } else if (opts.headStyle === 'needle') {
+    // A triangle pointing AT the tape from beyond the tallest tick.
+    const base = dir < 0 ? baseline - headTall : baseline + headTall;
+    const tip = dir < 0 ? baseline - 4 * u : baseline + 4 * u;
+    g.beginPath();
+    g.moveTo(hx, tip);
+    g.lineTo(hx - 7 * u, base);
+    g.lineTo(hx + 7 * u, base);
+    g.closePath();
+    g.fill();
+  } else {
+    roundedBar(
+      g,
+      hx - 2.5 * u,
+      dir < 0 ? baseline - headTall + 6 * u : baseline - 6 * u,
+      5 * u,
+      headTall,
+      2.5 * u,
+    );
+  }
 
   g.restore();
 }

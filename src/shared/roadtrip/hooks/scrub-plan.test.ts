@@ -4,7 +4,11 @@ import {
   DRIFT_SPAN,
   EASINGS,
   EASING_IDS,
+  EDGE_FADE_SHARE,
   KIT_IDS,
+  edgeFadeAt,
+  hexToRgba,
+  tapeGeometry,
   SCRUB_KITS,
   SCRUB_DEFAULTS,
   driftAt,
@@ -418,5 +422,82 @@ describe('the sweep options a document may hold', () => {
         .pieceByDay,
     ).toEqual({ '2025-03-04': 'p1' });
     expect(scrubOptions({ pieceByDay: ['p1'] }).pieceByDay).toEqual({});
+  });
+});
+
+describe('the tape’s geometry', () => {
+  it('centres the tape at the width asked for, on either edge', () => {
+    const bottom = tapeGeometry(1080, 1920, { tape: 'bottom', tapeWidth: 0.86, edgeOffset: 0.045 });
+    expect(bottom.length).toBeCloseTo(928.8, 6);
+    expect(bottom.x0).toBeCloseTo((1080 - 928.8) / 2, 6);
+    expect(bottom.x1 - bottom.x0).toBeCloseTo(bottom.length, 6);
+    expect(bottom.baseline).toBeCloseTo(1920 * 0.955, 6);
+    expect(bottom.dir).toBe(-1);
+    expect(bottom.u).toBe(1);
+    const top = tapeGeometry(540, 960, { tape: 'top', tapeWidth: 0.5, edgeOffset: 0.1 });
+    expect(top.baseline).toBeCloseTo(96, 6);
+    expect(top.dir).toBe(1);
+    expect(top.u).toBe(0.5);
+    expect(top.x0).toBe(135);
+  });
+
+  it('fades to nothing at the ends and to full past the ramp, or not at all when off', () => {
+    const x0 = 100;
+    const x1 = 1100;
+    const ramp = 1000 * EDGE_FADE_SHARE;
+    expect(edgeFadeAt(x0, x0, x1, true)).toBe(0);
+    expect(edgeFadeAt(x1, x0, x1, true)).toBe(0);
+    expect(edgeFadeAt(600, x0, x1, true)).toBe(1);
+    expect(edgeFadeAt(x0 + ramp, x0, x1, true)).toBe(1);
+    const half = edgeFadeAt(x0 + ramp / 2, x0, x1, true);
+    expect(half).toBeCloseTo(0.5, 9);
+    expect(edgeFadeAt(x1 - ramp / 2, x0, x1, true)).toBeCloseTo(half, 9);
+    expect(edgeFadeAt(x0, x0, x1, false)).toBe(1);
+  });
+
+  it('turns a hex colour into rgba, and never throws on a bad one', () => {
+    expect(hexToRgba('#d9442a', 0.5)).toBe('rgba(217,68,42,0.5)');
+    expect(hexToRgba('#FFFFFF', 2)).toBe('rgba(255,255,255,1)');
+    expect(hexToRgba('vermilion', 0.3)).toBe('rgba(255,255,255,0.3)');
+  });
+
+  it('reads the look through the defaults, and refuses what it cannot', () => {
+    const o = scrubOptions({});
+    expect(o.tapeWidth).toBe(0.86);
+    expect(o.tickColor).toBe('#ffffff');
+    expect(o.passedColor).toBe('#d9442a');
+    expect(o.headStyle).toBe('bar');
+    expect(o.headGlow).toBe(true);
+    expect(o.showTrack).toBe(true);
+    expect(o.tapeBackground).toBe(false);
+    expect(o.edgeFade).toBe(false);
+    const odd = scrubOptions({
+      tapeWidth: 3,
+      edgeOffset: -1,
+      tickColor: 'red',
+      passedColor: '#ABCDEF',
+      tickOpacity: 0,
+      tickHeight: 'tall',
+      tickGap: 99,
+      showTrack: false,
+      tapeBackground: true,
+      backgroundOpacity: 5,
+      edgeFade: true,
+      headStyle: 'arrow',
+      headGlow: false,
+    });
+    expect(odd.tapeWidth).toBe(1);
+    expect(odd.edgeOffset).toBe(0.02);
+    expect(odd.tickColor).toBe('#ffffff');
+    expect(odd.passedColor).toBe('#abcdef');
+    expect(odd.tickOpacity).toBe(0.15);
+    expect(odd.tickHeight).toBe(1);
+    expect(odd.tickGap).toBe(30);
+    expect(odd.showTrack).toBe(false);
+    expect(odd.tapeBackground).toBe(true);
+    expect(odd.backgroundOpacity).toBe(0.9);
+    expect(odd.edgeFade).toBe(true);
+    expect(odd.headStyle).toBe('bar');
+    expect(odd.headGlow).toBe(false);
   });
 });
