@@ -71,6 +71,7 @@ import EmptyState from '../../shared/ui/EmptyState';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 import { Icons } from '../../shared/ui/icons';
 import OverflowMenu, { type OverflowItem } from '../../shared/ui/OverflowMenu';
+import Segmented from '../../shared/ui/Segmented';
 
 interface TripGalleryProps {
   openTripId: string | null;
@@ -109,6 +110,9 @@ function sourceLabel(id: string): string {
 
 /** The trip this browser opened last (`TripCard`'s "last opened" tag). */
 const LAST_OPENED_KEY = 'atelier.roadtrip.lastOpened';
+/** Cards or Bands — the maintainer wanted both, and the cover kept. */
+const VIEW_KEY = 'atelier.roadtrip.gallery.view';
+type GalleryView = 'cards' | 'bands';
 
 /** The bottom-left caption on a picture cover: which day it is looking at. */
 function tileCaption(tile: CoverTile): string {
@@ -255,6 +259,338 @@ function CoverArt({
   );
 }
 
+/**
+ * A trip's verbs, wherever the trip is drawn — a card, a row, the resume
+ * band: the ⋯ menu and the two questions it can ask. One component, so the
+ * Bands view cannot offer a different set from the Cards view.
+ */
+function TripActions({
+  trip,
+  isOpen,
+  remoteOnly,
+  moveTargets,
+  onOpen,
+  onExport,
+  onDelete,
+  onMove,
+  onChooseCover,
+  size = 'sm',
+}: {
+  trip: TripDoc;
+  isOpen: boolean;
+  remoteOnly: boolean;
+  moveTargets: readonly SourceInfo[];
+  onOpen: () => void;
+  onExport: () => void;
+  onDelete: () => void;
+  onMove: (targetSourceId: string) => void;
+  onChooseCover: () => void;
+  size?: 'sm' | 'md';
+}) {
+  const [confirming, setConfirming] = useState<
+    { kind: 'delete' } | { kind: 'move'; to: SourceInfo } | null
+  >(null);
+
+  // The cover chooser keeps its own chip on the cover too, because a picker
+  // only a menu offers is a picker nobody finds (entry in `roadtrip.md`).
+  const items: OverflowItem[] = [
+    { id: 'open', label: isOpen ? 'Resume' : remoteOnly ? 'Open here' : 'Open', onSelect: onOpen },
+    { id: 'cover', label: 'Choose a cover…', onSelect: onChooseCover },
+    {
+      id: 'export',
+      label: 'Export the trip file',
+      title: `Save the whole trip as a ${TRIP_FILE_EXTENSION} file`,
+      onSelect: onExport,
+    },
+    ...(!remoteOnly
+      ? moveTargets.map((target) => ({
+          id: `move:${target.id}`,
+          label: `Keep on ${sourceLabel(target.id)}…`,
+          onSelect: () => setConfirming({ kind: 'move', to: target }),
+        }))
+      : []),
+    { id: 'delete', label: 'Delete this trip…', danger: true, onSelect: () => setConfirming({ kind: 'delete' }) },
+  ];
+
+  return (
+    <>
+      <OverflowMenu label={`More actions for ${trip.name}`} items={items} size={size} className="-mr-1.5" />
+      {confirming?.kind === 'delete' && (
+        <ConfirmDialog
+          title={`Delete “${trip.name}”?`}
+          confirmLabel="Delete"
+          danger
+          onCancel={() => setConfirming(null)}
+          onConfirm={() => {
+            setConfirming(null);
+            onDelete();
+          }}
+        >
+          <p>
+            Its days, stages and pieces go with it, for good. An exported
+            .roadtrip.json is the only copy that would survive.
+          </p>
+        </ConfirmDialog>
+      )}
+      {confirming?.kind === 'move' && (
+        <ConfirmDialog
+          title={`Keep “${trip.name}” on ${sourceLabel(confirming.to.id)}?`}
+          confirmLabel="Move"
+          cancelLabel="Cancel"
+          onCancel={() => setConfirming(null)}
+          onConfirm={() => {
+            const to = confirming.to.id;
+            setConfirming(null);
+            onMove(to);
+          }}
+        >
+          <p>
+            The trip will be kept there from now on and resume from any device
+            connected to it. Its pictures never travel with it.
+          </p>
+        </ConfirmDialog>
+      )}
+    </>
+  );
+}
+
+/** The one line under a trip's name: told, published, and the silence. */
+function ProgressLine({ coverage, className = '' }: { coverage: TripCoverage; className?: string }) {
+  const total = coverage.totalDays;
+  return (
+    <p className={`m-0 text-xs text-ink-soft tabular-nums ${className}`}>
+      <span className="font-mono">{coverage.toldDays}</span> / {total} day
+      {total === 1 ? '' : 's'} told
+      {coverage.publishedPosts > 0 && (
+        <>
+          <span className="text-faint"> · </span>
+          {coverage.publishedPosts} published
+        </>
+      )}
+      {coverage.toldDays > 0 && coverage.longestGap && coverage.longestGap.length >= 3 && (
+        <>
+          <span className="text-faint"> · </span>
+          <span className="text-accent-ink">{coverage.longestGap.length} of silence</span>
+        </>
+      )}
+    </p>
+  );
+}
+
+/**
+ * The trip's days as a strip of cells: one per day up to two months, then
+ * bucketed exactly as the card's rhythm band is (`rhythmBuckets`), on the
+ * grid's own five-rung ramp — a row and the overview must not disagree about
+ * a day.
+ */
+function DayStrip({ coverage, className = '' }: { coverage: TripCoverage; className?: string }) {
+  const bars = rhythmBuckets(coverage, Math.min(62, coverage.totalDays));
+  return (
+    <div className={`flex gap-px h-full ${className}`} aria-hidden="true">
+      {bars.map((bar) => (
+        <span
+          key={bar.from}
+          className="flex-1 min-w-0 rounded-[1px]"
+          style={{ background: HEATMAP_LEVELS[rhythmLevel(bar)] }}
+          title={`${formatIsoDate(bar.from)}${bar.days > 1 ? ` → ${formatIsoDate(bar.to)}` : ''} · ${bar.told}/${bar.days} told`}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** A row of the Bands view: name, dates, the strip, the progress. */
+function TripRow({
+  trip,
+  isOpen,
+  remoteOnly,
+  moveTargets,
+  busy,
+  onOpen,
+  onExport,
+  onDelete,
+  onMove,
+  onChooseCover,
+}: {
+  trip: TripDoc;
+  isOpen: boolean;
+  remoteOnly: boolean;
+  moveTargets: readonly SourceInfo[];
+  busy: string | null;
+  onOpen: () => void;
+  onExport: () => void;
+  onDelete: () => void;
+  onMove: (targetSourceId: string) => void;
+  onChooseCover: () => void;
+}) {
+  const coverage = tripCoverage(trip);
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={`Open ${trip.name}`}
+      onClick={(e) => {
+        if (busy !== null) return;
+        if ((e.target as HTMLElement).closest('button, a, [role="menu"]')) return;
+        onOpen();
+      }}
+      onKeyDown={(e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) {
+          e.preventDefault();
+          if (busy === null) onOpen();
+        }
+      }}
+      className={`grid grid-cols-[minmax(10rem,14rem)_minmax(0,1fr)_auto] items-center gap-x-5 gap-y-1 px-3 py-2.5 border-b border-line cursor-pointer transition-colors hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent ${
+        remoteOnly ? 'opacity-75' : ''
+      } ${isOpen ? 'bg-accent-wash/50' : ''}`}
+    >
+      <div className="min-w-0 flex flex-col gap-0.5">
+        <span className="text-sm font-semibold truncate" title={trip.name}>
+          {trip.name}
+        </span>
+        <span className="font-mono text-2xs text-muted tabular-nums truncate">
+          {formatIsoDate(trip.startDate)} → {formatIsoDate(trip.endDate)}
+          {trip.destination && <span className="font-sans"> · {trip.destination}</span>}
+        </span>
+      </div>
+      <div className="min-w-0 flex flex-col gap-1.5">
+        <div className="h-3">
+          <DayStrip coverage={coverage} />
+        </div>
+        {busy ? (
+          <p className="m-0 font-mono text-2xs text-muted" role="status">
+            {busy}
+          </p>
+        ) : (
+          <ProgressLine coverage={coverage} className="text-2xs" />
+        )}
+      </div>
+      {busy === null && (
+        <TripActions
+          trip={trip}
+          isOpen={isOpen}
+          remoteOnly={remoteOnly}
+          moveTargets={moveTargets}
+          onOpen={onOpen}
+          onExport={onExport}
+          onDelete={onDelete}
+          onMove={onMove}
+          onChooseCover={onChooseCover}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The band at the top of the Bands view: the trip you were on, with the one
+ * verb that matters (Resume) and the sentence the whole tool exists for —
+ * how much is told, and how long the silence has run.
+ */
+function ResumeBand({
+  trip,
+  isOpen,
+  moveTargets,
+  busy,
+  urls,
+  hasThumb,
+  onOpen,
+  onExport,
+  onDelete,
+  onMove,
+  onChooseCover,
+}: {
+  trip: TripDoc;
+  isOpen: boolean;
+  moveTargets: readonly SourceInfo[];
+  busy: string | null;
+  urls: ReadonlyMap<string, string>;
+  hasThumb: (postId: string) => boolean;
+  onOpen: () => void;
+  onExport: () => void;
+  onDelete: () => void;
+  onMove: (targetSourceId: string) => void;
+  onChooseCover: () => void;
+}) {
+  const coverage = tripCoverage(trip);
+  const tiles = coverTiles(trip, coverage, hasThumb);
+  const lead = tiles[0] ? urls.get(tiles[0].postId) : undefined;
+  const gap = coverage.longestGap;
+  return (
+    <div
+      className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-5 gap-y-2 p-4 mb-3 bg-surface border rounded-paper-lg shadow-paper-soft ${
+        isOpen ? 'border-accent' : 'border-line'
+      }`}
+    >
+      <div className="row-span-3 w-[7.5rem] h-[5.25rem] rounded-[10px] overflow-hidden bg-paper-2">
+        {lead ? (
+          <img src={lead} alt="" className="block w-full h-full object-cover" />
+        ) : (
+          <div className="p-2 h-full">
+            <DayStrip coverage={coverage} />
+          </div>
+        )}
+      </div>
+      <div className="min-w-0 flex items-baseline gap-2.5 flex-wrap">
+        <span className="font-serif text-xl leading-tight truncate">{trip.name}</span>
+        <span className="font-mono text-xs text-muted tabular-nums">
+          {formatIsoDate(trip.startDate)} → {formatIsoDate(trip.endDate)} · {coverage.totalDays} day
+          {coverage.totalDays === 1 ? '' : 's'}
+        </span>
+        <span
+          className={`font-mono text-3xs tracking-[0.08em] uppercase px-1.5 py-[2px] rounded-[6px] ${
+            isOpen ? 'bg-accent-wash text-accent-ink' : 'bg-paper-2 text-muted'
+          }`}
+        >
+          {isOpen ? 'open' : 'last opened'}
+        </span>
+      </div>
+      <div className="row-span-3 flex items-center gap-2">
+        <Button variant="primary" onClick={onOpen} disabled={busy !== null}>
+          {isOpen ? 'Resume' : 'Open'}
+        </Button>
+        {busy === null && (
+          <TripActions
+            trip={trip}
+            isOpen={isOpen}
+            remoteOnly={false}
+            moveTargets={moveTargets}
+            onOpen={onOpen}
+            onExport={onExport}
+            onDelete={onDelete}
+            onMove={onMove}
+            onChooseCover={onChooseCover}
+            size="md"
+          />
+        )}
+      </div>
+      <div className="h-5">
+        <DayStrip coverage={coverage} />
+      </div>
+      {busy ? (
+        <p className="m-0 font-mono text-2xs text-muted" role="status">
+          {busy}
+        </p>
+      ) : (
+        <p className="m-0 text-sm text-ink-soft tabular-nums">
+          <strong className="font-semibold text-ink">
+            {coverage.toldDays} day{coverage.toldDays === 1 ? '' : 's'} told of {coverage.totalDays}
+          </strong>
+          {coverage.publishedPosts > 0 && <> · {coverage.publishedPosts} published</>}
+          {gap && gap.length >= 2 && (
+            <>
+              {' · '}
+              <span className="text-accent-ink">
+                {gap.length} days of silence since {formatIsoDate(gap.start)}
+              </span>
+            </>
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function TripCard({
   trip,
   isOpen,
@@ -289,36 +625,11 @@ function TripCard({
   onMove: (targetSourceId: string) => void;
   onChooseCover: () => void;
 }) {
-  const [confirming, setConfirming] = useState<
-    { kind: 'delete' } | { kind: 'move'; to: SourceInfo } | null
-  >(null);
   const compact = useIsCompact();
   const coverage = tripCoverage(trip);
   const total = coverage.totalDays;
   const pct = total > 0 ? Math.round((coverage.toldDays / total) * 100) : 0;
   const tiles = coverTiles(trip, coverage, hasThumb);
-
-  // The card's secondary verbs, behind one ⋯ (`OverflowMenu`): the cover
-  // chooser keeps its own chip on the cover too, because a picker only a menu
-  // offers is a picker nobody finds (entry in `roadtrip.md`).
-  const items: OverflowItem[] = [
-    { id: 'open', label: isOpen ? 'Resume' : remoteOnly ? 'Open here' : 'Open', onSelect: onOpen },
-    { id: 'cover', label: 'Choose a cover…', onSelect: onChooseCover },
-    {
-      id: 'export',
-      label: 'Export the trip file',
-      title: `Save the whole trip as a ${TRIP_FILE_EXTENSION} file`,
-      onSelect: onExport,
-    },
-    ...(!remoteOnly
-      ? moveTargets.map((target) => ({
-          id: `move:${target.id}`,
-          label: `Keep on ${sourceLabel(target.id)}…`,
-          onSelect: () => setConfirming({ kind: 'move', to: target }),
-        }))
-      : []),
-    { id: 'delete', label: 'Delete this trip…', danger: true, onSelect: () => setConfirming({ kind: 'delete' }) },
-  ];
 
   return (
     <div
@@ -400,7 +711,17 @@ function TripCard({
           )}
           <span className="flex-1" />
           {busy === null && (
-            <OverflowMenu label={`More actions for ${trip.name}`} items={items} className="-mr-1.5" />
+            <TripActions
+              trip={trip}
+              isOpen={isOpen}
+              remoteOnly={remoteOnly}
+              moveTargets={moveTargets}
+              onOpen={onOpen}
+              onExport={onExport}
+              onDelete={onDelete}
+              onMove={onMove}
+              onChooseCover={onChooseCover}
+            />
           )}
         </div>
 
@@ -427,22 +748,7 @@ function TripCard({
               style={{ width: `${pct}%` }}
             />
           </div>
-          <p className="m-0 mt-1.5 text-xs text-ink-soft tabular-nums">
-            <span className="font-mono">{coverage.toldDays}</span> / {total} day
-            {total === 1 ? '' : 's'} told
-            {coverage.publishedPosts > 0 && (
-              <>
-                <span className="text-faint"> · </span>
-                {coverage.publishedPosts} published
-              </>
-            )}
-            {coverage.toldDays > 0 && coverage.longestGap && coverage.longestGap.length >= 3 && (
-              <>
-                <span className="text-faint"> · </span>
-                <span className="text-accent-ink">{coverage.longestGap.length} of silence</span>
-              </>
-            )}
-          </p>
+          <ProgressLine coverage={coverage} className="mt-1.5" />
         </div>
 
         {busy && (
@@ -452,41 +758,6 @@ function TripCard({
         )}
       </div>
 
-      {confirming?.kind === 'delete' && (
-        <ConfirmDialog
-          title={`Delete “${trip.name}”?`}
-          confirmLabel="Delete"
-          danger
-          onCancel={() => setConfirming(null)}
-          onConfirm={() => {
-            setConfirming(null);
-            onDelete();
-          }}
-        >
-          <p>
-            Its days, stages and pieces go with it, for good. An exported
-            .roadtrip.json is the only copy that would survive.
-          </p>
-        </ConfirmDialog>
-      )}
-      {confirming?.kind === 'move' && (
-        <ConfirmDialog
-          title={`Keep “${trip.name}” on ${sourceLabel(confirming.to.id)}?`}
-          confirmLabel="Move"
-          cancelLabel="Cancel"
-          onCancel={() => setConfirming(null)}
-          onConfirm={() => {
-            const to = confirming.to.id;
-            setConfirming(null);
-            onMove(to);
-          }}
-        >
-          <p>
-            The trip will be kept there from now on and resume from any device
-            connected to it. Its pictures never travel with it.
-          </p>
-        </ConfirmDialog>
-      )}
     </div>
   );
 }
@@ -511,6 +782,23 @@ export default function TripGallery({
 }: TripGalleryProps) {
   const [trips, setTrips] = useState<TripDoc[] | null>(null);
   const [creating, setCreating] = useState(false);
+  // Cards (the cover, the default) or Bands (progress rows under a resume
+  // band). A reading preference of this browser: never on the document.
+  const [view, setView] = useState<GalleryView>(() => {
+    try {
+      return localStorage.getItem(VIEW_KEY) === 'bands' ? 'bands' : 'cards';
+    } catch {
+      return 'cards';
+    }
+  });
+  const chooseView = (next: GalleryView) => {
+    setView(next);
+    try {
+      localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      /* private mode */
+    }
+  };
   // Where you were: the trip this browser opened last, so the gallery can
   // point at it when nothing is open. A reading preference of this browser —
   // never on the document, never in the file.
@@ -521,15 +809,20 @@ export default function TripGallery({
       return null;
     }
   });
-  useEffect(() => {
-    if (!openTripId) return;
-    setLastOpenedId(openTripId);
-    try {
-      localStorage.setItem(LAST_OPENED_KEY, openTripId);
-    } catch {
-      /* private mode: the tag is a convenience */
-    }
-  }, [openTripId]);
+  // Written on the way OUT: the gallery is unmounted while a trip is open,
+  // so watching `openTripId` from here would never see it.
+  const open = useCallback(
+    (trip: TripDoc) => {
+      setLastOpenedId(trip.id);
+      try {
+        localStorage.setItem(LAST_OPENED_KEY, trip.id);
+      } catch {
+        /* private mode: the tag is a convenience */
+      }
+      onOpen(trip);
+    },
+    [onOpen],
+  );
   const [importing, setImporting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [remoteLists, setRemoteLists] = useState<Record<string, RemoteList>>({});
@@ -641,7 +934,7 @@ export default function TripGallery({
       choices.sourceId,
     );
     setCreating(false);
-    if (await createOn(doc, 'created')) onOpen(doc);
+    if (await createOn(doc, 'created')) open(doc);
   }
 
   /** The whole trip on disk — a backup, and how it reaches another machine. */
@@ -767,7 +1060,7 @@ export default function TripGallery({
     setBusyFor(row.doc.id, `fetching from ${sourceLabel(row.doc.sourceId)}…`);
     await mirrorTrip(row.doc.sourceId, row.doc, row.etag);
     setBusyFor(row.doc.id, null);
-    onOpen(row.doc);
+    open(row.doc);
   }
 
   // One group per source: the local ones from `groupBySource`, plus every
@@ -820,6 +1113,15 @@ export default function TripGallery({
             <span className="font-mono text-xs text-muted tabular-nums">{trips.length}</span>
           )}
           <span className="flex-1" />
+          <Segmented
+            label="How the trips are shown"
+            value={view}
+            onChange={chooseView}
+            options={[
+              { id: 'cards', label: 'Cards', icon: Icons.grid, title: 'Each trip as a card with its cover' },
+              { id: 'bands', label: 'Bands', icon: Icons.rows, title: 'Progress rows, the trip you were on first' },
+            ]}
+          />
           <Button
             onClick={() => {
               if (documentSources.length > 1) setImporting(true);
@@ -904,6 +1206,68 @@ export default function TripGallery({
                 </p>
                 {count === 0 ? (
                   <p className="m-0 text-xs text-faint">Nothing kept here yet.</p>
+                ) : view === 'bands' && !compact ? (
+                  (() => {
+                    // The trip you were on leads the band — open, else last
+                    // opened — and the rest follow as rows.
+                    const leadId =
+                      items.find((t) => t.id === openTripId)?.id ??
+                      items.find((t) => t.id === lastOpenedId)?.id ??
+                      null;
+                    const lead = items.find((t) => t.id === leadId) ?? null;
+                    const rest = items.filter((t) => t.id !== leadId);
+                    return (
+                      <div className="flex flex-col">
+                        {lead && (
+                          <ResumeBand
+                            trip={lead}
+                            isOpen={lead.id === openTripId}
+                            moveTargets={moveTargets}
+                            busy={busy[lead.id] ?? null}
+                            urls={urls}
+                            hasThumb={hasThumb}
+                            onOpen={() => open(lead)}
+                            onExport={() => handleExport(lead)}
+                            onDelete={() => void handleDelete(lead, null)}
+                            onMove={(target) => void handleMove(lead, target)}
+                            onChooseCover={() => setCovering(lead)}
+                          />
+                        )}
+                        <div className="flex flex-col border-t border-line">
+                          {rest.map((trip) => (
+                            <TripRow
+                              key={trip.id}
+                              trip={trip}
+                              isOpen={false}
+                              remoteOnly={false}
+                              moveTargets={moveTargets}
+                              busy={busy[trip.id] ?? null}
+                              onOpen={() => open(trip)}
+                              onExport={() => handleExport(trip)}
+                              onDelete={() => void handleDelete(trip, null)}
+                              onMove={(target) => void handleMove(trip, target)}
+                              onChooseCover={() => setCovering(trip)}
+                            />
+                          ))}
+                          {remoteOnly.map((row) => (
+                            <TripRow
+                              key={row.doc.id}
+                              trip={row.doc}
+                              isOpen={false}
+                              remoteOnly
+                              moveTargets={[]}
+                              busy={busy[row.doc.id] ?? null}
+                              onOpen={() => void handleOpenRemote(row)}
+                              onExport={() => handleExport(row.doc)}
+                              onDelete={() => void handleDelete(row.doc, row.etag)}
+                              onMove={() => undefined}
+                              onChooseCover={() => setCovering(row.doc)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()
                 ) : (
                   <div
                     className={
@@ -928,7 +1292,7 @@ export default function TripGallery({
                         busy={busy[trip.id] ?? null}
                         urls={urls}
                         hasThumb={hasThumb}
-                        onOpen={() => onOpen(trip)}
+                        onOpen={() => open(trip)}
                         onExport={() => handleExport(trip)}
                         onDelete={() => void handleDelete(trip, null)}
                         onMove={(target) => void handleMove(trip, target)}
