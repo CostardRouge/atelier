@@ -165,8 +165,14 @@ function ProjectCard({
       tabIndex={0}
       aria-label={`Open ${doc.name}`}
       aria-disabled={busy !== null}
-      onClick={() => {
-        if (busy === null) onOpen();
+      onClick={(e) => {
+        if (busy !== null) return;
+        // Anything interactive inside keeps its own click (the ⋯ menu, a
+        // dialog), through one guard — the trip card's rule.
+        if ((e.target as HTMLElement).closest('button, select, input, a, [role="menu"], [role="alertdialog"]')) {
+          return;
+        }
+        onOpen();
       }}
       onKeyDown={(e) => {
         if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) {

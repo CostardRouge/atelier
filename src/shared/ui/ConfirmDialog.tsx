@@ -62,6 +62,11 @@ export default function ConfirmDialog({
       onPointerDown={(e) => {
         if (e.target === e.currentTarget && !busy) onCancel();
       }}
+      // A dialog is often rendered INSIDE the thing it asks about — a gallery
+      // card whose own click opens the document. Without this, "Delete" (or a
+      // press on the backdrop) bubbled to the card and opened the project
+      // being deleted, whose editor then saved it straight back.
+      onClick={(e) => e.stopPropagation()}
     >
       <div className="w-full max-w-[26rem] flex flex-col gap-4 bg-surface border border-line rounded-paper-lg shadow-paper p-6">
         <h2 className="m-0 font-serif text-2xl leading-tight">{title}</h2>
