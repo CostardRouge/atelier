@@ -199,7 +199,10 @@ export default function MediaLightbox({
           <button
             type="button"
             onClick={onClose}
-            className="font-mono text-3xs tracking-[0.12em] uppercase text-muted border border-line rounded-full px-2.5 py-[3px] hover:text-accent hover:border-line-strong transition-colors"
+            // The zoom pill's own height (two 24px buttons in 4px of padding
+            // and a hairline: 34px), so the two controls side by side line up
+            // top and bottom instead of a short chip beside a tall pill.
+            className="flex-none inline-flex items-center h-[2.125rem] font-mono text-3xs tracking-[0.12em] uppercase text-muted border border-line rounded-full px-3.5 hover:text-accent hover:border-line-strong transition-colors"
             aria-label="Close"
           >
             close ✕
