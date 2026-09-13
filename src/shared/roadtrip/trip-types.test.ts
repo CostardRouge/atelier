@@ -20,6 +20,7 @@ import {
 } from './trip-types';
 import { createShade } from './shades';
 import { DEFAULT_DEVELOP } from '../develop/develop';
+import { DEFAULT_FRAMING } from '../media/framing';
 import { DEFAULT_CTA } from './cta-slide';
 import { DEFAULT_BADGE_WORDS } from './day-badge';
 
@@ -729,8 +730,8 @@ describe('framing (v12)', () => {
 
   it('gives every picture the centred cover-crop it already had', () => {
     const doc = migrateTripDoc(v11());
-    expect(doc.posts[0].badge.framing).toEqual({ scale: 1, x: 0, y: 0, rotation: 0 });
-    expect(doc.posts[0].slides[0].framing).toEqual({ scale: 1, x: 0, y: 0, rotation: 0 });
+    expect(doc.posts[0].badge.framing).toEqual(DEFAULT_FRAMING);
+    expect(doc.posts[0].slides[0].framing).toEqual(DEFAULT_FRAMING);
   });
 
   it('leaves the rest of the badge alone', () => {
@@ -747,16 +748,46 @@ describe('framing (v12)', () => {
     // picture is how a subject ends up out of frame.
     const badge = {
       ...defaultPostBadge('reel'),
-      framing: { scale: 2.5, x: 0.2, y: -0.1, rotation: 12 },
+      framing: { ...DEFAULT_FRAMING, scale: 2.5, x: 0.2, y: -0.1, rotation: 12, flipX: true, fit: 'contain' as const },
     };
     const defaults = hookDefaultsFrom(badge);
     expect('framing' in defaults).toBe(false);
-    expect(defaultPostBadge('reel', defaults).framing).toEqual({
-      scale: 1,
-      x: 0,
-      y: 0,
-      rotation: 0,
+    expect(defaultPostBadge('reel', defaults).framing).toEqual(DEFAULT_FRAMING);
+  });
+});
+
+describe('migrateTripDoc — v17 → v18 (a mirror and a fit)', () => {
+  /** A v17 document: framings that know pan, zoom and rotation, nothing else. */
+  const v17 = () =>
+    ({
+      ...createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04'),
+      version: 17,
+      posts: [
+        {
+          ...createTripPost('carousel', '2025-03-27', 'Cliffs'),
+          badge: {
+            ...defaultPostBadge('carousel'),
+            framing: { scale: 2, x: 0.1, y: -0.05, rotation: 12 },
+          },
+          slides: [
+            { ...createPostSlide(), id: 's1', framing: { scale: 1, x: 0, y: 0, rotation: 90 } },
+          ],
+        },
+      ],
+    }) as unknown as TripDoc;
+
+  it('keeps every crop and lands it unmirrored on cover', () => {
+    const doc = migrateTripDoc(v17());
+    expect(doc.posts[0].badge.framing).toEqual({
+      ...DEFAULT_FRAMING,
+      scale: 2,
+      x: 0.1,
+      y: -0.05,
+      rotation: 12,
     });
+    expect(doc.posts[0].slides[0].framing).toEqual({ ...DEFAULT_FRAMING, rotation: 90 });
+    expect(doc.posts[0].badge.aspectId).toBe('4:5');
+    expect(doc.version).toBe(TRIP_DOC_VERSION);
   });
 });
 

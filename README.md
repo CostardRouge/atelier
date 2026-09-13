@@ -570,12 +570,15 @@ exit leave.
 **The picture is framed where you want it.** A 3:2 photograph in a 9:16 frame
 loses its sides, and the subject is rarely in the middle: drag the picture on
 the stage to move it, the wheel (or a trackpad pinch) to zoom, and a slider or
-a quarter-turn button to rotate — straightening a horizon included. The badge
-keeps first claim on a press, so grab the picture where no text sits. It can
-never be zoomed out past covering the frame or dragged off its edge, so no
-setting can produce a deliverable with a gap in it, and the preview, the PNG
-deck and the burned-in hook clip all draw through the same transform. Each
-picture of a carousel is framed on its own.
+a quarter-turn button to rotate — straightening a horizon included — and two
+buttons to **flip** it horizontally or vertically, which mirror what the frame
+shows whatever the rotation. The badge keeps first claim on a press, so grab
+the picture where no text sits. Under **Fill** (the default) it can never be
+zoomed out past covering the frame or dragged off its edge, so a gap only
+appears where you asked for one: **Whole** shows the entire picture with
+**black bars** where it falls short of the frame, and a drag slides it along
+them. The preview, the PNG deck and the burned-in hook clip all draw through
+the same transform. Each picture of a carousel is framed on its own.
 
 **The picture can be helped.** A bright sky exactly where the hook sits is the
 normal case, so up to four **shades** can be laid over it. One shade is a

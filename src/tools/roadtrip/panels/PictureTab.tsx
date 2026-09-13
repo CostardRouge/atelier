@@ -3,6 +3,7 @@ import GradePanel from '../../../shared/lut/GradePanel';
 import {
   DEFAULT_FRAMING,
   MAX_FRAMING_SCALE,
+  flipFraming,
   isDefaultFraming,
   wrapDegrees,
   type Framing,
@@ -230,8 +231,13 @@ export default function PictureTab({
                 press, so grab the picture where no text is.
               </p>
               <p>
-                It can never be zoomed out past covering the frame or dragged off its edge
-                — a deliverable with a gap in it is not one.
+                <strong>Fill</strong> covers the frame and crops what does not fit: it can
+                never be zoomed out past covering or dragged off an edge.{' '}
+                <strong>Whole</strong> shows all of the picture with black bars where it
+                falls short of the frame; drag it to slide it along its bars.
+              </p>
+              <p>
+                The flips mirror what the frame shows, whatever the picture’s rotation.
               </p>
               {linkedToProject && (
                 <p>
@@ -242,13 +248,41 @@ export default function PictureTab({
             </>
           }
           actions={
-            isDefaultFraming(framing) ? undefined : (
-              <Button size="sm" variant="ghost" onClick={() => onFraming({ ...DEFAULT_FRAMING })}>
+            // Reset puts the picture back where it started INSIDE the fit
+            // chosen: asking for the whole picture is not a crop to undo.
+            isDefaultFraming({ ...framing, fit: 'cover' }) ? undefined : (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => onFraming({ ...DEFAULT_FRAMING, fit: framing.fit })}
+              >
                 Reset
               </Button>
             )
           }
         >
+          <FieldRow label="Fit">
+            <Segmented
+              fill
+              size="sm"
+              label="Fit"
+              value={framing.fit}
+              // A new fit starts centred at its own scale 1: a zoom and a pan
+              // chosen to crop mean something else once the bars are allowed.
+              onChange={(fit) => {
+                if (fit !== framing.fit) onFraming({ ...framing, fit, scale: 1, x: 0, y: 0 });
+              }}
+              options={[
+                { id: 'cover', label: 'Fill', title: 'Cover the frame; the excess is cropped' },
+                {
+                  id: 'contain',
+                  label: 'Whole',
+                  title: 'Show the whole picture, with black bars where it falls short',
+                },
+              ]}
+              className="flex-1 min-w-0"
+            />
+          </FieldRow>
           <FieldRow label="Zoom">
             <RangeField
               label="Zoom"
@@ -293,6 +327,24 @@ export default function PictureTab({
               disabled={framing.rotation === 0}
             >
               Straight
+            </Button>
+          </FieldRow>
+          <FieldRow label="Flip">
+            <Button
+              size="sm"
+              icon={Icons.flipHorizontal}
+              onClick={() => onFraming(flipFraming(framing, 'x'))}
+              title="Mirror the picture left to right"
+            >
+              Horizontal
+            </Button>
+            <Button
+              size="sm"
+              icon={Icons.flipVertical}
+              onClick={() => onFraming(flipFraming(framing, 'y'))}
+              title="Mirror the picture top to bottom"
+            >
+              Vertical
             </Button>
           </FieldRow>
         </InspectorSection>

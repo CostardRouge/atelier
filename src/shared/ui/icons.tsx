@@ -160,6 +160,20 @@ export const Icons = {
       <path d="M8 21h8M12 17v4" />
     </>,
   ),
+  // A mirror line and a half on each side: the solid half is the picture, the
+  // open one where it lands.
+  flipHorizontal: icon(
+    <>
+      <path d="M12 3v18M15 7l6 10h-6z" />
+      <path d="M9 7 3 17h6z" fill="currentColor" />
+    </>,
+  ),
+  flipVertical: icon(
+    <>
+      <path d="M3 12h18M7 15l10 6v-6z" />
+      <path d="M7 9 17 3v6z" fill="currentColor" />
+    </>,
+  ),
 } as const;
 
 export type IconName = keyof typeof Icons;

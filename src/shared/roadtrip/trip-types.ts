@@ -53,7 +53,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 17;
+export const TRIP_DOC_VERSION = 18;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers and the
@@ -255,8 +255,8 @@ export interface PostBadge {
    */
   videoSpeed: number;
   /**
-   * How the hook's picture sits in the frame — pan, zoom, rotation over the
-   * cover-crop. Belongs to the piece and not to the trip's defaults: it is
+   * How the hook's picture sits in the frame — pan, zoom, rotation and a
+   * mirror, over the cover-crop or a fit with black bars. Belongs to the piece and not to the trip's defaults: it is
    * about THIS photograph's subject, and inheriting one picture's crop onto
    * the next is how a subject ends up out of frame.
    */
@@ -751,6 +751,10 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * backdrop, the place marker and the reference day. A post that had the
  * boolean on lands on `auto` — the intent kept, the untrue anniversary dropped.
  *
+ * v17 → v18 gives every framing its mirror and its fit (`flipX`, `flipY`,
+ * `fit`). Every stored picture lands unmirrored on `cover` — the crop it has
+ * always had — so nothing a trip already draws changes.
+ *
  * v16 → v17 gives every picture its DEVELOP (`PostBadge.develop`,
  * `PostSlide.develop`) and the trip its develop presets. Every stored picture
  * lands on `null` — as shot — and the presets start empty, so nothing a trip
@@ -1057,6 +1061,20 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
       })),
     }));
     migrated.developPresets = normaliseDevelopPresets(migrated.developPresets);
+  }
+
+  if (migrated.version < 18) {
+    // Nothing was mirrored or letterboxed before this existed: read through
+    // `normaliseFraming`, every stored framing keeps its pan, zoom and
+    // rotation and lands unmirrored on the cover-crop it always drew.
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      badge: { ...post.badge, framing: normaliseFraming(post.badge?.framing) },
+      slides: (post.slides ?? []).map((slide) => ({
+        ...slide,
+        framing: normaliseFraming(slide.framing),
+      })),
+    }));
   }
 
   migrated.version = TRIP_DOC_VERSION;

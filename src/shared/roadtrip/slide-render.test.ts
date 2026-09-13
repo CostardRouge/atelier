@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { badgeBlockExtent, badgeElements } from './badge-layout';
 import { DEFAULT_CTA } from './cta-slide';
 import { badgeContent, DEFAULT_BADGE_WORDS } from './day-badge';
+import { DEFAULT_FRAMING } from '../media/framing';
 import { contentSlideElements, deckSlides } from './deck';
 import { slideRender } from './slide-render';
 import {
@@ -99,7 +100,7 @@ describe('slideRender', () => {
 
   it('carries each slide’s own framing', () => {
     const t = trip();
-    const framing = { scale: 2.5, x: 0.1, y: -0.2, rotation: 90 };
+    const framing = { ...DEFAULT_FRAMING, scale: 2.5, x: 0.1, y: -0.2, rotation: 90, flipY: true };
     const p = post({
       badge: { ...defaultPostBadge('carousel'), framing },
       slides: [createPostSlide(null)],
