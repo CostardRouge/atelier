@@ -17,6 +17,12 @@ import { HEATMAP_LEVELS as LEVELS } from './heatmap-ramp';
 export interface DayMenuItem {
   label: string;
   run: () => void;
+  /**
+   * The group the item belongs to, named above it. A change of group draws a
+   * rule: telling the day and editing its stage act on different things, and
+   * a flat list read as one set of verbs.
+   */
+  group?: string;
 }
 
 /** The leg a day belongs to, as the grid needs to draw and name it. */
@@ -188,7 +194,7 @@ export default function DayHeatmap({
           {LEVELS.map((bg, i) => (
             <span
               key={i}
-              className="rounded-[3px] border border-line"
+              className="rounded-[3px]"
               style={{ width: 11, height: 11, background: bg }}
               aria-hidden="true"
             />
@@ -196,7 +202,7 @@ export default function DayHeatmap({
           <span>often</span>
         </span>
         <span className="flex-1" />
-        <span className="max-[600px]:hidden truncate">click: open the day{menuFor ? ' · right-click: cut a stage' : ''}{overlay ? ' · drag the loupe: what the ruler details' : ''}</span>
+        <span className="max-[600px]:hidden truncate">click: open the day{menuFor ? ' · right-click: tell it, or edit its stage' : ''}{overlay ? ' · drag the loupe: what the ruler details' : ''}</span>
       </div>
     {/* The scroll box holds the GRID alone: the legend below it used to ride
         inside it and scroll away sideways. The grid fills the box from a
@@ -205,7 +211,7 @@ export default function DayHeatmap({
     {/* `overflow-x-auto` clips vertically too, so whatever is drawn past the
         grid — the loupe's grip above the month labels, its frame under the
         last lane — needs room INSIDE the box, not outside it. */}
-    <div ref={boxRef} className={`overflow-x-auto ${overlay ? 'pt-4 pb-6 pl-2 pr-2' : 'pb-1'}`}>
+    <div ref={boxRef} className={`overflow-x-auto ${overlay ? 'pt-4 pb-3 pl-2 pr-2' : 'pb-1'}`}>
       <div className="inline-flex gap-2" style={{ minWidth: '100%' }}>
         {/* Weekday rail — every other row, the way a calendar is skimmed. */}
         <div
@@ -278,17 +284,17 @@ export default function DayHeatmap({
                       onBlur={() => setHovered((h) => (h?.cell === cell ? null : h))}
                       aria-label={cellTitle(cell, stage)}
                       aria-selected={isSelected}
-                      className="p-0 border cursor-pointer rounded-[3px] transition-[transform,box-shadow] duration-150 ease-paper hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink"
+                      // No border: the rung's colour is the cell, as in the mock.
+                      // The open day is an OUTLINE (it takes no layout, so the
+                      // lattice never shifts) and today an inset ring.
+                      className="p-0 border-0 cursor-pointer rounded-[3px] transition-[transform,box-shadow] duration-150 ease-paper hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink"
                       style={{
                         width: cellPx,
                         height: cellPx,
                         background: LEVELS[levelOf(cell)],
-                        borderColor: isSelected
-                          ? '#1b1813'
-                          : isToday
-                            ? '#938b7c'
-                            : 'rgba(43,33,18,0.10)',
-                        borderWidth: isSelected || isToday ? 2 : 1,
+                        outline: isSelected ? '2px solid var(--color-ink)' : undefined,
+                        outlineOffset: isSelected ? 1 : undefined,
+                        boxShadow: isToday && !isSelected ? 'inset 0 0 0 2px var(--color-muted)' : undefined,
                       }}
                     />
                   );
@@ -357,7 +363,8 @@ export function DayMenu({ menu, onClose }: { menu: Menu; onClose: () => void }) 
   }, []);
 
   const WIDTH = 230;
-  const height = 38 + menu.items.length * 32;
+  const groups = new Set(menu.items.map((i) => i.group ?? '')).size;
+  const height = 38 + menu.items.length * 32 + groups * 24 + (groups - 1) * 13;
   const x = Math.min(menu.x, window.innerWidth - WIDTH - 8);
   const y = Math.min(menu.y, window.innerHeight - height - 8);
 
@@ -387,21 +394,36 @@ export function DayMenu({ menu, onClose }: { menu: Menu; onClose: () => void }) 
         <span className="block px-2.5 pt-1 pb-1.5 font-mono text-2xs tracking-[0.12em] uppercase text-[rgba(244,240,231,0.62)]">
           day {menu.cell.dayNumber} · {formatIsoDate(menu.cell.date)}
         </span>
-        {menu.items.map((item, i) => (
-          <button
-            key={item.label}
-            ref={i === 0 ? first : undefined}
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              onClose();
-              item.run();
-            }}
-            className="block w-full px-2.5 py-1.5 border-0 rounded-[8px] bg-transparent text-left text-xs text-paper cursor-pointer hover:bg-[rgba(244,240,231,0.12)] focus:outline-none focus-visible:bg-[rgba(244,240,231,0.12)]"
-          >
-            {item.label}
-          </button>
-        ))}
+        {menu.items.map((item, i) => {
+          const opens = i === 0 || item.group !== menu.items[i - 1].group;
+          return (
+            <div key={`${item.group ?? ''}:${item.label}`} role="none">
+              {opens && i > 0 && (
+                <span className="block h-px mx-2 my-1.5 bg-[rgba(244,240,231,0.16)]" role="separator" />
+              )}
+              {opens && item.group && (
+                <span
+                  className="block px-2.5 pt-1 pb-0.5 font-sans text-3xs font-semibold text-[rgba(244,240,231,0.5)]"
+                  role="presentation"
+                >
+                  {item.group}
+                </span>
+              )}
+              <button
+                ref={i === 0 ? first : undefined}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  onClose();
+                  item.run();
+                }}
+                className="block w-full px-2.5 py-1.5 border-0 rounded-[8px] bg-transparent text-left text-xs text-paper cursor-pointer hover:bg-[rgba(244,240,231,0.12)] focus:outline-none focus-visible:bg-[rgba(244,240,231,0.12)]"
+              >
+                {item.label}
+              </button>
+            </div>
+          );
+        })}
       </div>
     </>
   );

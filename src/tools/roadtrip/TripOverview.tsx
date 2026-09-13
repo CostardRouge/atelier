@@ -225,14 +225,19 @@ export default function TripOverview({
    * active Library asset reaches the slide by the path that already exists,
    * never by a second one.
    */
-  const startPiece = useCallback(
-    (kind: PostKind) => {
-      if (!selected) return;
-      const post = createTripPost(kind, selected, '', null, trip.hookDefaults[kind]);
+  const startPieceOn = useCallback(
+    (kind: PostKind, date: IsoDate) => {
+      const post = createTripPost(kind, date, '', null, trip.hookDefaults[kind]);
       mutate([...trip.posts, post]);
       onOpenPost(post);
     },
-    [selected, trip.hookDefaults, trip.posts, mutate, onOpenPost],
+    [trip.hookDefaults, trip.posts, mutate, onOpenPost],
+  );
+  const startPiece = useCallback(
+    (kind: PostKind) => {
+      if (selected) startPieceOn(kind, selected);
+    },
+    [selected, startPieceOn],
   );
 
   // The same three verbs, offered wherever the shell shows one of this day's
@@ -338,9 +343,19 @@ export default function TripOverview({
     [trip.stages, openStage],
   );
 
+  // A right-click on a day tells it first — the reason the grid exists — and
+  // edits its stage second, under a rule: the two groups act on different
+  // things. A piece started here lands on the day CLICKED, not on the day
+  // open below, and opens straight away, like the day panel's own buttons.
   const menuFor = useCallback(
-    (date: IsoDate): DayMenuItem[] =>
-      dayStageActions(trip, date).map((action) => ({
+    (date: IsoDate): DayMenuItem[] => [
+      ...POST_KINDS.map((k) => ({
+        group: 'Tell this day',
+        label: k.label,
+        run: () => startPieceOn(k.id, date),
+      })),
+      ...dayStageActions(trip, date).map((action) => ({
+        group: 'Stage',
         label: action.label,
         run: () => {
           const result = action.apply(trip);
@@ -348,7 +363,8 @@ export default function TripOverview({
           setStageId(result.selectedId);
         },
       })),
-    [trip, setStages],
+    ],
+    [trip, setStages, startPieceOn],
   );
 
   const drafted = coverage.posts - coverage.publishedPosts;

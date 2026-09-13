@@ -72,7 +72,7 @@ export default function ShortDayStrip({
           {LEVELS.map((bg, i) => (
             <span
               key={i}
-              className="rounded-[3px] border border-line"
+              className="rounded-[3px]"
               style={{ width: 11, height: 11, background: bg }}
               aria-hidden="true"
             />
@@ -80,7 +80,7 @@ export default function ShortDayStrip({
           <span>often</span>
         </span>
         <span className="flex-1" />
-        <span className="max-[600px]:hidden truncate">click: open the day{menuFor ? ' · right-click: cut a stage' : ''}</span>
+        <span className="max-[600px]:hidden truncate">click: open the day{menuFor ? ' · right-click: tell it, or edit its stage' : ''}</span>
       </div>
       <div className="flex gap-1" role="grid" aria-label="Trip days">
         {days.map((cell) => {
@@ -122,11 +122,12 @@ export default function ShortDayStrip({
                 onBlur={() => setHovered((h) => (h?.cell === cell ? null : h))}
                 aria-label={cellTitle(cell, stage)}
                 aria-selected={isSelected}
-                className="w-full h-9 p-0 border cursor-pointer rounded-[4px] transition-[box-shadow] duration-150 ease-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-ink"
+                className="w-full h-9 p-0 border-0 cursor-pointer rounded-[4px] transition-[box-shadow] duration-150 ease-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-ink"
                 style={{
                   background: LEVELS[levelOf(cell)],
-                  borderColor: isSelected ? '#1b1813' : isToday ? '#938b7c' : 'rgba(43,33,18,0.10)',
-                  borderWidth: isSelected || isToday ? 2 : 1,
+                  outline: isSelected ? '2px solid var(--color-ink)' : undefined,
+                  outlineOffset: isSelected ? 1 : undefined,
+                  boxShadow: isToday && !isSelected ? 'inset 0 0 0 2px var(--color-muted)' : undefined,
                 }}
                 title={undefined}
               >

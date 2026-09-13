@@ -30,7 +30,7 @@ const HANDLE = 12;
 /** How far the frame stands off the columns it encloses. */
 const OUTSET = 5;
 /** Room under the last lane before the frame closes. */
-const BOTTOM = 18;
+const BOTTOM = 8;
 /** A handle's hit zone, around its 26px pill. */
 const PILL_ZONE = 40;
 
