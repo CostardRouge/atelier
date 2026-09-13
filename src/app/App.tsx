@@ -17,6 +17,7 @@ import { useLayoutMode } from '../shared/ui/use-layout-mode';
 import { useAssetLibrary } from '../shared/library/AssetLibraryContext';
 import { useWinnowConnection } from '../shared/sources/winnow/use-connection';
 import ThemeToggle from './ThemeToggle';
+import { buttonClass } from '../shared/ui/Button';
 
 /**
  * Whether the library column is collapsed to its rail, remembered PER SIZE.
@@ -239,7 +240,12 @@ export default function App() {
           {tool && !compact && <SourcePill />}
           <ThemeToggle />
           <a
-            className="inline-flex items-center text-muted transition-[color,transform] duration-200 ease-paper hover:text-accent hover:-translate-y-px"
+            className={buttonClass(
+              'ghost',
+              'sm',
+              'w-7 text-muted hover:text-ink [&>svg]:w-4 [&>svg]:h-4',
+              { square: true },
+            )}
             href={REPO_URL}
             target="_blank"
             rel="noreferrer"
