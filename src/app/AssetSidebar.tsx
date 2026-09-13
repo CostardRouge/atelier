@@ -42,6 +42,8 @@ import {
   pickFiles,
 } from '../shared/sources/file-sources';
 import EmptyState from '../shared/ui/EmptyState';
+import { Icons } from '../shared/ui/icons';
+import IconButton from '../shared/ui/IconButton';
 
 /** Short, human label for a kind chip. */
 function kindLabel(kind: AssetKind): string {
@@ -367,33 +369,27 @@ export default function AssetSidebar({
   // 820px, a state now unreachable, and dead responsive classes are worse
   // than none because they read as a supported layout.
   if (collapsed && variant === 'docked') {
+    const empty = lib.assets.length === 0;
     return (
-      <aside className="flex-none w-12 flex flex-col items-center gap-3 py-3 border-r border-line">
-        <button
-          type="button"
-          onClick={onToggle}
-          className="w-8 h-8 grid place-items-center rounded-lg border border-line bg-surface text-ink-soft hover:text-accent hover:border-line-strong transition-colors"
-          aria-label="Expand asset library"
-          title="Expand asset library"
+      <aside className="flex-none w-12 flex flex-col items-center gap-2 py-3 border-r border-line">
+        <IconButton size="sm" label="Expand asset library" onClick={onToggle}>
+          {Icons.forward}
+        </IconButton>
+        {/* Adding is the rail's own verb — an empty library starts as this
+            rail (App.tsx), so the way in must not wait for the panel. */}
+        <IconButton
+          size="sm"
+          variant={empty ? 'primary' : 'default'}
+          label={busy ? 'Opening…' : 'Add files'}
+          disabled={busy}
+          onClick={() => void run(pickFiles)}
         >
-          <svg
-            viewBox="0 0 16 16"
-            width="14"
-            height="14"
-            aria-hidden="true"
-          >
-            <path
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M6 3.5 10.5 8 6 12.5"
-            />
-          </svg>
-        </button>
+          {Icons.plus}
+        </IconButton>
         <span
-          className="w-8 h-8 grid place-items-center rounded-lg bg-ink text-paper font-mono text-2xs"
+          className={`w-7 h-7 grid place-items-center rounded-control font-mono text-2xs ${
+            empty ? 'bg-paper-2 text-muted' : 'bg-ink text-paper'
+          }`}
           title={`${lib.assets.length} assets`}
         >
           {lib.assets.length}

@@ -14,6 +14,8 @@ import { DEFAULT_SNAPS } from '../shared/ui/sheet-snap';
 import { useSectionBar } from '../shared/ui/section-rail';
 import { useAppHeight } from '../shared/ui/use-app-height';
 import { useLayoutMode } from '../shared/ui/use-layout-mode';
+import { useAssetLibrary } from '../shared/library/AssetLibraryContext';
+import { useWinnowConnection } from '../shared/sources/winnow/use-connection';
 
 /**
  * Whether the library column is collapsed to its rail, remembered PER SIZE.
@@ -91,8 +93,30 @@ export default function App() {
     // rail, so only an explicit '0' opens it.
     () => localStorage.getItem(COLLAPSE_KEY_MEDIUM) !== '0',
   );
-  const collapsed = railByDefault ? collapsedMedium : collapsedWide;
+  // **An empty library starts as the rail.** With nothing in it and no
+  // instance connected, the 288px column was a drop zone, one sentence and
+  // "0 selected" — a fifth of the screen for a fact the rail's "0" already
+  // states, with an add button beside it. Expanding it anyway is one click
+  // (`peeked`), and the first file to arrive opens it on its own, since the
+  // preference below then applies again.
+  const lib = useAssetLibrary();
+  const { connection } = useWinnowConnection();
+  const libraryEmpty = lib.assets.length === 0 && !connection;
+  const [peeked, setPeeked] = useState(false);
+  useEffect(() => {
+    if (!libraryEmpty) setPeeked(false);
+  }, [libraryEmpty]);
+  const preferredCollapsed = railByDefault ? collapsedMedium : collapsedWide;
+  const collapsed = (libraryEmpty && !peeked) || preferredCollapsed;
   const toggleLibrary = () => {
+    if (libraryEmpty && !peeked) {
+      // Opening the empty rail: remember the wish as the size's preference
+      // too, so the panel is what the first file lands in.
+      setPeeked(true);
+      if (railByDefault) setCollapsedMedium(false);
+      else setCollapsedWide(false);
+      return;
+    }
     if (railByDefault) setCollapsedMedium((c) => !c);
     else setCollapsedWide((c) => !c);
   };
