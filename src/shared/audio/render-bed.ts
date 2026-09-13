@@ -106,5 +106,35 @@ export async function renderBed(
     playable.map((event) => ({ ...event, at: Math.max(0, event.at - lead) })),
     0,
   );
-  return ctx.startRendering();
+  return limitPeak(await ctx.startRendering());
+}
+
+/** The highest a bed's samples may reach once rendered — just under full scale. */
+export const BED_CEILING = 0.98;
+
+/**
+ * Scale a rendered bed down, as a whole, if any sample passed the ceiling. Two
+ * ticks turned up and landing a few milliseconds apart at the fast start of a
+ * sweep can sum past full scale, and an AAC encoder handed that clips it
+ * audibly. Only a bed that WOULD clip is touched, and it keeps its shape — the
+ * ticks stay in proportion to each other, just no louder than the file allows.
+ */
+export function limitPeak<T extends { numberOfChannels: number; getChannelData(c: number): Float32Array }>(
+  buffer: T,
+): T {
+  let peak = 0;
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const data = buffer.getChannelData(c);
+    for (let i = 0; i < data.length; i++) {
+      const v = Math.abs(data[i]);
+      if (v > peak) peak = v;
+    }
+  }
+  if (peak <= BED_CEILING) return buffer;
+  const k = BED_CEILING / peak;
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const data = buffer.getChannelData(c);
+    for (let i = 0; i < data.length; i++) data[i] *= k;
+  }
+  return buffer;
 }

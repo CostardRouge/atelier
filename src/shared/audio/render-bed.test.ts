@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { eventsWithin, scheduleScore } from './render-bed';
+import { BED_CEILING, eventsWithin, limitPeak, scheduleScore } from './render-bed';
 import { isVoice, scheduleVoice, VOICE_NAMES } from './voices';
 
 /**
@@ -108,5 +108,27 @@ describe('scheduleScore', () => {
     const { ctx, starts } = recordingContext();
     expect(scheduleScore(ctx, {} as AudioNode, score, 5, 0.5)).toBe(2);
     expect(Math.min(...starts)).toBeCloseTo(5.1, 6);
+  });
+});
+
+describe('limitPeak', () => {
+  const bed = (...channels: number[][]) => {
+    const data = channels.map((c) => new Float32Array(c));
+    return { numberOfChannels: data.length, getChannelData: (c: number) => data[c] };
+  };
+
+  it('leaves a bed that fits under the ceiling exactly as it was', () => {
+    const b = bed([0.2, -0.5, 0.9]);
+    limitPeak(b);
+    expect([...b.getChannelData(0)]).toEqual([0.2, -0.5, 0.9].map(Math.fround));
+  });
+
+  it('brings a bed that would clip under the ceiling, keeping the ticks in proportion', () => {
+    const b = bed([0.7, -1.4], [0.35, 0]);
+    limitPeak(b);
+    const [l, r] = [b.getChannelData(0), b.getChannelData(1)];
+    expect(Math.abs(l[1])).toBeCloseTo(BED_CEILING, 5);
+    expect(l[0] / Math.abs(l[1])).toBeCloseTo(0.5, 5);
+    expect(r[0] / l[0]).toBeCloseTo(0.5, 5);
   });
 });

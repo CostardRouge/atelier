@@ -44,6 +44,8 @@ export interface ScrubOptions {
   tape: TapePosition;
   /** Tick at every landing, in the exported video. */
   sound: boolean;
+  /** How loud the ticks are: 1 as designed, 0 silent, up to 1.5. */
+  tickVolume: number;
   /** Over a clip with its own sound: mix the ticks in rather than leave them out. */
   mixWithClip: boolean;
 }
@@ -56,12 +58,14 @@ export const SCRUB_DEFAULTS: ScrubOptions = {
   flash: true,
   tape: 'bottom',
   sound: true,
+  tickVolume: 1,
   mixWithClip: false,
 };
 
 /** The bounds each option is clamped to — a stored value is never trusted. */
 export const SCRUB_LIMITS = {
   runUpDays: { min: 2, max: 30 },
+  tickVolume: { min: 0, max: 1.5 },
   maxStops: { min: 3, max: 16 },
   sweepSeconds: { min: 0.8, max: 4 },
 } as const;
@@ -99,6 +103,11 @@ function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Number.isFinite(n) ? n : min));
 }
 
+/** Like `clamp`, but an unreadable value falls back to `fallback`, not to `min`. */
+function clampOr(n: number, min: number, max: number, fallback: number): number {
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+}
+
 /** A stored options record, read through the defaults and clamped. */
 export function scrubOptions(raw: Readonly<Record<string, unknown>>): ScrubOptions {
   const o = { ...SCRUB_DEFAULTS, ...raw } as ScrubOptions;
@@ -118,6 +127,12 @@ export function scrubOptions(raw: Readonly<Record<string, unknown>>): ScrubOptio
     flash: o.flash !== false,
     tape: o.tape === 'top' ? 'top' : 'bottom',
     sound: o.sound !== false,
+    tickVolume: clampOr(
+      Number(o.tickVolume),
+      SCRUB_LIMITS.tickVolume.min,
+      SCRUB_LIMITS.tickVolume.max,
+      SCRUB_DEFAULTS.tickVolume,
+    ),
     mixWithClip: o.mixWithClip === true,
   };
 }
@@ -267,18 +282,22 @@ export function tapeTicks(
  *   meaning, so the one that is different;
  * - the hero is the `seat`, which ends the phrase.
  *
- * Levels fall along the sweep as the mechanism slows. Nothing when there is
- * nowhere to sweep from.
+ * Levels fall along the sweep as the mechanism slows. `volume` scales every
+ * one of them, so the ticks keep their shape at any level; and because it is
+ * applied HERE, the editor's live playback, a still's video, a silent clip's
+ * track and a mix all follow the one number with nothing else to thread.
+ * Nothing when there is nowhere to sweep from — or at volume 0, which writes no
+ * track at all rather than a silent one.
  */
-export function scrubScore(plan: ScrubPlan): SoundEvent[] {
-  if (plan.sweepSeconds <= 0) return [];
+export function scrubScore(plan: ScrubPlan, volume = 1): SoundEvent[] {
+  if (plan.sweepSeconds <= 0 || !(volume > 0)) return [];
   return plan.stops.map((stop, i) =>
     stop.hero
-      ? { at: stop.at, voice: 'seat', gain: 0.8 }
+      ? { at: stop.at, voice: 'seat', gain: 0.8 * volume }
       : {
           at: stop.at,
           voice: stop.legStart ? 'leg' : 'detent',
-          gain: Math.max(0.35, 0.85 - i * 0.04),
+          gain: Math.max(0.35, 0.85 - i * 0.04) * volume,
         },
   );
 }

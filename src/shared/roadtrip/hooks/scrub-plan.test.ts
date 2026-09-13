@@ -199,6 +199,29 @@ describe('scrubScore', () => {
     expect(scrubScore(scrubPlan(cal, dateOf(cal, 1), opts())!)).toEqual([]);
   });
 
+  it('scales every tick by the volume, keeping their shape', () => {
+    const cal = calendar(30, [3, 8, 14, 20], [1, 14]);
+    const plan = scrubPlan(cal, dateOf(cal, 27), opts())!;
+    const full = scrubScore(plan, 1);
+    const half = scrubScore(plan, 0.5);
+    half.forEach((event, i) => {
+      expect(event.at).toBe(full[i].at);
+      expect(event.gain).toBeCloseTo((full[i].gain ?? 0) * 0.5, 9);
+    });
+  });
+
+  it('writes no score at all at volume 0, so no silent track is made', () => {
+    const cal = calendar(30, [3, 8]);
+    expect(scrubScore(scrubPlan(cal, dateOf(cal, 20), opts())!, 0)).toEqual([]);
+  });
+
+  it('reads the volume through the defaults, clamped, and falls back when unreadable', () => {
+    expect(scrubOptions({}).tickVolume).toBe(1);
+    expect(scrubOptions({ tickVolume: 9 }).tickVolume).toBe(1.5);
+    expect(scrubOptions({ tickVolume: -1 }).tickVolume).toBe(0);
+    expect(scrubOptions({ tickVolume: 'loud' }).tickVolume).toBe(1);
+  });
+
   it('reads the sound switch through the defaults', () => {
     expect(scrubOptions({}).sound).toBe(true);
     expect(scrubOptions({ sound: false }).sound).toBe(false);

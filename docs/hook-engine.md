@@ -317,10 +317,11 @@ sound will add there is an audio track, since it writes none today.
   the right place in the file (measured); whether `detent`, `leg` and `seat`
   sound like a ratchet coming to rest is the maintainer's ear to judge — the
   gains and frequencies are one table in `voices.ts`.
-- **Mixing has no level control.** The ticks are summed at the bed's own level
-  over whatever the clip recorded; loud wind noise will bury them, a quiet clip
-  will not. A "ticks level" slider is the obvious next knob if the maintainer's
-  ear says so.
+- **The ticks' level is one slider** (Défilé → "Ticks volume", 0–150%, built
+  2026-09-13), applied inside `scrubScore`, so live playback, a still's video,
+  a silent clip's track and a mix all follow it. Measured linear (50% → ×0.52,
+  150% → ×1.48 RMS); a dense sweep at 150% peaks at 0.86 in the decoded file.
+  Whether 150% is enough over real wind noise is the maintainer's ear to judge.
 - **An HE-AAC source** (rare in cameras and phones) would need its real
   AudioSpecificConfig, which `decodeAacWindow` reads from the sample entry and
   only falls back to a built LC one; if a decode fails, the export copies the

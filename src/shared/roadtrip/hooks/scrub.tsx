@@ -178,6 +178,26 @@ function ScrubPanel({ options, onChange, ctx }: HookPanelProps) {
       </label>
 
       {o.sound && (
+        <Row title={`Ticks volume · ${Math.round(o.tickVolume * 100)}%`}>
+          <input
+            type="range"
+            min={SCRUB_LIMITS.tickVolume.min}
+            max={SCRUB_LIMITS.tickVolume.max}
+            step={0.05}
+            value={o.tickVolume}
+            onChange={(e) => set({ tickVolume: Number(e.target.value) })}
+            className="accent-accent"
+            aria-label="Ticks volume"
+          />
+          {o.tickVolume === 0 && (
+            <span className="text-[0.7rem] text-faint">
+              At 0% no sound track is written for the ticks at all.
+            </span>
+          )}
+        </Row>
+      )}
+
+      {o.sound && (
         <label className="flex items-start gap-2 text-[0.78rem] text-ink-soft cursor-pointer">
           <input
             type="checkbox"
@@ -243,7 +263,7 @@ export const scrubVariant: HookVariant = {
           ? (t) => (t < sweep ? { headline: String(plan.stops[plan.stopAt(t)].dayNumber) } : {})
           : undefined,
       paint: (g, t, frame) => paintScrub(g, plan, o, ctx.pictures, t, frame),
-      score: o.sound ? () => scrubScore(plan) : undefined,
+      score: o.sound ? () => scrubScore(plan, o.tickVolume) : undefined,
       mixWithSource: o.sound && o.mixWithClip,
     };
   },

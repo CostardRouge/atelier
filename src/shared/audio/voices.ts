@@ -42,8 +42,16 @@ export function isVoice(name: unknown): name is VoiceName {
   return typeof name === 'string' && (VOICE_NAMES as readonly string[]).includes(name);
 }
 
+/**
+ * The loudest a single voice may be asked to play. Above 1 on purpose: a score
+ * turned up (the scrub's ticks volume) must come out LOUDER, not flattened
+ * against a ceiling of 1 while quieter hits keep rising. What protects the
+ * file from clipping is the bed's own peak guard (`render-bed.ts`), not this.
+ */
+export const MAX_VOICE_GAIN = 2;
+
 export interface VoiceParams {
-  /** Peak level, 0..1. */
+  /** Peak level, 0..MAX_VOICE_GAIN; 1 is the voice as designed. */
   gain?: number;
   /** Pitch multiplier: 1 as designed, 2 an octave up, 0.5 an octave down. */
   rate?: number;
@@ -201,7 +209,7 @@ const VOICES: Record<VoiceName, Voice> = {
    * different — a listener hears the trip's legs go past.
    */
   leg: (ctx, dest, when, gain, rate) => {
-    noiseHit(ctx, dest, when, { freq: 1100 * rate, q: 3.5, duration: 0.11, gain: Math.min(1, gain * 1.4) });
+    noiseHit(ctx, dest, when, { freq: 1100 * rate, q: 3.5, duration: 0.11, gain: Math.min(MAX_VOICE_GAIN, gain * 1.4) });
     tone(ctx, dest, when, { freq: 420 * rate, endFreq: 300 * rate, duration: 0.06, gain: gain * 0.35 });
   },
   /**
@@ -228,5 +236,11 @@ export function scheduleVoice(
   { gain = 0.5, rate = 1 }: VoiceParams = {},
 ): void {
   const play = VOICES[isVoice(voice) ? voice : 'click'];
-  play(ctx, destination, Math.max(0, when), Math.max(0, Math.min(1, gain)), Math.max(0.05, rate));
+  play(
+    ctx,
+    destination,
+    Math.max(0, when),
+    Math.max(0, Math.min(MAX_VOICE_GAIN, gain)),
+    Math.max(0.05, rate),
+  );
 }
