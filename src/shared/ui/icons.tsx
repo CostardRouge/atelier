@@ -52,9 +52,9 @@ export const Icons = {
   check: icon(<path d="M5 12l5 5 9-10" />),
   more: icon(
     <>
-      <circle cx="5" cy="12" r="1" fill="currentColor" />
-      <circle cx="12" cy="12" r="1" fill="currentColor" />
-      <circle cx="19" cy="12" r="1" fill="currentColor" />
+      <circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none" />
     </>,
   ),
   /** The dotted wait — an export in flight, a fetch not yet answered. */

@@ -328,3 +328,8 @@ The founding request: most exports are portrait, some footage is better watched 
 ## One clip per project, for now (2026-08-21)
 
 **Decision.** A studio project is a composition over **one** media (the maintainer's flow: a drone clip, its overlays, its style, its export). Multi-clip editing (timeline, cuts, transitions) is explicitly out of scope; if it ever comes, it is a *list of compositions sharing a theme*, not a rewrite. Don't introduce timeline concepts into the project model.
+
+## 2026-09-13 — The project card opens as a whole, and its verbs live in a ⋯
+
+The gallery card had a row of grey links under it (Open · Use as template · Move… · Delete), the destructive one among them. Now the WHOLE card is the open target (the trip card's rule since 2026-09-07), the secondary verbs are in `shared/ui/OverflowMenu` (Open · Use as template · Move to X… · then Delete… apart, in red), and a move or a delete is confirmed in `ConfirmDialog`. The card no longer clips (`overflow-hidden` moved to the preview's own wrapper) or the menu would be cut at the card's edge — a trap for any card that grows a menu. The gallery header names itself (Projects · count) with Import and New project as `Button`s, and a dashed `NewProjectTile` completes the local grid: a click creates, a dropped `.atelier.json` imports (`importFromFile`, the half of `handleImport` that takes a File). **How to apply**: add a card verb to the menu's `items`, never as a link under the card.
+

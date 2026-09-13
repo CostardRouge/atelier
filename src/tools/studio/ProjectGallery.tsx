@@ -61,6 +61,8 @@ import Button from '../../shared/ui/Button';
 import LoadingState from '../../shared/ui/LoadingState';
 import EmptyState from '../../shared/ui/EmptyState';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
+import { Icons } from '../../shared/ui/icons';
+import OverflowMenu, { type OverflowItem } from '../../shared/ui/OverflowMenu';
 
 interface ProjectGalleryProps {
   /** Project currently loaded in the editor (highlighted, opens instantly). */
@@ -126,35 +128,67 @@ function ProjectCard({
 }) {
   const compact = useIsCompact();
   const thumbUrl = useObjectUrl(doc.thumbnail);
-  const [confirming, setConfirming] = useState<'delete' | 'move' | null>(null);
-  const [moveTo, setMoveTo] = useState(moveTargets[0]?.id ?? '');
+  const [confirming, setConfirming] = useState<
+    { kind: 'delete' } | { kind: 'move'; to: SourceInfo } | null
+  >(null);
   const aspect = ASPECT_PRESETS.find((a) => a.id === doc.settings.aspectId);
+
+  // The WHOLE card opens the project (the trip card's rule since 2026-09-07):
+  // the preview and the name are the two things you pick a card by, and a
+  // separate "Open" button under them was a third target for one intent.
+  // Everything else is behind the ⋯, with the destructive verb apart.
+  const items: OverflowItem[] = [
+    { id: 'open', label: isOpen ? 'Resume' : remoteOnly ? 'Open here' : 'Open', onSelect: onOpen },
+    ...(!remoteOnly
+      ? [
+          {
+            id: 'template',
+            label: 'Use as template',
+            title: "New project reusing this one's overlays, look and settings",
+            onSelect: onDuplicate,
+          },
+        ]
+      : []),
+    ...(!remoteOnly
+      ? moveTargets.map((target) => ({
+          id: `move:${target.id}`,
+          label: `Move to ${sourceLabel(target.id)}…`,
+          onSelect: () => setConfirming({ kind: 'move', to: target }),
+        }))
+      : []),
+    { id: 'delete', label: 'Delete…', danger: true, onSelect: () => setConfirming({ kind: 'delete' }) },
+  ];
 
   return (
     <div
-      className={`flex flex-col overflow-hidden bg-surface border rounded-paper-lg shadow-paper-soft transition-[transform,box-shadow,border-color] duration-300 ease-paper hover:-translate-y-1 hover:shadow-paper ${
+      role="button"
+      tabIndex={0}
+      aria-label={`Open ${doc.name}`}
+      aria-disabled={busy !== null}
+      onClick={() => {
+        if (busy === null) onOpen();
+      }}
+      onKeyDown={(e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) {
+          e.preventDefault();
+          if (busy === null) onOpen();
+        }
+      }}
+      className={`group relative flex flex-col bg-surface border rounded-paper-lg shadow-paper-soft cursor-pointer transition-[transform,box-shadow,border-color] duration-300 ease-paper hover:-translate-y-1 hover:shadow-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
         isOpen ? 'border-accent' : 'border-line hover:border-line-strong'
-      } ${remoteOnly ? 'opacity-75' : ''}`}
+      } ${remoteOnly ? 'opacity-75' : ''} ${busy !== null ? 'cursor-default' : ''}`}
     >
-      <button
-        type="button"
-        onClick={onOpen}
-        disabled={busy !== null}
-        className="block w-full p-0 border-0 bg-frame cursor-pointer leading-[0] disabled:cursor-default"
-        aria-label={`Open ${doc.name}`}
-      >
+      {/* The card no longer clips (the ⋯ menu opens past its edge), so the
+          preview rounds its own top corners. */}
+      <div className="block w-full bg-frame leading-[0] rounded-t-paper-lg overflow-hidden">
         {thumbUrl ? (
-          <img
-            src={thumbUrl}
-            alt=""
-            className="block w-full aspect-video object-cover"
-          />
+          <img src={thumbUrl} alt="" className="block w-full aspect-video object-cover" />
         ) : (
           <div className="w-full aspect-video flex items-center justify-center text-muted font-mono text-xs">
             {remoteOnly ? 'preview drawn once opened here' : 'no preview yet'}
           </div>
         )}
-      </button>
+      </div>
 
       <div
         className={`flex flex-col ${
@@ -170,13 +204,13 @@ function ProjectCard({
           >
             {doc.name}
           </h3>
-          {/* At two columns the chip was taking a third of the title's row,
-              so a project's NAME — the one thing you pick a card by — read as
-              "Sydney har…". It moves down to the facts, which wrap anyway. */}
-          {aspect && !compact && (
-            <span className="flex-none font-mono text-2xs tracking-[0.08em] px-2 py-[2px] rounded-full border border-line text-muted">
-              {aspect.id}
+          {isOpen && (
+            <span className="flex-none font-mono text-3xs tracking-[0.08em] uppercase px-1.5 py-[2px] rounded-[6px] bg-accent-wash text-accent-ink">
+              open
             </span>
+          )}
+          {busy === null && (
+            <OverflowMenu label={`More actions for ${doc.name}`} items={items} className="-mr-1.5" />
           )}
         </div>
 
@@ -185,7 +219,7 @@ function ProjectCard({
             compact ? 'text-3xs' : 'text-2xs'
           }`}
         >
-          {aspect && compact && (
+          {aspect && (
             <>
               <span className="text-ink-soft">{aspect.id}</span>
               <span className="text-faint">·</span>
@@ -222,104 +256,43 @@ function ProjectCard({
             {busy}
           </p>
         )}
-
-        <div className="flex items-center gap-3 pt-1 flex-wrap">
-          <button
-            type="button"
-            onClick={onOpen}
-            disabled={busy !== null}
-            className="px-3.5 py-[0.45rem] inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-xs font-semibold transition-colors duration-200 ease-paper hover:bg-accent hover:border-accent disabled:opacity-50"
-          >
-            {isOpen ? 'Resume' : remoteOnly ? 'Open here' : 'Open'}
-          </button>
-          {!remoteOnly && confirming === null && (
-            <button
-              type="button"
-              onClick={onDuplicate}
-              className="p-0 border-0 bg-transparent text-xs text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink"
-              title="New project reusing this one's overlays, look and settings"
-            >
-              Use as template
-            </button>
-          )}
-          <span className="flex-1" />
-          {confirming === null && (
-            <>
-              {moveTargets.length > 0 && !remoteOnly && (
-                <button
-                  type="button"
-                  onClick={() => setConfirming('move')}
-                  className="p-0 border-0 bg-transparent text-xs text-faint cursor-pointer hover:text-accent-ink"
-                  title="Keep this project on another source"
-                >
-                  Move…
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setConfirming('delete')}
-                className="p-0 border-0 bg-transparent text-xs text-faint cursor-pointer hover:text-danger"
-                aria-label={`Delete ${doc.name}`}
-              >
-                Delete
-              </button>
-            </>
-          )}
-          {confirming === 'delete' && (
-            <ConfirmDialog
-              title={`Delete “${doc.name}”?`}
-              confirmLabel="Delete"
-              danger
-              onCancel={() => setConfirming(null)}
-              onConfirm={() => {
-                setConfirming(null);
-                onDelete();
-              }}
-            >
-              <p>
-                Its overlays, look and settings go with it. The media files stay
-                where they are.
-              </p>
-            </ConfirmDialog>
-          )}
-          {confirming === 'move' && (
-            <span className="flex items-center gap-2 text-xs flex-wrap">
-              <label className="inline-flex items-center gap-1.5 text-muted">
-                to
-                <select
-                  value={moveTo}
-                  onChange={(e) => setMoveTo(e.target.value)}
-                  className="font-sans text-xs px-2 py-0.5 border border-line rounded-full bg-paper text-ink focus:outline-none focus:border-accent"
-                  aria-label="Move this project to"
-                >
-                  {moveTargets.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {sourceLabel(s.id)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                onClick={() => {
-                  setConfirming(null);
-                  if (moveTo) onMove(moveTo);
-                }}
-                className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px]"
-              >
-                Move
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirming(null)}
-                className="p-0 border-0 bg-transparent text-muted cursor-pointer"
-              >
-                Cancel
-              </button>
-            </span>
-          )}
-        </div>
       </div>
+
+      {confirming?.kind === 'delete' && (
+        <ConfirmDialog
+          title={`Delete “${doc.name}”?`}
+          confirmLabel="Delete"
+          danger
+          onCancel={() => setConfirming(null)}
+          onConfirm={() => {
+            setConfirming(null);
+            onDelete();
+          }}
+        >
+          <p>
+            Its overlays, look and settings go with it. The media files stay
+            where they are.
+          </p>
+        </ConfirmDialog>
+      )}
+      {confirming?.kind === 'move' && (
+        <ConfirmDialog
+          title={`Move “${doc.name}” to ${sourceLabel(confirming.to.id)}?`}
+          confirmLabel="Move"
+          cancelLabel="Cancel"
+          onCancel={() => setConfirming(null)}
+          onConfirm={() => {
+            const to = confirming.to.id;
+            setConfirming(null);
+            onMove(to);
+          }}
+        >
+          <p>
+            The project will be kept there from now on, and reopen from any
+            device connected to it. Its media never travels.
+          </p>
+        </ConfirmDialog>
+      )}
     </div>
   );
 }
@@ -484,6 +457,11 @@ export default function ProjectGallery({
   async function handleImport(targetSourceId: string) {
     const picked = await pickFile(PROJECT_FILE_ACCEPT);
     if (!picked) return;
+    await importFromFile(picked, targetSourceId);
+  }
+
+  /** The import itself — from the file dialog, or from a file dropped on the tile. */
+  async function importFromFile(picked: File, targetSourceId: string) {
     setNotice(null);
     const parsed = parseProjectFile(await picked.text());
     if (!parsed.ok) {
@@ -613,24 +591,24 @@ export default function ProjectGallery({
           the same verb twice on one screen — so the row itself goes with them
           rather than leaving an empty one above the cards. */}
       {!compact && (
-        <div className="flex items-center justify-end gap-4 flex-wrap">
-          <>
-            <button
-              type="button"
-              onClick={startImport}
-              className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-line-strong rounded-full bg-paper text-ink-soft cursor-pointer text-sm transition-colors hover:border-accent hover:text-accent-ink"
-              title={`Create a project from an exported settings file (${PROJECT_FILE_EXTENSION})`}
-            >
-              ↑ Import a project file
-            </button>
-            <button
-              type="button"
-              onClick={() => setCreating(true)}
-              className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent active:scale-[0.98]"
-            >
-              + New project
-            </button>
-          </>
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="font-serif text-2xl leading-none" aria-hidden="true">
+            Projects
+          </span>
+          {projects !== null && (
+            <span className="font-mono text-xs text-muted tabular-nums">{projects.length}</span>
+          )}
+          <span className="flex-1" />
+          <Button
+            onClick={startImport}
+            icon={Icons.import}
+            title={`Create a project from an exported settings file (${PROJECT_FILE_EXTENSION})`}
+          >
+            Import
+          </Button>
+          <Button variant="primary" onClick={() => setCreating(true)} icon={Icons.plus}>
+            New project
+          </Button>
         </div>
       )}
 
@@ -703,7 +681,7 @@ export default function ProjectGallery({
                     </span>
                   )}
                 </p>
-                {count === 0 ? (
+                {count === 0 && id !== DEFAULT_SOURCE_ID ? (
                   <p className="m-0 text-xs text-faint">Nothing kept here yet.</p>
                 ) : (
                   <div
@@ -731,6 +709,12 @@ export default function ProjectGallery({
                         onMove={(target) => void handleMove(doc, target)}
                       />
                     ))}
+                    {id === DEFAULT_SOURCE_ID && (
+                      <NewProjectTile
+                        onCreate={() => setCreating(true)}
+                        onDropFile={(file) => void importFromFile(file, DEFAULT_SOURCE_ID)}
+                      />
+                    )}
                     {remoteOnly.map((row) => (
                       <ProjectCard
                         key={row.doc.id}
@@ -777,3 +761,48 @@ export default function ProjectGallery({
     </section>
   );
 }
+
+/**
+ * The dashed tile that completes the grid: a way to start a project where the
+ * next card would be, and the drop zone for an exported settings file. A file
+ * dropped anywhere else on the page does what the browser does with a file —
+ * opens it — so the zone is drawn, and says what it takes.
+ */
+function NewProjectTile({
+  onCreate,
+  onDropFile,
+}: {
+  onCreate: () => void;
+  onDropFile: (file: File) => void;
+}) {
+  const [over, setOver] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onCreate}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes('Files')) {
+          e.preventDefault();
+          setOver(true);
+        }
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setOver(false);
+        const file = Array.from(e.dataTransfer.files).find((f) => /\.json$/i.test(f.name));
+        if (file) onDropFile(file);
+      }}
+      className={`min-h-[12rem] flex flex-col items-center justify-center gap-2 p-6 border-[1.5px] border-dashed rounded-paper-lg bg-transparent cursor-pointer text-center transition-colors ${
+        over
+          ? 'border-accent bg-accent-wash text-accent-ink'
+          : 'border-line-strong text-muted hover:border-accent hover:text-accent-ink'
+      }`}
+    >
+      <span className="inline-flex text-2xl">{Icons.plus}</span>
+      <span className="text-sm font-semibold">New project</span>
+      <span className="text-xs">or drop a {PROJECT_FILE_EXTENSION} file here</span>
+    </button>
+  );
+}
+
