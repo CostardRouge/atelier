@@ -16,6 +16,7 @@ import { useAppHeight } from '../shared/ui/use-app-height';
 import { useLayoutMode } from '../shared/ui/use-layout-mode';
 import { useAssetLibrary } from '../shared/library/AssetLibraryContext';
 import { useWinnowConnection } from '../shared/sources/winnow/use-connection';
+import ThemeToggle from './ThemeToggle';
 
 /**
  * Whether the library column is collapsed to its rail, remembered PER SIZE.
@@ -236,6 +237,7 @@ export default function App() {
               tool's tagline ("Unified editor"). It says an action or a state
               now: where the documents live, and the way to `#/sources`. */}
           {tool && !compact && <SourcePill />}
+          <ThemeToggle />
           <a
             className="inline-flex items-center text-muted transition-[color,transform] duration-200 ease-paper hover:text-accent hover:-translate-y-px"
             href={REPO_URL}

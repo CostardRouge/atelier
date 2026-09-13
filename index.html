@@ -40,6 +40,25 @@
          declared here AND as the manifest's `theme_color`: a tab reads this
          one, an installed launch reads that one. -->
     <meta name="theme-color" content="#f4f0e7" />
+    <!-- The theme, stamped before the first paint so a dark reader never sees
+         a flash of paper. The same arithmetic as `shared/ui/theme.ts`:
+         a stored `light`/`dark` wins, anything else follows the OS. -->
+    <script>
+      (function () {
+        var pref = null;
+        try {
+          pref = localStorage.getItem('atelier.theme');
+        } catch (e) {}
+        var dark =
+          pref === 'dark' ||
+          (pref !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        if (dark) {
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', '#16130e');
+        }
+      })();
+    </script>
     <!--
       Launched from the home screen, Atelier runs as its own app — the manifest
       says `display: "standalone"` and these two are the iOS half of it, which

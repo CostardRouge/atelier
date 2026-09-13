@@ -75,6 +75,45 @@
   --animate-deck-load: deck-load 1.15s ease-in-out infinite;
 }
 
+/* The DARK theme: Studio Papier at night — warm ink instead of warm paper,
+   Winnow's own night palette so the two apps agree after dark. Stamped as
+   `data-theme="dark"` on `<html>` (by `index.html` before paint, then by
+   `use-theme.ts`); the darkroom block below comes AFTER it on purpose, so a
+   grading screen is neutral grey under either theme. */
+html[data-theme='dark'] {
+  color-scheme: dark;
+  --color-paper: #16130e;
+  --color-paper-2: #1d1912;
+  --color-surface: #2a251c;
+  --color-ink: #f2ece0;
+  --color-ink-soft: #cfc6b5;
+  --color-muted: #a49a86;
+  --color-faint: #6f6656;
+  --color-line: #2d2820;
+  --color-line-strong: #40392e;
+  --color-accent: #ef5638;
+  --color-accent-ink: #f5745a;
+  --color-accent-wash: #3b211b;
+  --color-frame: #0a0908;
+  --color-paper-glow: #1f1a13;
+  --color-danger: #d85a5a;
+  --color-danger-ink: #e98383;
+  --color-danger-wash: #331716;
+  --color-danger-line: #5a2a28;
+  --color-ok: #57a06a;
+  --color-ok-wash: #15281b;
+  --color-ok-line: #2a4a33;
+  --color-warn: #e0a52a;
+  --color-warn-bright: #e0a52a;
+  --color-warn-wash: #2c2210;
+  --color-warn-line: #4f3d16;
+  --color-info: #8fb4d6;
+  --color-info-wash: #172230;
+  --color-info-line: #2b3d52;
+  --shadow-paper: 0 18px 40px -28px rgba(0, 0, 0, 0.85);
+  --shadow-paper-soft: 0 10px 30px -24px rgba(0, 0, 0, 0.75);
+}
+
 /* The DARKROOM: the same tokens, neutral, under a grading screen.
    `shared/ui/use-surface.ts` sets the attribute while the Studio editor or
    the piece editor is mounted. Every colour is a token, so redefining the

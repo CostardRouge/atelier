@@ -97,7 +97,10 @@ version of Atelier is refused rather than half-read.
 to position, anchors keep edge pinning), grade through a `.cube` LUT, scrub
 with the shared transport. The inspector is tabbed (Overlay / Style / Grade /
 Info / Export); tools run edge-to-edge so a landscape clip finally gets the
-width it needs. **The editor sits in a darkroom**: while a project is open the
+width it needs. The whole suite has a **light and a dark theme**, chosen with
+the button in the masthead (a monitor follows the system, a sun and a moon
+are yours); the dark one is the same paper at night. **The editor sits in a
+darkroom**: while a project is open the
 paper gives way to hue-less grey around the picture, because a warm surround
 biases the eye's reading of a grade. The galleries and the rest of the suite
 keep the paper. Clips **without** an `.srt` are accepted: telemetry fields
