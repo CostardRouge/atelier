@@ -79,6 +79,7 @@ import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { Icons } from '../../shared/ui/icons';
 import Segmented from '../../shared/ui/Segmented';
+import DeckTimeline from './DeckTimeline';
 
 interface PostEditorProps {
   trip: TripDoc;
@@ -935,6 +936,10 @@ export default function PostEditor({
             from the one screen that has none, while the width beside a
             portrait frame goes unused either way. */}
         <div className="flex-1 min-h-0 flex flex-row items-stretch justify-center gap-3">
+          {/* On a phone the rail keeps the deck (a row under the picture
+              costs the screen with the least height); wide, the deck is the
+              TIMELINE under the stage, and the rail stands down. */}
+          {compact && (
           <SlideRail
             slides={slides}
             index={slideIndex}
@@ -948,6 +953,7 @@ export default function PostEditor({
             onIncludeCta={(on) => onChangePost({ ...post, includeCta: on })}
             onEditClosingCard={() => setTripSheet('cta')}
           />
+          )}
           <div
             style={{ '--fit': fitWidth === null ? '100%' : `${Math.round(fitWidth)}px` } as React.CSSProperties}
             /* `w-full` is load-bearing on a narrow screen: the row above
@@ -1097,6 +1103,33 @@ export default function PostEditor({
                 </button>
               )}
             </div>
+          )}
+          {!compact && (
+            <DeckTimeline
+              slides={slides}
+              index={slideIndex}
+              aspect={aspect}
+              includeCta={post.includeCta}
+              thumbFor={railThumb}
+              onSelect={setSelected}
+              onAdd={() => void addSlide()}
+              onRemove={removeSlide}
+              onMove={moveSlideTo}
+              onIncludeCta={(on) => onChangePost({ ...post, includeCta: on })}
+              onEditClosingCard={() => setTripSheet('cta')}
+              clip={
+                isClipSlide
+                  ? {
+                      duration,
+                      range: clipRange,
+                      speed: slide.speed,
+                      playhead,
+                      playing: clipPlaying,
+                      onRangeChange: setClipRange,
+                    }
+                  : null
+              }
+            />
           )}
           </div>
         </div>
