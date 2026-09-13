@@ -65,7 +65,7 @@ export const SCRUB_DEFAULTS: ScrubOptions = {
 /** The bounds each option is clamped to — a stored value is never trusted. */
 export const SCRUB_LIMITS = {
   runUpDays: { min: 2, max: 30 },
-  tickVolume: { min: 0, max: 1.5 },
+  tickVolume: { min: 0, max: 2 },
   maxStops: { min: 3, max: 16 },
   sweepSeconds: { min: 0.8, max: 4 },
 } as const;

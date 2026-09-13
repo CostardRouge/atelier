@@ -317,11 +317,15 @@ sound will add there is an audio track, since it writes none today.
   the right place in the file (measured); whether `detent`, `leg` and `seat`
   sound like a ratchet coming to rest is the maintainer's ear to judge — the
   gains and frequencies are one table in `voices.ts`.
-- **The ticks' level is one slider** (Défilé → "Ticks volume", 0–150%, built
-  2026-09-13), applied inside `scrubScore`, so live playback, a still's video,
-  a silent clip's track and a mix all follow it. Measured linear (50% → ×0.52,
-  150% → ×1.48 RMS); a dense sweep at 150% peaks at 0.86 in the decoded file.
-  Whether 150% is enough over real wind noise is the maintainer's ear to judge.
+- **The ticks' level is one slider** (Défilé → "Ticks volume", 0–200%, built
+  2026-09-13, raised to 200% the same day), applied inside `scrubScore`, so
+  live playback, a still's video, a silent clip's track and a mix all follow
+  it. Linear up to where `BED_CEILING` starts pulling it back — measured on a
+  worst-case dense sweep (16 stops, a leg start almost every stop): 50% →
+  ×0.52 RMS, 150% → ×1.47, 200% → the guard engages and the bed's peak sits
+  exactly on the ceiling (0.98) rather than climbing further; the decoded MP4
+  peaks at 0.992, under full scale. Whether 200% is enough over real wind
+  noise is the maintainer's ear to judge.
 - **An HE-AAC source** (rare in cameras and phones) would need its real
   AudioSpecificConfig, which `decodeAacWindow` reads from the sample entry and
   only falls back to a built LC one; if a decode fails, the export copies the

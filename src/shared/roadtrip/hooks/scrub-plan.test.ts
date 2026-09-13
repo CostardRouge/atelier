@@ -217,7 +217,7 @@ describe('scrubScore', () => {
 
   it('reads the volume through the defaults, clamped, and falls back when unreadable', () => {
     expect(scrubOptions({}).tickVolume).toBe(1);
-    expect(scrubOptions({ tickVolume: 9 }).tickVolume).toBe(1.5);
+    expect(scrubOptions({ tickVolume: 9 }).tickVolume).toBe(2);
     expect(scrubOptions({ tickVolume: -1 }).tickVolume).toBe(0);
     expect(scrubOptions({ tickVolume: 'loud' }).tickVolume).toBe(1);
   });
