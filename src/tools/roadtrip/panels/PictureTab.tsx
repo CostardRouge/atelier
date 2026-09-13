@@ -16,6 +16,7 @@ import type { TripGradeBinding } from '../use-trip-grade';
 import DayFromWinnow from '../DayFromWinnow';
 import FrameStrip from '../FrameStrip';
 import { chipClass, legend, linkButton, smallButton } from './ui';
+import Segmented from '../../../shared/ui/Segmented';
 
 interface PictureTabProps {
   post: TripPost;
@@ -55,24 +56,17 @@ interface PictureTabProps {
 export function GradeScopeChips({ grade }: { grade: TripGradeBinding }) {
   const { scope, setScope } = grade;
   return (
-    <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="Grade scope">
-      <button
-        type="button"
-        onClick={() => setScope('trip')}
-        aria-pressed={scope === 'trip'}
-        className={chipClass(scope === 'trip')}
-      >
-        The trip’s
-      </button>
-      <button
-        type="button"
-        onClick={() => setScope('post')}
-        aria-pressed={scope === 'post'}
-        className={chipClass(scope === 'post')}
-      >
-        This piece’s own
-      </button>
-    </div>
+    <Segmented
+      fill
+      size="sm"
+      label="Grade scope"
+      value={scope}
+      onChange={setScope}
+      options={[
+        { id: 'trip', label: 'The trip’s' },
+        { id: 'post', label: 'This piece’s own' },
+      ]}
+    />
   );
 }
 

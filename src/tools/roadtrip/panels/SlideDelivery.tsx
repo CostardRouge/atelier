@@ -10,7 +10,8 @@ import {
   screenSecondsCeiling,
 } from '../../../shared/roadtrip/hook-video';
 import type { SlideMedium } from '../../../shared/roadtrip/trip-types';
-import { chipClass, legend } from './ui';
+import { legend, rowLabel } from './ui';
+import Segmented from '../../../shared/ui/Segmented';
 
 interface SlideDeliveryProps {
   slide: DeckSlide;
@@ -124,25 +125,21 @@ export default function SlideDelivery({
         </p>
       </SectionLegend>
 
-      <div className="grid grid-cols-3 gap-1">
-        {CHOICES.map((choice) => {
-          const would = resolveSlideMedium(choice.id, animated, name);
-          const hint = choiceHint(choice.id, would.reason, would.medium);
-          return (
-            <button
-              key={choice.id}
-              type="button"
-              onClick={() => onMedium(choice.id)}
-              aria-pressed={slide.chosen === choice.id}
-              className={`${chipClass(slide.chosen === choice.id)} flex flex-col gap-0.5 !text-left`}
-            >
-              <span className="font-semibold">{choice.label}</span>
-              <span className="font-mono text-3xs tracking-[0.06em] uppercase opacity-70">
-                {hint ?? ' '}
-              </span>
-            </button>
-          );
-        })}
+      <div className="flex items-center gap-3">
+        <span className={rowLabel}>Goes out as</span>
+        <Segmented
+          fill
+          size="sm"
+          label="What this slide is delivered as"
+          value={slide.chosen}
+          onChange={onMedium}
+          options={CHOICES.map((choice) => {
+            const would = resolveSlideMedium(choice.id, animated, name);
+            const hint = choiceHint(choice.id, would.reason, would.medium);
+            return { id: choice.id, label: choice.label, title: hint ?? undefined };
+          })}
+          className="flex-1 min-w-0"
+        />
       </div>
 
       <p className="m-0 text-xs text-ink-soft">

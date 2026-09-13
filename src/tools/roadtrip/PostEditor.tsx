@@ -78,6 +78,7 @@ import PanelHost from '../../shared/ui/PanelHost';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { Icons } from '../../shared/ui/icons';
+import Segmented from '../../shared/ui/Segmented';
 
 interface PostEditorProps {
   trip: TripDoc;
@@ -816,21 +817,6 @@ export default function PostEditor({
     [],
   );
 
-  const tabButton = (t: { id: PanelTab; label: string }) => (
-    <button
-      key={t.id}
-      type="button"
-      onClick={() => setTab(t.id)}
-      className={`flex-1 px-2 py-[0.45rem] font-mono text-2xs tracking-[0.14em] uppercase rounded-full cursor-pointer transition-colors ${
-        tab === t.id
-          ? 'bg-ink text-paper'
-          : 'bg-transparent text-muted hover:text-accent-ink'
-      }`}
-      aria-pressed={tab === t.id}
-    >
-      {t.label}
-    </button>
-  );
 
   return (
     // Wide: a two-column grid — the stage spans both rows on the left and
@@ -1129,13 +1115,14 @@ export default function PostEditor({
             rather than a toolbar. On a phone they are the shell's bottom bar
             instead, so there is no strip here at all. */}
         {!compact && (
-          <div
-            className="flex-none flex gap-1 p-1 rounded-full border border-line bg-surface"
-            role="tablist"
-            aria-label="Piece inspector"
-          >
-            {TABS.map(tabButton)}
-          </div>
+          <Segmented
+            fill
+            label="Piece inspector"
+            value={tab}
+            onChange={setTab}
+            options={TABS}
+            className="flex-none"
+          />
         )}
 
         {/* The piece in hand, rendered ONCE above the body: the Content and
