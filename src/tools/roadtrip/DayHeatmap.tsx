@@ -202,7 +202,10 @@ export default function DayHeatmap({
         inside it and scroll away sideways. The grid fills the box from a
         month up to about fourteen months; past that its cells floor at 6px
         and it scrolls. */}
-    <div ref={boxRef} className="overflow-x-auto pb-1">
+    {/* `overflow-x-auto` clips vertically too, so whatever is drawn past the
+        grid — the loupe's grip above the month labels, its frame under the
+        last lane — needs room INSIDE the box, not outside it. */}
+    <div ref={boxRef} className={`overflow-x-auto ${overlay ? 'pt-4 pb-6 pl-2 pr-2' : 'pb-1'}`}>
       <div className="inline-flex gap-2" style={{ minWidth: '100%' }}>
         {/* Weekday rail — every other row, the way a calendar is skimmed. */}
         <div

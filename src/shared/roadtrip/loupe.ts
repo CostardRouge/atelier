@@ -11,7 +11,7 @@
  * it moves and follows the open day when the day leaves it.
  */
 
-import { addDays, daysBetween, isWithin, spanLength, type IsoDate } from './trip-days';
+import { addDays, daysBetween, isWithin, spanLength, weekdayIndex, type IsoDate } from './trip-days';
 
 export interface Loupe {
   start: IsoDate;
@@ -40,8 +40,13 @@ export function defaultLoupe(trip: Span, focus: IsoDate | null, days = DEFAULT_L
   const width = Math.min(days, total);
   const anchor = focus && isWithin(trip.startDate, trip.endDate, focus) ? focus : trip.startDate;
   const from = daysBetween(trip.startDate, anchor) ?? 0;
-  // Two weeks before the focus keeps it inside the window with context behind it.
-  const wanted = Math.max(0, Math.min(total - width, from - 14));
+  // Two weeks before the focus keeps it inside the window with context behind
+  // it, pulled back to that week's Monday: the heatmap is drawn in weeks, so a
+  // window that starts mid-week would frame half a column.
+  const guess = Math.max(0, from - 14);
+  const guessDate = addDays(trip.startDate, guess)!;
+  const monday = guess - (weekdayIndex(guessDate) ?? 0);
+  const wanted = Math.max(0, Math.min(total - width, monday));
   return clampLoupe(trip, { start: addDays(trip.startDate, wanted)!, end: addDays(trip.startDate, wanted + width - 1)! });
 }
 

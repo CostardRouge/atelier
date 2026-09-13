@@ -18,7 +18,8 @@ describe('defaultLoupe', () => {
     const l = defaultLoupe(year, '2025-08-02');
     expect(loupeLength(l)).toBe(DEFAULT_LOUPE_DAYS);
     expect(l.start <= '2025-08-02' && l.end >= '2025-08-02').toBe(true);
-    expect(l.start).toBe('2025-07-19');
+    // Two weeks before, pulled back to that Monday.
+    expect(l.start).toBe('2025-07-14');
   });
   it('starts at the trip when the focus is near its start, and never leaves the trip at its end', () => {
     expect(defaultLoupe(year, '2025-01-03').start).toBe('2025-01-01');
