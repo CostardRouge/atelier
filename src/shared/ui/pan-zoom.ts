@@ -160,3 +160,34 @@ export function swipeCommit(dx: number, width: number, velocity: number): -1 | 0
   if (!flick && Math.abs(dx) < width * SWIPE_DISTANCE) return 0;
   return dx < 0 ? 1 : -1;
 }
+
+/** Wheel pixels past which a trackpad sweep is a page, however wide the slot. */
+export const SWEEP_COMMIT_PX = 160;
+
+/**
+ * Whether a horizontal wheel sweep IN PROGRESS has already earned its page.
+ *
+ * A wheel stream has no release: after the fingers lift, macOS keeps sending
+ * momentum for a second or more, so waiting for quiet (`swipeCommit`) left the
+ * title on the old media for that long while the deck showed the new one. The
+ * sweep commits the moment it crosses this line instead — a quarter of the
+ * slot, capped, because a wide sheet asked for a sweep no trackpad makes —
+ * and the momentum that follows is the caller's to swallow.
+ */
+export function sweepCommit(swept: number, width: number): -1 | 0 | 1 {
+  if (!(width > 0)) return 0;
+  if (Math.abs(swept) < Math.min(width * SWIPE_DISTANCE, SWEEP_COMMIT_PX)) return 0;
+  return swept < 0 ? 1 : -1;
+}
+
+/**
+ * Whether a wheel event swallowed as a finished sweep's momentum is in fact
+ * the START of a new sweep. Momentum only ever decays; fingers landing again
+ * push the delta back up, and that must page again rather than wait out the
+ * tail of the last one.
+ */
+export function sweepRestarts(previous: number, next: number): boolean {
+  const a = Math.abs(previous);
+  const b = Math.abs(next);
+  return b >= 8 && (b > a * 2 || (previous !== 0 && Math.sign(previous) !== Math.sign(next)));
+}

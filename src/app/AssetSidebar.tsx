@@ -286,40 +286,55 @@ export default function AssetSidebar({
     [viewable, lib.meta, viewUrls],
   );
   /**
-   * How the open picture was taken, read once when it opens: the head of the
-   * file for a photograph (`readEffectiveExif` — 256 KB, never the picture),
-   * and for a clip only what the source that handed it over vouched for,
-   * since an MP4 has no EXIF to find and reading a quarter megabyte to learn
-   * that is a waste. Kept beside the item rather than in it: `lightboxItem`
-   * stays pure and every other asset is untouched.
+   * How the pictures in the deck were taken: the head of the file for a
+   * photograph (`readEffectiveExif` — 256 KB, never the picture), and for a
+   * clip only what the source that handed it over vouched for, since an MP4
+   * has no EXIF to find and reading a quarter megabyte to learn that is a
+   * waste. The open one AND its two neighbours, remembered by id while the
+   * sheet is open: the header names the next media the moment a page
+   * commits, so its line should already be there rather than start reading
+   * then. Kept beside the items rather than in them: `lightboxItem` stays
+   * pure and every other asset is untouched.
    */
-  const [exposure, setExposure] = useState<{ id: string; line: string } | null>(null);
+  const [exposures, setExposures] = useState<ReadonlyMap<string, string>>(() => new Map());
   useEffect(() => {
-    const asset = viewing === null ? null : (viewable[viewing] ?? null);
-    const image = asset?.parts.image;
-    const file = image ?? asset?.parts.video;
-    if (!asset || !file) {
-      setExposure(null);
-      return;
-    }
-    if (!image) {
-      setExposure({ id: asset.id, line: exposureSummary(vouchedExif(file)?.exif) });
+    if (viewing === null) {
+      setExposures((prev) => (prev.size ? new Map() : prev));
       return;
     }
     let alive = true;
-    void readEffectiveExif(image).then(({ exif }) => {
-      if (alive) setExposure({ id: asset.id, line: exposureSummary(exif) });
-    });
+    const n = viewable.length;
+    for (const d of [0, 1, -1]) {
+      const asset = n ? viewable[(viewing + d + n) % n] : undefined;
+      const image = asset?.parts.image;
+      const file = image ?? asset?.parts.video;
+      if (!asset || !file) continue;
+      const settle = (line: string) =>
+        setExposures((prev) =>
+          prev.get(asset.id) === line ? prev : new Map(prev).set(asset.id, line),
+        );
+      if (!image) {
+        settle(exposureSummary(vouchedExif(file)?.exif));
+        continue;
+      }
+      void readEffectiveExif(image).then(({ exif }) => {
+        if (alive) settle(exposureSummary(exif));
+      });
+    }
     return () => {
       alive = false;
     };
   }, [viewing, viewable]);
   const viewShown = useMemo(
     () =>
-      exposure
-        ? viewItems.map((i) => (i.id === exposure.id ? { ...i, camera: exposure.line } : i))
-        : viewItems,
-    [viewItems, exposure],
+      viewItems.map((i, at) => {
+        const line = exposures.get(i.id);
+        if (line !== undefined) return { ...i, camera: line };
+        // A photograph whose head is still being read says so; a RAW that
+        // cannot be shown, and a clip, have nothing coming.
+        return viewable[at]?.parts.image && !i.unavailable ? { ...i, cameraPending: true } : i;
+      }),
+    [viewItems, exposures, viewable],
   );
   /** Open the sheet on one asset, by id — the rows know nothing of indices. */
   const view = (id: string) => {

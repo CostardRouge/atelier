@@ -18,7 +18,8 @@
  *   and a mouse has no other way to zoom.
  * - A bare HORIZONTAL wheel — a two-finger trackpad swipe — pages the deck,
  *   and pans instead once the picture is zoomed in and has somewhere to go.
- *   It arrives as a stream with no end event, so a short idle ends it.
+ *   It arrives as a stream with no end event, so it pages the moment it has
+ *   travelled far enough and eats the momentum after; a short idle ends it.
  * - A drag pans when zoomed and swipes when not: at the fitted size there is
  *   nothing to pan, so the same gesture is free to mean the other thing.
  * - Two fingers pinch to zoom AND pan by their centre, which is why the
@@ -38,6 +39,8 @@ import {
   containedSize,
   rubberBand,
   stepViewZoom,
+  sweepCommit,
+  sweepRestarts,
   swipeCommit,
   zoomAbout,
   zoomByPinchRatio,
@@ -82,6 +85,14 @@ export interface MediaViewerOptions {
 export interface MediaViewer {
   /** The box the deck is laid over. */
   viewportRef: RefObject<HTMLDivElement>;
+  /**
+   * The box the WHEEL is heard on: the viewport plus whatever floats over it
+   * (the pager). A wheel event goes to the element under the pointer and a
+   * button beside the viewport is not inside it, so a trackpad sweep started
+   * with the pointer resting on the arrow just clicked went nowhere. Falls
+   * back to the viewport when the caller attaches nothing.
+   */
+  surfaceRef: RefObject<HTMLDivElement>;
   viewport: Box;
   /** Where the current picture sits inside its slot. */
   view: View;
@@ -96,6 +107,13 @@ export interface MediaViewer {
   dragging: boolean;
   zoomed: boolean;
   zoom: ZoomControls;
+  /**
+   * The index a page in flight is heading to, or null at rest. The index
+   * itself only moves when the deck lands, 280ms later; whatever NAMES the
+   * media (the title, its facts) reads this first, so it changes with the
+   * picture rather than after it.
+   */
+  heading: number | null;
   /** The three media the deck keeps mounted, in the order it draws them. */
   slots: { slot: -1 | 0 | 1; index: number }[];
   /**
@@ -115,6 +133,8 @@ export function useMediaViewer({
   natural = null,
 }: MediaViewerOptions): MediaViewer {
   const viewportRef = useRef<HTMLDivElement>(null);
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  const [heading, setHeading] = useState<number | null>(null);
   const [viewport, setViewport] = useState<Box>({ width: 0, height: 0 });
   const [measured, setMeasured] = useState<Box | null>(null);
   const known = natural ?? measured;
@@ -201,6 +221,7 @@ export function useMediaViewer({
     pending.current = null;
     busy.current = false;
     if (dir === null) return;
+    setHeading(null);
     setSettling(false);
     setOffset(0);
     setView(FITTED);
@@ -238,6 +259,7 @@ export function useMediaViewer({
       clearSettle();
       busy.current = true;
       pending.current = dir;
+      setHeading((indexRef.current + dir + countRef.current) % countRef.current);
       setSettling(true);
       setOffset(-dir * travel);
       settleTimer.current = window.setTimeout(land, DECK_SETTLE_MS);
@@ -285,26 +307,47 @@ export function useMediaViewer({
   // Wheel. Native and NOT passive: React's own wheel handler is passive, so
   // `preventDefault` there is ignored and the browser zooms the page instead.
   useEffect(() => {
-    const el = viewportRef.current;
+    const el = surfaceRef.current ?? viewportRef.current;
     if (!el) return;
     let swept = 0;
     let idle: number | null = null;
+    /**
+     * A sweep that already paged, still streaming momentum. Those events are
+     * eaten until the stream goes quiet — or until one reads as fingers
+     * landing again (`sweepRestarts`), which is a new sweep and pages again.
+     */
+    let spent = false;
+    let lastDelta = 0;
 
+    const armIdle = () => {
+      if (idle !== null) window.clearTimeout(idle);
+      idle = window.setTimeout(endSweep, WHEEL_IDLE_MS);
+    };
     const endSweep = () => {
       idle = null;
-      const dir = swipeCommit(swept, slotTravel(), 0);
+      lastDelta = 0;
+      if (spent) {
+        spent = false;
+        return;
+      }
       swept = 0;
-      if (dir) page(dir);
-      else settleBack();
+      settleBack();
     };
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      const pinching = e.ctrlKey || e.metaKey;
+      if (spent && !pinching && !sweepRestarts(lastDelta, e.deltaX)) {
+        lastDelta = e.deltaX;
+        armIdle();
+        return;
+      }
+      spent = false;
       if (busy.current) land();
       setViewSettling(false);
       const sideways = Math.abs(e.deltaX) > Math.abs(e.deltaY);
       // A trackpad pinch arrives as a ctrl-wheel; so does a real one.
-      if (e.ctrlKey || e.metaKey || !sideways) {
+      if (pinching || !sideways) {
         zoomTo(zoomByWheelDelta(viewRef.current.scale, e.deltaY), anchorOf(e.clientX, e.clientY));
         return;
       }
@@ -313,9 +356,17 @@ export function useMediaViewer({
         return;
       }
       swept -= e.deltaX;
-      dragTo(swept);
-      if (idle !== null) window.clearTimeout(idle);
-      idle = window.setTimeout(endSweep, WHEEL_IDLE_MS);
+      lastDelta = e.deltaX;
+      const dir = sweepCommit(swept, slotTravel());
+      if (dir && countRef.current > 1) {
+        // Page NOW, not when the momentum runs out: the title follows at once.
+        swept = 0;
+        spent = true;
+        page(dir);
+      } else {
+        dragTo(swept);
+      }
+      armIdle();
     };
 
     el.addEventListener('wheel', onWheel, { passive: false });
@@ -478,6 +529,16 @@ export function useMediaViewer({
     };
   }, [dragTo, land, page, panBy, settleBack, slotTravel, zoomTo]);
 
+  // A second press while a page is still sliding lands the first, so no press
+  // is lost to an offset that was already where the second one sends it.
+  const pageBy = useCallback(
+    (dir: -1 | 1) => {
+      if (busy.current) land();
+      page(dir);
+    },
+    [land, page],
+  );
+
   const byButton = useCallback(
     (next: number) => {
       setViewSettling(true);
@@ -496,6 +557,7 @@ export function useMediaViewer({
 
   return {
     viewportRef,
+    surfaceRef,
     viewport,
     view,
     transform: `translate3d(${view.x}px, ${view.y}px, 0) scale(${view.scale})`,
@@ -513,8 +575,9 @@ export function useMediaViewer({
       zoomOut: () => byButton(stepViewZoom(viewRef.current.scale, -1)),
       reset: () => byButton(MIN_VIEW_ZOOM),
     },
+    heading,
     slots,
-    pageBy: page,
+    pageBy,
     onMeasured: setMeasured,
   };
 }

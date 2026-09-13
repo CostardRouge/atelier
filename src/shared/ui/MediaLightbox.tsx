@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import useDialogKeys from './use-dialog-keys';
 import StageZoomControl from './StageZoomControl';
 import { DECK_GAP, DECK_SETTLE_MS, useMediaViewer, type MediaViewer } from './use-media-viewer';
@@ -22,6 +22,13 @@ export interface LightboxItem {
    * all: a picture that says nothing about how it was taken says nothing.
    */
   camera?: string | null;
+  /**
+   * The exposure line is still being read — a local file's head is parsed
+   * when the sheet reaches it. Drawn as a quiet "reading…" in the line's own
+   * place, so a picture that is still being read never looks like one that
+   * says nothing.
+   */
+  cameraPending?: boolean;
   kind: 'photo' | 'video';
   /** What the middle slot draws. Null while it cannot be drawn. */
   src: string | null;
@@ -114,7 +121,16 @@ export default function MediaLightbox({
   // Escape closes; Enter does the one thing the caller offers, if any.
   useDialogKeys({ onCancel: onClose, onConfirm: onConfirm ?? null });
 
+  // The exposure line keeps its height across the whole deck when any media in
+  // it has one: a line that came and went with each page resized the frame
+  // under the finger.
+  const exposureLine = useMemo(() => items.some((i) => i.camera || i.cameraPending), [items]);
+
   if (!item) return null;
+  // What the header names: the media the deck is heading to as soon as a page
+  // commits, not 280ms later when it lands.
+  const shownAt = viewer.heading ?? index;
+  const named = items[shownAt] ?? item;
 
   /**
    * The pager, floating IN the frame rather than beside it.
@@ -125,6 +141,8 @@ export default function MediaLightbox({
    * covering a sliver of the image is the cheaper price. The pill is the one
    * `StageZoomControl` already floats in the opposite corner — translucent
    * paper, so it reads over a white sky as well as over the frame's black.
+   * (The zoom pill has since moved to the header: in that corner it sat on a
+   * clip's native control bar.)
    *
    * Still hidden under 820px, where the swipe is the gesture.
    */
@@ -160,14 +178,24 @@ export default function MediaLightbox({
       }}
     >
       <div className="w-full max-w-[64rem] h-[min(90dvh,54rem)] flex flex-col gap-3 bg-surface border border-line rounded-paper-lg shadow-paper p-4 overflow-hidden max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <div className="flex items-baseline gap-3 min-w-0">
-          <h2 className="m-0 font-serif text-lg min-w-0 truncate" title={item.title}>
-            {item.title}
-          </h2>
-          <span className="font-mono text-2xs text-muted whitespace-nowrap tabular-nums">
-            {index + 1} / {items.length}
-          </span>
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-baseline gap-3 min-w-0">
+            <h2 className="m-0 font-serif text-lg min-w-0 truncate" title={named.title}>
+              {named.title}
+            </h2>
+            <span className="font-mono text-2xs text-muted whitespace-nowrap tabular-nums">
+              {shownAt + 1} / {items.length}
+            </span>
+          </div>
           <span className="flex-1" />
+          {/* The zoom lives up here, never over the frame: in its corner it sat
+              on a clip's native control bar. Under 820px there is none — the
+              pinch is the gesture there, as the swipe is for the pager. */}
+          <StageZoomControl
+            zoom={viewer.zoom}
+            hint="wheel, or pinch"
+            className="flex-none max-[820px]:hidden"
+          />
           <button
             type="button"
             onClick={onClose}
@@ -178,15 +206,18 @@ export default function MediaLightbox({
           </button>
         </div>
 
-        <p className="m-0 font-mono text-2xs text-muted truncate" title={item.facts}>
-          {item.facts}
+        <p className="m-0 font-mono text-2xs text-muted truncate" title={named.facts}>
+          {named.facts}
         </p>
-        {item.camera && (
+        {exposureLine && (
           <p
-            className="m-0 -mt-2 font-mono text-2xs text-faint truncate"
-            title={item.camera}
+            className={`m-0 -mt-2 min-h-[1lh] font-mono text-2xs text-faint truncate ${
+              !named.camera && named.cameraPending ? 'animate-pulse' : ''
+            }`}
+            title={named.camera ?? undefined}
+            aria-busy={!named.camera && named.cameraPending ? true : undefined}
           >
-            {item.camera}
+            {named.camera || (named.cameraPending ? 'reading exposure…' : '')}
           </p>
         )}
 
@@ -195,7 +226,7 @@ export default function MediaLightbox({
             `absolute inset-0` inside a `flex-1 min-h-0` wrapper, never a
             percentage height, which has nothing definite to resolve against
             in a flex column and left the picture cut by `overflow-hidden`. */}
-        <div className="relative flex-1 min-w-0 min-h-0">
+        <div ref={viewer.surfaceRef} className="relative flex-1 min-w-0 min-h-0">
           <div
             ref={viewer.viewportRef}
             // `touch-none`: the deck answers every touch itself, and a
@@ -216,12 +247,17 @@ export default function MediaLightbox({
             >
               {viewer.slots.map(({ slot, index: at }) => (
                 <div
-                  // With three media or more each slot holds a different
-                  // item, so keying by it lets React carry the neighbour's
-                  // loaded picture into the middle: the page shows no
-                  // reload. With two, both neighbours ARE the same item and
-                  // the key has to be the slot instead.
-                  key={items.length >= 3 ? items[at].id : slot}
+                  // Keyed by media, so React carries the neighbour's loaded
+                  // picture into the middle and the page shows no reload —
+                  // and, as much as that, so the element under the pointer
+                  // is never the one removed: a wheel sequence stays aimed at
+                  // the node it started on, and once that node leaves the
+                  // DOM its events reach no one until the pointer moves.
+                  // With two media both neighbours ARE the same one, so the
+                  // previous slot takes a suffix; the middle and the next
+                  // keep the bare id, which is what survives a page either
+                  // way for the media that was under the pointer.
+                  key={items.length === 2 && slot === -1 ? `${items[at].id}:prev` : items[at].id}
                   className="absolute inset-0"
                   style={{
                     transform: `translateX(calc(${slot * 100}% + ${slot * DECK_GAP}px))`,
@@ -260,11 +296,6 @@ export default function MediaLightbox({
               {arrow('Next', 1, 'M6 3.5 10.5 8 6 12.5', 'right-2')}
             </>
           )}
-          <StageZoomControl
-            zoom={viewer.zoom}
-            hint="wheel, or pinch"
-            className="absolute bottom-2 right-2 z-10"
-          />
         </div>
 
         {footer}
@@ -302,6 +333,16 @@ function DeckSlide({
 }) {
   const [loaded, setLoaded] = useState(false);
   useEffect(() => setLoaded(false), [item.id, item.src]);
+  // A clip that leaves the middle stops, and lets go of its stream: removing
+  // `src` alone keeps the download going, `load()` is what ends it.
+  const videoRef = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const video = videoRef.current;
+    if (active || !video || !video.currentSrc) return;
+    video.pause();
+    video.load();
+    setLoaded(false);
+  }, [active]);
   useEffect(() => {
     if (active) onReady(loaded || !item.src);
   }, [active, loaded, item.src, onReady]);
@@ -341,30 +382,34 @@ function DeckSlide({
     return (
       <>
         {under}
-        {active ? (
-          <video
-            key={item.id}
-            src={item.src}
-            poster={item.still ?? undefined}
-            crossOrigin={cors}
-            controls
-            // Metadata only: opening a day should not stream every clip.
-            preload="metadata"
-            style={framed}
-            // Metadata, not `loadeddata`: with `preload="metadata"` a browser
-            // may hold the first frame back until play, and a bar that never
-            // stops is worse than no bar. The size is known here, the poster
-            // is already up, and that is what "ready to look at" means.
-            onLoadedMetadata={(e) => {
-              setLoaded(true);
-              viewer.onMeasured({
-                width: e.currentTarget.videoWidth,
-                height: e.currentTarget.videoHeight,
-              });
-            }}
-            className={fill}
-          />
-        ) : null}
+        {/* Mounted in every slot, handed its stream only in the middle: a
+            neighbour must not decode a second clip, and the one that just
+            left must not be REMOVED — it is under the pointer, and a wheel
+            sweep aimed at a node that left the DOM goes nowhere. */}
+        <video
+          ref={videoRef}
+          key={item.id}
+          src={active ? item.src : undefined}
+          poster={item.still ?? undefined}
+          crossOrigin={cors}
+          controls={active}
+          // Metadata only: opening a day should not stream every clip.
+          preload="metadata"
+          style={framed}
+          // Metadata, not `loadeddata`: with `preload="metadata"` a browser
+          // may hold the first frame back until play, and a bar that never
+          // stops is worse than no bar. The size is known here, the poster
+          // is already up, and that is what "ready to look at" means.
+          onLoadedMetadata={(e) => {
+            if (!active) return;
+            setLoaded(true);
+            viewer.onMeasured({
+              width: e.currentTarget.videoWidth,
+              height: e.currentTarget.videoHeight,
+            });
+          }}
+          className={fill}
+        />
       </>
     );
   }

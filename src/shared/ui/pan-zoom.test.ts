@@ -10,6 +10,9 @@ import {
   rubberBand,
   stepViewZoom,
   swipeCommit,
+  sweepCommit,
+  sweepRestarts,
+  SWEEP_COMMIT_PX,
   zoomAbout,
   zoomByPinchRatio,
   zoomByWheelDelta,
@@ -140,5 +143,41 @@ describe('swipeCommit', () => {
 
   it('decides nothing without a measured slot', () => {
     expect(swipeCommit(-300, 0, -2)).toBe(0);
+  });
+});
+
+describe('sweepCommit', () => {
+  it('pages at a quarter of a narrow slot', () => {
+    expect(sweepCommit(-100, 400)).toBe(1);
+    expect(sweepCommit(100, 400)).toBe(-1);
+    expect(sweepCommit(-99, 400)).toBe(0);
+  });
+
+  it('caps the distance on a wide sheet', () => {
+    expect(sweepCommit(-SWEEP_COMMIT_PX, 1600)).toBe(1);
+    expect(sweepCommit(SWEEP_COMMIT_PX - 1, 1600)).toBe(0);
+  });
+
+  it('decides nothing without a measured slot', () => {
+    expect(sweepCommit(-500, 0)).toBe(0);
+  });
+});
+
+describe('sweepRestarts', () => {
+  it('reads decaying momentum as the same sweep', () => {
+    expect(sweepRestarts(-30, -24)).toBe(false);
+    expect(sweepRestarts(-3, -2)).toBe(false);
+  });
+
+  it('reads a delta climbing back up as fingers landing again', () => {
+    expect(sweepRestarts(-6, -20)).toBe(true);
+  });
+
+  it('reads a reversal as a new sweep', () => {
+    expect(sweepRestarts(-12, 10)).toBe(true);
+  });
+
+  it('ignores jitter too small to be a gesture', () => {
+    expect(sweepRestarts(-1, -5)).toBe(false);
   });
 });
