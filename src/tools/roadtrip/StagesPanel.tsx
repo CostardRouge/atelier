@@ -13,6 +13,7 @@ import StageRuler from './StageRuler';
 import { Icons } from '../../shared/ui/icons';
 import IconButton from '../../shared/ui/IconButton';
 import Button from '../../shared/ui/Button';
+import { DateRangeField } from '../../shared/ui/DateField';
 
 interface StagesPanelProps {
   trip: TripDoc;
@@ -119,26 +120,15 @@ function StageCard({
           className={`${inputClass} flex-1 min-w-[8rem]`}
           aria-label="Region"
         />
-        <input
-          type="date"
-          value={stage.startDate}
+        <DateRangeField
+          start={stage.startDate}
+          end={stage.endDate}
           min={trip.startDate}
           max={trip.endDate}
-          onChange={(e) => onChange({ ...stage, startDate: e.target.value })}
-          className={inputClass}
-          aria-label="Arrived"
-        />
-        <span className="font-mono text-faint" aria-hidden="true">
-          →
-        </span>
-        <input
-          type="date"
-          value={stage.endDate}
-          min={trip.startDate}
-          max={trip.endDate}
-          onChange={(e) => onChange({ ...stage, endDate: e.target.value })}
-          className={inputClass}
-          aria-label="Left"
+          startLabel="Arrived"
+          endLabel="Left"
+          format={formatIsoDate}
+          onChange={({ start, end }) => onChange({ ...stage, startDate: start, endDate: end })}
         />
       </div>
       <p

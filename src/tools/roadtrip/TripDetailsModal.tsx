@@ -3,7 +3,7 @@ import PlaceSearchField from '../../shared/map/PlaceSearchField';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
 import { PLACE_ARROW, tripRouteEnds } from '../../shared/roadtrip/trip-places';
 import { hasImpact, spanImpact } from '../../shared/roadtrip/trip-edit';
-import { spanLength, todayIso } from '../../shared/roadtrip/trip-days';
+import { formatIsoDate, spanLength, todayIso } from '../../shared/roadtrip/trip-days';
 import {
   createTripPlace,
   defaultTripCover,
@@ -16,6 +16,7 @@ import { prunePins } from '../../shared/roadtrip/trip-cover';
 import CoverPanel from './CoverPanel';
 import { DEFAULT_SOURCE_ID, type SourceInfo } from '../../shared/sources/source';
 import InfoDot from '../../shared/ui/InfoDot';
+import { DateField } from '../../shared/ui/DateField';
 
 export interface TripDetails {
   name: string;
@@ -115,10 +116,9 @@ export default function TripDetailsModal({
   const [startDate, setStartDate] = useState(trip?.startDate ?? '');
   const [endDate, setEndDate] = useState(() => trip?.endDate ?? todayIso());
   const nameRef = useRef<HTMLInputElement>(null);
-  const startRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    (nameRef.current ?? startRef.current)?.focus();
+    nameRef.current?.focus();
     // Mount-only: the modal is short-lived.
   }, []);
 
@@ -288,23 +288,22 @@ export default function TripDetailsModal({
         <div className="grid grid-cols-2 gap-3 max-[420px]:grid-cols-1">
           <label className={field}>
             <span className={legend}>Left on</span>
-            <input
-              ref={startRef}
-              type="date"
+            <DateField
               value={startDate}
               max={endDate || undefined}
-              onChange={(e) => setStartDate(e.target.value)}
-              className={input}
+              onChange={setStartDate}
+              label="Left on"
+              format={formatIsoDate}
             />
           </label>
           <label className={field}>
             <span className={legend}>Came back</span>
-            <input
-              type="date"
+            <DateField
               value={endDate}
               min={startDate || undefined}
-              onChange={(e) => setEndDate(e.target.value)}
-              className={input}
+              onChange={setEndDate}
+              label="Came back"
+              format={formatIsoDate}
             />
           </label>
         </div>

@@ -20,6 +20,7 @@ import type {
 import ModeChoice, { type ChoiceOption } from './ModeChoice';
 import SlideDelivery from './SlideDelivery';
 import { inputClass, legend, linkButton, note, smallButton } from './ui';
+import { DateField } from '../../../shared/ui/DateField';
 
 interface ContentTabProps {
   trip: TripDoc;
@@ -223,12 +224,12 @@ export default function ContentTab({
           <p>Everything the badge says is counted from this day.</p>
         </SectionLegend>
         <div className="flex items-center gap-2">
-          <input
-            type="date"
+          <DateField
             value={post.date}
-            onChange={(e) => onChangePost({ ...post, date: e.target.value })}
-            className={`${inputClass} flex-1 min-w-0`}
-            aria-label="The day this piece tells"
+            onChange={(date) => onChangePost({ ...post, date })}
+            label="The day this piece tells"
+            format={formatIsoDate}
+            className="flex-1 min-w-0"
           />
           <span className="flex-none font-mono text-2xs text-muted tabular-nums">
             {dayOfTrip}
@@ -268,14 +269,13 @@ export default function ContentTab({
           <label className="flex flex-col gap-1">
             <span className={legend}>Through (for a range)</span>
             <div className="flex items-center gap-2">
-              <input
-                type="date"
+              <DateField
                 value={post.endDate ?? ''}
                 min={post.date}
-                onChange={(e) =>
-                  onChangePost({ ...post, endDate: e.target.value || null })
-                }
-                className={`${inputClass} flex-1 min-w-0`}
+                onChange={(endDate) => onChangePost({ ...post, endDate: endDate || null })}
+                label="Through"
+                format={formatIsoDate}
+                className="flex-1 min-w-0"
               />
               <button
                 type="button"
@@ -355,11 +355,12 @@ export default function ContentTab({
             <label className="flex flex-col gap-1">
               <span className={legend}>Read on</span>
               <div className="flex items-center gap-2">
-                <input
-                  type="date"
+                <DateField
                   value={post.badge.referenceDate ?? todayIso()}
-                  onChange={(e) => patchBadge({ referenceDate: e.target.value })}
-                  className={`${inputClass} flex-1 min-w-0`}
+                  onChange={(referenceDate) => patchBadge({ referenceDate })}
+                  label="Read on"
+                  format={formatIsoDate}
+                  className="flex-1 min-w-0"
                 />
                 {post.badge.referenceDate && (
                   <button
