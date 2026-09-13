@@ -115,6 +115,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - On that ruler a drag moves a LEG and nothing else: a day is picked with a click, never a scrub, so a finger is free to scroll a track wider than the screen — `roadtrip.md`.
 - A scrolling tile grid pins its ROWS in pixels and never lets them be `auto`: a grid divides a height that turns definite among its auto rows, and the pixel height on the picture inside is then clipped to a sliver — `frontend.md`.
 - A drag surface inside a scroll box claims only the axis it writes (`touch-pan-y`, never `touch-none`), and a surface that is merely pointed at claims nothing: `touch-none` on something that scrolls leaves touch no way in — `frontend.md`.
+- The Library's instance tab can look at the day BESIDE the one a tool publishes (the stepper's arrows), as a sidebar-only override anchored to that span: it never moves the piece, and it drops by itself when another piece or day is opened — `architecture.md`.
 - Looking a place up online is the suite's SECOND network exception, taken deliberately: opt-in, off by default, consent in `localStorage` and never on an exportable document, and never as-you-type — `roadtrip.md`, `local-first.md`.
 - The overview's zoom pills were retired for the loupe on 2026-09-13; `StageZoomControl` survives for the media lightbox alone — `roadtrip.md`, `frontend.md`.
 - Road Trip's grid draws its own hover card (fixed-positioned, pointer-transparent) because the native `title` is far too slow to sweep a calendar with — `roadtrip.md`.

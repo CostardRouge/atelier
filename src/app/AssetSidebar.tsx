@@ -11,6 +11,7 @@ import type { LibraryHalf } from '../shared/sources/winnow/client';
 import { useScopeRows } from '../shared/sources/winnow/use-scope-rows';
 import { usePickFromInstance } from '../shared/sources/winnow/use-pick';
 import { useMediaActions, useMediaScope } from '../shared/sources/media-scope';
+import { overrideTo, viewedSpan, type DayOverride } from '../shared/sources/scope-override';
 import MediaActionRow from '../shared/ui/MediaActionRow';
 import { shortHost } from '../shared/sources/source-ledger';
 import {
@@ -178,8 +179,18 @@ export default function AssetSidebar({
   // that shows one large — where the decision is actually taken.
   const offer = useMediaActions();
   const [manualDay, setManualDay] = useState<string>(() => todayIso());
-  const from = published?.from ?? manualDay;
-  const to = published?.to ?? manualDay;
+  // Another day looked at from the tool's own, without moving the tool: the
+  // arrows beside a piece's day. Anchored to what was published when it was
+  // taken, so opening another piece or day gives the tab back to the tool
+  // with nothing to reset (`scope-override.ts`).
+  const [override, setOverride] = useState<DayOverride | null>(null);
+  const viewed = viewedSpan(published, override, manualDay);
+  const { from, to } = viewed;
+  /** Look at one day: the tool's, another beside it, or one picked by hand. */
+  const goToDay = (iso: string) => {
+    if (viewed.anchor) setOverride(overrideTo(viewed.anchor, iso));
+    else setManualDay(iso);
+  };
   // Which half of the instance's library, sent with the span (never applied to
   // the answer: the row cap truncates before a local filter could run).
   const [half, setHalf] = useState<LibraryHalf | null>(readHalf);
@@ -634,7 +645,14 @@ export default function AssetSidebar({
       {remoteTab && connection && (
         <div className="px-3.5 pb-3 flex flex-col gap-1.5">
           <div className="flex items-baseline justify-between gap-2">
-            <span className={`${legend} min-w-0 truncate`} title={published ? `${published.label} — what ${published.publisher} has open` : 'A day, picked here'}>
+            <span
+              className={`${legend} min-w-0 truncate`}
+              title={
+                published
+                  ? `${published.label} — what ${published.publisher} has open. The arrows look at another day without moving it.`
+                  : 'A day, picked here'
+              }
+            >
               {published ? `${published.label} · ${published.publisher}` : 'A day'}
             </span>
             <button
@@ -646,22 +664,24 @@ export default function AssetSidebar({
               browse all
             </button>
           </div>
-          {published ? (
-            <p className="m-0 text-xs text-muted">
-              Follows the {published.from === published.to ? 'day' : 'days'} {published.publisher} has
-              open. One picture crosses per click.
-            </p>
-          ) : (
-            // Nothing open that names a day (the Studio, a gallery): pick one.
-            <DayPicker
-              day={manualDay}
-              onDay={setManualDay}
-              asking={scopeRows.rows === null && scopeRows.problem === null}
-              count={scopeRows.rows?.length ?? null}
-              client={client}
-              connectionId={connection.id}
-            />
-          )}
+          {/* The stepper in both cases. With a tool publishing, it starts on
+              the tool's day and the arrows look beside it without moving it;
+              with none, it is simply the day being browsed. */}
+          <DayPicker
+            span={{ from, to }}
+            onDay={goToDay}
+            anchor={
+              published && viewed.anchor
+                ? { span: viewed.anchor, label: published.label, publisher: published.publisher }
+                : null
+            }
+            overridden={viewed.overridden}
+            onReset={() => setOverride(null)}
+            asking={scopeRows.rows === null && scopeRows.problem === null}
+            count={scopeRows.rows?.length ?? null}
+            client={client}
+            connectionId={connection.id}
+          />
           <HalfPicker half={half} onHalf={setHalf} />
         </div>
       )}
@@ -774,7 +794,7 @@ export default function AssetSidebar({
               to={to}
               scope={scopeRows}
               shown={remoteShown}
-              announce={published !== null}
+              announce={false}
               inLibrary={inLibrary}
               activeId={lib.activeId}
               picker={picker}

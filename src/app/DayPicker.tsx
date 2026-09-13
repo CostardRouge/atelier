@@ -8,18 +8,36 @@ import {
   shiftMonth,
 } from '../shared/sources/winnow/month';
 import {
-  addDays,
   describeRelativeDay,
   formatIsoDate,
   todayIso,
   WEEKDAYS,
   weekdayIndex,
 } from '../shared/roadtrip/trip-days';
+import {
+  relativeToAnchor,
+  stepOut,
+  type DaySpan,
+} from '../shared/sources/scope-override';
 
 interface DayPickerProps {
-  /** The day being asked about, `YYYY-MM-DD`. */
-  day: string;
+  /**
+   * What the tab is asking about: one day, or — while it follows a tool that
+   * publishes several (a piece spanning days) — that span. `YYYY-MM-DD` each.
+   */
+  span: DaySpan;
+  /** A day was picked: an arrow, or the month. Always ONE day. */
   onDay: (iso: string) => void;
+  /**
+   * What the active tool has open, when one publishes a span — the day the
+   * arrows step away from and the reset returns to. Absent when the day is
+   * picked here with nothing to follow (the Studio, a gallery).
+   */
+  anchor?: { span: DaySpan; label: string; publisher: string } | null;
+  /** True while `span` is not the anchor: the tab looks elsewhere. */
+  overridden?: boolean;
+  /** Back to the anchor. Drawn only while overridden. */
+  onReset?: () => void;
   /** Whether the instance's answer for that day is still coming. */
   asking: boolean;
   /** How many files it holds that day; null while asking, or after a failure. */
@@ -97,8 +115,11 @@ const monthBtn =
  * (`announce={false}`); a real problem still comes from there, in red.
  */
 export default function DayPicker({
-  day,
+  span,
   onDay,
+  anchor = null,
+  overridden = false,
+  onReset,
   asking,
   count,
   client,
@@ -109,10 +130,23 @@ export default function DayPicker({
   const rootRef = useRef<HTMLDivElement>(null);
   const valueRef = useRef<HTMLButtonElement>(null);
 
-  const step = (days: number) => {
-    const next = addDays(day, days);
+  // One step out of what is shown — out of a span from its edges, so a
+  // three-day piece's arrows reach the day before its first or after its last.
+  const step = (dir: -1 | 1) => {
+    const next = stepOut(span, dir);
     if (next) onDay(next);
   };
+  const single = span.from === span.to;
+  const day = span.from;
+
+  // Where the view sits, in words. Against the tool's day when one is
+  // followed — from a piece, "the day before" is the day before the PIECE —
+  // and against today when the day is picked here.
+  const where = anchor
+    ? overridden
+      ? (relativeToAnchor(day, anchor.span) ?? day)
+      : `open in ${anchor.publisher}`
+    : (describeRelativeDay(day, today) ?? day);
 
   // Close on outside click or Escape, and hand focus back — the popover
   // pattern `ToolSwitcher` already sets, no library.
@@ -136,7 +170,14 @@ export default function DayPicker({
 
   return (
     <div ref={rootRef} className="relative flex flex-col gap-1">
-      <div className="flex h-8 items-stretch overflow-hidden rounded-paper border border-line bg-paper focus-within:border-accent">
+      {/* Looking away from the tool's day wears the accent at rest, not only
+          under focus: the arrows moved the view and not the piece, and that
+          must still be visible once the pointer has left. */}
+      <div
+        className={`flex h-8 items-stretch overflow-hidden rounded-paper border bg-paper focus-within:border-accent ${
+          overridden ? 'border-accent' : 'border-line'
+        }`}
+      >
         <button
           type="button"
           onClick={() => step(-1)}
@@ -153,10 +194,18 @@ export default function DayPicker({
           aria-haspopup="dialog"
           aria-expanded={open}
           title={`Pick a day from what ${connectionId} holds`}
-          className="flex-1 min-w-0 flex items-center justify-center gap-1 border-0 border-x border-line bg-transparent px-1 font-mono text-xs tabular-nums text-ink cursor-pointer whitespace-nowrap hover:bg-paper-2"
+          className={`flex-1 min-w-0 flex items-center justify-center gap-1 border-0 border-x border-line bg-transparent px-1 font-mono text-xs tabular-nums cursor-pointer whitespace-nowrap hover:bg-paper-2 ${
+            overridden ? 'text-accent-ink' : 'text-ink'
+          }`}
         >
-          <span className="text-muted">{WEEKDAYS[weekdayIndex(day) ?? 0]}</span>
-          <span className="truncate">{formatIsoDate(day)}</span>
+          {single ? (
+            <>
+              <span className="text-muted">{WEEKDAYS[weekdayIndex(day) ?? 0]}</span>
+              <span className="truncate">{formatIsoDate(day)}</span>
+            </>
+          ) : (
+            <span className="truncate">{spanLabel(span)}</span>
+          )}
           <span className="text-3xs text-faint" aria-hidden="true">
             ▾
           </span>
@@ -166,7 +215,7 @@ export default function DayPicker({
           onClick={() => step(1)}
           // Nothing was shot after today; the arrow says so rather than
           // asking the instance about a day it cannot hold anything on.
-          disabled={day >= today}
+          disabled={span.to >= today}
           aria-label="The day after"
           title="The day after"
           className="w-8 shrink-0 border-0 bg-transparent text-muted cursor-pointer hover:bg-paper-2 hover:text-ink disabled:text-faint disabled:cursor-default disabled:hover:bg-transparent"
@@ -177,7 +226,7 @@ export default function DayPicker({
 
       {open && (
         <MonthPanel
-          day={day}
+          span={span}
           today={today}
           client={client}
           connectionId={connectionId}
@@ -198,8 +247,8 @@ export default function DayPicker({
             asking ? 'bg-faint animate-pulse-dot motion-reduce:animate-none' : count ? 'bg-accent' : 'bg-faint'
           }`}
         />
-        <span className="truncate">
-          {describeRelativeDay(day, today) ?? day} ·{' '}
+        <span className={`min-w-0 truncate ${overridden ? 'text-accent-ink' : ''}`}>
+          {where} ·{' '}
           {asking
             ? 'asking…'
             : count === null
@@ -208,13 +257,30 @@ export default function DayPicker({
                 ? 'nothing here'
                 : `${count} file${count === 1 ? '' : 's'}`}
         </span>
+        {overridden && anchor && onReset && (
+          <button
+            type="button"
+            onClick={onReset}
+            title={`Back to what ${anchor.publisher} has open — ${anchor.label}`}
+            className="ml-auto shrink-0 p-0 border-0 bg-transparent font-mono text-2xs text-muted cursor-pointer underline underline-offset-[3px] hover:text-ink whitespace-nowrap"
+          >
+            ↺ {anchor.label}
+          </button>
+        )}
       </p>
     </div>
   );
 }
 
+/** `25 → 27 Mar 2025`, or the two whole dates when the months differ. */
+function spanLabel(span: DaySpan): string {
+  const a = formatIsoDate(span.from);
+  const b = formatIsoDate(span.to);
+  return span.from.slice(0, 7) === span.to.slice(0, 7) ? `${Number(span.from.slice(-2))} → ${b}` : `${a} → ${b}`;
+}
+
 interface MonthPanelProps {
-  day: string;
+  span: DaySpan;
   today: string;
   client: WinnowClient | null;
   connectionId: string;
@@ -235,8 +301,8 @@ interface MonthPanelProps {
  * give — the maintainer walked three months believing they held nothing, and
  * the media arrived after he had moved on.
  */
-function MonthPanel({ day, today, client, connectionId, onPick }: MonthPanelProps) {
-  const [month, setMonth] = useState(() => monthKeyOf(day));
+function MonthPanel({ span: picked, today, client, connectionId, onPick }: MonthPanelProps) {
+  const [month, setMonth] = useState(() => monthKeyOf(picked.from));
   const [view, setView] = useState<MonthView>(readMonthView);
   const [answer, setAnswer] = useState<MonthAnswer | null>(null);
   const [failed, setFailed] = useState(false);
@@ -287,7 +353,7 @@ function MonthPanel({ day, today, client, connectionId, onPick }: MonthPanelProp
   const canPrev = !bounds || month > monthKeyOf(bounds.min);
   const canNext = !bounds || month < monthKeyOf(bounds.max);
   /** The one day Tab reaches: the picked one, else the month's first. */
-  const roving = strip.bars.some((b) => b.date === day) ? day : span.from;
+  const roving = strip.bars.some((b) => b.date === picked.from) ? picked.from : span.from;
 
   const read = ((): string => {
     if (busy) return `asking ${connectionId}…`;
@@ -302,7 +368,7 @@ function MonthPanel({ day, today, client, connectionId, onPick }: MonthPanelProp
 
   const bodyProps: MonthBodyProps = {
     bars: strip.bars,
-    day,
+    picked,
     today,
     roving,
     busy,
@@ -371,7 +437,8 @@ function MonthPanel({ day, today, client, connectionId, onPick }: MonthPanelProp
 
 interface MonthBodyProps {
   bars: readonly DayBar[];
-  day: string;
+  /** What is shown — a day, or the span a tool has open. */
+  picked: DaySpan;
   today: string;
   /** The one day carrying `tabIndex=0`, so Tab does not visit thirty-one. */
   roving: string;
@@ -432,7 +499,7 @@ const busyClass = 'opacity-50 animate-pulse motion-reduce:animate-none pointer-e
  * day the instance holds nothing the bar is a stub, and "you are here" would
  * otherwise be invisible.
  */
-function StripBody({ bars, day, today, roving, busy, onPick, onHover }: MonthBodyProps) {
+function StripBody({ bars, picked: shown, today, roving, busy, onPick, onHover }: MonthBodyProps) {
   return (
     <div
       role="group"
@@ -444,7 +511,7 @@ function StripBody({ bars, day, today, roving, busy, onPick, onHover }: MonthBod
       style={{ height: `${STRIP_HEIGHT}px` }}
     >
       {bars.map((bar) => {
-        const picked = bar.date === day;
+        const picked = bar.date >= shown.from && bar.date <= shown.to;
         // Waiting: every day the same height, or a month nobody has answered
         // for reads exactly like a month holding nothing.
         const height = busy
@@ -497,7 +564,7 @@ function StripBody({ bars, day, today, roving, busy, onPick, onHover }: MonthBod
  */
 function CalendarBody({
   bars,
-  day,
+  picked: shown,
   today,
   roving,
   busy,
@@ -523,7 +590,7 @@ function CalendarBody({
         <span key={`lead-${i}`} />
       ))}
       {bars.map((bar) => {
-        const picked = bar.date === day;
+        const picked = bar.date >= shown.from && bar.date <= shown.to;
         return (
           <button
             key={bar.date}
