@@ -85,7 +85,7 @@ function PostRow({
         onOpen();
       }}
       aria-label={`Open ${post.title || 'this piece'}`}
-      className="flex items-center gap-3 py-2 border-b border-line last:border-b-0 cursor-pointer rounded-paper transition-colors hover:bg-paper-2/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink">
+      className="flex items-center gap-3 py-2 px-2 -mx-2 cursor-pointer rounded-paper transition-colors hover:bg-paper-2/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink">
       {/* The hook as it was last composed, at the frame it was composed for:
           a 16:9 piece is wide here and a 9:16 one is narrow. Fixing the box
           and cropping to it would hide the one thing the picture is for —
@@ -317,7 +317,7 @@ export default function DayPanel({
         </ul>
       )}
 
-      <div className="flex flex-col gap-2 pt-1 border-t border-line">
+      <div className="flex flex-col gap-2 pt-1">
         <span className={`${legend} pt-3`}>Tell this day</span>
         <div className="flex flex-wrap items-center gap-2">
           {POST_KINDS.map((k) => (
