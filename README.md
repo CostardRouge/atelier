@@ -67,8 +67,11 @@ single registry entry plus its component. Navigation is hash-based
 The destination of the whole suite: one editor instead of eight pages.
 
 **Projects first.** `#/studio/home` is a gallery of saved projects — thumbnail
-(baked at save time, so nothing decodes), aspect badge, duration, element and
-file counts. Creating one goes through a small intro modal (name, destination
+(baked at save time, so nothing decodes), aspect, duration, element and file
+counts. The whole card opens the project; its other verbs (use as template,
+move to another source, delete) sit behind a ⋯ menu, with a dashed tile at
+the end of the grid that creates a project or takes a dropped settings file.
+Creating one goes through a small intro modal (name, destination
 aspect, start-from-template, optional media folder). Everything you do in the
 editor autosaves to IndexedDB, but **media is never copied**: a project stores
 the folder's *handle* plus each file's name/size/mtime. Reopening re-lists the
@@ -94,7 +97,10 @@ version of Atelier is refused rather than half-read.
 to position, anchors keep edge pinning), grade through a `.cube` LUT, scrub
 with the shared transport. The inspector is tabbed (Overlay / Style / Grade /
 Info / Export); tools run edge-to-edge so a landscape clip finally gets the
-width it needs. Clips **without** an `.srt` are accepted: telemetry fields
+width it needs. **The editor sits in a darkroom**: while a project is open the
+paper gives way to hue-less grey around the picture, because a warm surround
+biases the eye's reading of a grade. The galleries and the rest of the suite
+keep the paper. Clips **without** an `.srt` are accepted: telemetry fields
 read “—”, free text and the grade still work. Stepping to the next clip with
 ‹ › hands playback over rather than stopping it: if you were watching, the
 next one picks up as soon as it is ready.
@@ -398,13 +404,19 @@ same sheet that asked for them, which says before saving what a shorter span
 does to the legs it no longer covers (trimmed, or removed when they fall
 outside it entirely). Pieces are never moved and never deleted.
 
-**The grid is the point.** `#/roadtrip` shows every day of the trip as a cell in
-a contribution-style grid, one column per week, Monday at the top. Its job is
-the **holes**: with thousands of photos and a year's distance, what you cannot
-answer from memory is which days you have never told. Empty cells are drawn
-like any other, five intensity rungs separate "nothing here" from "drafted but
-never sent" from "published once, twice, more", and the longest stretch of
-silence is called out with a link that jumps to it. Hovering a cell raises a
+**The grid is the point.** `#/roadtrip` lists the trips as **cards with their
+cover** or, one toggle away, as **bands** — the trip you were on first with a
+Resume button, then one progress row per trip. A trip opens on every day of
+it. Up to a month, that is a **strip**: each day a cell of real width, the
+legs drawn right under it. Longer, it is a contribution-style grid, one column
+per week, Monday at the top, fitted to the width of the window so a year
+reads at a glance, with the legs drawn as a lane under the weeks they cover.
+Its job is the **holes**: with thousands of photos and a year's distance,
+what you cannot answer from memory is which days you have never told. Empty
+cells are drawn like any other, five intensity rungs separate "nothing here"
+from "drafted but never sent" from "published once, twice, more", and the
+heading carries three figures — days told, published, and the longest
+silence, which jumps to its first day when clicked. Hovering a cell raises a
 card — the day, its number, what is sitting there and whether any of it went
 out — drawn immediately rather than after the browser's own tooltip delay, so
 the grid can be swept rather than interrogated. Clicking a day opens it: what
@@ -426,7 +438,11 @@ an id fragment, so renaming a trip never breaks a link. Each piece in that list 
 its own hook**, kept in the browser beside the trip, so a day reopened months
 later shows what you left there instead of a file name.
 
-**The hook.** Open a piece and you compose its badge over the picture: the
+**The hook.** Open a piece and you compose its badge over the picture, in the
+same darkroom the Studio grades in. On a wide screen the deck is a **timeline
+under the picture** — one bar per slide, as wide as the time it holds the
+screen, a handle on the open clip's edge to cut its out point — while a phone
+keeps the slide rail beside it: the
 number the trip gives it, big, with everything else deliberately subordinate —
 "Australia · Day · **27** · of 310 · ◆ Kalbarri · 1 year ago today". It counts
 four ways (day of trip, a range of days, the day at a place, how long you
@@ -459,15 +475,18 @@ a badge name a place, say "3 days in Kalbarri", or count which day of a stop a
 picture is — and an optional marker sets the place off from the rest.
 
 They live on a **ruler under the grid** — a video editor's timeline scaled to
-days. Each leg is a bar: drag either edge to change when it began or ended,
+days. On a long trip the ruler details the **loupe**: a window you drag over
+the grid (its grip on top slides it, its two edges widen it), so the legs of
+two months at a time get the width a finger can grab, while the grid above
+keeps the whole year in view. Each leg is a bar: drag either edge to change when it began or ended,
 drag its middle to slide it whole, and every move snaps to a day while a pin
 follows the pointer saying the date it would land on and how long the leg
 would then be. A run of days no leg covers offers a `+` that adds one over
 exactly that run; legs that overlap on a travel day stack in a second row
 rather than hiding one another. The grid and the ruler are the same calendar
 seen twice: each day's cell wears a stripe in its leg's tint, the day you have
-open is a **playhead you can scrub** — click or drag the strip along the top
-to travel through the trip — and **right-clicking a day** offers the edits
+open is a **playhead** — click anywhere on the track to go to that day, or
+move it with the arrow keys — and **right-clicking a day** offers the edits
 that make sense there, worded with the leg they would touch: start a stage
 here (inside a leg, that cuts it in two), end "Perth → Kalbarri" here, extend
 it to here. Clicking a bar opens that leg's fields beneath the ruler and goes
