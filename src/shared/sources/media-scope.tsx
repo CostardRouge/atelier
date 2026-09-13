@@ -56,6 +56,13 @@ export interface MediaScope {
    * Absent means `browse`: nobody said anything is waiting.
    */
   intent?: 'pick' | 'browse';
+  /**
+   * The wider span this one belongs to, when there is one worth drawing — a
+   * trip's two dates around a piece's day. Only a MARK: the sidebar shades it
+   * in its month so the days around the one open read against the whole, and
+   * lists nothing by it. Absent says nothing.
+   */
+  within?: { from: string; to: string; label: string };
 }
 
 /**
@@ -102,7 +109,10 @@ export function sameScope(a: MediaScope | null, b: MediaScope | null): boolean {
     a.to === b.to &&
     a.label === b.label &&
     a.publisher === b.publisher &&
-    (a.intent ?? 'browse') === (b.intent ?? 'browse')
+    (a.intent ?? 'browse') === (b.intent ?? 'browse') &&
+    a.within?.from === b.within?.from &&
+    a.within?.to === b.within?.to &&
+    a.within?.label === b.within?.label
   );
 }
 

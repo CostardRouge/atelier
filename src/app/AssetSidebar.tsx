@@ -672,7 +672,17 @@ export default function AssetSidebar({
             onDay={goToDay}
             anchor={
               published && viewed.anchor
-                ? { span: viewed.anchor, label: published.label, publisher: published.publisher }
+                ? {
+                    span: viewed.anchor,
+                    label: published.label,
+                    publisher: published.publisher,
+                    within: published.within
+                      ? {
+                          span: { from: published.within.from, to: published.within.to },
+                          label: published.within.label,
+                        }
+                      : null,
+                  }
                 : null
             }
             overridden={viewed.overridden}

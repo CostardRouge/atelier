@@ -203,9 +203,10 @@ export default function TripOverview({
             // Nothing here is waiting for a picture: looking at the day's
             // media is the point, so a click should show it large.
             intent: 'browse',
+            within: { from: trip.startDate, to: trip.endDate, label: trip.name },
           }
         : null,
-    [selected],
+    [selected, trip.startDate, trip.endDate, trip.name],
   );
   usePublishMediaScope(mediaScope);
 

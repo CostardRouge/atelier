@@ -33,7 +33,13 @@ interface DayPickerProps {
    * arrows step away from and the reset returns to. Absent when the day is
    * picked here with nothing to follow (the Studio, a gallery).
    */
-  anchor?: { span: DaySpan; label: string; publisher: string } | null;
+  anchor?: {
+    span: DaySpan;
+    label: string;
+    publisher: string;
+    /** The wider span it belongs to (a trip), shaded in the month. */
+    within?: { span: DaySpan; label: string } | null;
+  } | null;
   /** True while `span` is not the anchor: the tab looks elsewhere. */
   overridden?: boolean;
   /** Back to the anchor. Drawn only while overridden. */
@@ -227,6 +233,7 @@ export default function DayPicker({
       {open && (
         <MonthPanel
           span={span}
+          anchor={anchor}
           today={today}
           client={client}
           connectionId={connectionId}
@@ -281,6 +288,7 @@ function spanLabel(span: DaySpan): string {
 
 interface MonthPanelProps {
   span: DaySpan;
+  anchor: DayPickerProps['anchor'];
   today: string;
   client: WinnowClient | null;
   connectionId: string;
@@ -301,7 +309,7 @@ interface MonthPanelProps {
  * give — the maintainer walked three months believing they held nothing, and
  * the media arrived after he had moved on.
  */
-function MonthPanel({ span: picked, today, client, connectionId, onPick }: MonthPanelProps) {
+function MonthPanel({ span: picked, anchor, today, client, connectionId, onPick }: MonthPanelProps) {
   const [month, setMonth] = useState(() => monthKeyOf(picked.from));
   const [view, setView] = useState<MonthView>(readMonthView);
   const [answer, setAnswer] = useState<MonthAnswer | null>(null);
@@ -369,6 +377,10 @@ function MonthPanel({ span: picked, today, client, connectionId, onPick }: Month
   const bodyProps: MonthBodyProps = {
     bars: strip.bars,
     picked,
+    marks: {
+      anchor: anchor?.span ?? null,
+      within: anchor?.within?.span ?? null,
+    },
     today,
     roving,
     busy,
@@ -431,6 +443,22 @@ function MonthPanel({ span: picked, today, client, connectionId, onPick }: Month
       {view === 'strip' ? <StripBody {...bodyProps} /> : <CalendarBody {...bodyProps} />}
 
       <p className="m-0 truncate text-center font-mono text-3xs text-muted">{read}</p>
+      {/* What the two marks are, in the publisher's words — only when they
+          touch this month, or the key explains nothing on screen. */}
+      {anchor && (inMonth(anchor.span, span) || (anchor.within && inMonth(anchor.within.span, span))) && (
+        <p className="m-0 flex items-center justify-center gap-3 font-mono text-3xs text-muted min-w-0">
+          <span className="flex items-center gap-1 min-w-0">
+            <span aria-hidden="true" className="w-3 h-[3px] shrink-0 rounded-full bg-accent" />
+            <span className="truncate">open in {anchor.publisher}</span>
+          </span>
+          {anchor.within && (
+            <span className="flex items-center gap-1 min-w-0" title={anchor.within.label}>
+              <span aria-hidden="true" className="w-3 h-[3px] shrink-0 rounded-full bg-line-strong" />
+              <span className="truncate">{anchor.within.label || 'around it'}</span>
+            </span>
+          )}
+        </p>
+      )}
     </div>
   );
 }
@@ -439,6 +467,8 @@ interface MonthBodyProps {
   bars: readonly DayBar[];
   /** What is shown — a day, or the span a tool has open. */
   picked: DaySpan;
+  /** What to mark under the days: the tool's own, and the span around it. */
+  marks: DayMarks;
   today: string;
   /** The one day carrying `tabIndex=0`, so Tab does not visit thirty-one. */
   roving: string;
@@ -499,56 +529,68 @@ const busyClass = 'opacity-50 animate-pulse motion-reduce:animate-none pointer-e
  * day the instance holds nothing the bar is a stub, and "you are here" would
  * otherwise be invisible.
  */
-function StripBody({ bars, picked: shown, today, roving, busy, onPick, onHover }: MonthBodyProps) {
+function StripBody({ bars, picked: shown, marks, today, roving, busy, onPick, onHover }: MonthBodyProps) {
   return (
-    <div
-      role="group"
-      aria-label="Days of the month"
-      aria-busy={busy}
-      onKeyDown={(e) => walkDays(e, 1)}
-      onPointerLeave={() => onHover(null)}
-      className={`flex items-end gap-[2px] ${busy ? busyClass : ''}`}
-      style={{ height: `${STRIP_HEIGHT}px` }}
-    >
-      {bars.map((bar) => {
-        const picked = bar.date >= shown.from && bar.date <= shown.to;
-        // Waiting: every day the same height, or a month nobody has answered
-        // for reads exactly like a month holding nothing.
-        const height = busy
-          ? Math.round(STRIP_HEIGHT * 0.4)
-          : bar.count
-            ? Math.round(bar.fill * STRIP_HEIGHT)
-            : EMPTY_HEIGHT;
-        return (
-          <button
-            key={bar.date}
-            type="button"
-            disabled={bar.date > today}
-            tabIndex={bar.date === roving ? 0 : -1}
-            onClick={() => onPick(bar.date)}
-            onPointerEnter={() => onHover(bar.date)}
-            onFocus={() => onHover(bar.date)}
-            onBlur={() => onHover(null)}
-            aria-pressed={picked}
-            aria-label={dayLabel(bar)}
-            title={`${bar.date}${bar.count ? ` · ${bar.count} files` : ''}`}
-            className={`flex-1 min-w-0 h-full flex flex-col justify-end border-0 p-0 cursor-pointer disabled:cursor-default disabled:opacity-40 group rounded-t-[3px] ${
-              picked ? 'bg-[rgba(27,24,19,0.08)]' : 'bg-transparent'
-            }`}
-          >
-            <span
-              className={`w-full rounded-t-[2px] border border-b-0 transition-colors ${
-                picked && !busy
-                  ? 'bg-ink border-ink'
-                  : bar.count && !busy
-                    ? 'bg-accent-wash border-danger-line group-hover:border-accent'
-                    : 'bg-paper-2 border-line group-hover:border-line-strong'
+    <div className="flex flex-col gap-[3px]">
+      <div
+        role="group"
+        aria-label="Days of the month"
+        aria-busy={busy}
+        onKeyDown={(e) => walkDays(e, 1)}
+        onPointerLeave={() => onHover(null)}
+        className={`flex items-end gap-[2px] ${busy ? busyClass : ''}`}
+        style={{ height: `${STRIP_HEIGHT}px` }}
+      >
+        {bars.map((bar) => {
+          const picked = bar.date >= shown.from && bar.date <= shown.to;
+          // Waiting: every day the same height, or a month nobody has answered
+          // for reads exactly like a month holding nothing.
+          const height = busy
+            ? Math.round(STRIP_HEIGHT * 0.4)
+            : bar.count
+              ? Math.round(bar.fill * STRIP_HEIGHT)
+              : EMPTY_HEIGHT;
+          return (
+            <button
+              key={bar.date}
+              type="button"
+              disabled={bar.date > today}
+              tabIndex={bar.date === roving ? 0 : -1}
+              onClick={() => onPick(bar.date)}
+              onPointerEnter={() => onHover(bar.date)}
+              onFocus={() => onHover(bar.date)}
+              onBlur={() => onHover(null)}
+              aria-pressed={picked}
+              aria-label={dayLabel(bar)}
+              title={`${bar.date}${bar.count ? ` · ${bar.count} files` : ''}`}
+              className={`flex-1 min-w-0 h-full flex flex-col justify-end border-0 p-0 cursor-pointer disabled:cursor-default disabled:opacity-40 group rounded-t-[3px] ${
+                picked ? 'bg-[rgba(27,24,19,0.08)]' : 'bg-transparent'
               }`}
-              style={{ height: `${height}px` }}
-            />
-          </button>
-        );
-      })}
+            >
+              <span
+                className={`w-full rounded-t-[2px] border border-b-0 transition-colors ${
+                  picked && !busy
+                    ? 'bg-ink border-ink'
+                    : bar.count && !busy
+                      ? 'bg-accent-wash border-danger-line group-hover:border-accent'
+                      : 'bg-paper-2 border-line group-hover:border-line-strong'
+                }`}
+                style={{ height: `${height}px` }}
+              />
+            </button>
+          );
+        })}
+      </div>
+      {/* The lane under the bars, on the same columns: the tool's day in
+          accent, the span around it in ink. Its own row rather than a tint on
+          the bars, which already spend their colour on the counts. */}
+      {(marks.anchor || marks.within) && (
+        <div aria-hidden="true" className="flex gap-[2px] h-[3px]">
+          {bars.map((bar) => (
+            <span key={bar.date} className={`flex-1 min-w-0 rounded-full ${markClass(bar.date, marks)}`} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -565,6 +607,7 @@ function StripBody({ bars, picked: shown, today, roving, busy, onPick, onHover }
 function CalendarBody({
   bars,
   picked: shown,
+  marks,
   today,
   roving,
   busy,
@@ -604,7 +647,7 @@ function CalendarBody({
             aria-pressed={picked}
             aria-label={dayLabel(bar)}
             title={`${bar.date}${bar.count ? ` · ${bar.count} files` : ''}`}
-            className={`h-[30px] flex flex-col items-center justify-center gap-[1px] rounded-md border font-mono text-2xs tabular-nums cursor-pointer transition-colors disabled:cursor-default disabled:opacity-40 ${
+            className={`relative h-[30px] flex flex-col items-center justify-center gap-[1px] rounded-md border font-mono text-2xs tabular-nums cursor-pointer transition-colors disabled:cursor-default disabled:opacity-40 ${
               picked
                 ? 'bg-ink border-ink text-paper'
                 : bar.count && !busy
@@ -616,11 +659,36 @@ function CalendarBody({
             {bar.count > 0 && !busy && (
               <span className="text-3xs leading-none opacity-70">{bar.count}</span>
             )}
+            {/* The same marks as the strip's lane, as a foot on the cell. */}
+            {markClass(bar.date, marks) && (
+              <span
+                aria-hidden="true"
+                className={`absolute left-1 right-1 bottom-[2px] h-[2px] rounded-full ${markClass(bar.date, marks)}`}
+              />
+            )}
           </button>
         );
       })}
     </div>
   );
+}
+
+/** The tool's own span, and the wider one it belongs to — either may be absent. */
+interface DayMarks {
+  anchor: DaySpan | null;
+  within: DaySpan | null;
+}
+
+/** True when a span shares at least one day with the month. */
+const inMonth = (a: DaySpan, month: DaySpan) => a.from <= month.to && a.to >= month.from;
+
+const inSpan = (iso: string, span: DaySpan | null) => !!span && iso >= span.from && iso <= span.to;
+
+/** The mark a day wears, or '' for none. The tool's own day wins. */
+function markClass(iso: string, marks: DayMarks): string {
+  if (inSpan(iso, marks.anchor)) return 'bg-accent';
+  if (inSpan(iso, marks.within)) return 'bg-line-strong';
+  return '';
 }
 
 function dayLabel(bar: DayBar): string {

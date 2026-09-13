@@ -21,6 +21,17 @@ describe('sameScope', () => {
   });
 });
 
+describe('sameScope and `within`', () => {
+  const trip = { from: '2026-02-01', to: '2026-02-20', label: 'Australia' };
+  it('compares the wider span by value, so a re-render with a fresh object publishes nothing', () => {
+    expect(sameScope({ ...day, within: trip }, { ...day, within: { ...trip } })).toBe(true);
+  });
+  it('tells a scope with a wider span from one without, or with another', () => {
+    expect(sameScope(day, { ...day, within: trip })).toBe(false);
+    expect(sameScope({ ...day, within: trip }, { ...day, within: { ...trip, to: '2026-02-21' } })).toBe(false);
+  });
+});
+
 describe('isSingleDay', () => {
   it('reads a day as a span that starts where it ends', () => {
     expect(isSingleDay(day)).toBe(true);

@@ -122,6 +122,7 @@ Read before touching the shell (`src/app/`), the tool registry, the shared asset
 - It is ANCHORED to the span it was taken from and applies only while that span is still published — another piece, another heatmap day gives the tab back to the tool with no reset effect (his call: reset on change). Not persisted: a remembered override is the pile the tab was built to never become.
 - Always ONE day: out of a multi-day piece the arrows step from its edges (his call). Stepping back onto a single-day anchor IS following again (`overrideTo` → null), not a look-alike state.
 - The legend stays the tool's day; the stepper wears the accent border at rest while elsewhere, the line under it says where against the ANCHOR ("the day before", "day 2 of 3" — never "3 days ago"), and `↺ <day>` resets. The intent is unchanged: in the editor a click still puts the picture on the slide, whatever day it comes from.
+- The month popover MARKS where that sits: a lane under the strip (a foot on each calendar cell) in accent for the tool's days and in `line-strong` for `MediaScope.within`, a wider span the publisher names (Trips: the trip's two dates and name). A mark only — nothing is listed by `within` — and its own row, because the bars already spend their colour on the counts. The key under the month is drawn only when a mark touches that month.
 
 ## A click on an instance's tile means what the TOOL says it means (2026-09-07)
 

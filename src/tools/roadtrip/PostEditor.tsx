@@ -198,8 +198,10 @@ export default function PostEditor({
       publisher: 'Trips',
       // A slide is waiting for a picture: a click should put one on it.
       intent: 'pick',
+      // The trip around it, shaded in the Library's month.
+      within: { from: trip.startDate, to: trip.endDate, label: trip.name },
     }),
-    [post.date, post.endDate],
+    [post.date, post.endDate, trip.startDate, trip.endDate, trip.name],
   );
   usePublishMediaScope(mediaScope);
 
