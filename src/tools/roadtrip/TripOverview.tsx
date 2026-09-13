@@ -435,7 +435,7 @@ export default function TripOverview({
           exists for. The five-count strip and the "longest stretch" sentence
           it replaces were the top third of the screen before the calendar. */}
       <div
-        className={`flex items-end gap-x-6 gap-y-2 min-w-0 border-b border-line pb-4 ${
+        className={`flex items-end gap-x-6 gap-y-2 min-w-0 pb-2 ${
           compact ? 'flex-wrap' : ''
         }`}
       >

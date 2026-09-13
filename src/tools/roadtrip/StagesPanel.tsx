@@ -67,7 +67,7 @@ function StageCard({
 
   return (
     <div
-      className="flex flex-col gap-3 border-t border-line pt-3"
+      className="flex flex-col gap-3 pt-1"
       aria-label={`Stage ${index + 1}`}
     >
       <div className="flex items-center gap-2">
@@ -195,10 +195,11 @@ export default function StagesPanel({
 
   return (
     <section
-      // A section under a rule, not a card: the calendar above and the day
+      // A section, not a card and not a rule: the calendar above and the day
       // below are the same document, and a frame here made three levels of
-      // boxes on one screen (the audit's Z4). The open leg is a row of it.
-      className="flex flex-col gap-3 border-t border-line pt-4"
+      // boxes on one screen (the audit's Z4). Spacing alone separates them —
+      // the maintainer removed the rules too. The open leg is a row of it.
+      className="flex flex-col gap-3 pt-2"
       aria-label="Stages"
     >
       <div className="flex items-center gap-3">
