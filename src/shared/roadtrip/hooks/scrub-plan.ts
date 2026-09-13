@@ -29,6 +29,7 @@
  */
 
 import type { SoundEvent } from '../../audio/sound-event';
+import type { VoiceName } from '../../audio/voices';
 import type { HookDay } from './hook-variant';
 
 export type ScrubMode = 'from-start' | 'run-up';
@@ -37,6 +38,10 @@ export type TapePosition = 'bottom' | 'top';
 export type ScrubEasing = 'ease-out' | 'ease-out-hard' | 'linear' | 'ease-in' | 'ease-in-out';
 /** Where the sweep's days come from: sampled by the mode, or named by the author. */
 export type ScrubDays = 'auto' | 'chosen';
+/** Which voices the ticks are played on — see `SCRUB_KITS`. */
+export type ScrubKit = 'ratchet' | 'wood' | 'typewriter' | 'click';
+/** How the ticks' pitch moves along the sweep. */
+export type ScrubDrift = 'flat' | 'rising' | 'falling';
 
 export interface ScrubOptions {
   /** Sweep the whole trip from day 1, or only the days just before this one. */
@@ -67,8 +72,14 @@ export interface ScrubOptions {
   tape: TapePosition;
   /** Tick at every landing, in the exported video. */
   sound: boolean;
-  /** How loud the ticks are: 1 as designed, 0 silent, up to 1.5. */
+  /** How loud the ticks are: 1 as designed, 0 silent, up to 2. */
   tickVolume: number;
+  /** The voices the landings are played on. */
+  kit: ScrubKit;
+  /** Pitch of every tick: 1 as designed, 2 an octave up, 0.5 an octave down. */
+  tickPitch: number;
+  /** Whether the pitch climbs, falls or stays as the head slows. */
+  pitchDrift: ScrubDrift;
   /** Over a clip with its own sound: mix the ticks in rather than leave them out. */
   mixWithClip: boolean;
 }
@@ -87,6 +98,9 @@ export const SCRUB_DEFAULTS: ScrubOptions = {
   tape: 'bottom',
   sound: true,
   tickVolume: 1,
+  kit: 'ratchet',
+  tickPitch: 1,
+  pitchDrift: 'flat',
   mixWithClip: false,
 };
 
@@ -97,7 +111,72 @@ export const SCRUB_LIMITS = {
   maxStops: { min: 3, max: 16 },
   sweepSeconds: { min: 0.8, max: 4 },
   delaySeconds: { min: 0, max: 2 },
+  tickPitch: { min: 0.5, max: 2 },
 } as const;
+
+/**
+ * The voices a sweep may be played on. Each kit names the ordinary landing,
+ * how a LEG's landing departs from it (the one sound carrying meaning, so the
+ * one that is different: lower and a little louder), and the seat — which
+ * stays the seat in every kit, because it is the end of the phrase rather
+ * than a tick.
+ */
+export const SCRUB_KITS: Record<
+  ScrubKit,
+  {
+    label: string;
+    hint: string;
+    tick: VoiceName;
+    leg: { voice: VoiceName; rate: number; gain: number };
+    seat: VoiceName;
+  }
+> = {
+  ratchet: {
+    label: 'Ratchet',
+    hint: 'A mechanism — a narrow click, a deeper one where a leg starts',
+    tick: 'detent',
+    leg: { voice: 'leg', rate: 1, gain: 1 },
+    seat: 'seat',
+  },
+  wood: {
+    label: 'Woodblock',
+    hint: 'Warmer knocks, a low one where a leg starts',
+    tick: 'wood',
+    leg: { voice: 'wood', rate: 0.67, gain: 1.3 },
+    seat: 'seat',
+  },
+  typewriter: {
+    label: 'Typewriter',
+    hint: 'A key strike a day, a heavier one where a leg starts',
+    tick: 'typewriter',
+    leg: { voice: 'typewriter', rate: 0.7, gain: 1.3 },
+    seat: 'seat',
+  },
+  click: {
+    label: 'Shutter',
+    hint: 'A soft camera click a day',
+    tick: 'click',
+    leg: { voice: 'click', rate: 0.6, gain: 1.3 },
+    seat: 'seat',
+  },
+};
+
+export const KIT_IDS = Object.keys(SCRUB_KITS) as ScrubKit[];
+
+/**
+ * How far the pitch travels along a drifting sweep: ×0.84 at one end to ×1.19
+ * at the other, about three semitones each way — audible as a climb or a fall,
+ * small enough that every tick still reads as the same instrument.
+ */
+export const DRIFT_SPAN = { from: 0.84, to: 1.19 } as const;
+
+/** The pitch factor at `share` (0..1) of the way along the sweep. */
+export function driftAt(drift: ScrubDrift, share: number): number {
+  const u = Math.max(0, Math.min(1, share));
+  if (drift === 'rising') return DRIFT_SPAN.from + (DRIFT_SPAN.to - DRIFT_SPAN.from) * u;
+  if (drift === 'falling') return DRIFT_SPAN.to - (DRIFT_SPAN.to - DRIFT_SPAN.from) * u;
+  return 1;
+}
 
 /**
  * The curves the head may travel on, each with the inverse the stop placement
@@ -235,6 +314,14 @@ export function scrubOptions(raw: Readonly<Record<string, unknown>>): ScrubOptio
       SCRUB_LIMITS.tickVolume.max,
       SCRUB_DEFAULTS.tickVolume,
     ),
+    kit: (KIT_IDS as readonly string[]).includes(o.kit) ? o.kit : 'ratchet',
+    tickPitch: clampOr(
+      Number(o.tickPitch),
+      SCRUB_LIMITS.tickPitch.min,
+      SCRUB_LIMITS.tickPitch.max,
+      SCRUB_DEFAULTS.tickPitch,
+    ),
+    pitchDrift: o.pitchDrift === 'rising' || o.pitchDrift === 'falling' ? o.pitchDrift : 'flat',
     mixWithClip: o.mixWithClip === true,
   };
 }
@@ -401,27 +488,38 @@ export function tapeTicks(
  * to. The cadence comes free from the deceleration: the ticks slow as the head
  * settles, and a listener knows it is arriving before reading anything.
  *
- * - an ordinary landing is a `detent`;
- * - a landing on a day a leg starts is a `leg` — the one sound carrying
- *   meaning, so the one that is different;
- * - the hero is the `seat`, which ends the phrase.
+ * - an ordinary landing is the kit's tick;
+ * - a landing on a day a leg starts is the kit's leg voice — the one sound
+ *   carrying meaning, so the one that is different;
+ * - the hero is the seat, which ends the phrase.
  *
  * Levels fall along the sweep as the mechanism slows. `volume` scales every
- * one of them, so the ticks keep their shape at any level; and because it is
- * applied HERE, the editor's live playback, a still's video, a silent clip's
- * track and a mix all follow the one number with nothing else to thread.
- * Nothing when there is nowhere to sweep from — or at volume 0, which writes no
- * track at all rather than a silent one.
+ * one of them, so the ticks keep their shape at any level; `pitch` transposes
+ * them all, and a `drift` climbs or falls across the landings — the seat takes
+ * the pitch but not the drift, since it is the phrase's end and not a step in
+ * it. Because all of this is applied HERE, the editor's live playback, a
+ * still's video, a silent clip's track and a mix follow the same numbers with
+ * nothing else to thread. Nothing when there is nowhere to sweep from — or at
+ * volume 0, which writes no track at all rather than a silent one.
  */
-export function scrubScore(plan: ScrubPlan, volume = 1): SoundEvent[] {
+export function scrubScore(
+  plan: ScrubPlan,
+  volume = 1,
+  tuning: { kit: ScrubKit; pitch: number; drift: ScrubDrift } = {
+    kit: 'ratchet',
+    pitch: 1,
+    drift: 'flat',
+  },
+): SoundEvent[] {
   if (plan.sweepSeconds <= 0 || !(volume > 0)) return [];
-  return plan.stops.map((stop, i) =>
-    stop.hero
-      ? { at: stop.at, voice: 'seat', gain: 0.8 * volume }
-      : {
-          at: stop.at,
-          voice: stop.legStart ? 'leg' : 'detent',
-          gain: Math.max(0.35, 0.85 - i * 0.04) * volume,
-        },
-  );
+  const kit = SCRUB_KITS[tuning.kit];
+  const landings = Math.max(1, plan.stops.length - 1);
+  return plan.stops.map((stop, i) => {
+    if (stop.hero) return { at: stop.at, voice: kit.seat, gain: 0.8 * volume, rate: tuning.pitch };
+    const rate = tuning.pitch * driftAt(tuning.drift, landings > 1 ? i / (landings - 1) : 0);
+    const level = Math.max(0.35, 0.85 - i * 0.04) * volume;
+    return stop.legStart
+      ? { at: stop.at, voice: kit.leg.voice, gain: level * kit.leg.gain, rate: rate * kit.leg.rate }
+      : { at: stop.at, voice: kit.tick, gain: level, rate };
+  });
 }

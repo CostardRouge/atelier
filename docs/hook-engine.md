@@ -270,6 +270,19 @@ sound will add there is an audio track, since it writes none today.
   days in the sweep are decoded, the rule that keeps a 250-piece trip from
   decoding 250 thumbnails, so a day taken out of the sweep shows its number on
   a dark tile.
+- **The ticks are tuned in the score too (2026-09-13): a kit, a pitch, a
+  drift.** `SCRUB_KITS` names, per kit, the ordinary landing's voice, how a
+  leg's landing departs from it (lower, a little louder — the one sound that
+  carries meaning stays the one that is different in every kit) and the seat,
+  which stays the seat everywhere because it is the phrase's end and not a
+  tick. `tickPitch` transposes every event (×0.5–×2, read out in semitones);
+  `pitchDrift` climbs or falls about three semitones across the landings
+  (`DRIFT_SPAN`) and leaves the seat at the plain pitch. All three are event
+  `rate`s in the score, so nothing downstream changed. Measured by zero-
+  crossing rate on the rendered bed: ×0.5 / ×1 / ×2 gave 1639 / 2739 /
+  4821 Hz (a coarse estimator on band-passed noise, hence ≈×0.6 and ≈×1.76
+  rather than exact octaves), the woodblock kit sits near 880 Hz, a falling
+  drift descends monotonically and a rising one spans ×1.39 across a sweep.
 - **Three places had to learn that a hook can move without an animated piece**,
   each a real bug the first render showed: the badge clock (it never started,
   so the stage sat on the sweep's first, dark frame), the thumbnail capture
@@ -331,10 +344,12 @@ sound will add there is an audio track, since it writes none today.
 
 ## 12. Open points
 
-- **The three scrub voices have not been heard by a human.** Their energy is in
-  the right place in the file (measured); whether `detent`, `leg` and `seat`
-  sound like a ratchet coming to rest is the maintainer's ear to judge — the
-  gains and frequencies are one table in `voices.ts`.
+- **The scrub voices have not been heard by a human.** Their energy is in the
+  right place in the file (measured); whether `detent`, `leg` and `seat` sound
+  like a ratchet coming to rest — and whether the three other kits (woodblock,
+  typewriter, shutter) read as instruments rather than as UI sounds — is the
+  maintainer's ear to judge. The gains and frequencies are one table in
+  `voices.ts`, the kits one table in `scrub-plan.ts`.
 - **The ticks' level is one slider** (Défilé → "Ticks volume", 0–200%, built
   2026-09-13, raised to 200% the same day), applied inside `scrubScore`, so
   live playback, a still's video, a silent clip's track and a mix all follow

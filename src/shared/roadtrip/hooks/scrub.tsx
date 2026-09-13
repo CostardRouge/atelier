@@ -29,6 +29,8 @@ import { paintScrub } from './scrub-paint';
 import {
   EASINGS,
   EASING_IDS,
+  KIT_IDS,
+  SCRUB_KITS,
   SCRUB_DEFAULTS,
   SCRUB_LIMITS,
   scrubOptions,
@@ -377,6 +379,52 @@ function ScrubPanel({ options, onChange, ctx }: HookPanelProps) {
           hint="A photo, or a clip recorded without sound (most drone footage), takes the ticks as its sound. Most feeds play muted: the sweep says everything without them."
         />
         {o.sound && (
+          <FieldRow label="Voice" hint={SCRUB_KITS[o.kit].hint}>
+            <SelectField
+              label="The voices the ticks play on"
+              value={o.kit}
+              onChange={(kit) => set({ kit })}
+              options={KIT_IDS.map((id) => ({ id, label: SCRUB_KITS[id].label }))}
+            />
+          </FieldRow>
+        )}
+        {o.sound && (
+          <FieldRow label="Pitch">
+            <RangeField
+              label="Ticks pitch"
+              min={SCRUB_LIMITS.tickPitch.min}
+              max={SCRUB_LIMITS.tickPitch.max}
+              step={0.05}
+              value={o.tickPitch}
+              onChange={(tickPitch) => set({ tickPitch })}
+              format={(v) => (v === 1 ? 'as designed' : `${v < 1 ? '' : '+'}${Math.round(12 * Math.log2(v))} st`)}
+            />
+          </FieldRow>
+        )}
+        {o.sound && (
+          <FieldRow
+            label="Drift"
+            hint={
+              o.pitchDrift === 'flat'
+                ? undefined
+                : `The ticks ${o.pitchDrift === 'rising' ? 'climb' : 'fall'} about three semitones from the first landing to the last; the seat keeps its own pitch.`
+            }
+          >
+            <Segmented
+              size="sm"
+              fill
+              label="How the pitch moves along the sweep"
+              value={o.pitchDrift}
+              onChange={(pitchDrift) => set({ pitchDrift })}
+              options={[
+                { id: 'flat', label: 'Steady' },
+                { id: 'rising', label: 'Climbing' },
+                { id: 'falling', label: 'Falling' },
+              ]}
+            />
+          </FieldRow>
+        )}
+        {o.sound && (
           <FieldRow
             label="Volume"
             hint={o.tickVolume === 0 ? 'At 0% no sound track is written for the ticks at all.' : undefined}
@@ -460,7 +508,9 @@ export const scrubVariant: HookVariant = {
           ? (t) => (t < end ? { headline: String(plan.stops[plan.stopAt(t)].dayNumber) } : {})
           : undefined,
       paint: (g, t, frame) => paintScrub(g, plan, o, ctx.pictures, t, frame),
-      score: o.sound ? () => scrubScore(plan, o.tickVolume) : undefined,
+      score: o.sound
+        ? () => scrubScore(plan, o.tickVolume, { kit: o.kit, pitch: o.tickPitch, drift: o.pitchDrift })
+        : undefined,
       mixWithSource: o.sound && o.mixWithClip,
     };
   },

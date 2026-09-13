@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { HookDay } from './hook-variant';
 import {
+  DRIFT_SPAN,
   EASINGS,
   EASING_IDS,
+  KIT_IDS,
+  SCRUB_KITS,
   SCRUB_DEFAULTS,
+  driftAt,
   sampleEvenly,
   scrubOptions,
   scrubPlan,
@@ -324,6 +328,70 @@ describe('scrubScore', () => {
   it('reads the sound switch through the defaults', () => {
     expect(scrubOptions({}).sound).toBe(true);
     expect(scrubOptions({ sound: false }).sound).toBe(false);
+  });
+});
+
+describe('scrubScore tuning', () => {
+  const cal = calendar(30, [3, 8, 14, 20], [1, 14]);
+  const plan = scrubPlan(cal, dateOf(cal, 27), opts())!;
+  const legIndex = plan.stops.findIndex((s) => s.dayNumber === 14);
+
+  it('plays every kit on its own voices, the seat staying the seat', () => {
+    for (const id of KIT_IDS) {
+      const kit = SCRUB_KITS[id];
+      const score = scrubScore(plan, 1, { kit: id, pitch: 1, drift: 'flat' });
+      expect(score[1].voice).toBe(kit.tick);
+      expect(score[legIndex].voice).toBe(kit.leg.voice);
+      expect(score[score.length - 1].voice).toBe(kit.seat);
+    }
+  });
+
+  it('makes a leg’s landing the different one in every kit — lower, a little louder', () => {
+    for (const id of KIT_IDS) {
+      const score = scrubScore(plan, 1, { kit: id, pitch: 1, drift: 'flat' });
+      const plain = score[legIndex - 1];
+      const leg = score[legIndex];
+      if (id === 'ratchet') {
+        expect(leg.voice).not.toBe(plain.voice);
+      } else {
+        expect(leg.rate ?? 1).toBeLessThan(plain.rate ?? 1);
+        expect((leg.gain ?? 0) / Math.max(0.35, 0.85 - legIndex * 0.04)).toBeGreaterThan(1);
+      }
+    }
+  });
+
+  it('transposes every tick by the pitch, the seat included', () => {
+    const up = scrubScore(plan, 1, { kit: 'ratchet', pitch: 2, drift: 'flat' });
+    expect(up.every((e) => e.rate === 2)).toBe(true);
+  });
+
+  it('climbs or falls across the landings, and leaves the seat at the pitch', () => {
+    const rising = scrubScore(plan, 1, { kit: 'ratchet', pitch: 1, drift: 'rising' });
+    const landings = rising.slice(0, -1).map((e) => e.rate ?? 1);
+    for (let i = 1; i < landings.length; i++) expect(landings[i]).toBeGreaterThan(landings[i - 1]);
+    expect(landings[0]).toBeCloseTo(DRIFT_SPAN.from, 9);
+    expect(landings[landings.length - 1]).toBeCloseTo(DRIFT_SPAN.to, 9);
+    expect(rising[rising.length - 1].rate).toBe(1);
+
+    const falling = scrubScore(plan, 1, { kit: 'ratchet', pitch: 1, drift: 'falling' });
+    const down = falling.slice(0, -1).map((e) => e.rate ?? 1);
+    for (let i = 1; i < down.length; i++) expect(down[i]).toBeLessThan(down[i - 1]);
+  });
+
+  it('keeps a steady drift at exactly the pitch', () => {
+    expect(driftAt('flat', 0)).toBe(1);
+    expect(driftAt('flat', 1)).toBe(1);
+    expect(driftAt('rising', 0.5)).toBeCloseTo((DRIFT_SPAN.from + DRIFT_SPAN.to) / 2, 9);
+  });
+
+  it('reads the tuning through the defaults, and refuses what it cannot', () => {
+    expect(scrubOptions({}).kit).toBe('ratchet');
+    expect(scrubOptions({ kit: 'kazoo' }).kit).toBe('ratchet');
+    expect(scrubOptions({ kit: 'wood' }).kit).toBe('wood');
+    expect(scrubOptions({ tickPitch: 9 }).tickPitch).toBe(2);
+    expect(scrubOptions({ tickPitch: 'high' }).tickPitch).toBe(1);
+    expect(scrubOptions({ pitchDrift: 'sideways' }).pitchDrift).toBe('flat');
+    expect(scrubOptions({ pitchDrift: 'rising' }).pitchDrift).toBe('rising');
   });
 });
 
