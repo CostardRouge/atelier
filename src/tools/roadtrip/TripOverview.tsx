@@ -27,6 +27,8 @@ import TripDetailsModal, { type TripDetails } from './TripDetailsModal';
 import PageBar from '../../shared/ui/PageBar';
 import { pageScroll } from '../../shared/ui/page-scroll';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
+import { Icons } from '../../shared/ui/icons';
+import Button from '../../shared/ui/Button';
 
 interface TripOverviewProps {
   trip: TripDoc;
@@ -91,18 +93,18 @@ function TripTitle({ name, onRename }: { name: string; onRename: (name: string) 
         /* Exactly the pills' height, or the row centres a taller field
            against them and pushes the back button down — the whole point of
            the bar is that it does not move. */
-        className="grow shrink basis-[9rem] min-w-0 max-w-[22rem] h-[2.125rem] font-serif text-lg leading-none px-1.5 py-0 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
+        className="w-full min-w-0 max-w-[28rem] font-serif text-2xl leading-tight px-1.5 py-0.5 border border-line-strong rounded-control bg-paper text-ink focus:outline-none focus:border-accent"
       />
     );
   }
 
   return (
-    <h1 className="m-0 grow shrink basis-[9rem] min-w-0 max-w-[22rem]">
+    <h1 className="m-0 min-w-0 max-w-[28rem]">
       <button
         type="button"
         onClick={() => setDraft(name)}
         title="Rename the trip"
-        className="w-full h-[2.125rem] p-0 border-0 bg-transparent font-serif text-lg leading-none text-ink text-left truncate cursor-text hover:text-accent-ink"
+        className="w-full p-0 border-0 bg-transparent font-serif text-2xl leading-tight text-ink text-left truncate cursor-text hover:text-accent-ink"
       >
         {name}
       </button>
@@ -111,34 +113,43 @@ function TripTitle({ name, onRename }: { name: string; onRename: (name: string) 
 }
 
 /**
- * One count of the trip, and the word for it.
- *
- * On a phone it is the same figure smaller, with a one-word label, and it
- * never wraps: the counts are ONE ROW that scrolls sideways. Laid out to
- * breathe they took three rows of a 390px screen and most of the fold before
- * the calendar; folded into a three-across grid they still took two. A row
- * takes one, whatever a trip's numbers turn out to be — and the last figure
- * cut off at the right edge is what says there are more, which a wrapped grid
- * could never say.
+ * One figure of the heading: the number in the mono face, the word under it.
+ * The five-count strip and the "longest stretch" sentence this replaces were
+ * the top third of the screen before the calendar; three figures beside the
+ * name say the same at a glance, and the silence is a link to its first day.
  */
-function Stat({ value, label, compact }: { value: string; label: string; compact: boolean }) {
+function Figure({
+  value,
+  label,
+  tone = 'ink',
+  onClick,
+  title,
+}: {
+  value: ReactNode;
+  label: string;
+  tone?: 'ink' | 'accent';
+  onClick?: () => void;
+  title?: string;
+}) {
+  const Tag = onClick ? 'button' : 'div';
   return (
-    <div className={`flex flex-col ${compact ? 'flex-none' : 'min-w-0'}`}>
+    <Tag
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      title={title}
+      className={`flex flex-col items-end gap-0.5 p-0 border-0 bg-transparent text-right ${
+        onClick ? 'cursor-pointer hover:underline underline-offset-4 decoration-accent' : ''
+      }`}
+    >
       <span
-        className={`font-mono tabular-nums leading-none ${
-          compact ? 'text-base' : 'text-xl'
+        className={`font-mono tabular-nums text-xl leading-none ${
+          tone === 'accent' ? 'text-accent-ink' : 'text-ink'
         }`}
       >
         {value}
       </span>
-      <span
-        className={`font-mono tracking-[0.1em] uppercase text-muted ${
-          compact ? 'text-3xs mt-0.5 whitespace-nowrap' : 'text-3xs mt-1 truncate'
-        }`}
-      >
-        {label}
-      </span>
-    </div>
+      <span className="text-2xs text-muted whitespace-nowrap">{label}</span>
+    </Tag>
   );
 }
 
@@ -308,31 +319,7 @@ export default function TripOverview({
     [trip, setStages],
   );
 
-  const untold = coverage.totalDays - coverage.toldDays;
-
-  // Two lists rather than one with a `short` field, because they differ in
-  // LENGTH and not only in wording: read along a row, "days told · 345 left"
-  // is two figures pretending to be one, so a phone gets them as two. The
-  // sentences are the better label where there is room for them.
-  const stats = useMemo(() => {
-    const gap = coverage.longestGap;
-    return compact
-      ? [
-          { key: 'days', value: coverage.totalDays, label: 'days' },
-          { key: 'told', value: coverage.toldDays, label: 'told' },
-          { key: 'left', value: untold, label: 'left' },
-          { key: 'pieces', value: coverage.posts, label: 'pieces' },
-          { key: 'published', value: coverage.publishedPosts, label: 'published' },
-          ...(gap ? [{ key: 'silence', value: gap.length, label: 'silence' }] : []),
-        ]
-      : [
-          { key: 'days', value: coverage.totalDays, label: 'days on the road' },
-          { key: 'told', value: coverage.toldDays, label: `days told · ${untold} left` },
-          { key: 'pieces', value: coverage.posts, label: 'pieces' },
-          { key: 'published', value: coverage.publishedPosts, label: 'published' },
-          ...(gap ? [{ key: 'silence', value: gap.length, label: 'longest silence' }] : []),
-        ];
-  }, [coverage, untold, compact]);
+  const drafted = coverage.posts - coverage.publishedPosts;
 
   // The dates-and-route sheet, the creation modal reopened on this trip.
   const [editingDetails, setEditingDetails] = useState(false);
@@ -366,54 +353,80 @@ export default function TripOverview({
           found in the same place. What does not fit that one-pill line is the
           route and the dates, which keep a line of their own below: they are
           what was clipping on a 390px screen, not the name. */}
-      <div className="flex flex-col gap-1 min-w-0">
-        <PageBar back={{ label: 'Trips', onClick: onShowTrips }} trailing={headerExtra}>
-          <TripTitle name={trip.name} onRename={rename} />
-        </PageBar>
-        {/* The subtitle is the way back into the two facts that were only
-            askable at creation. Same sheet, so there is one place where a
-            trip's dates and route are said. */}
-        <button
-          type="button"
-          onClick={() => setEditingDetails(true)}
-          title="Change the trip's dates and route"
-          className="self-start p-0 border-0 bg-transparent font-mono text-xs text-muted text-left cursor-pointer hover:text-accent-ink hover:underline underline-offset-[3px]"
-        >
-          {trip.destination && <>{trip.destination} · </>}
-          {formatIsoDate(trip.startDate)} → {formatIsoDate(trip.endDate)}
-        </button>
-      </div>
+      <PageBar
+        back={{ label: 'Trips', onClick: onShowTrips }}
+        trailing={
+          <>
+            {headerExtra}
+            <Button
+              onClick={() => setEditingDetails(true)}
+              icon={Icons.settings}
+              title="The trip's dates, route and cover"
+            >
+              Trip settings
+            </Button>
+          </>
+        }
+      />
 
+      {/* The heading IS the summary: the name (click to rename), the route
+          and the dates (click to edit them), and the three figures the tool
+          exists for. The five-count strip and the "longest stretch" sentence
+          it replaces were the top third of the screen before the calendar. */}
       <div
-        className={`bg-surface border border-line rounded-paper-lg ${
-          compact
-            ? // One row that scrolls sideways, and NO `touch-action`. The rule
-              // in `frontend.md` is about a surface that WRITES a drag; this
-              // one is an ordinary scroll box, where the browser already does
-              // both axes — declaring `pan-x` would not add horizontal
-              // scrolling, it would remove the vertical swipe that scrolls the
-              // page under a 47px strip.
-              //
-              // `flex-none` is load-bearing, not tidiness: an `overflow` other
-              // than `visible` sets a flex item's AUTOMATIC MINIMUM SIZE to
-              // zero, so the moment this row could scroll sideways it also
-              // became crushable by the column above it — measured at 18px,
-              // the numbers sheared off at the waist.
-              'flex-none flex items-start gap-5 px-3 py-2 overflow-x-auto'
-            : 'flex flex-wrap items-start gap-x-10 gap-y-4 p-5'
+        className={`flex items-end gap-x-6 gap-y-2 min-w-0 border-b border-line pb-4 ${
+          compact ? 'flex-wrap' : ''
         }`}
       >
-        {stats.map((stat) => (
-          <Stat
-            key={stat.key}
-            value={String(stat.value)}
-            label={stat.label}
-            compact={compact}
+        <div className="min-w-0 flex-1 flex flex-col gap-1">
+          <TripTitle name={trip.name} onRename={rename} />
+          <button
+            type="button"
+            onClick={() => setEditingDetails(true)}
+            title="Change the trip's dates and route"
+            className="self-start p-0 border-0 bg-transparent text-xs text-muted text-left cursor-pointer hover:text-accent-ink hover:underline underline-offset-[3px]"
+          >
+            {trip.destination && <>{trip.destination} · </>}
+            <span className="font-mono tabular-nums">
+              {formatIsoDate(trip.startDate)} → {formatIsoDate(trip.endDate)}
+            </span>
+            {' · '}
+            {coverage.totalDays} day{coverage.totalDays === 1 ? '' : 's'}
+            {trip.stages.length > 0 && (
+              <>
+                {' · '}
+                {trip.stages.length} stage{trip.stages.length === 1 ? '' : 's'}
+              </>
+            )}
+          </button>
+        </div>
+        <div className={`flex items-end gap-6 ${compact ? 'w-full justify-between gap-3' : ''}`}>
+          <Figure
+            value={
+              <>
+                {coverage.toldDays}
+                <span className="text-muted">/{coverage.totalDays}</span>
+              </>
+            }
+            label="days told"
           />
-        ))}
+          <Figure
+            value={coverage.publishedPosts}
+            label={drafted > 0 ? `published · ${drafted} drafted` : 'published'}
+          />
+          {coverage.longestGap && (
+            <Figure
+              value={coverage.longestGap.length}
+              label="days of silence at most"
+              tone="accent"
+              title={`${formatIsoDate(coverage.longestGap.start)} → ${formatIsoDate(coverage.longestGap.end)} — go there`}
+              onClick={() => selectDate(coverage.longestGap!.start)}
+            />
+          )}
+        </div>
       </div>
 
-      <div className="bg-surface border border-line rounded-paper-lg p-5">
+      <section className="flex flex-col gap-2" aria-label="The journey, day by day">
         <DayHeatmap
           startDate={trip.startDate}
           endDate={trip.endDate}
@@ -423,22 +436,7 @@ export default function TripOverview({
           stageOf={(date) => dayStages.get(date) ?? null}
           menuFor={menuFor}
         />
-      </div>
-
-      {coverage.longestGap && (
-        <p className="m-0 text-xs text-muted">
-          The longest stretch nothing has been told from runs{' '}
-          <button
-            type="button"
-            onClick={() => selectDate(coverage.longestGap!.start)}
-            className="p-0 border-0 bg-transparent text-accent-ink underline underline-offset-[3px] cursor-pointer font-semibold"
-          >
-            {formatIsoDate(coverage.longestGap.start)} →{' '}
-            {formatIsoDate(coverage.longestGap.end)}
-          </button>{' '}
-          — {coverage.longestGap.length} days.
-        </p>
-      )}
+      </section>
 
       <StagesPanel
         trip={trip}

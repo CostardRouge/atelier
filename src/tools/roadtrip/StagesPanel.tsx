@@ -10,6 +10,9 @@ import StageZoomControl from '../../shared/ui/StageZoomControl';
 import { useStageZoom } from '../../shared/ui/use-stage-zoom';
 import PlacesEditor from './PlacesEditor';
 import StageRuler from './StageRuler';
+import { Icons } from '../../shared/ui/icons';
+import IconButton from '../../shared/ui/IconButton';
+import Button from '../../shared/ui/Button';
 
 interface StagesPanelProps {
   trip: TripDoc;
@@ -31,17 +34,6 @@ interface StagesPanelProps {
 const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 const inputClass =
   'font-sans text-sm px-2.5 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent';
-/** The header row's controls all stand 34px tall, the zoom pill's own height. */
-const pill =
-  'flex-none h-[2.125rem] inline-flex items-center px-3 border border-line-strong rounded-full bg-paper text-xs text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink';
-/**
- * Adding a leg is the panel's one creative act, so it is the gallery's own
- * primary button at header size — ink-filled, vermilion on hover — rather than
- * a bordered pill indistinguishable from the status ones beside it. The `+` is
- * its own span so it keeps the monospace weight of a glyph, not of the word.
- */
-const addButton =
-  'flex-none h-[2.125rem] inline-flex items-center gap-1.5 pl-3 pr-3.5 border border-ink rounded-full bg-ink text-paper text-xs font-semibold cursor-pointer transition-[transform,background-color,border-color] duration-200 ease-paper hover:bg-accent hover:border-accent active:scale-[0.98]';
 
 function StageCard({
   trip,
@@ -69,7 +61,7 @@ function StageCard({
 
   return (
     <div
-      className="flex flex-col gap-3 bg-paper border border-line-strong rounded-paper-lg p-4"
+      className="flex flex-col gap-3 border-t border-line pt-3"
       aria-label={`Stage ${index + 1}`}
     >
       <div className="flex items-center gap-2">
@@ -83,41 +75,27 @@ function StageCard({
           {days !== null && ` · ${days} day${days === 1 ? '' : 's'}`}
         </span>
         {confirming ? (
-          <span className="flex items-center gap-2 text-xs">
-            <button
-              type="button"
-              onClick={onDelete}
-              className="p-0 border-0 bg-transparent text-danger font-semibold cursor-pointer underline underline-offset-[3px]"
-            >
+          <span className="flex items-center gap-1.5">
+            <Button size="sm" variant="danger" onClick={onDelete}>
               Delete
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirming(false)}
-              className="p-0 border-0 bg-transparent text-muted cursor-pointer"
-            >
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
               Keep
-            </button>
+            </Button>
           </span>
         ) : (
-          <button
-            type="button"
+          <Button
+            size="sm"
+            variant="ghost"
             onClick={() => setConfirming(true)}
-            className="p-0 border-0 bg-transparent text-xs text-faint cursor-pointer hover:text-danger"
             aria-label={`Delete ${stage.name || 'this stage'}`}
           >
             Delete
-          </button>
+          </Button>
         )}
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close this stage"
-          title="Close"
-          className="flex-none w-6 h-6 grid place-items-center border border-line rounded-full bg-surface text-xs leading-none text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
-        >
-          ×
-        </button>
+        <IconButton size="sm" variant="ghost" label="Close this stage" onClick={onClose}>
+          {Icons.close}
+        </IconButton>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -227,7 +205,10 @@ export default function StagesPanel({
 
   return (
     <section
-      className="flex flex-col gap-3 bg-surface border border-line rounded-paper-lg p-5"
+      // A section under a rule, not a card: the calendar above and the day
+      // below are the same document, and a frame here made three levels of
+      // boxes on one screen (the audit's Z4). The open leg is a row of it.
+      className="flex flex-col gap-3 border-t border-line pt-4"
       aria-label="Stages"
     >
       <div className="flex items-center gap-3">
@@ -258,23 +239,19 @@ export default function StagesPanel({
             a diff the author accepts leg by leg, never a sync. */}
         {onCompleteFrom &&
           timelineSources.map((id) => (
-            <button
+            <Button
               key={id}
-              type="button"
               onClick={() => onCompleteFrom(id)}
               title={`Compare these stages with ${id}'s timeline and take what you want`}
-              className={pill}
+              icon={Icons.download}
             >
-              ↓ From {id}
-            </button>
+              From {id}
+            </Button>
           ))}
         <StageZoomControl zoom={zoom} className="flex-none" />
-        <button type="button" onClick={add} className={addButton}>
-          <span className="font-mono text-base leading-none" aria-hidden="true">
-            +
-          </span>
+        <Button variant="primary" onClick={add} icon={Icons.plus}>
           Stage
-        </button>
+        </Button>
       </div>
 
       <StageRuler
