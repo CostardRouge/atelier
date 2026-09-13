@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, type RefObject } from 'react';
-import SectionLegend from '../../../shared/ui/SectionLegend';
 import {
   counterPreviews,
   type BadgeContent,
@@ -17,10 +16,18 @@ import type {
   TripDoc,
   TripPost,
 } from '../../../shared/roadtrip/trip-types';
-import ModeChoice, { type ChoiceOption } from './ModeChoice';
 import SlideDelivery from './SlideDelivery';
-import { inputClass, legend, linkButton, note, smallButton } from './ui';
+import { inputClass, linkButton } from './ui';
 import { DateField } from '../../../shared/ui/DateField';
+import Button from '../../../shared/ui/Button';
+import {
+  FieldRow,
+  InspectorSection,
+  Readout,
+  SelectField,
+  ToggleField,
+} from '../../../shared/ui/Inspector';
+import type { TrimRange } from '../../../shared/media/trim';
 
 interface ContentTabProps {
   trip: TripDoc;
@@ -34,6 +41,8 @@ interface ContentTabProps {
   slideFile: File | null;
   /** The open slide's clip length, or 0 when its picture is not one. */
   clipSeconds: number;
+  /** The open clip's stretch and speed, when the slide is a clip. */
+  clip?: { range: TrimRange; speed: number; onSpeed: (speed: number) => void } | null;
   onChangePost: (post: TripPost) => void;
   patchBadge: (patch: Partial<PostBadge>) => void;
   patchSlide: (patch: Partial<Pick<PostSlide, 'caption' | 'medium' | 'seconds'>>) => void;
@@ -47,9 +56,21 @@ interface ContentTabProps {
  * What the piece SAYS: the badge's words on the hook, the caption on a
  * content picture, and the day every number is counted from. Each counter and
  * temporal mode still shows the line it would really draw for this post, or
- * why it cannot — a fabricated example reads as a broken feature — but only
- * the chosen one is on screen until you ask for the others (`ModeChoice`).
+ * why it cannot — a fabricated example reads as a broken feature: a select
+ * option carries that line, and the chosen one is repeated under it.
+ *
+ * Laid out in the inspector's grammar (`shared/ui/Inspector`): folding
+ * sections of label-and-control rows.
  */
+
+/** A mode as the select offers it: the line it would draw, or why it cannot. */
+interface ChoiceOption<Id extends string> {
+  id: Id;
+  label: string;
+  text: string | null;
+  otherwise: string;
+  hint?: string;
+}
 export default function ContentTab({
   trip,
   post,
@@ -58,6 +79,7 @@ export default function ContentTab({
   piece,
   slideFile,
   clipSeconds,
+  clip,
   onChangePost,
   patchBadge,
   patchSlide,
@@ -133,262 +155,287 @@ export default function ContentTab({
   );
   const timeLine = timeOptions.find((p) => p.id === post.badge.timeAgo)?.text ?? null;
 
+  const slideName =
+    slide.kind === 'hook' ? 'Hook' : slide.kind === 'cta' ? 'Closing card' : `Picture ${slide.position}`;
+
   return (
-    <div className="flex flex-col gap-4">
-      {isHook && (
-        <label className="flex flex-col gap-1.5">
-          <SectionLegend label="Text">
+    <div className="flex flex-col">
+      <InspectorSection
+        id="piece.slide"
+        title="Slide"
+        badge={slideName}
+        info={
+          <>
             <p>
-              What this piece of the badge says. Leave it empty and it follows the
-              trip — clearing it always gives the computed value back.
+              A slide goes out as a video when something on it moves — an animated badge,
+              a clip — and as an image otherwise. Say so explicitly when you want the
+              other one: a still of an animated hook is how a piece gets its grid picture,
+              and a photograph held for a few seconds is how it opens a reel.
             </p>
-          </SectionLegend>
-          <input
-            ref={textFieldRef}
-            value={post.badge.textOverrides[piece] ?? ''}
-            placeholder={content?.[piece] ?? '(nothing here)'}
-            onChange={(e) =>
-              patchBadge({
-                textOverrides: { ...post.badge.textOverrides, [piece]: e.target.value },
-              })
+            {isHook && (
+              <p>
+                The text is what this piece of the badge says. Leave it empty and it
+                follows the trip — clearing it always gives the computed value back.
+              </p>
+            )}
+          </>
+        }
+      >
+        {isHook && (
+          <FieldRow
+            label="Text"
+            hint={
+              !content ? (
+                <span className="text-danger" role="alert">
+                  This trip’s dates read backwards, so there is no total to count towards.
+                  Fix them and the badge comes back.
+                </span>
+              ) : undefined
             }
-            className={inputClass}
-          />
-          {!content && (
-            <span className="text-xs text-danger" role="alert">
-              This trip’s dates read backwards, so there is no total to count towards.
-              Fix them and the badge comes back.
-            </span>
-          )}
-        </label>
-      )}
-
-      {slide.kind === 'content' && (
-        <label className="flex flex-col gap-1.5">
-          <SectionLegend label="Caption">
-            <p>
-              The counter did its work on the hook; a content picture carries a line at
-              most.
-            </p>
-          </SectionLegend>
-          <input
-            ref={textFieldRef}
-            value={slide.caption}
-            onChange={(e) => patchSlide({ caption: e.target.value })}
-            placeholder="A line over this picture — optional"
-            className={inputClass}
-          />
-        </label>
-      )}
-
-      {slide.kind === 'cta' && (
-        <div className="flex flex-col gap-2">
-          <span className={legend}>Closing card</span>
-          <p className="m-0 text-xs text-ink-soft">
-            This slide is the trip’s call to action, shared by every deck that closes
-            with it.
-          </p>
-          <button
-            type="button"
-            onClick={onEditClosingCard}
-            className={`self-start ${smallButton}`}
           >
-            Edit it in the trip’s settings
-          </button>
-        </div>
-      )}
+            <input
+              ref={textFieldRef}
+              value={post.badge.textOverrides[piece] ?? ''}
+              placeholder={content?.[piece] ?? '(nothing here)'}
+              onChange={(e) =>
+                patchBadge({
+                  textOverrides: { ...post.badge.textOverrides, [piece]: e.target.value },
+                })
+              }
+              aria-label="Text"
+              className={`${inputClass} w-full`}
+            />
+          </FieldRow>
+        )}
 
-      {/* What this slide is DELIVERED as, decided where it is composed. The
-          closing card is left out on purpose: its medium is structural — a
-          card with no picture and nothing animated is a still, and inside a
-          reel it is the tail the export already appends. */}
-      {slide.kind !== 'cta' && (
-        <SlideDelivery
-          slide={slide}
-          animated={isHook && hookAnimates(post.badge.pieceStyles)}
-          clipSeconds={clipSeconds}
-          onMedium={(medium) =>
-            isHook ? patchBadge({ medium }) : patchSlide({ medium })
-          }
-          onSeconds={(seconds) =>
-            isHook ? patchBadge({ hookSeconds: seconds }) : patchSlide({ seconds })
-          }
-        />
-      )}
+        {slide.kind === 'content' && (
+          <FieldRow label="Caption">
+            <input
+              ref={textFieldRef}
+              value={slide.caption}
+              onChange={(e) => patchSlide({ caption: e.target.value })}
+              placeholder="A line over this picture — optional"
+              aria-label="Caption"
+              className={`${inputClass} w-full`}
+            />
+          </FieldRow>
+        )}
+
+        {slide.kind === 'cta' && (
+          <FieldRow label="Card" hint="The trip’s call to action, shared by every deck that closes with it.">
+            <Button size="sm" onClick={onEditClosingCard}>
+              Edit in the trip’s settings
+            </Button>
+          </FieldRow>
+        )}
+
+        {/* What this slide is DELIVERED as, decided where it is composed. The
+            closing card is left out on purpose: its medium is structural. */}
+        {slide.kind !== 'cta' && (
+          <SlideDelivery
+            slide={slide}
+            animated={isHook && hookAnimates(post.badge.pieceStyles)}
+            clipSeconds={clipSeconds}
+            clip={clip}
+            onMedium={(medium) => (isHook ? patchBadge({ medium }) : patchSlide({ medium }))}
+            onSeconds={(seconds) =>
+              isHook ? patchBadge({ hookSeconds: seconds }) : patchSlide({ seconds })
+            }
+          />
+        )}
+      </InspectorSection>
 
       {/* The day belongs to the PIECE, not to a slide: it is what every
           number on the badge is counted from, and it must not vanish on a
           carousel's second picture. */}
-      <div className="flex flex-col gap-2">
-        <SectionLegend label="The day this piece tells">
-          <p>Everything the badge says is counted from this day.</p>
-        </SectionLegend>
-        <div className="flex items-center gap-2">
+      <InspectorSection
+        id="piece.day"
+        title="Day"
+        info={<p>Everything the badge says is counted from this day.</p>}
+      >
+        <FieldRow
+          label={showRange ? 'From' : 'Day'}
+          hint={
+            captured ? (
+              <>
+                The picture is dated{' '}
+                <span className="text-ink">{formatIsoDate(captured.date)}</span>{' '}
+                {captured.source === 'exif'
+                  ? '(the camera’s own record)'
+                  : captured.source === 'source'
+                    ? `(the capture time ${captured.via ?? 'the source'} read at ingest)`
+                    : '(the file’s date — a copy or an export rewrites it)'}
+                {capturedElsewhere && (
+                  <>
+                    {' · '}
+                    <button
+                      type="button"
+                      onClick={() => onChangePost({ ...post, date: captured.date })}
+                      className={linkButton}
+                    >
+                      file it under that day
+                    </button>
+                  </>
+                )}
+                {capturedOutsideTrip && (
+                  <span className="text-danger">
+                    {' '}
+                    — outside this trip’s dates, so every count here would be about a day
+                    this picture has nothing to do with.
+                  </span>
+                )}
+              </>
+            ) : undefined
+          }
+        >
           <DateField
             value={post.date}
             onChange={(date) => onChangePost({ ...post, date })}
             label="The day this piece tells"
             format={formatIsoDate}
-            className="flex-1 min-w-0"
+            className="min-w-0"
           />
-          <span className="flex-none font-mono text-2xs text-muted tabular-nums">
-            {dayOfTrip}
-          </span>
-        </div>
-        {captured && (
-          <p className="m-0 text-xs text-muted">
-            The picture is dated{' '}
-            <span className="text-ink">{formatIsoDate(captured.date)}</span>{' '}
-            {captured.source === 'exif'
-              ? '(the camera’s own record)'
-              : captured.source === 'source'
-                ? `(the capture time ${captured.via ?? 'the source'} read at ingest)`
-                : '(the file’s date — a copy or an export rewrites it)'}
-            {capturedElsewhere && (
-              <>
-                {' · '}
-                <button
-                  type="button"
-                  onClick={() => onChangePost({ ...post, date: captured.date })}
-                  className="p-0 border-0 bg-transparent text-xs text-accent-ink cursor-pointer underline underline-offset-[3px]"
-                >
-                  file it under that day
-                </button>
-              </>
-            )}
-            {capturedOutsideTrip && (
-              <span className="text-danger">
-                {' '}
-                — outside this trip’s dates, so every count here would be about a day
-                this picture has nothing to do with.
-              </span>
-            )}
-          </p>
-        )}
+          <Readout muted>{dayOfTrip}</Readout>
+        </FieldRow>
         {showRange ? (
-          <label className="flex flex-col gap-1">
-            <span className={legend}>Through (for a range)</span>
-            <div className="flex items-center gap-2">
-              <DateField
-                value={post.endDate ?? ''}
-                min={post.date}
-                onChange={(endDate) => onChangePost({ ...post, endDate: endDate || null })}
-                label="Through"
-                format={formatIsoDate}
-                className="flex-1 min-w-0"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  onChangePost({ ...post, endDate: null });
-                  setWantRange(false);
-                }}
-                className={`flex-none ${linkButton}`}
-              >
-                One day
-              </button>
-            </div>
-          </label>
+          <FieldRow label="Through">
+            <DateField
+              value={post.endDate ?? ''}
+              min={post.date}
+              onChange={(endDate) => onChangePost({ ...post, endDate: endDate || null })}
+              label="Through"
+              format={formatIsoDate}
+              className="min-w-0"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                onChangePost({ ...post, endDate: null });
+                setWantRange(false);
+              }}
+              className={`flex-none ${linkButton}`}
+            >
+              One day
+            </button>
+          </FieldRow>
         ) : (
-          <button
-            type="button"
-            onClick={() => setWantRange(true)}
-            className={`self-start ${linkButton}`}
-          >
-            This piece covers several days…
-          </button>
+          <FieldRow label="">
+            <button type="button" onClick={() => setWantRange(true)} className={linkButton}>
+              This piece covers several days…
+            </button>
+          </FieldRow>
         )}
-      </div>
+      </InspectorSection>
 
       {isHook && (
-        <>
-          <div className="flex flex-col gap-2">
-            <ModeChoice
+        <InspectorSection
+          id="piece.counter"
+          title="Counter"
+          info={
+            <p>
+              The number the badge leads with. Every way of counting says the line it
+              would really draw for this piece, or the reason it cannot draw one.
+            </p>
+          }
+        >
+          <FieldRow
+            label="Mode"
+            hint={
+              counterReason ? (
+                <>
+                  {counterReason}{' '}
+                  {post.badge.mode === 'day-range'
+                    ? 'It counts the single day above meanwhile.'
+                    : 'Stages are edited on the trip’s Overview; the day of the trip is counted meanwhile.'}
+                </>
+              ) : activeCounter?.text ? (
+                <span className="font-mono text-ink">{activeCounter.text}</span>
+              ) : undefined
+            }
+          >
+            <SelectField
               label="Counter"
-              options={counterOptions}
               value={post.badge.mode}
               onChange={(mode) => patchBadge({ mode })}
-            >
-              <p>
-                The number the badge leads with. Every way of counting shows the line it
-                would really draw for this piece, or the reason it cannot draw one.
-              </p>
-            </ModeChoice>
-            {counterReason && (
-              <p className={`${note} text-muted`}>
-                {counterReason}{' '}
-                {post.badge.mode === 'day-range'
-                  ? 'It counts the single day above meanwhile.'
-                  : 'Stages are edited on the trip’s Overview; the day of the trip is counted meanwhile.'}
-              </p>
-            )}
-            <label className="flex items-center gap-2 text-xs text-ink-soft cursor-pointer">
-              <input
-                type="checkbox"
-                checked={post.badge.showPin}
-                onChange={(e) => patchBadge({ showPin: e.target.checked })}
-                className="accent-accent"
-              />
-              Marker before the place
-            </label>
-            <p className="m-0 text-xs text-faint">
-              {place
+              options={counterOptions.map((o) => ({
+                id: o.id,
+                label: `${o.label} · ${o.text ?? o.otherwise}`,
+              }))}
+            />
+          </FieldRow>
+          <FieldRow
+            label="Marker"
+            hint={
+              place
                 ? `The place reads “${place}”.`
-                : 'No stage covers this day, so there is no place to mark — add one on the Overview.'}
-            </p>
-          </div>
+                : 'No stage covers this day, so there is no place to mark — add one on the Overview.'
+            }
+          >
+            <ToggleField
+              label="Marker before the place"
+              checked={post.badge.showPin}
+              onChange={(showPin) => patchBadge({ showPin })}
+            >
+              Before the place
+            </ToggleField>
+          </FieldRow>
+        </InspectorSection>
+      )}
 
-          <div className="flex flex-col gap-2">
-            <ModeChoice
+      {isHook && (
+        <InspectorSection
+          id="piece.time"
+          title="Time"
+          info={
+            <p>
+              The line about when, drawn under the place. It is worked out for the day
+              the piece goes out — set that day ahead and it reads correctly then, not now.
+            </p>
+          }
+        >
+          <FieldRow
+            label="Mode"
+            hint={
+              timeLine ? (
+                <span className="font-mono text-ink">“{timeLine}”</span>
+              ) : post.badge.timeAgo === 'off' ? (
+                'No line about when. The trip’s name is on the badge either way.'
+              ) : post.badge.timeAgo === 'anniversary' ? (
+                'Not the anniversary on that day, so the line is left out. Nothing claims a date it is not.'
+              ) : (
+                'Nothing true to say about that gap yet, so the line is left out.'
+              )
+            }
+          >
+            <SelectField
               label="Time"
-              options={timeOptions}
               value={post.badge.timeAgo}
               onChange={(timeAgo) => patchBadge({ timeAgo })}
-            >
-              <p>
-                The line about when, drawn under the place. It is worked out for the day
-                the piece goes out — set that day ahead and it reads correctly then, not
-                now.
-              </p>
-            </ModeChoice>
-
-            <label className="flex flex-col gap-1">
-              <span className={legend}>Read on</span>
-              <div className="flex items-center gap-2">
-                <DateField
-                  value={post.badge.referenceDate ?? todayIso()}
-                  onChange={(referenceDate) => patchBadge({ referenceDate })}
-                  label="Read on"
-                  format={formatIsoDate}
-                  className="flex-1 min-w-0"
-                />
-                {post.badge.referenceDate && (
-                  <button
-                    type="button"
-                    onClick={() => patchBadge({ referenceDate: null })}
-                    className={`flex-none ${linkButton}`}
-                  >
-                    Today
-                  </button>
-                )}
-              </div>
-            </label>
-
-            <p className="m-0 px-2.5 py-2 rounded-paper bg-paper border border-line text-xs">
-              {timeLine ? (
-                <span className="text-ink">“{timeLine}”</span>
-              ) : (
-                <span className="text-muted">
-                  {post.badge.timeAgo === 'off'
-                    ? 'No line about when. The trip’s name is on the badge either way.'
-                    : post.badge.timeAgo === 'anniversary'
-                      ? 'Not the anniversary on that day, so the line is left out. Nothing claims a date it is not.'
-                      : 'Nothing true to say about that gap yet, so the line is left out.'}
-                </span>
-              )}
-            </p>
-          </div>
-        </>
+              options={timeOptions.map((o) => ({
+                id: o.id,
+                label: o.text ? `${o.label} · ${o.text}` : o.label,
+              }))}
+            />
+          </FieldRow>
+          <FieldRow label="Read on">
+            <DateField
+              value={post.badge.referenceDate ?? todayIso()}
+              onChange={(referenceDate) => patchBadge({ referenceDate })}
+              label="Read on"
+              format={formatIsoDate}
+              className="min-w-0"
+            />
+            {post.badge.referenceDate && (
+              <button
+                type="button"
+                onClick={() => patchBadge({ referenceDate: null })}
+                className={`flex-none ${linkButton}`}
+              >
+                Today
+              </button>
+            )}
+          </FieldRow>
+        </InspectorSection>
       )}
     </div>
   );

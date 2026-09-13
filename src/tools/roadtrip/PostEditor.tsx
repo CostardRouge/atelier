@@ -81,6 +81,7 @@ import { Icons } from '../../shared/ui/icons';
 import Segmented from '../../shared/ui/Segmented';
 import DeckTimeline from './DeckTimeline';
 import { useSurface } from '../../shared/ui/use-surface';
+import { FieldRow } from '../../shared/ui/Inspector';
 
 interface PostEditorProps {
   trip: TripDoc;
@@ -1166,18 +1167,14 @@ export default function PostEditor({
             Look tabs both edit it, and two copies of the same six chips read
             as two different controls. A click on the stage picks one too. */}
         {isHook && (tab === 'content' || tab === 'look') && (
-          <div className="flex-none flex flex-col gap-1.5">
-            <span className="flex items-center gap-2">
-              <span className="font-mono text-2xs tracking-[0.14em] uppercase text-muted">
-                Piece
-              </span>
-              <span className="text-2xs text-faint">or click it on the picture</span>
-            </span>
-            <PiecePicker piece={piece} onPiece={selectPiece} />
+          <div className="flex-none">
+            <FieldRow label="Piece" hint="Or click it on the picture.">
+              <PiecePicker piece={piece} onPiece={selectPiece} />
+            </FieldRow>
           </div>
         )}
 
-        <div className="flex flex-col gap-3 @min-[860px]:flex-1 @min-[860px]:min-h-0 @min-[860px]:overflow-y-auto @min-[860px]:overscroll-contain @min-[860px]:pr-1.5">
+        <div className="flex flex-col @min-[860px]:flex-1 @min-[860px]:min-h-0 @min-[860px]:overflow-y-auto @min-[860px]:overscroll-contain @min-[860px]:pr-1.5">
           {tab === 'content' && (
             <ContentTab
               trip={trip}
@@ -1187,6 +1184,7 @@ export default function PostEditor({
               piece={piece}
               slideFile={slideFile}
               clipSeconds={isVideo ? duration : 0}
+              clip={isClipSlide ? { range: clipRange, speed: slide.speed, onSpeed: setClipSpeed } : null}
               onChangePost={onChangePost}
               patchBadge={patchBadge}
               patchSlide={patchSlide}

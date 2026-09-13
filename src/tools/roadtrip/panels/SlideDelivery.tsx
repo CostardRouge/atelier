@@ -1,16 +1,18 @@
-import SectionLegend from '../../../shared/ui/SectionLegend';
 import {
   resolveSlideMedium,
   type DeckSlide,
   type SlideReason,
 } from '../../../shared/roadtrip/deck';
 import {
+  CLIP_SPEEDS,
   MAX_HOOK_SECONDS,
   MIN_HOOK_SECONDS,
   screenSecondsCeiling,
 } from '../../../shared/roadtrip/hook-video';
+import type { TrimRange } from '../../../shared/media/trim';
+import { formatTimecode } from '../../../shared/lib/format';
+import { FieldRow, RangeField, Readout } from '../../../shared/ui/Inspector';
 import type { SlideMedium } from '../../../shared/roadtrip/trip-types';
-import { legend, rowLabel } from './ui';
 import Segmented from '../../../shared/ui/Segmented';
 
 interface SlideDeliveryProps {
@@ -19,6 +21,8 @@ interface SlideDeliveryProps {
   animated: boolean;
   /** The clip's length when this slide holds one and it has loaded; else 0. */
   clipSeconds: number;
+  /** The open clip's stretch and speed, when the slide is a clip — the same numbers the bar under the picture edits. */
+  clip?: { range: TrimRange; speed: number; onSpeed: (speed: number) => void } | null;
   onMedium: (medium: SlideMedium) => void;
   onSeconds: (seconds: number) => void;
 }
@@ -73,7 +77,7 @@ function choiceHint(choice: SlideMedium, reason: SlideReason, medium: string): s
 }
 
 /** One word for a row in the rail or a plan: what this slide delivers. */
-function shortAnswer(reason: SlideReason): string {
+export function shortAnswer(reason: SlideReason): string {
   switch (reason) {
     case 'animated':
       return 'video · it animates';
@@ -104,6 +108,7 @@ export default function SlideDelivery({
   slide,
   animated,
   clipSeconds,
+  clip,
   onMedium,
   onSeconds,
 }: SlideDeliveryProps) {
@@ -115,18 +120,8 @@ export default function SlideDelivery({
   const seconds = Math.min(slide.seconds, ceiling);
 
   return (
-    <div className="flex flex-col gap-2">
-      <SectionLegend label={`This slide · ${shortAnswer(slide.reason)}`}>
-        <p>
-          A slide goes out as a video when something on it moves — an animated badge,
-          a clip — and as an image otherwise. Say so explicitly when you want the
-          other one: a still of an animated hook is how a piece gets its grid
-          picture, and a photograph held for a few seconds is how it opens a reel.
-        </p>
-      </SectionLegend>
-
-      <div className="flex items-center gap-3">
-        <span className={rowLabel}>Goes out as</span>
+    <>
+      <FieldRow label="Goes out as" hint={reasonSentence(slide.reason, seconds, slide.speed)}>
         <Segmented
           fill
           size="sm"
@@ -140,37 +135,52 @@ export default function SlideDelivery({
           })}
           className="flex-1 min-w-0"
         />
-      </div>
+      </FieldRow>
 
-      <p className="m-0 text-xs text-ink-soft">
-        {reasonSentence(slide.reason, seconds, slide.speed)}
-      </p>
+      {/* The clip's own numbers, as the audit's inspector drew them: the cut
+          is made on the bar under the picture, and read here; the speed is
+          one control in both places, writing the same field. */}
+      {clip && (
+        <>
+          <FieldRow label="Range">
+            <Readout>
+              {formatTimecode(clip.range.start)} → {formatTimecode(clip.range.end)}
+            </Readout>
+          </FieldRow>
+          <FieldRow label="Speed" hint={clip.speed !== 1 ? 'A re-timed clip goes out without sound.' : undefined}>
+            <Segmented
+              fill
+              size="sm"
+              label="Clip speed"
+              value={String(clip.speed)}
+              onChange={(v) => clip.onSpeed(Number(v))}
+              options={CLIP_SPEEDS.map((sp) => ({ id: String(sp), label: `${sp}×` }))}
+              className="flex-1 min-w-0"
+            />
+          </FieldRow>
+        </>
+      )}
 
-      <label className="flex flex-col gap-1">
-        <span className={legend}>
-          On screen · {seconds.toFixed(1)}s
-          {clipSeconds > 0 && ceiling < MAX_HOOK_SECONDS
-            ? ` of ${ceiling.toFixed(1)}s left${slide.speed !== 1 ? ` at ${slide.speed}×` : ''}`
-            : ''}
-        </span>
-        <input
-          type="range"
+      <FieldRow
+        label="On screen"
+        hint={
+          slide.medium === 'video'
+            ? clipSeconds > 0 && ceiling < MAX_HOOK_SECONDS
+              ? `At most ${ceiling.toFixed(1)}s of the clip is left after its in point${slide.speed !== 1 ? ` at ${slide.speed}×` : ''}.`
+              : undefined
+            : 'An image ignores this, until the deck is combined into one reel.'
+        }
+      >
+        <RangeField
+          label="How long this slide stays on screen"
           min={MIN_HOOK_SECONDS}
           max={ceiling}
           step={0.5}
           value={seconds}
-          onChange={(e) => onSeconds(Number(e.target.value))}
-          className="accent-accent"
-          aria-label="How long this slide stays on screen"
+          onChange={onSeconds}
+          format={(v) => `${v.toFixed(1)} s`}
         />
-        <span className="text-xs text-muted">
-          {slide.medium === 'video'
-            ? clipSeconds > 0
-              ? 'The length of the clip this slide delivers — the out point on the bar under the picture, where the in point and the speed are cut too.'
-              : 'The length of the clip this slide delivers.'
-            : 'An image ignores this, until the deck is combined into one reel.'}
-        </span>
-      </label>
-    </div>
+      </FieldRow>
+    </>
   );
 }
