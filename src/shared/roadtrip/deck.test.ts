@@ -10,6 +10,7 @@ import {
   slideFileName,
 } from './deck';
 import { DEFAULT_CTA } from './cta-slide';
+import { DEFAULT_DEVELOP } from '../develop/develop';
 import { DEFAULT_BADGE_WORDS } from './day-badge';
 import {
   createPostSlide,
@@ -53,6 +54,7 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   grade: { layers: [], output: 'none' },
   sourceId: 'local',
   cover: defaultTripCover(),
+  developPresets: [],
   createdAt: 0,
   updatedAt: 0,
   ...over,
@@ -337,5 +339,43 @@ describe('deckSlides — medium and screen time', () => {
     p.badge.medium = 'video';
     const deck = deckSlides(trip({ cta: { ...DEFAULT_CTA, headline: 'Follow' } }), p);
     expect(deck.at(-1)).toMatchObject({ kind: 'cta', medium: 'image', reason: 'plain' });
+  });
+
+  it('carries a clip’s speed, and 1 for anything that is not a clip', () => {
+    const p = post({ media: { name: 'DJI_0001.MP4', size: 1, lastModified: 1 } });
+    p.badge.videoSpeed = 2;
+    const slide = createPostSlide({ name: 'IMG_2.JPG', size: 1, lastModified: 1 });
+    slide.videoSpeed = 0.5; // a photograph has no speed, whatever is stored
+    const clip = createPostSlide({ name: 'DJI_0002.MOV', size: 1, lastModified: 1 });
+    clip.videoSpeed = 0.5;
+    const deck = deckSlides(
+      trip({ cta: { ...DEFAULT_CTA, headline: 'Follow' } }),
+      { ...p, slides: [slide, clip], includeCta: true },
+    );
+    expect(deck.map((s) => s.speed)).toEqual([2, 1, 0.5, 1]);
+  });
+
+  it('reads an odd stored speed as “as shot”', () => {
+    const p = post({ media: { name: 'DJI_0001.MP4', size: 1, lastModified: 1 } });
+    p.badge.videoSpeed = NaN;
+    expect(deckSlides(trip(), p)[0].speed).toBe(1);
+  });
+});
+
+describe('deckSlides — the picture’s own develop', () => {
+  it('carries the hook’s and each slide’s develop, and none for the closing card', () => {
+    const p = post({ includeCta: true });
+    p.badge.develop = { ...DEFAULT_DEVELOP, exposure: 0.7 };
+    const slide = createPostSlide({ name: 'IMG_2.JPG', size: 1, lastModified: 1 });
+    slide.develop = { ...DEFAULT_DEVELOP, highlights: -40 };
+    p.slides = [slide, createPostSlide()];
+    const t = trip();
+    t.cta = { ...t.cta, headline: 'Follow the trip' };
+    const slides = deckSlides(t, p);
+    expect(slides[0].develop).toEqual({ ...DEFAULT_DEVELOP, exposure: 0.7 });
+    expect(slides[1].develop).toEqual({ ...DEFAULT_DEVELOP, highlights: -40 });
+    expect(slides[2].develop).toBeNull();
+    expect(slides[3].kind).toBe('cta');
+    expect(slides[3].develop).toBeNull();
   });
 });

@@ -112,7 +112,9 @@ export default function SlideRail({
                       : 'The closing card, shared by the whole trip'
                 }\n${
                   s.medium === 'video'
-                    ? `Goes out as ${s.seconds.toFixed(1)}s of video`
+                    ? `Goes out as ${s.seconds.toFixed(1)}s of video${
+                        s.speed !== 1 ? ` at ${s.speed}×, without sound` : ''
+                      }`
                     : 'Goes out as an image'
                 }`}
                 draggable={ci >= 0}
@@ -171,6 +173,7 @@ export default function SlideRail({
                 {s.medium === 'video' && (
                   <span className="absolute bottom-0 inset-x-0 py-[1px] bg-[rgba(16,15,13,0.68)] font-mono text-[0.5rem] leading-none text-center text-[#f4efe6] tabular-nums">
                     {s.seconds.toFixed(1).replace(/\.0$/, '')}s
+                    {s.speed !== 1 ? `·${s.speed}×` : ''}
                   </span>
                 )}
               </button>

@@ -25,12 +25,40 @@ import {
 } from '../../shared/roadtrip/badge-render';
 import type { HookBlock, Shade } from '../../shared/roadtrip/shades';
 import type { ResolvedHook } from '../../shared/roadtrip/hooks/hook-variant';
+import { TRIM_EPSILON, type TrimRange } from '../../shared/media/trim';
+import { clampPlaybackRate } from '../../shared/media/use-video-transport';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
+
+/**
+ * Playing the open clip on the stage. The stage owns the `<video>` behind the
+ * picture (it is the decoded source), so it is the only place playback can
+ * be driven from; the caller owns the CLOCK — it receives the playhead every
+ * animation frame and hands the badge's own time back down as `timeSeconds`.
+ */
+export interface StagePlayback {
+  playing: boolean;
+  /** The clip's speed, which is also the preview's rate. */
+  rate: number;
+  /** The stretch played: playback starts at `start` and stops on `end`. */
+  range: TrimRange;
+  /** Jump back to `start` on the out point instead of stopping there. */
+  loop: boolean;
+  /** The playhead, in source seconds, once per frame while playing. */
+  onTime: (seconds: number) => void;
+  /** Playback stopped on the out point. */
+  onEnded: () => void;
+}
 
 interface BadgeStageProps {
   file: File | null;
-  /** Frame of a clip to sit on; ignored for photos. */
+  /**
+   * Frame of a clip to sit on — the playhead, in source seconds; ignored for
+   * photos. While `playback.playing` the element advances on its own and this
+   * is only what the caller was last told, so it is not seeked to.
+   */
   videoTimeSeconds: number;
+  /** Play the clip; absent, the stage shows the one frame it was asked for. */
+  playback?: StagePlayback | null;
   aspect: number;
   elements: OverlayElement[];
   theme: StyleTheme | null;
@@ -110,6 +138,7 @@ interface BadgeStageProps {
 export default function BadgeStage({
   file,
   videoTimeSeconds,
+  playback = null,
   aspect,
   elements,
   theme,
@@ -192,9 +221,18 @@ export default function BadgeStage({
   // what makes the paint wait for the frame: painting on `videoTimeSeconds`
   // alone would draw the OLD frame, since the seek has not landed yet.
   const [frameSeq, setFrameSeq] = useState(0);
+  // The playback callbacks through a ref: the loop below must not be torn
+  // down and restarted because the caller passed a fresh closure.
+  const playbackRef = useRef(playback);
+  playbackRef.current = playback;
+  const playing = Boolean(playback?.playing);
   useEffect(() => {
     const source = sourceRef.current;
     if (!source?.seek || loading) return;
+    // While the clip plays, `videoTimeSeconds` is the playhead the loop
+    // itself reported a frame ago: seeking to it would drag the element
+    // backwards a few milliseconds on every frame and stutter the picture.
+    if (playbackRef.current?.playing) return;
     let cancelled = false;
     void source
       .seek(videoTimeSeconds)
@@ -208,6 +246,61 @@ export default function BadgeStage({
       cancelled = true;
     };
   }, [videoTimeSeconds, loading]);
+
+  // Play the clip. The element advances by itself; a rAF loop reports the
+  // playhead to the caller and bumps `frameSeq` so the paint below draws
+  // every frame — the caller's `timeSeconds` alone would not, since a
+  // content slide's badge time never moves. The out point is watched on the
+  // same loop rather than on `timeupdate`, which fires ~4×/s and would let
+  // playback run a quarter of a second past the handle.
+  useEffect(() => {
+    const source = sourceRef.current;
+    const v = source?.image;
+    const pb = playbackRef.current;
+    if (!pb?.playing || loading || !(v instanceof HTMLVideoElement)) return;
+    const { start, end } = pb.range;
+    v.playbackRate = clampPlaybackRate(pb.rate);
+    // Pressing play on (or outside) the out point means replay the stretch.
+    if (v.currentTime < start || v.currentTime >= end - TRIM_EPSILON) v.currentTime = start;
+    // Muted and started by the author's own press, so the browser allows it;
+    // a refusal leaves the frame where it is.
+    void v.play().catch(() => {});
+    let raf = 0;
+    const tick = () => {
+      const now = playbackRef.current;
+      if (v.currentTime >= end - TRIM_EPSILON) {
+        if (now?.loop) {
+          v.currentTime = start;
+        } else {
+          v.pause();
+          // Land exactly on the handle, so the next press is unambiguously
+          // "at the out point" and replays from the in point.
+          v.currentTime = end;
+          now?.onTime(end);
+          setFrameSeq((n) => n + 1);
+          now?.onEnded();
+          return;
+        }
+      }
+      now?.onTime(v.currentTime);
+      setFrameSeq((n) => n + 1);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      v.pause();
+    };
+    // The loop restarts when the stretch, the rate or the loop flag change
+    // under it; the callbacks are read through the ref.
+  }, [
+    playing,
+    playback?.rate,
+    playback?.range.start,
+    playback?.range.end,
+    playback?.loop,
+    loading,
+  ]);
 
   // The hit boxes of the last paint, measured with the very options it used.
   // Read by the pointer handlers and by the outline; refreshed by every paint.

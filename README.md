@@ -151,6 +151,23 @@ instant A/B, reordered with ↑/↓. The stack **bakes into a single LUT**
 node graph), so the preview, the stills and every export variant still grade
 through one shader pass.
 
+**Develop: the media's own correction, before the look.** The Grade tab opens
+on one settled row — `As shot`, or `+0.7 EV · highlights −40` — and
+**Develop…** opens the same sheet Trips uses over the active photo *or clip*:
+exposure in stops, brightness, contrast, highlights, shadows, whites, blacks,
+temperature, tint, saturation, vibrance, with the grade stack underneath and a
+wipe to the untouched frame. A clip opens on the frame under the playhead. The
+correction bakes as the **first** stage of the same single LUT, so the stage,
+the still export, every video variant and the frame grab all carry it. It is
+kept **per media** in the project, keyed like the trims and guarded by the
+file's content hash (a develop set on one file is not restored onto a
+same-named other), follows a rename with them, and never enters
+`.atelier.json` — a template is from no picture. **Copy** and **Paste** in the
+sheet's header carry one set of numbers for the session, shared with Trips'
+sheet, and **Apply to N other media** writes the same numbers onto every other
+photo and clip of the project, each under its own hash, while Done writes the
+one in hand. The Studio keeps no presets; a trip's are Trips' own.
+
 **Output transform.** Conversion LUTs (D-Log→709, Apple Log→709, S-Log→709)
 are authored for a Rec.709 reference display — BT.1886, gamma 2.4, a dark
 grading suite. A browser shows roughly gamma 2.2, so those looks arrive
@@ -579,15 +596,25 @@ screen, a row when the editor stacks — so drag one along it, or move it with t
 arrow keys while it has focus. Only the middle moves — a hook that opened third
 and a call to action that came second would stop being either.
 
-**The hook can leave as a moving clip, not only a still.** When the hook sits
-on a video, "Export hook video" burns the animated badge into it through the
+**A slide can be a video, and it plays on the stage.** Put a clip on the hook
+or on any content slide and the picture becomes a transport: play it (`Space`),
+scrub it, and **cut the stretch it delivers** on the Studio's own trim bar —
+in and out handles that never cross, `I` / `O` to cut at the playhead, the
+picture following whichever handle you drag. A **speed** menu (¼× to 4×) plays
+the stretch faster or slower, on the stage and in the file alike: what you
+watch is what goes out. The badge is timed by the clip — its entrance lands on
+the first frame of the stretch and keeps its own pace whatever the speed — and
+pauses settled on the in point, the composition view the rail and the PNGs
+show. The filmstrip in the Picture tab still chooses the in point by pointing
+at the clip itself, and slides the whole stretch along it. A slide stores its
+in point, its screen time and its speed; the stretch of the source is derived
+from the three, so the bar, the rail's length and the export can never
+disagree. Exporting burns the badge (or the caption) into the clip through the
 **same WebCodecs pipeline the Studio exports with** — cover-cropped into the
-post's frame, the scrim and vignette applied per frame, audio copied through,
-never re-encoded. The clip starts on the frame you picked with the scrubber, so
-the entrance plays on frame one instead of having already happened; a length
-slider says how much of the rush goes out, defaulting to the badge's own hold
-plus a beat. It reads MP4 and MOV (what the demuxer handles) and says so
-plainly for anything else — the PNG export has no such limit.
+post's frame, the shades applied per frame, audio copied through, never
+re-encoded — and a re-timed clip therefore goes out **without sound**, said in
+the plan before anything runs. It reads MP4 and MOV (what the demuxer handles)
+and says so plainly for anything else; the PNG export has no such limit.
 
 The QR code is generated **on your machine** — a ~250-line encoder in
 `shared/lib/qr.ts` rather than a call to a web service, because a card that
@@ -595,6 +622,37 @@ fetched its own QR would be the one place the suite phoned home. Byte mode,
 error-correction level M, versions 1 to 10 (213 characters); a link that does
 not fit is refused with a reason rather than drawn as a code that scans to half
 a URL.
+
+**Develop: a picture's own correction.** On the Picture tab, one settled row
+says what has been done to the open slide's picture — `As shot`, or
+`+0.7 EV · highlights −40 · vibrance +15` — and **Develop…** opens a sheet
+over it: exposure (in stops), brightness, contrast, highlights, shadows,
+whites, blacks, temperature, tint, saturation and vibrance, with the trip's
+look underneath so a correction and a grade are set in one place. The picture
+on the sheet is exactly what the piece will deliver — the correction, then the
+look, then the output transform — and a drag across it wipes to the untouched
+frame (hold the corner chip to see it whole). The correction bakes into the
+same single LUT the grade already goes through, so the stage, the slide rail,
+the PNG deck and the hook clip all pick it up with nothing else to do. It
+belongs to **that slide**, like its framing: it is never inherited by the next
+picture, and ↺ puts it back to as shot. Every luminance move keeps hue and
+keeps a grey grey; only temperature and tint tint. On a JPEG or a Winnow proxy
+the sheet says so — an 8-bit picture has nothing above white to give back;
+developing a RAW is what the next phases are for (`docs/photo-develop.md`).
+
+**The same light on many pictures.** The sheet's header has **Copy** and
+**Paste** — one set of numbers kept for the session, never stored, and the
+same clipboard the Studio's sheet reads, so a correction crosses the two tools
+in two clicks. **Presets** are the trip's own: `Save current as…` keeps the
+numbers under a name of your choosing (there is no factory set), a chip writes
+a copy of them onto the open picture, and × removes the preset without
+touching any picture it was applied to — a preset is applied, never followed.
+Presets travel in `.roadtrip.json`. **Apply to…** offers what is worth a batch:
+*the other slides of this piece* and *the other pictures of this day*, each
+verb naming its count; a click writes the same numbers onto each of those
+pictures as its own copy, right away, while **Done** still writes the picture
+in hand. A whole trip is deliberately not offered: a day is the largest set one
+light is likely to hold.
 
 **The Studio and Trips are joined up.** A piece can link the Studio project
 its clip is graded in — pick an existing one or create it from the piece — and
@@ -616,8 +674,9 @@ stayed behind instead).
 
 Currently in place: the trip, its days and stages, the grid, day-keyed posts,
 the badge — words, temporal line, per-piece styling, animation and picture
-treatments — the deck through to its PNGs, the animated hook burned into a
-clip, the located places a stage went through, and the bridge into the Studio.
+treatments — the deck through to its PNGs, clips that play, trim and re-time
+on any slide and leave as video, the located places a stage went through, and
+the bridge into the Studio.
 A portable `.json` export of a trip is the phase that follows.
 
 ## Telemetry tool

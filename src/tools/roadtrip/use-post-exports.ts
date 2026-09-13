@@ -3,10 +3,11 @@ import type { CubeLut } from '../../shared/lib/cube-parser';
 import type { OverlayElement } from '../../shared/overlay/overlay-types';
 import { classifyPart } from '../../shared/library/assets';
 import { loadClipMeta } from '../../shared/media/video-metadata';
-import { contentSlideElements } from '../../shared/roadtrip/deck';
+import { contentSlideElements, type DeckSlide } from '../../shared/roadtrip/deck';
 import { renderDeck } from '../../shared/roadtrip/deck-export';
 import { exportPlan, type PlanItem } from '../../shared/roadtrip/export-plan';
 import {
+  clipSpeed,
   hookRange,
   hookSourceProblem,
   hookVariant,
@@ -17,9 +18,11 @@ import {
   exportHookVideo,
 } from '../../shared/roadtrip/hook-video-export';
 import {
+  DecodeUnsupportedError,
   isEncodeSupported,
   type ExportProgress,
 } from '../../shared/media/webcodecs-export';
+import { transcodeStore } from '../../shared/media/transcode-store';
 import type { HookBlock } from '../../shared/roadtrip/shades';
 import type { TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
 import { canWriteToDisk, pickWritableDirectory, writeItems } from '../../shared/sources/write-files';
@@ -52,8 +55,11 @@ export interface PostExportInputs {
   block: HookBlock | null;
   /** How long the burned-in clip runs, already clamped to the clip. */
   hookLength: number;
-  /** The composed grade every picture goes through; null leaves them as shot. */
-  lut: CubeLut | null;
+  /**
+   * The composed grade for a slide's own develop (`LutStack.composeWith`);
+   * null leaves that picture as shot.
+   */
+  lutFor: (develop: DeckSlide['develop']) => CubeLut | null;
   /** Called as an export starts, so the caller can bring the report into view. */
   onStart?: () => void;
 }
@@ -63,6 +69,14 @@ export interface PostExports {
   exporting: string | null;
   /** The last export's outcome, in a sentence. */
   note: string | null;
+  /**
+   * A clip the last export could not DECODE (HEVC on a browser without it),
+   * so the panel can offer the in-browser transcode right there — the
+   * pipeline's own message says "transcode it first", and a sentence that
+   * names a remedy the screen does not offer is a dead end. Cleared by the
+   * next export that starts.
+   */
+  undecodable: File | null;
   /** The piece's ONE primary export: every slide in the format it is. */
   exportPiece: (imagesOnly?: boolean) => Promise<void>;
   exportDeck: () => Promise<void>;
@@ -79,6 +93,44 @@ function download(blob: Blob, name: string) {
 }
 
 /**
+ * The file the pipeline should read: the H.264 the author transcoded from it
+ * when there is one, else the file itself — the Studio's own preference. The
+ * transcode keeps the picture's size, so the measured dimensions still hold.
+ */
+function deliverable(file: File): File {
+  return transcodeStore.get(file).file ?? file;
+}
+
+/**
+ * What an export failure means, in a sentence a person can act on; null for
+ * a cancellation. The pipeline's messages already name most causes; the two
+ * it cannot are a file handle gone stale (a folder's files become unreadable
+ * after a while) and — flagged apart so the panel can offer the remedy — a
+ * codec this browser does not decode.
+ */
+function explainFailure(
+  err: unknown,
+  fallback: string,
+): { note: string | null; undecodable: boolean } {
+  if (err instanceof DOMException && err.name === 'AbortError') {
+    return { note: null, undecodable: false };
+  }
+  if (
+    err instanceof DOMException &&
+    (err.name === 'NotReadableError' || err.name === 'NotFoundError')
+  ) {
+    return {
+      note: 'The clip could not be read. Files opened from a folder can become unreadable after a while — re-add it to the Library (drag it in, or “Add files”) and export again.',
+      undecodable: false,
+    };
+  }
+  if (err instanceof DecodeUnsupportedError) {
+    return { note: err.message, undecodable: true };
+  }
+  return { note: err instanceof Error ? err.message : fallback, undecodable: false };
+}
+
+/**
  * The two things that leave the piece editor as files: the deck as PNGs, and
  * the hook burned into its clip through the Studio's own video export. Both
  * report through one progress line and one note, because only one runs at a
@@ -87,6 +139,7 @@ function download(blob: Blob, name: string) {
 export function usePostExports(inputs: PostExportInputs): PostExports {
   const [exporting, setExporting] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [undecodable, setUndecodable] = useState<File | null>(null);
 
   /**
    * Burn the animated hook into a video. The still shows the badge settled;
@@ -115,18 +168,24 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         setNote(problem);
         return;
       }
-      if (!hookInfo.width || !hookInfo.height) {
-        setNote('The clip is still loading — try again in a moment.');
-        return;
-      }
     }
     setNote(null);
+    setUndecodable(null);
     setExporting('Encoding…');
     let audioSkipped: string | null = null;
     const onProgress = (p: ExportProgress) =>
       setExporting(p.ratio === null ? `${p.phase}…` : `Encoding ${Math.round(p.ratio * 100)}%…`);
     try {
-      const variant = hookVariant(post.badge.aspectId);
+      // The stage measures the hook's clip while it shows it; a piece opened
+      // on another slide has not shown it yet, so the size is read from the
+      // file rather than the author told to wait for something not coming.
+      const meta =
+        hookIsVideo && (!hookInfo.width || !hookInfo.height)
+          ? await loadClipMeta(hookFile, { thumbnail: false })
+          : hookInfo;
+      // The slide's own speed, resolved by the deck (1 for a photograph).
+      const speed = hookIsVideo ? clipSpeed(post.badge.videoSpeed) : 1;
+      const variant = hookVariant(post.badge.aspectId, 1080, speed);
       const shared = {
         variant,
         elements: inputs.hookElements,
@@ -138,23 +197,19 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         // The hook's own framing, so the burned-in picture is cropped where
         // the preview showed it — the PNG deck goes through the same value.
         framing: post.badge.framing,
-        lut: inputs.lut,
+        lut: inputs.lutFor(post.badge.develop),
         onProgress,
       };
       const blob = hookIsVideo
         ? await exportHookVideo({
             ...shared,
-            file: hookFile,
+            file: deliverable(hookFile),
             onAudioSkipped: (reason) => {
               audioSkipped = reason;
             },
-            srcWidth: hookInfo.width,
-            srcHeight: hookInfo.height,
-            range: hookRange(
-              post.badge.videoTimeSeconds,
-              inputs.hookLength,
-              hookInfo.duration,
-            ),
+            srcWidth: meta.width,
+            srcHeight: meta.height,
+            range: hookRange(post.badge.videoTimeSeconds, inputs.hookLength, meta.duration, speed),
           })
         : await exportHookStillVideo({
             ...shared,
@@ -170,9 +225,9 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       // with the delivery, rather than being discovered on a phone later.
       setNote(audioSkipped ? `${name} downloaded — ${audioSkipped}` : `${name} downloaded`);
     } catch (err) {
-      // The pipeline's messages already name the cause (an undecodable HEVC
-      // points at the transcode), so they are shown as they come.
-      setNote(err instanceof Error ? err.message : 'The clip could not be encoded.');
+      const failure = explainFailure(err, 'The clip could not be encoded.');
+      setNote(failure.note);
+      if (failure.undecodable) setUndecodable(hookFile);
     } finally {
       setExporting(null);
     }
@@ -197,7 +252,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     const isHook = slide.kind === 'hook';
     const file = inputs.resolve(slide.media);
     if (!file) throw new Error(`${slide.media?.name ?? 'This slide'} is not in the Library.`);
-    const variant = hookVariant(post.badge.aspectId);
+    const variant = hookVariant(post.badge.aspectId, 1080, slide.speed);
     const shared = {
       variant,
       elements: isHook ? inputs.hookElements : contentSlideElements(slide.caption, aspect),
@@ -207,24 +262,27 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       shades: isHook ? post.badge.shades : undefined,
       block: isHook ? inputs.block : null,
       framing: slide.framing,
-      lut: inputs.lut,
+      lut: inputs.lutFor(slide.develop),
       onProgress,
     };
     if (classifyPart(file.name) !== 'video') {
       return exportHookStillVideo({ ...shared, file, seconds: item.seconds, onAudioSkipped });
     }
-    // A content clip's own size has to be read here; the hook's is already
-    // measured by the stage that is showing it.
-    const meta = isHook
-      ? inputs.hookInfo
-      : await loadClipMeta(file, { thumbnail: false });
+    // The hook's size is usually already measured by the stage that showed
+    // it; a content clip's has to be read here — and so has the hook's when
+    // the stage has not shown it yet (a piece opened on another slide), or
+    // the variant would be sized from 0×0 and the encoder refused.
+    const meta =
+      isHook && inputs.hookInfo.width > 0 && inputs.hookInfo.height > 0
+        ? inputs.hookInfo
+        : await loadClipMeta(file, { thumbnail: false });
     return exportHookVideo({
       ...shared,
-      file,
+      file: deliverable(file),
       onAudioSkipped,
       srcWidth: meta.width,
       srcHeight: meta.height,
-      range: hookRange(slide.videoTimeSeconds, item.seconds, meta.duration),
+      range: hookRange(slide.videoTimeSeconds, item.seconds, meta.duration, slide.speed),
     });
   }
 
@@ -239,6 +297,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
   async function exportPiece(imagesOnly = false) {
     inputs.onStart?.();
     setNote(null);
+    setUndecodable(null);
     const plan = exportPlan(inputs.trip, inputs.post, {
       canEncode: isEncodeSupported(),
       hasPicture: (slide) => inputs.resolve(slide.media) !== null || slide.media === null,
@@ -265,7 +324,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
           longEdge: 1920,
           timeSeconds: inputs.timeSeconds,
           resolve: inputs.resolve,
-          lut: inputs.lut,
+          lutFor: (slide) => inputs.lutFor(slide.develop),
           include: (slide) => wanted.has(slide.position),
           onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`),
         });
@@ -293,7 +352,13 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
           );
           rendered.push({ name: item.name, blob });
         } catch (err) {
-          failures.push(err instanceof Error ? err.message : `${item.name} could not be encoded.`);
+          const failure = explainFailure(err, `${item.name} could not be encoded.`);
+          if (failure.note) failures.push(failure.note);
+          // The first clip this browser cannot decode gets the transcode
+          // offered; a second would be the same codec from the same camera.
+          if (failure.undecodable) {
+            setUndecodable((cur) => cur ?? inputs.resolve(item.slide.media));
+          }
         }
       }
 
@@ -305,7 +370,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       const short = plan.items.length - rendered.length;
       await deliver(rendered, short, [...plan.blockers, ...failures]);
     } catch (err) {
-      setNote(err instanceof Error ? err.message : 'The piece could not be exported.');
+      setNote(explainFailure(err, 'The piece could not be exported.').note);
     } finally {
       setExporting(null);
     }
@@ -365,7 +430,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         longEdge: 1920,
         timeSeconds: inputs.timeSeconds,
         resolve: inputs.resolve,
-        lut: inputs.lut,
+        lutFor: (slide) => inputs.lutFor(slide.develop),
         onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`),
       });
       if (!rendered.length) {
@@ -398,10 +463,12 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
             (short ? ` · ${short} could not be rendered` : ''),
         );
       }
+    } catch (err) {
+      setNote(explainFailure(err, 'The slides could not be exported.').note);
     } finally {
       setExporting(null);
     }
   }
 
-  return { exporting, note, exportPiece, exportDeck, exportHookClip };
+  return { exporting, note, undecodable, exportPiece, exportDeck, exportHookClip };
 }

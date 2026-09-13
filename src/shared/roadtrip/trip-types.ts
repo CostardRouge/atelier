@@ -20,6 +20,12 @@
 import { isIsoDate, isWithin, type IsoDate } from './trip-days';
 import { defaultHookSeconds } from './hook-video';
 import { DEFAULT_FRAMING, normaliseFraming, type Framing } from '../media/framing';
+import {
+  developOrNull,
+  normaliseDevelopPresets,
+  type DevelopPreset,
+  type DevelopSettings,
+} from '../develop/develop';
 import type { SavedMediaRef } from '../projects/project-types';
 import { DEFAULT_SOURCE_ID } from '../sources/source';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
@@ -47,7 +53,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 15;
+export const TRIP_DOC_VERSION = 17;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers and the
@@ -233,8 +239,21 @@ export interface PostBadge {
   shades: Shade[];
   /** The frame the badge is composed for, from `ASPECT_PRESETS`. */
   aspectId: string;
-  /** Frame of a video clip the badge sits on; ignored for a photo. */
+  /**
+   * Where the hook's clip STARTS — the frame the badge sits on for a still,
+   * and the in point of the stretch that is encoded, `hookSeconds` of screen
+   * time long at `videoSpeed`. Ignored for a photo.
+   */
   videoTimeSeconds: number;
+  /**
+   * The speed the hook's clip plays at, on the stage and in the file: 1 as
+   * shot, 2 twice as fast, 0.5 half — the Studio's own steps (`CLIP_SPEEDS`).
+   * The source stretch is `hookSeconds × videoSpeed` long (`clipSlice`), so
+   * changing the speed keeps the footage and moves the screen time. A speed
+   * other than 1 ships without sound: audio is copied, never re-encoded.
+   * Ignored for a photo.
+   */
+  videoSpeed: number;
   /**
    * How the hook's picture sits in the frame — pan, zoom, rotation over the
    * cover-crop. Belongs to the piece and not to the trip's defaults: it is
@@ -242,6 +261,15 @@ export interface PostBadge {
    * the next is how a subject ends up out of frame.
    */
   framing: Framing;
+  /**
+   * The hook picture's own CORRECTION — exposure, tone, colour
+   * (`shared/develop/develop.ts`), applied before the trip's look. Null is
+   * "as shot". Beside `framing` and for the same reason: it is about THIS
+   * photograph, so it is never inherited by the next piece (`hookDefaultsFrom`
+   * leaves it out); time is saved by presets and apply-to, not by a default
+   * that lifts every new picture by a stop.
+   */
+  develop: DevelopSettings | null;
   /**
    * Free text replacing a computed piece, per piece. An empty string means
    * "computed", never "blank": clearing the field gives the derived value
@@ -310,7 +338,7 @@ export function hookDefaultsFrom(badge: PostBadge): HookDefaults {
   };
 }
 
-function newId(): string {
+export function newId(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : `id_${Math.random().toString(36).slice(2)}`;
@@ -343,7 +371,10 @@ export function defaultPostBadge(
     shades: (defaults?.shades ?? []).map((shade) => ({ ...shade, id: newId() })),
     aspectId: defaults?.aspectId ?? ASPECT_FOR_KIND[kind],
     videoTimeSeconds: 0,
+    // Never inherited, like the frame: a speed is about the clip in hand.
+    videoSpeed: 1,
     framing: { ...DEFAULT_FRAMING },
+    develop: null,
     textOverrides: {},
     pieceStyles: defaults ? structuredClone(defaults.pieceStyles) : {},
     hook: defaults?.hook ? structuredClone(defaults.hook) : defaultHookLayers(),
@@ -361,11 +392,15 @@ export interface PostSlide {
   /**
    * Where this slide's picture is taken from its clip — and, once the slide is
    * delivered as a video, the IN point of the stretch that is encoded, with
-   * `seconds` as its length.
+   * `seconds` of screen time as its length at `videoSpeed`.
    */
   videoTimeSeconds: number;
+  /** The speed the clip plays at — see `PostBadge.videoSpeed`. */
+  videoSpeed: number;
   /** How this picture sits in the frame — see `PostBadge.framing`. */
   framing: Framing;
+  /** This picture's own correction, or null for as shot — see `PostBadge.develop`. */
+  develop: DevelopSettings | null;
   /** The author's own line over this picture; empty draws nothing. */
   caption: string;
   /** What this slide is delivered as; see {@link SlideMedium}. */
@@ -379,7 +414,9 @@ export function createPostSlide(media: SavedMediaRef | null = null): PostSlide {
     id: crypto.randomUUID(),
     media,
     videoTimeSeconds: 0,
+    videoSpeed: 1,
     framing: { ...DEFAULT_FRAMING },
+    develop: null,
     caption: '',
     medium: 'auto',
     seconds: DEFAULT_SLIDE_SECONDS,
@@ -518,6 +555,13 @@ export interface TripDoc {
    * are re-baked.
    */
   cover: TripCover;
+  /**
+   * Named develops the author saved from a picture, applied to another by a
+   * click — a preset is APPLIED, never followed, so editing one later changes
+   * no piece. Trip-wide like the words: the light of a trip is a habit, and
+   * portable for the same reason.
+   */
+  developPresets: DevelopPreset[];
   // --- bound half ----------------------------------------------------------
   /**
    * The source this trip belongs to — `'local'` for this browser
@@ -571,6 +615,7 @@ export function createTripDoc(
     cta: { ...DEFAULT_CTA },
     grade: emptyGrade(),
     cover: defaultTripCover(),
+    developPresets: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -705,6 +750,16 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * duration (an exit animation had nothing to land on without it), the picture
  * backdrop, the place marker and the reference day. A post that had the
  * boolean on lands on `auto` — the intent kept, the untrue anniversary dropped.
+ *
+ * v16 → v17 gives every picture its DEVELOP (`PostBadge.develop`,
+ * `PostSlide.develop`) and the trip its develop presets. Every stored picture
+ * lands on `null` — as shot — and the presets start empty, so nothing a trip
+ * already draws changes. It was v15 on its branch; main took v15 and v16 the
+ * same night, so it was renumbered on the merge and runs last.
+ *
+ * v15 → v16 gives every clip slide a speed. Every existing slide lands on 1,
+ * which is exactly what it delivered: the same footage over the same screen
+ * time. Nothing about a still changes, and the hook defaults carry no speed.
  *
  * v14 → v15 gives every piece its OPENER (`PostBadge.hook`), a list holding
  * the `badge` variant — the one that draws nothing extra — so no stored trip
@@ -970,6 +1025,38 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
           : defaults,
       ]),
     ) as HookDefaultsByKind;
+  }
+
+  if (migrated.version < 16) {
+    // Every clip composed before this played as shot, so every slide lands on
+    // 1: the same footage, over the same screen time, as it always delivered.
+    // The hook's remembered defaults are untouched — a speed belongs to the
+    // clip in hand, and is never inherited (like its frame).
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      badge: { ...post.badge, videoSpeed: post.badge?.videoSpeed ?? 1 },
+      slides: (post.slides ?? []).map((slide) => ({
+        ...slide,
+        videoSpeed: slide.videoSpeed ?? 1,
+      })),
+    }));
+  }
+
+  if (migrated.version < 17) {
+    // Nothing was developed before this existed: every picture stays as
+    // shot, which is what `null` means. Read through `developOrNull` so a
+    // hand-edited or foreign value lands clamped or as nothing, never as a
+    // NaN in a bake. The presets start empty — a preset nobody saved is a
+    // factory setting.
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      badge: { ...post.badge, develop: developOrNull(post.badge?.develop) },
+      slides: (post.slides ?? []).map((slide) => ({
+        ...slide,
+        develop: developOrNull(slide.develop),
+      })),
+    }));
+    migrated.developPresets = normaliseDevelopPresets(migrated.developPresets);
   }
 
   migrated.version = TRIP_DOC_VERSION;

@@ -23,6 +23,7 @@ import type { StyleTheme } from '../overlay/title-styles';
 import type { Scene } from '../overlay/scenes';
 import type { TimeShift } from '../telemetry/time-format';
 import type { ExportTail } from './export-tail';
+import { resolveSpeed } from './frame-rate';
 import type { TrimRange } from './trim';
 import { DEFAULT_FRAMING, drawFramed, type Framing } from './framing';
 import {
@@ -67,20 +68,45 @@ export interface VariantRenderOptions {
   /**
    * Painted into the variant's frame after the picture and BEFORE the
    * overlays, once per frame. The Studio leaves it unset; Road Trip uses it
-   * for the hook's scrim and vignette, which have to darken the picture rather
-   * than the text drawn over it.
+   * for the hook's scrim and vignette (which have to darken the picture
+   * rather than the text drawn over it) and for a hook variant's own drawing
+   * (the scrub's tape and flashes).
    */
   paintUnderOverlays?: (
     ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
     w: number,
     h: number,
-    /** Seconds since the first EXPORTED frame — the trim's in point is zero. */
+    /**
+     * Seconds since the first EXPORTED frame, on `overlayClock` — 0 there,
+     * and at the delivered speed under `'delivered'`. The trim's in point is
+     * the origin either way.
+     */
     tSeconds: number,
   ) => void;
   /**
+   * Which clock the overlays' animations run on.
+   *
+   * `source` (the default, the Studio's) hands the engine the SOURCE time
+   * and the trim's in point as the origin: cues, the capture clock and the
+   * heading smoothing all index the source timeline, and a re-timed variant
+   * plays its intro at the re-timed pace — that IS the Studio's re-time.
+   *
+   * `delivered` hands it the time into the DELIVERED clip, at the delivered
+   * speed, from zero: a Road Trip badge composed to slide in over 0.6 s must
+   * slide in over 0.6 s of the viewer's time whatever speed its clip plays
+   * at, exactly as the stage previews it. Only for a caller with no cues —
+   * a source-indexed readout under a delivered clock would read the wrong
+   * frame's value. `paintUnderOverlays` and `elementsAt` below are handed
+   * this SAME clock, so a hook variant's own drawing (the scrub's tape) and
+   * the badge's entrance never desync under a re-timed clip.
+   */
+  overlayClock?: 'source' | 'delivered';
+  /**
    * The overlays AT a moment, for a composition whose words change as it plays
-   * (Road Trip's scrub steps its numeral). Called with the same clip-relative
-   * seconds as `paintUnderOverlays`; `elements` is used when absent. The Studio
+   * (Road Trip's scrub steps its numeral). Called with the same clock as
+   * `paintUnderOverlays` and as `drawOverlays`' own `timeSeconds` — seconds
+   * since the first delivered frame, at the delivered speed under
+   * `overlayClock: 'delivered'`. `elements` is used when absent. The Studio
    * leaves it unset.
    */
   elementsAt?: (tSeconds: number) => OverlayElement[];
@@ -159,6 +185,9 @@ export async function exportVariantVideo(
         ? makeFrameGrader(opts.lut, codedWidth, codedHeight, opts.intensity)
         : null;
       const framing = opts.framing ?? DEFAULT_FRAMING;
+      const origin = opts.trim?.start ?? 0;
+      const delivered = opts.overlayClock === 'delivered';
+      const speed = resolveSpeed(variant.speed);
 
       return {
         draw(videoFrame, tMicros) {
@@ -171,9 +200,15 @@ export async function exportVariantVideo(
           // the badge preview, so a hook burns in where it was composed.
           drawFramed(ctx, upright, displayW, displayH, out.w, out.h, framing);
           const t = tMicros / 1_000_000;
-          // `t` is the SOURCE timestamp; a composition counts from the first
-          // exported frame, which a trim moves.
-          const sinceStart = t - (opts.trim?.start ?? 0);
+          // The ONE clock every per-frame callback below reads. Source: since
+          // the first exported frame, unscaled (the Studio's own re-time
+          // already plays cues at their source pace). Delivered: since the
+          // first DELIVERED frame, at the delivered speed — a hook variant's
+          // drawing (the scrub's tape) and the badge's own entrance must
+          // agree on this or a re-timed hook clip desyncs the two.
+          const sinceStart = delivered
+            ? Math.max(0, t - origin) / speed
+            : t - origin;
           opts.paintUnderOverlays?.(ctx, out.w, out.h, sinceStart);
           if (variant.overlays) {
             const elements = opts.elementsAt ? opts.elementsAt(sinceStart) : opts.elements;
@@ -181,11 +216,13 @@ export async function exportVariantVideo(
               theme: opts.theme,
               timeShift: opts.timeShift,
               cues: opts.cues,
-              timeSeconds: t,
-              scenes: opts.scenes,
               // `t` is the SOURCE timestamp; windows count from the first
-              // exported frame, which a trim moves.
-              originSeconds: opts.trim?.start ?? 0,
+              // exported frame, which a trim moves. On the delivered clock
+              // the engine is handed `sinceStart` itself instead, so an
+              // entrance keeps its own pace under a re-timed clip.
+              timeSeconds: delivered ? sinceStart : t,
+              scenes: opts.scenes,
+              originSeconds: delivered ? 0 : origin,
             });
           }
           return canvas;

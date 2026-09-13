@@ -8,6 +8,7 @@
  */
 
 import { useCallback, useDeferredValue, useMemo, useState } from 'react';
+import { DEFAULT_DEVELOP, isDefaultDevelop, type DevelopSettings } from '../develop/develop';
 import { parseCube, type CubeLut } from '../lib/cube-parser';
 import { CUBE_ACCEPT, pickFile } from '../sources/file-sources';
 import { BUILTIN_LUTS } from './builtin-luts';
@@ -41,8 +42,30 @@ export interface LutStack {
    * it or preview and export diverge.
    */
   interpolation: Interpolation;
+  /**
+   * The open picture's own correction, baked as the FIRST stage of
+   * `composed` (`develop/develop.ts`). Default is "as shot", which costs no
+   * bake at all. Session state here; the host binds it to its document the
+   * way it binds the layers.
+   */
+  develop: DevelopSettings;
   /** The whole stack baked into one LUT, or null when nothing is active. */
   composed: CubeLut | null;
+  /**
+   * The same stack WITHOUT the develop, for a source that was developed at
+   * decode (a RAW): its numbers were consumed there, and grading it through
+   * `composed` would apply the correction twice. Identical to `composed`
+   * while the develop is default — one bake, not two.
+   */
+  composedForDeveloped: CubeLut | null;
+  /**
+   * The stack baked with SOME OTHER picture's develop — how a deck whose
+   * slides each carry their own correction is graded: one cube per slide,
+   * memoised on the develop's value, thrown away whenever the layers, the
+   * output or the interpolation change. Null or a default develop answers
+   * `composedForDeveloped`, so the common case is a lookup, not a bake.
+   */
+  composeWith: (develop: DevelopSettings | null) => CubeLut | null;
   /** True while a built-in is being fetched. */
   busy: boolean;
   error: string | null;
@@ -54,6 +77,8 @@ export interface LutStack {
   setEnabled: (id: string, enabled: boolean) => void;
   setOutput: (output: OutputTransform) => void;
   setInterpolation: (mode: Interpolation) => void;
+  /** Replace the correction; `null` is "as shot". */
+  setDevelop: (develop: DevelopSettings | null) => void;
   /** Rebuild the stack from a saved document. */
   restore: (
     saved: readonly SavedLutLayer[],
@@ -82,6 +107,7 @@ async function loadBuiltin(builtinId: string): Promise<{ lut: CubeLut; name: str
 export function useLutStack(): LutStack {
   const [layers, setLayers] = useState<LutLayer[]>([]);
   const [output, setOutput] = useState<OutputTransform>('none');
+  const [develop, setDevelopState] = useState<DevelopSettings>(DEFAULT_DEVELOP);
   const { interpolation, setInterpolation } = useLutInterpolation();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,10 +137,38 @@ export function useLutStack(): LutStack {
   const bakeLayers = useDeferredValue(layers);
   const bakeOutput = useDeferredValue(output);
   const bakeInterpolation = useDeferredValue(interpolation);
-  const composed = useMemo(
+  const bakeDevelop = useDeferredValue(develop);
+  const composedForDeveloped = useMemo(
     () => composeLutStack(bakeLayers, bakeOutput, bakeInterpolation),
     [bakeLayers, bakeOutput, bakeInterpolation],
   );
+  // One memo per DEVELOP over the same stack, keyed on the develop's value:
+  // a deck of five corrected slides bakes five cubes once and then reads
+  // them, and a slider being dragged re-bakes only its own key. The cache
+  // lives with the stack it was baked from — a new layers/output/mode makes
+  // a new function and a new, empty cache. Bounded, so a long session of
+  // dragging cannot hold a thousand cubes.
+  const composeWith = useMemo(() => {
+    const cache = new Map<string, CubeLut | null>();
+    return (develop: DevelopSettings | null): CubeLut | null => {
+      if (isDefaultDevelop(develop)) return composedForDeveloped;
+      const key = JSON.stringify(develop);
+      let cube = cache.get(key);
+      if (cube === undefined) {
+        if (cache.size >= 32) cache.clear();
+        cube = composeLutStack(bakeLayers, bakeOutput, bakeInterpolation, develop);
+        cache.set(key, cube);
+      }
+      return cube;
+    };
+  }, [bakeLayers, bakeOutput, bakeInterpolation, composedForDeveloped]);
+  // With no correction the two are one bake: the common case pays nothing
+  // for the develop existing.
+  const composed = useMemo(() => composeWith(bakeDevelop), [composeWith, bakeDevelop]);
+
+  const setDevelop = useCallback((next: DevelopSettings | null) => {
+    setDevelopState(next ?? DEFAULT_DEVELOP);
+  }, []);
 
   const addBuiltin = useCallback(async (builtinId: string) => {
     setError(null);
@@ -224,7 +278,10 @@ export function useLutStack(): LutStack {
     layers,
     output,
     interpolation,
+    develop,
     composed,
+    composedForDeveloped,
+    composeWith,
     busy,
     error,
     addBuiltin,
@@ -235,6 +292,7 @@ export function useLutStack(): LutStack {
     setEnabled,
     setOutput,
     setInterpolation,
+    setDevelop,
     restore,
     toSaved,
   };

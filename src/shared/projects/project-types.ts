@@ -24,9 +24,10 @@ import { NO_SHIFT, type TimeShift } from '../telemetry/time-format';
 import { AUTO_TIME_SCALE, type TimeScaleSetting } from '../telemetry/time-scale';
 import type { OutputTransform } from '../lut/transfer';
 import type { SavedTrim } from '../media/trim';
+import { normaliseDevelops, type SavedDevelop } from './media-develop';
 import { DEFAULT_SOURCE_ID } from '../sources/source';
 
-export const PROJECT_DOC_VERSION = 14;
+export const PROJECT_DOC_VERSION = 15;
 
 /**
  * Identity of one media file, enough to re-match it wherever it lives.
@@ -125,6 +126,14 @@ export interface ProjectMedia {
    * and exports them one by one to assemble later.
    */
   trims: Record<string, SavedTrim>;
+  /**
+   * Each media's own CORRECTION (`shared/develop/develop.ts`), keyed by base
+   * name like the trims and guarded by the media's hash the way a trim is by
+   * its duration (`media-develop.ts`). Only the media that were corrected have
+   * an entry. Bound, not portable: a template is from no picture — and a
+   * develop set for THIS footage means nothing under another media.
+   */
+  develops: Record<string, SavedDevelop>;
 }
 
 export interface ProjectDoc {
@@ -229,7 +238,7 @@ export function createProjectDoc(
     exportPrefs: template
       ? structuredClone(template.exportPrefs)
       : { fileName: null, variants: defaultVariants() },
-    media: { dirHandle: null, files: [], activeId: null, trims: {} },
+    media: { dirHandle: null, files: [], activeId: null, trims: {}, develops: {} },
     thumbnail: null,
     durationSeconds: null,
   };
@@ -258,7 +267,9 @@ export function createProjectDoc(
  * speed of 1, which is the only speed an export could deliver before it
  * existed; v11 → v12 adds the scene list, empty — no project could have an
  * intro before it existed, and an empty list draws exactly nothing; v12 → v13
- * adds the outro card, null, for the same reason.
+ * adds the outro card, null, for the same reason; v13 → v14 files every
+ * document under the local source; v14 → v15 adds the per-media develops,
+ * empty — no picture was corrected before they existed.
  * Idempotent; the store runs it on every read.
  */
 export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
@@ -347,6 +358,15 @@ export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
   if (migrated.version < 14) {
     // Everything written before sources existed lives in this browser.
     migrated.sourceId = migrated.sourceId ?? DEFAULT_SOURCE_ID;
+  }
+  if (migrated.version < 15) {
+    // No picture was corrected before v15: every media stays as shot, which is
+    // what an empty map means. Read through the normaliser so a foreign value
+    // lands clamped or dropped, never as a NaN in a bake.
+    migrated.media = {
+      ...migrated.media,
+      develops: normaliseDevelops(migrated.media?.develops),
+    };
   }
   migrated.version = PROJECT_DOC_VERSION;
   return migrated;

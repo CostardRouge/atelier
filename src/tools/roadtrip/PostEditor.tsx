@@ -5,8 +5,19 @@ import type { AssetKind } from '../../shared/library/assets';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import type { SavedMediaRef } from '../../shared/projects/project-types';
 import { hashedMediaRef } from '../../shared/projects/media-identity';
+import DevelopSheet, { type DevelopApplyVerb } from '../../shared/develop/DevelopSheet';
+import type { DevelopSettings } from '../../shared/develop/develop';
+import { pictureFidelity } from '../../shared/develop/picture-fidelity';
 import { normaliseFraming, type Framing } from '../../shared/media/framing';
 import { badgeContent, type BadgePiece } from '../../shared/roadtrip/day-badge';
+import {
+  applyDevelopToDay,
+  applyDevelopToPost,
+  countDayPictures,
+  countPostPictures,
+  removePreset,
+  savePreset,
+} from '../../shared/roadtrip/develop-apply';
 import {
   badgeBlockExtent,
   badgeElements,
@@ -26,11 +37,19 @@ import {
   deckSlides,
   moveItem,
 } from '../../shared/roadtrip/deck';
-import { hookSecondsWithin } from '../../shared/roadtrip/hook-video';
+import {
+  clipSlice,
+  hookSecondsWithin,
+  retimedScreenSeconds,
+  screenSecondsOf,
+} from '../../shared/roadtrip/hook-video';
+import { badgeSettleSeconds } from '../../shared/roadtrip/badge-layout';
+import { TRIM_EPSILON, type TrimRange } from '../../shared/media/trim';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
 import { usePublishMediaScope, type MediaScope } from '../../shared/sources/media-scope';
 import {
   createPostSlide,
+  newId,
   type PostBadge,
   type PostSlide,
   type TripDoc,
@@ -39,13 +58,14 @@ import {
 import { canvasThumbnail } from '../../shared/roadtrip/thumbnail';
 import { putThumb } from '../../shared/roadtrip/trip-store';
 import BadgeStage from './BadgeStage';
+import ClipTransport from './ClipTransport';
 import type { CtaFieldRefs } from './CtaPanel';
 import SlideRail from './SlideRail';
 import TripSettingsModal, { type TripSettingsSection } from './TripSettingsModal';
 import ContentTab from './panels/ContentTab';
 import ExportTab from './panels/ExportTab';
 import LookTab from './panels/LookTab';
-import PictureTab from './panels/PictureTab';
+import PictureTab, { GradeScopeChips } from './panels/PictureTab';
 import PiecePicker from './panels/PiecePicker';
 import { useBadgeClock } from './use-badge-clock';
 import { usePostExports } from './use-post-exports';
@@ -348,6 +368,63 @@ export default function PostEditor({
     });
   };
 
+  /**
+   * The OPEN slide's own correction — the hook's on the badge, a carousel
+   * picture's on its slide, the same split as the framing, and for the same
+   * reason: it is about one photograph. Null is as shot.
+   */
+  const setDevelop = useCallback(
+    (develop: DevelopSettings | null) => {
+      if (slide.kind === 'hook') {
+        onChangePost({ ...post, badge: { ...post.badge, develop } });
+      } else if (slide.slideId) {
+        onChangePost({
+          ...post,
+          slides: post.slides.map((s) => (s.id === slide.slideId ? { ...s, develop } : s)),
+        });
+      }
+    },
+    [slide, post, onChangePost],
+  );
+  const [developOpen, setDevelopOpen] = useState(false);
+  // The sheet's time-savers (`docs/photo-develop.md` §8): the trip's presets,
+  // and two batch verbs that write a COPY onto each target now — the open
+  // slide is left to Done, which is what `developExcept` keeps out of the count.
+  const developExcept = isHook ? 'hook' : slide.slideId;
+  const otherSlides = isCta ? 0 : countPostPictures(post, developExcept);
+  const otherPieces = countDayPictures(trip, post);
+  const developPresets = useMemo(
+    () => ({
+      list: trip.developPresets,
+      onSave: (name: string, settings: DevelopSettings) =>
+        onChangeTrip(savePreset(trip, name, settings, newId())),
+      onRemove: (id: string) => onChangeTrip(removePreset(trip, id)),
+    }),
+    [trip, onChangeTrip],
+  );
+  const developApplyTo = useMemo(() => {
+    const verbs: DevelopApplyVerb[] = [];
+    if (otherSlides > 0) {
+      verbs.push({
+        id: 'slides',
+        label: `Apply to ${otherSlides} other slide${otherSlides === 1 ? '' : 's'}`,
+        hint: 'the other pictures of this piece',
+        run: (settings: DevelopSettings) =>
+          onChangePost(applyDevelopToPost(post, settings, developExcept)),
+      });
+    }
+    if (otherPieces > 0) {
+      verbs.push({
+        id: 'day',
+        label: `Apply to ${otherPieces} picture${otherPieces === 1 ? '' : 's'} of this day`,
+        hint: `the other pieces telling ${formatIsoDate(post.date)}`,
+        run: (settings: DevelopSettings) =>
+          onChangeTrip({ ...applyDevelopToDay(trip, post, settings), updatedAt: Date.now() }),
+      });
+    }
+    return verbs;
+  }, [otherSlides, otherPieces, post, trip, developExcept, onChangePost, onChangeTrip]);
+
   async function addSlide() {
     const ref = activeFile ? await hashedMediaRef(activeFile) : null;
     onChangePost({ ...post, slides: [...post.slides, createPostSlide(ref)] });
@@ -371,18 +448,128 @@ export default function PostEditor({
     setSelected(to + 1);
   }
 
+  // --- the clip under the open slide: its stretch, its playhead ------------
+  // A slide whose picture is a clip PLAYS on the stage, from its in point to
+  // its out point at its speed — the stretch the file will hold, nothing
+  // else. The stretch is derived from the slide's in point, screen time and
+  // speed (`clipSlice`), never stored a second time; the playhead is session
+  // state, reset to the in point whenever another slide or picture opens.
+  const isClipSlide = isVideo && duration > 0;
+  const slideKey = slide.slideId ?? slide.kind;
+  const clipRange = useMemo<TrimRange>(
+    () => clipSlice(slide.videoTimeSeconds, slide.seconds, slide.speed, duration),
+    [slide.videoTimeSeconds, slide.seconds, slide.speed, duration],
+  );
+  const [playhead, setPlayhead] = useState(slide.videoTimeSeconds);
+  const [clipPlaying, setClipPlaying] = useState(false);
+  const [clipLoop, setClipLoop] = useState(false);
+  useEffect(() => {
+    // The in point moved (a handle, the filmstrip, another slide): the
+    // playhead lands on it and whatever was playing stops.
+    setPlayhead(slide.videoTimeSeconds);
+    setClipPlaying(false);
+  }, [slideKey, slideFile, slide.videoTimeSeconds]);
+  // Scrubs arrive per pointer event; the stage can only seek once a frame.
+  const scrubRaf = useRef(0);
+  const scrubTo = useRef(0);
+  const seekPlayhead = useCallback((t: number) => {
+    scrubTo.current = t;
+    if (scrubRaf.current) return;
+    scrubRaf.current = requestAnimationFrame(() => {
+      scrubRaf.current = 0;
+      setPlayhead(scrubTo.current);
+    });
+  }, []);
+  useEffect(() => () => cancelAnimationFrame(scrubRaf.current), []);
+
+  /** A cut on the bar: the in point and the screen time are what it writes. */
+  const setClipRange = useCallback(
+    (range: TrimRange) => {
+      const seconds = screenSecondsOf(range, slide.speed);
+      if (slide.kind === 'hook') {
+        patchBadge({ videoTimeSeconds: range.start, hookSeconds: seconds });
+      } else if (slide.slideId) {
+        onChangePost({
+          ...post,
+          slides: post.slides.map((s) =>
+            s.id === slide.slideId
+              ? { ...s, videoTimeSeconds: range.start, seconds }
+              : s,
+          ),
+        });
+      }
+    },
+    [slide, post, patchBadge, onChangePost],
+  );
+
+  /**
+   * A new speed keeps the footage and moves the screen time. The footage is
+   * read from the stretch the stage really shows — clamped to the clip —
+   * rather than from the stored screen time, so a hook still carrying the 5s
+   * default over a 3s clip lands on the 1.5s it can deliver at 2×, not 2.5.
+   */
+  const setClipSpeed = useCallback(
+    (speed: number) => {
+      const seconds = retimedScreenSeconds(
+        screenSecondsOf(clipRange, slide.speed),
+        slide.speed,
+        speed,
+      );
+      if (slide.kind === 'hook') {
+        patchBadge({ videoSpeed: speed, hookSeconds: seconds });
+      } else if (slide.slideId) {
+        onChangePost({
+          ...post,
+          slides: post.slides.map((s) =>
+            s.id === slide.slideId ? { ...s, videoSpeed: speed, seconds } : s,
+          ),
+        });
+      }
+    },
+    [slide, clipRange, post, patchBadge, onChangePost],
+  );
+
   // --- the badge's own clock ------------------------------------------------
+  // On a photograph the badge has a transport of its own — including one an
+  // opener with no animated piece needs (a scrub moves the numeral with
+  // nothing in `pieceStyles` set to animate, so `hookSeconds` is threaded in
+  // to make `clock.animated` true for it too). On a CLIP the clip is the
+  // clock: the badge's time is how far into the delivered stretch the
+  // playhead is, at the slide's speed — exactly what the export draws, and
+  // exactly the clock `export-variant.ts` hands a hook variant's own paint
+  // under `overlayClock: 'delivered'` — so the entrance, and the scrub's
+  // tape, land on the first frame and play out where they will in the file.
+  // Paused ON the in point the badge draws settled: that is the composition
+  // view every other surface (the rail, the PNG) shows, and the one you open
+  // a piece on.
   const clock = useBadgeClock(
     post.badge.pieceStyles,
     post.badge.durationSeconds,
-    isHook,
+    isHook && !isClipSlide,
     hook.seconds,
   );
+  const settle = badgeSettleSeconds(post.badge.pieceStyles);
+  const atInPoint = playhead <= clipRange.start + TRIM_EPSILON;
+  const composedView = !isClipSlide || (!clipPlaying && atInPoint);
+  const badgeTime = !isHook
+    ? 0
+    : isClipSlide
+      ? composedView
+        ? settle
+        : Math.max(0, (playhead - clipRange.start) / slide.speed)
+      : clock.time;
 
-  // The opener's ticks, heard while the transport plays — off until asked for.
+  // The opener's ticks, heard while whichever transport is actually driving
+  // the badge plays — a clip's own, or the photo transport above — off until
+  // asked for. `badgeTime` already reads whichever clock applies.
   const hookScore = useMemo(() => hook.score(), [hook]);
   const [soundOn, setSoundOn] = useState(false);
-  useHookSound(hookScore, isHook && clock.playing, clock.time, soundOn);
+  useHookSound(
+    hookScore,
+    isHook && (isClipSlide ? clipPlaying : clock.playing),
+    badgeTime,
+    soundOn,
+  );
 
   // --- the hook's own picture, whichever slide is open ---------------------
   // The stage reports the OPEN slide's source; the hook clip export and the
@@ -426,31 +613,50 @@ export default function PostEditor({
     post.badge.hookSeconds,
     post.badge.durationSeconds,
     hookInfo.duration,
+    post.badge.videoTimeSeconds,
+    post.badge.videoSpeed,
   );
 
-  // A clip's frame must stay inside the clip: switching to a shorter video
+  // A clip's in point must stay inside the clip: switching to a shorter video
   // would otherwise leave the badge pinned past the end and decode nothing.
+  // Any slide, not only the hook — a carousel picture is re-pointed too.
   useEffect(() => {
-    if (isHook && duration > 0 && post.badge.videoTimeSeconds > duration) {
-      patchBadge({ videoTimeSeconds: 0 });
+    if (!isVideo || duration <= 0 || slide.videoTimeSeconds <= duration) return;
+    if (slide.kind === 'hook') patchBadge({ videoTimeSeconds: 0 });
+    else if (slide.slideId) {
+      onChangePost({
+        ...post,
+        slides: post.slides.map((s) =>
+          s.id === slide.slideId ? { ...s, videoTimeSeconds: 0 } : s,
+        ),
+      });
     }
-  }, [isHook, duration, post.badge.videoTimeSeconds, patchBadge]);
+  }, [isVideo, duration, slide, post, patchBadge, onChangePost]);
 
   // --- the grade: the Studio's stack, bound to the trip or to this piece ----
   const grade = useTripGrade(trip, post, onChangeTrip, onChangePost);
-  const lut = grade.stack.composed;
+  // One cube per SLIDE: the shared stack baked with that slide's own develop
+  // (memoised in the stack, so untouched slides share one cube). The stage
+  // reads the STORED develop even while the sheet is open — the sheet's
+  // draft rides `stack.composed`, which only the sheet itself paints from.
+  const lutFor = grade.stack.composeWith;
+  const lut = isCta ? null : lutFor(slide.develop);
 
   // Every cell of the rail, composed exactly as it will be delivered — the
   // crop, the caption, the badge, the grade. It needs the grade, so it sits
   // here rather than beside the deck above.
-  const railThumb = useRailThumbs({ trip, post, slides, aspect, resolve, lut });
+  const railThumb = useRailThumbs({ trip, post, slides, aspect, resolve, lutFor });
 
   const exports = usePostExports({
     trip,
     post,
     aspect,
     slideCount: slides.length,
-    timeSeconds: clock.time,
+    // A still is taken SETTLED, never at the transport's time: a PNG caught
+    // mid-entrance is a picture nobody composed. Only the still/PNG path
+    // reads this — the video paths below drive their own per-frame clock
+    // through `hook`/`hookElementsAt`, unrelated to this value.
+    timeSeconds: settle,
     hook,
     hookElementsAt,
     resolve,
@@ -460,7 +666,7 @@ export default function PostEditor({
     hookElements,
     block,
     hookLength,
-    lut,
+    lutFor,
     // The outcome is reported on the Export tab, so that is where to be.
     onStart: () => setTab('export'),
   });
@@ -577,19 +783,23 @@ export default function PostEditor({
   useEffect(() => {
     missingRef.current = missing;
   }, [missing]);
-  // Never while the transport plays: a thumbnail caught mid-sweep would be
-  // ANOTHER day's picture standing for this piece — in the gallery's cover and
-  // in every other piece's scrub that flashes it.
-  const playingRef = useRef(clock.playing);
+  // Settled means BOTH: not mid-sweep of a photo's own transport (a
+  // thumbnail caught there would be ANOTHER day's picture standing for this
+  // piece — in the gallery's cover and in every other piece's scrub that
+  // flashes it) and, on a clip, not playing or away from its in point — the
+  // thumbnail is the COMPOSITION, not whatever frame either transport
+  // stopped on. `composedView` alone does not cover the photo case: it is
+  // unconditionally true off a clip slide, transport included.
+  const settledRef = useRef(composedView && !clock.playing);
   useEffect(() => {
-    playingRef.current = clock.playing;
-  }, [clock.playing]);
+    settledRef.current = composedView && !clock.playing;
+  }, [composedView, clock.playing]);
   const captureThumb = useCallback(
     (canvas: HTMLCanvasElement) => {
-      if (!isHook || missingRef.current || playingRef.current) return;
+      if (!isHook || missingRef.current || !settledRef.current) return;
       if (thumbTimer.current !== null) window.clearTimeout(thumbTimer.current);
       thumbTimer.current = window.setTimeout(() => {
-        if (missingRef.current || playingRef.current) return;
+        if (missingRef.current || !settledRef.current) return;
         void canvasThumbnail(canvas).then((blob) => {
           if (blob) void putThumb(post.id, blob);
         });
@@ -764,11 +974,23 @@ export default function PostEditor({
           >
           <BadgeStage
             file={slideFile}
-            videoTimeSeconds={slide.videoTimeSeconds}
+            videoTimeSeconds={isClipSlide ? playhead : slide.videoTimeSeconds}
+            playback={
+              isClipSlide
+                ? {
+                    playing: clipPlaying,
+                    rate: slide.speed,
+                    range: clipRange,
+                    loop: clipLoop,
+                    onTime: setPlayhead,
+                    onEnded: () => setClipPlaying(false),
+                  }
+                : null
+            }
             aspect={aspect}
             elements={elements}
             theme={isCta ? null : trip.theme}
-            timeSeconds={isHook ? clock.time : 0}
+            timeSeconds={badgeTime}
             shades={isHook ? post.badge.shades : undefined}
             block={isHook ? block : null}
             hook={isHook ? hook : null}
@@ -779,7 +1001,7 @@ export default function PostEditor({
                 ? { ...cta.qr, dark: trip.cta.ink, light: trip.cta.background }
                 : null
             }
-            lut={isCta ? null : lut}
+            lut={lut}
             selectedId={selectedId}
             onSelect={selectElement}
             onActivate={activateElement}
@@ -796,7 +1018,28 @@ export default function PostEditor({
             onFit={setFitWidth}
           />
 
-          {isHook && clock.animated && (
+          {/* A clip slide plays on the stage: the stretch it delivers, at its
+              speed, cut on the Studio's own bar. The badge's own transport
+              stands down on it — the clip is the clock. */}
+          {isClipSlide && (
+            <ClipTransport
+              duration={duration}
+              time={playhead}
+              range={clipRange}
+              speed={slide.speed}
+              playing={clipPlaying}
+              loop={clipLoop}
+              onTogglePlay={() => setClipPlaying((p) => !p)}
+              onSeek={seekPlayhead}
+              onScrubStart={() => setClipPlaying(false)}
+              onRangeChange={setClipRange}
+              onSpeed={setClipSpeed}
+              onLoop={setClipLoop}
+              compact={compact}
+            />
+          )}
+
+          {isHook && !isClipSlide && clock.animated && (
             <div
               className={`flex-none flex items-center w-full max-w-[26rem] ${
                 compact ? 'gap-2' : 'gap-3'
@@ -958,6 +1201,9 @@ export default function PostEditor({
               onFraming={setFraming}
               grade={grade}
               linkedToProject={post.projectId !== null}
+              develop={slide.develop}
+              onOpenDevelop={() => setDevelopOpen(true)}
+              onResetDevelop={() => setDevelop(null)}
             />
           )}
 
@@ -974,6 +1220,7 @@ export default function PostEditor({
               hasPicture={hasPicture}
               exporting={exports.exporting}
               exportNote={exports.note}
+              undecodable={exports.undecodable}
               onExportPiece={(imagesOnly) => void exports.exportPiece(imagesOnly)}
               onExportDeck={() => void exports.exportDeck()}
               onExportHookClip={() => void exports.exportHookClip()}
@@ -985,6 +1232,27 @@ export default function PostEditor({
         </div>
       </PanelHost>
     </div>
+
+    {developOpen && !isCta && (
+      <DevelopSheet
+        file={slideFile}
+        videoTimeSeconds={slide.videoTimeSeconds}
+        title={slideFile?.name ?? 'this slide'}
+        fidelity={pictureFidelity(slideFile).chip}
+        note={pictureFidelity(slideFile).note}
+        stack={grade.stack}
+        value={slide.develop}
+        onDone={(develop) => {
+          setDevelop(develop);
+          setDevelopOpen(false);
+        }}
+        onCancel={() => setDevelopOpen(false)}
+        lookHeader={<GradeScopeChips grade={grade} />}
+        footerHint={isHook ? 'writes to the hook' : `writes to slide ${slide.position}`}
+        presets={developPresets}
+        applyTo={developApplyTo}
+      />
+    )}
 
     {tripSheet && (
       <TripSettingsModal

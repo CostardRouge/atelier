@@ -61,8 +61,12 @@ interface RailThumbInputs {
   aspect: number;
   /** Finds a slide's picture in the Library, or null when it is not loaded. */
   resolve: (ref: SavedMediaRef | null) => File | null;
-  /** The composed grade every picture goes through; null leaves them as shot. */
-  lut: CubeLut | null;
+  /**
+   * The composed grade for a slide's OWN develop (`LutStack.composeWith`);
+   * null leaves its picture as shot. A new function whenever the stack
+   * changes, which is what re-signs every cell.
+   */
+  lutFor: (develop: DeckSlide['develop']) => CubeLut | null;
 }
 
 /** One slide's thumbnail, or null while it has never been drawn. */
@@ -96,7 +100,7 @@ export default function useRailThumbs({
   slides,
   aspect,
   resolve,
-  lut,
+  lutFor,
 }: RailThumbInputs): RailThumbs {
   const [urls, setUrls] = useState<ReadonlyMap<string, string>>(new Map());
   /** What has been drawn, and from what. A null url is a failed decode. */
@@ -115,11 +119,16 @@ export default function useRailThumbs({
       slides.map((slide) => {
         const file = slide.kind === 'cta' ? null : resolve(slide.media);
         const render = slideRender(trip, post, slide, aspect);
+        // The cube of THIS slide: its own develop over the shared stack. The
+        // stack memoises per develop, so a deck of untouched slides reads one
+        // cube and only a corrected slide pays a bake.
+        const lut = slide.kind === 'cta' ? null : lutFor(slide.develop);
         return {
           key: slideKey(slide),
           slide,
           file,
           render,
+          lut,
           sig: JSON.stringify([
             render,
             aspect,
@@ -129,7 +138,7 @@ export default function useRailThumbs({
           ]),
         };
       }),
-    [slides, trip, post, aspect, resolve, lut],
+    [slides, trip, post, aspect, resolve, lutFor],
   );
 
   useEffect(() => {
@@ -166,8 +175,8 @@ export default function useRailThumbs({
       // A grader is a WebGL2 context: made for this one draw and disposed
       // straight after, exactly as `badgeToPng` does per slide.
       const grader =
-        lut && source && source.width > 0
-          ? makeFrameGrader(lut, source.width, source.height)
+        job.lut && source && source.width > 0
+          ? makeFrameGrader(job.lut, source.width, source.height)
           : null;
       try {
         await renderBadge(canvas, {
@@ -234,7 +243,7 @@ export default function useRailThumbs({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [jobs, aspect, lut, settle]);
+  }, [jobs, aspect, settle]);
 
   // The blobs and the decoded picture are the only heavy things this holds.
   useEffect(() => {

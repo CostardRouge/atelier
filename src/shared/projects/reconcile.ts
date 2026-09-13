@@ -146,11 +146,16 @@ export function adoptRenames(
 
   const trims: ProjectMedia['trims'] = {};
   for (const [id, trim] of Object.entries(media.trims)) trims[rebase(id)] = trim;
+  // The third structure keyed by base name — a develop belongs to the same
+  // picture under its new name, and its hash is what found the rename.
+  const develops: ProjectMedia['develops'] = {};
+  for (const [id, dev] of Object.entries(media.develops ?? {})) develops[rebase(id)] = dev;
 
   return {
     ...media,
     files,
     activeId: media.activeId === null ? null : rebase(media.activeId),
     trims,
+    develops,
   };
 }
