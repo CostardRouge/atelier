@@ -77,6 +77,7 @@ import Button from '../../shared/ui/Button';
 import PanelHost from '../../shared/ui/PanelHost';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
+import { Icons } from '../../shared/ui/icons';
 
 interface PostEditorProps {
   trip: TripDoc;
@@ -881,8 +882,9 @@ export default function PostEditor({
                 onClick={() => void exports.exportPiece()}
                 disabled={exports.exporting !== null}
                 title="Every slide of this piece, in the format it is"
+                icon={Icons.export}
               >
-                {exports.exporting ?? '↓ Export'}
+                {exports.exporting ?? 'Export'}
               </Button>
             </>
           }
@@ -894,11 +896,7 @@ export default function PostEditor({
             onClick={() => setTripSheet('words')}
             title="Trip settings — the words, the closing card, what a new piece starts from"
             className="font-mono text-2xs tracking-[0.06em] uppercase"
-            trailing={
-              <span className="text-base leading-none" aria-hidden="true">
-                ⚙
-              </span>
-            }
+            trailing={Icons.settings}
           >
             Trip
           </Button>
@@ -1053,7 +1051,7 @@ export default function PostEditor({
                   compact ? 'px-2.5 py-1 text-2xs' : 'px-3 py-1.5 text-xs'
                 }`}
               >
-                {clock.playing ? '❚❚ Pause' : '▶ Play'}
+                <span className="inline-flex items-center gap-1">{clock.playing ? Icons.pause : Icons.play}{clock.playing ? 'Pause' : 'Play'}</span>
                 {/* The shortcut, only where there is a keyboard to press it
                     on. A phone has none, so the word is a third of the
                     button's width spent on something the screen cannot do. */}

@@ -133,6 +133,7 @@ import PanelHost from '../../shared/ui/PanelHost';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useLearnedGesture } from '../../shared/ui/use-learned-gesture';
+import { Icons } from '../../shared/ui/icons';
 
 /**
  * Clips with or without telemetry, and stills — the studio edits all three.
@@ -1465,11 +1466,7 @@ export default function StudioEditor({
               onClick={() => setShowSettings(true)}
               className="font-mono text-2xs tracking-[0.06em]"
               title="Project settings — name, format, import/export"
-              trailing={
-                <span className="text-base leading-none" aria-hidden="true">
-                  ⚙
-                </span>
-              }
+              trailing={Icons.settings}
             >
               {ASPECT_PRESETS.find((a) => a.id === aspectId)?.id ?? aspectId}
             </Button>
@@ -1717,7 +1714,7 @@ export default function StudioEditor({
                 aria-label={playing ? 'Pause' : 'Play'}
                 title="Play / pause (Space)"
               >
-                {playing ? '❚❚' : '▶'}
+                {playing ? Icons.pause : Icons.play}
               </button>
               <span className="font-mono text-xs tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
                 {formatTimecode(time)}
@@ -1987,8 +1984,8 @@ export default function StudioEditor({
                       aria-expanded={listOpen}
                       className="flex items-center gap-1.5 p-0 border-0 bg-transparent text-accent-ink font-semibold text-sm cursor-pointer hover:text-accent"
                     >
-                      <span aria-hidden="true" className="text-2xs">
-                        {listOpen ? '▾' : '▸'}
+                      <span aria-hidden="true" className="inline-flex text-xs">
+                        {listOpen ? Icons.down : Icons.chevronRight}
                       </span>
                       Elements
                       <span className="ml-auto font-mono text-2xs tabular-nums text-muted">
@@ -2435,7 +2432,7 @@ export default function StudioEditor({
                           ) : (
                             stats && (
                               <div className="flex items-center gap-1.5 pt-1.5 border-t border-dashed border-line font-mono text-2xs tabular-nums text-ink-soft">
-                                <span className="text-ok">✓</span>
+                                <span className="inline-flex text-ok">{Icons.check}</span>
                                 {describeExportStat(stats)}
                               </div>
                             )

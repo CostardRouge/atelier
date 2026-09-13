@@ -31,6 +31,7 @@
 import type { ReactNode } from 'react';
 import Button from './Button';
 import { useIsCompact } from './use-layout-mode';
+import { Icons } from './icons';
 
 /**
  * One pill of the bar. Exported because a screen's own controls have to match
@@ -66,7 +67,7 @@ export default function PageBar({ back, children, trailing }: PageBarProps) {
   return (
     <div className={`flex items-center gap-2 flex-wrap min-w-0 ${compact ? 'mt-3' : ''}`}>
       {back && (
-        <Button onClick={back.onClick} title={back.title} icon={<span aria-hidden="true">←</span>}>
+        <Button onClick={back.onClick} title={back.title} icon={Icons.back}>
           {back.label}
         </Button>
       )}

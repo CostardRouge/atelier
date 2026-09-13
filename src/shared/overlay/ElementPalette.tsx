@@ -19,6 +19,7 @@ import {
   previewTextStyle,
   type PreviewAppearance,
 } from './style-preview';
+import { Icons } from '../ui/icons';
 
 interface ElementPaletteProps {
   /** What is already on the frame — each cell shows it, never blocks on it. */
@@ -276,8 +277,8 @@ export default function ElementPalette({
         aria-expanded={open}
         className="self-start flex items-center gap-1.5 p-0 border-0 bg-transparent text-accent-ink font-semibold text-sm cursor-pointer hover:text-accent"
       >
-        <span aria-hidden="true" className="text-2xs">
-          {open ? '▾' : '▸'}
+        <span aria-hidden="true" className="inline-flex text-xs">
+          {open ? Icons.down : Icons.chevronRight}
         </span>
         Add an element
       </button>

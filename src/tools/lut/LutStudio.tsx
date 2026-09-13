@@ -18,6 +18,7 @@ import { useLutSelection } from '../../shared/lut/use-lut-selection';
 import LutPicker from '../../shared/lut/LutPicker';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
+import { Icons } from '../../shared/ui/icons';
 
 /**
  * LUT Studio — grades the videos selected in the shared library through a
@@ -515,7 +516,7 @@ export default function LutStudio() {
                 aria-label={playing ? 'Pause' : 'Play'}
                 title="Play / pause (Space)"
               >
-                {playing ? '❚❚' : '▶'}
+                {playing ? Icons.pause : Icons.play}
               </button>
               <span
                 className="font-mono text-xs tabular-nums text-muted flex-none min-w-[3.2ch] text-center"
@@ -587,11 +588,11 @@ export default function LutStudio() {
                   aria-hidden="true"
                 >
                   {c.exportStatus === 'done'
-                    ? '✓'
+                    ? Icons.check
                     : c.exportStatus === 'error'
-                      ? '✗'
+                      ? Icons.close
                       : c.exportStatus === 'exporting'
-                        ? '⋯'
+                        ? Icons.ellipsis
                         : '·'}
                 </span>
                 <span className="font-medium truncate min-w-0" title={c.name}>

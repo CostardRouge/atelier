@@ -15,6 +15,7 @@ import {
   type TimeScaleReading,
   type TimeScaleSetting,
 } from '../../shared/telemetry/time-scale';
+import { Icons } from '../../shared/ui/icons';
 
 export interface ProjectSettingsDraft {
   name: string;
@@ -370,10 +371,10 @@ export default function ProjectSettingsModal({
           </SectionLegend>
           <div className="flex flex-wrap items-center gap-2.5">
             <button type="button" onClick={() => onExport(draft())} className={smallButton}>
-              <span aria-hidden="true">↓</span> Export settings
+              {Icons.export} Export settings
             </button>
             <button type="button" onClick={() => void chooseFile()} className={smallButton}>
-              <span aria-hidden="true">↑</span> Import a file…
+              {Icons.import} Import a file…
             </button>
           </div>
 

@@ -30,6 +30,7 @@ import GuidesControl from '../../shared/overlay/GuidesControl';
 import { useOverlayStage } from '../../shared/overlay/use-overlay-stage';
 import { useLutSelection } from '../../shared/lut/use-lut-selection';
 import LutPicker from '../../shared/lut/LutPicker';
+import { Icons } from '../../shared/ui/icons';
 
 interface OverlayClip {
   id: string;
@@ -473,7 +474,7 @@ export default function OverlayStudio() {
                 aria-label={playing ? 'Pause' : 'Play'}
                 title="Play / pause (Space)"
               >
-                {playing ? '❚❚' : '▶'}
+                {playing ? Icons.pause : Icons.play}
               </button>
               <span className="font-mono text-xs tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
                 {formatTimecode(time)}

@@ -29,6 +29,7 @@ import {
   isExportSupported,
   type ExportProgress,
 } from '../../shared/media/webcodecs-export';
+import { Icons } from '../../shared/ui/icons';
 
 const COMPOSER_KINDS = ['video+telemetry'] as const;
 const PREVIEW_MAX = 1440;
@@ -585,7 +586,7 @@ export default function ComposerTool() {
               aria-label={playing ? 'Pause' : 'Play'}
               title="Play / pause (Space)"
             >
-              {playing ? '❚❚' : '▶'}
+              {playing ? Icons.pause : Icons.play}
             </button>
             <input
               type="range"

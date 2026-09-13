@@ -30,6 +30,7 @@ import {
 import { formatBytes } from '../shared/lib/format';
 import useDialogKeys from '../shared/ui/use-dialog-keys';
 import WinnowThumb from '../shared/sources/winnow/WinnowThumb';
+import { Icons } from '../shared/ui/icons';
 
 interface WinnowBrowserProps {
   connection: WinnowConnection;
@@ -568,7 +569,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
           {view === 'day' ? (
             <div className={`flex flex-col gap-3 min-h-0 ${heading ? 'max-[820px]:hidden' : ''}`}>
               <div className="flex items-center gap-2">
-                <button type="button" disabled={!canPrev} onClick={() => setMonth(shiftMonth(month, -1))} className={`${pill} border-line bg-paper text-ink-soft disabled:opacity-30`} aria-label="Previous month">‹</button>
+                <button type="button" disabled={!canPrev} onClick={() => setMonth(shiftMonth(month, -1))} className={`${pill} border-line bg-paper text-ink-soft disabled:opacity-30`} aria-label="Previous month">{Icons.back}</button>
                 {/* One picker, years as groups: a library spanning fifteen
                     years is two clicks away, not a hundred arrow presses. */}
                 <select
@@ -587,7 +588,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
                     </optgroup>
                   ))}
                 </select>
-                <button type="button" disabled={!canNext} onClick={() => setMonth(shiftMonth(month, 1))} className={`${pill} border-line bg-paper text-ink-soft disabled:opacity-30`} aria-label="Next month">›</button>
+                <button type="button" disabled={!canNext} onClick={() => setMonth(shiftMonth(month, 1))} className={`${pill} border-line bg-paper text-ink-soft disabled:opacity-30`} aria-label="Next month">{Icons.forward}</button>
               </div>
               <div className="grid grid-cols-7 gap-1">
                 {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (

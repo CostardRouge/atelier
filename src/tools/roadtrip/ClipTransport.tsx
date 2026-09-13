@@ -5,6 +5,7 @@ import { describeKeyTarget, targetOwnsSpace, targetOwnsTyping } from '../../shar
 import { setEnd, setStart, trimDuration, type TrimRange } from '../../shared/media/trim';
 import { CLIP_SPEEDS, MIN_HOOK_SECONDS, screenSecondsOf } from '../../shared/roadtrip/hook-video';
 import { useLearnedGesture } from '../../shared/ui/use-learned-gesture';
+import { Icons } from '../../shared/ui/icons';
 
 interface ClipTransportProps {
   /** The clip's length, in source seconds. */
@@ -115,7 +116,7 @@ export default function ClipTransport({
           aria-label={playing ? 'Pause' : 'Play'}
           title="Play / pause the slide (Space)"
         >
-          {playing ? '❚❚' : '▶'}
+          {playing ? Icons.pause : Icons.play}
         </button>
         {!compact && (
           <span className="font-mono text-xs tabular-nums text-muted flex-none min-w-[3.2ch] text-center">

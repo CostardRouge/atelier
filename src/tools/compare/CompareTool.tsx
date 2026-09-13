@@ -6,6 +6,7 @@ import { formatDuration } from '../../shared/lib/format';
 import { useObjectUrl } from '../../shared/media/use-object-url';
 import { useVideoTransport } from '../../shared/media/use-video-transport';
 import { clamp01, insetForSplit, reconcilePair } from './compare';
+import { Icons } from '../../shared/ui/icons';
 
 /** Asset kinds the compare tool understands (video+telemetry stands in for video). */
 const COMPARE_KINDS = ['photo', 'video'] as const;
@@ -312,7 +313,7 @@ export default function CompareTool() {
             aria-label={playing ? 'Pause' : 'Play'}
             title="Play / pause (Space)"
           >
-            {playing ? '❚❚' : '▶'}
+            {playing ? Icons.pause : Icons.play}
           </button>
           <input
             type="range"
