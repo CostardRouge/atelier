@@ -1,6 +1,11 @@
 # Develop — a photo editor inside the suite
 
-**Status (2026-09-13): a proposal, not a set of decisions.** Written from the
+**Status (2026-09-13, evening): P1 is BUILT; the decoder is DECIDED.** The
+maintainer chose `libraw-wasm` (§6.2 option (a)) and started the phases:
+`shared/develop/develop.ts` with its spec, the develop stage as the fourth
+argument of `composeLutStack`, and `LutStack.develop` /
+`composedForDeveloped` are in — nothing on screen changes yet. P2 onwards is
+still the plan, and choices 5–7 of §11 are still open. Written from the
 maintainer's brief of the same day (*"un mini éditeur de photos… luminosité,
 contraste, exposition, saturation, brillance… highlights, whites, darks,
 shadows… des DNG… ça doit marcher aussi avec la source Winnow… des LUTs sur les
@@ -574,13 +579,17 @@ picture", and one panel sentence should list what crosses and what does not.
 Sized in commits and passes, not days — the scarce resource is the
 maintainer's instruction and review.
 
-### P1 — the engine, no UI
+### P1 — the engine, no UI — **BUILT**
 
 `shared/develop/develop.ts` + spec; the fourth argument of
 `composeLutStack` + specs (identity when default, floor 33, order develop →
 layers → transfer, `title`); `LutStack.develop` / `setDevelop` /
 `composedForDeveloped`. Nothing on screen changes. Verified by tests alone —
-this is the commit whose maths every later one trusts.
+this is the commit whose maths every later one trusts. Measured at 33³: a
+develop bake is 24 ms alone, 39 ms with a transform — the class the deferred
+bake already carries. One rule learnt building it, recorded in
+`media-pipeline.md`: an untouched pixel must come back bit-identical, so the
+luminance ratio is skipped when the curve did not move the value.
 
 ### P2 — Trips: v15, the sheet, the Picture tab row
 
@@ -667,11 +676,10 @@ Settled by the brief, to confirm:
 
 Open, and they gate a phase:
 
-4. **The decoder** (§6.2): `libraw-wasm` gated on the P5 spike, our own DNG
-   reader as the fallback, Winnow-served later. **Half-answered 2026-09-13**:
-   JPEG XL ProRAW files are in his pictures, so the spike must include one,
-   and a refusal by the npm build turns this into "which wasm build do we
-   maintain" (§6.2) — a bigger commitment than a dependency, and his call.
+4. **The decoder** (§6.2): **decided 2026-09-13 — `libraw-wasm`.** The P5
+   spike still runs, on his own files, and must include a JPEG XL ProRAW: a
+   refusal by the npm build turns this into "which wasm build do we
+   maintain" (§6.2), which comes back to him as a question then.
 5. **The histogram** (§7.1) — one strip with two clip marks, or nothing,
    given that Scopes was retired.
 6. **Whether a developed picture goes home to Winnow as an edit** (§7.6) — a

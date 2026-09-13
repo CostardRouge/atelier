@@ -7,6 +7,7 @@ import {
   type LutLayer,
 } from './lut-stack';
 import { applyTransfer } from './transfer';
+import { DEFAULT_DEVELOP, developStage } from '../develop/develop';
 import type { CubeLut } from '../lib/cube-parser';
 
 /** Build a size³ cube from a per-channel function. */
@@ -209,6 +210,59 @@ describe('composeLutStack — output transform', () => {
       'rec709-to-srgb',
     )!;
     expect(composed.title).toBe('Kodak → Rec.709 2.4 → sRGB');
+  });
+});
+
+describe('composeLutStack — develop', () => {
+  const asShot = { ...DEFAULT_DEVELOP };
+  const lifted = { ...DEFAULT_DEVELOP, exposure: 1 };
+
+  it('changes nothing when the develop is default or absent', () => {
+    const layers = [layer({ lut: half(9) }), layer({ lut: swapRB(9), intensity: 0.5 })];
+    const implicit = composeLutStack(layers)!;
+    const explicit = composeLutStack(layers, 'none', 'trilinear', asShot)!;
+    expect(Array.from(explicit.data)).toEqual(Array.from(implicit.data));
+    expect(composeLutStack([], 'none', 'trilinear', asShot)).toBeNull();
+    expect(composeLutStack([], 'none', 'trilinear', null)).toBeNull();
+  });
+
+  it('bypasses the single-layer fast path and bakes an empty stack', () => {
+    const only = half(9);
+    expect(composeLutStack([layer({ lut: only })], 'none', 'trilinear', asShot)).toBe(only);
+    expect(composeLutStack([layer({ lut: only })], 'none', 'trilinear', lifted)).not.toBe(only);
+    const alone = composeLutStack([], 'none', 'trilinear', lifted)!;
+    expect(alone).not.toBeNull();
+    // +1 EV on a mid code: 0.5 → linear 0.214 → 0.428 → code ~0.69.
+    expect(sampleLut(alone, 0.5, 0.5, 0.5)[0]).toBeCloseTo(developStage(lifted)(0.5, 0.5, 0.5)[0], 3);
+  });
+
+  it('applies BEFORE the layers, never after', () => {
+    // A halving LUT then +1 EV would cancel out; +1 EV then the halving does
+    // not, because the halving acts on codes and the exposure on light.
+    const composed = composeLutStack([layer({ lut: half(33) })], 'none', 'trilinear', lifted)!;
+    const developedThenHalved = developStage(lifted)(0.5, 0.5, 0.5)[0] / 2;
+    const halvedThenDeveloped = developStage(lifted)(0.25, 0.25, 0.25)[0];
+    expect(sampleLut(composed, 0.5, 0.5, 0.5)[0]).toBeCloseTo(developedThenHalved, 2);
+    expect(developedThenHalved).not.toBeCloseTo(halvedThenDeveloped, 2);
+  });
+
+  it('sits before the output transform too, and takes the same lattice floor', () => {
+    const composed = composeLutStack([], 'rec709-to-srgb', 'trilinear', lifted)!;
+    const expected = applyTransfer(developStage(lifted)(0.5, 0.5, 0.5)[0], 'rec709-to-srgb');
+    expect(sampleLut(composed, 0.5, 0.5, 0.5)[0]).toBeCloseTo(expected, 3);
+    expect(composeLutStack([layer({ lut: half(9) })], 'none', 'trilinear', lifted)!.size).toBe(33);
+    expect(composeLutStack([layer({ lut: half(64) })], 'none', 'trilinear', lifted)!.size).toBe(64);
+  });
+
+  it('keeps black pinned and names itself first in the chain', () => {
+    const composed = composeLutStack(
+      [layer({ lut: half(5), name: 'Kodak' })],
+      'rec709-to-srgb',
+      'trilinear',
+      { ...DEFAULT_DEVELOP, contrast: 40 },
+    )!;
+    expect(sampleLut(composed, 0, 0, 0)[0]).toBeCloseTo(0, 6);
+    expect(composed.title).toBe('Develop → Kodak → Rec.709 2.4 → sRGB');
   });
 });
 
