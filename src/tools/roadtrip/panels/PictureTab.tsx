@@ -10,12 +10,14 @@ import {
 import { ASPECT_PRESETS } from '../../../shared/projects/project-types';
 import type { DeckSlide } from '../../../shared/roadtrip/deck';
 import type { PostBadge, PostSlide, TripPost } from '../../../shared/roadtrip/trip-types';
-import SectionLegend from '../../../shared/ui/SectionLegend';
 import type { SlideRecovery } from '../use-slide-library';
 import type { TripGradeBinding } from '../use-trip-grade';
 import DayFromWinnow from '../DayFromWinnow';
 import FrameStrip from '../FrameStrip';
-import { chipClass, legend, linkButton, smallButton } from './ui';
+import Button from '../../../shared/ui/Button';
+import IconButton from '../../../shared/ui/IconButton';
+import { FieldRow, InspectorSection, RangeField, Readout } from '../../../shared/ui/Inspector';
+import { Icons } from '../../../shared/ui/icons';
 import Segmented from '../../../shared/ui/Segmented';
 
 interface PictureTabProps {
@@ -59,6 +61,7 @@ export function GradeScopeChips({ grade }: { grade: TripGradeBinding }) {
     <Segmented
       fill
       size="sm"
+      className="flex-1 min-w-0"
       label="Grade scope"
       value={scope}
       onChange={setScope}
@@ -107,67 +110,80 @@ export default function PictureTab({
   const { stack, scope } = grade;
 
   return (
-    <div className="flex flex-col gap-4">
-      {!isCta && (
-        <div className="flex flex-col gap-2">
-          <SectionLegend label="Picture">
+    <div className="flex flex-col">
+      <InspectorSection
+        id="piece.picture"
+        title="Picture"
+        info={
+          isCta ? undefined : (
             <p>
-              This slide composes over whatever is ticked in the Library on the left,
-              and picking another one there re-points the slide.
+              This slide composes over whatever is ticked in the Library on the left, and
+              picking another one there re-points the slide.
             </p>
-          </SectionLegend>
-          {slideFile ? (
-            <p className="m-0 text-xs text-ink-soft truncate" title={slideFile.name}>
-              {slideFile.name}
-            </p>
-          ) : (
-            <p className="m-0 text-xs text-muted">
-              {recovery?.state === 'fetching'
-                ? `“${slide.media?.name}” lives on ${recovery.sourceId} — fetching it back…`
-                : missing
-                  ? `“${slide.media?.name}” is not in the Library right now. The slide keeps its place in the deck.`
-                  : 'Tick a photo or a clip in the Library on the left — this slide composes over whatever is active there.'}
-            </p>
-          )}
-          {recovery?.state === 'failed' && (
-            <p className="m-0 text-xs text-danger" role="alert">
-              {recovery.problem}{' '}
-              {recovery.loginUrl && (
-                <a
-                  className="font-semibold underline underline-offset-[3px]"
-                  href={recovery.loginUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Sign in there
-                </a>
-              )}
-            </p>
-          )}
-          {/* The filmstrip moves the IN point and keeps the slide's length —
-              it slides the whole stretch along the clip. The bar under the
-              picture is where a cut is made (an in handle there keeps the out
-              point), and where the speed is chosen. */}
-          {isVideo && duration > 0 && slideFile && (
-            <FrameStrip
-              file={slideFile}
-              duration={duration}
-              value={slide.videoTimeSeconds}
-              label="In point"
-              onChange={(v) => {
-                if (isHook) patchBadge({ videoTimeSeconds: v });
-                else patchSlide({ videoTimeSeconds: v });
-              }}
-            />
-          )}
-          {isVideo && duration > 0 && slideFile && (
-            <p className="m-0 text-xs text-muted">
-              Where the slide’s stretch of the clip starts; it keeps its length. Cut its
-              end and choose its speed on the bar under the picture.
-            </p>
-          )}
-        </div>
-      )}
+          )
+        }
+      >
+        {isCta ? (
+          <p className="m-0 text-xs text-muted">
+            The closing card carries no photograph: a flat ground is what keeps the QR
+            readable and the sentence unmissable.
+          </p>
+        ) : (
+          <>
+            <FieldRow
+              label="File"
+              hint={
+                recovery?.state === 'failed' ? (
+                  <span className="text-danger" role="alert">
+                    {recovery.problem}{' '}
+                    {recovery.loginUrl && (
+                      <a
+                        className="font-semibold underline underline-offset-[3px]"
+                        href={recovery.loginUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Sign in there
+                      </a>
+                    )}
+                  </span>
+                ) : !slideFile ? (
+                  recovery?.state === 'fetching'
+                    ? `It lives on ${recovery.sourceId} — fetching it back…`
+                    : missing
+                      ? 'Not in the Library right now. The slide keeps its place in the deck.'
+                      : 'Tick a photo or a clip in the Library on the left.'
+                ) : undefined
+              }
+            >
+              <Readout muted={!slideFile}>{slideFile?.name ?? slide.media?.name ?? 'None'}</Readout>
+            </FieldRow>
+            {/* The filmstrip moves the IN point and keeps the slide's length —
+                it slides the whole stretch along the clip. The bar under the
+                picture is where a cut is made, and where the speed is chosen. */}
+            {isVideo && duration > 0 && slideFile && (
+              <FieldRow
+                label="In point"
+                align="start"
+                hint="Where the slide’s stretch of the clip starts; it keeps its length."
+              >
+                <div className="flex-1 min-w-0">
+                  <FrameStrip
+                    file={slideFile}
+                    duration={duration}
+                    value={slide.videoTimeSeconds}
+                    label="In point"
+                    onChange={(v) => {
+                      if (isHook) patchBadge({ videoTimeSeconds: v });
+                      else patchSlide({ videoTimeSeconds: v });
+                    }}
+                  />
+                </div>
+              </FieldRow>
+            )}
+          </>
+        )}
+      </InspectorSection>
 
       {/* The day this piece tells, asked of the instance that holds it — so
           the date is never picked by hand and one picture crosses at a time. */}
@@ -180,172 +196,151 @@ export default function PictureTab({
         />
       )}
 
-      {isCta && (
-        <p className="m-0 text-xs text-muted">
-          The closing card carries no photograph: a flat ground is what keeps the QR
-          readable and the sentence unmissable.
-        </p>
-      )}
-
       {!isCta && (
-        <div className="flex flex-col gap-2">
-          <SectionLegend label="Framing">
-            <p>
-              Where the picture sits inside the frame. Drag it on the stage to move it,
-              the wheel (or a trackpad pinch) to zoom; the badge keeps first claim on a
-              press, so grab the picture where no text is.
-            </p>
-            <p>
-              It can never be zoomed out past covering the frame or dragged off its
-              edge — a deliverable with a gap in it is not one.
-            </p>
-            {linkedToProject && (
+        <InspectorSection
+          id="piece.framing"
+          title="Framing"
+          info={
+            <>
               <p>
-                A reel exported from the linked Studio project is framed there, over
-                that project's own footage — this reframes the PNG deck and the hook
-                clip.
+                Where the picture sits inside the frame. Drag it on the stage to move it,
+                the wheel (or a trackpad pinch) to zoom; the badge keeps first claim on a
+                press, so grab the picture where no text is.
               </p>
-            )}
-          </SectionLegend>
-          <label className="flex flex-col gap-1">
-            <span className={legend}>Zoom · {framing.scale.toFixed(2)}×</span>
-            <input
-              type="range"
+              <p>
+                It can never be zoomed out past covering the frame or dragged off its edge
+                — a deliverable with a gap in it is not one.
+              </p>
+              {linkedToProject && (
+                <p>
+                  A reel exported from the linked Studio project is framed there, over
+                  that project's own footage — this reframes the PNG deck and the hook clip.
+                </p>
+              )}
+            </>
+          }
+          actions={
+            isDefaultFraming(framing) ? undefined : (
+              <Button size="sm" variant="ghost" onClick={() => onFraming({ ...DEFAULT_FRAMING })}>
+                Reset
+              </Button>
+            )
+          }
+        >
+          <FieldRow label="Zoom">
+            <RangeField
+              label="Zoom"
               min={1}
               max={MAX_FRAMING_SCALE}
               step={0.01}
               value={framing.scale}
-              onChange={(e) => onFraming({ ...framing, scale: Number(e.target.value) })}
-              className="accent-accent"
+              onChange={(scale) => onFraming({ ...framing, scale })}
+              format={(v) => `${v.toFixed(2)}×`}
             />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className={legend}>Rotation · {Math.round(framing.rotation)}°</span>
-            <input
-              type="range"
+          </FieldRow>
+          <FieldRow label="Rotation">
+            <RangeField
+              label="Rotation"
               min={-180}
               max={180}
               step={0.5}
               value={framing.rotation}
-              onChange={(e) =>
-                onFraming({ ...framing, rotation: Number(e.target.value) })
-              }
-              className="accent-accent"
+              onChange={(rotation) => onFraming({ ...framing, rotation })}
+              format={(v) => `${Math.round(v)}°`}
             />
-          </label>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() =>
-                onFraming({ ...framing, rotation: wrapDegrees(framing.rotation - 90) })
-              }
+          </FieldRow>
+          <FieldRow label="Turn">
+            <Button
+              size="sm"
+              onClick={() => onFraming({ ...framing, rotation: wrapDegrees(framing.rotation - 90) })}
               title="Turn a quarter anticlockwise"
-              className={smallButton}
             >
-              ⟲ 90°
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                onFraming({ ...framing, rotation: wrapDegrees(framing.rotation + 90) })
-              }
+              −90°
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => onFraming({ ...framing, rotation: wrapDegrees(framing.rotation + 90) })}
               title="Turn a quarter clockwise"
-              className={smallButton}
             >
-              ⟳ 90°
-            </button>
-            <button
-              type="button"
+              +90°
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
               onClick={() => onFraming({ ...framing, rotation: 0 })}
               disabled={framing.rotation === 0}
-              className={`${smallButton} font-normal`}
             >
               Straight
-            </button>
-            <button
-              type="button"
-              onClick={() => onFraming({ ...DEFAULT_FRAMING })}
-              disabled={isDefaultFraming(framing)}
-              className={`ml-auto ${linkButton}`}
-            >
-              Reset the framing
-            </button>
-          </div>
-        </div>
+            </Button>
+          </FieldRow>
+        </InspectorSection>
       )}
 
       {/* The picture's own CORRECTION, one settled row: the sentence the
           sheet writes, the way in, and the way back to as shot. Per SLIDE,
-          like the framing — about this photograph, never inherited. The
-          sliders live in the sheet, not here: nine more controls on a tab
-          that already holds five sections would be the accordion again. */}
+          like the framing — about this photograph, never inherited. */}
       {!isCta && (
-        <div className="flex flex-col gap-2">
-          <SectionLegend label="Develop">
+        <InspectorSection
+          id="piece.develop"
+          title="Develop"
+          info={
             <p>
-              This slide’s own correction — exposure, tone, colour — applied
-              before the grade below. It belongs to this photograph and is
-              never inherited by the next one.
+              This slide’s own correction — exposure, tone, colour — applied before the
+              grade below. It belongs to this photograph and is never inherited by the
+              next one.
             </p>
-          </SectionLegend>
-          <div className="flex items-center gap-2 min-w-0">
+          }
+        >
+          <FieldRow label="Correction">
             <span
-              className={`flex-1 min-w-0 truncate font-mono text-2xs ${
-                develop ? 'text-ink-soft' : 'text-faint'
-              }`}
+              className={`flex-1 min-w-0 truncate font-mono text-xs ${develop ? 'text-ink-soft' : 'text-muted'}`}
               title={describeDevelop(develop)}
             >
               {describeDevelop(develop)}
             </span>
-            <button
-              type="button"
+            {develop && (
+              <IconButton size="sm" variant="ghost" label="Back to as shot" onClick={onResetDevelop}>
+                {Icons.reset}
+              </IconButton>
+            )}
+            <Button
+              size="sm"
               onClick={onOpenDevelop}
               disabled={!slideFile}
               title={slideFile ? 'Open the Develop sheet' : 'Tick a picture first'}
-              className={`${smallButton} border-accent text-accent-ink`}
             >
               Develop…
-            </button>
-            {develop && (
-              <button
-                type="button"
-                onClick={onResetDevelop}
-                title="Back to as shot"
-                aria-label="Back to as shot"
-                className="w-6 h-6 grid place-items-center rounded-full border border-line bg-transparent text-xs text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
-              >
-                ↺
-              </button>
-            )}
-          </div>
-        </div>
+            </Button>
+          </FieldRow>
+        </InspectorSection>
       )}
 
-      <div className="flex flex-col gap-2">
-        <SectionLegend label="Format">
-          <p>The shape every slide of this deck is delivered in.</p>
-        </SectionLegend>
-        <div className="grid grid-cols-4 gap-1.5">
-          {ASPECT_PRESETS.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              onClick={() => patchBadge({ aspectId: a.id })}
-              aria-pressed={a.id === post.badge.aspectId}
-              title={a.label}
-              className={chipClass(a.id === post.badge.aspectId)}
-            >
-              {a.id}
-            </button>
-          ))}
-        </div>
-      </div>
+      <InspectorSection
+        id="piece.format"
+        title="Format"
+        info={<p>The shape every slide of this deck is delivered in.</p>}
+      >
+        <FieldRow label="Frame">
+          <Segmented
+            fill
+            size="sm"
+            label="Format"
+            value={post.badge.aspectId}
+            onChange={(aspectId) => patchBadge({ aspectId })}
+            options={ASPECT_PRESETS.map((a) => ({ id: a.id, label: a.id, title: a.label }))}
+            className="flex-1 min-w-0"
+          />
+        </FieldRow>
+      </InspectorSection>
 
       {/* The grade, through the Studio's own engine — one per piece, on every
-          picture of the deck. The closing card carries no photograph. */}
-      <div className="flex flex-col gap-2">
-        <span className="flex items-center gap-2">
-          <SectionLegend label="Grade">
+          picture of the deck. */}
+      <InspectorSection
+        id="piece.grade"
+        title="Grade"
+        badge={scope === 'trip' ? 'Trip' : undefined}
+        info={
+          <>
             <p>
               {scope === 'trip'
                 ? 'Every piece of the trip that has no grade of its own wears this one — the look that makes the feed read as one journey.'
@@ -357,21 +352,19 @@ export default function PictureTab({
               {linkedToProject &&
                 ' A reel exported from the linked Studio project uses that project’s grade, not this one — the Export tab says which.'}
             </p>
-          </SectionLegend>
-          {scope === 'trip' && (
-            <span className="font-mono text-3xs tracking-[0.12em] uppercase text-muted border border-line-strong rounded-full px-1.5 py-px">
-              Trip
-            </span>
-          )}
-        </span>
-        <GradeScopeChips grade={grade} />
+          </>
+        }
+      >
+        <FieldRow label="Grade of">
+          <GradeScopeChips grade={grade} />
+        </FieldRow>
         <GradePanel stack={stack} />
         {stack.error && (
           <p className="m-0 text-xs text-danger" role="alert">
             {stack.error}
           </p>
         )}
-      </div>
+      </InspectorSection>
     </div>
   );
 }

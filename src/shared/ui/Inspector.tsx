@@ -46,6 +46,12 @@ interface InspectorSectionProps {
   /** Controls pinned at the right of the header, before the chevron. */
   actions?: ReactNode;
   defaultOpen?: boolean;
+  /**
+   * Controlled fold, for a section whose body COSTS something while open (a
+   * request to an instance): the owner decides, and nothing is remembered.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   children: ReactNode;
 }
 
@@ -56,12 +62,19 @@ export function InspectorSection({
   info,
   actions,
   defaultOpen = true,
+  open: controlled,
+  onOpenChange,
   children,
 }: InspectorSectionProps) {
-  const [open, setOpen] = useState(() => readOpen(id, defaultOpen));
+  const [remembered, setRemembered] = useState(() => readOpen(id, defaultOpen));
+  const open = controlled ?? remembered;
   const bodyId = useId();
-  const toggle = () =>
-    setOpen((o) => {
+  const toggle = () => {
+    if (controlled !== undefined) {
+      onOpenChange?.(!controlled);
+      return;
+    }
+    setRemembered((o) => {
       try {
         localStorage.setItem(OPEN_KEY + id, o ? '0' : '1');
       } catch {
@@ -69,6 +82,7 @@ export function InspectorSection({
       }
       return !o;
     });
+  };
 
   return (
     <section className="flex flex-col border-t border-line first:border-t-0 py-3 first:pt-1">

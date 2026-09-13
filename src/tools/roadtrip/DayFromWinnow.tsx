@@ -5,7 +5,7 @@ import { materialize } from '../../shared/sources/winnow/materialize';
 import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
 import { useScopeRows, type RowsProblem } from '../../shared/sources/winnow/use-scope-rows';
 import WinnowThumb from '../../shared/sources/winnow/WinnowThumb';
-import { legend, section } from './panels/ui';
+import { InspectorSection } from '../../shared/ui/Inspector';
 
 interface DayFromWinnowProps {
   /** The day this piece tells — the query, so nobody types a date twice. */
@@ -99,23 +99,13 @@ export default function DayFromWinnow({ day, onPicked, defaultOpen, busy }: DayF
   if (!connection || !client) return null;
 
   return (
-    <div className={section}>
-      <div className="flex items-baseline justify-between gap-2">
-        <span className={legend}>This day · on {connection.id}</span>
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          className="font-mono text-3xs tracking-[0.1em] uppercase text-muted hover:text-accent bg-transparent border-0 p-0 cursor-pointer"
-        >
-          {open ? 'hide' : 'show'}
-        </button>
-      </div>
-
-      {!open ? (
-        <p className="m-0 text-xs text-muted">
-          The pictures {connection.id} holds for {day}, without leaving this piece.
-        </p>
-      ) : rows === null ? (
+    <InspectorSection
+      id="piece.winnow-day"
+      title={`This day on ${connection.id}`}
+      open={open}
+      onOpenChange={setOpen}
+    >
+      {rows === null ? (
         <p className="m-0 font-mono text-xs text-muted">asking {connection.id}…</p>
       ) : rows.length === 0 && !problem ? (
         <p className="m-0 text-xs text-muted">
@@ -185,6 +175,6 @@ export default function DayFromWinnow({ day, onPicked, defaultOpen, busy }: DayF
           )}
         </p>
       )}
-    </div>
+    </InspectorSection>
   );
 }

@@ -5,16 +5,15 @@ import {
 } from './builtin-luts';
 import { OUTPUT_TRANSFORM_OPTIONS } from './transfer';
 import type { LutStack } from './use-lut-stack';
+import Button from '../ui/Button';
+import IconButton from '../ui/IconButton';
+import Segmented from '../ui/Segmented';
+import { FieldRow, RangeField, SelectField, ToggleField } from '../ui/Inspector';
+import { Icons } from '../ui/icons';
 
 interface GradePanelProps {
   stack: LutStack;
 }
-
-const labelClass =
-  'font-mono text-2xs tracking-[0.12em] uppercase text-muted';
-
-const selectClass =
-  'w-full min-w-0 font-sans text-xs px-2 py-[0.4rem] border border-line-strong rounded-paper bg-paper text-ink cursor-pointer focus:outline-none focus:border-accent disabled:opacity-60';
 
 /**
  * The grade: a stack of looks applied top to bottom, each with its own
@@ -39,205 +38,122 @@ export default function GradePanel({ stack }: GradePanelProps) {
     OUTPUT_TRANSFORM_OPTIONS.find((o) => o.id === stack.output)?.hint ?? '';
 
   return (
-    <div className="flex flex-col gap-3">
-      {/* Add a look */}
-      <div className="flex flex-col gap-1.5">
-        <span className={labelClass}>Add a look</span>
-        <div className="flex items-center gap-2">
-          <select
-            className="flex-1 min-w-0 font-sans text-xs px-2 py-[0.4rem] border border-line-strong rounded-paper bg-paper text-ink cursor-pointer focus:outline-none focus:border-accent disabled:opacity-60"
-            value={pick}
-            disabled={stack.busy}
-            onChange={(e) => {
-              const id = e.target.value;
-              setPick('');
-              if (id) void stack.addBuiltin(id);
-            }}
-            aria-label="Add a built-in look"
-          >
-            <option value="">{stack.busy ? 'Loading…' : 'Built-in…'}</option>
-            {UNGROUPED_LUTS.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-            {LUT_GROUPS.map((g) => (
-              <optgroup key={g.label} label={g.label}>
-                {g.luts.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={() => void stack.addCustom()}
-            className="flex-none px-3 py-[0.4rem] rounded-full border border-line-strong bg-paper text-xs font-semibold text-ink cursor-pointer hover:border-accent"
-            title="Load a .cube file from disk"
-          >
-            .cube…
-          </button>
-        </div>
-      </div>
+    <div className="flex flex-col gap-2.5">
+      <FieldRow label="Add a look">
+        <SelectField
+          label="Add a built-in look"
+          value={pick}
+          onChange={(id) => {
+            setPick('');
+            if (id) void stack.addBuiltin(id);
+          }}
+          options={[
+            { id: '', label: stack.busy ? 'Loading…' : 'Built-in…' },
+            ...UNGROUPED_LUTS.map((l) => ({ id: l.id, label: l.name })),
+            ...LUT_GROUPS.flatMap((g) => g.luts.map((l) => ({ id: l.id, label: `${g.label} · ${l.name}` }))),
+          ]}
+        />
+        <Button size="sm" onClick={() => void stack.addCustom()} title="Load a .cube file from disk">
+          .cube…
+        </Button>
+      </FieldRow>
 
-      {stack.error && (
-        <p className="m-0 text-xs text-danger">{stack.error}</p>
-      )}
+      {stack.error && <p className="m-0 text-xs text-danger">{stack.error}</p>}
 
-      {/* The stack */}
+      {/* The stack: one block per look, its switch, its name, its order and
+          its strength. Order matters and is plain ↑/↓ — drag-and-drop is
+          fiddly in a narrow column. */}
       {stack.layers.length === 0 ? (
-        <p className="m-0 text-xs text-muted leading-relaxed">
-          No look yet — the clip grades through untouched. Add one or several;
-          they apply in order, top to bottom.
-        </p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          <span className={labelClass}>
-            Stack · {stack.layers.length}
-            {activeCount !== stack.layers.length && ` · ${activeCount} active`}
+        <FieldRow label="Stack">
+          <span className="text-xs text-muted">
+            No look yet — the picture grades through untouched.
           </span>
-          {stack.layers.map((layer, i) => (
-            <div
-              key={layer.id}
-              className={`flex flex-col gap-1.5 border rounded-paper px-2.5 py-2 transition-colors ${
-                layer.enabled
-                  ? 'border-line bg-paper'
-                  : 'border-line bg-transparent opacity-55'
-              }`}
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <button
-                  type="button"
-                  onClick={() => stack.setEnabled(layer.id, !layer.enabled)}
-                  aria-pressed={layer.enabled}
-                  className="flex-none w-5 text-center text-xs text-ink-soft cursor-pointer bg-transparent border-0 hover:text-accent"
-                  title={layer.enabled ? 'Bypass this look' : 'Enable this look'}
-                  aria-label={layer.enabled ? 'Bypass look' : 'Enable look'}
-                >
-                  {layer.enabled ? '◉' : '○'}
-                </button>
-                <span
-                  className="flex-1 min-w-0 truncate text-sm font-semibold"
-                  title={layer.name}
-                >
-                  {layer.name}
-                </span>
-                <span className="flex-none font-mono text-2xs tabular-nums text-faint">
-                  {Math.round(layer.intensity * 100)}%
-                </span>
-                <div className="flex-none flex items-center gap-0.5">
-                  <button
-                    type="button"
-                    onClick={() => stack.move(layer.id, -1)}
-                    disabled={i === 0}
-                    className="w-5 h-5 grid place-items-center rounded border border-line bg-transparent text-ink-soft text-2xs cursor-pointer hover:border-accent hover:text-accent-ink disabled:opacity-30 disabled:cursor-default"
-                    aria-label="Move look up"
-                    title="Apply earlier"
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => stack.move(layer.id, 1)}
-                    disabled={i === stack.layers.length - 1}
-                    className="w-5 h-5 grid place-items-center rounded border border-line bg-transparent text-ink-soft text-2xs cursor-pointer hover:border-accent hover:text-accent-ink disabled:opacity-30 disabled:cursor-default"
-                    aria-label="Move look down"
-                    title="Apply later"
-                  >
-                    ↓
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => stack.remove(layer.id)}
-                    className="w-5 h-5 grid place-items-center rounded-full border border-line bg-transparent text-faint text-xs cursor-pointer hover:text-danger hover:border-danger-line"
-                    aria-label="Remove look"
-                    title="Remove from the stack"
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-              <input
-                type="range"
-                className="w-full accent-accent cursor-pointer"
+        </FieldRow>
+      ) : (
+        stack.layers.map((layer, i) => (
+          <div
+            key={layer.id}
+            className={`flex flex-col gap-2 pl-3 border-l-2 transition-opacity ${
+              layer.enabled ? 'border-accent' : 'border-line opacity-60'
+            }`}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <ToggleField
+                label={layer.enabled ? `Bypass ${layer.name}` : `Enable ${layer.name}`}
+                checked={layer.enabled}
+                onChange={(on) => stack.setEnabled(layer.id, on)}
+              />
+              <span className="flex-1 min-w-0 truncate text-sm font-medium text-ink" title={layer.name}>
+                {layer.name}
+              </span>
+              <IconButton size="sm" variant="ghost" label="Apply earlier" disabled={i === 0} onClick={() => stack.move(layer.id, -1)}>
+                {Icons.up}
+              </IconButton>
+              <IconButton
+                size="sm"
+                variant="ghost"
+                label="Apply later"
+                disabled={i === stack.layers.length - 1}
+                onClick={() => stack.move(layer.id, 1)}
+              >
+                {Icons.down}
+              </IconButton>
+              <IconButton size="sm" variant="ghost" label="Remove from the stack" onClick={() => stack.remove(layer.id)}>
+                {Icons.close}
+              </IconButton>
+            </div>
+            <FieldRow label="Strength">
+              <RangeField
+                label={`${layer.name} strength`}
                 min={0}
                 max={3}
                 step={0.05}
                 value={layer.intensity}
                 disabled={!layer.enabled}
-                onChange={(e) =>
-                  stack.setIntensity(layer.id, Number(e.target.value))
-                }
-                aria-label={`${layer.name} strength`}
+                onChange={(v) => stack.setIntensity(layer.id, v)}
+                format={(v) => `${Math.round(v * 100)}%`}
               />
-            </div>
-          ))}
-        </div>
+            </FieldRow>
+          </div>
+        ))
       )}
 
-      {/* Output transform — the delivery stage, always last */}
-      <div className="flex flex-col gap-1.5 pt-1 border-t border-line">
-        <span className={labelClass}>Output transform</span>
-        <select
-          className={selectClass}
+      {/* The delivery stage, always last. */}
+      <FieldRow label="Output" hint={outputHint}>
+        <SelectField
+          label="Output transform"
           value={stack.output}
-          onChange={(e) =>
-            stack.setOutput(
-              e.target.value as (typeof OUTPUT_TRANSFORM_OPTIONS)[number]['id'],
-            )
-          }
-          aria-label="Output transform"
-        >
-          {OUTPUT_TRANSFORM_OPTIONS.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        <p className="m-0 text-xs text-faint leading-relaxed">
-          {outputHint}
-        </p>
-      </div>
+          onChange={(v) => stack.setOutput(v)}
+          options={OUTPUT_TRANSFORM_OPTIONS.map((o) => ({ id: o.id, label: o.label }))}
+        />
+      </FieldRow>
 
-      {/* How the LUT's lattice is read between its points */}
-      <div className="flex flex-col gap-1.5">
-        <span className={labelClass}>Interpolation</span>
-        <div className="flex items-center gap-1.5">
-          {(['tetrahedral', 'trilinear'] as const).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => stack.setInterpolation(mode)}
-              aria-pressed={stack.interpolation === mode}
-              className={`flex-1 px-2 py-[0.35rem] rounded-paper border text-xs cursor-pointer capitalize ${
-                stack.interpolation === mode
-                  ? 'border-accent bg-paper font-semibold text-accent-ink'
-                  : 'border-line bg-transparent text-ink-soft hover:border-accent'
-              }`}
-              title={
-                mode === 'tetrahedral'
-                  ? 'What Resolve uses — keeps neutral greys neutral'
-                  : 'The GPU sampler on its own — faster, less faithful'
-              }
-            >
-              {mode}
-            </button>
-          ))}
-        </div>
-        <p className="m-0 text-xs text-faint leading-relaxed">
-          A 33³ cube has to be interpolated between its points. Tetrahedral
-          reads the 4 lattice corners that matter, so greys stay grey;
-          trilinear averages all 8 and can tint them. Look at skies and
-          gradients — that is where it shows.
-        </p>
-      </div>
+      <FieldRow
+        label="Interpolation"
+        hint={
+          stack.interpolation === 'tetrahedral'
+            ? 'Reads the 4 lattice corners that matter, so greys stay grey — what Resolve uses.'
+            : 'Averages all 8 corners: faster, and it can tint greys. Look at skies and gradients.'
+        }
+      >
+        <Segmented
+          fill
+          size="sm"
+          label="Interpolation"
+          value={stack.interpolation}
+          onChange={(mode) => stack.setInterpolation(mode)}
+          options={[
+            { id: 'tetrahedral', label: 'Tetrahedral' },
+            { id: 'trilinear', label: 'Trilinear' },
+          ]}
+          className="flex-1 min-w-0"
+        />
+      </FieldRow>
 
-      <p className="m-0 text-xs text-faint leading-relaxed">
-        Looks apply top to bottom and bake into one LUT — the preview, the
-        stills and every export variant grade identically. Above 100% a look
-        extrapolates past what it was authored for.
+      <p className="m-0 text-xs text-muted leading-relaxed">
+        {stack.layers.length > 1 && `${activeCount} of ${stack.layers.length} looks active. `}
+        Looks apply top to bottom and bake into one LUT — the preview, the stills and every
+        export grade identically. Above 100% a look extrapolates past what it was authored for.
       </p>
     </div>
   );
