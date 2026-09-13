@@ -19,9 +19,12 @@
  * 3. **A variant never fetches and never reads the store.** `needs` declares
  *    what the shell resolves into `HookContext` before anything is drawn.
  *
- * Pure and DOM-free bar the canvas type. The design is `docs/hook-engine.md`.
+ * DOM-free: the only non-data types here are the 2D context a variant paints
+ * into and the React component types its card and panel are — both erased, so
+ * this module runs its tests in node. The design is `docs/hook-engine.md`.
  */
 
+import type { ComponentType } from 'react';
 import type { BadgeContent, BadgePiece } from '../day-badge';
 
 /** What the engine draws into — the 2D context both renderers already use. */
@@ -142,6 +145,14 @@ export interface HookRender {
   score?(): readonly SoundEvent[];
 }
 
+/** What a variant's own options panel is handed. */
+export interface HookPanelProps {
+  options: HookOptions;
+  onChange: (options: HookOptions) => void;
+  /** What the variant was prepared against, so a control can say a real value. */
+  ctx: HookContext;
+}
+
 /**
  * A hook variant. `owns` is the only thing a stack will ever have to arbitrate:
  * a `frame` owner replaces the picture (a scrub IS the picture while it
@@ -158,6 +169,44 @@ export interface HookVariant {
   prepare(options: HookOptions, ctx: HookContext): HookRender;
   /** Why this variant cannot run on this piece, or null when it can. */
   unmet?(ctx: HookContext): string | null;
+  /**
+   * The picker card's little drawing. It says what the variant DOES — it is
+   * not a render of this piece: the stage sits beside the picker showing the
+   * real thing, and a live render per card would cost a decode and a WebGL
+   * context each to repeat it worse.
+   */
+  Sketch?: ComponentType;
+  /** The variant's own options, mounted under the picker. Absent = none. */
+  Panel?: ComponentType<HookPanelProps>;
+}
+
+/**
+ * Choose a variant. Re-selecting the one already there keeps its settings —
+ * a click on the card you are on must not silently reset the panel under it —
+ * while a real change starts from that variant's own defaults.
+ *
+ * Only the first layer is written: the stack is storage, not UI (see D3).
+ */
+export function setHookVariant(
+  layers: readonly HookLayer[] | undefined,
+  variant: HookVariant,
+): HookLayer[] {
+  const current = layers?.[0];
+  const rest = (layers ?? []).slice(1);
+  if (current?.id === variant.id) {
+    return [{ id: current.id, options: { ...current.options } }, ...rest];
+  }
+  return [{ id: variant.id, options: { ...variant.defaults } }, ...rest];
+}
+
+/** Write the first layer's options, leaving any others alone. */
+export function setHookOptions(
+  layers: readonly HookLayer[] | undefined,
+  options: HookOptions,
+): HookLayer[] {
+  const rest = (layers ?? []).slice(1);
+  const id = layers?.[0]?.id ?? DEFAULT_HOOK_ID;
+  return [{ id, options }, ...rest];
 }
 
 /** Several layers, read as one. What the renderers and the export consume. */

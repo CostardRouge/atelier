@@ -1,10 +1,11 @@
 # The hook engine — many openers over one badge
 
-**Status (2026-09-13).** Design agreed with the maintainer; **phase 1 is built**
-(the contract, the registry, the `badge` variant, the resolution and the paint
-seam). Phases 2–7 are not. The exemplar that drove the design is the **scrub**
-(«&nbsp;Défilé&nbsp;»): the trip's measuring tape sweeps from day 1 to the day
-being told, flashing that day's pictures as it passes, and ticking.
+**Status (2026-09-13).** Design agreed with the maintainer; **phases 1 and 2
+are built** (the contract, the registry, the `badge` variant, the resolution,
+the paint seam, and the picker on the Look tab). Phases 3–7 are not. The
+exemplar that drove the design is the **scrub** («&nbsp;Défilé&nbsp;»): the
+trip's measuring tape sweeps from day 1 to the day being told, flashing that
+day's pictures as it passes, and ticking.
 
 Read this before touching `shared/roadtrip/hooks/`, `badge-layout.ts`,
 `badge-render.ts`, or anything that would add sound to an export.
@@ -57,6 +58,8 @@ interface HookVariant {
   owns: 'frame' | 'layer';    // see D2
   prepare(options: HookOptions, ctx: HookContext): HookRender;
   unmet?(ctx: HookContext): string | null;   // why it cannot run here
+  Sketch?: ComponentType;                    // the picker card's drawing
+  Panel?: ComponentType<HookPanelProps>;     // the variant's own options
 }
 
 interface HookRender {
@@ -124,15 +127,33 @@ The migration block goes **at the end** of `migrateTripDoc` — those blocks run
 in source order, and an early block writing onto a badge the v2 block has not
 built yet leaves the rest of it undefined (measured, on a v1 document).
 
-## 6. Picking one
+## 6. Picking one — built
 
 Cards, never a dropdown — the rule already settled for title styles: *a style
-you cannot see before adopting is a style you adopt by trial*. On the **Look**
-tab, above the style; each card draws the variant's own preview on this piece's
-real picture, static, animating on hover or focus. Selecting one swaps the panel
-below for that variant's options. A variant whose `unmet()` answers is greyed
-**with the reason on the card**, never hidden. Scope: per piece; the trip-wide
-default joins ⚙&nbsp;Trip → New pieces, beside the look a new piece inherits.
+you cannot see before adopting is a style you adopt by trial*. `HookPicker`
+(`tools/roadtrip/panels/`) sits at the **top of the Look tab, above the title
+style**, on the hook slide only: the opener decides what the hook IS, the style
+only how its words are set — and the style belongs to every slide.
+
+- **A card is a row in the title styles' own idiom**: the same dark 4.6×2.2rem
+  box, name, tagline. The box holds the variant's `Sketch` — a drawing of what
+  the variant DOES, **not a render of this piece**. That departs from the first
+  draft of this brief on purpose: the stage beside the picker already shows the
+  real thing, and a live render per card would cost a decode and a WebGL
+  context each to repeat it worse. A variant with motion animates its sketch.
+- **Selecting swaps the panel below** for that variant's `Panel`. The badge has
+  no options, so nothing mounts — the honest face of a variant with nothing to
+  set.
+- **An unmet variant is disabled, with its reason in place of the tagline**, in
+  the accent ink — never hidden.
+- **Re-selecting the current card keeps its settings**; choosing another starts
+  from that variant's `defaults`. Both writers (`setHookVariant`,
+  `setHookOptions`) replace the FIRST layer only, so a stored stack keeps what
+  sits behind it even though no UI builds one yet.
+- **The trip-wide default needed no second picker.** ⚙&nbsp;Trip → New pieces
+  already saves the whole look through `hookDefaultsFrom`, which carries `hook`
+  since phase 1 — a second place to choose the same thing is the fault this
+  tool keeps removing. Only its legend changed, to name the opener.
 
 ## 7. Sound
 
@@ -189,8 +210,9 @@ deliverable as a reel at all (the 2026-09-09 open item), and later the pre-roll.
    `resolveHook`, tests, and the paint seam threaded into `renderBadge` /
    `slide-render`. Storage (`PostBadge.hook`, v15) rides along so the engine
    reads the document from the first commit. No visible change. **Built.**
-2. **The picker.** Cards on the Look tab, the variant's `Panel`, the trip-wide
-   default. With one variant the row is one card — the honest way to prove it.
+2. **The picker.** Cards on the Look tab, the variant's `Panel`, the two pure
+   writers. With one variant the row is one card — the honest way to prove it.
+   **Built.**
 3. **Défilé, on a clip, silent.** Stop list from `tripCoverage`, the paint, the
    `content()` rewrite of the numeral, the options panel. Rides
    `exportHookVideo` unchanged.

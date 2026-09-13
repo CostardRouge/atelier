@@ -217,7 +217,7 @@ anything about media sources or document storage:
   the picker, how a synthesised sound bed reaches the MP4 through the export
   that already exists (the `p5-templates` pattern minus the server), the
   missing `exportGeneratedClip` seam, and seven phases of one commit each.
-  **Phase 1 is built**; the rest is not. Read it before touching
+  **Phases 1 and 2 are built** (engine + picker); the rest is not. Read it before touching
   `shared/roadtrip/hooks/`, `badge-layout.ts` or anything that would add audio
   to an export.
 - **`docs/winnow-timeline.md`** — what Winnow's forthcoming timeline (media

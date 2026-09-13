@@ -5,8 +5,11 @@ import {
   defaultHookLayers,
   foldHook,
   readOptions,
+  setHookOptions,
+  setHookVariant,
   type HookContext,
   type HookRender,
+  type HookVariant,
 } from './hook-variant';
 import { HOOK_VARIANTS, hookVariantById, resolveHook } from './registry';
 
@@ -158,5 +161,68 @@ describe('foldHook', () => {
       false,
     );
     expect(hook.score().map((event) => event.at)).toEqual([0.1, 0.4, 0.9]);
+  });
+});
+
+describe('choosing a variant', () => {
+  const scrub: HookVariant = {
+    id: 'scrub',
+    name: 'Défilé',
+    tagline: '',
+    defaults: { mode: 'from-start', stops: 12 },
+    needs: {},
+    owns: 'frame',
+    prepare: () => ({ seconds: 0 }),
+  };
+  const badge = hookVariantById(DEFAULT_HOOK_ID);
+  if (!badge) throw new Error('the badge variant must be registered');
+
+  it('starts a newly chosen variant from its own defaults', () => {
+    expect(setHookVariant(defaultHookLayers(), scrub)).toEqual([
+      { id: 'scrub', options: { mode: 'from-start', stops: 12 } },
+    ]);
+  });
+
+  it('keeps the settings when the card already chosen is clicked again', () => {
+    const tuned = [{ id: 'scrub', options: { mode: 'run-up', stops: 6 } }];
+    expect(setHookVariant(tuned, scrub)).toEqual(tuned);
+  });
+
+  it('drops a variant’s settings when another one is chosen', () => {
+    const tuned = [{ id: 'scrub', options: { mode: 'run-up', stops: 6 } }];
+    expect(setHookVariant(tuned, badge)).toEqual([{ id: DEFAULT_HOOK_ID, options: {} }]);
+  });
+
+  it('replaces the first layer only, so a stack keeps what sits behind it', () => {
+    const stack = [
+      { id: DEFAULT_HOOK_ID, options: {} },
+      { id: 'route', options: { opacity: 0.6 } },
+    ];
+    expect(setHookVariant(stack, scrub)).toEqual([
+      { id: 'scrub', options: { mode: 'from-start', stops: 12 } },
+      { id: 'route', options: { opacity: 0.6 } },
+    ]);
+  });
+
+  it('never shares an options object with the defaults it came from', () => {
+    const [layer] = setHookVariant([], scrub);
+    expect(layer.options).not.toBe(scrub.defaults);
+  });
+
+  it('writes a panel’s options to the first layer and leaves the rest of a stack alone', () => {
+    const stack = [
+      { id: 'scrub', options: { stops: 12 } },
+      { id: 'route', options: { opacity: 0.6 } },
+    ];
+    expect(setHookOptions(stack, { stops: 8 })).toEqual([
+      { id: 'scrub', options: { stops: 8 } },
+      { id: 'route', options: { opacity: 0.6 } },
+    ]);
+  });
+
+  it('gives options with nowhere to go the default layer', () => {
+    expect(setHookOptions([], { stops: 8 })).toEqual([
+      { id: DEFAULT_HOOK_ID, options: { stops: 8 } },
+    ]);
   });
 });
