@@ -22,8 +22,15 @@ export interface Tool {
   path: string;
   /** Nav label. */
   label: string;
-  /** Optional contextual caption shown beside the wordmark when active. */
+  /** The card's eyebrow on the home page. */
   subtitle?: string;
+  /**
+   * Where the switcher files it. The two `editor`s are where the suite is
+   * converging (`studio.md`); an `instrument` is one of the standalone pages
+   * kept until the Studio absorbs it. The list will grow — that is why the
+   * switcher is a menu and not a row of segments.
+   */
+  group: 'editor' | 'instrument';
   /** One-line pitch shown on the home page card. */
   blurb?: string;
   /** The tool's root component. */
@@ -39,6 +46,7 @@ export interface Tool {
 export const TOOLS: Tool[] = [
   {
     id: 'studio',
+    group: 'editor',
     path: '/studio',
     label: 'Studio',
     subtitle: 'Unified editor',
@@ -49,6 +57,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'roadtrip',
+    group: 'editor',
     path: '/roadtrip',
     label: 'Trips',
     subtitle: 'Trip · days · posts',
@@ -59,6 +68,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'telemetry',
+    group: 'instrument',
     path: '/telemetry',
     label: 'DJI Telemetry',
     subtitle: 'DJI · SRT telemetry',
@@ -69,6 +79,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'overlay',
+    group: 'instrument',
     path: '/overlay',
     label: 'Telemetry Overlay',
     subtitle: 'Burn-in telemetry',
@@ -79,6 +90,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'map',
+    group: 'instrument',
     path: '/map',
     label: 'Flight Map',
     subtitle: 'GPS flight path',
@@ -89,6 +101,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'composer',
+    group: 'instrument',
     path: '/composer',
     label: 'Composer',
     subtitle: 'Video + map + telemetry',
@@ -99,6 +112,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'exif',
+    group: 'instrument',
     path: '/exif',
     label: 'Photo EXIF',
     subtitle: 'Camera · lens · GPS',
@@ -109,6 +123,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'compare',
+    group: 'instrument',
     path: '/compare',
     label: 'Compare A/B',
     subtitle: 'Before/after wipe',
@@ -119,6 +134,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'lut',
+    group: 'instrument',
     path: '/lut',
     label: 'LUT Studio',
     subtitle: 'Colour grading',

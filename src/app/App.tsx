@@ -6,6 +6,7 @@ import Home from './Home';
 import { REPO_URL } from './site';
 import { HOME_PATH, toolForPath } from './tools';
 import ToolSwitcher from './ToolSwitcher';
+import SourcePill from './SourcePill';
 import { useHashRoute } from './use-hash-route';
 import BottomSheet from '../shared/ui/BottomSheet';
 import SectionRail from '../shared/ui/SectionRail';
@@ -207,11 +208,10 @@ export default function App() {
           )}
         </span>
         <div className={`flex items-center ${compact && tool ? 'gap-1.5' : 'gap-[0.9rem]'}`}>
-          {tool?.subtitle && !compact && (
-            <span className="font-mono text-2xs tracking-[0.18em] uppercase text-muted max-[480px]:hidden">
-              {tool.subtitle}
-            </span>
-          )}
+          {/* The most visible corner of a tool screen used to carry the
+              tool's tagline ("Unified editor"). It says an action or a state
+              now: where the documents live, and the way to `#/sources`. */}
+          {tool && !compact && <SourcePill />}
           <a
             className="inline-flex items-center text-muted transition-[color,transform] duration-200 ease-paper hover:text-accent hover:-translate-y-px"
             href={REPO_URL}

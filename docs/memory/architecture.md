@@ -168,3 +168,8 @@ proposal, a day's candidate slides, a batch grade) must forward `verdict` and
 `star_min` rather than invent a quality score of its own. The maintainer's triage
 already IS the judgement; scoring pictures in Atelier would be a second, worse
 opinion — the same anti-fabrication line the badge and the battery gauge hold.
+
+## 2026-09-13 — A tool has a GROUP, and the switcher is a menu because the list grows
+
+`Tool.group` is `editor` (Studio, Trips — where the suite converges) or `instrument` (the standalone pages kept until the Studio absorbs them; "Instruments" is the word the menu and, later, the home page use). `ToolSwitcher` files its entries by it: editor rows with one clause of the blurb, instruments in a two-column grid, Home and Sources in the foot. **The switcher stays a dropdown, never segments** — the maintainer's ruling: more tools are coming, segments do not hold past four, and a phone needs a menu anyway. What changed is the trigger: a real target (bordered pill on hover and while open) instead of text with a 9px chevron. The masthead's right side carries `SourcePill` (Local / the connected instance, a link to `#/sources`) where the tool's tagline used to be; `Tool.subtitle` survives only as the home card's eyebrow.
+
