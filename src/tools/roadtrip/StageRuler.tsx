@@ -26,6 +26,7 @@ import {
 import { stageLabel } from '../../shared/roadtrip/trip-places';
 import type { TripDoc, TripStage } from '../../shared/roadtrip/trip-types';
 import { useElementWidth } from '../../shared/ui/use-element-width';
+import { HEATMAP_LEVELS } from './heatmap-ramp';
 
 interface StageRulerProps {
   trip: TripDoc;
@@ -44,6 +45,8 @@ interface StageRulerProps {
    * window's edge stops there only because the window does.
    */
   span?: { startDate: IsoDate; endDate: IsoDate };
+  /** The grid's rung for a day (0..4): a strip of told-days under the head. */
+  rungAt?: (date: IsoDate) => number;
 }
 
 /**
@@ -55,6 +58,8 @@ const HEAD = 16;
 const BAR = 34;
 const LANE_GAP = 4;
 const AXIS = 20;
+const RUNG = 10;
+const RUNG_GAP = 6;
 const HANDLE = 10;
 
 interface Drag {
@@ -104,6 +109,7 @@ export default function StageRuler({
   onScrub,
   onChange,
   span,
+  rungAt,
 }: StageRulerProps) {
   // Everything the track MEASURES is measured against the span drawn; the
   // real trip is what the edits clamp to.
@@ -128,7 +134,10 @@ export default function StageRuler({
   const dayW = rulerDayWidth(width, total, 1);
   const ticks = rulerTicks(drawn, dayW);
   const trackW = dayW * total;
-  const lanesTop = HEAD;
+  // The rung strip: what was told each day, on the grid's own ramp, so the
+  // ruler says the same thing as the calendar above about every day it draws.
+  const rungs = rungAt ? RUNG + RUNG_GAP : 0;
+  const lanesTop = HEAD + rungs;
   const lanesH = lanes * BAR + (lanes - 1) * LANE_GAP;
   const bodyH = lanesTop + lanesH;
   const playAt = cursorDate ? dayOffset(drawn, cursorDate) : null;
@@ -239,6 +248,26 @@ export default function StageRuler({
           style={{ height: HEAD }}
           aria-hidden="true"
         />
+
+        {rungAt &&
+          Array.from({ length: total }, (_, i) => {
+            const date = dayAtOffset(drawn, i);
+            if (!date) return null;
+            return (
+              <span
+                key={i}
+                className="absolute rounded-[2px] pointer-events-none"
+                style={{
+                  left: i * dayW + 1,
+                  top: HEAD + 2,
+                  width: Math.max(1, dayW - 2),
+                  height: RUNG,
+                  background: HEATMAP_LEVELS[rungAt(date)],
+                }}
+                aria-hidden="true"
+              />
+            );
+          })}
 
         {/* Month rules and their labels, the scale of the track. */}
         {months.map((m) => (
@@ -470,9 +499,7 @@ function Bar({
           <span className={`font-semibold ${label ? 'text-ink' : 'text-muted'}`}>
             {label || 'Unnamed stage'}
           </span>
-          {places > 0 && (
-            <span className="text-ink-soft"> · {places} place{places === 1 ? '' : 's'}</span>
-          )}
+          <span className="text-ink-soft"> · {days} d{places > 0 ? ` · ${places} place${places === 1 ? '' : 's'}` : ''}</span>
         </span>
       </button>
       {!bar.clipStart && (

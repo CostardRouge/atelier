@@ -179,6 +179,25 @@ export default function DayHeatmap({
 
   return (
     <div className="flex flex-col">
+      {/* The legend heads the section, on one line with the hints, so the
+          grid is what the eye lands on and the key is read once above it. */}
+      <div className="flex items-center gap-3 mb-2 font-mono text-3xs text-faint whitespace-nowrap">
+        <span className="font-sans text-xs font-semibold text-ink-soft">The journey</span>
+        <span className="flex items-center gap-1.5">
+          <span>nothing</span>
+          {LEVELS.map((bg, i) => (
+            <span
+              key={i}
+              className="rounded-[3px] border border-line"
+              style={{ width: 11, height: 11, background: bg }}
+              aria-hidden="true"
+            />
+          ))}
+          <span>often</span>
+        </span>
+        <span className="flex-1" />
+        <span className="max-[600px]:hidden truncate">click: open the day{menuFor ? ' · right-click: cut a stage' : ''}{overlay ? ' · drag the loupe: what the ruler details' : ''}</span>
+      </div>
     {/* The scroll box holds the GRID alone: the legend below it used to ride
         inside it and scroll away sideways. The grid fills the box from a
         month up to about fourteen months; past that its cells floor at 6px
@@ -233,7 +252,6 @@ export default function DayHeatmap({
                   const isSelected = date === selected;
                   const isToday = date === today;
                   const stage = stageOf?.(date) ?? null;
-                  const tint = stage?.tint ?? null;
                   const show = (el: HTMLElement) => {
                     const r = el.getBoundingClientRect();
                     setHovered({ cell, stage, x: r.left + r.width / 2, y: r.top });
@@ -268,10 +286,6 @@ export default function DayHeatmap({
                             ? '#938b7c'
                             : 'rgba(43,33,18,0.10)',
                         borderWidth: isSelected || isToday ? 2 : 1,
-                        // The stage's tint as a stripe along the foot of the
-                        // cell, so a leg reads as a run of matching feet
-                        // without touching the rung that says what was told.
-                        boxShadow: tint ? `inset 0 -3px 0 0 ${tint}` : undefined,
                       }}
                     />
                   );
@@ -322,24 +336,6 @@ export default function DayHeatmap({
       {hovered && !menu && <DayCard hovered={hovered} />}
       {menu && <DayMenu menu={menu} onClose={() => setMenu(null)} />}
 
-      <div className="flex items-center gap-2 mt-2 font-mono text-3xs text-faint whitespace-nowrap">
-        <span>Nothing</span>
-        {LEVELS.map((bg, i) => (
-          <span
-            key={i}
-            className="rounded-[3px] border border-[rgba(43,33,18,0.10)]"
-            style={{ width: 11, height: 11, background: bg }}
-            aria-hidden="true"
-          />
-        ))}
-        <span>Told often</span>
-        {/* A hint for a pointer, so it is not shown where there is none. */}
-        {menuFor && (
-          <span className="ml-3 max-[600px]:hidden">
-            · right-click a day to start or end a stage there
-          </span>
-        )}
-      </div>
     </div>
   );
 }

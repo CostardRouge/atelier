@@ -42,8 +42,11 @@ export default function LoupeBrush({ trip, loupe, onChange, geometry, extraHeigh
   const length = loupeLength(loupe);
   const left = ((geometry.lead + from) / 7) * geometry.columnWidth;
   const width = (length / 7) * geometry.columnWidth;
-  const top = geometry.labelHeight - GRIP;
-  const height = GRIP + geometry.gridHeight + extraHeight;
+  // The frame encloses the month labels too (the mock's shape) and is
+  // transparent, so the labels read through it; the grip is a small tab on
+  // the top edge, not a bar over the labels.
+  const top = -GRIP;
+  const height = GRIP + geometry.labelHeight + geometry.gridHeight + extraHeight;
 
   const begin = (e: PointerEvent<HTMLElement>, mode: Drag['mode']) => {
     if (e.button !== 0) return;
@@ -85,7 +88,8 @@ export default function LoupeBrush({ trip, loupe, onChange, geometry, extraHeigh
 
   const label = `${formatIsoDate(loupe.start)} → ${formatIsoDate(loupe.end)} · ${length} days`;
   const handleClass =
-    'absolute top-0 bottom-0 p-0 border-0 bg-transparent cursor-ew-resize touch-pan-y select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ink rounded-[4px]';
+    'absolute top-0 bottom-0 grid place-items-center p-0 border-0 bg-transparent cursor-ew-resize touch-pan-y select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ink rounded-[4px]';
+  const pill = <span className="block w-[6px] h-[26px] rounded-full bg-ink" aria-hidden="true" />;
 
   return (
     <div
@@ -95,13 +99,15 @@ export default function LoupeBrush({ trip, loupe, onChange, geometry, extraHeigh
     >
       {/* The frame: seen, never touched. */}
       <span
-        className={`absolute inset-0 rounded-[5px] border-2 border-ink transition-[background-color] ${
-          dragging ? 'bg-ink/10' : 'bg-ink/[0.045]'
+        className={`absolute inset-0 rounded-[7px] border-2 border-ink transition-[background-color] ${
+          dragging ? 'bg-ink/10' : 'bg-ink/[0.04]'
         }`}
-        style={{ top: GRIP - 2 }}
+        style={{ top: GRIP / 2 }}
         aria-hidden="true"
       />
-      {/* The grip along the top: slide the window. */}
+      {/* The grip: the whole top edge takes the pointer, but only a small tab
+          on it is drawn — the month labels stay readable under a frame that
+          is a line, not a bar. */}
       <button
         type="button"
         onPointerDown={(e) => begin(e, 'move')}
@@ -111,10 +117,10 @@ export default function LoupeBrush({ trip, loupe, onChange, geometry, extraHeigh
         onKeyDown={(e) => nudge(e, 'move')}
         aria-label={`The loupe, ${label} — drag to slide it, arrows move it a week`}
         title={`${label} — drag to slide the loupe`}
-        className="pointer-events-auto absolute left-0 right-0 top-0 p-0 border-0 bg-ink rounded-t-[5px] cursor-grab active:cursor-grabbing touch-pan-y select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        style={{ height: GRIP + 2 }}
+        className="pointer-events-auto absolute left-0 right-0 top-0 p-0 border-0 bg-transparent cursor-grab active:cursor-grabbing touch-pan-y select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-[7px]"
+        style={{ height: GRIP + 4 }}
       >
-        <span className="block mx-auto w-6 h-[2px] rounded-full bg-paper/70" aria-hidden="true" />
+        <span className="block mx-auto w-7 h-[6px] rounded-full bg-ink" aria-hidden="true" />
       </button>
       <button
         type="button"
@@ -130,7 +136,9 @@ export default function LoupeBrush({ trip, loupe, onChange, geometry, extraHeigh
         title="Drag to change where the loupe begins"
         className={`pointer-events-auto ${handleClass} -left-[5px]`}
         style={{ width: HANDLE, top: GRIP }}
-      />
+      >
+        {pill}
+      </button>
       <button
         type="button"
         onPointerDown={(e) => {
@@ -145,7 +153,9 @@ export default function LoupeBrush({ trip, loupe, onChange, geometry, extraHeigh
         title="Drag to change where the loupe ends"
         className={`pointer-events-auto ${handleClass} -right-[5px]`}
         style={{ width: HANDLE, top: GRIP }}
-      />
+      >
+        {pill}
+      </button>
     </div>
   );
 }

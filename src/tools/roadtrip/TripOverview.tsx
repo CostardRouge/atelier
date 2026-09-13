@@ -26,7 +26,7 @@ import {
   type TripPost,
   type TripStage,
 } from '../../shared/roadtrip/trip-types';
-import DayHeatmap, { type DayMenuItem, type DayStage, type HeatmapLeg } from './DayHeatmap';
+import DayHeatmap, { levelOf, type DayMenuItem, type DayStage, type HeatmapLeg } from './DayHeatmap';
 import DayPanel from './DayPanel';
 import StagesPanel from './StagesPanel';
 import TripDetailsModal, { type TripDetails } from './TripDetailsModal';
@@ -352,6 +352,8 @@ export default function TripOverview({
   );
 
   const drafted = coverage.posts - coverage.publishedPosts;
+  const rungOf = useMemo(() => new Map(coverage.days.map((d) => [d.date, levelOf(d)])), [coverage.days]);
+  const rungAt = useCallback((date: IsoDate) => rungOf.get(date) ?? 0, [rungOf]);
   const short = isShortTrip(coverage.totalDays);
 
   // The loupe: the window of a long trip the ruler details (`loupe.ts`). It
@@ -508,6 +510,7 @@ export default function TripOverview({
       <StagesPanel
         trip={trip}
         span={short ? undefined : { startDate: loupe.start, endDate: loupe.end }}
+        rungAt={rungAt}
         selectedId={selectedStageId}
         cursorDate={selected}
         onSelect={setStageId}

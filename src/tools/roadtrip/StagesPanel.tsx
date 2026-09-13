@@ -20,6 +20,8 @@ interface StagesPanelProps {
    * a short one (the whole trip). The header names it.
    */
   span?: { startDate: IsoDate; endDate: IsoDate };
+  /** The grid's rung for a day (0..4), drawn as a strip on the ruler. */
+  rungAt?: (date: IsoDate) => number;
   /** The leg open in the editor below the ruler; null shows the ruler alone. */
   selectedId: string | null;
   /** The day open on the overview, drawn on the ruler as a playhead. */
@@ -160,6 +162,7 @@ function StageCard({
 export default function StagesPanel({
   trip,
   span,
+  rungAt,
   selectedId,
   cursorDate,
   onSelect,
@@ -201,7 +204,11 @@ export default function StagesPanel({
       <div className="flex items-center gap-3">
         <span className="flex-1">
           <SectionLegend
-            label={`Stages · ${trip.stages.length} leg${trip.stages.length === 1 ? '' : 's'}`}
+            label={
+              span
+                ? `Loupe · ${formatIsoDate(span.startDate)} → ${formatIsoDate(span.endDate)} · ${spanLength(span.startDate, span.endDate)} days`
+                : `Stages · ${trip.stages.length} leg${trip.stages.length === 1 ? '' : 's'}`
+            }
           >
             <p>
               A stage is a leg of the trip and the days you were on it. A badge can name
@@ -236,10 +243,8 @@ export default function StagesPanel({
             </Button>
           ))}
         {span && (
-          <span className="font-mono text-2xs text-muted tabular-nums whitespace-nowrap" title="What the loupe above frames">
-            {formatIsoDate(span.startDate)} → {formatIsoDate(span.endDate)}
-            {' · '}
-            {spanLength(span.startDate, span.endDate)} days
+          <span className="font-mono text-3xs text-faint whitespace-nowrap max-[900px]:hidden">
+            drag the window above · drag its edges to widen it
           </span>
         )}
         <Button variant="primary" onClick={add} icon={Icons.plus}>
@@ -249,6 +254,7 @@ export default function StagesPanel({
 
       <StageRuler
         trip={trip}
+        rungAt={rungAt}
         selectedId={selected?.id ?? null}
         cursorDate={cursorDate}
         onOpenStage={(stage) => {

@@ -63,13 +63,31 @@ export default function ShortDayStrip({
 
   return (
     <div className="flex flex-col">
+      {/* The legend heads the section, on one line with the hints, so the
+          grid is what the eye lands on and the key is read once above it. */}
+      <div className="flex items-center gap-3 mb-2 font-mono text-3xs text-faint whitespace-nowrap">
+        <span className="font-sans text-xs font-semibold text-ink-soft">The journey</span>
+        <span className="flex items-center gap-1.5">
+          <span>nothing</span>
+          {LEVELS.map((bg, i) => (
+            <span
+              key={i}
+              className="rounded-[3px] border border-line"
+              style={{ width: 11, height: 11, background: bg }}
+              aria-hidden="true"
+            />
+          ))}
+          <span>often</span>
+        </span>
+        <span className="flex-1" />
+        <span className="max-[600px]:hidden truncate">click: open the day{menuFor ? ' · right-click: cut a stage' : ''}</span>
+      </div>
       <div className="flex gap-1" role="grid" aria-label="Trip days">
         {days.map((cell) => {
           const date = cell.date;
           const isSelected = date === selected;
           const isToday = date === today;
           const stage = stageOf?.(date) ?? null;
-          const tint = stage?.tint ?? null;
           const weekday = weekdayOf(date);
           const weekend = weekday >= 5;
           const dayOfMonth = dayOfMonthOf(date);
@@ -109,9 +127,6 @@ export default function ShortDayStrip({
                   background: LEVELS[levelOf(cell)],
                   borderColor: isSelected ? '#1b1813' : isToday ? '#938b7c' : 'rgba(43,33,18,0.10)',
                   borderWidth: isSelected || isToday ? 2 : 1,
-                  // The leg's tint along the foot, exactly as the heatmap
-                  // draws it, so a leg reads as a run of matching feet.
-                  boxShadow: tint ? `inset 0 -4px 0 0 ${tint}` : undefined,
                 }}
                 title={undefined}
               >
@@ -125,23 +140,6 @@ export default function ShortDayStrip({
       {hovered && !menu && <DayCard hovered={hovered} />}
       {menu && <DayMenu menu={menu} onClose={() => setMenu(null)} />}
 
-      <div className="flex items-center gap-2 mt-2 font-mono text-3xs text-faint whitespace-nowrap">
-        <span>Nothing</span>
-        {LEVELS.map((bg, i) => (
-          <span
-            key={i}
-            className="rounded-[3px] border border-[rgba(43,33,18,0.10)]"
-            style={{ width: 11, height: 11, background: bg }}
-            aria-hidden="true"
-          />
-        ))}
-        <span>Told often</span>
-        {menuFor && (
-          <span className="ml-3 max-[600px]:hidden">
-            · right-click a day to start or end a stage there
-          </span>
-        )}
-      </div>
     </div>
   );
 }
