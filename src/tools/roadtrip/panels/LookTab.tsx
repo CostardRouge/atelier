@@ -6,10 +6,11 @@ import type { BadgePiece } from '../../../shared/roadtrip/day-badge';
 import type { PostBadge, TripDoc, TripPost } from '../../../shared/roadtrip/trip-types';
 import type { HookContext } from '../../../shared/roadtrip/hooks/hook-variant';
 import HookPicker from './HookPicker';
-import SectionLegend from '../../../shared/ui/SectionLegend';
 import PieceStylePanel from '../PieceStylePanel';
 import ShadesPanel from '../ShadesPanel';
-import { legend, linkButton } from './ui';
+import { linkButton } from './ui';
+import Button from '../../../shared/ui/Button';
+import { FieldRow, InspectorSection, RangeField } from '../../../shared/ui/Inspector';
 
 /** The nine anchors, laid out as the 3×3 grid they are. */
 const ANCHORS: Anchor[] = [
@@ -75,70 +76,87 @@ export default function LookTab({
     patchBadge({ pieceStyles: { ...post.badge.pieceStyles, [piece]: style } });
   const setShades = (shades: Shade[]) => patchBadge({ shades });
 
+  const departs = Object.keys(pieceStyle).length > 0;
+
   return (
-    <div className="flex flex-col gap-4">
-      {/* The opener comes FIRST, and so sits outside the hook branch below:
-          it decides what the hook IS, where the title style only decides how
-          its words are set — and the style belongs to every slide, not to the
-          hook alone. */}
+    <div className="flex flex-col">
+      {/* The opener comes FIRST: it decides what the hook IS, where the title
+          style only decides how its words are set. */}
       {isHook && (
-        <HookPicker
-          layers={post.badge.hook}
-          ctx={hookCtx}
-          onChange={(hook) => patchBadge({ hook })}
-        />
+        <InspectorSection
+          id="piece.opener"
+          title="Opener"
+          info={
+            <p>
+              What draws the first slide. The badge is the plain one — the counter and the
+              place over the picture. Another variant may bring its own drawing, its own
+              animation and its own sound, and says so on its card.
+            </p>
+          }
+        >
+          <HookPicker layers={post.badge.hook} ctx={hookCtx} onChange={(hook) => patchBadge({ hook })} />
+        </InspectorSection>
       )}
 
-      <div className="flex flex-col gap-2">
+      <InspectorSection
+        id="piece.title-style"
+        title="Title style"
+        badge="Trip"
+        info={
+          <p>
+            The whole trip wears this — it is what makes a piece recognisable in a feed
+            before a word of it is read. Each card shows the style itself rather than its
+            name, so a look is chosen by seeing it.
+          </p>
+        }
+      >
         <StylePanel
           theme={trip.theme}
           onChange={(theme) => onChangeTrip({ ...trip, theme })}
-          heading={
-            <span className="flex items-center gap-2">
-              <SectionLegend label="Title style">
-                <p>
-                  The whole trip wears this — it is what makes a piece recognisable in a
-                  feed before a word of it is read. Each card shows the style itself
-                  rather than its name, so a look is chosen by seeing it.
-                </p>
-              </SectionLegend>
-              <span className="font-mono text-3xs tracking-[0.12em] uppercase text-muted border border-line-strong rounded-full px-1.5 py-px">
-                Trip
-              </span>
-            </span>
-          }
+          heading={<></>}
         />
-        <button type="button" onClick={onOpenTripSettings} className={`self-start ${linkButton}`}>
-          The trip’s words and closing card…
-        </button>
-      </div>
+        <FieldRow label="Words">
+          <button type="button" onClick={onOpenTripSettings} className={linkButton}>
+            The trip’s words and closing card…
+          </button>
+        </FieldRow>
+      </InspectorSection>
 
       {isHook ? (
         <>
-          <div className="flex flex-col gap-2">
-            <SectionLegend label="This piece departs">
+          <InspectorSection
+            id="piece.departs"
+            title="This piece"
+            info={
               <p>
                 Colour, panel, casing and animation for the piece in hand only. A piece
                 departs from the theme by writing its own value; everything left alone
                 follows the trip.
               </p>
-            </SectionLegend>
+            }
+            actions={
+              departs ? (
+                <Button size="sm" variant="ghost" onClick={() => setPieceStyle({})}>
+                  Back to the trip’s
+                </Button>
+              ) : undefined
+            }
+          >
             <PieceStylePanel style={pieceStyle} onChange={setPieceStyle} />
-          </div>
+          </InspectorSection>
 
-          <div className="flex flex-col gap-2">
-            <SectionLegend label="Placement">
+          <InspectorSection
+            id="piece.placement"
+            title="Placement"
+            info={
               <p>
                 The grid is the coarse tool; drag the badge on the picture to place it
                 exactly — hold Alt to skip the snap.
               </p>
-            </SectionLegend>
-            <div className="flex items-start gap-3">
-              <div
-                className="grid grid-cols-3 gap-1.5 w-[6.5rem] flex-none"
-                role="group"
-                aria-label="Anchor"
-              >
+            }
+          >
+            <FieldRow label="Anchor" align="start">
+              <div className="grid grid-cols-3 gap-1.5 w-[6.5rem]" role="group" aria-label="Anchor">
                 {ANCHORS.map((anchor) => (
                   <button
                     key={anchor}
@@ -150,65 +168,59 @@ export default function LookTab({
                     }
                     aria-label={anchor}
                     aria-pressed={anchor === post.badge.layout.anchor}
-                    className={`h-7 rounded-[4px] border cursor-pointer transition-colors ${
+                    className={`h-7 rounded-[6px] border cursor-pointer transition-colors ${
                       anchor === post.badge.layout.anchor
                         ? 'border-accent bg-accent'
-                        : 'border-line bg-paper hover:border-line-strong'
+                        : 'border-line-strong bg-paper hover:border-muted'
                     }`}
                   />
                 ))}
               </div>
-              <label className="flex-1 flex flex-col gap-1">
-                <span className={legend}>
-                  Numeral · {Math.round(post.badge.layout.sizeFrac * 100)}%
-                </span>
-                <input
-                  type="range"
-                  min={0.05}
-                  max={0.4}
-                  step={0.005}
-                  value={post.badge.layout.sizeFrac}
-                  onChange={(e) =>
-                    patchBadge({
-                      layout: { ...post.badge.layout, sizeFrac: Number(e.target.value) },
-                    })
-                  }
-                  className="accent-accent"
-                />
-              </label>
-            </div>
-          </div>
+            </FieldRow>
+            <FieldRow label="Numeral">
+              <RangeField
+                label="Numeral size"
+                min={0.05}
+                max={0.4}
+                step={0.005}
+                value={post.badge.layout.sizeFrac}
+                onChange={(sizeFrac) => patchBadge({ layout: { ...post.badge.layout, sizeFrac } })}
+                format={(v) => `${Math.round(v * 100)}%`}
+              />
+            </FieldRow>
+            <FieldRow label="Duration" hint="How long the hook lasts — what an exit animation lands on.">
+              <RangeField
+                label="Hook duration"
+                min={1}
+                max={15}
+                step={0.5}
+                value={post.badge.durationSeconds}
+                onChange={(durationSeconds) => patchBadge({ durationSeconds })}
+                format={(v) => `${v.toFixed(1)} s`}
+              />
+            </FieldRow>
+          </InspectorSection>
 
-          <label className="flex flex-col gap-1">
-            <SectionLegend label={`Hook duration · ${post.badge.durationSeconds.toFixed(1)}s`}>
-              <p>How long the hook lasts — what an exit animation lands on.</p>
-            </SectionLegend>
-            <input
-              type="range"
-              min={1}
-              max={15}
-              step={0.5}
-              value={post.badge.durationSeconds}
-              onChange={(e) => patchBadge({ durationSeconds: Number(e.target.value) })}
-              className="accent-accent"
-            />
-          </label>
-
-          <div className="flex flex-col gap-2">
-            <SectionLegend label="Shades over the picture">
+          <InspectorSection
+            id="piece.shades"
+            title="Shades"
+            info={
               <p>
                 One stack of shades does both jobs — a vignette and the scrim under the
                 badge. Each has a direction, a reach and a strength.
               </p>
-            </SectionLegend>
+            }
+          >
             <ShadesPanel shades={post.badge.shades} onChange={setShades} />
-          </div>
+          </InspectorSection>
         </>
       ) : (
-        <p className="m-0 text-xs text-faint">
-          A caption and the closing card keep a fixed look; per-piece styling, placement
-          and shades belong to the badge on the hook.
-        </p>
+        <InspectorSection id="piece.slide-look" title="This slide">
+          <p className="m-0 text-xs text-muted">
+            A caption and the closing card keep a fixed look; per-piece styling, placement
+            and shades belong to the badge on the hook.
+          </p>
+        </InspectorSection>
       )}
     </div>
   );

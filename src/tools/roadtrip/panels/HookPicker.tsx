@@ -20,7 +20,6 @@ import {
   type HookVariant,
 } from '../../../shared/roadtrip/hooks/hook-variant';
 import { HOOK_VARIANTS, hookUnmet } from '../../../shared/roadtrip/hooks/registry';
-import SectionLegend from '../../../shared/ui/SectionLegend';
 
 interface HookPickerProps {
   /** The piece's stored layers; the picker writes the first and only the first. */
@@ -37,13 +36,6 @@ export default function HookPicker({ layers, ctx, onChange }: HookPickerProps) {
 
   return (
     <div className="flex flex-col gap-2">
-      <SectionLegend label="Opener">
-        <p>
-          What draws the first slide. The badge is the plain one — the counter and the
-          place over the picture. Another variant may bring its own drawing, its own
-          animation and its own sound, and says so on its card.
-        </p>
-      </SectionLegend>
 
       <div className="flex flex-col gap-1.5">
         {HOOK_VARIANTS.map((variant) => {

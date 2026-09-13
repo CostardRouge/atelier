@@ -5,16 +5,18 @@ import {
   vignetteShade,
   type Shade,
 } from '../../shared/roadtrip/shades';
+import Button from '../../shared/ui/Button';
+import IconButton from '../../shared/ui/IconButton';
+import { FieldRow, RangeField, SelectField, ToggleField } from '../../shared/ui/Inspector';
+import { Icons } from '../../shared/ui/icons';
 
 interface ShadesPanelProps {
   shades: Shade[];
   onChange: (next: Shade[]) => void;
 }
 
-const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
-
 /**
- * The stack of shades laid over a picture.
+ * The stack of shades laid over a picture, as inspector rows.
  *
  * One list rather than a vignette control and a scrim control: they were the
  * same thing seen twice, and keeping them apart made the combinations that
@@ -35,11 +37,11 @@ export default function ShadesPanel({ shades, onChange }: ShadesPanelProps) {
   };
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <>
       {shades.length === 0 && (
         <p className="m-0 text-xs text-muted">
-          The picture is untouched. Add a shade where the type needs help — a
-          bright sky exactly under the hook is the normal case.
+          The picture is untouched. Add a shade where the type needs help — a bright sky
+          exactly under the hook is the normal case.
         </p>
       )}
 
@@ -49,141 +51,103 @@ export default function ShadesPanel({ shades, onChange }: ShadesPanelProps) {
         // so the slider would be a control that does nothing.
         const reachLive = radial || !shade.followHook;
         return (
-          <div
-            key={shade.id}
-            className="flex flex-col gap-2 p-2.5 rounded-paper border border-line bg-paper"
-          >
+          <div key={shade.id} className="flex flex-col gap-2.5 pl-3 border-l-2 border-line">
             <div className="flex items-center gap-2">
-              <span className={`${legend} flex-1`}>Shade {i + 1}</span>
+              <span className="flex-1 text-sm font-medium text-ink">Shade {i + 1}</span>
               <input
                 type="color"
                 value={shade.color}
                 onChange={(e) => patch(shade.id, { color: e.target.value })}
-                className="flex-none w-7 h-7 p-0 border border-line-strong rounded-[5px] bg-paper cursor-pointer"
+                className="flex-none w-8 h-8 p-0 border border-line-strong rounded-[7px] bg-paper cursor-pointer"
                 aria-label={`Shade ${i + 1} colour`}
               />
-              <button
-                type="button"
+              <IconButton
+                size="sm"
+                variant="ghost"
+                label={`Remove shade ${i + 1}`}
                 onClick={() => onChange(shades.filter((s) => s.id !== shade.id))}
-                className="flex-none p-0 border-0 bg-transparent text-xs text-faint cursor-pointer hover:text-danger"
-                aria-label={`Remove shade ${i + 1}`}
               >
-                Remove
-              </button>
+                {Icons.close}
+              </IconButton>
             </div>
-
-            <select
-              value={shade.direction}
-              onChange={(e) =>
-                patch(shade.id, { direction: e.target.value as Shade['direction'] })
-              }
-              className="font-sans text-xs px-2 py-1.5 border border-line-strong rounded-paper bg-paper text-ink cursor-pointer focus:outline-none focus:border-accent"
-              aria-label={`Shade ${i + 1} direction`}
-            >
-              {SHADE_DIRECTIONS.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.label} — {d.hint}
-                </option>
-              ))}
-            </select>
-
-            <label className="flex flex-col gap-0.5">
-              <span className={legend}>
-                Strength · {Math.round(shade.strength * 100)}%
-              </span>
-              <input
-                type="range"
+            <FieldRow label="Direction">
+              <SelectField
+                label={`Shade ${i + 1} direction`}
+                value={shade.direction}
+                onChange={(direction) => patch(shade.id, { direction })}
+                options={SHADE_DIRECTIONS.map((d) => ({ id: d.id, label: `${d.label} — ${d.hint}` }))}
+              />
+            </FieldRow>
+            <FieldRow label="Strength">
+              <RangeField
+                label={`Shade ${i + 1} strength`}
                 min={0}
                 max={1}
                 step={0.02}
                 value={shade.strength}
-                onChange={(e) => patch(shade.id, { strength: Number(e.target.value) })}
-                className="accent-accent"
+                onChange={(strength) => patch(shade.id, { strength })}
+                format={(v) => `${Math.round(v * 100)}%`}
               />
-            </label>
-
-            <label className={`flex flex-col gap-0.5 ${reachLive ? '' : 'opacity-45'}`}>
-              <span className={legend}>
-                {radial ? 'Radius' : 'Reach'} · {Math.round(shade.reach * 100)}%
-              </span>
-              <input
-                type="range"
+            </FieldRow>
+            <FieldRow label={radial ? 'Radius' : 'Reach'}>
+              <RangeField
+                label={`Shade ${i + 1} ${radial ? 'radius' : 'reach'}`}
                 min={0}
                 max={1}
                 step={0.02}
                 value={shade.reach}
                 disabled={!reachLive}
-                onChange={(e) => patch(shade.id, { reach: Number(e.target.value) })}
-                className="accent-accent"
+                onChange={(reach) => patch(shade.id, { reach })}
+                format={(v) => `${Math.round(v * 100)}%`}
               />
-            </label>
-
-            <div className="flex flex-wrap gap-x-4 gap-y-1">
-              <label className="flex items-center gap-2 text-xs text-ink-soft cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={shade.invert}
-                  onChange={(e) => patch(shade.id, { invert: e.target.checked })}
-                  className="accent-accent"
-                />
-                Invert
-              </label>
-              <label className="flex items-center gap-2 text-xs text-ink-soft cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={shade.followHook}
-                  onChange={(e) => patch(shade.id, { followHook: e.target.checked })}
-                  className="accent-accent"
-                />
-                Follow the hook
-              </label>
-            </div>
-            <span className="text-2xs text-faint">
-              {shade.invert
-                ? radial
-                  ? 'Clear in the middle, closing in at the edges.'
-                  : 'Clear at that edge, darkening toward the end of the reach.'
-                : radial
-                  ? 'Dark in the middle, clearing outward.'
-                  : 'Dark at that edge, clearing inward.'}
-              {shade.followHook &&
-                (radial
-                  ? ' Centred on the badge.'
-                  : ' Landing on the badge’s own edge.')}
-            </span>
+            </FieldRow>
+            <FieldRow label="Invert">
+              <ToggleField
+                label={`Invert shade ${i + 1}`}
+                checked={shade.invert}
+                onChange={(invert) => patch(shade.id, { invert })}
+              />
+            </FieldRow>
+            <FieldRow
+              label="Follow hook"
+              hint={
+                <>
+                  {shade.invert
+                    ? radial
+                      ? 'Clear in the middle, closing in at the edges.'
+                      : 'Clear at that edge, darkening toward the end of the reach.'
+                    : radial
+                      ? 'Dark in the middle, clearing outward.'
+                      : 'Dark at that edge, clearing inward.'}
+                  {shade.followHook && (radial ? ' Centred on the badge.' : ' Landing on the badge’s own edge.')}
+                </>
+              }
+            >
+              <ToggleField
+                label={`Shade ${i + 1} follows the hook`}
+                checked={shade.followHook}
+                onChange={(followHook) => patch(shade.id, { followHook })}
+              />
+            </FieldRow>
           </div>
         );
       })}
 
       {shades.length < MAX_SHADES ? (
         <div className="flex flex-wrap gap-1.5">
-          <button
-            type="button"
-            onClick={() => add(createShade())}
-            className="px-2.5 py-1.5 rounded-paper border border-line-strong bg-paper text-xs font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
-          >
-            + Shade
-          </button>
-          <button
-            type="button"
-            onClick={() => add(createShade({ followHook: true }))}
-            className="px-2.5 py-1.5 rounded-paper border border-line bg-paper text-xs text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
-          >
-            + Under the hook
-          </button>
-          <button
-            type="button"
-            onClick={() => add(vignetteShade(0.45))}
-            className="px-2.5 py-1.5 rounded-paper border border-line bg-paper text-xs text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
-          >
-            + Vignette
-          </button>
+          <Button size="sm" icon={Icons.plus} onClick={() => add(createShade())}>
+            Shade
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => add(createShade({ followHook: true }))}>
+            Under the hook
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => add(vignetteShade(0.45))}>
+            Vignette
+          </Button>
         </div>
       ) : (
-        <span className="text-2xs text-faint">
-          Four is the limit — past that it stops being a treatment.
-        </span>
+        <span className="text-xs text-muted">Four is the limit — past that it stops being a treatment.</span>
       )}
-    </div>
+    </>
   );
 }
