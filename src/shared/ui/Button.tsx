@@ -28,9 +28,19 @@ const BASE =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 const SIZES: Record<ButtonSize, string> = {
-  sm: 'h-7 px-2.5 gap-1 text-xs',
-  md: 'h-[2.125rem] px-3.5 gap-1.5 text-sm',
-  lg: 'h-10 px-4 gap-2 text-sm',
+  sm: 'h-7 gap-1 text-xs',
+  md: 'h-[2.125rem] gap-1.5 text-sm',
+  lg: 'h-10 gap-2 text-sm',
+};
+
+// Padding apart from the height, because a SQUARE button (IconButton) takes
+// the height and a width instead — and two `px-*` utilities on one element
+// are resolved by Tailwind's own order, not by which came last, so an
+// override was silently losing to `px-2.5` and squeezing the glyph to 6px.
+const PADDINGS: Record<ButtonSize, string> = {
+  sm: 'px-2.5',
+  md: 'px-3.5',
+  lg: 'px-4',
 };
 
 const VARIANTS: Record<ButtonVariant, string> = {
@@ -51,8 +61,10 @@ export function buttonClass(
   variant: ButtonVariant = 'default',
   size: ButtonSize = 'md',
   extra = '',
+  options: { square?: boolean } = {},
 ): string {
-  return `${BASE} ${SIZES[size]} ${VARIANTS[variant]} ${extra}`.trim();
+  const pad = options.square ? '' : PADDINGS[size];
+  return `${BASE} ${SIZES[size]} ${pad} ${VARIANTS[variant]} ${extra}`.replace(/\s+/g, ' ').trim();
 }
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

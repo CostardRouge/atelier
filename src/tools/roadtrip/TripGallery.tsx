@@ -69,6 +69,8 @@ import Button from '../../shared/ui/Button';
 import LoadingState from '../../shared/ui/LoadingState';
 import EmptyState from '../../shared/ui/EmptyState';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
+import { Icons } from '../../shared/ui/icons';
+import OverflowMenu, { type OverflowItem } from '../../shared/ui/OverflowMenu';
 
 interface TripGalleryProps {
   openTripId: string | null;
@@ -105,9 +107,8 @@ function sourceLabel(id: string): string {
   return id === DEFAULT_SOURCE_ID ? 'this browser' : (sourceById(id)?.label ?? id);
 }
 
-/** One row of the card's overflow menu. */
-const menuItem =
-  'text-left font-sans text-xs text-ink-soft bg-transparent border-0 px-2.5 py-2 rounded-[10px] cursor-pointer hover:bg-paper-2 hover:text-ink';
+/** The trip this browser opened last (`TripCard`'s "last opened" tag). */
+const LAST_OPENED_KEY = 'atelier.roadtrip.lastOpened';
 
 /** The bottom-left caption on a picture cover: which day it is looking at. */
 function tileCaption(tile: CoverTile): string {
@@ -257,6 +258,7 @@ function CoverArt({
 function TripCard({
   trip,
   isOpen,
+  lastOpened,
   remoteOnly,
   moveTargets,
   busy,
@@ -270,6 +272,8 @@ function TripCard({
 }: {
   trip: TripDoc;
   isOpen: boolean;
+  /** The trip this browser opened last — where "resume" would land. */
+  lastOpened: boolean;
   /** Kept on an instance and not yet mirrored here: opening pulls it first. */
   remoteOnly: boolean;
   /** The other sources this trip could be moved to. */
@@ -285,39 +289,46 @@ function TripCard({
   onMove: (targetSourceId: string) => void;
   onChooseCover: () => void;
 }) {
-  const [confirming, setConfirming] = useState<'delete' | 'move' | null>(null);
-  const [menu, setMenu] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [moveTo, setMoveTo] = useState(moveTargets[0]?.id ?? '');
+  const [confirming, setConfirming] = useState<
+    { kind: 'delete' } | { kind: 'move'; to: SourceInfo } | null
+  >(null);
   const compact = useIsCompact();
   const coverage = tripCoverage(trip);
   const total = coverage.totalDays;
   const pct = total > 0 ? Math.round((coverage.toldDays / total) * 100) : 0;
   const tiles = coverTiles(trip, coverage, hasThumb);
 
-  // A menu that only closes on its own items is a menu you cannot dismiss —
-  // but it must not close on a press INSIDE itself: `pointerdown` lands before
-  // `click`, so unmounting there swallows the item you were pressing (every
-  // row silently did nothing but shut the menu).
-  useEffect(() => {
-    if (!menu) return;
-    const close = (e: PointerEvent) => {
-      if (menuRef.current?.contains(e.target as Node)) return;
-      setMenu(false);
-    };
-    window.addEventListener('pointerdown', close);
-    return () => window.removeEventListener('pointerdown', close);
-  }, [menu]);
+  // The card's secondary verbs, behind one ⋯ (`OverflowMenu`): the cover
+  // chooser keeps its own chip on the cover too, because a picker only a menu
+  // offers is a picker nobody finds (entry in `roadtrip.md`).
+  const items: OverflowItem[] = [
+    { id: 'open', label: isOpen ? 'Resume' : remoteOnly ? 'Open here' : 'Open', onSelect: onOpen },
+    { id: 'cover', label: 'Choose a cover…', onSelect: onChooseCover },
+    {
+      id: 'export',
+      label: 'Export the trip file',
+      title: `Save the whole trip as a ${TRIP_FILE_EXTENSION} file`,
+      onSelect: onExport,
+    },
+    ...(!remoteOnly
+      ? moveTargets.map((target) => ({
+          id: `move:${target.id}`,
+          label: `Keep on ${sourceLabel(target.id)}…`,
+          onSelect: () => setConfirming({ kind: 'move', to: target }),
+        }))
+      : []),
+    { id: 'delete', label: 'Delete this trip…', danger: true, onSelect: () => setConfirming({ kind: 'delete' }) },
+  ];
 
   return (
     <div
       // The whole card opens the trip — a card that shows a trip's name, its
-      // dates and how much of it is told is the thing you point at, and the
-      // "Open" button below stays as the keyboard and screen-reader path (and
-      // as the one that says "Resume" or "Open here"). Anything already
-      // interactive keeps its own click, through one guard rather than
-      // `stopPropagation` sprinkled over every control: the confirm rows, the
-      // move select, and the overflow menu's own padding.
+      // dates and how much of it is told is the thing you point at. Anything
+      // already interactive keeps its own click, through one guard rather
+      // than `stopPropagation` sprinkled over every control.
+      role="button"
+      tabIndex={0}
+      aria-label={`Open ${trip.name}`}
       onClick={(e) => {
         if (busy !== null) return;
         if ((e.target as HTMLElement).closest('button, select, input, label, a, [role="menu"]')) {
@@ -325,13 +336,21 @@ function TripCard({
         }
         onOpen();
       }}
-      className={`group flex flex-col bg-surface border rounded-paper-lg shadow-paper-soft overflow-hidden transition-[box-shadow,border-color] duration-300 ease-paper hover:shadow-paper ${
+      onKeyDown={(e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) {
+          e.preventDefault();
+          if (busy === null) onOpen();
+        }
+      }}
+      className={`group relative flex flex-col bg-surface border rounded-paper-lg shadow-paper-soft transition-[box-shadow,border-color] duration-300 ease-paper hover:shadow-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
         busy === null ? 'cursor-pointer' : ''
       } ${isOpen ? 'border-accent' : 'border-line hover:border-line-strong'} ${
         remoteOnly ? 'opacity-75' : ''
       }`}
     >
-      <div className="relative">
+      {/* The card no longer clips (its ⋯ menu opens past its edge), so the
+          cover rounds its own top corners. */}
+      <div className="relative rounded-t-paper-lg overflow-hidden">
         <CoverArt
           trip={trip}
           coverage={coverage}
@@ -339,13 +358,9 @@ function TripCard({
           urls={urls}
           remoteOnly={remoteOnly}
         />
-        {(isOpen || remoteOnly) && trip.cover.layout !== 'none' && (
-          <span
-            className={`absolute top-2.5 right-2.5 px-2 py-[3px] rounded-full border font-mono text-3xs tracking-[0.08em] uppercase bg-[rgba(251,248,241,0.92)] ${
-              isOpen ? 'border-accent text-accent-ink' : 'border-line text-muted'
-            }`}
-          >
-            {isOpen ? 'open' : 'not here yet'}
+        {remoteOnly && trip.cover.layout !== 'none' && (
+          <span className="absolute top-2.5 right-2.5 px-2 py-[3px] rounded-[6px] border font-mono text-3xs tracking-[0.08em] uppercase bg-[rgba(251,248,241,0.92)] border-line text-muted">
+            not here yet
           </span>
         )}
         {/* The cover offers its own verb. It lived only in the overflow menu,
@@ -356,70 +371,77 @@ function TripCard({
           <button
             type="button"
             onClick={onChooseCover}
-            className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line bg-[rgba(251,248,241,0.92)] text-ink-soft font-mono text-3xs tracking-[0.08em] uppercase cursor-pointer opacity-0 transition-opacity duration-200 ease-paper group-hover:opacity-100 focus-visible:opacity-100 hover:border-accent hover:text-accent-ink"
+            className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-control border border-line bg-[rgba(251,248,241,0.94)] text-ink text-xs font-medium cursor-pointer opacity-0 transition-opacity duration-200 ease-paper group-hover:opacity-100 focus-visible:opacity-100 hover:border-accent hover:text-accent-ink"
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <rect
-                x="3.5"
-                y="5.5"
-                width="17"
-                height="13"
-                rx="2"
-                stroke="currentColor"
-                strokeWidth="2"
-              />
-              <path
-                d="M4.5 16.5 9 12.5l3.5 3 3-2.5 4 3.5"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <span className="inline-flex text-sm">{Icons.image}</span>
             Cover
           </button>
         )}
       </div>
 
-      <div className={`flex flex-col ${compact ? 'gap-2 p-3.5' : 'gap-3 p-5'}`}>
-        <div className="min-w-0">
+      <div className={`flex flex-col ${compact ? 'gap-2 p-3.5' : 'gap-2.5 p-4'}`}>
+        <div className="flex items-center gap-2 min-w-0">
           <h3
-            className={`m-0 font-serif truncate ${compact ? 'text-base' : 'text-lg'}`}
+            className={`m-0 min-w-0 font-semibold truncate ${compact ? 'text-sm' : 'text-base'}`}
             title={trip.name}
           >
             {trip.name}
           </h3>
-          <p className="m-0 font-mono text-2xs text-muted truncate">
-            {trip.destination || 'No destination set'}
-          </p>
+          {/* Where you were: the trip this browser opened last, or the one
+              open right now. One tag, never both — "open" wins. */}
+          {(isOpen || lastOpened) && (
+            <span
+              className={`flex-none font-mono text-3xs tracking-[0.08em] uppercase px-1.5 py-[2px] rounded-[6px] ${
+                isOpen ? 'bg-accent-wash text-accent-ink' : 'bg-paper-2 text-muted'
+              }`}
+            >
+              {isOpen ? 'open' : 'last opened'}
+            </span>
+          )}
+          <span className="flex-1" />
+          {busy === null && (
+            <OverflowMenu label={`More actions for ${trip.name}`} items={items} className="-mr-1.5" />
+          )}
         </div>
 
-        {/* The day count moved down to the coverage line: with it here the date
-            line wrapped onto two rows on a narrow card, for a number that
-            belongs beside the days told anyway. */}
-        {/* A truncated date range says nothing — the whole point of the line
-            is the span — so on a phone it steps down a size rather than
-            losing its second half. */}
-        <p
-          className={`m-0 font-mono tabular-nums text-muted truncate ${
-            compact ? 'text-3xs' : 'text-2xs'
-          }`}
-        >
-          {formatIsoDate(trip.startDate)} → {formatIsoDate(trip.endDate)}
+        {/* The span and the destination on one line; an empty destination is
+            not drawn — a field with nothing in it is not a fact. */}
+        <p className={`m-0 text-muted truncate ${compact ? 'text-2xs' : 'text-xs'}`}>
+          <span className="font-mono tabular-nums">
+            {formatIsoDate(trip.startDate)} → {formatIsoDate(trip.endDate)}
+          </span>
+          {trip.destination && (
+            <>
+              <span className="text-faint"> · </span>
+              {trip.destination}
+            </>
+          )}
         </p>
 
         {/* Progress reads as "how much of the trip has been told", which is the
             number the maintainer actually tracks — not how many files exist. */}
         <div>
-          <div className="h-[6px] rounded-full bg-paper-2 overflow-hidden">
+          <div className="h-[5px] rounded-full bg-paper-2 overflow-hidden">
             <div
               className="h-full bg-accent transition-[width] duration-500 ease-paper"
               style={{ width: `${pct}%` }}
             />
           </div>
-          <p className="m-0 mt-1.5 font-mono text-2xs text-muted tabular-nums">
-            {coverage.toldDays} of {total} day{total === 1 ? '' : 's'} told
-            <span className="text-faint"> · </span>
-            {coverage.publishedPosts} published
+          <p className="m-0 mt-1.5 text-xs text-ink-soft tabular-nums">
+            <span className="font-mono">{coverage.toldDays}</span> / {total} day
+            {total === 1 ? '' : 's'} told
+            {coverage.publishedPosts > 0 && (
+              <>
+                <span className="text-faint"> · </span>
+                {coverage.publishedPosts} published
+              </>
+            )}
+            {coverage.toldDays > 0 && coverage.longestGap && coverage.longestGap.length >= 3 && (
+              <>
+                <span className="text-faint"> · </span>
+                <span className="text-accent-ink">{coverage.longestGap.length} of silence</span>
+              </>
+            )}
           </p>
         </div>
 
@@ -428,172 +450,43 @@ function TripCard({
             {busy}
           </p>
         )}
-
-        <div className="relative flex items-center gap-3 pt-1 flex-wrap">
-          <button
-            type="button"
-            onClick={onOpen}
-            disabled={busy !== null}
-            className="px-3.5 py-[0.45rem] inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-xs font-semibold transition-colors duration-200 ease-paper hover:bg-accent hover:border-accent disabled:opacity-50"
-          >
-            {isOpen ? 'Resume' : remoteOnly ? 'Open here' : 'Open'}
-          </button>
-          <span className="flex-1" />
-
-          {/* With no cover there is no cover zone to hang the chip on, and a
-              layout that draws nothing must never be a one-way door. The verb
-              moves into the row instead — the trip's details sheet holds the
-              same panel, so this is the second way back, not the only one. */}
-          {trip.cover.layout === 'none' && confirming === null && busy === null && (
-            <button
-              type="button"
-              onClick={onChooseCover}
-              className="p-0 border-0 bg-transparent font-mono text-3xs tracking-[0.08em] uppercase text-faint cursor-pointer opacity-0 transition-opacity duration-200 ease-paper group-hover:opacity-100 focus-visible:opacity-100 hover:text-accent-ink"
-            >
-              Cover
-            </button>
-          )}
-
-          {confirming === null && busy === null && (
-            <button
-              type="button"
-              aria-label={`More actions for ${trip.name}`}
-              aria-expanded={menu}
-              aria-haspopup="menu"
-              onClick={(e) => {
-                // The window listener that closes it would swallow this click.
-                e.stopPropagation();
-                setMenu((open) => !open);
-              }}
-              className={`w-[30px] h-[30px] inline-flex items-center justify-center rounded-full border bg-transparent cursor-pointer transition-colors ${
-                menu
-                  ? 'border-line-strong bg-paper-2 text-ink'
-                  : 'border-transparent text-faint hover:border-line hover:bg-paper hover:text-ink-soft'
-              }`}
-            >
-              <svg width="16" height="16" viewBox="0 0 20 20" aria-hidden="true">
-                <circle cx="4" cy="10" r="1.5" fill="currentColor" />
-                <circle cx="10" cy="10" r="1.5" fill="currentColor" />
-                <circle cx="16" cy="10" r="1.5" fill="currentColor" />
-              </svg>
-            </button>
-          )}
-
-          {menu && (
-            <div
-              ref={menuRef}
-              role="menu"
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') setMenu(false);
-              }}
-              className="absolute right-0 bottom-full mb-2 z-10 w-[13rem] flex flex-col p-1.5 bg-surface border border-line-strong rounded-paper shadow-paper"
-            >
-              <button
-                type="button"
-                role="menuitem"
-                className={menuItem}
-                onClick={() => {
-                  setMenu(false);
-                  onChooseCover();
-                }}
-              >
-                Choose a cover…
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className={menuItem}
-                onClick={() => {
-                  setMenu(false);
-                  onExport();
-                }}
-                title={`Save the whole trip as a ${TRIP_FILE_EXTENSION} file`}
-              >
-                Export the trip file
-              </button>
-              {moveTargets.length > 0 && !remoteOnly && (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className={menuItem}
-                  onClick={() => {
-                    setMenu(false);
-                    setConfirming('move');
-                  }}
-                >
-                  Keep on another source…
-                </button>
-              )}
-              <span className="h-px bg-line mx-2 my-1.5" />
-              <button
-                type="button"
-                role="menuitem"
-                className={`${menuItem} text-danger hover:bg-accent-wash`}
-                onClick={() => {
-                  setMenu(false);
-                  setConfirming('delete');
-                }}
-              >
-                Delete this trip
-              </button>
-            </div>
-          )}
-
-          {confirming === 'delete' && (
-            <ConfirmDialog
-              title={`Delete “${trip.name}”?`}
-              confirmLabel="Delete"
-              danger
-              onCancel={() => setConfirming(null)}
-              onConfirm={() => {
-                setConfirming(null);
-                onDelete();
-              }}
-            >
-              <p>
-                Its days, stages and pieces go with it, for good. An exported
-                .roadtrip.json is the only copy that would survive.
-              </p>
-            </ConfirmDialog>
-          )}
-          {confirming === 'move' && (
-            <span className="flex items-center gap-2 text-xs flex-wrap">
-              <label className="inline-flex items-center gap-1.5 text-muted">
-                to
-                <select
-                  value={moveTo}
-                  onChange={(e) => setMoveTo(e.target.value)}
-                  className="font-sans text-xs px-2 py-0.5 border border-line rounded-full bg-paper text-ink focus:outline-none focus:border-accent"
-                  aria-label="Move this trip to"
-                >
-                  {moveTargets.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {sourceLabel(s.id)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                onClick={() => {
-                  setConfirming(null);
-                  if (moveTo) onMove(moveTo);
-                }}
-                className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px]"
-              >
-                Move
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirming(null)}
-                className="p-0 border-0 bg-transparent text-muted cursor-pointer"
-              >
-                Cancel
-              </button>
-            </span>
-          )}
-        </div>
       </div>
+
+      {confirming?.kind === 'delete' && (
+        <ConfirmDialog
+          title={`Delete “${trip.name}”?`}
+          confirmLabel="Delete"
+          danger
+          onCancel={() => setConfirming(null)}
+          onConfirm={() => {
+            setConfirming(null);
+            onDelete();
+          }}
+        >
+          <p>
+            Its days, stages and pieces go with it, for good. An exported
+            .roadtrip.json is the only copy that would survive.
+          </p>
+        </ConfirmDialog>
+      )}
+      {confirming?.kind === 'move' && (
+        <ConfirmDialog
+          title={`Keep “${trip.name}” on ${sourceLabel(confirming.to.id)}?`}
+          confirmLabel="Move"
+          cancelLabel="Cancel"
+          onCancel={() => setConfirming(null)}
+          onConfirm={() => {
+            const to = confirming.to.id;
+            setConfirming(null);
+            onMove(to);
+          }}
+        >
+          <p>
+            The trip will be kept there from now on and resume from any device
+            connected to it. Its pictures never travel with it.
+          </p>
+        </ConfirmDialog>
+      )}
     </div>
   );
 }
@@ -618,6 +511,25 @@ export default function TripGallery({
 }: TripGalleryProps) {
   const [trips, setTrips] = useState<TripDoc[] | null>(null);
   const [creating, setCreating] = useState(false);
+  // Where you were: the trip this browser opened last, so the gallery can
+  // point at it when nothing is open. A reading preference of this browser —
+  // never on the document, never in the file.
+  const [lastOpenedId, setLastOpenedId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(LAST_OPENED_KEY);
+    } catch {
+      return null;
+    }
+  });
+  useEffect(() => {
+    if (!openTripId) return;
+    setLastOpenedId(openTripId);
+    try {
+      localStorage.setItem(LAST_OPENED_KEY, openTripId);
+    } catch {
+      /* private mode: the tag is a convenience */
+    }
+  }, [openTripId]);
   const [importing, setImporting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [remoteLists, setRemoteLists] = useState<Record<string, RemoteList>>({});
@@ -900,25 +812,27 @@ export default function TripGallery({
           the same verb twice on one screen — so the row itself goes with them
           rather than leaving an empty one above the cards. */}
       {!compact && (
-        <div className="flex items-center justify-end gap-4 flex-wrap">
-          <button
-            type="button"
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="font-serif text-2xl leading-none" aria-hidden="true">
+            Trips
+          </span>
+          {trips !== null && (
+            <span className="font-mono text-xs text-muted tabular-nums">{trips.length}</span>
+          )}
+          <span className="flex-1" />
+          <Button
             onClick={() => {
               if (documentSources.length > 1) setImporting(true);
               else void handleImport(DEFAULT_SOURCE_ID);
             }}
-            className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-line-strong rounded-full bg-paper text-ink-soft cursor-pointer text-sm transition-colors hover:border-accent hover:text-accent-ink"
+            icon={Icons.import}
             title={`Create a trip from an exported file (${TRIP_FILE_EXTENSION})`}
           >
-            ↑ Import a trip file
-          </button>
-          <button
-            type="button"
-            onClick={() => setCreating(true)}
-            className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent active:scale-[0.98]"
-          >
-            + New trip
-          </button>
+            Import
+          </Button>
+          <Button variant="primary" onClick={() => setCreating(true)} icon={Icons.plus}>
+            New trip
+          </Button>
         </div>
       )}
 
@@ -1008,6 +922,7 @@ export default function TripGallery({
                         key={trip.id}
                         trip={trip}
                         isOpen={trip.id === openTripId}
+                        lastOpened={openTripId === null && trip.id === lastOpenedId}
                         remoteOnly={false}
                         moveTargets={moveTargets}
                         busy={busy[trip.id] ?? null}
@@ -1025,6 +940,7 @@ export default function TripGallery({
                         key={row.doc.id}
                         trip={row.doc}
                         isOpen={false}
+                        lastOpened={false}
                         remoteOnly
                         moveTargets={[]}
                         busy={busy[row.doc.id] ?? null}
