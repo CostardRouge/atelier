@@ -37,6 +37,8 @@ interface ElementPaletteProps {
    */
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Drawn inside a host that owns the header and the fold (an `InspectorSection`). */
+  bare?: boolean;
 }
 
 const STAGE_FADE =
@@ -268,9 +270,11 @@ export default function ElementPalette({
   onAdd,
   open,
   onOpenChange,
+  bare = false,
 }: ElementPaletteProps) {
   return (
     <div className="flex flex-col gap-2">
+      {!bare && (
       <button
         type="button"
         onClick={() => onOpenChange(!open)}
@@ -282,6 +286,7 @@ export default function ElementPalette({
         </span>
         Add an element
       </button>
+      )}
 
       {open &&
         PALETTE_GROUPS.map((group) => (

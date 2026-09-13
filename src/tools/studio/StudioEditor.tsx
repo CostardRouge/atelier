@@ -99,7 +99,6 @@ import { useOverlayStage } from '../../shared/overlay/use-overlay-stage';
 import { useLutStack } from '../../shared/lut/use-lut-stack';
 import GradePanel from '../../shared/lut/GradePanel';
 import DevelopSheet from '../../shared/develop/DevelopSheet';
-import SectionLegend from '../../shared/ui/SectionLegend';
 import { describeDevelop, type DevelopSettings } from '../../shared/develop/develop';
 import { pictureFidelity } from '../../shared/develop/picture-fidelity';
 import { restoreDevelop, saveDevelop, type SavedDevelop } from '../../shared/projects/media-develop';
@@ -135,6 +134,9 @@ import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useLearnedGesture } from '../../shared/ui/use-learned-gesture';
 import { Icons } from '../../shared/ui/icons';
 import { useSurface } from '../../shared/ui/use-surface';
+import { FieldRow, InspectorSection, Readout, SelectField, ToggleField } from '../../shared/ui/Inspector';
+import IconButton from '../../shared/ui/IconButton';
+import Segmented from '../../shared/ui/Segmented';
 
 /**
  * Clips with or without telemetry, and stills — the studio edits all three.
@@ -1381,21 +1383,6 @@ export default function StudioEditor({
   const selectedScene = findScene(scenes, selectedElement?.sceneId);
   const hasTelemetry = cues.length > 0;
 
-  const tabButton = (t: { id: PanelTab; label: string }) => (
-    <button
-      key={t.id}
-      type="button"
-      onClick={() => setTab(t.id)}
-      className={`flex-1 px-2 py-[0.45rem] font-mono text-2xs tracking-[0.14em] uppercase rounded-full cursor-pointer transition-colors ${
-        tab === t.id
-          ? 'bg-ink text-paper'
-          : 'bg-transparent text-muted hover:text-accent-ink'
-      }`}
-      aria-pressed={tab === t.id}
-    >
-      {t.label}
-    </button>
-  );
 
   /**
    * The local save state, drawn the way `SyncPill` draws the remote one: a
@@ -1905,64 +1892,64 @@ export default function StudioEditor({
             className="flex flex-col gap-3 @min-[800px]:w-[340px] flex-none min-h-0 @max-[800px]:max-h-[45dvh] border border-line rounded-paper bg-surface p-3"
           >
             {!compact && (
-              <div
-                className="flex gap-1 p-1 rounded-full bg-paper border border-line flex-none"
-                role="tablist"
-                aria-label="Inspector"
-              >
-                {TABS.map(tabButton)}
-              </div>
+              <Segmented
+                fill
+                label="Inspector"
+                value={tab}
+                onChange={setTab}
+                options={TABS}
+                className="flex-none"
+              />
             )}
 
-            <div className="flex flex-col gap-3 flex-1 min-h-0 overflow-auto">
+            <div className="flex flex-col flex-1 min-h-0 overflow-auto pr-0.5">
               {tab === 'overlay' && (
                 <>
-                  <ElementPalette
-                    elements={elements}
-                    cue={activeCue}
-                    theme={theme}
-                    timeShift={timeShift}
-                    onAdd={addElement}
+                  <InspectorSection
+                    id="studio.palette"
+                    title="Add an element"
                     open={paletteOpen}
                     onOpenChange={setPaletteOpen}
-                  />
+                  >
+                    <ElementPalette
+                      elements={elements}
+                      cue={activeCue}
+                      theme={theme}
+                      timeShift={timeShift}
+                      onAdd={addElement}
+                      open={paletteOpen}
+                      onOpenChange={setPaletteOpen}
+                      bare
+                    />
+                  </InspectorSection>
 
                   {introScene && (
-                    <div className="pt-3 border-t border-line flex flex-col gap-2">
-                      <h2 className="m-0 flex items-baseline gap-2 font-mono text-2xs font-medium uppercase tracking-[0.16em] text-muted">
-                        {introScene.name}
-                        <span className="ml-auto normal-case tracking-normal text-2xs text-faint tabular-nums">
-                          {introScene.start.toFixed(1)}–{introScene.end.toFixed(1)} s
-                        </span>
-                      </h2>
+                    <InspectorSection
+                      id="studio.scene"
+                      title={introScene.name}
+                      badge={`${introScene.start.toFixed(1)}–${introScene.end.toFixed(1)} s`}
+                    >
                       <ScenePanel
                         scene={introScene}
-                        memberCount={
-                          elements.filter((e) => e.sceneId === introScene.id).length
-                        }
+                        memberCount={elements.filter((e) => e.sceneId === introScene.id).length}
                         playhead={playhead}
                         onChange={(next) =>
-                          setScenes((prev) =>
-                            prev.map((sc) => (sc.id === next.id ? next : sc)),
-                          )
+                          setScenes((prev) => prev.map((sc) => (sc.id === next.id ? next : sc)))
                         }
                         onRemove={() => removeScene(introScene.id)}
                       />
-                    </div>
+                    </InspectorSection>
                   )}
 
                   {/* The outro — intro · footage · closing card. The stage
                       cannot show it (the playhead cannot travel past the
                       clip), so the block carries its own preview. */}
-                  <div className="pt-3 border-t border-line flex flex-col gap-2">
-                    <h2 className="m-0 flex items-baseline gap-2 font-mono text-2xs font-medium uppercase tracking-[0.16em] text-muted">
-                      Outro
-                      {outro && (
-                        <span className="ml-auto normal-case tracking-normal text-2xs text-faint tabular-nums">
-                          + {outro.seconds.toFixed(1)} s after the footage
-                        </span>
-                      )}
-                    </h2>
+                  <InspectorSection
+                    id="studio.outro"
+                    title="Outro"
+                    badge={outro ? `+ ${outro.seconds.toFixed(1)} s` : undefined}
+                    info={<p>A closing card the export keeps encoding after the footage — appended, never over it.</p>}
+                  >
                     {outro ? (
                       <OutroPanel
                         outro={outro}
@@ -1971,303 +1958,260 @@ export default function StudioEditor({
                         onRemove={() => setOutro(null)}
                       />
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => setOutro(createOutroCard(projectName.trim() || 'Merci'))}
-                        className="self-start p-0 border-0 bg-transparent text-xs text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] hover:text-accent"
-                      >
-                        Add an outro — a closing card after the footage
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="pt-3 border-t border-line flex flex-col gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setListOpen((o) => !o)}
-                      aria-expanded={listOpen}
-                      className="flex items-center gap-1.5 p-0 border-0 bg-transparent text-accent-ink font-semibold text-sm cursor-pointer hover:text-accent"
-                    >
-                      <span aria-hidden="true" className="inline-flex text-xs">
-                        {listOpen ? Icons.down : Icons.chevronRight}
-                      </span>
-                      Elements
-                      <span className="ml-auto font-mono text-2xs tabular-nums text-muted">
-                        {elements.length}
-                      </span>
-                    </button>
-                    {/*
-                      Capped and scrollable rather than free-growing: a deck of
-                      fifteen readouts used to push the style panel off the
-                      bottom of the inspector.
-                    */}
-                    {listOpen && (
-                      <div className="max-h-[15rem] overflow-y-auto overscroll-contain -mx-1 px-1">
-                        <ElementList
-                          elements={elements}
-                          selectedId={selectedElementId}
-                          cue={activeCue}
-                          timeShift={timeShift}
-                          onSelect={selectElement}
-                          onRemove={removeElement}
-                          onToggleVisible={toggleVisible}
-                        />
-                      </div>
-                    )}
-
-                    {/* The starter deck: an offer when there is nothing to
-                        lose, a two-step confirm once there is. */}
-                    {elements.length === 0 ? (
-                      <button
-                        type="button"
-                        onClick={loadDefaultDeck}
-                        className="self-start p-0 border-0 bg-transparent text-xs text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] hover:text-accent"
-                      >
-                        Start from the default deck
-                      </button>
-                    ) : resettingDeck ? (
-                      <span className="flex flex-wrap items-center gap-2 text-xs text-muted">
-                        Replace {elements.length} element
-                        {elements.length > 1 ? 's' : ''} with the default deck?
-                        <button
-                          type="button"
-                          onClick={loadDefaultDeck}
-                          className="p-0 border-0 bg-transparent text-danger font-semibold cursor-pointer underline underline-offset-[3px]"
+                      <FieldRow label="Card">
+                        <Button
+                          size="sm"
+                          icon={Icons.plus}
+                          onClick={() => setOutro(createOutroCard(projectName.trim() || 'Merci'))}
                         >
-                          Reset
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setResettingDeck(false)}
-                          className="p-0 border-0 bg-transparent text-muted cursor-pointer"
-                        >
-                          Keep
-                        </button>
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setResettingDeck(true)}
-                        className="self-start p-0 border-0 bg-transparent text-xs text-faint cursor-pointer hover:text-danger"
-                      >
-                        Reset deck
-                      </button>
+                          Add an outro
+                        </Button>
+                      </FieldRow>
                     )}
-                  </div>
+                  </InspectorSection>
+
+                  <InspectorSection
+                    id="studio.elements"
+                    title="Elements"
+                    badge={String(elements.length)}
+                    open={listOpen}
+                    onOpenChange={setListOpen}
+                    actions={
+                      elements.length === 0 ? (
+                        <Button size="sm" variant="ghost" onClick={loadDefaultDeck}>
+                          Default deck
+                        </Button>
+                      ) : resettingDeck ? (
+                        <span className="flex items-center gap-1">
+                          <Button size="sm" variant="danger" onClick={loadDefaultDeck}>
+                            Reset
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setResettingDeck(false)}>
+                            Keep
+                          </Button>
+                        </span>
+                      ) : (
+                        <Button size="sm" variant="ghost" onClick={() => setResettingDeck(true)}>
+                          Reset deck
+                        </Button>
+                      )
+                    }
+                  >
+                    {resettingDeck && elements.length > 0 && (
+                      <p className="m-0 text-xs text-muted">
+                        Replace {elements.length} element{elements.length > 1 ? 's' : ''} with the
+                        default deck?
+                      </p>
+                    )}
+                    {/* Capped and scrollable rather than free-growing: a deck
+                        of fifteen readouts used to push the style panel off
+                        the bottom of the inspector. */}
+                    <div className="max-h-[15rem] overflow-y-auto overscroll-contain -mx-1 px-1">
+                      <ElementList
+                        elements={elements}
+                        selectedId={selectedElementId}
+                        cue={activeCue}
+                        timeShift={timeShift}
+                        onSelect={selectElement}
+                        onRemove={removeElement}
+                        onToggleVisible={toggleVisible}
+                      />
+                    </div>
+                  </InspectorSection>
 
                   {selectedElement && (
-                    <div ref={elementPanelRef} className="pt-3 border-t border-line scroll-mt-2">
-                      <h2 className="m-0 mb-2 flex items-baseline gap-2 font-mono text-2xs font-medium uppercase tracking-[0.16em] text-muted">
-                        Style
-                        <span className="ml-auto normal-case tracking-normal text-2xs text-faint">
-                          Delete removes it
-                        </span>
-                      </h2>
-                      <ElementPanel
-                        element={selectedElement}
-                        theme={theme}
-                        onChange={(patch) =>
-                          updateElement(selectedElement.id, patch)
-                        }
-                      />
-
-                      <h2 className="m-0 mt-3 mb-2 pt-3 border-t border-line flex items-baseline gap-2 font-mono text-2xs font-medium uppercase tracking-[0.16em] text-muted">
-                        Timing
-                      </h2>
-                      <TimingPanel
-                        element={selectedElement}
-                        scene={selectedScene}
-                        playhead={playhead}
-                        onChange={(patch) =>
-                          updateElement(selectedElement.id, patch)
-                        }
-                      />
+                    <div ref={elementPanelRef} className="scroll-mt-2 flex flex-col">
+                      <InspectorSection
+                        id="studio.element-style"
+                        title="Element style"
+                        info={<p>The selected element’s own look. Delete removes it.</p>}
+                      >
+                        <ElementPanel
+                          element={selectedElement}
+                          theme={theme}
+                          onChange={(patch) => updateElement(selectedElement.id, patch)}
+                        />
+                      </InspectorSection>
+                      <InspectorSection id="studio.element-timing" title="Timing">
+                        <TimingPanel
+                          element={selectedElement}
+                          scene={selectedScene}
+                          playhead={playhead}
+                          onChange={(patch) => updateElement(selectedElement.id, patch)}
+                        />
+                      </InspectorSection>
                     </div>
                   )}
 
-                  <div className="pt-3 border-t border-line flex flex-wrap items-center gap-2">
-                    <GuidesControl
-                      guides={guides}
-                      onChange={setGuides}
-                      frameAspect={frameAspect}
-                    />
-                  </div>
+                  <InspectorSection id="studio.guides" title="Guides">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <GuidesControl guides={guides} onChange={setGuides} frameAspect={frameAspect} />
+                    </div>
+                  </InspectorSection>
                 </>
               )}
 
               {tab === 'style' && (
-                <StylePanel theme={theme} onChange={setTheme} />
+                <InspectorSection
+                  id="studio.title-style"
+                  title="Title style"
+                  info={
+                    <p>
+                      One look for every title and readout of the project; an element can
+                      still depart from it on its own style.
+                    </p>
+                  }
+                >
+                  <StylePanel theme={theme} onChange={setTheme} heading={<></>} />
+                </InspectorSection>
               )}
 
               {tab === 'grade' && (
                 <>
                   {/* The media's own CORRECTION, one settled row at the TOP:
                       correction before look, on screen as in the cube. The
-                      sliders live in the sheet, not here — no sixth tab, and
-                      no nine more controls in a 340px column. */}
-                  <div className="flex flex-col gap-2 pb-3 border-b border-line">
-                    <SectionLegend label="Develop">
+                      sliders live in the sheet, not here. */}
+                  <InspectorSection
+                    id="studio.develop"
+                    title="Develop"
+                    info={
                       <p>
-                        This media’s own correction — exposure, tone, colour —
-                        applied before every look below. It belongs to this
-                        picture or clip and is kept with the project’s media,
-                        never in a project file.
+                        This media’s own correction — exposure, tone, colour — applied before
+                        every look below. It belongs to this picture or clip and is kept with
+                        the project’s media, never in a project file.
                       </p>
-                    </SectionLegend>
-                    <div className="flex items-center gap-2 min-w-0">
+                    }
+                  >
+                    <FieldRow label="Correction">
                       <span
-                        className={`flex-1 min-w-0 truncate font-mono text-2xs ${
-                          activeDevelop ? 'text-ink-soft' : 'text-faint'
+                        className={`flex-1 min-w-0 truncate font-mono text-xs ${
+                          activeDevelop ? 'text-ink-soft' : 'text-muted'
                         }`}
                         title={describeDevelop(activeDevelop)}
                       >
                         {describeDevelop(activeDevelop)}
                       </span>
-                      <button
-                        type="button"
+                      {activeDevelop && (
+                        <IconButton size="sm" variant="ghost" label="Back to as shot" onClick={() => setActiveDevelop(null)}>
+                          {Icons.reset}
+                        </IconButton>
+                      )}
+                      <Button
+                        size="sm"
                         onClick={() => {
                           setDevelopAt(videoRef.current?.currentTime ?? 0);
                           setDevelopOpen(true);
                         }}
                         disabled={!activeFile}
                         title="Open the Develop sheet"
-                        className="px-2.5 py-1.5 rounded-paper border border-accent bg-paper text-xs font-semibold text-accent-ink cursor-pointer hover:bg-accent-wash disabled:opacity-50 disabled:cursor-default"
                       >
                         Develop…
-                      </button>
-                      {activeDevelop && (
-                        <button
-                          type="button"
-                          onClick={() => setActiveDevelop(null)}
-                          title="Back to as shot"
-                          aria-label="Back to as shot"
-                          className="w-6 h-6 grid place-items-center rounded-full border border-line bg-transparent text-xs text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
-                        >
-                          ↺
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <GradePanel stack={lutStack} />
+                      </Button>
+                    </FieldRow>
+                  </InspectorSection>
+                  <InspectorSection id="studio.grade" title="Grade">
+                    <GradePanel stack={lutStack} />
+                  </InspectorSection>
                 </>
               )}
 
               {tab === 'info' && (
-                <InfoPanel
-                  baseName={active.baseName}
-                  file={activeImage ?? activeVideo}
-                  detail={activeDetail}
-                  duration={duration}
-                  cues={cues}
-                  cue={activeCue}
-                  timing={timing}
-                  scale={scale}
-                  overridden={overridden}
-                  photo={isPhoto ? (photoExif ?? {}) : null}
-                />
+                <InspectorSection id="studio.info" title="This media">
+                  <InfoPanel
+                    baseName={active.baseName}
+                    file={activeImage ?? activeVideo}
+                    detail={activeDetail}
+                    duration={duration}
+                    cues={cues}
+                    cue={activeCue}
+                    timing={timing}
+                    scale={scale}
+                    overridden={overridden}
+                    photo={isPhoto ? (photoExif ?? {}) : null}
+                  />
+                </InspectorSection>
               )}
 
               {tab === 'export' && (
-                <div className="flex flex-col gap-3.5">
-                  <label className="flex flex-col gap-1">
-                    <span className="font-mono text-2xs tracking-[0.12em] uppercase text-muted">
-                      File name
-                    </span>
-                    <input
-                      type="text"
-                      value={exportFileName}
-                      onChange={(e) => setExportFileName(e.target.value)}
-                      placeholder={active.baseName}
-                      className="font-sans text-sm px-3 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
-                    />
-                  </label>
-
-                  <div className="flex flex-col gap-1">
-                    <span className="font-mono text-2xs tracking-[0.12em] uppercase text-muted">
-                      Destination
-                    </span>
-                    <div className="flex items-center gap-2 min-w-0">
+                <>
+                  <InspectorSection id="studio.export.output" title="Output">
+                    <FieldRow label="File name">
+                      <input
+                        type="text"
+                        value={exportFileName}
+                        onChange={(e) => setExportFileName(e.target.value)}
+                        placeholder={active.baseName}
+                        aria-label="File name"
+                        className="w-full font-sans text-sm h-[2.125rem] px-3 border border-line-strong rounded-control bg-paper text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+                      />
+                    </FieldRow>
+                    <FieldRow
+                      label="Destination"
+                      hint={canWriteToDisk() ? undefined : 'Downloads — folder writing needs Chromium.'}
+                    >
                       {canWriteToDisk() ? (
                         <>
-                          <button
-                            type="button"
+                          <Readout muted={!destDir}>{destDir ? destDir.name : 'Downloads'}</Readout>
+                          <span className="flex-1" />
+                          {destDir && (
+                            <Button size="sm" variant="ghost" onClick={() => setDestDir(null)}>
+                              Downloads
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
                             onClick={() => {
                               void pickWritableDirectory()
                                 .then(setDestDir)
                                 .catch(() => undefined);
                             }}
-                            className="flex-none px-3 py-[0.35rem] rounded-full border border-line-strong bg-paper text-xs font-semibold text-ink cursor-pointer hover:border-accent"
                           >
-                            {destDir ? 'Change folder…' : 'Choose folder…'}
-                          </button>
-                          <span className="min-w-0 truncate text-xs text-muted">
-                            {destDir ? destDir.name : 'Downloads'}
-                          </span>
-                          {destDir && (
-                            <button
-                              type="button"
-                              onClick={() => setDestDir(null)}
-                              className="flex-none p-0 border-0 bg-transparent text-xs text-faint cursor-pointer hover:text-accent-ink underline underline-offset-[2px]"
-                            >
-                              use downloads
-                            </button>
-                          )}
+                            {destDir ? 'Change…' : 'Folder…'}
+                          </Button>
                         </>
                       ) : (
-                        <span className="text-xs text-muted">
-                          Downloads — folder writing needs Chromium.
-                        </span>
+                        <Readout muted>Downloads</Readout>
                       )}
-                    </div>
-                  </div>
-
-                  {proxyWithOriginal && (
-                    <div className={`${noticeMuted} m-0 flex flex-col gap-1.5`}>
-                      <span>
-                        You are editing on {proxyWithOriginal.sourceId}&apos;s proxy
-                        {srcH ? ` (${srcH}p)` : ''}
-                        {willFetchOriginal
-                          ? ' — the export fetches the original first, so the deliverables are full quality.'
-                          : ' — and delivering from it, so the deliverables are proxy quality.'}
-                      </span>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
+                    </FieldRow>
+                    {proxyWithOriginal && (
+                      <FieldRow
+                        label="From proxy"
+                        hint={
+                          <>
+                            You are editing on {proxyWithOriginal.sourceId}&apos;s proxy
+                            {srcH ? ` (${srcH}p)` : ''}
+                            {willFetchOriginal
+                              ? ' — the export fetches the original first, so the deliverables are full quality.'
+                              : ' — and delivering from it: faster, nothing large crosses the network, proxy quality.'}
+                          </>
+                        }
+                      >
+                        <ToggleField
+                          label="Render from the proxy"
                           checked={renderFromProxy}
-                          onChange={(e) => setRenderFromProxy(e.target.checked)}
-                          className="w-[15px] h-[15px] accent-ink cursor-pointer"
-                        />
-                        <span className="text-xs">
-                          Render from the proxy — faster, and nothing large crosses the
-                          network. For a quick look, not for delivery.
-                        </span>
-                      </label>
-                    </div>
-                  )}
+                          onChange={setRenderFromProxy}
+                        >
+                          For a quick look
+                        </ToggleField>
+                      </FieldRow>
+                    )}
+                  </InspectorSection>
 
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-2xs tracking-[0.12em] uppercase text-muted">
-                      Variants · {variants.length}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={addVariant}
-                      className="p-0 border-0 bg-transparent text-xs text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] hover:text-accent"
-                    >
-                      + Add variant
-                    </button>
-                  </div>
-
-                  <div className="flex flex-col gap-2">
-                    {variants.map((v) => {
-                      const dims =
-                        exportW && exportH ? variantOutputSize(v, exportW, exportH) : null;
+                  <InspectorSection
+                    id="studio.export.variants"
+                    title="Variants"
+                    badge={String(variants.length)}
+                    actions={
+                      <Button size="sm" variant="ghost" icon={Icons.plus} onClick={addVariant}>
+                        Variant
+                      </Button>
+                    }
+                  >
+                    {variants.map((v, index) => {
+                      const dims = exportW && exportH ? variantOutputSize(v, exportW, exportH) : null;
                       // A variant never upscales, so asking for more than the
                       // source holds silently delivers less. Say which.
-                      const short =
-                        exportW && exportH
-                          ? resolutionShortfall(v, exportW, exportH)
-                          : null;
+                      const short = exportW && exportH ? resolutionShortfall(v, exportW, exportH) : null;
                       const stats = variantStats[v.id];
                       const fileName = variantFileName(
                         exportFileName.trim() || active.baseName,
@@ -2275,167 +2219,132 @@ export default function StudioEditor({
                         isPhoto ? 'photo' : 'video',
                       );
                       return (
-                        <div
-                          key={v.id}
-                          className="flex flex-col gap-2 border border-line rounded-paper bg-paper px-2.5 py-2"
-                        >
+                        <div key={v.id} className="flex flex-col gap-2 pl-3 border-l-2 border-line">
                           <div className="flex items-center gap-2">
-                            <select
-                              className="flex-1 min-w-0 font-sans text-xs px-2 py-[0.35rem] border border-line-strong rounded-paper bg-surface text-ink cursor-pointer focus:outline-none focus:border-accent"
-                              value={v.aspectId}
-                              onChange={(e) => updateVariant(v.id, { aspectId: e.target.value })}
-                              aria-label="Variant format"
-                            >
-                              <option value="source">Source frame</option>
-                              {ASPECT_PRESETS.map((a) => (
-                                <option key={a.id} value={a.id}>
-                                  {a.id} — {a.label}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              type="button"
+                            <span className="flex-1 min-w-0 text-sm font-medium text-ink">Variant {index + 1}</span>
+                            <IconButton
+                              size="sm"
+                              variant="ghost"
+                              label="Remove this variant"
                               onClick={() => removeVariant(v.id)}
                               disabled={variants.length <= 1}
-                              className="flex-none w-6 h-6 grid place-items-center rounded-full border border-line bg-transparent text-faint cursor-pointer hover:text-danger hover:border-danger-line disabled:opacity-30 disabled:cursor-default"
-                              aria-label="Remove variant"
-                              title="Remove this variant"
                             >
-                              ×
-                            </button>
+                              {Icons.close}
+                            </IconButton>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <select
-                              className="flex-1 min-w-0 font-sans text-xs px-2 py-[0.35rem] border border-line-strong rounded-paper bg-surface text-ink cursor-pointer focus:outline-none focus:border-accent"
+                          <FieldRow label="Format">
+                            <SelectField
+                              label="Variant format"
+                              value={v.aspectId}
+                              onChange={(aspectId) => updateVariant(v.id, { aspectId })}
+                              options={[
+                                { id: 'source', label: 'Source frame' },
+                                ...ASPECT_PRESETS.map((a) => ({ id: a.id, label: `${a.id} — ${a.label}` })),
+                              ]}
+                            />
+                          </FieldRow>
+                          <FieldRow
+                            label="Resolution"
+                            hint={
+                              short ? (
+                                <span className="text-danger">
+                                  {short.asked}p was asked for; this source delivers {short.delivered}p.
+                                  {proxyWithOriginal && renderFromProxy
+                                    ? ' Turn off “From proxy” to export from the original.'
+                                    : ''}
+                                </span>
+                              ) : undefined
+                            }
+                          >
+                            <SelectField
+                              label="Variant resolution"
                               value={String(v.resolution)}
-                              onChange={(e) =>
+                              onChange={(r) =>
                                 updateVariant(v.id, {
-                                  resolution: (e.target.value === 'source'
-                                    ? 'source'
-                                    : Number(e.target.value)) as VariantResolution,
+                                  resolution: (r === 'source' ? 'source' : Number(r)) as VariantResolution,
                                 })
                               }
-                              aria-label="Variant resolution"
-                            >
-                              <option value="source">Source res</option>
-                              <option value="1080">1080p</option>
-                              <option value="720">720p</option>
-                            </select>
-                            {/* A cadence and a speed are about a sequence of
-                                frames; a still has one. Both controls (and the
-                                notes that explain them) leave the row rather
-                                than sit there inert. */}
-                            {!isPhoto && (
-                            <select
-                              className="flex-1 min-w-0 font-sans text-xs px-2 py-[0.35rem] border border-line-strong rounded-paper bg-surface text-ink cursor-pointer focus:outline-none focus:border-accent"
-                              value={String(v.frameRate)}
-                              onChange={(e) =>
-                                updateVariant(v.id, {
-                                  frameRate: (e.target.value === 'source'
-                                    ? 'source'
-                                    : Number(e.target.value)) as ExportFrameRate,
-                                })
-                              }
-                              aria-label="Variant frame rate"
-                              title="Delivery frame rate — 'Source fps' keeps every frame exactly as shot"
-                            >
-                              <option value="source">
-                                Source fps{sourceFps ? ` (${sourceFps})` : ''}
-                              </option>
-                              {FRAME_RATE_CHOICES.map((f) => (
-                                <option key={f} value={f}>
-                                  {f} fps
-                                </option>
-                              ))}
-                            </select>
-                            )}
-                          </div>
+                              options={[
+                                { id: 'source', label: 'Source' },
+                                { id: '1080', label: '1080p' },
+                                { id: '720', label: '720p' },
+                              ]}
+                            />
+                          </FieldRow>
+                          {/* A cadence and a speed are about a sequence of
+                              frames; a still has one, so both rows leave. */}
                           {!isPhoto && (
-                          <div className="flex items-center gap-2">
-                            <select
-                              className="flex-1 min-w-0 font-sans text-xs px-2 py-[0.35rem] border border-line-strong rounded-paper bg-surface text-ink cursor-pointer focus:outline-none focus:border-accent"
-                              value={String(resolveSpeed(v.speed))}
-                              onChange={(e) =>
-                                updateVariant(v.id, { speed: Number(e.target.value) })
+                            <FieldRow
+                              label="Frame rate"
+                              hint={
+                                sourceFps && v.frameRate !== 'source' && v.frameRate > sourceFps
+                                  ? `${v.frameRate} fps from ${sourceFps} — frames are duplicated, not interpolated: no new motion.`
+                                  : undefined
                               }
-                              aria-label="Variant speed"
-                              title="Delivered speed — the clip's duration changes, its cadence does not"
                             >
-                              {speedChoices.map((sp) => (
-                                <option key={sp} value={sp}>
-                                  {sp === 1 ? 'Normal speed' : `${sp}× speed`}
-                                  {sp !== 1 && sp === realtimeRate ? ' — real time' : ''}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          )}
-                          {/* A re-time is a real change of duration, and the
-                              audio cannot follow it — say both before it runs. */}
-                          {!isPhoto && variantIsRetimed(v) && (
-                            <p className="m-0 text-2xs leading-snug text-muted">
-                              {resolveSpeed(v.speed)}× speed
-                              {duration > 0
-                                ? ` — ${formatDuration(retimedDuration(duration, v.speed))} instead of ${formatDuration(duration)}`
-                                : ''}
-                              , delivered without audio: a copied track would
-                              drift against a re-timed picture.
-                            </p>
-                          )}
-                          {/* Say what a higher cadence really does: the encoder
-                              repeats frames, it does not invent motion. */}
-                          {!isPhoto && sourceFps && v.frameRate !== 'source' && v.frameRate > sourceFps && (
-                            <p className="m-0 text-2xs leading-snug text-muted">
-                              {v.frameRate} fps from {sourceFps} — frames are
-                              duplicated, not interpolated: no new motion.
-                            </p>
-                          )}
-                          <div className="flex items-center gap-2 min-w-0">
-                            <label className="flex items-center gap-1.5 cursor-pointer select-none flex-none">
-                              <input
-                                type="checkbox"
-                                className="w-3.5 h-3.5 accent-accent cursor-pointer"
-                                checked={v.overlays}
-                                onChange={(e) => updateVariant(v.id, { overlays: e.target.checked })}
+                              <SelectField
+                                label="Variant frame rate"
+                                value={String(v.frameRate)}
+                                onChange={(f) =>
+                                  updateVariant(v.id, {
+                                    frameRate: (f === 'source' ? 'source' : Number(f)) as ExportFrameRate,
+                                  })
+                                }
+                                options={[
+                                  { id: 'source', label: `Source${sourceFps ? ` (${sourceFps} fps)` : ''}` },
+                                  ...FRAME_RATE_CHOICES.map((f) => ({ id: String(f), label: `${f} fps` })),
+                                ]}
                               />
-                              <span className="font-mono text-2xs tracking-[0.1em] uppercase text-muted">
-                                Overlays
-                              </span>
-                            </label>
-                            <span
-                              className="flex-1 min-w-0 text-right font-mono text-2xs tabular-nums text-faint truncate"
-                              title={fileName}
+                            </FieldRow>
+                          )}
+                          {!isPhoto && (
+                            <FieldRow
+                              label="Speed"
+                              hint={
+                                variantIsRetimed(v) ? (
+                                  <>
+                                    {resolveSpeed(v.speed)}× speed
+                                    {duration > 0
+                                      ? ` — ${formatDuration(retimedDuration(duration, v.speed))} instead of ${formatDuration(duration)}`
+                                      : ''}
+                                    , delivered without audio: a copied track would drift against a
+                                    re-timed picture.
+                                  </>
+                                ) : undefined
+                              }
                             >
+                              <SelectField
+                                label="Variant speed"
+                                value={String(resolveSpeed(v.speed))}
+                                onChange={(sp) => updateVariant(v.id, { speed: Number(sp) })}
+                                options={speedChoices.map((sp) => ({
+                                  id: String(sp),
+                                  label: `${sp === 1 ? 'Normal' : `${sp}×`}${sp !== 1 && sp === realtimeRate ? ' — real time' : ''}`,
+                                }))}
+                              />
+                            </FieldRow>
+                          )}
+                          <FieldRow label="Overlays">
+                            <ToggleField
+                              label="Burn the overlays in"
+                              checked={v.overlays}
+                              onChange={(overlays) => updateVariant(v.id, { overlays })}
+                            />
+                            <span className="flex-1 min-w-0 text-right font-mono text-2xs tabular-nums text-muted truncate" title={fileName}>
                               {dims ? `${dims.w}×${dims.h} · ` : ''}
                               {fileName}
                             </span>
-                          </div>
-                          {/* The row says 1080p; the source cannot fill it.
-                              Better said here, beside the setting that made
-                              the promise, than discovered in the file. */}
-                          {short && (
-                            <p className="m-0 text-xs text-danger leading-snug">
-                              {short.asked}p was asked for; this source delivers{' '}
-                              {short.delivered}p.
-                              {proxyWithOriginal && renderFromProxy
-                                ? ' Untick “render from the proxy” to export from the original.'
-                                : ''}
-                            </p>
-                          )}
+                          </FieldRow>
                           {/* What this row cost last time it rendered — the
-                              figure sits with the settings that produced it,
-                              which is the whole point of showing it. */}
+                              figure sits with the settings that produced it. */}
                           {liveExport?.id === v.id ? (
-                            <div
-                              className="flex items-center gap-1.5 pt-1.5 border-t border-dashed border-line font-mono text-2xs tabular-nums text-accent-ink"
-                              role="status"
-                            >
+                            <div className="flex items-center gap-1.5 font-mono text-2xs tabular-nums text-accent-ink" role="status">
                               <span className="w-[7px] h-[7px] rounded-full bg-accent animate-pulse-dot" />
                               rendering… {formatElapsed(liveElapsed)}
                             </div>
                           ) : (
                             stats && (
-                              <div className="flex items-center gap-1.5 pt-1.5 border-t border-dashed border-line font-mono text-2xs tabular-nums text-ink-soft">
+                              <div className="flex items-center gap-1.5 font-mono text-2xs tabular-nums text-ink-soft">
                                 <span className="inline-flex text-ok">{Icons.check}</span>
                                 {describeExportStat(stats)}
                               </div>
@@ -2444,95 +2353,82 @@ export default function StudioEditor({
                         </div>
                       );
                     })}
-                  </div>
+                  </InspectorSection>
 
-                  {!exportSupported && (
-                    <p className="m-0 text-xs text-muted">
-                      Export needs WebCodecs (try Chrome/Edge/Safari) — editing
-                      works everywhere.
-                    </p>
-                  )}
-
-                  {exporting ? (
-                    <div className="flex flex-col gap-2" role="status">
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono text-xs tracking-[0.04em] text-ink-soft flex-none">
-                          {fetchingOriginal
-                            ? `Fetching the original from ${proxyWithOriginal?.sourceId ?? 'the source'}… `
-                            : exportStep && exportStep.total > 1
-                              ? `Variant ${exportStep.index}/${exportStep.total} · `
-                              : 'Exporting… '}
-                          {!fetchingOriginal && `${Math.round(exportRatio * 100)}%`}
-                        </span>
-                        <progress
-                          data-export
-                          className="flex-1 h-2 accent-accent"
-                          value={exportRatio}
-                          max={1}
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        className="self-start p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent"
-                        onClick={cancelExport}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      {exportDone && runStats.length > 0 && (
-                        <div
-                          className="flex flex-col gap-0.5 px-2.5 py-2 rounded-paper bg-surface border border-ok-line"
-                          role="status"
-                        >
-                          <span className="font-mono text-2xs tracking-[0.1em] uppercase text-ok">
-                            ✓ Exported
+                  <InspectorSection id="studio.export.run" title="Export">
+                    {!exportSupported && (
+                      <p className="m-0 text-xs text-muted">
+                        Export needs WebCodecs (try Chrome/Edge/Safari) — editing works everywhere.
+                      </p>
+                    )}
+                    {exporting ? (
+                      <div className="flex flex-col gap-2" role="status">
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono text-xs tracking-[0.04em] text-ink-soft flex-none">
+                            {fetchingOriginal
+                              ? `Fetching the original from ${proxyWithOriginal?.sourceId ?? 'the source'}… `
+                              : exportStep && exportStep.total > 1
+                                ? `Variant ${exportStep.index}/${exportStep.total} · `
+                                : 'Exporting… '}
+                            {!fetchingOriginal && `${Math.round(exportRatio * 100)}%`}
                           </span>
-                          <span className="font-mono text-xs tabular-nums text-ink-soft">
-                            {describeExportRun(runStats)}
-                          </span>
+                          <progress data-export className="flex-1 h-2 accent-accent" value={exportRatio} max={1} />
                         </div>
-                      )}
-                      {/* A clip that came from a Winnow can send its finals
-                          home, so the instance's lineage records that this
-                          capture has been told. Only offered for what was just
-                          rendered, only to the instance it came from. */}
-                      {exportDone && lastRun.length > 0 && finalsOrigin && (
-                        <SendFinalsPanel
-                          files={lastRun}
-                          sourceId={finalsOrigin.sourceId}
-                          assetId={finalsIdentity?.assetId ?? null}
-                        />
-                      )}
-                      {exportError && (
-                        <span className="text-xs text-danger" role="status">
-                          {exportError}
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        className="px-[1.1rem] py-2 inline-flex items-center justify-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent hover:text-white active:scale-[0.98] disabled:opacity-50 disabled:cursor-default"
-                        onClick={handleExport}
-                        disabled={!active || !exportSupported}
-                        title={
-                          isPhoto
-                            ? 'Render every variant as a JPEG, one after the other'
-                            : 'Render every variant (H.264 MP4), one after the other'
-                        }
-                      >
-                        Export{' '}
-                        {isPhoto
-                          ? variants.length > 1
-                            ? `${variants.length} JPEGs`
-                            : 'JPEG'
-                          : variants.length > 1
-                            ? `${variants.length} MP4s`
-                            : 'MP4'}
-                      </button>
-                    </>
-                  )}
-                </div>
+                        <Button size="sm" variant="ghost" onClick={cancelExport} className="self-start">
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        {exportDone && runStats.length > 0 && (
+                          <div className="flex flex-col gap-0.5 px-3 py-2 rounded-control bg-ok-wash border border-ok-line" role="status">
+                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-ok">
+                              {Icons.check} Exported
+                            </span>
+                            <span className="font-mono text-xs tabular-nums text-ink-soft">
+                              {describeExportRun(runStats)}
+                            </span>
+                          </div>
+                        )}
+                        {/* A clip that came from a Winnow can send its finals
+                            home. Only offered for what was just rendered, only
+                            to the instance it came from. */}
+                        {exportDone && lastRun.length > 0 && finalsOrigin && (
+                          <SendFinalsPanel
+                            files={lastRun}
+                            sourceId={finalsOrigin.sourceId}
+                            assetId={finalsIdentity?.assetId ?? null}
+                          />
+                        )}
+                        {exportError && (
+                          <span className="text-xs text-danger" role="status">
+                            {exportError}
+                          </span>
+                        )}
+                        <Button
+                          variant="primary"
+                          icon={Icons.export}
+                          onClick={handleExport}
+                          disabled={!active || !exportSupported}
+                          title={
+                            isPhoto
+                              ? 'Render every variant as a JPEG, one after the other'
+                              : 'Render every variant (H.264 MP4), one after the other'
+                          }
+                        >
+                          Export{' '}
+                          {isPhoto
+                            ? variants.length > 1
+                              ? `${variants.length} JPEGs`
+                              : 'JPEG'
+                            : variants.length > 1
+                              ? `${variants.length} MP4s`
+                              : 'MP4'}
+                        </Button>
+                      </>
+                    )}
+                  </InspectorSection>
+                </>
               )}
             </div>
           </PanelHost>
