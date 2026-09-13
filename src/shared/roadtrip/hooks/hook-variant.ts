@@ -115,6 +115,19 @@ export interface HookDay {
   legStart: boolean;
 }
 
+/**
+ * One leg of the trip, as a hook reads it — its span and its LOCATED places in
+ * the order they were lived. A place with no coordinates is left out here: it
+ * is a complete place, but nothing a drawing can put on a line.
+ */
+export interface HookStage {
+  startDate: string;
+  endDate: string;
+  /** What the badge calls this leg (`stageLabel`). */
+  label: string;
+  places: readonly { name: string; lat: number; lon: number }[];
+}
+
 /** A decoded picture a variant may draw, with the size it was decoded at. */
 export interface HookPicture {
   image: CanvasImageSource;
@@ -150,6 +163,8 @@ export interface HookContext {
   screenSeconds?: number;
   /** Every day of the trip, in order — filled when `needs.coverage` asks. */
   calendar?: readonly HookDay[];
+  /** The trip's legs, in the order they were lived — filled for `needs.stages`. */
+  stages?: readonly HookStage[];
   /**
    * Pictures keyed by day, filled when `needs.media` asks. A day with no entry
    * has nothing to show; a variant draws nothing for it rather than a stand-in.

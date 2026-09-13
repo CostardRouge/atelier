@@ -1,11 +1,11 @@
 # The hook engine — many openers over one badge
 
-**Status (2026-09-13).** Design agreed with the maintainer; **phases 1–3 and
-5 are built** — the engine, the picker, **Défilé** on the stage, the PNG deck,
-the rail and both video exports, and **its ticks** in a video painted from a
-still and in the editor's transport. What was phase 4 turned out to exist
-already (§8). Mixing the ticks into a clip's own sound, and the route trace,
-are not built. The
+**Status (2026-09-13).** Design agreed with the maintainer; **phases 1–3, 5
+and 7 are built** — the engine, the picker, **Défilé** everywhere a hook is
+drawn and **its ticks** in a video painted from a still, and the **route
+trace**, which passed the contract test (§11, phase 7). What was phase 4 turned
+out to exist already (§8). Only mixing the ticks into a clip's own sound
+(phase 6) is not built. The
 exemplar that drove the design is the **scrub** («&nbsp;Défilé&nbsp;»): the
 trip's measuring tape sweeps from day 1 to the day being told, flashing that
 day's pictures as it passes, and ticking.
@@ -259,7 +259,26 @@ sound will add there is an audio track, since it writes none today.
   piece everywhere), and `deckSlides`' `auto` medium (`hookMoves`, measured by
   preparing the hook — a scrub on day 1 plays nothing and stays an image).
 
-## 10. Phases — one commit each
+## 10. Route trace — what it refuses to claim (2026-09-13)
+
+- **It marks a LEG, never a point.** A place has no dates of its own, and the
+  badge's caption names the leg (`stageLabel`), not a spot on it — so the trace
+  paints the day's leg in the accent and pins nothing, except a leg of ONE
+  located place, which is that place and is ringed. Checked through the real
+  renderer: the accent leg and the caption under it name the same thing.
+- **Past solid, current accent, future faint and dashed.** The pen draws the
+  trip so far, then the legs still ahead fade in; the projection fits ALL of
+  them from the first frame, so nothing jumps when they arrive.
+- **A place without coordinates is simply not on the line** (typed by hand is
+  the normal case), and the panel says why a leg may be missing. Coordinates
+  come only from the opt-in place lookup — nothing here reaches the network.
+- **Equirectangular with the longitude scaled by cos(mean latitude)**: honest at
+  the scale of a country, no tiles, no map library. A route across the
+  antimeridian would split — untested, and no trip of the maintainer's does.
+- A dark underlay under every stroke keeps a white line legible over a pale
+  sky without a per-frame shadow blur.
+
+## 11. Phases — one commit each
 
 1. **The contract, and the badge inside it.** Types, registry, `badge` variant,
    `resolveHook`, tests, and the paint seam threaded into `renderBadge` /
@@ -279,9 +298,15 @@ sound will add there is an audio track, since it writes none today.
 6. **Mixing**, for clips that keep their sound. Opt-in.
 7. **Route trace.** A second real variant, deliberately unlike the first: needs
    located places, no media, no sound, no stop list. If it fits the contract
-   without changing it, the contract is right.
+   without changing it, the contract is right. **Built — and the verdict:**
+   the `HookVariant` interface, `resolveHook`, the picker, the renderer and
+   both exports did not change by a line. `HookContext` gained ONE optional
+   field (`stages`, filled by `hookContextFor`), which is exactly the growth
+   `needs.places` announced in phase 1 rather than a reshape. Its first real
+   `unmet()` also proved the picker's disabled-with-a-reason card, which no
+   variant had exercised.
 
-## 11. Open points
+## 12. Open points
 
 - **The three scrub voices have not been heard by a human.** Their energy is in
   the right place in the file (measured); whether `detent`, `leg` and `seat`

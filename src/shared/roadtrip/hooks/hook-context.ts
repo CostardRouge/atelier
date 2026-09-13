@@ -12,7 +12,7 @@
 
 import type { BadgeContent } from '../day-badge';
 import type { TripDoc, TripPost } from '../trip-types';
-import { hookCalendar } from './hook-calendar';
+import { hookCalendar, hookStages } from './hook-calendar';
 import type { HookContext, HookPicture } from './hook-variant';
 import { resolveHook } from './registry';
 
@@ -31,6 +31,7 @@ export function hookContextFor(
     content,
     counterMode: post.badge.mode,
     calendar: hookCalendar(trip, post.id),
+    stages: hookStages(trip),
     pictures,
   };
 }

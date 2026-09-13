@@ -14,8 +14,9 @@
  */
 
 import { tripCoverage } from '../trip-coverage';
+import { stageLabel } from '../trip-places';
 import type { TripDoc } from '../trip-types';
-import type { HookDay } from './hook-variant';
+import type { HookDay, HookStage } from './hook-variant';
 
 export function hookCalendar(trip: TripDoc, excludePostId: string | null): HookDay[] {
   const legStarts = new Set(trip.stages.map((stage) => stage.startDate));
@@ -42,4 +43,20 @@ export function hookDayPosts(
     if (chosen) out.set(cell.date, chosen.id);
   }
   return out;
+}
+
+/** The legs, with only the places a drawing can use — those with coordinates. */
+export function hookStages(trip: TripDoc): HookStage[] {
+  return trip.stages.map((stage) => ({
+    startDate: stage.startDate,
+    endDate: stage.endDate,
+    label: stageLabel(stage),
+    places: stage.places.flatMap((place) =>
+      place.coords &&
+      Number.isFinite(place.coords.lat) &&
+      Number.isFinite(place.coords.lon)
+        ? [{ name: place.name, lat: place.coords.lat, lon: place.coords.lon }]
+        : [],
+    ),
+  }));
 }
