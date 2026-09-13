@@ -11,11 +11,14 @@
  * `onRangeChange` — and, while the clip plays, the playhead runs along it.
  *
  * Only the middle reorders, exactly as on the rail; the drag logic is the
- * rail's own. Wide screens only: on a phone the picture is the whole
+ * rail's own. A long deck SCROLLS sideways rather than squeezing: every bar
+ * keeps a readable width (a clip's grows with its seconds), the add button
+ * and the closing card stay pinned at the right, and the open slide is
+ * brought into view whenever it changes. Wide screens only: on a phone the picture is the whole
  * screen's job and the rail keeps the deck (`PostEditor`).
  */
 
-import { useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import type { DeckSlide } from '../../shared/roadtrip/deck';
 import { MIN_HOOK_SECONDS, screenSecondsCeiling } from '../../shared/roadtrip/hook-video';
 import type { TrimRange } from '../../shared/media/trim';
@@ -50,6 +53,9 @@ interface DeckTimelineProps {
 }
 
 const BAR = 52;
+/** The narrowest a bar gets, and how much wider a clip's gets per second. */
+const BAR_MIN_REM = 6.5;
+const REM_PER_SECOND = 1.25;
 
 function fmt(seconds: number): string {
   return `${seconds.toFixed(1).replace(/\.0$/, '')}s`;
@@ -72,6 +78,14 @@ export default function DeckTimeline({
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
   const trim = useRef<{ originX: number; origin: TrimRange; width: number; seconds: number } | null>(null);
+  const track = useRef<HTMLDivElement>(null);
+
+  // Keep the open slide on screen: a new slide lands at the end of a deck
+  // that may already be wider than the track.
+  useEffect(() => {
+    const open = track.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+    open?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+  }, [index, slides.length]);
 
   const pictures = slides.filter((s) => s.kind !== 'cta');
   const card = slides.find((s) => s.kind === 'cta') ?? null;
@@ -116,7 +130,13 @@ export default function DeckTimeline({
       <div
         key={s.slideId ?? s.kind}
         className="relative flex-none min-w-0"
-        style={{ flexGrow: video ? Math.max(1, s.seconds) : 0.9, flexBasis: video ? 0 : '6.5rem', height: BAR }}
+        // A basis, never 0: with a zero basis and no room left to share, a
+        // clip's bar collapsed to nothing under a row of images.
+        style={{
+          flexGrow: video ? Math.max(1, s.seconds) : 0.9,
+          flexBasis: `${video ? Math.max(BAR_MIN_REM, s.seconds * REM_PER_SECOND) : BAR_MIN_REM}rem`,
+          height: BAR,
+        }}
       >
         <button
           type="button"
@@ -232,35 +252,43 @@ export default function DeckTimeline({
           </span>
         )}
       </div>
-      <div className="flex items-stretch gap-1.5" role="listbox" aria-label="The slides of this piece">
-        {pictures.map((s) => bar(s, slides.indexOf(s)))}
-        <button
-          type="button"
-          onClick={onAdd}
-          title="Add the active picture to this deck"
-          className="flex-none w-11 grid place-items-center rounded-[8px] border border-dashed border-line-strong bg-paper text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
-          style={{ height: BAR }}
-        >
-          {Icons.plus}
-        </button>
-        {card ? (
-          bar(card, slides.indexOf(card))
-        ) : (
+      <div className="flex items-start gap-1.5" role="listbox" aria-label="The slides of this piece">
+        {/* The padding is room for the × badge and the open ring, which the
+            scroll box would otherwise clip. */}
+        <div ref={track} className="flex-1 min-w-0 overflow-x-auto overscroll-x-contain [scrollbar-width:thin]">
+          <div className="flex items-stretch gap-1.5 w-max min-w-full pt-2.5 pr-2.5 pb-1.5 pl-0.5">
+            {pictures.map((s) => bar(s, slides.indexOf(s)))}
+          </div>
+        </div>
+        <div className="flex-none flex items-stretch gap-1.5 pt-2.5 pr-2.5">
           <button
             type="button"
-            onClick={includeCta ? onEditClosingCard : () => onIncludeCta(true)}
-            title={
-              includeCta
-                ? 'This piece ends on the trip’s closing card, and the card has no words yet — write them in ⚙ Trip'
-                : 'Close this piece with the trip’s call to action'
-            }
-            className="flex-none w-20 flex flex-col items-center justify-center gap-0.5 rounded-[8px] border border-dashed border-line-strong bg-paper text-faint cursor-pointer hover:border-accent hover:text-accent-ink"
+            onClick={onAdd}
+            title="Add the active picture to this deck"
+            className="flex-none w-11 grid place-items-center rounded-[8px] border border-dashed border-line-strong bg-paper text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
             style={{ height: BAR }}
           >
             {Icons.plus}
-            <span className="font-mono text-3xs tracking-[0.08em] uppercase">Closing</span>
           </button>
-        )}
+          {card ? (
+            bar(card, slides.indexOf(card))
+          ) : (
+            <button
+              type="button"
+              onClick={includeCta ? onEditClosingCard : () => onIncludeCta(true)}
+              title={
+                includeCta
+                  ? 'This piece ends on the trip’s closing card, and the card has no words yet — write them in ⚙ Trip'
+                  : 'Close this piece with the trip’s call to action'
+              }
+              className="flex-none w-20 flex flex-col items-center justify-center gap-0.5 rounded-[8px] border border-dashed border-line-strong bg-paper text-faint cursor-pointer hover:border-accent hover:text-accent-ink"
+              style={{ height: BAR }}
+            >
+              {Icons.plus}
+              <span className="font-mono text-3xs tracking-[0.08em] uppercase">Closing</span>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
