@@ -15,6 +15,8 @@ import {
   toIsoDate,
   weekdayIndex,
   yearsBetween,
+  isShortTrip,
+  SHORT_TRIP_DAYS,
 } from './trip-days';
 
 describe('parseIsoDate', () => {
@@ -262,3 +264,15 @@ describe('describeRelativeDay', () => {
     expect(describeRelativeDay('whenever', '2026-09-08')).toBeNull();
   });
 });
+
+describe('isShortTrip', () => {
+  it('is short up to the threshold and long past it', () => {
+    expect(isShortTrip(1)).toBe(true);
+    expect(isShortTrip(SHORT_TRIP_DAYS)).toBe(true);
+    expect(isShortTrip(SHORT_TRIP_DAYS + 1)).toBe(false);
+  });
+  it('is never short for an empty span', () => {
+    expect(isShortTrip(0)).toBe(false);
+  });
+});
+

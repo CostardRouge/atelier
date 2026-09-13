@@ -273,3 +273,17 @@ export function formatIsoDate(iso: IsoDate): string {
   const d = new Date(ms);
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
+
+/**
+ * Up to this many days a trip is SHORT: its overview draws every day as a
+ * cell of real width on one strip, legs beneath on the same axis, no zoom.
+ * Past it the weekday heatmap takes over — a year is only readable as one
+ * (the maintainer's Australia trip). A month is the natural seam: a strip of
+ * 31 cells still gives each day 30px in a 1000px box.
+ */
+export const SHORT_TRIP_DAYS = 31;
+
+export function isShortTrip(totalDays: number): boolean {
+  return totalDays > 0 && totalDays <= SHORT_TRIP_DAYS;
+}
+

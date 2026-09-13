@@ -3,7 +3,13 @@ import { deleteThumbs } from '../../shared/roadtrip/trip-store';
 import { applyTripDetails } from '../../shared/roadtrip/trip-edit';
 import { dayStageActions } from '../../shared/roadtrip/stage-edit';
 import { stageTint } from '../../shared/roadtrip/stage-ruler';
-import { enumerateDays, formatIsoDate, isWithin, type IsoDate } from '../../shared/roadtrip/trip-days';
+import {
+  enumerateDays,
+  formatIsoDate,
+  isShortTrip,
+  isWithin,
+  type IsoDate,
+} from '../../shared/roadtrip/trip-days';
 import { stageAt, stageDayNumber, tripCoverage } from '../../shared/roadtrip/trip-coverage';
 import { stageLabel } from '../../shared/roadtrip/trip-places';
 import {
@@ -29,6 +35,7 @@ import { pageScroll } from '../../shared/ui/page-scroll';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { Icons } from '../../shared/ui/icons';
 import Button from '../../shared/ui/Button';
+import ShortDayStrip from './ShortDayStrip';
 
 interface TripOverviewProps {
   trip: TripDoc;
@@ -320,6 +327,7 @@ export default function TripOverview({
   );
 
   const drafted = coverage.posts - coverage.publishedPosts;
+  const short = isShortTrip(coverage.totalDays);
 
   // The dates-and-route sheet, the creation modal reopened on this trip.
   const [editingDetails, setEditingDetails] = useState(false);
@@ -426,20 +434,34 @@ export default function TripOverview({
         </div>
       </div>
 
+      {/* A month or less is a STRIP — every day a cell of real width, the
+          legs right under it on the same axis, no zoom. Longer, the weekday
+          heatmap: the only thing that shows a year at a glance. */}
       <section className="flex flex-col gap-2" aria-label="The journey, day by day">
-        <DayHeatmap
-          startDate={trip.startDate}
-          endDate={trip.endDate}
-          days={coverage.days}
-          selected={selected}
-          onSelect={selectDate}
-          stageOf={(date) => dayStages.get(date) ?? null}
-          menuFor={menuFor}
-        />
+        {short ? (
+          <ShortDayStrip
+            days={coverage.days}
+            selected={selected}
+            onSelect={selectDate}
+            stageOf={(date) => dayStages.get(date) ?? null}
+            menuFor={menuFor}
+          />
+        ) : (
+          <DayHeatmap
+            startDate={trip.startDate}
+            endDate={trip.endDate}
+            days={coverage.days}
+            selected={selected}
+            onSelect={selectDate}
+            stageOf={(date) => dayStages.get(date) ?? null}
+            menuFor={menuFor}
+          />
+        )}
       </section>
 
       <StagesPanel
         trip={trip}
+        zoomable={!short}
         selectedId={selectedStageId}
         cursorDate={selected}
         onSelect={setStageId}

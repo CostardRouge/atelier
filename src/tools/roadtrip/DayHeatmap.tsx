@@ -47,7 +47,7 @@ interface DayHeatmapProps {
   menuFor?: (date: IsoDate) => DayMenuItem[];
 }
 
-interface Menu {
+export interface Menu {
   cell: DayCell;
   items: DayMenuItem[];
   x: number;
@@ -56,14 +56,14 @@ interface Menu {
 
 
 
-function levelOf(cell: DayCell): number {
+export function levelOf(cell: DayCell): number {
   if (cell.posts.length === 0) return 0;
   if (cell.published === 0) return 1;
   return Math.min(2 + cell.published - 1, 4);
 }
 
 /** What the card says about a day, in the order it is read. */
-interface Hovered {
+export interface Hovered {
   cell: DayCell;
   /** The leg it belongs to, when one covers it. */
   stage: DayStage | null;
@@ -72,7 +72,7 @@ interface Hovered {
   y: number;
 }
 
-function cellTitle(cell: DayCell, stage: DayStage | null): string {
+export function cellTitle(cell: DayCell, stage: DayStage | null): string {
   const leg = stage ? ` · ${stageLine(stage)}` : '';
   const when = `${formatIsoDate(cell.date)} · day ${cell.dayNumber}${leg}`;
   if (cell.posts.length === 0) return `${when} — nothing told yet`;
@@ -284,7 +284,7 @@ export default function DayHeatmap({
  * the card it takes the pointer, so a scrim behind it closes it on any
  * click outside, and Escape does the same.
  */
-function DayMenu({ menu, onClose }: { menu: Menu; onClose: () => void }) {
+export function DayMenu({ menu, onClose }: { menu: Menu; onClose: () => void }) {
   const first = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     first.current?.focus();
@@ -348,7 +348,7 @@ function DayMenu({ menu, onClose }: { menu: Menu; onClose: () => void }) {
  *
  * It never takes the pointer, so sweeping across the grid is uninterrupted.
  */
-function DayCard({ hovered }: { hovered: Hovered }) {
+export function DayCard({ hovered }: { hovered: Hovered }) {
   const { cell, stage } = hovered;
   const drafts = cell.posts.length - cell.published;
   const kinds = POST_KINDS.map((k) => ({

@@ -16,6 +16,12 @@ import Button from '../../shared/ui/Button';
 
 interface StagesPanelProps {
   trip: TripDoc;
+  /**
+   * Whether the track offers its zoom. A short trip's strip above already
+   * gives every day its width, and the ruler fits the same box: a zoom would
+   * only pull the two apart.
+   */
+  zoomable?: boolean;
   /** The leg open in the editor below the ruler; null shows the ruler alone. */
   selectedId: string | null;
   /** The day open on the overview, drawn on the ruler as a playhead. */
@@ -166,6 +172,7 @@ function StageCard({
  */
 export default function StagesPanel({
   trip,
+  zoomable = true,
   selectedId,
   cursorDate,
   onSelect,
@@ -184,7 +191,7 @@ export default function StagesPanel({
   // under the pointer, or days fall under the width a leg's edge can be
   // grabbed at. Zooming out from there would show nothing the track is not
   // already showing.
-  const zoom = useStageZoom({ wheel: 'any', minScale: 1 });
+  const zoom = useStageZoom({ wheel: zoomable ? 'any' : 'modifier', minScale: 1 });
   // The track's gestures are spelled out until the track has been USED at all
   // — a leg opened, a day tapped, a leg dragged, a gap filled — and stay behind
   // the legend's ⓘ after that. Any of them means the surface has been found,
@@ -248,7 +255,7 @@ export default function StagesPanel({
               From {id}
             </Button>
           ))}
-        <StageZoomControl zoom={zoom} className="flex-none" />
+        {zoomable && <StageZoomControl zoom={zoom} className="flex-none" />}
         <Button variant="primary" onClick={add} icon={Icons.plus}>
           Stage
         </Button>
