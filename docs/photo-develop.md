@@ -344,22 +344,35 @@ parser the suite already has.
   usually an embedded JPEG preview in IFD0 (`NewSubfileType` 1) — often
   full-size, sometimes 1024 px.
 - An **iPhone ProRAW DNG**: already demosaiced (`LinearRaw`, 34892), 12-bit,
-  lossless-JPEG; recent iPhones can write **JPEG XL** tiles (DNG 1.7), which
-  most decoders cannot read; it carries **opcode lists** (a gain map for lens
-  shading) that a naive decoder skips, and the picture then vignettes.
+  and its tiles are either lossless-JPEG (compression 7) or **JPEG XL**
+  (compression 52546, DNG 1.7). Apple's documentation puts the JPEG XL
+  options (*JPEG-XL Lossless* / *JPEG-XL Lossy*) on the iPhone 16 Pro and
+  later, and a 15 Pro's own Camera writes lossless JPEG — but **the
+  maintainer says JPEG XL ProRAW files ARE in his library (2026-09-13)**, so
+  whether they came from the phone's Camera, a third-party camera app or a
+  later export, the format has to be handled and the spike's very first step
+  is to read tag 259 on each of his files rather than trust a model number.
+  It also carries **opcode lists** (a gain map for lens shading) that a naive
+  decoder skips, and the picture then vignettes.
 
 ### 6.2 The three ways to decode, and the recommendation
 
 | Option | What it is | For | Against |
 | --- | --- | --- | --- |
-| **(a) LibRaw in wasm** — `libraw-wasm` on npm (Emscripten build of LibRaw, runs in a Web Worker, 8- or 16-bit RGB out, raw sensor data out, DNG among its formats) | The reference developer every desktop tool wraps | Handles both cameras, the colour matrices, the opcodes; one dependency; nothing to write | Bundle weight (a few MB — **must** be a dynamic import, the MapLibre rule, never in the main bundle); LGPL/CDDL (a wasm module is dynamically linked — fine, but the README's licence line must say it); the wrapper is young and largely machine-written; JPEG XL tiles depend on the LibRaw build |
-| **(b) A DNG decoder of our own** — TIFF walk (have it) + lossless JPEG (`ljpeg92`, ~300 lines) + bilinear demosaic + `ColorMatrix`/`AsShotNeutral` → sRGB | Nothing fetched, DNG only, pure and hand-testable (the EXIF parser's own tradition: a hand-built binary in the spec) | ~1 000 lines to own; no opcodes (ProRAW vignettes); no JPEG XL; a wrong colour matrix reads as a broken tool |
+| **(a) LibRaw in wasm** — `libraw-wasm` on npm (Emscripten build of LibRaw, runs in a Web Worker, 8- or 16-bit RGB out, raw sensor data out, DNG among its formats) | The reference developer every desktop tool wraps | Handles both cameras, the colour matrices, the opcodes; one dependency; nothing to write | Bundle weight (a few MB — **must** be a dynamic import, the MapLibre rule, never in the main bundle); LGPL/CDDL (a wasm module is dynamically linked — fine, but the README's licence line must say it); the wrapper is young and largely machine-written; **JPEG XL tiles need LibRaw 0.22 built WITH Adobe's DNG SDK 1.7** (LibRaw reads them through the SDK, not libjxl), and the npm build's README says only that it rejects "a compression format this build can't decode" — so a JPEG XL ProRAW most likely means a wasm build of our own (LibRaw + DNG SDK under Emscripten), which is a build to maintain, not a dependency to install |
+| **(b) A DNG decoder of our own** — TIFF walk (have it) + lossless JPEG (`ljpeg92`, ~300 lines) + bilinear demosaic + `ColorMatrix`/`AsShotNeutral` → sRGB | Nothing fetched, DNG only, pure and hand-testable (the EXIF parser's own tradition: a hand-built binary in the spec); a ProRAW is `LinearRaw`, so it needs no demosaic at all | ~1 000 lines to own; no opcodes (ProRAW vignettes); **JPEG XL tiles need a libjxl wasm that returns 16-bit** — `@jsquash/jxl` exists but hands back 8-bit `ImageData`, so it would be a custom libjxl build, the same class of cost as (a)'s; a wrong colour matrix reads as a broken tool |
 | **(c) Winnow develops** — a 16-bit linear rendition served by the instance | The right shape for a phone (a 48 MP RAW is 288 MB of 16-bit RGB; a tab does not have it) | Only for instance media; 150–290 MB through a tunnel per picture; work on the other repo; and a local DNG still needs (a) or (b) |
 
-**Recommendation: (a), gated on one spike** — decode one DNG of each camera
-in the container, compare the result against the file's own embedded preview,
-and measure decode time and heap at half size and full size. If the build
-fails his files, (b) for DNG only. Either sits behind **one seam**,
+**Recommendation: (a), gated on one spike** — read tag 259 (compression) and
+the opcode lists off one DNG of each kind he really has (DJI, ProRAW lossless
+JPEG, ProRAW JPEG XL), decode each with the npm build in the container,
+compare the result against the file's own embedded preview, and measure
+decode time and heap at half size and full size. **The JPEG XL file is what
+decides**: if the npm build refuses it, the choice is between a LibRaw + DNG
+SDK wasm build of our own (everything, one toolchain to keep) and (b) with a
+16-bit libjxl module (DNG only, ours line by line) — and a JPEG XL ProRAW
+keeps its embedded JPEG preview as its picture (P5) until that decoder lands,
+said in the chip rather than hidden. Either sits behind **one seam**,
 `shared/develop/raw-decoder.ts`:
 
 ```ts
@@ -655,8 +668,10 @@ Settled by the brief, to confirm:
 Open, and they gate a phase:
 
 4. **The decoder** (§6.2): `libraw-wasm` gated on the P5 spike, our own DNG
-   reader as the fallback, Winnow-served later. Also whether a JPEG XL ProRAW
-   is in his pictures at all.
+   reader as the fallback, Winnow-served later. **Half-answered 2026-09-13**:
+   JPEG XL ProRAW files are in his pictures, so the spike must include one,
+   and a refusal by the npm build turns this into "which wasm build do we
+   maintain" (§6.2) — a bigger commitment than a dependency, and his call.
 5. **The histogram** (§7.1) — one strip with two clip marks, or nothing,
    given that Scopes was retired.
 6. **Whether a developed picture goes home to Winnow as an edit** (§7.6) — a
