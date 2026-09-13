@@ -168,13 +168,7 @@ export const SCRUB_LIMITS = {
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
 /** `#rrggbb` → `rgba(r,g,b,a)`; anything unreadable is white, never a throw. */
-export function hexToRgba(hex: string, alpha: number): string {
-  const m = HEX_COLOR.test(hex) ? hex : '#ffffff';
-  const r = parseInt(m.slice(1, 3), 16);
-  const g = parseInt(m.slice(3, 5), 16);
-  const b = parseInt(m.slice(5, 7), 16);
-  return `rgba(${r},${g},${b},${Math.max(0, Math.min(1, alpha))})`;
-}
+export { hexToRgba } from './colour';
 
 /**
  * Where the tape sits on a frame of `w`×`h`: its two ends, its baseline, and

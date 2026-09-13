@@ -330,6 +330,41 @@ sound will add there is an audio track, since it writes none today.
 - A dark underlay under every stroke keeps a white line legible over a pale
   sky without a per-frame shadow blur.
 
+**Its options (2026-09-14)** follow Défilé's panel idiom — six mono legends
+over the inspector's rows — and every one of them is read through
+`routeOptions()`, which clamps a number, refuses a colour it cannot paint and
+an id it does not know, so a document written by a newer build cannot break the
+paint. What each group may say, and the rule each keeps to:
+
+- **Frame**: whole trip or this leg; top / middle / bottom; left / centre /
+  right; size; a translucent PLATE behind it (depth, colour) for a route over
+  a busy picture. The plate is a fill, never a composite mode.
+- **Line**: width; the three colours (so far / this leg / ahead) with a reset;
+  the legs ahead dashed, faint or HIDDEN; the underlay on or off. Hidden legs
+  never arrive, so the projection stops fitting them — the one case where the
+  "fit everything from the first frame" rule bends, because nothing can jump.
+- **Places**: dots and their size; NAMES — none, the trip's two ends, this
+  day's leg, every place — at a size; the ring on a one-place leg. A name is
+  the place's own, as written in the leg; one that would sit on another or
+  leave the frame is dropped (`placeLabels`, tried right / left / above /
+  below, measured with the paint's own font), never nudged onto the line.
+- **Motion**: draw or not; length; the shared easings; a hold at the first
+  place; the legs ahead after the pen or from the first frame; the pen's tip
+  or a bare line. The hook occupies `routeTiming`: hold + run, plus the fade
+  of the legs ahead when they follow the pen (starting at 80 % of the run, so
+  the whole is the 1.15 × the first version played).
+- **Extras**: a north arrow (north is up because the projection is — it
+  asserts nothing more); the DISTANCE so far in km or mi — the great-circle
+  sum of what the pen has drawn, counting up with it, never a road distance
+  and never past this day's leg.
+- **Sound**: ticks at every place the pen REACHES, on the shared kits, with a
+  pitch, a volume and the same mix-in switch as Défilé. Timed on
+  `reachTimes` — the inverse of the easing at each place's share of the drawn
+  length, measured in the projection's own units so it is frame-free — so a
+  tick cannot land before its dot appears. The kit's leg voice where a leg
+  begins, the seat where the pen rests; a leg ahead is never reached and never
+  ticks; a pen that does not move ticks nothing.
+
 ## 11. Phases — one commit each
 
 1. **The contract, and the badge inside it.** Types, registry, `badge` variant,

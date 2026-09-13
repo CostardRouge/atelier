@@ -618,7 +618,16 @@ typewriter, shutter) with a pitch, a drift along the sweep and a volume — the
 same sound the export writes, heard live behind a speaker toggle that is off on
 every visit. **Route** draws the trip's own shape from the legs' located places,
 the trip so far solid, this day's leg in the accent, the legs still ahead faint,
-and can draw itself. Every opener runs on the same clock as the badge, in the
+and can draw itself — the pen travelling on the same five motions, after a
+hold if you want one, the legs ahead fading in behind it or there from the
+start. It is yours to place (top, middle or bottom, kept left, centre or right,
+at a size, on a translucent plate for a busy picture) and to dress (the line's
+width and three colours, the legs ahead dashed, faint or hidden, the dots and
+their size, the places' own names at the ends, on this day's leg or
+everywhere, a north arrow) — and it can say the distance so far, in km or
+miles, counting up with the pen: the straight-line sum of what it has drawn,
+never a road distance. It ticks, too, at every place the pen reaches, on the
+same voices as Défilé. Every opener runs on the same clock as the badge, in the
 preview and in the file.
 
 **Nothing is keyed by a file name.** A post records the *day* it tells, never a
