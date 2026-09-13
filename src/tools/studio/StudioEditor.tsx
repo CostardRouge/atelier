@@ -134,6 +134,7 @@ import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useLearnedGesture } from '../../shared/ui/use-learned-gesture';
 import { Icons } from '../../shared/ui/icons';
+import { useSurface } from '../../shared/ui/use-surface';
 
 /**
  * Clips with or without telemetry, and stills — the studio edits all three.
@@ -199,6 +200,9 @@ export default function StudioEditor({
   onRepoint,
   onForgetMissing,
 }: StudioEditorProps) {
+  // A grading screen sits in the darkroom: neutral grey, so the eye does not
+  // adapt to warm paper and misjudge the frame (`use-surface.ts`).
+  useSurface('darkroom');
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scrub = useVideoScrub(videoRef);

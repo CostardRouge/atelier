@@ -25,6 +25,8 @@
 
   /* The near-black behind video frames */
   --color-frame: #100f0d;
+  /* The brightest corner of the page's paper glow (`body`). */
+  --color-paper-glow: #f7f3ea;
 
   /* State colours — semantic, never the accent. Each is a trio: the text/ink,
      a wash for a filled chip or banner, and a line for its border. */
@@ -71,6 +73,44 @@
   --animate-pulse-dot: pulse-dot 2.4s var(--ease-paper) infinite;
   /* The indeterminate bar over a media still loading (`MediaLightbox`). */
   --animate-deck-load: deck-load 1.15s ease-in-out infinite;
+}
+
+/* The DARKROOM: the same tokens, neutral, under a grading screen.
+   `shared/ui/use-surface.ts` sets the attribute while the Studio editor or
+   the piece editor is mounted. Every colour is a token, so redefining the
+   tokens is the whole of the switch; the accent stays the accent. The greys
+   are deliberately hue-less (no warmth, no coolness): the point is a surround
+   the eye does not adapt to. `color-scheme: dark` makes native controls
+   (a select's list, a scrollbar) agree with the paper around them. */
+html[data-surface='darkroom'] {
+  color-scheme: dark;
+  --color-paper: #262626;
+  --color-paper-2: #2e2e2e;
+  --color-surface: #303030;
+  --color-ink: #ececec;
+  --color-ink-soft: #c9c9c9;
+  --color-muted: #9b9b9b;
+  --color-faint: #6e6e6e;
+  --color-line: #3b3b3b;
+  --color-line-strong: #4b4b4b;
+  --color-accent-ink: #ef6c52;
+  --color-accent-wash: rgba(217, 68, 42, 0.16);
+  --color-frame: #101010;
+  --color-danger: #f08a80;
+  --color-danger-ink: #f7a79f;
+  --color-danger-wash: rgba(154, 58, 35, 0.22);
+  --color-danger-line: rgba(240, 138, 128, 0.35);
+  --color-ok: #86c79b;
+  --color-ok-wash: rgba(63, 122, 82, 0.22);
+  --color-ok-line: rgba(134, 199, 155, 0.35);
+  --color-warn: #e2b555;
+  --color-warn-wash: rgba(138, 106, 31, 0.22);
+  --color-warn-line: rgba(226, 181, 85, 0.35);
+  --color-info: #8fb4d6;
+  --color-info-wash: rgba(63, 90, 114, 0.22);
+  --color-info-line: rgba(143, 180, 214, 0.35);
+  --shadow-paper: 0 18px 40px -28px rgba(0, 0, 0, 0.8);
+  --shadow-paper-soft: 0 10px 30px -24px rgba(0, 0, 0, 0.7);
 }
 
 /* A sliver sweeping the width, twice as fast at the ends as in the middle —
@@ -172,7 +212,16 @@
     background-color: var(--color-paper);
     background-image:
       radial-gradient(120% 90% at 100% -10%, var(--color-paper-2) 0%, transparent 55%),
-      radial-gradient(90% 70% at -10% 0%, #f7f3ea 0%, transparent 50%);
+      radial-gradient(90% 70% at -10% 0%, var(--color-paper-glow) 0%, transparent 50%);
+  }
+
+  /* The darkroom is flat: no paper glow, no grain — a surround the eye reads
+     as nothing at all. */
+  html[data-surface='darkroom'] body {
+    background-image: none;
+  }
+  html[data-surface='darkroom'] body::after {
+    display: none;
   }
 
   /* A tool screen is an app: nothing outside its own lists may scroll, and the

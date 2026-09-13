@@ -80,6 +80,7 @@ import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { Icons } from '../../shared/ui/icons';
 import Segmented from '../../shared/ui/Segmented';
 import DeckTimeline from './DeckTimeline';
+import { useSurface } from '../../shared/ui/use-surface';
 
 interface PostEditorProps {
   trip: TripDoc;
@@ -140,6 +141,9 @@ export default function PostEditor({
   onChangeTrip,
   headerExtra,
 }: PostEditorProps) {
+  // A grading screen sits in the darkroom: neutral grey, so the eye does not
+  // adapt to warm paper and misjudge the frame (`use-surface.ts`).
+  useSurface('darkroom');
   const lib = useAssetLibrary();
   const { active } = useActiveAsset(MEDIA_KINDS);
   const [srcInfo, setSrcInfo] = useState(NO_SOURCE);
