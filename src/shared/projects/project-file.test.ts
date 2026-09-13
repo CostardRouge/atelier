@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_DEVELOP } from '../develop/develop';
 import {
   PROJECT_FILE_KIND,
   applyProjectFile,
@@ -56,6 +57,8 @@ function sampleDoc(): ProjectDoc {
     files: [{ name: 'DJI_0001.MP4', size: 12, lastModified: 3 }],
     activeId: 'DJI_0001',
     trims: { DJI_0001: { start: 2, end: 9, duration: 12 } },
+    // A develop is about THIS picture too: it stays home with the trims.
+    develops: { DJI_0001: { settings: { ...DEFAULT_DEVELOP, exposure: 0.7 }, hash: 'abc' } },
   };
   doc.thumbnail = null;
   doc.durationSeconds = 42;
@@ -91,6 +94,8 @@ describe('toProjectFile', () => {
     expect(json).not.toContain('dirHandle');
     expect(json).not.toContain('thumbnail');
     expect(json).not.toContain('trims');
+    expect(json).not.toContain('develops');
+    expect(json).not.toContain('exposure');
   });
 
   it('inlines a custom look so the grade travels with the file', () => {
@@ -202,6 +207,7 @@ describe('applyProjectFile', () => {
       files: [{ name: 'OTHER.MP4', size: 1, lastModified: 1 }],
       activeId: 'OTHER',
       trims: { OTHER: { start: 1, end: 4, duration: 6 } },
+      develops: { OTHER: { settings: { ...DEFAULT_DEVELOP, contrast: 12 } } },
     };
     const next = applyProjectFile(target, file, 1000);
 
@@ -212,6 +218,7 @@ describe('applyProjectFile', () => {
     expect(next.media.files[0].name).toBe('OTHER.MP4');
     // The imported settings say nothing about this footage's in/out points.
     expect(next.media.trims).toEqual({ OTHER: { start: 1, end: 4, duration: 6 } });
+    expect(next.media.develops.OTHER.settings.contrast).toBe(12);
 
     expect(next.settings.aspectId).toBe('9:16');
     expect(next.elements).toEqual(file.elements);

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_DEVELOP } from '../develop/develop';
 import { adoptRenames, reconcileMedia } from './reconcile';
 import type { ProjectMedia, SavedMediaRef } from './project-types';
 
@@ -112,6 +113,7 @@ const media = (over: Partial<ProjectMedia> = {}): ProjectMedia => ({
   files: [],
   activeId: null,
   trims: {},
+  develops: {},
   ...over,
 });
 
@@ -131,6 +133,7 @@ describe('adoptRenames', () => {
         files: [saved],
         activeId: 'DJI_0001',
         trims: { DJI_0001: { start: 1, end: 2, duration: 10 } },
+        develops: { DJI_0001: { settings: { ...DEFAULT_DEVELOP, exposure: 0.5 }, hash: 'abc' } },
       }),
       r,
     );
@@ -141,6 +144,9 @@ describe('adoptRenames', () => {
     expect(adopted?.files[0].hash).toBe('abc');
     expect(adopted?.activeId).toBe('sunset');
     expect(Object.keys(adopted?.trims ?? {})).toEqual(['sunset']);
+    // The third base-name key travels with the other two.
+    expect(Object.keys(adopted?.develops ?? {})).toEqual(['sunset']);
+    expect(adopted?.develops.sunset.settings.exposure).toBe(0.5);
   });
 
   it('leaves an untouched clip alone while renaming its neighbour', () => {

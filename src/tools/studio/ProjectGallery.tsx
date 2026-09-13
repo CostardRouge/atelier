@@ -467,8 +467,10 @@ export default function ProjectGallery({
       dirHandle: choices.folder?.handle ?? null,
       files: choices.folder?.refs ?? [],
       activeId: null,
-      // A template carries no in/out points: they belong to the footage.
+      // A template carries no in/out points, and no develop: both belong to
+      // the footage.
       trims: {},
+      develops: {},
     };
     setCreating(false);
     if (await createOn(doc, 'created')) onCreated(doc, choices.folder?.files ?? []);

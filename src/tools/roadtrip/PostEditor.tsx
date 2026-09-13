@@ -4,11 +4,11 @@ import { useActiveAsset } from '../../shared/library/use-active-asset';
 import type { AssetKind } from '../../shared/library/assets';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import type { SavedMediaRef } from '../../shared/projects/project-types';
-import { hashedMediaRef, mediaOrigin } from '../../shared/projects/media-identity';
+import { hashedMediaRef } from '../../shared/projects/media-identity';
 import DevelopSheet from '../../shared/develop/DevelopSheet';
 import type { DevelopSettings } from '../../shared/develop/develop';
+import { pictureFidelity } from '../../shared/develop/picture-fidelity';
 import { normaliseFraming, type Framing } from '../../shared/media/framing';
-import { imageTypeLabel } from '../../shared/media/image-meta';
 import { badgeContent, type BadgePiece } from '../../shared/roadtrip/day-badge';
 import {
   badgeBlockExtent,
@@ -90,28 +90,6 @@ const TABS: Array<{ id: PanelTab; label: string }> = [
 const MEDIA_KINDS: readonly AssetKind[] = ['photo', 'video+telemetry', 'video'];
 
 const NO_SOURCE = { width: 0, height: 0, duration: 0 };
-
-/**
- * What a picture IS, for the Develop sheet's chip — and the sentence about
- * what it can give back. An 8-bit picture clips at white; only a RAW keeps
- * what the sensor saw above it, and until the RAW path lands (P6 of
- * `docs/photo-develop.md`) a RAW here is its JPEG twin or nothing.
- */
-function pictureFidelity(file: File | null): { chip: string | null; note: string | null } {
-  if (!file) return { chip: null, note: null };
-  const origin = mediaOrigin(file);
-  if (origin?.fidelity === 'proxy') {
-    return {
-      chip: 'proxy · 8-bit',
-      note: `an 8-bit proxy from ${origin.sourceId}: highlights above white are already gone here`,
-    };
-  }
-  if (!file.type.startsWith('image/')) return { chip: 'clip · 8-bit', note: null };
-  return {
-    chip: `${imageTypeLabel(file.name)} · 8-bit`,
-    note: 'an 8-bit picture: highlights above white are already gone',
-  };
-}
 
 /**
  * Composing one post's hook: the picture, the badge over it, and the PNG that

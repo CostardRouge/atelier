@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_DEVELOP } from '../develop/develop';
 import {
   createProjectDoc,
   migrateProjectDoc,
@@ -39,6 +40,8 @@ describe('migrateProjectDoc', () => {
     expect(migrated.exportPrefs.variants[0].frameRate).toBe('source');
     // v8: no trim, so every clip reopens at its full length.
     expect(migrated.media.trims).toEqual({});
+    // v15: no develop, so every media reopens as shot.
+    expect(migrated.media.develops).toEqual({});
     // v9: the safe zone follows the frame's orientation. Editor-only chrome,
     // so an old project adopting it changes no rendered pixel.
     expect(migrated.guides.safeZoneOrientation).toBe('auto');
@@ -195,13 +198,15 @@ describe('createProjectDoc with a template', () => {
       files: [{ name: 'a.mp4', size: 1, lastModified: 1 }],
       activeId: 'a',
       trims: { a: { start: 5, end: 12, duration: 15 } },
+      develops: { a: { settings: { ...DEFAULT_DEVELOP, exposure: 1 }, hash: 'h' } },
     };
     const copy = createProjectDoc('copy', '1:1', [], DEFAULT_GUIDES, source);
     expect(copy.theme?.presetId).toBe('pixel-crt');
     expect(copy.elements).toHaveLength(source.elements.length);
     expect(copy.media.files).toHaveLength(0);
-    // In/out points are the footage's, not the template's.
+    // In/out points are the footage's, not the template's — and so is a develop.
     expect(copy.media.trims).toEqual({});
+    expect(copy.media.develops).toEqual({});
     expect(copy.settings.aspectId).toBe('1:1'); // the modal's choice wins
     // Deep copy — mutating the copy's theme never touches the source.
     copy.theme!.style.color = '#000001';

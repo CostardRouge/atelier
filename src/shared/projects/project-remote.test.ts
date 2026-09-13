@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { DEFAULT_DEVELOP } from '../develop/develop';
 import { WinnowClient } from '../sources/winnow/client';
 import { DEFAULT_GUIDES } from '../overlay/guides';
 import { PROJECT_DOC_VERSION, createProjectDoc, type ProjectDoc } from './project-types';
@@ -34,6 +35,7 @@ function project(): ProjectDoc {
     files: [{ name: 'DJI_0001.MP4', size: 10, lastModified: 1, hash: 'abc' }],
     activeId: 'dji_0001',
     trims: { dji_0001: { start: 1, end: 5, duration: 9 } },
+    develops: { dji_0001: { settings: { ...DEFAULT_DEVELOP, exposure: 0.7 }, hash: 'abc' } },
   };
   doc.thumbnail = new Blob(['jpeg']);
   return doc;
@@ -48,6 +50,8 @@ describe('the wire shape', () => {
     // The media LIST travels — that is how the project finds its clips elsewhere.
     expect(wire.media.files[0].hash).toBe('abc');
     expect(wire.media.trims.dji_0001.start).toBe(1);
+    // So does a develop: it addresses the same media, by the same key.
+    expect(wire.media.develops.dji_0001.settings.exposure).toBe(0.7);
     expect(wire.media.activeId).toBe('dji_0001');
     expect(JSON.parse(JSON.stringify(wire))).not.toHaveProperty('thumbnail');
   });

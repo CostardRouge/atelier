@@ -1,11 +1,14 @@
 # Develop — a photo editor inside the suite
 
-**Status (2026-09-13, evening): P1 and P2 are BUILT; the decoder is DECIDED.**
-The maintainer chose `libraw-wasm` (§6.2 option (a)) and started the phases:
-the engine (P1) and Trips' side (P2 — v15, the `DevelopSheet`, the Picture
-tab's settled row, one cube per slide through `LutStack.composeWith`) are in;
-the decisions they fixed are in `media-pipeline.md` and `roadtrip.md`. P3
-onwards is still the plan, and choices 5–7 of §11 are still open. Written from the
+**Status (2026-09-13, evening): P1, P2 and P3 are BUILT; the decoder is
+DECIDED.** The maintainer chose `libraw-wasm` (§6.2 option (a)) and started
+the phases: the engine (P1), Trips' side (P2 — v15, the `DevelopSheet`, the
+Picture tab's settled row, one cube per slide through `LutStack.composeWith`)
+and the Studio's (P3 — `ProjectMedia.develops` v15, hash-guarded, the Grade
+tab's settled row, the same sheet over a photo or a clip) are in; the
+decisions they fixed are in `media-pipeline.md`, `roadtrip.md` and
+`studio.md`. P4 onwards is still the plan, and choices 5–7 of §11 are still
+open. Written from the
 maintainer's brief of the same day (*"un mini éditeur de photos… luminosité,
 contraste, exposition, saturation, brillance… highlights, whites, darks,
 shadows… des DNG… ça doit marcher aussi avec la source Winnow… des LUTs sur les
@@ -607,12 +610,18 @@ open, a slider moves the sheet's pixel, Done writes the row and re-grades the
 stage and the rail, Escape closes. Not driven by the probe: the wipe gesture,
 the hold chip, and the PNG/hook exports (no H.264 here).
 
-### P3 — Studio: `media.develops`, `adoptRenames`, the Grade tab row
+### P3 — Studio: `media.develops`, `adoptRenames`, the Grade tab row — **BUILT**
 
-v15 on `ProjectDoc`; the sheet over a photo AND a clip; the `.atelier.json`
-spec asserting the field stays out; a rename absorbed with its develop.
-Verified: the JPEG export and a video variant carry the correction; a project
-file round-trips without it.
+v15 on `ProjectDoc`; `shared/projects/media-develop.ts` (`saveDevelop` /
+`restoreDevelop`, the hash guard, pure and tested); the sheet over a photo
+AND a clip (a clip opens on the playhead's frame); the `.atelier.json` spec
+asserting the field stays out; a rename absorbed with its develop; the wire
+carrying it with the trims. Five call sites moved from `lutStack.composed` to
+`lutStack.composeWith(activeDevelop)` — the stage, the still export, the
+video export, the seek fallback, the frame grab — so `composed` is the
+sheet's cube alone. Verified by the specs and the four gates; the JPEG export
+and a video variant carrying the correction ride the same `lut` the stage
+paints from, and the encode itself is the maintainer's machine's to confirm.
 
 ### P4 — presets, copy/paste, apply-to
 

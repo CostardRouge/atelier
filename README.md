@@ -151,6 +151,19 @@ instant A/B, reordered with ↑/↓. The stack **bakes into a single LUT**
 node graph), so the preview, the stills and every export variant still grade
 through one shader pass.
 
+**Develop: the media's own correction, before the look.** The Grade tab opens
+on one settled row — `As shot`, or `+0.7 EV · highlights −40` — and
+**Develop…** opens the same sheet Trips uses over the active photo *or clip*:
+exposure in stops, brightness, contrast, highlights, shadows, whites, blacks,
+temperature, tint, saturation, vibrance, with the grade stack underneath and a
+wipe to the untouched frame. A clip opens on the frame under the playhead. The
+correction bakes as the **first** stage of the same single LUT, so the stage,
+the still export, every video variant and the frame grab all carry it. It is
+kept **per media** in the project, keyed like the trims and guarded by the
+file's content hash (a develop set on one file is not restored onto a
+same-named other), follows a rename with them, and never enters
+`.atelier.json` — a template is from no picture.
+
 **Output transform.** Conversion LUTs (D-Log→709, Apple Log→709, S-Log→709)
 are authored for a Rec.709 reference display — BT.1886, gamma 2.4, a dark
 grading suite. A browser shows roughly gamma 2.2, so those looks arrive

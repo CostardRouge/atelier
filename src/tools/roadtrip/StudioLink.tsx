@@ -140,7 +140,7 @@ export default function StudioLink({
       // against an empty listing and greets a brand-new project with "1 media
       // file not in this folder". The Studio adds the clip from the Library,
       // which is where Road Trip has already pointed it.
-      doc.media = { dirHandle: null, files: [], activeId: null, trims: {} };
+      doc.media = { dirHandle: null, files: [], activeId: null, trims: {}, develops: {} };
       const ok = await putProject(doc);
       if (!ok) {
         setNote('The browser refused to save a new project.');
