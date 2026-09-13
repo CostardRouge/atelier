@@ -371,14 +371,18 @@ export default function AssetSidebar({
   if (collapsed && variant === 'docked') {
     const empty = lib.assets.length === 0;
     return (
-      <aside className="flex-none w-12 flex flex-col items-center gap-2 py-3 border-r border-line">
-        <IconButton size="sm" label="Expand asset library" onClick={onToggle}>
+      // The rail reaches under the shell's 16px gutter (`-ml-4 w-16`), so its
+      // icons are centred between the page's edge and the rule at its right
+      // rather than between the gutter and the rule — measured 26px from the
+      // edge and 10px from the rule before, 15 and 15 now. No top padding and
+      // the pill's own 34px: the first icon IS a pill of the bar beside it.
+      <aside className="flex-none w-16 -ml-4 flex flex-col items-center gap-2 pb-3 border-r border-line">
+        <IconButton label="Expand asset library" onClick={onToggle}>
           {Icons.forward}
         </IconButton>
         {/* Adding is the rail's own verb — an empty library starts as this
             rail (App.tsx), so the way in must not wait for the panel. */}
         <IconButton
-          size="sm"
           variant={empty ? 'primary' : 'default'}
           label={busy ? 'Opening…' : 'Add files'}
           disabled={busy}
@@ -387,7 +391,7 @@ export default function AssetSidebar({
           {Icons.plus}
         </IconButton>
         <span
-          className={`w-7 h-7 grid place-items-center rounded-control font-mono text-2xs ${
+          className={`w-[2.125rem] h-[2.125rem] grid place-items-center rounded-control font-mono text-2xs ${
             empty ? 'bg-paper-2 text-muted' : 'bg-ink text-paper'
           }`}
           title={`${lib.assets.length} assets`}
