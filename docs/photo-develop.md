@@ -1,14 +1,15 @@
 # Develop — a photo editor inside the suite
 
-**Status (2026-09-13, evening): P1, P2 and P3 are BUILT; the decoder is
+**Status (2026-09-13, night): P1 to P4 are BUILT; the decoder is
 DECIDED.** The maintainer chose `libraw-wasm` (§6.2 option (a)) and started
 the phases: the engine (P1), Trips' side (P2 — v15, the `DevelopSheet`, the
-Picture tab's settled row, one cube per slide through `LutStack.composeWith`)
-and the Studio's (P3 — `ProjectMedia.develops` v15, hash-guarded, the Grade
-tab's settled row, the same sheet over a photo or a clip) are in; the
-decisions they fixed are in `media-pipeline.md`, `roadtrip.md` and
-`studio.md`. P4 onwards is still the plan, and choices 5–7 of §11 are still
-open. Written from the
+Picture tab's settled row, one cube per slide through `LutStack.composeWith`),
+the Studio's (P3 — `ProjectMedia.develops` v15, hash-guarded, the Grade
+tab's settled row, the same sheet over a photo or a clip) and the
+time-savers of §8 (P4 — the session clipboard, the trip's presets, the
+apply-to verbs) are in; the decisions they fixed are in `media-pipeline.md`,
+`roadtrip.md` and `studio.md`. P5 onwards is still the plan, and choices 5–7
+of §11 are still open. Written from the
 maintainer's brief of the same day (*"un mini éditeur de photos… luminosité,
 contraste, exposition, saturation, brillance… highlights, whites, darks,
 shadows… des DNG… ça doit marcher aussi avec la source Winnow… des LUTs sur les
@@ -623,11 +624,23 @@ sheet's cube alone. Verified by the specs and the four gates; the JPEG export
 and a video variant carrying the correction ride the same `lut` the stage
 paints from, and the encode itself is the maintainer's machine's to confirm.
 
-### P4 — presets, copy/paste, apply-to
+### P4 — presets, copy/paste, apply-to — **BUILT**
 
 The Presets and Apply-to sections; the host verbs on Trips and in the Studio;
-the counts in the labels. Verified: a preset applied to three pieces writes
-three copies; editing the preset changes none of them.
+the counts in the labels. Built as planned, with three things the build fixed:
+the clipboard is module state shaped for `useSyncExternalStore`
+(`shared/develop/develop-clipboard.ts`), never persisted; the batch helpers are
+pure (`shared/roadtrip/develop-apply.ts`: `applyDevelopToPost` skipping the
+open slide, `applyDevelopToDay` over the other posts of the same date,
+`savePreset` replacing a taken name in place, `removePreset`); and a verb
+writes on its CLICK, not on Done — Done goes through `onChangePost` and a day
+batch through `onChangeTrip`, and the two in one tick would clobber each
+other in `RoadTripTool.updatePost`. The Studio's one verb is *Apply to N other
+media*, each written under its own hash. Verified in headless Chromium (see
+`roadtrip.md` and `studio.md`): "Apply to 2 other slides" wrote two copies,
+the day batch wrote three onto the other piece and none onto the open one,
+removing a preset changed no row, and Paste carried the numbers into a second
+piece.
 
 ### P5 — the RAW spike, and the preview a DNG already carries
 

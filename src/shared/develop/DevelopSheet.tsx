@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader, type FrameGrader } from '../lut/frame-grader';
 import GradePanel from '../lut/GradePanel';
@@ -14,8 +21,15 @@ import {
   isDefaultDevelop,
   signed,
   type DevelopKey,
+  type DevelopPreset,
   type DevelopSettings,
 } from './develop';
+import {
+  copyDevelop,
+  hasCopiedDevelop,
+  pasteDevelop,
+  subscribeDevelopClipboard,
+} from './develop-clipboard';
 
 /**
  * How wide a picture is kept for the sheet. A develop is judged on a screen,
@@ -113,6 +127,33 @@ export interface DevelopSheetProps {
   lookHeader?: ReactNode;
   /** What Done writes to, in the footer: "writes to this slide". */
   footerHint?: string;
+  /**
+   * The host's presets — a trip's. A chip applies a COPY into the draft
+   * (applied, never followed); `Save current as…` hands the draft back under
+   * a name. A host with none passes nothing and the section is not drawn.
+   */
+  presets?: DevelopPresets;
+  /**
+   * Batch verbs the host offers, each naming its count in its label ("Apply
+   * to 3 other slides"). The sheet draws them and hands them the DRAFT; the
+   * host writes a copy into each target's own field, now — it does not wait
+   * for Done, which writes the open picture alone.
+   */
+  applyTo?: readonly DevelopApplyVerb[];
+}
+
+export interface DevelopPresets {
+  list: readonly DevelopPreset[];
+  onSave: (name: string, settings: DevelopSettings) => void;
+  onRemove: (id: string) => void;
+}
+
+export interface DevelopApplyVerb {
+  id: string;
+  label: string;
+  /** What the batch will write, told beside the verb. */
+  hint?: string;
+  run: (settings: DevelopSettings) => void;
 }
 
 /**
@@ -142,10 +183,24 @@ export default function DevelopSheet({
   onCancel,
   lookHeader,
   footerHint,
+  presets,
+  applyTo,
 }: DevelopSheetProps) {
   const [draft, setDraft] = useState<DevelopSettings>(value ?? DEFAULT_DEVELOP);
   const [wipe, setWipe] = useState(1);
   const [holding, setHolding] = useState(false);
+  // The session clipboard: Copy keeps the draft, Paste replaces it. Module
+  // state, so the same correction crosses Trips ↔ Studio with zero storage.
+  const canPaste = useSyncExternalStore(subscribeDevelopClipboard, hasCopiedDevelop);
+  // What a verb or a preset last did, told for a moment under its button.
+  const [told, setTold] = useState<string | null>(null);
+  useEffect(() => {
+    if (!told) return;
+    const t = window.setTimeout(() => setTold(null), 2400);
+    return () => window.clearTimeout(t);
+  }, [told]);
+  const [naming, setNaming] = useState(false);
+  const [presetName, setPresetName] = useState('');
 
   // The draft rides the stack while the sheet is up, and leaves with it.
   const { setDevelop } = stack;
@@ -157,7 +212,8 @@ export default function DevelopSheet({
   const done = useCallback(() => {
     onDone(isDefaultDevelop(draft) ? null : draft);
   }, [draft, onDone]);
-  useDialogKeys({ onCancel, onConfirm: done });
+  // While a preset is being named, Enter belongs to that field's own form.
+  useDialogKeys({ onCancel, onConfirm: naming ? null : done });
 
   const set = (key: DevelopKey, v: number) => setDraft((d) => ({ ...d, [key]: v }));
 
@@ -280,6 +336,30 @@ export default function DevelopSheet({
           <span className="flex-1" />
           <button
             type="button"
+            onClick={() => {
+              copyDevelop(draft);
+              setTold('copied');
+            }}
+            disabled={asShot}
+            className={`${linkClass} whitespace-nowrap`}
+            title="Keep these numbers for the next picture, in this session"
+          >
+            Copy
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const pasted = pasteDevelop();
+              if (pasted) setDraft(pasted);
+            }}
+            disabled={!canPaste}
+            className={`${linkClass} whitespace-nowrap`}
+            title={canPaste ? 'Replace these numbers with the copied ones' : 'Nothing copied yet'}
+          >
+            Paste
+          </button>
+          <button
+            type="button"
             onClick={() => setDraft({ ...DEFAULT_DEVELOP })}
             disabled={asShot}
             className={`${linkClass} whitespace-nowrap`}
@@ -387,6 +467,127 @@ export default function DevelopSheet({
               </div>
             ))}
 
+            {presets && (
+              <div className="flex flex-col gap-2 pt-3 border-t border-line">
+                <SectionLegend label="Presets">
+                  <p>
+                    Your own names for a light, kept on the trip. A chip writes a COPY
+                    of its numbers here — applied, never followed, so editing a preset
+                    later changes no picture. There is no factory set.
+                  </p>
+                </SectionLegend>
+                {presets.list.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {presets.list.map((p) => (
+                      <span
+                        key={p.id}
+                        className="inline-flex items-center rounded-full border border-line-strong bg-paper overflow-hidden"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDraft({ ...DEFAULT_DEVELOP, ...p.settings });
+                            setTold(`applied ${p.name}`);
+                          }}
+                          className="px-2.5 py-[0.3rem] border-0 bg-transparent text-[0.74rem] text-ink-soft cursor-pointer hover:text-accent-ink"
+                          title={describeDevelop(p.settings)}
+                        >
+                          {p.name}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => presets.onRemove(p.id)}
+                          className="px-2 py-[0.3rem] border-0 border-l border-line bg-transparent font-mono text-[0.6rem] text-muted cursor-pointer hover:text-accent"
+                          aria-label={`Remove preset ${p.name}`}
+                          title="Remove this preset — the pictures it was applied to keep their numbers"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {naming ? (
+                  <form
+                    className="flex items-center gap-1.5"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const name = presetName.trim();
+                      if (!name) return;
+                      presets.onSave(name, { ...draft });
+                      setTold(`saved ${name}`);
+                      setPresetName('');
+                      setNaming(false);
+                    }}
+                  >
+                    <input
+                      type="text"
+                      value={presetName}
+                      onChange={(e) => setPresetName(e.target.value)}
+                      onKeyDown={(e) => {
+                        // The sheet's own Escape closes it; here it closes the field.
+                        if (e.key === 'Escape') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setNaming(false);
+                        }
+                      }}
+                      placeholder="Name this light"
+                      aria-label="Preset name"
+                      autoFocus
+                      className="flex-1 min-w-0 px-2.5 py-[0.3rem] rounded-full border border-line-strong bg-paper text-[16px] leading-tight text-ink focus:outline-none focus:border-accent"
+                    />
+                    <button type="submit" className={buttonClass} disabled={!presetName.trim()}>
+                      Save
+                    </button>
+                    <button type="button" onClick={() => setNaming(false)} className={linkClass}>
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setNaming(true)}
+                    disabled={asShot}
+                    className={`${buttonClass} self-start`}
+                    title={asShot ? 'Move a slider first' : 'Keep these numbers under a name of your own'}
+                  >
+                    Save current as…
+                  </button>
+                )}
+              </div>
+            )}
+
+            {applyTo && applyTo.length > 0 && (
+              <div className="flex flex-col gap-2 pt-3 border-t border-line">
+                <SectionLegend label="Apply to…">
+                  <p>
+                    The same numbers written onto other pictures, now, each as its own
+                    copy — the look under it stays theirs. Done still writes this one.
+                  </p>
+                </SectionLegend>
+                {applyTo.map((verb) => (
+                  <div key={verb.id} className="flex flex-col items-start gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        verb.run({ ...draft });
+                        setTold(`done · ${verb.label.toLowerCase()}`);
+                      }}
+                      className={buttonClass}
+                    >
+                      {verb.label}
+                    </button>
+                    {verb.hint && (
+                      <span className="font-mono text-[0.6rem] text-faint leading-relaxed">
+                        {verb.hint}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="flex flex-col gap-2 pt-3 border-t border-line">
               <span className="flex items-center gap-2">
                 <SectionLegend label="Look">
@@ -406,6 +607,11 @@ export default function DevelopSheet({
         {/* Footer: Enter is Done, Escape is Cancel. */}
         <div className="flex-none flex items-center gap-2 pt-3 border-t border-line">
           {footerHint && <span className={legendClass}>{footerHint}</span>}
+          {told && (
+            <span className="font-mono text-[0.62rem] text-accent-ink" role="status">
+              · {told}
+            </span>
+          )}
           <span className="flex-1" />
           <button type="button" onClick={onCancel} className={buttonClass}>
             Cancel

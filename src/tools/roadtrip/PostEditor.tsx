@@ -5,11 +5,19 @@ import type { AssetKind } from '../../shared/library/assets';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import type { SavedMediaRef } from '../../shared/projects/project-types';
 import { hashedMediaRef } from '../../shared/projects/media-identity';
-import DevelopSheet from '../../shared/develop/DevelopSheet';
+import DevelopSheet, { type DevelopApplyVerb } from '../../shared/develop/DevelopSheet';
 import type { DevelopSettings } from '../../shared/develop/develop';
 import { pictureFidelity } from '../../shared/develop/picture-fidelity';
 import { normaliseFraming, type Framing } from '../../shared/media/framing';
 import { badgeContent, type BadgePiece } from '../../shared/roadtrip/day-badge';
+import {
+  applyDevelopToDay,
+  applyDevelopToPost,
+  countDayPictures,
+  countPostPictures,
+  removePreset,
+  savePreset,
+} from '../../shared/roadtrip/develop-apply';
 import {
   badgeBlockExtent,
   badgeElements,
@@ -28,6 +36,7 @@ import { formatIsoDate } from '../../shared/roadtrip/trip-days';
 import { usePublishMediaScope, type MediaScope } from '../../shared/sources/media-scope';
 import {
   createPostSlide,
+  newId,
   type PostBadge,
   type PostSlide,
   type TripDoc,
@@ -329,6 +338,43 @@ export default function PostEditor({
     [slide, post, onChangePost],
   );
   const [developOpen, setDevelopOpen] = useState(false);
+  // The sheet's time-savers (`docs/photo-develop.md` §8): the trip's presets,
+  // and two batch verbs that write a COPY onto each target now — the open
+  // slide is left to Done, which is what `slideKey` keeps out of the count.
+  const slideKey = isHook ? 'hook' : slide.slideId;
+  const otherSlides = isCta ? 0 : countPostPictures(post, slideKey);
+  const otherPieces = countDayPictures(trip, post);
+  const developPresets = useMemo(
+    () => ({
+      list: trip.developPresets,
+      onSave: (name: string, settings: DevelopSettings) =>
+        onChangeTrip(savePreset(trip, name, settings, newId())),
+      onRemove: (id: string) => onChangeTrip(removePreset(trip, id)),
+    }),
+    [trip, onChangeTrip],
+  );
+  const developApplyTo = useMemo(() => {
+    const verbs: DevelopApplyVerb[] = [];
+    if (otherSlides > 0) {
+      verbs.push({
+        id: 'slides',
+        label: `Apply to ${otherSlides} other slide${otherSlides === 1 ? '' : 's'}`,
+        hint: 'the other pictures of this piece',
+        run: (settings: DevelopSettings) =>
+          onChangePost(applyDevelopToPost(post, settings, slideKey)),
+      });
+    }
+    if (otherPieces > 0) {
+      verbs.push({
+        id: 'day',
+        label: `Apply to ${otherPieces} picture${otherPieces === 1 ? '' : 's'} of this day`,
+        hint: `the other pieces telling ${formatIsoDate(post.date)}`,
+        run: (settings: DevelopSettings) =>
+          onChangeTrip({ ...applyDevelopToDay(trip, post, settings), updatedAt: Date.now() }),
+      });
+    }
+    return verbs;
+  }, [otherSlides, otherPieces, post, trip, slideKey, onChangePost, onChangeTrip]);
 
   async function addSlide() {
     const ref = activeFile ? await hashedMediaRef(activeFile) : null;
@@ -935,6 +981,8 @@ export default function PostEditor({
         onCancel={() => setDevelopOpen(false)}
         lookHeader={<GradeScopeChips grade={grade} />}
         footerHint={isHook ? 'writes to the hook' : `writes to slide ${slide.position}`}
+        presets={developPresets}
+        applyTo={developApplyTo}
       />
     )}
 

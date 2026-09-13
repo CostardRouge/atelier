@@ -311,6 +311,47 @@ export default function StudioEditor({
   // The sheet, and the clip's moment it opened on (a photograph has one).
   const [developOpen, setDevelopOpen] = useState(false);
   const [developAt, setDevelopAt] = useState(0);
+  // The sheet's one batch verb here: the same numbers onto every OTHER media
+  // of the project, each under its own hash — a copy per entry, never a
+  // reference, and the open media is left to Done. The hashes are read as
+  // the writes land (memoised per file), so a slow folder writes one by one.
+  const otherMedia = useMemo(
+    () =>
+      clips
+        .filter((a) => a.id !== activeId)
+        .map((a) => ({ id: a.id, file: a.kind === 'photo' ? a.parts.image : a.parts.video }))
+        .filter((m): m is { id: string; file: File } => !!m.file),
+    [clips, activeId],
+  );
+  const developApplyTo = useMemo(
+    () =>
+      otherMedia.length === 0
+        ? []
+        : [
+            {
+              id: 'project',
+              label: `Apply to ${otherMedia.length} other media`,
+              hint: 'every other photo and clip of this project',
+              run: (settings: DevelopSettings) => {
+                for (const m of otherMedia) {
+                  void mediaHash(m.file).then((hash) => {
+                    setDevelops((prev) => {
+                      const saved = saveDevelop(settings, hash);
+                      if (!saved) {
+                        if (!prev[m.id]) return prev;
+                        const rest = { ...prev };
+                        delete rest[m.id];
+                        return rest;
+                      }
+                      return { ...prev, [m.id]: saved };
+                    });
+                  });
+                }
+              },
+            },
+          ],
+    [otherMedia],
+  );
   // The cube every renderer here takes: the stack baked with THIS media's
   // stored develop. While the sheet is open its draft rides `lutStack.composed`,
   // which only the sheet paints from — the stage keeps the stored value.
@@ -1464,6 +1505,7 @@ export default function StudioEditor({
           }}
           onCancel={() => setDevelopOpen(false)}
           footerHint={`writes to ${active.baseName}`}
+          applyTo={developApplyTo}
         />
       )}
 
