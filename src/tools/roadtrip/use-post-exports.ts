@@ -145,6 +145,9 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         ? await exportHookVideo({
             ...shared,
             file: hookFile,
+            onAudioSkipped: (reason) => {
+              audioSkipped = reason;
+            },
             srcWidth: hookInfo.width,
             srcHeight: hookInfo.height,
             range: hookRange(
@@ -218,6 +221,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     return exportHookVideo({
       ...shared,
       file,
+      onAudioSkipped,
       srcWidth: meta.width,
       srcHeight: meta.height,
       range: hookRange(slide.videoTimeSeconds, item.seconds, meta.duration),

@@ -29,6 +29,7 @@ import {
   drawRotatedFrame,
   exportProcessedVideo,
   makeExportCanvas,
+  type ExportOptions,
   type ExportProgress,
   type FrameProcessor,
 } from './webcodecs-export';
@@ -83,6 +84,11 @@ export interface VariantRenderOptions {
    * leaves it unset.
    */
   elementsAt?: (tSeconds: number) => OverlayElement[];
+  /** Audio the caller made for this export — see `ExportOptions.bed`. */
+  bed?: ExportOptions['bed'];
+  /** Mix that bed into the clip's own sound — see `ExportOptions.mixBed`. */
+  mixBed?: boolean;
+  onAudioSkipped?: (reason: string) => void;
 }
 
 /**
@@ -197,6 +203,9 @@ export async function exportVariantVideo(
       trim: opts.trim ?? null,
       speed: variant.speed,
       tail,
+      bed: opts.bed ?? null,
+      mixBed: opts.mixBed,
+      onAudioSkipped: opts.onAudioSkipped,
     },
   );
 }

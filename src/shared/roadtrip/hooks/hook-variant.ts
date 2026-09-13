@@ -192,6 +192,14 @@ export interface HookRender {
   paint?(g: HookCtx2D, t: number, frame: FrameBox): void;
   /** The bed, as times and voices. Rendered offline at export; see §7. */
   score?(): readonly SoundEvent[];
+  /**
+   * Over a clip that has sound of its own: mix the score into it (re-encoding
+   * the clip's sound) rather than leave it out. Absent or false keeps the
+   * clip's sound bit-for-bit — the default, since re-encoding someone's
+   * recording is never done behind their back. A clip with no sound takes the
+   * score as its track either way.
+   */
+  readonly mixWithSource?: boolean;
 }
 
 /** What a variant's own options panel is handed. */
@@ -282,6 +290,8 @@ export interface ResolvedHook {
   paint(g: HookCtx2D, t: number, frame: FrameBox): void;
   /** Every layer's events, in time order. */
   score(): readonly SoundEvent[];
+  /** Some layer asked for its score to be mixed into a clip's own sound. */
+  readonly mixWithSource: boolean;
 }
 
 /**
@@ -296,6 +306,7 @@ export function foldHook(layers: readonly HookRender[], ownsFrame: boolean): Res
   return {
     seconds,
     rewrites: layers.some((layer) => typeof layer.content === 'function'),
+    mixWithSource: layers.some((layer) => layer.mixWithSource === true && !!layer.score),
     ownsFrame,
     contentAt(base, t) {
       if (!base) return null;

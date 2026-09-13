@@ -69,6 +69,8 @@ export async function renderBed(
   seconds: number,
   {
     leadSeconds = 0,
+    sampleRate = BED_SAMPLE_RATE,
+    channels = BED_CHANNELS,
   }: {
     /**
      * Render every sound this much EARLY. An encoder that primes (AAC delays
@@ -78,14 +80,22 @@ export async function renderBed(
      * opening tick. See `aacPrimingSeconds`.
      */
     leadSeconds?: number;
+    /**
+     * The format to render at. A bed mixed into a clip is rendered at the
+     * CLIP's rate and layout, so the two can be summed sample for sample.
+     */
+    sampleRate?: number;
+    channels?: number;
   } = {},
 ): Promise<AudioBuffer | null> {
   const playable = eventsWithin(events, seconds);
   if (!playable.length || !(seconds > 0)) return null;
   if (typeof OfflineAudioContext === 'undefined') return null;
 
-  const length = Math.max(1, Math.ceil(seconds * BED_SAMPLE_RATE));
-  const ctx = new OfflineAudioContext(BED_CHANNELS, length, BED_SAMPLE_RATE);
+  const rate = sampleRate > 0 ? sampleRate : BED_SAMPLE_RATE;
+  const layout = Math.max(1, Math.min(2, Math.round(channels) || BED_CHANNELS));
+  const length = Math.max(1, Math.ceil(seconds * rate));
+  const ctx = new OfflineAudioContext(layout, length, rate);
   const master = ctx.createGain();
   master.gain.value = MASTER_GAIN;
   master.connect(ctx.destination);

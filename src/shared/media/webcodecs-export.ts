@@ -30,6 +30,9 @@ import {
   type Sample,
   type Track,
 } from 'mp4box';
+import { planAudio } from './audio-plan';
+import { decodeAacWindow, mixPlanar, type PlanarAudio } from './audio-mix';
+import { encodeAudioBuffer, type EncodedAudio } from './audio-encode';
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
 import {
   frameTimestampMicros,
@@ -115,6 +118,22 @@ export interface ExportOptions {
    * export's output size.
    */
   tail?: ExportTail | null;
+  /**
+   * Audio the suite MADE for this export (a hook's ticks), asked for in the
+   * format the pipeline needs once it knows what it is writing: the clip's own
+   * rate and layout when it will be mixed in, 48 kHz stereo when it becomes the
+   * track alone. `seconds` is the footage's delivered length (the bed ends with
+   * the footage, as copied audio does). Resolve null for nothing to add.
+   *
+   * What happens to it is `audio-plan.ts`: the track of a clip with no sound
+   * or a re-timed one; mixed into a clip's own sound only with `mixBed`;
+   * otherwise left out, and `onAudioSkipped` says so.
+   */
+  bed?: ((format: { sampleRate: number; numberOfChannels: number; seconds: number }) => Promise<PlanarAudio | null>) | null;
+  /** Mix the bed into the clip's own sound, re-encoding it. Off keeps it bit-for-bit. */
+  mixBed?: boolean;
+  /** Told why composed audio did not make it into the file, when it did not. */
+  onAudioSkipped?: (reason: string) => void;
 }
 
 /**
@@ -513,6 +532,71 @@ export async function exportProcessedVideo(
   // A re-timed picture cannot carry a copied audio track: see `frame-rate.ts`.
   const keepAudio = speed === 1 ? audioTrack : null;
 
+  // What audio the file carries is decided HERE, before the muxer is built,
+  // because its audio track is fixed at construction. A bed or a mix is
+  // rendered and encoded in full now; anything that cannot be done falls back
+  // to the clip's own sound copied untouched, with a sentence — never to a
+  // failed export and never to a declared-but-broken track.
+  const audioWin = trimWindow(videoSamples, options.trim);
+  let footageEndMicros = 0;
+  for (const s of videoSamples) {
+    footageEndMicros = Math.max(footageEndMicros, toMicros(s.cts + s.duration, s.timescale));
+  }
+  const audioEndMicros = Math.min(audioWin.endMicros, footageEndMicros);
+  const audioPlan = planAudio({
+    sourceAudio: !!audioTrack && audioSamples.length > 0,
+    retimed: speed !== 1,
+    bed: !!options.bed,
+    mix: options.mixBed === true,
+  });
+  let madeAudio: EncodedAudio | null = null;
+  let copySource = audioPlan.kind === 'copy';
+  if (audioPlan.kind === 'copy' && audioPlan.droppedBed) {
+    options.onAudioSkipped?.(audioPlan.droppedBed);
+  }
+  if ((audioPlan.kind === 'bed' || audioPlan.kind === 'mix') && options.bed) {
+    const mixing = audioPlan.kind === 'mix' && !!audioTrack;
+    const bed = await options.bed({
+      sampleRate: mixing ? (audioTrack?.audio?.sample_rate ?? 48000) : 48000,
+      numberOfChannels: mixing ? (audioTrack?.audio?.channel_count ?? 2) : 2,
+      seconds: Math.max(0, (audioEndMicros - audioWin.baseMicros) / 1_000_000 / speed),
+    });
+    let toEncode: PlanarAudio | null = bed;
+    if (mixing && audioTrack) {
+      if (!bed) {
+        // Nothing to add after all: the clip keeps its own sound, bit-for-bit.
+        copySource = true;
+        toEncode = null;
+      } else {
+        const decoded = await decodeAacWindow(
+          audioTrack,
+          audioSamples,
+          audioWin.baseMicros,
+          audioEndMicros,
+          buildAacAsc,
+        );
+        if (decoded.ok) {
+          toEncode = mixPlanar(decoded.audio, bed);
+        } else {
+          options.onAudioSkipped?.(decoded.reason);
+          copySource = true;
+          toEncode = null;
+        }
+      }
+    }
+    if (toEncode) {
+      const encoded = await encodeAudioBuffer(toEncode);
+      if (encoded.ok) {
+        madeAudio = encoded.audio;
+      } else {
+        options.onAudioSkipped?.(encoded.reason);
+        copySource = mixing;
+      }
+    }
+    throwIfAborted();
+  }
+  const copiedAudio = copySource ? keepAudio : null;
+
   const bitrate = deriveBitrate(outputWidth, outputHeight, framerate);
 
   const description = extractDescription(videoSamples[0]);
@@ -528,13 +612,19 @@ export async function exportProcessedVideo(
       height: outputHeight,
       rotation: muxerRotation,
     },
-    audio: keepAudio
+    audio: madeAudio
       ? {
           codec: 'aac',
-          sampleRate: keepAudio.audio?.sample_rate ?? 48000,
-          numberOfChannels: keepAudio.audio?.channel_count ?? 2,
+          sampleRate: madeAudio.sampleRate,
+          numberOfChannels: madeAudio.numberOfChannels,
         }
-      : undefined,
+      : copiedAudio
+        ? {
+            codec: 'aac',
+            sampleRate: copiedAudio.audio?.sample_rate ?? 48000,
+            numberOfChannels: copiedAudio.audio?.channel_count ?? 2,
+          }
+        : undefined,
     fastStart: 'in-memory',
     firstTimestampBehavior: 'cross-track-offset',
   });
@@ -738,9 +828,14 @@ export async function exportProcessedVideo(
       await encoder.flush();
       if (pipelineError) throw pipelineError;
 
-      // Trimmed: only the audio overlapping the window, rebased on it. Re-timed:
-      // no audio at all — `keepAudio` is null (see `frame-rate.ts`).
-      copyAudio(muxer, keepAudio, audioSamples, win);
+      // The audio decided before the muxer was built: a made track (a bed, or
+      // a mix) as encoded, or the clip's own — trimmed to the window and
+      // rebased on it. Re-timed without a bed: no audio at all.
+      if (madeAudio) {
+        for (const { chunk, meta } of madeAudio.chunks) muxer.addAudioChunk(chunk, meta);
+      } else {
+        copyAudio(muxer, copiedAudio, audioSamples, win);
+      }
 
       onProgress?.({ phase: 'finalizing', ratio: null });
       muxer.finalize();

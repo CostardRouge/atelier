@@ -1,11 +1,11 @@
 # The hook engine — many openers over one badge
 
-**Status (2026-09-13).** Design agreed with the maintainer; **phases 1–3, 5
-and 7 are built** — the engine, the picker, **Défilé** everywhere a hook is
-drawn and **its ticks** in a video painted from a still, and the **route
-trace**, which passed the contract test (§11, phase 7). What was phase 4 turned
-out to exist already (§8). Only mixing the ticks into a clip's own sound
-(phase 6) is not built. The
+**Status (2026-09-13).** Design agreed with the maintainer; **every phase is
+built** — the engine, the picker, **Défilé** everywhere a hook is drawn, **its
+ticks** in every video a hook makes (mixed into a clip's own sound on request),
+and the **route trace**, which passed the contract test (§11, phase 7). What
+was phase 4 turned out to exist already (§8). What is left is judgement, not
+construction: §12. The
 exemplar that drove the design is the **scrub** («&nbsp;Défilé&nbsp;»): the
 trip's measuring tape sweeps from day 1 to the day being told, flashing that
 day's pictures as it passes, and ticking.
@@ -189,8 +189,8 @@ Three cases, one of them hard:
 | The hook is built on | Audio today | With a bed |
 | --- | --- | --- |
 | a **still** | painted by `encodeFrames`, silent | the bed is the only track — `encodeFrames` gains an audio track it never had, nothing to preserve |
-| a **clip delivered silent** (`keepAudio = null`) | already silent | bed encoded alone — free lane |
-| a **clip keeping its sound** | AAC copied bit-for-bit, deliberately | decode → sum → re-encode. **The one rule that bends** — opt-in, "keep the original audio untouched" stays the default |
+| a **clip recorded without sound** (most drone footage), or **re-timed** | no track | the bed becomes the track — no decoding at all |
+| a **clip keeping its sound** | AAC copied bit-for-bit, deliberately | copied untouched and the ticks left out (said in the export note) — **unless** the author asks to mix: decode → sum → re-encode (phase 6) |
 
 Guard `AudioEncoder` the way `pickAvcCodec` guards the video codec: where it
 cannot encode, the export ships **silent with a stated reason**, never failed.
@@ -295,7 +295,12 @@ sound will add there is an audio track, since it writes none today.
 5. **The voices and the bed.** Preset table, `score()` on Défilé, offline
    render, `AudioEncoder`, an audio track in `encodeFrames`, live playback
    muted by default. Stills only — no mixing anywhere. **Built.**
-6. **Mixing**, for clips that keep their sound. Opt-in.
+6. **Mixing**, for clips that keep their sound. Opt-in. **Built** — and
+   wider than planned: the plan (`audio-plan.ts`) also gives the ticks to a
+   clip with NO sound of its own, which needs no decoding and is the common
+   case for drone footage. Measured by decoding the MP4s back: silent clip,
+   copy, mix, and a trimmed mix that lands the clip's own sound sample-exact
+   where the copy is off by up to one AAC frame (`media-pipeline.md`).
 7. **Route trace.** A second real variant, deliberately unlike the first: needs
    located places, no media, no sound, no stop list. If it fits the contract
    without changing it, the contract is right. **Built — and the verdict:**
@@ -312,8 +317,14 @@ sound will add there is an audio track, since it writes none today.
   the right place in the file (measured); whether `detent`, `leg` and `seat`
   sound like a ratchet coming to rest is the maintainer's ear to judge — the
   gains and frequencies are one table in `voices.ts`.
-- **A scrub on a CLIP carries no ticks.** The clip's own audio is copied, and
-  putting the bed in means decode → sum → re-encode: phase 6, opt-in.
+- **Mixing has no level control.** The ticks are summed at the bed's own level
+  over whatever the clip recorded; loud wind noise will bury them, a quiet clip
+  will not. A "ticks level" slider is the obvious next knob if the maintainer's
+  ear says so.
+- **An HE-AAC source** (rare in cameras and phones) would need its real
+  AudioSpecificConfig, which `decodeAacWindow` reads from the sample entry and
+  only falls back to a built LC one; if a decode fails, the export copies the
+  clip untouched and says so rather than producing garbage.
 - **The priming constant is one platform's measurement.** Another browser's AAC
   encoder may prime differently; the round trip in `media-pipeline.md` is how
   to check before claiming sync there.

@@ -9,10 +9,10 @@
  *
  * The arithmetic is `scrub-plan.ts`, the drawing `scrub-paint.ts`; this file is
  * the variant's face — what it needs, when it cannot run, and its options.
- * It ticks at every landing (`scrubScore`), the seat on today: the bed is
- * rendered offline into a video painted from a still. A clip keeps its own
- * sound and does not carry the ticks yet — mixing is the next phase
- * (`docs/hook-engine.md`).
+ * It ticks at every landing (`scrubScore`), the seat on today. The bed is the
+ * sound of a video painted from a still and of a clip recorded without any; a
+ * clip with sound of its own keeps it untouched unless the author asks for the
+ * ticks to be mixed in (`mixWithClip`, see `audio-plan.ts`).
  */
 
 import type { ReactNode } from 'react';
@@ -171,12 +171,29 @@ function ScrubPanel({ options, onChange, ctx }: HookPanelProps) {
         <span>
           Tick at every day it lands on
           <span className="block text-[0.7rem] text-faint">
-            In the video made from a photo. A clip keeps its own sound for now — mixing
-            the ticks into it comes later. Most feeds play muted: the sweep says
-            everything without them.
+            A photo, or a clip recorded without sound (most drone footage), takes the ticks
+            as its sound. Most feeds play muted: the sweep says everything without them.
           </span>
         </span>
       </label>
+
+      {o.sound && (
+        <label className="flex items-start gap-2 text-[0.78rem] text-ink-soft cursor-pointer">
+          <input
+            type="checkbox"
+            checked={o.mixWithClip}
+            onChange={(e) => set({ mixWithClip: e.target.checked })}
+            className="accent-accent mt-[3px]"
+          />
+          <span>
+            Mix them into a clip’s own sound
+            <span className="block text-[0.7rem] text-faint">
+              Off, a clip that has sound keeps it bit-for-bit and goes out without the
+              ticks. On, its sound is decoded, the ticks are added, and it is re-encoded.
+            </span>
+          </span>
+        </label>
+      )}
 
       {ctx.counterMode && ctx.counterMode !== 'day' && (
         <p className="m-0 text-[0.72rem] text-faint">
@@ -227,6 +244,7 @@ export const scrubVariant: HookVariant = {
           : undefined,
       paint: (g, t, frame) => paintScrub(g, plan, o, ctx.pictures, t, frame),
       score: o.sound ? () => scrubScore(plan) : undefined,
+      mixWithSource: o.sound && o.mixWithClip,
     };
   },
   Sketch: ScrubSketch,

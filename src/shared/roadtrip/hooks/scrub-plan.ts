@@ -44,6 +44,8 @@ export interface ScrubOptions {
   tape: TapePosition;
   /** Tick at every landing, in the exported video. */
   sound: boolean;
+  /** Over a clip with its own sound: mix the ticks in rather than leave them out. */
+  mixWithClip: boolean;
 }
 
 export const SCRUB_DEFAULTS: ScrubOptions = {
@@ -54,6 +56,7 @@ export const SCRUB_DEFAULTS: ScrubOptions = {
   flash: true,
   tape: 'bottom',
   sound: true,
+  mixWithClip: false,
 };
 
 /** The bounds each option is clamped to — a stored value is never trusted. */
@@ -115,6 +118,7 @@ export function scrubOptions(raw: Readonly<Record<string, unknown>>): ScrubOptio
     flash: o.flash !== false,
     tape: o.tape === 'top' ? 'top' : 'bottom',
     sound: o.sound !== false,
+    mixWithClip: o.mixWithClip === true,
   };
 }
 

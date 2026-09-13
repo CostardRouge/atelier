@@ -53,8 +53,26 @@ export interface HookVideoOptions {
   hook?: ResolvedHook | null;
   /** The badge's elements at a moment, when the opener rewrites its words. */
   elementsAt?: ElementsAt | null;
+  /** Told why the opener's ticks did not make it into the file, when they did not. */
+  onAudioSkipped?: (reason: string) => void;
   onProgress?: (p: ExportProgress) => void;
   signal?: AbortSignal;
+}
+
+/**
+ * The opener's score as a bed in whatever format the pipeline asks for — the
+ * clip's own rate and layout when it will be mixed in — rendered ahead of the
+ * AAC priming so each tick lands on its frame. Null when nothing scores.
+ */
+function bedFor(hook: ResolvedHook | null | undefined) {
+  const score = hook?.score() ?? [];
+  if (!score.length) return null;
+  return (format: { sampleRate: number; numberOfChannels: number; seconds: number }) =>
+    renderBed(score, format.seconds, {
+      sampleRate: format.sampleRate,
+      channels: format.numberOfChannels,
+      leadSeconds: aacPrimingSeconds(format.sampleRate),
+    });
 }
 
 export function exportHookVideo(opts: HookVideoOptions): Promise<Blob> {
@@ -85,6 +103,9 @@ export function exportHookVideo(opts: HookVideoOptions): Promise<Blob> {
             }
           : undefined,
       elementsAt: opts.elementsAt ?? undefined,
+      bed: bedFor(opts.hook),
+      mixBed: opts.hook?.mixWithSource ?? false,
+      onAudioSkipped: opts.onAudioSkipped,
     },
     opts.onProgress,
     opts.signal,

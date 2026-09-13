@@ -13,6 +13,8 @@
  * few hundred kilobytes.
  */
 
+import type { PlanarAudio } from './audio-mix';
+
 /** What is asked of the encoder. AAC-LC — the one every platform ingests. */
 export const AAC_CODEC = 'mp4a.40.2';
 const AAC_BITRATE = 128_000;
@@ -65,7 +67,7 @@ export async function canEncodeAac(sampleRate: number, numberOfChannels: number)
 
 /** Planar Float32 frames [start, start + count) of every channel, concatenated. */
 export function planarSlice(
-  buffer: AudioBuffer,
+  buffer: PlanarAudio,
   start: number,
   count: number,
 ): Float32Array<ArrayBuffer> {
@@ -82,7 +84,7 @@ export function planarSlice(
  * answers with a sentence the export can show, and the clip goes out silent —
  * `p5-templates`' own rule, "a video without sound beats a failed job".
  */
-export async function encodeAudioBuffer(buffer: AudioBuffer): Promise<AudioEncodeResult> {
+export async function encodeAudioBuffer(buffer: PlanarAudio): Promise<AudioEncodeResult> {
   const { sampleRate, numberOfChannels, length } = buffer;
   if (!(await canEncodeAac(sampleRate, numberOfChannels))) {
     return {
@@ -130,5 +132,10 @@ export async function encodeAudioBuffer(buffer: AudioBuffer): Promise<AudioEncod
       reason: 'The ticks could not be encoded, so the clip went out without them.',
     };
   }
-  return { ok: true, audio: { sampleRate, numberOfChannels, chunks } };
+  // The flush emits the encoder's tail padding as packets stamped at or past
+  // the end of the signal. Kept, they made the audio track ~75ms longer than
+  // the picture (measured), and a file lasts as long as its longest track.
+  const endMicros = (length / sampleRate) * 1_000_000;
+  const kept = chunks.filter(({ chunk }) => chunk.timestamp < endMicros);
+  return { ok: true, audio: { sampleRate, numberOfChannels, chunks: kept.length ? kept : chunks } };
 }
