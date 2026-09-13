@@ -60,7 +60,7 @@ export default function SendFinalsPanel({ files, sourceId, assetId }: SendFinals
 
   if (!connection) {
     return (
-      <p className="m-0 text-[0.78rem] text-muted">
+      <p className="m-0 text-xs text-muted">
         This clip came from {sourceId}, which is not connected here any more — reconnect it to send the finals back.
       </p>
     );
@@ -99,16 +99,16 @@ export default function SendFinalsPanel({ files, sourceId, assetId }: SendFinals
 
   return (
     <div className="flex flex-col gap-2 px-2.5 py-2 rounded-paper bg-surface border border-line" role="group" aria-label={`Send to ${sourceId}`}>
-      <span className="font-mono text-[0.66rem] tracking-[0.1em] uppercase text-muted">
+      <span className="font-mono text-2xs tracking-[0.1em] uppercase text-muted">
         back to {sourceId}
       </span>
       {!writable ? (
-        <p className="m-0 text-[0.78rem] text-muted">
+        <p className="m-0 text-xs text-muted">
           Your account on {sourceId} is a viewer; it cannot receive files. Sign in there as an editor and reconnect.
         </p>
       ) : (
         <>
-          <ul className="m-0 pl-4 font-mono text-[0.68rem] text-ink-soft tabular-nums">
+          <ul className="m-0 pl-4 font-mono text-2xs text-ink-soft tabular-nums">
             {plan.items.map((item) => (
               <li key={item.path}>
                 {item.path} · {formatBytes(item.bytes)}
@@ -116,17 +116,17 @@ export default function SendFinalsPanel({ files, sourceId, assetId }: SendFinals
             ))}
           </ul>
           {plan.problems.map((p) => (
-            <p key={p} className="m-0 text-[0.78rem] text-[#9a3a23]" role="alert">
+            <p key={p} className="m-0 text-xs text-danger" role="alert">
               {p}
             </p>
           ))}
           {plan.notes.map((n) => (
-            <p key={n} className="m-0 text-[0.74rem] text-faint">
+            <p key={n} className="m-0 text-xs text-faint">
               {n}
             </p>
           ))}
           {sending.state === 'done' ? (
-            <p className="m-0 text-[0.78rem] text-[#3f6b3f]" role="status">
+            <p className="m-0 text-xs text-ok" role="status">
               ✓ {sending.sent} file{sending.sent === 1 ? '' : 's'} sent and linked
               {plan.originalAssetId !== null ? ` to capture #${plan.originalAssetId}` : ''} on {sourceId}.
             </p>
@@ -136,13 +136,13 @@ export default function SendFinalsPanel({ files, sourceId, assetId }: SendFinals
                 type="button"
                 onClick={() => void send()}
                 disabled={busy || plan.problems.length > 0}
-                className="px-3.5 py-[0.45rem] inline-flex items-center border border-line-strong rounded-full bg-paper text-ink-soft cursor-pointer text-[0.78rem] font-semibold hover:border-accent hover:text-accent-ink disabled:opacity-50 disabled:cursor-default"
+                className="px-3.5 py-[0.45rem] inline-flex items-center border border-line-strong rounded-full bg-paper text-ink-soft cursor-pointer text-xs font-semibold hover:border-accent hover:text-accent-ink disabled:opacity-50 disabled:cursor-default"
                 title="Upload the finals into this Winnow's finals root and link them to the capture"
               >
                 {busy ? `Sending ${sending.index + 1}/${plan.items.length}…` : label}
               </button>
               {sending.state === 'failed' && (
-                <span className="text-[0.78rem] text-[#9a3a23]" role="alert">
+                <span className="text-xs text-danger" role="alert">
                   {sending.sent > 0 && `${sending.sent} sent, then: `}
                   {sending.message}{' '}
                   {sending.login && (

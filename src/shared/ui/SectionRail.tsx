@@ -30,7 +30,7 @@
 import type { SectionBar } from './section-rail';
 
 const CELL =
-  'min-h-[44px] py-1.5 rounded-paper border-0 cursor-pointer font-mono text-[0.6rem] tracking-[0.08em] uppercase truncate transition-colors duration-200 ease-paper';
+  'min-h-[44px] py-1.5 rounded-paper border-0 cursor-pointer font-mono text-3xs tracking-[0.08em] uppercase truncate transition-colors duration-200 ease-paper';
 
 export interface SectionRailProps {
   /** The tool's cells, or null for a tool that publishes none. */

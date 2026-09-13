@@ -41,7 +41,7 @@ export const barPill =
 
 /** The back pill's own skin, on top of `barPill`. */
 const backSkin =
-  'border-line-strong bg-paper text-[0.78rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink';
+  'border-line-strong bg-paper text-xs font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink';
 
 interface PageBarProps {
   /** The way back. Omitted on a screen that is already the way back. */

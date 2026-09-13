@@ -39,7 +39,7 @@ export default function InfoDot({
         /* The ring is 16px so it sits on the cap height of a legend; the
            invisible ::after gives it a 32px touch target, which is what a
            thumb actually needs. */
-        className={`relative flex-none w-4 h-4 inline-grid place-items-center align-[-0.15em] rounded-full border font-serif text-[0.62rem] leading-none cursor-pointer transition-colors after:absolute after:-inset-2 after:content-[''] ${
+        className={`relative flex-none w-4 h-4 inline-grid place-items-center align-[-0.15em] rounded-full border font-serif text-2xs leading-none cursor-pointer transition-colors after:absolute after:-inset-2 after:content-[''] ${
           open
             ? 'border-accent bg-accent-wash text-accent-ink'
             : 'border-line-strong bg-transparent text-muted hover:text-accent-ink hover:border-accent'
@@ -50,7 +50,7 @@ export default function InfoDot({
       {open && (
         <span
           id={id}
-          className="block basis-full mt-1.5 text-[0.72rem] leading-relaxed text-muted [&>p]:m-0 [&>p+p]:mt-1.5"
+          className="block basis-full mt-1.5 text-xs leading-relaxed text-muted [&>p]:m-0 [&>p+p]:mt-1.5"
         >
           {children}
         </span>

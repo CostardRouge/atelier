@@ -93,7 +93,7 @@ export default function WinnowLightbox({
         <>
           <div className="flex items-center gap-3 flex-wrap">
             {have ? (
-              <span className="font-mono text-[0.64rem] tracking-[0.08em] uppercase text-muted">
+              <span className="font-mono text-2xs tracking-[0.08em] uppercase text-muted">
                 ✓ in the library
               </span>
             ) : (
@@ -101,7 +101,7 @@ export default function WinnowLightbox({
                 type="button"
                 onClick={() => void picker.pick(row)}
                 disabled={busy}
-                className="font-mono text-[0.64rem] tracking-[0.1em] uppercase px-3 py-1.5 rounded-full bg-ink text-paper cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+                className="font-mono text-2xs tracking-[0.1em] uppercase px-3 py-1.5 rounded-full bg-ink text-paper cursor-pointer disabled:opacity-50 disabled:cursor-wait"
               >
                 {picker.fetching === row.id ? 'fetching…' : 'Add to library'}
               </button>
@@ -125,11 +125,11 @@ export default function WinnowLightbox({
                   ? `Open this ${row.media_type}'s session on ${connection.id}, in a new tab`
                   : `Open this ${row.media_type} on ${connection.id}, in a new tab`
               }
-              className="font-mono text-[0.64rem] tracking-[0.1em] uppercase px-3 py-1.5 rounded-full border border-line-strong text-ink no-underline hover:border-accent hover:text-accent-ink transition-colors"
+              className="font-mono text-2xs tracking-[0.1em] uppercase px-3 py-1.5 rounded-full border border-line-strong text-ink no-underline hover:border-accent hover:text-accent-ink transition-colors"
             >
               Open in Winnow ↗
             </a>
-            <span className="text-[0.74rem] text-muted min-w-0 truncate">
+            <span className="text-xs text-muted min-w-0 truncate">
               the proxy, from {connection.id} — nothing leaves your machine
             </span>
           </div>
@@ -140,7 +140,7 @@ export default function WinnowLightbox({
           <MediaActionRow offer={offer} onRun={(a) => void start(a)} busy={busy} />
 
           {picker.problem && (
-            <p className="m-0 text-[0.78rem] text-[#9a3a23]" role="alert">
+            <p className="m-0 text-xs text-danger" role="alert">
               {picker.problem.text}{' '}
               {picker.problem.login && (
                 <a

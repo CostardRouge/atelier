@@ -40,7 +40,7 @@ const LAYOUTS: Array<{ id: CoverLayout; label: string; needs: string; note: stri
   },
 ];
 
-const legend = 'm-0 font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted';
+const legend = 'm-0 font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 
 /**
  * Choosing what a trip shows of itself: the layout, and the pieces pinned to it.
@@ -120,13 +120,13 @@ export default function CoverPanel({ trip, value, onChange }: CoverPanelProps) {
               />
               <span className="block px-2 py-1.5 border-t border-line">
                 <span
-                  className={`block font-sans text-[0.78rem] font-semibold ${
+                  className={`block font-sans text-xs font-semibold ${
                     layout === option.id ? 'text-accent-ink' : 'text-ink-soft'
                   }`}
                 >
                   {option.label}
                 </span>
-                <span className="block font-mono text-[0.56rem] tracking-[0.06em] uppercase text-faint">
+                <span className="block font-mono text-3xs tracking-[0.06em] uppercase text-faint">
                   {option.needs}
                 </span>
               </span>
@@ -134,7 +134,7 @@ export default function CoverPanel({ trip, value, onChange }: CoverPanelProps) {
           ))}
         </div>
         {urls.size === 0 && (
-          <p className="m-0 text-[0.76rem] text-muted leading-relaxed">
+          <p className="m-0 text-xs text-muted leading-relaxed">
             No piece of this trip has a picture on this device yet, so Mosaic and
             Cover have nothing to draw — the card falls back to the trip’s rhythm
             until one does. A piece bakes its picture the first time you open it
@@ -152,13 +152,13 @@ export default function CoverPanel({ trip, value, onChange }: CoverPanelProps) {
               <button
                 type="button"
                 onClick={() => onChange({ ...value, pinned: [] })}
-                className="p-0 border-0 bg-transparent text-[0.74rem] text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink"
+                className="p-0 border-0 bg-transparent text-xs text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink"
               >
                 Clear pins
               </button>
             )}
           </div>
-          <p className="m-0 text-[0.78rem] text-ink-soft leading-relaxed">
+          <p className="m-0 text-xs text-ink-soft leading-relaxed">
             Pin up to three. Whatever you leave unpinned fills from the trip’s
             busiest days — clear them all and the cover follows the trip on its
             own.
@@ -187,12 +187,12 @@ export default function CoverPanel({ trip, value, onChange }: CoverPanelProps) {
                     className="block w-full h-full min-h-0 min-w-0 object-cover"
                   />
                   {rank >= 0 && (
-                    <b className="absolute top-1 left-1 w-4 h-4 rounded-full bg-accent text-paper font-mono text-[0.55rem] font-normal flex items-center justify-center">
+                    <b className="absolute top-1 left-1 w-4 h-4 rounded-full bg-accent text-paper font-mono text-3xs font-normal flex items-center justify-center">
                       {rank + 1}
                     </b>
                   )}
                   {day !== null && (
-                    <span className="absolute inset-x-0 bottom-0 py-[1px] font-mono text-[0.52rem] text-paper bg-[rgba(16,15,13,0.45)]">
+                    <span className="absolute inset-x-0 bottom-0 py-[1px] font-mono text-3xs text-paper bg-[rgba(16,15,13,0.45)]">
                       {day}
                     </span>
                   )}
@@ -204,7 +204,7 @@ export default function CoverPanel({ trip, value, onChange }: CoverPanelProps) {
       )}
 
       {dropped.length > 0 && (
-        <p className="m-0 px-3 py-2.5 rounded-paper border border-[#f0d5cb] bg-accent-wash text-[0.78rem] text-ink-soft leading-relaxed">
+        <p className="m-0 px-3 py-2.5 rounded-paper border border-danger-line bg-accent-wash text-xs text-ink-soft leading-relaxed">
           <b className="font-semibold text-accent-ink">
             {dropped.length === 1 ? 'One pin points' : `${dropped.length} pins point`} at nothing.
           </b>{' '}

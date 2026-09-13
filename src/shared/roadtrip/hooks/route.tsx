@@ -69,12 +69,12 @@ function RouteSketch() {
 }
 
 const chip = (on: boolean) =>
-  `px-2 py-1.5 rounded-paper border text-center cursor-pointer text-[0.74rem] transition-colors ${
+  `px-2 py-1.5 rounded-paper border text-center cursor-pointer text-xs transition-colors ${
     on
       ? 'border-accent bg-accent-wash text-accent-ink font-semibold'
       : 'border-line bg-paper text-ink-soft hover:border-line-strong'
   }`;
-const label = 'font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted';
+const label = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 
 function Row({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -110,9 +110,9 @@ function RoutePanel({ options, onChange, ctx }: HookPanelProps) {
 
   return (
     <div className="flex flex-col gap-3 pl-3 border-l-2 border-line">
-      {summary && <p className="m-0 text-[0.76rem] text-ink-soft">{summary}</p>}
+      {summary && <p className="m-0 text-xs text-ink-soft">{summary}</p>}
       {unlocated && (
-        <p className="m-0 text-[0.72rem] text-faint">
+        <p className="m-0 text-xs text-faint">
           A leg with no located place is not on the line. Places get coordinates when you
           look them up in the trip’s legs.
         </p>
@@ -151,7 +151,7 @@ function RoutePanel({ options, onChange, ctx }: HookPanelProps) {
         />
       </Row>
 
-      <label className="flex items-center gap-2 text-[0.78rem] text-ink-soft cursor-pointer">
+      <label className="flex items-center gap-2 text-xs text-ink-soft cursor-pointer">
         <input type="checkbox" checked={o.draw} onChange={(e) => set({ draw: e.target.checked })} className="accent-accent" />
         Draw the trip so far, then show what is still ahead
       </label>

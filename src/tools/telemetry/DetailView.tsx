@@ -63,14 +63,14 @@ export default function DetailView({
     'p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent disabled:text-faint disabled:cursor-default disabled:no-underline';
   // .notice base + .mismatch override (font-family: inherit, smaller text, line-strong border)
   const mismatchNotice =
-    'm-0 px-[0.65rem] py-2 rounded-paper bg-accent-wash border border-line-strong text-accent-ink text-[0.76rem] leading-[1.45]';
+    'm-0 px-[0.65rem] py-2 rounded-paper bg-accent-wash border border-line-strong text-accent-ink text-xs leading-[1.45]';
   const notice =
-    'my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-[#eccabf] text-[#7c2e1c] text-[0.86rem] leading-[1.55]';
+    'my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-danger-line text-danger-ink text-sm leading-[1.55]';
 
   return (
     <div>
       <button
-        className="inline-flex items-center gap-[0.4rem] mb-5 font-mono text-[0.78rem] tracking-[0.04em] text-ink-soft cursor-pointer border-0 bg-transparent p-0 no-underline hover:text-accent"
+        className="inline-flex items-center gap-[0.4rem] mb-5 font-mono text-xs tracking-[0.04em] text-ink-soft cursor-pointer border-0 bg-transparent p-0 no-underline hover:text-accent"
         onClick={onBack}
       >
         ← Back to gallery

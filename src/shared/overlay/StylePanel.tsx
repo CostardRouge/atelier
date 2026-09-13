@@ -37,9 +37,9 @@ interface StylePanelProps {
 }
 
 const labelClass =
-  'font-mono text-[0.62rem] tracking-[0.12em] uppercase text-muted';
+  'font-mono text-2xs tracking-[0.12em] uppercase text-muted';
 const inputClass =
-  'font-sans text-[0.82rem] text-ink bg-surface border border-line-strong rounded-paper px-[0.6rem] py-[0.4rem] w-full';
+  'font-sans text-sm text-ink bg-surface border border-line-strong rounded-paper px-[0.6rem] py-[0.4rem] w-full';
 
 const WEIGHTS: { value: FontWeight; label: string }[] = [
   { value: 400, label: 'Regular' },
@@ -95,7 +95,7 @@ export default function StylePanel({ theme, onChange, heading }: StylePanelProps
         <button
           type="button"
           onClick={() => onChange(null)}
-          className={`px-3 py-2 rounded-paper border text-left cursor-pointer text-[0.8rem] transition-colors ${
+          className={`px-3 py-2 rounded-paper border text-left cursor-pointer text-xs transition-colors ${
             theme === null
               ? 'border-accent bg-accent-wash'
               : 'border-line bg-paper hover:border-line-strong'
@@ -119,14 +119,14 @@ export default function StylePanel({ theme, onChange, heading }: StylePanelProps
               aria-pressed={active}
             >
               <span
-                className="flex-none w-[4.6rem] h-[2.2rem] grid place-items-center rounded-[4px] bg-[#141210] overflow-hidden"
+                className="flex-none w-[4.6rem] h-[2.2rem] grid place-items-center rounded-[4px] bg-frame overflow-hidden"
                 aria-hidden="true"
               >
                 <span style={cardStyle(p.style)}>Alt 87m</span>
               </span>
               <span className="min-w-0">
-                <span className="block font-semibold text-[0.82rem]">{p.name}</span>
-                <span className="block text-[0.68rem] text-muted truncate">
+                <span className="block font-semibold text-sm">{p.name}</span>
+                <span className="block text-2xs text-muted truncate">
                   {p.tagline}
                 </span>
               </span>
@@ -219,7 +219,7 @@ export default function StylePanel({ theme, onChange, heading }: StylePanelProps
             </label>
             <button
               type="button"
-              className="flex-none h-9 px-3 border border-line-strong rounded-paper bg-paper text-ink-soft cursor-pointer italic font-serif text-[0.95rem] aria-pressed:border-accent aria-pressed:text-accent-ink"
+              className="flex-none h-9 px-3 border border-line-strong rounded-paper bg-paper text-ink-soft cursor-pointer italic font-serif text-base aria-pressed:border-accent aria-pressed:text-accent-ink"
               aria-pressed={theme.style.italic}
               onClick={() => patchStyle({ italic: !theme.style.italic })}
               title="Italic"
@@ -228,7 +228,7 @@ export default function StylePanel({ theme, onChange, heading }: StylePanelProps
             </button>
             <button
               type="button"
-              className="flex-none h-9 px-3 border border-line-strong rounded-paper bg-paper text-ink-soft cursor-pointer font-semibold text-[0.8rem] aria-pressed:border-accent aria-pressed:text-accent-ink"
+              className="flex-none h-9 px-3 border border-line-strong rounded-paper bg-paper text-ink-soft cursor-pointer font-semibold text-xs aria-pressed:border-accent aria-pressed:text-accent-ink"
               aria-pressed={theme.style.uppercase}
               onClick={() => patchStyle({ uppercase: !theme.style.uppercase })}
               title="Uppercase"
@@ -293,7 +293,7 @@ export default function StylePanel({ theme, onChange, heading }: StylePanelProps
           <div className="flex flex-col gap-2 pt-2 border-t border-line">
             <button
               type="button"
-              className="self-start p-0 border-0 bg-transparent text-[0.72rem] text-muted cursor-pointer underline underline-offset-[2px] hover:text-accent-ink"
+              className="self-start p-0 border-0 bg-transparent text-xs text-muted cursor-pointer underline underline-offset-[2px] hover:text-accent-ink"
               onClick={() => setAdvanced((a) => !a)}
               aria-expanded={advanced}
             >
@@ -308,7 +308,7 @@ export default function StylePanel({ theme, onChange, heading }: StylePanelProps
                       {theme.style.glowLayers?.[f.key] != null && (
                         <button
                           type="button"
-                          className="ml-1.5 p-0 border-0 bg-transparent text-accent cursor-pointer text-[0.72rem]"
+                          className="ml-1.5 p-0 border-0 bg-transparent text-accent cursor-pointer text-xs"
                           title="Back to the slider-derived value"
                           onClick={() => {
                             const rest = { ...theme.style.glowLayers };
@@ -340,7 +340,7 @@ export default function StylePanel({ theme, onChange, heading }: StylePanelProps
                     />
                   </label>
                 ))}
-                <p className="m-0 text-[0.68rem] text-faint leading-relaxed">
+                <p className="m-0 text-2xs text-faint leading-relaxed">
                   Layers follow the glow slider until you touch one; ↺ hands a
                   layer back to the slider.
                 </p>

@@ -146,7 +146,7 @@ function ProjectCard({
             className="block w-full aspect-video object-cover"
           />
         ) : (
-          <div className="w-full aspect-video flex items-center justify-center text-[#8c8576] font-mono text-[0.72rem]">
+          <div className="w-full aspect-video flex items-center justify-center text-muted font-mono text-xs">
             {remoteOnly ? 'preview drawn once opened here' : 'no preview yet'}
           </div>
         )}
@@ -160,7 +160,7 @@ function ProjectCard({
         <div className="flex items-center gap-2 min-w-0">
           <h3
             className={`m-0 flex-1 min-w-0 font-semibold whitespace-nowrap overflow-hidden text-ellipsis ${
-              compact ? 'text-[0.85rem]' : 'text-[0.95rem]'
+              compact ? 'text-sm' : 'text-base'
             }`}
             title={doc.name}
           >
@@ -170,7 +170,7 @@ function ProjectCard({
               so a project's NAME — the one thing you pick a card by — read as
               "Sydney har…". It moves down to the facts, which wrap anyway. */}
           {aspect && !compact && (
-            <span className="flex-none font-mono text-[0.62rem] tracking-[0.08em] px-2 py-[2px] rounded-full border border-line text-muted">
+            <span className="flex-none font-mono text-2xs tracking-[0.08em] px-2 py-[2px] rounded-full border border-line text-muted">
               {aspect.id}
             </span>
           )}
@@ -178,7 +178,7 @@ function ProjectCard({
 
         <p
           className={`m-0 font-mono tabular-nums text-muted flex flex-wrap items-center gap-x-2 ${
-            compact ? 'text-[0.6rem]' : 'text-[0.7rem]'
+            compact ? 'text-3xs' : 'text-2xs'
           }`}
         >
           {aspect && compact && (
@@ -209,12 +209,12 @@ function ProjectCard({
         </p>
 
         {remoteOnly && (
-          <p className="m-0 font-mono text-[0.66rem] text-faint">
+          <p className="m-0 font-mono text-2xs text-faint">
             on {sourceLabel(doc.sourceId)} · not yet on this device
           </p>
         )}
         {busy && (
-          <p className="m-0 font-mono text-[0.66rem] text-muted" role="status">
+          <p className="m-0 font-mono text-2xs text-muted" role="status">
             {busy}
           </p>
         )}
@@ -224,7 +224,7 @@ function ProjectCard({
             type="button"
             onClick={onOpen}
             disabled={busy !== null}
-            className="px-3.5 py-[0.45rem] inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.78rem] font-semibold transition-colors duration-200 ease-paper hover:bg-accent hover:border-accent disabled:opacity-50"
+            className="px-3.5 py-[0.45rem] inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-xs font-semibold transition-colors duration-200 ease-paper hover:bg-accent hover:border-accent disabled:opacity-50"
           >
             {isOpen ? 'Resume' : remoteOnly ? 'Open here' : 'Open'}
           </button>
@@ -232,7 +232,7 @@ function ProjectCard({
             <button
               type="button"
               onClick={onDuplicate}
-              className="p-0 border-0 bg-transparent text-[0.75rem] text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink"
+              className="p-0 border-0 bg-transparent text-xs text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink"
               title="New project reusing this one's overlays, look and settings"
             >
               Use as template
@@ -245,7 +245,7 @@ function ProjectCard({
                 <button
                   type="button"
                   onClick={() => setConfirming('move')}
-                  className="p-0 border-0 bg-transparent text-[0.75rem] text-faint cursor-pointer hover:text-accent-ink"
+                  className="p-0 border-0 bg-transparent text-xs text-faint cursor-pointer hover:text-accent-ink"
                   title="Keep this project on another source"
                 >
                   Move…
@@ -254,7 +254,7 @@ function ProjectCard({
               <button
                 type="button"
                 onClick={() => setConfirming('delete')}
-                className="p-0 border-0 bg-transparent text-[0.75rem] text-faint cursor-pointer hover:text-[#9a3a23]"
+                className="p-0 border-0 bg-transparent text-xs text-faint cursor-pointer hover:text-danger"
                 aria-label={`Delete ${doc.name}`}
               >
                 Delete
@@ -262,14 +262,14 @@ function ProjectCard({
             </>
           )}
           {confirming === 'delete' && (
-            <span className="flex items-center gap-2 text-[0.75rem]">
+            <span className="flex items-center gap-2 text-xs">
               <button
                 type="button"
                 onClick={() => {
                   setConfirming(null);
                   onDelete();
                 }}
-                className="p-0 border-0 bg-transparent text-[#9a3a23] font-semibold cursor-pointer underline underline-offset-[3px]"
+                className="p-0 border-0 bg-transparent text-danger font-semibold cursor-pointer underline underline-offset-[3px]"
               >
                 Delete
               </button>
@@ -283,13 +283,13 @@ function ProjectCard({
             </span>
           )}
           {confirming === 'move' && (
-            <span className="flex items-center gap-2 text-[0.75rem] flex-wrap">
+            <span className="flex items-center gap-2 text-xs flex-wrap">
               <label className="inline-flex items-center gap-1.5 text-muted">
                 to
                 <select
                   value={moveTo}
                   onChange={(e) => setMoveTo(e.target.value)}
-                  className="font-sans text-[0.75rem] px-2 py-0.5 border border-line rounded-full bg-paper text-ink focus:outline-none focus:border-accent"
+                  className="font-sans text-xs px-2 py-0.5 border border-line rounded-full bg-paper text-ink focus:outline-none focus:border-accent"
                   aria-label="Move this project to"
                 >
                   {moveTargets.map((s) => (
@@ -618,7 +618,7 @@ export default function ProjectGallery({
             <button
               type="button"
               onClick={startImport}
-              className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-line-strong rounded-full bg-paper text-ink-soft cursor-pointer text-[0.84rem] transition-colors hover:border-accent hover:text-accent-ink"
+              className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-line-strong rounded-full bg-paper text-ink-soft cursor-pointer text-sm transition-colors hover:border-accent hover:text-accent-ink"
               title={`Create a project from an exported settings file (${PROJECT_FILE_EXTENSION})`}
             >
               ↑ Import a project file
@@ -626,7 +626,7 @@ export default function ProjectGallery({
             <button
               type="button"
               onClick={() => setCreating(true)}
-              className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent active:scale-[0.98]"
+              className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent active:scale-[0.98]"
             >
               + New project
             </button>
@@ -635,32 +635,32 @@ export default function ProjectGallery({
       )}
 
       {notice && (
-        <p className="m-0 text-[0.8rem] text-[#9a3a23]" role="alert">
+        <p className="m-0 text-xs text-danger" role="alert">
           {notice}
         </p>
       )}
 
       {projects === null ? (
-        <p className="m-0 text-[0.85rem] text-muted font-mono">Loading projects…</p>
+        <p className="m-0 text-sm text-muted font-mono">Loading projects…</p>
       ) : nothingAnywhere && remoteSourceIds.every((id) => remoteLists[id]?.status === 'ok') ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-[42ch] flex flex-col items-center gap-3 border border-dashed border-line-strong rounded-paper-lg px-8 py-10">
-            <p className="m-0 font-serif text-[1.25rem]">No projects yet</p>
-            <p className="m-0 text-[0.85rem] text-muted leading-relaxed">
+            <p className="m-0 font-serif text-xl">No projects yet</p>
+            <p className="m-0 text-sm text-muted leading-relaxed">
               A project keeps your overlays, look and layout — and remembers
               which folder its media lives in, so it reopens in one click.
             </p>
             <button
               type="button"
               onClick={() => setCreating(true)}
-              className="mt-1 px-[1.1rem] py-2 inline-flex items-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold hover:bg-accent hover:border-accent"
+              className="mt-1 px-[1.1rem] py-2 inline-flex items-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold hover:bg-accent hover:border-accent"
             >
               Create the first one
             </button>
             <button
               type="button"
               onClick={startImport}
-              className="p-0 border-0 bg-transparent text-[0.78rem] text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink"
+              className="p-0 border-0 bg-transparent text-xs text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink"
             >
               or import a project file
             </button>
@@ -677,7 +677,7 @@ export default function ProjectGallery({
             const moveTargets = documentSources.filter((s) => s.id !== id);
             return (
               <section key={id} aria-label={`Projects from ${source?.label ?? id}`}>
-                <p className="m-0 mb-3 font-mono text-[0.66rem] tracking-[0.14em] uppercase text-muted">
+                <p className="m-0 mb-3 font-mono text-2xs tracking-[0.14em] uppercase text-muted">
                   source: {source?.label ?? id}
                   <span className="text-faint"> · </span>
                   <span className="tabular-nums">
@@ -711,7 +711,7 @@ export default function ProjectGallery({
                   )}
                 </p>
                 {count === 0 ? (
-                  <p className="m-0 text-[0.8rem] text-faint">Nothing kept here yet.</p>
+                  <p className="m-0 text-xs text-faint">Nothing kept here yet.</p>
                 ) : (
                   <div
                     className={

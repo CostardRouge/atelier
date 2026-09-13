@@ -27,7 +27,7 @@ export default function StageZoomControl({
 }) {
   const button =
     'w-6 h-6 grid place-items-center rounded-full border border-line-strong bg-paper text-ink ' +
-    'font-mono text-[0.8rem] leading-none cursor-pointer transition-colors ' +
+    'font-mono text-xs leading-none cursor-pointer transition-colors ' +
     'hover:border-accent hover:text-accent-ink disabled:opacity-40 disabled:cursor-default ' +
     'disabled:hover:border-line-strong disabled:hover:text-ink';
 
@@ -51,7 +51,7 @@ export default function StageZoomControl({
         disabled={zoom.scale === 1}
         title="Back to the fitted size"
         aria-label={`Zoom: ${zoom.label}. Back to the fitted size`}
-        className="min-w-[3.1rem] px-1 font-mono text-[0.68rem] tracking-[0.06em] text-muted cursor-pointer bg-transparent border-0 hover:text-accent-ink disabled:cursor-default disabled:hover:text-muted"
+        className="min-w-[3.1rem] px-1 font-mono text-2xs tracking-[0.06em] text-muted cursor-pointer bg-transparent border-0 hover:text-accent-ink disabled:cursor-default disabled:hover:text-muted"
       >
         {zoom.label}
       </button>

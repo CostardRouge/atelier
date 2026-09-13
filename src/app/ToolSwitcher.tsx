@@ -75,7 +75,7 @@ export default function ToolSwitcher({ tool }: { tool: Tool }) {
                   active ? 'bg-paper-2' : 'hover:bg-paper-2/60'
                 }`}
               >
-                <span className="flex items-center gap-2 text-[0.95rem] font-semibold text-ink leading-none">
+                <span className="flex items-center gap-2 text-base font-semibold text-ink leading-none">
                   {t.label}
                   {active && (
                     <span
@@ -85,7 +85,7 @@ export default function ToolSwitcher({ tool }: { tool: Tool }) {
                   )}
                 </span>
                 {t.subtitle && (
-                  <span className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-muted">
+                  <span className="font-mono text-2xs uppercase tracking-[0.14em] text-muted">
                     {t.subtitle}
                   </span>
                 )}

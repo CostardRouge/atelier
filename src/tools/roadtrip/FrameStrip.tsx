@@ -115,11 +115,11 @@ export default function FrameStrip({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline gap-2">
-        <span className="font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted">
+        <span className="font-mono text-2xs tracking-[0.14em] uppercase text-muted">
           {label}
         </span>
         <span className="flex-1" />
-        <span className="font-mono text-[0.68rem] tabular-nums text-ink-soft">
+        <span className="font-mono text-2xs tabular-nums text-ink-soft">
           {value.toFixed(2)}s
         </span>
       </div>
@@ -188,7 +188,7 @@ export default function FrameStrip({
         />
       </div>
 
-      <span className="text-[0.68rem] text-faint">
+      <span className="text-2xs text-faint">
         Drag along the clip to choose the frame — arrows nudge, shift jumps.
       </span>
     </div>

@@ -137,7 +137,7 @@ export default function SlideDelivery({
               className={`${chipClass(slide.chosen === choice.id)} flex flex-col gap-0.5 !text-left`}
             >
               <span className="font-semibold">{choice.label}</span>
-              <span className="font-mono text-[0.6rem] tracking-[0.06em] uppercase opacity-70">
+              <span className="font-mono text-3xs tracking-[0.06em] uppercase opacity-70">
                 {hint ?? ' '}
               </span>
             </button>
@@ -145,7 +145,7 @@ export default function SlideDelivery({
         })}
       </div>
 
-      <p className="m-0 text-[0.76rem] text-ink-soft">
+      <p className="m-0 text-xs text-ink-soft">
         {reasonSentence(slide.reason, seconds, slide.speed)}
       </p>
 
@@ -166,7 +166,7 @@ export default function SlideDelivery({
           className="accent-accent"
           aria-label="How long this slide stays on screen"
         />
-        <span className="text-[0.72rem] text-muted">
+        <span className="text-xs text-muted">
           {slide.medium === 'video'
             ? clipSeconds > 0
               ? 'The length of the clip this slide delivers — the out point on the bar under the picture, where the in point and the speed are cut too.'

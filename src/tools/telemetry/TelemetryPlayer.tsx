@@ -39,13 +39,13 @@ export default function TelemetryPlayer({
           className="block w-full max-h-[64vh] bg-frame rounded-paper"
         />
       ) : (
-        <div className="w-full aspect-video flex items-center justify-center bg-surface border border-line rounded-paper text-muted text-center p-4 font-mono text-[0.85rem]">
+        <div className="w-full aspect-video flex items-center justify-center bg-surface border border-line rounded-paper text-muted text-center p-4 font-mono text-sm">
           Select a video file to begin.
         </div>
       )}
 
       {videoError && (
-        <div className="my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-[#eccabf] text-[#7c2e1c] text-[0.86rem] leading-[1.55] flex flex-col gap-3">
+        <div className="my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-danger-line text-danger-ink text-sm leading-[1.55] flex flex-col gap-3">
           <p className="m-0">
             The video failed to play. DJI clips are often HEVC/H.265, which not
             every browser decodes natively. The telemetry below still works if
@@ -57,7 +57,7 @@ export default function TelemetryPlayer({
       )}
 
       {videoUrl && cues.length === 0 && (
-        <p className="my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-[#eccabf] text-[#7c2e1c] text-[0.86rem] leading-[1.55]">
+        <p className="my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-danger-line text-danger-ink text-sm leading-[1.55]">
           No telemetry loaded yet — select the matching{' '}
           <code className="font-mono text-[0.85em] bg-[rgba(124,46,28,0.1)] px-[0.35em] py-[0.05em] rounded-[4px]">
             .srt

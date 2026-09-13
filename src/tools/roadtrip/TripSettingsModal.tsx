@@ -134,8 +134,8 @@ export default function TripSettingsModal({
     >
       <div className="w-full max-w-[52rem] h-[min(90dvh,40rem)] flex flex-col overflow-hidden bg-surface border border-line rounded-paper-lg shadow-paper max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0">
         <div className="flex-none flex items-baseline gap-3 px-6 pt-[1.4rem] pb-3.5 border-b border-line">
-          <h2 className="m-0 flex-none whitespace-nowrap font-serif text-[1.4rem]">Trip settings</h2>
-          <span className="min-w-0 font-mono text-[0.68rem] text-muted truncate">
+          <h2 className="m-0 flex-none whitespace-nowrap font-serif text-2xl">Trip settings</h2>
+          <span className="min-w-0 font-mono text-2xs text-muted truncate">
             {trip.name} · {facts}
           </span>
           <span className="flex-1" />
@@ -143,7 +143,7 @@ export default function TripSettingsModal({
             type="button"
             onClick={onClose}
             aria-label="Close the trip settings"
-            className="flex-none w-7 h-7 grid place-items-center rounded-full border border-line text-[1.05rem] leading-none text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
+            className="flex-none w-7 h-7 grid place-items-center rounded-full border border-line text-base leading-none text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
           >
             ×
           </button>
@@ -157,7 +157,7 @@ export default function TripSettingsModal({
               showRail ? 'max-[820px]:flex' : 'max-[820px]:hidden'
             }`}
           >
-            <span className="font-mono text-[0.6rem] tracking-[0.14em] uppercase text-muted px-3 pt-1 pb-2">
+            <span className="font-mono text-3xs tracking-[0.14em] uppercase text-muted px-3 pt-1 pb-2">
               Shared by the whole trip
             </span>
             {SECTIONS.map((s) => (
@@ -169,7 +169,7 @@ export default function TripSettingsModal({
                   setShowRail(false);
                 }}
                 aria-current={s.id === open}
-                className={`text-left px-3 py-2 rounded-paper text-[0.82rem] cursor-pointer transition-colors max-[820px]:text-base max-[820px]:py-2.5 ${
+                className={`text-left px-3 py-2 rounded-paper text-sm cursor-pointer transition-colors max-[820px]:text-base max-[820px]:py-2.5 ${
                   s.id === open
                     ? 'bg-accent-wash text-accent-ink font-semibold'
                     : 'text-ink-soft hover:bg-paper-2'
@@ -188,7 +188,7 @@ export default function TripSettingsModal({
             <button
               type="button"
               onClick={() => setShowRail(true)}
-              className="hidden max-[820px]:inline-flex self-start items-center h-[2rem] px-3 rounded-full border border-line-strong bg-paper text-[0.82rem] font-semibold text-ink-soft cursor-pointer"
+              className="hidden max-[820px]:inline-flex self-start items-center h-[2rem] px-3 rounded-full border border-line-strong bg-paper text-sm font-semibold text-ink-soft cursor-pointer"
             >
               ‹ All settings
             </button>
@@ -229,7 +229,7 @@ export default function TripSettingsModal({
                 <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 max-[820px]:grid-cols-1">
                   {WORD_FIELDS.map((f) => (
                     <label key={f.key} className="flex items-center gap-2.5">
-                      <span className="w-[6.5rem] flex-none text-[0.72rem] text-muted">
+                      <span className="w-[6.5rem] flex-none text-xs text-muted">
                         {f.label}
                       </span>
                       <input
@@ -240,13 +240,13 @@ export default function TripSettingsModal({
                     </label>
                   ))}
                 </div>
-                <span className="font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted">
+                <span className="font-mono text-2xs tracking-[0.14em] uppercase text-muted">
                   Time
                 </span>
                 <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 max-[820px]:grid-cols-1">
                   {TIME_AGO_WORD_FIELDS.map((f) => (
                     <label key={f.key} className="flex items-center gap-2.5">
-                      <span className="w-[6.5rem] flex-none text-[0.72rem] text-muted">
+                      <span className="w-[6.5rem] flex-none text-xs text-muted">
                         {f.label}
                       </span>
                       <input
@@ -339,7 +339,7 @@ export default function TripSettingsModal({
                   )}
                 </div>
                 {!savedDefault && (
-                  <span className="text-[0.7rem] text-faint">
+                  <span className="text-2xs text-faint">
                     Nothing saved yet — new pieces start from the factory look.
                   </span>
                 )}
@@ -356,7 +356,7 @@ export default function TripSettingsModal({
           <button
             type="button"
             onClick={onClose}
-            className="h-[2.1rem] px-[1.1rem] inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.82rem] font-semibold hover:bg-accent hover:border-accent"
+            className="h-[2.1rem] px-[1.1rem] inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold hover:bg-accent hover:border-accent"
           >
             Done
           </button>

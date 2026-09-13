@@ -71,7 +71,7 @@ export default function ElementList({
       {addControls && (
         <div className="flex flex-wrap items-center gap-2">
           <select
-            className="font-sans text-[0.8rem] text-ink bg-surface border border-line-strong rounded-paper px-[0.55rem] py-[0.35rem] cursor-pointer"
+            className="font-sans text-xs text-ink bg-surface border border-line-strong rounded-paper px-[0.55rem] py-[0.35rem] cursor-pointer"
             value={field}
             onChange={(e) => setField(e.target.value as TelemetryFieldKey)}
             aria-label="Telemetry field to add"
@@ -119,7 +119,7 @@ export default function ElementList({
       )}
 
       {elements.length === 0 ? (
-        <p className="m-0 px-1 py-3 text-[0.8rem] text-muted">
+        <p className="m-0 px-1 py-3 text-xs text-muted">
           No elements yet. Add a telemetry field or text, then drag it onto the
           frame.
         </p>
@@ -142,7 +142,7 @@ export default function ElementList({
               >
                 <button
                   type="button"
-                  className="flex-none w-4 text-center text-[0.8rem] text-ink-soft hover:text-accent"
+                  className="flex-none w-4 text-center text-xs text-ink-soft hover:text-accent"
                   onClick={(e) => {
                     e.stopPropagation();
                     onToggleVisible(el.id);
@@ -153,14 +153,14 @@ export default function ElementList({
                   {el.visible ? '◉' : '○'}
                 </button>
                 <span
-                  className={`flex-1 min-w-0 truncate text-[0.82rem] ${
+                  className={`flex-1 min-w-0 truncate text-sm ${
                     el.visible ? 'text-ink' : 'text-faint line-through'
                   }`}
                   title={preview}
                 >
                   {preview}
                 </span>
-                <span className="flex-none font-mono text-[0.6rem] uppercase tracking-[0.1em] text-muted">
+                <span className="flex-none font-mono text-3xs uppercase tracking-[0.1em] text-muted">
                   {shape ? shape.tag : el.kind === 'text' ? 'TXT' : el.field}
                 </span>
                 <button

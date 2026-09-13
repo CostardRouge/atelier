@@ -74,7 +74,7 @@ export default function WinnowThumb({ client, id, label, box, alt = '' }: Winnow
   if (attempt > THUMB_RETRIES) {
     return (
       <div className={`${box} grid place-items-center bg-frame`}>
-        <span className="font-mono text-[0.55rem] uppercase tracking-wide text-[#8a8270]">
+        <span className="font-mono text-3xs uppercase tracking-wide text-muted">
           {label}
         </span>
       </div>

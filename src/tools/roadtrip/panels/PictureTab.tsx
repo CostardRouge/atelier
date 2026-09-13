@@ -123,11 +123,11 @@ export default function PictureTab({
             </p>
           </SectionLegend>
           {slideFile ? (
-            <p className="m-0 text-[0.8rem] text-ink-soft truncate" title={slideFile.name}>
+            <p className="m-0 text-xs text-ink-soft truncate" title={slideFile.name}>
               {slideFile.name}
             </p>
           ) : (
-            <p className="m-0 text-[0.78rem] text-muted">
+            <p className="m-0 text-xs text-muted">
               {recovery?.state === 'fetching'
                 ? `“${slide.media?.name}” lives on ${recovery.sourceId} — fetching it back…`
                 : missing
@@ -136,7 +136,7 @@ export default function PictureTab({
             </p>
           )}
           {recovery?.state === 'failed' && (
-            <p className="m-0 text-[0.78rem] text-[#9a3a23]" role="alert">
+            <p className="m-0 text-xs text-danger" role="alert">
               {recovery.problem}{' '}
               {recovery.loginUrl && (
                 <a
@@ -167,7 +167,7 @@ export default function PictureTab({
             />
           )}
           {isVideo && duration > 0 && slideFile && (
-            <p className="m-0 text-[0.72rem] text-muted">
+            <p className="m-0 text-xs text-muted">
               Where the slide’s stretch of the clip starts; it keeps its length. Cut its
               end and choose its speed on the bar under the picture.
             </p>
@@ -187,7 +187,7 @@ export default function PictureTab({
       )}
 
       {isCta && (
-        <p className="m-0 text-[0.78rem] text-muted">
+        <p className="m-0 text-xs text-muted">
           The closing card carries no photograph: a flat ground is what keeps the QR
           readable and the sentence unmissable.
         </p>
@@ -296,7 +296,7 @@ export default function PictureTab({
           </SectionLegend>
           <div className="flex items-center gap-2 min-w-0">
             <span
-              className={`flex-1 min-w-0 truncate font-mono text-[0.68rem] ${
+              className={`flex-1 min-w-0 truncate font-mono text-2xs ${
                 develop ? 'text-ink-soft' : 'text-faint'
               }`}
               title={describeDevelop(develop)}
@@ -318,7 +318,7 @@ export default function PictureTab({
                 onClick={onResetDevelop}
                 title="Back to as shot"
                 aria-label="Back to as shot"
-                className="w-6 h-6 grid place-items-center rounded-full border border-line bg-transparent text-[0.8rem] text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
+                className="w-6 h-6 grid place-items-center rounded-full border border-line bg-transparent text-xs text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
               >
                 ↺
               </button>
@@ -365,7 +365,7 @@ export default function PictureTab({
             </p>
           </SectionLegend>
           {scope === 'trip' && (
-            <span className="font-mono text-[0.55rem] tracking-[0.12em] uppercase text-muted border border-line-strong rounded-full px-1.5 py-px">
+            <span className="font-mono text-3xs tracking-[0.12em] uppercase text-muted border border-line-strong rounded-full px-1.5 py-px">
               Trip
             </span>
           )}
@@ -373,7 +373,7 @@ export default function PictureTab({
         <GradeScopeChips grade={grade} />
         <GradePanel stack={stack} />
         {stack.error && (
-          <p className="m-0 text-[0.76rem] text-[#9a3a23]" role="alert">
+          <p className="m-0 text-xs text-danger" role="alert">
             {stack.error}
           </p>
         )}

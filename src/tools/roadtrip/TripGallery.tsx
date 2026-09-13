@@ -103,7 +103,7 @@ function sourceLabel(id: string): string {
 
 /** One row of the card's overflow menu. */
 const menuItem =
-  'text-left font-sans text-[0.78rem] text-ink-soft bg-transparent border-0 px-2.5 py-2 rounded-[10px] cursor-pointer hover:bg-paper-2 hover:text-ink';
+  'text-left font-sans text-xs text-ink-soft bg-transparent border-0 px-2.5 py-2 rounded-[10px] cursor-pointer hover:bg-paper-2 hover:text-ink';
 
 /** The bottom-left caption on a picture cover: which day it is looking at. */
 function tileCaption(tile: CoverTile): string {
@@ -141,7 +141,7 @@ function RhythmBand({ coverage, compact }: { coverage: TripCoverage; compact: bo
         compact ? 'px-2.5 py-2' : 'px-3.5 py-3'
       }`}
     >
-      <p className="m-0 font-mono text-[0.62rem] tracking-[0.08em] uppercase text-muted truncate">
+      <p className="m-0 font-mono text-2xs tracking-[0.08em] uppercase text-muted truncate">
         {coverage.toldDays === 0 ? (
           `${coverage.totalDays} days, none told yet`
         ) : gap && gap.length > 1 ? (
@@ -205,7 +205,7 @@ function CoverArt({
     if (remoteOnly) {
       return (
         <div className={`${h.box} bg-paper-2 flex items-center justify-center px-4`}>
-          <p className="m-0 font-mono text-[0.62rem] tracking-[0.08em] uppercase text-faint text-center leading-[1.7]">
+          <p className="m-0 font-mono text-2xs tracking-[0.08em] uppercase text-faint text-center leading-[1.7]">
             pictures live on
             <br />
             {sourceLabel(trip.sourceId)}
@@ -243,7 +243,7 @@ function CoverArt({
         </div>
       )}
       <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-b from-transparent to-[rgba(16,15,13,0.52)] pointer-events-none" />
-      <span className="absolute left-3 bottom-2.5 font-mono text-[0.62rem] tracking-[0.1em] uppercase text-paper [text-shadow:0_1px_3px_rgba(0,0,0,0.5)]">
+      <span className="absolute left-3 bottom-2.5 font-mono text-2xs tracking-[0.1em] uppercase text-paper [text-shadow:0_1px_3px_rgba(0,0,0,0.5)]">
         {tileCaption(tiles[0])}
       </span>
     </div>
@@ -337,7 +337,7 @@ function TripCard({
         />
         {(isOpen || remoteOnly) && trip.cover.layout !== 'none' && (
           <span
-            className={`absolute top-2.5 right-2.5 px-2 py-[3px] rounded-full border font-mono text-[0.58rem] tracking-[0.08em] uppercase bg-[rgba(251,248,241,0.92)] ${
+            className={`absolute top-2.5 right-2.5 px-2 py-[3px] rounded-full border font-mono text-3xs tracking-[0.08em] uppercase bg-[rgba(251,248,241,0.92)] ${
               isOpen ? 'border-accent text-accent-ink' : 'border-line text-muted'
             }`}
           >
@@ -352,7 +352,7 @@ function TripCard({
           <button
             type="button"
             onClick={onChooseCover}
-            className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line bg-[rgba(251,248,241,0.92)] text-ink-soft font-mono text-[0.58rem] tracking-[0.08em] uppercase cursor-pointer opacity-0 transition-opacity duration-200 ease-paper group-hover:opacity-100 focus-visible:opacity-100 hover:border-accent hover:text-accent-ink"
+            className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line bg-[rgba(251,248,241,0.92)] text-ink-soft font-mono text-3xs tracking-[0.08em] uppercase cursor-pointer opacity-0 transition-opacity duration-200 ease-paper group-hover:opacity-100 focus-visible:opacity-100 hover:border-accent hover:text-accent-ink"
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <rect
@@ -379,12 +379,12 @@ function TripCard({
       <div className={`flex flex-col ${compact ? 'gap-2 p-3.5' : 'gap-3 p-5'}`}>
         <div className="min-w-0">
           <h3
-            className={`m-0 font-serif truncate ${compact ? 'text-[1.05rem]' : 'text-[1.2rem]'}`}
+            className={`m-0 font-serif truncate ${compact ? 'text-base' : 'text-lg'}`}
             title={trip.name}
           >
             {trip.name}
           </h3>
-          <p className="m-0 font-mono text-[0.68rem] text-muted truncate">
+          <p className="m-0 font-mono text-2xs text-muted truncate">
             {trip.destination || 'No destination set'}
           </p>
         </div>
@@ -397,7 +397,7 @@ function TripCard({
             losing its second half. */}
         <p
           className={`m-0 font-mono tabular-nums text-muted truncate ${
-            compact ? 'text-[0.6rem]' : 'text-[0.7rem]'
+            compact ? 'text-3xs' : 'text-2xs'
           }`}
         >
           {formatIsoDate(trip.startDate)} → {formatIsoDate(trip.endDate)}
@@ -412,7 +412,7 @@ function TripCard({
               style={{ width: `${pct}%` }}
             />
           </div>
-          <p className="m-0 mt-1.5 font-mono text-[0.66rem] text-muted tabular-nums">
+          <p className="m-0 mt-1.5 font-mono text-2xs text-muted tabular-nums">
             {coverage.toldDays} of {total} day{total === 1 ? '' : 's'} told
             <span className="text-faint"> · </span>
             {coverage.publishedPosts} published
@@ -420,7 +420,7 @@ function TripCard({
         </div>
 
         {busy && (
-          <p className="m-0 font-mono text-[0.66rem] text-muted" role="status">
+          <p className="m-0 font-mono text-2xs text-muted" role="status">
             {busy}
           </p>
         )}
@@ -430,7 +430,7 @@ function TripCard({
             type="button"
             onClick={onOpen}
             disabled={busy !== null}
-            className="px-3.5 py-[0.45rem] inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.78rem] font-semibold transition-colors duration-200 ease-paper hover:bg-accent hover:border-accent disabled:opacity-50"
+            className="px-3.5 py-[0.45rem] inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-xs font-semibold transition-colors duration-200 ease-paper hover:bg-accent hover:border-accent disabled:opacity-50"
           >
             {isOpen ? 'Resume' : remoteOnly ? 'Open here' : 'Open'}
           </button>
@@ -444,7 +444,7 @@ function TripCard({
             <button
               type="button"
               onClick={onChooseCover}
-              className="p-0 border-0 bg-transparent font-mono text-[0.58rem] tracking-[0.08em] uppercase text-faint cursor-pointer opacity-0 transition-opacity duration-200 ease-paper group-hover:opacity-100 focus-visible:opacity-100 hover:text-accent-ink"
+              className="p-0 border-0 bg-transparent font-mono text-3xs tracking-[0.08em] uppercase text-faint cursor-pointer opacity-0 transition-opacity duration-200 ease-paper group-hover:opacity-100 focus-visible:opacity-100 hover:text-accent-ink"
             >
               Cover
             </button>
@@ -524,7 +524,7 @@ function TripCard({
               <button
                 type="button"
                 role="menuitem"
-                className={`${menuItem} text-[#9a3a23] hover:bg-accent-wash`}
+                className={`${menuItem} text-danger hover:bg-accent-wash`}
                 onClick={() => {
                   setMenu(false);
                   setConfirming('delete');
@@ -536,7 +536,7 @@ function TripCard({
           )}
 
           {confirming === 'delete' && (
-            <span className="flex items-center gap-2 text-[0.75rem]">
+            <span className="flex items-center gap-2 text-xs">
               <span className="text-muted">Delete for good?</span>
               <button
                 type="button"
@@ -544,7 +544,7 @@ function TripCard({
                   setConfirming(null);
                   onDelete();
                 }}
-                className="p-0 border-0 bg-transparent text-[#9a3a23] font-semibold cursor-pointer underline underline-offset-[3px]"
+                className="p-0 border-0 bg-transparent text-danger font-semibold cursor-pointer underline underline-offset-[3px]"
               >
                 Delete
               </button>
@@ -558,13 +558,13 @@ function TripCard({
             </span>
           )}
           {confirming === 'move' && (
-            <span className="flex items-center gap-2 text-[0.75rem] flex-wrap">
+            <span className="flex items-center gap-2 text-xs flex-wrap">
               <label className="inline-flex items-center gap-1.5 text-muted">
                 to
                 <select
                   value={moveTo}
                   onChange={(e) => setMoveTo(e.target.value)}
-                  className="font-sans text-[0.75rem] px-2 py-0.5 border border-line rounded-full bg-paper text-ink focus:outline-none focus:border-accent"
+                  className="font-sans text-xs px-2 py-0.5 border border-line rounded-full bg-paper text-ink focus:outline-none focus:border-accent"
                   aria-label="Move this trip to"
                 >
                   {moveTargets.map((s) => (
@@ -908,7 +908,7 @@ export default function TripGallery({
               if (documentSources.length > 1) setImporting(true);
               else void handleImport(DEFAULT_SOURCE_ID);
             }}
-            className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-line-strong rounded-full bg-paper text-ink-soft cursor-pointer text-[0.84rem] transition-colors hover:border-accent hover:text-accent-ink"
+            className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-line-strong rounded-full bg-paper text-ink-soft cursor-pointer text-sm transition-colors hover:border-accent hover:text-accent-ink"
             title={`Create a trip from an exported file (${TRIP_FILE_EXTENSION})`}
           >
             ↑ Import a trip file
@@ -916,7 +916,7 @@ export default function TripGallery({
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent active:scale-[0.98]"
+            className="px-[1.1rem] py-2 inline-flex items-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent active:scale-[0.98]"
           >
             + New trip
           </button>
@@ -924,18 +924,18 @@ export default function TripGallery({
       )}
 
       {notice && (
-        <p className="m-0 text-[0.8rem] text-[#9a3a23]" role="alert">
+        <p className="m-0 text-xs text-danger" role="alert">
           {notice}
         </p>
       )}
 
       {trips === null ? (
-        <p className="m-0 text-[0.85rem] text-muted font-mono">Loading trips…</p>
+        <p className="m-0 text-sm text-muted font-mono">Loading trips…</p>
       ) : nothingAnywhere && remoteSourceIds.every((id) => remoteLists[id]?.status === 'ok') ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-[44ch] flex flex-col items-center gap-3 border border-dashed border-line-strong rounded-paper-lg px-8 py-10">
-            <p className="m-0 font-serif text-[1.25rem]">No trips yet</p>
-            <p className="m-0 text-[0.85rem] text-muted leading-relaxed">
+            <p className="m-0 font-serif text-xl">No trips yet</p>
+            <p className="m-0 text-sm text-muted leading-relaxed">
               Give a trip its two dates and every photo you post from it knows
               which day it belongs to — and the grid shows the days you have
               never told.
@@ -943,7 +943,7 @@ export default function TripGallery({
             <button
               type="button"
               onClick={() => setCreating(true)}
-              className="mt-1 px-[1.1rem] py-2 inline-flex items-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold hover:bg-accent hover:border-accent"
+              className="mt-1 px-[1.1rem] py-2 inline-flex items-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold hover:bg-accent hover:border-accent"
             >
               Create the first one
             </button>
@@ -962,7 +962,7 @@ export default function TripGallery({
             const moveTargets = documentSources.filter((s) => s.id !== id);
             return (
               <section key={id} aria-label={`Trips from ${source?.label ?? id}`}>
-                <p className="m-0 mb-3 font-mono text-[0.66rem] tracking-[0.14em] uppercase text-muted">
+                <p className="m-0 mb-3 font-mono text-2xs tracking-[0.14em] uppercase text-muted">
                   source: {source?.label ?? id}
                   <span className="text-faint"> · </span>
                   <span className="tabular-nums">
@@ -996,7 +996,7 @@ export default function TripGallery({
                   )}
                 </p>
                 {count === 0 ? (
-                  <p className="m-0 text-[0.8rem] text-faint">Nothing kept here yet.</p>
+                  <p className="m-0 text-xs text-faint">Nothing kept here yet.</p>
                 ) : (
                   <div
                     className={

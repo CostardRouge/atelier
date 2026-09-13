@@ -35,7 +35,7 @@ export interface ImportDocumentModalProps {
   onChooseFile: (targetSourceId: string) => void;
 }
 
-const legend = 'font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted';
+const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 
 export default function ImportDocumentModal({
   title,
@@ -72,8 +72,8 @@ export default function ImportDocumentModal({
     >
       <div className="w-full max-w-[26rem] flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper p-6">
         <div>
-          <h2 className="m-0 font-serif text-[1.4rem]">{title}</h2>
-          <p className="m-0 mt-1 text-[0.82rem] text-muted">{blurb}</p>
+          <h2 className="m-0 font-serif text-2xl">{title}</h2>
+          <p className="m-0 mt-1 text-sm text-muted">{blurb}</p>
         </div>
 
         {sources.length > 1 && (
@@ -84,7 +84,7 @@ export default function ImportDocumentModal({
               onChange={(e) => setTarget(e.target.value)}
               // 16px on a phone, or iOS zooms the page on focus and never
               // zooms back — the rule every field in the suite follows.
-              className="font-sans text-[0.95rem] px-3.5 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent max-[560px]:text-[1rem]"
+              className="font-sans text-base px-3.5 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent max-[560px]:text-base"
             >
               {sources.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -99,7 +99,7 @@ export default function ImportDocumentModal({
           <button
             type="button"
             onClick={onCancel}
-            className="p-0 mt-4 border-0 bg-transparent text-[0.84rem] text-muted cursor-pointer hover:text-ink"
+            className="p-0 mt-4 border-0 bg-transparent text-sm text-muted cursor-pointer hover:text-ink"
           >
             Cancel
           </button>
@@ -107,7 +107,7 @@ export default function ImportDocumentModal({
             ref={buttonRef}
             type="button"
             onClick={() => onChooseFile(target)}
-            className="mt-4 px-[1.1rem] py-2 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold transition-colors duration-200 ease-paper hover:bg-accent hover:border-accent"
+            className="mt-4 px-[1.1rem] py-2 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold transition-colors duration-200 ease-paper hover:bg-accent hover:border-accent"
           >
             Choose file…
           </button>

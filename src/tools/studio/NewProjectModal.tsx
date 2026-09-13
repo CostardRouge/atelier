@@ -40,7 +40,7 @@ interface NewProjectModalProps {
 }
 
 const field = 'flex flex-col gap-1.5';
-const legend = 'font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted';
+const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 
 /**
  * The After-Effects-style intro: name the project, pick the destination
@@ -113,8 +113,8 @@ export default function NewProjectModal({
     >
       <div className="w-full max-w-[30rem] max-h-[90dvh] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6">
         <div>
-          <h2 className="m-0 font-serif text-[1.4rem]">New project</h2>
-          <p className="m-0 mt-1 text-[0.82rem] text-muted">
+          <h2 className="m-0 font-serif text-2xl">New project</h2>
+          <p className="m-0 mt-1 text-sm text-muted">
             Everything can be changed later.
           </p>
         </div>
@@ -125,7 +125,7 @@ export default function NewProjectModal({
             ref={nameRef}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="font-sans text-[0.95rem] px-3.5 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent max-[560px]:text-[1rem]"
+            className="font-sans text-base px-3.5 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent max-[560px]:text-base"
           />
         </label>
 
@@ -153,15 +153,15 @@ export default function NewProjectModal({
                   aria-hidden="true"
                 />
                 <span className="min-w-0">
-                  <span className="block font-semibold text-[0.82rem]">{a.id}</span>
-                  <span className="block text-[0.7rem] text-muted truncate">
+                  <span className="block font-semibold text-sm">{a.id}</span>
+                  <span className="block text-2xs text-muted truncate">
                     {a.label}
                   </span>
                 </span>
               </button>
             ))}
           </div>
-          <p className="m-0 text-[0.7rem] text-faint">
+          <p className="m-0 text-2xs text-faint">
             Shown on the project card; drives composition framing when export
             templates land.
           </p>
@@ -173,7 +173,7 @@ export default function NewProjectModal({
             <select
               value={templateId}
               onChange={(e) => setTemplateId(e.target.value)}
-              className="font-sans text-[0.9rem] px-3 py-2 border border-line-strong rounded-paper bg-paper text-ink cursor-pointer focus:outline-none focus:border-accent max-[560px]:text-[1rem]"
+              className="font-sans text-sm px-3 py-2 border border-line-strong rounded-paper bg-paper text-ink cursor-pointer focus:outline-none focus:border-accent max-[560px]:text-base"
             >
               <option value="">Blank</option>
               {templates.map((t) => (
@@ -193,7 +193,7 @@ export default function NewProjectModal({
             <select
               value={sourceId}
               onChange={(e) => setSourceId(e.target.value)}
-              className="font-sans text-[0.9rem] px-3 py-2 border border-line-strong rounded-paper bg-paper text-ink cursor-pointer focus:outline-none focus:border-accent max-[560px]:text-[1rem]"
+              className="font-sans text-sm px-3 py-2 border border-line-strong rounded-paper bg-paper text-ink cursor-pointer focus:outline-none focus:border-accent max-[560px]:text-base"
             >
               {sources.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -201,7 +201,7 @@ export default function NewProjectModal({
                 </option>
               ))}
             </select>
-            <span className="text-[0.7rem] text-faint">
+            <span className="text-2xs text-faint">
               {sourceId === DEFAULT_SOURCE_ID
                 ? 'Stays in this browser. Export a project file to share its settings.'
                 : `Saved to ${sourceId} as you edit, so it resumes from another device. The media folder stays on this machine.`}
@@ -216,18 +216,18 @@ export default function NewProjectModal({
               type="button"
               onClick={() => void pickFolder()}
               disabled={picking}
-              className="px-3.5 py-2 inline-flex items-center gap-2 border border-line-strong rounded-full bg-paper text-[0.82rem] font-semibold text-ink cursor-pointer hover:border-accent disabled:opacity-60"
+              className="px-3.5 py-2 inline-flex items-center gap-2 border border-line-strong rounded-full bg-paper text-sm font-semibold text-ink cursor-pointer hover:border-accent disabled:opacity-60"
             >
               {picking ? 'Opening…' : folder ? 'Change folder…' : 'Choose folder…'}
             </button>
             {folder && (
-              <span className="text-[0.78rem] text-muted min-w-0 truncate">
+              <span className="text-xs text-muted min-w-0 truncate">
                 {folder.handle?.name ?? 'folder'} · {folder.files.length} file
                 {folder.files.length === 1 ? '' : 's'}
               </span>
             )}
           </div>
-          <p className="m-0 text-[0.7rem] text-faint">
+          <p className="m-0 text-2xs text-faint">
             Optional{' '}
             <InfoDot about="the folder">
               <p>
@@ -244,14 +244,14 @@ export default function NewProjectModal({
           <button
             type="button"
             onClick={onCancel}
-            className="p-0 mt-4 border-0 bg-transparent text-[0.84rem] text-muted cursor-pointer hover:text-ink"
+            className="p-0 mt-4 border-0 bg-transparent text-sm text-muted cursor-pointer hover:text-ink"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={submit}
-            className="mt-4 px-[1.1rem] py-2 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold transition-colors duration-200 ease-paper hover:bg-accent hover:border-accent"
+            className="mt-4 px-[1.1rem] py-2 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold transition-colors duration-200 ease-paper hover:bg-accent hover:border-accent"
           >
             Create project
           </button>

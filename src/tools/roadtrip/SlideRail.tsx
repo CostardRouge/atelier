@@ -171,7 +171,7 @@ export default function SlideRail({
                     than at the door — a carousel mixing a clip and three
                     stills must say so at a glance. */}
                 {s.medium === 'video' && (
-                  <span className="absolute bottom-0 inset-x-0 py-[1px] bg-[rgba(16,15,13,0.68)] font-mono text-[0.5rem] leading-none text-center text-[#f4efe6] tabular-nums">
+                  <span className="absolute bottom-0 inset-x-0 py-[1px] bg-[rgba(16,15,13,0.68)] font-mono text-3xs leading-none text-center text-paper tabular-nums">
                     {s.seconds.toFixed(1).replace(/\.0$/, '')}s
                     {s.speed !== 1 ? `·${s.speed}×` : ''}
                   </span>
@@ -195,14 +195,14 @@ export default function SlideRail({
                       ? 'End this piece on its last picture instead'
                       : 'Remove this picture from the deck'
                   }
-                  className="absolute -top-1.5 -right-1.5 w-[1.15rem] h-[1.15rem] grid place-items-center rounded-full border border-line-strong bg-paper text-[0.7rem] leading-none text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
+                  className="absolute -top-1.5 -right-1.5 w-[1.15rem] h-[1.15rem] grid place-items-center rounded-full border border-line-strong bg-paper text-2xs leading-none text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
                 >
                   ×
                 </button>
               )}
             </div>
             <span
-              className={`font-mono text-[0.56rem] tracking-[0.08em] uppercase ${
+              className={`font-mono text-3xs tracking-[0.08em] uppercase ${
                 open ? 'text-accent-ink' : 'text-muted'
               }`}
             >
@@ -228,11 +228,11 @@ export default function SlideRail({
           onClick={onAdd}
           title="Add the active picture to this deck"
           style={{ aspectRatio: String(aspect) }}
-          className={`${size} grid place-items-center rounded-[5px] border border-dashed border-line-strong bg-paper text-[0.95rem] leading-none text-muted cursor-pointer hover:border-accent hover:text-accent-ink`}
+          className={`${size} grid place-items-center rounded-[5px] border border-dashed border-line-strong bg-paper text-base leading-none text-muted cursor-pointer hover:border-accent hover:text-accent-ink`}
         >
           +
         </button>
-        <span className="font-mono text-[0.56rem] tracking-[0.08em] uppercase text-muted">
+        <span className="font-mono text-3xs tracking-[0.08em] uppercase text-muted">
           Add
         </span>
       </div>
@@ -254,11 +254,11 @@ export default function SlideRail({
                 : 'Close this piece with the trip’s call to action'
             }
             style={{ aspectRatio: String(aspect) }}
-            className={`${size} grid place-items-center rounded-[5px] border border-dashed border-line-strong bg-paper text-[0.95rem] leading-none text-faint cursor-pointer hover:border-accent hover:text-accent-ink`}
+            className={`${size} grid place-items-center rounded-[5px] border border-dashed border-line-strong bg-paper text-base leading-none text-faint cursor-pointer hover:border-accent hover:text-accent-ink`}
           >
             +
           </button>
-          <span className="font-mono text-[0.56rem] tracking-[0.08em] uppercase text-faint">
+          <span className="font-mono text-3xs tracking-[0.08em] uppercase text-faint">
             Closing
           </span>
         </div>
@@ -281,7 +281,7 @@ function SlidePreview({ thumb, kind }: { thumb: string | null; kind: DeckSlide['
     return <img src={thumb} alt="" className="absolute inset-0 w-full h-full object-cover" />;
   }
   return (
-    <span className="absolute inset-0 grid place-items-center bg-paper-2 font-mono text-[0.5rem] leading-tight text-[#6b6459]">
+    <span className="absolute inset-0 grid place-items-center bg-paper-2 font-mono text-3xs leading-tight text-ink-soft">
       {kind === 'cta' ? 'card' : '·'}
     </span>
   );

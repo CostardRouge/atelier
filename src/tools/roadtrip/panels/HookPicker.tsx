@@ -65,13 +65,13 @@ export default function HookPicker({ layers, ctx, onChange }: HookPickerProps) {
                     : 'border-line bg-paper hover:border-line-strong cursor-pointer'
               }`}
             >
-              <span className="flex-none w-[4.6rem] h-[2.2rem] grid place-items-center rounded-[4px] bg-[#141210] overflow-hidden">
+              <span className="flex-none w-[4.6rem] h-[2.2rem] grid place-items-center rounded-[4px] bg-frame overflow-hidden">
                 {Sketch ? <Sketch /> : null}
               </span>
               <span className="min-w-0">
-                <span className="block font-semibold text-[0.82rem]">{variant.name}</span>
+                <span className="block font-semibold text-sm">{variant.name}</span>
                 <span
-                  className={`block text-[0.68rem] truncate ${
+                  className={`block text-2xs truncate ${
                     unmet ? 'text-accent-ink' : 'text-muted'
                   }`}
                 >

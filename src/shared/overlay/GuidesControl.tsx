@@ -19,7 +19,7 @@ interface GuidesControlProps {
 }
 
 const toggle =
-  'inline-flex items-center gap-1.5 flex-none h-[2.3rem] px-[0.85rem] rounded-full border text-[0.8rem] font-semibold transition-colors aria-pressed:border-accent aria-pressed:text-accent-ink aria-pressed:bg-accent-wash border-line-strong bg-paper text-ink-soft hover:border-faint hover:text-ink';
+  'inline-flex items-center gap-1.5 flex-none h-[2.3rem] px-[0.85rem] rounded-full border text-xs font-semibold transition-colors aria-pressed:border-accent aria-pressed:text-accent-ink aria-pressed:bg-accent-wash border-line-strong bg-paper text-ink-soft hover:border-faint hover:text-ink';
 
 /**
  * Composition-guide controls for the overlay stage: a social safe-zone picker
@@ -49,12 +49,12 @@ export default function GuidesControl({
     <>
       {/* Social safe zones */}
       <label className="flex items-center gap-2 min-w-0 pl-1.5">
-        <span className="font-mono text-[0.62rem] tracking-[0.16em] uppercase text-muted select-none">
+        <span className="font-mono text-2xs tracking-[0.16em] uppercase text-muted select-none">
           Safe area
         </span>
         <div className="relative inline-flex items-center min-w-0">
           <select
-            className="appearance-none min-w-0 max-w-full overflow-hidden text-ellipsis font-sans text-[0.84rem] font-semibold text-ink bg-paper border border-line-strong rounded-full h-[2.3rem] pl-[0.9rem] pr-[2.2rem] cursor-pointer hover:border-faint focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-colors"
+            className="appearance-none min-w-0 max-w-full overflow-hidden text-ellipsis font-sans text-sm font-semibold text-ink bg-paper border border-line-strong rounded-full h-[2.3rem] pl-[0.9rem] pr-[2.2rem] cursor-pointer hover:border-faint focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-colors"
             value={guides.safeZone}
             onChange={(e) =>
               // Back to 'auto' with the template: a rotation pinned for a
@@ -151,7 +151,7 @@ export default function GuidesControl({
       </button>
 
       <div
-        className="inline-flex items-center gap-1 font-mono text-[0.74rem] text-ink-soft"
+        className="inline-flex items-center gap-1 font-mono text-xs text-ink-soft"
         title="Grid columns × rows (also used for snapping)"
       >
         <input

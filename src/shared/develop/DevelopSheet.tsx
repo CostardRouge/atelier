@@ -92,13 +92,13 @@ const GROUPS: ReadonlyArray<{ legend: string; keys: readonly DevelopKey[]; hint:
   },
 ];
 
-const legendClass = 'font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted';
+const legendClass = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 const pillClass =
-  'inline-flex items-center h-[1.4rem] px-2 rounded-full border border-line-strong font-mono text-[0.55rem] tracking-[0.12em] uppercase text-muted whitespace-nowrap';
+  'inline-flex items-center h-[1.4rem] px-2 rounded-full border border-line-strong font-mono text-3xs tracking-[0.12em] uppercase text-muted whitespace-nowrap';
 const buttonClass =
-  'px-3 py-[0.4rem] rounded-full border border-line-strong bg-paper text-[0.78rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink disabled:opacity-50 disabled:cursor-default';
+  'px-3 py-[0.4rem] rounded-full border border-line-strong bg-paper text-xs font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink disabled:opacity-50 disabled:cursor-default';
 const linkClass =
-  'p-0 border-0 bg-transparent text-[0.74rem] text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink disabled:opacity-50 disabled:cursor-default disabled:no-underline';
+  'p-0 border-0 bg-transparent text-xs text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink disabled:opacity-50 disabled:cursor-default disabled:no-underline';
 
 export interface DevelopSheetProps {
   /** The picture, or null when the slide has none — the controls still show. */
@@ -329,7 +329,7 @@ export default function DevelopSheet({
       <div className="w-full max-w-[64rem] h-[min(90dvh,54rem)] flex flex-col gap-3 bg-surface border border-line rounded-paper-lg shadow-paper p-4 overflow-hidden max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:p-3 max-[820px]:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         {/* Header: what, what it is, back to as shot, close. */}
         <div className="flex-none flex items-center gap-2.5 min-w-0">
-          <h2 className="m-0 font-serif text-[1.1rem] min-w-0 truncate" title={title}>
+          <h2 className="m-0 font-serif text-lg min-w-0 truncate" title={title}>
             Develop · {title}
           </h2>
           {fidelity && <span className={pillClass}>{fidelity}</span>}
@@ -369,7 +369,7 @@ export default function DevelopSheet({
           <button
             type="button"
             onClick={onCancel}
-            className="font-mono text-[0.6rem] tracking-[0.12em] uppercase text-muted border border-line rounded-full px-2.5 py-[3px] hover:text-accent hover:border-line-strong transition-colors cursor-pointer"
+            className="font-mono text-3xs tracking-[0.12em] uppercase text-muted border border-line rounded-full px-2.5 py-[3px] hover:text-accent hover:border-line-strong transition-colors cursor-pointer"
             aria-label="Close"
           >
             close ✕
@@ -407,17 +407,17 @@ export default function DevelopSheet({
                 aria-label="The picture, corrected"
               />
               {!file && (
-                <span className="absolute inset-0 grid place-items-center px-6 text-center font-mono text-[0.66rem] text-muted">
+                <span className="absolute inset-0 grid place-items-center px-6 text-center font-mono text-2xs text-muted">
                   This slide has no picture yet — tick one in the Library.
                 </span>
               )}
               {problem && (
-                <span className="absolute inset-0 grid place-items-center px-6 text-center font-mono text-[0.66rem] text-paper">
+                <span className="absolute inset-0 grid place-items-center px-6 text-center font-mono text-2xs text-paper">
                   {problem}
                 </span>
               )}
               {file && !source && !problem && (
-                <span className="absolute inset-0 grid place-items-center font-mono text-[0.66rem] text-muted">
+                <span className="absolute inset-0 grid place-items-center font-mono text-2xs text-muted">
                   decoding…
                 </span>
               )}
@@ -443,7 +443,7 @@ export default function DevelopSheet({
                 </>
               )}
             </div>
-            <p className="m-0 flex-none font-mono text-[0.62rem] text-faint leading-relaxed">
+            <p className="m-0 flex-none font-mono text-2xs text-faint leading-relaxed">
               {describeDevelop(draft)}
               {note ? ` — ${note}` : ''}
               {source && cube
@@ -489,7 +489,7 @@ export default function DevelopSheet({
                             setDraft({ ...DEFAULT_DEVELOP, ...p.settings });
                             setTold(`applied ${p.name}`);
                           }}
-                          className="px-2.5 py-[0.3rem] border-0 bg-transparent text-[0.74rem] text-ink-soft cursor-pointer hover:text-accent-ink"
+                          className="px-2.5 py-[0.3rem] border-0 bg-transparent text-xs text-ink-soft cursor-pointer hover:text-accent-ink"
                           title={describeDevelop(p.settings)}
                         >
                           {p.name}
@@ -497,7 +497,7 @@ export default function DevelopSheet({
                         <button
                           type="button"
                           onClick={() => presets.onRemove(p.id)}
-                          className="px-2 py-[0.3rem] border-0 border-l border-line bg-transparent font-mono text-[0.6rem] text-muted cursor-pointer hover:text-accent"
+                          className="px-2 py-[0.3rem] border-0 border-l border-line bg-transparent font-mono text-3xs text-muted cursor-pointer hover:text-accent"
                           aria-label={`Remove preset ${p.name}`}
                           title="Remove this preset — the pictures it was applied to keep their numbers"
                         >
@@ -535,7 +535,7 @@ export default function DevelopSheet({
                       placeholder="Name this light"
                       aria-label="Preset name"
                       autoFocus
-                      className="flex-1 min-w-0 px-2.5 py-[0.3rem] rounded-full border border-line-strong bg-paper text-[16px] leading-tight text-ink focus:outline-none focus:border-accent"
+                      className="flex-1 min-w-0 px-2.5 py-[0.3rem] rounded-full border border-line-strong bg-paper text-base leading-tight text-ink focus:outline-none focus:border-accent"
                     />
                     <button type="submit" className={buttonClass} disabled={!presetName.trim()}>
                       Save
@@ -579,7 +579,7 @@ export default function DevelopSheet({
                       {verb.label}
                     </button>
                     {verb.hint && (
-                      <span className="font-mono text-[0.6rem] text-faint leading-relaxed">
+                      <span className="font-mono text-3xs text-faint leading-relaxed">
                         {verb.hint}
                       </span>
                     )}
@@ -608,7 +608,7 @@ export default function DevelopSheet({
         <div className="flex-none flex items-center gap-2 pt-3 border-t border-line">
           {footerHint && <span className={legendClass}>{footerHint}</span>}
           {told && (
-            <span className="font-mono text-[0.62rem] text-accent-ink" role="status">
+            <span className="font-mono text-2xs text-accent-ink" role="status">
               · {told}
             </span>
           )}
@@ -619,10 +619,10 @@ export default function DevelopSheet({
           <button
             type="button"
             onClick={done}
-            className="px-4 py-[0.4rem] rounded-full border border-ink bg-ink text-paper text-[0.78rem] font-semibold cursor-pointer hover:bg-accent hover:border-accent"
+            className="px-4 py-[0.4rem] rounded-full border border-ink bg-ink text-paper text-xs font-semibold cursor-pointer hover:bg-accent hover:border-accent"
           >
             Done
-            <span className="ml-1.5 font-mono text-[0.58rem] opacity-70">↵</span>
+            <span className="ml-1.5 font-mono text-3xs opacity-70">↵</span>
           </button>
         </div>
       </div>
@@ -648,9 +648,9 @@ function Slider({
   return (
     <div className="flex flex-col gap-1" onDoubleClick={() => onChange(0)}>
       <div className="flex items-baseline justify-between">
-        <span className="text-[0.8rem] text-ink">{LABELS[k]}</span>
+        <span className="text-xs text-ink">{LABELS[k]}</span>
         <span
-          className={`font-mono text-[0.68rem] tabular-nums ${value === 0 ? 'text-faint' : 'text-ink-soft'}`}
+          className={`font-mono text-2xs tabular-nums ${value === 0 ? 'text-faint' : 'text-ink-soft'}`}
         >
           {printed}
         </span>

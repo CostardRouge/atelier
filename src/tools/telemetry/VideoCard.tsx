@@ -105,13 +105,13 @@ export default function VideoCard({
     >
       <div className="relative bg-frame leading-[0]">
         {index != null && (
-          <span className="absolute top-[0.7rem] left-[0.7rem] z-[2] font-mono text-[0.64rem] tracking-[0.12em] px-2 py-[0.22rem] rounded-full bg-[rgba(20,18,15,0.55)] text-paper backdrop-blur-[4px] leading-[1.4]">
+          <span className="absolute top-[0.7rem] left-[0.7rem] z-[2] font-mono text-2xs tracking-[0.12em] px-2 py-[0.22rem] rounded-full bg-[rgba(20,18,15,0.55)] text-paper backdrop-blur-[4px] leading-[1.4]">
             NO. {String(index + 1).padStart(2, '0')}
           </span>
         )}
         {hasTrack && liveAlt && (
           <span
-            className="absolute top-[0.7rem] right-[0.7rem] z-[2] inline-flex items-center gap-[0.4rem] font-mono text-[0.74rem] font-medium tracking-[0.02em] px-[0.6rem] py-[0.24rem] rounded-full bg-[rgba(20,18,15,0.55)] text-white backdrop-blur-[4px] leading-[1.4]"
+            className="absolute top-[0.7rem] right-[0.7rem] z-[2] inline-flex items-center gap-[0.4rem] font-mono text-xs font-medium tracking-[0.02em] px-[0.6rem] py-[0.24rem] rounded-full bg-[rgba(20,18,15,0.55)] text-white backdrop-blur-[4px] leading-[1.4]"
             aria-hidden="true"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse-dot motion-reduce:animate-none" />
@@ -136,7 +136,7 @@ export default function VideoCard({
               }}
             />
           ) : (
-            <div className="w-full aspect-video flex items-center justify-center bg-frame text-[#8c8576] text-[0.78rem] text-center p-4 font-mono leading-[1.5]">
+            <div className="w-full aspect-video flex items-center justify-center bg-frame text-muted text-xs text-center p-4 font-mono leading-[1.5]">
               {videoError ? (
                 <div className="flex flex-col items-center gap-3">
                   <span>
@@ -150,10 +150,10 @@ export default function VideoCard({
             </div>
           )
         ) : (
-          <div className="w-full aspect-video flex flex-col items-center justify-center gap-[0.85rem] bg-paper-2 text-[#8c8576] text-[0.78rem] text-center p-4 font-mono leading-[1.5]">
+          <div className="w-full aspect-video flex flex-col items-center justify-center gap-[0.85rem] bg-paper-2 text-muted text-xs text-center p-4 font-mono leading-[1.5]">
             <span>No video for this telemetry yet.</span>
             <button
-              className="px-[0.9rem] py-2 border border-accent rounded-paper bg-accent-wash text-accent-ink cursor-pointer font-semibold text-[0.82rem] transition-[background-color,transform] duration-200 ease-paper hover:bg-accent hover:text-white hover:-translate-y-px"
+              className="px-[0.9rem] py-2 border border-accent rounded-paper bg-accent-wash text-accent-ink cursor-pointer font-semibold text-sm transition-[background-color,transform] duration-200 ease-paper hover:bg-accent hover:text-white hover:-translate-y-px"
               onClick={() => handleAdd('video')}
             >
               Add video
@@ -171,7 +171,7 @@ export default function VideoCard({
         </h3>
 
         {pair.videoNameMismatch && (
-          <p className="m-0 px-[0.65rem] py-2 rounded-paper bg-accent-wash border border-line-strong text-accent-ink text-[0.76rem] leading-[1.45]">
+          <p className="m-0 px-[0.65rem] py-2 rounded-paper bg-accent-wash border border-line-strong text-accent-ink text-xs leading-[1.45]">
             ⚠ Video name doesn’t match (
             <code className="font-mono text-ink break-all">{video?.name}</code>{' '}
             vs <code className="font-mono text-ink break-all">{pair.baseName}</code>
@@ -185,7 +185,7 @@ export default function VideoCard({
           </p>
         )}
         {pair.srtNameMismatch && (
-          <p className="m-0 px-[0.65rem] py-2 rounded-paper bg-accent-wash border border-line-strong text-accent-ink text-[0.76rem] leading-[1.45]">
+          <p className="m-0 px-[0.65rem] py-2 rounded-paper bg-accent-wash border border-line-strong text-accent-ink text-xs leading-[1.45]">
             ⚠ Telemetry name doesn’t match (
             <code className="font-mono text-ink break-all">{srt?.name}</code> vs{' '}
             <code className="font-mono text-ink break-all">{pair.baseName}</code>
@@ -200,7 +200,7 @@ export default function VideoCard({
         )}
 
         {video && (
-          <p className="mt-[-0.3rem] mb-0 font-mono text-[0.74rem] tracking-[0.02em] text-muted flex items-center gap-2">
+          <p className="mt-[-0.3rem] mb-0 font-mono text-xs tracking-[0.02em] text-muted flex items-center gap-2">
             {formatBytes(video.size)}
             <span className="text-faint">·</span>
             {duration === undefined ? '…' : formatDuration(duration)}
@@ -209,12 +209,12 @@ export default function VideoCard({
 
         {srt ? (
           cues === undefined ? (
-            <p className="m-0 text-[0.82rem] text-muted">Reading telemetry…</p>
+            <p className="m-0 text-sm text-muted">Reading telemetry…</p>
           ) : hasTrack ? (
             <>
               <LiveTelemetry cue={liveCue} />
               {summary && (
-                <p className="m-0 font-mono text-[0.7rem] tracking-[0.02em] text-muted flex flex-wrap items-center gap-[0.45rem]">
+                <p className="m-0 font-mono text-2xs tracking-[0.02em] text-muted flex flex-wrap items-center gap-[0.45rem]">
                   {summary.cueCount} frames
                   {summary.relAltMin !== null && summary.relAltMax !== null && (
                     <>
@@ -233,10 +233,10 @@ export default function VideoCard({
               )}
             </>
           ) : (
-            <p className="m-0 text-[0.82rem] text-muted">Telemetry unreadable.</p>
+            <p className="m-0 text-sm text-muted">Telemetry unreadable.</p>
           )
         ) : (
-          <p className="m-0 text-[0.82rem] text-muted">
+          <p className="m-0 text-sm text-muted">
             No .srt — telemetry unavailable.{' '}
             <button
               className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent disabled:text-faint disabled:cursor-default disabled:no-underline"
@@ -249,7 +249,7 @@ export default function VideoCard({
 
         {(video || srt) && (
           <button
-            className="mt-auto px-4 py-[0.7rem] inline-flex items-center justify-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.85rem] font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent hover:text-white active:scale-[0.98]"
+            className="mt-auto px-4 py-[0.7rem] inline-flex items-center justify-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent hover:text-white active:scale-[0.98]"
             onClick={() => onOpen(pair)}
           >
             {srt && video

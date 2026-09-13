@@ -63,9 +63,9 @@ const WEIGHTS: { value: FontWeight; label: string }[] = [
 ];
 
 const labelClass =
-  'font-mono text-[0.62rem] tracking-[0.12em] uppercase text-muted';
+  'font-mono text-2xs tracking-[0.12em] uppercase text-muted';
 const inputClass =
-  'font-sans text-[0.82rem] text-ink bg-surface border border-line-strong rounded-paper px-[0.6rem] py-[0.4rem] w-full';
+  'font-sans text-sm text-ink bg-surface border border-line-strong rounded-paper px-[0.6rem] py-[0.4rem] w-full';
 
 /** Which element patch keys pin which themable property. */
 const THEMABLE_OF: Record<string, ThemableKey> = {
@@ -128,7 +128,7 @@ function EarlyValues({
         />
         <span className={labelClass}>Value from the start</span>
       </label>
-      <span className="text-[0.7rem] text-faint leading-relaxed">
+      <span className="text-2xs text-faint leading-relaxed">
         This value is measured between two GPS fixes a second apart, so the
         clip's first second has nothing behind it to measure — the instrument
         would sit blank exactly where a social cut begins. On, it shows the
@@ -185,7 +185,7 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
     return (
       <button
         type="button"
-        className="p-0 border-0 bg-transparent text-accent cursor-pointer leading-none text-[0.72rem]"
+        className="p-0 border-0 bg-transparent text-accent cursor-pointer leading-none text-xs"
         title="Overriding the project style — click to follow the theme again"
         aria-label={`Reset ${prop} to theme`}
         onClick={() => resetOverride(prop)}
@@ -198,7 +198,7 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
   return (
     <div className="flex flex-col gap-[0.85rem]">
       {activeTheme && (
-        <div className="flex items-center gap-2 text-[0.72rem] text-muted">
+        <div className="flex items-center gap-2 text-xs text-muted">
           {overrides.length === 0 ? (
             <span>Following the project style.</span>
           ) : (
@@ -222,7 +222,7 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
       {/* Content */}
       {element.kind === 'frame-corners' ? (
         <div className="flex flex-col gap-2">
-          <p className="m-0 text-[0.78rem] text-muted">
+          <p className="m-0 text-xs text-muted">
             Viewfinder brackets in the frame's four corners. It spans the whole
             frame, so it isn't dragged — tune its geometry here.
           </p>
@@ -257,7 +257,7 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
         </div>
       ) : element.kind === 'heading-arrow' ? (
         <div className="flex flex-col gap-2">
-          <p className="m-0 text-[0.78rem] text-muted">
+          <p className="m-0 text-xs text-muted">
             Rotates to the current course-over-ground heading. Shows a dot
             while hovering (no direction data).
           </p>
@@ -306,7 +306,7 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
                   change({ headingSmoothing: Number(e.target.value) })
                 }
               />
-              <span className="text-[0.7rem] text-faint leading-relaxed">
+              <span className="text-2xs text-faint leading-relaxed">
                 The heading is rebuilt from GPS a few times a second, so it
                 steps. Averaging a window of readings eases it — and bridges
                 the short gaps where there is nothing to read.
@@ -325,7 +325,7 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
                 <option value="hold">Hold it plainly, then drop</option>
                 <option value="hide">Drop to the no-data state at once</option>
               </select>
-              <span className="text-[0.7rem] text-faint leading-relaxed">
+              <span className="text-2xs text-faint leading-relaxed">
                 There is no compass in the log: the heading is course over
                 ground, so it disappears while hovering or yawing on the spot.
               </span>
@@ -353,7 +353,7 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
         </div>
       ) : element.kind === 'heading-tape' ? (
         <div className="flex flex-col gap-2">
-          <p className="m-0 text-[0.78rem] text-muted">
+          <p className="m-0 text-xs text-muted">
             A slice of the compass sliding under a fixed sight. Ends fade into
             the image; the scale disappears when there is no heading (hovering,
             or a clip without telemetry).
@@ -542,7 +542,7 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
                   change({ headingSmoothing: Number(e.target.value) })
                 }
               />
-              <span className="text-[0.7rem] text-faint leading-relaxed">
+              <span className="text-2xs text-faint leading-relaxed">
                 The heading is rebuilt from GPS a few times a second, so it
                 steps. Averaging a window of readings eases it — and bridges
                 the short gaps where there is nothing to read.
@@ -561,7 +561,7 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
                 <option value="hold">Hold it plainly, then drop</option>
                 <option value="hide">Drop to the no-data state at once</option>
               </select>
-              <span className="text-[0.7rem] text-faint leading-relaxed">
+              <span className="text-2xs text-faint leading-relaxed">
                 There is no compass in the log: the heading is course over
                 ground, so it disappears while hovering or yawing on the spot.
               </span>
@@ -589,7 +589,7 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
         </div>
       ) : element.kind === 'battery' ? (
         <div className="flex flex-col gap-2">
-          <p className="m-0 text-[0.78rem] text-muted">
+          <p className="m-0 text-xs text-muted">
             A charge gauge. DJI's per-frame <code>.srt</code> carries no battery
             level — the Mini 4 Pro included — so this is an authored value by
             default. Point it at a telemetry key if your firmware writes one.
@@ -632,7 +632,7 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
                 value={element.batteryKey ?? ''}
                 onChange={(e) => change({ batteryKey: e.target.value })}
               />
-              <span className="text-[0.7rem] text-faint leading-relaxed">
+              <span className="text-2xs text-faint leading-relaxed">
                 Blank probes the keys DJI firmwares are known to use. With
                 nothing to read the gauge draws empty — it never invents a level.
               </span>
@@ -711,7 +711,7 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
         </div>
       ) : element.kind === 'rotate-device' ? (
         <div className="flex flex-col gap-2">
-          <p className="m-0 text-[0.78rem] text-muted">
+          <p className="m-0 text-xs text-muted">
             A phone tipping a quarter turn, to invite the viewer to rotate their
             screen. It is drawn into the video like everything else — the export
             is a flat file, so the gesture is the whole message.
@@ -917,7 +917,7 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
                   </select>
                 </label>
               )}
-              <p className="m-0 text-[0.7rem] text-faint leading-relaxed">
+              <p className="m-0 text-2xs text-faint leading-relaxed">
                 The flight log records a bare wall-clock reading with no
                 timezone. If this clip's clock was off, correct it once in the
                 project settings — it applies to every time element at once.
@@ -1022,7 +1022,7 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
             </label>
             <button
               type="button"
-              className="flex-none h-9 px-3 border border-line-strong rounded-paper bg-paper text-ink-soft cursor-pointer italic font-serif text-[0.95rem] aria-pressed:border-accent aria-pressed:text-accent-ink"
+              className="flex-none h-9 px-3 border border-line-strong rounded-paper bg-paper text-ink-soft cursor-pointer italic font-serif text-base aria-pressed:border-accent aria-pressed:text-accent-ink"
               aria-pressed={st.italic}
               onClick={() => change({ italic: !st.italic })}
               title="Italic"

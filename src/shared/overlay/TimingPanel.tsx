@@ -20,11 +20,11 @@ interface TimingPanelProps {
   onChange: (patch: Partial<OverlayElement>) => void;
 }
 
-const labelClass = 'font-mono text-[0.62rem] tracking-[0.12em] uppercase text-muted';
+const labelClass = 'font-mono text-2xs tracking-[0.12em] uppercase text-muted';
 const inputClass =
-  'font-sans text-[0.82rem] text-ink bg-surface border border-line-strong rounded-paper px-[0.6rem] py-[0.4rem] w-full';
+  'font-sans text-sm text-ink bg-surface border border-line-strong rounded-paper px-[0.6rem] py-[0.4rem] w-full';
 const linkClass =
-  'p-0 border-0 bg-transparent text-accent-ink font-semibold text-[0.68rem] cursor-pointer underline underline-offset-[2px] hover:text-accent';
+  'p-0 border-0 bg-transparent text-accent-ink font-semibold text-2xs cursor-pointer underline underline-offset-[2px] hover:text-accent';
 
 const PRESETS: { value: AnimPreset; label: string }[] = [
   { value: 'none', label: 'Cut — no animation' },
@@ -194,7 +194,7 @@ export default function TimingPanel({
   return (
     <div className="flex flex-col gap-[0.85rem]">
       {scene ? (
-        <p className="m-0 text-[0.78rem] text-muted">
+        <p className="m-0 text-xs text-muted">
           In <strong className="font-semibold text-ink">{scene.name}</strong> —
           times below count from the scene's start ({scene.start.toFixed(1)} s), and it
           leaves with the scene at {scene.end.toFixed(1)} s at the latest.{' '}
@@ -207,14 +207,14 @@ export default function TimingPanel({
           </button>
         </p>
       ) : (
-        <p className="m-0 text-[0.78rem] text-muted">
+        <p className="m-0 text-xs text-muted">
           Times count from the clip's in point — the first frame an export keeps.
         </p>
       )}
 
       {!timed ? (
         <div className="flex items-center gap-2">
-          <span className="text-[0.78rem] text-muted">On screen the whole clip.</span>
+          <span className="text-xs text-muted">On screen the whole clip.</span>
           <button
             type="button"
             className={linkClass}
@@ -316,7 +316,7 @@ export default function TimingPanel({
           }}
         />
         {!anim.out && win?.end == null && !scene && (
-          <p className="m-0 text-[0.72rem] text-faint">
+          <p className="m-0 text-xs text-faint">
             An exit needs an end to play against — give the element one above.
           </p>
         )}

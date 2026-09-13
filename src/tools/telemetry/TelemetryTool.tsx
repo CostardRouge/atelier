@@ -61,7 +61,7 @@ export default function TelemetryTool() {
           onDetach={handleDetach}
         />
       ) : pairs.length === 0 ? (
-        <p className="m-0 text-[0.92rem] leading-[1.6] text-muted border-[1.5px] border-dashed border-line-strong rounded-paper-lg p-6 bg-surface text-center">
+        <p className="m-0 text-sm leading-[1.6] text-muted border-[1.5px] border-dashed border-line-strong rounded-paper-lg p-6 bg-surface text-center">
           Add your footage in the{' '}
           <strong className="text-ink-soft font-semibold">Library</strong> on the
           left, then select the clips to read. Videos pair with their{' '}

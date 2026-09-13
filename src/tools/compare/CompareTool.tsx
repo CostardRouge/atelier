@@ -145,7 +145,7 @@ export default function CompareTool() {
   }
 
   const selectClass =
-    'min-w-0 max-w-[14rem] h-[2.1rem] px-2 rounded-full border border-line-strong bg-paper text-[0.8rem] text-ink cursor-pointer focus:outline-none focus:border-accent';
+    'min-w-0 max-w-[14rem] h-[2.1rem] px-2 rounded-full border border-line-strong bg-paper text-xs text-ink cursor-pointer focus:outline-none focus:border-accent';
 
   function sideSelect(value: string | null, onChange: (id: string) => void, label: string) {
     return (
@@ -174,7 +174,7 @@ export default function CompareTool() {
     if (!side || !url) return null;
     if (error) {
       return (
-        <div className="max-w-[80%] text-center text-[#8c8576] font-mono text-[0.78rem] leading-[1.5]">
+        <div className="max-w-[80%] text-center text-muted font-mono text-xs leading-[1.5]">
           {side.kind === 'video'
             ? "This clip can't be decoded here (often HEVC/H.265). Try Safari or transcode to H.264."
             : "This file can't be previewed (e.g. camera RAW the browser can't decode)."}
@@ -208,12 +208,12 @@ export default function CompareTool() {
       {/* Control bar: choose A and B, swap. */}
       <div className="flex flex-wrap items-center gap-2 px-2 py-2 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
         {options.length === 0 ? (
-          <span className="text-[0.82rem] text-muted px-1">
+          <span className="text-sm text-muted px-1">
             Select two photos or clips in the Library to compare.
           </span>
         ) : (
           <>
-            <span className="font-mono text-[0.62rem] tracking-[0.14em] uppercase text-accent-ink flex-none">
+            <span className="font-mono text-2xs tracking-[0.14em] uppercase text-accent-ink flex-none">
               A
             </span>
             {sideSelect(aId, setAId, 'Side A')}
@@ -228,11 +228,11 @@ export default function CompareTool() {
               ⇄
             </button>
             {sideSelect(bId, setBId, 'Side B')}
-            <span className="font-mono text-[0.62rem] tracking-[0.14em] uppercase text-accent-ink flex-none">
+            <span className="font-mono text-2xs tracking-[0.14em] uppercase text-accent-ink flex-none">
               B
             </span>
             {hasVideo && hasBoth && (
-              <span className="ml-auto text-[0.72rem] text-muted font-mono">
+              <span className="ml-auto text-xs text-muted font-mono">
                 synced playback
               </span>
             )}
@@ -269,10 +269,10 @@ export default function CompareTool() {
             {/* Side labels + divider. */}
             {hasBoth && (
               <>
-                <span className="absolute top-2.5 left-2.5 z-[3] font-mono text-[0.62rem] tracking-[0.1em] uppercase text-white bg-black/55 px-[0.4rem] py-[0.18rem] rounded-[5px]">
+                <span className="absolute top-2.5 left-2.5 z-[3] font-mono text-2xs tracking-[0.1em] uppercase text-white bg-black/55 px-[0.4rem] py-[0.18rem] rounded-[5px]">
                   A · {aSide.baseName}
                 </span>
-                <span className="absolute top-2.5 right-2.5 z-[3] font-mono text-[0.62rem] tracking-[0.1em] uppercase text-white bg-black/55 px-[0.4rem] py-[0.18rem] rounded-[5px]">
+                <span className="absolute top-2.5 right-2.5 z-[3] font-mono text-2xs tracking-[0.1em] uppercase text-white bg-black/55 px-[0.4rem] py-[0.18rem] rounded-[5px]">
                   B · {bSide?.baseName}
                 </span>
                 <div
@@ -288,13 +288,13 @@ export default function CompareTool() {
 
             {/* One side only: invite picking the second. */}
             {!bSide && (
-              <span className="absolute bottom-3 left-1/2 -translate-x-1/2 z-[3] text-[0.78rem] text-white bg-black/55 px-3 py-1.5 rounded-full">
+              <span className="absolute bottom-3 left-1/2 -translate-x-1/2 z-[3] text-xs text-white bg-black/55 px-3 py-1.5 rounded-full">
                 Pick a second asset (B) to compare.
               </span>
             )}
           </>
         ) : (
-          <div className="absolute inset-0 grid place-items-center text-muted text-center p-4 font-mono text-[0.85rem]">
+          <div className="absolute inset-0 grid place-items-center text-muted text-center p-4 font-mono text-sm">
             {options.length === 0
               ? 'Select two assets in the Library.'
               : 'Choose A and B above.'}
@@ -307,7 +307,7 @@ export default function CompareTool() {
         <div className="flex items-center gap-[0.85rem] px-[0.85rem] py-[0.6rem] border border-line rounded-paper bg-surface flex-none">
           <button
             type="button"
-            className="flex-none w-[2.2rem] h-[2.2rem] border-0 rounded-full bg-ink text-paper cursor-pointer text-[0.8rem] leading-none inline-flex items-center justify-center transition-[background-color] duration-200 ease-paper hover:bg-accent"
+            className="flex-none w-[2.2rem] h-[2.2rem] border-0 rounded-full bg-ink text-paper cursor-pointer text-xs leading-none inline-flex items-center justify-center transition-[background-color] duration-200 ease-paper hover:bg-accent"
             onClick={togglePlay}
             aria-label={playing ? 'Pause' : 'Play'}
             title="Play / pause (Space)"
@@ -330,7 +330,7 @@ export default function CompareTool() {
             onChange={(e) => seek(Number(e.target.value))}
             aria-label="Seek both clips"
           />
-          <span className="font-mono text-[0.74rem] tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
+          <span className="font-mono text-xs tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
             {formatDuration(duration)}
           </span>
         </div>

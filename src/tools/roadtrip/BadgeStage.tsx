@@ -682,13 +682,13 @@ export default function BadgeStage({
           />
         </div>
         {loading && (
-          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-mono text-[0.7rem] text-paper bg-[rgba(20,18,15,0.7)] px-3 py-1.5 rounded-full">
+          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-mono text-2xs text-paper bg-[rgba(20,18,15,0.7)] px-3 py-1.5 rounded-full">
             decoding…
           </span>
         )}
       </div>
       {error && (
-        <p className="m-0 max-w-[46ch] text-center text-[0.78rem] text-[#9a3a23]" role="alert">
+        <p className="m-0 max-w-[46ch] text-center text-xs text-danger" role="alert">
           {error}
         </p>
       )}

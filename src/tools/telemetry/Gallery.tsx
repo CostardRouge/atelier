@@ -21,7 +21,7 @@ export default function Gallery({
 }: GalleryProps) {
   if (pairs.length === 0) {
     return (
-      <p className="my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-[#eccabf] text-[#7c2e1c] text-[0.86rem] leading-[1.55]">
+      <p className="my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-danger-line text-danger-ink text-sm leading-[1.55]">
         Nothing found. Pick a folder, or add DJI{' '}
         <code className="font-mono text-[0.85em] bg-[rgba(124,46,28,0.1)] px-[0.35em] py-[0.05em] rounded-[4px]">
           .mp4

@@ -8,7 +8,7 @@
 import type { UseTranscode } from './use-transcode';
 
 const buttonClass =
-  'inline-flex items-center gap-2 px-[0.9rem] py-[0.45rem] border border-accent rounded-full bg-accent-wash text-accent-ink cursor-pointer font-semibold text-[0.8rem] transition-[background-color,transform] duration-200 ease-paper hover:bg-accent hover:text-white hover:-translate-y-px';
+  'inline-flex items-center gap-2 px-[0.9rem] py-[0.45rem] border border-accent rounded-full bg-accent-wash text-accent-ink cursor-pointer font-semibold text-xs transition-[background-color,transform] duration-200 ease-paper hover:bg-accent hover:text-white hover:-translate-y-px';
 
 export default function TranscodeControl({
   state,
@@ -18,7 +18,7 @@ export default function TranscodeControl({
   if (state.status === 'running') {
     return (
       <div className="flex items-center gap-[0.7rem] w-full max-w-[22rem]" role="status">
-        <span className="font-mono text-[0.74rem] tracking-[0.02em] flex-none">
+        <span className="font-mono text-xs tracking-[0.02em] flex-none">
           Transcoding…{' '}
           {state.ratio != null ? `${Math.round(state.ratio * 100)}%` : ''}
         </span>
@@ -44,7 +44,7 @@ export default function TranscodeControl({
         {state.status === 'error' ? 'Retry transcode to H.264' : 'Transcode to H.264'}
       </button>
       {state.status === 'error' && state.error && (
-        <span className="font-mono text-[0.72rem] leading-snug text-[#9a3a23] text-center">
+        <span className="font-mono text-xs leading-snug text-danger text-center">
           {state.error}
         </span>
       )}

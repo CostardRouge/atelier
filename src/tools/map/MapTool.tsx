@@ -95,7 +95,7 @@ export default function MapTool() {
       {/* Control bar: clip switcher + base-map toggle. */}
       <div className="flex flex-wrap items-center gap-2 px-2 py-2 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
         {clips.length === 0 ? (
-          <span className="text-[0.82rem] text-muted px-1">
+          <span className="text-sm text-muted px-1">
             Select a DJI clip (or a loose <code className="font-mono">.srt</code>)
             in the Library to map its flight.
           </span>
@@ -112,7 +112,7 @@ export default function MapTool() {
                 >
                   ‹
                 </button>
-                <span className="font-mono text-[0.7rem] text-muted tabular-nums min-w-[3ch] text-center">
+                <span className="font-mono text-2xs text-muted tabular-nums min-w-[3ch] text-center">
                   {activeIndex + 1}/{clips.length}
                 </span>
                 <button
@@ -129,7 +129,7 @@ export default function MapTool() {
               </div>
             )}
             <span
-              className="font-semibold text-[0.9rem] whitespace-nowrap overflow-hidden text-ellipsis min-w-0"
+              className="font-semibold text-sm whitespace-nowrap overflow-hidden text-ellipsis min-w-0"
               title={active?.baseName}
             >
               {active?.baseName}
@@ -138,7 +138,7 @@ export default function MapTool() {
               type="button"
               onClick={() => setTilesOn((on) => !on)}
               aria-pressed={tilesOn}
-              className="ml-auto flex-none inline-flex items-center gap-1.5 h-[2.1rem] px-[0.9rem] rounded-full border text-[0.8rem] font-semibold transition-colors aria-pressed:border-accent aria-pressed:text-accent-ink aria-pressed:bg-accent-wash border-line-strong bg-paper text-ink-soft hover:border-faint hover:text-ink"
+              className="ml-auto flex-none inline-flex items-center gap-1.5 h-[2.1rem] px-[0.9rem] rounded-full border text-xs font-semibold transition-colors aria-pressed:border-accent aria-pressed:text-accent-ink aria-pressed:bg-accent-wash border-line-strong bg-paper text-ink-soft hover:border-faint hover:text-ink"
               title="Load OpenStreetMap tiles — the only feature that makes a network request"
             >
               {tilesOn ? 'Map background: on' : 'Load map background'}
@@ -157,14 +157,14 @@ export default function MapTool() {
         <div ref={containerRef} className="flex-1 min-h-0 w-full" />
 
         {error && (
-          <div className="absolute inset-0 grid place-items-center text-center p-6 text-muted font-mono text-[0.82rem]">
+          <div className="absolute inset-0 grid place-items-center text-center p-6 text-muted font-mono text-sm">
             The map library couldn't load.
           </div>
         )}
 
         {!error && clips.length > 0 && ready && track.length === 0 && (
           <div className="absolute inset-0 grid place-items-center text-center p-6 pointer-events-none">
-            <span className="text-[0.82rem] text-white bg-black/55 px-3 py-1.5 rounded-full">
+            <span className="text-sm text-white bg-black/55 px-3 py-1.5 rounded-full">
               No GPS fixes in this clip's telemetry.
             </span>
           </div>
@@ -172,7 +172,7 @@ export default function MapTool() {
 
         {/* Live readout, bottom-left. */}
         {liveCoord && track.length > 0 && (
-          <div className="absolute bottom-2.5 left-2.5 z-[2] font-mono text-[0.7rem] leading-[1.5] text-white bg-black/55 px-3 py-1.5 rounded-paper pointer-events-none">
+          <div className="absolute bottom-2.5 left-2.5 z-[2] font-mono text-2xs leading-[1.5] text-white bg-black/55 px-3 py-1.5 rounded-paper pointer-events-none">
             <div className="tabular-nums">{liveCoord}</div>
             <div className="text-white/85">
               {liveAlt ? `${liveAlt} m` : '—'}
@@ -183,12 +183,12 @@ export default function MapTool() {
 
         {/* Tile attribution / privacy note. */}
         {tilesOn ? (
-          <span className="absolute bottom-1 right-1 z-[2] font-mono text-[0.58rem] text-ink-soft bg-paper/80 px-1.5 py-0.5 rounded">
+          <span className="absolute bottom-1 right-1 z-[2] font-mono text-3xs text-ink-soft bg-paper/80 px-1.5 py-0.5 rounded">
             © OpenStreetMap contributors
           </span>
         ) : (
           clips.length > 0 && (
-            <span className="absolute top-2.5 left-2.5 z-[2] font-mono text-[0.6rem] tracking-[0.04em] text-white/90 bg-black/45 px-2 py-1 rounded">
+            <span className="absolute top-2.5 left-2.5 z-[2] font-mono text-3xs tracking-[0.04em] text-white/90 bg-black/45 px-2 py-1 rounded">
               Offline · no tiles loaded
             </span>
           )
@@ -206,7 +206,7 @@ export default function MapTool() {
             className="flex-none w-full max-h-[34vh] rounded-paper bg-frame object-contain"
           />
         ) : (
-          <p className="flex-none m-0 px-4 py-[0.7rem] rounded-paper bg-surface border border-line text-[0.82rem] text-muted text-center">
+          <p className="flex-none m-0 px-4 py-[0.7rem] rounded-paper bg-surface border border-line text-sm text-muted text-center">
             Telemetry only — add this clip's video to scrub along the path.
           </p>
         ))}

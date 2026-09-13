@@ -93,7 +93,7 @@ export default function WinnowScopeGrid({
         // skeleton is not a sentence, so it is drawn either way.
         <div className="flex flex-col gap-2" aria-busy="true">
           {announce && (
-            <p className="m-0 font-mono text-[0.68rem] text-muted">asking {connection.id}…</p>
+            <p className="m-0 font-mono text-2xs text-muted">asking {connection.id}…</p>
           )}
           <div className="w-full grid grid-cols-[repeat(auto-fill,minmax(74px,1fr))] gap-1.5">
             {Array.from({ length: 8 }, (_, i) => (
@@ -106,13 +106,13 @@ export default function WinnowScopeGrid({
         </div>
       ) : rows !== null && rows.length === 0 && !problem ? (
         announce ? (
-          <p className="m-0 text-[0.78rem] text-muted">
+          <p className="m-0 text-xs text-muted">
             {connection.id} holds nothing shot{' '}
             {from === to ? `on ${from}` : `from ${from} to ${to}`}.
           </p>
         ) : null
       ) : shown.length === 0 && rows && rows.length > 0 ? (
-        <p className="m-0 text-[0.78rem] text-muted">Nothing here matches the filter.</p>
+        <p className="m-0 text-xs text-muted">Nothing here matches the filter.</p>
       ) : (
         <div className="w-full grid grid-cols-[repeat(auto-fill,minmax(74px,1fr))] gap-1.5">
           {shown.map((r, i) => {
@@ -145,7 +145,7 @@ export default function WinnowScopeGrid({
                 />
                 {r.media_type === 'video' && (
                   <span
-                    className="absolute top-1 left-1 font-mono text-[0.55rem] text-paper bg-[rgba(20,18,15,0.62)] px-1 rounded-[3px] leading-[1.4]"
+                    className="absolute top-1 left-1 font-mono text-3xs text-paper bg-[rgba(20,18,15,0.62)] px-1 rounded-[3px] leading-[1.4]"
                     aria-hidden="true"
                   >
                     ▶{r.has_telemetry ? ' srt' : ''}
@@ -158,7 +158,7 @@ export default function WinnowScopeGrid({
                     badge only ever appeared where the ring had just left. */}
                 {have && (
                   <span
-                    className={`absolute bottom-1 right-1 w-[14px] h-[14px] grid place-items-center rounded-full text-[0.6rem] leading-none border ${
+                    className={`absolute bottom-1 right-1 w-[14px] h-[14px] grid place-items-center rounded-full text-3xs leading-none border ${
                       active
                         ? 'bg-accent text-paper border-accent'
                         : 'bg-paper text-ink border-line-strong'
@@ -170,7 +170,7 @@ export default function WinnowScopeGrid({
                   </span>
                 )}
                 {fetching === r.id && (
-                  <span className="absolute inset-0 grid place-items-center bg-[rgba(20,18,15,0.55)] font-mono text-[0.58rem] text-paper">
+                  <span className="absolute inset-0 grid place-items-center bg-[rgba(20,18,15,0.55)] font-mono text-3xs text-paper">
                     fetching…
                   </span>
                 )}
@@ -181,7 +181,7 @@ export default function WinnowScopeGrid({
       )}
 
       {shownProblem && (
-        <p className="m-0 text-[0.78rem] text-[#9a3a23]" role="alert">
+        <p className="m-0 text-xs text-danger" role="alert">
           {shownProblem.text}{' '}
           {shownProblem.login && (
             <a
@@ -199,7 +199,7 @@ export default function WinnowScopeGrid({
               picker.clearProblem();
               reload();
             }}
-            className="p-0 border-0 bg-transparent text-[0.74rem] text-muted cursor-pointer underline underline-offset-[3px] hover:text-ink"
+            className="p-0 border-0 bg-transparent text-xs text-muted cursor-pointer underline underline-offset-[3px] hover:text-ink"
           >
             ask again
           </button>

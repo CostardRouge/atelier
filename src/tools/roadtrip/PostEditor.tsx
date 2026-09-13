@@ -819,7 +819,7 @@ export default function PostEditor({
       key={t.id}
       type="button"
       onClick={() => setTab(t.id)}
-      className={`flex-1 px-2 py-[0.45rem] font-mono text-[0.66rem] tracking-[0.14em] uppercase rounded-full cursor-pointer transition-colors ${
+      className={`flex-1 px-2 py-[0.45rem] font-mono text-2xs tracking-[0.14em] uppercase rounded-full cursor-pointer transition-colors ${
         tab === t.id
           ? 'bg-ink text-paper'
           : 'bg-transparent text-muted hover:text-accent-ink'
@@ -880,7 +880,7 @@ export default function PostEditor({
                 onClick={() => void exports.exportPiece()}
                 disabled={exports.exporting !== null}
                 title="Every slide of this piece, in the format it is"
-                className={`${barPill} px-[1.1rem] border-ink bg-ink text-paper cursor-pointer text-[0.78rem] font-semibold hover:bg-accent hover:border-accent disabled:opacity-60 disabled:cursor-default`}
+                className={`${barPill} px-[1.1rem] border-ink bg-ink text-paper cursor-pointer text-xs font-semibold hover:bg-accent hover:border-accent disabled:opacity-60 disabled:cursor-default`}
               >
                 {exports.exporting ?? '↓ Export'}
               </button>
@@ -894,10 +894,10 @@ export default function PostEditor({
             type="button"
             onClick={() => setTripSheet('words')}
             title="Trip settings — the words, the closing card, what a new piece starts from"
-            className={`${barPill} gap-1.5 px-2.5 border-line-strong bg-paper font-mono text-[0.66rem] tracking-[0.06em] uppercase text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink`}
+            className={`${barPill} gap-1.5 px-2.5 border-line-strong bg-paper font-mono text-2xs tracking-[0.06em] uppercase text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink`}
           >
             Trip
-            <span className="text-[0.95rem] leading-none" aria-hidden="true">
+            <span className="text-base leading-none" aria-hidden="true">
               ⚙
             </span>
           </button>
@@ -914,12 +914,12 @@ export default function PostEditor({
           className={`w-full leading-tight bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0.5 placeholder:text-faint placeholder:italic ${
             // Every pixel this takes is one the picture does not get, and on a
             // phone the picture is the whole screen's job.
-            compact ? 'font-serif text-[1rem]' : 'font-serif text-[1.25rem]'
+            compact ? 'font-serif text-base' : 'font-serif text-xl'
           }`}
         />
         <p
           className={`m-0 px-1 font-mono text-muted ${
-            compact ? 'text-[0.62rem] -mt-0.5' : 'text-[0.68rem]'
+            compact ? 'text-2xs -mt-0.5' : 'text-2xs'
           }`}
         >
           {formatIsoDate(post.date)} · {post.kind}
@@ -1049,7 +1049,7 @@ export default function PostEditor({
                 type="button"
                 onClick={() => clock.setPlaying((p) => !p)}
                 className={`flex-none border border-line-strong rounded-full bg-paper font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink ${
-                  compact ? 'px-2.5 py-1 text-[0.7rem]' : 'px-3 py-1.5 text-[0.76rem]'
+                  compact ? 'px-2.5 py-1 text-2xs' : 'px-3 py-1.5 text-xs'
                 }`}
               >
                 {clock.playing ? '❚❚ Pause' : '▶ Play'}
@@ -1057,7 +1057,7 @@ export default function PostEditor({
                     on. A phone has none, so the word is a third of the
                     button's width spent on something the screen cannot do. */}
                 {!compact && (
-                  <span className="ml-1.5 text-faint font-mono text-[0.62rem]">space</span>
+                  <span className="ml-1.5 text-faint font-mono text-2xs">space</span>
                 )}
               </button>
               <input
@@ -1073,7 +1073,7 @@ export default function PostEditor({
                 className="flex-1 accent-accent"
                 aria-label="Badge time"
               />
-              <span className="flex-none font-mono text-[0.68rem] tabular-nums text-muted">
+              <span className="flex-none font-mono text-2xs tabular-nums text-muted">
                 {clock.time.toFixed(2)}s
               </span>
               {hookScore.length > 0 && (
@@ -1145,10 +1145,10 @@ export default function PostEditor({
         {isHook && (tab === 'content' || tab === 'look') && (
           <div className="flex-none flex flex-col gap-1.5">
             <span className="flex items-center gap-2">
-              <span className="font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted">
+              <span className="font-mono text-2xs tracking-[0.14em] uppercase text-muted">
                 Piece
               </span>
-              <span className="text-[0.68rem] text-faint">or click it on the picture</span>
+              <span className="text-2xs text-faint">or click it on the picture</span>
             </span>
             <PiecePicker piece={piece} onPiece={selectPiece} />
           </div>

@@ -28,7 +28,7 @@ export interface PlaceSearchFieldProps {
   inputClassName?: string;
 }
 
-const noticeClass = 'm-0 text-[0.7rem] text-faint leading-snug';
+const noticeClass = 'm-0 text-2xs text-faint leading-snug';
 
 export default function PlaceSearchField({
   value,
@@ -104,7 +104,7 @@ export default function PlaceSearchField({
           disabled={busy || !value.trim()}
           title={enabled ? `Look “${value.trim()}” up` : 'Look this place up online'}
           aria-label={enabled ? `Look ${value.trim() || 'this place'} up` : 'Look this place up online'}
-          className="flex-none w-7 h-7 inline-flex items-center justify-center border border-line-strong rounded-full bg-paper text-[0.8rem] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-line-strong disabled:hover:text-ink-soft"
+          className="flex-none w-7 h-7 inline-flex items-center justify-center border border-line-strong rounded-full bg-paper text-xs text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-line-strong disabled:hover:text-ink-soft"
         >
           {busy ? '·' : '⌕'}
         </button>
@@ -121,14 +121,14 @@ export default function PlaceSearchField({
                 setAsking(false);
                 void run();
               }}
-              className="px-2.5 py-1 border border-ink rounded-full bg-ink text-paper text-[0.72rem] font-semibold cursor-pointer hover:bg-accent hover:border-accent"
+              className="px-2.5 py-1 border border-ink rounded-full bg-ink text-paper text-xs font-semibold cursor-pointer hover:bg-accent hover:border-accent"
             >
               Turn on and search
             </button>
             <button
               type="button"
               onClick={() => setAsking(false)}
-              className="p-0 border-0 bg-transparent text-[0.72rem] text-muted cursor-pointer hover:text-ink"
+              className="p-0 border-0 bg-transparent text-xs text-muted cursor-pointer hover:text-ink"
             >
               Keep typing by hand
             </button>
@@ -137,7 +137,7 @@ export default function PlaceSearchField({
       )}
 
       {error && (
-        <p className="m-0 font-mono text-[0.68rem] text-[#9a3a23]" role="alert">
+        <p className="m-0 font-mono text-2xs text-danger" role="alert">
           {error}
         </p>
       )}
@@ -151,8 +151,8 @@ export default function PlaceSearchField({
                 onClick={() => choose(result)}
                 className="w-full flex flex-col gap-0.5 px-2.5 py-1.5 border-0 bg-transparent text-left cursor-pointer hover:bg-surface"
               >
-                <span className="text-[0.8rem] text-ink">{result.name}</span>
-                <span className="font-mono text-[0.64rem] text-faint">
+                <span className="text-xs text-ink">{result.name}</span>
+                <span className="font-mono text-2xs text-faint">
                   {[result.region, `${result.lat.toFixed(4)}, ${result.lon.toFixed(4)}`]
                     .filter(Boolean)
                     .join(' · ')}

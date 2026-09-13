@@ -32,12 +32,12 @@ export default function LutPicker({
   return (
     <>
       <label className="flex items-center gap-2 min-w-0 pl-1.5">
-        <span className="font-mono text-[0.62rem] tracking-[0.16em] uppercase text-muted select-none">
+        <span className="font-mono text-2xs tracking-[0.16em] uppercase text-muted select-none">
           Look
         </span>
         <div className="relative inline-flex items-center min-w-0">
           <select
-            className="appearance-none min-w-0 max-w-full overflow-hidden text-ellipsis font-sans text-[0.84rem] font-semibold text-ink bg-paper border border-line-strong rounded-full h-[2.3rem] pl-[0.9rem] pr-[2.2rem] cursor-pointer hover:border-faint focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-colors disabled:opacity-60 disabled:cursor-default"
+            className="appearance-none min-w-0 max-w-full overflow-hidden text-ellipsis font-sans text-sm font-semibold text-ink bg-paper border border-line-strong rounded-full h-[2.3rem] pl-[0.9rem] pr-[2.2rem] cursor-pointer hover:border-faint focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-colors disabled:opacity-60 disabled:cursor-default"
             value={selected}
             onChange={(e) => onSelect(e.target.value)}
             disabled={busy}
@@ -76,7 +76,7 @@ export default function LutPicker({
 
       <button
         type="button"
-        className="inline-flex items-center gap-1.5 h-[2.3rem] px-[0.85rem] rounded-full text-[0.8rem] font-semibold text-ink-soft hover:text-accent-ink hover:bg-accent-wash transition-colors"
+        className="inline-flex items-center gap-1.5 h-[2.3rem] px-[0.85rem] rounded-full text-xs font-semibold text-ink-soft hover:text-accent-ink hover:bg-accent-wash transition-colors"
         onClick={onUpload}
         title="Load your own 3D .cube LUT"
       >
@@ -101,7 +101,7 @@ export default function LutPicker({
           Only meaningful with a LUT active. Double-click the slider to reset. */}
       {selected !== 'none' && (
         <label className="flex items-center gap-2 min-w-0 pl-1.5">
-          <span className="font-mono text-[0.62rem] tracking-[0.16em] uppercase text-muted select-none">
+          <span className="font-mono text-2xs tracking-[0.16em] uppercase text-muted select-none">
             Intensity
           </span>
           <input
@@ -116,7 +116,7 @@ export default function LutPicker({
             aria-label="LUT intensity"
             title="LUT strength (double-click to reset to 100%)"
           />
-          <span className="font-mono text-[0.72rem] tabular-nums text-ink-soft min-w-[3.2ch] text-right">
+          <span className="font-mono text-xs tabular-nums text-ink-soft min-w-[3.2ch] text-right">
             {Math.round(intensity * 100)}%
           </span>
         </label>

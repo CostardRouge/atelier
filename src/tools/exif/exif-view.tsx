@@ -22,7 +22,7 @@ function Field({ label, value }: { label: string; value?: string }) {
   const empty = !value;
   return (
     <div style={{ display: 'contents' }}>
-      <dt className="text-muted text-[0.85rem]">{label}</dt>
+      <dt className="text-muted text-sm">{label}</dt>
       <dd
         className={`m-0 font-mono tabular-nums text-right break-words ${
           empty ? 'text-faint' : 'text-ink'
@@ -37,7 +37,7 @@ function Field({ label, value }: { label: string; value?: string }) {
 function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="bg-surface border border-line rounded-paper p-[1.25rem_1.35rem] shadow-paper-soft">
-      <h3 className="flex items-center gap-2 m-0 mb-4 font-mono text-[0.74rem] font-medium uppercase tracking-[0.18em] text-muted before:content-[''] before:w-[14px] before:h-px before:bg-accent">
+      <h3 className="flex items-center gap-2 m-0 mb-4 font-mono text-xs font-medium uppercase tracking-[0.18em] text-muted before:content-[''] before:w-[14px] before:h-px before:bg-accent">
         {title}
       </h3>
       <dl className="m-0 grid grid-cols-[auto_1fr] gap-[0.55rem_1rem]">{children}</dl>
@@ -87,10 +87,10 @@ export function ExifPanels({ data }: { data: ExifData }) {
         <Field label="Altitude" value={formatAltitude(data.gpsAltitude)} />
         {data.gps && (
           <div style={{ display: 'contents' }}>
-            <dt className="text-muted text-[0.85rem]">Map</dt>
+            <dt className="text-muted text-sm">Map</dt>
             <dd className="m-0 text-right">
               <a
-                className="font-mono text-[0.82rem] text-accent-ink underline underline-offset-[3px] hover:text-accent"
+                className="font-mono text-sm text-accent-ink underline underline-offset-[3px] hover:text-accent"
                 href={mapsUrl(data.gps)}
                 target="_blank"
                 rel="noreferrer"

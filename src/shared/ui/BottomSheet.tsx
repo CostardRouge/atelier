@@ -177,12 +177,12 @@ export default function BottomSheet({
         <div className="flex-none flex items-center gap-2 px-4 pb-2 border-b border-line">
           <h2
             id={titleId}
-            className="m-0 font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted font-normal"
+            className="m-0 font-mono text-2xs tracking-[0.14em] uppercase text-muted font-normal"
           >
             {title}
           </h2>
           {hint && (
-            <span className="font-mono text-[0.62rem] text-faint truncate">{hint}</span>
+            <span className="font-mono text-2xs text-faint truncate">{hint}</span>
           )}
           <button
             type="button"

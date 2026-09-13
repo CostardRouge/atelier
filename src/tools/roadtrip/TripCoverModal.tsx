@@ -33,8 +33,8 @@ export default function TripCoverModal({ trip, onCancel, onSave }: TripCoverModa
     >
       <div className="w-full max-w-[34rem] max-h-[90dvh] flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper p-6 overflow-auto">
         <div>
-          <h2 className="m-0 font-serif text-[1.4rem]">Cover</h2>
-          <p className="m-0 mt-1 text-[0.82rem] text-muted">
+          <h2 className="m-0 font-serif text-2xl">Cover</h2>
+          <p className="m-0 mt-1 text-sm text-muted">
             How {trip.name || 'this trip'} shows itself in the gallery.
           </p>
         </div>
@@ -45,14 +45,14 @@ export default function TripCoverModal({ trip, onCancel, onSave }: TripCoverModa
           <button
             type="button"
             onClick={onCancel}
-            className="p-0 border-0 bg-transparent text-[0.84rem] text-muted cursor-pointer hover:text-ink"
+            className="p-0 border-0 bg-transparent text-sm text-muted cursor-pointer hover:text-ink"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={save}
-            className="px-[1.1rem] py-2 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold transition-colors duration-200 ease-paper hover:bg-accent hover:border-accent"
+            className="px-[1.1rem] py-2 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold transition-colors duration-200 ease-paper hover:bg-accent hover:border-accent"
           >
             Done
           </button>

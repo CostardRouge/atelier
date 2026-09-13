@@ -59,9 +59,9 @@ interface TripDetailsModalProps {
 }
 
 const field = 'flex flex-col gap-1.5';
-const legend = 'font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted';
+const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 const input =
-  'font-sans text-[0.95rem] px-3.5 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent max-[560px]:text-[1rem]';
+  'font-sans text-base px-3.5 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent max-[560px]:text-base';
 
 /**
  * Naming a trip is naming its span: the two dates are what every later badge
@@ -178,10 +178,10 @@ export default function TripDetailsModal({
     >
       <div className="w-full max-w-[34rem] max-h-[90dvh] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6">
         <div>
-          <h2 className="m-0 font-serif text-[1.4rem]">
+          <h2 className="m-0 font-serif text-2xl">
             {editing ? 'Dates and route' : 'New trip'}
           </h2>
-          <p className="m-0 mt-1 text-[0.82rem] text-muted">
+          <p className="m-0 mt-1 text-sm text-muted">
             {editing ? 'Dates, route — all of it stays editable.' : 'All of it stays editable.'}{' '}
             <InfoDot about="the dates">
               <p>
@@ -197,7 +197,7 @@ export default function TripDetailsModal({
             the span, the places — instead of two dates typed by hand. One row,
             shown only when there is such a source, so the modal stays light. */}
         {!editing && timelineSources.length > 0 && onSeedFrom && (
-          <div className="flex items-center gap-2 flex-wrap text-[0.78rem] text-muted">
+          <div className="flex items-center gap-2 flex-wrap text-xs text-muted">
             <span>or seed it from</span>
             {timelineSources.map((s) => (
               <button
@@ -206,7 +206,7 @@ export default function TripDetailsModal({
                 disabled={!s.hasTimeline}
                 title={s.hasTimeline ? `Create the trip from ${s.id}'s timeline` : `${s.id} has no timeline yet`}
                 onClick={() => onSeedFrom(s.id)}
-                className="px-3 py-1 inline-flex items-center border border-line-strong rounded-full bg-paper text-ink-soft cursor-pointer text-[0.76rem] font-semibold hover:border-accent hover:text-accent-ink disabled:opacity-40 disabled:cursor-default disabled:hover:border-line-strong disabled:hover:text-ink-soft"
+                className="px-3 py-1 inline-flex items-center border border-line-strong rounded-full bg-paper text-ink-soft cursor-pointer text-xs font-semibold hover:border-accent hover:text-accent-ink disabled:opacity-40 disabled:cursor-default disabled:hover:border-line-strong disabled:hover:text-ink-soft"
               >
                 {s.id}
               </button>
@@ -226,7 +226,7 @@ export default function TripDetailsModal({
               placeholder="Australie"
               className={input}
             />
-            <span className="text-[0.7rem] text-faint">
+            <span className="text-2xs text-faint">
               Short — it is what a badge says over the picture.
             </span>
           </label>
@@ -272,7 +272,7 @@ export default function TripDetailsModal({
         </div>
 
         {editing && (
-          <p className="m-0 -mt-2 text-[0.7rem] text-faint">
+          <p className="m-0 -mt-2 text-2xs text-faint">
             The two ends of the trip{' '}
             <InfoDot about="the route">
               <p>
@@ -326,7 +326,7 @@ export default function TripDetailsModal({
                 </option>
               ))}
             </select>
-            <span className="text-[0.7rem] text-faint">
+            <span className="text-2xs text-faint">
               {sourceId === DEFAULT_SOURCE_ID
                 ? 'Stays in this browser. Export a file to move it elsewhere.'
                 : `Saved to ${sourceId} as you edit, so it resumes from another device.`}
@@ -335,7 +335,7 @@ export default function TripDetailsModal({
         )}
 
         <p
-          className={`m-0 text-[0.78rem] ${problem ? 'text-[#9a3a23]' : 'text-muted'}`}
+          className={`m-0 text-xs ${problem ? 'text-danger' : 'text-muted'}`}
           role={problem ? 'alert' : undefined}
         >
           {problem ??
@@ -348,7 +348,7 @@ export default function TripDetailsModal({
             lose a leg silently. Pieces are only hidden, never deleted. */}
         {impact && (
           <p
-            className="m-0 px-3.5 py-2.5 border border-accent bg-accent-wash rounded-paper text-[0.78rem] text-accent-ink"
+            className="m-0 px-3.5 py-2.5 border border-accent bg-accent-wash rounded-paper text-xs text-accent-ink"
             role="status"
           >
             {[
@@ -384,7 +384,7 @@ export default function TripDetailsModal({
           <button
             type="button"
             onClick={onCancel}
-            className="p-0 mt-4 border-0 bg-transparent text-[0.84rem] text-muted cursor-pointer hover:text-ink"
+            className="p-0 mt-4 border-0 bg-transparent text-sm text-muted cursor-pointer hover:text-ink"
           >
             Cancel
           </button>
@@ -392,7 +392,7 @@ export default function TripDetailsModal({
             type="button"
             onClick={submit}
             disabled={!canSubmit}
-            className="mt-4 px-[1.1rem] py-2 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold transition-colors duration-200 ease-paper hover:bg-accent hover:border-accent disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-ink disabled:hover:border-ink"
+            className="mt-4 px-[1.1rem] py-2 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold transition-colors duration-200 ease-paper hover:bg-accent hover:border-accent disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-ink disabled:hover:border-ink"
           >
             {editing ? 'Save' : 'Create trip'}
           </button>

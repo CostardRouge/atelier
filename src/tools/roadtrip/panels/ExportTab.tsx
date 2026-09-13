@@ -124,9 +124,9 @@ export default function ExportTab({
           {plan.items.map((item) => (
             <li
               key={`${item.kind}-${item.position}`}
-              className="flex items-baseline gap-2 text-[0.74rem]"
+              className="flex items-baseline gap-2 text-xs"
             >
-              <span className="flex-none font-mono text-[0.68rem] tabular-nums text-muted">
+              <span className="flex-none font-mono text-2xs tabular-nums text-muted">
                 {String(item.position).padStart(2, '0')}
               </span>
               <span
@@ -137,7 +137,7 @@ export default function ExportTab({
               >
                 {item.name}
               </span>
-              <span className="flex-none font-mono text-[0.62rem] tracking-[0.06em] uppercase text-muted">
+              <span className="flex-none font-mono text-2xs tracking-[0.06em] uppercase text-muted">
                 {item.medium === 'video'
                   ? `${item.seconds.toFixed(1)}s${item.speed !== 1 ? ` · ${item.speed}×` : ''}${
                       item.silent ? ' · silent' : ''
@@ -151,13 +151,13 @@ export default function ExportTab({
         {/* The hook's own reason, spelled out: it is the line an author
             changes most, and a word in a column does not explain itself. */}
         {plan.items[0] && (
-          <p className="m-0 text-[0.72rem] text-muted">
+          <p className="m-0 text-xs text-muted">
             {reasonSentence(plan.items[0].reason, plan.items[0].seconds, plan.items[0].speed)}
           </p>
         )}
 
         {plan.blockers.map((b) => (
-          <p key={b} className="m-0 text-[0.72rem] text-[#9a3a23]">
+          <p key={b} className="m-0 text-xs text-danger">
             {b}
           </p>
         ))}
@@ -167,14 +167,14 @@ export default function ExportTab({
             type="button"
             onClick={() => onExportPiece(imagesOnly)}
             disabled={exporting !== null || plan.files === 0}
-            className="px-[1.1rem] py-1.5 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.8rem] font-semibold hover:bg-accent hover:border-accent disabled:opacity-60 disabled:cursor-default"
+            className="px-[1.1rem] py-1.5 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-xs font-semibold hover:bg-accent hover:border-accent disabled:opacity-60 disabled:cursor-default"
           >
             {/* Always "the piece": the file COUNT is what the legend says,
                 and a deck of three whose two clips are blocked is still the
                 piece being exported, not "this slide". */}
             {exporting ?? '↓ Export the piece'}
           </button>
-          <label className="flex items-center gap-1.5 text-[0.74rem] text-ink-soft cursor-pointer">
+          <label className="flex items-center gap-1.5 text-xs text-ink-soft cursor-pointer">
             <input
               type="checkbox"
               checked={imagesOnly}
@@ -208,7 +208,7 @@ export default function ExportTab({
             </button>
           )}
         </div>
-        <p className="m-0 text-[0.72rem] text-muted">
+        <p className="m-0 text-xs text-muted">
           {hookIsVideoSlide
             ? hookIsVideo
               ? slides[0].speed !== 1

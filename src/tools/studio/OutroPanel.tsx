@@ -14,9 +14,9 @@ interface OutroPanelProps {
   onRemove: () => void;
 }
 
-const legend = 'font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted';
+const legend = 'font-mono text-2xs tracking-[0.12em] uppercase text-muted';
 const input =
-  'font-sans text-[0.8rem] px-2.5 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent';
+  'font-sans text-xs px-2.5 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent';
 
 /**
  * The outro — the closing card the export appends after the footage. The
@@ -107,7 +107,7 @@ export default function OutroPanel({ outro, aspect, onChange, onRemove }: OutroP
               className={`${input} w-[4.2rem] text-right tabular-nums`}
               aria-label="Outro duration in seconds"
             />
-            <span className="font-mono text-[0.7rem] text-muted">s</span>
+            <span className="font-mono text-2xs text-muted">s</span>
           </label>
           <label className="flex items-center gap-2">
             <span className={`${legend} flex-1`}>Ground</span>
@@ -134,7 +134,7 @@ export default function OutroPanel({ outro, aspect, onChange, onRemove }: OutroP
             <button
               type="button"
               onClick={() => removeLine(el.id)}
-              className="flex-none w-6 h-6 grid place-items-center rounded-full border border-line bg-transparent text-faint cursor-pointer hover:text-[#9a3a23] hover:border-[#e3b8a9]"
+              className="flex-none w-6 h-6 grid place-items-center rounded-full border border-line bg-transparent text-faint cursor-pointer hover:text-danger hover:border-danger-line"
               aria-label="Remove this line"
               title="Remove this line"
             >
@@ -145,7 +145,7 @@ export default function OutroPanel({ outro, aspect, onChange, onRemove }: OutroP
         <button
           type="button"
           onClick={() => onChange(withOutroLine(outro))}
-          className="self-start p-0 border-0 bg-transparent text-[0.75rem] text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] hover:text-accent"
+          className="self-start p-0 border-0 bg-transparent text-xs text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] hover:text-accent"
         >
           + Add a line
         </button>
@@ -161,18 +161,18 @@ export default function OutroPanel({ outro, aspect, onChange, onRemove }: OutroP
         />
       </label>
       {prepared.qrProblem && (
-        <p className="m-0 text-[0.72rem] text-[#9a3a23]">{prepared.qrProblem}</p>
+        <p className="m-0 text-xs text-danger">{prepared.qrProblem}</p>
       )}
 
       <div className="flex items-center justify-between">
-        <span className="text-[0.72rem] text-faint">
+        <span className="text-xs text-faint">
           Appended after the footage on variants that carry the overlays; the
           card plays silent.
         </span>
         <button
           type="button"
           onClick={onRemove}
-          className="flex-none p-0 border-0 bg-transparent text-[0.75rem] text-faint cursor-pointer hover:text-[#9a3a23]"
+          className="flex-none p-0 border-0 bg-transparent text-xs text-faint cursor-pointer hover:text-danger"
         >
           Remove
         </button>

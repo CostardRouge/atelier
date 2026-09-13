@@ -10,7 +10,7 @@ interface PlacesEditorProps {
 }
 
 const inputClass =
-  'font-sans text-[0.8rem] px-2 py-1 border border-line-strong rounded-paper bg-surface text-ink focus:outline-none focus:border-accent';
+  'font-sans text-xs px-2 py-1 border border-line-strong rounded-paper bg-surface text-ink focus:outline-none focus:border-accent';
 
 /**
  * The places one stage went through, in the order they were lived. The first
@@ -59,7 +59,7 @@ export default function PlacesEditor({ stage, onChange }: PlacesEditorProps) {
           return (
             <span key={place.id} className="inline-flex items-center gap-1.5">
               {i > 0 && (
-                <span className="font-mono text-[0.8rem] text-faint" aria-hidden="true">
+                <span className="font-mono text-xs text-faint" aria-hidden="true">
                   →
                 </span>
               )}
@@ -101,7 +101,7 @@ export default function PlacesEditor({ stage, onChange }: PlacesEditorProps) {
                   move(i, back ? i - 1 : i + 1);
                 }}
                 title={`${name || 'Unnamed place'} — drag it, or move it with the arrow keys`}
-                className={`inline-flex items-center gap-1.5 h-[1.9rem] pl-2 pr-2.5 rounded-full border text-[0.78rem] cursor-grab active:cursor-grabbing transition-colors ${
+                className={`inline-flex items-center gap-1.5 h-[1.9rem] pl-2 pr-2.5 rounded-full border text-xs cursor-grab active:cursor-grabbing transition-colors ${
                   dragFrom === i ? 'opacity-50 ' : ''
                 }${
                   dropping
@@ -112,7 +112,7 @@ export default function PlacesEditor({ stage, onChange }: PlacesEditorProps) {
                 }`}
               >
                 <span
-                  className="font-mono text-[0.72rem] leading-none text-faint tracking-[-0.1em]"
+                  className="font-mono text-xs leading-none text-faint tracking-[-0.1em]"
                   aria-hidden="true"
                 >
                   ⠿
@@ -125,7 +125,7 @@ export default function PlacesEditor({ stage, onChange }: PlacesEditorProps) {
         <button
           type="button"
           onClick={add}
-          className="inline-flex items-center h-[1.9rem] px-2.5 rounded-full border border-dashed border-line-strong bg-transparent text-[0.78rem] text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
+          className="inline-flex items-center h-[1.9rem] px-2.5 rounded-full border border-dashed border-line-strong bg-transparent text-xs text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
         >
           + Place
         </button>
@@ -199,11 +199,11 @@ function PlaceFields({
           className={`${inputClass} flex-1 min-w-[7rem]`}
         />
         {confirming ? (
-          <span className="flex items-center gap-1.5 text-[0.7rem] pt-1.5">
+          <span className="flex items-center gap-1.5 text-2xs pt-1.5">
             <button
               type="button"
               onClick={onDelete}
-              className="p-0 border-0 bg-transparent text-[#9a3a23] font-semibold cursor-pointer underline underline-offset-[3px]"
+              className="p-0 border-0 bg-transparent text-danger font-semibold cursor-pointer underline underline-offset-[3px]"
             >
               Delete
             </button>
@@ -219,7 +219,7 @@ function PlaceFields({
           <button
             type="button"
             onClick={() => setConfirming(true)}
-            className="p-0 pt-1.5 border-0 bg-transparent text-[0.7rem] text-faint cursor-pointer hover:text-[#9a3a23]"
+            className="p-0 pt-1.5 border-0 bg-transparent text-2xs text-faint cursor-pointer hover:text-danger"
             aria-label={`Delete ${name}`}
           >
             Delete
@@ -227,12 +227,12 @@ function PlaceFields({
         )}
       </div>
       {place.coords && (
-        <p className="m-0 font-mono text-[0.64rem] text-faint tabular-nums">
+        <p className="m-0 font-mono text-2xs text-faint tabular-nums">
           {formatCoords(place.coords)}
           <button
             type="button"
             onClick={() => onChange({ ...place, coords: null })}
-            className="ml-2 p-0 border-0 bg-transparent text-[0.64rem] text-faint cursor-pointer underline underline-offset-[2px] hover:text-[#9a3a23]"
+            className="ml-2 p-0 border-0 bg-transparent text-2xs text-faint cursor-pointer underline underline-offset-[2px] hover:text-danger"
           >
             forget
           </button>

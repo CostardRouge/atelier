@@ -11,10 +11,10 @@ interface GradePanelProps {
 }
 
 const labelClass =
-  'font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted';
+  'font-mono text-2xs tracking-[0.12em] uppercase text-muted';
 
 const selectClass =
-  'w-full min-w-0 font-sans text-[0.8rem] px-2 py-[0.4rem] border border-line-strong rounded-paper bg-paper text-ink cursor-pointer focus:outline-none focus:border-accent disabled:opacity-60';
+  'w-full min-w-0 font-sans text-xs px-2 py-[0.4rem] border border-line-strong rounded-paper bg-paper text-ink cursor-pointer focus:outline-none focus:border-accent disabled:opacity-60';
 
 /**
  * The grade: a stack of looks applied top to bottom, each with its own
@@ -45,7 +45,7 @@ export default function GradePanel({ stack }: GradePanelProps) {
         <span className={labelClass}>Add a look</span>
         <div className="flex items-center gap-2">
           <select
-            className="flex-1 min-w-0 font-sans text-[0.8rem] px-2 py-[0.4rem] border border-line-strong rounded-paper bg-paper text-ink cursor-pointer focus:outline-none focus:border-accent disabled:opacity-60"
+            className="flex-1 min-w-0 font-sans text-xs px-2 py-[0.4rem] border border-line-strong rounded-paper bg-paper text-ink cursor-pointer focus:outline-none focus:border-accent disabled:opacity-60"
             value={pick}
             disabled={stack.busy}
             onChange={(e) => {
@@ -74,7 +74,7 @@ export default function GradePanel({ stack }: GradePanelProps) {
           <button
             type="button"
             onClick={() => void stack.addCustom()}
-            className="flex-none px-3 py-[0.4rem] rounded-full border border-line-strong bg-paper text-[0.78rem] font-semibold text-ink cursor-pointer hover:border-accent"
+            className="flex-none px-3 py-[0.4rem] rounded-full border border-line-strong bg-paper text-xs font-semibold text-ink cursor-pointer hover:border-accent"
             title="Load a .cube file from disk"
           >
             .cube…
@@ -83,12 +83,12 @@ export default function GradePanel({ stack }: GradePanelProps) {
       </div>
 
       {stack.error && (
-        <p className="m-0 text-[0.78rem] text-[#9a3a23]">{stack.error}</p>
+        <p className="m-0 text-xs text-danger">{stack.error}</p>
       )}
 
       {/* The stack */}
       {stack.layers.length === 0 ? (
-        <p className="m-0 text-[0.8rem] text-muted leading-relaxed">
+        <p className="m-0 text-xs text-muted leading-relaxed">
           No look yet — the clip grades through untouched. Add one or several;
           they apply in order, top to bottom.
         </p>
@@ -112,19 +112,19 @@ export default function GradePanel({ stack }: GradePanelProps) {
                   type="button"
                   onClick={() => stack.setEnabled(layer.id, !layer.enabled)}
                   aria-pressed={layer.enabled}
-                  className="flex-none w-5 text-center text-[0.8rem] text-ink-soft cursor-pointer bg-transparent border-0 hover:text-accent"
+                  className="flex-none w-5 text-center text-xs text-ink-soft cursor-pointer bg-transparent border-0 hover:text-accent"
                   title={layer.enabled ? 'Bypass this look' : 'Enable this look'}
                   aria-label={layer.enabled ? 'Bypass look' : 'Enable look'}
                 >
                   {layer.enabled ? '◉' : '○'}
                 </button>
                 <span
-                  className="flex-1 min-w-0 truncate text-[0.82rem] font-semibold"
+                  className="flex-1 min-w-0 truncate text-sm font-semibold"
                   title={layer.name}
                 >
                   {layer.name}
                 </span>
-                <span className="flex-none font-mono text-[0.66rem] tabular-nums text-faint">
+                <span className="flex-none font-mono text-2xs tabular-nums text-faint">
                   {Math.round(layer.intensity * 100)}%
                 </span>
                 <div className="flex-none flex items-center gap-0.5">
@@ -132,7 +132,7 @@ export default function GradePanel({ stack }: GradePanelProps) {
                     type="button"
                     onClick={() => stack.move(layer.id, -1)}
                     disabled={i === 0}
-                    className="w-5 h-5 grid place-items-center rounded border border-line bg-transparent text-ink-soft text-[0.7rem] cursor-pointer hover:border-accent hover:text-accent-ink disabled:opacity-30 disabled:cursor-default"
+                    className="w-5 h-5 grid place-items-center rounded border border-line bg-transparent text-ink-soft text-2xs cursor-pointer hover:border-accent hover:text-accent-ink disabled:opacity-30 disabled:cursor-default"
                     aria-label="Move look up"
                     title="Apply earlier"
                   >
@@ -142,7 +142,7 @@ export default function GradePanel({ stack }: GradePanelProps) {
                     type="button"
                     onClick={() => stack.move(layer.id, 1)}
                     disabled={i === stack.layers.length - 1}
-                    className="w-5 h-5 grid place-items-center rounded border border-line bg-transparent text-ink-soft text-[0.7rem] cursor-pointer hover:border-accent hover:text-accent-ink disabled:opacity-30 disabled:cursor-default"
+                    className="w-5 h-5 grid place-items-center rounded border border-line bg-transparent text-ink-soft text-2xs cursor-pointer hover:border-accent hover:text-accent-ink disabled:opacity-30 disabled:cursor-default"
                     aria-label="Move look down"
                     title="Apply later"
                   >
@@ -151,7 +151,7 @@ export default function GradePanel({ stack }: GradePanelProps) {
                   <button
                     type="button"
                     onClick={() => stack.remove(layer.id)}
-                    className="w-5 h-5 grid place-items-center rounded-full border border-line bg-transparent text-faint text-[0.75rem] cursor-pointer hover:text-[#9a3a23] hover:border-[#e3b8a9]"
+                    className="w-5 h-5 grid place-items-center rounded-full border border-line bg-transparent text-faint text-xs cursor-pointer hover:text-danger hover:border-danger-line"
                     aria-label="Remove look"
                     title="Remove from the stack"
                   >
@@ -196,7 +196,7 @@ export default function GradePanel({ stack }: GradePanelProps) {
             </option>
           ))}
         </select>
-        <p className="m-0 text-[0.72rem] text-faint leading-relaxed">
+        <p className="m-0 text-xs text-faint leading-relaxed">
           {outputHint}
         </p>
       </div>
@@ -211,7 +211,7 @@ export default function GradePanel({ stack }: GradePanelProps) {
               type="button"
               onClick={() => stack.setInterpolation(mode)}
               aria-pressed={stack.interpolation === mode}
-              className={`flex-1 px-2 py-[0.35rem] rounded-paper border text-[0.78rem] cursor-pointer capitalize ${
+              className={`flex-1 px-2 py-[0.35rem] rounded-paper border text-xs cursor-pointer capitalize ${
                 stack.interpolation === mode
                   ? 'border-accent bg-paper font-semibold text-accent-ink'
                   : 'border-line bg-transparent text-ink-soft hover:border-accent'
@@ -226,7 +226,7 @@ export default function GradePanel({ stack }: GradePanelProps) {
             </button>
           ))}
         </div>
-        <p className="m-0 text-[0.72rem] text-faint leading-relaxed">
+        <p className="m-0 text-xs text-faint leading-relaxed">
           A 33³ cube has to be interpolated between its points. Tetrahedral
           reads the 4 lattice corners that matter, so greys stay grey;
           trilinear averages all 8 and can tint them. Look at skies and
@@ -234,7 +234,7 @@ export default function GradePanel({ stack }: GradePanelProps) {
         </p>
       </div>
 
-      <p className="m-0 text-[0.72rem] text-faint leading-relaxed">
+      <p className="m-0 text-xs text-faint leading-relaxed">
         Looks apply top to bottom and bake into one LUT — the preview, the
         stills and every export variant grade identically. Above 100% a look
         extrapolates past what it was authored for.

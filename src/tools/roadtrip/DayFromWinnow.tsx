@@ -105,20 +105,20 @@ export default function DayFromWinnow({ day, onPicked, defaultOpen, busy }: DayF
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="font-mono text-[0.58rem] tracking-[0.1em] uppercase text-muted hover:text-accent bg-transparent border-0 p-0 cursor-pointer"
+          className="font-mono text-3xs tracking-[0.1em] uppercase text-muted hover:text-accent bg-transparent border-0 p-0 cursor-pointer"
         >
           {open ? 'hide' : 'show'}
         </button>
       </div>
 
       {!open ? (
-        <p className="m-0 text-[0.78rem] text-muted">
+        <p className="m-0 text-xs text-muted">
           The pictures {connection.id} holds for {day}, without leaving this piece.
         </p>
       ) : rows === null ? (
-        <p className="m-0 font-mono text-[0.72rem] text-muted">asking {connection.id}…</p>
+        <p className="m-0 font-mono text-xs text-muted">asking {connection.id}…</p>
       ) : rows.length === 0 && !problem ? (
-        <p className="m-0 text-[0.78rem] text-muted">
+        <p className="m-0 text-xs text-muted">
           {connection.id} holds nothing shot on {day}.
         </p>
       ) : (
@@ -161,7 +161,7 @@ export default function DayFromWinnow({ day, onPicked, defaultOpen, busy }: DayF
                 box="w-full h-full"
               />
               {fetching === r.id && (
-                <span className="absolute inset-0 grid place-items-center bg-[rgba(20,18,15,0.55)] font-mono text-[0.58rem] text-paper">
+                <span className="absolute inset-0 grid place-items-center bg-[rgba(20,18,15,0.55)] font-mono text-3xs text-paper">
                   fetching…
                 </span>
               )}
@@ -171,7 +171,7 @@ export default function DayFromWinnow({ day, onPicked, defaultOpen, busy }: DayF
       )}
 
       {problem && (
-        <p className="m-0 text-[0.78rem] text-[#9a3a23]" role="alert">
+        <p className="m-0 text-xs text-danger" role="alert">
           {problem.text}{' '}
           {problem.login && (
             <a

@@ -58,11 +58,11 @@ function kindLabel(kind: AssetKind): string {
 function chipClass(kind: AssetKind): string {
   switch (kind) {
     case 'video+telemetry':
-      return 'bg-[#eef2e6] border-[#cdd8b6] text-[#586b39]';
+      return 'bg-ok-wash border-ok-line text-ok';
     case 'video':
-      return 'bg-[#e9eef3] border-[#c4d2df] text-[#3f5a72]';
+      return 'bg-info-wash border-info-line text-info';
     case 'photo':
-      return 'bg-[#f6e9e4] border-[#e3c4b6] text-[#9a4f33]';
+      return 'bg-danger-wash border-danger-line text-danger';
     default:
       return 'bg-paper-2 border-line-strong text-ink-soft';
   }
@@ -104,9 +104,9 @@ const HALVES: { key: LibraryHalf | null; label: string; hint: string }[] = [
   { key: 'final', label: 'Gallery', hint: 'Finished exports' },
 ];
 
-const legend = 'font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted';
+const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 const linkBtn =
-  'p-0 border-0 bg-transparent text-[0.74rem] text-muted cursor-pointer underline underline-offset-[3px] hover:text-ink';
+  'p-0 border-0 bg-transparent text-xs text-muted cursor-pointer underline underline-offset-[3px] hover:text-ink';
 
 interface AssetSidebarProps {
   tool: Tool;
@@ -392,12 +392,12 @@ export default function AssetSidebar({
           </svg>
         </button>
         <span
-          className="w-8 h-8 grid place-items-center rounded-lg bg-ink text-paper font-mono text-[0.66rem]"
+          className="w-8 h-8 grid place-items-center rounded-lg bg-ink text-paper font-mono text-2xs"
           title={`${lib.assets.length} assets`}
         >
           {lib.assets.length}
         </span>
-        <span className="[writing-mode:vertical-rl] font-mono text-[0.58rem] tracking-[0.16em] uppercase text-faint mt-1">
+        <span className="[writing-mode:vertical-rl] font-mono text-3xs tracking-[0.16em] uppercase text-faint mt-1">
           Library
         </span>
       </aside>
@@ -417,7 +417,7 @@ export default function AssetSidebar({
       type="button"
       onClick={() => setTab(id)}
       aria-pressed={remoteTab === (id === 'remote')}
-      className={`min-w-0 flex-1 px-2 py-[0.4rem] font-mono text-[0.62rem] tracking-[0.12em] uppercase rounded-full cursor-pointer transition-colors truncate ${
+      className={`min-w-0 flex-1 px-2 py-[0.4rem] font-mono text-2xs tracking-[0.12em] uppercase rounded-full cursor-pointer transition-colors truncate ${
         remoteTab === (id === 'remote')
           ? 'bg-ink text-paper'
           : 'bg-transparent text-muted hover:text-accent-ink'
@@ -465,7 +465,7 @@ export default function AssetSidebar({
       >
         {/* The sheet's own header already says "Library"; repeating it here
             would be the second sentence for one fact. */}
-        {!asSheet && <span className="font-serif text-[1.15rem]">Library</span>}
+        {!asSheet && <span className="font-serif text-lg">Library</span>}
         <span className="flex items-center gap-1.5">
           {/* Sources are the shell's business, and this rail is where they
               are felt — so the way to them is here, not buried in a tool.
@@ -479,7 +479,7 @@ export default function AssetSidebar({
               onClick={() => navigate('/sources')}
               className={`inline-flex items-center text-muted border border-line rounded-full hover:text-accent hover:border-line-strong transition-colors ${
                 asSheet
-                  ? 'gap-1.5 pl-2 pr-2.5 py-1 font-mono text-[0.62rem] tracking-[0.12em] uppercase'
+                  ? 'gap-1.5 pl-2 pr-2.5 py-1 font-mono text-2xs tracking-[0.12em] uppercase'
                   : 'p-[3px]'
               }`}
               aria-label="Sources — connect and manage Winnow instances"
@@ -493,7 +493,7 @@ export default function AssetSidebar({
             <button
               type="button"
               onClick={onToggle}
-              className="font-mono text-[0.6rem] tracking-[0.12em] uppercase text-muted border border-line rounded-full px-2 py-[3px] hover:text-accent hover:border-line-strong transition-colors"
+              className="font-mono text-3xs tracking-[0.12em] uppercase text-muted border border-line rounded-full px-2 py-[3px] hover:text-accent hover:border-line-strong transition-colors"
               aria-label="Collapse asset library"
             >
               collapse ⟨
@@ -536,7 +536,7 @@ export default function AssetSidebar({
           cannot do — so there it folds into one line above the grid, and the
           two links that actually work stay reachable. */}
       {!remoteTab && asTiles && (
-        <div className="px-3 pb-2 flex items-center gap-2 text-[0.76rem] text-muted">
+        <div className="px-3 pb-2 flex items-center gap-2 text-xs text-muted">
           <span className={legend}>Add</span>
           <button
             type="button"
@@ -569,7 +569,7 @@ export default function AssetSidebar({
       {!remoteTab && !asTiles && (
         <div className="px-3.5 pb-3">
           <div
-            className={`border-[1.5px] border-dashed rounded-paper text-center px-3 py-3.5 text-[0.82rem] leading-snug bg-paper/40 transition-colors ${
+            className={`border-[1.5px] border-dashed rounded-paper text-center px-3 py-3.5 text-sm leading-snug bg-paper/40 transition-colors ${
               dragging ? 'border-accent bg-accent-wash' : 'border-line-strong'
             }`}
             onDragOver={(e) => {
@@ -589,7 +589,7 @@ export default function AssetSidebar({
               >
                 {busy ? 'opening…' : 'Add files'}
               </button>
-              <span className="text-faint text-[0.8rem]">or</span>
+              <span className="text-faint text-xs">or</span>
               <button
                 type="button"
                 className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent disabled:text-faint disabled:no-underline"
@@ -600,7 +600,7 @@ export default function AssetSidebar({
               </button>
             </p>
             {!connection && (
-              <p className="m-0 mt-1.5 text-[0.78rem]">
+              <p className="m-0 mt-1.5 text-xs">
                 <button
                   type="button"
                   className="p-0 border-0 bg-transparent text-faint cursor-pointer underline underline-offset-[3px] hover:text-ink"
@@ -631,7 +631,7 @@ export default function AssetSidebar({
             </button>
           </div>
           {published ? (
-            <p className="m-0 text-[0.74rem] text-muted">
+            <p className="m-0 text-xs text-muted">
               Follows the {published.from === published.to ? 'day' : 'days'} {published.publisher} has
               open. One picture crosses per click.
             </p>
@@ -679,11 +679,11 @@ export default function AssetSidebar({
                     activate(viewable[viewing].id);
                     setViewing(null);
                   }}
-                  className="font-mono text-[0.64rem] tracking-[0.1em] uppercase px-3 py-1.5 rounded-full bg-ink text-paper cursor-pointer"
+                  className="font-mono text-2xs tracking-[0.1em] uppercase px-3 py-1.5 rounded-full bg-ink text-paper cursor-pointer"
                 >
                   Use in {tool.label}
                 </button>
-                <span className="text-[0.74rem] text-muted min-w-0 truncate">
+                <span className="text-xs text-muted min-w-0 truncate">
                   read from your disk — nothing uploaded
                 </span>
               </div>
@@ -724,7 +724,7 @@ export default function AssetSidebar({
                 ? 'Filter by file name…'
                 : `Filter ${tabPool.length} asset${tabPool.length === 1 ? '' : 's'}…`
             }
-            className="flex-1 min-w-0 font-sans text-[0.78rem] px-3 py-1.5 border border-line rounded-full bg-white text-ink placeholder:text-faint focus:outline-none focus:border-line-strong"
+            className="flex-1 min-w-0 font-sans text-xs px-3 py-1.5 border border-line rounded-full bg-white text-ink placeholder:text-faint focus:outline-none focus:border-line-strong"
           />
           {tabPool.length > 0 && (
             <button
@@ -735,7 +735,7 @@ export default function AssetSidebar({
                   !allSelected,
                 )
               }
-              className="font-mono text-[0.58rem] tracking-[0.1em] uppercase text-muted hover:text-accent whitespace-nowrap"
+              className="font-mono text-3xs tracking-[0.1em] uppercase text-muted hover:text-accent whitespace-nowrap"
               title={
                 remoteTab
                   ? `${allSelected ? 'Deselect' : 'Select'} every asset from ${connection?.id}`
@@ -774,7 +774,7 @@ export default function AssetSidebar({
         )}
 
         {!remoteTab && tabPool.length === 0 ? (
-          <p className="px-2 py-6 text-center text-[0.78rem] text-muted">
+          <p className="px-2 py-6 text-center text-xs text-muted">
             Nothing here yet. Add some assets above — they stay on your machine.
           </p>
         ) : (
@@ -822,7 +822,7 @@ export default function AssetSidebar({
           the ACTIVE asset is not told anything by six boxes being ticked, and
           on a phone that line was two rows of screen saying nothing. */}
       {!asTiles && (
-      <div className="border-t border-line px-4 py-2.5 bg-paper/40 text-[0.74rem] text-ink-soft flex flex-col gap-0.5">
+      <div className="border-t border-line px-4 py-2.5 bg-paper/40 text-xs text-ink-soft flex flex-col gap-0.5">
         <span>
           <b className="text-ink">{lib.selection.size} selected</b>
           {' · '}
@@ -877,7 +877,7 @@ function HalfPicker({
             onClick={() => onHalf(o.key)}
             aria-pressed={on}
             title={o.hint}
-            className={`flex-1 min-w-0 px-1 truncate font-mono text-[0.6rem] tracking-[0.1em] uppercase cursor-pointer transition-colors ${
+            className={`flex-1 min-w-0 px-1 truncate font-mono text-3xs tracking-[0.1em] uppercase cursor-pointer transition-colors ${
               i === 0 ? 'border-0' : 'border-y-0 border-r-0 border-l border-line'
             } ${
               on
@@ -950,7 +950,7 @@ function cadenceSentence(
  * shares the fixed 80×56 thumbnail with up to one other corner chip.
  */
 function scrim(corner: string): string {
-  return `absolute ${corner} left-[3px] z-[2] font-mono text-[0.5rem] tracking-[0.06em] uppercase text-paper bg-[rgba(20,18,15,0.62)] px-[0.25rem] py-px rounded-[4px] leading-[1.35] whitespace-nowrap backdrop-blur-[3px]`;
+  return `absolute ${corner} left-[3px] z-[2] font-mono text-3xs tracking-[0.06em] uppercase text-paper bg-[rgba(20,18,15,0.62)] px-[0.25rem] py-px rounded-[4px] leading-[1.35] whitespace-nowrap backdrop-blur-[3px]`;
 }
 
 /**
@@ -1078,14 +1078,14 @@ function AssetRow({
         className="flex-1 min-w-0 flex items-center gap-2.5 text-left cursor-pointer disabled:cursor-default"
       >
         <div className="min-w-0 flex-1 flex flex-col gap-[3px]">
-          <div className="text-[0.79rem] font-medium truncate" title={asset.baseName}>
+          <div className="text-xs font-medium truncate" title={asset.baseName}>
             {asset.baseName}
           </div>
-          <div className="font-mono text-[0.62rem] text-muted truncate">
+          <div className="font-mono text-2xs text-muted truncate">
             {metaFacts(asset, meta)}
           </div>
           <span
-            className={`self-start font-mono text-[0.56rem] tracking-[0.06em] uppercase px-1.5 py-0.5 rounded-md border whitespace-nowrap ${chipClass(
+            className={`self-start font-mono text-3xs tracking-[0.06em] uppercase px-1.5 py-0.5 rounded-md border whitespace-nowrap ${chipClass(
               asset.kind,
             )}`}
           >
@@ -1171,14 +1171,14 @@ function AssetTile({
         {meta?.thumbUrl ? (
           <img src={meta.thumbUrl} alt="" className="w-full h-full object-cover block" />
         ) : (
-          <span className="font-mono text-[0.5rem] text-[#8a8270] uppercase" aria-hidden="true">
+          <span className="font-mono text-3xs text-muted uppercase" aria-hidden="true">
             {asset.parts.video ? '▶' : (meta?.imageType ?? '◇')}
           </span>
         )}
       </button>
       {/* The tile is the picture's name here, so the name goes on the tile —
           quietly, and only where it does not cover the frame's subject. */}
-      <span className="absolute inset-x-0 bottom-0 px-1 pb-[2px] pt-2 bg-gradient-to-b from-transparent to-[rgba(16,15,13,0.6)] font-mono text-[0.5rem] text-paper truncate pointer-events-none">
+      <span className="absolute inset-x-0 bottom-0 px-1 pb-[2px] pt-2 bg-gradient-to-b from-transparent to-[rgba(16,15,13,0.6)] font-mono text-3xs text-paper truncate pointer-events-none">
         {asset.baseName}
       </span>
       {active && (
@@ -1193,7 +1193,7 @@ function AssetTile({
           onClick={onPreview}
           aria-label={`Look at ${asset.baseName}`}
           title={`Look at ${asset.baseName}`}
-          className="absolute top-[2px] right-[2px] w-6 h-6 grid place-items-center rounded-md border-0 bg-[rgba(251,248,241,0.85)] text-ink-soft text-[0.66rem] cursor-pointer hover:bg-surface"
+          className="absolute top-[2px] right-[2px] w-6 h-6 grid place-items-center rounded-md border-0 bg-[rgba(251,248,241,0.85)] text-ink-soft text-2xs cursor-pointer hover:bg-surface"
         >
           ⤢
         </button>
@@ -1223,7 +1223,7 @@ function Cover({
         <img src={thumbUrl} alt="" className="w-full h-full object-contain block" />
       ) : (
         <span
-          className="font-mono text-[0.55rem] text-[#8a8270] uppercase tracking-wide"
+          className="font-mono text-3xs text-muted uppercase tracking-wide"
           aria-hidden="true"
         >
           {fallback}
@@ -1260,7 +1260,7 @@ function Cover({
       {/* The affordance only on hover: a magnifier on every row would read as
           a badge the cover carries, not as something to press. */}
       <span
-        className="absolute inset-0 grid place-items-center bg-[rgba(20,18,15,0.35)] text-paper text-[0.8rem] opacity-0 group-hover/cover:opacity-100 transition-opacity"
+        className="absolute inset-0 grid place-items-center bg-[rgba(20,18,15,0.35)] text-paper text-xs opacity-0 group-hover/cover:opacity-100 transition-opacity"
         aria-hidden="true"
       >
         ⤢

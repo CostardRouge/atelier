@@ -10,7 +10,7 @@ export default function Home() {
     <>
       <section className="grid grid-cols-1 gap-6 pt-[clamp(2.5rem,7vw,5rem)] pb-[clamp(1.5rem,4vw,2.5rem)] min-[820px]:grid-cols-[1.35fr_1fr] min-[820px]:items-end">
         <div>
-          <p className="flex items-center gap-[0.6rem] m-0 mb-4 font-mono text-[0.72rem] uppercase tracking-[0.2em] text-accent-ink before:content-[''] before:w-[26px] before:h-px before:bg-accent">
+          <p className="flex items-center gap-[0.6rem] m-0 mb-4 font-mono text-xs uppercase tracking-[0.2em] text-accent-ink before:content-[''] before:w-[26px] before:h-px before:bg-accent">
             A studio for your captures
           </p>
           <h1 className="m-0 font-serif font-normal text-[clamp(2.8rem,8vw,5.2rem)] leading-[0.95] tracking-[-0.02em]">
@@ -19,7 +19,7 @@ export default function Home() {
             every <em className="text-accent italic">tool.</em>
           </h1>
         </div>
-        <p className="m-0 max-w-[44ch] text-ink-soft text-[1.05rem] leading-[1.6]">
+        <p className="m-0 max-w-[44ch] text-ink-soft text-base leading-[1.6]">
           Atelier is a small suite of local-first tools for editing the footage
           you shoot — read flight telemetry in sync with the frame, grade clips
           with LUTs, and more to come.{' '}
@@ -35,18 +35,18 @@ export default function Home() {
             href={`#${t.path}`}
           >
             {t.subtitle && (
-              <span className="font-mono text-[0.66rem] uppercase tracking-[0.16em] text-accent-ink">
+              <span className="font-mono text-2xs uppercase tracking-[0.16em] text-accent-ink">
                 {t.subtitle}
               </span>
             )}
-            <h2 className="m-0 font-serif font-normal text-[1.9rem] leading-none tracking-[-0.01em]">
+            <h2 className="m-0 font-serif font-normal text-3xl leading-none tracking-[-0.01em]">
               {t.label}
             </h2>
             {t.blurb && (
-              <p className="m-0 flex-1 text-ink-soft text-[0.95rem] leading-[1.55]">{t.blurb}</p>
+              <p className="m-0 flex-1 text-ink-soft text-base leading-[1.55]">{t.blurb}</p>
             )}
             <span
-              className="inline-flex items-center gap-[0.35rem] mt-2 text-[0.78rem] font-semibold tracking-[0.01em] text-accent-ink"
+              className="inline-flex items-center gap-[0.35rem] mt-2 text-xs font-semibold tracking-[0.01em] text-accent-ink"
               aria-hidden="true"
             >
               Open

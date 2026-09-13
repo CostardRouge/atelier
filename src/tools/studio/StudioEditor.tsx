@@ -152,11 +152,11 @@ const TABS: Array<{ id: PanelTab; label: string }> = [
 ];
 
 const notice =
-  'my-2 px-4 py-[0.7rem] rounded-paper bg-accent-wash border border-[#eccabf] text-[#7c2e1c] text-[0.84rem] leading-[1.5]';
+  'my-2 px-4 py-[0.7rem] rounded-paper bg-accent-wash border border-danger-line text-danger-ink text-sm leading-[1.5]';
 /** Same shape as `notice`, without the warning colour — for media that is
  * absent but not necessarily a problem (see the missing-media banner below). */
 const noticeMuted =
-  'my-2 px-4 py-[0.7rem] rounded-paper bg-paper-2 border border-line text-ink-soft text-[0.84rem] leading-[1.5]';
+  'my-2 px-4 py-[0.7rem] rounded-paper bg-paper-2 border border-line text-ink-soft text-sm leading-[1.5]';
 
 type SaveState = 'saved' | 'saving' | 'unsaved' | 'storage-error';
 
@@ -1380,7 +1380,7 @@ export default function StudioEditor({
       key={t.id}
       type="button"
       onClick={() => setTab(t.id)}
-      className={`flex-1 px-2 py-[0.45rem] font-mono text-[0.66rem] tracking-[0.14em] uppercase rounded-full cursor-pointer transition-colors ${
+      className={`flex-1 px-2 py-[0.45rem] font-mono text-2xs tracking-[0.14em] uppercase rounded-full cursor-pointer transition-colors ${
         tab === t.id
           ? 'bg-ink text-paper'
           : 'bg-transparent text-muted hover:text-accent-ink'
@@ -1402,13 +1402,13 @@ export default function StudioEditor({
    * The full text is announced either way, from the live region below.
    */
   const saveBadge: Record<SaveState, { label: string; cls: string; dot: string; act: boolean }> = {
-    saved: { label: 'Saved', cls: 'text-[#3f6b3f] border-[#c7d6c0]', dot: 'bg-[#5b8c5a]', act: false },
+    saved: { label: 'Saved', cls: 'text-ok border-ok-line', dot: 'bg-ok', act: false },
     saving: { label: 'Saving…', cls: 'text-muted border-line', dot: 'bg-faint', act: false },
     unsaved: { label: 'Edited', cls: 'text-muted border-line', dot: 'bg-line-strong', act: false },
     'storage-error': {
       label: 'Storage unavailable — in-memory only',
-      cls: 'text-[#9a3a23] border-[#e3b8a9]',
-      dot: 'bg-[#c0563a]',
+      cls: 'text-danger border-danger-line',
+      dot: 'bg-danger',
       act: true,
     },
   };
@@ -1444,7 +1444,7 @@ export default function StudioEditor({
           <>
             {headerExtra}
             <span
-              className={`${barPill} bg-paper font-mono text-[0.64rem] tracking-[0.1em] uppercase ${
+              className={`${barPill} bg-paper font-mono text-2xs tracking-[0.1em] uppercase ${
                 showSaveLabel ? 'gap-1.5' : 'justify-center w-[1.9rem] px-0'
               } ${save.cls}`}
               aria-label={save.label}
@@ -1463,11 +1463,11 @@ export default function StudioEditor({
             <button
               type="button"
               onClick={() => setShowSettings(true)}
-              className={`${barPill} gap-1.5 border-line-strong bg-paper font-mono text-[0.68rem] tracking-[0.06em] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink`}
+              className={`${barPill} gap-1.5 border-line-strong bg-paper font-mono text-2xs tracking-[0.06em] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink`}
               title="Project settings — name, format, import/export"
             >
               {ASPECT_PRESETS.find((a) => a.id === aspectId)?.id ?? aspectId}
-              <span className="text-[1.05rem] leading-none" aria-hidden="true">
+              <span className="text-base leading-none" aria-hidden="true">
                 ⚙
               </span>
             </button>
@@ -1486,7 +1486,7 @@ export default function StudioEditor({
           /* Exactly the pills' own height, or the row centres a 32px field
              against a 30px pill and pushes the back button 1px down — the
              whole point of the bar is that it does not move. */
-          className="grow shrink basis-[9rem] min-w-0 max-w-[24rem] h-[1.9rem] font-serif text-[1.15rem] bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0"
+          className="grow shrink basis-[9rem] min-w-0 max-w-[24rem] h-[1.9rem] font-serif text-lg bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0"
         />
       </PageBar>
 
@@ -1593,7 +1593,7 @@ export default function StudioEditor({
               >
                 ‹
               </button>
-              <span className="font-mono text-[0.7rem] text-muted tabular-nums min-w-[3ch] text-center">
+              <span className="font-mono text-2xs text-muted tabular-nums min-w-[3ch] text-center">
                 {activeIndex + 1}/{clips.length}
               </span>
               <button
@@ -1608,13 +1608,13 @@ export default function StudioEditor({
             </div>
           )}
           <span
-            className="font-semibold text-[0.9rem] whitespace-nowrap overflow-hidden text-ellipsis"
+            className="font-semibold text-sm whitespace-nowrap overflow-hidden text-ellipsis"
             title={active.baseName}
           >
             {active.baseName}
           </span>
           {activeDetail && (
-            <span className="font-mono text-[0.72rem] tracking-[0.02em] text-muted flex-none">
+            <span className="font-mono text-xs tracking-[0.02em] text-muted flex-none">
               {activeDetail}
             </span>
           )}
@@ -1622,7 +1622,7 @@ export default function StudioEditor({
               appears while the EXIF block is still being parsed reads as a
               verdict on a photo nobody has looked at yet. */}
           {!hasTelemetry && (isPhoto ? photoExif !== null : activeSrt === null) && (
-            <span className="font-mono text-[0.66rem] tracking-[0.08em] uppercase text-faint flex-none border border-line rounded-full px-2 py-[2px]">
+            <span className="font-mono text-2xs tracking-[0.08em] uppercase text-faint flex-none border border-line rounded-full px-2 py-[2px]">
               {isPhoto ? 'no exif' : 'no telemetry'}
             </span>
           )}
@@ -1675,7 +1675,7 @@ export default function StudioEditor({
                 onPointerCancel={stage.onPointerUp}
               />
             ) : (
-              <div className="w-full aspect-video flex items-center justify-center bg-surface border border-line rounded-paper text-muted text-center p-4 font-mono text-[0.85rem]">
+              <div className="w-full aspect-video flex items-center justify-center bg-surface border border-line rounded-paper text-muted text-center p-4 font-mono text-sm">
                 {clips.length === 0
                   ? 'No media in this project yet — add clips or photos from the Library, or point a folder from the banner above.'
                   : photoError
@@ -1710,14 +1710,14 @@ export default function StudioEditor({
               <div className="flex items-center gap-[0.85rem] grow shrink basis-[15rem] min-w-0">
               <button
                 type="button"
-                className="flex-none w-[2.2rem] h-[2.2rem] border-0 rounded-full bg-ink text-paper cursor-pointer text-[0.8rem] leading-none inline-flex items-center justify-center transition-[background-color] duration-200 ease-paper hover:bg-accent"
+                className="flex-none w-[2.2rem] h-[2.2rem] border-0 rounded-full bg-ink text-paper cursor-pointer text-xs leading-none inline-flex items-center justify-center transition-[background-color] duration-200 ease-paper hover:bg-accent"
                 onClick={togglePlay}
                 aria-label={playing ? 'Pause' : 'Play'}
                 title="Play / pause (Space)"
               >
                 {playing ? '❚❚' : '▶'}
               </button>
-              <span className="font-mono text-[0.74rem] tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
+              <span className="font-mono text-xs tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
                 {formatTimecode(time)}
               </span>
               <TrimBar
@@ -1731,7 +1731,7 @@ export default function StudioEditor({
                 onScrubEnd={() => scrub.end()}
                 onRangeChange={applyRange}
               />
-              <span className="font-mono text-[0.74rem] tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
+              <span className="font-mono text-xs tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
                 {formatDuration(duration)}
               </span>
               </div>
@@ -1744,7 +1744,7 @@ export default function StudioEditor({
                 type="button"
                 onClick={() => setLoop((l) => !l)}
                 aria-pressed={loop}
-                className={`flex-none px-2.5 py-1 rounded-full border font-mono text-[0.64rem] tracking-[0.1em] cursor-pointer transition-colors ${
+                className={`flex-none px-2.5 py-1 rounded-full border font-mono text-2xs tracking-[0.1em] cursor-pointer transition-colors ${
                   loop
                     ? 'border-accent bg-accent-wash text-accent-ink'
                     : 'border-line-strong bg-paper text-muted hover:text-accent-ink hover:border-accent'
@@ -1757,7 +1757,7 @@ export default function StudioEditor({
                 type="button"
                 onClick={() => void handleGrabFrame()}
                 disabled={grabbing}
-                className="flex-none px-2.5 py-1 rounded-full border border-line-strong bg-paper text-[0.78rem] text-muted cursor-pointer hover:text-accent-ink hover:border-accent transition-colors disabled:opacity-50 disabled:cursor-default"
+                className="flex-none px-2.5 py-1 rounded-full border border-line-strong bg-paper text-xs text-muted cursor-pointer hover:text-accent-ink hover:border-accent transition-colors disabled:opacity-50 disabled:cursor-default"
                 title="Save this frame as a JPEG, overlays and look burned in"
                 aria-label="Capture frame"
               >
@@ -1772,7 +1772,7 @@ export default function StudioEditor({
                     e.target.value === 'realtime' ? 'realtime' : Number(e.target.value),
                   )
                 }
-                className={`flex-none pl-2 pr-1 py-1 rounded-full border font-mono text-[0.64rem] tracking-[0.06em] cursor-pointer transition-colors focus:outline-none ${
+                className={`flex-none pl-2 pr-1 py-1 rounded-full border font-mono text-2xs tracking-[0.06em] cursor-pointer transition-colors focus:outline-none ${
                   previewRate === 1
                     ? 'border-line-strong bg-paper text-muted hover:text-accent-ink hover:border-accent'
                     : 'border-accent bg-accent-wash text-accent-ink'
@@ -1795,7 +1795,7 @@ export default function StudioEditor({
                 type="button"
                 onClick={() => setCompareOn((c) => !c)}
                 aria-pressed={compareOn}
-                className={`flex-none px-2.5 py-1 rounded-full border font-mono text-[0.64rem] tracking-[0.1em] cursor-pointer transition-colors ${
+                className={`flex-none px-2.5 py-1 rounded-full border font-mono text-2xs tracking-[0.1em] cursor-pointer transition-colors ${
                   compareOn
                     ? 'border-accent bg-accent-wash text-accent-ink'
                     : 'border-line-strong bg-paper text-muted hover:text-accent-ink hover:border-accent'
@@ -1811,7 +1811,7 @@ export default function StudioEditor({
                  rendered: appearing on the first drag, it would resize the row
                  above and make the rail jump under the pointer mid-gesture.
                  Untrimmed, it teaches the two shortcuts instead. */}
-             <div className="flex items-center gap-2 h-[1.1rem] pl-[3.05rem] font-mono text-[0.64rem] tracking-[0.06em] tabular-nums">
+             <div className="flex items-center gap-2 h-[1.1rem] pl-[3.05rem] font-mono text-2xs tracking-[0.06em] tabular-nums">
                {trimmed ? (
                  <>
                    <span
@@ -1825,7 +1825,7 @@ export default function StudioEditor({
                    <button
                      type="button"
                      onClick={() => applyRange(fullRange(duration))}
-                     className="border-0 bg-transparent p-0 text-accent-ink cursor-pointer text-[0.8rem] leading-none hover:text-accent"
+                     className="border-0 bg-transparent p-0 text-accent-ink cursor-pointer text-xs leading-none hover:text-accent"
                      title="Use the whole clip again"
                      aria-label="Clear the trim"
                    >
@@ -1848,7 +1848,7 @@ export default function StudioEditor({
               wipe, which is how a grade gets judged. */}
           {isPhoto && photo && (
             <div className="flex flex-wrap items-center gap-2 px-[0.85rem] py-[0.6rem] border border-line rounded-paper bg-surface flex-none">
-              <span className="font-mono text-[0.64rem] tracking-[0.1em] uppercase text-faint">
+              <span className="font-mono text-2xs tracking-[0.1em] uppercase text-faint">
                 Still
               </span>
               <span className="flex-1" />
@@ -1856,7 +1856,7 @@ export default function StudioEditor({
                 type="button"
                 onClick={() => setCompareOn((c) => !c)}
                 aria-pressed={compareOn}
-                className={`flex-none px-2.5 py-1 rounded-full border font-mono text-[0.64rem] tracking-[0.1em] cursor-pointer transition-colors ${
+                className={`flex-none px-2.5 py-1 rounded-full border font-mono text-2xs tracking-[0.1em] cursor-pointer transition-colors ${
                   compareOn
                     ? 'border-accent bg-accent-wash text-accent-ink'
                     : 'border-line-strong bg-paper text-muted hover:text-accent-ink hover:border-accent'
@@ -1926,9 +1926,9 @@ export default function StudioEditor({
 
                   {introScene && (
                     <div className="pt-3 border-t border-line flex flex-col gap-2">
-                      <h2 className="m-0 flex items-baseline gap-2 font-mono text-[0.7rem] font-medium uppercase tracking-[0.16em] text-muted">
+                      <h2 className="m-0 flex items-baseline gap-2 font-mono text-2xs font-medium uppercase tracking-[0.16em] text-muted">
                         {introScene.name}
-                        <span className="ml-auto normal-case tracking-normal text-[0.68rem] text-faint tabular-nums">
+                        <span className="ml-auto normal-case tracking-normal text-2xs text-faint tabular-nums">
                           {introScene.start.toFixed(1)}–{introScene.end.toFixed(1)} s
                         </span>
                       </h2>
@@ -1952,10 +1952,10 @@ export default function StudioEditor({
                       cannot show it (the playhead cannot travel past the
                       clip), so the block carries its own preview. */}
                   <div className="pt-3 border-t border-line flex flex-col gap-2">
-                    <h2 className="m-0 flex items-baseline gap-2 font-mono text-[0.7rem] font-medium uppercase tracking-[0.16em] text-muted">
+                    <h2 className="m-0 flex items-baseline gap-2 font-mono text-2xs font-medium uppercase tracking-[0.16em] text-muted">
                       Outro
                       {outro && (
-                        <span className="ml-auto normal-case tracking-normal text-[0.68rem] text-faint tabular-nums">
+                        <span className="ml-auto normal-case tracking-normal text-2xs text-faint tabular-nums">
                           + {outro.seconds.toFixed(1)} s after the footage
                         </span>
                       )}
@@ -1971,7 +1971,7 @@ export default function StudioEditor({
                       <button
                         type="button"
                         onClick={() => setOutro(createOutroCard(projectName.trim() || 'Merci'))}
-                        className="self-start p-0 border-0 bg-transparent text-[0.78rem] text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] hover:text-accent"
+                        className="self-start p-0 border-0 bg-transparent text-xs text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] hover:text-accent"
                       >
                         Add an outro — a closing card after the footage
                       </button>
@@ -1983,13 +1983,13 @@ export default function StudioEditor({
                       type="button"
                       onClick={() => setListOpen((o) => !o)}
                       aria-expanded={listOpen}
-                      className="flex items-center gap-1.5 p-0 border-0 bg-transparent text-accent-ink font-semibold text-[0.82rem] cursor-pointer hover:text-accent"
+                      className="flex items-center gap-1.5 p-0 border-0 bg-transparent text-accent-ink font-semibold text-sm cursor-pointer hover:text-accent"
                     >
-                      <span aria-hidden="true" className="text-[0.7rem]">
+                      <span aria-hidden="true" className="text-2xs">
                         {listOpen ? '▾' : '▸'}
                       </span>
                       Elements
-                      <span className="ml-auto font-mono text-[0.66rem] tabular-nums text-muted">
+                      <span className="ml-auto font-mono text-2xs tabular-nums text-muted">
                         {elements.length}
                       </span>
                     </button>
@@ -2018,18 +2018,18 @@ export default function StudioEditor({
                       <button
                         type="button"
                         onClick={loadDefaultDeck}
-                        className="self-start p-0 border-0 bg-transparent text-[0.78rem] text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] hover:text-accent"
+                        className="self-start p-0 border-0 bg-transparent text-xs text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] hover:text-accent"
                       >
                         Start from the default deck
                       </button>
                     ) : resettingDeck ? (
-                      <span className="flex flex-wrap items-center gap-2 text-[0.75rem] text-muted">
+                      <span className="flex flex-wrap items-center gap-2 text-xs text-muted">
                         Replace {elements.length} element
                         {elements.length > 1 ? 's' : ''} with the default deck?
                         <button
                           type="button"
                           onClick={loadDefaultDeck}
-                          className="p-0 border-0 bg-transparent text-[#9a3a23] font-semibold cursor-pointer underline underline-offset-[3px]"
+                          className="p-0 border-0 bg-transparent text-danger font-semibold cursor-pointer underline underline-offset-[3px]"
                         >
                           Reset
                         </button>
@@ -2045,7 +2045,7 @@ export default function StudioEditor({
                       <button
                         type="button"
                         onClick={() => setResettingDeck(true)}
-                        className="self-start p-0 border-0 bg-transparent text-[0.75rem] text-faint cursor-pointer hover:text-[#9a3a23]"
+                        className="self-start p-0 border-0 bg-transparent text-xs text-faint cursor-pointer hover:text-danger"
                       >
                         Reset deck
                       </button>
@@ -2054,9 +2054,9 @@ export default function StudioEditor({
 
                   {selectedElement && (
                     <div ref={elementPanelRef} className="pt-3 border-t border-line scroll-mt-2">
-                      <h2 className="m-0 mb-2 flex items-baseline gap-2 font-mono text-[0.7rem] font-medium uppercase tracking-[0.16em] text-muted">
+                      <h2 className="m-0 mb-2 flex items-baseline gap-2 font-mono text-2xs font-medium uppercase tracking-[0.16em] text-muted">
                         Style
-                        <span className="ml-auto normal-case tracking-normal text-[0.68rem] text-faint">
+                        <span className="ml-auto normal-case tracking-normal text-2xs text-faint">
                           Delete removes it
                         </span>
                       </h2>
@@ -2068,7 +2068,7 @@ export default function StudioEditor({
                         }
                       />
 
-                      <h2 className="m-0 mt-3 mb-2 pt-3 border-t border-line flex items-baseline gap-2 font-mono text-[0.7rem] font-medium uppercase tracking-[0.16em] text-muted">
+                      <h2 className="m-0 mt-3 mb-2 pt-3 border-t border-line flex items-baseline gap-2 font-mono text-2xs font-medium uppercase tracking-[0.16em] text-muted">
                         Timing
                       </h2>
                       <TimingPanel
@@ -2113,7 +2113,7 @@ export default function StudioEditor({
                     </SectionLegend>
                     <div className="flex items-center gap-2 min-w-0">
                       <span
-                        className={`flex-1 min-w-0 truncate font-mono text-[0.68rem] ${
+                        className={`flex-1 min-w-0 truncate font-mono text-2xs ${
                           activeDevelop ? 'text-ink-soft' : 'text-faint'
                         }`}
                         title={describeDevelop(activeDevelop)}
@@ -2128,7 +2128,7 @@ export default function StudioEditor({
                         }}
                         disabled={!activeFile}
                         title="Open the Develop sheet"
-                        className="px-2.5 py-1.5 rounded-paper border border-accent bg-paper text-[0.74rem] font-semibold text-accent-ink cursor-pointer hover:bg-accent-wash disabled:opacity-50 disabled:cursor-default"
+                        className="px-2.5 py-1.5 rounded-paper border border-accent bg-paper text-xs font-semibold text-accent-ink cursor-pointer hover:bg-accent-wash disabled:opacity-50 disabled:cursor-default"
                       >
                         Develop…
                       </button>
@@ -2138,7 +2138,7 @@ export default function StudioEditor({
                           onClick={() => setActiveDevelop(null)}
                           title="Back to as shot"
                           aria-label="Back to as shot"
-                          className="w-6 h-6 grid place-items-center rounded-full border border-line bg-transparent text-[0.8rem] text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
+                          className="w-6 h-6 grid place-items-center rounded-full border border-line bg-transparent text-xs text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
                         >
                           ↺
                         </button>
@@ -2167,7 +2167,7 @@ export default function StudioEditor({
               {tab === 'export' && (
                 <div className="flex flex-col gap-3.5">
                   <label className="flex flex-col gap-1">
-                    <span className="font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted">
+                    <span className="font-mono text-2xs tracking-[0.12em] uppercase text-muted">
                       File name
                     </span>
                     <input
@@ -2175,12 +2175,12 @@ export default function StudioEditor({
                       value={exportFileName}
                       onChange={(e) => setExportFileName(e.target.value)}
                       placeholder={active.baseName}
-                      className="font-sans text-[0.84rem] px-3 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
+                      className="font-sans text-sm px-3 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
                     />
                   </label>
 
                   <div className="flex flex-col gap-1">
-                    <span className="font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted">
+                    <span className="font-mono text-2xs tracking-[0.12em] uppercase text-muted">
                       Destination
                     </span>
                     <div className="flex items-center gap-2 min-w-0">
@@ -2193,25 +2193,25 @@ export default function StudioEditor({
                                 .then(setDestDir)
                                 .catch(() => undefined);
                             }}
-                            className="flex-none px-3 py-[0.35rem] rounded-full border border-line-strong bg-paper text-[0.78rem] font-semibold text-ink cursor-pointer hover:border-accent"
+                            className="flex-none px-3 py-[0.35rem] rounded-full border border-line-strong bg-paper text-xs font-semibold text-ink cursor-pointer hover:border-accent"
                           >
                             {destDir ? 'Change folder…' : 'Choose folder…'}
                           </button>
-                          <span className="min-w-0 truncate text-[0.76rem] text-muted">
+                          <span className="min-w-0 truncate text-xs text-muted">
                             {destDir ? destDir.name : 'Downloads'}
                           </span>
                           {destDir && (
                             <button
                               type="button"
                               onClick={() => setDestDir(null)}
-                              className="flex-none p-0 border-0 bg-transparent text-[0.74rem] text-faint cursor-pointer hover:text-accent-ink underline underline-offset-[2px]"
+                              className="flex-none p-0 border-0 bg-transparent text-xs text-faint cursor-pointer hover:text-accent-ink underline underline-offset-[2px]"
                             >
                               use downloads
                             </button>
                           )}
                         </>
                       ) : (
-                        <span className="text-[0.76rem] text-muted">
+                        <span className="text-xs text-muted">
                           Downloads — folder writing needs Chromium.
                         </span>
                       )}
@@ -2234,7 +2234,7 @@ export default function StudioEditor({
                           onChange={(e) => setRenderFromProxy(e.target.checked)}
                           className="w-[15px] h-[15px] accent-ink cursor-pointer"
                         />
-                        <span className="text-[0.8rem]">
+                        <span className="text-xs">
                           Render from the proxy — faster, and nothing large crosses the
                           network. For a quick look, not for delivery.
                         </span>
@@ -2243,13 +2243,13 @@ export default function StudioEditor({
                   )}
 
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted">
+                    <span className="font-mono text-2xs tracking-[0.12em] uppercase text-muted">
                       Variants · {variants.length}
                     </span>
                     <button
                       type="button"
                       onClick={addVariant}
-                      className="p-0 border-0 bg-transparent text-[0.78rem] text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] hover:text-accent"
+                      className="p-0 border-0 bg-transparent text-xs text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] hover:text-accent"
                     >
                       + Add variant
                     </button>
@@ -2278,7 +2278,7 @@ export default function StudioEditor({
                         >
                           <div className="flex items-center gap-2">
                             <select
-                              className="flex-1 min-w-0 font-sans text-[0.78rem] px-2 py-[0.35rem] border border-line-strong rounded-paper bg-surface text-ink cursor-pointer focus:outline-none focus:border-accent"
+                              className="flex-1 min-w-0 font-sans text-xs px-2 py-[0.35rem] border border-line-strong rounded-paper bg-surface text-ink cursor-pointer focus:outline-none focus:border-accent"
                               value={v.aspectId}
                               onChange={(e) => updateVariant(v.id, { aspectId: e.target.value })}
                               aria-label="Variant format"
@@ -2294,7 +2294,7 @@ export default function StudioEditor({
                               type="button"
                               onClick={() => removeVariant(v.id)}
                               disabled={variants.length <= 1}
-                              className="flex-none w-6 h-6 grid place-items-center rounded-full border border-line bg-transparent text-faint cursor-pointer hover:text-[#9a3a23] hover:border-[#e3b8a9] disabled:opacity-30 disabled:cursor-default"
+                              className="flex-none w-6 h-6 grid place-items-center rounded-full border border-line bg-transparent text-faint cursor-pointer hover:text-danger hover:border-danger-line disabled:opacity-30 disabled:cursor-default"
                               aria-label="Remove variant"
                               title="Remove this variant"
                             >
@@ -2303,7 +2303,7 @@ export default function StudioEditor({
                           </div>
                           <div className="flex items-center gap-2">
                             <select
-                              className="flex-1 min-w-0 font-sans text-[0.78rem] px-2 py-[0.35rem] border border-line-strong rounded-paper bg-surface text-ink cursor-pointer focus:outline-none focus:border-accent"
+                              className="flex-1 min-w-0 font-sans text-xs px-2 py-[0.35rem] border border-line-strong rounded-paper bg-surface text-ink cursor-pointer focus:outline-none focus:border-accent"
                               value={String(v.resolution)}
                               onChange={(e) =>
                                 updateVariant(v.id, {
@@ -2324,7 +2324,7 @@ export default function StudioEditor({
                                 than sit there inert. */}
                             {!isPhoto && (
                             <select
-                              className="flex-1 min-w-0 font-sans text-[0.78rem] px-2 py-[0.35rem] border border-line-strong rounded-paper bg-surface text-ink cursor-pointer focus:outline-none focus:border-accent"
+                              className="flex-1 min-w-0 font-sans text-xs px-2 py-[0.35rem] border border-line-strong rounded-paper bg-surface text-ink cursor-pointer focus:outline-none focus:border-accent"
                               value={String(v.frameRate)}
                               onChange={(e) =>
                                 updateVariant(v.id, {
@@ -2350,7 +2350,7 @@ export default function StudioEditor({
                           {!isPhoto && (
                           <div className="flex items-center gap-2">
                             <select
-                              className="flex-1 min-w-0 font-sans text-[0.78rem] px-2 py-[0.35rem] border border-line-strong rounded-paper bg-surface text-ink cursor-pointer focus:outline-none focus:border-accent"
+                              className="flex-1 min-w-0 font-sans text-xs px-2 py-[0.35rem] border border-line-strong rounded-paper bg-surface text-ink cursor-pointer focus:outline-none focus:border-accent"
                               value={String(resolveSpeed(v.speed))}
                               onChange={(e) =>
                                 updateVariant(v.id, { speed: Number(e.target.value) })
@@ -2370,7 +2370,7 @@ export default function StudioEditor({
                           {/* A re-time is a real change of duration, and the
                               audio cannot follow it — say both before it runs. */}
                           {!isPhoto && variantIsRetimed(v) && (
-                            <p className="m-0 text-[0.7rem] leading-snug text-muted">
+                            <p className="m-0 text-2xs leading-snug text-muted">
                               {resolveSpeed(v.speed)}× speed
                               {duration > 0
                                 ? ` — ${formatDuration(retimedDuration(duration, v.speed))} instead of ${formatDuration(duration)}`
@@ -2382,7 +2382,7 @@ export default function StudioEditor({
                           {/* Say what a higher cadence really does: the encoder
                               repeats frames, it does not invent motion. */}
                           {!isPhoto && sourceFps && v.frameRate !== 'source' && v.frameRate > sourceFps && (
-                            <p className="m-0 text-[0.7rem] leading-snug text-muted">
+                            <p className="m-0 text-2xs leading-snug text-muted">
                               {v.frameRate} fps from {sourceFps} — frames are
                               duplicated, not interpolated: no new motion.
                             </p>
@@ -2395,12 +2395,12 @@ export default function StudioEditor({
                                 checked={v.overlays}
                                 onChange={(e) => updateVariant(v.id, { overlays: e.target.checked })}
                               />
-                              <span className="font-mono text-[0.62rem] tracking-[0.1em] uppercase text-muted">
+                              <span className="font-mono text-2xs tracking-[0.1em] uppercase text-muted">
                                 Overlays
                               </span>
                             </label>
                             <span
-                              className="flex-1 min-w-0 text-right font-mono text-[0.68rem] tabular-nums text-faint truncate"
+                              className="flex-1 min-w-0 text-right font-mono text-2xs tabular-nums text-faint truncate"
                               title={fileName}
                             >
                               {dims ? `${dims.w}×${dims.h} · ` : ''}
@@ -2411,7 +2411,7 @@ export default function StudioEditor({
                               Better said here, beside the setting that made
                               the promise, than discovered in the file. */}
                           {short && (
-                            <p className="m-0 text-[0.72rem] text-[#9a3a23] leading-snug">
+                            <p className="m-0 text-xs text-danger leading-snug">
                               {short.asked}p was asked for; this source delivers{' '}
                               {short.delivered}p.
                               {proxyWithOriginal && renderFromProxy
@@ -2424,7 +2424,7 @@ export default function StudioEditor({
                               which is the whole point of showing it. */}
                           {liveExport?.id === v.id ? (
                             <div
-                              className="flex items-center gap-1.5 pt-1.5 border-t border-dashed border-line font-mono text-[0.66rem] tabular-nums text-accent-ink"
+                              className="flex items-center gap-1.5 pt-1.5 border-t border-dashed border-line font-mono text-2xs tabular-nums text-accent-ink"
                               role="status"
                             >
                               <span className="w-[7px] h-[7px] rounded-full bg-accent animate-pulse-dot" />
@@ -2432,8 +2432,8 @@ export default function StudioEditor({
                             </div>
                           ) : (
                             stats && (
-                              <div className="flex items-center gap-1.5 pt-1.5 border-t border-dashed border-line font-mono text-[0.66rem] tabular-nums text-ink-soft">
-                                <span className="text-[#3f6b3f]">✓</span>
+                              <div className="flex items-center gap-1.5 pt-1.5 border-t border-dashed border-line font-mono text-2xs tabular-nums text-ink-soft">
+                                <span className="text-ok">✓</span>
                                 {describeExportStat(stats)}
                               </div>
                             )
@@ -2444,7 +2444,7 @@ export default function StudioEditor({
                   </div>
 
                   {!exportSupported && (
-                    <p className="m-0 text-[0.78rem] text-muted">
+                    <p className="m-0 text-xs text-muted">
                       Export needs WebCodecs (try Chrome/Edge/Safari) — editing
                       works everywhere.
                     </p>
@@ -2453,7 +2453,7 @@ export default function StudioEditor({
                   {exporting ? (
                     <div className="flex flex-col gap-2" role="status">
                       <div className="flex items-center gap-3">
-                        <span className="font-mono text-[0.74rem] tracking-[0.04em] text-ink-soft flex-none">
+                        <span className="font-mono text-xs tracking-[0.04em] text-ink-soft flex-none">
                           {fetchingOriginal
                             ? `Fetching the original from ${proxyWithOriginal?.sourceId ?? 'the source'}… `
                             : exportStep && exportStep.total > 1
@@ -2480,13 +2480,13 @@ export default function StudioEditor({
                     <>
                       {exportDone && runStats.length > 0 && (
                         <div
-                          className="flex flex-col gap-0.5 px-2.5 py-2 rounded-paper bg-surface border border-[#c7d6c0]"
+                          className="flex flex-col gap-0.5 px-2.5 py-2 rounded-paper bg-surface border border-ok-line"
                           role="status"
                         >
-                          <span className="font-mono text-[0.66rem] tracking-[0.1em] uppercase text-[#3f6b3f]">
+                          <span className="font-mono text-2xs tracking-[0.1em] uppercase text-ok">
                             ✓ Exported
                           </span>
-                          <span className="font-mono text-[0.74rem] tabular-nums text-ink-soft">
+                          <span className="font-mono text-xs tabular-nums text-ink-soft">
                             {describeExportRun(runStats)}
                           </span>
                         </div>
@@ -2503,13 +2503,13 @@ export default function StudioEditor({
                         />
                       )}
                       {exportError && (
-                        <span className="text-[0.78rem] text-[#9a3a23]" role="status">
+                        <span className="text-xs text-danger" role="status">
                           {exportError}
                         </span>
                       )}
                       <button
                         type="button"
-                        className="px-[1.1rem] py-2 inline-flex items-center justify-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.82rem] font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent hover:text-white active:scale-[0.98] disabled:opacity-50 disabled:cursor-default"
+                        className="px-[1.1rem] py-2 inline-flex items-center justify-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent hover:text-white active:scale-[0.98] disabled:opacity-50 disabled:cursor-default"
                         onClick={handleExport}
                         disabled={!active || !exportSupported}
                         title={

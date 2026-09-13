@@ -502,7 +502,7 @@ export default function RoadTripTool() {
     <div className="flex flex-col flex-1 min-h-0 gap-3">
       {storageFailed && (
         <p
-          className="m-0 px-4 py-2.5 border border-accent bg-accent-wash rounded-paper text-[0.8rem] text-accent-ink"
+          className="m-0 px-4 py-2.5 border border-accent bg-accent-wash rounded-paper text-xs text-accent-ink"
           role="alert"
         >
           This trip could not be saved — the browser refused storage (a private
@@ -511,7 +511,7 @@ export default function RoadTripTool() {
         </p>
       )}
       {spanNote && !showGallery && (
-        <p className="m-0 px-4 py-2.5 border border-line bg-surface rounded-paper text-[0.8rem] text-muted flex items-center gap-3">
+        <p className="m-0 px-4 py-2.5 border border-line bg-surface rounded-paper text-xs text-muted flex items-center gap-3">
           <span className="flex-1">{spanNote}</span>
           <button
             type="button"

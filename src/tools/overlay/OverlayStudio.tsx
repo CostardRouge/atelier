@@ -39,7 +39,7 @@ interface OverlayClip {
 }
 
 const notice =
-  'my-2 px-4 py-[0.7rem] rounded-paper bg-accent-wash border border-[#eccabf] text-[#7c2e1c] text-[0.84rem] leading-[1.5]';
+  'my-2 px-4 py-[0.7rem] rounded-paper bg-accent-wash border border-danger-line text-danger-ink text-sm leading-[1.5]';
 
 /**
  * Telemetry Overlay — place altitude/GPS/exposure readouts (and free text) on a
@@ -398,7 +398,7 @@ export default function OverlayStudio() {
               >
                 ‹
               </button>
-              <span className="font-mono text-[0.7rem] text-muted tabular-nums min-w-[3ch] text-center">
+              <span className="font-mono text-2xs text-muted tabular-nums min-w-[3ch] text-center">
                 {activeIndex + 1}/{clips.length}
               </span>
               <button
@@ -413,13 +413,13 @@ export default function OverlayStudio() {
             </div>
           )}
           <span
-            className="font-semibold text-[0.9rem] whitespace-nowrap overflow-hidden text-ellipsis"
+            className="font-semibold text-sm whitespace-nowrap overflow-hidden text-ellipsis"
             title={activeClip.name}
           >
             {activeClip.name}
           </span>
           {activeDetail && (
-            <span className="font-mono text-[0.72rem] tracking-[0.02em] text-muted flex-none">
+            <span className="font-mono text-xs tracking-[0.02em] text-muted flex-none">
               {activeDetail}
             </span>
           )}
@@ -445,7 +445,7 @@ export default function OverlayStudio() {
                 onPointerCancel={stage.onPointerUp}
               />
             ) : (
-              <div className="w-full aspect-video flex items-center justify-center bg-surface border border-line rounded-paper text-muted text-center p-4 font-mono text-[0.85rem]">
+              <div className="w-full aspect-video flex items-center justify-center bg-surface border border-line rounded-paper text-muted text-center p-4 font-mono text-sm">
                 {clips.length === 0
                   ? 'Select a DJI clip with telemetry in the Library.'
                   : 'Select a clip to edit.'}
@@ -468,14 +468,14 @@ export default function OverlayStudio() {
             <div className="flex items-center gap-[0.85rem] px-[0.85rem] py-[0.6rem] border border-line rounded-paper bg-surface flex-none">
               <button
                 type="button"
-                className="flex-none w-[2.2rem] h-[2.2rem] border-0 rounded-full bg-ink text-paper cursor-pointer text-[0.8rem] leading-none inline-flex items-center justify-center transition-[background-color] duration-200 ease-paper hover:bg-accent"
+                className="flex-none w-[2.2rem] h-[2.2rem] border-0 rounded-full bg-ink text-paper cursor-pointer text-xs leading-none inline-flex items-center justify-center transition-[background-color] duration-200 ease-paper hover:bg-accent"
                 onClick={togglePlay}
                 aria-label={playing ? 'Pause' : 'Play'}
                 title="Play / pause (Space)"
               >
                 {playing ? '❚❚' : '▶'}
               </button>
-              <span className="font-mono text-[0.74rem] tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
+              <span className="font-mono text-xs tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
                 {formatTimecode(time)}
               </span>
               <input
@@ -491,7 +491,7 @@ export default function OverlayStudio() {
                 onChange={(e) => handleScrub(Number(e.target.value))}
                 aria-label="Seek"
               />
-              <span className="font-mono text-[0.74rem] tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
+              <span className="font-mono text-xs tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
                 {formatDuration(duration)}
               </span>
             </div>
@@ -520,7 +520,7 @@ export default function OverlayStudio() {
         {/* Inspector */}
         {activeClip && (
           <div className="flex flex-col gap-3 min-[900px]:w-[340px] flex-none min-h-0 overflow-auto border border-line rounded-paper bg-surface p-3">
-            <h2 className="m-0 font-mono text-[0.7rem] font-medium uppercase tracking-[0.16em] text-muted">
+            <h2 className="m-0 font-mono text-2xs font-medium uppercase tracking-[0.16em] text-muted">
               Elements
             </h2>
             <ElementList
@@ -546,7 +546,7 @@ export default function OverlayStudio() {
 
             {selectedElement && (
               <div className="pt-3 border-t border-line">
-                <h2 className="m-0 mb-2 font-mono text-[0.7rem] font-medium uppercase tracking-[0.16em] text-muted">
+                <h2 className="m-0 mb-2 font-mono text-2xs font-medium uppercase tracking-[0.16em] text-muted">
                   Style
                 </h2>
                 <ElementPanel
@@ -564,7 +564,7 @@ export default function OverlayStudio() {
         {exporting ? (
           <>
             <div className="flex items-center gap-[0.85rem] flex-1" role="status">
-              <span className="font-mono text-[0.74rem] tracking-[0.04em] text-ink-soft flex-none">
+              <span className="font-mono text-xs tracking-[0.04em] text-ink-soft flex-none">
                 Exporting… {Math.round(exportRatio * 100)}%
               </span>
               <progress
@@ -585,24 +585,24 @@ export default function OverlayStudio() {
         ) : (
           <>
             {!exportSupported && activeClip && (
-              <span className="mr-auto text-[0.78rem] text-muted">
+              <span className="mr-auto text-xs text-muted">
                 Export needs WebCodecs (try Chrome/Edge/Safari) — editing works
                 everywhere.
               </span>
             )}
             {exportDone && (
-              <span className="mr-auto text-[0.78rem] text-[#3f6b3f] font-semibold" role="status">
+              <span className="mr-auto text-xs text-ok font-semibold" role="status">
                 ✓ Exported
               </span>
             )}
             {exportError && (
-              <span className="mr-auto text-[0.78rem] text-[#9a3a23]" role="status">
+              <span className="mr-auto text-xs text-danger" role="status">
                 {exportError}
               </span>
             )}
             <button
               type="button"
-              className="px-[1.1rem] py-2 inline-flex items-center justify-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.82rem] font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent hover:text-white active:scale-[0.98] disabled:opacity-50 disabled:cursor-default"
+              className="px-[1.1rem] py-2 inline-flex items-center justify-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent hover:text-white active:scale-[0.98] disabled:opacity-50 disabled:cursor-default"
               onClick={handleExport}
               disabled={!activeClip || !exportSupported}
               title="Render a copy with the telemetry burned in (H.264 MP4)"

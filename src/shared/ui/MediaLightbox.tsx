@@ -161,29 +161,29 @@ export default function MediaLightbox({
     >
       <div className="w-full max-w-[64rem] h-[min(90dvh,54rem)] flex flex-col gap-3 bg-surface border border-line rounded-paper-lg shadow-paper p-4 overflow-hidden max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <div className="flex items-baseline gap-3 min-w-0">
-          <h2 className="m-0 font-serif text-[1.1rem] min-w-0 truncate" title={item.title}>
+          <h2 className="m-0 font-serif text-lg min-w-0 truncate" title={item.title}>
             {item.title}
           </h2>
-          <span className="font-mono text-[0.62rem] text-muted whitespace-nowrap tabular-nums">
+          <span className="font-mono text-2xs text-muted whitespace-nowrap tabular-nums">
             {index + 1} / {items.length}
           </span>
           <span className="flex-1" />
           <button
             type="button"
             onClick={onClose}
-            className="font-mono text-[0.6rem] tracking-[0.12em] uppercase text-muted border border-line rounded-full px-2.5 py-[3px] hover:text-accent hover:border-line-strong transition-colors"
+            className="font-mono text-3xs tracking-[0.12em] uppercase text-muted border border-line rounded-full px-2.5 py-[3px] hover:text-accent hover:border-line-strong transition-colors"
             aria-label="Close"
           >
             close ✕
           </button>
         </div>
 
-        <p className="m-0 font-mono text-[0.64rem] text-muted truncate" title={item.facts}>
+        <p className="m-0 font-mono text-2xs text-muted truncate" title={item.facts}>
           {item.facts}
         </p>
         {item.camera && (
           <p
-            className="m-0 -mt-2 font-mono text-[0.64rem] text-faint truncate"
+            className="m-0 -mt-2 font-mono text-2xs text-faint truncate"
             title={item.camera}
           >
             {item.camera}
@@ -317,7 +317,7 @@ function DeckSlide({
 
   if (item.unavailable || (!item.src && !item.still)) {
     return (
-      <span className="absolute inset-0 grid place-items-center px-6 text-center font-mono text-[0.66rem] text-muted">
+      <span className="absolute inset-0 grid place-items-center px-6 text-center font-mono text-2xs text-muted">
         {item.unavailable ?? 'nothing to show'}
       </span>
     );

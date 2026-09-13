@@ -39,10 +39,10 @@ interface InfoPanelProps {
   photo: ExifData | null;
 }
 
-const dt = 'font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted pt-[2px]';
-const dd = 'm-0 font-mono text-[0.76rem] tabular-nums text-ink';
+const dt = 'font-mono text-2xs tracking-[0.12em] uppercase text-muted pt-[2px]';
+const dd = 'm-0 font-mono text-xs tabular-nums text-ink';
 const heading =
-  'font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted flex items-center gap-2 before:content-[""] before:w-[14px] before:h-px before:bg-accent';
+  'font-mono text-2xs tracking-[0.12em] uppercase text-muted flex items-center gap-2 before:content-[""] before:w-[14px] before:h-px before:bg-accent';
 
 /** One label/value row; missing values read "—" in the faint ink. */
 function Row({
@@ -119,9 +119,9 @@ export default function InfoPanel({
 
   return (
     <div className="flex flex-col gap-3">
-      <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[0.8rem]">
+      <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
         <dt className={dt}>{isPhoto ? 'Photo' : 'Clip'}</dt>
-        <dd className="m-0 truncate text-[0.8rem]" title={baseName}>
+        <dd className="m-0 truncate text-xs" title={baseName}>
           {baseName}
         </dd>
         {file && <Row label="Size" value={formatBytes(file.size)} />}
@@ -151,7 +151,7 @@ export default function InfoPanel({
            burns in can never drift apart. Absent fields read "—": a still has
            no speed, no heading and no relative altitude. */
         <div className="flex flex-col gap-2.5 pt-2.5 border-t border-line">
-          <p className="m-0 font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted">
+          <p className="m-0 font-mono text-2xs tracking-[0.12em] uppercase text-muted">
             {hasTelemetry ? 'From the file’s EXIF' : 'No EXIF in this file'}
           </p>
           {hasTelemetry && (
@@ -177,7 +177,7 @@ export default function InfoPanel({
         </div>
       ) : hasTelemetry ? (
         <div className="flex flex-col gap-2.5 pt-2.5 border-t border-line">
-          <p className="m-0 font-mono text-[0.66rem] tracking-[0.12em] uppercase text-muted">
+          <p className="m-0 font-mono text-2xs tracking-[0.12em] uppercase text-muted">
             Telemetry at playhead
           </p>
 
@@ -209,7 +209,7 @@ export default function InfoPanel({
           </dl>
         </div>
       ) : (
-        <p className="m-0 text-[0.78rem] text-muted pt-2.5 border-t border-line">
+        <p className="m-0 text-xs text-muted pt-2.5 border-t border-line">
           No flight log (.srt) with this clip — the inspector shows live
           telemetry when one is present.
         </p>

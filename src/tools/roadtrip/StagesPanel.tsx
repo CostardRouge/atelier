@@ -28,12 +28,12 @@ interface StagesPanelProps {
   onCompleteFrom?: (sourceId: string) => void;
 }
 
-const legend = 'font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted';
+const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 const inputClass =
-  'font-sans text-[0.84rem] px-2.5 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent';
+  'font-sans text-sm px-2.5 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent';
 /** The header row's controls all stand 34px tall, the zoom pill's own height. */
 const pill =
-  'flex-none h-[2.125rem] inline-flex items-center px-3 border border-line-strong rounded-full bg-paper text-[0.76rem] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink';
+  'flex-none h-[2.125rem] inline-flex items-center px-3 border border-line-strong rounded-full bg-paper text-xs text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink';
 /**
  * Adding a leg is the panel's one creative act, so it is the gallery's own
  * primary button at header size — ink-filled, vermilion on hover — rather than
@@ -41,7 +41,7 @@ const pill =
  * its own span so it keeps the monospace weight of a glyph, not of the word.
  */
 const addButton =
-  'flex-none h-[2.125rem] inline-flex items-center gap-1.5 pl-3 pr-3.5 border border-ink rounded-full bg-ink text-paper text-[0.78rem] font-semibold cursor-pointer transition-[transform,background-color,border-color] duration-200 ease-paper hover:bg-accent hover:border-accent active:scale-[0.98]';
+  'flex-none h-[2.125rem] inline-flex items-center gap-1.5 pl-3 pr-3.5 border border-ink rounded-full bg-ink text-paper text-xs font-semibold cursor-pointer transition-[transform,background-color,border-color] duration-200 ease-paper hover:bg-accent hover:border-accent active:scale-[0.98]';
 
 function StageCard({
   trip,
@@ -83,11 +83,11 @@ function StageCard({
           {days !== null && ` · ${days} day${days === 1 ? '' : 's'}`}
         </span>
         {confirming ? (
-          <span className="flex items-center gap-2 text-[0.75rem]">
+          <span className="flex items-center gap-2 text-xs">
             <button
               type="button"
               onClick={onDelete}
-              className="p-0 border-0 bg-transparent text-[#9a3a23] font-semibold cursor-pointer underline underline-offset-[3px]"
+              className="p-0 border-0 bg-transparent text-danger font-semibold cursor-pointer underline underline-offset-[3px]"
             >
               Delete
             </button>
@@ -103,7 +103,7 @@ function StageCard({
           <button
             type="button"
             onClick={() => setConfirming(true)}
-            className="p-0 border-0 bg-transparent text-[0.75rem] text-faint cursor-pointer hover:text-[#9a3a23]"
+            className="p-0 border-0 bg-transparent text-xs text-faint cursor-pointer hover:text-danger"
             aria-label={`Delete ${stage.name || 'this stage'}`}
           >
             Delete
@@ -114,7 +114,7 @@ function StageCard({
           onClick={onClose}
           aria-label="Close this stage"
           title="Close"
-          className="flex-none w-6 h-6 grid place-items-center border border-line rounded-full bg-surface text-[0.75rem] leading-none text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
+          className="flex-none w-6 h-6 grid place-items-center border border-line rounded-full bg-surface text-xs leading-none text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
         >
           ×
         </button>
@@ -158,7 +158,7 @@ function StageCard({
         />
       </div>
       <p
-        className={`m-0 font-mono text-[0.68rem] ${problem ? 'text-[#9a3a23]' : 'text-faint'}`}
+        className={`m-0 font-mono text-2xs ${problem ? 'text-danger' : 'text-faint'}`}
         role={problem ? 'alert' : undefined}
       >
         {problem ??
@@ -270,7 +270,7 @@ export default function StagesPanel({
           ))}
         <StageZoomControl zoom={zoom} className="flex-none" />
         <button type="button" onClick={add} className={addButton}>
-          <span className="font-mono text-[0.95rem] leading-none" aria-hidden="true">
+          <span className="font-mono text-base leading-none" aria-hidden="true">
             +
           </span>
           Stage
@@ -299,7 +299,7 @@ export default function StagesPanel({
       {trip.stages.length === 0 ? (
         /* The empty state says what to DO; what a stage IS sits behind the
            legend's ⓘ, where it stops taking five lines on every visit. */
-        <p className="m-0 text-[0.8rem] text-muted">
+        <p className="m-0 text-xs text-muted">
           No legs yet — add one with the + above
           <span className="max-[600px]:hidden">
             , or right-click a day on the calendar
@@ -309,7 +309,7 @@ export default function StagesPanel({
       ) : (
         !selected &&
         !ruler.learned && (
-          <p className="m-0 font-mono text-[0.66rem] text-faint">
+          <p className="m-0 font-mono text-2xs text-faint">
             Tap a leg to edit it and go to its first day · drag a leg, or either
             of its edges, to move its dates · tap anywhere else on the track to
             open that day, and swipe the track sideways to see the rest

@@ -102,7 +102,7 @@ export default function LookTab({
                   rather than its name, so a look is chosen by seeing it.
                 </p>
               </SectionLegend>
-              <span className="font-mono text-[0.55rem] tracking-[0.12em] uppercase text-muted border border-line-strong rounded-full px-1.5 py-px">
+              <span className="font-mono text-3xs tracking-[0.12em] uppercase text-muted border border-line-strong rounded-full px-1.5 py-px">
                 Trip
               </span>
             </span>
@@ -205,7 +205,7 @@ export default function LookTab({
           </div>
         </>
       ) : (
-        <p className="m-0 text-[0.72rem] text-faint">
+        <p className="m-0 text-xs text-faint">
           A caption and the closing card keep a fixed look; per-piece styling, placement
           and shades belong to the badge on the hook.
         </p>

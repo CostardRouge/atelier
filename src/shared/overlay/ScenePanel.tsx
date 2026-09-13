@@ -21,11 +21,11 @@ interface ScenePanelProps {
   onRemove: () => void;
 }
 
-const labelClass = 'font-mono text-[0.62rem] tracking-[0.12em] uppercase text-muted';
+const labelClass = 'font-mono text-2xs tracking-[0.12em] uppercase text-muted';
 const inputClass =
-  'font-sans text-[0.82rem] text-ink bg-surface border border-line-strong rounded-paper px-[0.6rem] py-[0.4rem] w-full';
+  'font-sans text-sm text-ink bg-surface border border-line-strong rounded-paper px-[0.6rem] py-[0.4rem] w-full';
 const linkClass =
-  'p-0 border-0 bg-transparent text-accent-ink font-semibold text-[0.68rem] cursor-pointer underline underline-offset-[2px] hover:text-accent';
+  'p-0 border-0 bg-transparent text-accent-ink font-semibold text-2xs cursor-pointer underline underline-offset-[2px] hover:text-accent';
 
 const DEFAULT_SCRIM: SceneScrim = { color: '#0b0a09', opacity: 0.55, fade: 0.4 };
 
@@ -161,13 +161,13 @@ export default function ScenePanel({
       )}
 
       <div className="flex items-center gap-2">
-        <span className="text-[0.72rem] text-faint">
+        <span className="text-xs text-faint">
           {memberCount === 0
             ? 'Nothing in it yet — add from the Intro row above.'
             : `${memberCount} element${memberCount > 1 ? 's' : ''} in it.`}
         </span>
         {confirming ? (
-          <span className="ml-auto flex items-center gap-2 text-[0.72rem]">
+          <span className="ml-auto flex items-center gap-2 text-xs">
             <span className="text-muted">Drop it and its elements?</span>
             <button
               type="button"

@@ -34,18 +34,18 @@ function ScrubSketch() {
       <span className="absolute left-0 right-0 bottom-[3px] h-px bg-white/55" />
       <span className="absolute left-0 bottom-[3px] h-[5px] w-[40%] bg-[repeating-linear-gradient(90deg,#d9442a_0_1px,transparent_1px_5px)]" />
       <span className="absolute left-[40%] right-0 bottom-[3px] h-[5px] bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.5)_0_1px,transparent_1px_5px)]" />
-      <span className="absolute left-[40%] bottom-0 h-[13px] w-[2px] -translate-x-1/2 rounded-full bg-[#d9442a] shadow-[0_0_5px_rgba(217,68,42,0.8)] motion-safe:animate-[scrub-sketch_2.8s_cubic-bezier(0.2,0,0,1)_infinite]" />
+      <span className="absolute left-[40%] bottom-0 h-[13px] w-[2px] -translate-x-1/2 rounded-full bg-accent shadow-[0_0_5px_rgba(217,68,42,0.8)] motion-safe:animate-[scrub-sketch_2.8s_cubic-bezier(0.2,0,0,1)_infinite]" />
     </span>
   );
 }
 
 const chip = (on: boolean) =>
-  `px-2 py-1.5 rounded-paper border text-center cursor-pointer text-[0.74rem] transition-colors ${
+  `px-2 py-1.5 rounded-paper border text-center cursor-pointer text-xs transition-colors ${
     on
       ? 'border-accent bg-accent-wash text-accent-ink font-semibold'
       : 'border-line bg-paper text-ink-soft hover:border-line-strong'
   }`;
-const label = 'font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted';
+const label = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 
 function Row({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -82,9 +82,9 @@ function ScrubPanel({ options, onChange, ctx }: HookPanelProps) {
 
   return (
     <div className="flex flex-col gap-3 pl-3 border-l-2 border-line">
-      {summary && <p className="m-0 text-[0.76rem] text-ink-soft">{summary}</p>}
+      {summary && <p className="m-0 text-xs text-ink-soft">{summary}</p>}
       {cut && (
-        <p className="m-0 text-[0.72rem] text-accent-ink">
+        <p className="m-0 text-xs text-accent-ink">
           The hook is on screen for {ctx.screenSeconds?.toFixed(1)}s, shorter than the
           sweep — the export would cut it before it lands. Lengthen the hook in Export, or
           shorten the sweep.
@@ -151,7 +151,7 @@ function ScrubPanel({ options, onChange, ctx }: HookPanelProps) {
         </div>
       </Row>
 
-      <label className="flex items-center gap-2 text-[0.78rem] text-ink-soft cursor-pointer">
+      <label className="flex items-center gap-2 text-xs text-ink-soft cursor-pointer">
         <input
           type="checkbox"
           checked={o.flash}
@@ -161,7 +161,7 @@ function ScrubPanel({ options, onChange, ctx }: HookPanelProps) {
         Flash the told days’ pictures as the head passes
       </label>
 
-      <label className="flex items-start gap-2 text-[0.78rem] text-ink-soft cursor-pointer">
+      <label className="flex items-start gap-2 text-xs text-ink-soft cursor-pointer">
         <input
           type="checkbox"
           checked={o.sound}
@@ -170,7 +170,7 @@ function ScrubPanel({ options, onChange, ctx }: HookPanelProps) {
         />
         <span>
           Tick at every day it lands on
-          <span className="block text-[0.7rem] text-faint">
+          <span className="block text-2xs text-faint">
             A photo, or a clip recorded without sound (most drone footage), takes the ticks
             as its sound. Most feeds play muted: the sweep says everything without them.
           </span>
@@ -190,7 +190,7 @@ function ScrubPanel({ options, onChange, ctx }: HookPanelProps) {
             aria-label="Ticks volume"
           />
           {o.tickVolume === 0 && (
-            <span className="text-[0.7rem] text-faint">
+            <span className="text-2xs text-faint">
               At 0% no sound track is written for the ticks at all.
             </span>
           )}
@@ -198,7 +198,7 @@ function ScrubPanel({ options, onChange, ctx }: HookPanelProps) {
       )}
 
       {o.sound && (
-        <label className="flex items-start gap-2 text-[0.78rem] text-ink-soft cursor-pointer">
+        <label className="flex items-start gap-2 text-xs text-ink-soft cursor-pointer">
           <input
             type="checkbox"
             checked={o.mixWithClip}
@@ -207,7 +207,7 @@ function ScrubPanel({ options, onChange, ctx }: HookPanelProps) {
           />
           <span>
             Mix them into a clip’s own sound
-            <span className="block text-[0.7rem] text-faint">
+            <span className="block text-2xs text-faint">
               Off, a clip that has sound keeps it bit-for-bit and goes out without the
               ticks. On, its sound is decoded, the ticks are added, and it is re-encoded.
             </span>
@@ -216,7 +216,7 @@ function ScrubPanel({ options, onChange, ctx }: HookPanelProps) {
       )}
 
       {ctx.counterMode && ctx.counterMode !== 'day' && (
-        <p className="m-0 text-[0.72rem] text-faint">
+        <p className="m-0 text-xs text-faint">
           The numeral steps with the head only when the badge counts the day of the trip;
           under this counter it keeps its own reading.
         </p>

@@ -91,7 +91,7 @@ function TripTitle({ name, onRename }: { name: string; onRename: (name: string) 
         /* Exactly the pills' height, or the row centres a taller field
            against them and pushes the back button down — the whole point of
            the bar is that it does not move. */
-        className="grow shrink basis-[9rem] min-w-0 max-w-[22rem] h-[1.9rem] font-serif text-[1.15rem] leading-none px-1.5 py-0 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
+        className="grow shrink basis-[9rem] min-w-0 max-w-[22rem] h-[1.9rem] font-serif text-lg leading-none px-1.5 py-0 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
       />
     );
   }
@@ -102,7 +102,7 @@ function TripTitle({ name, onRename }: { name: string; onRename: (name: string) 
         type="button"
         onClick={() => setDraft(name)}
         title="Rename the trip"
-        className="w-full h-[1.9rem] p-0 border-0 bg-transparent font-serif text-[1.15rem] leading-none text-ink text-left truncate cursor-text hover:text-accent-ink"
+        className="w-full h-[1.9rem] p-0 border-0 bg-transparent font-serif text-lg leading-none text-ink text-left truncate cursor-text hover:text-accent-ink"
       >
         {name}
       </button>
@@ -126,14 +126,14 @@ function Stat({ value, label, compact }: { value: string; label: string; compact
     <div className={`flex flex-col ${compact ? 'flex-none' : 'min-w-0'}`}>
       <span
         className={`font-mono tabular-nums leading-none ${
-          compact ? 'text-[0.95rem]' : 'text-[1.35rem]'
+          compact ? 'text-base' : 'text-xl'
         }`}
       >
         {value}
       </span>
       <span
         className={`font-mono tracking-[0.1em] uppercase text-muted ${
-          compact ? 'text-[0.5rem] mt-0.5 whitespace-nowrap' : 'text-[0.6rem] mt-1 truncate'
+          compact ? 'text-3xs mt-0.5 whitespace-nowrap' : 'text-3xs mt-1 truncate'
         }`}
       >
         {label}
@@ -377,7 +377,7 @@ export default function TripOverview({
           type="button"
           onClick={() => setEditingDetails(true)}
           title="Change the trip's dates and route"
-          className="self-start p-0 border-0 bg-transparent font-mono text-[0.72rem] text-muted text-left cursor-pointer hover:text-accent-ink hover:underline underline-offset-[3px]"
+          className="self-start p-0 border-0 bg-transparent font-mono text-xs text-muted text-left cursor-pointer hover:text-accent-ink hover:underline underline-offset-[3px]"
         >
           {trip.destination && <>{trip.destination} · </>}
           {formatIsoDate(trip.startDate)} → {formatIsoDate(trip.endDate)}
@@ -426,7 +426,7 @@ export default function TripOverview({
       </div>
 
       {coverage.longestGap && (
-        <p className="m-0 text-[0.8rem] text-muted">
+        <p className="m-0 text-xs text-muted">
           The longest stretch nothing has been told from runs{' '}
           <button
             type="button"

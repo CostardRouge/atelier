@@ -257,7 +257,7 @@ export default function StageRuler({
             aria-hidden="true"
           >
             <span
-              className="absolute font-mono text-[0.6rem] tracking-[0.08em] text-muted leading-none whitespace-nowrap pl-1"
+              className="absolute font-mono text-3xs tracking-[0.08em] text-muted leading-none whitespace-nowrap pl-1"
               style={{ top: lanesH + 10 }}
             >
               {m.label}
@@ -291,7 +291,7 @@ export default function StageRuler({
               onClick={() => addOver(gap.startDate, gap.endDate)}
               title={`Add a stage covering ${formatIsoDate(gap.startDate)} → ${formatIsoDate(gap.endDate)}`}
               aria-label={`Add a stage covering ${formatIsoDate(gap.startDate)} to ${formatIsoDate(gap.endDate)}`}
-              className="absolute w-[18px] h-[18px] grid place-items-center rounded-full border border-dashed border-line-strong bg-paper text-[0.8rem] leading-none text-faint cursor-pointer hover:border-accent hover:text-accent-ink"
+              className="absolute w-[18px] h-[18px] grid place-items-center rounded-full border border-dashed border-line-strong bg-paper text-xs leading-none text-faint cursor-pointer hover:border-accent hover:text-accent-ink"
               style={{
                 left: gap.from * dayW + (gap.length * dayW) / 2 - 9,
                 top: lanesTop + BAR / 2 - 9,
@@ -384,7 +384,7 @@ function DatePin({ pin }: { pin: Pin }) {
       className="fixed z-50 pointer-events-none -translate-x-1/2 -translate-y-full"
       style={{ left: x, top: pin.y - 6 }}
     >
-      <div className="px-2.5 py-1 rounded-paper border border-frame bg-frame text-paper shadow-[0_6px_18px_rgba(16,15,13,0.28)] font-mono text-[0.68rem] tabular-nums whitespace-nowrap">
+      <div className="px-2.5 py-1 rounded-paper border border-frame bg-frame text-paper shadow-[0_6px_18px_rgba(16,15,13,0.28)] font-mono text-2xs tabular-nums whitespace-nowrap">
         {pin.text}
       </div>
       <span className="block mx-auto w-2 h-2 -mt-1 rotate-45 bg-frame" aria-hidden="true" />
@@ -472,7 +472,7 @@ function Bar({
         className="absolute inset-0 w-full p-0 border-0 bg-transparent text-left cursor-grab active:cursor-grabbing touch-pan-y select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ink rounded-[10px]"
         style={{ paddingLeft: HANDLE + 4, paddingRight: HANDLE + 4 }}
       >
-        <span className="block truncate text-[0.76rem] leading-none">
+        <span className="block truncate text-xs leading-none">
           <span className={`font-semibold ${label ? 'text-ink' : 'text-muted'}`}>
             {label || 'Unnamed stage'}
           </span>

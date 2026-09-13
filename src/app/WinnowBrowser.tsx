@@ -54,13 +54,13 @@ export function chapterLabel(chapter: WinnowChapter): string {
   return first === last ? first : `${first} ${PLACE_ARROW} ${last}`;
 }
 
-const legend = 'font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted';
+const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 // Under 820px every control grows: a finger is not a cursor, and a control
 // whose font is under 16px makes iOS zoom the page the moment it is tapped.
 const pill =
-  'px-3 py-1 inline-flex items-center border rounded-full cursor-pointer text-[0.78rem] transition-colors max-[820px]:px-3.5 max-[820px]:py-1.5 max-[820px]:text-[0.85rem]';
+  'px-3 py-1 inline-flex items-center border rounded-full cursor-pointer text-xs transition-colors max-[820px]:px-3.5 max-[820px]:py-1.5 max-[820px]:text-sm';
 const select =
-  'font-sans text-[0.78rem] px-2.5 py-1 border border-line rounded-full bg-paper text-ink focus:outline-none focus:border-accent max-w-[14rem] min-w-0 max-[820px]:text-[1rem] max-[820px]:py-1.5 max-[820px]:max-w-full';
+  'font-sans text-xs px-2.5 py-1 border border-line rounded-full bg-paper text-ink focus:outline-none focus:border-accent max-w-[14rem] min-w-0 max-[820px]:text-base max-[820px]:py-1.5 max-[820px]:max-w-full';
 /** A filter select shares the row evenly once that row starts wrapping. */
 const filterSelect = `${select} max-[820px]:flex-1 max-[820px]:basis-[10rem]`;
 
@@ -415,7 +415,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
       onClick={() =>
         view === 'day' ? setDay(null) : view === 'session' ? setSession(null) : setChapter(null)
       }
-      className="hidden max-[820px]:inline-flex items-center px-3.5 py-1.5 border border-line rounded-full bg-paper text-ink-soft cursor-pointer text-[0.85rem] transition-colors"
+      className="hidden max-[820px]:inline-flex items-center px-3.5 py-1.5 border border-line rounded-full bg-paper text-ink-soft cursor-pointer text-sm transition-colors"
     >
       ‹ {view === 'day' ? monthLabel(month) : view === 'session' ? 'folders' : 'legs'}
     </button>
@@ -452,8 +452,8 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
     >
       <div className="w-full max-w-[56rem] h-[min(90dvh,52rem)] flex flex-col gap-4 bg-surface border border-line rounded-paper-lg shadow-paper p-6 overflow-hidden max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:gap-3 max-[820px]:p-4 max-[820px]:pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="flex items-baseline gap-3 flex-wrap">
-          <h2 className="m-0 font-serif text-[1.4rem] min-w-0 truncate">From {connection.id}</h2>
-          <span className="text-[0.78rem] text-muted max-[560px]:hidden">
+          <h2 className="m-0 font-serif text-2xl min-w-0 truncate">From {connection.id}</h2>
+          <span className="text-xs text-muted max-[560px]:hidden">
             pick a day, a folder{timelineOffered ? ' or a leg' : ''}, then the pictures — they arrive as files in the library.
           </span>
           <span className="flex-1" />
@@ -463,7 +463,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
               onClose();
               navigate(`/connect?instance=${encodeURIComponent(connection.baseUrl)}`);
             }}
-            className="p-0 border-0 bg-transparent text-[0.74rem] text-faint cursor-pointer underline underline-offset-[3px] hover:text-ink"
+            className="p-0 border-0 bg-transparent text-xs text-faint cursor-pointer underline underline-offset-[3px] hover:text-ink"
           >
             reconnect
           </button>
@@ -541,7 +541,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
             <button
               type="button"
               onClick={() => setFilter({})}
-              className="p-0 border-0 bg-transparent text-[0.74rem] text-muted cursor-pointer underline underline-offset-[3px] hover:text-ink"
+              className="p-0 border-0 bg-transparent text-xs text-muted cursor-pointer underline underline-offset-[3px] hover:text-ink"
             >
               clear
             </button>
@@ -549,7 +549,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
         </div>
 
         {problem && (
-          <p className="m-0 text-[0.84rem] text-[#9a3a23]" role="alert">
+          <p className="m-0 text-sm text-danger" role="alert">
             {problem.text}{' '}
             {problem.login && (
               <a className="font-semibold underline underline-offset-[3px]" href={problem.login} target="_blank" rel="noreferrer">
@@ -574,7 +574,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
                 <select
                   value={month}
                   onChange={(e) => setMonth(e.target.value)}
-                  className={`${select} flex-1 text-center font-serif text-[1rem] rounded-paper`}
+                  className={`${select} flex-1 text-center font-serif text-base rounded-paper`}
                   aria-label="Month"
                 >
                   {years.map((y) => (
@@ -591,7 +591,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
               </div>
               <div className="grid grid-cols-7 gap-1">
                 {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-                  <span key={i} className="text-center font-mono text-[0.58rem] text-faint">{d}</span>
+                  <span key={i} className="text-center font-mono text-3xs text-faint">{d}</span>
                 ))}
                 {Array.from({ length: span.leading }, (_, i) => <span key={`pad-${i}`} />)}
                 {span.days.map((iso) => {
@@ -604,21 +604,21 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
                       disabled={!n}
                       onClick={() => setDay(iso)}
                       title={n ? `${iso} · ${n} media` : iso}
-                      className={`aspect-square rounded-md border text-[0.7rem] tabular-nums transition-colors max-[820px]:aspect-auto max-[820px]:min-h-[3.5rem] max-[820px]:text-[0.9rem] ${
+                      className={`aspect-square rounded-md border text-2xs tabular-nums transition-colors max-[820px]:aspect-auto max-[820px]:min-h-[3.5rem] max-[820px]:text-sm ${
                         active
                           ? 'bg-ink text-paper border-ink'
                           : n
-                            ? 'bg-accent-wash border-[#eccabf] text-ink cursor-pointer hover:border-accent'
+                            ? 'bg-accent-wash border-danger-line text-ink cursor-pointer hover:border-accent'
                             : 'bg-paper border-line text-faint'
                       }`}
                     >
                       {Number(iso.slice(-2))}
-                      {n > 0 && <span className="block font-mono text-[0.52rem] leading-none opacity-70">{n}</span>}
+                      {n > 0 && <span className="block font-mono text-3xs leading-none opacity-70">{n}</span>}
                     </button>
                   );
                 })}
               </div>
-              <p className="m-0 font-mono text-[0.62rem] text-muted">
+              <p className="m-0 font-mono text-2xs text-muted">
                 {calendar === null && !problem
                   ? 'asking…'
                   : bounds
@@ -629,9 +629,9 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
           ) : view === 'chapter' ? (
             <div className={`flex flex-col gap-2 min-h-0 overflow-auto pr-1 ${heading ? 'max-[820px]:hidden' : ''}`}>
               {chapters === null ? (
-                <p className="m-0 font-mono text-[0.72rem] text-muted">{problem ? '' : 'asking…'}</p>
+                <p className="m-0 font-mono text-xs text-muted">{problem ? '' : 'asking…'}</p>
               ) : chapters.length === 0 ? (
-                <p className="m-0 text-[0.8rem] text-muted">No leg matches these filters.</p>
+                <p className="m-0 text-xs text-muted">No leg matches these filters.</p>
               ) : (
                 chapters.map((c) => {
                   const active = chapter?.id === c.id;
@@ -647,8 +647,8 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
                         active ? 'bg-ink text-paper border-ink' : 'bg-paper border-line hover:border-line-strong'
                       }`}
                     >
-                      <span className="block text-[0.8rem] font-medium truncate">{chapterLabel(c)}</span>
-                      <span className={`block font-mono text-[0.6rem] tabular-nums ${active ? 'opacity-70' : 'text-muted'}`}>
+                      <span className="block text-xs font-medium truncate">{chapterLabel(c)}</span>
+                      <span className={`block font-mono text-3xs tabular-nums ${active ? 'opacity-70' : 'text-muted'}`}>
                         {chapterDates(c)}
                         {' · '}{c.assetCount} media
                         {c.videoCount ? ` · ${c.videoCount} ▶` : ''}
@@ -661,9 +661,9 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
           ) : (
             <div className={`flex flex-col gap-2 min-h-0 overflow-auto pr-1 ${heading ? 'max-[820px]:hidden' : ''}`}>
               {sessions === null ? (
-                <p className="m-0 font-mono text-[0.72rem] text-muted">{problem ? '' : 'asking…'}</p>
+                <p className="m-0 font-mono text-xs text-muted">{problem ? '' : 'asking…'}</p>
               ) : sessions.length === 0 ? (
-                <p className="m-0 text-[0.8rem] text-muted">No folder matches these filters.</p>
+                <p className="m-0 text-xs text-muted">No folder matches these filters.</p>
               ) : (
                 sessions.map((s) => {
                   const active = session?.id === s.id;
@@ -678,8 +678,8 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
                         active ? 'bg-ink text-paper border-ink' : 'bg-paper border-line hover:border-line-strong'
                       }`}
                     >
-                      <span className="block text-[0.8rem] font-medium truncate">{s.name}</span>
-                      <span className={`block font-mono text-[0.6rem] tabular-nums ${active ? 'opacity-70' : 'text-muted'}`}>
+                      <span className="block text-xs font-medium truncate">{s.name}</span>
+                      <span className={`block font-mono text-3xs tabular-nums ${active ? 'opacity-70' : 'text-muted'}`}>
                         {shortDate(s.captured_at_min)}
                         {s.captured_at_max && s.captured_at_max.slice(0, 10) !== shortDate(s.captured_at_min) && ` → ${shortDate(s.captured_at_max)}`}
                         {' · '}{s.asset_count} media
@@ -695,7 +695,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
           {/* --- right: the pictures of what was chosen --------------------- */}
           <div className={`flex flex-col gap-3 min-h-0 overflow-hidden ${heading ? '' : 'max-[820px]:hidden'}`}>
             {!heading ? (
-              <p className="m-0 text-[0.84rem] text-muted">
+              <p className="m-0 text-sm text-muted">
                 {view === 'day'
                   ? 'Choose a day on the left.'
                   : view === 'session'
@@ -705,7 +705,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
             ) : rows === null ? (
               <div className="flex items-center gap-3 flex-wrap">
                 {backToPicker}
-                <span className="font-mono text-[0.72rem] text-muted">reading {heading}…</span>
+                <span className="font-mono text-xs text-muted">reading {heading}…</span>
               </div>
             ) : (
               <>
@@ -713,7 +713,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
                   {backToPicker}
                   <span className={`${legend} truncate max-w-[60%] max-[820px]:max-w-full`}>{heading} · {rows.length} media</span>
                   {legNote && (
-                    <span className="font-mono text-[0.58rem] text-muted normal-case" title={legNote.why}>
+                    <span className="font-mono text-3xs text-muted normal-case" title={legNote.why}>
                       {legNote.text}
                     </span>
                   )}
@@ -722,13 +722,13 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
                     onClick={() =>
                       setChecked(checked.size === rows.length ? new Set() : new Set(rows.map((r) => r.id)))
                     }
-                    className="font-mono text-[0.58rem] tracking-[0.1em] uppercase text-muted hover:text-accent"
+                    className="font-mono text-3xs tracking-[0.1em] uppercase text-muted hover:text-accent"
                   >
                     {checked.size === rows.length ? 'none' : 'all'}
                   </button>
                 </div>
                 {rows.length === 0 ? (
-                  <p className="m-0 text-[0.8rem] text-muted">Nothing here matches these filters.</p>
+                  <p className="m-0 text-xs text-muted">Nothing here matches these filters.</p>
                 ) : (
                   <div className="flex-1 min-h-0 overflow-auto grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] auto-rows-max gap-2 content-start pr-1">
                     {rows.map((r) => {
@@ -757,7 +757,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
                             label={r.ext || (r.media_type === 'video' ? 'video' : 'photo')}
                             box="w-full h-[90px] max-[820px]:h-[120px]"
                           />
-                          <span className="absolute bottom-0 inset-x-0 px-1.5 py-1 font-mono text-[0.55rem] text-paper bg-[rgba(20,18,15,0.62)] truncate">
+                          <span className="absolute bottom-0 inset-x-0 px-1.5 py-1 font-mono text-3xs text-paper bg-[rgba(20,18,15,0.62)] truncate">
                             {r.filename}
                             {r.media_type === 'video' && ' ▶'}
                             {r.has_telemetry && ' · srt'}
@@ -784,7 +784,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
             <button type="button" onClick={() => setFidelity('original')} className={`${pill} ${fidelity === 'original' ? 'bg-ink text-paper border-ink' : 'bg-paper border-line text-ink-soft'}`} title="The full files — every byte through the tunnel">
               originals
             </button>
-            <span className="text-[0.74rem] text-faint">
+            <span className="text-xs text-faint">
               {fidelity === 'proxy'
                 ? 'proxies are what you edit on; exports can fetch originals later'
                 : picked.length
@@ -793,15 +793,15 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
             </span>
           </div>
           <div className="flex items-center gap-3 gap-y-2 flex-wrap justify-end ml-auto max-[560px]:w-full">
-            {progress && <span className="font-mono text-[0.66rem] text-muted max-[560px]:w-full">{progress}</span>}
-            <button type="button" onClick={onClose} className="p-0 border-0 bg-transparent text-[0.82rem] text-muted cursor-pointer underline underline-offset-[3px] hover:text-ink">
+            {progress && <span className="font-mono text-2xs text-muted max-[560px]:w-full">{progress}</span>}
+            <button type="button" onClick={onClose} className="p-0 border-0 bg-transparent text-sm text-muted cursor-pointer underline underline-offset-[3px] hover:text-ink">
               Cancel
             </button>
             <button
               type="button"
               onClick={() => void add()}
               disabled={!picked.length || progress !== null}
-              className="px-[1.1rem] py-2 inline-flex items-center justify-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold hover:bg-accent hover:border-accent disabled:opacity-40 disabled:cursor-default max-[560px]:flex-1"
+              className="px-[1.1rem] py-2 inline-flex items-center justify-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold hover:bg-accent hover:border-accent disabled:opacity-40 disabled:cursor-default max-[560px]:flex-1"
             >
               Add {picked.length || ''} to library
             </button>

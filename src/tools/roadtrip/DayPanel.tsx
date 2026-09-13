@@ -26,11 +26,11 @@ interface DayPanelProps {
   onOpenPost: (post: TripPost) => void;
 }
 
-const legend = 'font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted';
+const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 
 /** A row's secondary actions: small round glyph buttons, named by their title. */
 const iconButton =
-  'flex-none w-7 h-7 grid place-items-center rounded-full border border-line bg-paper text-[0.85rem] leading-none text-ink-soft cursor-pointer transition-colors hover:border-accent hover:text-accent-ink';
+  'flex-none w-7 h-7 grid place-items-center rounded-full border border-line bg-paper text-sm leading-none text-ink-soft cursor-pointer transition-colors hover:border-accent hover:text-accent-ink';
 
 function formatPublished(ts: number): string {
   return new Date(ts).toLocaleDateString(undefined, {
@@ -109,7 +109,7 @@ function PostRow({
         )}
       </span>
       <span
-        className={`flex-none font-mono text-[0.6rem] tracking-[0.1em] uppercase px-2 py-[3px] rounded-full border ${
+        className={`flex-none font-mono text-3xs tracking-[0.1em] uppercase px-2 py-[3px] rounded-full border ${
           post.publishedAt === null
             ? 'border-line text-muted'
             : 'border-accent bg-accent-wash text-accent-ink'
@@ -119,10 +119,10 @@ function PostRow({
       </span>
 
       <span className="flex-1 min-w-0">
-        <span className="block text-[0.85rem] truncate" title={post.title}>
+        <span className="block text-sm truncate" title={post.title}>
           {post.title || <span className="text-faint italic">Untitled</span>}
         </span>
-        <span className="block font-mono text-[0.66rem] text-faint">
+        <span className="block font-mono text-2xs text-faint">
           {post.publishedAt === null
             ? 'draft'
             : `published ${formatPublished(post.publishedAt)}`}
@@ -169,14 +169,14 @@ function PostRow({
       </button>
 
       {confirming ? (
-        <span className="flex-none flex items-center gap-2 text-[0.75rem]">
+        <span className="flex-none flex items-center gap-2 text-xs">
           <button
             type="button"
             onClick={(e) => {
               stopRow(e);
               onDelete();
             }}
-            className="p-0 border-0 bg-transparent text-[#9a3a23] font-semibold cursor-pointer underline underline-offset-[3px]"
+            className="p-0 border-0 bg-transparent text-danger font-semibold cursor-pointer underline underline-offset-[3px]"
           >
             Delete
           </button>
@@ -198,7 +198,7 @@ function PostRow({
             stopRow(e);
             setConfirming(true);
           }}
-          className={`${iconButton} hover:text-[#9a3a23] hover:border-[#e3b8a9]`}
+          className={`${iconButton} hover:text-danger hover:border-danger-line`}
           title="Delete this piece"
           aria-label="Delete this piece"
         >
@@ -215,7 +215,7 @@ function PostRow({
           stopRow(e);
           onOpen();
         }}
-        className="flex-none px-3.5 py-1.5 border border-ink rounded-full bg-ink text-paper text-[0.75rem] font-semibold cursor-pointer hover:bg-accent hover:border-accent"
+        className="flex-none px-3.5 py-1.5 border border-ink rounded-full bg-ink text-paper text-xs font-semibold cursor-pointer hover:bg-accent hover:border-accent"
       >
         Open
       </button>
@@ -282,15 +282,15 @@ export default function DayPanel({
       aria-label={`Day ${cell?.dayNumber ?? ''}`}
     >
       <div className="flex items-baseline gap-3 flex-wrap">
-        <h2 className="m-0 font-serif text-[1.3rem]">
+        <h2 className="m-0 font-serif text-xl">
           Day {cell?.dayNumber ?? '—'}
           {totalDays !== null && <span className="text-faint"> / {totalDays}</span>}
         </h2>
-        <span className="font-mono text-[0.72rem] text-muted">
+        <span className="font-mono text-xs text-muted">
           {formatIsoDate(date)}
         </span>
         {stage && (
-          <span className="font-mono text-[0.68rem] text-accent-ink">
+          <span className="font-mono text-2xs text-accent-ink">
             {stage.name}
             {atStage ? ` · day ${atStage.day}/${atStage.total}` : ''}
           </span>
@@ -298,7 +298,7 @@ export default function DayPanel({
       </div>
 
       {posts.length === 0 ? (
-        <p className="m-0 text-[0.84rem] text-muted">
+        <p className="m-0 text-sm text-muted">
           Nothing told from this day yet.
         </p>
       ) : (
@@ -326,12 +326,12 @@ export default function DayPanel({
               type="button"
               onClick={() => onStartPost(k.id)}
               title={`${k.hint} — opens straight away`}
-              className="px-3.5 py-2 rounded-full border border-ink bg-ink text-paper text-[0.8rem] font-semibold cursor-pointer transition-colors hover:bg-accent hover:border-accent"
+              className="px-3.5 py-2 rounded-full border border-ink bg-ink text-paper text-xs font-semibold cursor-pointer transition-colors hover:bg-accent hover:border-accent"
             >
               {k.label}
             </button>
           ))}
-          <span className="text-[0.74rem] text-muted">
+          <span className="text-xs text-muted">
             It opens straight away — name it and dress it there.
           </span>
         </div>

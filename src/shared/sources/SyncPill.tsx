@@ -27,18 +27,18 @@ interface SyncPillProps {
 
 /** The dot's colour per status — a glance before the sentence. */
 const DOT: Record<SyncStatus, string> = {
-  synced: 'bg-[#4f8a5b]',
-  dirty: 'bg-[#c9a227]',
-  saving: 'bg-[#c9a227] animate-pulse',
+  synced: 'bg-ok',
+  dirty: 'bg-warn-bright',
+  saving: 'bg-warn-bright animate-pulse',
   offline: 'bg-faint',
   unauthenticated: 'bg-accent',
-  forbidden: 'bg-[#9a3a23]',
-  conflict: 'bg-[#9a3a23]',
-  gone: 'bg-[#9a3a23]',
+  forbidden: 'bg-danger',
+  conflict: 'bg-danger',
+  gone: 'bg-danger',
 };
 
 const linkBtn =
-  'p-0 border-0 bg-transparent text-[0.72rem] font-semibold text-accent-ink underline underline-offset-[3px] cursor-pointer';
+  'p-0 border-0 bg-transparent text-xs font-semibold text-accent-ink underline underline-offset-[3px] cursor-pointer';
 
 /** The panel's width, in px — the same number its `w-[min(20rem,…)]` resolves to. */
 const PANEL_WIDTH = 320;
@@ -221,11 +221,11 @@ export default function SyncPill({
         // No `title`: the browser's own tooltip would appear over the panel a
         // hover has just opened, saying the same sentence a second time.
         aria-label={text}
-        className={`inline-flex items-center shrink-0 whitespace-nowrap h-[1.9rem] rounded-full border bg-paper font-mono text-[0.66rem] tracking-[0.06em] uppercase cursor-pointer transition-colors ${
+        className={`inline-flex items-center shrink-0 whitespace-nowrap h-[1.9rem] rounded-full border bg-paper font-mono text-2xs tracking-[0.06em] uppercase cursor-pointer transition-colors ${
           showLabel ? 'gap-1.5 px-2.5' : 'justify-center w-[1.9rem] px-0'
         } ${
           needsAction
-            ? 'border-[#e3b8a9] text-[#9a3a23] hover:border-accent'
+            ? 'border-danger-line text-danger hover:border-accent'
             : 'border-line-strong text-ink-soft hover:border-accent hover:text-accent-ink'
         }`}
       >
@@ -248,7 +248,7 @@ export default function SyncPill({
         // hover would drop the panel on the way to its buttons.
         <div className="absolute top-full z-50 pt-2" style={{ left: offset }}>
           <div
-            className="w-[min(20rem,calc(100vw-2rem))] flex flex-col gap-2 p-3 rounded-paper border border-line bg-surface shadow-paper font-mono text-[0.7rem] leading-[1.15rem] text-muted"
+            className="w-[min(20rem,calc(100vw-2rem))] flex flex-col gap-2 p-3 rounded-paper border border-line bg-surface shadow-paper font-mono text-2xs leading-[1.15rem] text-muted"
             role="dialog"
             aria-label="Where this document stands"
           >
@@ -277,7 +277,7 @@ export default function SyncPill({
                       <button
                         type="button"
                         onClick={run(onTakeTheirs)}
-                        className={`${linkBtn} text-[#9a3a23]`}
+                        className={`${linkBtn} text-danger`}
                       >
                         Yes, take theirs
                       </button>
@@ -311,7 +311,7 @@ export default function SyncPill({
                       <button
                         type="button"
                         onClick={run(onDeleteHere)}
-                        className={`${linkBtn} text-[#9a3a23]`}
+                        className={`${linkBtn} text-danger`}
                       >
                         Yes, delete
                       </button>

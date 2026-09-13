@@ -7,7 +7,7 @@ interface PieceStylePanelProps {
   onChange: (style: BadgePieceStyle) => void;
 }
 
-const legend = 'font-mono text-[0.6rem] tracking-[0.13em] uppercase text-muted';
+const legend = 'font-mono text-3xs tracking-[0.13em] uppercase text-muted';
 const row = 'flex items-center gap-2';
 const swatch =
   'w-7 h-7 p-0 border border-line-strong rounded-[5px] bg-paper cursor-pointer';
@@ -55,7 +55,7 @@ function OptionalColor({
         className="accent-accent"
         aria-label={`Use ${label}`}
       />
-      <span className="flex-1 text-[0.78rem] text-ink-soft">{label}</span>
+      <span className="flex-1 text-xs text-ink-soft">{label}</span>
       <input
         type="color"
         value={value ?? fallback}
@@ -81,7 +81,7 @@ function StepEditor({
   return (
     <div className="flex flex-col gap-1.5">
       <div className={row}>
-        <span className="w-8 flex-none font-mono text-[0.66rem] text-muted">
+        <span className="w-8 flex-none font-mono text-2xs text-muted">
           {which}
         </span>
         <select
@@ -94,7 +94,7 @@ function StepEditor({
                 : { ...(step ?? defaultStep(next)), preset: next },
             );
           }}
-          className="flex-1 min-w-0 font-sans text-[0.78rem] px-2 py-1 border border-line-strong rounded-paper bg-paper text-ink cursor-pointer"
+          className="flex-1 min-w-0 font-sans text-xs px-2 py-1 border border-line-strong rounded-paper bg-paper text-ink cursor-pointer"
         >
           {PRESETS.map((p) => (
             <option key={p.id} value={p.id}>
@@ -106,7 +106,7 @@ function StepEditor({
 
       {step && (
         <div className="flex flex-wrap items-center gap-2 pl-8">
-          <label className="flex items-center gap-1 text-[0.7rem] text-muted">
+          <label className="flex items-center gap-1 text-2xs text-muted">
             {step.duration.toFixed(2)}s
             <input
               type="range"
@@ -122,7 +122,7 @@ function StepEditor({
           <select
             value={step.easing}
             onChange={(e) => onChange({ ...step, easing: e.target.value as Easing })}
-            className="font-sans text-[0.72rem] px-1.5 py-0.5 border border-line rounded-paper bg-paper text-ink-soft cursor-pointer"
+            className="font-sans text-xs px-1.5 py-0.5 border border-line rounded-paper bg-paper text-ink-soft cursor-pointer"
             aria-label={`${which} easing`}
           >
             {EASINGS.map((e) => (
@@ -140,7 +140,7 @@ function StepEditor({
                   direction: e.target.value as AnimStep['direction'],
                 })
               }
-              className="font-sans text-[0.72rem] px-1.5 py-0.5 border border-line rounded-paper bg-paper text-ink-soft cursor-pointer"
+              className="font-sans text-xs px-1.5 py-0.5 border border-line rounded-paper bg-paper text-ink-soft cursor-pointer"
               aria-label="Slide direction"
             >
               <option value="up">up</option>
@@ -150,7 +150,7 @@ function StepEditor({
             </select>
           )}
           {which === 'In' && (
-            <label className="flex items-center gap-1 text-[0.7rem] text-muted">
+            <label className="flex items-center gap-1 text-2xs text-muted">
               delay {(step.delay ?? 0).toFixed(2)}s
               <input
                 type="range"
@@ -193,7 +193,7 @@ export default function PieceStylePanel({ style, onChange }: PieceStylePanelProp
               type="button"
               onClick={() => patch({ textCase: c.id })}
               aria-pressed={(style.textCase ?? 'as-is') === c.id}
-              className={`flex-1 px-2 py-1.5 rounded-paper border text-[0.74rem] cursor-pointer transition-colors ${
+              className={`flex-1 px-2 py-1.5 rounded-paper border text-xs cursor-pointer transition-colors ${
                 (style.textCase ?? 'as-is') === c.id
                   ? 'border-accent bg-accent-wash text-accent-ink font-semibold'
                   : 'border-line bg-paper text-ink-soft hover:border-line-strong'
@@ -230,7 +230,7 @@ export default function PieceStylePanel({ style, onChange }: PieceStylePanelProp
       {hasPanel && (
         <div className="flex flex-col gap-1.5">
           <span className={legend}>Panel</span>
-          <label className="flex items-center gap-2 text-[0.72rem] text-muted">
+          <label className="flex items-center gap-2 text-xs text-muted">
             <span className="w-14 flex-none">padding</span>
             <input
               type="range"
@@ -242,7 +242,7 @@ export default function PieceStylePanel({ style, onChange }: PieceStylePanelProp
               className="flex-1 accent-accent"
             />
           </label>
-          <label className="flex items-center gap-2 text-[0.72rem] text-muted">
+          <label className="flex items-center gap-2 text-xs text-muted">
             <span className="w-14 flex-none">corners</span>
             <input
               type="range"
@@ -255,7 +255,7 @@ export default function PieceStylePanel({ style, onChange }: PieceStylePanelProp
             />
           </label>
           {style.borderColor && (
-            <label className="flex items-center gap-2 text-[0.72rem] text-muted">
+            <label className="flex items-center gap-2 text-xs text-muted">
               <span className="w-14 flex-none">border</span>
               <input
                 type="range"
@@ -302,7 +302,7 @@ export default function PieceStylePanel({ style, onChange }: PieceStylePanelProp
       <button
         type="button"
         onClick={() => onChange({})}
-        className="self-start p-0 border-0 bg-transparent text-[0.74rem] text-faint cursor-pointer underline underline-offset-[3px] hover:text-accent-ink"
+        className="self-start p-0 border-0 bg-transparent text-xs text-faint cursor-pointer underline underline-offset-[3px] hover:text-accent-ink"
       >
         Back to the trip's style
       </button>

@@ -30,7 +30,7 @@ export default function SectionLegend({
     /* The row wraps and the note is `basis-full`, so an open note takes the
        line under the label rather than squeezing it as a second flex item. */
     <span className="flex flex-wrap items-center gap-1.5">
-      <span className="font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted">
+      <span className="font-mono text-2xs tracking-[0.14em] uppercase text-muted">
         {label}
       </span>
       {children && <InfoDot about={label.toLowerCase()}>{children}</InfoDot>}

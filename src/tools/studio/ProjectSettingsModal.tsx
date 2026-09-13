@@ -45,9 +45,9 @@ interface ProjectSettingsModalProps {
 }
 
 const field = 'flex flex-col gap-1.5';
-const legend = 'font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted';
+const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 const smallButton =
-  'px-3 py-1.5 inline-flex items-center gap-1.5 border border-line-strong rounded-full bg-paper text-[0.78rem] text-ink-soft cursor-pointer transition-colors hover:border-accent hover:text-accent-ink';
+  'px-3 py-1.5 inline-flex items-center gap-1.5 border border-line-strong rounded-full bg-paper text-xs text-ink-soft cursor-pointer transition-colors hover:border-accent hover:text-accent-ink';
 
 /**
  * Project settings, DaVinci-style: everything chosen at creation stays
@@ -162,7 +162,7 @@ export default function ProjectSettingsModal({
     >
       <div className="w-full max-w-[28rem] max-h-[90dvh] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6">
         <div>
-          <h2 className="m-0 font-serif text-[1.4rem]">Project settings</h2>
+          <h2 className="m-0 font-serif text-2xl">Project settings</h2>
         </div>
 
         <label className={field}>
@@ -171,7 +171,7 @@ export default function ProjectSettingsModal({
             ref={nameRef}
             value={draftName}
             onChange={(e) => setDraftName(e.target.value)}
-            className="font-sans text-[0.95rem] px-3.5 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent max-[560px]:text-[1rem]"
+            className="font-sans text-base px-3.5 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent max-[560px]:text-base"
           />
         </label>
 
@@ -204,8 +204,8 @@ export default function ProjectSettingsModal({
                   aria-hidden="true"
                 />
                 <span className="min-w-0">
-                  <span className="block font-semibold text-[0.82rem]">{a.id}</span>
-                  <span className="block text-[0.7rem] text-muted truncate">
+                  <span className="block font-semibold text-sm">{a.id}</span>
+                  <span className="block text-2xs text-muted truncate">
                     {a.label}
                   </span>
                 </span>
@@ -239,10 +239,10 @@ export default function ProjectSettingsModal({
                   : 'border-line bg-paper hover:border-line-strong'
               }`}
             >
-              <span className="font-semibold text-[0.82rem]">
+              <span className="font-semibold text-sm">
                 Follow the flight log
               </span>
-              <span className="font-mono text-[0.68rem] text-muted">
+              <span className="font-mono text-2xs text-muted">
                 {measuredLabel}
               </span>
             </button>
@@ -256,15 +256,15 @@ export default function ProjectSettingsModal({
                   : 'border-line bg-paper hover:border-line-strong'
               }`}
             >
-              <span className="font-semibold text-[0.82rem]">Set it by hand</span>
-              <span className="text-[0.68rem] text-muted">
+              <span className="font-semibold text-sm">Set it by hand</span>
+              <span className="text-2xs text-muted">
                 For footage whose log says nothing — or a conform you did yourself.
               </span>
             </button>
           </div>
           {scaleMode === 'manual' && (
             <div className="flex items-center gap-2 pl-3">
-              <span className="text-[0.78rem] text-ink-soft">This clip plays</span>
+              <span className="text-xs text-ink-soft">This clip plays</span>
               <input
                 type="number"
                 value={factor}
@@ -272,9 +272,9 @@ export default function ProjectSettingsModal({
                 max={600}
                 step={0.5}
                 onChange={(e) => setFactor(Number(e.target.value))}
-                className="w-[5rem] font-mono text-[0.85rem] px-2 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
+                className="w-[5rem] font-mono text-sm px-2 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
               />
-              <span className="text-[0.78rem] text-ink-soft">×</span>
+              <span className="text-xs text-ink-soft">×</span>
               <div className="flex rounded-full border border-line-strong overflow-hidden">
                 {(['slower', 'faster'] as const).map((dir) => (
                   <button
@@ -282,7 +282,7 @@ export default function ProjectSettingsModal({
                     type="button"
                     onClick={() => setSlower(dir === 'slower')}
                     aria-pressed={slower === (dir === 'slower')}
-                    className={`px-2.5 py-1 font-mono text-[0.68rem] cursor-pointer transition-colors ${
+                    className={`px-2.5 py-1 font-mono text-2xs cursor-pointer transition-colors ${
                       slower === (dir === 'slower')
                         ? 'bg-ink text-paper'
                         : 'bg-paper text-muted hover:text-ink'
@@ -292,7 +292,7 @@ export default function ProjectSettingsModal({
                   </button>
                 ))}
               </div>
-              <span className="text-[0.78rem] text-ink-soft">than life</span>
+              <span className="text-xs text-ink-soft">than life</span>
             </div>
           )}
         </fieldset>
@@ -319,7 +319,7 @@ export default function ProjectSettingsModal({
                 min={-23}
                 max={23}
                 onChange={(e) => setHM(Number(e.target.value) || 0, mins)}
-                className="w-[4.5rem] font-mono text-[0.85rem] px-2 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
+                className="w-[4.5rem] font-mono text-sm px-2 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
               />
             </label>
             <label className="flex flex-col gap-1">
@@ -331,7 +331,7 @@ export default function ProjectSettingsModal({
                 max={59}
                 step={15}
                 onChange={(e) => setHM(hours, Number(e.target.value) || 0)}
-                className="w-[4.5rem] font-mono text-[0.85rem] px-2 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
+                className="w-[4.5rem] font-mono text-sm px-2 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
               />
             </label>
             <label className="flex flex-col gap-1">
@@ -344,14 +344,14 @@ export default function ProjectSettingsModal({
                 onChange={(e) =>
                   setShift({ ...shift, days: Number(e.target.value) || 0 })
                 }
-                className="w-[4.5rem] font-mono text-[0.85rem] px-2 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
+                className="w-[4.5rem] font-mono text-sm px-2 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
               />
             </label>
             {(shift.minutes !== 0 || shift.days !== 0) && (
               <button
                 type="button"
                 onClick={() => setShift({ ...NO_SHIFT })}
-                className="mb-1.5 p-0 border-0 bg-transparent text-[0.75rem] text-accent-ink cursor-pointer underline underline-offset-[3px]"
+                className="mb-1.5 p-0 border-0 bg-transparent text-xs text-accent-ink cursor-pointer underline underline-offset-[3px]"
               >
                 Clear
               </button>
@@ -382,11 +382,11 @@ export default function ProjectSettingsModal({
               ref={confirmRef}
               className="flex flex-col gap-2 p-3 rounded-paper border border-accent bg-accent-wash"
             >
-              <p className="m-0 text-[0.78rem] leading-relaxed">
+              <p className="m-0 text-xs leading-relaxed">
                 Replace this project's overlays, style, grade and format with
                 {pending.name ? ` “${pending.name}”` : ' the imported file'}?
               </p>
-              <p className="m-0 text-[0.72rem] text-muted leading-relaxed">
+              <p className="m-0 text-xs text-muted leading-relaxed">
                 {pending.elements.length} element
                 {pending.elements.length === 1 ? '' : 's'} · {pending.settings.aspectId}
                 {pending.lutStack.length > 0 &&
@@ -397,14 +397,14 @@ export default function ProjectSettingsModal({
                 <button
                   type="button"
                   onClick={() => onImport(pending)}
-                  className="p-0 border-0 bg-transparent text-[0.78rem] font-semibold text-accent-ink cursor-pointer underline underline-offset-[3px]"
+                  className="p-0 border-0 bg-transparent text-xs font-semibold text-accent-ink cursor-pointer underline underline-offset-[3px]"
                 >
                   Replace the settings
                 </button>
                 <button
                   type="button"
                   onClick={() => setPending(null)}
-                  className="p-0 border-0 bg-transparent text-[0.78rem] text-muted cursor-pointer"
+                  className="p-0 border-0 bg-transparent text-xs text-muted cursor-pointer"
                 >
                   Keep mine
                 </button>
@@ -413,7 +413,7 @@ export default function ProjectSettingsModal({
           )}
 
           {importError && (
-            <p className="m-0 text-[0.75rem] text-[#9a3a23]" role="alert">
+            <p className="m-0 text-xs text-danger" role="alert">
               {importError}
             </p>
           )}
@@ -425,14 +425,14 @@ export default function ProjectSettingsModal({
           <button
             type="button"
             onClick={onCancel}
-            className="p-0 mt-4 border-0 bg-transparent text-[0.84rem] text-muted cursor-pointer hover:text-ink"
+            className="p-0 mt-4 border-0 bg-transparent text-sm text-muted cursor-pointer hover:text-ink"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={apply}
-            className="mt-4 px-[1.1rem] py-2 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold transition-colors duration-200 ease-paper hover:bg-accent hover:border-accent"
+            className="mt-4 px-[1.1rem] py-2 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold transition-colors duration-200 ease-paper hover:bg-accent hover:border-accent"
           >
             Apply
           </button>

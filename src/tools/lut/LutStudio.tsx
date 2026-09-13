@@ -348,7 +348,7 @@ export default function LutStudio() {
             <div className="flex items-center gap-2 basis-full @[40rem]:basis-auto @[40rem]:ml-auto">
               <button
                 type="button"
-                className="inline-flex items-center gap-1.5 flex-none h-[2.3rem] px-[0.9rem] rounded-full border text-[0.8rem] font-semibold transition-colors disabled:opacity-50 disabled:cursor-default aria-pressed:border-accent aria-pressed:text-accent-ink aria-pressed:bg-accent-wash border-line-strong bg-paper text-ink-soft hover:enabled:border-faint hover:enabled:text-ink"
+                className="inline-flex items-center gap-1.5 flex-none h-[2.3rem] px-[0.9rem] rounded-full border text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-default aria-pressed:border-accent aria-pressed:text-accent-ink aria-pressed:bg-accent-wash border-line-strong bg-paper text-ink-soft hover:enabled:border-faint hover:enabled:text-ink"
                 onClick={toggleCompare}
                 disabled={!lut}
                 aria-pressed={compareOn}
@@ -381,7 +381,7 @@ export default function LutStudio() {
               >
                 <button
                   type="button"
-                  className={`inline-flex items-center h-full px-[0.85rem] rounded-full text-[0.8rem] font-semibold transition-colors ${
+                  className={`inline-flex items-center h-full px-[0.85rem] rounded-full text-xs font-semibold transition-colors ${
                     bypass || !lut
                       ? 'bg-ink text-paper'
                       : 'text-muted hover:text-ink'
@@ -397,7 +397,7 @@ export default function LutStudio() {
                 </button>
                 <button
                   type="button"
-                  className={`inline-flex items-center h-full px-[0.85rem] rounded-full text-[0.8rem] font-semibold transition-colors disabled:text-faint disabled:cursor-default ${
+                  className={`inline-flex items-center h-full px-[0.85rem] rounded-full text-xs font-semibold transition-colors disabled:text-faint disabled:cursor-default ${
                     !bypass && lut
                       ? 'bg-ink text-paper'
                       : 'text-muted enabled:hover:text-ink'
@@ -429,7 +429,7 @@ export default function LutStudio() {
                   >
                     ‹
                   </button>
-                  <span className="font-mono text-[0.7rem] text-muted tabular-nums min-w-[3ch] text-center">
+                  <span className="font-mono text-2xs text-muted tabular-nums min-w-[3ch] text-center">
                     {activeIndex + 1}/{clips.length}
                   </span>
                   <button
@@ -444,13 +444,13 @@ export default function LutStudio() {
                 </div>
               )}
               <span
-                className="font-semibold text-[0.9rem] whitespace-nowrap overflow-hidden text-ellipsis"
+                className="font-semibold text-sm whitespace-nowrap overflow-hidden text-ellipsis"
                 title={activeClip.name}
               >
                 {activeClip.name}
               </span>
               {activeDetail && (
-                <span className="font-mono text-[0.72rem] tracking-[0.02em] text-muted flex-none">
+                <span className="font-mono text-xs tracking-[0.02em] text-muted flex-none">
                   {activeDetail}
                 </span>
               )}
@@ -475,10 +475,10 @@ export default function LutStudio() {
                 aria-hidden="true"
               >
                 <span className="absolute top-1/2 left-1/2 w-[34px] h-[34px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/95 bg-black/[0.32] shadow-[0_1px_6px_rgba(0,0,0,0.45)] before:content-[''] before:absolute before:top-1/2 before:left-2 before:w-1.5 before:h-1.5 before:border-t-2 before:border-r-2 before:border-white/95 before:-translate-y-1/2 before:-rotate-[135deg] after:content-[''] after:absolute after:top-1/2 after:right-2 after:w-1.5 after:h-1.5 after:border-t-2 after:border-r-2 after:border-white/95 after:-translate-y-1/2 after:rotate-45" />
-                <span className="absolute top-2.5 right-2.5 font-mono text-[0.62rem] tracking-[0.08em] uppercase text-white bg-black/55 px-[0.4rem] py-[0.18rem] rounded-[5px] whitespace-nowrap">
+                <span className="absolute top-2.5 right-2.5 font-mono text-2xs tracking-[0.08em] uppercase text-white bg-black/55 px-[0.4rem] py-[0.18rem] rounded-[5px] whitespace-nowrap">
                   Graded
                 </span>
-                <span className="absolute top-2.5 left-2.5 font-mono text-[0.62rem] tracking-[0.08em] uppercase text-white bg-black/55 px-[0.4rem] py-[0.18rem] rounded-[5px] whitespace-nowrap">
+                <span className="absolute top-2.5 left-2.5 font-mono text-2xs tracking-[0.08em] uppercase text-white bg-black/55 px-[0.4rem] py-[0.18rem] rounded-[5px] whitespace-nowrap">
                   Original
                 </span>
               </div>
@@ -489,7 +489,7 @@ export default function LutStudio() {
                 className="block w-auto h-auto max-w-full max-h-full object-contain bg-frame"
               />
             ) : (
-              <div className="w-full aspect-video flex items-center justify-center bg-surface border border-line rounded-paper text-muted text-center p-4 font-mono text-[0.85rem]">
+              <div className="w-full aspect-video flex items-center justify-center bg-surface border border-line rounded-paper text-muted text-center p-4 font-mono text-sm">
                 {clips.length === 0
                   ? 'Select a video in the Library.'
                   : 'Select a clip to preview.'}
@@ -510,7 +510,7 @@ export default function LutStudio() {
             <div className="flex items-center gap-[0.85rem] mt-[0.9rem] px-[0.85rem] py-[0.6rem] border border-line rounded-paper bg-surface">
               <button
                 type="button"
-                className="flex-none w-[2.2rem] h-[2.2rem] border-0 rounded-full bg-ink text-paper cursor-pointer text-[0.8rem] leading-none inline-flex items-center justify-center transition-[background-color] duration-200 ease-paper hover:bg-accent"
+                className="flex-none w-[2.2rem] h-[2.2rem] border-0 rounded-full bg-ink text-paper cursor-pointer text-xs leading-none inline-flex items-center justify-center transition-[background-color] duration-200 ease-paper hover:bg-accent"
                 onClick={togglePlay}
                 aria-label={playing ? 'Pause' : 'Play'}
                 title="Play / pause (Space)"
@@ -518,7 +518,7 @@ export default function LutStudio() {
                 {playing ? '❚❚' : '▶'}
               </button>
               <span
-                className="font-mono text-[0.74rem] tabular-nums text-muted flex-none min-w-[3.2ch] text-center"
+                className="font-mono text-xs tabular-nums text-muted flex-none min-w-[3.2ch] text-center"
                 title="Current position"
               >
                 {formatTimecode(time)}
@@ -537,21 +537,21 @@ export default function LutStudio() {
                 onChange={(e) => handleScrub(Number(e.target.value))}
                 aria-label="Seek"
               />
-              <span className="font-mono text-[0.74rem] tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
+              <span className="font-mono text-xs tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
                 {formatDuration(duration)}
               </span>
             </div>
           )}
 
           {!supported && (
-            <p className="my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-[#eccabf] text-[#7c2e1c] text-[0.86rem] leading-[1.55]">
+            <p className="my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-danger-line text-danger-ink text-sm leading-[1.55]">
               Your browser doesn't expose <strong>WebGL2</strong>, which the LUT
               preview needs. Try a recent Chrome, Edge, Firefox or Safari.
             </p>
           )}
 
           {activeError && (
-            <div className="my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-[#eccabf] text-[#7c2e1c] text-[0.86rem] leading-[1.55] flex flex-col gap-3">
+            <div className="my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-danger-line text-danger-ink text-sm leading-[1.55] flex flex-col gap-3">
               <p className="m-0">
                 This clip failed to decode. DJI footage is often HEVC/H.265,
                 which not every browser plays natively. Transcode it to H.264 to
@@ -562,7 +562,7 @@ export default function LutStudio() {
           )}
 
           {cubeError && (
-            <p className="my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-[#eccabf] text-[#7c2e1c] text-[0.86rem] leading-[1.55]">
+            <p className="my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-danger-line text-danger-ink text-sm leading-[1.55]">
               {cubeError}
             </p>
           )}
@@ -575,13 +575,13 @@ export default function LutStudio() {
         >
           {reported.map((c) => (
             <div key={c.id} className="flex flex-col gap-0.5 min-w-0">
-              <div className="flex items-center gap-2 text-[0.8rem] min-w-0">
+              <div className="flex items-center gap-2 text-xs min-w-0">
                 <span
                   className={`flex-none w-4 text-center font-semibold ${
                     c.exportStatus === 'done'
-                      ? 'text-[#3f6b3f]'
+                      ? 'text-ok'
                       : c.exportStatus === 'error'
-                        ? 'text-[#9a3a23]'
+                        ? 'text-danger'
                         : 'text-muted'
                   }`}
                   aria-hidden="true"
@@ -597,7 +597,7 @@ export default function LutStudio() {
                 <span className="font-medium truncate min-w-0" title={c.name}>
                   {c.name}
                 </span>
-                <span className="ml-auto flex-none font-mono text-[0.72rem] text-muted tabular-nums">
+                <span className="ml-auto flex-none font-mono text-xs text-muted tabular-nums">
                   {c.exportStatus === 'queued' && 'Queued'}
                   {c.exportStatus === 'exporting' &&
                     (c.exportRatio != null
@@ -608,7 +608,7 @@ export default function LutStudio() {
                 </span>
               </div>
               {c.exportStatus === 'error' && c.exportError && (
-                <p className="m-0 pl-6 text-[0.72rem] leading-snug text-[#9a3a23]">
+                <p className="m-0 pl-6 text-xs leading-snug text-danger">
                   {c.exportError}
                 </p>
               )}
@@ -624,7 +624,7 @@ export default function LutStudio() {
               className="flex items-center gap-[0.85rem] mt-0 flex-1"
               role="status"
             >
-              <span className="font-mono text-[0.74rem] tracking-[0.04em] text-ink-soft flex-none min-w-[11ch]">
+              <span className="font-mono text-xs tracking-[0.04em] text-ink-soft flex-none min-w-[11ch]">
                 Exporting {Math.min(doneCount + 1, batchTotal)}/{batchTotal}
               </span>
               <progress
@@ -645,21 +645,21 @@ export default function LutStudio() {
         ) : (
           <>
             {!exportSupported && clips.length > 0 && (
-              <span className="mr-auto text-[0.78rem] text-muted">
+              <span className="mr-auto text-xs text-muted">
                 Export needs WebCodecs (try Chrome/Edge) — preview works
                 everywhere.
               </span>
             )}
             {exportSupported && reported.length > 0 && (
-              <span className="mr-auto text-[0.78rem] text-ink-soft" role="status">
+              <span className="mr-auto text-xs text-ink-soft" role="status">
                 {doneCount > 0 && (
-                  <b className="text-[#3f6b3f] font-semibold">
+                  <b className="text-ok font-semibold">
                     {doneCount} exported
                   </b>
                 )}
                 {doneCount > 0 && errorCount > 0 && ' · '}
                 {errorCount > 0 && (
-                  <b className="text-[#9a3a23] font-semibold">
+                  <b className="text-danger font-semibold">
                     {errorCount} failed
                   </b>
                 )}
@@ -667,7 +667,7 @@ export default function LutStudio() {
             )}
             <button
               type="button"
-              className="mt-0 px-[1.1rem] py-2 inline-flex items-center justify-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.82rem] font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent hover:text-white active:scale-[0.98] disabled:opacity-50 disabled:cursor-default"
+              className="mt-0 px-[1.1rem] py-2 inline-flex items-center justify-center gap-2 border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold transition-[transform,background-color,color] duration-200 ease-paper hover:bg-accent hover:border-accent hover:text-white active:scale-[0.98] disabled:opacity-50 disabled:cursor-default"
               onClick={handleExport}
               disabled={clips.length === 0 || !exportSupported}
               title="Render graded copies of the selected clips (H.264 MP4)"

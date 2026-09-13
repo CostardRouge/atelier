@@ -154,7 +154,7 @@ export default function ContentTab({
             className={inputClass}
           />
           {!content && (
-            <span className="text-[0.78rem] text-[#9a3a23]" role="alert">
+            <span className="text-xs text-danger" role="alert">
               This trip’s dates read backwards, so there is no total to count towards.
               Fix them and the badge comes back.
             </span>
@@ -183,7 +183,7 @@ export default function ContentTab({
       {slide.kind === 'cta' && (
         <div className="flex flex-col gap-2">
           <span className={legend}>Closing card</span>
-          <p className="m-0 text-[0.78rem] text-ink-soft">
+          <p className="m-0 text-xs text-ink-soft">
             This slide is the trip’s call to action, shared by every deck that closes
             with it.
           </p>
@@ -230,12 +230,12 @@ export default function ContentTab({
             className={`${inputClass} flex-1 min-w-0`}
             aria-label="The day this piece tells"
           />
-          <span className="flex-none font-mono text-[0.68rem] text-muted tabular-nums">
+          <span className="flex-none font-mono text-2xs text-muted tabular-nums">
             {dayOfTrip}
           </span>
         </div>
         {captured && (
-          <p className="m-0 text-[0.74rem] text-muted">
+          <p className="m-0 text-xs text-muted">
             The picture is dated{' '}
             <span className="text-ink">{formatIsoDate(captured.date)}</span>{' '}
             {captured.source === 'exif'
@@ -249,14 +249,14 @@ export default function ContentTab({
                 <button
                   type="button"
                   onClick={() => onChangePost({ ...post, date: captured.date })}
-                  className="p-0 border-0 bg-transparent text-[0.74rem] text-accent-ink cursor-pointer underline underline-offset-[3px]"
+                  className="p-0 border-0 bg-transparent text-xs text-accent-ink cursor-pointer underline underline-offset-[3px]"
                 >
                   file it under that day
                 </button>
               </>
             )}
             {capturedOutsideTrip && (
-              <span className="text-[#9a3a23]">
+              <span className="text-danger">
                 {' '}
                 — outside this trip’s dates, so every count here would be about a day
                 this picture has nothing to do with.
@@ -322,7 +322,7 @@ export default function ContentTab({
                   : 'Stages are edited on the trip’s Overview; the day of the trip is counted meanwhile.'}
               </p>
             )}
-            <label className="flex items-center gap-2 text-[0.8rem] text-ink-soft cursor-pointer">
+            <label className="flex items-center gap-2 text-xs text-ink-soft cursor-pointer">
               <input
                 type="checkbox"
                 checked={post.badge.showPin}
@@ -331,7 +331,7 @@ export default function ContentTab({
               />
               Marker before the place
             </label>
-            <p className="m-0 text-[0.72rem] text-faint">
+            <p className="m-0 text-xs text-faint">
               {place
                 ? `The place reads “${place}”.`
                 : 'No stage covers this day, so there is no place to mark — add one on the Overview.'}
@@ -373,7 +373,7 @@ export default function ContentTab({
               </div>
             </label>
 
-            <p className="m-0 px-2.5 py-2 rounded-paper bg-paper border border-line text-[0.8rem]">
+            <p className="m-0 px-2.5 py-2 rounded-paper bg-paper border border-line text-xs">
               {timeLine ? (
                 <span className="text-ink">“{timeLine}”</span>
               ) : (

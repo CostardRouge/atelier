@@ -26,6 +26,33 @@
   /* The near-black behind video frames */
   --color-frame: #100f0d;
 
+  /* State colours — semantic, never the accent. Each is a trio: the text/ink,
+     a wash for a filled chip or banner, and a line for its border. */
+  --color-danger: #9a3a23;
+  --color-danger-ink: #7c2e1c;
+  --color-danger-wash: #f6e2dc;
+  --color-danger-line: #eccabf;
+  --color-ok: #3f7a52;
+  --color-ok-wash: #e4efe4;
+  --color-ok-line: #bcd4bf;
+  --color-warn: #8a6a1f;
+  --color-warn-bright: #c9a227;
+  --color-warn-wash: #f5ecd6;
+  --color-warn-line: #e6d7b0;
+  --color-info: #3f5a72;
+  --color-info-wash: #e9eef3;
+  --color-info-line: #c4d2df;
+
+  /* The type scale. Tailwind's named sizes carry the page (xs 12px · sm 14px ·
+     base 16px · lg 18px …); two smaller steps exist for the mono eyebrow labels
+     and the caption under a thumbnail. Nothing is set in `text-[…rem]`: an
+     ESLint rule refuses it, because 43 hand-picked sizes is what the suite had
+     before this scale. */
+  --text-2xs: 0.66rem;
+  --text-2xs--line-height: 1.35;
+  --text-3xs: 0.58rem;
+  --text-3xs--line-height: 1.3;
+
   --font-sans: 'Space Grotesk', system-ui, -apple-system, sans-serif;
   --font-serif: 'Instrument Serif', Georgia, serif;
   --font-mono: 'JetBrains Mono', monospace;

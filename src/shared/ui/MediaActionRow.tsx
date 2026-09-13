@@ -27,7 +27,7 @@ export default function MediaActionRow({ offer, onRun, busy }: MediaActionRowPro
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <span className="font-mono text-[0.62rem] tracking-[0.12em] uppercase text-muted">
+      <span className="font-mono text-2xs tracking-[0.12em] uppercase text-muted">
         {offer.heading}
       </span>
       {offer.actions.map((action) => (
@@ -37,7 +37,7 @@ export default function MediaActionRow({ offer, onRun, busy }: MediaActionRowPro
           onClick={() => onRun(action)}
           disabled={busy}
           title={action.hint}
-          className="px-3 py-1.5 rounded-full border border-line-strong bg-paper text-ink text-[0.78rem] cursor-pointer transition-colors hover:border-accent hover:text-accent-ink disabled:opacity-50 disabled:cursor-wait"
+          className="px-3 py-1.5 rounded-full border border-line-strong bg-paper text-ink text-xs cursor-pointer transition-colors hover:border-accent hover:text-accent-ink disabled:opacity-50 disabled:cursor-wait"
         >
           {action.label}
         </button>

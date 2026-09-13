@@ -274,9 +274,9 @@ export default function ElementPalette({
         type="button"
         onClick={() => onOpenChange(!open)}
         aria-expanded={open}
-        className="self-start flex items-center gap-1.5 p-0 border-0 bg-transparent text-accent-ink font-semibold text-[0.82rem] cursor-pointer hover:text-accent"
+        className="self-start flex items-center gap-1.5 p-0 border-0 bg-transparent text-accent-ink font-semibold text-sm cursor-pointer hover:text-accent"
       >
-        <span aria-hidden="true" className="text-[0.7rem]">
+        <span aria-hidden="true" className="text-2xs">
           {open ? '▾' : '▸'}
         </span>
         Add an element
@@ -285,7 +285,7 @@ export default function ElementPalette({
       {open &&
         PALETTE_GROUPS.map((group) => (
           <div key={group.label} className="flex flex-col gap-1">
-            <span className="font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted">
+            <span className="font-mono text-3xs uppercase tracking-[0.14em] text-muted">
               {group.label}
             </span>
             <div className="grid grid-cols-3 gap-1.5">
@@ -319,17 +319,17 @@ export default function ElementPalette({
                     className="flex flex-col gap-1 p-1.5 rounded-paper border border-line bg-paper cursor-pointer text-left transition-colors hover:border-accent"
                   >
                     <span className="flex items-center gap-1 w-full min-w-0">
-                      <span className="flex-1 min-w-0 truncate font-mono text-[0.53rem] uppercase tracking-[0.08em] text-muted leading-none">
+                      <span className="flex-1 min-w-0 truncate font-mono text-3xs uppercase tracking-[0.08em] text-muted leading-none">
                         {name}
                       </span>
                       {hint ? (
-                        <span className="flex-none font-mono text-[0.53rem] text-muted leading-none">
+                        <span className="flex-none font-mono text-3xs text-muted leading-none">
                           {hint}
                         </span>
                       ) : (
                         placed > 0 && (
                           <span
-                            className="flex-none font-mono text-[0.53rem] text-accent leading-none"
+                            className="flex-none font-mono text-3xs text-accent leading-none"
                             aria-label={`${placed} already placed`}
                           >
                             {placed > 1 ? placed : '•'}
@@ -338,7 +338,7 @@ export default function ElementPalette({
                       )}
                     </span>
                     <span
-                      className="h-[2rem] w-full grid place-items-center rounded-[3px] bg-[#141210] overflow-hidden px-1"
+                      className="h-[2rem] w-full grid place-items-center rounded-[3px] bg-frame overflow-hidden px-1"
                       // A long readout ("TIME 2026-05-30 05:49:34") cannot fit
                       // a third of 340px; fading the edges says "there is more"
                       // instead of chopping a glyph in half.

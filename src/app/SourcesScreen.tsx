@@ -31,14 +31,14 @@ import { listTrips } from '../shared/roadtrip/trip-store';
 /** Where a connect made from a LINK lands once done — the studio's gallery. */
 const AFTER_CONNECT = '/studio/home';
 
-const legend = 'font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted';
+const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 const pill =
-  'inline-flex items-center gap-1.5 font-mono text-[0.64rem] tracking-[0.04em] px-2 py-[0.15rem] rounded-full border whitespace-nowrap';
+  'inline-flex items-center gap-1.5 font-mono text-2xs tracking-[0.04em] px-2 py-[0.15rem] rounded-full border whitespace-nowrap';
 const btn =
-  'px-3 py-[0.28rem] rounded-full border text-[0.74rem] font-semibold cursor-pointer whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-default';
+  'px-3 py-[0.28rem] rounded-full border text-xs font-semibold cursor-pointer whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-default';
 const solid = `${btn} border-ink bg-ink text-paper hover:bg-accent hover:border-accent`;
 const ghost = `${btn} border-line-strong bg-transparent text-ink hover:text-accent-ink hover:border-accent`;
-const danger = `${btn} border-[#e0c3ba] bg-transparent text-[#9a3a23] hover:bg-[#f6e2dc]`;
+const danger = `${btn} border-danger-line bg-transparent text-danger hover:bg-danger-wash`;
 
 /** The dot + words for a state, in the four shapes an instance can be in. */
 function HealthPill({ health }: { health: SourceHealth }) {
@@ -46,22 +46,22 @@ function HealthPill({ health }: { health: SourceHealth }) {
   switch (health.state) {
     case 'reachable':
       return (
-        <span className={`${pill} border-[#bcd4bf] bg-[#e4efe4] text-[#3f7a52]`}>
-          <i className={`${dot} bg-[#3f7a52]`} />
+        <span className={`${pill} border-ok-line bg-ok-wash text-ok`}>
+          <i className={`${dot} bg-ok`} />
           reachable{health.latencyMs !== null && ` · ${health.latencyMs} ms`}
         </span>
       );
     case 'signin':
       return (
-        <span className={`${pill} border-[#e3d3a8] bg-[#f5ecd6] text-[#8a6a1f]`}>
-          <i className={`${dot} bg-[#8a6a1f]`} />
+        <span className={`${pill} border-warn-line bg-warn-wash text-warn`}>
+          <i className={`${dot} bg-warn`} />
           sign-in needed
         </span>
       );
     case 'unreachable':
       return (
-        <span className={`${pill} border-[#e0c3ba] bg-[#f6e2dc] text-[#9a3a23]`}>
-          <i className={`${dot} bg-[#9a3a23]`} />
+        <span className={`${pill} border-danger-line bg-danger-wash text-danger`}>
+          <i className={`${dot} bg-danger`} />
           unreachable
         </span>
       );
@@ -105,25 +105,25 @@ function SourceRow({ glyph, remote, name, aside, pill: state, facts, actions, no
       }`}
     >
       <span
-        className={`row-span-2 w-8 h-8 rounded-[10px] grid place-items-center font-mono text-[0.66rem] font-bold border ${
+        className={`row-span-2 w-8 h-8 rounded-[10px] grid place-items-center font-mono text-2xs font-bold border ${
           remote
-            ? 'bg-accent-wash text-accent-ink border-[#ecd3ca]'
+            ? 'bg-accent-wash text-accent-ink border-danger-line'
             : 'bg-paper-2 text-ink-soft border-line'
         }`}
         aria-hidden="true"
       >
         {glyph}
       </span>
-      <span className={`min-w-0 font-mono text-[0.9rem] font-medium ${dim ? 'text-muted' : ''}`}>
+      <span className={`min-w-0 font-mono text-sm font-medium ${dim ? 'text-muted' : ''}`}>
         <span className="break-all">{name}</span>
-        {aside && <small className="ml-2 font-sans text-[0.74rem] text-muted">{aside}</small>}
+        {aside && <small className="ml-2 font-sans text-xs text-muted">{aside}</small>}
       </span>
       <span className="col-span-2 sm:col-span-1 flex flex-wrap items-center justify-start sm:justify-end gap-1.5 order-3 sm:order-none">
         {state}
         {actions}
       </span>
       <span
-        className={`col-start-2 col-span-1 sm:col-span-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[0.66rem] text-muted tabular-nums ${
+        className={`col-start-2 col-span-1 sm:col-span-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-2xs text-muted tabular-nums ${
           dim ? 'opacity-70' : ''
         }`}
       >
@@ -242,8 +242,8 @@ export default function SourcesScreen({ query }: { query: string }) {
     >
       <div>
         <p className={legend}>Sources</p>
-        <h1 className="m-0 mt-1 font-serif text-[1.7rem] leading-tight">Where your work lives</h1>
-        <p className="m-0 mt-1.5 text-[0.86rem] text-muted leading-relaxed">
+        <h1 className="m-0 mt-1 font-serif text-3xl leading-tight">Where your work lives</h1>
+        <p className="m-0 mt-1.5 text-sm text-muted leading-relaxed">
           A project, a trip and its media belong to exactly one source. Nothing is sent anywhere —
           connecting is your click, and only ever to the address you name.
         </p>
@@ -255,8 +255,8 @@ export default function SourcesScreen({ query }: { query: string }) {
           name={LOCAL_SOURCE.label}
           aside="this browser · the folders you open"
           pill={
-            <span className={`${pill} border-[#bcd4bf] bg-[#e4efe4] text-[#3f7a52]`}>
-              <i className="w-[7px] h-[7px] rounded-full block bg-[#3f7a52]" />
+            <span className={`${pill} border-ok-line bg-ok-wash text-ok`}>
+              <i className="w-[7px] h-[7px] rounded-full block bg-ok" />
               always on
             </span>
           }
@@ -347,8 +347,8 @@ export default function SourcesScreen({ query }: { query: string }) {
               }
               note={
                 confirming === conn.id ? (
-                  <div className="mt-1.5 flex flex-wrap items-center gap-2 border border-[#e9cfc6] bg-[#f6e2dc] rounded-paper px-3 py-2">
-                    <span className="text-[0.78rem] text-[#9a3a23] leading-snug grow basis-[18rem]">
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2 border border-danger-line bg-danger-wash rounded-paper px-3 py-2">
+                    <span className="text-xs text-danger leading-snug grow basis-[18rem]">
                       {forgetWarning(conn.id, count)}
                     </span>
                     <span className="flex gap-2 ml-auto">
@@ -366,10 +366,10 @@ export default function SourcesScreen({ query }: { query: string }) {
                   </div>
                 ) : state.reason ? (
                   <p
-                    className={`m-0 mt-1.5 text-[0.78rem] leading-snug border rounded-paper px-3 py-2 ${
+                    className={`m-0 mt-1.5 text-xs leading-snug border rounded-paper px-3 py-2 ${
                       state.state === 'signin'
-                        ? 'text-[#8a6a1f] bg-[#f5ecd6] border-[#e6d7b0]'
-                        : 'text-[#9a3a23] bg-[#f6e2dc] border-[#e9cfc6]'
+                        ? 'text-warn bg-warn-wash border-warn-line'
+                        : 'text-danger bg-danger-wash border-danger-line'
                     }`}
                   >
                     {state.reason}
@@ -399,11 +399,11 @@ export default function SourcesScreen({ query }: { query: string }) {
             }}
             placeholder="https://winnow.example"
             spellCheck={false}
-            className="font-mono text-[16px] px-3.5 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
+            className="font-mono text-base px-3.5 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
           />
-          {problem && <span className="text-[0.74rem] text-[#9a3a23]">{problem}</span>}
+          {problem && <span className="text-xs text-danger">{problem}</span>}
           {!problem && baseUrl && (
-            <span className="text-[0.74rem] text-faint">
+            <span className="text-xs text-faint">
               {proposed
                 ? `A link asked to connect ${sourceIdFor(baseUrl)}. Check the address before allowing it.`
                 : `Will be listed as source “${sourceIdFor(baseUrl)}”.`}
@@ -411,7 +411,7 @@ export default function SourcesScreen({ query }: { query: string }) {
             </span>
           )}
           {!raw.trim() && (
-            <span className="text-[0.74rem] text-faint">
+            <span className="text-xs text-faint">
               An instance becomes a source: its pictures and clips browsed by day, beside your own
               folders — and, when it offers the document bucket, your trips and projects kept there.
             </span>
@@ -422,8 +422,8 @@ export default function SourcesScreen({ query }: { query: string }) {
           <button type="button" onClick={() => void allow()} disabled={!baseUrl || busy} className={solid}>
             {busy ? 'Asking…' : already ? 'Allow again' : 'Allow'}
           </button>
-          <span className="text-[0.76rem] text-muted">
-            One request is made — <code className="font-mono text-[0.72rem]">/api/capabilities</code>{' '}
+          <span className="text-xs text-muted">
+            One request is made — <code className="font-mono text-xs">/api/capabilities</code>{' '}
             — and nothing is stored unless it answers.
           </span>
           {sentByLink && (
@@ -434,7 +434,7 @@ export default function SourcesScreen({ query }: { query: string }) {
         </div>
 
         {needsLogin && (
-          <p className="m-0 text-[0.82rem] leading-relaxed border border-[#e6d7b0] bg-[#f5ecd6] rounded-paper px-3 py-2 text-[#8a6a1f]">
+          <p className="m-0 text-sm leading-relaxed border border-warn-line bg-warn-wash rounded-paper px-3 py-2 text-warn">
             That Winnow does not know you yet.{' '}
             <a
               className="text-accent-ink font-semibold underline underline-offset-[3px]"
@@ -449,7 +449,7 @@ export default function SourcesScreen({ query }: { query: string }) {
           </p>
         )}
         {error && (
-          <p className="m-0 text-[0.82rem] text-[#9a3a23] leading-relaxed" role="alert">
+          <p className="m-0 text-sm text-danger leading-relaxed" role="alert">
             {error}
           </p>
         )}

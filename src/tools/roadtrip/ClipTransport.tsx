@@ -33,7 +33,7 @@ const MIN_LENGTH = MIN_HOOK_SECONDS / 4;
 const STEP = 1 / 30;
 
 const pill =
-  'flex-none px-2.5 py-1 rounded-full border font-mono text-[0.64rem] tracking-[0.06em] cursor-pointer transition-colors focus:outline-none';
+  'flex-none px-2.5 py-1 rounded-full border font-mono text-2xs tracking-[0.06em] cursor-pointer transition-colors focus:outline-none';
 const pillOff = 'border-line-strong bg-paper text-muted hover:text-accent-ink hover:border-accent';
 const pillOn = 'border-accent bg-accent-wash text-accent-ink';
 
@@ -111,14 +111,14 @@ export default function ClipTransport({
         <button
           type="button"
           onClick={onTogglePlay}
-          className="flex-none w-[2.1rem] h-[2.1rem] border-0 rounded-full bg-ink text-paper cursor-pointer text-[0.78rem] leading-none inline-flex items-center justify-center hover:bg-accent"
+          className="flex-none w-[2.1rem] h-[2.1rem] border-0 rounded-full bg-ink text-paper cursor-pointer text-xs leading-none inline-flex items-center justify-center hover:bg-accent"
           aria-label={playing ? 'Pause' : 'Play'}
           title="Play / pause the slide (Space)"
         >
           {playing ? '❚❚' : '▶'}
         </button>
         {!compact && (
-          <span className="font-mono text-[0.72rem] tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
+          <span className="font-mono text-xs tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
             {formatTimecode(time)}
           </span>
         )}
@@ -160,7 +160,7 @@ export default function ClipTransport({
           pointer mid-gesture (the Studio's own trap). */}
       <p
         className={`m-0 flex flex-wrap items-center gap-x-2 font-mono tabular-nums text-muted ${
-          compact ? 'text-[0.6rem] pl-[2.6rem]' : 'text-[0.64rem] pl-[5.7rem]'
+          compact ? 'text-3xs pl-[2.6rem]' : 'text-2xs pl-[5.7rem]'
         }`}
       >
         <span className="uppercase tracking-[0.12em]">Cut</span>

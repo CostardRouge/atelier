@@ -38,13 +38,13 @@ interface TimelineImportPanelProps {
   onApply: (trip: TripDoc, spanWidened: boolean) => void;
 }
 
-const legend = 'font-mono text-[0.64rem] tracking-[0.14em] uppercase text-muted';
+const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 const input =
-  'font-sans text-[0.95rem] px-3.5 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent max-[560px]:text-[1rem]';
+  'font-sans text-base px-3.5 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent max-[560px]:text-base';
 const row =
-  'flex items-start gap-3 py-2 border-b border-line last:border-b-0 text-[0.84rem] leading-snug';
+  'flex items-start gap-3 py-2 border-b border-line last:border-b-0 text-sm leading-snug';
 const check = 'mt-[3px] w-[15px] h-[15px] accent-ink flex-none max-[820px]:w-[18px] max-[820px]:h-[18px]';
-const problemInk = 'text-[#9a3a23]';
+const problemInk = 'text-danger';
 
 function explain(err: unknown, client: WinnowClient): { text: string; login?: string } {
   if (err instanceof WinnowError && err.kind === 'unauthenticated') {
@@ -251,8 +251,8 @@ export default function TimelineImportPanel({
     >
       <div className="w-full max-w-[40rem] max-h-[90dvh] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6 max-[820px]:max-w-none max-[820px]:max-h-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:px-4 max-[820px]:pt-4">
         <div>
-          <h2 className="m-0 font-serif text-[1.4rem]">{title}</h2>
-          <p className="m-0 mt-1 text-[0.82rem] text-muted">
+          <h2 className="m-0 font-serif text-2xl">{title}</h2>
+          <p className="m-0 mt-1 text-sm text-muted">
             {mode.kind === 'seed'
               ? 'The timeline’s legs become the trip’s stages — its span, its places. No post is created: the grid stays yours to fill.'
               : 'What the timeline has that the trip does not, and the reverse. Nothing you wrote changes unless you tick it.'}
@@ -260,12 +260,12 @@ export default function TimelineImportPanel({
         </div>
 
         {!offered ? (
-          <p className="m-0 text-[0.84rem] text-muted">
+          <p className="m-0 text-sm text-muted">
             {connection.id} has no timeline yet. Reconnect it once it does, and this
             screen will list its legs.
           </p>
         ) : problem ? (
-          <p className={`m-0 text-[0.84rem] ${problemInk}`} role="alert">
+          <p className={`m-0 text-sm ${problemInk}`} role="alert">
             {problem.text}{' '}
             {problem.login && (
               <a className="font-semibold underline underline-offset-[3px]" href={problem.login} target="_blank" rel="noreferrer">
@@ -274,9 +274,9 @@ export default function TimelineImportPanel({
             )}
           </p>
         ) : chapters === null ? (
-          <p className="m-0 font-mono text-[0.72rem] text-muted">asking {connection.id}…</p>
+          <p className="m-0 font-mono text-xs text-muted">asking {connection.id}…</p>
         ) : chapters.length === 0 ? (
-          <p className="m-0 text-[0.84rem] text-muted">The timeline has no chapter yet.</p>
+          <p className="m-0 text-sm text-muted">The timeline has no chapter yet.</p>
         ) : mode.kind === 'seed' ? (
           <>
             {/* --- the legs, each a tick ---------------------------------- */}
@@ -288,7 +288,7 @@ export default function TimelineImportPanel({
                   onClick={() =>
                     setSelected(picked.size === chapters.length ? new Set() : new Set(chapters.map((c) => c.id)))
                   }
-                  className="p-0 border-0 bg-transparent font-mono text-[0.58rem] tracking-[0.1em] uppercase text-muted cursor-pointer hover:text-accent"
+                  className="p-0 border-0 bg-transparent font-mono text-3xs tracking-[0.1em] uppercase text-muted cursor-pointer hover:text-accent"
                 >
                   {picked.size === chapters.length ? 'none' : 'all'}
                 </button>
@@ -305,7 +305,7 @@ export default function TimelineImportPanel({
                     />
                     <span className="min-w-0 flex-1">
                       <span className="block font-medium truncate">{chapterName(c)}</span>
-                      <span className="block font-mono text-[0.62rem] text-muted tabular-nums">
+                      <span className="block font-mono text-2xs text-muted tabular-nums">
                         {c.startDate && c.endDate ? spanText(c.startDate, c.endDate) : 'undated'}
                         {' · '}{c.assetCount} media
                         {/* Where the place came from, when it was not measured: a
@@ -322,7 +322,7 @@ export default function TimelineImportPanel({
 
             {/* --- what will be created — the real numbers, or why none --- */}
             {imported && (
-              <div className="flex flex-col gap-1.5 text-[0.82rem]">
+              <div className="flex flex-col gap-1.5 text-sm">
                 {imported.span ? (
                   <>
                     <p className="m-0">
@@ -330,7 +330,7 @@ export default function TimelineImportPanel({
                       {' · '}{spanText(imported.span.startDate, imported.span.endDate)}
                       {imported.destination && <> · {imported.destination}</>}
                     </p>
-                    <ul className="m-0 pl-4 text-[0.78rem] text-muted">
+                    <ul className="m-0 pl-4 text-xs text-muted">
                       {imported.stages.map((s) => (
                         <li key={s.id}>
                           {stageLabel(s) || <em>no place — the badge will count the day of the trip</em>}
@@ -339,7 +339,7 @@ export default function TimelineImportPanel({
                       ))}
                     </ul>
                     {imported.uncovered.length > 0 && (
-                      <p className="m-0 text-[0.78rem] text-muted">
+                      <p className="m-0 text-xs text-muted">
                         {imported.uncovered.reduce((n, g) => n + g.length, 0)} day
                         {imported.uncovered.reduce((n, g) => n + g.length, 0) === 1 ? '' : 's'} belong to no leg:{' '}
                         {imported.uncovered.map((g) => spanText(g.start, g.end).replace(/ · .*$/, '')).join(', ')}.
@@ -360,14 +360,14 @@ export default function TimelineImportPanel({
                 placeholder="Australie"
                 className={input}
               />
-              <span className="text-[0.7rem] text-faint">Short — it is what a badge says over the picture.</span>
+              <span className="text-2xs text-faint">Short — it is what a badge says over the picture.</span>
             </label>
           </>
         ) : (
           <>
             {/* --- the diff, one tick per line ----------------------------- */}
             {actionable.length === 0 ? (
-              <p className="m-0 text-[0.84rem] text-muted">
+              <p className="m-0 text-sm text-muted">
                 Your trip already matches the timeline — {entries.length} leg{entries.length === 1 ? '' : 's'}, nothing to change.
               </p>
             ) : (
@@ -385,7 +385,7 @@ export default function TimelineImportPanel({
                         aria-label={describe(e)}
                       />
                       <span className="min-w-0 flex-1">
-                        <span className={`font-mono text-[0.58rem] tracking-[0.1em] uppercase mr-2 ${e.kind === 'dropped' ? problemInk : 'text-muted'}`}>
+                        <span className={`font-mono text-3xs tracking-[0.1em] uppercase mr-2 ${e.kind === 'dropped' ? problemInk : 'text-muted'}`}>
                           {e.kind === 'unchanged' && !inert ? 'link' : e.kind}
                           {e.matchedBy && e.matchedBy !== 'id' && ` · matched by ${e.matchedBy}`}
                         </span>
@@ -400,7 +400,7 @@ export default function TimelineImportPanel({
         )}
 
         {warnings.length > 0 && (
-          <ul className="m-0 pl-4 text-[0.76rem] text-muted">
+          <ul className="m-0 pl-4 text-xs text-muted">
             {warnings.map((w, i) => (
               <li key={`${w.kind}-${w.chapterId}-${i}`}>{w.message}</li>
             ))}
@@ -411,7 +411,7 @@ export default function TimelineImportPanel({
           <button
             type="button"
             onClick={onCancel}
-            className="p-0 mt-4 border-0 bg-transparent text-[0.84rem] text-muted cursor-pointer hover:text-ink"
+            className="p-0 mt-4 border-0 bg-transparent text-sm text-muted cursor-pointer hover:text-ink"
           >
             Cancel
           </button>
@@ -420,7 +420,7 @@ export default function TimelineImportPanel({
               type="button"
               onClick={seed}
               disabled={!canGo}
-              className="mt-4 px-[1.1rem] py-2 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold hover:bg-accent hover:border-accent disabled:opacity-50 disabled:cursor-not-allowed"
+              className="mt-4 px-[1.1rem] py-2 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold hover:bg-accent hover:border-accent disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Create trip
             </button>
@@ -429,7 +429,7 @@ export default function TimelineImportPanel({
               type="button"
               onClick={apply}
               disabled={!canGo}
-              className="mt-4 px-[1.1rem] py-2 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.84rem] font-semibold hover:bg-accent hover:border-accent disabled:opacity-50 disabled:cursor-not-allowed"
+              className="mt-4 px-[1.1rem] py-2 inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold hover:bg-accent hover:border-accent disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Apply {tickedActionable || ''}
             </button>

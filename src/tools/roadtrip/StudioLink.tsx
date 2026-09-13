@@ -42,9 +42,9 @@ interface StudioLinkProps {
 }
 
 const button =
-  'px-2.5 py-1.5 rounded-paper border border-line-strong bg-paper text-[0.74rem] font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink disabled:opacity-50 disabled:cursor-default';
+  'px-2.5 py-1.5 rounded-paper border border-line-strong bg-paper text-xs font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink disabled:opacity-50 disabled:cursor-default';
 const link =
-  'p-0 border-0 bg-transparent text-[0.76rem] text-accent-ink cursor-pointer underline underline-offset-[3px] hover:text-accent disabled:opacity-50 disabled:cursor-default disabled:no-underline';
+  'p-0 border-0 bg-transparent text-xs text-accent-ink cursor-pointer underline underline-offset-[3px] hover:text-accent disabled:opacity-50 disabled:cursor-default disabled:no-underline';
 
 /**
  * The bridge to the Studio.
@@ -218,17 +218,17 @@ export default function StudioLink({
           <div className="flex items-center gap-3 p-2 rounded-paper border border-line bg-paper">
             <ProjectThumb doc={linked} />
             <span className="flex-1 min-w-0">
-              <span className="block text-[0.86rem] text-ink truncate" title={linked.name}>
+              <span className="block text-sm text-ink truncate" title={linked.name}>
                 {linked.name}
               </span>
               <span
-                className={`inline-flex items-center gap-1.5 font-mono text-[0.64rem] tracking-[0.1em] uppercase ${
+                className={`inline-flex items-center gap-1.5 font-mono text-2xs tracking-[0.1em] uppercase ${
                   hasHook(linked) ? 'text-accent-ink' : 'text-faint'
                 }`}
               >
                 <span
                   className={`w-1.5 h-1.5 rounded-full ${
-                    hasHook(linked) ? 'bg-accent' : 'bg-[#c9c0ad]'
+                    hasHook(linked) ? 'bg-accent' : 'bg-line-strong'
                   }`}
                   aria-hidden="true"
                 />
@@ -239,7 +239,7 @@ export default function StudioLink({
 
           <button
             type="button"
-            className="px-[1.1rem] py-2 inline-flex items-center justify-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-[0.82rem] font-semibold hover:bg-accent hover:border-accent disabled:opacity-60"
+            className="px-[1.1rem] py-2 inline-flex items-center justify-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold hover:bg-accent hover:border-accent disabled:opacity-60"
             disabled={busy !== null || !elements.length}
             onClick={() => void send(true)}
           >
@@ -266,20 +266,20 @@ export default function StudioLink({
             <button
               type="button"
               onClick={() => void unlink()}
-              className="p-0 border-0 bg-transparent text-[0.74rem] text-faint cursor-pointer underline underline-offset-[3px] hover:text-[#9a3a23]"
+              className="p-0 border-0 bg-transparent text-xs text-faint cursor-pointer underline underline-offset-[3px] hover:text-danger"
             >
               Unlink
             </button>
           </div>
 
           {!elements.length && (
-            <span className="text-[0.7rem] text-faint">
+            <span className="text-2xs text-faint">
               There is no badge to send — the trip&rsquo;s dates cannot be read.
             </span>
           )}
 
           {/* Two grades, one file: say which one the Studio export will use. */}
-          <p className="m-0 px-2.5 py-2 rounded-paper border border-line bg-paper text-[0.74rem] text-ink-soft leading-snug">
+          <p className="m-0 px-2.5 py-2 rounded-paper border border-line bg-paper text-xs text-ink-soft leading-snug">
             {projectGraded
               ? `A reel exported from this project uses the project’s own grade${
                   hereGraded ? `, not ${whose} shown here` : ''
@@ -316,10 +316,10 @@ export default function StudioLink({
                 >
                   <ProjectThumb doc={p} small />
                   <span className="flex-1 min-w-0">
-                    <span className="block text-[0.8rem] text-ink truncate" title={p.name}>
+                    <span className="block text-xs text-ink truncate" title={p.name}>
                       {p.name}
                     </span>
-                    <span className="block font-mono text-[0.62rem] text-faint">
+                    <span className="block font-mono text-2xs text-faint">
                       {new Date(p.updatedAt).toLocaleDateString(undefined, {
                         day: 'numeric',
                         month: 'short',
@@ -341,7 +341,7 @@ export default function StudioLink({
             {busy ?? (candidates.length ? '+ Or create one for this clip' : '+ Create a project for this clip')}
           </button>
           {projects !== null && candidates.length === 0 && (
-            <span className="text-[0.7rem] text-faint">
+            <span className="text-2xs text-faint">
               No Studio projects in this browser yet.
             </span>
           )}
@@ -349,7 +349,7 @@ export default function StudioLink({
       )}
 
       {note && (
-        <p className="m-0 px-2.5 py-2 rounded-paper border border-line bg-paper text-[0.75rem] text-ink-soft leading-snug">
+        <p className="m-0 px-2.5 py-2 rounded-paper border border-line bg-paper text-xs text-ink-soft leading-snug">
           {note}
         </p>
       )}

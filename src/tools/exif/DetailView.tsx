@@ -40,12 +40,12 @@ export default function DetailView({ photo, onBack }: DetailViewProps) {
   };
 
   const notice =
-    'my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-[#eccabf] text-[#7c2e1c] text-[0.86rem] leading-[1.55]';
+    'my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-danger-line text-danger-ink text-sm leading-[1.55]';
 
   return (
     <div>
       <button
-        className="inline-flex items-center gap-[0.4rem] mb-5 font-mono text-[0.78rem] tracking-[0.04em] text-ink-soft cursor-pointer border-0 bg-transparent p-0 no-underline hover:text-accent"
+        className="inline-flex items-center gap-[0.4rem] mb-5 font-mono text-xs tracking-[0.04em] text-ink-soft cursor-pointer border-0 bg-transparent p-0 no-underline hover:text-accent"
         onClick={onBack}
       >
         ← Back to gallery
@@ -53,7 +53,7 @@ export default function DetailView({ photo, onBack }: DetailViewProps) {
       <h2 className="font-serif text-[clamp(1.6rem,4vw,2.4rem)] tracking-[-0.01em] normal-case text-ink m-0 mb-1 break-words">
         {photo.image.name}
       </h2>
-      <p className="m-0 mb-5 font-mono text-[0.74rem] text-muted flex items-center gap-2">
+      <p className="m-0 mb-5 font-mono text-xs text-muted flex items-center gap-2">
         {typeLabel}
         <span className="text-faint">·</span>
         {formatBytes(photo.image.size)}
@@ -75,7 +75,7 @@ export default function DetailView({ photo, onBack }: DetailViewProps) {
               onError={() => setDecodeError(true)}
             />
           ) : (
-            <div className="p-8 text-center text-[#8c8576] font-mono text-[0.8rem] leading-[1.6]">
+            <div className="p-8 text-center text-muted font-mono text-xs leading-[1.6]">
               {decodeError
                 ? `${typeLabel} — this browser can't decode a preview. The metadata below is still read straight from the file.`
                 : '…'}

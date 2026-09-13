@@ -26,7 +26,7 @@ export default function PiecePicker({
           type="button"
           onClick={() => onPiece(p.id)}
           aria-pressed={piece === p.id}
-          className={`px-2 py-1.5 rounded-paper border text-[0.74rem] cursor-pointer truncate transition-colors ${
+          className={`px-2 py-1.5 rounded-paper border text-xs cursor-pointer truncate transition-colors ${
             piece === p.id
               ? 'border-accent bg-accent-wash text-accent-ink font-semibold'
               : 'border-line bg-paper text-ink-soft hover:border-line-strong'

@@ -156,7 +156,7 @@ export default function DayHeatmap({
           {WEEKDAYS.map((label, row) => (
             <span
               key={label}
-              className="font-mono text-[0.58rem] text-faint leading-none flex items-center justify-end pr-1"
+              className="font-mono text-3xs text-faint leading-none flex items-center justify-end pr-1"
               style={{ height: cellPx, width: 26 }}
             >
               {row % 2 === 0 ? label : ''}
@@ -169,7 +169,7 @@ export default function DayHeatmap({
             {months.map((m) => (
               <span
                 key={`${m.column}-${m.label}`}
-                className="absolute top-0 font-mono text-[0.6rem] tracking-[0.08em] text-muted leading-none"
+                className="absolute top-0 font-mono text-3xs tracking-[0.08em] text-muted leading-none"
                 style={{ left: m.column * columnWidth }}
               >
                 {m.label}
@@ -249,7 +249,7 @@ export default function DayHeatmap({
       {hovered && !menu && <DayCard hovered={hovered} />}
       {menu && <DayMenu menu={menu} onClose={() => setMenu(null)} />}
 
-      <div className="flex items-center gap-2 mt-3 font-mono text-[0.6rem] text-faint whitespace-nowrap">
+      <div className="flex items-center gap-2 mt-3 font-mono text-3xs text-faint whitespace-nowrap">
         <span>Nothing</span>
         {LEVELS.map((bg, i) => (
           <span
@@ -318,7 +318,7 @@ function DayMenu({ menu, onClose }: { menu: Menu; onClose: () => void }) {
         className="fixed z-50 p-1.5 rounded-paper border border-frame bg-frame text-paper shadow-[0_12px_26px_rgba(16,15,13,0.32)]"
         style={{ left: x, top: y, width: WIDTH }}
       >
-        <span className="block px-2.5 pt-1 pb-1.5 font-mono text-[0.62rem] tracking-[0.12em] uppercase text-[rgba(244,240,231,0.62)]">
+        <span className="block px-2.5 pt-1 pb-1.5 font-mono text-2xs tracking-[0.12em] uppercase text-[rgba(244,240,231,0.62)]">
           day {menu.cell.dayNumber} · {formatIsoDate(menu.cell.date)}
         </span>
         {menu.items.map((item, i) => (
@@ -331,7 +331,7 @@ function DayMenu({ menu, onClose }: { menu: Menu; onClose: () => void }) {
               onClose();
               item.run();
             }}
-            className="block w-full px-2.5 py-1.5 border-0 rounded-[8px] bg-transparent text-left text-[0.78rem] text-paper cursor-pointer hover:bg-[rgba(244,240,231,0.12)] focus:outline-none focus-visible:bg-[rgba(244,240,231,0.12)]"
+            className="block w-full px-2.5 py-1.5 border-0 rounded-[8px] bg-transparent text-left text-xs text-paper cursor-pointer hover:bg-[rgba(244,240,231,0.12)] focus:outline-none focus-visible:bg-[rgba(244,240,231,0.12)]"
           >
             {item.label}
           </button>
@@ -367,10 +367,10 @@ function DayCard({ hovered }: { hovered: Hovered }) {
       style={{ left: x, top: hovered.y - 8 }}
     >
       <div className="px-3 py-2 rounded-paper border border-frame bg-frame text-paper shadow-[0_6px_18px_rgba(16,15,13,0.28)] min-w-[9rem]">
-        <span className="block font-mono text-[0.62rem] tracking-[0.12em] uppercase text-[rgba(244,240,231,0.62)]">
+        <span className="block font-mono text-2xs tracking-[0.12em] uppercase text-[rgba(244,240,231,0.62)]">
           day {cell.dayNumber}
         </span>
-        <span className="block text-[0.82rem] leading-tight">
+        <span className="block text-sm leading-tight">
           {formatIsoDate(cell.date)}
         </span>
         {/* The leg, under the date and above what was told: the day's place
@@ -378,7 +378,7 @@ function DayCard({ hovered }: { hovered: Hovered }) {
             repeated as a dot so the card and the cell's stripe read as the
             same leg. */}
         {stage && (
-          <span className="flex items-center gap-1.5 mt-0.5 text-[0.72rem] leading-tight text-[rgba(244,240,231,0.82)]">
+          <span className="flex items-center gap-1.5 mt-0.5 text-xs leading-tight text-[rgba(244,240,231,0.82)]">
             <span
               className="flex-none w-1.5 h-1.5 rounded-full"
               style={{ background: stage.tint }}
@@ -388,11 +388,11 @@ function DayCard({ hovered }: { hovered: Hovered }) {
           </span>
         )}
         {cell.posts.length === 0 ? (
-          <span className="block mt-1 font-mono text-[0.66rem] text-[rgba(244,240,231,0.62)]">
+          <span className="block mt-1 font-mono text-2xs text-[rgba(244,240,231,0.62)]">
             nothing told yet
           </span>
         ) : (
-          <span className="block mt-1 font-mono text-[0.66rem] text-[rgba(244,240,231,0.82)]">
+          <span className="block mt-1 font-mono text-2xs text-[rgba(244,240,231,0.82)]">
             {kinds.map((k) => `${k.count} ${k.label.toLowerCase()}`).join(' · ')}
             <span className="block text-[rgba(244,240,231,0.62)]">
               {cell.published ? `${cell.published} published` : 'draft only'}

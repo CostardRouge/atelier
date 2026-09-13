@@ -153,11 +153,11 @@ export default function DayPicker({
           aria-haspopup="dialog"
           aria-expanded={open}
           title={`Pick a day from what ${connectionId} holds`}
-          className="flex-1 min-w-0 flex items-center justify-center gap-1 border-0 border-x border-line bg-transparent px-1 font-mono text-[0.78rem] tabular-nums text-ink cursor-pointer whitespace-nowrap hover:bg-paper-2"
+          className="flex-1 min-w-0 flex items-center justify-center gap-1 border-0 border-x border-line bg-transparent px-1 font-mono text-xs tabular-nums text-ink cursor-pointer whitespace-nowrap hover:bg-paper-2"
         >
           <span className="text-muted">{WEEKDAYS[weekdayIndex(day) ?? 0]}</span>
           <span className="truncate">{formatIsoDate(day)}</span>
-          <span className="text-[0.55rem] text-faint" aria-hidden="true">
+          <span className="text-3xs text-faint" aria-hidden="true">
             ▾
           </span>
         </button>
@@ -189,7 +189,7 @@ export default function DayPicker({
         />
       )}
 
-      <p className="m-0 flex items-center gap-1.5 text-[0.7rem] text-muted">
+      <p className="m-0 flex items-center gap-1.5 text-2xs text-muted">
         <span
           aria-hidden="true"
           // The dot pulses while the answer is out: a still grey dot beside
@@ -328,7 +328,7 @@ function MonthPanel({ day, today, client, connectionId, onPick }: MonthPanelProp
           ‹
         </button>
         <span
-          className="flex-1 min-w-0 truncate text-center font-mono text-[0.68rem] text-ink"
+          className="flex-1 min-w-0 truncate text-center font-mono text-2xs text-ink"
           title={
             bounds ? `${connectionId} holds media from ${bounds.min} to ${bounds.max}` : undefined
           }
@@ -364,7 +364,7 @@ function MonthPanel({ day, today, client, connectionId, onPick }: MonthPanelProp
 
       {view === 'strip' ? <StripBody {...bodyProps} /> : <CalendarBody {...bodyProps} />}
 
-      <p className="m-0 truncate text-center font-mono text-[0.58rem] text-muted">{read}</p>
+      <p className="m-0 truncate text-center font-mono text-3xs text-muted">{read}</p>
     </div>
   );
 }
@@ -474,7 +474,7 @@ function StripBody({ bars, day, today, roving, busy, onPick, onHover }: MonthBod
                 picked && !busy
                   ? 'bg-ink border-ink'
                   : bar.count && !busy
-                    ? 'bg-accent-wash border-[#eccabf] group-hover:border-accent'
+                    ? 'bg-accent-wash border-danger-line group-hover:border-accent'
                     : 'bg-paper-2 border-line group-hover:border-line-strong'
               }`}
               style={{ height: `${height}px` }}
@@ -515,7 +515,7 @@ function CalendarBody({
       className={`grid grid-cols-7 gap-[3px] ${busy ? busyClass : ''}`}
     >
       {WEEKDAYS.map((name, i) => (
-        <span key={i} className="text-center font-mono text-[0.5rem] text-faint">
+        <span key={i} className="text-center font-mono text-3xs text-faint">
           {name[0]}
         </span>
       ))}
@@ -537,17 +537,17 @@ function CalendarBody({
             aria-pressed={picked}
             aria-label={dayLabel(bar)}
             title={`${bar.date}${bar.count ? ` · ${bar.count} files` : ''}`}
-            className={`h-[30px] flex flex-col items-center justify-center gap-[1px] rounded-md border font-mono text-[0.62rem] tabular-nums cursor-pointer transition-colors disabled:cursor-default disabled:opacity-40 ${
+            className={`h-[30px] flex flex-col items-center justify-center gap-[1px] rounded-md border font-mono text-2xs tabular-nums cursor-pointer transition-colors disabled:cursor-default disabled:opacity-40 ${
               picked
                 ? 'bg-ink border-ink text-paper'
                 : bar.count && !busy
-                  ? 'bg-accent-wash border-[#eccabf] text-ink hover:border-accent'
+                  ? 'bg-accent-wash border-danger-line text-ink hover:border-accent'
                   : 'bg-paper border-line text-faint hover:border-line-strong'
             } ${bar.date === today && !picked ? 'shadow-[inset_0_0_0_1px_var(--color-line-strong)]' : ''}`}
           >
             {Number(bar.date.slice(-2))}
             {bar.count > 0 && !busy && (
-              <span className="text-[0.44rem] leading-none opacity-70">{bar.count}</span>
+              <span className="text-3xs leading-none opacity-70">{bar.count}</span>
             )}
           </button>
         );

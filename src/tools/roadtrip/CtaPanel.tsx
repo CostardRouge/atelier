@@ -19,9 +19,9 @@ interface CtaPanelProps {
   fieldRefs?: CtaFieldRefs;
 }
 
-const legend = 'font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted';
+const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 const inputClass =
-  'font-sans text-[0.82rem] px-2.5 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent';
+  'font-sans text-sm px-2.5 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent';
 
 /**
  * The closing slide, edited once for the whole trip. Everything here is
@@ -65,13 +65,13 @@ export default function CtaPanel({ cta, onChange, problem, fieldRefs }: CtaPanel
           className={inputClass}
         />
         <span
-          className={`text-[0.68rem] ${urlLength > QR_MAX_BYTES ? 'text-[#9a3a23]' : 'text-faint'}`}
+          className={`text-2xs ${urlLength > QR_MAX_BYTES ? 'text-danger' : 'text-faint'}`}
         >
           {urlLength}/{QR_MAX_BYTES} characters a QR code can hold
         </span>
       </label>
 
-      <label className="flex items-center gap-2 text-[0.8rem] text-ink-soft cursor-pointer">
+      <label className="flex items-center gap-2 text-xs text-ink-soft cursor-pointer">
         <input
           type="checkbox"
           checked={cta.showQr}
@@ -82,13 +82,13 @@ export default function CtaPanel({ cta, onChange, problem, fieldRefs }: CtaPanel
       </label>
 
       {problem && (
-        <p className="m-0 text-[0.76rem] text-[#9a3a23]" role="alert">
+        <p className="m-0 text-xs text-danger" role="alert">
           {problem}
         </p>
       )}
 
       <div className="flex items-center gap-4">
-        <label className="flex items-center gap-2 text-[0.78rem] text-ink-soft">
+        <label className="flex items-center gap-2 text-xs text-ink-soft">
           Ground
           <input
             type="color"
@@ -98,7 +98,7 @@ export default function CtaPanel({ cta, onChange, problem, fieldRefs }: CtaPanel
             aria-label="Card background"
           />
         </label>
-        <label className="flex items-center gap-2 text-[0.78rem] text-ink-soft">
+        <label className="flex items-center gap-2 text-xs text-ink-soft">
           Ink
           <input
             type="color"
@@ -109,7 +109,7 @@ export default function CtaPanel({ cta, onChange, problem, fieldRefs }: CtaPanel
           />
         </label>
       </div>
-      <p className="m-0 text-[0.68rem] text-faint">
+      <p className="m-0 text-2xs text-faint">
         The QR is drawn in the ink on the ground — a code the same colour as its
         surround scans as nothing at all.
       </p>

@@ -31,8 +31,8 @@ export function Field({
       <dt
         className={
           highlight
-            ? 'text-[1.15rem] font-semibold text-accent-ink'
-            : 'text-muted text-[0.85rem]'
+            ? 'text-lg font-semibold text-accent-ink'
+            : 'text-muted text-sm'
         }
       >
         {label}
@@ -40,7 +40,7 @@ export function Field({
       <dd
         className={`m-0 font-mono tabular-nums text-right ${
           highlight
-            ? 'text-[1.15rem] font-semibold text-accent-ink'
+            ? 'text-lg font-semibold text-accent-ink'
             : empty
               ? 'text-faint'
               : 'text-ink'
@@ -61,7 +61,7 @@ export function TelemetryPanels({ cue }: { cue: Cue | null }) {
   return (
     <div className="grid grid-cols-1 min-[680px]:grid-cols-2 gap-5 mt-6">
       <section className="bg-surface border border-line rounded-paper p-[1.25rem_1.35rem] shadow-paper-soft">
-        <h2 className="flex items-center gap-2 m-0 mb-4 font-mono text-[0.74rem] font-medium uppercase tracking-[0.18em] text-muted before:content-[''] before:w-[14px] before:h-px before:bg-accent">
+        <h2 className="flex items-center gap-2 m-0 mb-4 font-mono text-xs font-medium uppercase tracking-[0.18em] text-muted before:content-[''] before:w-[14px] before:h-px before:bg-accent">
           Flight
         </h2>
         <dl className="m-0 grid grid-cols-[auto_1fr] gap-[0.55rem_1rem]">
@@ -81,7 +81,7 @@ export function TelemetryPanels({ cue }: { cue: Cue | null }) {
       </section>
 
       <section className="bg-surface border border-line rounded-paper p-[1.25rem_1.35rem] shadow-paper-soft">
-        <h2 className="flex items-center gap-2 m-0 mb-4 font-mono text-[0.74rem] font-medium uppercase tracking-[0.18em] text-muted before:content-[''] before:w-[14px] before:h-px before:bg-accent">
+        <h2 className="flex items-center gap-2 m-0 mb-4 font-mono text-xs font-medium uppercase tracking-[0.18em] text-muted before:content-[''] before:w-[14px] before:h-px before:bg-accent">
           Camera
         </h2>
         <dl className="m-0 grid grid-cols-[auto_1fr] gap-[0.55rem_1rem]">
@@ -121,28 +121,28 @@ export function LiveTelemetry({ cue }: { cue: Cue | null }) {
 
   return (
     <dl className="m-0 grid grid-cols-[auto_1fr] items-baseline gap-[0.4rem_0.9rem] px-[0.95rem] py-[0.85rem] border border-line rounded-paper bg-paper">
-      <dt className="font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted">
+      <dt className="font-mono text-2xs tracking-[0.14em] uppercase text-muted">
         Altitude
       </dt>
-      <dd className="m-0 text-right font-serif text-[1.7rem] leading-none text-accent-ink">
+      <dd className="m-0 text-right font-serif text-3xl leading-none text-accent-ink">
         {fmt(d.rel_alt, ' m')}
       </dd>
-      <dt className="font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted">
+      <dt className="font-mono text-2xs tracking-[0.14em] uppercase text-muted">
         Speed
       </dt>
-      <dd className="m-0 text-right font-mono tabular-nums text-[0.82rem] text-ink">
+      <dd className="m-0 text-right font-mono tabular-nums text-sm text-ink">
         {motion || '—'}
       </dd>
-      <dt className="font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted">
+      <dt className="font-mono text-2xs tracking-[0.14em] uppercase text-muted">
         GPS
       </dt>
-      <dd className="m-0 text-right font-mono tabular-nums text-[0.82rem] text-ink">
+      <dd className="m-0 text-right font-mono tabular-nums text-sm text-ink">
         {gps}
       </dd>
-      <dt className="font-mono text-[0.62rem] tracking-[0.14em] uppercase text-muted">
+      <dt className="font-mono text-2xs tracking-[0.14em] uppercase text-muted">
         Exposure
       </dt>
-      <dd className="m-0 text-right font-mono tabular-nums text-[0.82rem] text-ink">
+      <dd className="m-0 text-right font-mono tabular-nums text-sm text-ink">
         {exposure || '—'}
       </dd>
     </dl>

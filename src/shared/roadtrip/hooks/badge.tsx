@@ -24,7 +24,7 @@ function BadgeSketch() {
   return (
     <span className="flex flex-col items-start gap-[2px] leading-none" aria-hidden="true">
       <span className="block h-[2px] w-3 rounded-full bg-white/55" />
-      <span className="block font-sans text-[0.95rem] font-bold text-white">27</span>
+      <span className="block font-sans text-base font-bold text-white">27</span>
       <span className="block h-[2px] w-5 rounded-full bg-white/40" />
     </span>
   );

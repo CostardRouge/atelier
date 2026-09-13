@@ -208,7 +208,7 @@ export default function App() {
         </span>
         <div className={`flex items-center ${compact && tool ? 'gap-1.5' : 'gap-[0.9rem]'}`}>
           {tool?.subtitle && !compact && (
-            <span className="font-mono text-[0.7rem] tracking-[0.18em] uppercase text-muted max-[480px]:hidden">
+            <span className="font-mono text-2xs tracking-[0.18em] uppercase text-muted max-[480px]:hidden">
               {tool.subtitle}
             </span>
           )}
@@ -315,7 +315,7 @@ export default function App() {
       {/* Tools run in a fixed-height frame, so the global footer would push it
           past the viewport — show it only on the Home landing. */}
       {!tool && (
-        <footer className="mt-14 pt-5 border-t border-line text-[0.8rem] text-muted flex flex-wrap items-center gap-[0.5rem_0.7rem]">
+        <footer className="mt-14 pt-5 border-t border-line text-xs text-muted flex flex-wrap items-center gap-[0.5rem_0.7rem]">
           <span className="w-[5px] h-[5px] rounded-full bg-accent inline-block" />
           Runs entirely in your browser — files are never uploaded.
           <span className="w-[5px] h-[5px] rounded-full bg-accent inline-block" />

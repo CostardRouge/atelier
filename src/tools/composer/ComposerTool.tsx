@@ -371,14 +371,14 @@ export default function ComposerTool() {
   const isPip = layout === 'pip-map' || layout === 'pip-video';
 
   const chip =
-    'inline-flex items-center h-[1.9rem] px-[0.7rem] rounded-full border text-[0.74rem] font-semibold transition-colors aria-pressed:border-accent aria-pressed:text-accent-ink aria-pressed:bg-accent-wash border-line-strong bg-paper text-ink-soft hover:border-faint hover:text-ink';
+    'inline-flex items-center h-[1.9rem] px-[0.7rem] rounded-full border text-xs font-semibold transition-colors aria-pressed:border-accent aria-pressed:text-accent-ink aria-pressed:bg-accent-wash border-line-strong bg-paper text-ink-soft hover:border-faint hover:text-ink';
 
   return (
     <section className="flex flex-col flex-1 min-h-0 gap-[0.6rem] overflow-y-auto" aria-label="Composer">
       {/* Clip + output settings. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-2 py-2 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
         {clips.length === 0 ? (
-          <span className="text-[0.82rem] text-muted px-1">
+          <span className="text-sm text-muted px-1">
             Select a DJI clip (video + <code className="font-mono">.srt</code>) in
             the Library to compose.
           </span>
@@ -395,7 +395,7 @@ export default function ComposerTool() {
                 >
                   ‹
                 </button>
-                <span className="font-mono text-[0.7rem] text-muted tabular-nums">
+                <span className="font-mono text-2xs text-muted tabular-nums">
                   {activeIndex + 1}/{clips.length}
                 </span>
                 <button
@@ -409,10 +409,10 @@ export default function ComposerTool() {
                 </button>
               </div>
             )}
-            <span className="font-semibold text-[0.88rem] truncate max-w-[14rem]" title={active?.baseName}>
+            <span className="font-semibold text-sm truncate max-w-[14rem]" title={active?.baseName}>
               {active?.baseName}
             </span>
-            <span className="font-mono text-[0.66rem] text-muted">
+            <span className="font-mono text-2xs text-muted">
               {out.w}×{out.h}
             </span>
           </>
@@ -422,9 +422,9 @@ export default function ComposerTool() {
       {active && (
         <>
           {/* Controls. */}
-          <div className="flex flex-col gap-2 px-2 py-2 border border-line rounded-paper-lg bg-surface shadow-paper-soft text-[0.74rem]">
+          <div className="flex flex-col gap-2 px-2 py-2 border border-line rounded-paper-lg bg-surface shadow-paper-soft text-xs">
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted w-14">Aspect</span>
+              <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted w-14">Aspect</span>
               {ASPECTS.map((a) => (
                 <button key={a.id} type="button" className={chip} aria-pressed={aspectId === a.id} onClick={() => setAspectId(a.id)}>
                   {a.id}
@@ -439,7 +439,7 @@ export default function ComposerTool() {
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted w-14">Layout</span>
+              <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted w-14">Layout</span>
               {LAYOUTS.map((l) => (
                 <button key={l.id} type="button" className={chip} aria-pressed={layout === l.id} onClick={() => setLayout(l.id)}>
                   {l.label}
@@ -450,13 +450,13 @@ export default function ComposerTool() {
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
               {!isPip ? (
                 <label className="flex items-center gap-2">
-                  <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted">Split</span>
+                  <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">Split</span>
                   <input type="range" min={0.2} max={0.8} step={0.01} value={split} onChange={(e) => setSplit(Number(e.target.value))} className="accent-accent w-32" />
                 </label>
               ) : (
                 <>
                   <label className="flex items-center gap-2">
-                    <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted">Inset</span>
+                    <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">Inset</span>
                     <input type="range" min={0.15} max={0.5} step={0.01} value={inset} onChange={(e) => setInset(Number(e.target.value))} className="accent-accent w-28" />
                   </label>
                   <div className="flex items-center gap-1">
@@ -469,7 +469,7 @@ export default function ComposerTool() {
                 </>
               )}
               <div className="flex items-center gap-1">
-                <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted">Video</span>
+                <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">Video</span>
                 {(['cover', 'contain'] as const).map((m) => (
                   <button key={m} type="button" className={chip} aria-pressed={videoFit === m} onClick={() => setVideoFit(m)}>
                     {m}
@@ -477,7 +477,7 @@ export default function ComposerTool() {
                 ))}
               </div>
               <label className="flex items-center gap-2">
-                <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted">Map zoom</span>
+                <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">Map zoom</span>
                 <input type="range" min={-4} max={4} step={0.5} value={zoomOffset} onChange={(e) => setZoomOffset(Number(e.target.value))} className="accent-accent w-28" />
               </label>
               <button type="button" className={chip} aria-pressed={tilesOn} onClick={() => setTilesOn((t) => !t)} title="Load OpenStreetMap tiles — the one feature that makes a network request">
@@ -503,7 +503,7 @@ export default function ComposerTool() {
             {/* Overlay (telemetry readout) options. */}
             <div className="flex flex-col gap-2 border-t border-line pt-2">
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted w-14">Overlay</span>
+                <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted w-14">Overlay</span>
                 <button type="button" className={chip} aria-pressed={overlay.show} onClick={() => setOverlay((o) => ({ ...o, show: !o.show }))}>
                   {overlay.show ? 'shown' : 'hidden'}
                 </button>
@@ -526,24 +526,24 @@ export default function ComposerTool() {
 
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <label className="flex items-center gap-1.5">
-                  <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted">Text</span>
+                  <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">Text</span>
                   <input type="color" value={overlay.textColor} onChange={(e) => setOverlay((o) => ({ ...o, textColor: e.target.value }))} className="w-7 h-7 rounded border border-line-strong bg-paper cursor-pointer" aria-label="Text colour" />
                 </label>
                 <label className="flex items-center gap-1.5">
-                  <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted">Bg</span>
+                  <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">Bg</span>
                   <input type="color" value={overlay.bgColor} onChange={(e) => setOverlay((o) => ({ ...o, bgColor: e.target.value }))} className="w-7 h-7 rounded border border-line-strong bg-paper cursor-pointer" aria-label="Background colour" />
                   <input type="range" min={0} max={1} step={0.05} value={overlay.bgOpacity} onChange={(e) => setOverlay((o) => ({ ...o, bgOpacity: Number(e.target.value) }))} className="accent-accent w-20" aria-label="Background opacity" />
                 </label>
                 <label className="flex items-center gap-1.5">
-                  <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted">Radius</span>
+                  <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">Radius</span>
                   <input type="range" min={0} max={32} step={1} value={overlay.radius} onChange={(e) => setOverlay((o) => ({ ...o, radius: Number(e.target.value) }))} className="accent-accent w-20" />
                 </label>
                 <label className="flex items-center gap-1.5">
-                  <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted">Size</span>
+                  <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">Size</span>
                   <input type="range" min={0.6} max={2.2} step={0.1} value={overlay.fontScale} onChange={(e) => setOverlay((o) => ({ ...o, fontScale: Number(e.target.value) }))} className="accent-accent w-20" />
                 </label>
                 <div className="flex items-center gap-1">
-                  <span className="font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted">Font</span>
+                  <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">Font</span>
                   {(['mono', 'sans', 'serif'] as OverlayFont[]).map((fnt) => (
                     <button key={fnt} type="button" className={chip} aria-pressed={overlay.font === fnt} onClick={() => setOverlay((o) => ({ ...o, font: fnt }))}>
                       {fnt}
@@ -570,7 +570,7 @@ export default function ComposerTool() {
           </div>
 
           {map.error && (
-            <p className="flex-none m-0 px-4 py-2 rounded-paper bg-accent-wash border border-[#eccabf] text-[#7c2e1c] text-[0.82rem]">
+            <p className="flex-none m-0 px-4 py-2 rounded-paper bg-accent-wash border border-danger-line text-danger-ink text-sm">
               The map library couldn't load — the composition will show the video
               and telemetry only.
             </p>
@@ -580,7 +580,7 @@ export default function ComposerTool() {
           <div className="flex-none flex items-center gap-[0.85rem] px-[0.85rem] py-[0.6rem] border border-line rounded-paper bg-surface">
             <button
               type="button"
-              className="flex-none w-[2.2rem] h-[2.2rem] border-0 rounded-full bg-ink text-paper text-[0.8rem] leading-none inline-flex items-center justify-center hover:bg-accent transition-colors"
+              className="flex-none w-[2.2rem] h-[2.2rem] border-0 rounded-full bg-ink text-paper text-xs leading-none inline-flex items-center justify-center hover:bg-accent transition-colors"
               onClick={togglePlay}
               aria-label={playing ? 'Pause' : 'Play'}
               title="Play / pause (Space)"
@@ -601,12 +601,12 @@ export default function ComposerTool() {
               }}
               aria-label="Seek"
             />
-            <span className="font-mono text-[0.74rem] tabular-nums text-muted flex-none">
+            <span className="font-mono text-xs tabular-nums text-muted flex-none">
               {formatDuration(duration)}
             </span>
             {exporting ? (
               <>
-                <span className="font-mono text-[0.72rem] text-ink-soft flex-none tabular-nums min-w-[7ch] text-right">
+                <span className="font-mono text-xs text-ink-soft flex-none tabular-nums min-w-[7ch] text-right">
                   {exportRatio != null ? `${Math.round(exportRatio * 100)}%` : 'Rendering…'}
                 </span>
                 <button
@@ -621,7 +621,7 @@ export default function ComposerTool() {
               <button
                 type="button"
                 disabled={!exportSupported}
-                className="flex-none px-[1.1rem] py-2 rounded-full border border-ink bg-ink text-paper text-[0.82rem] font-semibold cursor-pointer transition-colors hover:bg-accent hover:border-accent disabled:opacity-50 disabled:cursor-default"
+                className="flex-none px-[1.1rem] py-2 rounded-full border border-ink bg-ink text-paper text-sm font-semibold cursor-pointer transition-colors hover:bg-accent hover:border-accent disabled:opacity-50 disabled:cursor-default"
                 onClick={handleExport}
                 title={
                   exportSupported
@@ -635,12 +635,12 @@ export default function ComposerTool() {
           </div>
 
           {exportError && (
-            <p className="flex-none m-0 px-4 py-2 rounded-paper bg-accent-wash border border-[#eccabf] text-[#7c2e1c] text-[0.82rem]">
+            <p className="flex-none m-0 px-4 py-2 rounded-paper bg-accent-wash border border-danger-line text-danger-ink text-sm">
               {exportError}
             </p>
           )}
           {!exportSupported && !exportError && (
-            <p className="flex-none m-0 text-[0.76rem] text-muted px-1">
+            <p className="flex-none m-0 text-xs text-muted px-1">
               MP4 export needs WebCodecs (Chrome/Edge); the live preview works
               everywhere.
             </p>

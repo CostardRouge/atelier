@@ -62,14 +62,14 @@ export default function ModeChoice<Id extends string>({
               className={optionClass(o.id === value)}
             >
               <span
-                className={`block text-[0.78rem] ${
+                className={`block text-xs ${
                   o.id === value ? 'text-accent-ink font-semibold' : 'text-ink-soft'
                 }`}
               >
                 {o.label}
               </span>
               <span
-                className={`block font-mono text-[0.7rem] ${
+                className={`block font-mono text-2xs ${
                   o.text ? 'text-ink' : 'text-faint'
                 }`}
               >
@@ -86,18 +86,18 @@ export default function ModeChoice<Id extends string>({
           className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-paper border border-accent bg-accent-wash text-left cursor-pointer"
         >
           <span className="flex-1 min-w-0">
-            <span className="block text-[0.72rem] text-accent-ink">
+            <span className="block text-xs text-accent-ink">
               {chosen?.label ?? '—'}
             </span>
             <span
-              className={`block font-mono text-[0.76rem] truncate ${
+              className={`block font-mono text-xs truncate ${
                 chosen?.text ? 'text-ink' : 'text-muted'
               }`}
             >
               {chosen ? (chosen.text ?? chosen.otherwise) : '—'}
             </span>
           </span>
-          <span className="flex-none text-[0.72rem] font-semibold text-accent-ink">
+          <span className="flex-none text-xs font-semibold text-accent-ink">
             Change
           </span>
         </button>
