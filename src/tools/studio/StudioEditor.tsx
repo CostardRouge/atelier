@@ -98,6 +98,11 @@ import { DEFAULT_GUIDES, type GuidesState } from '../../shared/overlay/guides';
 import { useOverlayStage } from '../../shared/overlay/use-overlay-stage';
 import { useLutStack } from '../../shared/lut/use-lut-stack';
 import GradePanel from '../../shared/lut/GradePanel';
+import DevelopSheet from '../../shared/develop/DevelopSheet';
+import SectionLegend from '../../shared/ui/SectionLegend';
+import { describeDevelop, type DevelopSettings } from '../../shared/develop/develop';
+import { pictureFidelity } from '../../shared/develop/picture-fidelity';
+import { restoreDevelop, saveDevelop, type SavedDevelop } from '../../shared/projects/media-develop';
 import type { StyleTheme } from '../../shared/overlay/title-styles';
 import StylePanel from '../../shared/overlay/StylePanel';
 import ProjectSettingsModal, { type ProjectSettingsDraft } from './ProjectSettingsModal';
@@ -119,7 +124,7 @@ import {
 } from '../../shared/telemetry/time-scale';
 import { retimeCues } from '../../shared/telemetry/motion';
 import type { ProjectDoc } from '../../shared/projects/project-types';
-import { hashedMediaRefs } from '../../shared/projects/media-identity';
+import { hashedMediaRefs, mediaHash } from '../../shared/projects/media-identity';
 import { putProject } from '../../shared/projects/project-store';
 import type { Reconciliation } from '../../shared/projects/reconcile';
 import PageBar, { barPill } from '../../shared/ui/PageBar';
@@ -266,6 +271,91 @@ export default function StudioEditor({
     () => project.media.trims ?? {},
   );
   const [range, setRange] = useState<TrimRange>(() => fullRange(0));
+
+  // --- develop --------------------------------------------------------------
+  // Each media's own correction, keyed by base name like the trims and
+  // guarded by the media's hash the way a trim is by its duration: a develop
+  // set on one file is not restored onto a same-named other. The hash is
+  // read once per media (128 KiB at most, memoised in `media-identity.ts`).
+  const [develops, setDevelops] = useState<Record<string, SavedDevelop>>(
+    () => project.media.develops ?? {},
+  );
+  const activeFile = activeImage ?? activeVideo;
+  const [activeHash, setActiveHash] = useState<string | null>(null);
+  useEffect(() => {
+    setActiveHash(null);
+    if (!activeFile) return;
+    let cancelled = false;
+    void mediaHash(activeFile).then((hash) => {
+      if (!cancelled) setActiveHash(hash);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeFile]);
+  const activeDevelop = activeId ? restoreDevelop(develops[activeId], activeHash) : null;
+  /** Write the open media's correction; null puts it back to as shot. */
+  function setActiveDevelop(next: DevelopSettings | null) {
+    if (!activeId) return;
+    setDevelops((prev) => {
+      const saved = saveDevelop(next, activeHash);
+      if (!saved) {
+        if (!prev[activeId]) return prev;
+        const rest = { ...prev };
+        delete rest[activeId];
+        return rest;
+      }
+      return { ...prev, [activeId]: saved };
+    });
+  }
+  // The sheet, and the clip's moment it opened on (a photograph has one).
+  const [developOpen, setDevelopOpen] = useState(false);
+  const [developAt, setDevelopAt] = useState(0);
+  // The sheet's one batch verb here: the same numbers onto every OTHER media
+  // of the project, each under its own hash — a copy per entry, never a
+  // reference, and the open media is left to Done. The hashes are read as
+  // the writes land (memoised per file), so a slow folder writes one by one.
+  const otherMedia = useMemo(
+    () =>
+      clips
+        .filter((a) => a.id !== activeId)
+        .map((a) => ({ id: a.id, file: a.kind === 'photo' ? a.parts.image : a.parts.video }))
+        .filter((m): m is { id: string; file: File } => !!m.file),
+    [clips, activeId],
+  );
+  const developApplyTo = useMemo(
+    () =>
+      otherMedia.length === 0
+        ? []
+        : [
+            {
+              id: 'project',
+              label: `Apply to ${otherMedia.length} other media`,
+              hint: 'every other photo and clip of this project',
+              run: (settings: DevelopSettings) => {
+                for (const m of otherMedia) {
+                  void mediaHash(m.file).then((hash) => {
+                    setDevelops((prev) => {
+                      const saved = saveDevelop(settings, hash);
+                      if (!saved) {
+                        if (!prev[m.id]) return prev;
+                        const rest = { ...prev };
+                        delete rest[m.id];
+                        return rest;
+                      }
+                      return { ...prev, [m.id]: saved };
+                    });
+                  });
+                }
+              },
+            },
+          ],
+    [otherMedia],
+  );
+  // The cube every renderer here takes: the stack baked with THIS media's
+  // stored develop. While the sheet is open its draft rides `lutStack.composed`,
+  // which only the sheet paints from — the stage keeps the stored value.
+  const lut = lutStack.composeWith(activeDevelop);
   // The trim bar's gestures are spelled out under it until one has been used.
   const trim = useLearnedGesture('studio.trim');
   const [loop, setLoop] = useState(false);
@@ -797,7 +887,7 @@ export default function StudioEditor({
     elements: stageElements,
     selectedId: selectedElementId,
     guides,
-    lut: lutStack.composed,
+    lut,
     intensity: 1,
     interpolation: lutStack.interpolation,
     theme,
@@ -888,6 +978,7 @@ export default function StudioEditor({
             files: mediaFiles.length ? mediaFiles : docRef.current.media.files,
             activeId,
             trims,
+            develops,
           },
           thumbnail: await bakeThumbnail(),
           durationSeconds: durationRef.current || docRef.current.durationSeconds,
@@ -916,6 +1007,7 @@ export default function StudioEditor({
     variants,
     activeId,
     trims,
+    develops,
     lutStack.layers,
     lutStack.output,
     clips,
@@ -982,7 +1074,7 @@ export default function StudioEditor({
     const blob = await exportPhotoVariant(bitmap, variant, {
       elements: stageElements,
       cue: cues[0] ?? null,
-      lut: lutStack.composed,
+      lut,
       intensity: 1,
       theme,
       timeShift,
@@ -1004,7 +1096,7 @@ export default function StudioEditor({
     const opts = {
       elements,
       cues,
-      lut: lutStack.composed,
+      lut,
       intensity: 1,
       theme,
       timeShift,
@@ -1028,7 +1120,7 @@ export default function StudioEditor({
           source,
           cues,
           variant.overlays ? elements : [],
-          lutStack.composed,
+          lut,
           1,
           theme,
           timeShift,
@@ -1211,7 +1303,7 @@ export default function StudioEditor({
       const blob = await grabFrame(video, {
         elements,
         cues,
-        lut: lutStack.composed,
+        lut,
         intensity: 1,
         theme,
         timeShift,
@@ -1397,6 +1489,25 @@ export default function StudioEditor({
           className="grow shrink basis-[9rem] min-w-0 max-w-[24rem] h-[1.9rem] font-serif text-[1.15rem] bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0"
         />
       </PageBar>
+
+      {developOpen && active && activeFile && (
+        <DevelopSheet
+          file={activeFile}
+          videoTimeSeconds={developAt}
+          title={activeFile.name}
+          fidelity={pictureFidelity(activeFile).chip}
+          note={pictureFidelity(activeFile).note}
+          stack={lutStack}
+          value={activeDevelop}
+          onDone={(next) => {
+            setActiveDevelop(next);
+            setDevelopOpen(false);
+          }}
+          onCancel={() => setDevelopOpen(false)}
+          footerHint={`writes to ${active.baseName}`}
+          applyTo={developApplyTo}
+        />
+      )}
 
       {showSettings && (
         <ProjectSettingsModal
@@ -1985,7 +2096,58 @@ export default function StudioEditor({
                 <StylePanel theme={theme} onChange={setTheme} />
               )}
 
-              {tab === 'grade' && <GradePanel stack={lutStack} />}
+              {tab === 'grade' && (
+                <>
+                  {/* The media's own CORRECTION, one settled row at the TOP:
+                      correction before look, on screen as in the cube. The
+                      sliders live in the sheet, not here — no sixth tab, and
+                      no nine more controls in a 340px column. */}
+                  <div className="flex flex-col gap-2 pb-3 border-b border-line">
+                    <SectionLegend label="Develop">
+                      <p>
+                        This media’s own correction — exposure, tone, colour —
+                        applied before every look below. It belongs to this
+                        picture or clip and is kept with the project’s media,
+                        never in a project file.
+                      </p>
+                    </SectionLegend>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className={`flex-1 min-w-0 truncate font-mono text-[0.68rem] ${
+                          activeDevelop ? 'text-ink-soft' : 'text-faint'
+                        }`}
+                        title={describeDevelop(activeDevelop)}
+                      >
+                        {describeDevelop(activeDevelop)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDevelopAt(videoRef.current?.currentTime ?? 0);
+                          setDevelopOpen(true);
+                        }}
+                        disabled={!activeFile}
+                        title="Open the Develop sheet"
+                        className="px-2.5 py-1.5 rounded-paper border border-accent bg-paper text-[0.74rem] font-semibold text-accent-ink cursor-pointer hover:bg-accent-wash disabled:opacity-50 disabled:cursor-default"
+                      >
+                        Develop…
+                      </button>
+                      {activeDevelop && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveDevelop(null)}
+                          title="Back to as shot"
+                          aria-label="Back to as shot"
+                          className="w-6 h-6 grid place-items-center rounded-full border border-line bg-transparent text-[0.8rem] text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
+                        >
+                          ↺
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <GradePanel stack={lutStack} />
+                </>
+              )}
 
               {tab === 'info' && (
                 <InfoPanel

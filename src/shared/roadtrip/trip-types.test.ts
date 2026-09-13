@@ -19,6 +19,7 @@ import {
   type TripStage,
 } from './trip-types';
 import { createShade } from './shades';
+import { DEFAULT_DEVELOP } from '../develop/develop';
 import { DEFAULT_CTA } from './cta-slide';
 import { DEFAULT_BADGE_WORDS } from './day-badge';
 
@@ -756,6 +757,59 @@ describe('framing (v12)', () => {
       y: 0,
       rotation: 0,
     });
+  });
+});
+
+describe('migrateTripDoc — v16 → v17 (a picture’s own develop)', () => {
+  /** A v16 document: a badge and a slide, but no develop and no presets. */
+  const v16 = (badgeDevelop?: unknown, slideDevelop?: unknown) => {
+    const badge = { ...defaultPostBadge('carousel') } as Record<string, unknown>;
+    delete badge.develop;
+    if (badgeDevelop !== undefined) badge.develop = badgeDevelop;
+    const slide = { ...createPostSlide(), id: 's1' } as Record<string, unknown>;
+    delete slide.develop;
+    if (slideDevelop !== undefined) slide.develop = slideDevelop;
+    return {
+      ...createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04'),
+      version: 16,
+      posts: [
+        {
+          ...createTripPost('carousel', '2025-03-27', 'Cliffs'),
+          badge,
+          slides: [slide],
+        },
+      ],
+      developPresets: undefined,
+    } as unknown as TripDoc;
+  };
+
+  it('leaves every picture as shot and the presets empty', () => {
+    const doc = migrateTripDoc(v16());
+    expect(doc.posts[0].badge.develop).toBeNull();
+    expect(doc.posts[0].slides[0].develop).toBeNull();
+    expect(doc.developPresets).toEqual([]);
+    expect(doc.version).toBe(TRIP_DOC_VERSION);
+  });
+
+  it('reads a stored develop through the clamp, and an all-zero one as nothing', () => {
+    const doc = migrateTripDoc(v16({ exposure: 9, vibrance: 'x' }, { exposure: 0 }));
+    expect(doc.posts[0].badge.develop).toEqual({ ...DEFAULT_DEVELOP, exposure: 3 });
+    expect(doc.posts[0].slides[0].develop).toBeNull();
+  });
+
+  it('keeps a document that already says so, presets included', () => {
+    const doc = migrateTripDoc(v16());
+    doc.posts[0].slides[0].develop = { ...DEFAULT_DEVELOP, highlights: -40 };
+    doc.developPresets = [{ id: 'p', name: 'Dusk', settings: { ...DEFAULT_DEVELOP, tint: 5 } }];
+    const again = migrateTripDoc({ ...doc, version: 16 });
+    expect(again.posts[0].slides[0].develop).toEqual({ ...DEFAULT_DEVELOP, highlights: -40 });
+    expect(again.developPresets).toEqual(doc.developPresets);
+  });
+
+  it('never hands a develop to a new piece — a correction is not a habit', () => {
+    const badge = defaultPostBadge('reel', hookDefaultsFrom({ ...defaultPostBadge('reel'), develop: { ...DEFAULT_DEVELOP, exposure: 1 } }));
+    expect(badge.develop).toBeNull();
+    expect(createPostSlide().develop).toBeNull();
   });
 });
 

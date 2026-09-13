@@ -20,6 +20,12 @@
 import { isIsoDate, isWithin, type IsoDate } from './trip-days';
 import { defaultHookSeconds } from './hook-video';
 import { DEFAULT_FRAMING, normaliseFraming, type Framing } from '../media/framing';
+import {
+  developOrNull,
+  normaliseDevelopPresets,
+  type DevelopPreset,
+  type DevelopSettings,
+} from '../develop/develop';
 import type { SavedMediaRef } from '../projects/project-types';
 import { DEFAULT_SOURCE_ID } from '../sources/source';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
@@ -47,7 +53,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 16;
+export const TRIP_DOC_VERSION = 17;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers and the
@@ -256,6 +262,15 @@ export interface PostBadge {
    */
   framing: Framing;
   /**
+   * The hook picture's own CORRECTION — exposure, tone, colour
+   * (`shared/develop/develop.ts`), applied before the trip's look. Null is
+   * "as shot". Beside `framing` and for the same reason: it is about THIS
+   * photograph, so it is never inherited by the next piece (`hookDefaultsFrom`
+   * leaves it out); time is saved by presets and apply-to, not by a default
+   * that lifts every new picture by a stop.
+   */
+  develop: DevelopSettings | null;
+  /**
    * Free text replacing a computed piece, per piece. An empty string means
    * "computed", never "blank": clearing the field gives the derived value
    * back, so an override is never a one-way door.
@@ -323,7 +338,7 @@ export function hookDefaultsFrom(badge: PostBadge): HookDefaults {
   };
 }
 
-function newId(): string {
+export function newId(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : `id_${Math.random().toString(36).slice(2)}`;
@@ -359,6 +374,7 @@ export function defaultPostBadge(
     // Never inherited, like the frame: a speed is about the clip in hand.
     videoSpeed: 1,
     framing: { ...DEFAULT_FRAMING },
+    develop: null,
     textOverrides: {},
     pieceStyles: defaults ? structuredClone(defaults.pieceStyles) : {},
     hook: defaults?.hook ? structuredClone(defaults.hook) : defaultHookLayers(),
@@ -383,6 +399,8 @@ export interface PostSlide {
   videoSpeed: number;
   /** How this picture sits in the frame — see `PostBadge.framing`. */
   framing: Framing;
+  /** This picture's own correction, or null for as shot — see `PostBadge.develop`. */
+  develop: DevelopSettings | null;
   /** The author's own line over this picture; empty draws nothing. */
   caption: string;
   /** What this slide is delivered as; see {@link SlideMedium}. */
@@ -398,6 +416,7 @@ export function createPostSlide(media: SavedMediaRef | null = null): PostSlide {
     videoTimeSeconds: 0,
     videoSpeed: 1,
     framing: { ...DEFAULT_FRAMING },
+    develop: null,
     caption: '',
     medium: 'auto',
     seconds: DEFAULT_SLIDE_SECONDS,
@@ -536,6 +555,13 @@ export interface TripDoc {
    * are re-baked.
    */
   cover: TripCover;
+  /**
+   * Named develops the author saved from a picture, applied to another by a
+   * click — a preset is APPLIED, never followed, so editing one later changes
+   * no piece. Trip-wide like the words: the light of a trip is a habit, and
+   * portable for the same reason.
+   */
+  developPresets: DevelopPreset[];
   // --- bound half ----------------------------------------------------------
   /**
    * The source this trip belongs to — `'local'` for this browser
@@ -589,6 +615,7 @@ export function createTripDoc(
     cta: { ...DEFAULT_CTA },
     grade: emptyGrade(),
     cover: defaultTripCover(),
+    developPresets: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -723,6 +750,12 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * duration (an exit animation had nothing to land on without it), the picture
  * backdrop, the place marker and the reference day. A post that had the
  * boolean on lands on `auto` — the intent kept, the untrue anniversary dropped.
+ *
+ * v16 → v17 gives every picture its DEVELOP (`PostBadge.develop`,
+ * `PostSlide.develop`) and the trip its develop presets. Every stored picture
+ * lands on `null` — as shot — and the presets start empty, so nothing a trip
+ * already draws changes. It was v15 on its branch; main took v15 and v16 the
+ * same night, so it was renumbered on the merge and runs last.
  *
  * v15 → v16 gives every clip slide a speed. Every existing slide lands on 1,
  * which is exactly what it delivered: the same footage over the same screen
@@ -1007,6 +1040,23 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
         videoSpeed: slide.videoSpeed ?? 1,
       })),
     }));
+  }
+
+  if (migrated.version < 17) {
+    // Nothing was developed before this existed: every picture stays as
+    // shot, which is what `null` means. Read through `developOrNull` so a
+    // hand-edited or foreign value lands clamped or as nothing, never as a
+    // NaN in a bake. The presets start empty — a preset nobody saved is a
+    // factory setting.
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      badge: { ...post.badge, develop: developOrNull(post.badge?.develop) },
+      slides: (post.slides ?? []).map((slide) => ({
+        ...slide,
+        develop: developOrNull(slide.develop),
+      })),
+    }));
+    migrated.developPresets = normaliseDevelopPresets(migrated.developPresets);
   }
 
   migrated.version = TRIP_DOC_VERSION;

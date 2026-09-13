@@ -5,8 +5,19 @@ import type { AssetKind } from '../../shared/library/assets';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import type { SavedMediaRef } from '../../shared/projects/project-types';
 import { hashedMediaRef } from '../../shared/projects/media-identity';
+import DevelopSheet, { type DevelopApplyVerb } from '../../shared/develop/DevelopSheet';
+import type { DevelopSettings } from '../../shared/develop/develop';
+import { pictureFidelity } from '../../shared/develop/picture-fidelity';
 import { normaliseFraming, type Framing } from '../../shared/media/framing';
 import { badgeContent, type BadgePiece } from '../../shared/roadtrip/day-badge';
+import {
+  applyDevelopToDay,
+  applyDevelopToPost,
+  countDayPictures,
+  countPostPictures,
+  removePreset,
+  savePreset,
+} from '../../shared/roadtrip/develop-apply';
 import {
   badgeBlockExtent,
   badgeElements,
@@ -34,6 +45,7 @@ import { formatIsoDate } from '../../shared/roadtrip/trip-days';
 import { usePublishMediaScope, type MediaScope } from '../../shared/sources/media-scope';
 import {
   createPostSlide,
+  newId,
   type PostBadge,
   type PostSlide,
   type TripDoc,
@@ -49,7 +61,7 @@ import TripSettingsModal, { type TripSettingsSection } from './TripSettingsModal
 import ContentTab from './panels/ContentTab';
 import ExportTab from './panels/ExportTab';
 import LookTab from './panels/LookTab';
-import PictureTab from './panels/PictureTab';
+import PictureTab, { GradeScopeChips } from './panels/PictureTab';
 import PiecePicker from './panels/PiecePicker';
 import { useBadgeClock } from './use-badge-clock';
 import { usePostExports } from './use-post-exports';
@@ -336,6 +348,63 @@ export default function PostEditor({
     });
   };
 
+  /**
+   * The OPEN slide's own correction — the hook's on the badge, a carousel
+   * picture's on its slide, the same split as the framing, and for the same
+   * reason: it is about one photograph. Null is as shot.
+   */
+  const setDevelop = useCallback(
+    (develop: DevelopSettings | null) => {
+      if (slide.kind === 'hook') {
+        onChangePost({ ...post, badge: { ...post.badge, develop } });
+      } else if (slide.slideId) {
+        onChangePost({
+          ...post,
+          slides: post.slides.map((s) => (s.id === slide.slideId ? { ...s, develop } : s)),
+        });
+      }
+    },
+    [slide, post, onChangePost],
+  );
+  const [developOpen, setDevelopOpen] = useState(false);
+  // The sheet's time-savers (`docs/photo-develop.md` §8): the trip's presets,
+  // and two batch verbs that write a COPY onto each target now — the open
+  // slide is left to Done, which is what `developExcept` keeps out of the count.
+  const developExcept = isHook ? 'hook' : slide.slideId;
+  const otherSlides = isCta ? 0 : countPostPictures(post, developExcept);
+  const otherPieces = countDayPictures(trip, post);
+  const developPresets = useMemo(
+    () => ({
+      list: trip.developPresets,
+      onSave: (name: string, settings: DevelopSettings) =>
+        onChangeTrip(savePreset(trip, name, settings, newId())),
+      onRemove: (id: string) => onChangeTrip(removePreset(trip, id)),
+    }),
+    [trip, onChangeTrip],
+  );
+  const developApplyTo = useMemo(() => {
+    const verbs: DevelopApplyVerb[] = [];
+    if (otherSlides > 0) {
+      verbs.push({
+        id: 'slides',
+        label: `Apply to ${otherSlides} other slide${otherSlides === 1 ? '' : 's'}`,
+        hint: 'the other pictures of this piece',
+        run: (settings: DevelopSettings) =>
+          onChangePost(applyDevelopToPost(post, settings, developExcept)),
+      });
+    }
+    if (otherPieces > 0) {
+      verbs.push({
+        id: 'day',
+        label: `Apply to ${otherPieces} picture${otherPieces === 1 ? '' : 's'} of this day`,
+        hint: `the other pieces telling ${formatIsoDate(post.date)}`,
+        run: (settings: DevelopSettings) =>
+          onChangeTrip({ ...applyDevelopToDay(trip, post, settings), updatedAt: Date.now() }),
+      });
+    }
+    return verbs;
+  }, [otherSlides, otherPieces, post, trip, developExcept, onChangePost, onChangeTrip]);
+
   async function addSlide() {
     const ref = activeFile ? await hashedMediaRef(activeFile) : null;
     onChangePost({ ...post, slides: [...post.slides, createPostSlide(ref)] });
@@ -528,12 +597,17 @@ export default function PostEditor({
 
   // --- the grade: the Studio's stack, bound to the trip or to this piece ----
   const grade = useTripGrade(trip, post, onChangeTrip, onChangePost);
-  const lut = grade.stack.composed;
+  // One cube per SLIDE: the shared stack baked with that slide's own develop
+  // (memoised in the stack, so untouched slides share one cube). The stage
+  // reads the STORED develop even while the sheet is open — the sheet's
+  // draft rides `stack.composed`, which only the sheet itself paints from.
+  const lutFor = grade.stack.composeWith;
+  const lut = isCta ? null : lutFor(slide.develop);
 
   // Every cell of the rail, composed exactly as it will be delivered — the
   // crop, the caption, the badge, the grade. It needs the grade, so it sits
   // here rather than beside the deck above.
-  const railThumb = useRailThumbs({ trip, post, slides, aspect, resolve, lut });
+  const railThumb = useRailThumbs({ trip, post, slides, aspect, resolve, lutFor });
 
   const exports = usePostExports({
     trip,
@@ -550,7 +624,7 @@ export default function PostEditor({
     hookElements,
     block,
     hookLength,
-    lut,
+    lutFor,
     // The outcome is reported on the Export tab, so that is where to be.
     onStart: () => setTab('export'),
   });
@@ -877,7 +951,7 @@ export default function PostEditor({
                 ? { ...cta.qr, dark: trip.cta.ink, light: trip.cta.background }
                 : null
             }
-            lut={isCta ? null : lut}
+            lut={lut}
             selectedId={selectedId}
             onSelect={selectElement}
             onActivate={activateElement}
@@ -1042,6 +1116,9 @@ export default function PostEditor({
               onFraming={setFraming}
               grade={grade}
               linkedToProject={post.projectId !== null}
+              develop={slide.develop}
+              onOpenDevelop={() => setDevelopOpen(true)}
+              onResetDevelop={() => setDevelop(null)}
             />
           )}
 
@@ -1070,6 +1147,27 @@ export default function PostEditor({
         </div>
       </PanelHost>
     </div>
+
+    {developOpen && !isCta && (
+      <DevelopSheet
+        file={slideFile}
+        videoTimeSeconds={slide.videoTimeSeconds}
+        title={slideFile?.name ?? 'this slide'}
+        fidelity={pictureFidelity(slideFile).chip}
+        note={pictureFidelity(slideFile).note}
+        stack={grade.stack}
+        value={slide.develop}
+        onDone={(develop) => {
+          setDevelop(develop);
+          setDevelopOpen(false);
+        }}
+        onCancel={() => setDevelopOpen(false)}
+        lookHeader={<GradeScopeChips grade={grade} />}
+        footerHint={isHook ? 'writes to the hook' : `writes to slide ${slide.position}`}
+        presets={developPresets}
+        applyTo={developApplyTo}
+      />
+    )}
 
     {tripSheet && (
       <TripSettingsModal

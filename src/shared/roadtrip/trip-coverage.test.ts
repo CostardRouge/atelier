@@ -68,6 +68,7 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   grade: { layers: [], output: 'none' },
   sourceId: 'local',
   cover: defaultTripCover(),
+  developPresets: [],
   createdAt: 0,
   updatedAt: 0,
   ...over,

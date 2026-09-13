@@ -15,6 +15,7 @@ import {
   tripDocFromFile,
   tripFileName,
 } from './trip-file';
+import { DEFAULT_DEVELOP } from '../develop/develop';
 
 const trip = (): TripDoc => {
   const doc = createTripDoc('Australie', 'Australia', '2025-07-01', '2025-07-10');
@@ -107,6 +108,29 @@ describe('the trip file', () => {
     if (!r.ok) throw new Error(r.error);
     expect(r.file.grade).toEqual({ layers: [], output: 'none' });
     expect(r.file.posts[0].grade).toBeNull();
+  });
+
+  it('carries a slide’s develop and the trip’s presets, and lands an older file on none', () => {
+    const doc = trip();
+    doc.posts[0].badge.develop = { ...DEFAULT_DEVELOP, exposure: 0.7, highlights: -40 };
+    doc.developPresets = [
+      { id: 'p1', name: 'Desert noon', settings: { ...DEFAULT_DEVELOP, whites: -20 } },
+    ];
+    const file = roundTrip(doc);
+    expect(file.posts[0].badge.develop).toEqual(doc.posts[0].badge.develop);
+    expect(file.developPresets).toEqual(doc.developPresets);
+    // `tripDocFromFile` spreads `createTripDoc`, so a field forgotten there
+    // compiles and drops silently — this line is what catches it.
+    expect(tripDocFromFile(file).developPresets).toEqual(doc.developPresets);
+    expect(tripDocFromFile(file).posts[0].badge.develop).toEqual(doc.posts[0].badge.develop);
+
+    const old = { ...toTripFile(trip()), version: 14 } as Record<string, unknown>;
+    delete old.developPresets;
+    (old.posts as Record<string, Record<string, unknown>>[]).forEach((p) => delete p.badge.develop);
+    const r = parseTripFile(JSON.stringify(old));
+    if (!r.ok) throw new Error(r.error);
+    expect(r.file.developPresets).toEqual([]);
+    expect(r.file.posts[0].badge.develop).toBeNull();
   });
 
   it('writes readable, newline-terminated JSON', () => {

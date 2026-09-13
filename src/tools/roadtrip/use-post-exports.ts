@@ -3,7 +3,7 @@ import type { CubeLut } from '../../shared/lib/cube-parser';
 import type { OverlayElement } from '../../shared/overlay/overlay-types';
 import { classifyPart } from '../../shared/library/assets';
 import { loadClipMeta } from '../../shared/media/video-metadata';
-import { contentSlideElements } from '../../shared/roadtrip/deck';
+import { contentSlideElements, type DeckSlide } from '../../shared/roadtrip/deck';
 import { renderDeck } from '../../shared/roadtrip/deck-export';
 import { exportPlan, type PlanItem } from '../../shared/roadtrip/export-plan';
 import {
@@ -46,8 +46,11 @@ export interface PostExportInputs {
   block: HookBlock | null;
   /** How long the burned-in clip runs, already clamped to the clip. */
   hookLength: number;
-  /** The composed grade every picture goes through; null leaves them as shot. */
-  lut: CubeLut | null;
+  /**
+   * The composed grade for a slide's own develop (`LutStack.composeWith`);
+   * null leaves that picture as shot.
+   */
+  lutFor: (develop: DeckSlide['develop']) => CubeLut | null;
   /** Called as an export starts, so the caller can bring the report into view. */
   onStart?: () => void;
 }
@@ -182,7 +185,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         // The hook's own framing, so the burned-in picture is cropped where
         // the preview showed it — the PNG deck goes through the same value.
         framing: post.badge.framing,
-        lut: inputs.lut,
+        lut: inputs.lutFor(post.badge.develop),
         onProgress,
       };
       const blob = hookIsVideo
@@ -236,7 +239,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       shades: isHook ? post.badge.shades : undefined,
       block: isHook ? inputs.block : null,
       framing: slide.framing,
-      lut: inputs.lut,
+      lut: inputs.lutFor(slide.develop),
       onProgress,
     };
     if (classifyPart(file.name) !== 'video') {
@@ -297,7 +300,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
           longEdge: 1920,
           timeSeconds: inputs.timeSeconds,
           resolve: inputs.resolve,
-          lut: inputs.lut,
+          lutFor: (slide) => inputs.lutFor(slide.develop),
           include: (slide) => wanted.has(slide.position),
           onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`),
         });
@@ -398,7 +401,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         longEdge: 1920,
         timeSeconds: inputs.timeSeconds,
         resolve: inputs.resolve,
-        lut: inputs.lut,
+        lutFor: (slide) => inputs.lutFor(slide.develop),
         onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`),
       });
       if (!rendered.length) {

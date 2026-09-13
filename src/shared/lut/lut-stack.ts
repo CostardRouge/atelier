@@ -22,10 +22,17 @@
  * into the LUT's output values instead, intensity 0 correctly yields the
  * untouched source.
  *
+ * The optional DEVELOP (see develop/develop.ts) is the mirror image: a FIRST,
+ * non-reorderable stage — a picture's own correction (exposure, tone, colour)
+ * applied before any look, the way a grading suite orders its nodes. Baked
+ * for the same three reasons, plus one: it is the only way all six renderers
+ * get the correction at once, with no shader change for CI not to see.
+ *
  * Pure and DOM-free.
  */
 
 import type { CubeLut } from '../lib/cube-parser';
+import { developStage, isDefaultDevelop, type DevelopSettings } from '../develop/develop';
 import { sampleTrilinear, sampleWith, type Interpolation } from './interpolate';
 import { makeTransfer, transformLabel, type OutputTransform } from './transfer';
 
@@ -63,26 +70,33 @@ export function activeLayers(layers: readonly LutLayer[]): LutLayer[] {
 
 /**
  * Bake the stack into one LUT, or null when nothing is active AND no output
- * transform is asked for (the caller then grades through no LUT at all — the
- * cheapest path).
+ * transform is asked for AND no develop is set (the caller then grades through
+ * no LUT at all — the cheapest path).
  *
- * With `output` left at 'none' this is byte-for-byte what it has always done,
- * including returning a single full-strength layer as-is so the common case
- * pays no resampling round-trip. An output transform bypasses both shortcuts:
- * it has to be applied to something, so a stack of zero layers still produces
- * an identity-plus-curve cube.
+ * With `output` left at 'none' and no develop this is byte-for-byte what it
+ * has always done, including returning a single full-strength layer as-is so
+ * the common case pays no resampling round-trip. An output transform or a
+ * develop bypasses both shortcuts: it has to be applied to something, so a
+ * stack of zero layers still produces an identity-plus-curve cube.
+ *
+ * Order is fixed and is the whole point: develop → each layer, in order →
+ * output transform. A correction belongs before a look, a delivery curve
+ * after it.
  */
 export function composeLutStack(
   layers: readonly LutLayer[],
   output: OutputTransform = 'none',
   interpolation: Interpolation = 'trilinear',
+  develop: DevelopSettings | null = null,
 ): CubeLut | null {
   const active = activeLayers(layers);
   const transform = output !== 'none';
-  // Resolved once: inside the lattice walk this runs 3× per point.
+  const developed = !isDefaultDevelop(develop);
+  // Resolved once: inside the lattice walk each runs 3× (or 1×) per point.
   const transfer = makeTransfer(output);
-  if (active.length === 0 && !transform) return null;
-  if (!transform && active.length === 1 && active[0].intensity === 1) {
+  const correct = developed && develop ? developStage(develop) : null;
+  if (active.length === 0 && !transform && !developed) return null;
+  if (!transform && !developed && active.length === 1 && active[0].intensity === 1) {
     return active[0].lut;
   }
 
@@ -93,10 +107,11 @@ export function composeLutStack(
   // 64³ costs ~180 ms per bake, and the strength slider re-bakes on every drag
   // step, which froze the UI. At the shipped 33³ the error is 0.77 of an 8-bit
   // code against 0.35 at 64³ — both under the quantisation step, and not worth
-  // eight times the lattice.
+  // eight times the lattice. A develop's tone curve has the same shape near
+  // black, so it takes the same floor.
   const size = Math.min(
     MAX_COMPOSED_SIZE,
-    transform ? Math.max(largest, TRANSFORM_MIN_SIZE) : largest,
+    transform || developed ? Math.max(largest, TRANSFORM_MIN_SIZE) : largest,
   );
   const last = size - 1;
   const data = new Float32Array(size * size * size * 3);
@@ -107,6 +122,9 @@ export function composeLutStack(
         let r = ri / last;
         let g = gi / last;
         let b = bi / last;
+
+        // The correction FIRST: every look then sees the developed picture.
+        if (correct) [r, g, b] = correct(r, g, b);
 
         for (const layer of active) {
           const [lr, lg, lb] = sampleWith(layer.lut, r, g, b, interpolation);
@@ -137,6 +155,7 @@ export function composeLutStack(
   }
 
   const names = active.map((l) => l.name);
+  if (developed) names.unshift('Develop');
   if (transform) names.push(transformLabel(output));
 
   return {

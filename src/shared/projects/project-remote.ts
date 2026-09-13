@@ -82,7 +82,7 @@ export function fromWireDoc(
   if (typeof body.version !== 'number' || typeof body.settings !== 'object' || body.settings === null) {
     throw new WinnowError('protocol', `The stored copy of ${id} is not a project.`);
   }
-  const media = body.media ?? { files: [], activeId: null, trims: {} };
+  const media = body.media ?? { files: [], activeId: null, trims: {}, develops: {} };
   return migrateProjectDoc({
     ...(body as unknown as ProjectDoc),
     id,
