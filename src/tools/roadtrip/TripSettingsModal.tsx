@@ -284,9 +284,10 @@ export default function TripSettingsModal({
               <>
                 <SectionLegend label={`New pieces · ${kindLabel}`}>
                   <p>
-                    The frame, the placement, the shades, the per-piece styling and what
-                    a piece counts — kept for the next {kindLabel} of this trip. What a
-                    piece says about a particular day is never inherited.
+                    The frame, the opener, the placement, the shades, the per-piece
+                    styling and what a piece counts — kept for the next {kindLabel} of
+                    this trip. What a piece says about a particular day is never
+                    inherited.
                   </p>
                 </SectionLegend>
                 <div className="flex flex-wrap gap-1.5">

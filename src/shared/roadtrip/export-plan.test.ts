@@ -132,6 +132,26 @@ describe('exportPlan', () => {
     expect(plan.items.at(-1)).toMatchObject({ kind: 'cta', medium: 'image' });
   });
 
+  it('says a re-timed clip ships silent, and an as-shot one does not', () => {
+    const fast = post({ media: { name: 'CLIP.MP4', size: 1, lastModified: 1 } });
+    fast.badge.videoSpeed = 2;
+    const plan = exportPlan(trip(), fast, ALL_THERE);
+    expect(plan.items[0]).toMatchObject({ medium: 'video', speed: 2, silent: true });
+
+    const plain = post({ media: { name: 'CLIP.MP4', size: 1, lastModified: 1 } });
+    expect(exportPlan(trip(), plain, ALL_THERE).items[0]).toMatchObject({
+      speed: 1,
+      silent: false,
+    });
+  });
+
+  it('does not call a re-timed clip silent once it goes out as an image', () => {
+    const fast = post({ media: { name: 'CLIP.MP4', size: 1, lastModified: 1 } });
+    fast.badge.videoSpeed = 2;
+    const plan = exportPlan(trip(), fast, { ...ALL_THERE, imagesOnly: true });
+    expect(plan.items[0].silent).toBe(false);
+  });
+
   it('says plainly when nothing can be written', () => {
     const p = post({ media: { name: 'CLIP.WEBM', size: 1, lastModified: 1 } });
     expect(describePlan(exportPlan(trip(), p, ALL_THERE))).toBe('nothing can be written');

@@ -25,6 +25,7 @@ import type { DevelopSettings } from '../develop/develop';
 import { OUTRO_SECONDS_DEFAULT } from '../overlay/outro-card';
 import type { SavedMediaRef } from '../projects/project-types';
 import type { BadgePieceStyles } from './badge-layout';
+import { clipSpeed } from './hook-video';
 import type { SlideMedium, TripDoc, TripPost } from './trip-types';
 
 export type DeckSlideKind = 'hook' | 'content' | 'cta';
@@ -86,6 +87,12 @@ export interface DeckSlide {
    * value to keep in step.
    */
   seconds: number;
+  /**
+   * The speed its clip plays at (1 for anything that is not a clip): the
+   * source stretch is `seconds × speed` long, and a speed other than 1 ships
+   * silent. Resolved through the Studio's clamp, so an odd stored value is 1.
+   */
+  speed: number;
 }
 
 /**
@@ -146,6 +153,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       ),
       chosen: post.badge.medium,
       seconds: post.badge.hookSeconds,
+      speed: isClip(post.media?.name) ? clipSpeed(post.badge.videoSpeed) : 1,
     },
   ];
 
@@ -164,6 +172,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       ...resolveSlideMedium(slide.medium, false, slide.media?.name ?? null),
       chosen: slide.medium,
       seconds: slide.seconds,
+      speed: isClip(slide.media?.name) ? clipSpeed(slide.videoSpeed) : 1,
     });
   }
 
@@ -188,10 +197,16 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       reason: 'plain',
       chosen: 'image',
       seconds: OUTRO_SECONDS_DEFAULT,
+      speed: 1,
     });
   }
 
   return slides;
+}
+
+/** Whether a media name is a clip, by the Library's own reading of it. */
+function isClip(mediaName: string | null | undefined): boolean {
+  return typeof mediaName === 'string' && classifyPart(mediaName) === 'video';
 }
 
 /**

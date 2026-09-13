@@ -2,7 +2,7 @@
 
 **Status (2026-09-13, night): P1 to P4 are BUILT; the decoder is
 DECIDED.** The maintainer chose `libraw-wasm` (§6.2 option (a)) and started
-the phases: the engine (P1), Trips' side (P2 — v15, the `DevelopSheet`, the
+the phases: the engine (P1), Trips' side (P2 — v17 on `TripDoc`, the `DevelopSheet`, the
 Picture tab's settled row, one cube per slide through `LutStack.composeWith`),
 the Studio's (P3 — `ProjectMedia.develops` v15, hash-guarded, the Grade
 tab's settled row, the same sheet over a photo or a clip) and the
@@ -308,11 +308,12 @@ never a second stack.
 ### 5.3 Where it is stored
 
 - **Trips** — `PostBadge.develop: DevelopSettings | null` and
-  `PostSlide.develop: DevelopSettings | null`, **v15**, beside `framing` and
+  `PostSlide.develop: DevelopSettings | null`, **v17** (v15 on its branch;
+  main took v15 and v16 the same night), beside `framing` and
   for the same reason (about ONE photograph). `null` is *as shot* — the
   "empty means computed" rule, where computed is the identity, so a document
   that never opened the sheet stores nothing. **The migration block goes at
-  the END of `migrateTripDoc`** (its blocks run in source order; a v15 block
+  the END of `migrateTripDoc`** (its blocks run in source order; a develop block
   placed high writes onto a badge the v2 block has not built). `hookDefaultsFrom`
   leaves it out. The trip file: the field travels inside the posts, so
   `toTripFile` / `parseTripFile` / `tripDocFromFile` need nothing new — but
@@ -326,7 +327,7 @@ never a second stack.
   `activeId` and `trims` (the memory rule: *"anything else keyed by base name
   must join that function"*). Not in `.atelier.json` — a template is from no
   picture; the four-places rule does not apply and a spec asserts the file
-  stays free of it. v15 there too.
+  stays free of it. v15 there (`ProjectDoc`).
 - **Presets** — `TripDoc.developPresets: DevelopPreset[]` (`{ id, name,
   settings }`), **portable**: a preset is the trip's habit like its words, so
   it travels in `.roadtrip.json` and the four `trip-file.ts` places gain a
@@ -595,7 +596,7 @@ bake already carries. One rule learnt building it, recorded in
 `media-pipeline.md`: an untouched pixel must come back bit-identical, so the
 luminance ratio is skipped when the curve did not move the value.
 
-### P2 — Trips: v15, the sheet, the Picture tab row — **BUILT**
+### P2 — Trips: v17, the sheet, the Picture tab row — **BUILT**
 
 `PostBadge.develop`, `PostSlide.develop`, `developPresets`, the migration at
 the END of `migrateTripDoc`, `trip-file.ts`'s four places, `hookDefaultsFrom`

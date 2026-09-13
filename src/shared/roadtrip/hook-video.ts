@@ -22,6 +22,7 @@ import {
   type ExportVariant,
   type VariantResolution,
 } from '../projects/export-variants';
+import { resolveSpeed } from '../media/frame-rate';
 import type { TrimRange } from '../media/trim';
 
 /** Shortest hook worth encoding — below this the entrance has no room. */
@@ -29,6 +30,92 @@ export const MIN_HOOK_SECONDS = 1;
 
 /** Longest a hook clip is offered at; past this it stops being a hook. */
 export const MAX_HOOK_SECONDS = 30;
+
+/**
+ * The speeds a clip slide is offered at — the Studio's own steps, so a piece
+ * re-cut there means the same thing. 1 is as shot; 0.5 delivers a second of
+ * footage over two seconds (frames repeated, never invented); 2 delivers it
+ * in half a second (frames dropped).
+ */
+export const CLIP_SPEEDS: readonly number[] = [0.25, 0.5, 1, 2, 4];
+
+/** The speed a slide really plays at: the Studio's clamp, 1 for anything odd. */
+export function clipSpeed(speed: number | undefined | null): number {
+  return resolveSpeed(speed);
+}
+
+/**
+ * The stretch of the SOURCE a slide delivers: from its in point, as much
+ * footage as its screen time holds at its speed — `seconds × speed` of the
+ * clip — never past the end. A slide stores its screen time (what the deck
+ * reads) and its speed; the source range is derived here and nowhere else,
+ * so the stage's trim bar, the rail's length and the encoder's cut cannot
+ * disagree about which frames go out.
+ *
+ * With an unknown duration the clip is assumed long enough: the range is the
+ * ask, and a later clamp (`screenSecondsWithin`) corrects the screen time
+ * once the clip has been measured.
+ */
+export function clipSlice(
+  inSeconds: number,
+  screenSeconds: number,
+  speed: number,
+  duration: number,
+): TrimRange {
+  const rate = clipSpeed(speed);
+  const total = Number.isFinite(duration) && duration > 0 ? duration : Number.POSITIVE_INFINITY;
+  const start = clamp(inSeconds, 0, Math.max(0, total - MIN_HOOK_SECONDS / 4));
+  const length = Math.max((MIN_HOOK_SECONDS / 4) * rate, screenSeconds * rate);
+  return { start, end: Math.min(total, start + length) };
+}
+
+/** How long `range` of the source is on screen at `speed`. */
+export function screenSecondsOf(range: TrimRange, speed: number): number {
+  return Math.max(0, range.end - range.start) / clipSpeed(speed);
+}
+
+/**
+ * The most screen time a slide can honestly promise: what is left of the
+ * clip after its in point, stretched or squeezed by the speed, within the
+ * control's own bounds. Unknown duration → the control's ceiling.
+ */
+export function screenSecondsCeiling(
+  inSeconds: number,
+  speed: number,
+  duration: number,
+): number {
+  if (!Number.isFinite(duration) || duration <= 0) return MAX_HOOK_SECONDS;
+  const left = Math.max(0, duration - Math.max(0, inSeconds));
+  return clamp(left / clipSpeed(speed), MIN_HOOK_SECONDS, MAX_HOOK_SECONDS);
+}
+
+/**
+ * A slide's screen time, clamped to what its clip can deliver from its in
+ * point at its speed. `hookSecondsWithin` is this with the hook's own default.
+ */
+export function screenSecondsWithin(
+  wanted: number,
+  inSeconds: number,
+  speed: number,
+  duration: number,
+): number {
+  return clamp(wanted, MIN_HOOK_SECONDS, screenSecondsCeiling(inSeconds, speed, duration));
+}
+
+/**
+ * A slide re-timed to another speed keeps the FOOTAGE it delivers and changes
+ * how long that footage is on screen — which is what an author means by
+ * "play this at 2×": the same six seconds of the shot, in three. The screen
+ * time is what is stored, so it is the number that moves.
+ */
+export function retimedScreenSeconds(
+  screenSeconds: number,
+  fromSpeed: number,
+  toSpeed: number,
+): number {
+  const source = screenSeconds * clipSpeed(fromSpeed);
+  return clamp(source / clipSpeed(toSpeed), MIN_HOOK_SECONDS / 4, MAX_HOOK_SECONDS);
+}
 
 /**
  * How long the clip should run by default: the badge's own hold plus a beat
@@ -51,13 +138,11 @@ export function hookSecondsWithin(
   preferred: number | null,
   badgeDurationSeconds: number,
   duration: number,
+  inSeconds = 0,
+  speed = 1,
 ): number {
   const wanted = preferred ?? defaultHookSeconds(badgeDurationSeconds);
-  const ceiling =
-    Number.isFinite(duration) && duration > 0
-      ? Math.max(MIN_HOOK_SECONDS, Math.min(MAX_HOOK_SECONDS, duration))
-      : MAX_HOOK_SECONDS;
-  return clamp(wanted, MIN_HOOK_SECONDS, ceiling);
+  return screenSecondsWithin(wanted, inSeconds, speed, duration);
 }
 
 /**
@@ -79,46 +164,57 @@ export function hookSourceProblem(fileName: string, mimeType = ''): string | nul
  * unknown duration, or a length that already covers everything). Null is not a
  * failure: the pipeline reads it as "no trim", and `originSeconds` then
  * correctly falls back to 0.
+ *
+ * `lengthSeconds` is SCREEN time: at 2× it reaches twice as far into the
+ * source, at 0.5× half as far — `clipSlice` is the one place that arithmetic
+ * lives.
  */
 export function hookRange(
   startSeconds: number,
   lengthSeconds: number,
   duration: number,
+  speed = 1,
 ): TrimRange | null {
   if (!Number.isFinite(duration) || duration <= 0) return null;
-  const start = clamp(startSeconds, 0, Math.max(0, duration - MIN_HOOK_SECONDS / 4));
-  const length = Math.max(MIN_HOOK_SECONDS / 4, lengthSeconds);
-  const end = Math.min(duration, start + length);
+  const { start, end } = clipSlice(startSeconds, lengthSeconds, speed, duration);
   if (start <= 0 && end >= duration) return null;
   return { start, end };
 }
 
 /**
  * The export variant for a hook: the post's own frame, burned overlays, the
- * clip's own cadence and speed. The frame rate is left at the source's — a
- * hook is one to three seconds and resampling it would only cost frames.
+ * clip's own cadence and the slide's speed. The frame rate is left at the
+ * source's — a hook is one to three seconds and resampling it would only cost
+ * frames. A speed other than 1 re-times the clip through the Studio's own
+ * pipeline, which then ships it SILENT (audio is copied, never re-encoded).
  */
 export function hookVariant(
   aspectId: string,
   resolution: VariantResolution = 1080,
+  speed = 1,
 ): ExportVariant {
   return {
     ...createVariant(aspectId),
     resolution,
     frameRate: 'source',
-    speed: 1,
+    speed: clipSpeed(speed),
     overlays: true,
   };
 }
 
-/** `australia-day-27-hook-9x16-1080p.mp4` — recognisable in a downloads folder. */
+/**
+ * `australia-day-27-hook-9x16-1080p.mp4` — recognisable in a downloads
+ * folder. The speed is deliberately NOT in the name: it is part of the
+ * slide's composition, not a delivery departure the way the Studio's
+ * per-variant re-time is, and `-2x` on a hook would read as a second cut.
+ */
 export function hookVideoName(
   tripName: string,
   postSlug: string,
   variant: ExportVariant,
 ): string {
   const stem = [tripName, postSlug, 'hook'].map(slugify).filter(Boolean).join('-');
-  return variantFileName(stem || 'hook', variant);
+  return variantFileName(stem || 'hook', { ...variant, speed: 1 });
 }
 
 function slugify(value: string): string {

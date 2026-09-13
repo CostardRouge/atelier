@@ -340,6 +340,26 @@ describe('deckSlides — medium and screen time', () => {
     const deck = deckSlides(trip({ cta: { ...DEFAULT_CTA, headline: 'Follow' } }), p);
     expect(deck.at(-1)).toMatchObject({ kind: 'cta', medium: 'image', reason: 'plain' });
   });
+
+  it('carries a clip’s speed, and 1 for anything that is not a clip', () => {
+    const p = post({ media: { name: 'DJI_0001.MP4', size: 1, lastModified: 1 } });
+    p.badge.videoSpeed = 2;
+    const slide = createPostSlide({ name: 'IMG_2.JPG', size: 1, lastModified: 1 });
+    slide.videoSpeed = 0.5; // a photograph has no speed, whatever is stored
+    const clip = createPostSlide({ name: 'DJI_0002.MOV', size: 1, lastModified: 1 });
+    clip.videoSpeed = 0.5;
+    const deck = deckSlides(
+      trip({ cta: { ...DEFAULT_CTA, headline: 'Follow' } }),
+      { ...p, slides: [slide, clip], includeCta: true },
+    );
+    expect(deck.map((s) => s.speed)).toEqual([2, 1, 0.5, 1]);
+  });
+
+  it('reads an odd stored speed as “as shot”', () => {
+    const p = post({ media: { name: 'DJI_0001.MP4', size: 1, lastModified: 1 } });
+    p.badge.videoSpeed = NaN;
+    expect(deckSlides(trip(), p)[0].speed).toBe(1);
+  });
 });
 
 describe('deckSlides — the picture’s own develop', () => {

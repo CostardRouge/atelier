@@ -38,6 +38,7 @@ import {
   type BadgePieceStyles,
 } from './badge-layout';
 import { createShade, vignetteShade, type Shade } from './shades';
+import { defaultHookLayers, type HookLayer } from './hooks/hook-variant';
 import { DEFAULT_CTA, type CtaSlide } from './cta-slide';
 import {
   DEFAULT_TIME_AGO_WORDS,
@@ -52,7 +53,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 15;
+export const TRIP_DOC_VERSION = 17;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers and the
@@ -238,8 +239,21 @@ export interface PostBadge {
   shades: Shade[];
   /** The frame the badge is composed for, from `ASPECT_PRESETS`. */
   aspectId: string;
-  /** Frame of a video clip the badge sits on; ignored for a photo. */
+  /**
+   * Where the hook's clip STARTS — the frame the badge sits on for a still,
+   * and the in point of the stretch that is encoded, `hookSeconds` of screen
+   * time long at `videoSpeed`. Ignored for a photo.
+   */
   videoTimeSeconds: number;
+  /**
+   * The speed the hook's clip plays at, on the stage and in the file: 1 as
+   * shot, 2 twice as fast, 0.5 half — the Studio's own steps (`CLIP_SPEEDS`).
+   * The source stretch is `hookSeconds × videoSpeed` long (`clipSlice`), so
+   * changing the speed keeps the footage and moves the screen time. A speed
+   * other than 1 ships without sound: audio is copied, never re-encoded.
+   * Ignored for a photo.
+   */
+  videoSpeed: number;
   /**
    * How the hook's picture sits in the frame — pan, zoom, rotation over the
    * cover-crop. Belongs to the piece and not to the trip's defaults: it is
@@ -264,6 +278,18 @@ export interface PostBadge {
   textOverrides: Partial<Record<BadgePiece, string>>;
   /** How each piece departs from the trip's theme — case, colour, panel, animation. */
   pieceStyles: BadgePieceStyles;
+  /**
+   * The OPENER: which hook variant draws this piece's first slide, and what it
+   * was told. A list from the first version even though only the first entry is
+   * ever written today — the stack (a route trace behind a scrub) is UI that
+   * does not exist yet, and shaping the field for it now costs nothing where a
+   * later migration would run on documents remote trips already carry.
+   *
+   * An id this build does not know is skipped at resolve time and the badge
+   * stands in: a trip written by a newer Atelier opens here and loses its
+   * opener, it never fails to open. See `docs/hook-engine.md`.
+   */
+  hook: HookLayer[];
 }
 
 /**
@@ -289,6 +315,8 @@ export interface HookDefaults {
   layout: BadgeLayout;
   pieceStyles: BadgePieceStyles;
   shades: Shade[];
+  /** The opener a new piece of this kind starts on. */
+  hook: HookLayer[];
 }
 
 export type HookDefaultsByKind = Partial<Record<PostKind, HookDefaults>>;
@@ -306,6 +334,7 @@ export function hookDefaultsFrom(badge: PostBadge): HookDefaults {
     layout: { ...badge.layout },
     pieceStyles: structuredClone(badge.pieceStyles),
     shades: badge.shades.map((shade) => ({ ...shade, id: newId() })),
+    hook: structuredClone(badge.hook),
   };
 }
 
@@ -342,10 +371,13 @@ export function defaultPostBadge(
     shades: (defaults?.shades ?? []).map((shade) => ({ ...shade, id: newId() })),
     aspectId: defaults?.aspectId ?? ASPECT_FOR_KIND[kind],
     videoTimeSeconds: 0,
+    // Never inherited, like the frame: a speed is about the clip in hand.
+    videoSpeed: 1,
     framing: { ...DEFAULT_FRAMING },
     develop: null,
     textOverrides: {},
     pieceStyles: defaults ? structuredClone(defaults.pieceStyles) : {},
+    hook: defaults?.hook ? structuredClone(defaults.hook) : defaultHookLayers(),
   };
 }
 
@@ -360,9 +392,11 @@ export interface PostSlide {
   /**
    * Where this slide's picture is taken from its clip — and, once the slide is
    * delivered as a video, the IN point of the stretch that is encoded, with
-   * `seconds` as its length.
+   * `seconds` of screen time as its length at `videoSpeed`.
    */
   videoTimeSeconds: number;
+  /** The speed the clip plays at — see `PostBadge.videoSpeed`. */
+  videoSpeed: number;
   /** How this picture sits in the frame — see `PostBadge.framing`. */
   framing: Framing;
   /** This picture's own correction, or null for as shot — see `PostBadge.develop`. */
@@ -380,6 +414,7 @@ export function createPostSlide(media: SavedMediaRef | null = null): PostSlide {
     id: crypto.randomUUID(),
     media,
     videoTimeSeconds: 0,
+    videoSpeed: 1,
     framing: { ...DEFAULT_FRAMING },
     develop: null,
     caption: '',
@@ -716,6 +751,20 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * backdrop, the place marker and the reference day. A post that had the
  * boolean on lands on `auto` — the intent kept, the untrue anniversary dropped.
  *
+ * v16 → v17 gives every picture its DEVELOP (`PostBadge.develop`,
+ * `PostSlide.develop`) and the trip its develop presets. Every stored picture
+ * lands on `null` — as shot — and the presets start empty, so nothing a trip
+ * already draws changes. It was v15 on its branch; main took v15 and v16 the
+ * same night, so it was renumbered on the merge and runs last.
+ *
+ * v15 → v16 gives every clip slide a speed. Every existing slide lands on 1,
+ * which is exactly what it delivered: the same footage over the same screen
+ * time. Nothing about a still changes, and the hook defaults carry no speed.
+ *
+ * v14 → v15 gives every piece its OPENER (`PostBadge.hook`), a list holding
+ * the `badge` variant — the one that draws nothing extra — so no stored trip
+ * changes. See `docs/hook-engine.md`.
+ *
  * v12 → v13 gives the trip its cover: a layout and the pieces pinned to it.
  * Every stored trip lands on the mosaic with nothing pinned, which is fully
  * derived from what the trip already holds — so no document gains a choice
@@ -957,6 +1006,43 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
   }
 
   if (migrated.version < 15) {
+    // Every piece composed before hook variants existed is the badge, which is
+    // the variant that draws nothing extra — so no stored trip changes by one
+    // pixel. The trip's saved looks take it too, or the next piece of that kind
+    // would start with no opener at all.
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      badge: {
+        ...post.badge,
+        hook: post.badge?.hook?.length ? post.badge.hook : defaultHookLayers(),
+      },
+    }));
+    migrated.hookDefaults = Object.fromEntries(
+      Object.entries(migrated.hookDefaults ?? {}).map(([kind, defaults]) => [
+        kind,
+        defaults
+          ? { ...defaults, hook: defaults.hook?.length ? defaults.hook : defaultHookLayers() }
+          : defaults,
+      ]),
+    ) as HookDefaultsByKind;
+  }
+
+  if (migrated.version < 16) {
+    // Every clip composed before this played as shot, so every slide lands on
+    // 1: the same footage, over the same screen time, as it always delivered.
+    // The hook's remembered defaults are untouched — a speed belongs to the
+    // clip in hand, and is never inherited (like its frame).
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      badge: { ...post.badge, videoSpeed: post.badge?.videoSpeed ?? 1 },
+      slides: (post.slides ?? []).map((slide) => ({
+        ...slide,
+        videoSpeed: slide.videoSpeed ?? 1,
+      })),
+    }));
+  }
+
+  if (migrated.version < 17) {
     // Nothing was developed before this existed: every picture stays as
     // shot, which is what `null` means. Read through `developOrNull` so a
     // hand-edited or foreign value lands clamped or as nothing, never as a

@@ -23,6 +23,7 @@ import type { StyleTheme } from '../overlay/title-styles';
 import type { Scene } from '../overlay/scenes';
 import type { TimeShift } from '../telemetry/time-format';
 import type { ExportTail } from './export-tail';
+import { resolveSpeed } from './frame-rate';
 import type { TrimRange } from './trim';
 import { DEFAULT_FRAMING, drawFramed, type Framing } from './framing';
 import {
@@ -74,6 +75,22 @@ export interface VariantRenderOptions {
     w: number,
     h: number,
   ) => void;
+  /**
+   * Which clock the overlays' animations run on.
+   *
+   * `source` (the default, the Studio's) hands the engine the SOURCE time
+   * and the trim's in point as the origin: cues, the capture clock and the
+   * heading smoothing all index the source timeline, and a re-timed variant
+   * plays its intro at the re-timed pace — that IS the Studio's re-time.
+   *
+   * `delivered` hands it the time into the DELIVERED clip, at the delivered
+   * speed, from zero: a Road Trip badge composed to slide in over 0.6 s must
+   * slide in over 0.6 s of the viewer's time whatever speed its clip plays
+   * at, exactly as the stage previews it. Only for a caller with no cues —
+   * a source-indexed readout under a delivered clock would read the wrong
+   * frame's value.
+   */
+  overlayClock?: 'source' | 'delivered';
 }
 
 /**
@@ -144,6 +161,9 @@ export async function exportVariantVideo(
         ? makeFrameGrader(opts.lut, codedWidth, codedHeight, opts.intensity)
         : null;
       const framing = opts.framing ?? DEFAULT_FRAMING;
+      const origin = opts.trim?.start ?? 0;
+      const delivered = opts.overlayClock === 'delivered';
+      const speed = resolveSpeed(variant.speed);
 
       return {
         draw(videoFrame, tMicros) {
@@ -162,11 +182,13 @@ export async function exportVariantVideo(
               theme: opts.theme,
               timeShift: opts.timeShift,
               cues: opts.cues,
-              timeSeconds: t,
-              scenes: opts.scenes,
               // `t` is the SOURCE timestamp; windows count from the first
-              // exported frame, which a trim moves.
-              originSeconds: opts.trim?.start ?? 0,
+              // exported frame, which a trim moves. On the delivered clock
+              // the engine is handed the time into the output instead, so an
+              // entrance keeps its own pace under a re-timed clip.
+              timeSeconds: delivered ? Math.max(0, t - origin) / speed : t,
+              scenes: opts.scenes,
+              originSeconds: delivered ? 0 : origin,
             });
           }
           return canvas;

@@ -36,6 +36,14 @@ export interface PlanItem {
   reason: SlideReason;
   /** Screen time; only meaningful for a video item. */
   seconds: number;
+  /** The clip's speed; 1 for anything that is not a clip. */
+  speed: number;
+  /**
+   * True when the clip ships without sound: it is re-timed, and audio is
+   * copied, never re-encoded. Stated in the plan so nobody discovers it in
+   * the file. A painted still is silent too, but says so in its reason.
+   */
+  silent: boolean;
   /** The file this item writes. */
   name: string;
   /** Why it cannot be written, in a sentence, or null. */
@@ -113,6 +121,8 @@ export function exportPlan(
       // medium, never why the slide is what it is.
       reason: slide.reason,
       seconds: slide.seconds,
+      speed: slide.speed,
+      silent: medium === 'video' && slide.speed !== 1,
       name: slideFileName(trip.name, slug, slide, slides.length, medium === 'video' ? 'mp4' : 'png'),
       blocker,
     };

@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import SectionLegend from '../../../shared/ui/SectionLegend';
 import type { OverlayElement } from '../../../shared/overlay/overlay-types';
+import TranscodeControl from '../../../shared/media/TranscodeControl';
 import { useAvcEncodeSupport } from '../../../shared/media/use-encode-support';
+import { useTranscode } from '../../../shared/media/use-transcode';
 import type { DeckSlide } from '../../../shared/roadtrip/deck';
 import { describePlan, exportPlan } from '../../../shared/roadtrip/export-plan';
 import type { TripDoc, TripGrade, TripPost } from '../../../shared/roadtrip/trip-types';
@@ -28,6 +30,8 @@ interface ExportTabProps {
   /** A running export's progress line, or null when idle. */
   exporting: string | null;
   exportNote: string | null;
+  /** A clip the last export could not decode here; the transcode is offered for it. */
+  undecodable: File | null;
   onExportPiece: (imagesOnly: boolean) => void;
   onExportDeck: () => void;
   onExportHookClip: () => void;
@@ -60,6 +64,7 @@ export default function ExportTab({
   hasPicture,
   exporting,
   exportNote,
+  undecodable,
   onExportPiece,
   onExportDeck,
   onExportHookClip,
@@ -68,6 +73,10 @@ export default function ExportTab({
   gradeScope,
 }: ExportTabProps) {
   const graded = grade.layers.some((l) => l.enabled && l.intensity > 0);
+  // The in-browser transcode for a clip this browser cannot decode — the
+  // Studio's own control, shared through the file-keyed store, so a clip
+  // transcoded here is the one every export reads from then on.
+  const transcode = useTranscode(undecodable);
   // What the HOOK SLIDE says it is, not what its file happens to be: a
   // photograph with an animated badge is a video now, and a clip the author
   // set to Image is not. The deck decides; this panel delivers.
@@ -88,6 +97,19 @@ export default function ExportTab({
   return (
     <div className="flex flex-col gap-4">
       {exportNote && <p className={note}>{exportNote}</p>}
+      {/* A sentence that says "transcode it first" must offer the transcode
+          where it is read, or it is a dead end. Once done, the next export
+          reads the H.264 by itself. */}
+      {undecodable && (
+        <div className={`${note} flex flex-col gap-2`}>
+          <span>
+            {transcode.status === 'done'
+              ? `${undecodable.name} is transcoded to H.264 — export again and it is what goes out.`
+              : `${undecodable.name} cannot be decoded for export here (DJI footage is often HEVC/H.265). Transcode it to H.264 in the browser, then export again.`}
+          </span>
+          {transcode.status !== 'done' && <TranscodeControl state={transcode} />}
+        </div>
+      )}
 
       <div className={section}>
         <SectionLegend label={`What goes out · ${describePlan(plan)}`}>
@@ -116,7 +138,11 @@ export default function ExportTab({
                 {item.name}
               </span>
               <span className="flex-none font-mono text-[0.62rem] tracking-[0.06em] uppercase text-muted">
-                {item.medium === 'video' ? `${item.seconds.toFixed(1)}s` : 'still'}
+                {item.medium === 'video'
+                  ? `${item.seconds.toFixed(1)}s${item.speed !== 1 ? ` · ${item.speed}×` : ''}${
+                      item.silent ? ' · silent' : ''
+                    }`
+                  : 'still'}
               </span>
             </li>
           ))}
@@ -126,7 +152,7 @@ export default function ExportTab({
             changes most, and a word in a column does not explain itself. */}
         {plan.items[0] && (
           <p className="m-0 text-[0.72rem] text-muted">
-            {reasonSentence(plan.items[0].reason, plan.items[0].seconds)}
+            {reasonSentence(plan.items[0].reason, plan.items[0].seconds, plan.items[0].speed)}
           </p>
         )}
 
@@ -185,7 +211,9 @@ export default function ExportTab({
         <p className="m-0 text-[0.72rem] text-muted">
           {hookIsVideoSlide
             ? hookIsVideo
-              ? 'The hook’s clip starts on the frame you chose, so the badge animates in on the first frame. Audio is copied through'
+              ? slides[0].speed !== 1
+                ? `The hook’s clip starts on its in point and plays at ${slides[0].speed}×, so the badge animates in on the first frame at its own pace. A re-timed clip goes out without sound`
+                : 'The hook’s clip starts on its in point, so the badge animates in on the first frame. Audio is copied through'
               : 'The hook is painted over its photograph, frame by frame, so its entrance plays. It comes out silent — there is no track to copy'
             : hookFile
               ? 'The hook goes out as an image: nothing on it moves. Give it an animation on the Look tab, or set the slide to Video to hold it as a card'

@@ -64,9 +64,12 @@ export function exportHookVideo(opts: HookVideoOptions): Promise<Blob> {
       srcHeight: opts.srcHeight,
       trim: opts.range,
       framing: opts.framing ?? null,
-      // The badge's windows count from the first exported frame, and the
-      // pipeline reads that from the trim's in point — so the entrance plays
-      // on frame one of the delivered clip, not wherever it fell in the rush.
+      // The badge's windows count from the first exported frame, and at the
+      // DELIVERED pace: the entrance plays on frame one of the clip and takes
+      // the seconds it was composed to take whatever speed the clip plays at
+      // — which is what the stage previews. Safe here because a badge reads
+      // no cues; the Studio keeps the source clock for its readouts.
+      overlayClock: 'delivered',
       paintUnderOverlays: shades?.length
         ? (ctx, w, h) => paintShades(ctx, w, h, shades, block)
         : undefined,

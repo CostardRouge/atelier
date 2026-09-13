@@ -4,6 +4,8 @@ import type { Shade } from '../../../shared/roadtrip/shades';
 import type { BadgePieceStyle } from '../../../shared/roadtrip/badge-layout';
 import type { BadgePiece } from '../../../shared/roadtrip/day-badge';
 import type { PostBadge, TripDoc, TripPost } from '../../../shared/roadtrip/trip-types';
+import type { HookContext } from '../../../shared/roadtrip/hooks/hook-variant';
+import HookPicker from './HookPicker';
 import SectionLegend from '../../../shared/ui/SectionLegend';
 import PieceStylePanel from '../PieceStylePanel';
 import ShadesPanel from '../ShadesPanel';
@@ -34,6 +36,8 @@ interface LookTabProps {
   post: TripPost;
   /** The badge only exists on the hook, and so does everything here but the theme. */
   isHook: boolean;
+  /** What the piece's opener was prepared against — the picker hands it on. */
+  hookCtx: HookContext;
   /** The piece in hand — chosen above the tabs, or by a click on the stage. */
   piece: BadgePiece;
   onChangeTrip: (trip: TripDoc) => void;
@@ -60,6 +64,7 @@ export default function LookTab({
   trip,
   post,
   isHook,
+  hookCtx,
   piece,
   onChangeTrip,
   patchBadge,
@@ -72,6 +77,18 @@ export default function LookTab({
 
   return (
     <div className="flex flex-col gap-4">
+      {/* The opener comes FIRST, and so sits outside the hook branch below:
+          it decides what the hook IS, where the title style only decides how
+          its words are set — and the style belongs to every slide, not to the
+          hook alone. */}
+      {isHook && (
+        <HookPicker
+          layers={post.badge.hook}
+          ctx={hookCtx}
+          onChange={(hook) => patchBadge({ hook })}
+        />
+      )}
+
       <div className="flex flex-col gap-2">
         <StylePanel
           theme={trip.theme}

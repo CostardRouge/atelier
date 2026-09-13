@@ -596,15 +596,25 @@ screen, a row when the editor stacks — so drag one along it, or move it with t
 arrow keys while it has focus. Only the middle moves — a hook that opened third
 and a call to action that came second would stop being either.
 
-**The hook can leave as a moving clip, not only a still.** When the hook sits
-on a video, "Export hook video" burns the animated badge into it through the
+**A slide can be a video, and it plays on the stage.** Put a clip on the hook
+or on any content slide and the picture becomes a transport: play it (`Space`),
+scrub it, and **cut the stretch it delivers** on the Studio's own trim bar —
+in and out handles that never cross, `I` / `O` to cut at the playhead, the
+picture following whichever handle you drag. A **speed** menu (¼× to 4×) plays
+the stretch faster or slower, on the stage and in the file alike: what you
+watch is what goes out. The badge is timed by the clip — its entrance lands on
+the first frame of the stretch and keeps its own pace whatever the speed — and
+pauses settled on the in point, the composition view the rail and the PNGs
+show. The filmstrip in the Picture tab still chooses the in point by pointing
+at the clip itself, and slides the whole stretch along it. A slide stores its
+in point, its screen time and its speed; the stretch of the source is derived
+from the three, so the bar, the rail's length and the export can never
+disagree. Exporting burns the badge (or the caption) into the clip through the
 **same WebCodecs pipeline the Studio exports with** — cover-cropped into the
-post's frame, the scrim and vignette applied per frame, audio copied through,
-never re-encoded. The clip starts on the frame you picked with the scrubber, so
-the entrance plays on frame one instead of having already happened; a length
-slider says how much of the rush goes out, defaulting to the badge's own hold
-plus a beat. It reads MP4 and MOV (what the demuxer handles) and says so
-plainly for anything else — the PNG export has no such limit.
+post's frame, the shades applied per frame, audio copied through, never
+re-encoded — and a re-timed clip therefore goes out **without sound**, said in
+the plan before anything runs. It reads MP4 and MOV (what the demuxer handles)
+and says so plainly for anything else; the PNG export has no such limit.
 
 The QR code is generated **on your machine** — a ~250-line encoder in
 `shared/lib/qr.ts` rather than a call to a web service, because a card that
@@ -664,8 +674,9 @@ stayed behind instead).
 
 Currently in place: the trip, its days and stages, the grid, day-keyed posts,
 the badge — words, temporal line, per-piece styling, animation and picture
-treatments — the deck through to its PNGs, the animated hook burned into a
-clip, the located places a stage went through, and the bridge into the Studio.
+treatments — the deck through to its PNGs, clips that play, trim and re-time
+on any slide and leave as video, the located places a stage went through, and
+the bridge into the Studio.
 A portable `.json` export of a trip is the phase that follows.
 
 ## Telemetry tool
