@@ -6,7 +6,6 @@ import {
   type SyncRecord,
   type SyncStatus,
 } from './doc-sync';
-import { useIsCompact } from '../ui/use-layout-mode';
 
 interface SyncPillProps {
   record: SyncRecord;
@@ -94,7 +93,6 @@ export default function SyncPill({
   onDeleteHere,
 }: SyncPillProps) {
   const now = useNow(30_000);
-  const compact = useIsCompact();
   const [open, setOpen] = useState(false);
   const [offset, setOffset] = useState(0);
   const [confirming, setConfirming] = useState<'theirs' | 'delete' | null>(null);
@@ -192,7 +190,12 @@ export default function SyncPill({
     closeTimer.current = window.setTimeout(() => setOpen(false), HOVER_CLOSE_MS);
   };
 
-  const showLabel = !compact || needsAction;
+  // The word used to survive on anything wider than a phone (`!compact`),
+  // but a plain "Saved" is not worth the row-wrap it caused wherever the
+  // toolbar around it is already tight — the dot plus the popover says the
+  // same thing on a click or a hover. `needsAction` still forces the word at
+  // every width: a state nobody is asked to resolve does not get to hide.
+  const showLabel = needsAction;
 
   return (
     <div
