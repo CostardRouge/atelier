@@ -15,7 +15,7 @@
  * ticks to be mixed in (`mixWithClip`, see `audio-plan.ts`).
  */
 
-import { useCallback, type ReactNode } from 'react';
+import { useCallback } from 'react';
 import Segmented from '../../ui/Segmented';
 import {
   FieldRow,
@@ -26,6 +26,7 @@ import {
   swatchClass,
 } from '../../ui/Inspector';
 import type { HookContext, HookDay, HookPanelProps, HookPicture, HookVariant } from './hook-variant';
+import { Group } from './panel-ui';
 import { paintScrub } from './scrub-paint';
 import {
   EASINGS,
@@ -49,16 +50,6 @@ function ScrubSketch() {
       <span className="absolute left-[40%] right-0 bottom-[3px] h-[5px] bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.5)_0_1px,transparent_1px_5px)]" />
       <span className="absolute left-[40%] bottom-0 h-[13px] w-[2px] -translate-x-1/2 rounded-full bg-accent shadow-[0_0_5px_rgba(217,68,42,0.8)] motion-safe:animate-[scrub-sketch_2.8s_cubic-bezier(0.2,0,0,1)_infinite]" />
     </span>
-  );
-}
-
-/** A small mono legend over a group of rows — the panel's sub-sections. */
-function Group({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-2.5">
-      <span className="font-mono text-2xs tracking-[0.14em] uppercase text-muted">{title}</span>
-      {children}
-    </div>
   );
 }
 

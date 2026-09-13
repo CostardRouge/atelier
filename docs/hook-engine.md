@@ -86,7 +86,15 @@ from the registry.
 
 `needs` (`coverage`, `stages`, `places`, `media: 'day' | 'deck' | 'stage'`)
 declares what the shell resolves into `HookContext` — **a variant never fetches
-and never reads the store**. That is what stops ten variants each querying a
+and never reads the store**.
+
+What two variants both wanted lives beside the contract rather than in either:
+`easing.ts` (the curves a moving opener travels on, each with a closed-form
+inverse), `tick-kits.ts` (the voices a landing, a leg's landing and the seat
+play on, and the pitch drift) and `panel-ui.tsx` (the mono legend a panel
+groups its rows under, since a panel mounts inside the picker's section and
+cannot open sections of its own). Grown in Défilé, lifted out when the route
+reached for them; Défilé re-exports the old names. That is what stops ten variants each querying a
 day's pictures, and what tells an export pre-pass exactly what to prepare.
 
 ## 4. The three decisions (2026-09-13)

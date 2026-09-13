@@ -29,19 +29,25 @@
  */
 
 import type { SoundEvent } from '../../audio/sound-event';
-import type { VoiceName } from '../../audio/voices';
+import { EASINGS, EASING_IDS, type HookEasing } from './easing';
 import type { HookDay } from './hook-variant';
+import { KIT_IDS, TICK_KITS, driftAt, type TickDrift, type TickKit } from './tick-kits';
+
+// The easings and the tick kits grew here and were lifted out once the route
+// wanted them too; their old names stay exported so nothing else moves.
+export { EASINGS, EASING_IDS } from './easing';
+export { TICK_KITS as SCRUB_KITS, KIT_IDS, DRIFT_SPAN, driftAt } from './tick-kits';
 
 export type ScrubMode = 'from-start' | 'run-up';
 export type TapePosition = 'bottom' | 'top';
 /** How the head travels — see `EASINGS`. */
-export type ScrubEasing = 'ease-out' | 'ease-out-hard' | 'linear' | 'ease-in' | 'ease-in-out';
+export type ScrubEasing = HookEasing;
 /** Where the sweep's days come from: sampled by the mode, or named by the author. */
 export type ScrubDays = 'auto' | 'chosen';
-/** Which voices the ticks are played on — see `SCRUB_KITS`. */
-export type ScrubKit = 'ratchet' | 'wood' | 'typewriter' | 'click';
+/** Which voices the ticks are played on — see `tick-kits.ts`. */
+export type ScrubKit = TickKit;
 /** How the ticks' pitch moves along the sweep. */
-export type ScrubDrift = 'flat' | 'rising' | 'falling';
+export type ScrubDrift = TickDrift;
 /** The shape of the reading head. */
 export type ScrubHead = 'bar' | 'dot' | 'needle';
 
@@ -214,114 +220,7 @@ export function edgeFadeAt(x: number, x0: number, x1: number, fade: boolean): nu
   return t * t * (3 - 2 * t);
 }
 
-/**
- * The voices a sweep may be played on. Each kit names the ordinary landing,
- * how a LEG's landing departs from it (the one sound carrying meaning, so the
- * one that is different: lower and a little louder), and the seat — which
- * stays the seat in every kit, because it is the end of the phrase rather
- * than a tick.
- */
-export const SCRUB_KITS: Record<
-  ScrubKit,
-  {
-    label: string;
-    hint: string;
-    tick: VoiceName;
-    leg: { voice: VoiceName; rate: number; gain: number };
-    seat: VoiceName;
-  }
-> = {
-  ratchet: {
-    label: 'Ratchet',
-    hint: 'A mechanism — a narrow click, a deeper one where a leg starts',
-    tick: 'detent',
-    leg: { voice: 'leg', rate: 1, gain: 1 },
-    seat: 'seat',
-  },
-  wood: {
-    label: 'Woodblock',
-    hint: 'Warmer knocks, a low one where a leg starts',
-    tick: 'wood',
-    leg: { voice: 'wood', rate: 0.67, gain: 1.3 },
-    seat: 'seat',
-  },
-  typewriter: {
-    label: 'Typewriter',
-    hint: 'A key strike a day, a heavier one where a leg starts',
-    tick: 'typewriter',
-    leg: { voice: 'typewriter', rate: 0.7, gain: 1.3 },
-    seat: 'seat',
-  },
-  click: {
-    label: 'Shutter',
-    hint: 'A soft camera click a day',
-    tick: 'click',
-    leg: { voice: 'click', rate: 0.6, gain: 1.3 },
-    seat: 'seat',
-  },
-};
 
-export const KIT_IDS = Object.keys(SCRUB_KITS) as ScrubKit[];
-
-/**
- * How far the pitch travels along a drifting sweep: ×0.84 at one end to ×1.19
- * at the other, about three semitones each way — audible as a climb or a fall,
- * small enough that every tick still reads as the same instrument.
- */
-export const DRIFT_SPAN = { from: 0.84, to: 1.19 } as const;
-
-/** The pitch factor at `share` (0..1) of the way along the sweep. */
-export function driftAt(drift: ScrubDrift, share: number): number {
-  const u = Math.max(0, Math.min(1, share));
-  if (drift === 'rising') return DRIFT_SPAN.from + (DRIFT_SPAN.to - DRIFT_SPAN.from) * u;
-  if (drift === 'falling') return DRIFT_SPAN.to - (DRIFT_SPAN.to - DRIFT_SPAN.from) * u;
-  return 1;
-}
-
-/**
- * The curves the head may travel on, each with the inverse the stop placement
- * needs. `u` and `p` are both 0..1; every curve is monotonic, starts at 0 and
- * ends at 1, so `inverse(ease(u)) === u` to floating precision.
- */
-export const EASINGS: Record<
-  ScrubEasing,
-  { label: string; hint: string; ease: (u: number) => number; inverse: (p: number) => number }
-> = {
-  'ease-out': {
-    label: 'Settle',
-    hint: 'Fast off the start, coming to rest on today',
-    ease: (u) => 1 - (1 - u) ** 3,
-    inverse: (p) => 1 - Math.cbrt(1 - p),
-  },
-  'ease-out-hard': {
-    label: 'Brake',
-    hint: 'A hard stop — most of the trip goes by in the first half-second',
-    // Normalised so the curve really reaches 1 at u = 1.
-    ease: (u) => (1 - 2 ** (-10 * u)) / (1 - 2 ** -10),
-    inverse: (p) => -Math.log2(1 - p * (1 - 2 ** -10)) / 10,
-  },
-  linear: {
-    label: 'Even',
-    hint: 'Every day takes the same time — a metronome, not a mechanism',
-    ease: (u) => u,
-    inverse: (p) => p,
-  },
-  'ease-in': {
-    label: 'Wind up',
-    hint: 'Slow to leave, arriving at speed',
-    ease: (u) => u ** 3,
-    inverse: (p) => Math.cbrt(p),
-  },
-  'ease-in-out': {
-    label: 'Glide',
-    hint: 'Slow to leave and slow to arrive',
-    ease: (u) => (u < 0.5 ? 4 * u ** 3 : 1 - (-2 * u + 2) ** 3 / 2),
-    // Upper half: p = 1 − (2 − 2u)³ / 2  ⇒  2 − 2u = ∛(2(1 − p)).
-    inverse: (p) => (p < 0.5 ? Math.cbrt(p / 4) : 1 - Math.cbrt(2 * (1 - p)) / 2),
-  },
-};
-
-export const EASING_IDS = Object.keys(EASINGS) as ScrubEasing[];
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -625,7 +524,7 @@ export function scrubScore(
   },
 ): SoundEvent[] {
   if (plan.sweepSeconds <= 0 || !(volume > 0)) return [];
-  const kit = SCRUB_KITS[tuning.kit];
+  const kit = TICK_KITS[tuning.kit];
   const landings = Math.max(1, plan.stops.length - 1);
   return plan.stops.map((stop, i) => {
     if (stop.hero) return { at: stop.at, voice: kit.seat, gain: 0.8 * volume, rate: tuning.pitch };
