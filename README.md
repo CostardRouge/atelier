@@ -597,6 +597,27 @@ the preview is the export at a smaller size. The style and the words belong to
 the **trip**, not to the post: a badge that varies per post stops being the
 signature that makes a post recognisable in a feed.
 
+**The opener.** The badge is one way to open a piece; the Look tab's first
+section picks another from cards — a card you cannot feed (a route with no
+located place) is greyed with the reason, never hidden. **Badge** is the plain
+one. **Défilé** runs the trip past before landing on the day: a measuring tape
+of the whole trip sweeps to the day you are telling, decelerating like a
+mechanism coming to rest; every day another piece already tells flashes its
+picture as the head passes, a day nobody told goes dark, and the badge's numeral
+steps with the head. Its sweep is yours to shape — five motions (settle, brake,
+even, wind up, glide), a hold before it starts, the days sampled from the trip or
+named one by one with the piece that stands for each — and so is the tape: its
+width, its colours, the ticks' height, opacity and spacing, a band behind it
+for a bright picture, a fade at both ends, a bar, a dot or a needle for the
+head. It **ticks** at every landing, a deeper tick where a leg of the trip
+begins and a low seat on today, in a choice of voices (ratchet, woodblock,
+typewriter, shutter) with a pitch, a drift along the sweep and a volume — the
+same sound the export writes, heard live behind a speaker toggle that is off on
+every visit. **Route** draws the trip's own shape from the legs' located places,
+the trip so far solid, this day's leg in the accent, the legs still ahead faint,
+and can draw itself. Every opener runs on the same clock as the badge, in the
+preview and in the file.
+
 **Nothing is keyed by a file name.** A post records the *day* it tells, never a
 filename: exports get renamed and re-graded between tools, and a tracking system
 built on names goes stale the first time you touch Capture One. A post does
@@ -633,10 +654,15 @@ in point, its screen time and its speed; the stretch of the source is derived
 from the three, so the bar, the rail's length and the export can never
 disagree. Exporting burns the badge (or the caption) into the clip through the
 **same WebCodecs pipeline the Studio exports with** — cover-cropped into the
-post's frame, the shades applied per frame, audio copied through, never
-re-encoded — and a re-timed clip therefore goes out **without sound**, said in
-the plan before anything runs. It reads MP4 and MOV (what the demuxer handles)
-and says so plainly for anything else; the PNG export has no such limit.
+post's frame, the shades applied per frame, the clip's own audio copied through
+untouched — and a re-timed clip therefore goes out **without its own sound**,
+said in the plan before anything runs. The one exception to "never re-encoded"
+is the one you ask for: a Défilé's ticks become the track of a photo, of a clip
+recorded without sound (most drone footage) and of a re-timed clip, and are
+**mixed into** a clip's own sound only when its "Mix in" switch is on — off,
+the clip keeps its sound bit-for-bit and the export note says the ticks stayed
+out. It reads MP4 and MOV (what the demuxer handles) and says so plainly for
+anything else; the PNG export has no such limit.
 
 The QR code is generated **on your machine** — a ~250-line encoder in
 `shared/lib/qr.ts` rather than a call to a web service, because a card that
