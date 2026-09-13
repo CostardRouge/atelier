@@ -1035,6 +1035,7 @@ export default function PostEditor({
               hasPicture={hasPicture}
               exporting={exports.exporting}
               exportNote={exports.note}
+              undecodable={exports.undecodable}
               onExportPiece={(imagesOnly) => void exports.exportPiece(imagesOnly)}
               onExportDeck={() => void exports.exportDeck()}
               onExportHookClip={() => void exports.exportHookClip()}

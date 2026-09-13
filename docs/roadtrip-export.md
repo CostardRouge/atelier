@@ -1,6 +1,10 @@
 # Road Trip exports: what leaves the tool, what cannot, and the plan
 
-**Status (2026-09-09): P1 to P4 are BUILT; P5 onwards is the plan.**
+**Status (2026-09-13): P1 to P5 are BUILT; P6 onwards is the plan.** P5 went
+further than planned: a clip slide (hook or content) PLAYS on the stage, is
+cut on the Studio's trim bar and carries a SPEED (v15, `videoSpeed`) —
+`roadtrip.md`, «A clip slide has an in point, a screen time and a SPEED». The
+combined reel (P4's last item) is still not built.
 
 The direction is the maintainer's — "exporter la vidéo du hook
 plus les autres éléments… un raccourci, qu'on importe et qu'on utilise ce que
@@ -312,7 +316,15 @@ path the other does not have, the preview stops being a preview.
   until P5 a clip slide inside it is **held on its chosen frame**, named, with
   the same escape offered.
 
-### P5 — a content slide can be a clip
+### P5 — a content slide can be a clip — **BUILT** (2026-09-13)
+
+Built as the maintainer then asked for it — "les vidéos peuvent être jouées
+dans les slides… trimer et choisir la zone de lecture, ainsi que sa vitesse":
+the stage plays the slide's stretch, `ClipTransport` cuts it and sets its
+speed, and the export delivers it through `exportVariantVideo` with the badge
+or the caption burned in on the delivered clock. Verified end to end in
+headless Chromium with the encoders swapped to VP9 (§7). What remains of the
+original P5 text below is the combined-reel half, which is P4's open item.
 
 The maintainer's own third phase. **The model already describes it**:
 `videoTimeSeconds` is the in point and `seconds` is the length, which is
