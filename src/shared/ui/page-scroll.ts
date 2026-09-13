@@ -21,5 +21,11 @@
  * The TOP is deliberately not here — it is already paid, differently and
  * correctly, by whatever the screen opens on: `PageBar` clears the masthead
  * itself at `compact`, and a screen without one adds `pt-3`.
+ *
+ * The SIDES get the same treatment, cancelled by a negative margin so no
+ * content moves: a scroll box clips on both axes, and anything drawn past a
+ * flush edge — the selected day's outline on a short trip's strip, a card's
+ * focus ring — was cut off against it. `-mx-1` borrows 4px of the frame's own
+ * `px-4` gutter, which has room to spare.
  */
-export const pageScroll = 'flex flex-col flex-1 min-h-0 gap-4 overflow-auto pb-4';
+export const pageScroll = 'flex flex-col flex-1 min-h-0 gap-4 overflow-auto pb-4 -mx-1 px-1';
