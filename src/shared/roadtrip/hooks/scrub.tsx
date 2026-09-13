@@ -9,7 +9,10 @@
  *
  * The arithmetic is `scrub-plan.ts`, the drawing `scrub-paint.ts`; this file is
  * the variant's face — what it needs, when it cannot run, and its options.
- * Silent for now: its score is a later phase (`docs/hook-engine.md`).
+ * It ticks at every landing (`scrubScore`), the seat on today: the bed is
+ * rendered offline into a video painted from a still. A clip keeps its own
+ * sound and does not carry the ticks yet — mixing is the next phase
+ * (`docs/hook-engine.md`).
  */
 
 import type { ReactNode } from 'react';
@@ -20,6 +23,7 @@ import {
   SCRUB_LIMITS,
   scrubOptions,
   scrubPlan,
+  scrubScore,
   scrubStopDays,
   type ScrubOptions,
 } from './scrub-plan';
@@ -157,6 +161,23 @@ function ScrubPanel({ options, onChange, ctx }: HookPanelProps) {
         Flash the told days’ pictures as the head passes
       </label>
 
+      <label className="flex items-start gap-2 text-[0.78rem] text-ink-soft cursor-pointer">
+        <input
+          type="checkbox"
+          checked={o.sound}
+          onChange={(e) => set({ sound: e.target.checked })}
+          className="accent-accent mt-[3px]"
+        />
+        <span>
+          Tick at every day it lands on
+          <span className="block text-[0.7rem] text-faint">
+            In the video made from a photo. A clip keeps its own sound for now — mixing
+            the ticks into it comes later. Most feeds play muted: the sweep says
+            everything without them.
+          </span>
+        </span>
+      </label>
+
       {ctx.counterMode && ctx.counterMode !== 'day' && (
         <p className="m-0 text-[0.72rem] text-faint">
           The numeral steps with the head only when the badge counts the day of the trip;
@@ -205,6 +226,7 @@ export const scrubVariant: HookVariant = {
           ? (t) => (t < sweep ? { headline: String(plan.stops[plan.stopAt(t)].dayNumber) } : {})
           : undefined,
       paint: (g, t, frame) => paintScrub(g, plan, o, ctx.pictures, t, frame),
+      score: o.sound ? () => scrubScore(plan) : undefined,
     };
   },
   Sketch: ScrubSketch,

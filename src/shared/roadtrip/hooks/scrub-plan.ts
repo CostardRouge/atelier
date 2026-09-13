@@ -23,6 +23,7 @@
  * Pure and DOM-free. Design: `docs/hook-engine.md`.
  */
 
+import type { SoundEvent } from '../../audio/sound-event';
 import type { HookDay } from './hook-variant';
 
 export type ScrubMode = 'from-start' | 'run-up';
@@ -41,6 +42,8 @@ export interface ScrubOptions {
   flash: boolean;
   /** Where the tape runs. */
   tape: TapePosition;
+  /** Tick at every landing, in the exported video. */
+  sound: boolean;
 }
 
 export const SCRUB_DEFAULTS: ScrubOptions = {
@@ -50,6 +53,7 @@ export const SCRUB_DEFAULTS: ScrubOptions = {
   sweepSeconds: 1.9,
   flash: true,
   tape: 'bottom',
+  sound: true,
 };
 
 /** The bounds each option is clamped to — a stored value is never trusted. */
@@ -110,6 +114,7 @@ export function scrubOptions(raw: Readonly<Record<string, unknown>>): ScrubOptio
     ),
     flash: o.flash !== false,
     tape: o.tape === 'top' ? 'top' : 'bottom',
+    sound: o.sound !== false,
   };
 }
 
@@ -245,4 +250,31 @@ export function tapeTicks(
   const ticks = new Set<number>([1, totalDays, ...legStarts]);
   for (let day = 1; day <= totalDays; day += step) ticks.add(day);
   return [...ticks].filter((d) => d >= 1 && d <= totalDays).sort((a, b) => a - b);
+}
+
+/**
+ * The sweep, heard: a sound at every landing, read off the same stops the head
+ * and the pictures follow — so the ticks cannot fall between frames they belong
+ * to. The cadence comes free from the deceleration: the ticks slow as the head
+ * settles, and a listener knows it is arriving before reading anything.
+ *
+ * - an ordinary landing is a `detent`;
+ * - a landing on a day a leg starts is a `leg` — the one sound carrying
+ *   meaning, so the one that is different;
+ * - the hero is the `seat`, which ends the phrase.
+ *
+ * Levels fall along the sweep as the mechanism slows. Nothing when there is
+ * nowhere to sweep from.
+ */
+export function scrubScore(plan: ScrubPlan): SoundEvent[] {
+  if (plan.sweepSeconds <= 0) return [];
+  return plan.stops.map((stop, i) =>
+    stop.hero
+      ? { at: stop.at, voice: 'seat', gain: 0.8 }
+      : {
+          at: stop.at,
+          voice: stop.legStart ? 'leg' : 'detent',
+          gain: Math.max(0.35, 0.85 - i * 0.04),
+        },
+  );
 }

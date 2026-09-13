@@ -157,16 +157,9 @@ export interface HookContext {
   pictures?: ReadonlyMap<string, HookPicture>;
 }
 
-/** One sound the hook makes. Times and voices only — never an AudioContext. */
-export interface SoundEvent {
-  /** Seconds into the hook's own life. */
-  at: number;
-  voice: string;
-  /** Peak level, 0..1. */
-  gain?: number;
-  /** Pitch multiplier, 1 = the voice as designed. */
-  rate?: number;
-}
+/** One sound the hook makes — see `shared/audio/sound-event.ts`. */
+export type { SoundEvent } from '../../audio/sound-event';
+import type { SoundEvent } from '../../audio/sound-event';
 
 /** A prepared hook: the closure every downstream reader shares. */
 export interface HookRender {

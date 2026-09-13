@@ -18,6 +18,7 @@ import type { HookContext } from '../../shared/roadtrip/hooks/hook-variant';
 import { hookContextFor } from '../../shared/roadtrip/hooks/hook-context';
 import { hookElementsAt as hookElementsAtFor } from '../../shared/roadtrip/hooks/hook-elements';
 import useHookPictures from './use-hook-pictures';
+import { useHookSound } from './use-hook-sound';
 import { ctaLayout, ctaRoleFromElementId, type CtaRole } from '../../shared/roadtrip/cta-slide';
 import {
   captionLineFromElementId,
@@ -377,6 +378,11 @@ export default function PostEditor({
     isHook,
     hook.seconds,
   );
+
+  // The opener's ticks, heard while the transport plays — off until asked for.
+  const hookScore = useMemo(() => hook.score(), [hook]);
+  const [soundOn, setSoundOn] = useState(false);
+  useHookSound(hookScore, isHook && clock.playing, clock.time, soundOn);
 
   // --- the hook's own picture, whichever slide is open ---------------------
   // The stage reports the OPEN slide's source; the hook clip export and the
@@ -827,6 +833,41 @@ export default function PostEditor({
               <span className="flex-none font-mono text-[0.68rem] tabular-nums text-muted">
                 {clock.time.toFixed(2)}s
               </span>
+              {hookScore.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSoundOn((on) => !on)}
+                  aria-pressed={soundOn}
+                  aria-label={soundOn ? 'Mute the opener’s ticks' : 'Hear the opener’s ticks'}
+                  title={soundOn ? 'Mute the ticks' : 'Hear the ticks'}
+                  className={`flex-none grid place-items-center rounded-full border cursor-pointer ${
+                    compact ? 'w-7 h-7' : 'w-8 h-8'
+                  } ${
+                    soundOn
+                      ? 'border-accent bg-accent-wash text-accent-ink'
+                      : 'border-line-strong bg-paper text-muted hover:border-accent hover:text-accent-ink'
+                  }`}
+                >
+                  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none">
+                    <path d="M2.5 6h2.2L8 3.2v9.6L4.7 10H2.5z" fill="currentColor" />
+                    {soundOn ? (
+                      <path
+                        d="M10.4 5.6a3.4 3.4 0 0 1 0 4.8M12.2 3.8a6 6 0 0 1 0 8.4"
+                        stroke="currentColor"
+                        strokeWidth="1.3"
+                        strokeLinecap="round"
+                      />
+                    ) : (
+                      <path
+                        d="M10.5 6l3.5 4M14 6l-3.5 4"
+                        stroke="currentColor"
+                        strokeWidth="1.3"
+                        strokeLinecap="round"
+                      />
+                    )}
+                  </svg>
+                </button>
+              )}
             </div>
           )}
           </div>

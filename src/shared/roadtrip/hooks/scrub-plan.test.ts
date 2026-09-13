@@ -5,6 +5,7 @@ import {
   sampleEvenly,
   scrubOptions,
   scrubPlan,
+  scrubScore,
   scrubStopDays,
   stopFraction,
   tapeFraction,
@@ -165,5 +166,41 @@ describe('the tape', () => {
     expect(ticks).toContain(400);
     expect(ticks).toContain(137);
     expect(ticks).toContain(251);
+  });
+});
+
+describe('scrubScore', () => {
+  it('lands a sound on every stop, at that stop’s own time', () => {
+    const cal = calendar(30, [3, 8, 14, 20], [1, 14]);
+    const plan = scrubPlan(cal, dateOf(cal, 27), opts())!;
+    const score = scrubScore(plan);
+    expect(score.map((e) => e.at)).toEqual(plan.stops.map((s) => s.at));
+  });
+
+  it('marks a leg with its own voice and ends on the seat', () => {
+    const cal = calendar(30, [3, 8, 14, 20], [1, 14]);
+    const plan = scrubPlan(cal, dateOf(cal, 27), opts())!;
+    const score = scrubScore(plan);
+    const voiceOn = (day: number) => score[plan.stops.findIndex((s) => s.dayNumber === day)].voice;
+    expect(voiceOn(14)).toBe('leg');
+    expect(voiceOn(8)).toBe('detent');
+    expect(score[score.length - 1].voice).toBe('seat');
+  });
+
+  it('gets quieter as the mechanism slows, the seat apart', () => {
+    const cal = calendar(60, [4, 9, 15, 22, 30, 37], []);
+    const plan = scrubPlan(cal, dateOf(cal, 44), opts())!;
+    const levels = scrubScore(plan).slice(0, -1).map((e) => e.gain ?? 0);
+    for (let i = 1; i < levels.length; i++) expect(levels[i]).toBeLessThanOrEqual(levels[i - 1]);
+  });
+
+  it('is silent when there is nowhere to sweep from', () => {
+    const cal = calendar(10, [2]);
+    expect(scrubScore(scrubPlan(cal, dateOf(cal, 1), opts())!)).toEqual([]);
+  });
+
+  it('reads the sound switch through the defaults', () => {
+    expect(scrubOptions({}).sound).toBe(true);
+    expect(scrubOptions({ sound: false }).sound).toBe(false);
   });
 });

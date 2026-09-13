@@ -1,9 +1,11 @@
 # The hook engine — many openers over one badge
 
-**Status (2026-09-13).** Design agreed with the maintainer; **phases 1–3 are
-built** — the engine, the picker, and **Défilé** itself, silent, on the stage,
-the PNG deck, the rail and both video exports. What was phase 4 turned out to
-exist already (§8). Sound, mixing and the route trace are not built. The
+**Status (2026-09-13).** Design agreed with the maintainer; **phases 1–3 and
+5 are built** — the engine, the picker, **Défilé** on the stage, the PNG deck,
+the rail and both video exports, and **its ticks** in a video painted from a
+still and in the editor's transport. What was phase 4 turned out to exist
+already (§8). Mixing the ticks into a clip's own sound, and the route trace,
+are not built. The
 exemplar that drove the design is the **scrub** («&nbsp;Défilé&nbsp;»): the
 trip's measuring tape sweeps from day 1 to the day being told, flashing that
 day's pictures as it passes, and ticking.
@@ -161,10 +163,13 @@ only how its words are set — and the style belongs to every slide.
   since phase 1 — a second place to choose the same thing is the fault this
   tool keeps removing. Only its legend changed, to name the opener.
 
-## 7. Sound
+## 7. Sound — built for stills (phase 5)
 
 The lineage is the maintainer's own `p5-templates`: events → offline render →
-mux. Two differences, one of them a simplification.
+mux. Two differences, one of them a simplification. Built as
+`shared/audio/voices.ts` (the ported presets + `detent`, `leg`, `seat`),
+`shared/audio/render-bed.ts` and `shared/media/audio-encode.ts`; `encodeFrames`
+takes `audio`.
 
 - **No capture log.** p5 logs every `trigger()` during a deterministic frame
   loop because a sketch is imperative. A variant's `score()` is known *before a
@@ -192,6 +197,24 @@ cannot encode, the export ships **silent with a stated reason**, never failed.
 In the editor the score plays through one `AudioContext` created on a user
 gesture, muted by default behind a speaker toggle — a panel that ticks while a
 slider is dragged is unusable.
+
+**What building it taught, measured and not guessed:**
+
+- **The AAC encoder primes by 2112 samples and mp4-muxer writes no edit list.**
+  Rendered ticks at 0.10 / 0.60 / 1.50s decoded out of the MP4 at 0.144 / 0.644
+  / 1.544 — 44ms after their frames. Stamping the audio early is refused (no
+  negative timestamps); stamping the video late is silently undone (no edit
+  list, both tracks start at 0). The bed is instead rendered AHEAD by the
+  priming (`leadSeconds`): **0.0ms** drift on every tick, ≤0.3ms through the
+  whole `exportHookStillVideo` path with a real scrub. A sound in the first
+  44ms still lands up to 44ms late — the scrub's opening tick only.
+- **The whole bed is encoded before the muxer exists**, so "is there an audio
+  track" is decided by "are there chunks", never by a half-written track.
+- **The noise is seeded** per hit, so the same piece exports the same bed.
+- Verified by decoding, not by ear: the agent can prove where the energy is in
+  the file, not that it sounds good. The voices' design is the maintainer's
+  from `p5-templates`, plus the three scrub voices, which have not yet been
+  listened to by a human.
 
 ## 8. The still → video seam — already built
 
@@ -252,13 +275,23 @@ sound will add there is an audio track, since it writes none today.
 4. ~~`exportGeneratedClip`~~ — **already built** as `encodeFrames` (§8).
 5. **The voices and the bed.** Preset table, `score()` on Défilé, offline
    render, `AudioEncoder`, an audio track in `encodeFrames`, live playback
-   muted by default. Stills first — no mixing anywhere.
+   muted by default. Stills only — no mixing anywhere. **Built.**
 6. **Mixing**, for clips that keep their sound. Opt-in.
 7. **Route trace.** A second real variant, deliberately unlike the first: needs
    located places, no media, no sound, no stop list. If it fits the contract
    without changing it, the contract is right.
 
 ## 11. Open points
+
+- **The three scrub voices have not been heard by a human.** Their energy is in
+  the right place in the file (measured); whether `detent`, `leg` and `seat`
+  sound like a ratchet coming to rest is the maintainer's ear to judge — the
+  gains and frequencies are one table in `voices.ts`.
+- **A scrub on a CLIP carries no ticks.** The clip's own audio is copied, and
+  putting the bed in means decode → sum → re-encode: phase 6, opt-in.
+- **The priming constant is one platform's measurement.** Another browser's AAC
+  encoder may prime differently; the round trip in `media-pipeline.md` is how
+  to check before claiming sync there.
 
 - **The tape paints UNDER the shades**, because the seam is between the picture
   and the shades. A strong scrim at the bottom dims it. Acceptable so far; if it

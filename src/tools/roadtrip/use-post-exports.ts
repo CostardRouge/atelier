@@ -122,6 +122,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     }
     setNote(null);
     setExporting('Encoding…');
+    let audioSkipped: string | null = null;
     const onProgress = (p: ExportProgress) =>
       setExporting(p.ratio === null ? `${p.phase}…` : `Encoding ${Math.round(p.ratio * 100)}%…`);
     try {
@@ -156,10 +157,15 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
             ...shared,
             file: hookFile,
             seconds: inputs.hookLength,
+            onAudioSkipped: (reason) => {
+              audioSkipped = reason;
+            },
           });
       const name = hookVideoName(trip.name, post.title.trim() || `day-${post.date}`, variant);
       download(blob, name);
-      setNote(`${name} downloaded`);
+      // A clip that went out without the ticks it was composed with says so
+      // with the delivery, rather than being discovered on a phone later.
+      setNote(audioSkipped ? `${name} downloaded — ${audioSkipped}` : `${name} downloaded`);
     } catch (err) {
       // The pipeline's messages already name the cause (an undecodable HEVC
       // points at the transcode), so they are shown as they come.
@@ -181,6 +187,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
   async function renderSlideVideo(
     item: PlanItem,
     onProgress: (p: ExportProgress) => void,
+    onAudioSkipped?: (reason: string) => void,
   ): Promise<Blob> {
     const { post, trip, aspect } = inputs;
     const { slide } = item;
@@ -201,7 +208,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       onProgress,
     };
     if (classifyPart(file.name) !== 'video') {
-      return exportHookStillVideo({ ...shared, file, seconds: item.seconds });
+      return exportHookStillVideo({ ...shared, file, seconds: item.seconds, onAudioSkipped });
     }
     // A content clip's own size has to be read here; the hook's is already
     // measured by the stage that is showing it.
@@ -268,12 +275,17 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       const clips = items.filter((i) => i.medium === 'video');
       for (const [i, item] of clips.entries()) {
         try {
-          const blob = await renderSlideVideo(item, (p) =>
-            setExporting(
-              p.ratio === null
-                ? `${p.phase}…`
-                : `Encoding ${i + 1}/${clips.length} · ${Math.round(p.ratio * 100)}%…`,
-            ),
+          const blob = await renderSlideVideo(
+            item,
+            (p) =>
+              setExporting(
+                p.ratio === null
+                  ? `${p.phase}…`
+                  : `Encoding ${i + 1}/${clips.length} · ${Math.round(p.ratio * 100)}%…`,
+              ),
+            // Not a failure — the file is delivered — but a departure from what
+            // was composed, reported with the delivery like one.
+            (reason) => failures.push(`${item.name}: ${reason}`),
           );
           rendered.push({ name: item.name, blob });
         } catch (err) {

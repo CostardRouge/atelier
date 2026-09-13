@@ -17,9 +17,11 @@
  *
  * Two things it deliberately does not do, both stated wherever it is offered:
  *
- * - **No audio.** Audio is copied bit-for-bit and never re-encoded (the
- *   pipeline's founding rule), and a painted timeline has no demuxed track to
- *   copy from. A painted clip is silent, and the caller says so.
+ * - **No audio of its own.** Audio is copied bit-for-bit and never re-encoded
+ *   (the pipeline's founding rule), and a painted timeline has no demuxed track
+ *   to copy from. The one exception is audio the suite itself MADE — a hook's
+ *   tick bed — handed in as `audio` and encoded to AAC (`audio-encode.ts`).
+ *   Without it the clip has no audio track at all.
  * - **No source cadence to inherit.** There is no clip whose rate could be
  *   passed through, so the frame rate is a delivery choice with a default
  *   ({@link DEFAULT_PAINTED_FPS}) rather than a resample of anything.
@@ -28,6 +30,7 @@
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
 import { safeChunkMetadata } from './colour-tag';
 import { framePlan } from './frame-plan';
+import { encodeAudioBuffer, type EncodedAudio } from './audio-encode';
 import {
   awaitQueue,
   deriveBitrate,
@@ -61,6 +64,15 @@ export interface EncodeFramesOptions {
    * `FrameProcessor`, nothing here is racing a decoder queue.
    */
   draw: (tSeconds: number) => CanvasImageSource | Promise<CanvasImageSource>;
+  /**
+   * Audio the suite rendered for this clip (a hook's tick bed), starting at the
+   * clip's first frame. Encoded to AAC before anything else is built, so a
+   * browser that cannot encode it yields a clip with NO audio track rather
+   * than a broken one.
+   */
+  audio?: AudioBuffer | null;
+  /** Told why `audio` did not make it into the file, when it did not. */
+  onAudioSkipped?: (reason: string) => void;
   onProgress?: (p: ExportProgress) => void;
   signal?: AbortSignal;
 }
@@ -111,13 +123,32 @@ export async function encodeFrames(opts: EncodeFramesOptions): Promise<Blob> {
   };
   throwIfAborted();
 
+  // The bed is encoded in full BEFORE the muxer exists: whether the file gets
+  // an audio track is decided by whether there are chunks to put in it.
+  let audio: EncodedAudio | null = null;
+  if (opts.audio && opts.audio.length > 0) {
+    const encoded = await encodeAudioBuffer(opts.audio);
+    if (encoded.ok) audio = encoded.audio;
+    else opts.onAudioSkipped?.(encoded.reason);
+  }
+  throwIfAborted();
+
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
-    // No audio track is declared at all: a painted clip has nothing to copy,
-    // and an empty track would be a silent lie about what the file holds.
     video: { codec: 'avc', width: w, height: h, rotation: 0 },
+    // No audio track is declared unless there is audio to put in it: an empty
+    // track would be a silent lie about what the file holds.
+    audio: audio
+      ? { codec: 'aac', sampleRate: audio.sampleRate, numberOfChannels: audio.numberOfChannels }
+      : undefined,
     fastStart: 'in-memory',
+    // An encoder that stamps its first packet before zero is rebased with the
+    // picture rather than refused. The priming itself is NOT handled here: the
+    // muxer writes no edit list, so a track's start offset would simply be
+    // lost — the bed is rendered ahead of it instead (`renderBed`'s lead).
+    firstTimestampBehavior: audio ? 'cross-track-offset' : 'strict',
   });
+  for (const { chunk, meta } of audio?.chunks ?? []) muxer.addAudioChunk(chunk, meta);
 
   let pipelineError: Error | null = null;
 

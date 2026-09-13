@@ -24,6 +24,8 @@ import { variantOutputSize, type ExportVariant } from '../projects/export-varian
 import { loadBadgeSource, paintShades, renderBadge } from './badge-render';
 import type { HookBlock, Shade } from './shades';
 import type { ResolvedHook } from './hooks/hook-variant';
+import { BED_SAMPLE_RATE, renderBed } from '../audio/render-bed';
+import { aacPrimingSeconds } from '../media/audio-encode';
 import type { ElementsAt } from './hooks/hook-elements';
 
 export interface HookVideoOptions {
@@ -106,6 +108,8 @@ export interface HookStillVideoOptions {
   /** The piece's prepared opener — see {@link HookVideoOptions.hook}. */
   hook?: ResolvedHook | null;
   elementsAt?: ElementsAt | null;
+  /** Told why the opener's ticks did not make it into the file, when they did not. */
+  onAudioSkipped?: (reason: string) => void;
   onProgress?: (p: ExportProgress) => void;
   signal?: AbortSignal;
 }
@@ -122,8 +126,9 @@ export interface HookStillVideoOptions {
  * the source's own density before the crop is the same order `renderBadge`
  * uses, so the still video and the PNG are the same picture.
  *
- * It is SILENT and has no cadence to inherit, both by construction — see
- * `render-video.ts`. The caller says so.
+ * It has no cadence to inherit, by construction — see `render-video.ts`. Its
+ * only sound is the one the opener SCORES (a scrub's ticks), rendered offline
+ * from the same plan the frames are painted from, so the two cannot drift.
  */
 export async function exportHookStillVideo(opts: HookStillVideoOptions): Promise<Blob> {
   const source = await loadBadgeSource(opts.file);
@@ -147,11 +152,24 @@ export async function exportHookStillVideo(opts: HookStillVideoOptions): Promise
     canvas.width = size.w;
     canvas.height = size.h;
 
+    // The bed is rendered from the score before a frame is painted: the
+    // score is known up front, so there is nothing to capture while drawing.
+    const score = opts.hook?.score() ?? [];
+    // Rendered ahead of the AAC encoder's priming, so each tick lands ON the
+    // frame it was scored for instead of 44ms after it (measured).
+    const audio = score.length
+      ? await renderBed(score, opts.seconds, {
+          leadSeconds: aacPrimingSeconds(BED_SAMPLE_RATE),
+        })
+      : null;
+
     return await encodeFrames({
       width: size.w,
       height: size.h,
       seconds: opts.seconds,
       fps: opts.fps,
+      audio,
+      onAudioSkipped: opts.onAudioSkipped,
       // The same render the stage and the PNG deck go through, at a clock
       // rather than settled: one composition, three surfaces.
       draw: async (tSeconds) => {

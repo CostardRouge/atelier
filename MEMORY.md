@@ -36,6 +36,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - `shared/` never imports `tools/`; pure logic lives in DOM-free modules with unit tests beside them — `architecture.md`, `testing.md`.
 - One global asset library keyed by base name feeds every tool through capability matching — `architecture.md`.
 - Video export is one shared WebCodecs pipeline (`exportProcessedVideo`) parameterised by a per-frame processor; audio is copied, never re-encoded — `media-pipeline.md`.
+- Audio the suite MAKES (a hook's tick bed) IS encoded, to AAC, before the muxer is built — and rendered ahead of the encoder's measured 2112-sample priming, because mp4-muxer writes no edit list and refuses negative timestamps; sync is claimed only after decoding the MP4 back — `media-pipeline.md`.
 - HEVC that the browser cannot decode is handled by an opt-in, in-browser ffmpeg.wasm transcode to H.264, not by uploading or by dropping the clip — `media-pipeline.md`.
 - Export frame rate is a per-variant resample onto a `1/fps` grid — duration kept, frames dropped or duplicated, never interpolated; asking for the source rate stays an exact pass-through — `media-pipeline.md`, `studio.md`.
 - The GitHub Pages base path is derived from `GITHUB_REPOSITORY`, never hardcoded — `deployment.md`.
@@ -220,7 +221,7 @@ anything about media sources or document storage:
   the picker, how a synthesised sound bed reaches the MP4 through the export
   that already exists (the `p5-templates` pattern minus the server), the
   missing `exportGeneratedClip` seam, and seven phases of one commit each.
-  **Phases 1–3 are built** (engine, picker, Défilé — silent); phase 4 turned out to exist already as `encodeFrames`; sound, mixing and the route trace are not built. Read it before touching
+  **Phases 1–3 and 5 are built** (engine, picker, Défilé, its ticks in videos painted from a still); phase 4 turned out to exist already as `encodeFrames`; mixing into a clip's own sound and the route trace are not built. Read it before touching
   `shared/roadtrip/hooks/`, `badge-layout.ts` or anything that would add audio
   to an export.
 - **`docs/winnow-timeline.md`** — what Winnow's forthcoming timeline (media
