@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   WEEKDAYS,
   formatIsoDate,
@@ -7,10 +7,9 @@ import {
   todayIso,
   type IsoDate,
 } from '../../shared/roadtrip/trip-days';
-import { HEATMAP_FIXED, heatmapColumn, heatmapWidth } from '../../shared/roadtrip/day-grid';
+import { RAIL_WIDTH, fittedColumn } from '../../shared/roadtrip/day-grid';
+import { useElementWidth } from '../../shared/ui/use-element-width';
 import { POST_KINDS } from '../../shared/roadtrip/trip-types';
-import StageZoomControl from '../../shared/ui/StageZoomControl';
-import { useStageZoom } from '../../shared/ui/use-stage-zoom';
 import type { DayCell } from '../../shared/roadtrip/trip-coverage';
 import { HEATMAP_LEVELS as LEVELS } from './heatmap-ramp';
 
@@ -35,6 +34,18 @@ export interface DayStage {
   total: number;
 }
 
+/** A leg drawn under the grid, on the grid's own week axis. */
+export interface HeatmapLeg {
+  id: string;
+  label: string;
+  tint: string;
+  /** 0-based day offset from the trip's first day. */
+  from: number;
+  length: number;
+  lane: number;
+  selected: boolean;
+}
+
 interface DayHeatmapProps {
   startDate: IsoDate;
   endDate: IsoDate;
@@ -45,6 +56,25 @@ interface DayHeatmapProps {
   stageOf?: (date: IsoDate) => DayStage | null;
   /** What a right-click on the day offers; none or empty leaves the browser's menu. */
   menuFor?: (date: IsoDate) => DayMenuItem[];
+  /** The legs, drawn as a lane under the weeks they cover. */
+  legs?: readonly HeatmapLeg[];
+  onOpenLeg?: (id: string) => void;
+  /** Something drawn OVER the grid at its scale — the loupe's window. */
+  overlay?: (geometry: HeatmapGeometry) => ReactNode;
+}
+
+/** What the grid is drawn with, for whoever draws over it. */
+export interface HeatmapGeometry {
+  cellPx: number;
+  gapPx: number;
+  columnWidth: number;
+  /** Empty cells before the first day, so a day's column is `(lead + offset) / 7`. */
+  lead: number;
+  weeks: number;
+  /** Height of the seven rows. */
+  gridHeight: number;
+  /** The month strip above the rows. */
+  labelHeight: number;
 }
 
 export interface Menu {
@@ -55,6 +85,11 @@ export interface Menu {
 }
 
 
+
+/** The month strip above the rows, and a leg bar under them. */
+const LABELS = 18;
+const LEG = 18;
+const LEG_GAP = 3;
 
 export function levelOf(cell: DayCell): number {
   if (cell.posts.length === 0) return 0;
@@ -106,6 +141,9 @@ export default function DayHeatmap({
   onSelect,
   stageOf,
   menuFor,
+  legs = [],
+  onOpenLeg,
+  overlay,
 }: DayHeatmapProps) {
   const weeks = useMemo(() => heatmapWeeks(startDate, endDate), [startDate, endDate]);
   const months = useMemo(() => monthLabels(weeks), [weeks]);
@@ -116,56 +154,56 @@ export default function DayHeatmap({
   // for a grid meant to be swept over, and it cannot show the kinds.
   const [hovered, setHovered] = useState<Hovered | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
-  // The grid's zoom: a 310-day trip is 45 columns of 14px, and the days are
-  // what the maintainer sweeps. Zooming in gives a cell big enough to aim at;
-  // zooming out puts a long trip on one screen.
-  //
-  // `fixed` — the weekday rail keeps its width at every zoom, so the scroll
-  // correction must not count it as content that grew. `contentWidth` — the
-  // grid rounds its cells to whole pixels, so it is a staircase, not a line:
-  // the zoom needs it both to know how much the grid REALLY grew and to stop
-  // going out once the grid no longer fills the box (`day-grid.ts`).
-  const zoom = useStageZoom({
-    wheel: 'any',
-    fixed: HEATMAP_FIXED,
-    contentWidth: (scale) => heatmapWidth(weeks.length, scale),
-  });
-  const { cellPx, gapPx } = heatmapColumn(zoom.scale);
+  // The grid FITS its box (`fittedColumn`): a year across the whole width,
+  // no zoom pill. The two zooms the overview used to carry were replaced by
+  // the loupe below the grid — the maintainer's choice of L1 (roadtrip.md).
+  const [boxRef, boxWidth] = useElementWidth<HTMLDivElement>();
+  const { cellPx, gapPx } = fittedColumn(boxWidth, weeks.length);
 
   if (!weeks.length) return null;
 
   const columnWidth = cellPx + gapPx;
+  const lead = weeks[0].findIndex((d) => d !== null);
+  const geometry: HeatmapGeometry = {
+    cellPx,
+    gapPx,
+    columnWidth,
+    lead: lead < 0 ? 0 : lead,
+    weeks: weeks.length,
+    gridHeight: 7 * cellPx + 6 * gapPx,
+    labelHeight: LABELS,
+  };
+  const laneCount = legs.reduce((n, l) => Math.max(n, l.lane + 1), 0);
+  const gridWidth = weeks.length * columnWidth - gapPx;
+  const dayX = (offset: number) => ((geometry.lead + offset) / 7) * columnWidth;
 
   return (
     <div className="flex flex-col">
-    {/* The scroll box holds the GRID alone: the legend and the zoom below it
-        used to ride inside it and scroll away sideways on a zoomed trip. The
-        inner wrapper is `w-fit min-w-full`, so the grid is centred while it is
-        narrower than the box — there is no scroll to hold a day still there,
-        and growing about the middle at least keeps the view where it was —
-        and starts at the corner once it overflows. */}
-    <div ref={zoom.viewportRef} className="overflow-x-auto pb-1">
-      <div className="w-fit min-w-full flex justify-center">
-      <div className="inline-flex gap-2">
+    {/* The scroll box holds the GRID alone: the legend below it used to ride
+        inside it and scroll away sideways. The grid fills the box from a
+        month up to about fourteen months; past that its cells floor at 6px
+        and it scrolls. */}
+    <div ref={boxRef} className="overflow-x-auto pb-1">
+      <div className="inline-flex gap-2" style={{ minWidth: '100%' }}>
         {/* Weekday rail — every other row, the way a calendar is skimmed. */}
         <div
-          className="flex flex-col flex-none pt-[18px]"
-          style={{ gap: gapPx }}
+          className="flex flex-col flex-none"
+          style={{ gap: gapPx, paddingTop: LABELS }}
           aria-hidden="true"
         >
           {WEEKDAYS.map((label, row) => (
             <span
               key={label}
               className="font-mono text-3xs text-faint leading-none flex items-center justify-end pr-1"
-              style={{ height: cellPx, width: 26 }}
+              style={{ height: cellPx, width: RAIL_WIDTH }}
             >
               {row % 2 === 0 ? label : ''}
             </span>
           ))}
         </div>
 
-        <div className="flex-none">
-          <div className="relative h-[18px]">
+        <div className="relative flex-none" style={{ width: gridWidth }}>
+          <div className="relative" style={{ height: LABELS }}>
             {months.map((m) => (
               <span
                 key={`${m.column}-${m.label}`}
@@ -241,15 +279,50 @@ export default function DayHeatmap({
               </div>
             ))}
           </div>
+
+          {/* The legs, on the grid's own week axis: a bar under the weeks it
+              covers, to the day within the column. Overlaps stack, as they
+              do on the ruler. A click opens the leg below. */}
+          {laneCount > 0 && (
+            <div
+              className="relative mt-2"
+              style={{ height: laneCount * (LEG + LEG_GAP) - LEG_GAP }}
+              aria-label="Stages"
+            >
+              {legs.map((leg) => (
+                <button
+                  key={leg.id}
+                  type="button"
+                  onClick={() => onOpenLeg?.(leg.id)}
+                  title={leg.label}
+                  aria-pressed={leg.selected}
+                  className={`absolute top-0 h-[18px] px-1.5 border-0 rounded-[4px] text-left text-3xs leading-[18px] text-ink-soft truncate cursor-pointer transition-shadow ${
+                    leg.selected ? 'ring-2 ring-accent text-ink font-semibold' : 'hover:ring-1 hover:ring-line-strong'
+                  }`}
+                  style={{
+                    left: dayX(leg.from),
+                    top: leg.lane * (LEG + LEG_GAP),
+                    width: Math.max(4, (leg.length / 7) * columnWidth - 1),
+                    height: LEG,
+                    background: `color-mix(in oklch, ${leg.tint} 26%, var(--color-surface))`,
+                    boxShadow: `inset 3px 0 0 ${leg.tint}`,
+                  }}
+                >
+                  {leg.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {overlay?.(geometry)}
         </div>
-      </div>
       </div>
     </div>
 
       {hovered && !menu && <DayCard hovered={hovered} />}
       {menu && <DayMenu menu={menu} onClose={() => setMenu(null)} />}
 
-      <div className="flex items-center gap-2 mt-3 font-mono text-3xs text-faint whitespace-nowrap">
+      <div className="flex items-center gap-2 mt-2 font-mono text-3xs text-faint whitespace-nowrap">
         <span>Nothing</span>
         {LEVELS.map((bg, i) => (
           <span
@@ -266,12 +339,6 @@ export default function DayHeatmap({
             · right-click a day to start or end a stage there
           </span>
         )}
-        {/* The zoom rides the legend row rather than a row of its own: the
-            grid is already a tall block, and the scale belongs with the key
-            that says what the colours mean. */}
-        <span className="ml-auto flex-none">
-          <StageZoomControl zoom={zoom} />
-        </span>
       </div>
     </div>
   );

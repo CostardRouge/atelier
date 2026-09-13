@@ -40,6 +40,16 @@ describe('rulerBars', () => {
     expect(bar.from).toBe(0);
     expect(bar.length).toBe(5);
     expect(bar.stage).toBe(s);
+    // Its left edge is the span's, not the stage's: the ruler must not offer
+    // that edge as a handle for a date it does not stand at.
+    expect(bar.clipStart).toBe(true);
+    expect(bar.clipEnd).toBe(false);
+  });
+
+  it('marks neither edge clipped for a stage inside the span', () => {
+    const [bar] = rulerBars(trip([stage('2025-01-28', '2025-01-30')]));
+    expect(bar.clipStart).toBe(false);
+    expect(bar.clipEnd).toBe(false);
   });
 
   it('draws nothing for a stage entirely outside, reversed, or malformed', () => {

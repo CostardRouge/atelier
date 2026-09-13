@@ -48,3 +48,24 @@ export function heatmapWidth(weeks: number, scale: number): number {
   const { cellPx, gapPx } = heatmapColumn(scale);
   return weeks * (cellPx + gapPx);
 }
+
+/** Widest a cell is drawn when the box has room to spare: past this a grid stops being a calendar and becomes tiles. */
+export const MAX_FIT_CELL = 28;
+/** Narrowest a fitted cell may be before the grid scrolls instead of shrinking further. */
+export const MIN_FIT_CELL = 6;
+
+/**
+ * A cell and its gutter FITTED to a box: the whole trip across the width it is
+ * given, no zoom. A year is 53 columns, which a 1000px box gives ~18px each —
+ * enough to aim at; up to about fourteen months stays readable, and past that
+ * the cell floors at 6px and the grid scrolls inside its box. A short trip
+ * (a few weeks) would get cells the size of tiles, so it caps at 28px.
+ */
+export function fittedColumn(viewportWidth: number, weeks: number): HeatmapColumn {
+  if (viewportWidth <= 0 || weeks <= 0) return { cellPx: CELL, gapPx: GAP };
+  const column = Math.floor((viewportWidth - RAIL_WIDTH - RAIL_GAP) / weeks);
+  const gapPx = column >= 12 ? GAP : column >= 8 ? 2 : 1;
+  const cellPx = Math.max(MIN_FIT_CELL, Math.min(MAX_FIT_CELL, column - gapPx));
+  return { cellPx, gapPx };
+}
+

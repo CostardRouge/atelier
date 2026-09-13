@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { deleteThumbs } from '../../shared/roadtrip/trip-store';
 import { applyTripDetails } from '../../shared/roadtrip/trip-edit';
 import { dayStageActions } from '../../shared/roadtrip/stage-edit';
-import { stageTint } from '../../shared/roadtrip/stage-ruler';
+import { rulerBars, stageTint } from '../../shared/roadtrip/stage-ruler';
 import {
   enumerateDays,
   formatIsoDate,
@@ -26,7 +26,7 @@ import {
   type TripPost,
   type TripStage,
 } from '../../shared/roadtrip/trip-types';
-import DayHeatmap, { type DayMenuItem, type DayStage } from './DayHeatmap';
+import DayHeatmap, { type DayMenuItem, type DayStage, type HeatmapLeg } from './DayHeatmap';
 import DayPanel from './DayPanel';
 import StagesPanel from './StagesPanel';
 import TripDetailsModal, { type TripDetails } from './TripDetailsModal';
@@ -313,6 +313,29 @@ export default function TripOverview({
     return map;
   }, [trip]);
 
+  // The legs under the heatmap, on its own week axis — the same bars the
+  // ruler draws, so the two say the same thing about a stage's days.
+  const legs = useMemo<HeatmapLeg[]>(
+    () =>
+      rulerBars(trip).map((bar) => ({
+        id: bar.stage.id,
+        label: stageLabel(bar.stage) || `Stage ${bar.index + 1}`,
+        tint: stageTint(bar.index),
+        from: bar.from,
+        length: bar.length,
+        lane: bar.lane,
+        selected: bar.stage.id === selectedStageId,
+      })),
+    [trip, selectedStageId],
+  );
+  const openLegById = useCallback(
+    (id: string) => {
+      const stage = trip.stages.find((s) => s.id === id);
+      if (stage) openStage(stage);
+    },
+    [trip.stages, openStage],
+  );
+
   const menuFor = useCallback(
     (date: IsoDate): DayMenuItem[] =>
       dayStageActions(trip, date).map((action) => ({
@@ -455,6 +478,8 @@ export default function TripOverview({
             onSelect={selectDate}
             stageOf={(date) => dayStages.get(date) ?? null}
             menuFor={menuFor}
+            legs={legs}
+            onOpenLeg={openLegById}
           />
         )}
       </section>

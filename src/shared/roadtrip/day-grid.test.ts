@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CELL, GAP, heatmapColumn, heatmapWidth } from './day-grid';
+import { CELL, GAP, MAX_FIT_CELL, MIN_FIT_CELL, fittedColumn, heatmapColumn, heatmapWidth } from './day-grid';
 
 describe('heatmapColumn', () => {
   it('is the drawn size at 100%', () => {
@@ -30,3 +30,21 @@ describe('heatmapWidth', () => {
     }
   });
 });
+
+describe('fittedColumn', () => {
+  it('gives a year in a 1000px box a cell wide enough to aim at', () => {
+    const { cellPx, gapPx } = fittedColumn(1000, 53);
+    expect(cellPx).toBeGreaterThanOrEqual(14);
+    expect(cellPx + gapPx).toBeLessThanOrEqual(Math.floor((1000 - 34) / 53));
+  });
+  it('caps a short trip at the largest cell rather than drawing tiles', () => {
+    expect(fittedColumn(1000, 5).cellPx).toBe(MAX_FIT_CELL);
+  });
+  it('floors a very long trip at the smallest cell, so the grid scrolls', () => {
+    expect(fittedColumn(600, 200).cellPx).toBe(MIN_FIT_CELL);
+  });
+  it('falls back to the 100% column with no box to fit', () => {
+    expect(fittedColumn(0, 53)).toEqual({ cellPx: CELL, gapPx: GAP });
+  });
+});
+

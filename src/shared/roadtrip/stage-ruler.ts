@@ -24,6 +24,10 @@ export interface RulerBar {
   length: number;
   /** Row on the track; overlapping legs (a travel day) stack downwards. */
   lane: number;
+  /** The stage began before the span drawn — its left edge is the span's, not its own. */
+  clipStart: boolean;
+  /** The stage ended after the span drawn. */
+  clipEnd: boolean;
 }
 
 /** A run of days no stage covers, where the ruler offers to add one. */
@@ -95,7 +99,7 @@ export function rulerBars(trip: Pick<TripDoc, 'startDate' | 'endDate' | 'stages'
     let lane = 0;
     while (lane < laneEnds.length && laneEnds[lane] > from) lane += 1;
     laneEnds[lane] = from + length;
-    bars.push({ stage, index, from, length, lane });
+    bars.push({ stage, index, from, length, lane, clipStart: start < 0, clipEnd: end > total - 1 });
   });
   return bars;
 }
