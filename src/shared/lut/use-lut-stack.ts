@@ -58,6 +58,14 @@ export interface LutStack {
    * while the develop is default — one bake, not two.
    */
   composedForDeveloped: CubeLut | null;
+  /**
+   * The stack baked with SOME OTHER picture's develop — how a deck whose
+   * slides each carry their own correction is graded: one cube per slide,
+   * memoised on the develop's value, thrown away whenever the layers, the
+   * output or the interpolation change. Null or a default develop answers
+   * `composedForDeveloped`, so the common case is a lookup, not a bake.
+   */
+  composeWith: (develop: DevelopSettings | null) => CubeLut | null;
   /** True while a built-in is being fetched. */
   busy: boolean;
   error: string | null;
@@ -134,15 +142,29 @@ export function useLutStack(): LutStack {
     () => composeLutStack(bakeLayers, bakeOutput, bakeInterpolation),
     [bakeLayers, bakeOutput, bakeInterpolation],
   );
+  // One memo per DEVELOP over the same stack, keyed on the develop's value:
+  // a deck of five corrected slides bakes five cubes once and then reads
+  // them, and a slider being dragged re-bakes only its own key. The cache
+  // lives with the stack it was baked from — a new layers/output/mode makes
+  // a new function and a new, empty cache. Bounded, so a long session of
+  // dragging cannot hold a thousand cubes.
+  const composeWith = useMemo(() => {
+    const cache = new Map<string, CubeLut | null>();
+    return (develop: DevelopSettings | null): CubeLut | null => {
+      if (isDefaultDevelop(develop)) return composedForDeveloped;
+      const key = JSON.stringify(develop);
+      let cube = cache.get(key);
+      if (cube === undefined) {
+        if (cache.size >= 32) cache.clear();
+        cube = composeLutStack(bakeLayers, bakeOutput, bakeInterpolation, develop);
+        cache.set(key, cube);
+      }
+      return cube;
+    };
+  }, [bakeLayers, bakeOutput, bakeInterpolation, composedForDeveloped]);
   // With no correction the two are one bake: the common case pays nothing
   // for the develop existing.
-  const composed = useMemo(
-    () =>
-      isDefaultDevelop(bakeDevelop)
-        ? composedForDeveloped
-        : composeLutStack(bakeLayers, bakeOutput, bakeInterpolation, bakeDevelop),
-    [bakeLayers, bakeOutput, bakeInterpolation, bakeDevelop, composedForDeveloped],
-  );
+  const composed = useMemo(() => composeWith(bakeDevelop), [composeWith, bakeDevelop]);
 
   const setDevelop = useCallback((next: DevelopSettings | null) => {
     setDevelopState(next ?? DEFAULT_DEVELOP);
@@ -259,6 +281,7 @@ export function useLutStack(): LutStack {
     develop,
     composed,
     composedForDeveloped,
+    composeWith,
     busy,
     error,
     addBuiltin,

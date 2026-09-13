@@ -139,6 +139,38 @@ export function normaliseDevelop(raw: unknown): DevelopSettings {
   return out;
 }
 
+/**
+ * A stored develop as a DOCUMENT holds it: `null` for "as shot", so a picture
+ * nobody corrected stores nothing — the "empty means computed" rule, where
+ * computed is the identity. Reads anything (a migration's unknown, a file's
+ * junk) and answers null for a default or unreadable value.
+ */
+export function developOrNull(raw: unknown): DevelopSettings | null {
+  if (raw === null || raw === undefined) return null;
+  const d = normaliseDevelop(raw);
+  return isDefaultDevelop(d) ? null : d;
+}
+
+/** A named develop kept on a document, applied by a click — never followed. */
+export interface DevelopPreset {
+  id: string;
+  name: string;
+  settings: DevelopSettings;
+}
+
+/** Presets as a document holds them, read back safely: junk entries dropped. */
+export function normaliseDevelopPresets(raw: unknown): DevelopPreset[] {
+  if (!Array.isArray(raw)) return [];
+  const out: DevelopPreset[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const e = entry as Record<string, unknown>;
+    if (typeof e.id !== 'string' || !e.id || typeof e.name !== 'string') continue;
+    out.push({ id: e.id, name: e.name, settings: normaliseDevelop(e.settings) });
+  }
+  return out;
+}
+
 // --- the maths --------------------------------------------------------------
 
 /** Rec.709 / sRGB luminance weights, in linear light. */

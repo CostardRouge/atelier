@@ -21,6 +21,7 @@ import {
 import { charBudget, wrapText } from '../lib/wrap-text';
 import { classifyPart } from '../library/assets';
 import { DEFAULT_FRAMING, normaliseFraming, type Framing } from '../media/framing';
+import type { DevelopSettings } from '../develop/develop';
 import { OUTRO_SECONDS_DEFAULT } from '../overlay/outro-card';
 import type { SavedMediaRef } from '../projects/project-types';
 import type { BadgePieceStyles } from './badge-layout';
@@ -59,6 +60,12 @@ export interface DeckSlide {
   videoTimeSeconds: number;
   /** How this slide's picture sits in the frame. The closing card has none. */
   framing: Framing;
+  /**
+   * This picture's own correction, applied before the grade; null is as
+   * shot. Per SLIDE, like the framing — a renderer composes its cube with
+   * `LutStack.composeWith(slide.develop)`, never with one cube for the deck.
+   */
+  develop: DevelopSettings | null;
   /** The author's own line over a content picture. */
   caption: string;
   /** What this slide is delivered as, `auto` already resolved. */
@@ -130,6 +137,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       media: post.media,
       videoTimeSeconds: post.badge.videoTimeSeconds,
       framing: normaliseFraming(post.badge.framing),
+      develop: post.badge.develop ?? null,
       caption: '',
       ...resolveSlideMedium(
         post.badge.medium,
@@ -149,6 +157,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       media: slide.media,
       videoTimeSeconds: slide.videoTimeSeconds,
       framing: normaliseFraming(slide.framing),
+      develop: slide.develop ?? null,
       caption: slide.caption,
       // A content slide has nothing animated on it yet; when a caption gains
       // an animation, that flag is the only thing that changes here.
@@ -170,6 +179,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       media: null,
       videoTimeSeconds: 0,
       framing: { ...DEFAULT_FRAMING },
+      develop: null,
       caption: '',
       // The closing card carries no picture and nothing animated, so it is a
       // still — and, inside a reel, the tail the Studio already appends, at

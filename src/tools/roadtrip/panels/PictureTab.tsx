@@ -1,3 +1,4 @@
+import { describeDevelop, type DevelopSettings } from '../../../shared/develop/develop';
 import GradePanel from '../../../shared/lut/GradePanel';
 import {
   DEFAULT_FRAMING,
@@ -42,6 +43,37 @@ interface PictureTabProps {
   grade: TripGradeBinding;
   /** A reel from the linked project wears that project's grade, not this one. */
   linkedToProject: boolean;
+  /** The open slide's own correction, or null for as shot. */
+  develop: DevelopSettings | null;
+  /** Open the Develop sheet over this slide's picture. */
+  onOpenDevelop: () => void;
+  /** Back to as shot. */
+  onResetDevelop: () => void;
+}
+
+/** The two chips that say whose grade the stack is editing — the trip's, or this piece's own. */
+export function GradeScopeChips({ grade }: { grade: TripGradeBinding }) {
+  const { scope, setScope } = grade;
+  return (
+    <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="Grade scope">
+      <button
+        type="button"
+        onClick={() => setScope('trip')}
+        aria-pressed={scope === 'trip'}
+        className={chipClass(scope === 'trip')}
+      >
+        The trip’s
+      </button>
+      <button
+        type="button"
+        onClick={() => setScope('post')}
+        aria-pressed={scope === 'post'}
+        className={chipClass(scope === 'post')}
+      >
+        This piece’s own
+      </button>
+    </div>
+  );
 }
 
 /**
@@ -72,10 +104,13 @@ export default function PictureTab({
   onFraming,
   grade,
   linkedToProject,
+  develop,
+  onOpenDevelop,
+  onResetDevelop,
 }: PictureTabProps) {
   const isHook = slide.kind === 'hook';
   const isCta = slide.kind === 'cta';
-  const { stack, scope, setScope } = grade;
+  const { stack, scope } = grade;
 
   return (
     <div className="flex flex-col gap-4">
@@ -234,6 +269,53 @@ export default function PictureTab({
         </div>
       )}
 
+      {/* The picture's own CORRECTION, one settled row: the sentence the
+          sheet writes, the way in, and the way back to as shot. Per SLIDE,
+          like the framing — about this photograph, never inherited. The
+          sliders live in the sheet, not here: nine more controls on a tab
+          that already holds five sections would be the accordion again. */}
+      {!isCta && (
+        <div className="flex flex-col gap-2">
+          <SectionLegend label="Develop">
+            <p>
+              This slide’s own correction — exposure, tone, colour — applied
+              before the grade below. It belongs to this photograph and is
+              never inherited by the next one.
+            </p>
+          </SectionLegend>
+          <div className="flex items-center gap-2 min-w-0">
+            <span
+              className={`flex-1 min-w-0 truncate font-mono text-[0.68rem] ${
+                develop ? 'text-ink-soft' : 'text-faint'
+              }`}
+              title={describeDevelop(develop)}
+            >
+              {describeDevelop(develop)}
+            </span>
+            <button
+              type="button"
+              onClick={onOpenDevelop}
+              disabled={!slideFile}
+              title={slideFile ? 'Open the Develop sheet' : 'Tick a picture first'}
+              className={`${smallButton} border-accent text-accent-ink`}
+            >
+              Develop…
+            </button>
+            {develop && (
+              <button
+                type="button"
+                onClick={onResetDevelop}
+                title="Back to as shot"
+                aria-label="Back to as shot"
+                className="w-6 h-6 grid place-items-center rounded-full border border-line bg-transparent text-[0.8rem] text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
+              >
+                ↺
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col gap-2">
         <SectionLegend label="Format">
           <p>The shape every slide of this deck is delivered in.</p>
@@ -277,24 +359,7 @@ export default function PictureTab({
             </span>
           )}
         </span>
-        <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="Grade scope">
-          <button
-            type="button"
-            onClick={() => setScope('trip')}
-            aria-pressed={scope === 'trip'}
-            className={chipClass(scope === 'trip')}
-          >
-            The trip’s
-          </button>
-          <button
-            type="button"
-            onClick={() => setScope('post')}
-            aria-pressed={scope === 'post'}
-            className={chipClass(scope === 'post')}
-          >
-            This piece’s own
-          </button>
-        </div>
+        <GradeScopeChips grade={grade} />
         <GradePanel stack={stack} />
         {stack.error && (
           <p className="m-0 text-[0.76rem] text-[#9a3a23]" role="alert">

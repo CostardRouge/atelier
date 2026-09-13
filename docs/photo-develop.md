@@ -1,11 +1,11 @@
 # Develop — a photo editor inside the suite
 
-**Status (2026-09-13, evening): P1 is BUILT; the decoder is DECIDED.** The
-maintainer chose `libraw-wasm` (§6.2 option (a)) and started the phases:
-`shared/develop/develop.ts` with its spec, the develop stage as the fourth
-argument of `composeLutStack`, and `LutStack.develop` /
-`composedForDeveloped` are in — nothing on screen changes yet. P2 onwards is
-still the plan, and choices 5–7 of §11 are still open. Written from the
+**Status (2026-09-13, evening): P1 and P2 are BUILT; the decoder is DECIDED.**
+The maintainer chose `libraw-wasm` (§6.2 option (a)) and started the phases:
+the engine (P1) and Trips' side (P2 — v15, the `DevelopSheet`, the Picture
+tab's settled row, one cube per slide through `LutStack.composeWith`) are in;
+the decisions they fixed are in `media-pipeline.md` and `roadtrip.md`. P3
+onwards is still the plan, and choices 5–7 of §11 are still open. Written from the
 maintainer's brief of the same day (*"un mini éditeur de photos… luminosité,
 contraste, exposition, saturation, brillance… highlights, whites, darks,
 shadows… des DNG… ça doit marcher aussi avec la source Winnow… des LUTs sur les
@@ -591,16 +591,21 @@ bake already carries. One rule learnt building it, recorded in
 `media-pipeline.md`: an untouched pixel must come back bit-identical, so the
 luminance ratio is skipped when the curve did not move the value.
 
-### P2 — Trips: v15, the sheet, the Picture tab row
+### P2 — Trips: v15, the sheet, the Picture tab row — **BUILT**
 
 `PostBadge.develop`, `PostSlide.develop`, `developPresets`, the migration at
 the END of `migrateTripDoc`, `trip-file.ts`'s four places, `hookDefaultsFrom`
 leaving it out; `DevelopSheet` with Light · Tone · Colour · Look · footer (no
 presets, no apply-to yet); the settled row; the develop in the rail's
-signature. Verified in the dev server on a real trip: slide A developed, slide
-B untouched, the PNG deck and the hook video match the stage (the preview =
-export invariant), 0 px document overflow at 390 px with the sheet open,
-Escape / Enter.
+signature. What the build added to the plan: **`LutStack.composeWith(develop)`**,
+a memoised per-slide bake, because one cube for the deck would grade a
+corrected hook's neighbours too — the stage, the rail, the PNG deck and both
+hook videos each take their slide's own cube, while the sheet's draft rides
+`stack.develop`. Verified in headless Chromium on the dev server (a dropped
+JPEG, a Single-photo piece): 0 px overflow at 1280 and 390 with the sheet
+open, a slider moves the sheet's pixel, Done writes the row and re-grades the
+stage and the rail, Escape closes. Not driven by the probe: the wipe gesture,
+the hold chip, and the PNG/hook exports (no H.264 here).
 
 ### P3 — Studio: `media.develops`, `adoptRenames`, the Grade tab row
 

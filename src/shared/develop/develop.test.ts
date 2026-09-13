@@ -4,9 +4,11 @@ import {
   DEVELOP_KEYS,
   describeDevelop,
   developLinear,
+  developOrNull,
   developStage,
   isDefaultDevelop,
   normaliseDevelop,
+  normaliseDevelopPresets,
   signed,
   type DevelopSettings,
 } from './develop';
@@ -207,6 +209,35 @@ describe('isDefaultDevelop / normaliseDevelop', () => {
     expect(out.highlights).toBe(0);
     expect(Object.keys(out).sort()).toEqual([...DEVELOP_KEYS].sort());
     expect(normaliseDevelop(null)).toEqual(DEFAULT_DEVELOP);
+  });
+});
+
+describe('developOrNull / normaliseDevelopPresets', () => {
+  it('stores nothing for as-shot and a clamped record otherwise', () => {
+    expect(developOrNull(null)).toBeNull();
+    expect(developOrNull(undefined)).toBeNull();
+    expect(developOrNull({})).toBeNull();
+    expect(developOrNull({ exposure: 0, tint: 0 })).toBeNull();
+    expect(developOrNull('junk')).toBeNull();
+    expect(developOrNull({ exposure: 9, contrast: 12 })).toEqual(
+      dev({ exposure: 3, contrast: 12 }),
+    );
+  });
+
+  it('keeps well-formed presets and drops the rest', () => {
+    expect(normaliseDevelopPresets(null)).toEqual([]);
+    expect(
+      normaliseDevelopPresets([
+        { id: 'a', name: 'Desert noon', settings: { exposure: 0.5, blacks: -300 } },
+        { id: '', name: 'nameless' },
+        { name: 'no id', settings: {} },
+        'junk',
+        { id: 'b', name: 'Empty', settings: null },
+      ]),
+    ).toEqual([
+      { id: 'a', name: 'Desert noon', settings: dev({ exposure: 0.5, blacks: -100 }) },
+      { id: 'b', name: 'Empty', settings: { ...DEFAULT_DEVELOP } },
+    ]);
   });
 });
 

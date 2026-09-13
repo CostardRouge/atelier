@@ -596,6 +596,23 @@ error-correction level M, versions 1 to 10 (213 characters); a link that does
 not fit is refused with a reason rather than drawn as a code that scans to half
 a URL.
 
+**Develop: a picture's own correction.** On the Picture tab, one settled row
+says what has been done to the open slide's picture — `As shot`, or
+`+0.7 EV · highlights −40 · vibrance +15` — and **Develop…** opens a sheet
+over it: exposure (in stops), brightness, contrast, highlights, shadows,
+whites, blacks, temperature, tint, saturation and vibrance, with the trip's
+look underneath so a correction and a grade are set in one place. The picture
+on the sheet is exactly what the piece will deliver — the correction, then the
+look, then the output transform — and a drag across it wipes to the untouched
+frame (hold the corner chip to see it whole). The correction bakes into the
+same single LUT the grade already goes through, so the stage, the slide rail,
+the PNG deck and the hook clip all pick it up with nothing else to do. It
+belongs to **that slide**, like its framing: it is never inherited by the next
+picture, and ↺ puts it back to as shot. Every luminance move keeps hue and
+keeps a grey grey; only temperature and tint tint. On a JPEG or a Winnow proxy
+the sheet says so — an 8-bit picture has nothing above white to give back;
+developing a RAW is what the next phases are for (`docs/photo-develop.md`).
+
 **The Studio and Trips are joined up.** A piece can link the Studio project
 its clip is graded in — pick an existing one or create it from the piece — and
 the badge is then **sent into that project as an intro scene**. One export from

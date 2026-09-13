@@ -99,6 +99,9 @@ export function toTripFile(trip: TripDoc, exportedAt: number = Date.now()): Trip
     // until its pictures have been re-baked, then lights up on the pieces it
     // was already pinned to.
     cover: structuredClone(trip.cover),
+    // The presets are the trip's habit of light, like its words; a piece's
+    // own develop rides inside its post above.
+    developPresets: structuredClone(trip.developPresets),
   };
 }
 
@@ -193,6 +196,9 @@ export function parseTripFile(text: string): ParseResult {
       : base.hookDefaults,
     grade: isRecord(raw.grade) ? (raw.grade as unknown as TripDoc['grade']) : base.grade,
     cover: isRecord(raw.cover) ? (raw.cover as unknown as TripDoc['cover']) : base.cover,
+    developPresets: Array.isArray(raw.developPresets)
+      ? (raw.developPresets as TripDoc['developPresets'])
+      : base.developPresets,
   });
 
   return {
@@ -215,6 +221,7 @@ export function parseTripFile(text: string): ParseResult {
       hookDefaults: migrated.hookDefaults,
       grade: migrated.grade,
       cover: migrated.cover,
+      developPresets: migrated.developPresets,
     },
   };
 }
@@ -255,5 +262,6 @@ export function tripDocFromFile(
     // and silently drops what the file carried — the fault `applyProjectFile`
     // once had on the studio's intros.
     cover: structuredClone(file.cover),
+    developPresets: structuredClone(file.developPresets),
   };
 }

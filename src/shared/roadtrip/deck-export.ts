@@ -37,11 +37,12 @@ export interface RenderDeckOptions {
   /** Find a library file for a stored reference, or null when it is gone. */
   resolve: (ref: SavedMediaRef | null) => File | null;
   /**
-   * The composed grade every picture of the deck goes through — the post's
-   * own, or the trip's. Null leaves the pictures as shot. The closing card
-   * carries no picture, so it is never graded.
+   * The composed grade a slide's picture goes through — the post's own or the
+   * trip's, baked with THAT slide's develop (`LutStack.composeWith`). Absent,
+   * or answering null, leaves the picture as shot. The closing card carries
+   * no picture, so it is never graded.
    */
-  lut?: CubeLut | null;
+  lutFor?: (slide: DeckSlide) => CubeLut | null;
   /**
    * Which slides to render. Absent renders the whole deck, which is what the
    * PNG export has always done; the piece export passes the stills only,
@@ -81,7 +82,7 @@ export async function renderDeck(
         timeSeconds: slide.kind === 'hook' ? opts.timeSeconds : 0,
         width: w,
         height: h,
-        lut: opts.lut ?? null,
+        lut: opts.lutFor?.(slide) ?? null,
       });
       if (blob) {
         out.push({

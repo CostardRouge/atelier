@@ -4,8 +4,11 @@ import { useActiveAsset } from '../../shared/library/use-active-asset';
 import type { AssetKind } from '../../shared/library/assets';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import type { SavedMediaRef } from '../../shared/projects/project-types';
-import { hashedMediaRef } from '../../shared/projects/media-identity';
+import { hashedMediaRef, mediaOrigin } from '../../shared/projects/media-identity';
+import DevelopSheet from '../../shared/develop/DevelopSheet';
+import type { DevelopSettings } from '../../shared/develop/develop';
 import { normaliseFraming, type Framing } from '../../shared/media/framing';
+import { imageTypeLabel } from '../../shared/media/image-meta';
 import { badgeContent, type BadgePiece } from '../../shared/roadtrip/day-badge';
 import {
   badgeBlockExtent,
@@ -39,7 +42,7 @@ import TripSettingsModal, { type TripSettingsSection } from './TripSettingsModal
 import ContentTab from './panels/ContentTab';
 import ExportTab from './panels/ExportTab';
 import LookTab from './panels/LookTab';
-import PictureTab from './panels/PictureTab';
+import PictureTab, { GradeScopeChips } from './panels/PictureTab';
 import PiecePicker from './panels/PiecePicker';
 import { useBadgeClock } from './use-badge-clock';
 import { usePostExports } from './use-post-exports';
@@ -87,6 +90,28 @@ const TABS: Array<{ id: PanelTab; label: string }> = [
 const MEDIA_KINDS: readonly AssetKind[] = ['photo', 'video+telemetry', 'video'];
 
 const NO_SOURCE = { width: 0, height: 0, duration: 0 };
+
+/**
+ * What a picture IS, for the Develop sheet's chip — and the sentence about
+ * what it can give back. An 8-bit picture clips at white; only a RAW keeps
+ * what the sensor saw above it, and until the RAW path lands (P6 of
+ * `docs/photo-develop.md`) a RAW here is its JPEG twin or nothing.
+ */
+function pictureFidelity(file: File | null): { chip: string | null; note: string | null } {
+  if (!file) return { chip: null, note: null };
+  const origin = mediaOrigin(file);
+  if (origin?.fidelity === 'proxy') {
+    return {
+      chip: 'proxy · 8-bit',
+      note: `an 8-bit proxy from ${origin.sourceId}: highlights above white are already gone here`,
+    };
+  }
+  if (!file.type.startsWith('image/')) return { chip: 'clip · 8-bit', note: null };
+  return {
+    chip: `${imageTypeLabel(file.name)} · 8-bit`,
+    note: 'an 8-bit picture: highlights above white are already gone',
+  };
+}
 
 /**
  * Composing one post's hook: the picture, the badge over it, and the PNG that
@@ -307,6 +332,26 @@ export default function PostEditor({
     });
   };
 
+  /**
+   * The OPEN slide's own correction — the hook's on the badge, a carousel
+   * picture's on its slide, the same split as the framing, and for the same
+   * reason: it is about one photograph. Null is as shot.
+   */
+  const setDevelop = useCallback(
+    (develop: DevelopSettings | null) => {
+      if (slide.kind === 'hook') {
+        onChangePost({ ...post, badge: { ...post.badge, develop } });
+      } else if (slide.slideId) {
+        onChangePost({
+          ...post,
+          slides: post.slides.map((s) => (s.id === slide.slideId ? { ...s, develop } : s)),
+        });
+      }
+    },
+    [slide, post, onChangePost],
+  );
+  const [developOpen, setDevelopOpen] = useState(false);
+
   async function addSlide() {
     const ref = activeFile ? await hashedMediaRef(activeFile) : null;
     onChangePost({ ...post, slides: [...post.slides, createPostSlide(ref)] });
@@ -387,12 +432,17 @@ export default function PostEditor({
 
   // --- the grade: the Studio's stack, bound to the trip or to this piece ----
   const grade = useTripGrade(trip, post, onChangeTrip, onChangePost);
-  const lut = grade.stack.composed;
+  // One cube per SLIDE: the shared stack baked with that slide's own develop
+  // (memoised in the stack, so untouched slides share one cube). The stage
+  // reads the STORED develop even while the sheet is open — the sheet's
+  // draft rides `stack.composed`, which only the sheet itself paints from.
+  const lutFor = grade.stack.composeWith;
+  const lut = isCta ? null : lutFor(slide.develop);
 
   // Every cell of the rail, composed exactly as it will be delivered — the
   // crop, the caption, the badge, the grade. It needs the grade, so it sits
   // here rather than beside the deck above.
-  const railThumb = useRailThumbs({ trip, post, slides, aspect, resolve, lut });
+  const railThumb = useRailThumbs({ trip, post, slides, aspect, resolve, lutFor });
 
   const exports = usePostExports({
     trip,
@@ -407,7 +457,7 @@ export default function PostEditor({
     hookElements,
     block,
     hookLength,
-    lut,
+    lutFor,
     // The outcome is reported on the Export tab, so that is where to be.
     onStart: () => setTab('export'),
   });
@@ -717,7 +767,7 @@ export default function PostEditor({
                 ? { ...cta.qr, dark: trip.cta.ink, light: trip.cta.background }
                 : null
             }
-            lut={isCta ? null : lut}
+            lut={lut}
             selectedId={selectedId}
             onSelect={selectElement}
             onActivate={activateElement}
@@ -860,6 +910,9 @@ export default function PostEditor({
               onFraming={setFraming}
               grade={grade}
               linkedToProject={post.projectId !== null}
+              develop={slide.develop}
+              onOpenDevelop={() => setDevelopOpen(true)}
+              onResetDevelop={() => setDevelop(null)}
             />
           )}
 
@@ -887,6 +940,25 @@ export default function PostEditor({
         </div>
       </PanelHost>
     </div>
+
+    {developOpen && !isCta && (
+      <DevelopSheet
+        file={slideFile}
+        videoTimeSeconds={slide.videoTimeSeconds}
+        title={slideFile?.name ?? 'this slide'}
+        fidelity={pictureFidelity(slideFile).chip}
+        note={pictureFidelity(slideFile).note}
+        stack={grade.stack}
+        value={slide.develop}
+        onDone={(develop) => {
+          setDevelop(develop);
+          setDevelopOpen(false);
+        }}
+        onCancel={() => setDevelopOpen(false)}
+        lookHeader={<GradeScopeChips grade={grade} />}
+        footerHint={isHook ? 'writes to the hook' : `writes to slide ${slide.position}`}
+      />
+    )}
 
     {tripSheet && (
       <TripSettingsModal
