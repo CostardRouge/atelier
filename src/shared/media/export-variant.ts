@@ -73,7 +73,16 @@ export interface VariantRenderOptions {
     ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
     w: number,
     h: number,
+    /** Seconds since the first EXPORTED frame — the trim's in point is zero. */
+    tSeconds: number,
   ) => void;
+  /**
+   * The overlays AT a moment, for a composition whose words change as it plays
+   * (Road Trip's scrub steps its numeral). Called with the same clip-relative
+   * seconds as `paintUnderOverlays`; `elements` is used when absent. The Studio
+   * leaves it unset.
+   */
+  elementsAt?: (tSeconds: number) => OverlayElement[];
 }
 
 /**
@@ -155,10 +164,14 @@ export async function exportVariantVideo(
           // with one it is the author's pan, zoom and rotation. Same maths as
           // the badge preview, so a hook burns in where it was composed.
           drawFramed(ctx, upright, displayW, displayH, out.w, out.h, framing);
-          opts.paintUnderOverlays?.(ctx, out.w, out.h);
+          const t = tMicros / 1_000_000;
+          // `t` is the SOURCE timestamp; a composition counts from the first
+          // exported frame, which a trim moves.
+          const sinceStart = t - (opts.trim?.start ?? 0);
+          opts.paintUnderOverlays?.(ctx, out.w, out.h, sinceStart);
           if (variant.overlays) {
-            const t = tMicros / 1_000_000;
-            drawOverlays(ctx, opts.elements, findCue(opts.cues, t), out.w, out.h, {
+            const elements = opts.elementsAt ? opts.elementsAt(sinceStart) : opts.elements;
+            drawOverlays(ctx, elements, findCue(opts.cues, t), out.w, out.h, {
               theme: opts.theme,
               timeShift: opts.timeShift,
               cues: opts.cues,

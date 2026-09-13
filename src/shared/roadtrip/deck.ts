@@ -25,6 +25,7 @@ import { OUTRO_SECONDS_DEFAULT } from '../overlay/outro-card';
 import type { SavedMediaRef } from '../projects/project-types';
 import type { BadgePieceStyles } from './badge-layout';
 import type { SlideMedium, TripDoc, TripPost } from './trip-types';
+import { hookMoves } from './hooks/hook-context';
 
 export type DeckSlideKind = 'hook' | 'content' | 'cta';
 
@@ -133,7 +134,9 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       caption: '',
       ...resolveSlideMedium(
         post.badge.medium,
-        hookAnimates(post.badge.pieceStyles),
+        // An opener that plays (the scrub) moves the hook exactly as an
+        // animated piece does: left as `auto`, it must leave as a video.
+        hookAnimates(post.badge.pieceStyles) || hookMoves(trip, post),
         post.media?.name ?? null,
       ),
       chosen: post.badge.medium,

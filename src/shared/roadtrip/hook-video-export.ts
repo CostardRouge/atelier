@@ -23,6 +23,8 @@ import type { StyleTheme } from '../overlay/title-styles';
 import { variantOutputSize, type ExportVariant } from '../projects/export-variants';
 import { loadBadgeSource, paintShades, renderBadge } from './badge-render';
 import type { HookBlock, Shade } from './shades';
+import type { ResolvedHook } from './hooks/hook-variant';
+import type { ElementsAt } from './hooks/hook-elements';
 
 export interface HookVideoOptions {
   file: File;
@@ -45,6 +47,10 @@ export interface HookVideoOptions {
    * leaves the clip as shot.
    */
   lut?: CubeLut | null;
+  /** The piece's prepared opener, painted under the shades at the clip's clock. */
+  hook?: ResolvedHook | null;
+  /** The badge's elements at a moment, when the opener rewrites its words. */
+  elementsAt?: ElementsAt | null;
   onProgress?: (p: ExportProgress) => void;
   signal?: AbortSignal;
 }
@@ -67,9 +73,16 @@ export function exportHookVideo(opts: HookVideoOptions): Promise<Blob> {
       // The badge's windows count from the first exported frame, and the
       // pipeline reads that from the trim's in point — so the entrance plays
       // on frame one of the delivered clip, not wherever it fell in the rush.
-      paintUnderOverlays: shades?.length
-        ? (ctx, w, h) => paintShades(ctx, w, h, shades, block)
-        : undefined,
+      // The opener first, then the shades over it — the order `renderBadge`
+      // paints in, so the burned clip and the stage are the same composition.
+      paintUnderOverlays:
+        opts.hook || shades?.length
+          ? (ctx, w, h, t) => {
+              opts.hook?.paint(ctx, t, { width: w, height: h });
+              if (shades?.length) paintShades(ctx, w, h, shades, block);
+            }
+          : undefined,
+      elementsAt: opts.elementsAt ?? undefined,
     },
     opts.onProgress,
     opts.signal,
@@ -90,6 +103,9 @@ export interface HookStillVideoOptions {
   shades?: readonly Shade[];
   block?: HookBlock | null;
   lut?: CubeLut | null;
+  /** The piece's prepared opener — see {@link HookVideoOptions.hook}. */
+  hook?: ResolvedHook | null;
+  elementsAt?: ElementsAt | null;
   onProgress?: (p: ExportProgress) => void;
   signal?: AbortSignal;
 }
@@ -142,6 +158,8 @@ export async function exportHookStillVideo(opts: HookStillVideoOptions): Promise
         await renderBadge(canvas, {
           source: picture,
           elements: opts.elements,
+          elementsAt: opts.elementsAt ?? null,
+          hook: opts.hook ?? null,
           theme: opts.theme,
           timeSeconds: tSeconds,
           shades: opts.shades,

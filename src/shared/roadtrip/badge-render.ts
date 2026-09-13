@@ -187,6 +187,14 @@ export interface RenderBadgeOptions {
    * agree. See `shared/roadtrip/hooks/`.
    */
   hook?: ResolvedHook | null;
+  /**
+   * The badge's elements AT a moment, for a hook that rewrites its text — the
+   * scrub's numeral counting with the head. When set it wins over `elements`
+   * for both the paint and the measure, evaluated at `timeSeconds`, so a click
+   * lands on the numeral it is currently showing. Null for every badge whose
+   * words do not move, which keeps their elements built once per edit.
+   */
+  elementsAt?: ((tSeconds: number) => OverlayElement[]) | null;
   /** A QR square, drawn under the text — the call-to-action slide's hero. */
   qr?: QrDraw | null;
   /**
@@ -231,7 +239,12 @@ export function measureBadge(
   h: number,
   opts: RenderBadgeOptions,
 ): ElementBox[] {
-  return measureOverlays(ctx, opts.elements, null, w, h, overlayOptions(opts));
+  return measureOverlays(ctx, elementsFor(opts), null, w, h, overlayOptions(opts));
+}
+
+/** The elements a paint or a measure uses — rewritten at the clock when a hook says so. */
+function elementsFor(opts: RenderBadgeOptions): OverlayElement[] {
+  return opts.elementsAt ? opts.elementsAt(opts.timeSeconds ?? 0) : opts.elements;
 }
 
 /** `#rrggbb` → `rgba(r,g,b,a)`; anything else is passed through unchanged. */
@@ -337,7 +350,7 @@ export async function renderBadge(
   if (opts.shades?.length) paintShades(ctx, w, h, opts.shades, opts.block ?? null);
   if (opts.qr) drawQr(ctx, w, h, opts.qr);
 
-  drawOverlays(ctx, opts.elements, null, w, h, overlayOptions(opts));
+  drawOverlays(ctx, elementsFor(opts), null, w, h, overlayOptions(opts));
 }
 
 /**

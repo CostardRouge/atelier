@@ -23,6 +23,8 @@ import {
 import type { HookBlock } from '../../shared/roadtrip/shades';
 import type { TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
 import { canWriteToDisk, pickWritableDirectory, writeItems } from '../../shared/sources/write-files';
+import type { ResolvedHook } from '../../shared/roadtrip/hooks/hook-variant';
+import type { ElementsAt } from '../../shared/roadtrip/hooks/hook-elements';
 
 export interface PostExportInputs {
   trip: TripDoc;
@@ -40,6 +42,13 @@ export interface PostExportInputs {
   hookInfo: { width: number; height: number; duration: number };
   /** The badge exactly as the stage draws it. */
   hookElements: OverlayElement[];
+  /**
+   * The piece's prepared opener, WITH its pictures — the same object the stage
+   * paints, so a burned-in scrub flashes what the preview flashed.
+   */
+  hook: ResolvedHook | null;
+  /** The badge's elements at a moment, when the opener rewrites its words. */
+  hookElementsAt: ElementsAt | null;
   block: HookBlock | null;
   /** How long the burned-in clip runs, already clamped to the clip. */
   hookLength: number;
@@ -120,6 +129,8 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       const shared = {
         variant,
         elements: inputs.hookElements,
+        hook: inputs.hook,
+        elementsAt: inputs.hookElementsAt,
         theme: trip.theme,
         shades: post.badge.shades,
         block: inputs.block,
@@ -180,6 +191,8 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     const shared = {
       variant,
       elements: isHook ? inputs.hookElements : contentSlideElements(slide.caption, aspect),
+      hook: isHook ? inputs.hook : null,
+      elementsAt: isHook ? inputs.hookElementsAt : null,
       theme: isHook ? trip.theme : null,
       shades: isHook ? post.badge.shades : undefined,
       block: isHook ? inputs.block : null,

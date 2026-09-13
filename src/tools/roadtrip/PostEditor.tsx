@@ -15,6 +15,9 @@ import {
 } from '../../shared/roadtrip/badge-layout';
 import { resolveHook } from '../../shared/roadtrip/hooks/registry';
 import type { HookContext } from '../../shared/roadtrip/hooks/hook-variant';
+import { hookContextFor } from '../../shared/roadtrip/hooks/hook-context';
+import { hookElementsAt as hookElementsAtFor } from '../../shared/roadtrip/hooks/hook-elements';
+import useHookPictures from './use-hook-pictures';
 import { ctaLayout, ctaRoleFromElementId, type CtaRole } from '../../shared/roadtrip/cta-slide';
 import {
   captionLineFromElementId,
@@ -273,16 +276,18 @@ export default function PostEditor({
     [content, post.badge.layout, aspect],
   );
 
-  // What every hook variant is prepared against — and what the picker hands to
-  // a variant's own options panel, so a control there can say a real value.
+  // What every hook variant is prepared against — built by the one function
+  // the deck, the rail and the exports use too — and what the picker hands to a
+  // variant's options panel, so a control there can say a real value. The
+  // pictures an opener asked for are decoded apart and joined in after.
+  const baseHookCtx = useMemo<HookContext>(
+    () => hookContextFor(trip, post, aspect, content),
+    [trip, post, aspect, content],
+  );
+  const hookPictures = useHookPictures(trip, post, post.badge.hook, baseHookCtx);
   const hookCtx = useMemo<HookContext>(
-    () => ({
-      aspect,
-      durationSeconds: post.badge.durationSeconds,
-      date: post.date,
-      content,
-    }),
-    [aspect, post.badge.durationSeconds, post.date, content],
+    () => ({ ...baseHookCtx, pictures: hookPictures }),
+    [baseHookCtx, hookPictures],
   );
 
   // The piece's opener, prepared once per change of what it reads — never per
@@ -290,6 +295,20 @@ export default function PostEditor({
   const hook = useMemo(
     () => resolveHook(post.badge.hook, hookCtx),
     [post.badge.hook, hookCtx],
+  );
+  // Only an opener that rewrites the badge's words gets elements per frame;
+  // every other piece keeps the ones built above, once per edit.
+  const hookElementsAt = useMemo(
+    () =>
+      hookElementsAtFor(
+        hook,
+        content,
+        post.badge.layout,
+        aspect,
+        post.badge.pieceStyles,
+        post.badge.durationSeconds,
+      ),
+    [hook, content, post.badge.layout, aspect, post.badge.pieceStyles, post.badge.durationSeconds],
   );
 
   const patchBadge = useCallback(
@@ -352,7 +371,12 @@ export default function PostEditor({
   }
 
   // --- the badge's own clock ------------------------------------------------
-  const clock = useBadgeClock(post.badge.pieceStyles, post.badge.durationSeconds, isHook);
+  const clock = useBadgeClock(
+    post.badge.pieceStyles,
+    post.badge.durationSeconds,
+    isHook,
+    hook.seconds,
+  );
 
   // --- the hook's own picture, whichever slide is open ---------------------
   // The stage reports the OPEN slide's source; the hook clip export and the
@@ -421,6 +445,8 @@ export default function PostEditor({
     aspect,
     slideCount: slides.length,
     timeSeconds: clock.time,
+    hook,
+    hookElementsAt,
     resolve,
     hookFile,
     hookIsVideo,
@@ -545,12 +571,19 @@ export default function PostEditor({
   useEffect(() => {
     missingRef.current = missing;
   }, [missing]);
+  // Never while the transport plays: a thumbnail caught mid-sweep would be
+  // ANOTHER day's picture standing for this piece — in the gallery's cover and
+  // in every other piece's scrub that flashes it.
+  const playingRef = useRef(clock.playing);
+  useEffect(() => {
+    playingRef.current = clock.playing;
+  }, [clock.playing]);
   const captureThumb = useCallback(
     (canvas: HTMLCanvasElement) => {
-      if (!isHook || missingRef.current) return;
+      if (!isHook || missingRef.current || playingRef.current) return;
       if (thumbTimer.current !== null) window.clearTimeout(thumbTimer.current);
       thumbTimer.current = window.setTimeout(() => {
-        if (missingRef.current) return;
+        if (missingRef.current || playingRef.current) return;
         void canvasThumbnail(canvas).then((blob) => {
           if (blob) void putThumb(post.id, blob);
         });
@@ -733,6 +766,7 @@ export default function PostEditor({
             shades={isHook ? post.badge.shades : undefined}
             block={isHook ? block : null}
             hook={isHook ? hook : null}
+            elementsAt={isHook ? hookElementsAt : null}
             background={isCta ? trip.cta.background : undefined}
             qr={
               isCta && cta.qr

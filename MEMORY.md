@@ -90,6 +90,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - `drawOverlays` draws one line and never wraps: a sentence is wrapped onto a character budget first (`shared/lib/wrap-text.ts`) — `roadtrip.md`.
 - An animated hook burns into a clip through the Studio's own `exportVariantVideo`, trimmed to START on the chosen frame so `originSeconds` puts the entrance on frame one; the scrim reaches the frame through a new `paintUnderOverlays` hook — `roadtrip.md`, `media-pipeline.md`.
 - Only a deck's content slides reorder; the hook and the call to action are structural — `roadtrip.md`.
+- A hook can MOVE without an animated badge piece (Défilé): the clock, the thumbnail capture and `deckSlides`' `auto` must all read `ResolvedHook.seconds`, and a still of a hook is taken at rest past it — `roadtrip.md`.
 - A piece's OPENER is a hook VARIANT from a registry (`shared/roadtrip/hooks/`, `PostBadge.hook` v15): `prepare()` returns a closure so the paint, the content and the sound cannot drift apart, a variant rewrites named badge PIECES instead of building elements, `owns: 'frame' | 'layer'` is declared from the start, and the field is a LIST with one entry so a stack costs no second migration — `roadtrip.md`, `docs/hook-engine.md`.
 - Vignette and scrim are ONE stack of shades (direction × reach × strength × colour × invert × follow-the-hook); a middle band must run edge-to-edge with the peak in the centre, or a canvas gradient blacks out the far half — `roadtrip.md`.
 - In an async paint, read the canvas's size AFTER the last await: a stale render that read it before drew a miniature over a resized stage — `roadtrip.md`.
@@ -219,7 +220,7 @@ anything about media sources or document storage:
   the picker, how a synthesised sound bed reaches the MP4 through the export
   that already exists (the `p5-templates` pattern minus the server), the
   missing `exportGeneratedClip` seam, and seven phases of one commit each.
-  **Phases 1 and 2 are built** (engine + picker); the rest is not. Read it before touching
+  **Phases 1–3 are built** (engine, picker, Défilé — silent); phase 4 turned out to exist already as `encodeFrames`; sound, mixing and the route trace are not built. Read it before touching
   `shared/roadtrip/hooks/`, `badge-layout.ts` or anything that would add audio
   to an export.
 - **`docs/winnow-timeline.md`** — what Winnow's forthcoming timeline (media

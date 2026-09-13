@@ -7,6 +7,7 @@
  */
 
 import { badgeVariant } from './badge';
+import { scrubVariant } from './scrub';
 import {
   DEFAULT_HOOK_ID,
   defaultHookLayers,
@@ -18,7 +19,7 @@ import {
   type ResolvedHook,
 } from './hook-variant';
 
-export const HOOK_VARIANTS: readonly HookVariant[] = [badgeVariant];
+export const HOOK_VARIANTS: readonly HookVariant[] = [badgeVariant, scrubVariant];
 
 export function hookVariantById(id: string): HookVariant | undefined {
   return HOOK_VARIANTS.find((variant) => variant.id === id);

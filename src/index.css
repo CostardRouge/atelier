@@ -88,6 +88,20 @@
   }
 }
 
+/* The Défilé picker card (`shared/roadtrip/hooks/scrub.tsx`): its reading head
+   leaves the start of a tiny tape and comes to rest, decelerating, like the
+   sweep it stands for. The card uses `motion-safe:`, so a viewer who asked for
+   no motion sees the head already at rest. */
+@keyframes scrub-sketch {
+  0% {
+    left: 0;
+  }
+  45%,
+  100% {
+    left: 40%;
+  }
+}
+
 @keyframes pulse-dot {
   0%,
   100% {

@@ -26,6 +26,8 @@ import { badgeContent } from './day-badge';
 import { contentSlideElements, type DeckSlide } from './deck';
 import type { HookBlock, Shade } from './shades';
 import { resolveHook } from './hooks/registry';
+import { hookContextFor } from './hooks/hook-context';
+import { hookElementsAt, type ElementsAt } from './hooks/hook-elements';
 import type { ResolvedHook } from './hooks/hook-variant';
 import type { TripDoc, TripPost } from './trip-types';
 
@@ -50,6 +52,8 @@ export interface SlideRender {
    * whatever second it is drawing.
    */
   hook: ResolvedHook | null;
+  /** The badge's elements at a moment, when the opener rewrites its words. */
+  elementsAt: ElementsAt | null;
 }
 
 export function slideRender(
@@ -73,6 +77,7 @@ export function slideRender(
         : null,
       framing: slide.framing,
       hook: null,
+      elementsAt: null,
     };
   }
 
@@ -86,6 +91,7 @@ export function slideRender(
       qr: null,
       framing: slide.framing,
       hook: null,
+      elementsAt: null,
     };
   }
 
@@ -97,6 +103,10 @@ export function slideRender(
     showPin: post.badge.showPin,
     overrides: post.badge.textOverrides,
   });
+
+  // No pictures here: this module is pure, and every still it feeds is drawn
+  // settled — past the sweep, where a scrub shows the piece's own picture.
+  const hook = resolveHook(post.badge.hook, hookContextFor(trip, post, aspect, content));
 
   return {
     elements: content
@@ -118,11 +128,14 @@ export function slideRender(
     background: undefined,
     qr: null,
     framing: slide.framing,
-    hook: resolveHook(post.badge.hook, {
-      aspect,
-      durationSeconds: post.badge.durationSeconds,
-      date: post.date,
+    hook,
+    elementsAt: hookElementsAt(
+      hook,
       content,
-    }),
+      post.badge.layout,
+      aspect,
+      post.badge.pieceStyles,
+      post.badge.durationSeconds,
+    ),
   };
 }

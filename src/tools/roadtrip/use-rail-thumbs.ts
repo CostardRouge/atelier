@@ -174,7 +174,10 @@ export default function useRailThumbs({
           ...job.render,
           source,
           grader,
-          timeSeconds: job.slide.kind === 'hook' ? settle : 0,
+          // Past the opener too: a scrub's thumbnail mid-sweep would be
+          // another day's picture standing for this one.
+          timeSeconds:
+            job.slide.kind === 'hook' ? Math.max(settle, job.render.hook?.seconds ?? 0) : 0,
         });
       } finally {
         grader?.dispose();

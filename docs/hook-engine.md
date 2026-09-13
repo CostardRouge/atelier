@@ -1,8 +1,9 @@
 # The hook engine — many openers over one badge
 
-**Status (2026-09-13).** Design agreed with the maintainer; **phases 1 and 2
-are built** (the contract, the registry, the `badge` variant, the resolution,
-the paint seam, and the picker on the Look tab). Phases 3–7 are not. The
+**Status (2026-09-13).** Design agreed with the maintainer; **phases 1–3 are
+built** — the engine, the picker, and **Défilé** itself, silent, on the stage,
+the PNG deck, the rail and both video exports. What was phase 4 turned out to
+exist already (§8). Sound, mixing and the route trace are not built. The
 exemplar that drove the design is the **scrub** («&nbsp;Défilé&nbsp;»): the
 trip's measuring tape sweeps from day 1 to the day being told, flashing that
 day's pictures as it passes, and ticking.
@@ -39,6 +40,11 @@ may not do to the badge above it.
   null` — **a re-timed export is already silent**.
 - `export-tail.ts` (`{ seconds, draw(t) }`) proves generated frames encode and
   mux cleanly, appended after the footage.
+- `encodeFrames` (`shared/media/render-video.ts`) paints a clip with **no source
+  file**, and `exportHookStillVideo` delivers a hook over a photograph through it
+  — `renderBadge` once per frame. Both landed before this brief (`78fc7f0`,
+  `fc41dba`) and the first draft missed them. `encodeFrames` writes **no audio
+  track**, by construction.
 - `portablePost` in `trip-file.ts` deep-clones the whole post, so a new field on
   `PostBadge` travels in and out of `.roadtrip.json` **without** a fifth site to
   remember. The four-site rule bites fields on `TripDoc`, not on a post.
@@ -177,7 +183,7 @@ Three cases, one of them hard:
 
 | The hook is built on | Audio today | With a bed |
 | --- | --- | --- |
-| a **still** | no video path at all | the bed is the only track — no conflict |
+| a **still** | painted by `encodeFrames`, silent | the bed is the only track — `encodeFrames` gains an audio track it never had, nothing to preserve |
 | a **clip delivered silent** (`keepAudio = null`) | already silent | bed encoded alone — free lane |
 | a **clip keeping its sound** | AAC copied bit-for-bit, deliberately | decode → sum → re-encode. **The one rule that bends** — opt-in, "keep the original audio untouched" stays the default |
 
@@ -187,24 +193,50 @@ In the editor the score plays through one `AudioContext` created on a user
 gesture, muted by default behind a speaker toggle — a panel that ticks while a
 slider is dragged is unusable.
 
-## 8. The missing seam: `exportGeneratedClip`
+## 8. The still → video seam — already built
 
-A scrub over a photograph has no footage to burn into, and `exportHookVideo`
-needs a `File`. What is missing is a head with no body — *easier* than the
-deferred pre-roll, because nothing already encoded has to move:
+The first draft of this brief proposed an `exportGeneratedClip` for a hook with
+no footage. **It exists**, under the name `encodeFrames`, with
+`exportHookStillVideo` as Road Trip's caller (§2). Défilé on a still rides it
+unchanged: the painter calls `renderBadge` per frame, which paints the opener
+and asks `elementsAt` for the numeral like every other surface. The only thing
+sound will add there is an audio track, since it writes none today.
 
-```ts
-exportGeneratedClip(opts: {
-  seconds: number; fps: number; width: number; height: number;
-  draw: (tSeconds: number) => CanvasImageSource;   // ExportTail's own shape
-  audio?: AudioBuffer | null;
-}): Promise<Blob>
-```
+## 9. Défilé — decisions built into it (2026-09-13)
 
-It unlocks three things at once: every variant **on a still**, a photo piece
-deliverable as a reel at all (the 2026-09-09 open item), and later the pre-roll.
+- **One driver** (`scrub-plan.ts`, pure): stops placed on the inverse of a cubic
+  ease-out, the head gliding on the same curve so it sits exactly on a stop at
+  that stop's time. The paint, the numeral and (later) the score read it.
+- **Only told days flash; an untold day goes DARK.** Not a stand-in, and not the
+  hero shown early — an empty day looks empty, which is the honest reading of
+  the calendar and what makes the hero land. A trip with nothing told still
+  sweeps, through evenly spaced dark days, so a first piece reads the length.
+  The piece being composed never counts as telling its own day.
+- **Flashes come from the thumbs store**, one JPEG per day (`hookDayPosts`: the
+  published piece stands for its day over a draft). Local, already graded and
+  framed, one read a day; a flash lasts a few frames, so a 640px picture
+  stretched over it is not what anyone sees. Only the days `wantsDays` names
+  are decoded, and a replaced set is closed late, since an export may still be
+  drawing it.
+- **The numeral steps only under the `day` counter**, and only while the head
+  moves; at rest the badge says its own value, a range post's "27–29" too.
+  Stepping trip days into a numeral labelled as a day at a place would be a
+  fabricated reading.
+- **`content()` reaches the renderer as `elementsAt(t)`**, not by moving the
+  element build into `renderBadge` as the first draft proposed: `renderBadge`,
+  `measureBadge`, `exportVariantVideo` and the still painter all accept an
+  optional function of the clock and fall back to `elements`. Built only when
+  `ResolvedHook.rewrites` — every other piece keeps elements built once per
+  edit. Hit-testing reads the same function, so a click lands on the numeral
+  it is showing.
+- **Three places had to learn that a hook can move without an animated piece**,
+  each a real bug the first render showed: the badge clock (it never started,
+  so the stage sat on the sweep's first, dark frame), the thumbnail capture
+  (never while the transport plays, or another day's picture stands for this
+  piece everywhere), and `deckSlides`' `auto` medium (`hookMoves`, measured by
+  preparing the hook — a scrub on day 1 plays nothing and stays an image).
 
-## 9. Phases — one commit each
+## 10. Phases — one commit each
 
 1. **The contract, and the badge inside it.** Types, registry, `badge` variant,
    `resolveHook`, tests, and the paint seam threaded into `renderBadge` /
@@ -213,28 +245,28 @@ deliverable as a reel at all (the 2026-09-09 open item), and later the pre-roll.
 2. **The picker.** Cards on the Look tab, the variant's `Panel`, the two pure
    writers. With one variant the row is one card — the honest way to prove it.
    **Built.**
-3. **Défilé, on a clip, silent.** Stop list from `tripCoverage`, the paint, the
-   `content()` rewrite of the numeral, the options panel. Rides
-   `exportHookVideo` unchanged.
-4. **`exportGeneratedClip`.** Défilé on a still; photo pieces exportable as
-   video.
+3. **Défilé, silent.** Stop list, paint, `content()` through `elementsAt`,
+   options panel — on the stage, the PNG deck, the rail, and BOTH video paths
+   (the clip's and the still's). **Built.** Not verified in a browser: an actual
+   encode of a scrub (the test profile's pieces carry no picture).
+4. ~~`exportGeneratedClip`~~ — **already built** as `encodeFrames` (§8).
 5. **The voices and the bed.** Preset table, `score()` on Défilé, offline
-   render, `AudioEncoder`, live playback muted by default. Stills first — no
-   mixing anywhere.
+   render, `AudioEncoder`, an audio track in `encodeFrames`, live playback
+   muted by default. Stills first — no mixing anywhere.
 6. **Mixing**, for clips that keep their sound. Opt-in.
 7. **Route trace.** A second real variant, deliberately unlike the first: needs
    located places, no media, no sound, no stop list. If it fits the contract
    without changing it, the contract is right.
 
-## 10. Open points
+## 11. Open points
 
-- **`content()` is unwired.** Phase 1 threads the *paint* (cheap, already
-  per-frame) but not the content rewrite: both call sites `useMemo` the elements
-  on a stable `content`, and making that depend on the transport's clock would
-  rebuild every element every frame for a variant that rewrites nothing. The
-  answer when Défilé needs it (phase 3) is to move the element build into the
-  render — `renderBadge` taking `content` + `layout` rather than finished
-  `elements` — not to add a time dependency to the React memo.
+- **The tape paints UNDER the shades**, because the seam is between the picture
+  and the shades. A strong scrim at the bottom dims it. Acceptable so far; if it
+  is not, a variant needs a second seam above the shades, not a hack in the
+  paint.
+- **The hook's screen time does not grow to fit the sweep.** The panel says so
+  when `hookSeconds` would cut it; the document is never changed behind the
+  author's back.
 - **Sound in the editor's transport** is designed but unbuilt; the toggle's home
   (transport vs Look tab) is not decided.
 - **The stack UI** (more than one layer) has no design. The storage is ready for

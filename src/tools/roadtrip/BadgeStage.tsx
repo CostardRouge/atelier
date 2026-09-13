@@ -46,6 +46,8 @@ interface BadgeStageProps {
    * what is composed here is what is delivered.
    */
   hook?: ResolvedHook | null;
+  /** The badge's elements at a moment, when the opener rewrites its words. */
+  elementsAt?: ((tSeconds: number) => OverlayElement[]) | null;
   /** Painted where no picture covers the frame — the closing card's ground. */
   background?: string;
   /** A QR square under the text. */
@@ -115,6 +117,7 @@ export default function BadgeStage({
   shades,
   block,
   hook = null,
+  elementsAt = null,
   background,
   qr,
   lut = null,
@@ -325,6 +328,7 @@ export default function BadgeStage({
       qr,
       framing,
       hook,
+      elementsAt,
       grader: graderFor(sourceRef.current),
       ghostId: selectedId,
     };
@@ -352,6 +356,7 @@ export default function BadgeStage({
     qr,
     framing,
     hook,
+    elementsAt,
     selectedId,
     loading,
     file,

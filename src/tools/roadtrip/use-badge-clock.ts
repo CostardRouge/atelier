@@ -27,12 +27,19 @@ export function useBadgeClock(
   styles: BadgePieceStyles,
   durationSeconds: number,
   enabled: boolean,
+  /**
+   * How long the piece's opener plays (`ResolvedHook.seconds`). A scrub has no
+   * animated piece and still moves: without this the transport never showed
+   * and the stage sat forever on the sweep's first, dark frame — which is also
+   * the frame the hook's thumbnail would have been taken from.
+   */
+  hookSeconds = 0,
 ): BadgeClock {
-  const settle = badgeSettleSeconds(styles);
+  const settle = Math.max(badgeSettleSeconds(styles), hookSeconds);
   const list = Object.values(styles);
-  const animated = list.some((s) => s?.animation);
+  const animated = list.some((s) => s?.animation) || hookSeconds > 0;
   const exits = list.some((s) => s?.animation?.out);
-  const loopSeconds = exits ? durationSeconds : Math.max(settle + 1.5, 3);
+  const loopSeconds = exits ? Math.max(durationSeconds, settle) : Math.max(settle + 1.5, 3);
 
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);

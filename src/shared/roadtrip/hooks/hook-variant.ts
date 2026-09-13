@@ -25,7 +25,7 @@
  */
 
 import type { ComponentType } from 'react';
-import type { BadgeContent, BadgePiece } from '../day-badge';
+import type { BadgeContent, BadgePiece, CounterMode } from '../day-badge';
 
 /** What the engine draws into — the 2D context both renderers already use. */
 export type HookCtx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -101,6 +101,27 @@ export type HookMediaNeed = 'day' | 'deck' | 'stage';
  * document. Phase 1 carries only what the badge itself needs; the fields behind
  * `needs` join it as the variants that want them are built.
  */
+/**
+ * One day of the trip, as a hook reads it. Built by the shell from the
+ * coverage and the stages (`hook-calendar.ts`), never by a variant.
+ */
+export interface HookDay {
+  date: string;
+  /** 1-based day of the trip. */
+  dayNumber: number;
+  /** ANOTHER piece tells this day — the one being composed never counts. */
+  told: boolean;
+  /** A leg of the trip starts on this day. */
+  legStart: boolean;
+}
+
+/** A decoded picture a variant may draw, with the size it was decoded at. */
+export interface HookPicture {
+  image: CanvasImageSource;
+  width: number;
+  height: number;
+}
+
 export interface HookContext {
   /** Frame aspect, width / height. */
   aspect: number;
@@ -114,6 +135,26 @@ export interface HookContext {
   date: string;
   /** The badge's computed content, before any variant rewrites a piece. */
   content: BadgeContent | null;
+  /**
+   * What the badge's numeral counts. A variant that steps the numeral through
+   * trip days must leave it alone under any other counter: stepping "1, 3,
+   * 5…" into a numeral labelled as a day AT A PLACE would be a fabricated
+   * reading.
+   */
+  counterMode?: CounterMode;
+  /**
+   * How long the hook slide is ON SCREEN (`PostBadge.hookSeconds`) — not the
+   * badge's life. What a variant compares its own length against, to say so
+   * when it would be cut off.
+   */
+  screenSeconds?: number;
+  /** Every day of the trip, in order — filled when `needs.coverage` asks. */
+  calendar?: readonly HookDay[];
+  /**
+   * Pictures keyed by day, filled when `needs.media` asks. A day with no entry
+   * has nothing to show; a variant draws nothing for it rather than a stand-in.
+   */
+  pictures?: ReadonlyMap<string, HookPicture>;
 }
 
 /** One sound the hook makes. Times and voices only — never an AudioContext. */
@@ -170,6 +211,13 @@ export interface HookVariant {
   /** Why this variant cannot run on this piece, or null when it can. */
   unmet?(ctx: HookContext): string | null;
   /**
+   * The days whose pictures this variant will actually draw, for `needs.media
+   * === 'day'`. The shell fetches exactly these and nothing else: a trip of
+   * 250 pieces must not decode 250 thumbnails for a sweep that stops twelve
+   * times.
+   */
+  wantsDays?(options: HookOptions, ctx: HookContext): string[];
+  /**
    * The picker card's little drawing. It says what the variant DOES — it is
    * not a render of this piece: the stage sits beside the picker showing the
    * real thing, and a live render per card would cost a decode and a WebGL
@@ -213,6 +261,11 @@ export function setHookOptions(
 export interface ResolvedHook {
   /** Seconds the longest layer occupies; 0 when nothing plays. */
   readonly seconds: number;
+  /**
+   * True when a layer rewrites badge text. A caller only builds elements per
+   * frame when this is set — the badge alone must keep its static elements.
+   */
+  readonly rewrites: boolean;
   /** True when a layer replaces the picture rather than drawing over it. */
   readonly ownsFrame: boolean;
   /** The badge's content after every layer has had its say at `t`. */
@@ -234,6 +287,7 @@ export function foldHook(layers: readonly HookRender[], ownsFrame: boolean): Res
   const seconds = layers.reduce((max, layer) => Math.max(max, layer.seconds), 0);
   return {
     seconds,
+    rewrites: layers.some((layer) => typeof layer.content === 'function'),
     ownsFrame,
     contentAt(base, t) {
       if (!base) return null;
