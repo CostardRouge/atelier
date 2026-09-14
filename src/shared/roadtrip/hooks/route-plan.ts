@@ -31,8 +31,20 @@
 
 import type { SoundEvent } from '../../audio/sound-event';
 import { EASINGS, EASING_IDS, type HookEasing } from './easing';
+import { fitProjection, haversineKm, type Box, type DistanceUnit } from './geo';
 import type { HookStage } from './hook-variant';
 import { KIT_IDS, TICK_KITS, type TickKit } from './tick-kits';
+
+// The geography lives beside the contract since the drive wanted it too
+// (`geo.ts`); the old names stay exported from here.
+export {
+  fitProjection,
+  formatDistance,
+  haversineKm,
+  placeLabels,
+  type Box,
+  type PlacedLabel,
+} from './geo';
 
 export type LegState = 'past' | 'current' | 'future';
 export type RouteScope = 'trip' | 'leg';
@@ -44,7 +56,7 @@ export type FutureStyle = 'dashed' | 'faint' | 'hidden';
 export type FutureReveal = 'after' | 'always';
 /** Which places carry their name. */
 export type RouteLabels = 'none' | 'ends' | 'current' | 'all';
-export type RouteDistance = 'off' | 'km' | 'mi';
+export type RouteDistance = DistanceUnit;
 export type RoutePen = 'dot' | 'none';
 
 export interface RouteOptions {
@@ -286,13 +298,6 @@ export function locatedSpots(stages: readonly HookStage[]): number {
   return spots.length;
 }
 
-export interface Box {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
 /** The box the route is fitted into, on a frame of `w`×`h`. */
 export function routeBox(
   w: number,
@@ -307,42 +312,6 @@ export function routeBox(
   const y =
     position === 'top' ? h * 0.09 : position === 'bottom' ? h * 0.9 - height : (h - height) / 2;
   return { x, y, width, height };
-}
-
-/**
- * A projection that fits every point of `shape` inside `box`, aspect kept and
- * centred. North is up. A shape of one spot (or none) sits in the middle.
- */
-export function fitProjection(
-  points: readonly RoutePoint[],
-  box: Box,
-): (point: RoutePoint) => { x: number; y: number } {
-  const cx = box.x + box.width / 2;
-  const cy = box.y + box.height / 2;
-  if (points.length === 0) return () => ({ x: cx, y: cy });
-
-  const meanLat = points.reduce((sum, p) => sum + p.lat, 0) / points.length;
-  const k = Math.cos((meanLat * Math.PI) / 180);
-  const px = (p: RoutePoint) => p.lon * k;
-  const py = (p: RoutePoint) => -p.lat;
-
-  const xs = points.map(px);
-  const ys = points.map(py);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  const spanX = maxX - minX;
-  const spanY = maxY - minY;
-  if (spanX < 1e-9 && spanY < 1e-9) return () => ({ x: cx, y: cy });
-
-  const scale = Math.min(
-    spanX > 1e-9 ? box.width / spanX : Infinity,
-    spanY > 1e-9 ? box.height / spanY : Infinity,
-  );
-  const midX = (minX + maxX) / 2;
-  const midY = (minY + maxY) / 2;
-  return (p) => ({ x: cx + (px(p) - midX) * scale, y: cy + (py(p) - midY) * scale });
 }
 
 /**
@@ -464,18 +433,6 @@ export function planarLengths(shape: RouteShape): number[] {
   });
 }
 
-/** Great-circle distance between two located places, in kilometres. */
-export function haversineKm(a: RoutePoint, b: RoutePoint): number {
-  const R = 6371.0088;
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLon = toRad(b.lon - a.lon);
-  const s =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
-}
-
 /** Each segment's length in kilometres, in the shape's order. */
 export function segmentKms(shape: RouteShape): number[] {
   return shape.segments.map((segment) => haversineKm(segment.from, segment.to));
@@ -487,76 +444,6 @@ export function segmentKms(shape: RouteShape): number[] {
  */
 export function drawnKm(kms: readonly number[], fractions: readonly number[]): number {
   return kms.reduce((sum, km, i) => sum + km * (fractions[i] ?? 0), 0);
-}
-
-/** "1 240 km" / "770 mi" — a space in the thousands, one decimal under ten. */
-export function formatDistance(km: number, unit: RouteDistance): string {
-  if (unit === 'off') return '';
-  const value = unit === 'mi' ? km * 0.621371 : km;
-  const text =
-    value < 10
-      ? value.toFixed(1)
-      : Math.round(value)
-          .toString()
-          .replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-  return `${text} ${unit}`;
-}
-
-export interface PlacedLabel {
-  /** Index into `shape.points`. */
-  index: number;
-  x: number;
-  y: number;
-  align: 'left' | 'right' | 'center';
-  /** Which side of the dot the text sits on. */
-  side: 'right' | 'left' | 'above' | 'below';
-}
-
-/**
- * Where each wanted label goes, and which are left out. Labels are placed in
- * order, each tried to the right of its dot, then the left, above, below; one
- * that would overlap a label already placed or leave the frame is DROPPED —
- * a name over another name says neither. The paint measures text with its
- * own font; without a measure, width is estimated from the font size (an
- * average glyph is ~0.55 em wide in the suite's faces), so this stays pure.
- */
-export function placeLabels(
-  points: readonly { x: number; y: number; name: string; wanted: boolean }[],
-  fontPx: number,
-  frame: { width: number; height: number },
-  dotRadius: number,
-  measure: (name: string) => number = (name) => Math.max(1, name.length) * fontPx * 0.55,
-): PlacedLabel[] {
-  const placed: PlacedLabel[] = [];
-  const boxes: { x0: number; y0: number; x1: number; y1: number }[] = [];
-  const gap = dotRadius + fontPx * 0.45;
-  const lineH = fontPx * 1.2;
-  const overlaps = (b: { x0: number; y0: number; x1: number; y1: number }) =>
-    b.x0 < 0 ||
-    b.y0 < 0 ||
-    b.x1 > frame.width ||
-    b.y1 > frame.height ||
-    boxes.some((o) => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0);
-
-  points.forEach((p, index) => {
-    if (!p.wanted || !p.name.trim()) return;
-    const w = measure(p.name.trim());
-    const tries: PlacedLabel[] = [
-      { index, x: p.x + gap, y: p.y, align: 'left', side: 'right' },
-      { index, x: p.x - gap, y: p.y, align: 'right', side: 'left' },
-      { index, x: p.x, y: p.y - gap - lineH * 0.35, align: 'center', side: 'above' },
-      { index, x: p.x, y: p.y + gap + lineH * 0.35, align: 'center', side: 'below' },
-    ];
-    for (const t of tries) {
-      const x0 = t.align === 'left' ? t.x : t.align === 'right' ? t.x - w : t.x - w / 2;
-      const box = { x0, y0: t.y - lineH / 2, x1: x0 + w, y1: t.y + lineH / 2 };
-      if (overlaps(box)) continue;
-      boxes.push(box);
-      placed.push(t);
-      return;
-    }
-  });
-  return placed;
 }
 
 /** Which points carry a name under `labels`. */

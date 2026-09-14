@@ -82,17 +82,44 @@ export function isoFromTimestamp(ms: number): IsoDate | null {
  * is a record of it.
  */
 export async function readCaptureDate(file: File): Promise<CaptureDate | null> {
+  return (await readCapture(file)).date;
+}
+
+/** The day a file was captured and, when its EXIF says, where. */
+export interface Capture {
+  date: CaptureDate | null;
+  /** The position it was shot at, from the file's EXIF or the source's record; null when neither says. */
+  coords: { lat: number; lon: number } | null;
+}
+
+/**
+ * The day AND the position, from one read of the file's head — the chooser
+ * that dates a hundred pictures must not read a hundred heads twice. The
+ * position follows the date's rule: the file's own EXIF, else the source's
+ * record of it; it is never a guess, so there is no third rung.
+ */
+export async function readCapture(file: File): Promise<Capture> {
+  let exifDate: IsoDate | null = null;
+  let coords: { lat: number; lon: number } | null = null;
   try {
     const head = await file.slice(0, EXIF_SLICE_BYTES).arrayBuffer();
-    const exif = isoFromExifDateTime(parseExif(head).dateTimeOriginal);
-    if (exif) return { date: exif, source: 'exif' };
+    const exif = parseExif(head);
+    exifDate = isoFromExifDateTime(exif.dateTimeOriginal);
+    if (exif.gps && Number.isFinite(exif.gps.lat) && Number.isFinite(exif.gps.lon)) {
+      coords = { lat: exif.gps.lat, lon: exif.gps.lon };
+    }
   } catch {
     // An unreadable slice is not an error worth surfacing: the fallbacks below
     // answer the question, just less confidently.
   }
   const origin = mediaOrigin(file);
+  const vouchedGps = origin?.exif?.gps;
+  if (!coords && vouchedGps && Number.isFinite(vouchedGps.lat) && Number.isFinite(vouchedGps.lon)) {
+    coords = { lat: vouchedGps.lat, lon: vouchedGps.lon };
+  }
+  if (exifDate) return { date: { date: exifDate, source: 'exif' }, coords };
   const vouched = isoFromExifDateTime(origin?.exif?.dateTimeOriginal);
-  if (vouched) return { date: vouched, source: 'source', via: origin?.sourceId };
+  if (vouched) return { date: { date: vouched, source: 'source', via: origin?.sourceId }, coords };
   const stamp = isoFromTimestamp(file.lastModified);
-  return stamp ? { date: stamp, source: 'file' } : null;
+  return { date: stamp ? { date: stamp, source: 'file' } : null, coords };
 }

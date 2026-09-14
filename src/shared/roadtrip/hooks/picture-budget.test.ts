@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PICTURES_PIXEL_BUDGET, coverCrop, perPicturePixels } from './picture-budget';
+import { PICTURES_PIXEL_BUDGET, PRINT_LONG_EDGE, coverCrop, perPicturePixels, wholeCrop } from './picture-budget';
 
 describe('coverCrop', () => {
   it('keeps the centred slice of a landscape picture a portrait frame shows', () => {
@@ -43,6 +43,25 @@ describe('coverCrop', () => {
     const c = coverCrop(0, 0, Number.NaN, 1000);
     expect(c.width).toBeGreaterThanOrEqual(1);
     expect(c.height).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('wholeCrop', () => {
+  it('keeps the whole picture at its own shape, no larger than a print needs', () => {
+    const c = wholeCrop(6000, 4000, Infinity);
+    expect([c.sx, c.sy, c.sw, c.sh]).toEqual([0, 0, 6000, 4000]);
+    expect(c.width).toBe(PRINT_LONG_EDGE);
+    expect(c.height).toBe(Math.round(PRINT_LONG_EDGE / 1.5));
+    const portrait = wholeCrop(4000, 6000, Infinity);
+    expect(portrait.height).toBe(PRINT_LONG_EDGE);
+    expect(portrait.width).toBe(Math.floor(PRINT_LONG_EDGE / 1.5));
+  });
+
+  it('never enlarges, and shrinks under the pixel cap', () => {
+    expect(wholeCrop(300, 200, Infinity)).toMatchObject({ width: 300, height: 200 });
+    const capped = wholeCrop(6000, 4000, 300_000);
+    expect(capped.width * capped.height).toBeLessThanOrEqual(300_000 + capped.width);
+    expect(capped.width / capped.height).toBeCloseTo(1.5, 2);
   });
 });
 

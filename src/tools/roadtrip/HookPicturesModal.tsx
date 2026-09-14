@@ -4,7 +4,7 @@ import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { isRawImage, type Asset } from '../../shared/library/assets';
 import { useObjectUrls } from '../../shared/lib/use-object-urls';
 import { hashedMediaRef, knownIdentity } from '../../shared/projects/media-identity';
-import { readCaptureDate, isoFromTimestamp } from '../../shared/roadtrip/media-date';
+import { readCapture, isoFromTimestamp } from '../../shared/roadtrip/media-date';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
 import type { HookContext, HookPickedPicture } from '../../shared/roadtrip/hooks/hook-variant';
 import {
@@ -44,14 +44,15 @@ interface HookPicturesModalProps {
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
- * Each Library file's capture date, read once per File for the whole session:
- * reopening the chooser must not re-read a hundred EXIF heads.
+ * Each Library file's capture day and position, read once per File for the
+ * whole session: reopening the chooser must not re-read a hundred EXIF heads.
  */
-const captureDays = new WeakMap<File, string | null>();
+const captures = new WeakMap<File, { date: string | null; coords: { lat: number; lon: number } | null }>();
 
 /**
- * The Library's photographs with the day each was shot — read from their
- * heads, a few at a time, so the grid fills as the dates come in.
+ * The Library's photographs with the day each was shot — and where, when the
+ * file says — read from their heads, a few at a time, so the grid fills as
+ * the dates come in.
  */
 function useLibraryCandidates(assets: readonly Asset[]): { items: Candidate[]; reading: number } {
   const photos = useMemo(
@@ -66,14 +67,14 @@ function useLibraryCandidates(assets: readonly Asset[]): { items: Candidate[]; r
 
   useEffect(() => {
     let cancelled = false;
-    const unread = photos.filter(({ file }) => !captureDays.has(file));
+    const unread = photos.filter(({ file }) => !captures.has(file));
     if (!unread.length) return;
     void (async () => {
       const queue = [...unread];
       const worker = async () => {
         for (let next = queue.shift(); next; next = queue.shift()) {
-          const capture = await readCaptureDate(next.file);
-          captureDays.set(next.file, capture?.date ?? null);
+          const capture = await readCapture(next.file);
+          captures.set(next.file, { date: capture.date?.date ?? null, coords: capture.coords });
           if (cancelled) return;
         }
       };
@@ -92,11 +93,12 @@ function useLibraryCandidates(assets: readonly Asset[]): { items: Candidate[]; r
     let reading = 0;
     const items: Candidate[] = [];
     for (const { asset, file } of photos) {
-      if (!captureDays.has(file)) {
+      const capture = captures.get(file);
+      if (!capture) {
         reading += 1;
         continue;
       }
-      const date = captureDays.get(file);
+      const { date, coords } = capture;
       if (!date) continue;
       const identity = knownIdentity(file);
       items.push({
@@ -106,6 +108,7 @@ function useLibraryCandidates(assets: readonly Asset[]): { items: Candidate[]; r
         file,
         date,
         takenAt: file.lastModified,
+        ...(coords ? { coords } : {}),
         ref: {
           name: file.name,
           size: file.size,
@@ -126,12 +129,20 @@ function rowCandidate(row: WinnowAssetRow, host: string): Candidate | null {
   const day = row.capture_date?.slice(0, 10);
   const date = day && ISO_DAY.test(day) ? day : isoFromTimestamp(mtime);
   if (!date) return null;
+  // The instance parsed the picture's EXIF at ingest; its position is the
+  // same column the exposure elements already read (`exif-from-row.ts`).
+  const located =
+    typeof row.gps_lat === 'number' &&
+    typeof row.gps_lon === 'number' &&
+    Number.isFinite(row.gps_lat) &&
+    Number.isFinite(row.gps_lon);
   return {
     key: `win:${host}/${row.id}`,
     origin: 'instance',
     row,
     date,
     takenAt: mtime,
+    ...(located ? { coords: { lat: row.gps_lat as number, lon: row.gps_lon as number } } : {}),
     ref: {
       name: row.filename,
       size: row.file_size ?? 0,
@@ -236,6 +247,7 @@ export default function HookPicturesModal({ ctx, selected, onCancel, onConfirm }
           ref: c.origin === 'library' ? await hashedMediaRef(c.file) : c.ref,
           date: c.date,
           takenAt: c.takenAt,
+          ...(c.coords ? { coords: c.coords } : {}),
         })),
       );
       onConfirm(picked);

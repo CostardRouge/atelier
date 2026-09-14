@@ -26,6 +26,8 @@ export interface PoolCandidate {
   date: string;
   /** The capture instant in ms — orders a day's pictures. */
   takenAt: number;
+  /** Where it was shot, when the file or the instance says. */
+  coords?: { lat: number; lon: number };
   origin: 'library' | 'instance';
 }
 
