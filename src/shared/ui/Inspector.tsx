@@ -203,7 +203,7 @@ interface RangeFieldProps {
 /** A slider with its value beside it — never inside the label, where it moved the row. */
 export function RangeField({ value, min, max, step, onChange, format, label, disabled }: RangeFieldProps) {
   const clamped = Math.min(max, Math.max(min, value));
-  const fill = max > min ? `${((clamped - min) / (max - min)) * 100}%` : '0%';
+  const fraction = max > min ? (clamped - min) / (max - min) : 0;
   return (
     <>
       <input
@@ -215,8 +215,8 @@ export function RangeField({ value, min, max, step, onChange, format, label, dis
         disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
         aria-label={label}
-        style={{ '--range-fill': fill } as CSSProperties}
-        className="range-fill flex-1 min-w-0 accent-accent disabled:opacity-45"
+        style={{ '--range-fraction': fraction } as CSSProperties}
+        className="range-fill flex-1 min-w-0 disabled:opacity-45"
       />
       <span className="flex-none min-w-[3.25rem] text-right whitespace-nowrap font-mono text-xs tabular-nums text-ink-soft">
         {format(value)}

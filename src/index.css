@@ -329,20 +329,59 @@ html[data-surface='darkroom'] {
   }
 
   /* `RangeField` (`shared/ui/Inspector.tsx`) additionally reports how far the
-     value has travelled: a hard-stop gradient computed from its own props,
-     since repainting the track loses the browser's built-in fill. */
+     value has travelled, as a hard-stop gradient computed from its own
+     props — repainting the track loses the browser's built-in fill. A raw
+     `fraction * 100%` stop does not land on the thumb: the native thumb's
+     OWN travel is inset by half its width at each end, so the stop and the
+     thumb disagree most right where that inset is a large share of the
+     track — a small value drew a full circle sitting past a vertical seam.
+     The thumb is sized here too (14px) so the stop can be placed at the
+     thumb's own centre (`--range-fraction`, a plain 0–1 number) instead of
+     guessing at the UA's own, unknown, thumb width. */
+  input[type='range'].range-fill {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+  }
   input[type='range'].range-fill::-webkit-slider-runnable-track {
+    height: 3px;
     background: linear-gradient(
       to right,
-      var(--color-accent) var(--range-fill, 0%),
-      var(--color-line-strong) var(--range-fill, 0%)
+      var(--color-accent) 0,
+      var(--color-accent) calc((100% - 14px) * var(--range-fraction, 0) + 7px),
+      var(--color-line-strong) 0
     );
   }
   input[type='range'].range-fill::-moz-range-track {
+    height: 3px;
     background: linear-gradient(
       to right,
-      var(--color-accent) var(--range-fill, 0%),
-      var(--color-line-strong) var(--range-fill, 0%)
+      var(--color-accent) 0,
+      var(--color-accent) calc((100% - 14px) * var(--range-fraction, 0) + 7px),
+      var(--color-line-strong) 0
     );
+  }
+  input[type='range'].range-fill::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -5.5px;
+    border-radius: 999px;
+    background: var(--color-accent);
+    cursor: pointer;
+  }
+  input[type='range'].range-fill::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border: none;
+    border-radius: 999px;
+    background: var(--color-accent);
+    cursor: pointer;
+  }
+  input[type='range'].range-fill:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 3px;
+    border-radius: 999px;
   }
 }
