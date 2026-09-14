@@ -7,8 +7,26 @@ import {
   loupeIsWhole,
   loupeLength,
   moveLoupe,
+  panWeeks,
   resizeLoupe,
 } from './loupe';
+
+describe('panWeeks', () => {
+  it('turns a week of track into a week, carrying the rest', () => {
+    expect(panWeeks(0, 150, 20)).toEqual({ weeks: 1, carry: 10 });
+    expect(panWeeks(10, 130, 20)).toEqual({ weeks: 1, carry: 0 });
+  });
+  it('moves back on a negative scroll, and nothing under a week', () => {
+    expect(panWeeks(0, -290, 20)).toEqual({ weeks: -2, carry: -10 });
+    expect(panWeeks(0, 100, 20)).toEqual({ weeks: 0, carry: 100 });
+  });
+  it('lets a reversal eat the carry before it moves the other way', () => {
+    expect(panWeeks(100, -120, 20)).toEqual({ weeks: 0, carry: -20 });
+  });
+  it('moves nothing before the ruler has a width', () => {
+    expect(panWeeks(50, 500, 0)).toEqual({ weeks: 0, carry: 0 });
+  });
+});
 
 const year = { startDate: '2025-01-01', endDate: '2025-12-31' };
 const week = { startDate: '2026-09-01', endDate: '2026-09-08' };

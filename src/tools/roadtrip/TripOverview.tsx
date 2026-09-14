@@ -36,7 +36,7 @@ import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { Icons } from '../../shared/ui/icons';
 import Button from '../../shared/ui/Button';
 import ShortDayStrip from './ShortDayStrip';
-import { defaultLoupe, loupeContaining, type Loupe } from '../../shared/roadtrip/loupe';
+import { defaultLoupe, loupeContaining, moveLoupe, type Loupe } from '../../shared/roadtrip/loupe';
 import LoupeBrush from './LoupeBrush';
 
 interface TripOverviewProps {
@@ -378,10 +378,17 @@ export default function TripOverview({
   // and is dragged on the heatmap. Not stored: where you are looking is not
   // part of the trip.
   const [loupe, setLoupe] = useState<Loupe>(() => defaultLoupe(trip, selected));
+  const { startDate: tripStart, endDate: tripEnd } = trip;
   useEffect(() => {
-    setLoupe((l) => loupeContaining(trip, l, selected ?? trip.startDate));
-    // Also re-clamps after the trip's dates are edited.
-  }, [trip.startDate, trip.endDate, selected, trip]);
+    setLoupe((l) => loupeContaining({ startDate: tripStart, endDate: tripEnd }, l, selected ?? tripStart));
+    // Keyed on the DATES and the open day, never on the document: a leg
+    // dragged in a window scrolled away from the open day changes the trip,
+    // and re-running here yanked the window back to that day mid-edit.
+  }, [tripStart, tripEnd, selected]);
+  const panLoupe = useCallback(
+    (weeks: number) => setLoupe((l) => moveLoupe({ startDate: tripStart, endDate: tripEnd }, l, weeks * 7)),
+    [tripStart, tripEnd],
+  );
 
   // The dates-and-route sheet, the creation modal reopened on this trip.
   const [editingDetails, setEditingDetails] = useState(false);
@@ -527,6 +534,7 @@ export default function TripOverview({
       <StagesPanel
         trip={trip}
         span={short ? undefined : { startDate: loupe.start, endDate: loupe.end }}
+        onPanSpan={panLoupe}
         rungAt={rungAt}
         selectedId={selectedStageId}
         cursorDate={selected}

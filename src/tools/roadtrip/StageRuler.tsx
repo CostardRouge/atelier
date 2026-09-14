@@ -1,4 +1,5 @@
-import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { panWeeks } from '../../shared/roadtrip/loupe';
 import {
   insertStageInOrder,
   resizeStage,
@@ -25,6 +26,7 @@ import {
 } from '../../shared/roadtrip/trip-days';
 import { stageLabel } from '../../shared/roadtrip/trip-places';
 import type { TripDoc, TripStage } from '../../shared/roadtrip/trip-types';
+import { PRESS_SLOP } from '../../shared/ui/press-intent';
 import { useElementWidth } from '../../shared/ui/use-element-width';
 import { HEATMAP_LEVELS } from './heatmap-ramp';
 
@@ -47,6 +49,12 @@ interface StageRulerProps {
   span?: { startDate: IsoDate; endDate: IsoDate };
   /** The grid's rung for a day (0..4): a strip of told-days under the head. */
   rungAt?: (date: IsoDate) => number;
+  /**
+   * Scroll the SPAN itself, by whole weeks: a sideways wheel over the track,
+   * or a swipe along one of its two bands. Given only when a loupe drives
+   * the span — a short trip's track is the whole trip and has nowhere to go.
+   */
+  onPan?: (weeks: number) => void;
 }
 
 /**
@@ -61,6 +69,14 @@ const AXIS = 20;
 const RUNG = 10;
 const RUNG_GAP = 6;
 const HANDLE = 10;
+
+/** A swipe along a pan band, until it is a swipe or a tap. */
+interface Pan {
+  id: number;
+  startX: number;
+  lastX: number;
+  moved: boolean;
+}
 
 interface Drag {
   id: string;
@@ -110,6 +126,7 @@ export default function StageRuler({
   onChange,
   span,
   rungAt,
+  onPan,
 }: StageRulerProps) {
   // Everything the track MEASURES is measured against the span drawn; the
   // real trip is what the edits clamp to.
@@ -124,6 +141,50 @@ export default function StageRuler({
   // A drag ends in a click on the same button; this swallows that click so
   // sliding a leg does not also open it.
   const swallowClick = useRef(false);
+  const pan = useRef<Pan | null>(null);
+  // What a scroll left short of a week, carried to the next one.
+  const carry = useRef(0);
+  const dayWRef = useRef(0);
+  const onPanRef = useRef(onPan);
+  onPanRef.current = onPan;
+
+  /**
+   * A sideways scroll of `px` over the track. A track too wide for its box (a
+   * loupe widened past the 6px a day needs) scrolls in its box first; what the
+   * box cannot take moves the loupe, a week per week of track.
+   */
+  const panBy = (px: number) => {
+    const el = scroller.current;
+    let rest = px;
+    if (el) {
+      const before = el.scrollLeft;
+      el.scrollLeft = before + px;
+      rest -= el.scrollLeft - before;
+    }
+    const step = panWeeks(carry.current, rest, dayWRef.current);
+    carry.current = step.carry;
+    if (step.weeks !== 0) onPanRef.current?.(step.weeks);
+  };
+  const panByRef = useRef(panBy);
+  panByRef.current = panBy;
+
+  // A trackpad's sideways swipe, or shift + a mouse wheel. Native and
+  // non-passive, because it is `preventDefault` that keeps the browser from
+  // reading a horizontal swipe at the loupe's edge as Back.
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const wheel = (e: WheelEvent) => {
+      if (!onPanRef.current || e.ctrlKey || e.metaKey) return;
+      // Windows turns shift + wheel into deltaY; macOS already into deltaX.
+      const dx = e.deltaX !== 0 ? e.deltaX : e.shiftKey ? e.deltaY : 0;
+      if (Math.abs(dx) <= Math.abs(e.shiftKey ? 0 : e.deltaY)) return;
+      e.preventDefault();
+      panByRef.current(e.deltaMode === 1 ? dx * 16 : e.deltaMode === 2 ? dx * el.clientWidth : dx);
+    };
+    el.addEventListener('wheel', wheel, { passive: false });
+    return () => el.removeEventListener('wheel', wheel);
+  }, [scroller, total]);
 
   if (total === null) return null;
 
@@ -134,6 +195,7 @@ export default function StageRuler({
   const dayW = rulerDayWidth(width, total, 1);
   const ticks = rulerTicks(drawn, dayW);
   const trackW = dayW * total;
+  dayWRef.current = dayW;
   // The rung strip: what was told each day, on the grid's own ramp, so the
   // ruler says the same thing as the calendar above about every day it draws.
   const rungs = rungAt ? RUNG + RUNG_GAP : 0;
@@ -215,6 +277,53 @@ export default function StageRuler({
     if (date) onScrub(date);
   };
 
+  // A pan band: a tap opens the day under it, like the rest of the track; a
+  // swipe along it scrolls the loupe with the finger. `touch-pan-y` is what
+  // hands the sideways travel to these handlers on a phone — the lanes and
+  // their bars keep theirs, so a drag there still moves a leg.
+  const panDown = (e: PointerEvent<HTMLElement>) => {
+    if (e.button !== 0 || pan.current) return;
+    pan.current = { id: e.pointerId, startX: e.clientX, lastX: e.clientX, moved: false };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const panMove = (e: PointerEvent<HTMLElement>) => {
+    const p = pan.current;
+    if (!p || e.pointerId !== p.id) return;
+    if (!p.moved && Math.abs(e.clientX - p.startX) <= PRESS_SLOP) return;
+    if (!p.moved) {
+      p.moved = true;
+      carry.current = 0;
+    }
+    // Content follows the finger: travelling left brings the later weeks in.
+    panBy(p.lastX - e.clientX);
+    p.lastX = e.clientX;
+  };
+  const panUp = (e: PointerEvent<HTMLElement>) => {
+    const p = pan.current;
+    if (!p || e.pointerId !== p.id) return;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    pan.current = null;
+    if (e.type === 'pointerup' && !p.moved) pickDay(e.clientX);
+  };
+  // The scale is the band a finger is TOLD about: on a touch screen it wears a
+  // faint rail, the one visible sign that it moves something. A mouse gets
+  // the grab cursor instead, and a trackpad needs neither.
+  const panBand = (top: number, height: number, where: 'head' | 'scale') =>
+    onPan ? (
+      <div
+        className={`absolute left-0 right-0 cursor-grab active:cursor-grabbing touch-pan-y select-none ${
+          where === 'scale' ? 'rounded-[6px] pointer-coarse:bg-ink/[0.06]' : ''
+        }`}
+        style={{ top, height }}
+        onPointerDown={panDown}
+        onPointerMove={panMove}
+        onPointerUp={panUp}
+        onPointerCancel={panUp}
+        title={`Swipe the ${where} sideways to move the loupe · click to open a day`}
+        aria-hidden="true"
+      />
+    ) : null;
+
   const addOver = (startDate: IsoDate, endDate: IsoDate) => {
     const stage = stageOverGap(trip, startDate, endDate);
     onChange(insertStageInOrder(trip.stages, stage));
@@ -248,6 +357,12 @@ export default function StageRuler({
           style={{ height: HEAD }}
           aria-hidden="true"
         />
+        {/* The two bands no leg can sit in — the head with its told-days strip,
+            and the scale under the lanes — are where a swipe moves the loupe
+            (`panBand`). Drawn under everything else on the track, so the
+            playhead stays a button. */}
+        {panBand(0, lanesTop, 'head')}
+        {panBand(bodyH, AXIS + 6, 'scale')}
 
         {rungAt &&
           Array.from({ length: total }, (_, i) => {

@@ -3,7 +3,15 @@
  * around the days the ruler below details, a grip along its top to slide it,
  * a handle on each side to widen it. The frame itself takes no pointer — the
  * cells under it stay clickable and hoverable — only the grip and the handles
- * do, and every drag snaps to whole days through the grid's column width.
+ * do, and every drag snaps to whole weeks through the grid's column width.
+ *
+ * The frame's BODY is a grip too, without taking a pointer: a press that
+ * starts inside it is watched from the grid, and becomes a slide of the
+ * window once it is a drag (`pressIntent`) — past the slop for a mouse, after
+ * a still hold for a finger, because a finger that travels at once is
+ * scrolling the page. A plain click still opens the day under it. The thin
+ * grip on top was the only way to slide the window, and a phone could not
+ * aim at it.
  *
  * Keyboard: the grip moves the window a week with the arrows (a day with
  * Shift); a handle moves its edge. `touch-pan-y` on the three, never
@@ -11,7 +19,8 @@
  * page's (frontend.md).
  */
 
-import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { pressIntent, LONG_PRESS_MS } from '../../shared/ui/press-intent';
 import { loupeLength, moveLoupe, resizeLoupe, type Loupe } from '../../shared/roadtrip/loupe';
 import { addDays, daysBetween, formatIsoDate, weekdayIndex, type IsoDate } from '../../shared/roadtrip/trip-days';
 import type { HeatmapGeometry } from './DayHeatmap';
@@ -43,6 +52,133 @@ interface Drag {
 export default function LoupeBrush({ trip, loupe, onChange, geometry, extraHeight = 0 }: LoupeBrushProps) {
   const drag = useRef<Drag | null>(null);
   const [dragging, setDragging] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const frame = useRef<HTMLSpanElement>(null);
+  // The body drag listens natively, once; it reads what is current from here.
+  const live = useRef({ trip, loupe, onChange, col: geometry.columnWidth });
+  live.current = { trip, loupe, onChange, col: geometry.columnWidth };
+
+  useEffect(() => {
+    // The grid's own positioned box — the element this overlay is drawn in,
+    // and the one every cell's and every leg's pointer events bubble through.
+    const host = root.current?.parentElement;
+    if (!host) return;
+    let press: {
+      id: number;
+      type: string;
+      x: number;
+      y: number;
+      at: number;
+      origin: Loupe;
+      active: boolean;
+      timer: number;
+    } | null = null;
+    let swallowClick = false;
+    // iOS answers a held finger with its callout; the hold is ours here.
+    host.style.setProperty('-webkit-touch-callout', 'none');
+
+    const activate = () => {
+      if (!press || press.active) return;
+      press.active = true;
+      window.clearTimeout(press.timer);
+      try {
+        host.setPointerCapture(press.id);
+      } catch {
+        // The pointer is already gone; the next event ends the press.
+      }
+      host.style.cursor = 'grabbing';
+      setDragging(true);
+      // The long press's usual answer on a phone that has one.
+      if (press.type === 'touch') navigator.vibrate?.(8);
+    };
+    const finish = () => {
+      if (!press) return;
+      window.clearTimeout(press.timer);
+      if (press.active) {
+        if (host.hasPointerCapture(press.id)) host.releasePointerCapture(press.id);
+        host.style.cursor = '';
+        setDragging(false);
+        // The click this press ends in must not also open a day. It fires
+        // right after the pointerup, or not at all (a touch that moved).
+        swallowClick = true;
+        window.setTimeout(() => {
+          swallowClick = false;
+        }, 0);
+      }
+      press = null;
+    };
+
+    const down = (e: globalThis.PointerEvent) => {
+      if (press || e.button !== 0 || !e.isPrimary) return;
+      // The grip and the handles run their own drags.
+      if (root.current?.contains(e.target as Node)) return;
+      const r = frame.current?.getBoundingClientRect();
+      if (!r || e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+      press = {
+        id: e.pointerId,
+        type: e.pointerType,
+        x: e.clientX,
+        y: e.clientY,
+        at: e.timeStamp,
+        origin: live.current.loupe,
+        active: false,
+        // Only a finger is picked up by holding still (`pressIntent`).
+        timer: e.pointerType === 'touch' ? window.setTimeout(activate, LONG_PRESS_MS) : 0,
+      };
+    };
+    const move = (e: globalThis.PointerEvent) => {
+      if (!press || e.pointerId !== press.id) return;
+      const dx = e.clientX - press.x;
+      if (!press.active) {
+        const intent = pressIntent({ pointerType: press.type, dx, dy: e.clientY - press.y, heldMs: e.timeStamp - press.at });
+        if (intent === 'release') finish();
+        else if (intent === 'drag') activate();
+        return;
+      }
+      const { trip: t, onChange: set, col: c } = live.current;
+      set(moveLoupe(t, press.origin, Math.round(dx / c) * 7));
+    };
+    const up = (e: globalThis.PointerEvent) => {
+      if (press && e.pointerId === press.id) finish();
+    };
+    const click = (e: MouseEvent) => {
+      if (!swallowClick) return;
+      swallowClick = false;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    // Once the window is picked up, a finger's travel is the window's and not
+    // the page's: only a cancelled touchmove stops the browser from panning
+    // (and from cancelling the pointer), and only a non-passive listener may.
+    const touchmove = (e: TouchEvent) => {
+      if (press?.active && e.cancelable) e.preventDefault();
+    };
+    // Android answers a held finger with a context menu — the day menu, here.
+    const contextmenu = (e: MouseEvent) => {
+      if (press?.type !== 'touch') return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    host.addEventListener('pointerdown', down);
+    host.addEventListener('pointermove', move);
+    host.addEventListener('pointerup', up);
+    host.addEventListener('pointercancel', up);
+    host.addEventListener('click', click, true);
+    host.addEventListener('touchmove', touchmove, { passive: false });
+    host.addEventListener('contextmenu', contextmenu, true);
+    return () => {
+      if (press) window.clearTimeout(press.timer);
+      host.style.cursor = '';
+      host.removeEventListener('pointerdown', down);
+      host.removeEventListener('pointermove', move);
+      host.removeEventListener('pointerup', up);
+      host.removeEventListener('pointercancel', up);
+      host.removeEventListener('click', click, true);
+      host.removeEventListener('touchmove', touchmove);
+      host.removeEventListener('contextmenu', contextmenu, true);
+    };
+  }, []);
   const col = geometry.columnWidth;
   const from = daysBetween(trip.startDate, loupe.start) ?? 0;
   const length = loupeLength(loupe);
@@ -118,12 +254,15 @@ export default function LoupeBrush({ trip, loupe, onChange, geometry, extraHeigh
 
   return (
     <div
+      ref={root}
       className="absolute pointer-events-none"
       style={{ left, top, width, height }}
       aria-hidden={false}
     >
-      {/* The frame: seen, never touched. */}
+      {/* The frame: seen, never touched — its body is dragged through the
+          grid below it, measured against this box. */}
       <span
+        ref={frame}
         className={`absolute inset-0 rounded-[7px] border-2 border-ink transition-[background-color] ${
           dragging ? 'bg-ink/10' : 'bg-ink/[0.04]'
         }`}
@@ -140,8 +279,8 @@ export default function LoupeBrush({ trip, loupe, onChange, geometry, extraHeigh
         onPointerUp={end}
         onPointerCancel={end}
         onKeyDown={(e) => nudge(e, 'move')}
-        aria-label={`The loupe, ${label} — drag to slide it, arrows move it a week`}
-        title={`${label} — drag to slide the loupe`}
+        aria-label={`The loupe, ${label} — drag it, or hold inside it and drag, to slide it; arrows move it a week`}
+        title={`${label} — drag here, or hold anywhere inside and drag, to slide the loupe`}
         className="pointer-events-auto absolute left-0 right-0 top-0 p-0 border-0 bg-transparent cursor-grab active:cursor-grabbing touch-pan-y select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-[7px]"
         style={{ height: GRIP + 4 }}
       >

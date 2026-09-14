@@ -59,6 +59,20 @@ export function moveLoupe(trip: Span, loupe: Loupe, deltaDays: number): Loupe {
   return { start: addDays(trip.startDate, next)!, end: addDays(trip.startDate, next + width - 1)! };
 }
 
+/**
+ * A sideways scroll over the ruler, in pixels, turned into the whole WEEKS the
+ * loupe moves — the loupe lives in weeks, like every other way of moving it —
+ * with what did not make a week carried to the next event. `dayPx` is the
+ * ruler's drawn day width, so a week of scrolling is a week of track.
+ */
+export function panWeeks(carry: number, px: number, dayPx: number): { weeks: number; carry: number } {
+  if (!(dayPx > 0)) return { weeks: 0, carry: 0 };
+  const total = carry + px;
+  // `|| 0`: a negative remainder truncates to -0, which no caller wants to see.
+  const weeks = Math.trunc(total / (7 * dayPx)) || 0;
+  return { weeks, carry: total - weeks * 7 * dayPx };
+}
+
 /** Move one edge to a date; the window never shrinks under `MIN_LOUPE_DAYS`. */
 export function resizeLoupe(trip: Span, loupe: Loupe, edge: 'start' | 'end', date: IsoDate): Loupe {
   const clamped = clampDate(trip, date);

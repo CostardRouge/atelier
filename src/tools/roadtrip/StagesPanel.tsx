@@ -20,6 +20,8 @@ interface StagesPanelProps {
    * a short one (the whole trip). The header names it.
    */
   span?: { startDate: IsoDate; endDate: IsoDate };
+  /** Move that window by whole weeks — a sideways scroll over the ruler. */
+  onPanSpan?: (weeks: number) => void;
   /** The grid's rung for a day (0..4), drawn as a strip on the ruler. */
   rungAt?: (date: IsoDate) => number;
   /** The leg open in the editor below the ruler; null shows the ruler alone. */
@@ -162,6 +164,7 @@ function StageCard({
 export default function StagesPanel({
   trip,
   span,
+  onPanSpan,
   rungAt,
   selectedId,
   cursorDate,
@@ -222,7 +225,7 @@ export default function StagesPanel({
             <p>
               On the track: tap a leg to edit it and go to its first day · drag a leg,
               or either of its edges, to move its dates · tap anywhere else to open that
-              day, and swipe sideways to see the rest.
+              day{span ? ', and swipe its head or its scale sideways to move the loupe' : ''}.
               <span className="max-[600px]:hidden">
                 {' '}
                 Right-click a day on the calendar to start or end a stage there.
@@ -245,7 +248,7 @@ export default function StagesPanel({
           ))}
         {span && (
           <span className="font-mono text-3xs text-faint whitespace-nowrap max-[900px]:hidden">
-            drag the window above · drag its edges to widen it
+            drag the window above, or hold inside it · swipe the ruler's head or scale to move it
           </span>
         )}
         <Button variant="primary" onClick={add} icon={Icons.plus}>
@@ -271,6 +274,7 @@ export default function StagesPanel({
           onChange(stages);
         }}
         span={span}
+        onPan={span ? onPanSpan : undefined}
       />
 
       {trip.stages.length === 0 ? (
@@ -289,7 +293,7 @@ export default function StagesPanel({
           <p className="m-0 font-mono text-2xs text-faint">
             Tap a leg to edit it and go to its first day · drag a leg, or either
             of its edges, to move its dates · tap anywhere else on the track to
-            open that day, and swipe the track sideways to see the rest
+            open that day{span ? ' · swipe its head or its scale sideways to move the loupe' : ''}
             {/* A gesture a phone does not have, hidden where there is none —
                 the calendar's own hint above does the same. */}
             <span className="max-[600px]:hidden">
