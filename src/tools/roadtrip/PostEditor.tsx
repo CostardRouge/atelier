@@ -46,6 +46,7 @@ import {
 import { badgeSettleSeconds } from '../../shared/roadtrip/badge-layout';
 import { TRIM_EPSILON, type TrimRange } from '../../shared/media/trim';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
+import { describeKeyTarget, targetOwnsTyping } from '../../shared/media/transport-keys';
 import { usePublishMediaScope, type MediaScope } from '../../shared/sources/media-scope';
 import {
   createPostSlide,
@@ -582,6 +583,20 @@ export default function PostEditor({
     soundOn,
   );
 
+  // `M` mutes the opener's ticks, the reflex every other player answers to —
+  // only where there is something to mute, and never while typing.
+  useEffect(() => {
+    if (hookScore.length === 0) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.key.toLowerCase() !== 'm') return;
+      if (targetOwnsTyping(describeKeyTarget(e.target))) return;
+      e.preventDefault();
+      setSoundOn((on) => !on);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [hookScore.length]);
+
   // --- the hook's own picture, whichever slide is open ---------------------
   // The stage reports the OPEN slide's source; the hook clip export and the
   // Studio bridge are about the piece and must work from a carousel's second
@@ -1051,12 +1066,6 @@ export default function PostEditor({
                 }`}
               >
                 <span className="inline-flex items-center gap-1">{clock.playing ? Icons.pause : Icons.play}{clock.playing ? 'Pause' : 'Play'}</span>
-                {/* The shortcut, only where there is a keyboard to press it
-                    on. A phone has none, so the word is a third of the
-                    button's width spent on something the screen cannot do. */}
-                {!compact && (
-                  <span className="ml-1.5 text-faint font-mono text-2xs">space</span>
-                )}
               </button>
               <input
                 type="range"
@@ -1080,7 +1089,7 @@ export default function PostEditor({
                   onClick={() => setSoundOn((on) => !on)}
                   aria-pressed={soundOn}
                   aria-label={soundOn ? 'Mute the opener’s ticks' : 'Hear the opener’s ticks'}
-                  title={soundOn ? 'Mute the ticks' : 'Hear the ticks'}
+                  title={soundOn ? 'Mute the ticks (M)' : 'Hear the ticks (M)'}
                   className={`flex-none grid place-items-center rounded-full border cursor-pointer ${
                     compact ? 'w-7 h-7' : 'w-8 h-8'
                   } ${
