@@ -255,15 +255,21 @@ export default function LoupeBrush({ trip, loupe, onChange, geometry, extraHeigh
   return (
     <div
       ref={root}
-      className="absolute pointer-events-none"
+      // Above the grid's own cells: a transform (the cell's `hover:scale-125`)
+      // promotes it into the same paint step as this absolutely-positioned
+      // overlay, and DOM order alone then leaves the frame's border cut by
+      // whichever cell sits under it — an explicit z-index settles it.
+      className="absolute z-10 pointer-events-none"
       style={{ left, top, width, height }}
       aria-hidden={false}
     >
       {/* The frame: seen, never touched — its body is dragged through the
-          grid below it, measured against this box. */}
+          grid below it, measured against this box. A single, thinner border:
+          at the 6px cell floor a long trip hits on a phone, `border-2` and a
+          7px radius read as a thick black blob rather than a window. */}
       <span
         ref={frame}
-        className={`absolute inset-0 rounded-[7px] border-2 border-ink transition-[background-color] ${
+        className={`absolute inset-0 rounded-[5px] border border-ink transition-[background-color] ${
           dragging ? 'bg-ink/10' : 'bg-ink/[0.04]'
         }`}
         style={{ top: GRIP / 2 }}

@@ -169,6 +169,10 @@ export default function DayHeatmap({
   if (!weeks.length) return null;
 
   const columnWidth = cellPx + gapPx;
+  // A fixed 3px radius reads as a square at 14px and as a near-circle at the
+  // 6px floor a long trip hits on a phone — scaled and capped instead, so a
+  // tiny cell still reads as a cell.
+  const cellRadius = Math.max(1, Math.min(3, Math.floor(cellPx / 4)));
   const lead = weeks[0].findIndex((d) => d !== null);
   const geometry: HeatmapGeometry = {
     cellPx,
@@ -287,10 +291,11 @@ export default function DayHeatmap({
                       // No border: the rung's colour is the cell, as in the mock.
                       // The open day is an OUTLINE (it takes no layout, so the
                       // lattice never shifts) and today an inset ring.
-                      className="p-0 border-0 cursor-pointer rounded-[3px] transition-[transform,box-shadow] duration-150 ease-paper hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink"
+                      className="p-0 border-0 cursor-pointer transition-[transform,box-shadow] duration-150 ease-paper hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink"
                       style={{
                         width: cellPx,
                         height: cellPx,
+                        borderRadius: cellRadius,
                         background: LEVELS[levelOf(cell)],
                         outline: isSelected ? '2px solid var(--color-ink)' : undefined,
                         outlineOffset: isSelected ? 1 : undefined,
