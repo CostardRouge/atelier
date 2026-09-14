@@ -72,8 +72,12 @@ export interface Shade {
   invert: boolean;
   /** Take the reach (and, for a radial, the centre) from the badge block. */
   followHook: boolean;
-  /** Off keeps the shade in the stack but skips it — the A/B of grading. */
-  enabled: boolean;
+  /**
+   * Off keeps the shade in the stack but skips it — the A/B of grading.
+   * Optional because every shade stored before the switch existed has no such
+   * key: absent means ON, so read it as `enabled !== false`, never `!enabled`.
+   */
+  enabled?: boolean;
 }
 
 /** More than a handful stops being a treatment and starts being a paint job. */
@@ -236,7 +240,7 @@ export function shadeGradient(
   shade: Shade,
   block: HookBlock | null = null,
 ): ShadeGradient | null {
-  if (!shade.enabled) return null;
+  if (shade.enabled === false) return null;
   if (clamp01(shade.strength) <= 0) return null;
   const useHook = shade.followHook ? block : null;
   const stops = stopsFor(shade.strength, shade.invert, isMirrored(shade.direction));

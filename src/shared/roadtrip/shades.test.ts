@@ -31,6 +31,12 @@ describe('shadeGradient — nothing to draw', () => {
     expect(shadeGradient(shade({ enabled: false }))).toBeNull();
   });
 
+  it('draws a shade stored before the switch existed (no enabled key)', () => {
+    const stored = shade();
+    delete stored.enabled;
+    expect(shadeGradient(stored)).not.toBeNull();
+  });
+
   it('draws nothing rather than something transparent', () => {
     // A zero-alpha fill still costs a composite on every exported frame.
     for (const direction of SHADE_DIRECTIONS) {
