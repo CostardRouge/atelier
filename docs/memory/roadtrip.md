@@ -529,6 +529,8 @@ A list you sweep through should not make you aim at a 38px thumbnail or a small 
 
 `shadeGradient` returns the gradient in FRACTIONS of the frame (radii against the SHORTER side, so a radial stays a circle on 9:16) and `paintShades` is a dumb translation into pixels — the same split that keeps the burn-in and the PNG identical.
 
+**A shade has an `enabled` bypass, same as a LUT layer (2026-09-14).** The maintainer wanted to A/B a shade against the preview without deleting and re-adding it — the round trip `GradePanel` already gives a look. `Shade.enabled` defaults true (`createShade`), and `shadeGradient` returns null when off, so the one call site (`paintShades`) needs no change and preview/export stay identical. `ShadesPanel` mirrors `GradePanel`'s row exactly: a `ToggleField` first in the header, the row's left border and opacity drop when off, the strength/reach sliders (not the other fields — `GradePanel` doesn't grey those either) get `disabled`.
+
 ## Never read a canvas's size before an await and draw after it (2026-08-24)
 
 **Measured**: a miniature badge stayed burnt into the corner of the stage. `renderBadge` read `canvas.width/height`, awaited the fonts, and drew — while a newer render had resized the canvas in between. The stale call painted at the OLD scale over the new frame. The trigger was `BadgeStage`'s decode effect painting an empty frame into a canvas it never sized (300×150, the element default), but any caller could have caused it.

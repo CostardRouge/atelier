@@ -27,6 +27,10 @@ describe('shadeGradient — nothing to draw', () => {
     expect(shadeGradient(shade({ direction: 'radial', reach: 0 }))).toBeNull();
   });
 
+  it('is null when disabled, even at full strength', () => {
+    expect(shadeGradient(shade({ enabled: false }))).toBeNull();
+  });
+
   it('draws nothing rather than something transparent', () => {
     // A zero-alpha fill still costs a composite on every exported frame.
     for (const direction of SHADE_DIRECTIONS) {

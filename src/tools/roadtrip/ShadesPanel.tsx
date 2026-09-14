@@ -51,8 +51,18 @@ export default function ShadesPanel({ shades, onChange }: ShadesPanelProps) {
         // so the slider would be a control that does nothing.
         const reachLive = radial || !shade.followHook;
         return (
-          <div key={shade.id} className="flex flex-col gap-2.5 pl-3 border-l-2 border-line">
+          <div
+            key={shade.id}
+            className={`flex flex-col gap-2.5 pl-3 border-l-2 transition-opacity ${
+              shade.enabled ? 'border-line' : 'border-line opacity-60'
+            }`}
+          >
             <div className="flex items-center gap-2">
+              <ToggleField
+                label={shade.enabled ? `Bypass shade ${i + 1}` : `Enable shade ${i + 1}`}
+                checked={shade.enabled}
+                onChange={(enabled) => patch(shade.id, { enabled })}
+              />
               <span className="flex-1 text-sm font-medium text-ink">Shade {i + 1}</span>
               <input
                 type="color"
@@ -85,6 +95,7 @@ export default function ShadesPanel({ shades, onChange }: ShadesPanelProps) {
                 max={1}
                 step={0.02}
                 value={shade.strength}
+                disabled={!shade.enabled}
                 onChange={(strength) => patch(shade.id, { strength })}
                 format={(v) => `${Math.round(v * 100)}%`}
               />
@@ -96,7 +107,7 @@ export default function ShadesPanel({ shades, onChange }: ShadesPanelProps) {
                 max={1}
                 step={0.02}
                 value={shade.reach}
-                disabled={!reachLive}
+                disabled={!shade.enabled || !reachLive}
                 onChange={(reach) => patch(shade.id, { reach })}
                 format={(v) => `${Math.round(v * 100)}%`}
               />
