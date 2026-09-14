@@ -51,7 +51,8 @@ export type DriveStopsOn = 'places' | 'pictures';
 export type DriveGround = 'paper' | 'picture';
 export type DrivePath = 'curved' | 'straight';
 export type DriveAhead = 'dashed' | 'faint' | 'hidden';
-export type DrivePictures = 'cards' | 'fill' | 'none';
+/** Prints beside the car, the picture filling the frame, the picture BEHIND the map, or nothing. */
+export type DrivePictures = 'cards' | 'fill' | 'backdrop' | 'none';
 export type DriveCamera = 'whole' | 'follow';
 export type DriveEnd = 'reveal' | 'stay';
 export type DriveLabels = 'none' | 'ends' | 'all';
@@ -233,7 +234,7 @@ export function driveOptions(raw: Readonly<Record<string, unknown>>): DriveOptio
     trailColor: hex(o.trailColor, d.trailColor),
     aheadColor: hex(o.aheadColor, d.aheadColor),
     lineWidth: clamp(Number(o.lineWidth), L.lineWidth.min, L.lineWidth.max, d.lineWidth),
-    pictures: oneOf(o.pictures, ['cards', 'fill', 'none'], d.pictures),
+    pictures: oneOf(o.pictures, ['cards', 'fill', 'backdrop', 'none'], d.pictures),
     secondsPerPicture: clamp(Number(o.secondsPerPicture), L.secondsPerPicture.min, L.secondsPerPicture.max, d.secondsPerPicture),
     pauseEverywhere: o.pauseEverywhere === true,
     cardsStay: o.cardsStay !== false,
@@ -493,7 +494,7 @@ export function driveWants(route: DriveRoute, o: DriveOptions): HookPictureWant[
     for (const { key, want } of stop.pictures) {
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push({ ...want, shape: o.pictures === 'fill' ? 'frame' : 'own' });
+      out.push({ ...want, shape: o.pictures === 'cards' ? 'own' : 'frame' });
     }
   }
   return out;
@@ -775,6 +776,8 @@ export interface DriveMoment {
   mapAlpha: number;
   /** Past the end: the car rests, the map stays or is gone. */
   over: boolean;
+  /** Seconds since the current phase began — a ripple as the car halts. */
+  since: number;
 }
 
 export interface DrivePlan {
@@ -838,6 +841,7 @@ export function drivePlan(route: DriveRoute, o: DriveOptions): DrivePlan | null 
       progress: path.length > 0 ? s / path.length : 1,
       mapAlpha,
       over,
+      since: over ? t - total : t - phase.start,
     };
   };
 
@@ -971,9 +975,13 @@ export function jitter(key: string, salt = 0): number {
 }
 
 /**
- * Where a card sits beside its stop, in the frame: fanned upward and to
- * alternate sides so a stack of them reads as a pile of prints, kept inside
- * the frame by clamping. All in pixels; the paint decides the sizes.
+ * Where a card sits beside its stop, in the frame: a PILE above and to one
+ * side of the stop — each later print a little further up, across and
+ * turned, the way prints land on a table — so a stop's pictures cover one
+ * patch of the map and not the road. The side alternates from stop to stop
+ * (`stopIndex`), the tilt is seeded by the key so a frame never differs
+ * from the last, and the pile is kept inside the frame by clamping. All in
+ * pixels; the paint decides the sizes.
  */
 export function cardPlacement(
   stop: PlanPoint,
@@ -982,14 +990,15 @@ export function cardPlacement(
   card: { w: number; h: number },
   frame: { width: number; height: number },
   lift: number,
+  stopIndex = 0,
 ): { x: number; y: number; angle: number } {
-  const side = rank % 2 === 0 ? 1 : -1;
-  const spread = card.w * 0.32 + lift * 0.35;
-  const jx = jitter(key) * card.w * 0.08;
-  const jy = jitter(key, 7) * card.h * 0.06;
-  const x = stop.x + side * (card.w * 0.62 + rank * spread * 0.22) + jx;
-  const y = stop.y - lift - card.h * 0.45 - rank * card.h * 0.16 + jy;
-  const angle = side * (0.06 + rank * 0.045) + jitter(key, 3) * 0.08;
+  const side = stopIndex % 2 === 0 ? 1 : -1;
+  const step = Math.min(card.w, card.h) * 0.09;
+  const jx = jitter(key) * card.w * 0.04;
+  const jy = jitter(key, 7) * card.h * 0.04;
+  const x = stop.x + side * (card.w * 0.58 + lift * 0.3) + rank * step * side + jx;
+  const y = stop.y - lift * 0.6 - card.h * 0.55 - rank * step + jy;
+  const angle = side * 0.07 + rank * 0.06 * side + jitter(key, 3) * 0.07;
   const pad = 8;
   const half = Math.hypot(card.w, card.h) / 2;
   return {

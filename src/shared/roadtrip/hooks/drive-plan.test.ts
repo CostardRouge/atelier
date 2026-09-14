@@ -275,6 +275,7 @@ describe('driveWants', () => {
     expect(cards.map((w) => w.ref.name).sort()).toEqual(['a.jpg', 'p3.jpg']);
     expect(cards.every((w) => w.shape === 'own')).toBe(true);
     expect(driveWants(route, opts({ pictures: 'fill' })).every((w) => w.shape === 'frame')).toBe(true);
+    expect(driveWants(route, opts({ pictures: 'backdrop' })).every((w) => w.shape === 'frame')).toBe(true);
     expect(driveWants(route, opts({ pictures: 'none' }))).toEqual([]);
   });
 });

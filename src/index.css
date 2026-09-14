@@ -211,6 +211,31 @@ html[data-surface='darkroom'] {
   }
 }
 
+/* The Virée picker card (`shared/roadtrip/hooks/drive.tsx`): a car glyph
+   travels the sketch's dotted road and rests at its end, then goes again.
+   `offset-path` keeps it on the curve; a viewer who asked for no motion sees
+   it parked at the last stop. */
+.drive-sketch-car {
+  offset-path: path('M5 16 C 14 4, 24 20, 34 10 S 48 4, 53 8');
+  offset-rotate: auto;
+  offset-distance: 100%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .drive-sketch-car {
+    animation: drive-sketch 3.6s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  }
+}
+@keyframes drive-sketch {
+  0%,
+  8% {
+    offset-distance: 0%;
+  }
+  70%,
+  100% {
+    offset-distance: 100%;
+  }
+}
+
 @keyframes pulse-dot {
   0%,
   100% {
