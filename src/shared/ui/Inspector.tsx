@@ -8,8 +8,9 @@
  * one the interface audit drew:
  *
  * - an `InspectorSection` is a titled block, parted from the next by a rule
- *   and FOLDED with the chevron beside its title; its standing prose sits
- *   behind an ⓘ, and whether it is open is remembered per section;
+ *   and FOLDED by a click anywhere on its header band — the title, the empty
+ *   stretch and the chevron alike; its standing prose sits behind an ⓘ, and
+ *   whether it is open is remembered per section;
  * - inside it, a `FieldRow` is a label at the left and ITS control at the
  *   right, on one line, with an optional sentence under the control;
  * - `RangeField`, `SelectField` and `ToggleField` are the three controls a
@@ -20,7 +21,7 @@
  * and a card per block would be the boxes-in-boxes the audit removed.
  */
 
-import { useId, useState, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { useId, useState, type MouseEvent, type ReactNode, type SelectHTMLAttributes } from 'react';
 import InfoDot from './InfoDot';
 import { Icons } from './icons';
 
@@ -83,38 +84,59 @@ export function InspectorSection({
       return !o;
     });
   };
+  // The whole band folds, not only the 28px chevron the maintainer kept
+  // hunting for. The band cannot be ONE button — the ⓘ and the header's
+  // actions are buttons of their own — so it listens instead, and folds only
+  // for a click on itself or on a part marked `data-fold` (title, badge,
+  // stretch, chevron). Anything else a click lands on — an action, the ⓘ, the
+  // note it unfolds, a menu portalled out of an action — is not the band's.
+  // The title stays the real button, so the keyboard and a screen reader keep
+  // one control with `aria-expanded`; its click bubbles here like any other.
+  const onBandClick = (e: MouseEvent<HTMLDivElement>) => {
+    const band = e.currentTarget;
+    const hit = e.target as Element;
+    if (hit !== band) {
+      const part = hit.closest('[data-fold]');
+      if (!part || !band.contains(part)) return;
+    }
+    toggle();
+  };
 
   return (
     <section className="flex flex-col border-t border-line first:border-t-0 py-3 first:pt-1">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-0 min-h-7">
+      <div
+        onClick={onBandClick}
+        className="group/band flex flex-wrap items-center gap-x-2 gap-y-0 min-h-7 cursor-pointer"
+      >
         <button
           type="button"
-          onClick={toggle}
+          data-fold
           aria-expanded={open}
           aria-controls={bodyId}
-          className="min-w-0 p-0 border-0 bg-transparent text-left font-sans text-sm font-semibold text-ink cursor-pointer truncate hover:text-accent-ink focus:outline-none focus-visible:underline"
+          className="min-w-0 p-0 border-0 bg-transparent text-left font-sans text-sm font-semibold text-ink cursor-pointer truncate select-none group-hover/band:text-accent-ink focus:outline-none focus-visible:underline"
         >
           {title}
         </button>
         {badge && (
-          <span className="flex-none font-mono text-3xs tracking-[0.1em] uppercase text-muted border border-line-strong rounded-[5px] px-1.5 py-px">
+          <span
+            data-fold
+            className="flex-none font-mono text-3xs tracking-[0.1em] uppercase text-muted border border-line-strong rounded-[5px] px-1.5 py-px select-none"
+          >
             {badge}
           </span>
         )}
         {info && <InfoDot about={title.toLowerCase()}>{info}</InfoDot>}
-        <span className="flex-1" />
+        <span data-fold className="flex-1 self-stretch" />
         {open && actions}
-        <button
-          type="button"
-          onClick={toggle}
-          tabIndex={-1}
+        <span
+          data-fold
           aria-hidden="true"
-          className={`flex-none grid place-items-center w-7 h-7 -mr-1.5 p-0 border-0 rounded-[8px] bg-transparent text-muted cursor-pointer hover:bg-paper-2 hover:text-ink transition-transform duration-200 ease-paper [&>svg]:w-4 [&>svg]:h-4 ${
+          className={`flex-none grid place-items-center w-7 h-7 -mr-1.5 rounded-[8px] text-muted group-hover/band:bg-paper-2 group-hover/band:text-ink transition-transform duration-200 ease-paper [&>svg]:w-4 [&>svg]:h-4 ${
             open ? '' : '-rotate-90'
           }`}
         >
           {Icons.down}
-        </button>
+        </span>
       </div>
       {open && (
         <div id={bodyId} className="flex flex-col gap-2.5 pt-2.5">

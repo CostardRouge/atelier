@@ -1156,7 +1156,10 @@ export default function PostEditor({
         open={inspectorOpen}
         onClose={() => setInspectorOpen(false)}
         title={TABS.find((t) => t.id === tab)?.label ?? 'Piece'}
-        className="w-full min-w-0 flex flex-col gap-3 @min-[860px]:min-h-0 @min-[860px]:col-start-2 @min-[860px]:row-start-2"
+        // The Studio inspector's frame: one rounded paper box holding the tab
+        // strip and the sections, so the two editors read as one suite. The
+        // header above it (Overview, Trip, Export, the name) stays outside.
+        className="w-full min-w-0 flex flex-col gap-3 border border-line rounded-paper bg-surface p-3 @min-[860px]:min-h-0 @min-[860px]:col-start-2 @min-[860px]:row-start-2"
       >
         {/* Four tabs share one row, so the container is a pill again: it was
             a soft rectangle only because six of them wrapped onto two rows,
