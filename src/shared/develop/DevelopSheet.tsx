@@ -7,11 +7,12 @@ import {
   type ReactNode,
 } from 'react';
 import type { CubeLut } from '../lib/cube-parser';
-import { makeFrameGrader, type FrameGrader } from '../lut/frame-grader';
+import { makeFrameGrader } from '../lut/frame-grader';
 import GradePanel from '../lut/GradePanel';
+import { holdGrades, type HeldGrader } from '../lut/held-grader';
 import type { LutStack } from '../lut/use-lut-stack';
 import { stageFrameSize } from '../overlay/stage-size';
-import { loadBadgeSource, type BadgeSource } from '../roadtrip/badge-render';
+import { boundSource, loadBadgeSource, type BadgeSource } from '../roadtrip/badge-render';
 import SectionLegend from '../ui/SectionLegend';
 import useDialogKeys from '../ui/use-dialog-keys';
 import {
@@ -30,34 +31,6 @@ import {
   pasteDevelop,
   subscribeDevelopClipboard,
 } from './develop-clipboard';
-
-/**
- * How wide a picture is kept for the sheet. A develop is judged on a screen,
- * never at 48 megapixels: the stage budget (`stage-size.ts`) bounds the
- * canvas, and this bounds the bitmap behind it — a 194 MB bitmap for a
- * preview is the arithmetic that killed an iPhone's tab. The export composes
- * from the source at its own density, never from here.
- */
-const KEEP_MAX_WIDTH = 3840;
-
-/**
- * A source no wider than the cap — and NEVER wider than it was: the decode
- * option `loadBadgeSource` offers enlarges a small picture up to the cap
- * (right for a thumbnail cell, wrong here — measured: a 1600 px probe came
- * back at 3840). So the picture is decoded as it is and only a big one is
- * scaled down from the decoded bitmap, which is a resample, not a second
- * decode; the big bitmap is released at once.
- */
-async function boundedSource(file: File, videoTimeSeconds: number): Promise<BadgeSource> {
-  const source = await loadBadgeSource(file, videoTimeSeconds);
-  if (source.width <= KEEP_MAX_WIDTH || !(source.image instanceof ImageBitmap)) return source;
-  const small = await createImageBitmap(source.image, {
-    resizeWidth: KEEP_MAX_WIDTH,
-    resizeQuality: 'high',
-  });
-  source.release();
-  return { image: small, width: small.width, height: small.height, release: () => small.close() };
-}
 
 const LABELS: Readonly<Record<DevelopKey, string>> = {
   exposure: 'Exposure',
@@ -228,7 +201,10 @@ export default function DevelopSheet({
     setProblem(null);
     if (!file) return;
     let loaded: BadgeSource | null = null;
-    void boundedSource(file, videoTimeSeconds)
+    // A develop is judged on a screen, never at 48 megapixels: the picture is
+    // kept within the stage budget, and the export decodes the file again.
+    void loadBadgeSource(file, videoTimeSeconds)
+      .then((s) => boundSource(s))
       .then((s) => {
         if (cancelled) {
           s.release();
@@ -247,13 +223,15 @@ export default function DevelopSheet({
   }, [file, videoTimeSeconds]);
 
   // One grader, re-made only when the cube or the source's size changes — a
-  // WebGL2 context per repaint is never reclaimed (the stage's own rule).
+  // WebGL2 context per repaint is never reclaimed (the stage's own rule). It
+  // holds its grade, so dragging the wipe or holding the original does not
+  // grade the same picture again on every step (`held-grader.ts`).
   const cube = stack.composed;
-  const graderRef = useRef<{ lut: CubeLut; w: number; h: number; grader: FrameGrader } | null>(
+  const graderRef = useRef<{ lut: CubeLut; w: number; h: number; grader: HeldGrader } | null>(
     null,
   );
   const graderFor = useCallback(
-    (lut: CubeLut | null, s: BadgeSource): FrameGrader | null => {
+    (lut: CubeLut | null, s: BadgeSource): HeldGrader | null => {
       const cur = graderRef.current;
       if (!lut) {
         cur?.grader.dispose();
@@ -262,7 +240,7 @@ export default function DevelopSheet({
       }
       if (cur && cur.lut === lut && cur.w === s.width && cur.h === s.height) return cur.grader;
       cur?.grader.dispose();
-      const grader = makeFrameGrader(lut, s.width, s.height);
+      const grader = holdGrades(makeFrameGrader(lut, s.width, s.height));
       graderRef.current = { lut, w: s.width, h: s.height, grader };
       return grader;
     },

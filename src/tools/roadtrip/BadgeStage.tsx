@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CubeLut } from '../../shared/lib/cube-parser';
-import { makeFrameGrader, type FrameGrader } from '../../shared/lut/frame-grader';
+import { makeFrameGrader } from '../../shared/lut/frame-grader';
+import { holdGrades, type HeldGrader } from '../../shared/lut/held-grader';
+import { stageFrameSize } from '../../shared/overlay/stage-size';
 import {
   DEFAULT_FRAMING,
   MAX_FRAMING_SCALE,
@@ -15,6 +17,7 @@ import { moveBlock } from '../../shared/roadtrip/badge-layout';
 import {
   MAX_PREVIEW_LONG_EDGE,
   PREVIEW_LONG_EDGE,
+  boundSource,
   frameSize,
   loadBadgeSource,
   measureBadge,
@@ -191,17 +194,27 @@ export default function BadgeStage({
 
     setLoading(true);
     void loadBadgeSource(file, videoTimeSeconds)
-      .then((source) => {
+      .then(async (decoded) => {
+        if (cancelled) {
+          decoded.release();
+          return;
+        }
+        // The FILE's size is what the editor is told — the exports size their
+        // variants from it — while the stage keeps a still within its pixel
+        // budget: framing only reads the aspect, and grading 48 MP is what
+        // made every drag over a graded still crawl.
+        const natural = {
+          width: decoded.width,
+          height: decoded.height,
+          duration: 'duration' in decoded.image ? (decoded.image.duration ?? 0) : 0,
+        };
+        const source = await boundSource(decoded);
         if (cancelled) {
           source.release();
           return;
         }
         sourceRef.current = source;
-        onSourceLoaded?.({
-          width: source.width,
-          height: source.height,
-          duration: 'duration' in source.image ? (source.image.duration ?? 0) : 0,
-        });
+        onSourceLoaded?.(natural);
       })
       .catch((e: unknown) => {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
@@ -336,10 +349,15 @@ export default function BadgeStage({
   // source's pixel size changes. A grader is a WebGL2 context; making one per
   // paint would build and lose a context on every frame of the transport, and
   // contexts are only reclaimed on GC or a forced loss.
-  const graderRef = useRef<{ lut: CubeLut; w: number; h: number; grader: FrameGrader } | null>(
+  //
+  // It HOLDS its grades: a drag repaints the stage on every step, and the
+  // picture under it has not changed, so it is graded once and drawn many
+  // times (`held-grader.ts`). A clip over the pixel budget is graded into a
+  // budget-sized canvas — its element cannot be resampled ahead of the GPU.
+  const graderRef = useRef<{ lut: CubeLut; w: number; h: number; grader: HeldGrader } | null>(
     null,
   );
-  const graderFor = useCallback((source: BadgeSource | null): FrameGrader | null => {
+  const graderFor = useCallback((source: BadgeSource | null): HeldGrader | null => {
     const cur = graderRef.current;
     if (!lut || !source || source.width <= 0) {
       cur?.grader.dispose();
@@ -350,10 +368,15 @@ export default function BadgeStage({
       return cur.grader;
     }
     cur?.grader.dispose();
-    const grader = makeFrameGrader(lut, source.width, source.height);
+    const size = stageFrameSize(source.width, source.height);
+    const grader = holdGrades(makeFrameGrader(lut, size.w, size.h));
     graderRef.current = { lut, w: source.width, h: source.height, grader };
     return grader;
   }, [lut]);
+  // The frame the held grade was taken from. A clip's element is the same
+  // object whatever frame it shows, so every frame the stage is told about
+  // (`frameSeq`: a seek landing, a playback tick) is a new picture to grade.
+  const gradedSeqRef = useRef(-1);
   useEffect(
     () => () => {
       graderRef.current?.grader.dispose();
@@ -410,6 +433,11 @@ export default function BadgeStage({
     const { w, h } = frameSize(aspect, longEdge);
     canvas.width = w;
     canvas.height = h;
+    const grader = graderFor(sourceRef.current);
+    if (grader && gradedSeqRef.current !== frameSeq) {
+      grader.invalidate();
+      gradedSeqRef.current = frameSeq;
+    }
     const opts: RenderBadgeOptions = {
       source: sourceRef.current,
       elements,
@@ -422,7 +450,7 @@ export default function BadgeStage({
       framing,
       hook,
       elementsAt,
-      grader: graderFor(sourceRef.current),
+      grader,
       ghostId: selectedId,
     };
     void renderBadge(canvas, opts).then(() => {

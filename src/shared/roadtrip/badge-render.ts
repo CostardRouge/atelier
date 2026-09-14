@@ -13,6 +13,7 @@ import type { CubeLut } from '../lib/cube-parser';
 import { DEFAULT_FRAMING, drawFramed, type Framing } from '../media/framing';
 import { makeFrameGrader, type FrameGrader } from '../lut/frame-grader';
 import { drawQr, type QrDraw } from '../overlay/draw-qr';
+import { MAX_STAGE_PIXELS, stageFrameSize } from '../overlay/stage-size';
 import { shadeGradient, type HookBlock, type Shade } from './shades';
 import type { ResolvedHook } from './hooks/hook-variant';
 import { seek as seekVideo } from './video-frames';
@@ -111,6 +112,43 @@ export async function loadBadgeSource(
   }
 }
 
+/**
+ * A decoded STILL brought within an editor's pixel budget (`stage-size.ts`):
+ * a picture already inside it — and every clip, whose element cannot be
+ * resampled once for all its frames — comes back untouched; a bigger one is
+ * resampled down from the decoded bitmap and the big bitmap released at once.
+ *
+ * An editor decodes as-is and bounds here, never through `loadBadgeSource`'s
+ * `maxWidth`: that option ENLARGES a smaller picture up to the cap (right for
+ * a rail cell, wrong for a preview — a 1600 px probe came back at 3840).
+ *
+ * Why the budget, measured on a 1600 px Trips stage: a graded 48 MP still
+ * costs a 194 MB bitmap and a paint several times slower than a 4K frame's,
+ * for detail no preview shows. A preview budget only — every deliverable
+ * decodes the file again at its own density.
+ */
+export async function boundSource(
+  source: BadgeSource,
+  budget = MAX_STAGE_PIXELS,
+): Promise<BadgeSource> {
+  if (typeof ImageBitmap === 'undefined' || !(source.image instanceof ImageBitmap)) return source;
+  const { w, h } = stageFrameSize(source.width, source.height, budget);
+  if (w === source.width && h === source.height) return source;
+  let small: ImageBitmap;
+  try {
+    small = await createImageBitmap(source.image, {
+      resizeWidth: w,
+      resizeHeight: h,
+      resizeQuality: 'high',
+    });
+  } catch {
+    // A browser without resize options keeps the picture as decoded.
+    return source;
+  }
+  source.release();
+  return { image: small, width: small.width, height: small.height, release: () => small.close() };
+}
+
 function loadVideoFrame(file: File, timeSeconds: number): Promise<BadgeSource> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -198,11 +236,14 @@ export interface RenderBadgeOptions {
   /** A QR square, drawn under the text — the call-to-action slide's hero. */
   qr?: QrDraw | null;
   /**
-   * The grade, as a grader the CALLER owns, sized to the source's own pixels.
-   * A grader is a WebGL2 context, and a context per repaint would be built and
-   * lost on every frame of the stage's transport (contexts are only reclaimed
-   * on GC or a forced loss): the stage keeps one and re-makes it when the LUT
-   * or the source size changes; `badgeToPng` makes and disposes one per slide.
+   * The grade, as a grader the CALLER owns, sized to the source's own pixels
+   * (or fewer, of the same aspect — the picture is drawn at the source's size
+   * whatever the grader hands back). A grader is a WebGL2 context, and a
+   * context per repaint would be built and lost on every frame of the stage's
+   * transport (contexts are only reclaimed on GC or a forced loss): the stage
+   * keeps one, HOLDING its grades (`held-grader.ts`), and re-makes it when the
+   * LUT or the source size changes; `badgeToPng` makes and disposes one per
+   * slide.
    */
   grader?: FrameGrader | null;
   /**
