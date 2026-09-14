@@ -799,7 +799,7 @@ export default function AssetSidebar({
                 ? 'Filter by file name…'
                 : `Filter ${tabPool.length} asset${tabPool.length === 1 ? '' : 's'}…`
             }
-            className="flex-1 min-w-0 font-sans text-xs px-3 py-1.5 border border-line rounded-full bg-white text-ink placeholder:text-faint focus:outline-none focus:border-line-strong"
+            className="flex-1 min-w-0 font-sans text-xs px-3 py-1.5 border border-line rounded-full bg-surface text-ink placeholder:text-faint focus:outline-none focus:border-line-strong"
           />
           {tabPool.length > 0 && (
             <button
@@ -1103,15 +1103,15 @@ function AssetRow({
 
   // The active row gets an accent ring; a merely-selected row a subtle one.
   const ring = active
-    ? 'bg-white shadow-[inset_0_0_0_2px_var(--color-accent)]'
+    ? 'bg-surface shadow-[inset_0_0_0_2px_var(--color-accent)]'
     : selected
-      ? 'bg-white shadow-[inset_0_0_0_1px_var(--color-line-strong)]'
+      ? 'bg-surface shadow-[inset_0_0_0_1px_var(--color-line-strong)]'
       : '';
 
   return (
     <div
       ref={ref}
-      className={`group flex items-center gap-2.5 px-2 py-1.5 mb-1 rounded-[11px] hover:bg-white ${ring} ${
+      className={`group flex items-center gap-2.5 px-2 py-1.5 mb-1 rounded-[11px] hover:bg-surface ${ring} ${
         usable ? '' : 'opacity-45'
       }`}
     >

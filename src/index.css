@@ -312,4 +312,37 @@ html[data-surface='darkroom'] {
     background: var(--color-accent);
     border-radius: 999px;
   }
+
+  /* Every <input type="range">: the runnable track is a UA-default light
+     grey that `color-scheme` cannot recolour once `accent-color` is set too
+     (verified live — the pair disables Chromium's own dark-track repaint),
+     which is what kept every slider in the darkroom pale under either
+     theme. Paint the track from a token instead; the thumb keeps the
+     browser's native `accent-color` rendering, untouched. */
+  input[type='range']::-webkit-slider-runnable-track {
+    background: var(--color-line-strong);
+    border-radius: 999px;
+  }
+  input[type='range']::-moz-range-track {
+    background: var(--color-line-strong);
+    border-radius: 999px;
+  }
+
+  /* `RangeField` (`shared/ui/Inspector.tsx`) additionally reports how far the
+     value has travelled: a hard-stop gradient computed from its own props,
+     since repainting the track loses the browser's built-in fill. */
+  input[type='range'].range-fill::-webkit-slider-runnable-track {
+    background: linear-gradient(
+      to right,
+      var(--color-accent) var(--range-fill, 0%),
+      var(--color-line-strong) var(--range-fill, 0%)
+    );
+  }
+  input[type='range'].range-fill::-moz-range-track {
+    background: linear-gradient(
+      to right,
+      var(--color-accent) var(--range-fill, 0%),
+      var(--color-line-strong) var(--range-fill, 0%)
+    );
+  }
 }
