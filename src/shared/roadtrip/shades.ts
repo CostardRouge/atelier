@@ -19,10 +19,18 @@
  * hook" behaviour, kept because a scrim that moves with the text it protects
  * is worth more than one placed by eye.
  *
+ * `followAnchor` goes one step further and hands over the POSITION too: the
+ * shade sits in the cell of the 3×3 grid the badge is anchored to — a badge
+ * set bottom-left gets a pool of shade in that corner, and moves it when the
+ * badge moves. The shade's own direction is kept underneath, so switching the
+ * option off returns exactly what was chosen by hand.
+ *
  * Everything here is pure and DOM-free: `shadeGradient` returns a description
  * in fractions of the frame, so the geometry is unit-testable and the canvas
  * work is a dumb translation of it (`badge-render.ts`).
  */
+
+import type { Anchor } from '../overlay/overlay-types';
 
 /** Where a shade is anchored, and which way it travels. */
 export type ShadeDirection =
@@ -36,7 +44,12 @@ export type ShadeDirection =
   /** Opaque across the middle, fading to both left and right. */
   | 'middle-horizontal'
   /** Opaque at the centre, fading outward in a circle. */
-  | 'radial';
+  | 'radial'
+  /** Opaque in that corner, fading outward in a quarter circle. */
+  | 'top-left'
+  | 'top-right'
+  | 'bottom-left'
+  | 'bottom-right';
 
 export const SHADE_DIRECTIONS: readonly {
   id: ShadeDirection;
@@ -58,7 +71,78 @@ export const SHADE_DIRECTIONS: readonly {
     hint: 'Dark across the middle, clearing toward both sides',
   },
   { id: 'radial', label: 'Radial', hint: 'Dark at the centre, clearing outward' },
+  { id: 'top-left', label: 'Top-left corner', hint: 'Dark in the corner, clearing outward' },
+  { id: 'top-right', label: 'Top-right corner', hint: 'Dark in the corner, clearing outward' },
+  { id: 'bottom-left', label: 'Bottom-left corner', hint: 'Dark in the corner, clearing outward' },
+  { id: 'bottom-right', label: 'Bottom-right corner', hint: 'Dark in the corner, clearing outward' },
 ];
+
+/**
+ * The 3×3 grid a direction is picked on, in reading order, cell for cell the
+ * badge's own anchor grid. Every cell holds one shape except the centre, which
+ * holds three: a radial and the two middle bands — a band crosses the frame,
+ * so no single cell of a grid could stand for it.
+ */
+export const SHADE_GRID: readonly { cell: Anchor; shapes: readonly ShadeDirection[] }[] = [
+  { cell: 'top-left', shapes: ['top-left'] },
+  { cell: 'top-center', shapes: ['top'] },
+  { cell: 'top-right', shapes: ['top-right'] },
+  { cell: 'center-left', shapes: ['left'] },
+  { cell: 'center', shapes: ['radial', 'middle-vertical', 'middle-horizontal'] },
+  { cell: 'center-right', shapes: ['right'] },
+  { cell: 'bottom-left', shapes: ['bottom-left'] },
+  { cell: 'bottom-center', shapes: ['bottom'] },
+  { cell: 'bottom-right', shapes: ['bottom-right'] },
+];
+
+/** The grid cell a direction lives in. */
+export function shadeCell(direction: ShadeDirection): Anchor {
+  return SHADE_GRID.find((c) => c.shapes.includes(direction))?.cell ?? 'center';
+}
+
+/**
+ * The direction a shade draws in the cell `anchor`: its own direction when that
+ * already lives there (a band stays a band under a centred badge), otherwise
+ * the cell's first shape.
+ */
+export function directionInCell(anchor: Anchor, own: ShadeDirection): ShadeDirection {
+  const cell = SHADE_GRID.find((c) => c.cell === anchor) ?? SHADE_GRID[4];
+  return cell.shapes.includes(own) ? own : cell.shapes[0];
+}
+
+/** How a shade takes after the badge — nothing, its edge, or its anchor too. */
+export type ShadeFollow = 'none' | 'edge' | 'anchor';
+
+export function shadeFollow(shade: Pick<Shade, 'followHook' | 'followAnchor'>): ShadeFollow {
+  if (shade.followAnchor === true) return 'anchor';
+  return shade.followHook ? 'edge' : 'none';
+}
+
+/** The two stored flags a follow mode writes. */
+export function followFlags(follow: ShadeFollow): Pick<Shade, 'followHook' | 'followAnchor'> {
+  return { followHook: follow === 'edge', followAnchor: follow === 'anchor' };
+}
+
+/**
+ * The direction a shade really draws with the badge in hand: under
+ * `followAnchor`, the badge's cell; otherwise its own. No anchor to follow (a
+ * slide without a badge) falls back to its own too, never to nothing.
+ */
+export function resolvedDirection(shade: Shade, block: HookBlock | null): ShadeDirection {
+  if (shade.followAnchor === true && block?.anchor) {
+    return directionInCell(block.anchor, shade.direction);
+  }
+  return shade.direction;
+}
+
+/**
+ * Whether the badge sets this direction's reach, so its slider does nothing:
+ * only the top and bottom edges land on the block, which is measured
+ * vertically. A side, a corner and a band keep the slider's reach.
+ */
+export function reachFollowsBadge(direction: ShadeDirection, follow: ShadeFollow): boolean {
+  return follow !== 'none' && (direction === 'top' || direction === 'bottom');
+}
 
 export interface Shade {
   id: string;
@@ -72,6 +156,12 @@ export interface Shade {
   invert: boolean;
   /** Take the reach (and, for a radial, the centre) from the badge block. */
   followHook: boolean;
+  /**
+   * Take the position from the badge's anchor as well (implies the reach of
+   * `followHook`). Optional, absent means off: shades stored before it
+   * existed carry no such key.
+   */
+  followAnchor?: boolean;
   /**
    * Off keeps the shade in the stack but skips it — the A/B of grading.
    * Optional because every shade stored before the switch existed has no such
@@ -95,6 +185,7 @@ export function createShade(over: Partial<Shade> = {}): Shade {
     color: '#000000',
     invert: false,
     followHook: false,
+    followAnchor: false,
     enabled: true,
     ...over,
   };
@@ -137,6 +228,8 @@ export type ShadeGradient = LinearShade | RadialShade;
 export interface HookBlock {
   top: number;
   bottom: number;
+  /** The badge's grid anchor, what `followAnchor` places a shade by. */
+  anchor?: Anchor;
 }
 
 function clamp01(value: number): number {
@@ -178,6 +271,25 @@ function stopsFor(strength: number, invert: boolean, mirrored: boolean): ShadeSt
   if (!invert) return ramp;
   // Inverted: clear at the anchor, opaque at the far end of the reach.
   return ramp.map((stop) => ({ at: 1 - stop.at, alpha: stop.alpha })).reverse();
+}
+
+/** A corner's radial, as a fraction of the shorter side at full reach. */
+const CORNER_RADIUS = 1.2;
+
+/** The corner a direction names, as frame fractions, or null for any other. */
+function cornerOf(direction: ShadeDirection): { cx: number; cy: number } | null {
+  switch (direction) {
+    case 'top-left':
+      return { cx: 0, cy: 0 };
+    case 'top-right':
+      return { cx: 1, cy: 0 };
+    case 'bottom-left':
+      return { cx: 0, cy: 1 };
+    case 'bottom-right':
+      return { cx: 1, cy: 1 };
+    default:
+      return null;
+  }
 }
 
 /** True for the directions whose gradient runs edge to edge about a centre. */
@@ -242,10 +354,21 @@ export function shadeGradient(
 ): ShadeGradient | null {
   if (shade.enabled === false) return null;
   if (clamp01(shade.strength) <= 0) return null;
-  const useHook = shade.followHook ? block : null;
-  const stops = stopsFor(shade.strength, shade.invert, isMirrored(shade.direction));
+  const direction = resolvedDirection(shade, block);
+  const useHook = shadeFollow(shade) !== 'none' ? block : null;
+  const stops = stopsFor(shade.strength, shade.invert, isMirrored(direction));
 
-  if (shade.direction === 'radial') {
+  // A corner is a quarter of a circle centred ON the corner — a pool of shade
+  // falling off like light, where a diagonal linear would draw a straight
+  // edge across the frame. Radii run against the shorter side, as a radial's.
+  const corner = cornerOf(direction);
+  if (corner) {
+    const reach = clamp01(shade.reach);
+    if (reach <= 0) return null;
+    return { kind: 'radial', ...corner, r0: 0, r1: reach * CORNER_RADIUS, stops };
+  }
+
+  if (direction === 'radial') {
     // Centred on the badge when it is asked to follow it, so a hook set low
     // in the frame gets its own pool of shade rather than one in the middle.
     const cy = useHook ? clamp01((useHook.top + useHook.bottom) / 2) : 0.5;
@@ -255,7 +378,7 @@ export function shadeGradient(
   }
 
   if (!useHook && clamp01(shade.reach) <= 0) return null;
-  const ends = linearEnds(shade.direction, shade.reach, useHook);
+  const ends = linearEnds(direction, shade.reach, useHook);
   if (ends.x0 === ends.x1 && ends.y0 === ends.y1) return null;
   return { kind: 'linear', ...ends, stops };
 }

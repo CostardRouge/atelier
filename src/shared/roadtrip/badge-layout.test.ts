@@ -343,6 +343,12 @@ describe('badgeBlockExtent', () => {
     expect(extent.top).toBeLessThan(extent.bottom);
   });
 
+  it("carries the badge's anchor, what a shade following it is placed by", () => {
+    expect(badgeBlockExtent(full, layout({ anchor: 'top-right', y: 0.1 }), REEL)!.anchor).toBe(
+      'top-right',
+    );
+  });
+
   it('starts at a top anchor', () => {
     const extent = badgeBlockExtent(full, layout({ anchor: 'top-left', y: 0.1 }), REEL)!;
     expect(extent.top).toBeCloseTo(0.1, 6);

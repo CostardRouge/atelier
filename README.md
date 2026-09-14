@@ -582,13 +582,17 @@ the same transform. Each picture of a carousel is framed on its own.
 
 **The picture can be helped.** A bright sky exactly where the hook sits is the
 normal case, so up to four **shades** can be laid over it. One shade is a
-direction — from any of the four edges, a band across the middle either way, or
-radial — a reach, a strength and **its own colour**, and it can be **inverted**:
-"from the top, reaching halfway, inverted" is clear at the edge and darkest at
-mid-frame, which is what a centred hook on a textured picture needs. *Follow the
-hook* hands the reach to the badge itself — a linear shade lands on the block's
-own edge, a radial centres on it — so the fade moves when the text does. They
-stack, so a wash from the left and a corner vignette can be on at once.
+direction, picked on a 3×3 grid whose cells show the gradient they draw — from
+any of the four edges, a quarter circle from any of the four corners, or, in the
+centre, a radial or a band across the middle either way — a reach, a strength
+and **its own colour**, and it can be **inverted**: "from the top, reaching
+halfway, inverted" is clear at the edge and darkest at mid-frame, which is what a
+centred hook on a textured picture needs. *Follow badge* hands part of the shade
+to the badge: **Edge** gives it the reach (a top or bottom shade lands on the
+block's own edge, a radial centres on it), **Anchor** gives it the place as well
+— a badge anchored bottom-left gets its shade in that corner, and takes it along
+when it is re-anchored. They stack, so a wash from the left and a corner vignette
+can be on at once.
 Darkening the picture keeps the typography clean, which a panel behind every
 line does not.
 

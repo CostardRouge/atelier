@@ -211,7 +211,11 @@ export default function LookTab({
               </p>
             }
           >
-            <ShadesPanel shades={post.badge.shades} onChange={setShades} />
+            <ShadesPanel
+              shades={post.badge.shades}
+              onChange={setShades}
+              anchor={post.badge.layout.anchor}
+            />
           </InspectorSection>
         </>
       ) : (

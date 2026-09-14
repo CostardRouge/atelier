@@ -257,10 +257,12 @@ export function badgeBlockExtent(
   content: BadgeContent,
   layout: BadgeLayout,
   aspect: number,
-): { top: number; bottom: number } | null {
+): { top: number; bottom: number; anchor: Anchor } | null {
   const { pieces, top, height } = blockMetrics(content, layout, aspect);
   if (!pieces.length) return null;
-  return { top, bottom: top + height };
+  // The anchor rides along so a shade can take its place from the badge's
+  // cell (`Shade.followAnchor`) with no second argument threaded everywhere.
+  return { top, bottom: top + height, anchor: layout.anchor };
 }
 
 /**

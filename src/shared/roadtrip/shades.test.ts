@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 import {
   MAX_SHADES,
   SHADE_DIRECTIONS,
+  SHADE_GRID,
   createShade,
+  directionInCell,
+  followFlags,
+  reachFollowsBadge,
+  resolvedDirection,
+  shadeCell,
+  shadeFollow,
   shadeGradient,
   vignetteShade,
   type LinearShade,
@@ -108,6 +115,27 @@ describe('shadeGradient — every direction is a different gradient', () => {
       cy: 0.5,
       r0: 0,
     });
+  });
+
+  it('puts a corner radial ON its corner, a quarter circle of shade', () => {
+    const corners = {
+      'top-left': { cx: 0, cy: 0 },
+      'top-right': { cx: 1, cy: 0 },
+      'bottom-left': { cx: 0, cy: 1 },
+      'bottom-right': { cx: 1, cy: 1 },
+    } as const;
+    for (const [direction, at] of Object.entries(corners)) {
+      expect(
+        shadeGradient(shade({ direction: direction as keyof typeof corners })),
+      ).toMatchObject({ kind: 'radial', r0: 0, ...at });
+    }
+  });
+
+  it('grows a corner with its reach, and draws nothing at none', () => {
+    const near = shadeGradient(shade({ direction: 'bottom-left', reach: 0.3 })) as { r1: number };
+    const far = shadeGradient(shade({ direction: 'bottom-left', reach: 0.8 })) as { r1: number };
+    expect(far.r1).toBeGreaterThan(near.r1);
+    expect(shadeGradient(shade({ direction: 'bottom-left', reach: 0 }))).toBeNull();
   });
 
   it('gives each direction its own geometry — none is a duplicate', () => {
@@ -237,5 +265,68 @@ describe('createShade', () => {
   it('leaves room for a handful, not a paint job', () => {
     expect(MAX_SHADES).toBeGreaterThan(1);
     expect(MAX_SHADES).toBeLessThan(9);
+  });
+});
+
+describe('the direction grid', () => {
+  it('holds every direction exactly once', () => {
+    const all = SHADE_GRID.flatMap((c) => c.shapes);
+    expect(new Set(all).size).toBe(all.length);
+    expect([...all].sort()).toEqual(SHADE_DIRECTIONS.map((d) => d.id).sort());
+  });
+
+  it('files a direction under its cell, the bands under the centre', () => {
+    expect(shadeCell('top')).toBe('top-center');
+    expect(shadeCell('left')).toBe('center-left');
+    expect(shadeCell('bottom-right')).toBe('bottom-right');
+    expect(shadeCell('middle-vertical')).toBe('center');
+    expect(shadeCell('radial')).toBe('center');
+  });
+
+  it("keeps a shape that already lives in the cell, else takes the cell's first", () => {
+    expect(directionInCell('center', 'middle-horizontal')).toBe('middle-horizontal');
+    expect(directionInCell('center', 'bottom')).toBe('radial');
+    expect(directionInCell('bottom-left', 'radial')).toBe('bottom-left');
+  });
+});
+
+describe('shadeGradient — following the anchor', () => {
+  const at = (anchor: (typeof SHADE_GRID)[number]['cell']) => ({ ...block, anchor });
+
+  it("reads the follow mode from the two flags, absent followAnchor as off", () => {
+    const stored = shade({ followHook: true });
+    delete stored.followAnchor;
+    expect(shadeFollow(stored)).toBe('edge');
+    for (const follow of ['none', 'edge', 'anchor'] as const) {
+      expect(shadeFollow(shade(followFlags(follow)))).toBe(follow);
+    }
+  });
+
+  it("takes the badge's cell, keeping its own direction underneath", () => {
+    const s = shade({ direction: 'top', ...followFlags('anchor') });
+    expect(resolvedDirection(s, at('bottom-left'))).toBe('bottom-left');
+    expect(resolvedDirection(s, at('center-right'))).toBe('right');
+    expect(s.direction).toBe('top');
+    expect(shadeGradient(s, at('bottom-left'))).toMatchObject({ kind: 'radial', cx: 0, cy: 1 });
+  });
+
+  it('keeps its own direction with no anchor to follow, or when not asked', () => {
+    expect(resolvedDirection(shade({ direction: 'top', ...followFlags('anchor') }), block)).toBe('top');
+    expect(resolvedDirection(shade({ direction: 'top', ...followFlags('anchor') }), null)).toBe('top');
+    expect(resolvedDirection(shade({ direction: 'top', followHook: true }), at('bottom-left'))).toBe('top');
+  });
+
+  it("lands on the block's edge as well, like following the edge", () => {
+    const anchored = shadeGradient(shade({ ...followFlags('anchor') }), at('bottom-center'));
+    const edged = shadeGradient(shade({ direction: 'bottom', ...followFlags('edge') }), block);
+    expect(anchored).toEqual(edged);
+  });
+
+  it('says when the badge, not the slider, sets the reach', () => {
+    expect(reachFollowsBadge('bottom', 'anchor')).toBe(true);
+    expect(reachFollowsBadge('top', 'edge')).toBe(true);
+    expect(reachFollowsBadge('bottom', 'none')).toBe(false);
+    expect(reachFollowsBadge('bottom-left', 'anchor')).toBe(false);
+    expect(reachFollowsBadge('left', 'edge')).toBe(false);
   });
 });
