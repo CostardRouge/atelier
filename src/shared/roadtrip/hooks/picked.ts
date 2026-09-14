@@ -8,7 +8,7 @@
  * ignores the position. Pure and DOM-free.
  */
 
-import { hookPictureKey, type HookPickedPicture } from './hook-variant';
+import { hookPictureKey, type HookDay, type HookPickedPicture } from './hook-variant';
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -68,4 +68,41 @@ export function sortPicked(picked: readonly HookPickedPicture[]): HookPickedPict
       (a.takenAt ?? Number.MAX_SAFE_INTEGER) - (b.takenAt ?? Number.MAX_SAFE_INTEGER) ||
       a.ref.name.localeCompare(b.ref.name),
   );
+}
+
+/**
+ * Where each picked picture falls against this piece: in reach (shot on a
+ * day of the trip, no later than the piece's own), after it, or outside the
+ * trip altogether. A panel says the last two out loud; a plan uses the first.
+ */
+export function partitionPicked(
+  calendar: readonly HookDay[],
+  date: string,
+  picked: readonly HookPickedPicture[],
+): { inReach: HookPickedPicture[]; after: number; outside: number } {
+  const days = new Set(calendar.map((day) => day.date));
+  const inReach: HookPickedPicture[] = [];
+  let after = 0;
+  let outside = 0;
+  for (const picture of picked) {
+    if (!days.has(picture.date)) outside += 1;
+    else if (picture.date > date) after += 1;
+    else inReach.push(picture);
+  }
+  return { inReach: sortPicked(inReach), after, outside };
+}
+
+/**
+ * `k` items spread evenly over `items`, first and last always kept. Fewer than
+ * `k` comes back whole: a sweep never repeats a day to reach a count.
+ */
+export function sampleEvenly<T>(items: readonly T[], k: number): T[] {
+  if (k <= 0) return [];
+  if (items.length <= k) return [...items];
+  if (k === 1) return [items[items.length - 1]];
+  const out: T[] = [];
+  for (let i = 0; i < k; i++) {
+    out.push(items[Math.round((i * (items.length - 1)) / (k - 1))]);
+  }
+  return out;
 }
