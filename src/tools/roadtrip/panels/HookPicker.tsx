@@ -10,29 +10,61 @@
  * A variant a piece cannot feed is greyed **with the reason on the card**, not
  * hidden — the counter modes' rule: say what it would draw, or say why it
  * cannot. A variant you cannot find is a feature that does not exist.
+ *
+ * The picker is also the variant panel's HOST: a panel may not open the
+ * Library or ask an instance itself (`hook-variant.ts`), so the things it may
+ * ask for — the picture chooser, how its pictures are loading — are handed
+ * down from here, and the chooser is drawn here.
  */
 
+import { useCallback, useMemo, useState } from 'react';
 import {
   setHookOptions,
   setHookVariant,
   type HookContext,
   type HookLayer,
+  type HookPanelHost,
+  type HookPickedPicture,
+  type HookPictureStatus,
   type HookVariant,
 } from '../../../shared/roadtrip/hooks/hook-variant';
 import { HOOK_VARIANTS, hookUnmet } from '../../../shared/roadtrip/hooks/registry';
+import HookPicturesModal from '../HookPicturesModal';
 
 interface HookPickerProps {
   /** The piece's stored layers; the picker writes the first and only the first. */
   layers: HookLayer[];
   /** What the variants were prepared against — also what an option panel reads. */
   ctx: HookContext;
+  /** How the opener's pictures are coming along, for its panel to say. */
+  pictureStatus?: HookPictureStatus;
   onChange: (layers: HookLayer[]) => void;
 }
 
-export default function HookPicker({ layers, ctx, onChange }: HookPickerProps) {
+interface ChooseRequest {
+  selected: readonly HookPickedPicture[];
+  resolve: (picked: HookPickedPicture[] | null) => void;
+}
+
+export default function HookPicker({ layers, ctx, pictureStatus, onChange }: HookPickerProps) {
   const currentId = layers[0]?.id ?? '';
   const current: HookVariant | undefined = HOOK_VARIANTS.find((v) => v.id === currentId);
   const Panel = current?.Panel;
+
+  const [choosing, setChoosing] = useState<ChooseRequest | null>(null);
+  const choosePictures = useCallback(
+    (selected: readonly HookPickedPicture[]) =>
+      new Promise<HookPickedPicture[] | null>((resolve) => setChoosing({ selected, resolve })),
+    [],
+  );
+  const host = useMemo<HookPanelHost>(
+    () => ({ choosePictures, pictureStatus }),
+    [choosePictures, pictureStatus],
+  );
+  const settle = (picked: HookPickedPicture[] | null) => {
+    choosing?.resolve(picked);
+    setChoosing(null);
+  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -79,7 +111,17 @@ export default function HookPicker({ layers, ctx, onChange }: HookPickerProps) {
         <Panel
           options={layers[0]?.options ?? {}}
           ctx={ctx}
+          host={host}
           onChange={(options) => onChange(setHookOptions(layers, options))}
+        />
+      )}
+
+      {choosing && (
+        <HookPicturesModal
+          ctx={ctx}
+          selected={choosing.selected}
+          onCancel={() => settle(null)}
+          onConfirm={(picked) => settle(picked)}
         />
       )}
     </div>

@@ -55,6 +55,26 @@ export function isResolvable(ref: SavedMediaRef | null | undefined): boolean {
   return resolvableSource(ref) !== null;
 }
 
+/**
+ * A still's editing rendition, straight from the instance `ref` names — one
+ * request for the bytes, and nothing else: no row lookup, no `.srt`, no
+ * identity registered, and the file is NOT meant for the library.
+ *
+ * For a picture drawn for a few frames inside something else (a hook's
+ * flash), where `refetchMedia`'s full materialisation would put a pool asset
+ * behind every tick of a sweep. Null when no connected instance holds `ref`.
+ * Throws a `WinnowError` for an instance that answered badly, so "not signed
+ * in" can be said as such.
+ */
+export async function fetchPreviewStill(ref: SavedMediaRef): Promise<Blob | null> {
+  const split = splitAssetId(ref.assetId);
+  if (!split || split.host === DEFAULT_SOURCE_ID) return null;
+  const connection = getWinnowConnection(split.host);
+  if (!connection) return null;
+  const client = new WinnowClient({ baseUrl: connection.baseUrl, auth: connection.auth });
+  return client.fetchFile(client.proxyUrl(split.id), `${ref.name}.webp`, 'image/webp', ref.lastModified);
+}
+
 export interface RefetchOptions {
   /** The edit rendition by default — preview always reads the proxy. */
   fidelity?: Fidelity;

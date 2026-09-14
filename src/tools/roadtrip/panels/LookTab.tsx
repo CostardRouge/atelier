@@ -4,7 +4,7 @@ import type { Shade } from '../../../shared/roadtrip/shades';
 import type { BadgePieceStyle } from '../../../shared/roadtrip/badge-layout';
 import type { BadgePiece } from '../../../shared/roadtrip/day-badge';
 import type { PostBadge, TripDoc, TripPost } from '../../../shared/roadtrip/trip-types';
-import type { HookContext } from '../../../shared/roadtrip/hooks/hook-variant';
+import type { HookContext, HookPictureStatus } from '../../../shared/roadtrip/hooks/hook-variant';
 import HookPicker from './HookPicker';
 import PieceStylePanel from '../PieceStylePanel';
 import ShadesPanel from '../ShadesPanel';
@@ -39,6 +39,8 @@ interface LookTabProps {
   isHook: boolean;
   /** What the piece's opener was prepared against — the picker hands it on. */
   hookCtx: HookContext;
+  /** How the opener's pictures are coming along — its panel says so. */
+  hookPictureStatus?: HookPictureStatus;
   /** The piece in hand — chosen above the tabs, or by a click on the stage. */
   piece: BadgePiece;
   onChangeTrip: (trip: TripDoc) => void;
@@ -66,6 +68,7 @@ export default function LookTab({
   post,
   isHook,
   hookCtx,
+  hookPictureStatus,
   piece,
   onChangeTrip,
   patchBadge,
@@ -94,7 +97,12 @@ export default function LookTab({
             </p>
           }
         >
-          <HookPicker layers={post.badge.hook} ctx={hookCtx} onChange={(hook) => patchBadge({ hook })} />
+          <HookPicker
+            layers={post.badge.hook}
+            ctx={hookCtx}
+            pictureStatus={hookPictureStatus}
+            onChange={(hook) => patchBadge({ hook })}
+          />
         </InspectorSection>
       )}
 

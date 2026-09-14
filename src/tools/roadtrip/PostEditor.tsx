@@ -317,7 +317,17 @@ export default function PostEditor({
     () => hookContextFor(trip, post, aspect, content),
     [trip, post, aspect, content],
   );
-  const hookPictures = useHookPictures(trip, post, post.badge.hook, baseHookCtx);
+  // The grade is bound here, before the opener's pictures: a flashed picture
+  // wears the piece's grade (without any one slide's develop), so a sweep and
+  // the picture it lands on read as one look.
+  const grade = useTripGrade(trip, post, onChangeTrip, onChangePost);
+  const flashLut = grade.stack.composeWith(null);
+  const { pictures: hookPictures, status: hookPictureStatus } = useHookPictures(
+    post.badge.hook,
+    baseHookCtx,
+    lib.assets,
+    flashLut,
+  );
   const hookCtx = useMemo<HookContext>(
     () => ({ ...baseHookCtx, pictures: hookPictures }),
     [baseHookCtx, hookPictures],
@@ -660,7 +670,7 @@ export default function PostEditor({
   }, [isVideo, duration, slide, post, patchBadge, onChangePost]);
 
   // --- the grade: the Studio's stack, bound to the trip or to this piece ----
-  const grade = useTripGrade(trip, post, onChangeTrip, onChangePost);
+  // (bound above, beside the opener's pictures, which wear it too)
   // One cube per SLIDE: the shared stack baked with that slide's own develop
   // (memoised in the stack, so untouched slides share one cube). The stage
   // reads the STORED develop even while the sheet is open — the sheet's
@@ -1213,6 +1223,7 @@ export default function PostEditor({
               post={post}
               isHook={isHook}
               hookCtx={hookCtx}
+              hookPictureStatus={hookPictureStatus}
               piece={piece}
               onChangeTrip={onChangeTrip}
               patchBadge={patchBadge}

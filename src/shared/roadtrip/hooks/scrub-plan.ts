@@ -9,28 +9,36 @@
  *
  * Two decisions live here rather than in a comment elsewhere:
  *
- * - **Only told days flash.** A stop is a day another piece already tells;
- *   a day nothing was ever posted from is crossed by the head, never shown,
- *   never faked. A trip with nothing told yet still sweeps — through evenly
- *   spaced days that flash nothing — so the tape reads the trip's length even
- *   on its first piece.
+ * - **A stop is a real picture, or an honest dark frame.** Stopping on the
+ *   pieces' days, a stop is a day another piece already tells and flashes the
+ *   SOURCE picture that piece is composed over; a day nothing was posted from
+ *   is crossed by the head, never shown, never faked. A trip with nothing told
+ *   yet still sweeps — through evenly spaced days that flash nothing — so the
+ *   tape reads the trip's length even on its first piece.
  * - **The easing places the stops.** Stops sit on the INVERSE of the chosen
  *   curve, and the head glides on the curve itself, which is what makes it sit
  *   EXACTLY on a stop at that stop's time rather than near it. Every easing
  *   offered has a closed-form inverse for that reason. The default is a cubic
  *   ease-out — the last few days take as long as the first twenty, a mechanism
  *   coming to rest rather than a slideshow ending.
- * - **The author may name the days.** `days: 'chosen'` sweeps exactly the days
- *   picked (the hero appended), and `pieceByDay` says which piece stands for a
- *   day told several times. Still only pictures that exist: a chosen day nobody
- *   told is crossed dark like any other.
+ * - **The author may pick the pictures.** `stopsOn: 'picked'` stops once per
+ *   picture in `picked`, in the order they were shot, the hero appended. A day
+ *   with three pictures is three stops on one tick: the head holds while the
+ *   frames change. A picture shot after this piece's day, or outside the trip,
+ *   has no place on the tape and is left out — and the panel says so.
  *
  * Pure and DOM-free. Design: `docs/hook-engine.md`.
  */
 
 import type { SoundEvent } from '../../audio/sound-event';
 import { EASINGS, EASING_IDS, type HookEasing } from './easing';
-import type { HookDay } from './hook-variant';
+import {
+  hookPictureKey,
+  type HookDay,
+  type HookPickedPicture,
+  type HookPictureWant,
+} from './hook-variant';
+import { standingPiece } from './hook-calendar';
 import { KIT_IDS, TICK_KITS, driftAt, type TickDrift, type TickKit } from './tick-kits';
 
 // The easings and the tick kits grew here and were lifted out once the route
@@ -42,8 +50,8 @@ export type ScrubMode = 'from-start' | 'run-up';
 export type TapePosition = 'bottom' | 'top';
 /** How the head travels — see `EASINGS`. */
 export type ScrubEasing = HookEasing;
-/** Where the sweep's days come from: sampled by the mode, or named by the author. */
-export type ScrubDays = 'auto' | 'chosen';
+/** What the sweep stops on: the days other pieces tell, or the pictures picked. */
+export type ScrubStopsOn = 'pieces' | 'picked';
 /** Which voices the ticks are played on — see `tick-kits.ts`. */
 export type ScrubKit = TickKit;
 /** How the ticks' pitch moves along the sweep. */
@@ -52,11 +60,15 @@ export type ScrubDrift = TickDrift;
 export type ScrubHead = 'bar' | 'dot' | 'needle';
 
 export interface ScrubOptions {
-  /** Sweep the whole trip from day 1, or only the days just before this one. */
+  /** What the sweep stops on — see {@link ScrubStopsOn}. */
+  stopsOn: ScrubStopsOn;
+  /** `picked` only: the pictures, in any order — the plan sorts them by capture. */
+  picked: HookPickedPicture[];
+  /** `pieces` only: sweep the whole trip from day 1, or only the days just before this one. */
   mode: ScrubMode;
   /** Run-up only: how many told days before this one the sweep starts from. */
   runUpDays: number;
-  /** The most stops a sweep makes, the hero's own included. */
+  /** `pieces` only: the most stops a sweep makes, the hero's own included. */
   maxStops: number;
   /** How long the sweep takes to come to rest. */
   sweepSeconds: number;
@@ -64,17 +76,7 @@ export interface ScrubOptions {
   easing: ScrubEasing;
   /** Seconds the frame holds on the first stop before the head moves. */
   delaySeconds: number;
-  /** Sampled (`auto`), or exactly the days in `chosenDays`. */
-  days: ScrubDays;
-  /** `chosen` only: the days the sweep stops on, `YYYY-MM-DD`, any order. */
-  chosenDays: string[];
-  /**
-   * Which piece's picture flashes for a day told several times, by day. Absent
-   * = the shell's default (the published piece, else the first). A piece that
-   * no longer tells that day is ignored, never a blank.
-   */
-  pieceByDay: Record<string, string>;
-  /** Flash the told days' pictures as the head passes them. */
+  /** Flash each stop's picture as the head lands on it. */
   flash: boolean;
   /** Where the tape runs. */
   tape: TapePosition;
@@ -117,15 +119,14 @@ export interface ScrubOptions {
 }
 
 export const SCRUB_DEFAULTS: ScrubOptions = {
+  stopsOn: 'pieces',
+  picked: [],
   mode: 'from-start',
   runUpDays: 8,
   maxStops: 12,
   sweepSeconds: 1.9,
   easing: 'ease-out',
   delaySeconds: 0,
-  days: 'auto',
-  chosenDays: [],
-  pieceByDay: {},
   flash: true,
   tape: 'bottom',
   tapeWidth: 0.86,
@@ -164,6 +165,13 @@ export const SCRUB_LIMITS = {
   tickGap: { min: 3, max: 30 },
   backgroundOpacity: { min: 0.1, max: 0.9 },
 } as const;
+
+/**
+ * The most pictures a picked sweep stops on, the hero's own not counted. Past
+ * it the list is thinned evenly — the first and the last kept — rather than
+ * cut: at four seconds that is already a tenth of a second a picture.
+ */
+export const PICKED_MAX_STOPS = 40;
 
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
@@ -224,8 +232,13 @@ export interface ScrubStop {
   dayNumber: number;
   /** Seconds into the hook at which the head lands here. */
   at: number;
-  /** Another piece tells this day, so it has a picture to flash. */
+  /**
+   * The stop has a picture to flash: another piece tells the day, or the
+   * author picked a picture shot on it. Never the hero.
+   */
   told: boolean;
+  /** The picture this stop flashes (`hookPictureKey`), or null for none. */
+  pictureKey: string | null;
   /** A leg of the trip starts on this day. */
   legStart: boolean;
   /** The day this piece tells — the picture already on the frame, never flashed. */
@@ -267,6 +280,8 @@ function clampOr(n: number, min: number, max: number, fallback: number): number 
 export function scrubOptions(raw: Readonly<Record<string, unknown>>): ScrubOptions {
   const o = { ...SCRUB_DEFAULTS, ...raw } as ScrubOptions;
   return {
+    stopsOn: o.stopsOn === 'picked' ? 'picked' : 'pieces',
+    picked: readPicked(o.picked),
     mode: o.mode === 'run-up' ? 'run-up' : 'from-start',
     runUpDays: Math.round(
       clamp(Number(o.runUpDays), SCRUB_LIMITS.runUpDays.min, SCRUB_LIMITS.runUpDays.max),
@@ -286,18 +301,6 @@ export function scrubOptions(raw: Readonly<Record<string, unknown>>): ScrubOptio
       SCRUB_LIMITS.delaySeconds.max,
       SCRUB_DEFAULTS.delaySeconds,
     ),
-    days: o.days === 'chosen' ? 'chosen' : 'auto',
-    chosenDays: Array.isArray(o.chosenDays)
-      ? [...new Set(o.chosenDays.filter((d): d is string => typeof d === 'string' && ISO_DAY.test(d)))]
-      : [],
-    pieceByDay:
-      o.pieceByDay && typeof o.pieceByDay === 'object' && !Array.isArray(o.pieceByDay)
-        ? Object.fromEntries(
-            Object.entries(o.pieceByDay as Record<string, unknown>).filter(
-              ([day, id]) => ISO_DAY.test(day) && typeof id === 'string' && id.length > 0,
-            ),
-          ) as Record<string, string>
-        : {},
     flash: o.flash !== false,
     tape: o.tape === 'top' ? 'top' : 'bottom',
     tapeWidth: clampOr(Number(o.tapeWidth), SCRUB_LIMITS.tapeWidth.min, SCRUB_LIMITS.tapeWidth.max, SCRUB_DEFAULTS.tapeWidth),
@@ -371,34 +374,124 @@ function progress(
 }
 
 /**
- * The days a sweep stops on, the hero last — or null when this piece's day is
+ * One stop before it is timed: the day it sits on, and the picture it asks the
+ * shell for. The hero's seed asks for nothing — its picture is the frame.
+ */
+export interface ScrubSeed {
+  day: HookDay;
+  want: HookPictureWant | null;
+  /** A leg starts here AND this is the first stop on that day. */
+  legStart: boolean;
+}
+
+/**
+ * A stored picked list, read defensively: an entry with no readable ref or
+ * day is dropped, a second entry for the same picture is dropped. What a newer
+ * build wrote beside `ref` / `date` / `takenAt` is left behind, not trusted.
+ */
+function readPicked(raw: unknown): HookPickedPicture[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: HookPickedPicture[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const { ref, date, takenAt } = item as Record<string, unknown>;
+    if (typeof date !== 'string' || !ISO_DAY.test(date)) continue;
+    if (!ref || typeof ref !== 'object') continue;
+    const r = ref as Record<string, unknown>;
+    if (typeof r.name !== 'string' || !r.name) continue;
+    const clean = {
+      name: r.name,
+      size: Number.isFinite(r.size) ? Number(r.size) : 0,
+      lastModified: Number.isFinite(r.lastModified) ? Number(r.lastModified) : 0,
+      ...(typeof r.assetId === 'string' && r.assetId ? { assetId: r.assetId } : {}),
+      ...(typeof r.hash === 'string' && r.hash ? { hash: r.hash } : {}),
+    };
+    const key = hookPictureKey(clean);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      ref: clean,
+      date,
+      ...(typeof takenAt === 'number' && Number.isFinite(takenAt) ? { takenAt } : {}),
+    });
+  }
+  return out;
+}
+
+/** Picked pictures in the order they were shot: day, then instant, then name. */
+export function sortPicked(picked: readonly HookPickedPicture[]): HookPickedPicture[] {
+  return [...picked].sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      (a.takenAt ?? Number.MAX_SAFE_INTEGER) - (b.takenAt ?? Number.MAX_SAFE_INTEGER) ||
+      a.ref.name.localeCompare(b.ref.name),
+  );
+}
+
+/**
+ * Where each picked picture falls against this piece: on the tape (shot on a
+ * day of the trip, no later than the piece's own), after it, or outside the
+ * trip altogether. The panel says the last two out loud; the plan uses the first.
+ */
+export function partitionPicked(
+  calendar: readonly HookDay[],
+  date: string,
+  picked: readonly HookPickedPicture[],
+): { inReach: HookPickedPicture[]; after: number; outside: number } {
+  const days = new Set(calendar.map((day) => day.date));
+  const inReach: HookPickedPicture[] = [];
+  let after = 0;
+  let outside = 0;
+  for (const picture of picked) {
+    if (!days.has(picture.date)) outside += 1;
+    else if (picture.date > date) after += 1;
+    else inReach.push(picture);
+  }
+  return { inReach: sortPicked(inReach), after, outside };
+}
+
+/**
+ * The stops a sweep makes, the hero last — or null when this piece's day is
  * not a day of the trip at all.
  *
- * The pool is the TOLD days before this one. When it is empty the sweep still
- * runs, through evenly spaced untold days, so a first piece reads the trip's
- * length too; those stops flash nothing because there is nothing to flash.
+ * On the pieces' days, the pool is the TOLD days before this one. When it is
+ * empty the sweep still runs, through evenly spaced untold days, so a first
+ * piece reads the trip's length too; those stops flash nothing because there
+ * is nothing to flash. On picked pictures, it is one stop a picture.
  */
-export function scrubStopDays(
+export function scrubSeeds(
   calendar: readonly HookDay[],
   date: string,
   opts: ScrubOptions,
-): HookDay[] | null {
+): ScrubSeed[] | null {
   const heroIndex = calendar.findIndex((day) => day.date === date);
   if (heroIndex < 0) return null;
   const hero = calendar[heroIndex];
+  const heroSeed: ScrubSeed = { day: hero, want: null, legStart: hero.legStart };
+
+  if (opts.stopsOn === 'picked') {
+    const byDate = new Map(calendar.map((day) => [day.date, day]));
+    const kept = sampleEvenly(partitionPicked(calendar, date, opts.picked).inReach, PICKED_MAX_STOPS);
+    let lastDate = '';
+    const seeds = kept.map((picture): ScrubSeed => {
+      const day = byDate.get(picture.date)!;
+      const first = picture.date !== lastDate;
+      lastDate = picture.date;
+      return {
+        day,
+        want: { key: hookPictureKey(picture.ref), ref: picture.ref },
+        legStart: first && day.legStart,
+      };
+    });
+    // The hero's tick sounds its leg only when no picture already landed there.
+    return [...seeds, { ...heroSeed, legStart: hero.legStart && lastDate !== hero.date }];
+  }
+
   const before = calendar.slice(0, heroIndex);
   const budget = opts.maxStops - 1;
-
   let picks: HookDay[];
-  if (opts.days === 'chosen') {
-    // Exactly what was named, in calendar order, whatever the mode says. A
-    // chosen day after the hero has nothing to sweep towards and is dropped;
-    // past the hard ceiling the list is thinned evenly rather than truncated,
-    // so the first and the last named day both survive.
-    const chosen = new Set(opts.chosenDays);
-    const named = before.filter((day) => chosen.has(day.date));
-    picks = sampleEvenly(named, SCRUB_LIMITS.maxStops.max - 1);
-  } else if (opts.mode === 'run-up') {
+  if (opts.mode === 'run-up') {
     const told = before.filter((day) => day.told);
     picks = told.length
       ? told.slice(-Math.min(opts.runUpDays, budget))
@@ -412,7 +505,17 @@ export function scrubStopDays(
       picks = [before[0], ...(budget > 1 ? picks.slice(-(budget - 1)) : [])];
     }
   }
-  return [...picks, hero];
+  const seeds = picks.map((day): ScrubSeed => {
+    const media = day.told ? standingPiece(day) : undefined;
+    return {
+      day,
+      want: media?.media
+        ? { key: hookPictureKey(media.media), ref: media.media, atSeconds: media.videoSeconds }
+        : null,
+      legStart: day.legStart,
+    };
+  });
+  return [...seeds, heroSeed];
 }
 
 /** The scrub, planned: stops, their times, and the readings a frame needs. */
@@ -421,21 +524,25 @@ export function scrubPlan(
   date: string,
   opts: ScrubOptions,
 ): ScrubPlan | null {
-  const days = scrubStopDays(calendar, date, opts);
-  if (!days) return null;
+  const seeds = scrubSeeds(calendar, date, opts);
+  if (!seeds) return null;
 
-  const count = days.length;
+  const count = seeds.length;
   const sweep = count > 1 ? opts.sweepSeconds : 0;
   // A sweep of one has nothing to wait for either: no delay, no life.
   const delay = count > 1 ? opts.delaySeconds : 0;
-  const stops: ScrubStop[] = days.map((day, i) => ({
-    date: day.date,
-    dayNumber: day.dayNumber,
-    at: delay + sweep * stopFraction(i, count, opts.easing),
-    told: i < count - 1 && day.told,
-    legStart: day.legStart,
-    hero: i === count - 1,
-  }));
+  const stops: ScrubStop[] = seeds.map((seed, i) => {
+    const hero = i === count - 1;
+    return {
+      date: seed.day.date,
+      dayNumber: seed.day.dayNumber,
+      at: delay + sweep * stopFraction(i, count, opts.easing),
+      told: !hero && (opts.stopsOn === 'picked' ? seed.want !== null : seed.day.told),
+      pictureKey: hero ? null : (seed.want?.key ?? null),
+      legStart: seed.legStart,
+      hero,
+    };
+  });
 
   const stopAt = (t: number) =>
     Math.min(count - 1, Math.floor(progress(t, delay, sweep, count, opts.easing) + 1e-9));
@@ -458,6 +565,18 @@ export function scrubPlan(
       return t - stops[stopAt(t)].at;
     },
   };
+}
+
+/**
+ * The pictures a plan's stops flash, once each — what the variant hands the
+ * shell to decode. The hero's picture is already on the frame.
+ */
+export function scrubWants(seeds: readonly ScrubSeed[]): HookPictureWant[] {
+  const out = new Map<string, HookPictureWant>();
+  for (const seed of seeds.slice(0, -1)) {
+    if (seed.want && !out.has(seed.want.key)) out.set(seed.want.key, seed.want);
+  }
+  return [...out.values()];
 }
 
 /**

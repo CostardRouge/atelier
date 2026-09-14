@@ -243,13 +243,23 @@ sound will add there is an audio track, since it writes none today.
   the calendar and what makes the hero land. A trip with nothing told still
   sweeps, through evenly spaced dark days, so a first piece reads the length.
   The piece being composed never counts as telling its own day.
-- **Flashes come from the thumbs store**, one JPEG per day (`hookDayPosts`: the
-  published piece stands for its day over a draft). Local, already graded and
-  framed, one read a day; a flash lasts a few frames, so a 640px picture
-  stretched over it is not what anyone sees. Only the pictures `wantsPictures`
-  names are decoded — a day each, and the PIECE the author chose for a day told
-  several times — and a replaced set is closed late, since an export may still
-  be drawing it.
+- **Flashes are SOURCE pictures, never the thumbs store (rev. 2026-09-14).**
+  The first build flashed each told day's hook thumbnail — "local, already
+  graded" — and the maintainer's first look at it found soft 640px pictures with
+  OTHER pieces' badges burned in. A want is now a media ref under a key
+  (`HookPictureWant {key, ref, atSeconds?}`, `hookPictureKey`): on the pieces'
+  days it is the ref the standing piece is composed over (`standingPiece`: a
+  published piece with a picture, then any piece with one), on picked pictures
+  it is the author's own. The shell (`use-hook-pictures.ts`) finds it in the
+  Library by name then hash, else fetches the connected instance's editing
+  rendition directly (`fetchPreviewStill` — one request, NOT added to the pool),
+  a clip's frame from a video element at the piece's in point; crops it to the
+  frame's shape AT decode, sized to a delivered frame (long edge 1920) inside
+  ONE 32 MP budget the set shares (`picture-budget.ts`, split in count steps so
+  one more picture decodes one more picture); and grades it with the piece's
+  grade minus any slide's develop, so the flashes and the frame they land on
+  wear one look. What cannot be drawn comes back per key with one line
+  (`HookPictureStatus`), and a replaced bitmap is still closed late.
 - **The numeral steps only under the `day` counter**, and only while the head
   moves; at rest the badge says its own value, a range post's "27–29" too.
   Stepping trip days into a numeral labelled as a day at a place would be a
@@ -268,16 +278,31 @@ sound will add there is an audio track, since it writes none today.
   rather than on it; the round-trip is a test, and it caught a wrong `ease-in-
   out` inverse on the first run. A `delaySeconds` hold on the first stop, with
   `endSeconds` (hold + sweep) as the opener's life so every reader — the paint,
-  the numeral, the transport, `hookMoves` — agrees where rest is. And
-  `days: 'chosen'` + `chosenDays` + `pieceByDay`: the author names the days
-  and, for a day told twice, which piece flashes; the calendar the shell hands
-  over (`HookDay.pieces`) is what lets the panel offer that choice without the
-  variant reading the store, and a named piece that no longer tells its day
-  falls back to the shell's own rule rather than to a blank. The panel shows
-  the sweep's days as TILES drawing the picture the shell decoded — only the
-  days in the sweep are decoded, the rule that keeps a 250-piece trip from
-  decoding 250 thumbnails, so a day taken out of the sweep shows its number on
-  a dark tile.
+  the numeral, the transport, `hookMoves` — agrees where rest is. The stops
+  themselves are `stopsOn: 'pieces' | 'picked'` (rev. 2026-09-14 — it replaced
+  `days: 'chosen'` + `chosenDays` + `pieceByDay`, which the maintainer could not
+  read: two unlabelled "Day 1 / Day 21" selects, tiles that toggled in one mode
+  and not the other, and no way to see a picture before it flashed). `picked`
+  stores `HookPickedPicture {ref, date, takenAt?}` in the options and stops once
+  a picture in shot order, three on one day holding the head on that tick
+  while the frame changes (a leg's voice only on the day's first); a picture
+  after the piece's day or outside the trip is left out and COUNTED in the
+  panel (`partitionPicked`), and past `PICKED_MAX_STOPS` (40) the list is
+  thinned evenly. The panel's strip shows exactly the stops before the hero,
+  read-only, each tile the decoded picture or its day number on dark.
+- **The chooser is the shell's, reached through `HookPanelHost` (2026-09-14).**
+  A panel may not open the Library or ask an instance, so `HookPanelProps.host`
+  carries what the shell does for it — `choosePictures(selected)` resolving the
+  kept list or null, and `pictureStatus` — and `HookPicker` draws the sheet
+  (`HookPicturesModal`, through a portal: the inspector is itself a sheet on a
+  phone). It is the maintainer's gesture: a span (trip so far · this leg · last
+  7 days · this day, or two dates), every photo SHOT in it from the Library
+  (dated by EXIF) and the connected instance, grouped by trip day, ALL ticked;
+  untick, look large from a tile's corner, "Use N pictures". Reopened, the held
+  list is what is ticked; a widened span is new ground and comes in ticked. The
+  rules are pure (`picture-pool.ts`: one picture in both places is offered once,
+  from the Library). Photos only — a clip would mean downloading the clip to
+  pick a frame.
 - **The ticks are tuned in the score too (2026-09-13): a kit, a pitch, a
   drift.** `SCRUB_KITS` names, per kit, the ordinary landing's voice, how a
   leg's landing departs from it (lower, a little louder — the one sound that

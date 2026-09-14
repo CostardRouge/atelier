@@ -2,8 +2,9 @@
  * «&nbsp;Défilé&nbsp;» — the trip runs past and stops on this day.
  *
  * The trip's measuring tape sweeps from where it starts to the day this piece
- * tells, decelerating; every day another piece already tells flashes its
- * picture as the head passes, an untold day goes dark, and the badge's numeral
+ * tells, decelerating; every stop flashes a real picture as the head lands —
+ * the photo another piece of that day is made from, or one the author picked
+ * over a span of the trip — a stop with none goes dark, and the badge's numeral
  * steps with the head. When it comes to rest, the piece's own picture is the
  * frame and the tape stays under it, reading today.
  *
@@ -16,6 +17,7 @@
  */
 
 import { useCallback } from 'react';
+import Button from '../../ui/Button';
 import Segmented from '../../ui/Segmented';
 import {
   FieldRow,
@@ -25,20 +27,28 @@ import {
   ToggleField,
   swatchClass,
 } from '../../ui/Inspector';
-import type { HookContext, HookDay, HookPanelProps, HookPicture, HookVariant } from './hook-variant';
+import type {
+  HookPanelProps,
+  HookPicture,
+  HookPictureStatus,
+  HookVariant,
+} from './hook-variant';
 import { Group } from './panel-ui';
 import { paintScrub } from './scrub-paint';
 import {
   EASINGS,
   EASING_IDS,
   KIT_IDS,
+  PICKED_MAX_STOPS,
   SCRUB_KITS,
   SCRUB_DEFAULTS,
   SCRUB_LIMITS,
+  partitionPicked,
   scrubOptions,
   scrubPlan,
   scrubScore,
-  scrubStopDays,
+  scrubSeeds,
+  scrubWants,
   type ScrubOptions,
 } from './scrub-plan';
 
@@ -54,29 +64,27 @@ function ScrubSketch() {
 }
 
 /**
- * One day's tile in the picture strip: the picture that WOULD flash for it,
- * when the shell has decoded one (only the days in the sweep are decoded — the
- * rule that keeps a 250-piece trip from decoding 250 thumbnails), else the day
- * number on a dark tile. Cover-cropped the way the flash is.
+ * One stop's tile in the strip: the picture that will flash there, once the
+ * shell has decoded it, else the day number on a dark tile — which is also
+ * exactly what the sweep draws for a stop with nothing to show.
+ * Cover-cropped the way the flash is. Read-only: what flashes is decided by
+ * the controls above it, never by poking a tile.
  */
-function DayTile({
-  day,
+function StopTile({
+  dayNumber,
   picture,
-  inSweep,
-  chosen,
-  onToggle,
+  legStart,
+  problem,
 }: {
-  day: HookDay;
+  dayNumber: number;
   picture: HookPicture | undefined;
-  inSweep: boolean;
-  /** `chosen` mode: the tile is a toggle. `auto`: it only reports. */
-  chosen: boolean;
-  onToggle?: () => void;
+  legStart: boolean;
+  /** Why this stop's picture will not be drawn, when that is known. */
+  problem?: string;
 }) {
-  // A callback ref, not an effect: the tile's wrapper is a <span> that reports
-  // in `auto` and a <button> that toggles in `chosen`, so flipping the mode
-  // REMOUNTS the canvas — and an effect keyed on the unchanged picture would
-  // never repaint the new, blank node. The ref runs on every attach.
+  // A callback ref, not an effect: it runs on every attach, so a tile whose
+  // canvas is remounted (a list reordered, a mode switched) is painted again
+  // rather than left blank by an effect keyed on an unchanged picture.
   const paintInto = useCallback(
     (canvas: HTMLCanvasElement | null) => {
       if (!canvas || !picture) return;
@@ -96,72 +104,83 @@ function DayTile({
     [picture],
   );
 
-  const body = (
-    <>
+  return (
+    <span
+      role="listitem"
+      title={problem}
+      aria-label={`Day ${dayNumber}${problem ? ` — ${problem}` : ''}`}
+      className={`relative flex-none w-[2.25rem] aspect-[9/16] overflow-hidden rounded-[5px] bg-frame border ${
+        problem ? 'border-danger' : 'border-line-strong'
+      }`}
+    >
       {picture ? (
         <canvas ref={paintInto} width={54} height={96} className="block w-full h-full" aria-hidden="true" />
-      ) : (
-        <span className="absolute inset-0 grid place-items-center font-mono text-xs text-white/70">
-          {day.dayNumber}
-        </span>
-      )}
+      ) : null}
       <span className="absolute left-1 top-1 rounded-[3px] bg-black/55 px-1 font-mono text-3xs text-white">
-        {day.dayNumber}
+        {dayNumber}
       </span>
-      {day.legStart && (
+      {legStart && (
         <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
       )}
-    </>
-  );
-  const shell = `relative flex-none w-[2.25rem] aspect-[9/16] overflow-hidden rounded-[5px] bg-frame border transition-colors ${
-    inSweep ? 'border-accent' : 'border-line-strong'
-  } ${chosen ? 'cursor-pointer' : ''} ${!inSweep && chosen ? 'opacity-55' : ''}`;
-  return chosen ? (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-pressed={inSweep}
-      aria-label={`Day ${day.dayNumber}${inSweep ? ', in the sweep' : ''}`}
-      className={`${shell} p-0`}
-    >
-      {body}
-    </button>
-  ) : (
-    <span className={shell} aria-label={`Day ${day.dayNumber}${inSweep ? ', in the sweep' : ''}`}>
-      {body}
     </span>
   );
 }
 
-/** The days this piece could sweep through: told, before its own. */
-function candidateDays(ctx: HookContext): HookDay[] {
-  const calendar = ctx.calendar ?? [];
-  const heroIndex = calendar.findIndex((day) => day.date === ctx.date);
-  return calendar.slice(0, heroIndex < 0 ? 0 : heroIndex).filter((day) => day.told);
+/** How the shell is getting on with the pictures this plan flashes. */
+function pictureLine(
+  keys: readonly string[],
+  status: HookPictureStatus | undefined,
+): { text: string; danger: boolean } | null {
+  if (!status || keys.length === 0) return null;
+  const failing = keys.filter((key) => status.problems.has(key));
+  if (status.pending > 0) {
+    return { text: `Loading ${status.pending} ${status.pending === 1 ? 'picture' : 'pictures'}…`, danger: false };
+  }
+  if (!failing.length) return null;
+  const first = status.problems.get(failing[0]);
+  return {
+    text:
+      failing.length === 1
+        ? `One picture cannot be shown: ${first}`
+        : `${failing.length} pictures cannot be shown — ${first}${failing.length > 1 ? ' (and others)' : ''}`,
+    danger: true,
+  };
 }
 
-function ScrubPanel({ options, onChange, ctx }: HookPanelProps) {
+function ScrubPanel({ options, onChange, ctx, host }: HookPanelProps) {
   const o = scrubOptions(options);
   const set = (patch: Partial<ScrubOptions>) => onChange({ ...o, ...patch });
-  const plan = ctx.calendar ? scrubPlan(ctx.calendar, ctx.date, o) : null;
-  const inSweep = new Set(plan?.stops.filter((s) => !s.hero).map((s) => s.date) ?? []);
-  const candidates = candidateDays(ctx);
+  const calendar = ctx.calendar;
+  const plan = calendar ? scrubPlan(calendar, ctx.date, o) : null;
+  const flashing = plan ? plan.stops.filter((s) => !s.hero) : [];
+  const keys = [...new Set(flashing.flatMap((s) => (s.pictureKey ? [s.pictureKey] : [])))];
+  const status = host?.pictureStatus;
+  const line = o.flash ? pictureLine(keys, status) : null;
+  const picked = o.stopsOn === 'picked';
+  const split = calendar ? partitionPicked(calendar, ctx.date, o.picked) : null;
 
   // The panel says what the sweep WILL do for this piece — the counter modes'
   // rule: the real line, or the reason there is none.
-  const flashes = plan ? plan.stops.filter((s) => s.told).length : 0;
+  const flashes = flashing.filter((s) => s.told).length;
+  // A told day whose piece has no picture yet is crossed dark: say so rather
+  // than count it as a flash.
+  const pictured = flashing.filter((s) => s.told && s.pictureKey).length;
   const summary = !plan
     ? null
     : plan.stops.length < 2
-      ? o.days === 'chosen' && candidates.length > 0
-        ? 'No day is chosen yet — pick the days below and the sweep will run through them.'
+      ? picked
+        ? 'No picture picked yet — choose them below, and the sweep runs through them in the order they were shot.'
         : 'This is the first day of the trip — there is nothing to sweep from.'
       : `${plan.stops.length} stops from day ${plan.stops[0].dayNumber} · ${
           !o.flash
             ? 'no pictures flash'
-            : flashes === 0
-              ? 'no other day told yet, so nothing flashes'
-              : `${flashes} told ${flashes === 1 ? 'day flashes' : 'days flash'}`
+            : picked
+              ? `${flashes} ${flashes === 1 ? 'picture flashes' : 'pictures flash'}`
+              : flashes === 0
+                ? 'no other day told yet, so nothing flashes'
+                : pictured < flashes
+                  ? `${pictured} of ${flashes} told days flash a picture — ${flashes - pictured} ${flashes - pictured === 1 ? 'piece has' : 'pieces have'} none yet`
+                  : `${flashes} told ${flashes === 1 ? 'day flashes' : 'days flash'}`
         } · ${plan.sweepSeconds.toFixed(1)}s${plan.delaySeconds > 0 ? ` after ${plan.delaySeconds.toFixed(1)}s` : ''}`;
   // The hook's screen time is a separate setting; say so when it would cut the
   // sweep short, rather than delivering a scrub that never lands.
@@ -169,14 +188,12 @@ function ScrubPanel({ options, onChange, ctx }: HookPanelProps) {
   // Past ~3 frames a flash, the pictures stop registering as pictures.
   const perStop = plan && plan.stops.length > 1 ? plan.sweepSeconds / (plan.stops.length - 1) : 1;
 
-  const toggleDay = (date: string) =>
-    set({
-      chosenDays: o.chosenDays.includes(date)
-        ? o.chosenDays.filter((d) => d !== date)
-        : [...o.chosenDays, date],
-    });
-  // Days in the sweep with more than one piece: a picture to choose.
-  const choosable = candidates.filter((day) => inSweep.has(day.date) && day.pieces.length > 1);
+  const choose = host?.choosePictures
+    ? async () => {
+        const next = await host.choosePictures?.(o.picked);
+        if (next) set({ stopsOn: 'picked', picked: next });
+      }
+    : null;
 
   return (
     <div className="flex flex-col gap-4 pl-3 border-l-2 border-line">
@@ -195,22 +212,38 @@ function ScrubPanel({ options, onChange, ctx }: HookPanelProps) {
         </p>
       )}
 
-      <Group title="Sweep">
-        <FieldRow label="Days" align="start">
+      <Group title="Stops">
+        <FieldRow
+          label="Stops on"
+          align="start"
+          hint={
+            picked
+              ? 'One stop a picture you picked, in the order they were shot. Several on one day: the head holds on that day while they change.'
+              : 'One stop a day another piece tells. Each flashes the picture that piece is made from — the photo itself, not its finished hook. A day nobody told goes dark.'
+          }
+        >
           <Segmented
             size="sm"
             fill
-            label="Which days the sweep visits"
-            value={o.days}
-            onChange={(days) => set({ days })}
+            label="What the sweep stops on"
+            value={o.stopsOn}
+            onChange={(stopsOn) => set({ stopsOn })}
             options={[
-              { id: 'auto', label: 'Sampled' },
-              { id: 'chosen', label: 'Chosen' },
+              { id: 'pieces', label: 'Pieces’ days' },
+              { id: 'picked', label: 'Picked pictures' },
             ]}
           />
         </FieldRow>
-        {o.days === 'auto' && (
-          <FieldRow label="From">
+
+        {!picked && (
+          <FieldRow
+            label="Starts"
+            hint={
+              o.mode === 'from-start'
+                ? 'The head leaves day 1 of the trip.'
+                : 'The head starts a few told days before this one.'
+            }
+          >
             <Segmented
               size="sm"
               fill
@@ -218,14 +251,14 @@ function ScrubPanel({ options, onChange, ctx }: HookPanelProps) {
               value={o.mode}
               onChange={(mode) => set({ mode })}
               options={[
-                { id: 'from-start', label: 'Day 1' },
-                { id: 'run-up', label: 'Run-up' },
+                { id: 'from-start', label: 'At day 1' },
+                { id: 'run-up', label: 'A few days back' },
               ]}
             />
           </FieldRow>
         )}
-        {o.days === 'auto' && o.mode === 'run-up' && (
-          <FieldRow label="Run-up">
+        {!picked && o.mode === 'run-up' && (
+          <FieldRow label="Days back">
             <RangeField
               label="Told days before this one"
               min={SCRUB_LIMITS.runUpDays.min}
@@ -237,8 +270,8 @@ function ScrubPanel({ options, onChange, ctx }: HookPanelProps) {
             />
           </FieldRow>
         )}
-        {o.days === 'auto' && (
-          <FieldRow label="Stops">
+        {!picked && (
+          <FieldRow label="Most stops">
             <RangeField
               label="Most stops"
               min={SCRUB_LIMITS.maxStops.min}
@@ -250,6 +283,77 @@ function ScrubPanel({ options, onChange, ctx }: HookPanelProps) {
             />
           </FieldRow>
         )}
+
+        {flashing.length > 0 && (
+          <div
+            className="flex gap-1.5 overflow-x-auto pb-1 -mx-0.5 px-0.5"
+            role="list"
+            aria-label="The stops before this day, with the picture each flashes"
+          >
+            {flashing.map((stop, i) => (
+              <StopTile
+                key={`${stop.pictureKey ?? stop.date}-${i}`}
+                dayNumber={stop.dayNumber}
+                picture={stop.pictureKey ? ctx.pictures?.get(stop.pictureKey) : undefined}
+                legStart={stop.legStart}
+                problem={stop.pictureKey ? status?.problems.get(stop.pictureKey) : undefined}
+              />
+            ))}
+          </div>
+        )}
+
+        {picked && (
+          <div className="flex flex-col gap-2">
+            {choose ? (
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button size="sm" variant={o.picked.length ? 'default' : 'primary'} onClick={() => void choose()}>
+                  {o.picked.length ? 'Change pictures…' : 'Choose pictures…'}
+                </Button>
+                {o.picked.length > 0 && (
+                  <span className="text-xs text-muted">
+                    {o.picked.length} picked
+                  </span>
+                )}
+              </div>
+            ) : (
+              <p className="m-0 text-xs text-muted">The picture chooser is not available here.</p>
+            )}
+            {split && (split.after > 0 || split.outside > 0) && (
+              <p className="m-0 text-xs text-accent-ink">
+                {[
+                  split.after > 0 &&
+                    `${split.after} shot after this piece’s day`,
+                  split.outside > 0 && `${split.outside} shot outside the trip`,
+                ]
+                  .filter(Boolean)
+                  .join(' and ')}{' '}
+                — left out: they have no place on the tape before this day.
+              </p>
+            )}
+            {split && split.inReach.length > PICKED_MAX_STOPS && (
+              <p className="m-0 text-xs text-muted">
+                {split.inReach.length} pictures in reach; the sweep shows {PICKED_MAX_STOPS} of
+                them, spread evenly from the first to the last.
+              </p>
+            )}
+          </div>
+        )}
+
+        {line && (
+          <p className={`m-0 text-xs ${line.danger ? 'text-danger' : 'text-muted'}`} role={line.danger ? 'alert' : undefined}>
+            {line.text}
+          </p>
+        )}
+
+        <SwitchRow
+          label="Flash each stop’s picture as the head lands"
+          name="Flash pictures"
+          checked={o.flash}
+          onChange={(flash) => set({ flash })}
+        />
+      </Group>
+
+      <Group title="Sweep">
         <FieldRow label="Length">
           <RangeField
             label="Sweep length"
@@ -287,63 +391,6 @@ function ScrubPanel({ options, onChange, ctx }: HookPanelProps) {
             format={(v) => (v === 0 ? 'none' : `${v.toFixed(1)}s`)}
           />
         </FieldRow>
-      </Group>
-
-      <Group title="Pictures">
-        <SwitchRow
-          label="Flash the told days’ pictures as the head passes"
-          name="Flash pictures"
-          checked={o.flash}
-          onChange={(flash) => set({ flash })}
-        />
-        {candidates.length > 0 ? (
-          <>
-            <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-0.5 px-0.5" role="list" aria-label="Told days before this one">
-              {candidates.map((day) => (
-                <DayTile
-                  key={day.date}
-                  day={day}
-                  picture={ctx.pictures?.get(day.date)}
-                  inSweep={inSweep.has(day.date)}
-                  chosen={o.days === 'chosen'}
-                  onToggle={() => toggleDay(day.date)}
-                />
-              ))}
-            </div>
-            <p className="m-0 text-xs text-muted">
-              {o.days === 'chosen'
-                ? `Tap a day to put it in the sweep or take it out — ${inSweep.size} of ${candidates.length} chosen. A vermilion dot marks a day a leg starts on.`
-                : 'The days the sweep visits are outlined. Switch to “Chosen” to name them yourself.'}
-            </p>
-            {choosable.length > 0 && (
-              <div className="flex flex-col gap-2">
-                {choosable.map((day) => {
-                  const named = o.pieceByDay[day.date];
-                  const current = day.pieces.find((piece) => piece.id === named)
-                    ? named
-                    : (day.pieces.find((piece) => piece.published) ?? day.pieces[0]).id;
-                  return (
-                    <FieldRow key={day.date} label={`Day ${day.dayNumber}`}>
-                      <SelectField
-                        label={`Piece for day ${day.dayNumber}`}
-                        value={current}
-                        onChange={(id) => set({ pieceByDay: { ...o.pieceByDay, [day.date]: id } })}
-                        options={day.pieces.map((piece, i) => ({
-                          id: piece.id,
-                          label: `${piece.title || `Piece ${i + 1}`}${piece.published ? ' · published' : ''}`,
-                        }))}
-                      />
-                    </FieldRow>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        ) : (
-          <p className="m-0 text-xs text-muted">
-            No other piece tells a day before this one yet, so there is nothing to flash.
-          </p>
-        )}
       </Group>
 
       <Group title="Tape">
@@ -611,14 +658,9 @@ export const scrubVariant: HookVariant = {
   wantsPictures(options, ctx) {
     const o = scrubOptions(options);
     if (!o.flash || !ctx.calendar) return [];
-    const days = scrubStopDays(ctx.calendar, ctx.date, o) ?? [];
-    // The hero's own picture is already on the frame, and an untold day has
-    // nothing to fetch: only the told stops before it are wanted — each with
-    // the piece the author named for it, where they named one.
-    return days
-      .slice(0, -1)
-      .filter((day) => day.told)
-      .map((day) => ({ date: day.date, postId: o.pieceByDay[day.date] }));
+    // The hero's own picture is already on the frame, and a stop with nothing
+    // to show has nothing to fetch: only the pictures the stops name, once each.
+    return scrubWants(scrubSeeds(ctx.calendar, ctx.date, o) ?? []);
   },
   prepare(options, ctx) {
     const o = scrubOptions(options);

@@ -8,10 +8,12 @@
  *
  * What a frame shows, while the sweep runs:
  *
- * - a TOLD day → that day's picture, cover-cropped into the frame;
- * - a day nothing was told from → the frame goes dark. It is not a stand-in
- *   and it is not the hero shown early: an empty day looks empty, which is the
- *   honest reading of the calendar and what makes the hero's arrival land.
+ * - a stop with a picture → that picture, cover-cropped into the frame (the
+ *   source picture of the piece telling that day, or one the author picked);
+ * - a stop without one, or whose picture could not be found → the frame goes
+ *   dark. It is not a stand-in and it is not the hero shown early: an empty
+ *   day looks empty, which is the honest reading of the calendar and what
+ *   makes the hero's arrival land.
  *
  * Once the sweep has come to rest this draws nothing but the tape, and the
  * piece's own picture — already on the canvas — is the frame.
@@ -55,7 +57,7 @@ export function paintScrub(
 
   if (opts.flash && sweeping) {
     const stop = plan.stops[index];
-    const picture = stop.told ? pictures?.get(stop.date) : undefined;
+    const picture = stop.pictureKey ? pictures?.get(stop.pictureKey) : undefined;
     if (!drawPicture(g, picture, w, h)) {
       g.fillStyle = EMPTY_DAY;
       g.fillRect(0, 0, w, h);

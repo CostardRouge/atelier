@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { deckSlides } from '../deck';
 import { createTripDoc, createTripPost, type TripDoc, type TripPost } from '../trip-types';
-import { hookCalendar, hookDayPosts } from './hook-calendar';
+import { hookCalendar, standingPiece } from './hook-calendar';
 import { hookContextFor, hookMoves } from './hook-context';
 import { hookElementsAt } from './hook-elements';
 import { resolveHook } from './registry';
@@ -43,31 +43,20 @@ describe('hookCalendar', () => {
     expect(hookCalendar(trip, hero.id).filter((d) => d.legStart).map((d) => d.dayNumber)).toEqual([1, 5]);
   });
 
-  it('lets a published piece stand for its day over a draft', () => {
+  it('lets a published piece stand for its day over a draft, and a pictured one over a bare one', () => {
     const { trip, hero } = fixture();
-    const published = trip.posts.find((p) => p.publishedAt !== null);
-    const byDay = hookDayPosts(trip, [{ date: '2025-03-05' }, { date: '2025-03-08' }], hero.id);
-    expect(byDay.get('2025-03-05')).toBe(published?.id);
+    const published = trip.posts.find((p) => p.publishedAt !== null)!;
+    const draft = trip.posts.find((p) => p.date === '2025-03-05' && p.publishedAt === null)!;
+    // Neither has a picture: the published one still stands.
+    expect(standingPiece(hookCalendar(trip, hero.id)[4])?.id).toBe(published.id);
+    // Only the draft has a picture: a flash with nothing to show helps nobody.
+    draft.media = { name: 'draft.jpg', size: 1, lastModified: 0 };
+    expect(standingPiece(hookCalendar(trip, hero.id)[4])?.id).toBe(draft.id);
+    // Both do: the published one's picture wins again.
+    published.media = { name: 'published.jpg', size: 1, lastModified: 0 };
+    expect(standingPiece(hookCalendar(trip, hero.id)[4])?.media?.name).toBe('published.jpg');
     // The hero's own day has no OTHER piece, so nothing stands for it.
-    expect(byDay.has('2025-03-08')).toBe(false);
-  });
-
-  it('lets a variant name the piece for a day, and ignores a name that no longer tells it', () => {
-    const { trip, hero } = fixture();
-    const draft = trip.posts.find((p) => p.date === '2025-03-05' && p.publishedAt === null);
-    const published = trip.posts.find((p) => p.publishedAt !== null);
-    // Named: the draft stands in front of the published piece.
-    expect(hookDayPosts(trip, [{ date: '2025-03-05', postId: draft?.id }], hero.id).get('2025-03-05')).toBe(
-      draft?.id,
-    );
-    // A stale name — a piece deleted, or moved to another day — falls back.
-    expect(hookDayPosts(trip, [{ date: '2025-03-05', postId: 'gone' }], hero.id).get('2025-03-05')).toBe(
-      published?.id,
-    );
-    // The piece being composed can never stand for a day, named or not.
-    expect(hookDayPosts(trip, [{ date: '2025-03-08', postId: hero.id }], hero.id).has('2025-03-08')).toBe(
-      false,
-    );
+    expect(standingPiece(hookCalendar(trip, hero.id)[7])).toBeUndefined();
   });
 
   it('lists each day’s OTHER pieces, so a panel can offer a choice', () => {

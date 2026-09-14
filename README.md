@@ -609,11 +609,18 @@ section picks another from cards — a card you cannot feed (a route with no
 located place) is greyed with the reason, never hidden. **Badge** is the plain
 one. **Défilé** runs the trip past before landing on the day: a measuring tape
 of the whole trip sweeps to the day you are telling, decelerating like a
-mechanism coming to rest; every day another piece already tells flashes its
-picture as the head passes, a day nobody told goes dark, and the badge's numeral
-steps with the head. Its sweep is yours to shape — five motions (settle, brake,
-even, wind up, glide), a hold before it starts, the days sampled from the trip or
-named one by one with the piece that stands for each — and so is the tape: its
+mechanism coming to rest; every stop flashes a real picture as the head lands on
+it, a day nobody told goes dark, and the badge's numeral steps with the head. The
+stops are either the days other pieces tell — each flashing the photo that piece
+is made from, never its finished hook — or **pictures you pick**: choose a span
+(the trip so far, this leg, the last week, or any two dates), see every photo shot
+in it from the Library and, when one is connected, your Winnow, all of them
+ticked, and untick what does not belong. The sweep shows them in the order they
+were shot, several on one day holding the head on that day while they change;
+a picture from the instance is fetched only when the sweep draws it, cropped to
+the frame and graded with the piece, and never lands in the Library. Its sweep is
+yours to shape — five motions (settle, brake, even, wind up, glide), a hold before
+it starts, where it starts and how many days it samples — and so is the tape: its
 width, its colours, the ticks' height, opacity and spacing, a band behind it
 for a bright picture, a fade at both ends, a bar, a dot or a needle for the
 head. It **ticks** at every landing, a deeper tick where a leg of the trip

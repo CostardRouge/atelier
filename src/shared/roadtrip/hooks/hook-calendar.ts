@@ -2,22 +2,23 @@
  * The trip, as a hook variant is allowed to read it — built by the SHELL, never
  * by a variant (a variant never reads the store: `hook-variant.ts`).
  *
- * Two readings of the document, both pure:
+ * Pure readings of the document:
  *
- * - `hookCalendar` — every day of the trip, whether ANOTHER piece tells it and
- *   whether a leg starts on it. The piece being composed never counts as
+ * - `hookCalendar` — every day of the trip, whether ANOTHER piece tells it,
+ *   whether a leg starts on it, and the pieces that tell it with the SOURCE
+ *   picture each is composed over. The piece being composed never counts as
  *   telling its own day: a sweep that stopped on the hero's own day as a
  *   "told" day would flash the picture already on the frame.
- * - `hookDayPosts` — for each wanted day, the ONE piece whose hook picture
- *   stands for it: the piece the variant named when it still tells that day,
- *   else the published one, else the first. A day told three times flashes
- *   once.
+ * - `standingPiece` — the ONE piece whose picture stands for a day told
+ *   several times: the published one, else the first. A day told three times
+ *   flashes once.
+ * - `hookStages` — the legs, with the places a drawing can use.
  */
 
 import { tripCoverage } from '../trip-coverage';
 import { stageLabel } from '../trip-places';
 import type { TripDoc } from '../trip-types';
-import type { HookDay, HookPictureWant, HookStage } from './hook-variant';
+import type { HookDay, HookDayPiece, HookStage } from './hook-variant';
 
 export function hookCalendar(trip: TripDoc, excludePostId: string | null): HookDay[] {
   const legStarts = new Set(trip.stages.map((stage) => stage.startDate));
@@ -32,31 +33,23 @@ export function hookCalendar(trip: TripDoc, excludePostId: string | null): HookD
         id: post.id,
         title: post.title.trim(),
         published: post.publishedAt !== null,
+        media: post.media ?? null,
+        videoSeconds: Number.isFinite(post.badge.videoTimeSeconds) ? post.badge.videoTimeSeconds : 0,
       })),
     };
   });
 }
 
-/** The piece whose hook picture stands for each wanted day, where one exists. */
-export function hookDayPosts(
-  trip: TripDoc,
-  wants: readonly HookPictureWant[],
-  excludePostId: string | null,
-): Map<string, string> {
-  const preferred = new Map<string, string | undefined>();
-  for (const want of wants) preferred.set(want.date, want.postId);
-  const out = new Map<string, string>();
-  for (const cell of tripCoverage(trip).days) {
-    if (!preferred.has(cell.date)) continue;
-    const others = cell.posts.filter((post) => post.id !== excludePostId);
-    const named = preferred.get(cell.date);
-    const chosen =
-      others.find((post) => post.id === named) ??
-      others.find((post) => post.publishedAt !== null) ??
-      others[0];
-    if (chosen) out.set(cell.date, chosen.id);
-  }
-  return out;
+/**
+ * The piece whose picture stands for `day`: the published one with a picture,
+ * else the first with a picture — and when none has one, the published piece
+ * or the first (which then has nothing to show). A draft's picture never
+ * hides a published one's.
+ */
+export function standingPiece(day: HookDay): HookDayPiece | undefined {
+  const pick = (pieces: readonly HookDayPiece[]) =>
+    pieces.find((piece) => piece.published) ?? pieces[0];
+  return pick(day.pieces.filter((piece) => piece.media !== null)) ?? pick(day.pieces);
 }
 
 /** The legs, with only the places a drawing can use — those with coordinates. */

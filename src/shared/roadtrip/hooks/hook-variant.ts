@@ -25,6 +25,7 @@
  */
 
 import type { ComponentType } from 'react';
+import type { SavedMediaRef } from '../../projects/project-types';
 import type { BadgeContent, BadgePiece, CounterMode } from '../day-badge';
 
 /** What the engine draws into — the 2D context both renderers already use. */
@@ -126,17 +127,48 @@ export interface HookDayPiece {
   /** The piece's title, or empty. */
   title: string;
   published: boolean;
+  /**
+   * The SOURCE picture the piece's hook is composed over — the file, never
+   * the piece's finished hook: a flash of a composed hook shows another
+   * badge burned into it. Null when the piece has no picture yet.
+   */
+  media: SavedMediaRef | null;
+  /** Where the hook's frame sits in its clip, when that picture is a clip. */
+  videoSeconds: number;
 }
 
-/** A picture a variant asks the shell for: a day, and optionally WHICH piece's. */
-export interface HookPictureWant {
+/**
+ * A picture the author picked for a variant, stored in its options: the ref
+ * the shell finds the file again by, and the day it was shot — which is where
+ * it sits on a trip's calendar, whatever piece it did or did not end up in.
+ */
+export interface HookPickedPicture {
+  ref: SavedMediaRef;
+  /** The day the picture was shot, `YYYY-MM-DD`. */
   date: string;
-  /**
-   * The piece whose hook picture should stand for the day. Absent, or a piece
-   * that does not tell that day any more, falls back to the shell's own rule
-   * (the published piece, else the first).
-   */
-  postId?: string;
+  /** The capture instant in ms, when known — orders one day's pictures. */
+  takenAt?: number;
+}
+
+/**
+ * The key a picture is decoded under — what `HookContext.pictures` is keyed by
+ * and what a variant's stop names. The source's own id first, the content hash
+ * next, the name and size last: the order `findMedia` resolves in, so two refs
+ * to one file share one decode.
+ */
+export function hookPictureKey(ref: SavedMediaRef): string {
+  if (ref.assetId) return `id:${ref.assetId}`;
+  if (ref.hash) return `hash:${ref.hash}`;
+  return `name:${ref.name.toLowerCase()}:${ref.size}`;
+}
+
+/** A picture a variant asks the shell for, under the key it will draw it by. */
+export interface HookPictureWant {
+  /** `hookPictureKey(ref)`. */
+  key: string;
+  ref: SavedMediaRef;
+  /** For a clip: the second its frame is taken at. Ignored for a still. */
+  atSeconds?: number;
 }
 
 /**
@@ -190,8 +222,10 @@ export interface HookContext {
   /** The trip's legs, in the order they were lived — filled for `needs.stages`. */
   stages?: readonly HookStage[];
   /**
-   * Pictures keyed by day, filled when `needs.media` asks. A day with no entry
-   * has nothing to show; a variant draws nothing for it rather than a stand-in.
+   * The pictures a variant asked for (`wantsPictures`), decoded, keyed by
+   * `hookPictureKey`. A key with no entry has nothing to show — not found, not
+   * reachable, or still loading; a variant draws nothing for it rather than a
+   * stand-in.
    */
   pictures?: ReadonlyMap<string, HookPicture>;
 }
@@ -226,12 +260,36 @@ export interface HookRender {
   readonly mixWithSource?: boolean;
 }
 
+/**
+ * What the shell can do FOR a panel — the things a variant may not do itself
+ * (open the library, ask an instance, decode). Every member is optional: a
+ * panel mounted without a shell (a test, a future host) still renders, and
+ * says what it cannot offer.
+ */
+export interface HookPanelHost {
+  /**
+   * Open the shell's picture chooser, starting from `selected`. Resolves the
+   * pictures the author kept, or null when they cancelled.
+   */
+  choosePictures?(selected: readonly HookPickedPicture[]): Promise<HookPickedPicture[] | null>;
+  /** How the pictures the variant asked for are coming along. */
+  pictureStatus?: HookPictureStatus;
+}
+
+export interface HookPictureStatus {
+  /** Pictures still being found, fetched or decoded. */
+  pending: number;
+  /** Keys that could not be drawn, each with one line saying why. */
+  problems: ReadonlyMap<string, string>;
+}
+
 /** What a variant's own options panel is handed. */
 export interface HookPanelProps {
   options: HookOptions;
   onChange: (options: HookOptions) => void;
   /** What the variant was prepared against, so a control can say a real value. */
   ctx: HookContext;
+  host?: HookPanelHost;
 }
 
 /**
@@ -251,10 +309,10 @@ export interface HookVariant {
   /** Why this variant cannot run on this piece, or null when it can. */
   unmet?(ctx: HookContext): string | null;
   /**
-   * The pictures this variant will actually draw, for `needs.media === 'day'`
-   * — a day each, and optionally which piece's. The shell fetches exactly
-   * these and nothing else: a trip of 250 pieces must not decode 250
-   * thumbnails for a sweep that stops twelve times.
+   * The pictures this variant will actually draw, for `needs.media === 'day'`,
+   * each under the key it will look it up by. The shell finds, fetches and
+   * decodes exactly these and nothing else: a trip of 250 pieces must not
+   * decode 250 pictures for a sweep that stops twelve times.
    */
   wantsPictures?(options: HookOptions, ctx: HookContext): HookPictureWant[];
   /**

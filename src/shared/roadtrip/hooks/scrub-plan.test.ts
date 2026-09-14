@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { HookDay } from './hook-variant';
+import { hookPictureKey, type HookDay, type HookPickedPicture } from './hook-variant';
 import {
   DRIFT_SPAN,
   EASINGS,
   EASING_IDS,
   EDGE_FADE_SHARE,
   KIT_IDS,
+  PICKED_MAX_STOPS,
   edgeFadeAt,
   hexToRgba,
   tapeGeometry,
@@ -16,7 +17,9 @@ import {
   scrubOptions,
   scrubPlan,
   scrubScore,
-  scrubStopDays,
+  partitionPicked,
+  scrubSeeds,
+  scrubWants,
   stopFraction,
   tapeFraction,
   tapeTicks,
@@ -33,7 +36,17 @@ function calendar(total: number, told: number[] = [], legs: number[] = [1]): Hoo
       dayNumber: i + 1,
       told: isTold,
       legStart: legs.includes(i + 1),
-      pieces: isTold ? [{ id: `p${i + 1}`, title: '', published: false }] : [],
+      pieces: isTold
+        ? [
+            {
+              id: `p${i + 1}`,
+              title: '',
+              published: false,
+              media: { name: `p${i + 1}.jpg`, size: 1, lastModified: 0 },
+              videoSeconds: 0,
+            },
+          ]
+        : [],
     };
   });
 }
@@ -118,70 +131,114 @@ describe('EASINGS', () => {
   });
 });
 
-describe('scrubStopDays', () => {
+describe('scrubSeeds on the pieces’ days', () => {
+  const dayNumbers = (seeds: ReturnType<typeof scrubSeeds>) => seeds!.map((s) => s.day.dayNumber);
+
   it('sweeps from day 1 to the hero through told days only', () => {
     const cal = calendar(30, [3, 8, 14, 20]);
-    const days = scrubStopDays(cal, dateOf(cal, 27), opts())!;
-    expect(days.map((d) => d.dayNumber)).toEqual([1, 3, 8, 14, 20, 27]);
+    const seeds = scrubSeeds(cal, dateOf(cal, 27), opts())!;
+    expect(dayNumbers(seeds)).toEqual([1, 3, 8, 14, 20, 27]);
     // Day 1 is visited because the sweep STARTS there, not because it was told.
-    expect(days[0].told).toBe(false);
+    expect(seeds[0].day.told).toBe(false);
+    expect(seeds[0].want).toBeNull();
   });
 
   it('caps the stops, keeping the start and the hero', () => {
     const cal = calendar(100, Array.from({ length: 60 }, (_, i) => i + 2));
-    const days = scrubStopDays(cal, dateOf(cal, 90), opts({ maxStops: 8 }))!;
-    expect(days).toHaveLength(8);
-    expect(days[0].dayNumber).toBe(1);
-    expect(days[days.length - 1].dayNumber).toBe(90);
+    const seeds = scrubSeeds(cal, dateOf(cal, 90), opts({ maxStops: 8 }))!;
+    expect(seeds).toHaveLength(8);
+    expect(seeds[0].day.dayNumber).toBe(1);
+    expect(seeds[seeds.length - 1].day.dayNumber).toBe(90);
   });
 
   it('runs up through the last told days before the hero', () => {
     const cal = calendar(40, [2, 5, 9, 12, 15, 18, 21, 24]);
-    const days = scrubStopDays(cal, dateOf(cal, 30), opts({ mode: 'run-up', runUpDays: 3 }))!;
-    expect(days.map((d) => d.dayNumber)).toEqual([18, 21, 24, 30]);
+    expect(dayNumbers(scrubSeeds(cal, dateOf(cal, 30), opts({ mode: 'run-up', runUpDays: 3 })))).toEqual([
+      18, 21, 24, 30,
+    ]);
   });
 
   it('still sweeps a trip nothing has been told from, flashing nothing', () => {
     const cal = calendar(20);
-    const days = scrubStopDays(cal, dateOf(cal, 15), opts())!;
-    expect(days[0].dayNumber).toBe(1);
-    expect(days[days.length - 1].dayNumber).toBe(15);
-    expect(days.slice(0, -1).every((d) => !d.told)).toBe(true);
-    expect(days.length).toBeGreaterThan(2);
+    const seeds = scrubSeeds(cal, dateOf(cal, 15), opts())!;
+    expect(seeds[0].day.dayNumber).toBe(1);
+    expect(seeds[seeds.length - 1].day.dayNumber).toBe(15);
+    expect(seeds.every((s) => s.want === null)).toBe(true);
+    expect(seeds.length).toBeGreaterThan(2);
   });
 
   it('refuses a day that is not a day of the trip', () => {
-    expect(scrubStopDays(calendar(10), '2031-01-01', opts())).toBeNull();
+    expect(scrubSeeds(calendar(10), '2031-01-01', opts())).toBeNull();
   });
 
-  it('sweeps exactly the chosen days, in calendar order, whatever the mode says', () => {
-    const cal = calendar(30, [3, 8, 14, 20]);
-    const days = scrubStopDays(
-      cal,
-      dateOf(cal, 27),
-      opts({ days: 'chosen', mode: 'run-up', chosenDays: [dateOf(cal, 20), dateOf(cal, 3), dateOf(cal, 14)] }),
-    )!;
-    expect(days.map((d) => d.dayNumber)).toEqual([3, 14, 20, 27]);
+  it('asks for the SOURCE picture of the piece standing for each day — the published one first', () => {
+    const cal = calendar(10, [4]);
+    const day = cal[3];
+    cal[3] = {
+      ...day,
+      pieces: [
+        { id: 'draft', title: '', published: false, media: { name: 'draft.jpg', size: 1, lastModified: 0 }, videoSeconds: 0 },
+        { id: 'bare', title: '', published: true, media: null, videoSeconds: 0 },
+        { id: 'live', title: '', published: true, media: { name: 'live.mov', size: 2, lastModified: 0 }, videoSeconds: 3.5 },
+      ],
+    };
+    const seed = scrubSeeds(cal, dateOf(cal, 8), opts())!.find((s) => s.day.dayNumber === 4)!;
+    expect(seed.want).toMatchObject({ ref: { name: 'live.mov' }, atSeconds: 3.5 });
+    expect(seed.want?.key).toBe(hookPictureKey({ name: 'live.mov', size: 2, lastModified: 0 }));
   });
+});
 
-  it('drops a chosen day the sweep cannot reach, and keeps a chosen day nobody told as a dark stop', () => {
-    const cal = calendar(30, [3, 8]);
-    const days = scrubStopDays(
+describe('scrubSeeds on picked pictures', () => {
+  const cal = calendar(30, [], [1, 10]);
+  const pic = (name: string, day: number, takenAt?: number, extra: object = {}): HookPickedPicture => ({
+    ref: { name, size: 1, lastModified: 0, ...extra },
+    date: day > 0 ? dateOf(cal, day) : '2024-01-01',
+    ...(takenAt === undefined ? {} : { takenAt }),
+  });
+  const picked = (list: HookPickedPicture[]) => opts({ stopsOn: 'picked', picked: list });
+
+  it('stops once a picture, in the order they were shot, the hero last', () => {
+    const seeds = scrubSeeds(
       cal,
       dateOf(cal, 20),
-      opts({ days: 'chosen', chosenDays: [dateOf(cal, 25), dateOf(cal, 3), dateOf(cal, 11)] }),
+      picked([pic('c', 12), pic('b', 10, 200), pic('a', 10, 100), pic('d', 5)]),
     )!;
-    expect(days.map((d) => d.dayNumber)).toEqual([3, 11, 20]);
-    expect(days[1].told).toBe(false);
+    expect(seeds.map((s) => s.want?.ref.name ?? 'hero')).toEqual(['d', 'a', 'b', 'c', 'hero']);
+    expect(seeds.map((s) => s.day.dayNumber)).toEqual([5, 10, 10, 12, 20]);
   });
 
-  it('thins a long chosen list evenly rather than truncating it', () => {
-    const cal = calendar(60, Array.from({ length: 40 }, (_, i) => i + 2));
-    const chosen = cal.slice(1, 41).map((d) => d.date);
-    const days = scrubStopDays(cal, dateOf(cal, 50), opts({ days: 'chosen', chosenDays: chosen }))!;
-    expect(days.length).toBe(16);
-    expect(days[0].dayNumber).toBe(2);
-    expect(days[days.length - 2].dayNumber).toBe(41);
+  it('sounds a leg’s start once, on the first picture of that day', () => {
+    const seeds = scrubSeeds(cal, dateOf(cal, 20), picked([pic('a', 10, 1), pic('b', 10, 2)]))!;
+    expect(seeds.map((s) => s.legStart)).toEqual([true, false, false]);
+  });
+
+  it('leaves out what was shot after this piece’s day or outside the trip, and says how many', () => {
+    const list = [pic('ok', 3), pic('hero-day', 20), pic('later', 25), pic('elsewhere', 0)];
+    const seeds = scrubSeeds(cal, dateOf(cal, 20), picked(list))!;
+    expect(seeds.map((s) => s.want?.ref.name ?? 'hero')).toEqual(['ok', 'hero-day', 'hero']);
+    const split = partitionPicked(cal, dateOf(cal, 20), list);
+    expect(split.after).toBe(1);
+    expect(split.outside).toBe(1);
+  });
+
+  it('thins a long list evenly rather than cutting it', () => {
+    const list = Array.from({ length: 90 }, (_, i) => pic(`p${i}`, 1 + (i % 19), i));
+    const seeds = scrubSeeds(cal, dateOf(cal, 20), picked(list))!;
+    expect(seeds).toHaveLength(PICKED_MAX_STOPS + 1);
+  });
+
+  it('marks every picked stop as flashing its own picture, never the hero', () => {
+    const plan = scrubPlan(cal, dateOf(cal, 20), picked([pic('a', 4), pic('b', 4)]))!;
+    expect(plan.stops.map((s) => s.told)).toEqual([true, true, false]);
+    expect(plan.stops[0].pictureKey).toBe(hookPictureKey(pic('a', 4).ref));
+    expect(plan.stops[2].pictureKey).toBeNull();
+    // Two pictures of one day: the head holds on the tick while the frame changes.
+    expect(plan.headDayAt(plan.stops[1].at)).toBeCloseTo(4, 6);
+  });
+
+  it('asks the shell for each picture once, and never for the hero', () => {
+    const seeds = scrubSeeds(cal, dateOf(cal, 20), picked([pic('a', 4), pic('b', 6)]))!;
+    expect(scrubWants(seeds).map((w) => w.ref.name)).toEqual(['a', 'b']);
   });
 });
 
@@ -407,21 +464,25 @@ describe('the sweep options a document may hold', () => {
     expect(scrubOptions({ delaySeconds: 'long' }).delaySeconds).toBe(0);
   });
 
-  it('keeps only real days in the chosen list, once each', () => {
-    expect(
-      scrubOptions({ days: 'chosen', chosenDays: ['2025-03-04', 'tuesday', 7, '2025-03-04', '2025-03-09'] })
-        .chosenDays,
-    ).toEqual(['2025-03-04', '2025-03-09']);
-    expect(scrubOptions({ chosenDays: 'all' }).chosenDays).toEqual([]);
-    expect(scrubOptions({ days: 'sometimes' }).days).toBe('auto');
-  });
-
-  it('keeps only day → piece pairs it can read', () => {
-    expect(
-      scrubOptions({ pieceByDay: { '2025-03-04': 'p1', bad: 'p2', '2025-03-05': 3, '2025-03-06': '' } })
-        .pieceByDay,
-    ).toEqual({ '2025-03-04': 'p1' });
-    expect(scrubOptions({ pieceByDay: ['p1'] }).pieceByDay).toEqual({});
+  it('keeps only picked pictures it can find again, once each', () => {
+    const o = scrubOptions({
+      stopsOn: 'picked',
+      picked: [
+        { ref: { name: 'a.jpg', size: 3, lastModified: 1, assetId: 'w/1', extra: 'x' }, date: '2025-03-04', takenAt: 5 },
+        { ref: { name: 'again.jpg', size: 9, lastModified: 1, assetId: 'w/1' }, date: '2025-03-04' },
+        { ref: { name: '' }, date: '2025-03-04' },
+        { ref: { name: 'b.jpg' }, date: 'tuesday' },
+        'c.jpg',
+        { ref: { name: 'd.jpg', size: 'big' }, date: '2025-03-05', takenAt: 'noon' },
+      ],
+    });
+    expect(o.stopsOn).toBe('picked');
+    expect(o.picked).toEqual([
+      { ref: { name: 'a.jpg', size: 3, lastModified: 1, assetId: 'w/1' }, date: '2025-03-04', takenAt: 5 },
+      { ref: { name: 'd.jpg', size: 0, lastModified: 0 }, date: '2025-03-05' },
+    ]);
+    expect(scrubOptions({ picked: 'all' }).picked).toEqual([]);
+    expect(scrubOptions({ stopsOn: 'sometimes' }).stopsOn).toBe('pieces');
   });
 });
 
