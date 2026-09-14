@@ -44,9 +44,11 @@ import {
   screenSecondsOf,
 } from '../../shared/roadtrip/hook-video';
 import { badgeSettleSeconds } from '../../shared/roadtrip/badge-layout';
-import { TRIM_EPSILON, type TrimRange } from '../../shared/media/trim';
+import { screenLength } from '../../shared/roadtrip/deck-strip';
+import { MIN_HOOK_SECONDS } from '../../shared/roadtrip/hook-video';
+import { setEnd, setStart, TRIM_EPSILON, type TrimRange } from '../../shared/media/trim';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
-import { describeKeyTarget, targetOwnsTyping } from '../../shared/media/transport-keys';
+import { describeKeyTarget, targetOwnsSpace, targetOwnsTyping } from '../../shared/media/transport-keys';
 import { usePublishMediaScope, type MediaScope } from '../../shared/sources/media-scope';
 import {
   createPostSlide,
@@ -59,16 +61,15 @@ import {
 import { canvasThumbnail } from '../../shared/roadtrip/thumbnail';
 import { putThumb } from '../../shared/roadtrip/trip-store';
 import BadgeStage from './BadgeStage';
-import ClipTransport from './ClipTransport';
 import type { CtaFieldRefs } from './CtaPanel';
-import SlideRail from './SlideRail';
+import DeckStrip from './DeckStrip';
 import TripSettingsModal, { type TripSettingsSection } from './TripSettingsModal';
 import ContentTab from './panels/ContentTab';
 import ExportTab from './panels/ExportTab';
 import LookTab from './panels/LookTab';
 import PictureTab, { GradeScopeChips } from './panels/PictureTab';
 import PiecePicker from './panels/PiecePicker';
-import { useBadgeClock } from './use-badge-clock';
+import { useDeckTransport } from './use-deck-transport';
 import { usePostExports } from './use-post-exports';
 import useRailThumbs from './use-rail-thumbs';
 import { pickable, useSlideLibrary } from './use-slide-library';
@@ -80,7 +81,6 @@ import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { Icons } from '../../shared/ui/icons';
 import Segmented from '../../shared/ui/Segmented';
-import DeckTimeline from './DeckTimeline';
 import { useSurface } from '../../shared/ui/use-surface';
 import { FieldRow } from '../../shared/ui/Inspector';
 
@@ -121,6 +121,17 @@ const MEDIA_KINDS: readonly AssetKind[] = ['photo', 'video+telemetry', 'video'];
 
 const NO_SOURCE = { width: 0, height: 0, duration: 0 };
 
+/** What the stage last decoded, and for which file — see `duration` below. */
+interface LoadedSource {
+  width: number;
+  height: number;
+  duration: number;
+  file: File | null;
+}
+
+/** Shortest cut `I` / `O` may leave — the floor `clipSlice` keeps. */
+const MIN_CUT = MIN_HOOK_SECONDS / 4;
+
 /**
  * Composing one post's hook: the picture, the badge over it, and the PNG that
  * comes out.
@@ -148,8 +159,7 @@ export default function PostEditor({
   useSurface('darkroom');
   const lib = useAssetLibrary();
   const { active } = useActiveAsset(MEDIA_KINDS);
-  const [srcInfo, setSrcInfo] = useState(NO_SOURCE);
-  const duration = srcInfo.duration;
+  const [srcInfo, setSrcInfo] = useState<LoadedSource>({ ...NO_SOURCE, file: null });
   const [selected, setSelected] = useState(0);
   const [piece, setPiece] = useState<BadgePiece>('kicker');
   const [tab, setTab] = useState<PanelTab>('content');
@@ -258,6 +268,11 @@ export default function PostEditor({
   const slideFile = isCta ? null : activeFile;
   const missing = !isCta && slide.media !== null && activeFile === null;
   const isVideo = Boolean(slideFile && !slideFile.type.startsWith('image/'));
+  // The stage's numbers are only this slide's once they describe THIS file:
+  // while the piece plays from a clip into another, the last clip's duration
+  // would otherwise cut the next one with a stretch it does not have.
+  const sourceReady = srcInfo.file === slideFile;
+  const duration = sourceReady ? srcInfo.duration : 0;
 
   const aspectPreset =
     ASPECT_PRESETS.find((a) => a.id === post.badge.aspectId) ?? ASPECT_PRESETS[0];
@@ -483,14 +498,9 @@ export default function PostEditor({
     [slide.videoTimeSeconds, slide.seconds, slide.speed, duration],
   );
   const [playhead, setPlayhead] = useState(slide.videoTimeSeconds);
+  // The clip's OWN playback, used while its cut is open on the band (it
+  // loops there); the piece's playback is the deck transport's, below.
   const [clipPlaying, setClipPlaying] = useState(false);
-  const [clipLoop, setClipLoop] = useState(false);
-  useEffect(() => {
-    // The in point moved (a handle, the filmstrip, another slide): the
-    // playhead lands on it and whatever was playing stops.
-    setPlayhead(slide.videoTimeSeconds);
-    setClipPlaying(false);
-  }, [slideKey, slideFile, slide.videoTimeSeconds]);
   // Scrubs arrive per pointer event; the stage can only seek once a frame.
   const scrubRaf = useRef(0);
   const scrubTo = useRef(0);
@@ -551,47 +561,116 @@ export default function PostEditor({
     [slide, clipRange, post, patchBadge, onChangePost],
   );
 
-  // --- the badge's own clock ------------------------------------------------
-  // On a photograph the badge has a transport of its own — including one an
-  // opener with no animated piece needs (a scrub moves the numeral with
-  // nothing in `pieceStyles` set to animate, so `hookSeconds` is threaded in
-  // to make `clock.animated` true for it too). On a CLIP the clip is the
-  // clock: the badge's time is how far into the delivered stretch the
-  // playhead is, at the slide's speed — exactly what the export draws, and
-  // exactly the clock `export-variant.ts` hands a hook variant's own paint
-  // under `overlayClock: 'delivered'` — so the entrance, and the scrub's
-  // tape, land on the first frame and play out where they will in the file.
-  // Paused ON the in point the badge draws settled: that is the composition
-  // view every other surface (the rail, the PNG) shows, and the one you open
-  // a piece on.
-  const clock = useBadgeClock(
-    post.badge.pieceStyles,
-    post.badge.durationSeconds,
-    isHook && !isClipSlide,
-    hook.seconds,
+  // --- the piece's transport: every slide, one after the other --------------
+  // The band under the picture (`DeckStrip`) slides the whole piece under a
+  // fixed needle, and ▶ plays it slide after slide on this one stage. Each
+  // slide holds the screen for what it really delivers — a clip its cut, a
+  // still the seconds its inspector gives it — and the durations of clips the
+  // stage has already decoded are remembered, so a stored 5s over a 3s clip
+  // reads 3 on the band before that slide is opened again.
+  const [clipDurations, setClipDurations] = useState<Record<string, number>>({});
+  const lengths = useMemo(
+    () =>
+      slides.map((s) =>
+        screenLength(s, s.media ? (clipDurations[s.media.name.toLowerCase()] ?? 0) : 0),
+      ),
+    [slides, clipDurations],
   );
+  const slideKeys = useMemo(() => slides.map((s) => s.slideId ?? s.kind), [slides]);
+  const deck = useDeckTransport({
+    lengths,
+    keys: slideKeys,
+    index: slideIndex,
+    select: setSelected,
+    clip: isClipSlide
+      ? { start: clipRange.start, speed: slide.speed, playhead, seek: seekPlayhead }
+      : null,
+    pending: Boolean(slideFile) && !sourceReady,
+  });
+
+  // The cut, opened on the band. It belongs to one clip: another slide, or a
+  // picture that is not a clip, closes it.
+  const [trimming, setTrimming] = useState(false);
+  const trimOpen = trimming && isClipSlide;
+  useEffect(() => {
+    setTrimming(false);
+  }, [slideKey]);
+  const stagePlaying = trimOpen ? clipPlaying : deck.playing;
+  const togglePlay = trimOpen ? () => setClipPlaying((p) => !p) : deck.toggle;
+
+  // A new slide or a newly decoded file puts the playhead where the band sent
+  // it (its in point, unless a scrub landed inside the clip); an in point
+  // moved by the cut puts it on the new in point.
+  const lastOpened = useRef<{ key: string; file: File | null } | null>(null);
+  useEffect(() => {
+    const moved = lastOpened.current?.key !== slideKey || lastOpened.current?.file !== slideFile;
+    lastOpened.current = { key: slideKey, file: slideFile };
+    setPlayhead(slide.videoTimeSeconds + (moved ? deck.pendingLocal(slideKey) * slide.speed : 0));
+    setClipPlaying(false);
+    // `deck.pendingLocal` is stable; the in point and the speed are read as of this change.
+  }, [slideKey, slideFile, slide.videoTimeSeconds]);
+
+  // The badge's clock. On a CLIP the clip is the clock: the badge's time is
+  // how far into the delivered stretch the playhead is, at the slide's speed —
+  // exactly what the export draws, and exactly the clock `export-variant.ts`
+  // hands a hook variant's own paint under `overlayClock: 'delivered'`. On a
+  // photograph it is how far the piece's transport is into the slide. Either
+  // way, AT REST on the slide's first moment the badge draws settled: that is
+  // the composition every other surface (the band, the PNG) shows, and the one
+  // a piece opens on — an opener that moves with no animated piece (a scrub)
+  // settles past its own length.
   const settle = badgeSettleSeconds(post.badge.pieceStyles);
-  const atInPoint = playhead <= clipRange.start + TRIM_EPSILON;
-  const composedView = !isClipSlide || (!clipPlaying && atInPoint);
+  const clipAtRest = !stagePlaying && playhead <= clipRange.start + TRIM_EPSILON;
+  const stillAtRest = !deck.playing && deck.local <= TRIM_EPSILON;
+  const composedView = isClipSlide ? clipAtRest : stillAtRest;
   const badgeTime = !isHook
     ? 0
     : isClipSlide
-      ? composedView
+      ? clipAtRest
         ? settle
         : Math.max(0, (playhead - clipRange.start) / slide.speed)
-      : clock.time;
+      : stillAtRest
+        ? Math.max(settle, hook.seconds)
+        : deck.local;
 
   // The opener's ticks, heard while whichever transport is actually driving
   // the badge plays — a clip's own, or the photo transport above — off until
   // asked for. `badgeTime` already reads whichever clock applies.
   const hookScore = useMemo(() => hook.score(), [hook]);
   const [soundOn, setSoundOn] = useState(false);
-  useHookSound(
-    hookScore,
-    isHook && (isClipSlide ? clipPlaying : clock.playing),
-    badgeTime,
-    soundOn,
-  );
+  useHookSound(hookScore, isHook && stagePlaying, badgeTime, soundOn);
+
+  // Space plays — the piece, or the cut while it is open — and `I` / `O` cut
+  // the open clip at the playhead (Shift: back to the clip's own ends), the
+  // Studio's reflexes. On `window`, like every transport in the suite, and
+  // read through a ref so the listener is bound once.
+  const keys = useRef({ togglePlay, isClipSlide, clipRange, playhead, duration, setClipRange });
+  keys.current = { togglePlay, isClipSlide, clipRange, playhead, duration, setClipRange };
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = describeKeyTarget(e.target);
+      const k = keys.current;
+      if (e.code === 'Space' || e.key === ' ') {
+        if (e.repeat || e.shiftKey || targetOwnsSpace(target)) return;
+        e.preventDefault();
+        k.togglePlay();
+        return;
+      }
+      // A letter needs the NARROWER guard: a button does not own `i`.
+      if (!k.isClipSlide || targetOwnsTyping(target)) return;
+      const key = e.key.toLowerCase();
+      if (key === 'i') {
+        e.preventDefault();
+        k.setClipRange(setStart(k.clipRange, e.shiftKey ? 0 : k.playhead, k.duration, MIN_CUT));
+      } else if (key === 'o') {
+        e.preventDefault();
+        k.setClipRange(setEnd(k.clipRange, e.shiftKey ? k.duration : k.playhead, k.duration, MIN_CUT));
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // `M` mutes the opener's ticks, the reflex every other player answers to —
   // only where there is something to mute, and never while typing.
@@ -634,10 +713,18 @@ export default function PostEditor({
   const [hookInfo, setHookInfo] = useState(NO_SOURCE);
   const onSourceLoaded = useCallback(
     (info: { width: number; height: number; duration: number }) => {
-      setSrcInfo(info);
+      // Called from the decode of the file this render hands the stage, so
+      // `slideFile` here IS the file these numbers describe.
+      setSrcInfo({ ...info, file: slideFile });
       if (isHook) setHookInfo(info);
+      if (info.duration > 0 && slideFile) {
+        const name = slideFile.name.toLowerCase();
+        setClipDurations((known) =>
+          known[name] === info.duration ? known : { ...known, [name]: info.duration },
+        );
+      }
     },
-    [isHook],
+    [isHook, slideFile],
   );
 
   // How long the burned-in hook clip runs. It lives on the DOCUMENT since
@@ -826,10 +913,10 @@ export default function PostEditor({
   // thumbnail is the COMPOSITION, not whatever frame either transport
   // stopped on. `composedView` alone does not cover the photo case: it is
   // unconditionally true off a clip slide, transport included.
-  const settledRef = useRef(composedView && !clock.playing);
+  const settledRef = useRef(composedView);
   useEffect(() => {
-    settledRef.current = composedView && !clock.playing;
-  }, [composedView, clock.playing]);
+    settledRef.current = composedView;
+  }, [composedView]);
   const captureThumb = useCallback(
     (canvas: HTMLCanvasElement) => {
       if (!isHook || missingRef.current || !settledRef.current) return;
@@ -850,6 +937,53 @@ export default function PostEditor({
     [],
   );
 
+
+  const deckStrip = (
+    <DeckStrip
+      slides={slides}
+      lengths={lengths}
+      index={slideIndex}
+      time={deck.time}
+      playing={stagePlaying}
+      aspect={aspect}
+      thumbFor={railThumb}
+      onTogglePlay={togglePlay}
+      onScrub={deck.scrub}
+      onSelect={(i) => deck.goTo(i, 0)}
+      onAdd={() => void addSlide()}
+      onRemove={removeSlide}
+      onMove={moveSlideTo}
+      includeCta={post.includeCta}
+      onIncludeCta={(on) => onChangePost({ ...post, includeCta: on })}
+      onEditClosingCard={() => setTripSheet('cta')}
+      clip={
+        isClipSlide
+          ? {
+              duration,
+              range: clipRange,
+              playhead,
+              speed: slide.speed,
+              onSpeed: setClipSpeed,
+              onRangeChange: setClipRange,
+              onSeek: seekPlayhead,
+              onScrubStart: () => setClipPlaying(false),
+            }
+          : null
+      }
+      trimming={trimOpen}
+      onTrimming={(on) => {
+        deck.setPlaying(false);
+        setClipPlaying(false);
+        setTrimming(on);
+      }}
+      sound={
+        isHook && hookScore.length > 0
+          ? { on: soundOn, onToggle: () => setSoundOn((on) => !on) }
+          : null
+      }
+      compact={compact}
+    />
+  );
 
   return (
     // Wide: a two-column grid — the stage spans both rows on the left and
@@ -944,48 +1078,18 @@ export default function PostEditor({
         </p>
       </div>
 
-      {/* The deck sits beside the picture, not behind a tab: a carousel is
-          the one thing about a piece you cannot see while you work on it.
-          It is a column against the stage at every width — slimmer below the
-          860px container query, which is why the rail stays a child of the
-          queried layout. */}
-      {/* On a compact shell this column FLEXES, so the stage inside it fills a
-          screen whose height is fixed. Stacked on a tablet it keeps its
-          content height and the column scrolls instead. */}
+      {/* The picture and, under it, the piece as ONE band (`DeckStrip`): the
+          deck and its transport together, the same at every width — the
+          maintainer's pick (2026-09-14) over a rail beside the picture, a
+          transport and a timeline stacked under it. On a compact shell this
+          column FLEXES, so the stage fills a screen whose height is fixed and
+          the band keeps its own; stacked on a tablet the column scrolls. */}
       <div
         className={`min-w-0 flex flex-col gap-3 @min-[860px]:min-h-0 @min-[860px]:col-start-1 @min-[860px]:row-start-1 @min-[860px]:row-span-2 ${
           compact ? 'flex-1 min-h-0' : ''
         }`}
       >
-        {/* Centred as a PAIR, and the picture's column capped to the width
-            the picture actually takes (reported by the stage from the height
-            it was given): a portrait frame on a wide screen used to centre
-            itself inside a full-width column, leaving the rail stranded a
-            third of a screen away from the thumbnails it belongs to. */}
-        {/* Beside the picture at every width, on the left, centred against
-            it — the maintainer's call. A row under the stage was the narrow
-            fallback and it is the wrong trade on a phone: it takes HEIGHT
-            from the one screen that has none, while the width beside a
-            portrait frame goes unused either way. */}
-        <div className="flex-1 min-h-0 flex flex-row items-stretch justify-center gap-3">
-          {/* On a phone the rail keeps the deck (a row under the picture
-              costs the screen with the least height); wide, the deck is the
-              TIMELINE under the stage, and the rail stands down. */}
-          {compact && (
-          <SlideRail
-            slides={slides}
-            index={slideIndex}
-            aspect={aspect}
-            includeCta={post.includeCta}
-            thumbFor={railThumb}
-            onSelect={setSelected}
-            onAdd={() => void addSlide()}
-            onRemove={removeSlide}
-            onMove={moveSlideTo}
-            onIncludeCta={(on) => onChangePost({ ...post, includeCta: on })}
-            onEditClosingCard={() => setTripSheet('cta')}
-          />
-          )}
+        <div className="flex-1 min-h-0 flex flex-row items-stretch justify-center">
           <div
             style={{ '--fit': fitWidth === null ? '100%' : `${Math.round(fitWidth)}px` } as React.CSSProperties}
             /* `w-full` is load-bearing on a narrow screen: the row above
@@ -993,7 +1097,7 @@ export default function PostEditor({
                from the badge's own measured box — the stage then measured a
                box the picture had sized, which is how a preview ends up
                measuring its own output. The column states its width instead. */
-            className="w-full flex-1 min-w-0 min-h-0 flex flex-col items-center gap-3 @min-[860px]:max-w-[min(100%,var(--fit))]"
+            className="w-full flex-1 min-w-0 min-h-0 flex flex-col items-center @min-[860px]:max-w-[min(100%,var(--fit))]"
           >
           <BadgeStage
             file={slideFile}
@@ -1001,12 +1105,13 @@ export default function PostEditor({
             playback={
               isClipSlide
                 ? {
-                    playing: clipPlaying,
+                    playing: stagePlaying,
                     rate: slide.speed,
                     range: clipRange,
-                    loop: clipLoop,
+                    // The cut loops while it is being made; the piece moves on.
+                    loop: trimOpen,
                     onTime: setPlayhead,
-                    onEnded: () => setClipPlaying(false),
+                    onEnded: trimOpen ? () => setClipPlaying(false) : deck.onClipEnded,
                   }
                 : null
             }
@@ -1040,125 +1145,19 @@ export default function PostEditor({
             onRendered={captureThumb}
             onFit={setFitWidth}
           />
-
-          {/* A clip slide plays on the stage: the stretch it delivers, at its
-              speed, cut on the Studio's own bar. The badge's own transport
-              stands down on it — the clip is the clock. */}
-          {isClipSlide && (
-            <ClipTransport
-              duration={duration}
-              time={playhead}
-              range={clipRange}
-              speed={slide.speed}
-              playing={clipPlaying}
-              loop={clipLoop}
-              onTogglePlay={() => setClipPlaying((p) => !p)}
-              onSeek={seekPlayhead}
-              onScrubStart={() => setClipPlaying(false)}
-              onRangeChange={setClipRange}
-              onSpeed={setClipSpeed}
-              onLoop={setClipLoop}
-              compact={compact}
-            />
-          )}
-
-          {isHook && !isClipSlide && clock.animated && (
-            <div
-              className={`flex-none flex items-center w-full max-w-[26rem] ${
-                compact ? 'gap-2' : 'gap-3'
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => clock.setPlaying((p) => !p)}
-                className={`flex-none border border-line-strong rounded-full bg-paper font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink ${
-                  compact ? 'px-2.5 py-1 text-2xs' : 'px-3 py-1.5 text-xs'
-                }`}
-              >
-                <span className="inline-flex items-center gap-1">{clock.playing ? Icons.pause : Icons.play}{clock.playing ? 'Pause' : 'Play'}</span>
-              </button>
-              <input
-                type="range"
-                min={0}
-                max={clock.loopSeconds}
-                step={0.02}
-                value={clock.time}
-                onChange={(e) => {
-                  clock.setPlaying(false);
-                  clock.setTime(Number(e.target.value));
-                }}
-                className="flex-1 accent-accent"
-                aria-label="Badge time"
-              />
-              <span className="flex-none font-mono text-2xs tabular-nums text-muted">
-                {clock.time.toFixed(2)}s
-              </span>
-              {hookScore.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setSoundOn((on) => !on)}
-                  aria-pressed={soundOn}
-                  aria-label={soundOn ? 'Mute the opener’s ticks' : 'Hear the opener’s ticks'}
-                  title={soundOn ? 'Mute the ticks (M)' : 'Hear the ticks (M)'}
-                  className={`flex-none grid place-items-center rounded-full border cursor-pointer ${
-                    compact ? 'w-7 h-7' : 'w-8 h-8'
-                  } ${
-                    soundOn
-                      ? 'border-accent bg-accent-wash text-accent-ink'
-                      : 'border-line-strong bg-paper text-muted hover:border-accent hover:text-accent-ink'
-                  }`}
-                >
-                  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none">
-                    <path d="M2.5 6h2.2L8 3.2v9.6L4.7 10H2.5z" fill="currentColor" />
-                    {soundOn ? (
-                      <path
-                        d="M10.4 5.6a3.4 3.4 0 0 1 0 4.8M12.2 3.8a6 6 0 0 1 0 8.4"
-                        stroke="currentColor"
-                        strokeWidth="1.3"
-                        strokeLinecap="round"
-                      />
-                    ) : (
-                      <path
-                        d="M10.5 6l3.5 4M14 6l-3.5 4"
-                        stroke="currentColor"
-                        strokeWidth="1.3"
-                        strokeLinecap="round"
-                      />
-                    )}
-                  </svg>
-                </button>
-              )}
-            </div>
-          )}
-          {!compact && (
-            <DeckTimeline
-              slides={slides}
-              index={slideIndex}
-              aspect={aspect}
-              includeCta={post.includeCta}
-              thumbFor={railThumb}
-              onSelect={setSelected}
-              onAdd={() => void addSlide()}
-              onRemove={removeSlide}
-              onMove={moveSlideTo}
-              onIncludeCta={(on) => onChangePost({ ...post, includeCta: on })}
-              onEditClosingCard={() => setTripSheet('cta')}
-              clip={
-                isClipSlide
-                  ? {
-                      duration,
-                      range: clipRange,
-                      speed: slide.speed,
-                      playhead,
-                      playing: clipPlaying,
-                      onRangeChange: setClipRange,
-                    }
-                  : null
-              }
-            />
-          )}
+          {compact && <div className="w-full flex-none mt-2">{deckStrip}</div>}
           </div>
         </div>
+        {/* Wide, the band spans the picture's side of the editor. On a phone
+            it sits in the stage's column instead, directly under the picture:
+            the stage there is an aspect box, and the slack of a tall screen
+            falls below the pair rather than between the frame and the band
+            that drives it (`frontend.md`, «A stage that FLEXES»). */}
+        {!compact && (
+          <div className="w-full flex-none @min-[860px]:max-w-[52rem] @min-[860px]:self-center">
+            {deckStrip}
+          </div>
+        )}
       </div>
 
       <PanelHost

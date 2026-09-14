@@ -442,10 +442,8 @@ its own hook**, kept in the browser beside the trip, so a day reopened months
 later shows what you left there instead of a file name.
 
 **The hook.** Open a piece and you compose its badge over the picture, in the
-same darkroom the Studio grades in. On a wide screen the deck is a **timeline
-under the picture** — one bar per slide, as wide as the time it holds the
-screen, a handle on the open clip's edge to cut its out point — while a phone
-keeps the slide rail beside it: the
+same darkroom the Studio grades in, with the deck and its transport as one
+band under the picture (see *A post is a deck*). The badge is the
 number the trip gives it, big, with everything else deliberately subordinate —
 "Australia · Day · **27** · of 310 · ◆ Kalbarri · 1 year ago today". It counts
 four ways (day of trip, a range of days, the day at a place, how long you
@@ -563,9 +561,8 @@ computed value back.
 lower), its ink, a panel behind it (fill, corner radius, outline) and an
 entrance and exit drawn from the engine's own animation model — fade, slide,
 scale, typewriter, wipe, with duration, easing and a stagger delay. The hook
-has a **duration**, which is what an exit animation lands on; a transport under
-the preview plays the whole thing so you can watch the entrance land and the
-exit leave.
+has a **duration**, which is what an exit animation lands on; playing the piece
+from the band under the preview shows the entrance land and the exit leave.
 
 **The picture is framed where you want it.** A 3:2 photograph in a 9:16 frame
 loses its sides, and the subject is rarely in the middle: drag the picture on
@@ -657,24 +654,28 @@ reel or a single photo is the same model with a deck of one, so a piece can be
 re-cut into a carousel without being rebuilt. Export writes the whole deck as numbered PNGs into a
 folder you pick (or downloads them one by one where the folder picker is not
 available), named so a file listing is already in swipe order. The order is
-yours: the deck is a **rail of slides beside the picture** — a column on a wide
-screen, a row when the editor stacks — so drag one along it, or move it with the
-arrow keys while it has focus. Only the middle moves — a hook that opened third
+yours, and so is the time: under the picture, at every width, the deck is **one
+band** — every slide end to end on the piece's clock, a clip as wide as its cut
+and a still as wide as the seconds its inspector gives it, slid under a needle
+that never moves. Drag the band (or use the arrow keys on it) and the slide under
+the needle is the one open; ▶ or `Space` plays **the whole piece**, slide after
+slide, on the stage. `⋯` moves the open picture earlier or later, removes it, or
+closes the piece on the call to action; `+` adds the active picture. Only the middle moves — a hook that opened third
 and a call to action that came second would stop being either.
 
 **A slide can be a video, and it plays on the stage.** Put a clip on the hook
-or on any content slide and the picture becomes a transport: play it (`Space`),
-scrub it, and **cut the stretch it delivers** on the Studio's own trim bar —
-in and out handles that never cross, `I` / `O` to cut at the playhead, the
+or on any content slide and it plays when the piece reaches it; **Cut** on the
+band opens the Studio's own trim bar in its place, looping the stretch while you
+**cut what it delivers** — in and out handles that never cross, `I` / `O` to cut at the playhead, the
 picture following whichever handle you drag. A **speed** menu (¼× to 4×) plays
 the stretch faster or slower, on the stage and in the file alike: what you
 watch is what goes out. The badge is timed by the clip — its entrance lands on
 the first frame of the stretch and keeps its own pace whatever the speed — and
-pauses settled on the in point, the composition view the rail and the PNGs
+pauses settled on the in point, the composition view the band and the PNGs
 show. The filmstrip in the Picture tab still chooses the in point by pointing
 at the clip itself, and slides the whole stretch along it. A slide stores its
 in point, its screen time and its speed; the stretch of the source is derived
-from the three, so the bar, the rail's length and the export can never
+from the three, so the bar, the band's length and the export can never
 disagree. Exporting burns the badge (or the caption) into the clip through the
 **same WebCodecs pipeline the Studio exports with** — cover-cropped into the
 post's frame, the shades applied per frame, the clip's own audio copied through

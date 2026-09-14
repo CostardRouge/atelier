@@ -168,7 +168,7 @@ export default function SlideDelivery({
             ? clipSeconds > 0 && ceiling < MAX_HOOK_SECONDS
               ? `At most ${ceiling.toFixed(1)}s of the clip is left after its in point${slide.speed !== 1 ? ` at ${slide.speed}×` : ''}.`
               : undefined
-            : 'An image ignores this, until the deck is combined into one reel.'
+            : 'How long this picture holds the screen when the piece plays.'
         }
       >
         <RangeField
