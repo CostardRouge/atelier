@@ -292,7 +292,10 @@ export interface HookPanelHost {
    * Open the shell's picture chooser, starting from `selected`. Resolves the
    * pictures the author kept, or null when they cancelled.
    */
-  choosePictures?(selected: readonly HookPickedPicture[]): Promise<HookPickedPicture[] | null>;
+  choosePictures?(
+    selected: readonly HookPickedPicture[],
+    choice?: HookPictureChoice,
+  ): Promise<HookPickedPicture[] | null>;
   /** How the pictures the variant asked for are coming along. */
   pictureStatus?: HookPictureStatus;
   /**
@@ -300,6 +303,17 @@ export interface HookPanelHost {
    * write the trip itself; absent, the panel says where the car is set.
    */
   configureCar?(): void;
+}
+
+/** How a variant wants the chooser to open. */
+export interface HookPictureChoice {
+  /**
+   * Offer the piece's OWN day as well, rather than the days before it. A sweep
+   * is a run-up to the piece and stops the day before; an itinerary's stops are
+   * as often the day being told. Nothing shot AFTER the piece is ever offered
+   * either way.
+   */
+  includeThisDay?: boolean;
 }
 
 export interface HookPictureStatus {

@@ -660,8 +660,7 @@ up as it drives), the motion (the time on the road, the five motions, a hold
 first, a beat at the end, whether the camera fits the whole route or follows
 the car at a zoom, the badge's place following the car), and the sound: a tick
 at every stop on the same voices, deeper where a leg begins, the seat on
-arrival, a shutter click as each print lands. Every opener runs on the same
-clock as the badge, in the preview and in the file.
+arrival, a shutter click as each print lands.
 
 **The car is the trip's, and it has a garage.** One car per journey: every
 Virée of a trip drives the same one, and it travels in the trip's backup. It is
@@ -677,6 +676,27 @@ asks for less motion), drawn by the very renderer the map uses, so what the
 garage shows is what the opener gets. The garage opens from the opener's own
 panel («Configure the car…», with Cancel and Done) and lives in the trip's
 settings as its Car section, where every switch writes at once.
+
+**Itinerary** is the one you compose yourself: pick the
+stops on a map — click to drop one where you like, drag it to move it, take
+one of the trip's own places with a click, or find it by name through the same
+opt-in place lookup the legs use — and the pen travels them in order, bowing
+from stop to stop, waiting at each for as long as you ask. There are no tiles
+and no basemap: the picking map is the very projection the export draws, run
+backwards, so what you point at is what goes out. Each stop can carry **one
+picture**, and how they are shown is the point of it: **pinned** beside their
+own dot as the pen lands (several on screen at once, on paper or bare, with a
+stem down to the dot), on a **card** under the map captioned with the stop's
+name, **filling the frame** behind the map with a dim so the line survives, or
+laid out as a **strip** along the edge with the stops still ahead held back. A
+stop that holds no picture draws nothing — never the one before it standing in
+— and the panel says so before you export. Its map is placed and dressed like
+the Route's (position, size, plate, line width and colours, dots, numbers,
+names, a north arrow, the distance, and a chart's lat/lon grid if you want
+one), the stops still ahead can be dashed, faint or hidden, the pen can be a
+dot or a little plane, the badge's caption can follow it from stop to stop, and
+it ticks at each arrival on the same voices. Every opener runs on the same
+clock as the badge, in the preview and in the file.
 
 **Nothing is keyed by a file name.** A post records the *day* it tells, never a
 filename: exports get renamed and re-graded between tools, and a tracking system

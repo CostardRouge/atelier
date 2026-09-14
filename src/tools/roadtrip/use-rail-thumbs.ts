@@ -10,6 +10,7 @@ import {
   type BadgeSource,
 } from '../../shared/roadtrip/badge-render';
 import type { DeckSlide } from '../../shared/roadtrip/deck';
+import type { HookPicture } from '../../shared/roadtrip/hooks/hook-variant';
 import { slideRender } from '../../shared/roadtrip/slide-render';
 import type { TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
 
@@ -54,6 +55,25 @@ function lutId(lut: CubeLut | null): number {
   return nextLutId;
 }
 
+/**
+ * The same trick for the opener's picture set, which cannot be stringified:
+ * `use-hook-pictures` hands back a NEW map only when a picture has actually
+ * landed, changed or gone, so its identity IS "the pictures changed". Without
+ * it a hook cell would keep the map-with-no-photographs it was first drawn
+ * with — the signature it is compared against is JSON, and a decoded bitmap
+ * has no JSON.
+ */
+const pictureIds = new WeakMap<object, number>();
+let nextPictureId = 0;
+function picturesId(pictures: ReadonlyMap<string, HookPicture> | undefined): number {
+  if (!pictures) return 0;
+  const known = pictureIds.get(pictures);
+  if (known !== undefined) return known;
+  nextPictureId += 1;
+  pictureIds.set(pictures, nextPictureId);
+  return nextPictureId;
+}
+
 interface RailThumbInputs {
   trip: TripDoc;
   post: TripPost;
@@ -67,6 +87,12 @@ interface RailThumbInputs {
    * changes, which is what re-signs every cell.
    */
   lutFor: (develop: DeckSlide['develop']) => CubeLut | null;
+  /**
+   * The opener's decoded pictures — an itinerary pins them at rest, which is
+   * exactly when a thumbnail is drawn, so a cell without them would show a
+   * map the deck does not deliver.
+   */
+  pictures?: ReadonlyMap<string, HookPicture>;
 }
 
 /** One slide's thumbnail, or null while it has never been drawn. */
@@ -101,6 +127,7 @@ export default function useRailThumbs({
   aspect,
   resolve,
   lutFor,
+  pictures,
 }: RailThumbInputs): RailThumbs {
   const [urls, setUrls] = useState<ReadonlyMap<string, string>>(new Map());
   /** What has been drawn, and from what. A null url is a failed decode. */
@@ -118,7 +145,7 @@ export default function useRailThumbs({
     () =>
       slides.map((slide) => {
         const file = slide.kind === 'cta' ? null : resolve(slide.media);
-        const render = slideRender(trip, post, slide, aspect);
+        const render = slideRender(trip, post, slide, aspect, pictures);
         // The cube of THIS slide: its own develop over the shared stack. The
         // stack memoises per develop, so a deck of untouched slides reads one
         // cube and only a corrected slide pays a bake.
@@ -135,10 +162,13 @@ export default function useRailThumbs({
             lutId(lut),
             slide.videoTimeSeconds,
             file ? [file.name, file.size, file.lastModified] : null,
+            // Only the hook's cell reads them; signing every cell with them
+            // would redraw a whole carousel each time one picture lands.
+            slide.kind === 'hook' ? picturesId(pictures) : 0,
           ]),
         };
       }),
-    [slides, trip, post, aspect, resolve, lutFor],
+    [slides, trip, post, aspect, resolve, lutFor, pictures],
   );
 
   useEffect(() => {

@@ -771,7 +771,7 @@ export default function PostEditor({
   // Every cell of the rail, composed exactly as it will be delivered — the
   // crop, the caption, the badge, the grade. It needs the grade, so it sits
   // here rather than beside the deck above.
-  const railThumb = useRailThumbs({ trip, post, slides, aspect, resolve, lutFor });
+  const railThumb = useRailThumbs({ trip, post, slides, aspect, resolve, lutFor, pictures: hookPictures });
 
   const exports = usePostExports({
     trip,
@@ -784,6 +784,7 @@ export default function PostEditor({
     // through `hook`/`hookElementsAt`, unrelated to this value.
     timeSeconds: settle,
     hook,
+    hookPictures,
     hookElementsAt,
     resolve,
     hookFile,

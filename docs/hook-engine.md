@@ -1,11 +1,12 @@
 # The hook engine — many openers over one badge
 
-**Status (2026-09-13).** Design agreed with the maintainer; **every phase is
+**Status (2026-09-14).** Design agreed with the maintainer; **every phase is
 built** — the engine, the picker, **Défilé** everywhere a hook is drawn, **its
 ticks** in every video a hook makes (mixed into a clip's own sound on request),
-and the **route trace**, which passed the contract test (§11, phase 7). What
-was phase 4 turned out to exist already (§8). What is left is judgement, not
-construction: §12. The
+the **route trace**, which passed the contract test (§11, phase 7), and the
+**Itinerary** (§13), the first variant the author composes rather than reads.
+What was phase 4 turned out to exist already (§8). What is left is judgement,
+not construction: §12. The
 exemplar that drove the design is the **scrub** («&nbsp;Défilé&nbsp;»): the
 trip's measuring tape sweeps from day 1 to the day being told, flashing that
 day's pictures as it passes, and ticking.
@@ -422,6 +423,10 @@ paint. What each group may say, and the rule each keeps to:
    `needs.places` announced in phase 1 rather than a reshape. Its first real
    `unmet()` also proved the picker's disabled-with-a-reason card, which no
    variant had exercised.
+8. **Itinerary** (2026-09-14, unplanned — the maintainer asked for a map hook).
+   The first variant whose subject is AUTHORED rather than read, and the first
+   to combine a stop list, picked pictures, a paint, a score and a content
+   rewrite in one file. §13.
 
 ## 12. Open points
 
@@ -572,3 +577,43 @@ renderer or either export moved.
   rear, water · petrol · water — without overlaps, pinned by
   `car-model.test.ts`; his placement is the authority, the geometry an
   approximation of it.
+
+## 14. Itinerary — an authored map (2026-09-14, rev. 2026-09-15)
+
+The variant that answers "which of these can the author compose themselves?".
+Its decisions and its traps live in `roadtrip.md` («The Itinerary opener»);
+what belongs to the ENGINE is what it asked of the contract, and what it
+proves about it.
+
+**What the contract did not need.** `HookVariant`, `HookRender`, `resolveHook`,
+`foldHook`, the picker, `renderBadge` and both video exports are unchanged. A
+variant that owns a stop list, decodes pictures, paints, scores AND rewrites a
+badge piece fits the shape as written — which is the strongest reading it has
+had, since Défilé and the Route each exercised only part of it.
+
+**What it did need**, both optional and both filled by the shell:
+
+- `HookPanelHost.choosePictures` takes a `HookPictureChoice`
+  (`includeThisDay`), because the chooser's default span was Défilé's reading
+  of "pictures for a hook" — the days BEFORE the piece. `defaultSpan` carries
+  the flag; `reachSpan` still bounds both, so nothing shot after the piece is
+  ever offered.
+- `slideRender` takes the decoded pictures, because "a still is drawn settled,
+  so it needs no pictures" was Défilé's truth and not the engine's: an
+  itinerary shows its stops' photographs AT REST. The PNG deck and the rail's
+  thumbnails pass them; the video paths already read them through the
+  `ResolvedHook` the stage prepared.
+
+**What it says about `owns`.** It declares `frame`, though only its backdrop
+mode replaces the picture — the reading the scrub already used (it covers the
+frame only while it sweeps). `owns` is what a variant MAY do, not what it does
+on a given piece; nothing consumes the flag yet, and the conservative
+direction is the safe one for the stack arbiter that eventually will.
+
+**What two variants both wanted, again.** The Itinerary and the drive
+reached for the same four things on the same day and, independently, lifted
+them out the same way: the projection, the great-circle distance, its
+formatting and the name placer now live in `geo.ts` (§13), which is the fourth
+time the §3 rule has fired after `easing.ts`, `tick-kits.ts` and
+`panel-ui.tsx`. `placeLabels` there takes `reserved` boxes, so a name never
+lands on a pinned photograph.

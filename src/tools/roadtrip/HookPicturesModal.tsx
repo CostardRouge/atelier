@@ -37,6 +37,11 @@ interface HookPicturesModalProps {
   ctx: HookContext;
   /** What the variant holds now; ticked on open. */
   selected: readonly HookPickedPicture[];
+  /**
+   * Open on the piece's own day as well as the days before it — what a variant
+   * whose pictures are not a run-up to the piece asks for (`defaultSpan`).
+   */
+  includeThisDay?: boolean;
   onCancel: () => void;
   onConfirm: (picked: HookPickedPicture[]) => void;
 }
@@ -173,12 +178,20 @@ function rowCandidate(row: WinnowAssetRow, host: string): Candidate | null {
  * (`frontend.md`). Rendered through a portal: it opens from inside the
  * inspector, which is a sheet of its own on a phone.
  */
-export default function HookPicturesModal({ ctx, selected, onCancel, onConfirm }: HookPicturesModalProps) {
+export default function HookPicturesModal({
+  ctx,
+  selected,
+  includeThisDay = false,
+  onCancel,
+  onConfirm,
+}: HookPicturesModalProps) {
   const lib = useAssetLibrary();
   const { connection, client } = useWinnowConnection();
   const calendar = useMemo(() => ctx.calendar ?? [], [ctx.calendar]);
   const reach = reachSpan(calendar, ctx.date);
-  const [span, setSpan] = useState<DateSpan | null>(() => defaultSpan(calendar, ctx.date, selected));
+  const [span, setSpan] = useState<DateSpan | null>(() =>
+    defaultSpan(calendar, ctx.date, selected, includeThisDay),
+  );
   const quick = useMemo(() => quickSpans(calendar, ctx.date, ctx.stages), [calendar, ctx.date, ctx.stages]);
 
   const library = useLibraryCandidates(lib.assets);

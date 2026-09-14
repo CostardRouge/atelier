@@ -18,6 +18,7 @@ import {
   type BadgeSource,
 } from './badge-render';
 import { deckSlides, slideFileName, type DeckSlide } from './deck';
+import type { HookPicture } from './hooks/hook-variant';
 import { slideRender } from './slide-render';
 import type { TripDoc, TripPost } from './trip-types';
 
@@ -43,6 +44,12 @@ export interface RenderDeckOptions {
    * no picture, so it is never graded.
    */
   lutFor?: (slide: DeckSlide) => CubeLut | null;
+  /**
+   * The pictures the piece's opener asked for, already decoded. An itinerary
+   * shows its stops' photographs at rest, so a deck rendered without them
+   * would deliver a map the stage did not show.
+   */
+  pictures?: ReadonlyMap<string, HookPicture>;
   /**
    * Which slides to render. Absent renders the whole deck, which is what the
    * PNG export has always done; the piece export passes the stills only,
@@ -77,7 +84,7 @@ export async function renderDeck(
         // What this slide is made of — the badge, a caption or the trip's
         // card, each with its own framing — derived exactly as the stage and
         // the rail's thumbnails derive it.
-        ...slideRender(trip, post, slide, aspect),
+        ...slideRender(trip, post, slide, aspect, opts.pictures),
         source,
         timeSeconds: slide.kind === 'hook' ? opts.timeSeconds : 0,
         width: w,

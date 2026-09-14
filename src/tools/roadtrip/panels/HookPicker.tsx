@@ -24,6 +24,7 @@ import {
   type HookContext,
   type HookLayer,
   type HookPanelHost,
+  type HookPictureChoice,
   type HookPickedPicture,
   type HookPictureStatus,
   type HookVariant,
@@ -48,6 +49,7 @@ interface HookPickerProps {
 
 interface ChooseRequest {
   selected: readonly HookPickedPicture[];
+  choice: HookPictureChoice;
   resolve: (picked: HookPickedPicture[] | null) => void;
 }
 
@@ -64,8 +66,10 @@ export default function HookPicker({
 
   const [choosing, setChoosing] = useState<ChooseRequest | null>(null);
   const choosePictures = useCallback(
-    (selected: readonly HookPickedPicture[]) =>
-      new Promise<HookPickedPicture[] | null>((resolve) => setChoosing({ selected, resolve })),
+    (selected: readonly HookPickedPicture[], choice: HookPictureChoice = {}) =>
+      new Promise<HookPickedPicture[] | null>((resolve) =>
+        setChoosing({ selected, choice, resolve }),
+      ),
     [],
   );
   const host = useMemo<HookPanelHost>(
@@ -131,6 +135,7 @@ export default function HookPicker({
         <HookPicturesModal
           ctx={ctx}
           selected={choosing.selected}
+          includeThisDay={choosing.choice.includeThisDay}
           onCancel={() => settle(null)}
           onConfirm={(picked) => settle(picked)}
         />

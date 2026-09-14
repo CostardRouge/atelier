@@ -28,7 +28,7 @@ import type { HookBlock, Shade } from './shades';
 import { resolveHook } from './hooks/registry';
 import { hookContextFor } from './hooks/hook-context';
 import { hookElementsAt, type ElementsAt } from './hooks/hook-elements';
-import type { ResolvedHook } from './hooks/hook-variant';
+import type { HookPicture, ResolvedHook } from './hooks/hook-variant';
 import type { TripDoc, TripPost } from './trip-types';
 
 /** What one slide is made of, bar its picture, its grade and its clock. */
@@ -61,6 +61,11 @@ export function slideRender(
   post: TripPost,
   slide: DeckSlide,
   aspect: number,
+  /**
+   * The pictures the opener asked for, already decoded (`use-hook-pictures`).
+   * Passed in, never fetched: this module stays pure and DOM-free.
+   */
+  pictures?: ReadonlyMap<string, HookPicture>,
 ): SlideRender {
   if (slide.kind === 'cta') {
     const cta = ctaLayout(trip.cta, aspect);
@@ -104,9 +109,12 @@ export function slideRender(
     overrides: post.badge.textOverrides,
   });
 
-  // No pictures here: this module is pure, and every still it feeds is drawn
-  // settled — past the sweep, where a scrub shows the piece's own picture.
-  const hook = resolveHook(post.badge.hook, hookContextFor(trip, post, aspect, content));
+  // The opener's pictures reach it here or not at all. A sweep does not need
+  // them in a still — it is drawn settled, past the sweep, where the piece's
+  // own picture is the frame — but an ITINERARY still shows its stops' photos
+  // at rest, pinned or on a card. A caller with none (a pure test, a surface
+  // that has not decoded yet) gets a map without them rather than a stand-in.
+  const hook = resolveHook(post.badge.hook, hookContextFor(trip, post, aspect, content, pictures));
 
   return {
     elements: content
