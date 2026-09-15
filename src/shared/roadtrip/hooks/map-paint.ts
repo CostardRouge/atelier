@@ -55,6 +55,7 @@ import {
   pinAlphaAt,
   quadAt,
   quadSplit,
+  quadTail,
   stopPictureKey,
   wantsLabel,
   type Box,
@@ -128,30 +129,48 @@ export function paintMap(
     const from = points[i].at;
     return { from, to: to.at, control: arcControl(from, to.at, o.curve) };
   });
-  const strokeHops = (pass: 'under' | 'line') => {
+  /**
+   * The path, in two layers: what is still to come, then what the pen has
+   * drawn over it.
+   *
+   * The remainder of the hop the pen is ON belongs to the first layer — which
+   * is the whole point. Drawing only up to the pen erased the faint line
+   * exactly where the eye was following it, so the shape of the journey
+   * stopped being readable the moment it started being drawn. Now the ahead
+   * style is the line's bed and the pen fills it in.
+   */
+  const strokeLayer = (layer: 'ahead' | 'drawn', pass: 'under' | 'line') => {
     arcs.forEach((arc, i) => {
-      const f = fractions[i] ?? 0;
-      const ahead = f <= 0;
-      if (ahead && o.aheadStyle === 'hidden') return;
-      const drawn = ahead ? 1 : f;
-      const part = quadSplit(arc.from, arc.control, arc.to, drawn);
-      g.globalAlpha = ahead ? (o.aheadStyle === 'faint' ? 0.3 : 0.5) : 1;
-      g.setLineDash(ahead && o.aheadStyle === 'dashed' ? AHEAD_DASH.map((d) => d * u) : []);
+      const f = Math.max(0, Math.min(1, fractions[i] ?? 0));
+      if (layer === 'ahead' ? f >= 1 : f <= 0) return;
+      g.globalAlpha = layer === 'ahead' ? (o.aheadStyle === 'faint' ? 0.3 : 0.5) : 1;
+      g.setLineDash(layer === 'ahead' && o.aheadStyle === 'dashed' ? AHEAD_DASH.map((d) => d * u) : []);
       g.beginPath();
-      g.moveTo(arc.from.x, arc.from.y);
-      g.quadraticCurveTo(part.control.x, part.control.y, part.end.x, part.end.y);
+      if (layer === 'ahead') {
+        const tail = quadTail(arc.from, arc.control, arc.to, f);
+        g.moveTo(tail.start.x, tail.start.y);
+        g.quadraticCurveTo(tail.control.x, tail.control.y, tail.end.x, tail.end.y);
+      } else {
+        const part = quadSplit(arc.from, arc.control, arc.to, f);
+        g.moveTo(arc.from.x, arc.from.y);
+        g.quadraticCurveTo(part.control.x, part.control.y, part.end.x, part.end.y);
+      }
       if (pass === 'under') {
         g.strokeStyle = UNDERLAY;
         g.lineWidth = (6 * o.lineWidth + 4) * u;
       } else {
-        g.strokeStyle = ahead ? hexToRgba(o.aheadColor, 0.85) : o.pathColor;
-        g.lineWidth = (ahead ? 3.5 : 6) * o.lineWidth * u;
+        g.strokeStyle = layer === 'ahead' ? hexToRgba(o.aheadColor, 0.85) : o.pathColor;
+        g.lineWidth = (layer === 'ahead' ? 3.5 : 6) * o.lineWidth * u;
       }
       g.stroke();
     });
   };
-  if (o.underlay) strokeHops('under');
-  strokeHops('line');
+  if (o.aheadStyle !== 'hidden') {
+    if (o.underlay) strokeLayer('ahead', 'under');
+    strokeLayer('ahead', 'line');
+  }
+  if (o.underlay) strokeLayer('drawn', 'under');
+  strokeLayer('drawn', 'line');
   g.setLineDash([]);
 
   // --- the trip's other places, faint behind the itinerary -------------------
