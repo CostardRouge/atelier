@@ -265,6 +265,8 @@ Verified in headless Chromium: the sheet opens on the trip's own values, the imp
 
 **Names can ACCUMULATE behind the pen (2026-09-15).** `labels` gained `passed` — every stop the pen has reached keeps its name — beside `current`, which names only where the pen is. Both readings are wanted (a list being written vs. one name following the pen), which is why this is a list of modes and not a switch; `all` was the only way to see more than one name, and it says every name from the first frame, which is a different picture again.
 
+**A pinned picture's STEM is drawn under the dot (2026-09-15).** The maintainer, looking at a real piece: *"the picture stem should be displayed un[der] the place dot"*. It was painted with its tile, after the dots, so the hairline crossed the numbered disc and read as a line THROUGH the place rather than as a picture belonging to it. The pins are now LAID OUT before the stops are drawn (`layoutPins`) and painted in two halves on either side of them — stem under, tile over. The rule for anything that points at a marker: the marker is the last thing drawn where they meet.
+
 **Traps, all three measured in the browser:**
 
 - **A pin covers what is under it.** Two stops a degree apart put the second's dot (and the hop reaching it) under the first's photograph — Exmouth vanished from the first render. A pin spot is now rejected if it covers ANOTHER stop's dot, on top of the frame and other-pin tests; the placement order is above, right, left, below, then dropped. The names use the same rule and take the placed pins as `reserved` boxes, so a name never lands on a photograph. That placer moved to `label-place.ts` (route-plan re-exports it) — the `easing.ts` / `tick-kits.ts` pattern, on its second consumer.

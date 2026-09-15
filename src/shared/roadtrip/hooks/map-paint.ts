@@ -193,6 +193,29 @@ export function paintMap(
   // A numbered dot is a disc with a numeral in it, so it has to be big enough
   // to read one: at 1.55 the glyph came out at 12 px on a 1080-wide frame.
   const dotR = 7 * u * o.dotSize * (o.numbers ? 2.1 : 1);
+
+  // Where each pinned picture goes, decided BEFORE anything else about the
+  // stops is drawn: its stem runs under the dot and its tile over the map, so
+  // the two cannot be painted in one pass. The boxes are also what the names
+  // are placed around.
+  const pinned: LabelBox[] = [];
+  const pins =
+    o.media === 'pin'
+      ? layoutPins(o, timing, points, reached, pictureOf, media, t, u, frame, dotR, pinned)
+      : [];
+  // The stem first: a hairline that crosses the dot it points at reads as a
+  // line THROUGH the place rather than as a picture belonging to it.
+  for (const pin of pins) {
+    if (!o.pinStem) break;
+    g.globalAlpha = pin.alpha;
+    g.strokeStyle = o.pathColor;
+    g.lineWidth = 2 * u * o.lineWidth;
+    g.beginPath();
+    g.moveTo(pin.at.x, pin.at.y);
+    g.lineTo(pin.spot.x + pin.size / 2, pin.spot.y + pin.size / 2);
+    g.stroke();
+  }
+
   if (o.dots) {
     points.forEach(({ at, index }) => {
       const ahead = !reached[index];
@@ -220,13 +243,12 @@ export function paintMap(
     });
   }
 
-  // --- pictures pinned at their stops ---------------------------------------
-  // Placed before the names, and handed to the label placer as reserved boxes,
-  // so a name never lands on a photograph.
-  const pinned: LabelBox[] = [];
-  if (o.media === 'pin') {
-    paintPins(g, o, timing, points, reached, pictureOf, media, t, u, frame, dotR, pinned);
+  // --- the pinned pictures, over the map and over their own stems -----------
+  for (const pin of pins) {
+    g.globalAlpha = pin.alpha;
+    tile(g, pin.picture, pin.spot.x, pin.spot.y, pin.size, pin.size, o.mediaFrame, u);
   }
+  g.globalAlpha = 1;
 
   // --- the names ------------------------------------------------------------
   if (o.labels !== 'none') {
@@ -398,16 +420,29 @@ function paintGraticule(
   g.restore();
 }
 
+/** One pinned picture, once it is known where it goes. */
+interface PlacedPin {
+  /** The dot it belongs to. */
+  at: Point;
+  /** The tile's top-left corner, and its side. */
+  spot: Point;
+  size: number;
+  alpha: number;
+  picture: HookPicture;
+}
+
 /**
- * The pictures pinned beside their dots. Each is tried above its dot, then
- * right, left, below, and DROPPED if it would leave the frame, overlap a pin
+ * Where the pinned pictures go. Each is tried above its dot, then right,
+ * left, below, and DROPPED if it would leave the frame, overlap a pin
  * already placed, or cover ANOTHER stop's dot — the rule the names follow,
  * for the same reason, plus one the names do not need: two stops a degree
  * apart put the second one's dot under the first one's photograph, and a
  * stop hidden behind a picture reads as a stop that is not on the itinerary.
+ *
+ * Laying them out is separate from drawing them because the two halves sit on
+ * opposite sides of the dots: the stem under, the tile over.
  */
-function paintPins(
-  g: HookCtx2D,
+function layoutPins(
   o: MapOptions,
   timing: MapTiming,
   points: readonly Painted[],
@@ -419,7 +454,8 @@ function paintPins(
   frame: FrameBox,
   dotR: number,
   placed: LabelBox[],
-): void {
+): PlacedPin[] {
+  const pins: PlacedPin[] = [];
   const size = PIN * u * o.mediaSize;
   const gap = dotR + 14 * u;
   for (const { at, index } of points) {
@@ -455,18 +491,9 @@ function paintPins(
     });
     if (!spot) continue;
     placed.push({ x0: spot.x, y0: spot.y, x1: spot.x + size, y1: spot.y + size });
-    g.globalAlpha = alpha;
-    if (o.pinStem) {
-      g.strokeStyle = o.pathColor;
-      g.lineWidth = 2 * u * o.lineWidth;
-      g.beginPath();
-      g.moveTo(at.x, at.y);
-      g.lineTo(spot.x + size / 2, spot.y + size / 2);
-      g.stroke();
-    }
-    tile(g, picture, spot.x, spot.y, size, size, o.mediaFrame, u);
+    pins.push({ at, spot, size, alpha, picture });
   }
-  g.globalAlpha = 1;
+  return pins;
 }
 
 /**
