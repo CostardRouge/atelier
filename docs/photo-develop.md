@@ -9,7 +9,9 @@ tab's settled row, the same sheet over a photo or a clip) and the
 time-savers of §8 (P4 — the session clipboard, the trip's presets, the
 apply-to verbs) are in; the decisions they fixed are in `media-pipeline.md`,
 `roadtrip.md` and `studio.md`. P5 onwards is still the plan, and choices 5–7
-of §11 are still open. Written from the
+of §11 are still open. **2026-09-15: how a develop reaches the ORIGINAL
+(full-size render vs RAW, and the `base` a develop is tuned on) is proposed in
+`docs/develop-originals.md`, which refines P5–P7 below.** Written from the
 maintainer's brief of the same day (*"un mini éditeur de photos… luminosité,
 contraste, exposition, saturation, brillance… highlights, whites, darks,
 shadows… des DNG… ça doit marcher aussi avec la source Winnow… des LUTs sur les
