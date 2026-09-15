@@ -95,8 +95,9 @@ const MIN_LENGTH = MIN_HOOK_SECONDS / 4;
 const FRAME_STEP = 1 / 30;
 const MIN_CELL_PX = 26;
 const GAP_PX = 2;
-/** The height a cell's thumbnail is drawn at, for the frames of a clip. */
-const CELL_PX = 40;
+/** A cell's height: the 56px band less its 1px border and the cell's 10px/6px
+ *  insets. Its tiles are sized on it, so they keep the slide's aspect. */
+const CELL_PX = 38;
 const TAP_SLOP_PX = 5;
 const SNAP_PX = 10;
 
@@ -468,7 +469,14 @@ export default function DeckStrip({
               if (!s) return null;
               const thumb = thumbFor(s);
               const video = s.medium === 'video';
-              const frame = Math.max(12, Math.round(CELL_PX * aspect));
+              // Every cell repeats its picture along its length, so a long
+              // still reads as the picture held rather than one tile and
+              // paper. A clip's tiles are frames, split by dark rules; a
+              // still's are the same picture again, split by paper. A still's
+              // cell has a 1px dashed border, so its tile is sized on the
+              // height inside it.
+              const frame = Math.max(12, Math.round((video ? CELL_PX : CELL_PX - 2) * aspect));
+              const rule = video ? 'rgba(0,0,0,0.55)' : 'var(--color-paper)';
               const label =
                 (s.kind === 'hook' ? 'Hook' : s.kind === 'cta' ? 'End' : String(s.position)) +
                 ` ${seconds(lengths[i] ?? 0)}` +
@@ -483,12 +491,10 @@ export default function DeckStrip({
                     left: cell.left,
                     width: cell.width,
                     backgroundImage: thumb
-                      ? video
-                        ? `repeating-linear-gradient(90deg, rgba(0,0,0,0.55) 0 1px, transparent 1px ${frame}px), url(${thumb})`
-                        : `url(${thumb})`
+                      ? `repeating-linear-gradient(90deg, ${rule} 0 1px, transparent 1px ${frame}px), url(${thumb})`
                       : undefined,
-                    backgroundSize: thumb ? (video ? `auto, ${frame}px 100%` : 'auto 100%') : undefined,
-                    backgroundRepeat: thumb ? (video ? 'repeat, repeat-x' : 'no-repeat') : undefined,
+                    backgroundSize: thumb ? `auto, ${frame}px 100%` : undefined,
+                    backgroundRepeat: thumb ? 'repeat, repeat-x' : undefined,
                   }}
                   aria-hidden="true"
                 >
