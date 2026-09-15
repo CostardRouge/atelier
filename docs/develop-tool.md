@@ -1,9 +1,9 @@
 # Develop — the third editor
 
 **Status (2026-09-16): the direction and eight choices are DECIDED by the
-maintainer (§2, §8); the shared foundations and D1–D5 are BUILT — the tool
-exists with its gallery and a contact-sheet roll screen over the modal sheet;
-the full-screen editor (D6) is next.** From
+maintainer (§2, §8); the shared foundations and D1–D6 are BUILT — the tool
+has its gallery and its full-screen editor (stage, filmstrip, the Develop
+inspector); batch (D7) is next.** From
 his brief of the same day (*"un troisième outil officiel de développement
 d'images … à peu près la même interface que la modale … je n'ai pas envie de
 réinventer la roue … si des choses communes peuvent être développées, on
@@ -102,7 +102,7 @@ interface RollPicture {
   bucket's key is `(app, id)` and two accounts on one instance would collide; a
   second device finds it by listing the kind. The same `doc-sync` reducer,
   its sentence drawn in the presets section with a "keep on" picker (built:
-  `use-preset-book.ts`, `develop.md`).
+  `use-preset-book.ts`, `develop-roll.md`).
 - **Every host reads and writes the book** through `savePresetIn` /
   `removePresetFrom`; a 412 is merged by name (`mergeBooks`) and pushed again,
   never shown as a conflict.
@@ -185,11 +185,13 @@ interface RollPicture {
 - **D5 — the tool shell** — **BUILT 2026-09-16**: registry entry, routes
   (`develop-route.ts` + spec), `RollGallery` over `useDocumentGallery`,
   `NewRollModal`, the Home door lookup (`DOORS`), `DocCount.rolls`; the roll
-  screen is a CONTACT SHEET that opens the modal `DevelopSheet` over the roll's
-  look (`use-roll-grade.ts`), so a roll can be developed before D6 — which
-  replaces the sheet by the full-screen layout of the same blocks.
-- **D6 — the editor**: stage + filmstrip + Develop tab from the workbench
-  blocks, the per-picture `key`, keyboard.
+  screen was first a contact sheet over the modal sheet, replaced by D6.
+- **D6 — the editor** — **BUILT 2026-09-16**: `RollEditor` + `PictureWorkbench`
+  + `Filmstrip` over the workbench blocks, `roll-editor.ts` + spec (keys,
+  stepping, removal, develop equality); write-through with no Done, one
+  updater, a history-replacing step, the open cell redrawn as delivered, the
+  inspector a sheet on a phone. Only the Develop inspector exists: the Crop and
+  Export tabs arrive with D8 and D9, so no empty tab is drawn before them.
 - **D7 — batch**: selection, apply / paste to selection, counts in labels.
 - **D8 — crop**: framing on the stage and the Crop tab.
 - **D9 — export**: framing-aware still export, full decode (the originals

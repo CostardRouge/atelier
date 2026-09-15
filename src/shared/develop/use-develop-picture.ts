@@ -3,6 +3,7 @@ import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
 import { holdGrades, type HeldGrader } from '../lut/held-grader';
 import { stageFrameSize } from '../overlay/stage-size';
+import { THUMB_LONG_EDGE, THUMB_QUALITY, thumbSize } from '../roadtrip/thumbnail';
 import { boundSource, loadBadgeSource, type BadgeSource } from '../roadtrip/badge-render';
 import { usePictureZoom, type PictureZoom } from '../ui/use-picture-zoom';
 import { HISTOGRAM_SAMPLE_EDGE, luminanceHistogram, type Histogram } from './histogram';
@@ -46,6 +47,12 @@ export interface DevelopPicture {
   histogram: Histogram | null;
   /** Where the divider and its handle are drawn, in viewport pixels. */
   divider: { x: number; top: number; bottom: number };
+  /**
+   * A small JPEG of the picture AS DELIVERED — graded, whole, never the split
+   * or "before" — for a filmstrip cell or a gallery card. Null while nothing is
+   * decoded, or when the browser refuses the encode.
+   */
+  snapshot: (longEdge?: number) => Promise<Blob | null>;
   /** The wipe gesture, for the viewport element. */
   handlers: {
     onPointerDown: (e: ReactPointerEvent<HTMLElement>) => void;
@@ -202,6 +209,33 @@ export function useDevelopPicture({
     };
   }, [source, cube, graderFor]);
 
+  // Read through refs: a snapshot is asked for after a quiet delay, and must
+  // take the cube of THAT moment, not the one the closure was made with.
+  const latest = useRef({ source, cube });
+  latest.current = { source, cube };
+  const snapshot = useCallback(
+    async (longEdge = THUMB_LONG_EDGE): Promise<Blob | null> => {
+      const { source: s, cube: lut } = latest.current;
+      if (!s || s.width <= 0 || s.height <= 0) return null;
+      const { w, h } = thumbSize(s.width, s.height, longEdge);
+      const out = document.createElement('canvas');
+      out.width = w;
+      out.height = h;
+      const ctx = out.getContext('2d');
+      if (!ctx) return null;
+      try {
+        const grader = graderFor(lut, s);
+        const graded = grader ? grader.render(s.image) : s.image;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(graded, 0, 0, s.width, s.height, 0, 0, w, h);
+      } catch {
+        return null;
+      }
+      return new Promise((resolve) => out.toBlob(resolve, 'image/jpeg', THUMB_QUALITY));
+    },
+    [graderFor],
+  );
+
   const dragging = useRef<{ startX: number; live: boolean } | null>(null);
   const fingers = useRef(0);
   const zoomedRef = useRef(false);
@@ -276,6 +310,7 @@ export function useDevelopPicture({
     comparing: Boolean(source && cube && !holding),
     histogram,
     divider,
+    snapshot,
     handlers,
   };
 }

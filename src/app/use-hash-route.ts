@@ -24,9 +24,16 @@ export function useHashRoute(): string {
   return useSyncExternalStore(subscribe, currentPath, () => '');
 }
 
-/** Navigate to a route path (writes the hash; a no-op if already there). */
-export function navigate(path: string): void {
-  if (window.location.hash !== `#${path}`) window.location.hash = path;
+/**
+ * Navigate to a route path (writes the hash; a no-op if already there).
+ * `replace` swaps the current history entry instead of adding one — for a
+ * route that moves under a gesture repeated many times (stepping along a
+ * filmstrip), so Back leaves the screen rather than replaying every step.
+ */
+export function navigate(path: string, options: { replace?: boolean } = {}): void {
+  if (window.location.hash === `#${path}`) return;
+  if (options.replace) window.location.replace(`#${path}`);
+  else window.location.hash = path;
 }
 
 /**

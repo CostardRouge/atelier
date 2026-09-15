@@ -1,0 +1,77 @@
+import { describe, expect, it } from 'vitest';
+import { DEFAULT_DEVELOP } from './develop';
+import {
+  editorKeyAction,
+  openAfterRemoval,
+  openPictureId,
+  sameDevelop,
+  stepPicture,
+  type EditorKeyPress,
+} from './roll-editor';
+
+const strip = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+
+const press = (over: Partial<EditorKeyPress>): EditorKeyPress => ({
+  key: '',
+  repeat: false,
+  metaKey: false,
+  ctrlKey: false,
+  altKey: false,
+  shiftKey: false,
+  targetTypes: false,
+  hasSelection: false,
+  ...over,
+});
+
+describe('which picture is open', () => {
+  it('takes the route when it names a picture on the roll, else the first', () => {
+    expect(openPictureId(strip, 'b')).toBe('b');
+    expect(openPictureId(strip, 'gone')).toBe('a');
+    expect(openPictureId(strip, null)).toBe('a');
+    expect(openPictureId([], 'a')).toBeNull();
+  });
+
+  it('steps along the strip and stops at its ends', () => {
+    expect(stepPicture(strip, 'a', 1)).toBe('b');
+    expect(stepPicture(strip, 'c', 1)).toBe('c');
+    expect(stepPicture(strip, 'a', -1)).toBe('a');
+    expect(stepPicture(strip, null, 1)).toBe('b');
+    expect(stepPicture([], 'a', 1)).toBeNull();
+  });
+
+  it('opens the picture that takes the removed one’s place', () => {
+    expect(openAfterRemoval(strip, 'a', 'b')).toBe('b');
+    expect(openAfterRemoval(strip, 'b', 'b')).toBe('c');
+    expect(openAfterRemoval(strip, 'c', 'c')).toBe('b');
+    expect(openAfterRemoval([{ id: 'a' }], 'a', 'a')).toBeNull();
+  });
+});
+
+describe('sameDevelop', () => {
+  it('reads null and an untouched set as the same', () => {
+    expect(sameDevelop(null, { ...DEFAULT_DEVELOP })).toBe(true);
+    expect(sameDevelop({ ...DEFAULT_DEVELOP, exposure: 0.5 }, { ...DEFAULT_DEVELOP, exposure: 0.5 })).toBe(true);
+    expect(sameDevelop({ ...DEFAULT_DEVELOP, exposure: 0.5 }, null)).toBe(false);
+  });
+});
+
+describe('editorKeyAction', () => {
+  it('maps the editor keys', () => {
+    expect(editorKeyAction(press({ key: 'ArrowLeft' }))).toBe('previous');
+    expect(editorKeyAction(press({ key: 'ArrowRight', repeat: true }))).toBe('next');
+    expect(editorKeyAction(press({ key: '\\' }))).toBe('hold');
+    expect(editorKeyAction(press({ key: 'z' }))).toBe('zoom');
+    expect(editorKeyAction(press({ key: 'c', metaKey: true }))).toBe('copy');
+    expect(editorKeyAction(press({ key: 'V', ctrlKey: true }))).toBe('paste');
+  });
+
+  it('yields to a field, a selection, a held key and other chords', () => {
+    expect(editorKeyAction(press({ key: 'ArrowLeft', targetTypes: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'c', metaKey: true, hasSelection: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: '\\', repeat: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'z', metaKey: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'ArrowRight', shiftKey: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'c', metaKey: true, shiftKey: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'x' }))).toBeNull();
+  });
+});

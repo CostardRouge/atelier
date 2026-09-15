@@ -4,7 +4,8 @@ Read when you touch `src/shared/develop/`, the Develop modal in Trips or the
 Studio, or the Develop tool. The engine (the develop stage in the cube) is in
 `media-pipeline.md`; each host's storage rules are in `roadtrip.md` and
 `studio.md`; the tool's plan is `docs/develop-tool.md`; delivering from an
-original is `docs/develop-originals.md`.
+original is `docs/develop-originals.md`. The roll document, the preset book,
+the tool's shell and its editor are in `develop-roll.md`.
 
 ## The Develop tool is the third editor, over a roll (2026-09-15)
 
@@ -95,103 +96,3 @@ races it, whichever comes first. The bars are a fixed light over `bg-frame`,
 never a theme token: `paper` is dark in the darkroom. Verified in the Browser
 pane on a PNG with a known 6.25 % white block: `whites 6.3 %` at as shot, 28 %
 at +1.5 EV (over the hook's stored +0.7), none and `blacks 2.5 %` at −2 EV.
-
-## The roll is read ONE way, wherever it comes from (2026-09-15, D3)
-
-`roll-types.ts` (`RollDoc` v1), `roll-store.ts`, `roll-remote.ts`, `roll-file.ts`
-— the trip's twins, built before any screen. Rules a later phase must keep:
-(1) **one reader** — the store, the instance and the `.roll.json` all go
-through `readRollDoc`, which drops a picture whose ref names nothing, keeps
-the first of two entries with one id, and stores an as-shot develop, an
-untouched framing and an empty look as `null` (one spelling each, so
-"developed" and "has a look" are simple tests). (2) **a picture is added
-once** — `addPictures` dedupes by source id → hash → name and size, so adding a
-day again never duplicates what was already developed. (3) **the database is
-`atelier-develop` v1 with FOUR stores from the start** (`rolls`, `thumbs` keyed
-by PICTURE id, `sync`, `presets` for D4's book) so no later phase needs an
-upgrade transaction; thumbnails are pruned by whoever removes a picture or
-deletes a roll. (4) **a kind is asked for** — `remoteFor(sourceId, kind)` and
-`rollRemoteFor` return null for an instance whose `documents.kinds` does not
-name `roll` (`bucketHolds`; a bucket with no list is read as trip + project
-only), so an instance without Winnow's `43f01e9` hides rolls instead of a 400
-on the first push. The trip and project drivers still call `remoteFor(id)`
-without a kind — unchanged, since every bucket keeps them. (5) the file is a
-BACKUP (fresh id, importing source, refs and custom `.cube` text travel), the
-trip file's rule, and a newer version is refused. Verified: 19 specs, and the
-store round-tripped in the Browser pane (put/get/list, a thumbnail written and
-pruned, a sync record, the four stores present). **Winnow's side was committed
-without its typecheck**: that checkout has no `node_modules`.
-
-## The preset book is ONE live store every host reads (2026-09-15, D4)
-
-`preset-book.ts` (pure, tested), `preset-book-remote.ts` (kind `presets`),
-`use-preset-book.ts` (module state + `usePresetBookHost`). `DevelopSheet` draws
-the book when a host passes no `presets`, so Trips and the Studio get the same
-list with no host code; the tool will call `usePresetBookHost()` itself.
-Rules a later agent must keep:
-
-- **The id is a UUID, never a fixed `mine`.** Winnow's bucket key is
-  `(app, id)` — not per user — so a fixed id collides between two accounts on
-  one instance (the second gets a 404 on a foreign row). A second device finds
-  the book by LISTING kind `presets` when the person keeps theirs there, and
-  merges into that row's id.
-- **No conflict is ever handed to a person.** A 412 on push is pulled,
-  `mergeBooks`-ed (server order and id; the LOCAL copy of a name wins; local-only
-  names appended) and pushed again once; a record left in `conflict` heals on
-  the next trigger. The accepted cost: a preset deleted on one device can come
-  back from another's copy (no tombstones — a list of names is not worth them).
-- **A clean resume takes the server's copy; a dirty one merges.** A book the
-  instance no longer holds (another device took it home) stays here, kept in
-  this browser (`keepHere`) — never resurrected there on its own.
-- **Trips' old lists are merged in ONCE per trip** (`mergedTripIds`; the
-  book's numbers win on a name). `TripDoc.developPresets` stays on the
-  document and in `.roadtrip.json` but no host writes it any more — do not
-  "clean it up", a trip imported from an old file still carries a list to
-  merge. Trips' `savePreset` / `removePreset` wrappers are gone.
-- **Loaded lazily, once per tab**, when the first host subscribes — opening
-  the Studio or Trips never touches `listTrips` or the instance until a sheet
-  opens. Moving the book (`keepPresetBookOn`) is the person's gesture: the
-  target is written and acknowledged before the origin's copy is deleted, and
-  moving home deletes the instance's copy first (refused while unreachable).
-  The picker appears only when a second source keeps kind `presets`.
-
-Verified against the stub instance (`testing.md`'s recipe with `kinds`
-including `presets`): four trips merged into a fresh book; Keep on → list +
-PUT; a server-side change + a local save → PUT 412 → GET → PUT, both names
-kept; a reload with a clean record took the server's removal; a second book
-kept on the same instance merged into the first's row and its own row went; a
-move home sent DELETE with If-Match; a row deleted behind the browser's back
-came back as "kept in this browser". In the Trips sheet: the row, the picker
-moving it, "unsaved changes — saving to … shortly", then the idle PUT.
-
-## The tool shell opens a roll as a contact sheet over the modal (2026-09-16, D5)
-
-`tools/develop/`: `DevelopTool` (Trips' shell shape: route-addressed, 800 ms
-local debounce as `beforeFlush`, `useDocumentSync` with **`kind: 'roll'`** — the
-hook's new optional `kind`, so a roll is never pushed to a bucket that predates
-rolls), `RollGallery` (the project gallery over `useDocumentGallery`, the cover a
-mosaic of the first four thumbnails), `NewRollModal`, `RollScreen`,
-`use-roll-grade.ts`. Rules: (1) **routes** are `develop-route.ts`'s — the trip's
-`<slug>-<id8>` ref, so a rename keeps every link, and `/develop/<roll>/<picture>`
-IS the open sheet (Back closes it). (2) **The roll screen is a contact sheet
-that opens the MODAL sheet** — chosen so a roll is usable before D6; D6 swaps the
-sheet for the full-screen layout and must keep the route and the writers.
-(3) **The roll's look is one stack for every picture** (`useRollGrade`, Trips'
-`useTripGrade` with one scope): written back only when it differs from what was
-last restored, and an empty look is stored as `null`. (4) **Thumbnails are baked
-from the Library's FILE** (`roll-thumb.ts`), found per picture by
-`findMedia` (name → hash), one decode at a time, once per picture per visit —
-AS SHOT, not graded (D6 decides whether the strip shows the develop). A bake
-that lands after its run was superseded still sets the thumbnail: the picture
-is already marked tried. (5) **Apply to N other pictures** writes copies on its
-click and Done writes the open picture — the Trips rule, separate ticks.
-(6) A modal's Enter is `useDialogKeys`' on the window: a `<form>` with a submit
-button around a text field would run the create TWICE. Verified in the Browser
-pane: three dropped JPEGs → New roll with them → thumbnails baked → a picture
-developed at +0.80 EV and applied to the two others → "3 of 3 developed" after
-a reload (library empty, thumbnails from the store) → the card's cover → the
-Home door → `rolls 1` on `#/sources`; against the stub: Move to the instance
-(PUT), resume (GET with `If-None-Match`), a rename pushed after the idle with
-`If-Match`, Delete (DELETE with `If-Match`, thumbnails and record pruned). The sources
-ledger counts rolls (`DocCount.rolls`). Not measured on a phone; the compact
-gallery publishes New roll · Import to the bar.

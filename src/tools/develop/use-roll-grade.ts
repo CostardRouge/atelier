@@ -13,8 +13,11 @@ import type { RollDoc, RollGrade } from '../../shared/develop/roll-types';
  * still equal to that, nothing is written — otherwise the empty stack of a
  * restore in flight would wipe the stored look. An empty look is stored as
  * null, the roll reader's one spelling of "no look".
+ *
+ * The roll is read for its CURRENT look only; writing goes through the
+ * editor's updater.
  */
-export function useRollGrade(roll: RollDoc, onChange: (roll: RollDoc) => void): LutStack {
+export function useRollGrade(roll: RollDoc, update: (change: (roll: RollDoc) => RollDoc) => void): LutStack {
   const stack = useLutStack();
   const source: RollGrade = roll.grade ?? { layers: [], output: 'none' };
   const sourceKey = JSON.stringify(source);
@@ -27,8 +30,8 @@ export function useRollGrade(roll: RollDoc, onChange: (roll: RollDoc) => void): 
     // `source` is what `sourceKey` stringifies; `stack.restore` is stable.
   }, [sourceKey]);
 
-  const latest = useRef({ roll, onChange });
-  latest.current = { roll, onChange };
+  const latest = useRef(update);
+  latest.current = update;
   useEffect(() => {
     if (stack.busy) return;
     const saved: RollGrade = { layers: stack.toSaved(), output: stack.output };
@@ -36,8 +39,9 @@ export function useRollGrade(roll: RollDoc, onChange: (roll: RollDoc) => void): 
     if (key === agreed.current) return;
     agreed.current = key;
     const empty = saved.layers.length === 0 && saved.output === 'none';
-    const cur = latest.current;
-    cur.onChange({ ...cur.roll, grade: empty ? null : saved, updatedAt: Date.now() });
+    // An updater, so a look written in the same tick as a develop composes
+    // with it instead of replacing a roll that has already moved on.
+    latest.current((r) => ({ ...r, grade: empty ? null : saved, updatedAt: Date.now() }));
   }, [stack.layers, stack.output, stack.busy]);
 
   return stack;

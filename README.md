@@ -864,13 +864,18 @@ twice, so adding a day again only brings what is new. A roll holds a
 the file, so it reopens on another machine once the same pictures are in the
 Library there, and says *not in the Library* where they are not.
 
-**Developing.** A picture opens the same Develop sheet as Trips and the Studio
-— the sliders, the histogram, the before/after wipe and zoom, your presets —
-over the roll's look, which is edited in the sheet's Look section and saved on
-the roll. **Apply to N other pictures** writes the numbers onto the rest of the
-roll, each as its own copy; **Done** writes the picture in hand. The roll's
-contact sheet marks what is developed. The full-screen editor — a stage, a
-filmstrip with multi-select, crop, and export — comes next.
+**Developing.** A roll opens in its editor: the picture large, the roll as a
+filmstrip under it, and beside it the same controls as the Develop sheet in
+Trips and the Studio — the histogram, the sliders, your presets, the
+before/after wipe and zoom, and the roll's **look**, which dresses every
+picture after its own correction. There is no Done: what you set is saved on
+the roll as you go. **←/→** move along the strip, **\\** held shows the picture
+as shot, **Z** goes closer and back, **⌘C / ⌘V** copy a develop from one
+picture to the next, and **Apply to N other pictures** writes it onto the rest
+of the roll, each as its own copy. A filmstrip cell shows the picture as it was
+last seen in the editor, and a dot marks what is developed. On a phone the
+picture and the strip share the screen and the controls open from the bottom
+bar. Selecting several pictures, crop, and export come next.
 
 **Keeping it.** A roll saves as you go, and one kept on a Winnow saves there
 after a few seconds of quiet, with the same status pill as a trip; the gallery

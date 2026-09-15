@@ -22,14 +22,15 @@ import type { RollDoc } from '../../shared/develop/roll-types';
 import { requestPersistentStorage } from '../../shared/projects/project-store';
 import { useDocumentSync, type DocumentSyncDriver } from '../../shared/sources/use-document-sync';
 import RollGallery from './RollGallery';
-import RollScreen from './RollScreen';
+import RollEditor from './RollEditor';
 
 const SAVE_DEBOUNCE_MS = 800;
 
 /**
  * The Develop tool's shell — the suite's third editor (`docs/develop-tool.md`),
  * rolls-first like Trips: `/develop/home` lists them, `/develop/<roll>` opens
- * one, `/develop/<roll>/<picture>` a picture on it. Where you are lives in the
+ * one in the editor on its first picture, `/develop/<roll>/<picture>` on that
+ * picture. Where you are lives in the
  * route; only the shell knows about documents and persistence.
  *
  * Edits save LOCAL NOW (an 800 ms debounce into `atelier-develop`) and, for a
@@ -174,13 +175,14 @@ export default function DevelopTool() {
       {showGallery ? (
         <RollGallery openRollId={open?.id ?? null} onOpen={handleOpen} />
       ) : (
-        <RollScreen
+        <RollEditor
           key={open.id}
           roll={open}
           pictureId={route.pictureId}
           onBack={() => navigate(DEVELOP_HOME)}
           onChange={handleChange}
-          onOpenPicture={(id) => navigate(developPath(rollRef(open), id))}
+          // A step along the strip replaces the entry, so Back leaves the roll.
+          onOpenPicture={(id) => navigate(developPath(rollRef(open), id), { replace: true })}
           headerExtra={sync.pill}
         />
       )}
