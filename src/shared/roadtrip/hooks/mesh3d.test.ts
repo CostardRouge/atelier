@@ -164,6 +164,17 @@ describe('lighting / colours', () => {
     expect(north.highlight).toBe(0);
   });
 
+  it('adds a broad sheen by the key’s angle, not its cube, and leaves the default light alone', () => {
+    const n: [number, number, number] = [0, 0, 1];
+    const plain = lighting(n, DEFAULT_LIGHT);
+    const sheened = lighting(n, { ...DEFAULT_LIGHT, gloss: 0, sheen: 0.2 });
+    const k = Math.max(0, DEFAULT_LIGHT.key[2]);
+    expect(sheened.highlight).toBeCloseTo(0.2 * k, 9);
+    expect(sheened.shade).toBeCloseTo(plain.shade, 9);
+    expect(DEFAULT_LIGHT.sheen).toBeUndefined();
+    expect(plain.highlight).toBeCloseTo(DEFAULT_LIGHT.gloss * k ** 3, 9);
+  });
+
   it('reads a hex colour, and falls to grey for anything else', () => {
     expect(hexToRgb('#d9442a')).toEqual([217, 68, 42]);
     expect(hexToRgb('red')).toEqual([128, 128, 128]);

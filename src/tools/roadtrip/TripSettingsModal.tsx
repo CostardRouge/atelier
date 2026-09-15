@@ -20,16 +20,18 @@ import {
   type TripDoc,
   type TripPost,
 } from '../../shared/roadtrip/trip-types';
+import CarGaragePanel from './CarGaragePanel';
 import CtaPanel, { type CtaFieldRefs } from './CtaPanel';
 import { dangerLink, inputClass, smallButton } from './panels/ui';
 
 /** Which part of the sheet a click asked for. */
-export type TripSettingsSection = 'words' | 'cta' | 'defaults';
+export type TripSettingsSection = 'words' | 'cta' | 'defaults' | 'car';
 
 const SECTIONS: Array<{ id: TripSettingsSection; label: string }> = [
   { id: 'words', label: 'Words' },
   { id: 'cta', label: 'Closing card' },
   { id: 'defaults', label: 'New pieces' },
+  { id: 'car', label: 'Car' },
 ];
 
 interface TripSettingsModalProps {
@@ -56,7 +58,7 @@ interface TripSettingsModalProps {
  * about the piece again.
  *
  * A rail of sections beside one pane, rather than a single long scroll: the
- * three areas have nothing to do with each other, and a sheet you have to
+ * four areas have nothing to do with each other, and a sheet you have to
  * scroll to discover is the fault this whole pass is about. Under 820px the
  * sheet is the whole screen and shows ONE pane at a time — the rail, then the
  * section, with a way back — never both stacked in a height that cannot grow
@@ -343,6 +345,28 @@ export default function TripSettingsModal({
                     Nothing saved yet — new pieces start from the factory look.
                   </span>
                 )}
+              </>
+            )}
+
+            {open === 'car' && (
+              <>
+                <SectionLegend label="Car">
+                  <p>
+                    The car every Virée of this trip drives — one car, every piece —
+                    and it travels in the trip’s backup. A piece only chooses how big
+                    it is drawn and how the camera looks at it.
+                  </p>
+                  <p>
+                    Drag the car to turn it. The angle here is only a look: it is never
+                    kept, and never becomes a piece’s camera.
+                  </p>
+                </SectionLegend>
+                <div className="max-w-[32rem]">
+                  <CarGaragePanel
+                    value={trip.car}
+                    onChange={(car) => onChangeTrip({ ...trip, car })}
+                  />
+                </div>
               </>
             )}
           </div>

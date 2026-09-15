@@ -163,6 +163,13 @@ export interface Light {
   fillWeight: number;
   /** Strength of the highlight the key throws, 0..1. */
   gloss: number;
+  /**
+   * A broad, additive sheen from the key — light that a matte coating
+   * scatters back rather than reflects. A multiplier cannot lift a black
+   * surface, so a matte black car with no gloss would be a silhouette with
+   * inked edges; this is the term that keeps it a shape. Absent = none.
+   */
+  sheen?: number;
 }
 
 export const DEFAULT_LIGHT: Light = {
@@ -180,7 +187,7 @@ export function lighting(n: Vec3, light: Light): { shade: number; highlight: num
   const f = Math.max(0, dot(n, light.fill));
   return {
     shade: light.ambient + light.keyWeight * k + light.fillWeight * f,
-    highlight: light.gloss * k ** 3,
+    highlight: light.gloss * k ** 3 + (light.sheen ?? 0) * k,
   };
 }
 

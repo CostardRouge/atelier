@@ -81,14 +81,13 @@ export interface DriveOptions {
   /** Leave the cards on the map once the car has gone. */
   cardsStay: boolean;
   cardSize: number;
-  // --- car -------------------------------------------------------------------
-  carColor: string;
+  // --- car ---------------------------------------------------------------------
+  // The car itself — model, colour, finish, gear — is the TRIP's (`TripDoc.car`)
+  // and reaches the variant through `HookContext.car`; a piece keeps only how
+  // big it is drawn and how the camera looks at it.
   carSize: number;
   /** The camera's elevation over the map, degrees; 90 looks straight down. */
   tilt: number;
-  spare: boolean;
-  rack: boolean;
-  mirrors: boolean;
   // --- map -------------------------------------------------------------------
   ground: DriveGround;
   paperColor: string;
@@ -139,12 +138,8 @@ export const DRIVE_DEFAULTS: DriveOptions = {
   pauseEverywhere: false,
   cardsStay: true,
   cardSize: 1,
-  carColor: '#1c1c1e',
   carSize: 1,
   tilt: 58,
-  spare: true,
-  rack: false,
-  mirrors: true,
   ground: 'paper',
   paperColor: '#e8e2d4',
   inkColor: '#3a332a',
@@ -239,12 +234,8 @@ export function driveOptions(raw: Readonly<Record<string, unknown>>): DriveOptio
     pauseEverywhere: o.pauseEverywhere === true,
     cardsStay: o.cardsStay !== false,
     cardSize: clamp(Number(o.cardSize), L.cardSize.min, L.cardSize.max, d.cardSize),
-    carColor: hex(o.carColor, d.carColor),
     carSize: clamp(Number(o.carSize), L.carSize.min, L.carSize.max, d.carSize),
     tilt: clamp(Number(o.tilt), L.tilt.min, L.tilt.max, d.tilt),
-    spare: o.spare !== false,
-    rack: o.rack === true,
-    mirrors: o.mirrors !== false,
     ground: oneOf(o.ground, ['paper', 'picture'], d.ground),
     paperColor: hex(o.paperColor, d.paperColor),
     inkColor: hex(o.inkColor, d.inkColor),

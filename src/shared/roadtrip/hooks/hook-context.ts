@@ -33,6 +33,7 @@ export function hookContextFor(
     calendar: hookCalendar(trip, post.id),
     stages: hookStages(trip),
     pictures,
+    car: trip.car,
   };
 }
 

@@ -26,6 +26,8 @@ import {
   ToggleField,
   swatchClass,
 } from '../../ui/Inspector';
+import { DEFAULT_CAR, describeCar } from '../car-spec';
+import { carModel } from './car-registry';
 import {
   DRIVE_DEFAULTS,
   DRIVE_LIMITS,
@@ -111,6 +113,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
   const wants = driveWants(route, o);
   const status = host?.pictureStatus;
   const line = pictureLine(wants.map((w) => w.key), status);
+  const car = ctx.car ?? DEFAULT_CAR;
   const shown = route.stops.reduce((n, s) => n + s.pictures.length, 0);
   const located = stages.reduce((n, s) => n + s.places.length, 0);
   const pickedLocated = o.picked.filter((p) => p.coords).length;
@@ -331,14 +334,16 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
       </Group>
 
       <Group title="Car">
-        <FieldRow label="Colour">
-          <input type="color" value={o.carColor} onChange={(e) => set({ carColor: e.target.value })} className={swatchClass} aria-label="Car colour" />
-          {o.carColor !== DRIVE_DEFAULTS.carColor && (
-            <button type="button" onClick={() => set({ carColor: DRIVE_DEFAULTS.carColor })} className={resetLink}>
-              Reset
-            </button>
-          )}
-        </FieldRow>
+        <p className="m-0 text-xs text-ink-soft">{describeCar(car, carModel(car.model).name)}</p>
+        {host?.configureCar ? (
+          <div>
+            <Button size="sm" onClick={() => host.configureCar?.()}>
+              Configure the car…
+            </Button>
+          </div>
+        ) : (
+          <p className="m-0 text-xs text-muted">The car is set for the whole trip, in its settings.</p>
+        )}
         <FieldRow label="Size">
           <RangeField
             label="Car size"
@@ -360,19 +365,6 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             onChange={(tilt) => set({ tilt })}
             format={(v) => `${Math.round(v)}°`}
           />
-        </FieldRow>
-        <FieldRow label="Fittings" align="start">
-          <div className="flex flex-col gap-1.5">
-            <ToggleField label="Spare wheel on the tailgate" checked={o.spare} onChange={(spare) => set({ spare })}>
-              Spare on the tailgate
-            </ToggleField>
-            <ToggleField label="Roof rack" checked={o.rack} onChange={(rack) => set({ rack })}>
-              Roof rack
-            </ToggleField>
-            <ToggleField label="Door mirrors" checked={o.mirrors} onChange={(mirrors) => set({ mirrors })}>
-              Door mirrors
-            </ToggleField>
-          </div>
         </FieldRow>
       </Group>
 
@@ -683,7 +675,7 @@ export const driveVariant: HookVariant = {
     const route = driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o);
     const plan = drivePlan(route, o);
     if (!plan) return { seconds: 0 };
-    const scratch = driveScratch(o);
+    const scratch = driveScratch(ctx.car ?? DEFAULT_CAR);
     const follows = o.captionFollows && o.stopsOn === 'places' && route.stops.some((s) => s.name);
     return {
       seconds: plan.seconds,

@@ -40,6 +40,7 @@ import {
 import { createShade, vignetteShade, type Shade } from './shades';
 import { defaultHookLayers, type HookLayer } from './hooks/hook-variant';
 import { DEFAULT_CTA, type CtaSlide } from './cta-slide';
+import { defaultCarSpec, readCarSpec, type CarSpec } from './car-spec';
 import {
   DEFAULT_TIME_AGO_WORDS,
   FRENCH_TIME_AGO_WORDS,
@@ -53,7 +54,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 18;
+export const TRIP_DOC_VERSION = 19;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers and the
@@ -562,6 +563,13 @@ export interface TripDoc {
    * portable for the same reason.
    */
   developPresets: DevelopPreset[];
+  /**
+   * The car every Virée of this trip drives — its model, colour, finish and
+   * gear, dressed in the garage. On the TRIP because a journey has one car:
+   * a piece that drove a different one would be a different journey.
+   * Portable, so the backup carries it.
+   */
+  car: CarSpec;
   // --- bound half ----------------------------------------------------------
   /**
    * The source this trip belongs to — `'local'` for this browser
@@ -616,6 +624,7 @@ export function createTripDoc(
     grade: emptyGrade(),
     cover: defaultTripCover(),
     developPresets: [],
+    car: defaultCarSpec(),
     createdAt: now,
     updatedAt: now,
   };
@@ -750,6 +759,12 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * duration (an exit animation had nothing to land on without it), the picture
  * backdrop, the place marker and the reference day. A post that had the
  * boolean on lands on `auto` — the intent kept, the untrue anniversary dropped.
+ *
+ * v18 → v19 gives the trip its CAR (`TripDoc.car`): the model, the colour,
+ * the finish and the gear every Virée of the trip drives. Every stored trip
+ * lands on the maintainer's own car — the Prado in Raptor black, fully
+ * geared — which is what the opener drew before the field existed, so no
+ * piece changes what it draws.
  *
  * v17 → v18 gives every framing its mirror and its fit (`flipX`, `flipY`,
  * `fit`). Every stored picture lands unmirrored on `cover` — the crop it has
@@ -1075,6 +1090,12 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
         framing: normaliseFraming(slide.framing),
       })),
     }));
+  }
+
+  if (migrated.version < 19) {
+    // Read through `readCarSpec`: a document that never had a car lands on the
+    // default, junk lands on the default, a partial spec keeps what it says.
+    migrated.car = readCarSpec(migrated.car);
   }
 
   migrated.version = TRIP_DOC_VERSION;

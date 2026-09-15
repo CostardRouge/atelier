@@ -26,6 +26,7 @@
 
 import type { ComponentType } from 'react';
 import type { SavedMediaRef } from '../../projects/project-types';
+import type { CarSpec } from '../car-spec';
 import type { BadgeContent, BadgePiece, CounterMode } from '../day-badge';
 
 /** What the engine draws into — the 2D context both renderers already use. */
@@ -243,6 +244,11 @@ export interface HookContext {
    * stand-in.
    */
   pictures?: ReadonlyMap<string, HookPicture>;
+  /**
+   * The trip's car (`TripDoc.car`) — what a variant that drives one draws.
+   * A hand-built context without it drives the default car.
+   */
+  car?: CarSpec;
 }
 
 /** One sound the hook makes — see `shared/audio/sound-event.ts`. */
@@ -289,6 +295,11 @@ export interface HookPanelHost {
   choosePictures?(selected: readonly HookPickedPicture[]): Promise<HookPickedPicture[] | null>;
   /** How the pictures the variant asked for are coming along. */
   pictureStatus?: HookPictureStatus;
+  /**
+   * Open the garage — the sheet that dresses the TRIP's car. A panel may not
+   * write the trip itself; absent, the panel says where the car is set.
+   */
+  configureCar?(): void;
 }
 
 export interface HookPictureStatus {

@@ -22,7 +22,9 @@
  */
 
 import { drawFramed } from '../../media/framing';
-import { CAR_LENGTH, CAR_WIDTH, WHEEL_IDS, WHEEL_RADIUS, buildCar, carPalette } from './car-model';
+import type { CarSpec } from '../car-spec';
+import { carLight, carPalette } from './car-model';
+import { carModel, type CarModel } from './car-registry';
 import { hexToRgba } from './colour';
 import {
   CARD_FADE_SECONDS,
@@ -49,14 +51,25 @@ const CAR_PX = 118;
 /** A card's long edge in 1080-units at size 1. */
 const CARD_PX = 190;
 
-/** What a paint keeps between frames: the car's parts and the reveal buffer. */
+/**
+ * What a paint keeps between frames: the trip's car and its model, the parts
+ * — built on the FIRST paint, never in `prepare`, which `deckSlides` calls
+ * for every slide just to ask how long the hook is — and the reveal buffer.
+ */
 export interface DriveScratch {
-  car: Part[];
+  spec: CarSpec;
+  model: CarModel;
+  parts?: Part[];
   buffer?: OffscreenCanvas | HTMLCanvasElement;
 }
 
-export function driveScratch(o: DriveOptions): DriveScratch {
-  return { car: buildCar({ spare: o.spare, rack: o.rack, mirrors: o.mirrors }) };
+export function driveScratch(spec: CarSpec): DriveScratch {
+  return { spec, model: carModel(spec.model) };
+}
+
+function carParts(scratch: DriveScratch): Part[] {
+  if (!scratch.parts) scratch.parts = scratch.model.build(scratch.spec.gear);
+  return scratch.parts;
 }
 
 /** The box the route is fitted into, on a frame of `w`×`h`. */
@@ -286,15 +299,16 @@ function paintMap(
 
   // The car, its shadow first.
   {
+    const parts = carParts(scratch);
+    const { model, spec } = scratch;
     const p = at(moment.point);
     const heading = moment.heading;
     const len = Math.hypot(heading.x, heading.y) || 1;
-    const scale = carPx / CAR_LENGTH;
+    const scale = carPx / model.length;
     const travelled = moment.s * view.scale;
-    const spin = travelled / (WHEEL_RADIUS * scale);
+    const spin = travelled / (model.wheelRadius * scale);
     const spins: Record<string, number> = {};
-    for (const part of scratch.car) if (part.spin) spins[part.id] = -spin;
-    void WHEEL_IDS;
+    for (const part of parts) if (part.spin) spins[part.id] = -spin;
     const pose: Pose = {
       fx: heading.x / len,
       fy: -heading.y / len,
@@ -304,9 +318,9 @@ function paintMap(
       y: p.y,
       spins,
     };
-    paintGroundShadow(g, pose, CAR_LENGTH / 2, CAR_WIDTH / 2, onPaper ? 0.28 : 0.4);
-    paintMesh(g, renderOrder(scratch.car, pose), {
-      palette: carPalette(o.carColor),
+    paintGroundShadow(g, pose, model.length / 2, model.width / 2, onPaper ? 0.28 : 0.4);
+    paintMesh(g, renderOrder(parts, pose, carLight(spec.finish)), {
+      palette: carPalette(spec.color),
       ink: onPaper ? hexToRgba(o.inkColor, 0.85) : 'rgba(10,8,6,0.85)',
       outlineWidth: Math.max(0.9, carPx / 78),
     });

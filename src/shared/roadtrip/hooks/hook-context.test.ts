@@ -125,6 +125,7 @@ describe('the scrub through the shared context', () => {
   it('builds elements per frame only for a hook that rewrites', () => {
     const { trip, hero } = fixture();
     const ctx = hookContextFor(trip, hero, 9 / 16, content);
+    expect(ctx.car).toBe(trip.car);
     const plain = resolveHook(hero.badge.hook, ctx);
     expect(hookElementsAt(plain, content, DEFAULT_BADGE_LAYOUT, 9 / 16, {}, 4)).toBeNull();
 

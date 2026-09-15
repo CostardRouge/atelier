@@ -37,6 +37,7 @@
  * and downloading files stay in the UI.
  */
 
+import { readCarSpec } from './car-spec';
 import { isIsoDate } from './trip-days';
 import {
   TRIP_DOC_VERSION,
@@ -102,6 +103,7 @@ export function toTripFile(trip: TripDoc, exportedAt: number = Date.now()): Trip
     // The presets are the trip's habit of light, like its words; a piece's
     // own develop rides inside its post above.
     developPresets: structuredClone(trip.developPresets),
+    car: structuredClone(trip.car),
   };
 }
 
@@ -199,6 +201,8 @@ export function parseTripFile(text: string): ParseResult {
     developPresets: Array.isArray(raw.developPresets)
       ? (raw.developPresets as TripDoc['developPresets'])
       : base.developPresets,
+    // A validated read, never a cast: junk or nothing lands on the default car.
+    car: readCarSpec(raw.car),
   });
 
   return {
@@ -222,6 +226,7 @@ export function parseTripFile(text: string): ParseResult {
       grade: migrated.grade,
       cover: migrated.cover,
       developPresets: migrated.developPresets,
+      car: migrated.car,
     },
   };
 }
@@ -263,5 +268,6 @@ export function tripDocFromFile(
     // once had on the studio's intros.
     cover: structuredClone(file.cover),
     developPresets: structuredClone(file.developPresets),
+    car: structuredClone(file.car),
   };
 }

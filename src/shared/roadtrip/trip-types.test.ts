@@ -22,6 +22,7 @@ import { createShade } from './shades';
 import { DEFAULT_DEVELOP } from '../develop/develop';
 import { DEFAULT_FRAMING } from '../media/framing';
 import { DEFAULT_CTA } from './cta-slide';
+import { DEFAULT_CAR } from './car-spec';
 import { DEFAULT_BADGE_WORDS } from './day-badge';
 
 const stage = (
@@ -121,6 +122,10 @@ describe('migrateTripDoc', () => {
   it('is idempotent', () => {
     const once = migrateTripDoc(v1());
     expect(migrateTripDoc(once)).toEqual(once);
+  });
+
+  it('gives a v1 document the default car', () => {
+    expect(migrateTripDoc(v1()).car).toEqual(DEFAULT_CAR);
   });
 
   it('leaves a current document untouched', () => {
@@ -753,6 +758,37 @@ describe('framing (v12)', () => {
     const defaults = hookDefaultsFrom(badge);
     expect('framing' in defaults).toBe(false);
     expect(defaultPostBadge('reel', defaults).framing).toEqual(DEFAULT_FRAMING);
+  });
+});
+
+describe('migrateTripDoc — v18 → v19 (the trip’s car)', () => {
+  /** A v18 document: no car at all. */
+  const v18 = (car?: unknown) =>
+    ({
+      ...createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04'),
+      version: 18,
+      ...(car === undefined ? {} : { car }),
+    }) as unknown as TripDoc;
+
+  it('lands a trip that never had a car on the default one', () => {
+    const doc = migrateTripDoc(v18());
+    expect(doc.car).toEqual(DEFAULT_CAR);
+    expect(doc.version).toBe(TRIP_DOC_VERSION);
+  });
+
+  it('lands junk on the default and keeps what a partial spec says', () => {
+    expect(migrateTripDoc(v18('black')).car).toEqual(DEFAULT_CAR);
+    expect(migrateTripDoc(v18({ color: 'red', gear: 3 })).car).toEqual(DEFAULT_CAR);
+    const partial = migrateTripDoc(v18({ color: '#ff0000', gear: { bullBar: false } })).car;
+    expect(partial.color).toBe('#ff0000');
+    expect(partial.gear.bullBar).toBe(false);
+    expect(partial.gear.spare).toBe(true);
+    expect(partial.finish).toBe(DEFAULT_CAR.finish);
+  });
+
+  it('is idempotent', () => {
+    const once = migrateTripDoc(v18({ color: '#1f3b2f' }));
+    expect(migrateTripDoc(once)).toEqual(once);
   });
 });
 

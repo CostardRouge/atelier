@@ -47,6 +47,8 @@ interface LookTabProps {
   patchBadge: (patch: Partial<PostBadge>) => void;
   /** The trip's words live in its settings sheet now. */
   onOpenTripSettings: () => void;
+  /** Opens the trip's garage, for the opener that drives its car. */
+  onConfigureCar?: () => void;
 }
 
 /**
@@ -73,6 +75,7 @@ export default function LookTab({
   onChangeTrip,
   patchBadge,
   onOpenTripSettings,
+  onConfigureCar,
 }: LookTabProps) {
   const pieceStyle: BadgePieceStyle = post.badge.pieceStyles[piece] ?? {};
   const setPieceStyle = (style: BadgePieceStyle) =>
@@ -102,6 +105,7 @@ export default function LookTab({
             ctx={hookCtx}
             pictureStatus={hookPictureStatus}
             onChange={(hook) => patchBadge({ hook })}
+            onConfigureCar={onConfigureCar}
           />
         </InspectorSection>
       )}

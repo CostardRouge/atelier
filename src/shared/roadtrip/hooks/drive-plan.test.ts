@@ -103,7 +103,6 @@ describe('driveOptions', () => {
     const o = driveOptions({
       driveSeconds: 99,
       tilt: 10,
-      carColor: 'black',
       stopsOn: 'moon',
       camera: 'drone',
       picked: 'all',
@@ -111,11 +110,18 @@ describe('driveOptions', () => {
     });
     expect(o.driveSeconds).toBe(DRIVE_LIMITS.driveSeconds.max);
     expect(o.tilt).toBe(DRIVE_LIMITS.tilt.min);
-    expect(o.carColor).toBe(DRIVE_DEFAULTS.carColor);
     expect(o.stopsOn).toBe('places');
     expect(o.camera).toBe('whole');
     expect(o.picked).toEqual([]);
     expect(o.followZoom).toBe(DRIVE_LIMITS.followZoom.min);
+  });
+
+  it('ignores the car keys a piece once carried — the car is the trip’s now', () => {
+    const o = driveOptions({ carColor: '#ff0000', spare: false, rack: true, mirrors: false }) as unknown as Record<string, unknown>;
+    expect(o.carColor).toBeUndefined();
+    expect(o.spare).toBeUndefined();
+    expect(o.rack).toBeUndefined();
+    expect(o.mirrors).toBeUndefined();
   });
 
   it('reads a picked picture with its position', () => {
