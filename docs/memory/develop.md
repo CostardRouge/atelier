@@ -48,3 +48,14 @@ the Picture tab row.
 `Develop…`); Trips' Picture tab and the Studio's Grade tab carried the same
 markup twice and differed only in the id, the ⓘ and what opening does. A third
 host (the tool's inspector, a lightbox verb) draws it rather than a copy.
+
+## Writers that do not belong to a tool (2026-09-15)
+
+The list rules for presets (a taken name replaced in place keeping id and
+position; a blank name or an as-shot develop saves nothing and hands back the
+SAME list) are `develop-presets.ts`'s `savePresetIn` / `removePresetFrom`;
+Trips' `savePreset` / `removePreset` are wrappers over a trip. The personal
+preset list the maintainer chose for all three hosts (`docs/develop-tool.md`)
+is the same shape and must use them. The Studio's per-media map goes through
+ONE writer, `media-develop.ts`'s `writeDevelop` (Done and the batch verb had
+each a copy).

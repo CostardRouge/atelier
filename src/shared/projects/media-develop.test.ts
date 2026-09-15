@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_DEVELOP } from '../develop/develop';
-import { normaliseDevelops, restoreDevelop, saveDevelop } from './media-develop';
+import { normaliseDevelops, restoreDevelop, saveDevelop, writeDevelop } from './media-develop';
 
 const lifted = { ...DEFAULT_DEVELOP, exposure: 0.7 };
 
@@ -48,5 +48,20 @@ describe('normaliseDevelops', () => {
       a: { settings: lifted, hash: 'abc' },
       d: { settings: { ...DEFAULT_DEVELOP, blacks: -100 } },
     });
+  });
+});
+
+describe('writeDevelop', () => {
+  const lifted = { ...DEFAULT_DEVELOP, exposure: 0.4 };
+
+  it('writes a correction under its key, with the hash it was set against', () => {
+    const map = writeDevelop({}, 'DJI_0001', lifted, 'h1');
+    expect(map).toEqual({ DJI_0001: { settings: lifted, hash: 'h1' } });
+  });
+
+  it('removes a key put back to as shot, and hands back the same map when there was none', () => {
+    const map = writeDevelop({}, 'DJI_0001', lifted, 'h1');
+    expect(writeDevelop(map, 'DJI_0001', { ...DEFAULT_DEVELOP }, 'h1')).toEqual({});
+    expect(writeDevelop(map, 'DJI_0002', null, null)).toBe(map);
   });
 });

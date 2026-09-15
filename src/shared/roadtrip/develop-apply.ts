@@ -10,7 +10,8 @@
  * Pure and DOM-free.
  */
 
-import { isDefaultDevelop, type DevelopPreset, type DevelopSettings } from '../develop/develop';
+import { isDefaultDevelop, type DevelopSettings } from '../develop/develop';
+import { removePresetFrom, savePresetIn } from '../develop/develop-presets';
 import type { TripDoc, TripPost } from './trip-types';
 
 /** A develop as stored: a copy, or null for as shot. */
@@ -79,10 +80,9 @@ export function countDayPictures(trip: TripDoc, post: TripPost): number {
 // --- presets ---------------------------------------------------------------
 
 /**
- * The trip with a new preset holding a COPY of `settings` under `name`; a
- * name already taken is replaced in place, so "Save current as… Desert noon"
- * twice is one preset with the newer numbers. An as-shot develop saves
- * nothing — a preset of zeros is a button that does nothing.
+ * The trip with a new preset holding a COPY of `settings` under `name` — the
+ * list rules (a taken name replaced in place, nothing saved for a blank name
+ * or an as-shot develop) are `savePresetIn`'s, shared with every Develop host.
  */
 export function savePreset(
   trip: TripDoc,
@@ -90,23 +90,11 @@ export function savePreset(
   settings: DevelopSettings | null,
   id: string,
 ): TripDoc {
-  const value = stored(settings);
-  const label = name.trim();
-  if (!value || !label) return trip;
-  const existing = trip.developPresets.findIndex((p) => p.name === label);
-  const preset: DevelopPreset = {
-    id: existing >= 0 ? trip.developPresets[existing].id : id,
-    name: label,
-    settings: value,
-  };
-  const developPresets =
-    existing >= 0
-      ? trip.developPresets.map((p, i) => (i === existing ? preset : p))
-      : [...trip.developPresets, preset];
-  return { ...trip, developPresets };
+  const developPresets = savePresetIn(trip.developPresets, name, settings, id);
+  return developPresets === trip.developPresets ? trip : { ...trip, developPresets: [...developPresets] };
 }
 
 export function removePreset(trip: TripDoc, id: string): TripDoc {
-  if (!trip.developPresets.some((p) => p.id === id)) return trip;
-  return { ...trip, developPresets: trip.developPresets.filter((p) => p.id !== id) };
+  const developPresets = removePresetFrom(trip.developPresets, id);
+  return developPresets === trip.developPresets ? trip : { ...trip, developPresets: [...developPresets] };
 }

@@ -32,6 +32,27 @@ export function saveDevelop(
 }
 
 /**
+ * The project's develops map with `key`'s correction written — or removed when
+ * it is back to as shot. The same map comes back when there was nothing to
+ * remove, so a state setter can skip the render. The one writer both the open
+ * media (Done) and the batch verb (every other media, each under its own hash)
+ * go through.
+ */
+export function writeDevelop(
+  develops: Readonly<Record<string, SavedDevelop>>,
+  key: string,
+  settings: DevelopSettings | null,
+  hash: string | null | undefined,
+): Record<string, SavedDevelop> {
+  const saved = saveDevelop(settings, hash);
+  if (saved) return { ...develops, [key]: saved };
+  if (!(key in develops)) return develops as Record<string, SavedDevelop>;
+  const rest = { ...develops };
+  delete rest[key];
+  return rest;
+}
+
+/**
  * The develop to apply to a media, or null when there is none — or when the
  * saved one was set against a DIFFERENT file of the same name: both hashes
  * known and disagreeing means another take, and a correction made for one

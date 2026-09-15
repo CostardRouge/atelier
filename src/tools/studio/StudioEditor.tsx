@@ -102,7 +102,7 @@ import DevelopSheet from '../../shared/develop/DevelopSheet';
 import DevelopSection from '../../shared/develop/DevelopSection';
 import type { DevelopSettings } from '../../shared/develop/develop';
 import { pictureFidelity } from '../../shared/develop/picture-fidelity';
-import { restoreDevelop, saveDevelop, type SavedDevelop } from '../../shared/projects/media-develop';
+import { restoreDevelop, writeDevelop, type SavedDevelop } from '../../shared/projects/media-develop';
 import type { StyleTheme } from '../../shared/overlay/title-styles';
 import StylePanel from '../../shared/overlay/StylePanel';
 import ProjectSettingsModal, { type ProjectSettingsDraft } from './ProjectSettingsModal';
@@ -306,16 +306,7 @@ export default function StudioEditor({
   /** Write the open media's correction; null puts it back to as shot. */
   function setActiveDevelop(next: DevelopSettings | null) {
     if (!activeId) return;
-    setDevelops((prev) => {
-      const saved = saveDevelop(next, activeHash);
-      if (!saved) {
-        if (!prev[activeId]) return prev;
-        const rest = { ...prev };
-        delete rest[activeId];
-        return rest;
-      }
-      return { ...prev, [activeId]: saved };
-    });
+    setDevelops((prev) => writeDevelop(prev, activeId, next, activeHash));
   }
   // The sheet, and the clip's moment it opened on (a photograph has one).
   const [developOpen, setDevelopOpen] = useState(false);
@@ -344,16 +335,7 @@ export default function StudioEditor({
               run: (settings: DevelopSettings) => {
                 for (const m of otherMedia) {
                   void mediaHash(m.file).then((hash) => {
-                    setDevelops((prev) => {
-                      const saved = saveDevelop(settings, hash);
-                      if (!saved) {
-                        if (!prev[m.id]) return prev;
-                        const rest = { ...prev };
-                        delete rest[m.id];
-                        return rest;
-                      }
-                      return { ...prev, [m.id]: saved };
-                    });
+                    setDevelops((prev) => writeDevelop(prev, m.id, settings, hash));
                   });
                 }
               },
