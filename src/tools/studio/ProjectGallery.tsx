@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { formatDuration } from '../../shared/lib/format';
 import { useObjectUrl } from '../../shared/media/use-object-url';
 import {
@@ -29,29 +22,18 @@ import {
   parseProjectFile,
 } from '../../shared/projects/project-file';
 import {
+  PROJECT_DOC_KIND,
   deleteRemoteProject,
-  explainFailure,
-  failureOf,
-  isRemoteSource,
   listRemoteProjects,
   mirrorProject,
   moveProject,
   pushProject,
-  remoteFor,
   type RemoteProjectRow,
 } from '../../shared/projects/project-remote';
 import { pickFile } from '../../shared/sources/file-sources';
-import {
-  DEFAULT_SOURCE_ID,
-  groupBySource,
-  listSources,
-  sourceById,
-  type SourceInfo,
-} from '../../shared/sources/source';
-import {
-  listWinnowConnections,
-  subscribeWinnowConnections,
-} from '../../shared/sources/winnow/store';
+import { DEFAULT_SOURCE_ID, sourceById, type SourceInfo } from '../../shared/sources/source';
+import { sourceLabel } from '../../shared/sources/document-gallery';
+import { useDocumentGallery } from '../../shared/sources/use-document-gallery';
 import { DEFAULT_GUIDES } from '../../shared/overlay/guides';
 import { defaultElementsPreset } from '../../shared/overlay/overlay-types';
 import NewProjectModal, { type NewProjectChoices } from './NewProjectModal';
@@ -81,27 +63,6 @@ function formatWhen(ts: number): string {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-/**
- * The sources that can HOLD a project: this browser, plus every connected
- * instance whose capabilities say it has a document bucket. The connection
- * list is the argument only so a memo re-runs when a connection comes or
- * goes — `listSources()` is the store's mirror and reads nothing itself.
- */
-function documentSourcesFor(connections: readonly unknown[]): SourceInfo[] {
-  void connections;
-  return listSources().filter((s) => s.capabilities.documents);
-}
-
-/** What this device knows about one instance's list of projects. */
-type RemoteList =
-  | { status: 'loading' }
-  | { status: 'ok'; rows: RemoteProjectRow[] }
-  | { status: 'failed'; text: string; login?: string };
-
-function sourceLabel(id: string): string {
-  return id === DEFAULT_SOURCE_ID ? 'this browser' : (sourceById(id)?.label ?? id);
 }
 
 function ProjectCard({
@@ -322,19 +283,37 @@ export default function ProjectGallery({
   onOpen,
   onCreated,
 }: ProjectGalleryProps) {
-  const [projects, setProjects] = useState<ProjectDoc[] | null>(null);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [remoteLists, setRemoteLists] = useState<Record<string, RemoteList>>({});
-  const [busy, setBusy] = useState<Record<string, string>>({});
-
-  const connections = useSyncExternalStore(subscribeWinnowConnections, listWinnowConnections);
-  const documentSources = useMemo(() => documentSourcesFor(connections), [connections]);
-  const remoteSourceIds = useMemo(
-    () => documentSources.filter((s) => isRemoteSource(s.id)).map((s) => s.id),
-    [documentSources],
-  );
+  // The lists, the groups and the verbs that cross a source are shared with
+  // every document gallery (`use-document-gallery.ts`); this driver says how a
+  // project is listed, written and removed.
+  const gallery = useDocumentGallery<ProjectDoc, RemoteProjectRow>({
+    kind: PROJECT_DOC_KIND,
+    noun: 'project',
+    listLocal: listProjects,
+    listRemote: listRemoteProjects,
+    putDoc: putProject,
+    pushNew: (remote, doc) => pushProject(remote, doc, null),
+    getRecord: getSyncRecord,
+    deleteRecord: deleteSyncRecord,
+    deleteRemote: deleteRemoteProject,
+    deleteLocal: (doc) => deleteProject(doc.id),
+    mirror: mirrorProject,
+    move: moveProject,
+  });
+  const {
+    docs: projects,
+    documentSources,
+    refresh,
+    groups,
+    nothingAnywhere,
+    allListed,
+    busy,
+    notice,
+    setNotice,
+    createOn,
+  } = gallery;
 
   /**
    * Importing is two steps and the first one is a QUESTION — where the file
@@ -380,56 +359,6 @@ export default function ProjectGallery({
   );
 
 
-  const refresh = useCallback(() => {
-    void listProjects().then(setProjects);
-    for (const id of remoteSourceIds) {
-      const remote = remoteFor(id);
-      if (!remote) continue;
-      setRemoteLists((cur) => ({ ...cur, [id]: { status: 'loading' } }));
-      void listRemoteProjects(remote).then(
-        (rows) => setRemoteLists((cur) => ({ ...cur, [id]: { status: 'ok', rows } })),
-        (err: unknown) => {
-          const e = explainFailure(failureOf(err), remote);
-          setRemoteLists((cur) => ({ ...cur, [id]: { status: 'failed', ...e } }));
-        },
-      );
-    }
-  }, [remoteSourceIds]);
-
-  useEffect(refresh, [refresh]);
-
-  const setBusyFor = (id: string, text: string | null) =>
-    setBusy((cur) => {
-      const next = { ...cur };
-      if (text === null) delete next[id];
-      else next[id] = text;
-      return next;
-    });
-
-  /**
-   * A project on an instance is written THERE first — one gesture, one
-   * request, the result said. Nothing is kept here if the instance refused.
-   */
-  async function createOn(doc: ProjectDoc, verb: string): Promise<boolean> {
-    if (!isRemoteSource(doc.sourceId)) {
-      await putProject(doc);
-      return true;
-    }
-    const remote = remoteFor(doc.sourceId);
-    if (!remote) {
-      setNotice(`${doc.sourceId} is not connected — nothing was ${verb}.`);
-      return false;
-    }
-    const rec = await pushProject(remote, doc, null);
-    if (rec.status !== 'synced') {
-      await deleteSyncRecord(doc.id);
-      const why = rec.error ? `: ${rec.error}` : '';
-      setNotice(`Could not save to ${remote.label}${why} — nothing was ${verb}.`);
-      return false;
-    }
-    await putProject(doc);
-    return true;
-  }
 
   async function handleCreate(choices: NewProjectChoices) {
     setNotice(null);
@@ -501,53 +430,16 @@ export default function ProjectGallery({
    * reached: there are no tombstones.
    */
   async function handleDelete(doc: ProjectDoc, etagHint: string | null) {
-    setNotice(null);
-    if (isRemoteSource(doc.sourceId)) {
-      const remote = remoteFor(doc.sourceId);
-      if (!remote) {
-        setNotice(`Connect ${doc.sourceId} to delete this project — it is kept there.`);
-        return;
-      }
-      setBusyFor(doc.id, `deleting on ${remote.label}…`);
-      const etag = etagHint ?? (await getSyncRecord(doc.id))?.etag ?? null;
-      try {
-        await deleteRemoteProject(remote, doc.id, etag);
-      } catch (err) {
-        const f = failureOf(err);
-        if (f.kind !== 'notfound') {
-          setBusyFor(doc.id, null);
-          const e = explainFailure(f, remote);
-          setNotice(
-            f.kind === 'unreachable'
-              ? `Connect to ${remote.label} to delete this project — it is kept there.`
-              : `Could not delete on ${remote.label}: ${e.text}`,
-          );
-          return;
-        }
-      }
-    }
-    await deleteProject(doc.id);
-    await deleteSyncRecord(doc.id);
-    setBusyFor(doc.id, null);
-    refresh();
+    await gallery.remove(doc, etagHint);
   }
 
   async function handleMove(doc: ProjectDoc, targetSourceId: string) {
-    setNotice(null);
-    setBusyFor(doc.id, `moving to ${sourceLabel(targetSourceId)}…`);
-    const r = await moveProject(doc, targetSourceId);
-    setBusyFor(doc.id, null);
-    if (!r.ok) setNotice(r.error);
-    refresh();
+    await gallery.moveTo(doc, targetSourceId);
   }
 
   /** A project kept there and not here yet: pull, mirror, then open. */
   async function handleOpenRemote(row: RemoteProjectRow) {
-    setNotice(null);
-    setBusyFor(row.doc.id, `fetching from ${sourceLabel(row.doc.sourceId)}…`);
-    await mirrorProject(row.doc.sourceId, row.doc, row.etag);
-    setBusyFor(row.doc.id, null);
-    onOpen(row.doc);
+    onOpen(await gallery.mirrorRemote(row));
   }
 
   /** A new LOCAL project from another's portable half — a template is from no source. */
@@ -561,28 +453,6 @@ export default function ProjectGallery({
     );
     void putProject(doc).then(refresh);
   }
-
-  // One group per source: the local ones from `groupBySource`, plus every
-  // connected instance with a bucket even when nothing of it is mirrored yet,
-  // so its header can say "checking…" or why it could not answer.
-  const groups = useMemo(() => {
-    if (projects === null) return [];
-    const base = groupBySource(projects);
-    const seen = new Set(base.map((g) => g.id));
-    for (const id of remoteSourceIds) {
-      if (!seen.has(id)) base.push({ id, items: [] });
-    }
-    return base.map((g) => {
-      const list = remoteLists[g.id];
-      const mirrored = new Set(g.items.map((p) => p.id));
-      const remoteOnly =
-        list?.status === 'ok' ? list.rows.filter((r) => !mirrored.has(r.doc.id)) : [];
-      return { ...g, list, remoteOnly };
-    });
-  }, [projects, remoteSourceIds, remoteLists]);
-
-  const nothingAnywhere =
-    projects !== null && groups.every((g) => g.items.length === 0 && g.remoteOnly.length === 0);
 
   return (
     <section
@@ -634,7 +504,7 @@ export default function ProjectGallery({
 
       {projects === null ? (
         <LoadingState label="Loading projects…" />
-      ) : nothingAnywhere && remoteSourceIds.every((id) => remoteLists[id]?.status === 'ok') ? (
+      ) : nothingAnywhere && allListed ? (
         <EmptyState
           title="No projects yet"
           actions={

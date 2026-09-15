@@ -1,7 +1,7 @@
 # Develop — the third editor
 
 **Status (2026-09-15): the direction and eight choices are DECIDED by the
-maintainer (§2, §8); the shared foundations, D1, D2's sync half and D3 are
+maintainer (§2, §8); the shared foundations, D1, D2 and D3 are
 BUILT; the tool's screens are not.** From
 his brief of the same day (*"un troisième outil officiel de développement
 d'images … à peu près la même interface que la modale … je n'ai pas envie de
@@ -165,10 +165,9 @@ interface RollPicture {
   the modal's column. Useful before the tool exists.
 - **D2 — shared document plumbing**: `useDocumentSync`, gallery source helpers;
   Studio and Trips moved onto them, behaviour unchanged, their sync verified
-  against a stub instance (the `testing.md` recipe). **The sync half is BUILT
-  (2026-09-15, `c379211`: `use-document-sync.tsx` + `afterPull`); the gallery
-  half (source list, remote lists, create-on-source, delete-from-source) waits
-  for `ProjectGallery.tsx` to leave a parallel session's hands.**
+  against a stub instance (the `testing.md` recipe). **BUILT 2026-09-15**: the sync
+  half in `c379211` (`use-document-sync.tsx` + `afterPull`), the gallery half
+  right after (`document-gallery.ts` + `use-document-gallery.ts`).
 - **D3 — the roll model** — **BUILT 2026-09-15**: `roll-types.ts` + spec,
   `roll-store.ts` (DB `atelier-develop` v1: `rolls`, `thumbs`, `sync`,
   `presets`), `roll-remote.ts`, `roll-file.ts` + spec; `remoteFor(id, kind)`

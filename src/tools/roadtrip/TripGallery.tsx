@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
 import { tripCoverage, type TripCoverage } from '../../shared/roadtrip/trip-coverage';
 import {
@@ -27,17 +20,9 @@ import {
   tripFileName,
 } from '../../shared/roadtrip/trip-file';
 import { pickFile } from '../../shared/sources/file-sources';
-import {
-  DEFAULT_SOURCE_ID,
-  groupBySource,
-  listSources,
-  sourceById,
-  type SourceInfo,
-} from '../../shared/sources/source';
-import {
-  listWinnowConnections,
-  subscribeWinnowConnections,
-} from '../../shared/sources/winnow/store';
+import { DEFAULT_SOURCE_ID, sourceById, type SourceInfo } from '../../shared/sources/source';
+import { sourceLabel } from '../../shared/sources/document-gallery';
+import { useDocumentGallery } from '../../shared/sources/use-document-gallery';
 import { downloadBlob } from '../../shared/media/save';
 import {
   deleteSyncRecord,
@@ -48,9 +33,8 @@ import {
   putTrip,
 } from '../../shared/roadtrip/trip-store';
 import {
+  TRIP_DOC_KIND,
   deleteRemoteTrip,
-  explainFailure,
-  failureOf,
   isRemoteSource,
   listRemoteTrips,
   mirrorTrip,
@@ -87,27 +71,6 @@ interface TripGalleryProps {
    * to the store here would be overwritten by its next flush.
    */
   onChangeOpenTrip?: (doc: TripDoc) => void;
-}
-
-/**
- * The sources that can HOLD a trip: this browser, plus every connected
- * instance whose capabilities say it has a document bucket. The connection
- * list is the argument only so a memo re-runs when a connection comes or
- * goes — `listSources()` is the store's mirror and reads nothing itself.
- */
-function documentSourcesFor(connections: readonly unknown[]): SourceInfo[] {
-  void connections;
-  return listSources().filter((s) => s.capabilities.documents);
-}
-
-/** What this device knows about one instance's list of trips. */
-type RemoteList =
-  | { status: 'loading' }
-  | { status: 'ok'; rows: RemoteTripRow[] }
-  | { status: 'failed'; text: string; login?: string };
-
-function sourceLabel(id: string): string {
-  return id === DEFAULT_SOURCE_ID ? 'this browser' : (sourceById(id)?.label ?? id);
 }
 
 /** The trip this browser opened last (`TripCard`'s "last opened" tag). */
@@ -782,7 +745,6 @@ export default function TripGallery({
   onSeedFrom,
   onChangeOpenTrip,
 }: TripGalleryProps) {
-  const [trips, setTrips] = useState<TripDoc[] | null>(null);
   const [creating, setCreating] = useState(false);
   // Cards (the cover, the default) or Bands (progress rows under a resume
   // band). A reading preference of this browser: never on the document.
@@ -826,13 +788,44 @@ export default function TripGallery({
     [onOpen],
   );
   const [importing, setImporting] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [remoteLists, setRemoteLists] = useState<Record<string, RemoteList>>({});
-  const [busy, setBusy] = useState<Record<string, string>>({});
   const [covering, setCovering] = useState<TripDoc | null>(null);
 
-  const connections = useSyncExternalStore(subscribeWinnowConnections, listWinnowConnections);
-  const documentSources = useMemo(() => documentSourcesFor(connections), [connections]);
+  // The lists, the groups and the verbs that cross a source are shared with
+  // every document gallery (`use-document-gallery.ts`); this driver says how a
+  // trip is listed, written and removed — its hook thumbnails go with it.
+  const gallery = useDocumentGallery<TripDoc, RemoteTripRow>({
+    kind: TRIP_DOC_KIND,
+    noun: 'trip',
+    listLocal: listTrips,
+    listRemote: listRemoteTrips,
+    putDoc: putTrip,
+    pushNew: (remote, doc) => pushTrip(remote, doc, null),
+    getRecord: getSyncRecord,
+    deleteRecord: deleteSyncRecord,
+    deleteRemote: deleteRemoteTrip,
+    deleteLocal: async (trip) => {
+      await deleteTrip(trip.id);
+      // The hooks go with the trip: nothing else will ever prune them, and
+      // they are the only heavy values in the database.
+      await deleteThumbs(trip.posts.map((p) => p.id));
+    },
+    mirror: mirrorTrip,
+    move: moveTrip,
+  });
+  const {
+    docs: trips,
+    setDocs: setTrips,
+    documentSources,
+    refresh,
+    groups,
+    nothingAnywhere,
+    allListed,
+    busy,
+    setBusyFor,
+    notice,
+    setNotice,
+    createOn,
+  } = gallery;
   // `handleImport` is declared further down and is a fresh function on every
   // render, so the bar reads it through a ref rather than listing it as a
   // dependency — the same shape the transport and dialog keys use.
@@ -864,63 +857,7 @@ export default function TripGallery({
       [compact, documentSources.length],
     ),
   );
-  const remoteSourceIds = useMemo(
-    () => documentSources.filter((s) => isRemoteSource(s.id)).map((s) => s.id),
-    [documentSources],
-  );
-
   const { urls, hasThumb } = useCoverThumbs(trips);
-
-  const refresh = useCallback(() => {
-    void listTrips().then(setTrips);
-    for (const id of remoteSourceIds) {
-      const remote = remoteFor(id);
-      if (!remote) continue;
-      setRemoteLists((cur) => ({ ...cur, [id]: { status: 'loading' } }));
-      void listRemoteTrips(remote).then(
-        (rows) => setRemoteLists((cur) => ({ ...cur, [id]: { status: 'ok', rows } })),
-        (err: unknown) => {
-          const e = explainFailure(failureOf(err), remote);
-          setRemoteLists((cur) => ({ ...cur, [id]: { status: 'failed', ...e } }));
-        },
-      );
-    }
-  }, [remoteSourceIds]);
-
-  useEffect(refresh, [refresh]);
-
-  const setBusyFor = (id: string, text: string | null) =>
-    setBusy((cur) => {
-      const next = { ...cur };
-      if (text === null) delete next[id];
-      else next[id] = text;
-      return next;
-    });
-
-  /**
-   * A trip on an instance is written THERE first — one gesture, one request,
-   * the result said. Nothing is kept here if the instance refused.
-   */
-  async function createOn(doc: TripDoc, verb: string): Promise<boolean> {
-    if (!isRemoteSource(doc.sourceId)) {
-      await putTrip(doc);
-      return true;
-    }
-    const remote = remoteFor(doc.sourceId);
-    if (!remote) {
-      setNotice(`${doc.sourceId} is not connected — nothing was ${verb}.`);
-      return false;
-    }
-    const rec = await pushTrip(remote, doc, null);
-    if (rec.status !== 'synced') {
-      await deleteSyncRecord(doc.id);
-      const why = rec.error ? `: ${rec.error}` : '';
-      setNotice(`Could not save to ${remote.label}${why} — nothing was ${verb}.`);
-      return false;
-    }
-    await putTrip(doc);
-    return true;
-  }
 
   async function handleCreate(choices: TripDetails) {
     setNotice(null);
@@ -983,39 +920,7 @@ export default function TripGallery({
    * be reached: a delete that lands later is a tombstone, and there are none.
    */
   async function handleDelete(trip: TripDoc, etagHint: string | null) {
-    setNotice(null);
-    if (isRemoteSource(trip.sourceId)) {
-      const remote = remoteFor(trip.sourceId);
-      if (!remote) {
-        setNotice(`Connect ${trip.sourceId} to delete this trip — it is kept there.`);
-        return;
-      }
-      setBusyFor(trip.id, `deleting on ${remote.label}…`);
-      const etag = etagHint ?? (await getSyncRecord(trip.id))?.etag ?? null;
-      try {
-        await deleteRemoteTrip(remote, trip.id, etag);
-      } catch (err) {
-        const f = failureOf(err);
-        if (f.kind !== 'notfound') {
-          setBusyFor(trip.id, null);
-          const e = explainFailure(f, remote);
-          setNotice(
-            f.kind === 'unreachable'
-              ? `Connect to ${remote.label} to delete this trip — it is kept there.`
-              : `Could not delete on ${remote.label}: ${e.text}`,
-          );
-          return;
-        }
-        // Already gone there: deleting the mirror is exactly what remains.
-      }
-    }
-    // The hooks go with the trip: nothing else will ever prune them, and they
-    // are the only heavy values in the database.
-    await deleteTrip(trip.id);
-    await deleteThumbs(trip.posts.map((p) => p.id));
-    await deleteSyncRecord(trip.id);
-    setBusyFor(trip.id, null);
-    refresh();
+    await gallery.remove(trip, etagHint);
   }
 
   /**
@@ -1053,44 +958,13 @@ export default function TripGallery({
   }
 
   async function handleMove(trip: TripDoc, targetSourceId: string) {
-    setNotice(null);
-    setBusyFor(trip.id, `moving to ${sourceLabel(targetSourceId)}…`);
-    const r = await moveTrip(trip, targetSourceId);
-    setBusyFor(trip.id, null);
-    if (!r.ok) setNotice(r.error);
-    refresh();
+    await gallery.moveTo(trip, targetSourceId);
   }
 
   /** A trip kept there and not here yet: pull, mirror, then open. */
   async function handleOpenRemote(row: RemoteTripRow) {
-    setNotice(null);
-    setBusyFor(row.doc.id, `fetching from ${sourceLabel(row.doc.sourceId)}…`);
-    await mirrorTrip(row.doc.sourceId, row.doc, row.etag);
-    setBusyFor(row.doc.id, null);
-    open(row.doc);
+    open(await gallery.mirrorRemote(row));
   }
-
-  // One group per source: the local ones from `groupBySource`, plus every
-  // connected instance with a bucket even when nothing of it is mirrored yet,
-  // so its header can say "checking…" or why it could not answer.
-  const groups = useMemo(() => {
-    if (trips === null) return [];
-    const base = groupBySource(trips);
-    const seen = new Set(base.map((g) => g.id));
-    for (const id of remoteSourceIds) {
-      if (!seen.has(id)) base.push({ id, items: [] });
-    }
-    return base.map((g) => {
-      const list = remoteLists[g.id];
-      const mirrored = new Set(g.items.map((t) => t.id));
-      const remoteOnly =
-        list?.status === 'ok' ? list.rows.filter((r) => !mirrored.has(r.doc.id)) : [];
-      return { ...g, list, remoteOnly };
-    });
-  }, [trips, remoteSourceIds, remoteLists]);
-
-  const nothingAnywhere =
-    trips !== null && groups.every((g) => g.items.length === 0 && g.remoteOnly.length === 0);
 
   return (
     <section
@@ -1153,7 +1027,7 @@ export default function TripGallery({
 
       {trips === null ? (
         <LoadingState label="Loading trips…" />
-      ) : nothingAnywhere && remoteSourceIds.every((id) => remoteLists[id]?.status === 'ok') ? (
+      ) : nothingAnywhere && allListed ? (
         <EmptyState
           title="No trips yet"
           actions={
