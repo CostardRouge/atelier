@@ -380,4 +380,20 @@ describe('deckSlides — the picture’s own develop', () => {
     expect(slides[3].kind).toBe('cta');
     expect(slides[3].develop).toBeNull();
   });
+
+  it('carries the picture’s own GRADE the same way — the deck resolves the chain', () => {
+    const own = { layers: [], output: 'rec709-to-srgb' as const };
+    const p = post({ includeCta: true });
+    p.badge.grade = own;
+    const slide = createPostSlide({ name: 'IMG_2.JPG', size: 1, lastModified: 1 });
+    p.slides = [slide];
+    const t = trip();
+    t.cta = { ...t.cta, headline: 'Follow the trip' };
+    const slides = deckSlides(t, p);
+    expect(slides[0].grade).toEqual(own);
+    // A slide that never departed says so with a null, never with a copy of
+    // the piece's — the chain is resolved on read (`post-grade.ts`).
+    expect(slides[1].grade).toBeNull();
+    expect(slides[2].grade).toBeNull();
+  });
 });
