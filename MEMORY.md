@@ -195,6 +195,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 | `docs/memory/local-first.md` | anything that could touch the network, read files, or persist data |
 | `docs/memory/studio.md` | the Studio tool, the tool-merge plan, project persistence, title styles, retiring a legacy tool |
 | `docs/memory/roadtrip.md` | the Road Trip tool, trip/day/post model, day badges, publishing cadence and strategy |
+| `docs/memory/develop.md` | `src/shared/develop/` (the workbench blocks), the Develop modal in Trips or the Studio, the Develop tool |
 
 Not memory files, but read them before starting new work, or before touching
 anything about media sources or document storage:

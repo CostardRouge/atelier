@@ -5,7 +5,8 @@ import type { AssetKind } from '../../shared/library/assets';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import type { SavedMediaRef } from '../../shared/projects/project-types';
 import { hashedMediaRef } from '../../shared/projects/media-identity';
-import DevelopSheet, { type DevelopApplyVerb } from '../../shared/develop/DevelopSheet';
+import DevelopSheet from '../../shared/develop/DevelopSheet';
+import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import type { DevelopSettings } from '../../shared/develop/develop';
 import { pictureFidelity } from '../../shared/develop/picture-fidelity';
 import { normaliseFraming, type Framing } from '../../shared/media/framing';
@@ -460,6 +461,7 @@ export default function PostEditor({
       onSave: (name: string, settings: DevelopSettings) =>
         onChangeTrip(savePreset(trip, name, settings, newId())),
       onRemove: (id: string) => onChangeTrip(removePreset(trip, id)),
+      keptOn: 'on the trip',
     }),
     [trip, onChangeTrip],
   );
@@ -1345,6 +1347,7 @@ export default function PostEditor({
         title={slideFile?.name ?? 'this slide'}
         fidelity={pictureFidelity(slideFile).chip}
         note={pictureFidelity(slideFile).note}
+        emptyText="This slide has no picture yet — tick one in the Library."
         stack={grade.stack}
         value={slide.develop}
         onDone={(develop) => {
