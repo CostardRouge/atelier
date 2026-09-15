@@ -954,6 +954,7 @@ export const mapVariant: HookVariant = {
   name: 'Itinerary',
   tagline: 'Places you pick, joined on a map',
   defaults: { ...MAP_DEFAULTS },
+  contentKeys: ['stops'],
   // `stages` for the trip's own places — as landmarks to adopt and as the
   // faint context layer. `media: 'day'` is what makes the shell resolve and
   // decode the pictures the stops name (`use-hook-pictures.ts`).

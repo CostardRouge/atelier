@@ -15,6 +15,8 @@ import {
   type CoverTile,
 } from '../../shared/roadtrip/trip-cover';
 import { createTripDoc, type TripCover, type TripDoc } from '../../shared/roadtrip/trip-types';
+import { applyHouseStyle } from '../../shared/roadtrip/house-style';
+import { bundledHouseStyle } from '../../shared/roadtrip/house-style-bundle';
 import {
   TRIP_FILE_ACCEPT,
   TRIP_FILE_EXTENSION,
@@ -925,13 +927,18 @@ export default function TripGallery({
     // The two ends, with the empty ones dropped: filled they seed one leg over
     // the whole trip, empty they seed nothing at all — see `createTripDoc`.
     const places = [choices.from, choices.to].filter((p) => p.name.trim().length > 0);
-    const doc = createTripDoc(
-      choices.name,
-      choices.destination,
-      choices.startDate,
-      choices.endDate,
-      places,
-      choices.sourceId,
+    // A new trip wears the house style when one is committed; a backup or an
+    // existing trip never does (`house-style.ts`).
+    const doc = applyHouseStyle(
+      createTripDoc(
+        choices.name,
+        choices.destination,
+        choices.startDate,
+        choices.endDate,
+        places,
+        choices.sourceId,
+      ),
+      bundledHouseStyle(),
     );
     setCreating(false);
     if (await createOn(doc, 'created')) open(doc);

@@ -650,6 +650,7 @@ export const scrubVariant: HookVariant = {
   name: 'Défilé',
   tagline: 'The trip runs past and stops on this day',
   defaults: { ...SCRUB_DEFAULTS },
+  contentKeys: ['picked'],
   needs: { coverage: true, stages: true, media: 'day' },
   owns: 'frame',
   unmet(ctx) {

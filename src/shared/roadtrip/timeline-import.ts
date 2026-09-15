@@ -289,7 +289,8 @@ export function importTimeline(
  * A brand-new trip from an import — the "create a trip from a timeline" entry
  * point. Its span and stages come from the timeline; its name from the author;
  * its voice (words, theme, call to action, hook defaults) is the factory's,
- * because a source has no opinion about how a trip is told. No post is
+ * because a source has no opinion about how a trip is told — the caller
+ * dresses it in the house style, as any new trip (`house-style.ts`). No post is
  * created. Null when nothing dated came in — there is no trip to make.
  *
  * `sourceId` is where the DOCUMENT lives — this browser, unless a remote

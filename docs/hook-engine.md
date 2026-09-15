@@ -600,6 +600,14 @@ returns is the TAPE's band (`tapeBox`) and what a drag writes is
 elements → opener → picture, unchanged in spirit: the badge is composed far
 more often than the opener is placed.
 
+**What the house style needed (2026-09-15).** A trip's look can leave the trip
+as the one every new trip starts from (`house-style.ts`), and an opener's
+options mix HOW it draws with WHAT it was given for one piece. So
+`HookVariant.contentKeys` (optional) names the latter — `picked` for Défilé
+and Virée, `stops` for the Itinerary — and the house style puts them back to
+`defaults`. A test fails any variant whose defaults hold a list it does not
+declare: a list in an opener's options is always something picked.
+
 **What it says about `owns`.** It declares `frame`, though only its backdrop
 mode replaces the picture — the reading the scrub already used (it covers the
 frame only while it sweeps). `owns` is what a variant MAY do, not what it does

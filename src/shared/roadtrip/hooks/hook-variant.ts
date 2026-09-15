@@ -356,6 +356,14 @@ export interface HookVariant {
   name: string;
   tagline: string;
   defaults: HookOptions;
+  /**
+   * The option keys that hold what the author gave ONE piece — the pictures a
+   * sweep flashes, an itinerary's stops — rather than how the opener is drawn.
+   * A look that leaves its trip (the house style, `house-style.ts`) resets
+   * them to `defaults`: a picture ref from one journey is nothing in the next.
+   * Absent = every option is look.
+   */
+  contentKeys?: readonly string[];
   needs: HookNeeds;
   owns: 'frame' | 'layer';
   prepare(options: HookOptions, ctx: HookContext): HookRender;

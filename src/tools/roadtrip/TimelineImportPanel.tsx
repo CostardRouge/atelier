@@ -17,6 +17,8 @@ import {
 import { formatIsoDate, spanLength } from '../../shared/roadtrip/trip-days';
 import { PLACE_ARROW, stageLabel } from '../../shared/roadtrip/trip-places';
 import type { TripDoc, TripStage } from '../../shared/roadtrip/trip-types';
+import { applyHouseStyle } from '../../shared/roadtrip/house-style';
+import { bundledHouseStyle } from '../../shared/roadtrip/house-style-bundle';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
 
 /**
@@ -215,7 +217,7 @@ export default function TimelineImportPanel({
   function seed() {
     if (!imported) return;
     const trip = tripFromTimeline(name, imported);
-    if (trip) onSeed(trip);
+    if (trip) onSeed(applyHouseStyle(trip, bundledHouseStyle()));
   }
 
   function apply() {

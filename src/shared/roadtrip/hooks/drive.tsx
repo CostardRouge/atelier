@@ -664,6 +664,7 @@ export const driveVariant: HookVariant = {
   name: 'Virée',
   tagline: 'A little car drives the map from stop to stop, showing pictures',
   defaults: { ...DRIVE_DEFAULTS },
+  contentKeys: ['picked'],
   needs: { coverage: true, stages: true, places: true, media: 'day' },
   owns: 'frame',
   wantsPictures(options, ctx) {
