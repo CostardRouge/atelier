@@ -55,30 +55,28 @@ const EPSILON = 1e-3;
  * camera. THIS is the fault the maintainer reported — a piece of the car
  * simply not being there — so this is the gate that matters.
  *
- * It cannot be 100%: several parts are modelled INTO each other (the wheels
- * sink into the body, which has no arches cut in it; the cladding shares a
- * slab with it; the roof rails run through the basket's floor), and two
- * solids sharing a volume have no correct order at all, only a least-bad
- * one. Measured over the sweep the worst part keeps 20%; the ordering this
- * replaced buried the solar panel, its frame and the cabin to 0, 0 and 2%.
+ * It is not 100%, and the reason is no longer that solids are modelled into
+ * each other: the hull is cut into panels with real arches and nothing shares
+ * a volume any more. What is left is that a long panel is still keyed by its
+ * FARTHEST corner, so the bonnet sorts a little behind where its front half
+ * really is. Measured over the sweep the worst part keeps 36%, against 20%
+ * before the hull was cut and 0% under the ordering before that.
  */
-const MIN_KEPT = 0.15;
+const MIN_KEPT = 0.3;
 
 /** Below this a part is a speck on screen and a share of it means nothing. */
 const MIN_CLAIM = 40;
 
 /**
  * How much of one view of the car may show a surface that is not the nearest
- * one. A loose canary, not the gate: it is there to catch a gross regression,
- * and the number it allows is mostly not an ordering choice at all.
+ * one — a canary over the whole picture, where `MIN_KEPT` watches each part.
  *
- * What fills it is the wheels, which sink into a body that has no arches cut
- * in it, and that body's single top polygon spanning the whole car, which
- * therefore lands before everything else. Splitting that face into real
- * panels is the fix and was deliberately not taken (`roadtrip.md`). Measured
- * worst pose: 13.5%, against 37% under the ordering this replaced.
+ * Measured worst pose: 7.3%. It was 13.5% while the body was one box 4.6 m
+ * long with the wheels modelled inside it, and 37% under the ordering before
+ * that. What remains is the long-panel keying above, not geometry sharing a
+ * volume.
  */
-const TOLERANCE = 0.15;
+const TOLERANCE = 0.09;
 
 const poseAt = (headingDeg: number, tiltDeg: number): Pose => ({
   fx: Math.sin((headingDeg * Math.PI) / 180),

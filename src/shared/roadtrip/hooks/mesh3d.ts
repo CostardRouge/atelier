@@ -396,12 +396,25 @@ export function box(id: string, a: Vec3, b: Vec3, role: string, outline = true):
 }
 
 /** A convex plan (x, y) pulled up from `z0` to `z1`. */
+/**
+ * The roles an extrusion paints with. A cap may be `null`, which builds it
+ * NOT AT ALL — for a face that is interior by construction, buried against
+ * the block stacked on it. Such a face is not merely invisible: it is a
+ * surface the painter's algorithm has to place among the ones you can see,
+ * and it will sometimes place it on top of them. The cure is to not have it.
+ */
+export interface ExtrudeRoles {
+  side: string;
+  top: string | null;
+  bottom: string | null;
+}
+
 export function extrude(
   id: string,
   plan: readonly (readonly [number, number])[],
   z0: number,
   z1: number,
-  roles: { side: string; top: string; bottom: string },
+  roles: ExtrudeRoles,
   outline = true,
 ): Part {
   const faces: Face[] = [];
@@ -419,8 +432,8 @@ export function extrude(
       ],
     });
   }
-  faces.push({ role: roles.top, verts: plan.map(([x, y]) => [x, y, z1] as Vec3) });
-  faces.push({ role: roles.bottom, verts: plan.map(([x, y]) => [x, y, z0] as Vec3) });
+  if (roles.top !== null) faces.push({ role: roles.top, verts: plan.map(([x, y]) => [x, y, z1] as Vec3) });
+  if (roles.bottom !== null) faces.push({ role: roles.bottom, verts: plan.map(([x, y]) => [x, y, z0] as Vec3) });
   return solid(id, faces, outline);
 }
 

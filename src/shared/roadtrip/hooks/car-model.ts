@@ -87,19 +87,90 @@ export function carLight(finish: CarFinish): Light {
   return DEFAULT_LIGHT;
 }
 
-/** A rectangle's corners in the plan, the corners cut by `chamfer`. */
-function chamfered(x0: number, x1: number, y0: number, y1: number, chamfer: number): [number, number][] {
-  const c = chamfer;
-  return [
-    [x0 + c, y0],
-    [x1 - c, y0],
-    [x1, y0 + c],
-    [x1, y1 - c],
-    [x1 - c, y1],
-    [x0 + c, y1],
-    [x0, y1 - c],
-    [x0, y0 + c],
-  ];
+/**
+ * The hull's own dimensions, in one place.
+ *
+ * They were typed twice — once in the extrudes, once again inside
+ * `cornerDecal` and the `nose` constant — so a change to the body silently
+ * detached the corner lights from the corner they are supposed to lie on.
+ * Everything that has to sit ON the hull reads these.
+ */
+const HULL = {
+  halfWidth: 0.95,
+  halfLength: 2.3,
+  chamfer: 0.2,
+  /** The beltline: the body stops here and the greenhouse starts. */
+  top: 1.15,
+  /** The bottom of the painted bodywork, where the charcoal band takes over. */
+  bottom: 0.5,
+  /**
+   * Above this the body may run its full width, because it is clear of the
+   * wheels (whose tops are at 2 × `WHEEL_RADIUS`). Below it, across an axle,
+   * the body has to pull in to `archHalfWidth` — that gap IS the wheel arch.
+   */
+  shoulder: 0.88,
+  /** Inboard of this a block clears a wheel, whose inner face is at 0.68. */
+  archHalfWidth: 0.66,
+};
+
+/** How far each axle's arch reaches fore and aft of the wheel's centre. */
+const ARCH = { y: 1.45, half: 0.44 };
+
+/**
+ * The plan of a slice of the hull between two y's, the chamfered corners
+ * carried through wherever the slice reaches them.
+ *
+ * The hull is no longer one box: it is a stack of convex slices, because ONE
+ * polygon spanning 4.6 m takes its place in the paint order from whichever
+ * END is farthest, so the bonnet was being laid down as if it sat at the
+ * tailgate and everything painted after it showed through. A slice is keyed
+ * by its own extent.
+ */
+function hullSlice(
+  halfWidth: number,
+  halfLength: number,
+  chamfer: number,
+  y0: number,
+  y1: number,
+): [number, number][] {
+  const widthAt = (y: number) => {
+    const inFromEnd = halfLength - Math.abs(y);
+    return inFromEnd >= chamfer ? halfWidth : Math.max(0, halfWidth - (chamfer - inFromEnd));
+  };
+  const ys = [y0];
+  for (const corner of [-(halfLength - chamfer), halfLength - chamfer]) {
+    if (corner > y0 && corner < y1) ys.push(corner);
+  }
+  ys.push(y1);
+  ys.sort((a, b) => a - b);
+  const right = ys.map((y) => [widthAt(y), y] as [number, number]);
+  const left = [...right].reverse().map(([x, y]) => [-x, y] as [number, number]);
+  return [...right, ...left];
+}
+
+/**
+ * One convex slice of the painted body, between two y's and two heights.
+ *
+ * `buried` drops the faces that another slice sits directly on: a horizontal
+ * surface with an opaque block resting on its whole footprint can never be
+ * seen from a camera above, but it is still a face the paint order has to
+ * place, and it lands on top of the bodywork often enough to look like a hole
+ * in the bonnet. Not building it is the fix.
+ */
+function hullBlock(
+  id: string,
+  y0: number,
+  y1: number,
+  z0: number,
+  z1: number,
+  halfWidth = HULL.halfWidth,
+  buried: { top?: boolean; bottom?: boolean } = {},
+): Part {
+  return extrude(id, hullSlice(halfWidth, HULL.halfLength, HULL.chamfer, y0, y1), z0, z1, {
+    side: 'body',
+    top: buried.top ? null : 'body',
+    bottom: buried.bottom ? null : 'body',
+  });
 }
 
 // The greenhouse's section: narrower at the roof than at the beltline, the
@@ -234,17 +305,42 @@ function rimParts(id: string, x: number, y: number, outerSign: 1 | -1): Part[] {
   return [rim, ...spokes, hub];
 }
 
+/**
+ * The heights a decal on the hull's nose or tail must be cut at.
+ *
+ * A decal is ordered exactly only while it lies INSIDE the one face it is
+ * pushed off (depth is linear over a plane, so the far end of a contained
+ * polygon cannot be farther than its container's). The hull is split at the
+ * shoulder, so a lamp that crosses that line belongs to two faces at once and
+ * the upper block paints over its own lamp. Cut it instead: a decal carries
+ * no ink of its own, so the seam is invisible.
+ */
+function bands(z0: number, z1: number): [number, number][] {
+  const s = HULL.shoulder;
+  return z0 < s && z1 > s ? [[z0, s], [s, z1]] : [[z0, z1]];
+}
+
 /** A quad on one of the body's chamfered corners, pushed a hair off it. */
-function cornerDecal(id: string, role: string, xSign: 1 | -1, ySign: 1 | -1, z0: number, z1: number): Part {
+function cornerDecal(id: string, role: string, xSign: 1 | -1, ySign: 1 | -1, z0: number, z1: number): Part[] {
   // The corner segment runs from (x1, y1 − c) to (x1 − c, y1) on the ±x, ±y corner.
-  const c = 0.2;
-  const ax = xSign * 0.95;
-  const ay = ySign * (2.3 - c);
-  const bx = xSign * (0.95 - c);
-  const by = ySign * 2.3;
+  const { halfWidth: w, halfLength: l, chamfer: c } = HULL;
+  const ax = xSign * w;
+  const ay = ySign * (l - c);
+  const bx = xSign * (w - c);
+  const by = ySign * l;
   const n = normalise([xSign, ySign, 0]);
   const at = (t: number, z: number): Vec3 => [ax + (bx - ax) * t + n[0] * 0.004, ay + (by - ay) * t + n[1] * 0.004, z];
-  return decal(id, [at(0.15, z0), at(0.85, z0), at(0.85, z1), at(0.15, z1)], role, n);
+  return bands(z0, z1).map(([a, b], i) =>
+    decal(i === 0 ? id : `${id}-${i}`, [at(0.15, a), at(0.85, a), at(0.85, b), at(0.15, b)], role, n),
+  );
+}
+
+/** A flat lamp or bar on the hull's nose or tail, cut at the shoulder if it crosses. */
+function faceDecal(id: string, role: string, x0: number, x1: number, y: number, z0: number, z1: number): Part[] {
+  const n: Vec3 = y > 0 ? [0, 1, 0] : [0, -1, 0];
+  return bands(z0, z1).map(([a, b], i) =>
+    decal(i === 0 ? id : `${id}-${i}`, [[x0, y, a], [x1, y, a], [x1, y, b], [x0, y, b]], role, n),
+  );
 }
 
 /** The bull bar: a hoop around each headlight, a bar across the top, a plate below. */
@@ -284,12 +380,17 @@ function bullBar(withLights: boolean): Part[] {
 /** The roof basket, and what rides in it. */
 function basket(gear: CarGear): Part[] {
   const parts: Part[] = [];
-  const z0 = 2.05;
-  parts.push(box('basket-floor', [-0.68, -1.9, z0], [0.68, 0.3, z0 + 0.03], 'basket'));
-  parts.push(box('basket-front', [-0.7, 0.26, z0], [0.7, 0.31, z0 + 0.19], 'basket'));
-  parts.push(box('basket-back', [-0.7, -1.91, z0], [0.7, -1.86, z0 + 0.19], 'basket'));
-  parts.push(box('basket-left', [-0.7, -1.9, z0], [-0.65, 0.3, z0 + 0.19], 'basket'));
-  parts.push(box('basket-right', [0.65, -1.9, z0], [0.7, 0.3, z0 + 0.19], 'basket'));
+  // The floor sits INSIDE its four rails and on top of the roof rails, rather
+  // than through them: the basket used to be modelled with every piece a few
+  // centimetres into its neighbour, and two solids sharing a volume have no
+  // right order at all.
+  const z0 = 2.06;
+  const inner = { x: 0.65, y0: -1.86, y1: 0.26 };
+  parts.push(box('basket-floor', [-inner.x, inner.y0, z0], [inner.x, inner.y1, z0 + 0.03], 'basket'));
+  parts.push(box('basket-front', [-0.7, inner.y1, z0], [0.7, inner.y1 + 0.05, z0 + 0.19], 'basket'));
+  parts.push(box('basket-back', [-0.7, inner.y0 - 0.05, z0], [0.7, inner.y0, z0 + 0.19], 'basket'));
+  parts.push(box('basket-left', [-0.7, inner.y0, z0], [-inner.x, inner.y1, z0 + 0.19], 'basket'));
+  parts.push(box('basket-right', [inner.x, inner.y0, z0], [0.7, inner.y1, z0 + 0.19], 'basket'));
   const top = z0 + 0.03;
   if (gear.solar) {
     parts.push(box('solar-frame', [-0.64, -1.3, top], [-0.06, 0.22, top + 0.03], 'solarFrame'));
@@ -338,10 +439,43 @@ export function buildCar(gear: CarGear = DEFAULT_GEAR): Part[] {
   const g = effectiveGear(gear);
   const parts: Part[] = [];
 
-  // Bumpers and sills: the charcoal band the body sits on.
-  parts.push(extrude('cladding', chamfered(-0.9, 0.9, -2.36, 2.36, 0.22), 0.34, 0.52, { side: 'cladding', top: 'cladding', bottom: 'cladding' }));
-  // The body up to the beltline.
-  parts.push(extrude('body', chamfered(-0.95, 0.95, -2.3, 2.3, 0.2), 0.5, 1.15, { side: 'body', top: 'body', bottom: 'body' }));
+  // Bumpers and sills: the charcoal band the body sits on. Split at the axles
+  // like the body above it, and pulled in to the arch width between them, so
+  // no wheel is modelled inside it. Its top meets the body's bottom exactly —
+  // it used to reach 0.02 INTO it, which no paint order can resolve.
+  const CLAD = { halfWidth: 0.9, halfLength: 2.36, chamfer: 0.22, z0: 0.34, z1: HULL.bottom };
+  const cladSlice = (id: string, y0: number, y1: number, halfWidth = CLAD.halfWidth, buriedTop = false) =>
+    extrude(id, hullSlice(halfWidth, CLAD.halfLength, CLAD.chamfer, y0, y1), CLAD.z0, CLAD.z1, {
+      side: 'cladding',
+      top: buriedTop ? null : 'cladding',
+      bottom: 'cladding',
+    });
+  const archF0 = ARCH.y - ARCH.half;
+  const archF1 = ARCH.y + ARCH.half;
+  parts.push(cladSlice('cladding-front', archF1, CLAD.halfLength));
+  parts.push(cladSlice('cladding-sill', -archF1, archF1, HULL.archHalfWidth, true));
+  parts.push(cladSlice('cladding-rear', -CLAD.halfLength, -archF1));
+
+  // The painted body, to the beltline — a stack of convex slices rather than
+  // one box 4.6 m long. Above the shoulder it runs full width and is split
+  // only where a car really has a shut line: the base of the windscreen and
+  // the top of the tailgate. Below the shoulder it is split at the arches and
+  // pulled inboard across each axle, which is what stops a wheel from living
+  // inside it.
+  const { bottom, top, shoulder, halfLength: L } = HULL;
+  const onSkirt = { bottom: true };
+  const underBody = { top: true, bottom: true };
+  parts.push(hullBlock('body-bonnet', CABIN.frontB, L, shoulder, top, HULL.halfWidth, onSkirt));
+  parts.push(hullBlock('body-roof', CABIN.rearB, CABIN.frontB, shoulder, top, HULL.halfWidth, onSkirt));
+  parts.push(hullBlock('body-lip', -L, CABIN.rearB, shoulder, top, HULL.halfWidth, onSkirt));
+  // Across each axle the skirt simply is not there — that gap IS the arch, and
+  // the wheel standing in it is what you see. An inner wing modelled in the
+  // gap would be hidden by the wheel from every angle the camera can take, and
+  // its buried end walls, tying with the neighbouring block's, sorted on top of
+  // the bonnet. The cheapest correct surface is the one not built.
+  parts.push(hullBlock('body-skirt-nose', archF1, L, bottom, shoulder, HULL.halfWidth, underBody));
+  parts.push(hullBlock('body-skirt-mid', -archF0, archF0, bottom, shoulder, HULL.halfWidth, underBody));
+  parts.push(hullBlock('body-skirt-tail', -L, -archF1, bottom, shoulder, HULL.halfWidth, underBody));
   parts.push(...cabin());
   if (g.visors) parts.push(...visors());
 
@@ -358,13 +492,16 @@ export function buildCar(gear: CarGear = DEFAULT_GEAR): Part[] {
   }
   if (g.mudFlaps) parts.push(...mudFlaps());
 
-  // Flares over the wheels, in the cladding's charcoal.
-  for (const [x0, x1] of [
-    [-1.03, -0.95],
-    [0.95, 1.03],
-  ] as const) {
-    for (const y of [1.45, -1.45]) {
-      parts.push(box(`flare-${x0 < 0 ? 'l' : 'r'}-${y > 0 ? 'f' : 'r'}`, [x0, y - 0.6, 0.55], [x1, y + 0.6, 0.98], 'cladding'));
+  // Flares over the wheels, in the cladding's charcoal: an eyebrow standing
+  // proud of the flank ABOVE the tyre, not a slab beside it. It starts where
+  // the body's side ends and sits on the shoulder, so it touches the wheel and
+  // the body without sharing a volume with either.
+  for (const side of [-1, 1] as const) {
+    for (const y of [ARCH.y, -ARCH.y]) {
+      const id = `flare-${side < 0 ? 'l' : 'r'}-${y > 0 ? 'f' : 'r'}`;
+      const x0 = side * HULL.halfWidth;
+      const x1 = side * (HULL.halfWidth + 0.11);
+      parts.push(box(id, [x0, y - 0.6, HULL.shoulder], [x1, y + 0.6, HULL.shoulder + 0.14], 'cladding'));
     }
   }
 
@@ -401,16 +538,22 @@ export function buildCar(gear: CarGear = DEFAULT_GEAR): Part[] {
   // The nose: wraparound headlights, a barred grille with its badge; the
   // tail: tall clusters wrapping the rear corners into the pillars — decals a
   // hair off the body's faces.
-  const nose = 2.304;
+  const nose = HULL.halfLength + 0.004;
+  const tail = -nose;
+  // The nose face is only 1.5 wide where the chamfer starts, so a lamp is kept
+  // inside it — a decal that overhangs its host is exactly what the paint
+  // order cannot resolve.
+  const noseHalf = HULL.halfWidth - HULL.chamfer;
   for (const z of [0.78, 0.86, 0.94]) {
-    parts.push(decal(`grille-${z}`, [[-0.36, nose, z], [0.36, nose, z], [0.36, nose, z + 0.06], [-0.36, nose, z + 0.06]], 'trim', [0, 1, 0]));
+    parts.push(...faceDecal(`grille-${z}`, 'trim', -0.36, 0.36, nose, z, z + 0.06));
   }
   parts.push(
     decal(
       'badge',
       Array.from({ length: 10 }, (_, i) => {
         const a = (i / 10) * Math.PI * 2;
-        return [0.07 * Math.cos(a), nose + 0.003, 0.89 + 0.07 * Math.sin(a)] as Vec3;
+        // Above the shoulder, so the one round decal never needs cutting.
+        return [0.07 * Math.cos(a), nose + 0.003, 1.0 + 0.07 * Math.sin(a)] as Vec3;
       }),
       'badge',
       [0, 1, 0],
@@ -418,14 +561,10 @@ export function buildCar(gear: CarGear = DEFAULT_GEAR): Part[] {
   );
   for (const sign of [-1, 1] as const) {
     const side = sign < 0 ? 'l' : 'r';
-    parts.push(
-      decal(`headlight-${side}`, [[sign * 0.4, nose, 0.76], [sign * 0.86, nose, 0.76], [sign * 0.86, nose, 1.08], [sign * 0.4, nose, 1.08]], 'light', [0, 1, 0]),
-    );
-    parts.push(cornerDecal(`headlight-${side}-wrap`, 'light', sign, 1, 0.78, 1.06));
-    parts.push(
-      decal(`taillight-${side}`, [[sign * 0.62, -2.304, 0.56], [sign * 0.88, -2.304, 0.56], [sign * 0.88, -2.304, 1.12], [sign * 0.62, -2.304, 1.12]], 'tail', [0, -1, 0]),
-    );
-    parts.push(cornerDecal(`taillight-${side}-wrap`, 'tail', sign, -1, 0.56, 1.12));
+    parts.push(...faceDecal(`headlight-${side}`, 'light', sign * 0.4, sign * noseHalf, nose, 0.76, 1.08));
+    parts.push(...cornerDecal(`headlight-${side}-wrap`, 'light', sign, 1, 0.78, 1.06));
+    parts.push(...faceDecal(`taillight-${side}`, 'tail', sign * 0.5, sign * noseHalf, tail, 0.56, 1.12));
+    parts.push(...cornerDecal(`taillight-${side}-wrap`, 'tail', sign, -1, 0.56, 1.12));
   }
 
   if (g.bullBar) parts.push(...bullBar(g.spotLights));
