@@ -6,9 +6,11 @@ import { badgeSettleSeconds } from '../../shared/roadtrip/badge-layout';
 import {
   frameSize,
   loadBadgeSource,
+  loadCollageSources,
   renderBadge,
   type BadgeSource,
 } from '../../shared/roadtrip/badge-render';
+import { collageMediaRefs } from '../../shared/roadtrip/collage';
 import type { DeckSlide } from '../../shared/roadtrip/deck';
 import type { HookPicture } from '../../shared/roadtrip/hooks/hook-variant';
 import { slideRender } from '../../shared/roadtrip/slide-render';
@@ -156,6 +158,17 @@ export default function useRailThumbs({
         // untouched slides reads one cube and only a slide that departed —
         // in its correction or in its look — pays for one of its own.
         const lut = slide.kind === 'cta' ? null : lutFor(slide);
+        // A collage cell is signed by ITS file and ITS cube, so a picture
+        // landing in cell four redraws this slide and no other.
+        const collageFiles = slide.collage
+          ? collageMediaRefs(slide, slide.collage).map((ref) => {
+              const f = resolve(ref);
+              return f ? [f.name, f.size, f.lastModified] : null;
+            })
+          : null;
+        const collageLuts = slide.collage
+          ? [slide, ...slide.collage.cells].map((cell) => lutId(lutFor({ ...slide, develop: cell.develop })))
+          : null;
         return {
           key: slideKey(slide),
           slide,
@@ -168,6 +181,9 @@ export default function useRailThumbs({
             lutId(lut),
             slide.videoTimeSeconds,
             file ? [file.name, file.size, file.lastModified] : null,
+            slide.collage,
+            collageFiles,
+            collageLuts,
             // Only the hook's cell reads them; signing every cell with them
             // would redraw a whole carousel each time one picture lands.
             slide.kind === 'hook' ? picturesId(pictures) : 0,
@@ -207,18 +223,36 @@ export default function useRailThumbs({
       const { w, h } = frameSize(aspect, THUMB_LONG_EDGE);
       canvas.width = w;
       canvas.height = h;
-      const source = await sourceFor(job);
+      // A collage decodes every cell at thumbnail width for this one draw;
+      // the held source is for the common case of one picture per slide.
+      const cells = job.slide.collage
+        ? await loadCollageSources(job.slide, job.slide.collage, resolve, SOURCE_WIDTH)
+        : null;
+      const source = cells ? null : await sourceFor(job);
       // A grader is a WebGL2 context: made for this one draw and disposed
       // straight after, exactly as `badgeToPng` does per slide.
       const grader =
         job.lut && source && source.width > 0
           ? makeFrameGrader(job.lut, source.width, source.height)
           : null;
+      const cellGraders = (cells?.items ?? []).map((item) => {
+        const lut = lutFor({ ...job.slide, develop: item.develop });
+        return lut && item.source && item.source.width > 0
+          ? makeFrameGrader(lut, item.source.width, item.source.height)
+          : null;
+      });
       try {
         await renderBadge(canvas, {
           ...job.render,
           source,
           grader,
+          collage:
+            cells && job.slide.collage
+              ? {
+                  collage: job.slide.collage,
+                  items: cells.items.map((item, i) => ({ ...item, grader: cellGraders[i] })),
+                }
+              : null,
           // Past the opener too: a scrub's thumbnail mid-sweep would be
           // another day's picture standing for this one.
           timeSeconds:
@@ -226,6 +260,8 @@ export default function useRailThumbs({
         });
       } finally {
         grader?.dispose();
+        for (const g of cellGraders) g?.dispose();
+        cells?.release();
       }
       return new Promise((resolve_) =>
         canvas.toBlob(
@@ -279,7 +315,7 @@ export default function useRailThumbs({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [jobs, aspect, settle]);
+  }, [jobs, aspect, settle, resolve, lutFor]);
 
   // The blobs and the decoded picture are the only heavy things this holds.
   useEffect(() => {

@@ -26,6 +26,7 @@ import { OUTRO_SECONDS_DEFAULT } from '../overlay/outro-card';
 import type { SavedMediaRef } from '../projects/project-types';
 import type { BadgePieceStyles } from './badge-layout';
 import { clipSpeed } from './hook-video';
+import type { SlideCollage } from './collage';
 import type { SlideMedium, TripDoc, TripGrade, TripPost } from './trip-types';
 import { hookMoves } from './hooks/hook-context';
 
@@ -76,6 +77,11 @@ export interface DeckSlide {
    * asks it for the cube rather than reading this.
    */
   grade: TripGrade | null;
+  /**
+   * Several pictures in this slide's frame, or null for one. `media`,
+   * `framing` and `develop` above are its first cell (`collage.ts`).
+   */
+  collage: SlideCollage | null;
   /** The author's own line over a content picture. */
   caption: string;
   /** What this slide is delivered as, `auto` already resolved. */
@@ -155,6 +161,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       framing: normaliseFraming(post.badge.framing),
       develop: post.badge.develop ?? null,
       grade: post.badge.grade ?? null,
+      collage: post.badge.collage ?? null,
       caption: '',
       ...resolveSlideMedium(
         post.badge.medium,
@@ -179,6 +186,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       framing: normaliseFraming(slide.framing),
       develop: slide.develop ?? null,
       grade: slide.grade ?? null,
+      collage: slide.collage ?? null,
       caption: slide.caption,
       // A content slide has nothing animated on it yet; when a caption gains
       // an animation, that flag is the only thing that changes here.
@@ -204,6 +212,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       develop: null,
       // The closing card is drawn, not photographed: nothing to grade.
       grade: null,
+      collage: null,
       caption: '',
       // The closing card carries no picture and nothing animated, so it is a
       // still — and, inside a reel, the tail the Studio already appends, at

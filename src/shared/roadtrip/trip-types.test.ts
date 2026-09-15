@@ -165,6 +165,34 @@ describe('migrateTripDoc — v22 → v23, the camera credit is opt-in', () => {
   });
 });
 
+describe('migrateTripDoc — v23 → v24, a slide may hold several pictures', () => {
+  const v23 = () => {
+    const doc = createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04');
+    const post = createTripPost('carousel', '2025-03-27', 'Cliffs');
+    post.slides = [createPostSlide(null)];
+    delete (post.badge as Partial<typeof post.badge>).collage;
+    delete (post.slides[0] as Partial<(typeof post.slides)[0]>).collage;
+    return { ...doc, version: 23, posts: [post] } as TripDoc;
+  };
+
+  it('starts every slide on the one picture it always held', () => {
+    const doc = migrateTripDoc(v23());
+    expect(doc.version).toBe(TRIP_DOC_VERSION);
+    expect(doc.posts[0].badge.collage).toBeNull();
+    expect(doc.posts[0].slides[0].collage).toBeNull();
+  });
+
+  it('keeps a sound collage and turns an unknown template into none', () => {
+    const doc = v23();
+    doc.posts[0].badge.collage = { template: 'grid-2x2', cells: [] } as never;
+    (doc.posts[0].slides[0] as { collage?: unknown }).collage = { template: 'from-the-future' };
+    const migrated = migrateTripDoc(doc);
+    expect(migrated.posts[0].badge.collage?.template).toBe('grid-2x2');
+    expect(migrated.posts[0].badge.collage?.cells).toEqual([]);
+    expect(migrated.posts[0].slides[0].collage).toBeNull();
+  });
+});
+
 describe('migrateTripDoc — v21 → v22, every picture may depart', () => {
   /** A v21 trip: a grade on the trip and on the piece, none on a picture. */
   const v21 = () => {

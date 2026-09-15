@@ -15,7 +15,9 @@ import {
   badgeToPng,
   frameSize,
   loadBadgeSource,
+  loadCollageSources,
   type BadgeSource,
+  type CollageSources,
 } from './badge-render';
 import { deckSlides, slideFileName, type DeckSlide } from './deck';
 import type { HookPicture } from './hooks/hook-variant';
@@ -81,9 +83,16 @@ export async function renderDeck(
 
   for (const slide of slides) {
     let source: BadgeSource | null = null;
+    let cells: CollageSources | null = null;
     try {
-      const file = opts.resolve(slide.media);
-      if (file) source = await loadBadgeSource(file, slide.videoTimeSeconds);
+      if (slide.collage) {
+        // Every cell's picture, the lead's first; each cell's cube is the
+        // slide's grade baked with THAT cell's develop.
+        cells = await loadCollageSources(slide, slide.collage, opts.resolve);
+      } else {
+        const file = opts.resolve(slide.media);
+        if (file) source = await loadBadgeSource(file, slide.videoTimeSeconds);
+      }
 
       const blob = await badgeToPng({
         // What this slide is made of — the badge, a caption or the trip's
@@ -91,6 +100,10 @@ export async function renderDeck(
         // the rail's thumbnails derive it.
         ...slideRender(trip, post, slide, aspect, opts.pictures, opts.exposure),
         source,
+        collage: cells && slide.collage ? { collage: slide.collage, items: cells.items } : null,
+        collageLuts: cells
+          ? cells.items.map((item) => opts.lutFor?.({ ...slide, develop: item.develop }) ?? null)
+          : undefined,
         timeSeconds: slide.kind === 'hook' ? opts.timeSeconds : 0,
         width: w,
         height: h,
@@ -110,6 +123,7 @@ export async function renderDeck(
       // shortfall by comparing what came back with the deck's length.
     } finally {
       source?.release();
+      cells?.release();
       opts.onProgress?.(slide.position, slides.length);
     }
   }

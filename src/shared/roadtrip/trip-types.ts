@@ -42,6 +42,7 @@ import { createShade, vignetteShade, type Shade } from './shades';
 import { defaultHookLayers, type HookLayer } from './hooks/hook-variant';
 import { mapFromRoute } from './hooks/map-plan';
 import { DEFAULT_CTA, type CtaSlide } from './cta-slide';
+import { readCollage, type SlideCollage } from './collage';
 import { defaultCarSpec, readCarSpec, type CarSpec } from './car-spec';
 import {
   DEFAULT_TIME_AGO_WORDS,
@@ -56,7 +57,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 23;
+export const TRIP_DOC_VERSION = 24;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers and the
@@ -295,6 +296,14 @@ export interface PostBadge {
    */
   grade: TripGrade | null;
   /**
+   * Several pictures in the hook's frame, or null for the one picture the
+   * badge has always sat on. The hook's own picture is the collage's first
+   * cell — `media`, `framing` and `develop` above stay what they are — so
+   * nothing that reads one picture per slide has to know (`collage.ts`).
+   * Never inherited by the next piece: its cells are photographs of a day.
+   */
+  collage: SlideCollage | null;
+  /**
    * Free text replacing a computed piece, per piece. An empty string means
    * "computed", never "blank": clearing the field gives the derived value
    * back, so an override is never a one-way door.
@@ -403,6 +412,7 @@ export function defaultPostBadge(
     framing: { ...DEFAULT_FRAMING },
     develop: null,
     grade: null,
+    collage: null,
     textOverrides: {},
     pieceStyles: defaults ? structuredClone(defaults.pieceStyles) : {},
     hook: defaults?.hook ? structuredClone(defaults.hook) : defaultHookLayers(),
@@ -431,6 +441,8 @@ export interface PostSlide {
   develop: DevelopSettings | null;
   /** This picture's own grade, or null to follow the piece — see `PostBadge.grade`. */
   grade: TripGrade | null;
+  /** Several pictures in this slide's frame, this one first — see `PostBadge.collage`. */
+  collage: SlideCollage | null;
   /** The author's own line over this picture; empty draws nothing. */
   caption: string;
   /** What this slide is delivered as; see {@link SlideMedium}. */
@@ -448,6 +460,7 @@ export function createPostSlide(media: SavedMediaRef | null = null): PostSlide {
     framing: { ...DEFAULT_FRAMING },
     develop: null,
     grade: null,
+    collage: null,
     caption: '',
     medium: 'auto',
     seconds: DEFAULT_SLIDE_SECONDS,
@@ -1206,6 +1219,22 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
         defaults ? { ...defaults, showExif: defaults.showExif ?? false } : defaults,
       ]),
     ) as HookDefaultsByKind;
+  }
+
+  if (migrated.version < 24) {
+    // A slide may hold several pictures. Every stored one holds the one it
+    // always did: `collage` starts null, and a value that is there (a document
+    // from a newer build, a hand edit) is read through `readCollage`, which
+    // keeps a sound collage and turns anything else — an unknown template
+    // above all — into none, so the slide opens as its lead picture.
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      badge: { ...post.badge, collage: readCollage(post.badge?.collage) },
+      slides: (post.slides ?? []).map((slide) => ({
+        ...slide,
+        collage: readCollage(slide.collage),
+      })),
+    }));
   }
 
   migrated.version = TRIP_DOC_VERSION;
