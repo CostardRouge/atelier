@@ -61,6 +61,13 @@ export interface PostExportInputs {
    * them through `hook`, but the deck renderer prepares the opener itself.
    */
   hookPictures?: ReadonlyMap<string, HookPicture>;
+  /**
+   * The hook picture's exposure line, when the piece credits its camera —
+   * measured in the editor, so the PNG deck says what the stage says. The
+   * video paths need nothing: they burn in `hookElements`, which already
+   * carries the credit.
+   */
+  exposure?: string | null;
   /** The badge's elements at a moment, when the opener rewrites its words. */
   hookElementsAt: ElementsAt | null;
   block: HookBlock | null;
@@ -336,6 +343,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
           timeSeconds: inputs.timeSeconds,
           resolve: inputs.resolve,
           pictures: inputs.hookPictures,
+          exposure: inputs.exposure,
           lutFor: inputs.lutFor,
           include: (slide) => wanted.has(slide.position),
           onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`),
@@ -443,6 +451,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         timeSeconds: inputs.timeSeconds,
         resolve: inputs.resolve,
         pictures: inputs.hookPictures,
+        exposure: inputs.exposure,
         lutFor: inputs.lutFor,
         onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`),
       });

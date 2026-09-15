@@ -86,6 +86,10 @@ const RATIOS = {
   // The WHEN line is the quietest thing on the badge on purpose: it explains
   // why the post is going out today, which nobody has to read to recognise it.
   timing: 0.16,
+  // Quieter still: a camera credit is for the handful of people who ask what
+  // took it, and it is a long line of numerals — set any larger it competes
+  // with the place for the eye, which is the one thing the badge must not do.
+  exif: 0.12,
 } as const;
 
 /** Space under each piece, again as a multiple of the headline's size. */
@@ -95,7 +99,10 @@ const GAP_AFTER = {
   headline: 0.06,
   counter: 0.12,
   caption: 0.08,
-  timing: 0,
+  // Only ever used when the camera line follows it — the last piece of the
+  // block takes no gap whatever it is, so no stored badge moves by a pixel.
+  timing: 0.06,
+  exif: 0,
 } as const;
 
 const ORDER: readonly BadgePiece[] = [
@@ -105,6 +112,7 @@ const ORDER: readonly BadgePiece[] = [
   'counter',
   'caption',
   'timing',
+  'exif',
 ];
 
 /**

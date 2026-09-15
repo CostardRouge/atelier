@@ -20,6 +20,7 @@ const CONTENT: BadgeContent = {
   counter: 'of 104',
   caption: 'in Karijini',
   timing: '515 days ago',
+  exif: null,
 };
 
 const CTX: HookContext = {

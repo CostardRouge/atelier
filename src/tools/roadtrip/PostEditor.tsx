@@ -72,6 +72,7 @@ import PiecePicker from './panels/PiecePicker';
 import { useDeckTransport } from './use-deck-transport';
 import { usePostExports } from './use-post-exports';
 import useRailThumbs from './use-rail-thumbs';
+import { useExposureLine } from './use-exposure-line';
 import { pickable, useSlideLibrary } from './use-slide-library';
 import { useTripGrade } from './use-trip-grade';
 import PageBar from '../../shared/ui/PageBar';
@@ -282,6 +283,35 @@ export default function PostEditor({
   const sourceReady = srcInfo.file === slideFile;
   const duration = sourceReady ? srcInfo.duration : 0;
 
+  // --- the hook's own picture, whichever slide is open ---------------------
+  // The stage reports the OPEN slide's source; the hook clip export, the
+  // camera credit and the Studio bridge are about the piece and must work
+  // from a carousel's second slide too, so the hook's file and dimensions are
+  // kept apart. Resolved HERE, above the badge's words, because the credit is
+  // one of them.
+  const resolve = useCallback(
+    (ref: { name: string } | null) => {
+      if (!ref) return null;
+      const want = ref.name.toLowerCase();
+      for (const asset of lib.assets) {
+        const f = pickable(asset);
+        if (f && f.name.toLowerCase() === want) return f;
+      }
+      return null;
+    },
+    [lib.assets],
+  );
+
+  const hookFile = isHook ? slideFile : resolve(post.media);
+  const hookIsVideo = Boolean(hookFile && !hookFile.type.startsWith('image/'));
+
+  /**
+   * What took the hook's picture, read from the picture itself — the badge's
+   * camera credit, and the line the Content tab shows beside its toggle so a
+   * piece whose photograph says nothing says why rather than drawing a blank.
+   */
+  const exposure = useExposureLine(hookFile);
+
   const aspectPreset =
     ASPECT_PRESETS.find((a) => a.id === post.badge.aspectId) ?? ASPECT_PRESETS[0];
   const aspect = aspectPreset.w / aspectPreset.h;
@@ -294,9 +324,11 @@ export default function PostEditor({
         timeAgo: post.badge.timeAgo,
         referenceDate: post.badge.referenceDate,
         showPin: post.badge.showPin,
+        showExif: post.badge.showExif,
+        exposure,
         overrides: post.badge.textOverrides,
       }),
-    [trip, post],
+    [trip, post, exposure],
   );
 
   const cta = useMemo(() => ctaLayout(trip.cta, aspect), [trip.cta, aspect]);
@@ -726,30 +758,12 @@ export default function PostEditor({
     return () => window.removeEventListener('keydown', onKey);
   }, [hookScore.length]);
 
-  // --- the hook's own picture, whichever slide is open ---------------------
-  // The stage reports the OPEN slide's source; the hook clip export and the
-  // Studio bridge are about the piece and must work from a carousel's second
-  // slide too, so the hook's file and dimensions are kept apart.
-  const resolve = useCallback(
-    (ref: { name: string } | null) => {
-      if (!ref) return null;
-      const want = ref.name.toLowerCase();
-      for (const asset of lib.assets) {
-        const f = pickable(asset);
-        if (f && f.name.toLowerCase() === want) return f;
-      }
-      return null;
-    },
-    [lib.assets],
-  );
   /** Whether the Library holds a slide's picture — what the export plan reads. */
   const hasPicture = useCallback(
     (s: { media: SavedMediaRef | null }) => s.media === null || resolve(s.media) !== null,
     [resolve],
   );
 
-  const hookFile = isHook ? slideFile : resolve(post.media);
-  const hookIsVideo = Boolean(hookFile && !hookFile.type.startsWith('image/'));
   const [hookInfo, setHookInfo] = useState(NO_SOURCE);
   const onSourceLoaded = useCallback(
     (info: { width: number; height: number; duration: number }) => {
@@ -808,7 +822,16 @@ export default function PostEditor({
   // Every cell of the rail, composed exactly as it will be delivered — the
   // crop, the caption, the badge, the grade. It needs the grade, so it sits
   // here rather than beside the deck above.
-  const railThumb = useRailThumbs({ trip, post, slides, aspect, resolve, lutFor, pictures: hookPictures });
+  const railThumb = useRailThumbs({
+    trip,
+    post,
+    slides,
+    aspect,
+    resolve,
+    lutFor,
+    pictures: hookPictures,
+    exposure,
+  });
 
   const exports = usePostExports({
     trip,
@@ -823,6 +846,7 @@ export default function PostEditor({
     timeSeconds: settle,
     hook,
     hookPictures,
+    exposure,
     hookElementsAt,
     resolve,
     hookFile,
@@ -1263,6 +1287,7 @@ export default function PostEditor({
               content={content}
               piece={piece}
               slideFile={slideFile}
+              exposure={exposure}
               clipSeconds={isVideo ? duration : 0}
               clip={isClipSlide ? { range: clipRange, speed: slide.speed, onSpeed: setClipSpeed } : null}
               onChangePost={onChangePost}

@@ -560,6 +560,18 @@ for the gap on the day it is read. The reference day is itself a field: set it
 ahead and the line reads correctly on the day the post goes out, not on the day
 you composed it.
 
+**The camera credit.** Under the temporal line, quieter still, a piece can
+credit what took the picture — body, lens, focal length, aperture, shutter,
+ISO, read from the photograph's own EXIF at every render rather than typed or
+stored. It is **off unless a piece asks for it**: a badge is a signature, and
+one that grew a sixth line on its own would have changed every piece already
+composed. The line is never invented — a picture that records nothing draws
+nothing, and the panel says so beside the switch instead of showing a made-up
+exposure. A fetched picture still gets it: a Winnow proxy is a re-encode with
+no metadata, and the instance's own reading of the capture is merged under the
+file's. Like every other piece it can be replaced with free text, which is how
+a scan or a film frame gets credited at all.
+
 **Every option shows what it would really say.** The counter modes and the
 temporal modes are listed with the line they would draw *for the post in hand* —
 "Day · 27 · of 310", "Kalbarri · 3 · of 4", "515 days ago" — or, when a mode has
@@ -582,8 +594,8 @@ nothing behind it.
 every word — the counter's, the units, the templates — is a field on the trip,
 so writing the deck in French is a handful of inputs (there is a one-click
 French button) rather than a language setting with two options. On top of that
-any single piece — the trip name, the word, the numeral, the total, the place —
-can be replaced with free text per post; clearing the field always gives the
+any single piece — the trip name, the word, the numeral, the total, the place,
+the camera — can be replaced with free text per post; clearing the field always gives the
 computed value back.
 
 **Each piece can depart from the trip's style**: its casing (as-is, UPPER,

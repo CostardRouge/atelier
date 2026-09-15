@@ -135,6 +135,36 @@ describe('migrateTripDoc', () => {
   });
 });
 
+describe('migrateTripDoc — v22 → v23, the camera credit is opt-in', () => {
+  /** A v22 trip: a piece and a remembered look, neither knowing the credit. */
+  const v22 = () => {
+    const doc = createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04');
+    const post = createTripPost('reel', '2025-03-27', 'Cliffs');
+    delete (post.badge as Partial<typeof post.badge>).showExif;
+    const defaults = hookDefaultsFrom(post.badge);
+    delete (defaults as Partial<typeof defaults>).showExif;
+    return {
+      ...doc,
+      version: 22,
+      posts: [post],
+      hookDefaults: { reel: defaults },
+    } as TripDoc;
+  };
+
+  it('leaves every stored badge saying exactly what it said', () => {
+    const doc = migrateTripDoc(v22());
+    expect(doc.version).toBe(TRIP_DOC_VERSION);
+    expect(doc.posts[0].badge.showExif).toBe(false);
+    expect(doc.hookDefaults.reel!.showExif).toBe(false);
+  });
+
+  it('keeps a credit a piece already asked for', () => {
+    const doc = v22();
+    doc.posts[0].badge.showExif = true;
+    expect(migrateTripDoc(doc).posts[0].badge.showExif).toBe(true);
+  });
+});
+
 describe('migrateTripDoc — v21 → v22, every picture may depart', () => {
   /** A v21 trip: a grade on the trip and on the piece, none on a picture. */
   const v21 = () => {

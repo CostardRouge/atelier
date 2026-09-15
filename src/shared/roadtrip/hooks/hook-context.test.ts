@@ -103,6 +103,7 @@ describe('the scrub through the shared context', () => {
     counter: 'of 10',
     caption: null,
     timing: null,
+    exif: null,
   };
 
   it('steps the numeral while it sweeps, and gives the badge its own value back at rest', () => {
