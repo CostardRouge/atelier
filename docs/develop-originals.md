@@ -1,12 +1,14 @@
 # Develop on the original — proxy, full-size render, RAW
 
-**Status (2026-09-15): a proposal, not a set of decisions.** Written from the
+**Status (2026-09-15): DECIDED — the maintainer accepted all six
+recommendations of §7 the same day (*"je suis ok pour les recommandations"*);
+nothing is built yet, O1 + O2 come first.** Written from the
 maintainer's question of the same day (*"c'est ok de jouer sur le proxy, mais
 […] le fichier RAW final — à quel moment ? bosser sur le proxy et à l'export
 utiliser les mêmes réglages sur le RAW final ? […] pour les carrousels
 d'images je pense qu'il sera plus avantageux d'utiliser le fichier RAW"*). §1
 and §2 are traced to files in both repos and are fact; §3 onwards is the plan;
-§7 lists the six choices. The illustrated version (a pixel calculator, four
+§7 records the six choices. The illustrated version (a pixel calculator, four
 mockups) is the artifact linked from the session; this file is what outlives
 it. It refines P5–P7 of `docs/photo-develop.md` and does not replace it —
 read that first, and `media-pipeline.md` for the pixel budget.
@@ -141,15 +143,18 @@ Embedded preview sizes per camera (F5); whether Winnow exposes
 render (how far apart the two bases really are); heap for a half-size and a
 full-size decode on his iPhone.
 
-## 7. Decisions for the maintainer
+## 7. Decisions (accepted 2026-09-15)
 
-1. **Two axes** (material in Develop, per picture; pixels at export, per
-   piece) — recommended — or one HQ switch.
-2. **Export default**: Auto (recommended) · Proxies · Originals for carousels.
-3. **Fetched originals**: held for the session (recommended) · re-fetched per
-   export · an opt-in OPFS cache (reopens a declined decision).
-4. **A RAW never checked in Develop, at export**: flagged and delivered from
-   its render (recommended) · refused until checked · delivered with a warning.
-5. **Phone**: full-size render yes, RAW after measuring (recommended) ·
-   desktop only for now.
-6. **Where to start**: O1+O2 (recommended, no new decoder) · O7 first · O4.
+1. **Two axes**: material chosen in Develop, per picture (`DevelopSettings.base`);
+   pixels chosen at export, per piece. Not one HQ switch.
+2. **Export default: Auto** — an original is fetched only for a slide whose
+   proxy crop would upscale. Proxies and Originals stay one click away.
+3. **Fetched originals are held in memory for the session**, dropped on
+   close; no persistent byte cache (the earlier refusal stands).
+4. **A RAW never checked in Develop is flagged at export and delivered from
+   its render** (full-size embedded preview, else the proxy) — never from
+   the RAW with numbers nobody has seen on it.
+5. **Phone: the full-size render yes; the RAW only once a decode has been
+   measured on the iPhone.**
+6. **Start with O1 + O2** (know the original, deliver from decodable
+   originals), no new decoder.
