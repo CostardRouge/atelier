@@ -101,19 +101,27 @@ function lutsManifestPlugin(): Plugin {
 
 // --- House style (dev server only) ------------------------------------------
 //
-// Trips' settings sheet can save the open trip's look as the one every NEW trip
-// starts from (`src/shared/roadtrip/house-style.ts`). A browser cannot write
-// into the repository, so the dev server does: ONE fixed file, written on a
-// POST and removed on a DELETE — never a path the request names. `apply:
-// 'serve'` keeps the endpoint out of `vite build`: the deployed site is static
-// and only ever reads the committed file. The app fetches it at the root,
-// outside `base`, because this middleware runs before Vite's own.
+// Trips' settings sheet and the Studio's project settings can save the open
+// trip's or project's look as the one every NEW one starts from
+// (`src/shared/roadtrip/house-style.ts`, `src/shared/projects/house-style.ts`).
+// A browser cannot write into the repository, so the dev server does: one
+// FIXED file per target, written on a POST and removed on a DELETE — the
+// request names a key of the table below, never a path. `apply: 'serve'` keeps
+// the endpoint out of `vite build`: the deployed site is static and only ever
+// reads the committed files. The app fetches it at the root, outside `base`,
+// because this middleware runs before Vite's own.
 
-const HOUSE_STYLE_FILE = fileURLToPath(
-  new URL('./src/shared/roadtrip/house-style.json', import.meta.url),
-);
+const HOUSE_STYLES: Record<string, { file: string; kind: string }> = {
+  trip: {
+    file: fileURLToPath(new URL('./src/shared/roadtrip/house-style.json', import.meta.url)),
+    kind: 'atelier.trip-house-style',
+  },
+  project: {
+    file: fileURLToPath(new URL('./src/shared/projects/house-style.json', import.meta.url)),
+    kind: 'atelier.project-house-style',
+  },
+};
 const HOUSE_STYLE_ROUTE = '/__atelier/house-style';
-const HOUSE_STYLE_KIND = 'atelier.trip-house-style';
 const HOUSE_STYLE_MAX_BYTES = 1024 * 1024;
 
 function readBody(req: IncomingMessage): Promise<string> {
@@ -156,10 +164,17 @@ function houseStylePlugin(): Plugin {
           reply(403, { error: 'Refused: the request did not come from this dev server.' });
           return;
         }
-        const where = path.relative(process.cwd(), HOUSE_STYLE_FILE).split(path.sep).join('/');
+        // Mounted on the route, so `req.url` is what follows it: `/trip`, `/project`.
+        const key = (req.url ?? '').replace(/^\/+|[?#].*$/g, '');
+        const target = Object.hasOwn(HOUSE_STYLES, key) ? HOUSE_STYLES[key] : null;
+        if (!target) {
+          reply(404, { error: `No house style is called “${key}”.` });
+          return;
+        }
+        const where = path.relative(process.cwd(), target.file).split(path.sep).join('/');
         try {
           if (req.method === 'DELETE') {
-            await rm(HOUSE_STYLE_FILE, { force: true });
+            await rm(target.file, { force: true });
             reply(200, { path: where });
             return;
           }
@@ -175,7 +190,7 @@ function houseStylePlugin(): Plugin {
           const valid =
             typeof file === 'object' &&
             file !== null &&
-            (file as { kind?: unknown }).kind === HOUSE_STYLE_KIND &&
+            (file as { kind?: unknown }).kind === target.kind &&
             Number.isInteger((file as { version?: unknown }).version) &&
             typeof (file as { style?: unknown }).style === 'object' &&
             (file as { style?: unknown }).style !== null;
@@ -183,7 +198,7 @@ function houseStylePlugin(): Plugin {
             reply(400, { error: 'That is not a house style.' });
             return;
           }
-          await writeFile(HOUSE_STYLE_FILE, `${JSON.stringify(file, null, 2)}\n`);
+          await writeFile(target.file, `${JSON.stringify(file, null, 2)}\n`);
           reply(200, { path: where });
         } catch (error) {
           // A body that is not JSON is the caller's fault; a failed write is ours.

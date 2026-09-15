@@ -13,6 +13,8 @@ import {
   createProjectDoc,
   type ProjectDoc,
 } from '../../shared/projects/project-types';
+import { applyProjectHouseStyle } from '../../shared/projects/house-style';
+import { bundledProjectHouseStyle } from '../../shared/projects/house-style-bundle';
 import {
   deleteProject,
   deleteSyncRecord,
@@ -434,13 +436,19 @@ export default function ProjectGallery({
     const template = choices.templateId
       ? (projects ?? []).find((p) => p.id === choices.templateId)
       : undefined;
-    const doc = createProjectDoc(
+    const created = createProjectDoc(
       choices.name,
       choices.aspectId,
       defaultElementsPreset(),
       DEFAULT_GUIDES,
       template,
     );
+    // A picked template wins; without one, the committed house style replaces
+    // the factory look. An import, a duplicate or a project Trips makes around
+    // a clip never wears it (`house-style.ts`).
+    const doc = template
+      ? created
+      : applyProjectHouseStyle(created, bundledProjectHouseStyle());
     doc.sourceId = choices.sourceId;
     doc.media = {
       dirHandle: choices.folder?.handle ?? null,

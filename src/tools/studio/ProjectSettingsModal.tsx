@@ -16,6 +16,8 @@ import {
   type TimeScaleSetting,
 } from '../../shared/telemetry/time-scale';
 import { Icons } from '../../shared/ui/icons';
+import type { ProjectHouseStyle } from '../../shared/projects/house-style';
+import ProjectHouseStylePanel from './ProjectHouseStylePanel';
 
 export interface ProjectSettingsDraft {
   name: string;
@@ -43,6 +45,11 @@ interface ProjectSettingsModalProps {
   onExport: (draft: ProjectSettingsDraft) => void;
   /** Replace the open project's portable half with an imported file. */
   onImport: (file: ProjectFile) => void;
+  /**
+   * The live look to offer as the house style — handed in by the dev server
+   * only, so the built site never draws that section.
+   */
+  houseStyle?: ProjectHouseStyle;
 }
 
 const field = 'flex flex-col gap-1.5';
@@ -66,6 +73,7 @@ export default function ProjectSettingsModal({
   onApply,
   onExport,
   onImport,
+  houseStyle,
 }: ProjectSettingsModalProps) {
   const [draftName, setDraftName] = useState(name);
   const [draftAspect, setDraftAspect] = useState(aspectId);
@@ -419,6 +427,12 @@ export default function ProjectSettingsModal({
             </p>
           )}
         </fieldset>
+
+        {import.meta.env.DEV && houseStyle && (
+          <fieldset className="m-0 p-0 border-0 flex flex-col gap-2 pt-4 border-t border-line">
+            <ProjectHouseStylePanel project={houseStyle} />
+          </fieldset>
+        )}
 
         {/* Pinned: on a phone the card scrolls, and Apply used to sit below
             the fold — the one control every visit ends with. */}

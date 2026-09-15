@@ -1508,6 +1508,20 @@ export default function StudioEditor({
           }}
           onExport={exportProjectFile}
           onImport={importProjectFile}
+          houseStyle={
+            import.meta.env.DEV
+              ? {
+                  elements,
+                  guides,
+                  lutStack: lutStack.toSaved(),
+                  outputTransform: lutStack.output,
+                  theme,
+                  scenes,
+                  outro,
+                  exportPrefs: { fileName: exportFileName.trim() || null, variants },
+                }
+              : undefined
+          }
         />
       )}
 

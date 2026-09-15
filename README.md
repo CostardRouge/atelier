@@ -93,6 +93,20 @@ sent you. Nothing bound to a machine is written: no folder handle, no media
 list, no thumbnail. An older file is migrated on read; a file from a newer
 version of Atelier is refused rather than half-read.
 
+**A house style for new projects.** On the dev server only (`npm run dev`),
+project settings end on a **House style** section that writes the open
+project's look — overlays, guides, title style, intro, closing card, grade and
+export matrix — to `src/shared/projects/house-style.json`. Commit that file and
+every new project created *without* a template starts from it, on the deployed
+site too (the modal's "Start from" then reads **House style** instead of
+**Blank**); **Back to the factory look** deletes it. It never carries the
+format (chosen when creating), the capture-time shift, the cadence, the export
+file name or the media, never what Trips sent into the project (its hook and
+closing card), and never an uploaded LUT. Existing projects, imported project
+files, duplicates and the projects Trips creates around a clip are left alone.
+It is the Studio twin of Trips' house style, below, and shares its dev-server
+writer.
+
 **The editor.** Pick a clip, place overlay elements on the canvas stage (drag
 to position, anchors keep edge pinning), grade through a `.cube` LUT, scrub
 with the shared transport. The inspector is tabbed (Overlay / Style / Grade /
@@ -576,8 +590,9 @@ look**) and they start from the factory again. Existing trips and imported
 backups never change. The name, dates, legs and pieces never travel, nor do the
 pictures or stops an opener was given, nor an uploaded LUT (its whole `.cube`
 would ride in the bundle; put it in `public/luts/` instead). The endpoint that
-writes the file exists only while `vite` serves, and refuses any request that
-does not come from the dev server's own page.
+writes the file — the Studio's house style uses the same one — exists only
+while `vite` serves, and refuses any request that does not come from the dev
+server's own page.
 
 **The picture is framed where you want it.** A 3:2 photograph in a 9:16 frame
 loses its sides, and the subject is rarely in the middle: drag the picture on

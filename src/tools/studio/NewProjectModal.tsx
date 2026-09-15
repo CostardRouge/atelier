@@ -9,6 +9,7 @@ import {
   type SavedMediaRef,
 } from '../../shared/projects/project-types';
 import { hashedMediaRefs } from '../../shared/projects/media-identity';
+import { bundledProjectHouseStyle } from '../../shared/projects/house-style-bundle';
 import { DEFAULT_SOURCE_ID, type SourceInfo } from '../../shared/sources/source';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
 import InfoDot from '../../shared/ui/InfoDot';
@@ -175,7 +176,9 @@ export default function NewProjectModal({
               onChange={(e) => setTemplateId(e.target.value)}
               className="font-sans text-sm px-3 py-2 border border-line-strong rounded-paper bg-paper text-ink cursor-pointer focus:outline-none focus:border-accent max-[560px]:text-base"
             >
-              <option value="">Blank</option>
+              {/* Without a template a project starts from the committed house
+                  style when there is one — the option says which it will be. */}
+              <option value="">{bundledProjectHouseStyle() ? 'House style' : 'Blank'}</option>
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name} — overlays, look &amp; settings
