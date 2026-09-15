@@ -1,4 +1,5 @@
-import { describeDevelop, type DevelopSettings } from '../../../shared/develop/develop';
+import type { DevelopSettings } from '../../../shared/develop/develop';
+import DevelopSection from '../../../shared/develop/DevelopSection';
 import GradePanel from '../../../shared/lut/GradePanel';
 import {
   DEFAULT_FRAMING,
@@ -16,7 +17,6 @@ import type { TripGradeBinding } from '../use-trip-grade';
 import DayFromWinnow from '../DayFromWinnow';
 import FrameStrip from '../FrameStrip';
 import Button from '../../../shared/ui/Button';
-import IconButton from '../../../shared/ui/IconButton';
 import { FieldRow, InspectorSection, RangeField, Readout } from '../../../shared/ui/Inspector';
 import { Icons } from '../../../shared/ui/icons';
 import Segmented from '../../../shared/ui/Segmented';
@@ -354,9 +354,8 @@ export default function PictureTab({
           sheet writes, the way in, and the way back to as shot. Per SLIDE,
           like the framing — about this photograph, never inherited. */}
       {!isCta && (
-        <InspectorSection
+        <DevelopSection
           id="piece.develop"
-          title="Develop"
           info={
             <p>
               This slide’s own correction — exposure, tone, colour — applied before the
@@ -364,29 +363,12 @@ export default function PictureTab({
               next one.
             </p>
           }
-        >
-          <FieldRow label="Correction">
-            <span
-              className={`flex-1 min-w-0 truncate font-mono text-xs ${develop ? 'text-ink-soft' : 'text-muted'}`}
-              title={describeDevelop(develop)}
-            >
-              {describeDevelop(develop)}
-            </span>
-            {develop && (
-              <IconButton size="sm" variant="ghost" label="Back to as shot" onClick={onResetDevelop}>
-                {Icons.reset}
-              </IconButton>
-            )}
-            <Button
-              size="sm"
-              onClick={onOpenDevelop}
-              disabled={!slideFile}
-              title={slideFile ? 'Open the Develop sheet' : 'Tick a picture first'}
-            >
-              Develop…
-            </Button>
-          </FieldRow>
-        </InspectorSection>
+          develop={develop}
+          canOpen={Boolean(slideFile)}
+          openTitle={slideFile ? 'Open the Develop sheet' : 'Tick a picture first'}
+          onOpen={onOpenDevelop}
+          onReset={onResetDevelop}
+        />
       )}
 
       <InspectorSection

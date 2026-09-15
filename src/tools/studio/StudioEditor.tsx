@@ -99,7 +99,8 @@ import { useOverlayStage } from '../../shared/overlay/use-overlay-stage';
 import { useLutStack } from '../../shared/lut/use-lut-stack';
 import GradePanel from '../../shared/lut/GradePanel';
 import DevelopSheet from '../../shared/develop/DevelopSheet';
-import { describeDevelop, type DevelopSettings } from '../../shared/develop/develop';
+import DevelopSection from '../../shared/develop/DevelopSection';
+import type { DevelopSettings } from '../../shared/develop/develop';
 import { pictureFidelity } from '../../shared/develop/picture-fidelity';
 import { restoreDevelop, saveDevelop, type SavedDevelop } from '../../shared/projects/media-develop';
 import type { StyleTheme } from '../../shared/overlay/title-styles';
@@ -2069,9 +2070,8 @@ export default function StudioEditor({
                   {/* The media's own CORRECTION, one settled row at the TOP:
                       correction before look, on screen as in the cube. The
                       sliders live in the sheet, not here. */}
-                  <InspectorSection
+                  <DevelopSection
                     id="studio.develop"
-                    title="Develop"
                     info={
                       <p>
                         This media’s own correction — exposure, tone, colour — applied before
@@ -2079,34 +2079,14 @@ export default function StudioEditor({
                         the project’s media, never in a project file.
                       </p>
                     }
-                  >
-                    <FieldRow label="Correction">
-                      <span
-                        className={`flex-1 min-w-0 truncate font-mono text-xs ${
-                          activeDevelop ? 'text-ink-soft' : 'text-muted'
-                        }`}
-                        title={describeDevelop(activeDevelop)}
-                      >
-                        {describeDevelop(activeDevelop)}
-                      </span>
-                      {activeDevelop && (
-                        <IconButton size="sm" variant="ghost" label="Back to as shot" onClick={() => setActiveDevelop(null)}>
-                          {Icons.reset}
-                        </IconButton>
-                      )}
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          setDevelopAt(videoRef.current?.currentTime ?? 0);
-                          setDevelopOpen(true);
-                        }}
-                        disabled={!activeFile}
-                        title="Open the Develop sheet"
-                      >
-                        Develop…
-                      </Button>
-                    </FieldRow>
-                  </InspectorSection>
+                    develop={activeDevelop}
+                    canOpen={Boolean(activeFile)}
+                    onOpen={() => {
+                      setDevelopAt(videoRef.current?.currentTime ?? 0);
+                      setDevelopOpen(true);
+                    }}
+                    onReset={() => setActiveDevelop(null)}
+                  />
                   <InspectorSection id="studio.grade" title="Grade">
                     <GradePanel stack={lutStack} />
                   </InspectorSection>

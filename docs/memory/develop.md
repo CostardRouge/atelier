@@ -41,3 +41,10 @@ rule). Verified in the Browser pane on Trips after the split: eleven sliders,
 the wipe, the zoom pill, Save current as… with Enter kept by the field, a
 preset applied after As shot, Copy enabling Paste, Done writing `+0.7 EV` to
 the Picture tab row.
+
+## The inspector row is one component too (2026-09-15)
+
+`DevelopSection.tsx` is the settled row every host draws (sentence · `↺` ·
+`Develop…`); Trips' Picture tab and the Studio's Grade tab carried the same
+markup twice and differed only in the id, the ⓘ and what opening does. A third
+host (the tool's inspector, a lightbox verb) draws it rather than a copy.
