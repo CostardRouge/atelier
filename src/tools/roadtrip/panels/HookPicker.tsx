@@ -39,6 +39,11 @@ interface HookPickerProps {
   /** How the opener's pictures are coming along, for its panel to say. */
   pictureStatus?: HookPictureStatus;
   onChange: (layers: HookLayer[]) => void;
+  /**
+   * Opens the trip's garage — the car every Virée drives. Absent where the
+   * picker has no trip to write to, and the variant's panel says so instead.
+   */
+  onConfigureCar?: () => void;
 }
 
 interface ChooseRequest {
@@ -46,7 +51,13 @@ interface ChooseRequest {
   resolve: (picked: HookPickedPicture[] | null) => void;
 }
 
-export default function HookPicker({ layers, ctx, pictureStatus, onChange }: HookPickerProps) {
+export default function HookPicker({
+  layers,
+  ctx,
+  pictureStatus,
+  onChange,
+  onConfigureCar,
+}: HookPickerProps) {
   const currentId = layers[0]?.id ?? '';
   const current: HookVariant | undefined = HOOK_VARIANTS.find((v) => v.id === currentId);
   const Panel = current?.Panel;
@@ -58,8 +69,8 @@ export default function HookPicker({ layers, ctx, pictureStatus, onChange }: Hoo
     [],
   );
   const host = useMemo<HookPanelHost>(
-    () => ({ choosePictures, pictureStatus }),
-    [choosePictures, pictureStatus],
+    () => ({ choosePictures, pictureStatus, configureCar: onConfigureCar }),
+    [choosePictures, pictureStatus, onConfigureCar],
   );
   const settle = (picked: HookPickedPicture[] | null) => {
     choosing?.resolve(picked);

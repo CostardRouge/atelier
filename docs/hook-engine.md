@@ -530,3 +530,45 @@ renderer or either export moved.
   pictures; the panel mounted standalone, choosing pictures and switching the
   stops' source updating its summary and its left-out line. NOT exercised: a
   real export, the chooser reading GPS from real files, memory on a phone.
+
+### The garage — the car is the trip's (2026-09-15)
+
+- **`TripDoc.car` (v19), portable.** `CarSpec { model, color, finish, gear }`
+  (`shared/roadtrip/car-spec.ts`, pure, tested), read through `readCarSpec`
+  by the migration and by `parseTripFile`; junk or nothing lands on the
+  default — the maintainer's Prado J120 in Raptor black, fully geared, which
+  is what the opener drew before the field existed. `DriveOptions` keeps only
+  what is about the PIECE's view of the car (`carSize`, `tilt`); `carColor`,
+  `spare`, `rack` and `mirrors` are read and ignored.
+- **`HookContext.car`** (optional, filled by `hookContextFor` from `trip.car`)
+  is what `prepare` reads, `DEFAULT_CAR` when absent (`hookMoves`' four-argument
+  context only asks for the seconds). `driveScratch(spec)` resolves the model
+  from `car-registry.ts` and builds the parts LAZILY on the first paint, so
+  preparing every deck slide stays cheap.
+- **`HookPanelHost.configureCar?()`** is the one new host verb. The picker sets
+  it from `onConfigureCar`, one prop through `LookTab` from `PostEditor`; a
+  panel whose host has none says the car is set in the trip's settings. The
+  picker's contract stays the PIECE's opener: it never receives the trip or a
+  trip writer.
+- **Two homes, one panel.** `CarGaragePanel` is controlled and has no shell
+  (the `CoverPanel` rule): the trip settings sheet's Car section writes on
+  every switch; `CarGarageModal`, opened from the piece, holds a DRAFT and
+  writes on Done — the map is being composed behind it, and a stage that
+  redraws on every flag is a distraction. `CarTurntable` paints with the
+  drive's own `renderOrder` / `paintMesh`, `carLight(finish)` and
+  `carPalette(color)`, so the garage shows what the map gets; its angle is a
+  look, never stored, never the piece's Camera row.
+- **`Light.sheen`.** A matte black car is a silhouette under the renderer's
+  pure multiplier, so `lighting()` gained an additive term from the key
+  (`sheen × k`, default 0, so `DEFAULT_LIGHT` and every test stand);
+  `carLight('matte')` is gloss 0.04, sheen 0.12, ambient 0.48. Check the black
+  car first after any change to the light or the palette.
+- **Convexity recipes for gear.** A hoop is two uprights and a top tube; a
+  basket is a floor and four rails; a can's handle is its own box; a spot
+  light is a `cylinder` with a `lamp` decal on the FRONT cap only; a visor is
+  a decal pushed 0.012 along the cabin's side normal; a chamfer decal states
+  its chamfer's normal or `decal()` turns it away. The load sits where the
+  photographs have it — solar left, box front right, three cans across the
+  rear, water · petrol · water — without overlaps, pinned by
+  `car-model.test.ts`; his placement is the authority, the geometry an
+  approximation of it.

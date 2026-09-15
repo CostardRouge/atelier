@@ -663,6 +663,21 @@ at every stop on the same voices, deeper where a leg begins, the seat on
 arrival, a shutter click as each print lands. Every opener runs on the same
 clock as the badge, in the preview and in the file.
 
+**The car is the trip's, and it has a garage.** One car per journey: every
+Virée of a trip drives the same one, and it travels in the trip's backup. It is
+a Toyota Land Cruiser Prado (the J120), and the garage dresses it — a colour
+from the factory range or one of your own, a factory gloss or a matte coating
+(Raptor black, the default), and the gear: a bull bar with two spot lights, a
+roof basket carrying a solar panel on the left, an aluminium storage box and
+three jerry cans across the rear (water, petrol, water), an awning bag along
+the side, mud flaps, window visors, the spare on the tailgate, the door
+mirrors — each a switch. The car turns on a turntable while you dress it (drag
+to turn it, the arrow keys turn and tilt it; it stands still if your system
+asks for less motion), drawn by the very renderer the map uses, so what the
+garage shows is what the opener gets. The garage opens from the opener's own
+panel («Configure the car…», with Cancel and Done) and lives in the trip's
+settings as its Car section, where every switch writes at once.
+
 **Nothing is keyed by a file name.** A post records the *day* it tells, never a
 filename: exports get renamed and re-graded between tools, and a tracking system
 built on names goes stale the first time you touch Capture One. A post does
