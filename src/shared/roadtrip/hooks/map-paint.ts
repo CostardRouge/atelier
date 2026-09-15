@@ -30,6 +30,7 @@
  * a white line legible over a pale sky without a per-frame shadow blur.
  */
 
+import { roundedRect, tile } from '../../media/cell-paint';
 import { drawFramed } from '../../media/framing';
 import { hexToRgba } from './colour';
 import type { FrameBox, HookCtx2D, HookPicture } from './hook-variant';
@@ -71,8 +72,7 @@ const AHEAD_DASH = [9, 8];
 /** The suite's faces, each with a fallback: a glyph must survive a stack we do not control. */
 const LABEL_FONT = "'Space Grotesk', 'Helvetica Neue', Arial, sans-serif";
 const MONO_FONT = "'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace";
-/** The paper a tile is mounted on, and the ink of a card's caption. */
-const PAPER = '#f4efe4';
+/** The ink of a numbered dot — the tile's own paper and ink live in `cell-paint.ts`. */
 const PAPER_INK = '#1c1a17';
 /** A pin's tile at size 1, in 1080-units. */
 const PIN = 150;
@@ -592,76 +592,6 @@ function lastReached(timing: MapTiming, t: number): number {
   return index;
 }
 
-/**
- * One picture in a box, cover-cropped, on paper or bare. A caption, when there
- * is one, sits in the paper below the picture — which is why a paper tile is
- * the default: the mount is where a name can go.
- */
-function tile(
-  g: HookCtx2D,
-  picture: HookPicture,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  frame: MapOptions['mediaFrame'],
-  u: number,
-  caption = '',
-): void {
-  const paper = frame === 'paper';
-  const border = paper ? Math.max(3 * u, Math.min(w, h) * 0.045) : 0;
-  const captionH = paper && caption ? Math.max(18 * u, h * 0.16) : 0;
-  const radius = 5 * u;
-  g.save();
-  // A shadow under the tile, not under everything drawn after it.
-  g.shadowColor = 'rgba(0,0,0,0.45)';
-  g.shadowBlur = 10 * u;
-  g.shadowOffsetY = 3 * u;
-  if (paper) {
-    g.fillStyle = PAPER;
-    roundedRect(g, x, y, w, h + captionH, radius);
-    g.fill();
-  }
-  g.restore();
-
-  const px = x + border;
-  const py = y + border;
-  const pw = Math.max(1, w - border * 2);
-  const ph = Math.max(1, h - border * 2);
-  g.save();
-  g.beginPath();
-  if (paper) g.rect(px, py, pw, ph);
-  else roundedRect(g, px, py, pw, ph, radius);
-  g.clip();
-  g.translate(px, py);
-  try {
-    drawFramed(g, picture.image, picture.width, picture.height, pw, ph);
-  } catch {
-    // A bitmap closed under a render still in flight throws; that frame shows
-    // the stop without its picture rather than killing the paint loop.
-  }
-  g.restore();
-
-  if (!paper) {
-    g.save();
-    g.strokeStyle = 'rgba(255,255,255,0.85)';
-    g.lineWidth = 2 * u;
-    roundedRect(g, px, py, pw, ph, radius);
-    g.stroke();
-    g.restore();
-  }
-
-  if (captionH > 0) {
-    g.save();
-    g.fillStyle = PAPER_INK;
-    g.font = `600 ${Math.min(captionH * 0.52, 30 * u)}px ${LABEL_FONT}`;
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    g.fillText(caption, x + w / 2, y + h + captionH / 2 - border / 2, w - border * 2);
-    g.restore();
-  }
-}
-
 function cover(g: HookCtx2D, picture: HookPicture, w: number, h: number): void {
   try {
     drawFramed(g, picture.image, picture.width, picture.height, w, h);
@@ -716,19 +646,4 @@ function paintCompass(g: HookCtx2D, o: MapOptions, cx: number, cy: number, u: nu
   }
   g.fillStyle = o.pathColor;
   g.fillText('N', cx, cy - half - 16 * u);
-}
-
-function roundedRect(g: HookCtx2D, x: number, y: number, w: number, h: number, r: number): void {
-  const rr = Math.min(r, w / 2, h / 2);
-  g.beginPath();
-  g.moveTo(x + rr, y);
-  g.lineTo(x + w - rr, y);
-  g.quadraticCurveTo(x + w, y, x + w, y + rr);
-  g.lineTo(x + w, y + h - rr);
-  g.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
-  g.lineTo(x + rr, y + h);
-  g.quadraticCurveTo(x, y + h, x, y + h - rr);
-  g.lineTo(x, y + rr);
-  g.quadraticCurveTo(x, y, x + rr, y);
-  g.closePath();
 }
