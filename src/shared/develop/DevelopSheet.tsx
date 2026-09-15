@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -14,7 +15,9 @@ import type { LutStack } from '../lut/use-lut-stack';
 import { stageFrameSize } from '../overlay/stage-size';
 import { boundSource, loadBadgeSource, type BadgeSource } from '../roadtrip/badge-render';
 import SectionLegend from '../ui/SectionLegend';
+import StageZoomControl from '../ui/StageZoomControl';
 import useDialogKeys from '../ui/use-dialog-keys';
+import { usePictureZoom } from '../ui/use-picture-zoom';
 import {
   DEFAULT_DEVELOP,
   DEVELOP_RANGES,
@@ -72,6 +75,22 @@ const buttonClass =
   'px-3 py-[0.4rem] rounded-full border border-line-strong bg-paper text-xs font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink disabled:opacity-50 disabled:cursor-default';
 const linkClass =
   'p-0 border-0 bg-transparent text-xs text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink disabled:opacity-50 disabled:cursor-default disabled:no-underline';
+
+/** How close to the frame's side the divider's handle may be held, in px. */
+const HANDLE_INSET = 14;
+/** How far a finger travels before it moves the divider, in px. */
+const TOUCH_SLOP = 6;
+
+/**
+ * Whether a press on the picture places the divider rather than panning:
+ * always at the fitted size, where there is nothing to pan; once zoomed, only
+ * on the divider's own handle. A control over the picture keeps its press.
+ */
+function wipeClaims(target: EventTarget | null, zoomed: boolean): boolean {
+  const el = target as Element | null;
+  if (el?.closest?.('button')) return false;
+  return !zoomed || Boolean(el?.closest?.('[data-wipe-handle]'));
+}
 
 export interface DevelopSheetProps {
   /** The picture, or null when the slide has none — the controls still show. */
@@ -269,28 +288,48 @@ export default function DevelopSheet({
     ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
     // The wipe: the untouched picture to the RIGHT of the divider, the way
     // the shader's own split works — graded on the left.
+    // The divider itself is drawn over the canvas, in the page, so it stays a
+    // hairline at any zoom and can be grabbed.
     if (grader && wipe < 1) {
       const x = Math.round(wipe * w);
       const sx = Math.round(wipe * source.width);
       ctx.drawImage(source.image, sx, 0, source.width - sx, source.height, x, 0, w - x, h);
-      ctx.save();
-      ctx.strokeStyle = 'rgba(251,248,241,0.9)';
-      ctx.lineWidth = Math.max(1.5, h * 0.003);
-      ctx.beginPath();
-      ctx.moveTo(x + 0.5, 0);
-      ctx.lineTo(x + 0.5, h);
-      ctx.stroke();
-      ctx.restore();
     }
   }, [source, cube, wipe, holding, graderFor]);
 
-  // Drag anywhere on the picture to place the divider.
-  const dragging = useRef(false);
+  // Looking closer: wheel, pinch, and a drag that pans once zoomed. Fitted, a
+  // drag anywhere places the divider, as it always did; zoomed, the drag is
+  // the pan's and the divider keeps a handle that works at any zoom.
+  // A finger does not move the divider until it has travelled (or lifts as a
+  // tap): the first of two fingers landing for a pinch would otherwise throw
+  // the divider to wherever it touched. A mouse places it at once.
+  const dragging = useRef<{ startX: number; live: boolean } | null>(null);
+  const fingers = useRef(0);
+  const zoomedRef = useRef(false);
+  const natural = useMemo(
+    () => (source ? { width: source.width, height: source.height } : null),
+    [source],
+  );
+  const view = usePictureZoom({
+    natural,
+    resetKey: source,
+    claim: (e) => wipeClaims(e.target, zoomedRef.current),
+    onTakeover: () => {
+      dragging.current = null;
+    },
+  });
+  zoomedRef.current = view.zoomed;
   const wipeFrom = (e: React.PointerEvent<HTMLElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    if (rect.width <= 0) return;
-    setWipe(Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)));
+    const f = view.fractionAt(e.clientX, e.clientY).x;
+    setWipe(Math.min(1, Math.max(0, f)));
   };
+  const comparing = Boolean(source && cube && !holding);
+  // The divider, where the picture is — held inside the frame so its handle
+  // can always be reached, even when the line itself is panned out of view.
+  const { rect, viewport } = view;
+  const dividerX = Math.min(Math.max(rect.x + wipe * rect.width, HANDLE_INSET), Math.max(HANDLE_INSET, viewport.width - HANDLE_INSET));
+  const dividerTop = Math.max(0, rect.y);
+  const dividerBottom = Math.min(viewport.height, rect.y + rect.height);
 
   const asShot = isDefaultDevelop(draft);
 
@@ -344,6 +383,11 @@ export default function DevelopSheet({
           >
             As shot
           </button>
+          {/* In the header, never over the picture (the lightbox's rule); under
+              820px there is none — the pinch is the gesture there. */}
+          {source && (
+            <StageZoomControl zoom={view.zoom} hint="wheel, or pinch" className="flex-none max-[820px]:hidden" />
+          )}
           <button
             type="button"
             onClick={onCancel}
@@ -359,31 +403,69 @@ export default function DevelopSheet({
               reveals the untouched frame to its right. */}
           <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-2 max-[820px]:flex-none">
             <div
+              ref={view.viewportRef}
               // On a phone the picture takes a fixed share of the MEASURED
               // app height (`--app-h`, never `vh`: a locked document is where
               // a stale unit can never be corrected — `frontend.md`) and the
               // column scrolls under it.
-              className="relative flex-1 min-h-0 bg-frame rounded-paper overflow-hidden touch-none select-none cursor-col-resize max-[820px]:flex-none max-[820px]:h-[calc(var(--app-h)*0.38)]"
+              className={`relative flex-1 min-h-0 bg-frame rounded-paper overflow-hidden touch-none select-none max-[820px]:flex-none max-[820px]:h-[calc(var(--app-h)*0.38)] ${
+                view.zoomed ? (view.panning ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-col-resize'
+              }`}
               onPointerDown={(e) => {
-                dragging.current = true;
+                const touch = e.pointerType === 'touch';
+                if (touch) fingers.current += 1;
+                // A second finger is the pinch's (`onTakeover`), never a wipe.
+                if (dragging.current || (touch && fingers.current > 1)) return;
+                if (!wipeClaims(e.target, view.zoomed)) return;
+                dragging.current = { startX: e.clientX, live: !touch };
                 e.currentTarget.setPointerCapture(e.pointerId);
-                wipeFrom(e);
+                if (!touch) wipeFrom(e);
               }}
               onPointerMove={(e) => {
-                if (dragging.current) wipeFrom(e);
+                const d = dragging.current;
+                if (!d) return;
+                if (!d.live && Math.abs(e.clientX - d.startX) > TOUCH_SLOP) d.live = true;
+                if (d.live) wipeFrom(e);
               }}
-              onPointerUp={() => {
-                dragging.current = false;
+              onPointerUp={(e) => {
+                if (e.pointerType === 'touch') fingers.current = Math.max(0, fingers.current - 1);
+                // A finger that never travelled was a tap: it places the divider.
+                if (dragging.current && !dragging.current.live) wipeFrom(e);
+                dragging.current = null;
               }}
-              onPointerCancel={() => {
-                dragging.current = false;
+              onPointerCancel={(e) => {
+                if (e.pointerType === 'touch') fingers.current = Math.max(0, fingers.current - 1);
+                dragging.current = null;
               }}
             >
               <canvas
                 ref={canvasRef}
                 className="absolute inset-0 w-full h-full object-contain"
+                style={{
+                  transform: view.transform,
+                  // A finger is followed as it moves; a button is animated.
+                  transition: view.settling ? 'transform 220ms var(--ease-paper)' : undefined,
+                }}
                 aria-label="The picture, corrected"
               />
+              {comparing && (
+                <div
+                  data-wipe-handle
+                  className="absolute w-7 -ml-3.5 cursor-col-resize group"
+                  style={{ left: dividerX, top: dividerTop, height: Math.max(0, dividerBottom - dividerTop) }}
+                  title="Drag to compare with the picture as shot"
+                  aria-hidden="true"
+                >
+                  {wipe < 1 && (
+                    <span className="absolute inset-y-0 left-1/2 w-[1.5px] -ml-[0.75px] bg-[rgba(251,248,241,0.9)] pointer-events-none" />
+                  )}
+                  <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 grid place-items-center w-6 h-6 rounded-full bg-[rgba(251,248,241,0.92)] border border-line-strong text-ink-soft shadow-paper group-hover:border-accent group-hover:text-accent-ink pointer-events-none">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 7l-5 5 5 5M15 7l5 5-5 5" />
+                    </svg>
+                  </span>
+                </div>
+              )}
               {!file && (
                 <span className="absolute inset-0 grid place-items-center px-6 text-center font-mono text-2xs text-muted">
                   This slide has no picture yet — tick one in the Library.
@@ -425,7 +507,9 @@ export default function DevelopSheet({
               {describeDevelop(draft)}
               {note ? ` — ${note}` : ''}
               {source && cube
-                ? ' · drag across the picture to compare'
+                ? view.zoomed
+                  ? ' · drag to look around, the handle on the divider compares'
+                  : ' · drag across the picture to compare, wheel or pinch to look closer'
                 : source && !cube
                   ? ' · nothing changes the picture yet'
                   : ''}

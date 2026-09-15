@@ -8,7 +8,9 @@
  * past the edges of the picture, so the picture is moved by a TRANSFORM and
  * every limit here is arithmetic we own.
  *
- * DOM-free, tested beside; the hook (`use-media-viewer.ts`) does the events.
+ * DOM-free, tested beside; the hooks do the events — `use-media-viewer.ts` for
+ * the lightbox's deck, `use-picture-zoom.ts` for one picture with no deck
+ * (the develop sheet).
  */
 
 /** Fit is the floor: a viewer showing less than the whole picture shows nothing. */
@@ -39,27 +41,71 @@ export interface View {
 
 export const FITTED: View = { scale: 1, x: 0, y: 0 };
 
-export function clampViewZoom(scale: number): number {
+/**
+ * The scale held between the fit and a ceiling. Every function that can reach
+ * a scale takes the ceiling as its last argument, defaulting to the lightbox's
+ * 8×: the develop sheet stops at its preview's own pixels (`pixelCeiling`).
+ */
+export function clampViewZoom(scale: number, max: number = MAX_VIEW_ZOOM): number {
   if (!Number.isFinite(scale)) return MIN_VIEW_ZOOM;
-  return Math.min(MAX_VIEW_ZOOM, Math.max(MIN_VIEW_ZOOM, scale));
+  return Math.min(Math.max(MIN_VIEW_ZOOM, max), Math.max(MIN_VIEW_ZOOM, scale));
 }
 
-export function stepViewZoom(scale: number, direction: 1 | -1): number {
-  return clampViewZoom(direction === 1 ? scale * VIEW_ZOOM_STEP : scale / VIEW_ZOOM_STEP);
+export function stepViewZoom(scale: number, direction: 1 | -1, max: number = MAX_VIEW_ZOOM): number {
+  return clampViewZoom(direction === 1 ? scale * VIEW_ZOOM_STEP : scale / VIEW_ZOOM_STEP, max);
 }
 
 /**
  * A wheel notch as a multiplier — exponential, so the gesture feels the same
  * at every scale, on the same 400-unit divisor the stages use.
  */
-export function zoomByWheelDelta(scale: number, deltaY: number): number {
-  return clampViewZoom(scale * Math.exp(-deltaY / 400));
+export function zoomByWheelDelta(scale: number, deltaY: number, max: number = MAX_VIEW_ZOOM): number {
+  return clampViewZoom(scale * Math.exp(-deltaY / 400), max);
 }
 
 /** A pinch's finger-distance ratio applied to the scale it started from. */
-export function zoomByPinchRatio(startScale: number, ratio: number): number {
-  if (!Number.isFinite(ratio) || ratio <= 0) return clampViewZoom(startScale);
-  return clampViewZoom(startScale * ratio);
+export function zoomByPinchRatio(startScale: number, ratio: number, max: number = MAX_VIEW_ZOOM): number {
+  if (!Number.isFinite(ratio) || ratio <= 0) return clampViewZoom(startScale, max);
+  return clampViewZoom(startScale * ratio, max);
+}
+
+/**
+ * The deepest zoom that still shows real pixels: one pixel of the picture per
+ * device pixel of the screen — past it the preview is only enlarged, and a
+ * develop is judged on what is there. Never under 2×, so a picture already
+ * near its own size can still be looked into; never over the lightbox's 8×.
+ * A size not known yet gets the floor.
+ */
+export function pixelCeiling(natural: Box | null, contained: Box, devicePixelRatio: number): number {
+  const dpr = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;
+  if (!natural || !(natural.width > 0) || !(contained.width > 0)) return 2;
+  return Math.min(MAX_VIEW_ZOOM, Math.max(2, natural.width / (contained.width * dpr)));
+}
+
+/**
+ * Where a point of the viewport falls on the picture, as a share of its width
+ * and height (0 at the left/top edge, 1 at the right/bottom; outside when the
+ * point is off the picture). `anchor` is measured from the viewport's centre,
+ * like `zoomAbout`'s.
+ */
+export function pictureFraction(view: View, anchor: Point, content: Box): Point {
+  const scale = view.scale > 0 ? view.scale : 1;
+  return {
+    x: content.width > 0 ? (anchor.x - view.x) / scale / content.width + 0.5 : 0.5,
+    y: content.height > 0 ? (anchor.y - view.y) / scale / content.height + 0.5 : 0.5,
+  };
+}
+
+/** Where the picture sits in the viewport, in its pixels from the top-left corner. */
+export function pictureRect(view: View, viewport: Box, content: Box): Box & Point {
+  const width = content.width * view.scale;
+  const height = content.height * view.scale;
+  return {
+    x: viewport.width / 2 + view.x - width / 2,
+    y: viewport.height / 2 + view.y - height / 2,
+    width,
+    height,
+  };
 }
 
 /**
@@ -89,8 +135,8 @@ export function panLimit(viewport: Box, content: Box, scale: number): Point {
 }
 
 /** The same view with its offsets held inside those limits. */
-export function clampView(view: View, viewport: Box, content: Box): View {
-  const scale = clampViewZoom(view.scale);
+export function clampView(view: View, viewport: Box, content: Box, max: number = MAX_VIEW_ZOOM): View {
+  const scale = clampViewZoom(view.scale, max);
   const limit = panLimit(viewport, content, scale);
   return {
     scale,
@@ -116,9 +162,10 @@ export function zoomAbout(
   anchor: Point,
   viewport: Box,
   content: Box,
+  max: number = MAX_VIEW_ZOOM,
 ): View {
-  const scale = clampViewZoom(next);
-  if (view.scale <= 0) return clampView({ ...view, scale }, viewport, content);
+  const scale = clampViewZoom(next, max);
+  if (view.scale <= 0) return clampView({ ...view, scale }, viewport, content, max);
   const k = scale / view.scale;
   return clampView(
     {
@@ -128,6 +175,7 @@ export function zoomAbout(
     },
     viewport,
     content,
+    max,
   );
 }
 

@@ -7,6 +7,9 @@ import {
   clampViewZoom,
   containedSize,
   panLimit,
+  pictureFraction,
+  pictureRect,
+  pixelCeiling,
   rubberBand,
   stepViewZoom,
   swipeCommit,
@@ -179,5 +182,64 @@ describe('sweepRestarts', () => {
 
   it('ignores jitter too small to be a gesture', () => {
     expect(sweepRestarts(-1, -5)).toBe(false);
+  });
+});
+
+describe('a lower ceiling', () => {
+  it('holds every way of reaching a scale under it', () => {
+    expect(clampViewZoom(5, 3)).toBe(3);
+    expect(stepViewZoom(2.5, 1, 3)).toBe(3);
+    expect(zoomByWheelDelta(2.9, -400, 3)).toBe(3);
+    expect(zoomByPinchRatio(2, 4, 3)).toBe(3);
+    expect(zoomAbout(FITTED, 9, { x: 0, y: 0 }, viewport, viewport, 3).scale).toBe(3);
+    expect(clampView({ scale: 6, x: 0, y: 0 }, viewport, viewport, 3).scale).toBe(3);
+  });
+
+  it('never goes under the fit, whatever it is asked', () => {
+    expect(clampViewZoom(4, 0.5)).toBe(MIN_VIEW_ZOOM);
+  });
+});
+
+describe('pixelCeiling', () => {
+  it('stops where one picture pixel meets one device pixel', () => {
+    // 3000 px of picture drawn 600 css px wide on a 2× screen: 1:1 at 2.5×.
+    expect(pixelCeiling({ width: 3000, height: 2000 }, { width: 600, height: 400 }, 2)).toBeCloseTo(2.5);
+  });
+
+  it('keeps 2× as a floor and 8× as a ceiling', () => {
+    expect(pixelCeiling({ width: 800, height: 600 }, { width: 800, height: 600 }, 2)).toBe(2);
+    expect(pixelCeiling({ width: 12000, height: 8000 }, { width: 300, height: 200 }, 1)).toBe(MAX_VIEW_ZOOM);
+    expect(pixelCeiling(null, viewport, 2)).toBe(2);
+    expect(pixelCeiling({ width: 3000, height: 2000 }, { width: 600, height: 400 }, Number.NaN)).toBe(5);
+  });
+});
+
+describe('pictureFraction / pictureRect', () => {
+  const content = { width: 600, height: 400 };
+
+  it('reads the centre, the edges and a point off the picture at the fit', () => {
+    expect(pictureFraction(FITTED, { x: 0, y: 0 }, content)).toEqual({ x: 0.5, y: 0.5 });
+    expect(pictureFraction(FITTED, { x: -300, y: 200 }, content)).toEqual({ x: 0, y: 1 });
+    // The letterbox beside a contained picture is outside it.
+    expect(pictureFraction(FITTED, { x: 390, y: 0 }, content).x).toBeGreaterThan(1);
+  });
+
+  it('follows a zoomed, panned view back to the same point of the picture', () => {
+    const view = zoomAbout(FITTED, 3, { x: 120, y: -40 }, viewport, content);
+    // The point under the anchor did not move, so it reads what it read at the fit.
+    const before = pictureFraction(FITTED, { x: 120, y: -40 }, content);
+    const after = pictureFraction(view, { x: 120, y: -40 }, content);
+    expect(after.x).toBeCloseTo(before.x);
+    expect(after.y).toBeCloseTo(before.y);
+  });
+
+  it('places the picture in the viewport, and a fraction back onto it', () => {
+    expect(pictureRect(FITTED, viewport, content)).toEqual({ x: 100, y: 100, width: 600, height: 400 });
+    const view = { scale: 2, x: 50, y: 0 };
+    const rect = pictureRect(view, viewport, content);
+    expect(rect).toEqual({ x: -150, y: -100, width: 1200, height: 800 });
+    // The quarter-way point of the picture, read back from where the rect puts it.
+    const px = rect.x + 0.25 * rect.width - viewport.width / 2;
+    expect(pictureFraction(view, { x: px, y: 0 }, content).x).toBeCloseTo(0.25);
   });
 });
