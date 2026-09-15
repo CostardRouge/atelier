@@ -9,7 +9,10 @@ import {
   PICKED_MAX_STOPS,
   edgeFadeAt,
   hexToRgba,
+  moveTape,
+  tapeBox,
   tapeGeometry,
+  tapeMoved,
   SCRUB_KITS,
   SCRUB_DEFAULTS,
   driftAt,
@@ -500,6 +503,66 @@ describe('the tape’s geometry', () => {
     expect(top.dir).toBe(1);
     expect(top.u).toBe(0.5);
     expect(top.x0).toBe(135);
+  });
+
+  it('moves the tape by its offsets, and places an unmoved one exactly as before', () => {
+    const base = { tape: 'bottom' as const, tapeWidth: 0.5, edgeOffset: 0.045 };
+    const still = tapeGeometry(1080, 1920, { ...base, offsetX: 0, offsetY: 0 });
+    expect(still.x0).toBe(270);
+    expect(still.baseline).toBeCloseTo(1920 * 0.955, 6);
+    const moved = tapeGeometry(1080, 1920, { ...base, offsetX: 0.1, offsetY: -0.3 });
+    expect(moved.x0).toBeCloseTo(270 + 108, 6);
+    expect(moved.baseline).toBeCloseTo(1920 * (0.955 - 0.3), 6);
+  });
+
+  it('keeps a dragged band inside the frame on the frame’s own aspect', () => {
+    // A bottom tape dragged to the very top: its ticks grow UP, so the
+    // baseline stops where the band's top meets the frame's.
+    const g = tapeGeometry(1920, 1080, { tape: 'bottom', tapeWidth: 1, edgeOffset: 0.02, offsetY: -0.96 });
+    expect(g.band.y).toBeCloseTo(0, 6);
+    expect(g.band.y + g.band.height).toBeLessThanOrEqual(1080);
+  });
+
+  it('grabs the band that covers the head and the tallest tick, on either edge', () => {
+    for (const tape of ['bottom', 'top'] as const) {
+      const g = tapeGeometry(1080, 1920, { tape, tapeWidth: 0.86, edgeOffset: 0.045, tickHeight: 2 });
+      const box = tapeBox(1080, 1920, { tape, tapeWidth: 0.86, edgeOffset: 0.045, tickHeight: 2 });
+      expect(box).toEqual(g.band);
+      const reach = Math.max(g.tallTick, g.headTall);
+      const far = g.baseline + g.dir * reach;
+      expect(Math.min(g.baseline, far)).toBeGreaterThanOrEqual(box.y);
+      expect(Math.max(g.baseline, far)).toBeLessThanOrEqual(box.y + box.height);
+      expect(box.x).toBeLessThan(g.x0);
+      expect(box.x + box.width).toBeGreaterThan(g.x1);
+    }
+  });
+
+  it('drags by increments, and never past an end or off the frame', () => {
+    const o = opts({ tapeWidth: 0.6 });
+    const once = moveTape(o, 0.1, -0.2);
+    expect(once.offsetX).toBeCloseTo(0.1, 6);
+    expect(once.offsetY).toBeCloseTo(-0.2, 6);
+    expect(tapeMoved(once)).toBe(true);
+    const twice = moveTape(once, 0.1, -0.2);
+    // Sideways, only until an end meets the edge: (1 - 0.6) / 2.
+    expect(twice.offsetX).toBeCloseTo(0.2, 6);
+    expect(twice.offsetY).toBeCloseTo(-0.4, 6);
+    const far = moveTape(twice, -5, -5);
+    expect(far.offsetX).toBeCloseTo(-0.2, 6);
+    // The baseline stays inside: from 1 - 0.045 up to the edge minimum.
+    expect(far.offsetY).toBeCloseTo(0.02 - 0.955, 6);
+    expect(moveTape(o, NaN, 0).offsetX).toBe(0);
+    expect(tapeMoved(o)).toBe(false);
+    // A full-width tape moves up and down only.
+    expect(moveTape(opts({ tapeWidth: 1 }), 0.3, 0).offsetX).toBe(0);
+  });
+
+  it('reads a stored drag against the placement it is measured from', () => {
+    expect(scrubOptions({ offsetX: 0.4, tapeWidth: 0.6 }).offsetX).toBeCloseTo(0.2, 6);
+    // Widened after the drag: the tape comes back inside the frame.
+    expect(scrubOptions({ offsetX: 0.2, tapeWidth: 0.9 }).offsetX).toBeCloseTo(0.05, 6);
+    expect(scrubOptions({ offsetY: 0.5, tape: 'bottom' }).offsetY).toBeCloseTo(0.98 - 0.955, 6);
+    expect(scrubOptions({ offsetX: 'left' }).offsetX).toBe(0);
   });
 
   it('fades to nothing at the ends and to full past the ramp, or not at all when off', () => {

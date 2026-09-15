@@ -33,7 +33,7 @@ import type {
   HookPictureStatus,
   HookVariant,
 } from './hook-variant';
-import { Group } from './panel-ui';
+import { Group, MovedRow } from './panel-ui';
 import { paintScrub } from './scrub-paint';
 import {
   EASINGS,
@@ -43,12 +43,15 @@ import {
   SCRUB_KITS,
   SCRUB_DEFAULTS,
   SCRUB_LIMITS,
+  moveTape,
   partitionPicked,
   scrubOptions,
   scrubPlan,
   scrubScore,
   scrubSeeds,
   scrubWants,
+  tapeBox,
+  tapeMoved,
   type ScrubOptions,
 } from './scrub-plan';
 
@@ -429,6 +432,9 @@ function ScrubPanel({ options, onChange, ctx, host }: HookPanelProps) {
             format={(v) => `${(v * 100).toFixed(1)}%`}
           />
         </FieldRow>
+        {tapeMoved(o) && (
+          <MovedRow offsetX={o.offsetX} offsetY={o.offsetY} onReset={() => set({ offsetX: 0, offsetY: 0 })} />
+        )}
         <FieldRow label="Colours" hint="The ticks ahead, then the head and the days it has passed.">
           <input
             type="color"
@@ -681,6 +687,18 @@ export const scrubVariant: HookVariant = {
         : undefined,
       mixWithSource: o.sound && o.mixWithClip,
     };
+  },
+  // The TAPE is what a click grabs and a drag moves: the flashes fill the frame
+  // and the numeral is a badge piece, so neither has a place to be dragged to.
+  // Nothing to grab when there is no sweep to draw: `scrubPlan` refuses only a
+  // piece dated outside its calendar, checked here without building a plan on
+  // every repaint of the outline.
+  frameBox(options, ctx, frame) {
+    if (!ctx.calendar?.some((day) => day.date === ctx.date)) return null;
+    return tapeBox(frame.width, frame.height, scrubOptions(options));
+  },
+  moveBy(options, dx, dy) {
+    return { ...moveTape(scrubOptions(options), dx, dy) };
   },
   Sketch: ScrubSketch,
   Panel: ScrubPanel,

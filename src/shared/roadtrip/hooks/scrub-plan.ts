@@ -85,6 +85,12 @@ export interface ScrubOptions {
   tapeWidth: number;
   /** How far the tape sits from its edge, as a share of the frame's height. */
   edgeOffset: number;
+  /**
+   * Where a drag on the stage left the tape, from the placement above: shares
+   * of the frame's width and height. 0 is where Runs / From edge put it.
+   */
+  offsetX: number;
+  offsetY: number;
   /** Ticks and track, `#rrggbb`. */
   tickColor: string;
   /** The head and every tick it has passed, `#rrggbb`. */
@@ -132,6 +138,8 @@ export const SCRUB_DEFAULTS: ScrubOptions = {
   tape: 'bottom',
   tapeWidth: 0.86,
   edgeOffset: 0.045,
+  offsetX: 0,
+  offsetY: 0,
   tickColor: '#ffffff',
   passedColor: '#d9442a',
   tickOpacity: 0.55,
@@ -179,27 +187,124 @@ const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 /** `#rrggbb` → `rgba(r,g,b,a)`; anything unreadable is white, never a throw. */
 export { hexToRgba } from './colour';
 
+/** What the tape's geometry is read from; a drag's offsets and the tick height may be absent (0 and 1). */
+export type TapeGeometryOptions = Pick<ScrubOptions, 'tape' | 'tapeWidth' | 'edgeOffset'> &
+  Partial<Pick<ScrubOptions, 'offsetX' | 'offsetY' | 'tickHeight'>>;
+
+export interface TapeGeometry {
+  x0: number;
+  x1: number;
+  length: number;
+  baseline: number;
+  /** Which way the ticks grow: +1 down (a top tape), -1 up. */
+  dir: 1 | -1;
+  /** The 1080-frame unit every drawn size is in. */
+  u: number;
+  shortTick: number;
+  tallTick: number;
+  headTall: number;
+  /** How deep the band behind the tape reaches from the baseline. */
+  bandDepth: number;
+  /** The band's rectangle — the tallest thing on the tape with room to breathe; what a click grabs. */
+  band: { x: number; y: number; width: number; height: number };
+}
+
 /**
- * Where the tape sits on a frame of `w`×`h`: its two ends, its baseline, and
- * which way its ticks grow (away from the frame's edge, into the picture).
- * `u` is the 1080-frame unit every drawn size is in.
+ * Where the tape sits on a frame of `w`×`h`: its two ends, its baseline, which
+ * way its ticks grow (away from the frame's edge, into the picture) and every
+ * size drawn on it. The paint only reads this, so what the stage grabs
+ * (`tapeBox`) is exactly what is drawn.
+ *
+ * A dragged tape (a non-zero offset) is kept inside the frame on this frame's
+ * own aspect — the band's depth is in 1080-frame units, so how much of the
+ * height it takes depends on the shape. An unmoved tape is placed exactly as
+ * it always was.
  */
-export function tapeGeometry(
-  w: number,
-  h: number,
-  opts: Pick<ScrubOptions, 'tape' | 'tapeWidth' | 'edgeOffset'>,
-): { x0: number; x1: number; length: number; baseline: number; dir: 1 | -1; u: number } {
+export function tapeGeometry(w: number, h: number, opts: TapeGeometryOptions): TapeGeometry {
+  const u = w / 1080;
+  const tickHeight = opts.tickHeight ?? 1;
+  const offsetX = opts.offsetX ?? 0;
+  const offsetY = opts.offsetY ?? 0;
   const length = w * opts.tapeWidth;
-  const x0 = (w - length) / 2;
   const top = opts.tape === 'top';
+  const dir: 1 | -1 = top ? 1 : -1;
+  const shortTick = 13 * u * tickHeight;
+  const tallTick = 26 * u * tickHeight;
+  const headTall = 40 * u * Math.max(0.6, Math.min(1.4, tickHeight));
+  const bandDepth = Math.max(tallTick, headTall) + 14 * u;
+  const breathe = 6 * u;
+
+  let x0 = (w - length) / 2 + w * offsetX;
+  if (offsetX !== 0) x0 = Math.min(Math.max(0, w - length), Math.max(0, x0));
+  let baseline = (top ? h * opts.edgeOffset : h * (1 - opts.edgeOffset)) + h * offsetY;
+  if (offsetY !== 0) {
+    const lo = top ? breathe : bandDepth + breathe;
+    const hi = top ? h - bandDepth - breathe : h - breathe;
+    if (lo <= hi) baseline = Math.min(hi, Math.max(lo, baseline));
+  }
+
+  const pad = 16 * u;
   return {
     x0,
     x1: x0 + length,
     length,
-    baseline: top ? h * opts.edgeOffset : h * (1 - opts.edgeOffset),
-    dir: top ? 1 : -1,
-    u: w / 1080,
+    baseline,
+    dir,
+    u,
+    shortTick,
+    tallTick,
+    headTall,
+    bandDepth,
+    band: {
+      x: x0 - pad,
+      y: dir < 0 ? baseline - bandDepth - breathe : baseline - breathe,
+      width: length + pad * 2,
+      height: bandDepth + breathe * 2,
+    },
   };
+}
+
+/** The tape's band on a frame — what the stage outlines and a click grabs. */
+export function tapeBox(
+  w: number,
+  h: number,
+  opts: TapeGeometryOptions,
+): { x: number; y: number; width: number; height: number } {
+  return tapeGeometry(w, h, opts).band;
+}
+
+/**
+ * How far a drag may move the tape, frame-free: sideways until an end meets
+ * the frame's edge, up and down while the baseline stays inside the frame
+ * (`tapeGeometry` then keeps the band itself inside, on the frame's aspect).
+ */
+export function tapeOffsetLimits(
+  opts: Pick<ScrubOptions, 'tape' | 'tapeWidth' | 'edgeOffset'>,
+): { x: { min: number; max: number }; y: { min: number; max: number } } {
+  const side = Math.max(0, (1 - opts.tapeWidth) / 2);
+  const anchor = opts.tape === 'top' ? opts.edgeOffset : 1 - opts.edgeOffset;
+  const edge = SCRUB_LIMITS.edgeOffset.min;
+  return {
+    x: { min: -side, max: side },
+    y: { min: edge - anchor, max: 1 - edge - anchor },
+  };
+}
+
+/** The tape after a drag of `dx`, `dy` — shares of the frame, incremental. */
+export function moveTape(opts: ScrubOptions, dx: number, dy: number): ScrubOptions {
+  const limits = tapeOffsetLimits(opts);
+  const step = (v: number, d: number, l: { min: number; max: number }) =>
+    Math.min(l.max, Math.max(l.min, v + (Number.isFinite(d) ? d : 0)));
+  return {
+    ...opts,
+    offsetX: step(opts.offsetX, dx, limits.x),
+    offsetY: step(opts.offsetY, dy, limits.y),
+  };
+}
+
+/** The tape has been dragged away from where Runs / From edge put it. */
+export function tapeMoved(opts: Pick<ScrubOptions, 'offsetX' | 'offsetY'>): boolean {
+  return opts.offsetX !== 0 || opts.offsetY !== 0;
 }
 
 /** How much of the tape's length each end fades over, when the fade is on. */
@@ -278,6 +383,12 @@ function clampOr(n: number, min: number, max: number, fallback: number): number 
 /** A stored options record, read through the defaults and clamped. */
 export function scrubOptions(raw: Readonly<Record<string, unknown>>): ScrubOptions {
   const o = { ...SCRUB_DEFAULTS, ...raw } as ScrubOptions;
+  const tape = o.tape === 'top' ? 'top' : 'bottom';
+  const tapeWidth = clampOr(Number(o.tapeWidth), SCRUB_LIMITS.tapeWidth.min, SCRUB_LIMITS.tapeWidth.max, SCRUB_DEFAULTS.tapeWidth);
+  const edgeOffset = clampOr(Number(o.edgeOffset), SCRUB_LIMITS.edgeOffset.min, SCRUB_LIMITS.edgeOffset.max, SCRUB_DEFAULTS.edgeOffset);
+  // A drag's offsets are read against the placement they are measured from, so
+  // a tape widened or moved to the other edge after a drag still fits.
+  const limits = tapeOffsetLimits({ tape, tapeWidth, edgeOffset });
   return {
     stopsOn: o.stopsOn === 'picked' ? 'picked' : 'pieces',
     picked: readPicked(o.picked),
@@ -301,9 +412,11 @@ export function scrubOptions(raw: Readonly<Record<string, unknown>>): ScrubOptio
       SCRUB_DEFAULTS.delaySeconds,
     ),
     flash: o.flash !== false,
-    tape: o.tape === 'top' ? 'top' : 'bottom',
-    tapeWidth: clampOr(Number(o.tapeWidth), SCRUB_LIMITS.tapeWidth.min, SCRUB_LIMITS.tapeWidth.max, SCRUB_DEFAULTS.tapeWidth),
-    edgeOffset: clampOr(Number(o.edgeOffset), SCRUB_LIMITS.edgeOffset.min, SCRUB_LIMITS.edgeOffset.max, SCRUB_DEFAULTS.edgeOffset),
+    tape,
+    tapeWidth,
+    edgeOffset,
+    offsetX: clampOr(Number(o.offsetX), limits.x.min, limits.x.max, 0),
+    offsetY: clampOr(Number(o.offsetY), limits.y.min, limits.y.max, 0),
     tickColor: typeof o.tickColor === 'string' && HEX_COLOR.test(o.tickColor) ? o.tickColor.toLowerCase() : SCRUB_DEFAULTS.tickColor,
     passedColor: typeof o.passedColor === 'string' && HEX_COLOR.test(o.passedColor) ? o.passedColor.toLowerCase() : SCRUB_DEFAULTS.passedColor,
     tickOpacity: clampOr(Number(o.tickOpacity), SCRUB_LIMITS.tickOpacity.min, SCRUB_LIMITS.tickOpacity.max, SCRUB_DEFAULTS.tickOpacity),

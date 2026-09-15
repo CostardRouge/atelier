@@ -105,16 +105,13 @@ function paintTape(
   w: number,
   h: number,
 ): void {
-  const { x0, x1, length, baseline, dir, u } = tapeGeometry(w, h, opts);
+  // Every size and the band come from the pure geometry, so the rectangle the
+  // stage grabs (`tapeBox`) is the one drawn here.
+  const { x0, x1, length, baseline, dir, u, shortTick, headTall, tallTick, band } = tapeGeometry(w, h, opts);
   const headDay = plan.headDayAt(t);
   const legs = new Set(plan.legStarts);
   const xOf = (day: number) => x0 + length * tapeFraction(day, plan.totalDays);
   const fade = (x: number) => edgeFadeAt(x, x0, x1, opts.edgeFade);
-  const shortTick = 13 * u * opts.tickHeight;
-  const tallTick = 26 * u * opts.tickHeight;
-  const headTall = 40 * u * Math.max(0.6, Math.min(1.4, opts.tickHeight));
-  // The band behind the tape covers the tallest thing on it, with room to breathe.
-  const bandDepth = Math.max(tallTick, headTall) + 14 * u;
 
   g.save();
 
@@ -122,11 +119,7 @@ function paintTape(
     // A dark band, rounded, faded at the ends with everything else when the
     // fade is on — a gradient fill rather than a mask, so no compositing mode
     // is involved (a shadow is dropped under `destination-*`, `studio.md`).
-    const pad = 16 * u;
-    const bx = x0 - pad;
-    const bw = length + pad * 2;
-    const by = dir < 0 ? baseline - bandDepth - 6 * u : baseline - 6 * u;
-    const bh = bandDepth + 12 * u;
+    const { x: bx, y: by, width: bw, height: bh } = band;
     if (opts.edgeFade) {
       const grad = g.createLinearGradient(bx, 0, bx + bw, 0);
       const stops = 12;

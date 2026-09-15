@@ -26,7 +26,6 @@ import {
   FieldRow,
   NumberField,
   RangeField,
-  Readout,
   SelectField,
   SwitchRow,
   ToggleField,
@@ -63,7 +62,7 @@ import {
   tripPlaces,
   type MapOptions,
 } from './map-plan';
-import { Group } from './panel-ui';
+import { Group, MovedRow, resetLink } from './panel-ui';
 import { KIT_IDS, TICK_KITS } from './tick-kits';
 
 export { MAP_DEFAULTS, mapOptions, type MapOptions, type MapStop } from './map-plan';
@@ -82,8 +81,6 @@ function MapSketch() {
   );
 }
 
-const resetLink =
-  'p-0 border-0 bg-transparent text-xs text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink';
 const searchInputClass =
   'font-sans text-sm h-[2.125rem] px-3 border border-line-strong rounded-control bg-surface text-ink focus:outline-none focus:border-accent';
 
@@ -558,22 +555,8 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
             format={(v) => `${Math.round(v * 100)}%`}
           />
         </FieldRow>
-        {/*
-          A drag on the stage has to have a way back, or the coarse placement
-          above stops meaning anything — the one-way-door rule the cover panel
-          had to be taught. Shown only once there is something to undo.
-        */}
         {mapMoved(o) && (
-          <FieldRow label="Moved" hint="Dragged away from the placement above.">
-            <Readout muted>
-              {`${o.offsetX >= 0 ? '+' : ''}${Math.round(o.offsetX * 100)}%, ${
-                o.offsetY >= 0 ? '+' : ''
-              }${Math.round(o.offsetY * 100)}%`}
-            </Readout>
-            <button type="button" onClick={() => set({ offsetX: 0, offsetY: 0 })} className={resetLink}>
-              Put it back
-            </button>
-          </FieldRow>
+          <MovedRow offsetX={o.offsetX} offsetY={o.offsetY} onReset={() => set({ offsetX: 0, offsetY: 0 })} />
         )}
         <FieldRow label="Plate" hint={o.plate ? undefined : 'A translucent panel behind the map, for a map over a busy picture.'}>
           <ToggleField label="Plate behind the map" checked={o.plate} onChange={(plate) => set({ plate })}>

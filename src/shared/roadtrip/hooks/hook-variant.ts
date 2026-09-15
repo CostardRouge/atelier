@@ -371,8 +371,9 @@ export interface HookVariant {
   /**
    * Where this opener's drawing sits in the frame, so the stage can let it be
    * POINTED AT and dragged like any other content. Absent, the opener is not
-   * grabbable and a press falls through to the picture, which is what a
-   * variant covering the whole frame (the badge, a scrub's tape) wants.
+   * grabbable and a press falls through to the picture, which is what the
+   * badge wants. A variant that fills the frame and draws something small over
+   * it (Défilé's tape) returns the small thing: that is what can be moved.
    *
    * Editor-only, and deliberately NOT on `HookRender`: `prepare()`'s closure
    * is what every renderer and both exports share, and none of them has any

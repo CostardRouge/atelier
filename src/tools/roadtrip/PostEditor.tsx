@@ -361,7 +361,7 @@ export default function PostEditor({
    * The opener as CONTENT on the stage: where its drawing sits, and what a
    * drag of it writes. Both come from the variant (`frameBox` / `moveBy`),
    * so an opener that does not offer them simply is not grabbable — the
-   * badge and Défilé, which cover the whole frame, do not.
+   * badge does not; Défilé offers its tape, the Itinerary its map.
    */
   const hookVariant = hookVariantById(post.badge.hook[0]?.id ?? '');
   const hookOptions = post.badge.hook[0]?.options ?? {};

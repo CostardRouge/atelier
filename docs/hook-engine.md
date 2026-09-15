@@ -592,8 +592,11 @@ to be draggable on the stage "like any other content", so `HookVariant` gained
 are on the VARIANT and not on `HookRender` on purpose: the closure `prepare()`
 returns is what the stage, the PNG deck, the rail and both exports share, and
 none of them has any business knowing where a pointer is. A variant that
-offers neither is not grabbable, which is the right answer for the badge and
-for a scrub whose tape spans the frame. The stage's order of claim is
+offers neither is not grabbable, which is the right answer for the badge.
+Défilé offers them too since the same day (the maintainer: "we should be able
+to drag the opener anywhere"): its flashes fill the frame, so what `frameBox`
+returns is the TAPE's band (`tapeBox`) and what a drag writes is
+`offsetX/offsetY` beside Runs / From edge. The stage's order of claim is
 elements → opener → picture, unchanged in spirit: the badge is composed far
 more often than the opener is placed.
 
