@@ -55,7 +55,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 20;
+export const TRIP_DOC_VERSION = 21;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers and the
@@ -761,6 +761,13 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * backdrop, the place marker and the reference day. A post that had the
  * boolean on lands on `auto` — the intent kept, the untrue anniversary dropped.
  *
+ * v20 → v21 REPAIRS the car. The Itinerary branch numbered its Route
+ * conversion v19 while `main` took v19 for the car, and a trip opened on that
+ * branch before the renumber was stamped v19 with no car at all — so the car
+ * block below never ran on it, and the garage threw on `car.model`. The car is
+ * read again through `readCarSpec`, which keeps a real spec exactly as it is
+ * and gives a missing one the default the opener always drew.
+ *
  * v18 → v19 gives the trip its CAR (`TripDoc.car`): the model, the colour,
  * the finish and the gear every Virée of the trip drives. Every stored trip
  * lands on the maintainer's own car — the Prado in Raptor black, fully
@@ -1131,6 +1138,12 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
         }),
       );
     }
+  }
+
+  if (migrated.version < 21) {
+    // A trip stamped v19 by the Itinerary branch skipped the car block above.
+    // Idempotent on every other document: a car that is there is kept as is.
+    migrated.car = readCarSpec(migrated.car);
   }
 
   migrated.version = TRIP_DOC_VERSION;

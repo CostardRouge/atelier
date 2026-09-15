@@ -135,6 +135,28 @@ describe('migrateTripDoc', () => {
   });
 });
 
+describe('migrateTripDoc — v20 → v21, the car is repaired', () => {
+  /** What the Itinerary branch stamped v19 — and main then stamped v20 — with no car. */
+  const carless = (version: number) => {
+    const doc = createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04');
+    delete (doc as Partial<TripDoc>).car;
+    return { ...doc, version } as TripDoc;
+  };
+
+  it('gives a carless v19 or v20 trip the default car', () => {
+    expect(migrateTripDoc(carless(19)).car).toEqual(DEFAULT_CAR);
+    expect(migrateTripDoc(carless(20)).car).toEqual(DEFAULT_CAR);
+  });
+
+  it('keeps the car a v20 trip already has', () => {
+    const doc = createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04');
+    const car = { ...doc.car, color: '#b3261e', finish: 'gloss' as const };
+    const migrated = migrateTripDoc({ ...doc, version: 20, car });
+    expect(migrated.car).toEqual(car);
+    expect(migrated.version).toBe(TRIP_DOC_VERSION);
+  });
+});
+
 describe('migrateTripDoc — v19 → v20, the Route becomes an Itinerary', () => {
   /** A piece composed with the retired `route` opener, on a trip with legs. */
   const v18 = () =>
