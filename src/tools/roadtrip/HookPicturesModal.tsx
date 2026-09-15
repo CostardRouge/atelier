@@ -13,10 +13,11 @@ import {
   groupByDay,
   inSpan,
   initialExclusions,
+  laterLeftOff,
   mergePool,
   quickSpans,
-  reachSpan,
   sortPool,
+  tripSpan,
   type DateSpan,
   type PoolCandidate,
 } from '../../shared/roadtrip/hooks/picture-pool';
@@ -26,7 +27,7 @@ import { useWinnowConnection } from '../../shared/sources/winnow/use-connection'
 import { useScopeRows } from '../../shared/sources/winnow/use-scope-rows';
 import WinnowThumb from '../../shared/sources/winnow/WinnowThumb';
 import Button from '../../shared/ui/Button';
-import { DateField } from '../../shared/ui/DateField';
+import { DateRangeField } from '../../shared/ui/DateField';
 import MediaLightbox, { type LightboxItem } from '../../shared/ui/MediaLightbox';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
 
@@ -44,6 +45,12 @@ interface HookPicturesModalProps {
    * whose pictures are not a run-up to the piece asks for (`defaultSpan`).
    */
   includeThisDay?: boolean;
+  /**
+   * The variant uses a picture shot after the piece's day. Without it such a
+   * picture is still offered — the dates reach the whole trip — but marked as
+   * left off (`laterLeftOff`).
+   */
+  keepsLater?: boolean;
   onCancel: () => void;
   onConfirm: (picked: HookPickedPicture[]) => void;
 }
@@ -190,13 +197,16 @@ export default function HookPicturesModal({
   ctx,
   selected,
   includeThisDay = false,
+  keepsLater = false,
   onCancel,
   onConfirm,
 }: HookPicturesModalProps) {
   const lib = useAssetLibrary();
   const { connection, client } = useWinnowConnection();
   const calendar = useMemo(() => ctx.calendar ?? [], [ctx.calendar]);
-  const reach = reachSpan(calendar, ctx.date);
+  // The dates reach the whole trip; only a piece dated outside it has none.
+  const bounds = calendar.some((day) => day.date === ctx.date) ? tripSpan(calendar) : null;
+  const leftOff = (date: string) => laterLeftOff(date, ctx.date, keepsLater);
   const [span, setSpan] = useState<DateSpan | null>(() =>
     defaultSpan(calendar, ctx.date, selected, includeThisDay),
   );
@@ -285,6 +295,7 @@ export default function HookPicturesModal({
   };
 
   const ticked = pool.filter((c) => !excluded.has(c.key));
+  const tickedLater = ticked.filter((c) => leftOff(c.date)).length;
   const toggle = (keys: readonly string[], on: boolean) =>
     setExcluded((prev) => {
       const next = new Set(prev);
@@ -351,29 +362,23 @@ export default function HookPicturesModal({
           </p>
         </div>
 
-        {span && reach ? (
+        {span && bounds ? (
           <div className="flex flex-col gap-2">
-            <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 max-w-[26rem]">
-              <DateField
-                label="From"
-                value={span.from}
-                min={reach.from}
-                max={span.to}
-                format={formatIsoDate}
-                onChange={(from) => ISO_DAY.test(from) && changeSpan({ from, to: span.to < from ? from : span.to })}
-              />
-              <span className="text-sm text-muted" aria-hidden="true">
-                →
-              </span>
-              <DateField
-                label="To"
-                value={span.to}
-                min={span.from}
-                max={reach.to}
-                format={formatIsoDate}
-                onChange={(to) => ISO_DAY.test(to) && changeSpan({ from: span.from > to ? to : span.from, to })}
-              />
-            </div>
+            {/* The suite's own range: the two dates side by side around their
+                arrow. A 1fr grid left each field on the left of its column. */}
+            <DateRangeField
+              start={span.from}
+              end={span.to}
+              min={bounds.from}
+              max={bounds.to}
+              format={formatIsoDate}
+              onChange={({ start, end }) => {
+                if (!ISO_DAY.test(start) || !ISO_DAY.test(end)) return;
+                // Moving one end past the other drags the other along.
+                if (start !== span.from) changeSpan({ from: start, to: end < start ? start : end });
+                else changeSpan({ from: start > end ? end : start, to: end });
+              }}
+            />
             <div className="flex items-center gap-1.5 flex-wrap" role="group" aria-label="Quick spans">
               {quick.map((q) => {
                 const on = q.from === span.from && q.to === span.to;
@@ -401,6 +406,11 @@ export default function HookPicturesModal({
           <span className="font-mono text-2xs tracking-[0.12em] uppercase text-muted">
             {ticked.length} of {pool.length} {pool.length === 1 ? 'photo' : 'photos'}
           </span>
+          {tickedLater > 0 && (
+            <span className="text-xs text-accent-ink">
+              {tickedLater} shot after this piece’s day — the opener leaves {tickedLater === 1 ? 'it' : 'them'} off
+            </span>
+          )}
           <button
             type="button"
             onClick={() => toggle(pool.map((c) => c.key), true)}
@@ -472,6 +482,9 @@ export default function HookPicturesModal({
                       >
                         {allOn ? 'none' : 'all'}
                       </button>
+                      {leftOff(group.date) && (
+                        <span className="text-xs text-accent-ink">after this piece’s day — left off</span>
+                      )}
                     </div>
                     {/* Pixel rows, never `auto` or `aspect-*`: a grid tile's
                         height must not be a share of anything (`frontend.md`). */}
@@ -481,6 +494,7 @@ export default function HookPicturesModal({
                           key={c.key}
                           candidate={c}
                           on={!excluded.has(c.key)}
+                          leftOff={leftOff(c.date)}
                           client={client}
                           thumbUrl={c.origin === 'library' ? lib.meta.get(c.asset.id)?.thumbUrl : undefined}
                           onToggle={() => toggle([c.key], excluded.has(c.key))}
@@ -539,6 +553,7 @@ export default function HookPicturesModal({
 function Tile({
   candidate,
   on,
+  leftOff,
   client,
   thumbUrl,
   onToggle,
@@ -546,6 +561,8 @@ function Tile({
 }: {
   candidate: Candidate;
   on: boolean;
+  /** Shot after the piece's day, for an opener that will not use it. */
+  leftOff: boolean;
   client: WinnowClient | null;
   thumbUrl: string | undefined;
   onToggle: () => void;
@@ -590,7 +607,7 @@ function Tile({
         ⤢
       </button>
       <span className="pointer-events-none absolute bottom-0 inset-x-0 px-1.5 py-0.5 font-mono text-3xs text-paper bg-[rgba(20,18,15,0.62)] truncate">
-        {candidate.origin === 'instance' ? '◇ ' : ''}
+        {leftOff ? 'left off · ' : candidate.origin === 'instance' ? '◇ ' : ''}
         {candidate.ref.name}
       </span>
     </div>

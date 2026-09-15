@@ -297,8 +297,8 @@ sound will add there is an audio track, since it writes none today.
   carries what the shell does for it — `choosePictures(selected)` resolving the
   kept list or null, and `pictureStatus` — and `HookPicker` draws the sheet
   (`HookPicturesModal`, through a portal: the inspector is itself a sheet on a
-  phone). It is the maintainer's gesture: a span (trip so far · this leg · last
-  7 days · this day, or two dates), every photo SHOT in it from the Library
+  phone). It is the maintainer's gesture: a span (whole trip · trip so far ·
+  this leg · last 7 days · this day, or two dates), every photo SHOT in it from the Library
   (dated by EXIF) and the connected instance, grouped by trip day, ALL ticked;
   untick, look large from a tile's corner, "Use N pictures". Reopened, the held
   list is what is ticked; a widened span is new ground and comes in ticked. The
@@ -576,8 +576,10 @@ had, since Défilé and the Route each exercised only part of it.
 - `HookPanelHost.choosePictures` takes a `HookPictureChoice`
   (`includeThisDay`), because the chooser's default span was Défilé's reading
   of "pictures for a hook" — the days BEFORE the piece. `defaultSpan` carries
-  the flag; `reachSpan` still bounds both, so nothing shot after the piece is
-  ever offered.
+  the flag. Since 2026-09-15 the dates reach the whole trip (`tripSpan`) and a
+  second flag, `keepsLater`, says the variant uses a picture shot after the
+  piece; without it such a picture is offered but marked "left off", because
+  Défilé and Virée drop it (`partitionPicked`).
 - `slideRender` takes the decoded pictures, because "a still is drawn settled,
   so it needs no pictures" was Défilé's truth and not the engine's: an
   itinerary shows its stops' photographs AT REST. The PNG deck and the rail's

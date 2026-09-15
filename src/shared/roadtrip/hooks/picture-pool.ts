@@ -88,8 +88,9 @@ export function groupByDay<T extends PoolCandidate>(
 }
 
 /**
- * Where a sweep's pictures can come from: the trip's first day to this
- * piece's own — a picture shot later has no place on the tape.
+ * The trip so far: its first day to this piece's own. What a sweep or a drive
+ * can tell — a picture shot later has no place on the tape — and so the span
+ * the chooser OPENS on. Null when the piece is dated outside its trip.
  */
 export function reachSpan(calendar: readonly HookDay[], date: string): DateSpan | null {
   if (!calendar.length || !calendar.some((day) => day.date === date)) return null;
@@ -97,15 +98,28 @@ export function reachSpan(calendar: readonly HookDay[], date: string): DateSpan 
 }
 
 /**
+ * The whole trip, first day to last: how far the chooser's dates may be moved.
+ * Wider than `reachSpan` on purpose (2026-09-15) — the maintainer sometimes
+ * wants a picture from past this piece's day, and an itinerary keeps one. A
+ * variant that cannot tell it says so on the tile (`laterLeftOff`), rather
+ * than the chooser refusing to show it.
+ */
+export function tripSpan(calendar: readonly HookDay[]): DateSpan | null {
+  if (!calendar.length) return null;
+  return { from: calendar[0].date, to: calendar[calendar.length - 1].date };
+}
+
+/**
  * The span the chooser opens on. With a list already held, the days it covers
- * (inside reach); with none, the whole trip up to the day BEFORE this one — the
- * days a sweep runs through — or this day alone on the trip's first.
+ * (inside the trip, so a picture kept from past this piece reopens where it
+ * can be seen and is not dropped on confirm); with none, the trip up to the day
+ * BEFORE this one — the days a sweep runs through — or this day alone on the
+ * trip's first.
  *
  * `includeThisDay` moves that edge to the piece's own day, for a variant whose
  * pictures are not a run-up to it: an itinerary's stops are as often the day
  * being told as the days before it, and opening on a span that hides today's
- * photographs reads as "there are none". Both spans stay inside `reachSpan`,
- * so nothing shot AFTER the piece is ever offered.
+ * photographs reads as "there are none".
  */
 export function defaultSpan(
   calendar: readonly HookDay[],
@@ -114,22 +128,33 @@ export function defaultSpan(
   includeThisDay = false,
 ): DateSpan | null {
   const reach = reachSpan(calendar, date);
-  if (!reach) return null;
-  const held = selected.map((p) => p.date).filter((d) => d >= reach.from && d <= reach.to).sort();
+  const trip = tripSpan(calendar);
+  if (!reach || !trip) return null;
+  const held = selected.map((p) => p.date).filter((d) => d >= trip.from && d <= trip.to).sort();
   if (held.length) return { from: held[0], to: held[held.length - 1] };
   if (includeThisDay) return reach;
   const heroIndex = calendar.findIndex((day) => day.date === date);
   return { from: reach.from, to: heroIndex > 0 ? calendar[heroIndex - 1].date : date };
 }
 
+/**
+ * Whether a candidate is shot after this piece's day and the variant will
+ * leave it off — a sweep and a drive tell the trip up to the piece, never
+ * past it (`partitionPicked`). Offered all the same, and marked.
+ */
+export function laterLeftOff(candidateDate: string, pieceDate: string, keepsLater: boolean): boolean {
+  return !keepsLater && candidateDate > pieceDate;
+}
+
 export interface QuickSpan extends DateSpan {
-  id: 'trip' | 'leg' | 'week' | 'day';
+  id: 'whole' | 'trip' | 'leg' | 'week' | 'day';
   label: string;
 }
 
 /**
- * One-click spans: the trip so far, this leg so far, the last seven days, this
- * day alone. A span that would say the same as an earlier one is left out.
+ * One-click spans, widest first: the whole trip, the trip so far, this leg so
+ * far, the last seven days, this day alone. A span that would say the same as
+ * an earlier one is left out.
  */
 export function quickSpans(
   calendar: readonly HookDay[],
@@ -137,10 +162,14 @@ export function quickSpans(
   stages: readonly HookStage[] = [],
 ): QuickSpan[] {
   const reach = reachSpan(calendar, date);
-  if (!reach) return [];
+  const trip = tripSpan(calendar);
+  if (!reach || !trip) return [];
   const heroIndex = calendar.findIndex((day) => day.date === date);
   const before = heroIndex > 0 ? calendar[heroIndex - 1].date : date;
-  const out: QuickSpan[] = [{ id: 'trip', label: 'Trip so far', from: reach.from, to: before }];
+  const out: QuickSpan[] = [
+    { id: 'whole', label: 'Whole trip', from: trip.from, to: trip.to },
+    { id: 'trip', label: 'Trip so far', from: reach.from, to: before },
+  ];
   const leg = stages.find((stage) => stage.startDate <= date && date <= stage.endDate);
   if (leg && leg.startDate > reach.from && leg.startDate < date) {
     out.push({ id: 'leg', label: 'This leg', from: leg.startDate, to: before });

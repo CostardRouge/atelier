@@ -139,9 +139,11 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         const stop = o.stops[index];
         if (!stop) return;
         // Including the piece's own day: an itinerary's stops are as often the
-        // day being told as the days before it, unlike a sweep's run-up.
+        // day being told as the days before it, unlike a sweep's run-up. And a
+        // stop is the author's, so a picture from later in the trip is kept.
         const picked = await host.choosePictures?.(stop.picture ? [stop.picture] : [], {
           includeThisDay: true,
+          keepsLater: true,
         });
         if (!picked) return;
         const next = assignPictures(o.stops, index, picked);

@@ -5,10 +5,12 @@ import {
   groupByDay,
   inSpan,
   initialExclusions,
+  laterLeftOff,
   mergePool,
   quickSpans,
   reachSpan,
   sameRef,
+  tripSpan,
   type PoolCandidate,
 } from './picture-pool';
 
@@ -76,15 +78,34 @@ describe('spans', () => {
     expect(reachSpan(cal, '2031-01-01')).toBeNull();
   });
 
+  it('spans the whole trip, first day to last', () => {
+    expect(tripSpan(cal)).toEqual({ from: cal[0].date, to: cal[19].date });
+    expect(tripSpan([])).toBeNull();
+  });
+
   it('opens on the days before this one, or on the days a held list covers', () => {
     expect(defaultSpan(cal, cal[9].date, [])).toEqual({ from: cal[0].date, to: cal[8].date });
     expect(defaultSpan(cal, cal[0].date, [])).toEqual({ from: cal[0].date, to: cal[0].date });
     const held = [
       { ref: ref('x'), date: cal[6].date },
       { ref: ref('y'), date: cal[2].date },
-      { ref: ref('z'), date: cal[15].date },
+      { ref: ref('z'), date: '2031-01-01' },
     ];
     expect(defaultSpan(cal, cal[9].date, held)).toEqual({ from: cal[2].date, to: cal[6].date });
+  });
+
+  it('reopens on a held picture shot after the piece, so confirming does not drop it', () => {
+    const held = [
+      { ref: ref('x'), date: cal[3].date },
+      { ref: ref('z'), date: cal[15].date },
+    ];
+    expect(defaultSpan(cal, cal[9].date, held)).toEqual({ from: cal[3].date, to: cal[15].date });
+  });
+
+  it('marks a later picture only for a variant that leaves it off', () => {
+    expect(laterLeftOff(cal[12].date, cal[9].date, false)).toBe(true);
+    expect(laterLeftOff(cal[12].date, cal[9].date, true)).toBe(false);
+    expect(laterLeftOff(cal[9].date, cal[9].date, false)).toBe(false);
   });
 
   it('offers the leg only when it says something the trip does not', () => {
@@ -92,14 +113,21 @@ describe('spans', () => {
       { startDate: cal[0].date, endDate: cal[4].date, label: '', places: [] },
       { startDate: cal[5].date, endDate: cal[19].date, label: '', places: [] },
     ];
-    expect(quickSpans(cal, cal[15].date, stages).map((s) => s.id)).toEqual(['trip', 'leg', 'week', 'day']);
-    expect(quickSpans(cal, cal[3].date, stages).map((s) => s.id)).toEqual(['trip', 'day']);
+    expect(quickSpans(cal, cal[15].date, stages).map((s) => s.id)).toEqual(['whole', 'trip', 'leg', 'week', 'day']);
+    expect(quickSpans(cal, cal[3].date, stages).map((s) => s.id)).toEqual(['whole', 'trip', 'day']);
     const leg = quickSpans(cal, cal[15].date, stages).find((s) => s.id === 'leg');
     expect(leg).toMatchObject({ from: cal[5].date, to: cal[14].date });
     // A week that starts where the leg does says nothing new.
-    expect(quickSpans(cal, cal[12].date, stages).map((s) => s.id)).toEqual(['trip', 'leg', 'day']);
+    expect(quickSpans(cal, cal[12].date, stages).map((s) => s.id)).toEqual(['whole', 'trip', 'leg', 'day']);
     // On the trip's first day, "the trip so far" IS that day.
-    expect(quickSpans(cal, cal[0].date, stages).map((s) => s.id)).toEqual(['trip']);
+    expect(quickSpans(cal, cal[0].date, stages).map((s) => s.id)).toEqual(['whole', 'trip']);
+  });
+
+  it('reaches past this piece with the whole trip, and drops it on a one-day trip', () => {
+    const whole = quickSpans(cal, cal[9].date).find((s) => s.id === 'whole');
+    expect(whole).toMatchObject({ from: cal[0].date, to: cal[19].date });
+    const one = calendar(1);
+    expect(quickSpans(one, one[0].date).map((s) => s.id)).toEqual(['whole']);
   });
 
   it('keeps only what was shot inside the span, both ends included', () => {

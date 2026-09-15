@@ -136,6 +136,7 @@ export default function HookPicker({
           ctx={ctx}
           selected={choosing.selected}
           includeThisDay={choosing.choice.includeThisDay}
+          keepsLater={choosing.choice.keepsLater}
           onCancel={() => settle(null)}
           onConfirm={(picked) => settle(picked)}
         />

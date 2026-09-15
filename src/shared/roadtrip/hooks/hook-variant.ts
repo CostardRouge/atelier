@@ -316,12 +316,17 @@ export interface HookPanelHost {
 /** How a variant wants the chooser to open. */
 export interface HookPictureChoice {
   /**
-   * Offer the piece's OWN day as well, rather than the days before it. A sweep
-   * is a run-up to the piece and stops the day before; an itinerary's stops are
-   * as often the day being told. Nothing shot AFTER the piece is ever offered
-   * either way.
+   * Open on the piece's OWN day as well, rather than the days before it. A
+   * sweep is a run-up to the piece and stops the day before; an itinerary's
+   * stops are as often the day being told.
    */
   includeThisDay?: boolean;
+  /**
+   * The variant uses a picture shot AFTER this piece's day. The chooser's dates
+   * reach the whole trip either way; without this, such a picture is marked as
+   * left off, because a sweep or a drive tells the trip up to the piece.
+   */
+  keepsLater?: boolean;
 }
 
 export interface HookPictureStatus {
