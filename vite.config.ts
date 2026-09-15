@@ -2,6 +2,8 @@ import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { readdirSync } from 'node:fs';
+import { rm, writeFile } from 'node:fs/promises';
+import type { IncomingMessage } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -97,6 +99,103 @@ function lutsManifestPlugin(): Plugin {
   };
 }
 
+// --- House style (dev server only) ------------------------------------------
+//
+// Trips' settings sheet can save the open trip's look as the one every NEW trip
+// starts from (`src/shared/roadtrip/house-style.ts`). A browser cannot write
+// into the repository, so the dev server does: ONE fixed file, written on a
+// POST and removed on a DELETE — never a path the request names. `apply:
+// 'serve'` keeps the endpoint out of `vite build`: the deployed site is static
+// and only ever reads the committed file. The app fetches it at the root,
+// outside `base`, because this middleware runs before Vite's own.
+
+const HOUSE_STYLE_FILE = fileURLToPath(
+  new URL('./src/shared/roadtrip/house-style.json', import.meta.url),
+);
+const HOUSE_STYLE_ROUTE = '/__atelier/house-style';
+const HOUSE_STYLE_KIND = 'atelier.trip-house-style';
+const HOUSE_STYLE_MAX_BYTES = 1024 * 1024;
+
+function readBody(req: IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > HOUSE_STYLE_MAX_BYTES) {
+        reject(new Error('The house style is larger than 1 MB.'));
+        req.destroy();
+      } else chunks.push(chunk);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
+  });
+}
+
+function houseStylePlugin(): Plugin {
+  return {
+    name: 'house-style-writer',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use(HOUSE_STYLE_ROUTE, async (req, res) => {
+        const reply = (status: number, body: Record<string, unknown>) => {
+          res.statusCode = status;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(body));
+        };
+        // Same origin only: another site open in the same browser must not be
+        // able to rewrite a file in the repository through the dev server. A
+        // cross-origin JSON POST is preflighted, and the preflight gets a 405.
+        let origin: string | null = null;
+        try {
+          origin = req.headers.origin ? new URL(req.headers.origin).host : null;
+        } catch {
+          origin = 'invalid';
+        }
+        if (origin !== null && origin !== req.headers.host) {
+          reply(403, { error: 'Refused: the request did not come from this dev server.' });
+          return;
+        }
+        const where = path.relative(process.cwd(), HOUSE_STYLE_FILE).split(path.sep).join('/');
+        try {
+          if (req.method === 'DELETE') {
+            await rm(HOUSE_STYLE_FILE, { force: true });
+            reply(200, { path: where });
+            return;
+          }
+          if (req.method !== 'POST') {
+            reply(405, { error: 'POST a house style, or DELETE it.' });
+            return;
+          }
+          if (!req.headers['content-type']?.startsWith('application/json')) {
+            reply(415, { error: 'Send the house style as application/json.' });
+            return;
+          }
+          const file: unknown = JSON.parse(await readBody(req));
+          const valid =
+            typeof file === 'object' &&
+            file !== null &&
+            (file as { kind?: unknown }).kind === HOUSE_STYLE_KIND &&
+            Number.isInteger((file as { version?: unknown }).version) &&
+            typeof (file as { style?: unknown }).style === 'object' &&
+            (file as { style?: unknown }).style !== null;
+          if (!valid) {
+            reply(400, { error: 'That is not a house style.' });
+            return;
+          }
+          await writeFile(HOUSE_STYLE_FILE, `${JSON.stringify(file, null, 2)}\n`);
+          reply(200, { path: where });
+        } catch (error) {
+          // A body that is not JSON is the caller's fault; a failed write is ours.
+          reply(error instanceof SyntaxError ? 400 : 500, {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      });
+    },
+  };
+}
+
 // The GitHub Pages base path is `/<repo>/` (served from
 // https://<user>.github.io/<repo>/). In CI we read the real repository name
 // from `GITHUB_REPOSITORY` (`owner/repo`, set automatically by GitHub Actions)
@@ -108,7 +207,7 @@ const REPO = process.env.GITHUB_REPOSITORY?.split('/')[1] ?? 'atelier';
 const BASE = process.env.BASE_PATH ?? `/${REPO}/`;
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), lutsManifestPlugin()],
+  plugins: [react(), tailwindcss(), lutsManifestPlugin(), houseStylePlugin()],
   base: BASE,
   // ffmpeg.wasm (the HEVC→H.264 transcode fallback) spins up a module worker and
   // is loaded lazily; don't let dev pre-bundling rewrite its worker URL, and emit

@@ -22,16 +22,20 @@ import {
 } from '../../shared/roadtrip/trip-types';
 import CarGaragePanel from './CarGaragePanel';
 import CtaPanel, { type CtaFieldRefs } from './CtaPanel';
+import HouseStylePanel from './HouseStylePanel';
 import { dangerLink, inputClass, smallButton } from './panels/ui';
 
 /** Which part of the sheet a click asked for. */
-export type TripSettingsSection = 'words' | 'cta' | 'defaults' | 'car';
+export type TripSettingsSection = 'words' | 'cta' | 'defaults' | 'car' | 'house';
 
 const SECTIONS: Array<{ id: TripSettingsSection; label: string }> = [
   { id: 'words', label: 'Words' },
   { id: 'cta', label: 'Closing card' },
   { id: 'defaults', label: 'New pieces' },
   { id: 'car', label: 'Car' },
+  // The dev server alone can write the house style into the repository; the
+  // built site never draws this section, and Vite drops the panel from it.
+  ...(import.meta.env.DEV ? [{ id: 'house' as const, label: 'House style' }] : []),
 ];
 
 interface TripSettingsModalProps {
@@ -369,6 +373,8 @@ export default function TripSettingsModal({
                 </div>
               </>
             )}
+
+            {import.meta.env.DEV && open === 'house' && <HouseStylePanel trip={trip} />}
           </div>
         </div>
 
