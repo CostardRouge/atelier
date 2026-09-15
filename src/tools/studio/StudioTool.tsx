@@ -21,23 +21,8 @@ import {
   reconcileMedia,
   type Reconciliation,
 } from '../../shared/projects/reconcile';
-import {
-  isRemoteSource,
-  outcomeEvent,
-  pullProject,
-  pushOnce,
-  remoteFor,
-} from '../../shared/projects/project-remote';
-import { failureEvent } from '../../shared/sources/doc-remote';
-import {
-  REMOTE_IDLE_MS,
-  newSyncRecord,
-  reduceSync,
-  shouldFlush,
-  type SyncRecord,
-} from '../../shared/sources/doc-sync';
-import { DEFAULT_SOURCE_ID } from '../../shared/sources/source';
-import SyncPill from '../../shared/sources/SyncPill';
+import { pullProject, pushOnce } from '../../shared/projects/project-remote';
+import { useDocumentSync, type DocumentSyncDriver } from '../../shared/sources/use-document-sync';
 import ProjectGallery from './ProjectGallery';
 import StudioEditor from './StudioEditor';
 
@@ -83,7 +68,6 @@ export default function StudioTool() {
   const path = useHashRoute();
   const lib = useAssetLibrary();
   const [open, setOpen] = useState<OpenProject | null>(null);
-  const [sync, setSync] = useState<SyncRecord | null>(null);
 
   // Ask the browser (once) not to evict our project store under disk pressure.
   const persistAsked = useRef(false);
@@ -111,120 +95,38 @@ export default function StudioTool() {
   }, [mine, requestedId, path, open]);
 
   // --- the remote machine ---------------------------------------------------
-
-  const openRef = useRef<ProjectDoc | null>(null);
-  openRef.current = open?.doc ?? null;
-  const syncRef = useRef<SyncRecord | null>(null);
-
-  /** The one writer of the record: memory, state and store together. */
-  const setRecord = useCallback((rec: SyncRecord | null) => {
-    syncRef.current = rec;
-    setSync(rec);
-    if (rec) void putSyncRecord(rec);
-  }, []);
-
-  const openSourceId = open?.doc.sourceId ?? null;
-  const remote = useMemo(
-    () => (openSourceId ? remoteFor(openSourceId) : null),
-    [openSourceId],
+  // Shared with every document kind (`use-document-sync.tsx`); this tool only
+  // says how a project is stored and carried, and what replacing one does.
+  const syncDriver = useMemo<DocumentSyncDriver<ProjectDoc>>(
+    () => ({
+      getRecord: getSyncRecord,
+      putRecord: putSyncRecord,
+      deleteRecord: deleteSyncRecord,
+      putDoc: putProject,
+      deleteDoc: (doc) => deleteProject(doc.id),
+      push: pushOnce,
+      pull: pullProject,
+    }),
+    [],
   );
-
-  const remoteTimer = useRef<number | null>(null);
-  const pushing = useRef(false);
-
-  const remoteFlush = useCallback(
-    async (force = false) => {
-      const doc = openRef.current;
-      const rec = syncRef.current;
-      if (!doc || !rec || !remote || remote.sourceId !== doc.sourceId) return;
-      if (pushing.current) return;
-      if (!shouldFlush(rec, Date.now(), force ? 0 : REMOTE_IDLE_MS)) return;
-      pushing.current = true;
-      try {
-        setRecord(reduceSync(rec, { type: 'pushStarted', now: Date.now() }));
-        const outcome = await pushOnce(remote, doc, rec.etag);
-        const live = syncRef.current;
-        if (live && live.id === doc.id) {
-          setRecord(reduceSync(live, outcomeEvent(outcome, Date.now())));
-        }
-      } finally {
-        pushing.current = false;
-      }
+  const sync = useDocumentSync<ProjectDoc>({
+    doc: open?.doc ?? null,
+    driver: syncDriver,
+    // The editor seeds its own state from the prop at mount, so a document
+    // replaced under it (take theirs, keep as local) remounts it.
+    onReplace: (doc) =>
+      setOpen((prev) => (prev ? { ...prev, doc, generation: prev.generation + 1 } : prev)),
+    onDeleted: () => {
+      setOpen(null);
+      navigate(HOME_ROUTE);
     },
-    [remote, setRecord],
-  );
-
-  const armRemote = useCallback(() => {
-    if (remoteTimer.current !== null) window.clearTimeout(remoteTimer.current);
-    remoteTimer.current = window.setTimeout(() => {
-      remoteTimer.current = null;
-      void remoteFlush(false);
-    }, REMOTE_IDLE_MS + 50);
-  }, [remoteFlush]);
-
-  useEffect(() => {
-    return () => {
-      if (remoteTimer.current !== null) window.clearTimeout(remoteTimer.current);
-      void remoteFlush(true);
-    };
-  }, [remoteFlush]);
-
-  useEffect(() => {
-    const onVisibility = () => {
-      if (document.visibilityState === 'hidden') void remoteFlush(true);
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, [remoteFlush]);
-
-  /**
-   * The resume workflow, before the media are reconciled: for a remote
-   * project, ask the instance whether it moved. A clean mirror takes the
-   * server's copy silently; a dirty one is a conflict the pill resolves;
-   * unreachable opens the mirror and says so. Returns the document to open.
-   */
-  const resume = useCallback(
-    async (doc: ProjectDoc): Promise<ProjectDoc> => {
-      if (!isRemoteSource(doc.sourceId)) {
-        syncRef.current = null;
-        setSync(null);
-        return doc;
-      }
-      const stored = await getSyncRecord(doc.id);
-      const rec = stored ?? newSyncRecord(doc.id, doc.sourceId, Date.now());
-      setRecord(rec);
-      const r = remoteFor(doc.sourceId);
-      if (!r) return doc;
-      const pulled = await pullProject(r, doc.id, rec.etag, doc);
-      if (pulled.kind === 'current') return doc;
-      if (pulled.kind === 'fetched') {
-        if (rec.dirtyAt === null) {
-          await putProject(pulled.doc);
-          setRecord(reduceSync(rec, { type: 'pulled', etag: pulled.etag, now: Date.now() }));
-          return pulled.doc;
-        }
-        setRecord(
-          reduceSync(rec, {
-            type: 'pushFailed',
-            kind: 'conflict',
-            message: 'changed on another device',
-            theirs: { etag: pulled.etag, updatedAt: pulled.updatedAt },
-          }),
-        );
-        return doc;
-      }
-      if (!(pulled.failure.kind === 'protocol' && rec.dirtyAt === null)) {
-        setRecord(reduceSync(rec, failureEvent(pulled.failure)));
-      }
-      return doc;
-    },
-    [setRecord],
-  );
+  });
+  const { resume, adopt, edited } = sync;
 
   /** List a project's folder (asking permission if needed) and load it. */
   const openProject = useCallback(
     async (stored: ProjectDoc) => {
-      const doc = await resume(stored);
+      const doc = (await resume(stored))?.doc ?? stored;
       let files: File[] = [];
       const handle = doc.media.dirHandle;
       if (handle) {
@@ -316,17 +218,11 @@ export default function StudioTool() {
   const handleCreated = useCallback(
     async (doc: ProjectDoc, files: File[]) => {
       if (files.length) lib.addFiles(files);
-      if (isRemoteSource(doc.sourceId)) {
-        // The gallery pushed it already; its record is in the store.
-        setRecord((await getSyncRecord(doc.id)) ?? newSyncRecord(doc.id, doc.sourceId, Date.now()));
-      } else {
-        syncRef.current = null;
-        setSync(null);
-      }
+      await adopt(doc);
       setOpen((prev) => ({ doc, reconciliation: null, generation: (prev?.generation ?? 0) + 1 }));
       navigate(BASE_ROUTE);
     },
-    [lib.addFiles, setRecord],
+    [lib.addFiles, adopt],
   );
 
   // A project handed over from another tool. Loaded once per id: the route is
@@ -353,80 +249,10 @@ export default function StudioTool() {
   const handleDocSaved = useCallback(
     (doc: ProjectDoc) => {
       setOpen((prev) => (prev && prev.doc.id === doc.id ? { ...prev, doc } : prev));
-      if (!isRemoteSource(doc.sourceId)) return;
-      const now = Date.now();
-      const rec = syncRef.current?.id === doc.id ? syncRef.current : null;
-      setRecord(reduceSync(rec ?? newSyncRecord(doc.id, doc.sourceId, now), { type: 'edited', now }));
-      armRemote();
+      edited(doc);
     },
-    [setRecord, armRemote],
+    [edited],
   );
-
-  // --- the pill's verbs ---------------------------------------------------
-
-  const keepMine = useCallback(() => {
-    const rec = syncRef.current;
-    if (!rec) return;
-    setRecord(reduceSync(rec, { type: 'resolvedKeepMine' }));
-    void remoteFlush(true);
-  }, [setRecord, remoteFlush]);
-
-  const takeTheirs = useCallback(async () => {
-    const doc = openRef.current;
-    const rec = syncRef.current;
-    if (!doc || !rec || !remote) return;
-    const pulled = await pullProject(remote, doc.id, null, doc);
-    const live = syncRef.current;
-    if (openRef.current?.id !== doc.id || !live) return;
-    if (pulled.kind === 'fetched') {
-      await putProject(pulled.doc);
-      setRecord(reduceSync(live, { type: 'resolvedTakeTheirs', etag: pulled.etag, now: Date.now() }));
-      // Remount the editor on the server's copy — its own state is the edit being dropped.
-      setOpen((prev) =>
-        prev ? { ...prev, doc: pulled.doc, generation: prev.generation + 1 } : prev,
-      );
-    } else if (pulled.kind === 'failed') {
-      setRecord(reduceSync(live, failureEvent(pulled.failure)));
-    }
-  }, [remote, setRecord]);
-
-  const keepLocal = useCallback(async () => {
-    const doc = openRef.current;
-    if (!doc) return;
-    const local = { ...doc, sourceId: DEFAULT_SOURCE_ID, updatedAt: Date.now() };
-    await putProject(local);
-    await deleteSyncRecord(doc.id);
-    syncRef.current = null;
-    setSync(null);
-    // The editor seeds `sourceId` from the prop at mount; remount so its
-    // next autosave does not write the old source back.
-    setOpen((prev) => (prev ? { ...prev, doc: local, generation: prev.generation + 1 } : prev));
-  }, []);
-
-  const deleteHere = useCallback(async () => {
-    const doc = openRef.current;
-    if (!doc) return;
-    await deleteProject(doc.id);
-    await deleteSyncRecord(doc.id);
-    syncRef.current = null;
-    setSync(null);
-    setOpen(null);
-    navigate(HOME_ROUTE);
-  }, []);
-
-  const pill =
-    open && sync && isRemoteSource(open.doc.sourceId) ? (
-      <SyncPill
-        record={sync}
-        sourceLabel={remote?.label ?? open.doc.sourceId}
-        loginUrl={remote?.client.loginUrl() ?? null}
-        onSaveNow={() => void remoteFlush(true)}
-        onKeepMine={keepMine}
-        onTakeTheirs={() => void takeTheirs()}
-        onKeepLocal={() => void keepLocal()}
-        onDeleteHere={() => void deleteHere()}
-      />
-    ) : null;
 
   if (showGallery) {
     return (
@@ -454,7 +280,7 @@ export default function StudioTool() {
       onDocSaved={handleDocSaved}
       onRepoint={() => void repoint()}
       onForgetMissing={() => void forgetMissing()}
-      headerExtra={pill}
+      headerExtra={sync.pill}
     />
   );
 }

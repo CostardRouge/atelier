@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   REMOTE_IDLE_MS,
+  afterPull,
   describeAgo,
   newSyncRecord,
   pillLabel,
@@ -272,5 +273,44 @@ describe('pillNeedsAction — what may never shrink to a bare dot', () => {
     expect(pillNeedsAction('saving')).toBe(false);
     // Offline retries on its own trigger — `shouldFlush` keeps it in the loop.
     expect(pillNeedsAction('offline')).toBe(false);
+  });
+});
+
+describe('afterPull — the resume workflow', () => {
+  const doc = { id: 't1', name: 'theirs' };
+
+  it('does nothing when the mirror is still current', () => {
+    expect(afterPull(synced(), { kind: 'current' })).toEqual({ take: null, event: null });
+  });
+
+  it('takes the server copy silently over a clean mirror', () => {
+    const r = afterPull(synced(), { kind: 'fetched', doc, etag: 'e2', updatedAt: '2026-09-15T10:00:00Z' });
+    expect(r.take).toBe(doc);
+    expect(r.event).toMatchObject({ type: 'pulled', etag: 'e2' });
+    expect(reduceSync(synced(), r.event!).status).toBe('synced');
+  });
+
+  it('holds a conflict over a dirty mirror, overwriting nothing', () => {
+    const dirty = synced({ status: 'dirty', dirtyAt: 2_000 });
+    const r = afterPull(dirty, { kind: 'fetched', doc, etag: 'e2', updatedAt: '2026-09-15T10:00:00Z' });
+    expect(r.take).toBeNull();
+    const next = reduceSync(dirty, r.event!);
+    expect(next.status).toBe('conflict');
+    expect(next.theirs).toEqual({ etag: 'e2', updatedAt: '2026-09-15T10:00:00Z' });
+  });
+
+  it('says a failure, but not a protocol error on a clean mirror', () => {
+    const offline = afterPull(synced(), {
+      kind: 'failed',
+      failure: { kind: 'unreachable', message: 'no answer', theirs: null },
+    });
+    expect(reduceSync(synced(), offline.event!).status).toBe('offline');
+    expect(
+      afterPull(synced(), { kind: 'failed', failure: { kind: 'protocol', message: '500', theirs: null } }),
+    ).toEqual({ take: null, event: null });
+    const dirty = synced({ status: 'dirty', dirtyAt: 2_000 });
+    expect(
+      afterPull(dirty, { kind: 'failed', failure: { kind: 'protocol', message: '500', theirs: null } }).event,
+    ).toMatchObject({ type: 'pushFailed', kind: 'protocol' });
   });
 });

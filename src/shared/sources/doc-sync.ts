@@ -295,3 +295,52 @@ export function pillNeedsAction(status: SyncStatus): boolean {
     status === 'gone'
   );
 }
+
+/** A pull of one document, as a tool's remote driver reports it. */
+export type PullOutcome<D> =
+  /** 304: the mirror's etag is the server's. */
+  | { kind: 'current' }
+  | { kind: 'fetched'; doc: D; etag: string; updatedAt: string }
+  | { kind: 'failed'; failure: { kind: PushFailure; message: string; theirs: TheirCopy | null } };
+
+/**
+ * What opening a document kept on an instance does with the answer to "did it
+ * move?" — the resume workflow, once for every kind of document:
+ *
+ * - still current → nothing;
+ * - newer there and the mirror is CLEAN → take the server's copy silently;
+ * - newer there and the mirror is DIRTY → a conflict, nothing overwritten —
+ *   the pill offers the two ways out;
+ * - unreachable, signed out, gone → say it, except a protocol error on a
+ *   clean mirror, which is not worth a sentence (the next push reports it).
+ */
+export function afterPull<D>(
+  record: SyncRecord,
+  pulled: PullOutcome<D>,
+): { take: D | null; event: SyncEvent | null } {
+  if (pulled.kind === 'current') return { take: null, event: null };
+  if (pulled.kind === 'fetched') {
+    if (record.dirtyAt === null) {
+      return { take: pulled.doc, event: { type: 'pulled', etag: pulled.etag, now: Date.now() } };
+    }
+    return {
+      take: null,
+      event: {
+        type: 'pushFailed',
+        kind: 'conflict',
+        message: 'changed on another device',
+        theirs: { etag: pulled.etag, updatedAt: pulled.updatedAt },
+      },
+    };
+  }
+  if (pulled.failure.kind === 'protocol' && record.dirtyAt === null) return { take: null, event: null };
+  return {
+    take: null,
+    event: {
+      type: 'pushFailed',
+      kind: pulled.failure.kind,
+      message: pulled.failure.message,
+      theirs: pulled.failure.theirs ?? undefined,
+    },
+  };
+}

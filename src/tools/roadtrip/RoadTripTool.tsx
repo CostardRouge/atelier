@@ -20,21 +20,8 @@ import {
 } from '../../shared/roadtrip/trip-route';
 import type { IsoDate } from '../../shared/roadtrip/trip-days';
 import type { TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
-import {
-  REMOTE_IDLE_MS,
-  newSyncRecord,
-  reduceSync,
-  shouldFlush,
-  type SyncRecord,
-} from '../../shared/sources/doc-sync';
-import {
-  isRemoteSource,
-  outcomeEvent,
-  pullTrip,
-  pushOnce,
-  remoteFor,
-} from '../../shared/roadtrip/trip-remote';
-import { DEFAULT_SOURCE_ID } from '../../shared/sources/source';
+import { pullTrip, pushOnce } from '../../shared/roadtrip/trip-remote';
+import { useDocumentSync, type DocumentSyncDriver } from '../../shared/sources/use-document-sync';
 import { hasTimeline } from '../../shared/sources/winnow/client';
 import { TIMELINE_SYNC_ENABLED } from '../../shared/sources/winnow/features';
 import {
@@ -44,7 +31,6 @@ import {
   type WinnowConnection,
 } from '../../shared/sources/winnow/store';
 import PostEditor from './PostEditor';
-import SyncPill from '../../shared/sources/SyncPill';
 import TimelineImportPanel from './TimelineImportPanel';
 import TripGallery from './TripGallery';
 import TripOverview from './TripOverview';
@@ -98,7 +84,6 @@ export default function RoadTripTool() {
   const path = useHashRoute();
   const [open, setOpen] = useState<TripDoc | null>(null);
   const [storageFailed, setStorageFailed] = useState(false);
-  const [sync, setSync] = useState<SyncRecord | null>(null);
   const [importing, setImporting] = useState<Importing | null>(null);
   const [spanNote, setSpanNote] = useState<string | null>(null);
   const route = parseRoadtripPath(path);
@@ -167,73 +152,48 @@ export default function RoadTripTool() {
     });
   }, [mine, route.ref, open]);
 
-  // The open document and its sync record, readable from callbacks that
-  // outlive a render (timers, unmount, a push that was out when it changed).
-  const openRef = useRef<TripDoc | null>(null);
-  openRef.current = open;
-  const syncRef = useRef<SyncRecord | null>(null);
-
-  /** The one writer of the record: memory, state and store together. */
-  const setRecord = useCallback((rec: SyncRecord | null) => {
-    syncRef.current = rec;
-    setSync(rec);
-    if (rec) void putSyncRecord(rec);
-  }, []);
-
-  const openSourceId = open?.sourceId ?? null;
-  const remote = useMemo(
-    () => (openSourceId ? remoteFor(openSourceId) : null),
-    [openSourceId],
-  );
-
-  // --- the remote flush ------------------------------------------------
-
-  const remoteTimer = useRef<number | null>(null);
-  const pushing = useRef(false);
-
-  /**
-   * Push the mirror if the record says it is due. `force` skips the idle
-   * wait (tab hidden, leaving, "Save now") but never the held states — a
-   * conflict is a person's decision, not a timer's.
-   */
-  const remoteFlush = useCallback(
-    async (force = false) => {
-      const doc = openRef.current;
-      const rec = syncRef.current;
-      if (!doc || !rec || !remote || remote.sourceId !== doc.sourceId) return;
-      if (pushing.current) return;
-      if (!shouldFlush(rec, Date.now(), force ? 0 : REMOTE_IDLE_MS)) return;
-      pushing.current = true;
-      try {
-        setRecord(reduceSync(rec, { type: 'pushStarted', now: Date.now() }));
-        const outcome = await pushOnce(remote, doc, rec.etag);
-        // The record may have moved on while the request was out (an edit,
-        // another trip opened): reduce the LIVE one, and only if it is still
-        // this trip's.
-        const live = syncRef.current;
-        if (live && live.id === doc.id) {
-          setRecord(reduceSync(live, outcomeEvent(outcome, Date.now())));
-        }
-      } finally {
-        pushing.current = false;
-      }
-    },
-    [remote, setRecord],
-  );
-
-  const armRemote = useCallback(() => {
-    if (remoteTimer.current !== null) window.clearTimeout(remoteTimer.current);
-    remoteTimer.current = window.setTimeout(() => {
-      remoteTimer.current = null;
-      void remoteFlush(false);
-    }, REMOTE_IDLE_MS + 50);
-  }, [remoteFlush]);
-
   // --- the local save machine ---------------------------------------------
 
   // One pending write at a time; the latest document wins.
   const saveTimer = useRef<number | null>(null);
   const pending = useRef<TripDoc | null>(null);
+  /** The local flush, read by the sync machine through a ref — it is declared after it. */
+  const flushRef = useRef<() => Promise<void>>(async () => {});
+
+  // --- the remote machine --------------------------------------------------
+  // Shared with every document kind (`use-document-sync.tsx`); this tool only
+  // says how a trip is stored and carried, and hands its debounced local write
+  // over so a push never carries a trip older than the screen.
+  const syncDriver = useMemo<DocumentSyncDriver<TripDoc>>(
+    () => ({
+      getRecord: getSyncRecord,
+      putRecord: putSyncRecord,
+      deleteRecord: deleteSyncRecord,
+      putDoc: putTrip,
+      deleteDoc: async (doc) => {
+        await deleteTrip(doc.id);
+        // The hooks go with the trip: nothing else will ever prune them.
+        await deleteThumbs(doc.posts.map((p) => p.id));
+      },
+      push: pushOnce,
+      pull: (remote, id, etag) => pullTrip(remote, id, etag),
+    }),
+    [],
+  );
+  const sync = useDocumentSync<TripDoc>({
+    doc: open,
+    driver: syncDriver,
+    beforeFlush: () => flushRef.current(),
+    onDiscardPending: () => {
+      pending.current = null;
+    },
+    onReplace: (doc) => setOpen(doc),
+    onDeleted: () => {
+      setOpen(null);
+      navigate(HOME_ROUTE);
+    },
+  });
+  const { edited, resume, clear } = sync;
 
   const flush = useCallback(async () => {
     const doc = pending.current;
@@ -241,36 +201,19 @@ export default function RoadTripTool() {
     if (!doc) return;
     const ok = await putTrip(doc);
     setStorageFailed(!ok);
-    // The mirror moved: the record is dirty from now, and a push is due
-    // after the idle delay. A local trip has no record and none is made.
-    if (ok && isRemoteSource(doc.sourceId)) {
-      const now = Date.now();
-      const rec = syncRef.current?.id === doc.id ? syncRef.current : null;
-      setRecord(reduceSync(rec ?? newSyncRecord(doc.id, doc.sourceId, now), { type: 'edited', now }));
-      armRemote();
-    }
-  }, [setRecord, armRemote]);
+    // The mirror moved: for a trip kept on an instance the record is dirty
+    // from now, and a push is due after the idle delay.
+    if (ok) edited(doc);
+  }, [edited]);
+  flushRef.current = flush;
 
   useEffect(() => {
-    // A trip left mid-edit must not lose its last 800 ms on unmount — nor
-    // its push: best effort, and the dirty record covers what does not land.
+    // A trip left mid-edit must not lose its last 800 ms on unmount: the sync
+    // machine's own cleanup runs `flush` (then pushes); this only stops the timer.
     return () => {
       if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
-      if (remoteTimer.current !== null) window.clearTimeout(remoteTimer.current);
-      void flush().then(() => remoteFlush(true));
     };
-  }, [flush, remoteFlush]);
-
-  // A hidden tab is often a tab about to be closed: push what is dirty now.
-  useEffect(() => {
-    const onVisibility = () => {
-      if (document.visibilityState === 'hidden') {
-        void flush().then(() => remoteFlush(true));
-      }
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, [flush, remoteFlush]);
+  }, []);
 
   const handleChange = useCallback(
     (doc: TripDoc) => {
@@ -286,141 +229,21 @@ export default function RoadTripTool() {
   );
 
   // --- opening a remote trip: the resume workflow -------------------------
-
+  // The mirror opens at once; the instance is asked whether it moved, and a
+  // clean mirror is replaced silently when it did (`afterPull`).
   const resumedFor = useRef<string | null>(null);
   useEffect(() => {
     if (!open) {
       resumedFor.current = null;
-      syncRef.current = null;
-      setSync(null);
+      clear();
       return;
     }
     if (resumedFor.current === open.id) return;
     resumedFor.current = open.id;
-    if (!isRemoteSource(open.sourceId)) {
-      syncRef.current = null;
-      setSync(null);
-      return;
-    }
-    const id = open.id;
-    const sourceId = open.sourceId;
-    void (async () => {
-      const stored = await getSyncRecord(id);
-      if (openRef.current?.id !== id) return;
-      // A mirror with no record (a push that never got to write one) is
-      // simply dirty: it goes up on the next trigger.
-      const rec = stored ?? newSyncRecord(id, sourceId, Date.now());
-      setRecord(rec);
-      const r = remoteFor(sourceId);
-      if (!r) return; // not connected, or no bucket: the pill's text says so through the gallery
-      const pulled = await pullTrip(r, id, rec.etag);
-      const live = syncRef.current;
-      if (openRef.current?.id !== id || !live || live.id !== id) return;
-      if (pulled.kind === 'current') return;
-      if (pulled.kind === 'fetched') {
-        if (live.dirtyAt === null) {
-          // Clean mirror: the server's copy is simply newer. Replace silently.
-          await putTrip(pulled.doc);
-          setOpen(pulled.doc);
-          setRecord(reduceSync(live, { type: 'pulled', etag: pulled.etag, now: Date.now() }));
-        } else {
-          // Both moved. Nothing is overwritten; the pill offers the two ways out.
-          setRecord(
-            reduceSync(live, {
-              type: 'pushFailed',
-              kind: 'conflict',
-              message: 'changed on another device',
-              theirs: { etag: pulled.etag, updatedAt: pulled.updatedAt },
-            }),
-          );
-        }
-        return;
-      }
-      // Unreachable, signed out, gone: say it. A protocol error on a clean
-      // mirror is not worth a sentence — the next push will report it.
-      if (pulled.failure.kind === 'protocol' && live.dirtyAt === null) return;
-      setRecord(
-        reduceSync(live, {
-          type: 'pushFailed',
-          kind: pulled.failure.kind,
-          message: pulled.failure.message,
-          theirs: pulled.failure.theirs ?? undefined,
-        }),
-      );
-    })();
-  }, [open, setRecord]);
-
-  // --- the pill's verbs ---------------------------------------------------
-
-  const keepMine = useCallback(() => {
-    const rec = syncRef.current;
-    if (!rec) return;
-    setRecord(reduceSync(rec, { type: 'resolvedKeepMine' }));
-    void remoteFlush(true);
-  }, [setRecord, remoteFlush]);
-
-  const takeTheirs = useCallback(async () => {
-    const doc = openRef.current;
-    const rec = syncRef.current;
-    if (!doc || !rec || !remote) return;
-    const pulled = await pullTrip(remote, doc.id, null);
-    const live = syncRef.current;
-    if (openRef.current?.id !== doc.id || !live) return;
-    if (pulled.kind === 'fetched') {
-      pending.current = null; // whatever was about to be saved is the edit being dropped
-      await putTrip(pulled.doc);
-      setOpen(pulled.doc);
-      setRecord(reduceSync(live, { type: 'resolvedTakeTheirs', etag: pulled.etag, now: Date.now() }));
-    } else if (pulled.kind === 'failed') {
-      setRecord(
-        reduceSync(live, {
-          type: 'pushFailed',
-          kind: pulled.failure.kind,
-          message: pulled.failure.message,
-          theirs: pulled.failure.theirs ?? undefined,
-        }),
-      );
-    }
-  }, [remote, setRecord]);
-
-  const keepLocal = useCallback(async () => {
-    const doc = openRef.current;
-    if (!doc) return;
-    const local = { ...doc, sourceId: DEFAULT_SOURCE_ID, updatedAt: Date.now() };
-    pending.current = null;
-    await putTrip(local);
-    await deleteSyncRecord(doc.id);
-    syncRef.current = null;
-    setSync(null);
-    setOpen(local);
-  }, []);
-
-  const deleteHere = useCallback(async () => {
-    const doc = openRef.current;
-    if (!doc) return;
-    pending.current = null;
-    await deleteTrip(doc.id);
-    await deleteThumbs(doc.posts.map((p) => p.id));
-    await deleteSyncRecord(doc.id);
-    syncRef.current = null;
-    setSync(null);
-    setOpen(null);
-    navigate(HOME_ROUTE);
-  }, []);
-
-  const pill =
-    open && sync && isRemoteSource(open.sourceId) ? (
-      <SyncPill
-        record={sync}
-        sourceLabel={remote?.label ?? open.sourceId}
-        loginUrl={remote?.client.loginUrl() ?? null}
-        onSaveNow={() => void flush().then(() => remoteFlush(true))}
-        onKeepMine={keepMine}
-        onTakeTheirs={() => void takeTheirs()}
-        onKeepLocal={() => void keepLocal()}
-        onDeleteHere={() => void deleteHere()}
-      />
-    ) : null;
+    void resume(open).then((r) => {
+      if (r?.replaced) setOpen(r.doc);
+    });
+  }, [open, resume, clear]);
 
   const handleOpen = useCallback((doc: TripDoc) => {
     setOpen(doc);
@@ -540,7 +363,7 @@ export default function RoadTripTool() {
           onBack={() => go(editingPost.date)}
           onChangePost={updatePost}
           onChangeTrip={handleChange}
-          headerExtra={pill}
+          headerExtra={sync.pill}
         />
       ) : (
         <TripOverview
@@ -551,7 +374,7 @@ export default function RoadTripTool() {
           onShowTrips={() => navigate(HOME_ROUTE)}
           onChange={handleChange}
           onOpenPost={(post) => go(post.date, post.id)}
-          headerExtra={pill}
+          headerExtra={sync.pill}
           timelineSources={completeSources}
           onCompleteFrom={(id) => openImport('complete', id)}
         />
