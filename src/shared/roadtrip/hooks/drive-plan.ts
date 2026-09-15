@@ -10,8 +10,9 @@
  *   positions.** On places, the road is the trip so far — every leg up to
  *   the one this day belongs to, in the order they were lived — and the car
  *   arrives at the end of that leg: it marks the LEG, never a spot the dates
- *   cannot justify — the rule the retired route trace fixed. On pictures, a photo whose EXIF says
- *   where it was shot IS a stop, in the order they were shot; a photo without
+ *   cannot justify — the rule the retired route trace fixed. On pictures, a
+ *   photo whose EXIF says where it was shot IS a stop, in the order they were
+ *   shot; a photo without
  *   a position rides along with the stop before it, never on a spot of its
  *   own.
  * - **A picture is shown where the document can put it.** With a position:

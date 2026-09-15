@@ -343,9 +343,16 @@ sound will add there is an audio track, since it writes none today.
 The engine's second variant derived its line from the trip's legs. **The
 Itinerary replaced it** on the maintainer's call, and the files are gone
 (`route.tsx`, `route-paint.ts`, `route-plan.ts`); a stored `route` layer is
-converted rather than dropped, by `mapFromRoute` in the v19 trip migration.
+converted rather than dropped, by `mapFromRoute` in the v20 trip migration.
 `git show 3c7bfb6 -- src/shared/roadtrip/hooks/route.tsx` is where it lives
 now.
+
+Two of its parts outlived it because a second variant had already reached for
+them: `geo.ts` (§13) holds the projection, the great-circle distance, the
+distance format and the name placer, and `currentLegIndex` — which leg a day
+belongs to — moved to `hook-calendar.ts`, where the drive reads it. That is
+the §3 rule paying for itself: a variant whose shared parts were lifted out
+the day a sibling wanted them can be retired without touching the sibling.
 
 What it proved, and what carried over:
 
