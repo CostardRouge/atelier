@@ -146,9 +146,13 @@ export function seal<T>(history: HistoryState<T>): HistoryState<T> {
  * right — each member of such a slice is itself held immutably, so an unchanged
  * member is the same object.
  */
-export function shallowSame(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+export function shallowSame<T extends object>(a: T, b: T): boolean {
   if (Object.is(a, b)) return true;
-  const keys = Object.keys(a);
-  if (keys.length !== Object.keys(b).length) return false;
-  return keys.every((k) => Object.prototype.hasOwnProperty.call(b, k) && Object.is(a[k], b[k]));
+  const left = a as Record<string, unknown>;
+  const right = b as Record<string, unknown>;
+  const keys = Object.keys(left);
+  if (keys.length !== Object.keys(right).length) return false;
+  return keys.every(
+    (k) => Object.prototype.hasOwnProperty.call(right, k) && Object.is(left[k], right[k]),
+  );
 }

@@ -31,6 +31,15 @@ export interface HistoryOptions<T> {
   label?: string | null;
   /** False where the keyboard belongs to something else — a sheet with its own draft. */
   enabled?: boolean;
+  /**
+   * False while the editor is still SEEDING itself from the document: whatever
+   * arrives then is not an edit but the document finishing its own arrival, and
+   * it becomes the beginning rather than a step. What it is for: the Studio
+   * restores its saved grade asynchronously (every built-in cube is fetched
+   * again), so the looks land after the first render — and a project opened
+   * with a grade would otherwise offer an undo that strips it.
+   */
+  ready?: boolean;
   /** How two values are compared. `Object.is` unless the value is a slice rebuilt per render (`shallowSame`). */
   isSame?: (a: T, b: T) => boolean;
   limit?: number;
@@ -78,6 +87,7 @@ export default function useHistory<T>(options: HistoryOptions<T>): DocumentHisto
 
   const history = useRef<HistoryState<T>>(newHistory(value));
   const subjectRef = useRef<string | null>(subject);
+  const readyRef = useRef(options.ready !== false);
   const [steps, setSteps] = useState({ undo: false, redo: false });
 
   /** The record is a ref (a restore must read it synchronously); this is what the buttons see. */
@@ -91,8 +101,13 @@ export default function useHistory<T>(options: HistoryOptions<T>): DocumentHisto
 
   // Everything the tool hands back down, except what this hook just put there.
   useEffect(() => {
-    const { isSame, label = null, limit, coalesceMs } = latest.current;
-    if (subjectRef.current !== subject) {
+    const { isSame, label = null, limit, coalesceMs, ready = true } = latest.current;
+    // The commit where seeding ENDS may carry the last of it — React is free to
+    // batch the two — so the transition reseeds as well, not only the commits
+    // before it.
+    const justReady = ready && !readyRef.current;
+    readyRef.current = ready;
+    if (subjectRef.current !== subject || !ready || justReady) {
       subjectRef.current = subject;
       history.current = newHistory(value);
       publish();
@@ -102,7 +117,7 @@ export default function useHistory<T>(options: HistoryOptions<T>): DocumentHisto
     if (same(value, history.current.present)) return;
     history.current = record(history.current, value, { now: Date.now(), label, limit, coalesceMs });
     publish();
-  }, [value, subject, publish]);
+  }, [value, subject, options.ready, publish]);
 
   const step = useCallback(
     (move: (h: HistoryState<T>) => HistoryState<T>) => {
