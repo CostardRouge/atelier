@@ -13,13 +13,13 @@ import { ASPECT_PRESETS } from '../../../shared/projects/project-types';
 import type { DeckSlide } from '../../../shared/roadtrip/deck';
 import type { PostBadge, PostSlide, TripPost } from '../../../shared/roadtrip/trip-types';
 import type { SlideRecovery } from '../use-slide-library';
-import type { TripGradeBinding } from '../use-trip-grade';
+import type { GradeScope, TripGradeBinding } from '../use-trip-grade';
 import DayFromWinnow from '../DayFromWinnow';
 import FrameStrip from '../FrameStrip';
 import Button from '../../../shared/ui/Button';
 import { FieldRow, InspectorSection, RangeField, Readout } from '../../../shared/ui/Inspector';
 import { Icons } from '../../../shared/ui/icons';
-import Segmented from '../../../shared/ui/Segmented';
+import Segmented, { type SegmentedOption } from '../../../shared/ui/Segmented';
 
 /**
  * The formats from tallest to widest, so a shape sits beside its neighbours —
@@ -65,7 +65,7 @@ interface PictureTabProps {
   /** How the open slide's picture sits in the frame, and how to change it. */
   framing: Framing;
   onFraming: (framing: Framing) => void;
-  /** The grade, bound either to the trip or to this piece. */
+  /** The grade, bound to the trip, to this piece, or to this one picture. */
   grade: TripGradeBinding;
   /** A reel from the linked project wears that project's grade, not this one. */
   linkedToProject: boolean;
@@ -77,9 +77,41 @@ interface PictureTabProps {
   onResetDevelop: () => void;
 }
 
-/** The two chips that say whose grade the stack is editing — the trip's, or this piece's own. */
+/**
+ * The three rungs a look can be written on, in order of reach.
+ *
+ * Three short words rather than the two sentences the old pair carried: at
+ * 22rem, "This piece's own" and "This picture's own" side by side are two
+ * ellipses. The titles say the whole thing.
+ */
+const GRADE_SCOPES: readonly SegmentedOption<GradeScope>[] = [
+  {
+    id: 'trip',
+    label: 'Trip',
+    title: 'The trip’s grade — worn by every piece that has none of its own',
+  },
+  {
+    id: 'post',
+    label: 'Piece',
+    title: 'This piece’s own grade — every picture of the deck',
+  },
+  {
+    id: 'slide',
+    label: 'Picture',
+    title: 'This one picture’s own grade — the rest of the deck is unchanged',
+  },
+];
+
+/**
+ * The chips that say WHOSE grade the stack is editing — the trip's, this
+ * piece's, or this one picture's.
+ *
+ * The closing card cannot depart (it has no photograph), so its chip is not
+ * drawn rather than drawn dead: an option that would do nothing is the
+ * fabricated-example rule in its other half.
+ */
 export function GradeScopeChips({ grade }: { grade: TripGradeBinding }) {
-  const { scope, setScope } = grade;
+  const { scope, setScope, canDepart } = grade;
   return (
     <Segmented
       fill
@@ -88,10 +120,7 @@ export function GradeScopeChips({ grade }: { grade: TripGradeBinding }) {
       label="Grade scope"
       value={scope}
       onChange={setScope}
-      options={[
-        { id: 'trip', label: 'The trip’s' },
-        { id: 'post', label: 'This piece’s own' },
-      ]}
+      options={canDepart ? GRADE_SCOPES : GRADE_SCOPES.filter((o) => o.id !== 'slide')}
     />
   );
 }
@@ -394,22 +423,26 @@ export default function PictureTab({
         </FieldRow>
       </InspectorSection>
 
-      {/* The grade, through the Studio's own engine — one per piece, on every
-          picture of the deck. */}
+      {/* The grade, through the Studio's own engine. Three rungs: the trip's
+          look, a piece that departs from it, a picture that departs from the
+          piece — a deck mixing a D-Log clip with a phone photograph cannot
+          wear one conversion LUT. */}
       <InspectorSection
         id="piece.grade"
         title="Grade"
-        badge={scope === 'trip' ? 'Trip' : undefined}
+        badge={scope === 'trip' ? 'Trip' : scope === 'post' ? 'Piece' : undefined}
         info={
           <>
             <p>
               {scope === 'trip'
                 ? 'Every piece of the trip that has no grade of its own wears this one — the look that makes the feed read as one journey.'
-                : 'A picture that needs its own correction. It started from the trip’s grade; “The trip’s” sends it back and drops this one.'}
+                : scope === 'post'
+                  ? 'This piece’s own look, on every picture of its deck. It started from the trip’s; “Trip” sends it back and drops this one.'
+                  : 'This one picture’s own look — for a slide that comes off another camera, or out of another profile, than the rest of the deck. It started from what the piece was wearing; “Piece” sends it back and drops this one.'}
             </p>
             <p>
-              The preview, the PNG deck and the hook clip all grade through the Studio’s
-              own shader. A different grade per slide is not offered yet.
+              The preview, the rail, the PNG deck and the hook clip all grade through the
+              Studio’s own shader, each picture through the grade it wears.
               {linkedToProject &&
                 ' A reel exported from the linked Studio project uses that project’s grade, not this one — the Export tab says which.'}
             </p>

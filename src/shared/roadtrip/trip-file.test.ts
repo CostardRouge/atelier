@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   TRIP_DOC_VERSION,
   createTripDoc,
+  createPostSlide,
   createTripPlace,
   createTripPost,
   createTripStage,
@@ -132,6 +133,25 @@ describe('the trip file', () => {
     if (!r.ok) throw new Error(r.error);
     expect(r.file.developPresets).toEqual([]);
     expect(r.file.posts[0].badge.develop).toBeNull();
+  });
+
+  it('carries a PICTURE’s own grade, and lands an older file on "follow the piece"', () => {
+    const own = { layers: [], output: 'rec709-to-srgb' as const };
+    const doc = trip();
+    doc.posts[0].badge.grade = own;
+    doc.posts[0].slides = [createPostSlide({ name: 'b.jpg', size: 1, lastModified: 1 })];
+    doc.posts[0].slides[0].grade = own;
+    const file = roundTrip(doc);
+    expect(file.posts[0].badge.grade).toEqual(own);
+    expect(file.posts[0].slides[0].grade).toEqual(own);
+    expect(tripDocFromFile(file).posts[0].badge.grade).toEqual(own);
+    expect(tripDocFromFile(file).posts[0].slides[0].grade).toEqual(own);
+
+    const old = { ...toTripFile(trip()), version: 21 } as Record<string, unknown>;
+    (old.posts as Record<string, Record<string, unknown>>[]).forEach((p) => delete p.badge.grade);
+    const r = parseTripFile(JSON.stringify(old));
+    if (!r.ok) throw new Error(r.error);
+    expect(r.file.posts[0].badge.grade).toBeNull();
   });
 
   it('carries the trip’s car — its colour, finish and gear — and lands an older file on the default', () => {

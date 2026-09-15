@@ -26,7 +26,7 @@ import { OUTRO_SECONDS_DEFAULT } from '../overlay/outro-card';
 import type { SavedMediaRef } from '../projects/project-types';
 import type { BadgePieceStyles } from './badge-layout';
 import { clipSpeed } from './hook-video';
-import type { SlideMedium, TripDoc, TripPost } from './trip-types';
+import type { SlideMedium, TripDoc, TripGrade, TripPost } from './trip-types';
 import { hookMoves } from './hooks/hook-context';
 
 export type DeckSlideKind = 'hook' | 'content' | 'cta';
@@ -68,6 +68,14 @@ export interface DeckSlide {
    * `LutStack.composeWith(slide.develop)`, never with one cube for the deck.
    */
   develop: DevelopSettings | null;
+  /**
+   * This picture's OWN grade, or null to follow the piece's (and through it
+   * the trip's). Per picture, like the develop, and for a reason the develop
+   * does not have: a deck mixing a D-Log clip with a phone photograph cannot
+   * wear one conversion LUT. `post-grade.ts` resolves the chain; a renderer
+   * asks it for the cube rather than reading this.
+   */
+  grade: TripGrade | null;
   /** The author's own line over a content picture. */
   caption: string;
   /** What this slide is delivered as, `auto` already resolved. */
@@ -146,6 +154,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       videoTimeSeconds: post.badge.videoTimeSeconds,
       framing: normaliseFraming(post.badge.framing),
       develop: post.badge.develop ?? null,
+      grade: post.badge.grade ?? null,
       caption: '',
       ...resolveSlideMedium(
         post.badge.medium,
@@ -169,6 +178,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       videoTimeSeconds: slide.videoTimeSeconds,
       framing: normaliseFraming(slide.framing),
       develop: slide.develop ?? null,
+      grade: slide.grade ?? null,
       caption: slide.caption,
       // A content slide has nothing animated on it yet; when a caption gains
       // an animation, that flag is the only thing that changes here.
@@ -192,6 +202,8 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       videoTimeSeconds: 0,
       framing: { ...DEFAULT_FRAMING },
       develop: null,
+      // The closing card is drawn, not photographed: nothing to grade.
+      grade: null,
       caption: '',
       // The closing card carries no picture and nothing animated, so it is a
       // still — and, inside a reel, the tail the Studio already appends, at

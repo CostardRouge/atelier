@@ -38,10 +38,10 @@ export interface RenderDeckOptions {
   /** Find a library file for a stored reference, or null when it is gone. */
   resolve: (ref: SavedMediaRef | null) => File | null;
   /**
-   * The composed grade a slide's picture goes through — the post's own or the
-   * trip's, baked with THAT slide's develop (`LutStack.composeWith`). Absent,
-   * or answering null, leaves the picture as shot. The closing card carries
-   * no picture, so it is never graded.
+   * The composed grade a slide's picture goes through — the slide's own, else
+   * the post's, else the trip's (`post-grade.ts`), baked with THAT slide's
+   * develop. Absent, or answering null, leaves the picture as shot. The
+   * closing card carries no picture, so it is never graded.
    */
   lutFor?: (slide: DeckSlide) => CubeLut | null;
   /**

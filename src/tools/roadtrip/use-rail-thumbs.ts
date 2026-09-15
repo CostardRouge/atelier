@@ -82,11 +82,13 @@ interface RailThumbInputs {
   /** Finds a slide's picture in the Library, or null when it is not loaded. */
   resolve: (ref: SavedMediaRef | null) => File | null;
   /**
-   * The composed grade for a slide's OWN develop (`LutStack.composeWith`);
-   * null leaves its picture as shot. A new function whenever the stack
-   * changes, which is what re-signs every cell.
+   * The cube a slide is rendered through — its own grade baked with its own
+   * develop (`TripGradeBinding.lutFor`); null leaves its picture as shot. A
+   * new function whenever the stack changes, which is what re-signs every
+   * cell; the cube's identity is what `lutId` signs each one with, so a slide
+   * that departed re-draws on its own and not on the deck's.
    */
-  lutFor: (develop: DeckSlide['develop']) => CubeLut | null;
+  lutFor: (slide: DeckSlide) => CubeLut | null;
   /**
    * The opener's decoded pictures — an itinerary pins them at rest, which is
    * exactly when a thumbnail is drawn, so a cell without them would show a
@@ -146,10 +148,11 @@ export default function useRailThumbs({
       slides.map((slide) => {
         const file = slide.kind === 'cta' ? null : resolve(slide.media);
         const render = slideRender(trip, post, slide, aspect, pictures);
-        // The cube of THIS slide: its own develop over the shared stack. The
-        // stack memoises per develop, so a deck of untouched slides reads one
-        // cube and only a corrected slide pays a bake.
-        const lut = slide.kind === 'cta' ? null : lutFor(slide.develop);
+        // The cube of THIS slide: the grade it wears, baked with its own
+        // develop. The bake is memoised per (grade, develop), so a deck of
+        // untouched slides reads one cube and only a slide that departed —
+        // in its correction or in its look — pays for one of its own.
+        const lut = slide.kind === 'cta' ? null : lutFor(slide);
         return {
           key: slideKey(slide),
           slide,

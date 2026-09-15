@@ -208,7 +208,12 @@ export default function StudioLink({
   const candidates = projects ?? [];
   const hereGraded = grade.layers.some((l) => l.enabled && l.intensity > 0);
   const projectGraded = Boolean(linked?.lutStack.length);
-  const whose = gradeScope === 'post' ? 'this piece’s own grade' : 'the trip’s grade';
+  const whose =
+    gradeScope === 'slide'
+      ? 'this picture’s own grade'
+      : gradeScope === 'post'
+        ? 'this piece’s own grade'
+        : 'the trip’s grade';
 
   return (
     <div className="flex flex-col gap-2.5">

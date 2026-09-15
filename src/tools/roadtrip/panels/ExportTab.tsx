@@ -38,9 +38,18 @@ interface ExportTabProps {
   onExportDeck: () => void;
   onExportHookClip: () => void;
   onChangePost: (post: TripPost) => void;
-  /** The grade the piece wears here, and whose it is — the bridge says which grade a Studio export uses. */
+  /**
+   * The grade the HOOK wears here, and whose it is — the bridge says which
+   * grade a Studio export uses.
+   */
   grade: TripGrade;
   gradeScope: GradeScope;
+  /**
+   * How many pictures of the deck carry a look of their own. The plan may not
+   * claim one grade for the whole deck when they do — the same
+   * anti-fabrication rule every mode in this tool follows.
+   */
+  ownGrades: number;
 }
 
 /**
@@ -73,6 +82,7 @@ export default function ExportTab({
   onChangePost,
   grade,
   gradeScope,
+  ownGrades,
 }: ExportTabProps) {
   const graded = grade.layers.some((l) => l.enabled && l.intensity > 0);
   // The in-browser transcode for a clip this browser cannot decode — the
@@ -191,8 +201,16 @@ export default function ExportTab({
               : hookFile
                 ? 'The hook goes out as an image: nothing on it moves. Give it an animation on the Look tab, or set the slide to Video to hold it as a card'
                 : 'Give the hook a picture from the Library first'}
-            {graded
-              ? `, and every picture goes through ${gradeScope === 'post' ? 'this piece’s own' : 'the trip’s'} grade.`
+            {graded || ownGrades > 0
+              ? ownGrades > 0
+                ? `, and each picture goes through the grade it wears — ${
+                    ownGrades === 1
+                      ? 'one of them has a look of its own'
+                      : `${ownGrades} of them have a look of their own`
+                  }.`
+                : `, and every picture goes through ${
+                    gradeScope === 'post' ? 'this piece’s own' : 'the trip’s'
+                  } grade.`
               : '; nothing is graded — no grade is set.'}
           </p>
         }
