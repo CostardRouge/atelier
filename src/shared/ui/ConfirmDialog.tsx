@@ -10,9 +10,16 @@
  * Escape keeps, Enter confirms only when the dialog is NOT destructive — a
  * stray Enter must never delete a year of tracking. Focus lands on the safe
  * answer for the same reason.
+ *
+ * It is drawn in a PORTAL on `document.body`, because it is usually rendered
+ * inside the card it asks about, and a card lifts on hover with a transform:
+ * a transformed ancestor becomes the containing block of every `fixed`
+ * descendant, so the "full-screen" sheet was confined to the card's box and
+ * jumped as the hover came and went, its buttons dodging the pointer.
  */
 
 import { useEffect, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import Button from './Button';
 import useDialogKeys from './use-dialog-keys';
 
@@ -53,7 +60,7 @@ export default function ConfirmDialog({
     onConfirm: danger || busy ? null : onConfirm,
   });
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[rgba(20,18,15,0.45)] backdrop-blur-[2px]"
       role="alertdialog"
@@ -65,7 +72,9 @@ export default function ConfirmDialog({
       // A dialog is often rendered INSIDE the thing it asks about — a gallery
       // card whose own click opens the document. Without this, "Delete" (or a
       // press on the backdrop) bubbled to the card and opened the project
-      // being deleted, whose editor then saved it straight back.
+      // being deleted, whose editor then saved it straight back. The portal
+      // does not change that: React events bubble through the COMPONENT tree,
+      // so the card still hears a click made in the dialog.
       onClick={(e) => e.stopPropagation()}
     >
       <div className="w-full max-w-[26rem] flex flex-col gap-4 bg-surface border border-line rounded-paper-lg shadow-paper p-6">
@@ -80,6 +89,7 @@ export default function ConfirmDialog({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
