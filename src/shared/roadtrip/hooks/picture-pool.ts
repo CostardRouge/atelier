@@ -100,16 +100,24 @@ export function reachSpan(calendar: readonly HookDay[], date: string): DateSpan 
  * The span the chooser opens on. With a list already held, the days it covers
  * (inside reach); with none, the whole trip up to the day BEFORE this one — the
  * days a sweep runs through — or this day alone on the trip's first.
+ *
+ * `includeThisDay` moves that edge to the piece's own day, for a variant whose
+ * pictures are not a run-up to it: an itinerary's stops are as often the day
+ * being told as the days before it, and opening on a span that hides today's
+ * photographs reads as "there are none". Both spans stay inside `reachSpan`,
+ * so nothing shot AFTER the piece is ever offered.
  */
 export function defaultSpan(
   calendar: readonly HookDay[],
   date: string,
   selected: readonly HookPickedPicture[],
+  includeThisDay = false,
 ): DateSpan | null {
   const reach = reachSpan(calendar, date);
   if (!reach) return null;
   const held = selected.map((p) => p.date).filter((d) => d >= reach.from && d <= reach.to).sort();
   if (held.length) return { from: held[0], to: held[held.length - 1] };
+  if (includeThisDay) return reach;
   const heroIndex = calendar.findIndex((day) => day.date === date);
   return { from: reach.from, to: heroIndex > 0 ? calendar[heroIndex - 1].date : date };
 }

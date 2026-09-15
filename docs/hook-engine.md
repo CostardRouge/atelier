@@ -1,11 +1,13 @@
 # The hook engine — many openers over one badge
 
-**Status (2026-09-13).** Design agreed with the maintainer; **every phase is
+**Status (2026-09-14).** Design agreed with the maintainer; **every phase is
 built** — the engine, the picker, **Défilé** everywhere a hook is drawn, **its
 ticks** in every video a hook makes (mixed into a clip's own sound on request),
-and the **route trace**, which passed the contract test (§11, phase 7). What
-was phase 4 turned out to exist already (§8). What is left is judgement, not
-construction: §12. The
+the **route trace**, which passed the contract test (§11, phase 7) and was
+then RETIRED by the **Itinerary** (§13, 2026-09-15) — the first variant the
+author composes rather than reads, and now the only one that draws a map.
+What was phase 4 turned out to exist already (§8). What is left is judgement,
+not construction: §12. The
 exemplar that drove the design is the **scrub** («&nbsp;Défilé&nbsp;»): the
 trip's measuring tape sweeps from day 1 to the day being told, flashing that
 day's pictures as it passes, and ticking.
@@ -336,59 +338,38 @@ sound will add there is an audio track, since it writes none today.
   piece everywhere), and `deckSlides`' `auto` medium (`hookMoves`, measured by
   preparing the hook — a scrub on day 1 plays nothing and stays an image).
 
-## 10. Route trace — what it refuses to claim (2026-09-13)
+## 10. Route trace — retired (2026-09-13 → 2026-09-15)
 
-- **It marks a LEG, never a point.** A place has no dates of its own, and the
-  badge's caption names the leg (`stageLabel`), not a spot on it — so the trace
-  paints the day's leg in the accent and pins nothing, except a leg of ONE
-  located place, which is that place and is ringed. Checked through the real
-  renderer: the accent leg and the caption under it name the same thing.
-- **Past solid, current accent, future faint and dashed.** The pen draws the
-  trip so far, then the legs still ahead fade in; the projection fits ALL of
-  them from the first frame, so nothing jumps when they arrive.
-- **A place without coordinates is simply not on the line** (typed by hand is
-  the normal case), and the panel says why a leg may be missing. Coordinates
-  come only from the opt-in place lookup — nothing here reaches the network.
-- **Equirectangular with the longitude scaled by cos(mean latitude)**: honest at
-  the scale of a country, no tiles, no map library. A route across the
-  antimeridian would split — untested, and no trip of the maintainer's does.
-- A dark underlay under every stroke keeps a white line legible over a pale
-  sky without a per-frame shadow blur.
+The engine's second variant derived its line from the trip's legs. **The
+Itinerary replaced it** on the maintainer's call, and the files are gone
+(`route.tsx`, `route-paint.ts`, `route-plan.ts`); a stored `route` layer is
+converted rather than dropped, by `mapFromRoute` in the v20 trip migration.
+`git show 3c7bfb6 -- src/shared/roadtrip/hooks/route.tsx` is where it lives
+now.
 
-**Its options (2026-09-14)** follow Défilé's panel idiom — six mono legends
-over the inspector's rows — and every one of them is read through
-`routeOptions()`, which clamps a number, refuses a colour it cannot paint and
-an id it does not know, so a document written by a newer build cannot break the
-paint. What each group may say, and the rule each keeps to:
+Two of its parts outlived it because a second variant had already reached for
+them: `geo.ts` (§13) holds the projection, the great-circle distance, the
+distance format and the name placer, and `currentLegIndex` — which leg a day
+belongs to — moved to `hook-calendar.ts`, where the drive reads it. That is
+the §3 rule paying for itself: a variant whose shared parts were lifted out
+the day a sibling wanted them can be retired without touching the sibling.
 
-- **Frame**: whole trip or this leg; top / middle / bottom; left / centre /
-  right; size; a translucent PLATE behind it (depth, colour) for a route over
-  a busy picture. The plate is a fill, never a composite mode.
-- **Line**: width; the three colours (so far / this leg / ahead) with a reset;
-  the legs ahead dashed, faint or HIDDEN; the underlay on or off. Hidden legs
-  never arrive, so the projection stops fitting them — the one case where the
-  "fit everything from the first frame" rule bends, because nothing can jump.
-- **Places**: dots and their size; NAMES — none, the trip's two ends, this
-  day's leg, every place — at a size; the ring on a one-place leg. A name is
-  the place's own, as written in the leg; one that would sit on another or
-  leave the frame is dropped (`placeLabels`, tried right / left / above /
-  below, measured with the paint's own font), never nudged onto the line.
-- **Motion**: draw or not; length; the shared easings; a hold at the first
-  place; the legs ahead after the pen or from the first frame; the pen's tip
-  or a bare line. The hook occupies `routeTiming`: hold + run, plus the fade
-  of the legs ahead when they follow the pen (starting at 80 % of the run, so
-  the whole is the 1.15 × the first version played).
-- **Extras**: a north arrow (north is up because the projection is — it
-  asserts nothing more); the DISTANCE so far in km or mi — the great-circle
-  sum of what the pen has drawn, counting up with it, never a road distance
-  and never past this day's leg.
-- **Sound**: ticks at every place the pen REACHES, on the shared kits, with a
-  pitch, a volume and the same mix-in switch as Défilé. Timed on
-  `reachTimes` — the inverse of the easing at each place's share of the drawn
-  length, measured in the projection's own units so it is frame-free — so a
-  tick cannot land before its dot appears. The kit's leg voice where a leg
-  begins, the seat where the pen rests; a leg ahead is never reached and never
-  ticks; a pen that does not move ticks nothing.
+What it proved, and what carried over:
+
+- **It marked a LEG, never a point.** A place has no dates of its own and the
+  badge's caption names the leg, so a "you are here" pin would have been a
+  claim the document cannot back. That refusal is the whole reason the
+  Itinerary is ALLOWED to pin one: there the stop is the author's own
+  assertion, not a reading of the calendar (§13).
+- **Equirectangular with the longitude scaled by cos(mean latitude)**, no
+  tiles and no map library — honest at the scale of a country. The Itinerary
+  draws on the same projection and runs it backwards to pick.
+- **Every text is the place's own name, a distance the pen actually covered,
+  or the letter N.** The distance is great-circle and says so.
+- Its option groups, its label placer (now `label-place.ts`) and its tick
+  scoring were the second consumer that made `easing.ts`, `tick-kits.ts`,
+  `panel-ui.tsx` and `colour.ts` shared — which is what made the Itinerary a
+  file plus a registry line rather than a third copy of all of it.
 
 ## 11. Phases — one commit each
 
@@ -422,6 +403,10 @@ paint. What each group may say, and the rule each keeps to:
    `needs.places` announced in phase 1 rather than a reshape. Its first real
    `unmet()` also proved the picker's disabled-with-a-reason card, which no
    variant had exercised.
+8. **Itinerary** (2026-09-14, unplanned — the maintainer asked for a map hook).
+   The first variant whose subject is AUTHORED rather than read, and the first
+   to combine a stop list, picked pictures, a paint, a score and a content
+   rewrite in one file. §13.
 
 ## 12. Open points
 
@@ -572,3 +557,54 @@ renderer or either export moved.
   rear, water · petrol · water — without overlaps, pinned by
   `car-model.test.ts`; his placement is the authority, the geometry an
   approximation of it.
+
+## 14. Itinerary — an authored map (2026-09-14, rev. 2026-09-15)
+
+The variant that answers "which of these can the author compose themselves?".
+Its decisions and its traps live in `roadtrip.md` («The Itinerary opener»);
+what belongs to the ENGINE is what it asked of the contract, and what it
+proves about it.
+
+**What the contract did not need.** `HookVariant`, `HookRender`, `resolveHook`,
+`foldHook`, the picker, `renderBadge` and both video exports are unchanged. A
+variant that owns a stop list, decodes pictures, paints, scores AND rewrites a
+badge piece fits the shape as written — which is the strongest reading it has
+had, since Défilé and the Route each exercised only part of it.
+
+**What it did need**, both optional and both filled by the shell:
+
+- `HookPanelHost.choosePictures` takes a `HookPictureChoice`
+  (`includeThisDay`), because the chooser's default span was Défilé's reading
+  of "pictures for a hook" — the days BEFORE the piece. `defaultSpan` carries
+  the flag; `reachSpan` still bounds both, so nothing shot after the piece is
+  ever offered.
+- `slideRender` takes the decoded pictures, because "a still is drawn settled,
+  so it needs no pictures" was Défilé's truth and not the engine's: an
+  itinerary shows its stops' photographs AT REST. The PNG deck and the rail's
+  thumbnails pass them; the video paths already read them through the
+  `ResolvedHook` the stage prepared.
+
+**What it needed SECOND (2026-09-15), and the line it drew.** The opener had
+to be draggable on the stage "like any other content", so `HookVariant` gained
+`frameBox` and `moveBy` — both optional, both pure, both **editor-only**. They
+are on the VARIANT and not on `HookRender` on purpose: the closure `prepare()`
+returns is what the stage, the PNG deck, the rail and both exports share, and
+none of them has any business knowing where a pointer is. A variant that
+offers neither is not grabbable, which is the right answer for the badge and
+for a scrub whose tape spans the frame. The stage's order of claim is
+elements → opener → picture, unchanged in spirit: the badge is composed far
+more often than the opener is placed.
+
+**What it says about `owns`.** It declares `frame`, though only its backdrop
+mode replaces the picture — the reading the scrub already used (it covers the
+frame only while it sweeps). `owns` is what a variant MAY do, not what it does
+on a given piece; nothing consumes the flag yet, and the conservative
+direction is the safe one for the stack arbiter that eventually will.
+
+**What two variants both wanted, again.** The Itinerary and the drive
+reached for the same four things on the same day and, independently, lifted
+them out the same way: the projection, the great-circle distance, its
+formatting and the name placer now live in `geo.ts` (§13), which is the fourth
+time the §3 rule has fired after `easing.ts`, `tick-kits.ts` and
+`panel-ui.tsx`. `placeLabels` there takes `reserved` boxes, so a name never
+lands on a pinned photograph.

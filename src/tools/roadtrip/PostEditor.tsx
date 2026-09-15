@@ -24,8 +24,8 @@ import {
   pieceElementId,
   pieceFromElementId,
 } from '../../shared/roadtrip/badge-layout';
-import { resolveHook } from '../../shared/roadtrip/hooks/registry';
-import type { HookContext } from '../../shared/roadtrip/hooks/hook-variant';
+import { hookVariantById, resolveHook } from '../../shared/roadtrip/hooks/registry';
+import { setHookOptions, type HookContext } from '../../shared/roadtrip/hooks/hook-variant';
 import { hookContextFor } from '../../shared/roadtrip/hooks/hook-context';
 import { hookElementsAt as hookElementsAtFor } from '../../shared/roadtrip/hooks/hook-elements';
 import useHookPictures from './use-hook-pictures';
@@ -60,7 +60,7 @@ import {
 } from '../../shared/roadtrip/trip-types';
 import { canvasThumbnail } from '../../shared/roadtrip/thumbnail';
 import { putThumb } from '../../shared/roadtrip/trip-store';
-import BadgeStage from './BadgeStage';
+import BadgeStage, { HOOK_ID } from './BadgeStage';
 import type { CtaFieldRefs } from './CtaPanel';
 import DeckStrip from './DeckStrip';
 import CarGarageModal from './CarGarageModal';
@@ -357,6 +357,27 @@ export default function PostEditor({
     () => resolveHook(post.badge.hook, hookCtx),
     [post.badge.hook, hookCtx],
   );
+  /**
+   * The opener as CONTENT on the stage: where its drawing sits, and what a
+   * drag of it writes. Both come from the variant (`frameBox` / `moveBy`),
+   * so an opener that does not offer them simply is not grabbable — the
+   * badge and Défilé, which cover the whole frame, do not.
+   */
+  const hookVariant = hookVariantById(post.badge.hook[0]?.id ?? '');
+  const hookOptions = post.badge.hook[0]?.options ?? {};
+  const hookRectFor = useMemo(
+    () =>
+      hookVariant?.frameBox
+        ? (frame: { width: number; height: number }) =>
+            hookVariant.frameBox?.(hookOptions, hookCtx, frame) ?? null
+        : null,
+    [hookVariant, hookOptions, hookCtx],
+  );
+  const moveHook = (dx: number, dy: number) => {
+    if (!hookVariant?.moveBy) return;
+    patchBadge({ hook: setHookOptions(post.badge.hook, hookVariant.moveBy(hookOptions, dx, dy)) });
+  };
+
   // Only an opener that rewrites the badge's words gets elements per frame;
   // every other piece keeps the ones built above, once per edit.
   const hookElementsAt = useMemo(
@@ -771,7 +792,7 @@ export default function PostEditor({
   // Every cell of the rail, composed exactly as it will be delivered — the
   // crop, the caption, the badge, the grade. It needs the grade, so it sits
   // here rather than beside the deck above.
-  const railThumb = useRailThumbs({ trip, post, slides, aspect, resolve, lutFor });
+  const railThumb = useRailThumbs({ trip, post, slides, aspect, resolve, lutFor, pictures: hookPictures });
 
   const exports = usePostExports({
     trip,
@@ -784,6 +805,7 @@ export default function PostEditor({
     // through `hook`/`hookElementsAt`, unrelated to this value.
     timeSeconds: settle,
     hook,
+    hookPictures,
     hookElementsAt,
     resolve,
     hookFile,
@@ -829,6 +851,12 @@ export default function PostEditor({
   function selectElement(id: string | null) {
     setSelectedId(id);
     if (!id) return;
+    if (id === HOOK_ID) {
+      // The opener's panel is the first thing on the Look tab, and it has no
+      // one field to focus — the whole panel IS what was selected.
+      setTab('look');
+      return;
+    }
     const badgePiece = pieceFromElementId(id);
     if (badgePiece) {
       setPiece(badgePiece);
@@ -1140,6 +1168,10 @@ export default function PostEditor({
             // caption and the closing card sit at fixed positions.
             blockAnchor={isHook ? post.badge.layout : null}
             onMoveBlock={isHook ? moveBlockTo : undefined}
+            // The opener draws on the hook slide alone, so it can only be
+            // pointed at there.
+            hookRectFor={isHook ? hookRectFor : null}
+            onMoveHook={isHook && hookVariant?.moveBy ? moveHook : undefined}
             framing={slide.framing}
             // The closing card carries no photograph, so there is nothing to
             // reframe there and a drag must not pretend otherwise.

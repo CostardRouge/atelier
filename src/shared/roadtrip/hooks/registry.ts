@@ -9,7 +9,7 @@
 import { badgeVariant } from './badge';
 import { driveVariant } from './drive';
 import { scrubVariant } from './scrub';
-import { routeVariant } from './route';
+import { mapVariant } from './map';
 import {
   DEFAULT_HOOK_ID,
   defaultHookLayers,
@@ -21,7 +21,12 @@ import {
   type ResolvedHook,
 } from './hook-variant';
 
-export const HOOK_VARIANTS: readonly HookVariant[] = [badgeVariant, scrubVariant, routeVariant, driveVariant];
+export const HOOK_VARIANTS: readonly HookVariant[] = [
+  badgeVariant,
+  scrubVariant,
+  driveVariant,
+  mapVariant,
+];
 
 export function hookVariantById(id: string): HookVariant | undefined {
   return HOOK_VARIANTS.find((variant) => variant.id === id);

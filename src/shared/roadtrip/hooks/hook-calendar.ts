@@ -13,6 +13,9 @@
  *   several times: the published one, else the first. A day told three times
  *   flashes once.
  * - `hookStages` — the legs, with the places a drawing can use.
+ * - `currentLegIndex` — which leg a day belongs to. It lived in the route
+ *   trace's plan until that variant was retired (2026-09-15); it is a reading
+ *   of the trip, not of a drawing, so it belongs here with the rest of them.
  */
 
 import { tripCoverage } from '../trip-coverage';
@@ -66,4 +69,13 @@ export function hookStages(trip: TripDoc): HookStage[] {
         : [],
     ),
   }));
+}
+
+/** Which leg a day belongs to: the LAST match, the rule `stageAt` uses. */
+export function currentLegIndex(stages: readonly HookStage[], date: string): number | null {
+  let found: number | null = null;
+  stages.forEach((stage, i) => {
+    if (stage.startDate <= date && date <= stage.endDate) found = i;
+  });
+  return found;
 }

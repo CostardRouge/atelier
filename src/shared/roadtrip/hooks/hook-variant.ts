@@ -38,6 +38,14 @@ export interface FrameBox {
   height: number;
 }
 
+/** A rectangle inside the output frame, in the frame's own pixels. */
+export interface FrameRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 /**
  * A variant's stored settings. Deliberately a plain JSON record: it is what
  * travels in `.roadtrip.json` and what a newer build may have written keys into
@@ -292,7 +300,10 @@ export interface HookPanelHost {
    * Open the shell's picture chooser, starting from `selected`. Resolves the
    * pictures the author kept, or null when they cancelled.
    */
-  choosePictures?(selected: readonly HookPickedPicture[]): Promise<HookPickedPicture[] | null>;
+  choosePictures?(
+    selected: readonly HookPickedPicture[],
+    choice?: HookPictureChoice,
+  ): Promise<HookPickedPicture[] | null>;
   /** How the pictures the variant asked for are coming along. */
   pictureStatus?: HookPictureStatus;
   /**
@@ -300,6 +311,17 @@ export interface HookPanelHost {
    * write the trip itself; absent, the panel says where the car is set.
    */
   configureCar?(): void;
+}
+
+/** How a variant wants the chooser to open. */
+export interface HookPictureChoice {
+  /**
+   * Offer the piece's OWN day as well, rather than the days before it. A sweep
+   * is a run-up to the piece and stops the day before; an itinerary's stops are
+   * as often the day being told. Nothing shot AFTER the piece is ever offered
+   * either way.
+   */
+  includeThisDay?: boolean;
 }
 
 export interface HookPictureStatus {
@@ -341,6 +363,25 @@ export interface HookVariant {
    * decode 250 pictures for a sweep that stops twelve times.
    */
   wantsPictures?(options: HookOptions, ctx: HookContext): HookPictureWant[];
+  /**
+   * Where this opener's drawing sits in the frame, so the stage can let it be
+   * POINTED AT and dragged like any other content. Absent, the opener is not
+   * grabbable and a press falls through to the picture, which is what a
+   * variant covering the whole frame (the badge, a scrub's tape) wants.
+   *
+   * Editor-only, and deliberately NOT on `HookRender`: `prepare()`'s closure
+   * is what every renderer and both exports share, and none of them has any
+   * business knowing where a pointer is.
+   */
+  frameBox?(options: HookOptions, ctx: HookContext, frame: FrameBox): FrameRect | null;
+  /**
+   * The same drawing moved by a drag — `dx` a fraction of the frame's width,
+   * `dy` of its height, INCREMENTAL (the delta since the last call), the way
+   * the picture's own pan is applied. Pure: options in, options out, so the
+   * stage writes them back through the one path the panel uses. A variant
+   * with a `frameBox` and no `moveBy` can be selected but not moved.
+   */
+  moveBy?(options: HookOptions, dx: number, dy: number): HookOptions;
   /**
    * The picker card's little drawing. It says what the variant DOES — it is
    * not a render of this piece: the stage sits beside the picker showing the

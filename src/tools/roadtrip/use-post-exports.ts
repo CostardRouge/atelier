@@ -26,7 +26,7 @@ import { transcodeStore } from '../../shared/media/transcode-store';
 import type { HookBlock } from '../../shared/roadtrip/shades';
 import type { TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
 import { canWriteToDisk, pickWritableDirectory, writeItems } from '../../shared/sources/write-files';
-import type { ResolvedHook } from '../../shared/roadtrip/hooks/hook-variant';
+import type { HookPicture, ResolvedHook } from '../../shared/roadtrip/hooks/hook-variant';
 import type { ElementsAt } from '../../shared/roadtrip/hooks/hook-elements';
 
 export interface PostExportInputs {
@@ -50,6 +50,11 @@ export interface PostExportInputs {
    * paints, so a burned-in scrub flashes what the preview flashed.
    */
   hook: ResolvedHook | null;
+  /**
+   * The opener's decoded pictures, for the PNG path: the video path reads
+   * them through `hook`, but the deck renderer prepares the opener itself.
+   */
+  hookPictures?: ReadonlyMap<string, HookPicture>;
   /** The badge's elements at a moment, when the opener rewrites its words. */
   hookElementsAt: ElementsAt | null;
   block: HookBlock | null;
@@ -324,6 +329,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
           longEdge: 1920,
           timeSeconds: inputs.timeSeconds,
           resolve: inputs.resolve,
+          pictures: inputs.hookPictures,
           lutFor: (slide) => inputs.lutFor(slide.develop),
           include: (slide) => wanted.has(slide.position),
           onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`),
@@ -430,6 +436,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         longEdge: 1920,
         timeSeconds: inputs.timeSeconds,
         resolve: inputs.resolve,
+        pictures: inputs.hookPictures,
         lutFor: (slide) => inputs.lutFor(slide.develop),
         onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`),
       });
