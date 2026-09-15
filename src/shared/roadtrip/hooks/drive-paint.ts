@@ -22,6 +22,7 @@
  */
 
 import { drawFramed } from '../../media/framing';
+import { DEFAULT_GEAR } from '../car-spec';
 import { CAR_LENGTH, CAR_WIDTH, WHEEL_IDS, WHEEL_RADIUS, buildCar, carPalette } from './car-model';
 import { hexToRgba } from './colour';
 import {
@@ -56,7 +57,9 @@ export interface DriveScratch {
 }
 
 export function driveScratch(o: DriveOptions): DriveScratch {
-  return { car: buildCar({ spare: o.spare, rack: o.rack, mirrors: o.mirrors }) };
+  // A bridge until the car is the trip's: the piece's three toggles over the
+  // default gear.
+  return { car: buildCar({ ...DEFAULT_GEAR, spare: o.spare, rack: o.rack, mirrors: o.mirrors }) };
 }
 
 /** The box the route is fitted into, on a frame of `w`×`h`. */
