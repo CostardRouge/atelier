@@ -56,43 +56,45 @@ describe('healthFromAnswer', () => {
 });
 
 describe('countBySource', () => {
-  it('counts projects and trips per source', () => {
-    const counts = countBySource(
-      [{ sourceId: 'local' }, { sourceId: 'w.example' }, { sourceId: 'w.example' }],
-      [{ sourceId: 'w.example' }],
-    );
-    expect(counts.get('local')).toEqual({ projects: 1, trips: 0 });
-    expect(counts.get('w.example')).toEqual({ projects: 2, trips: 1 });
+  it('counts projects, trips and rolls per source', () => {
+    const counts = countBySource({
+      projects: [{ sourceId: 'local' }, { sourceId: 'w.example' }, { sourceId: 'w.example' }],
+      trips: [{ sourceId: 'w.example' }],
+      rolls: [{ sourceId: 'w.example' }, {}],
+    });
+    expect(counts.get('local')).toEqual({ projects: 1, trips: 0, rolls: 1 });
+    expect(counts.get('w.example')).toEqual({ projects: 2, trips: 1, rolls: 1 });
   });
 
   it('files a document written before the field existed under this browser', () => {
-    const counts = countBySource([{}], [{}]);
-    expect(counts.get('local')).toEqual({ projects: 1, trips: 1 });
+    const counts = countBySource({ projects: [{}], trips: [{}] });
+    expect(counts.get('local')).toEqual({ projects: 1, trips: 1, rolls: 0 });
   });
 
   it('leaves a source nobody uses out of the map', () => {
-    expect(countBySource([], []).size).toBe(0);
+    expect(countBySource({}).size).toBe(0);
   });
 });
 
 describe('describeDocs', () => {
   it('never says zero', () => {
-    expect(describeDocs({ projects: 0, trips: 0 })).toBe('nothing yet');
-    expect(describeDocs({ projects: 2, trips: 0 })).toBe('2 projects');
-    expect(describeDocs({ projects: 0, trips: 1 })).toBe('one trip');
-    expect(describeDocs({ projects: 8, trips: 3 })).toBe('8 projects and 3 trips');
+    expect(describeDocs({ projects: 0, trips: 0, rolls: 0 })).toBe('nothing yet');
+    expect(describeDocs({ projects: 2, trips: 0, rolls: 0 })).toBe('2 projects');
+    expect(describeDocs({ projects: 0, trips: 1, rolls: 0 })).toBe('one trip');
+    expect(describeDocs({ projects: 8, trips: 3, rolls: 0 })).toBe('8 projects and 3 trips');
+    expect(describeDocs({ projects: 8, trips: 3, rolls: 1 })).toBe('8 projects, 3 trips and one roll');
   });
 });
 
 describe('forgetWarning', () => {
   it('says what stays where', () => {
-    const w = forgetWarning('w.example', { projects: 8, trips: 3 });
+    const w = forgetWarning('w.example', { projects: 8, trips: 3, rolls: 0 });
     expect(w).toContain('8 projects and 3 trips');
     expect(w).toContain('stay on the instance');
   });
 
   it('stays short when the instance holds nothing of ours', () => {
-    expect(forgetWarning('w.example', { projects: 0, trips: 0 })).toContain('Nothing is deleted');
+    expect(forgetWarning('w.example', { projects: 0, trips: 0, rolls: 0 })).toContain('Nothing is deleted');
   });
 });
 

@@ -1,4 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ComponentType } from 'react';
+import { developPath, rollRef } from '../shared/develop/develop-route';
+import { getRollThumbs, listRolls } from '../shared/develop/roll-store';
+import { rollProgress } from '../shared/develop/roll-types';
 import { listProjects } from '../shared/projects/project-store';
 import { listTrips } from '../shared/roadtrip/trip-store';
 import { roadtripPath } from '../shared/roadtrip/trip-route';
@@ -9,15 +12,16 @@ import { Icons } from '../shared/ui/icons';
 import { TOOLS, type Tool } from './tools';
 
 /**
- * Home page for the Atelier suite: two doors, and the instruments behind
- * them.
+ * Home page for the Atelier suite: a door per editor, and the instruments
+ * behind them.
  *
  * Nine equal cards told a story of nine equal tools, while the suite is
- * converging on ONE editor (`studio.md`) and the trips beside it. The two
- * editors are the doors now, each carrying the document this browser worked
- * on last so the page is a point of resumption rather than a menu; the seven
- * pages kept until the Studio absorbs them are a compact list under the
- * name the tool menu gives them, "Instruments".
+ * converging on its editors (`studio.md`) — the Studio, Trips and Develop.
+ * Each editor is a door, carrying the document this browser worked on last so
+ * the page is a point of resumption rather than a menu; the pages kept until
+ * the Studio absorbs them are a compact list under the name the tool menu
+ * gives them, "Instruments". A door is looked up by tool id (`DOORS`), so a
+ * new editor is an entry there, never another branch.
  */
 export default function Home() {
   const editors = TOOLS.filter((t) => t.group === 'editor');
@@ -44,14 +48,13 @@ export default function Home() {
         </p>
       </section>
 
-      <section className="grid grid-cols-1 gap-4 mb-10 min-[680px]:grid-cols-2" aria-label="Editors">
-        {editors.map((t) =>
-          t.id === 'studio' ? (
-            <StudioDoor key={t.id} tool={t} />
-          ) : (
-            <TripsDoor key={t.id} tool={t} />
-          ),
-        )}
+      {/* One column, then a row of three: two columns would leave the third
+          door alone on a line of its own. */}
+      <section className="grid grid-cols-1 gap-4 mb-10 min-[900px]:grid-cols-3" aria-label="Editors">
+        {editors.map((t) => {
+          const Door = DOORS[t.id] ?? PlainDoor;
+          return <Door key={t.id} tool={t} />;
+        })}
       </section>
 
       <section className="mb-12" aria-label="Instruments">
@@ -189,6 +192,71 @@ function TripsDoor({ tool }: { tool: Tool }) {
     </a>
   );
 }
+
+/** The Develop door: the roll touched last, its first pictures as a strip. */
+function DevelopDoor({ tool }: { tool: Tool }) {
+  const [last, setLast] = useState<{ ref: string; name: string; developed: number; total: number; thumbs: Blob[] } | null>(
+    null,
+  );
+  useEffect(() => {
+    let alive = true;
+    void listRolls().then(async (all) => {
+      const r = all[0];
+      if (!r) return;
+      const ids = r.pictures.slice(0, 5).map((p) => p.id);
+      const map = await getRollThumbs(ids);
+      const { developed, total } = rollProgress(r);
+      if (alive) setLast({ ref: rollRef(r), name: r.name, developed, total, thumbs: ids.flatMap((id) => map.get(id) ?? []) });
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const href = last ? `#${developPath(last.ref)}` : `#${tool.path}`;
+  return (
+    <a href={href} className={door}>
+      <div className="h-24 rounded-[10px] overflow-hidden bg-paper-2 flex gap-px">
+        {last && last.thumbs.length > 0 ? (
+          last.thumbs.map((blob, i) => <DoorThumb key={i} blob={blob} />)
+        ) : (
+          <div className="w-full h-full grid place-items-center text-faint text-2xl">{Icons.image}</div>
+        )}
+      </div>
+      <DoorHead
+        tool={tool}
+        resume={
+          last
+            ? `${last.name} · ${last.total === 0 ? 'no pictures yet' : `${last.developed} of ${last.total} developed`}`
+            : null
+        }
+      />
+    </a>
+  );
+}
+
+function DoorThumb({ blob }: { blob: Blob }) {
+  const url = useObjectUrl(blob);
+  return (
+    <div className="flex-1 min-w-0 h-full bg-frame">
+      {url && <img src={url} alt="" className="block w-full h-full object-cover" />}
+    </div>
+  );
+}
+
+/** An editor with no door of its own yet: its name and pitch. */
+function PlainDoor({ tool }: { tool: Tool }) {
+  return (
+    <a href={`#${tool.path}`} className={door}>
+      <DoorHead tool={tool} resume={null} />
+    </a>
+  );
+}
+
+const DOORS: Record<string, ComponentType<{ tool: Tool }>> = {
+  studio: StudioDoor,
+  roadtrip: TripsDoor,
+  develop: DevelopDoor,
+};
 
 function when(ts: number): string {
   return new Date(ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });

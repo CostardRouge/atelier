@@ -163,3 +163,35 @@ kept on the same instance merged into the first's row and its own row went; a
 move home sent DELETE with If-Match; a row deleted behind the browser's back
 came back as "kept in this browser". In the Trips sheet: the row, the picker
 moving it, "unsaved changes — saving to … shortly", then the idle PUT.
+
+## The tool shell opens a roll as a contact sheet over the modal (2026-09-16, D5)
+
+`tools/develop/`: `DevelopTool` (Trips' shell shape: route-addressed, 800 ms
+local debounce as `beforeFlush`, `useDocumentSync` with **`kind: 'roll'`** — the
+hook's new optional `kind`, so a roll is never pushed to a bucket that predates
+rolls), `RollGallery` (the project gallery over `useDocumentGallery`, the cover a
+mosaic of the first four thumbnails), `NewRollModal`, `RollScreen`,
+`use-roll-grade.ts`. Rules: (1) **routes** are `develop-route.ts`'s — the trip's
+`<slug>-<id8>` ref, so a rename keeps every link, and `/develop/<roll>/<picture>`
+IS the open sheet (Back closes it). (2) **The roll screen is a contact sheet
+that opens the MODAL sheet** — chosen so a roll is usable before D6; D6 swaps the
+sheet for the full-screen layout and must keep the route and the writers.
+(3) **The roll's look is one stack for every picture** (`useRollGrade`, Trips'
+`useTripGrade` with one scope): written back only when it differs from what was
+last restored, and an empty look is stored as `null`. (4) **Thumbnails are baked
+from the Library's FILE** (`roll-thumb.ts`), found per picture by
+`findMedia` (name → hash), one decode at a time, once per picture per visit —
+AS SHOT, not graded (D6 decides whether the strip shows the develop). A bake
+that lands after its run was superseded still sets the thumbnail: the picture
+is already marked tried. (5) **Apply to N other pictures** writes copies on its
+click and Done writes the open picture — the Trips rule, separate ticks.
+(6) A modal's Enter is `useDialogKeys`' on the window: a `<form>` with a submit
+button around a text field would run the create TWICE. Verified in the Browser
+pane: three dropped JPEGs → New roll with them → thumbnails baked → a picture
+developed at +0.80 EV and applied to the two others → "3 of 3 developed" after
+a reload (library empty, thumbnails from the store) → the card's cover → the
+Home door → `rolls 1` on `#/sources`; against the stub: Move to the instance
+(PUT), resume (GET with `If-None-Match`), a rename pushed after the idle with
+`If-Match`, Delete (DELETE with `If-Match`, thumbnails and record pruned). The sources
+ledger counts rolls (`DocCount.rolls`). Not measured on a phone; the compact
+gallery publishes New roll · Import to the bar.

@@ -84,42 +84,50 @@ export function healthFromAnswer(latencyMs: number, now = Date.now()): SourceHea
 export interface DocCount {
   projects: number;
   trips: number;
+  rolls: number;
 }
 
-export const NO_DOCS: DocCount = { projects: 0, trips: 0 };
+export const NO_DOCS: DocCount = { projects: 0, trips: 0, rolls: 0 };
 
 /**
- * How many documents each source holds, counted from the two local stores.
+ * How many documents each source holds, counted from the local stores.
  *
  * A document with no `sourceId` was written before the field existed and
  * belongs to this browser — the same rule `groupBySource` applies, kept
  * identical on purpose so the gallery and this screen never disagree.
  */
 export function countBySource(
-  projects: readonly { sourceId?: string }[],
-  trips: readonly { sourceId?: string }[],
+  docs: {
+    projects?: readonly { sourceId?: string }[];
+    trips?: readonly { sourceId?: string }[];
+    rolls?: readonly { sourceId?: string }[];
+  },
   localId = 'local',
 ): Map<string, DocCount> {
   const counts = new Map<string, DocCount>();
   const bump = (id: string | undefined, key: keyof DocCount) => {
     const at = id ?? localId;
-    const current = counts.get(at) ?? { projects: 0, trips: 0 };
+    const current = counts.get(at) ?? NO_DOCS;
     counts.set(at, { ...current, [key]: current[key] + 1 });
   };
-  for (const p of projects) bump(p.sourceId, 'projects');
-  for (const t of trips) bump(t.sourceId, 'trips');
+  for (const p of docs.projects ?? []) bump(p.sourceId, 'projects');
+  for (const t of docs.trips ?? []) bump(t.sourceId, 'trips');
+  for (const r of docs.rolls ?? []) bump(r.sourceId, 'rolls');
   return counts;
 }
 
-/** "8 projects and 3 trips", "one trip", "nothing yet" — never "0 projects". */
+/** "8 projects, 3 trips and 2 rolls", "one trip", "nothing yet" — never "0 projects". */
 export function describeDocs(count: DocCount): string {
   const parts: string[] = [];
-  if (count.projects > 0) {
-    parts.push(count.projects === 1 ? 'one project' : `${count.projects} projects`);
-  }
-  if (count.trips > 0) parts.push(count.trips === 1 ? 'one trip' : `${count.trips} trips`);
+  const say = (n: number, noun: string) => {
+    if (n > 0) parts.push(n === 1 ? `one ${noun}` : `${n} ${noun}s`);
+  };
+  say(count.projects, 'project');
+  say(count.trips, 'trip');
+  say(count.rolls, 'roll');
   if (parts.length === 0) return 'nothing yet';
-  return parts.join(' and ');
+  if (parts.length === 1) return parts[0];
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
 /**

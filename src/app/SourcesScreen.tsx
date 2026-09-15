@@ -20,6 +20,7 @@ import {
   countBySource,
   describeDocs,
   forgetWarning,
+  NO_DOCS,
   type DocCount,
   type SourceHealth,
 } from '../shared/sources/source-ledger';
@@ -27,6 +28,7 @@ import { describeAgo } from '../shared/sources/doc-sync';
 import { LOCAL_SOURCE } from '../shared/sources/source';
 import { listProjects } from '../shared/projects/project-store';
 import { listTrips } from '../shared/roadtrip/trip-store';
+import { listRolls } from '../shared/develop/roll-store';
 
 /** Where a connect made from a LINK lands once done — the studio's gallery. */
 const AFTER_CONNECT = '/studio/home';
@@ -179,8 +181,8 @@ export default function SourcesScreen({ query }: { query: string }) {
   // What each source holds, so a forget can say it before it asks. Read once
   // per visit — the two stores are local and small.
   const recount = useCallback(() => {
-    void Promise.all([listProjects(), listTrips()])
-      .then(([projects, trips]) => setCounts(countBySource(projects, trips, LOCAL_SOURCE.id)))
+    void Promise.all([listProjects(), listTrips(), listRolls()])
+      .then(([projects, trips, rolls]) => setCounts(countBySource({ projects, trips, rolls }, LOCAL_SOURCE.id)))
       .catch(() => setCounts(new Map()));
   }, []);
   useEffect(recount, [recount]);
@@ -233,7 +235,7 @@ export default function SourcesScreen({ query }: { query: string }) {
     recount();
   }
 
-  const localCount = counts.get(LOCAL_SOURCE.id) ?? { projects: 0, trips: 0 };
+  const localCount = counts.get(LOCAL_SOURCE.id) ?? NO_DOCS;
 
   return (
     <section
@@ -264,6 +266,7 @@ export default function SourcesScreen({ query }: { query: string }) {
             <>
               <Fact label="projects" value={String(localCount.projects)} />
               <Fact label="trips" value={String(localCount.trips)} />
+              <Fact label="rolls" value={String(localCount.rolls)} />
               <Fact label="media" value="File System Access" />
               <Fact label="documents" value="IndexedDB" />
               <Fact label="scheduling" value="—" />
@@ -274,7 +277,7 @@ export default function SourcesScreen({ query }: { query: string }) {
         {connections.map((conn) => {
           const state = health.get(conn.id) ?? CHECKING;
           const caps = conn.capabilities;
-          const count = counts.get(conn.id) ?? { projects: 0, trips: 0 };
+          const count = counts.get(conn.id) ?? NO_DOCS;
           const readAt = conn.refreshedAt ?? conn.connectedAt;
           const client = new WinnowClient({ baseUrl: conn.baseUrl, auth: conn.auth });
           const down = state.state === 'unreachable' || state.state === 'signin';
@@ -373,7 +376,7 @@ export default function SourcesScreen({ query }: { query: string }) {
                     }`}
                   >
                     {state.reason}
-                    {count.projects + count.trips > 0 && (
+                    {count.projects + count.trips + count.rolls > 0 && (
                       <>
                         {' '}
                         {describeDocs(count)} came from it — the copies in this browser still open,

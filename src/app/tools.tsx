@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import type { AssetKind } from '../shared/library/assets';
 import CompareTool from '../tools/compare/CompareTool';
 import ComposerTool from '../tools/composer/ComposerTool';
+import DevelopTool from '../tools/develop/DevelopTool';
 import ExifTool from '../tools/exif/ExifTool';
 import LutStudio from '../tools/lut/LutStudio';
 import MapTool from '../tools/map/MapTool';
@@ -25,7 +26,7 @@ export interface Tool {
   /** The card's eyebrow on the home page. */
   subtitle?: string;
   /**
-   * Where the switcher files it. The two `editor`s are where the suite is
+   * Where the switcher files it. The `editor`s are where the suite is
    * converging (`studio.md`); an `instrument` is one of the standalone pages
    * kept until the Studio absorbs it. The list will grow — that is why the
    * switcher is a menu and not a row of segments.
@@ -65,6 +66,17 @@ export const TOOLS: Tool[] = [
       'Give a trip its dates and every photo knows which day it belongs to — a grid of the whole journey shows what you have told and what you never have.',
     Component: RoadTripTool,
     accepts: ['photo', 'video+telemetry', 'video'],
+  },
+  {
+    id: 'develop',
+    group: 'editor',
+    path: '/develop',
+    label: 'Develop',
+    subtitle: 'Roll · pictures · look',
+    blurb:
+      'Gather the photographs you mean to develop into a roll — from a folder or a day on your Winnow — and give each its own light and colour, under one look for the roll.',
+    Component: DevelopTool,
+    accepts: ['photo'],
   },
   {
     id: 'telemetry',

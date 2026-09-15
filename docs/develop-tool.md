@@ -1,8 +1,9 @@
 # Develop — the third editor
 
-**Status (2026-09-15): the direction and eight choices are DECIDED by the
-maintainer (§2, §8); the shared foundations, D1, D2 and D3 are
-BUILT; the tool's screens are not.** From
+**Status (2026-09-16): the direction and eight choices are DECIDED by the
+maintainer (§2, §8); the shared foundations and D1–D5 are BUILT — the tool
+exists with its gallery and a contact-sheet roll screen over the modal sheet;
+the full-screen editor (D6) is next.** From
 his brief of the same day (*"un troisième outil officiel de développement
 d'images … à peu près la même interface que la modale … je n'ai pas envie de
 réinventer la roue … si des choses communes peuvent être développées, on
@@ -181,8 +182,12 @@ interface RollPicture {
   `preset-book-remote.ts` + spec, `use-preset-book.ts`; `DevelopSheet` draws the
   book by default, so Trips and the Studio switched with no host code; Trips'
   preset wrappers removed.
-- **D5 — the tool shell**: registry entry (`group: 'editor'`, accepts photo),
-  routes, gallery, New roll, the Home door lookup, ledger counts.
+- **D5 — the tool shell** — **BUILT 2026-09-16**: registry entry, routes
+  (`develop-route.ts` + spec), `RollGallery` over `useDocumentGallery`,
+  `NewRollModal`, the Home door lookup (`DOORS`), `DocCount.rolls`; the roll
+  screen is a CONTACT SHEET that opens the modal `DevelopSheet` over the roll's
+  look (`use-roll-grade.ts`), so a roll can be developed before D6 — which
+  replaces the sheet by the full-screen layout of the same blocks.
 - **D6 — the editor**: stage + filmstrip + Develop tab from the workbench
   blocks, the per-picture `key`, keyboard.
 - **D7 — batch**: selection, apply / paste to selection, counts in labels.

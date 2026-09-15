@@ -4,7 +4,7 @@ A local-first **suite of browser tools for your captures** — photo and video,
 across devices (DJI, Apple, Sony, …). Everything runs in your browser; files
 never leave your machine — no upload, no account, no server.
 
-Today it ships nine tools, converging into a single studio:
+Today it ships ten tools, converging into a few editors:
 
 - **Studio** — the unified editor the suite is converging on. Opens on your
   **projects** (saved compositions with a baked preview); each project keeps
@@ -14,6 +14,9 @@ Today it ships nine tools, converging into a single studio:
 - **Trips** — plan and track how a journey gets told. Give a trip its two
   dates and every day of it becomes a cell in a contribution-style grid; the
   holes are the days you have never posted from.
+- **Develop** — gather the photographs you mean to develop into a **roll**,
+  kept in this browser or on your Winnow, and give each its own light and
+  colour under one look for the roll.
 - **DJI Telemetry** — view DJI drone flight telemetry in sync with the video it
   was captured with.
 - **Telemetry Overlay** — place altitude, GPS and exposure readouts anywhere on
@@ -843,6 +846,37 @@ treatments — the deck through to its PNGs, clips that play, trim and re-time
 on any slide and leave as video, the located places a stage went through, and
 the bridge into the Studio.
 A portable `.json` export of a trip is the phase that follows.
+
+## Develop tool
+
+The third editor, for photographs you mean to **develop** rather than compose.
+It opens on your **rolls** — cards grouped by where each is kept, with the
+first pictures as a cover and how many are developed — and a roll is a set of
+pictures, each keeping its own develop, plus a **look** for the whole roll that
+dresses every picture after its own correction.
+
+**Making a roll.** *New roll* asks for a name, where to keep it when a Winnow
+can keep rolls too, and whether to start with the photos ticked in the Library
+(a folder, or a day on your instance). Inside a roll, *Add N selected* adds the
+Library's ticked photos in order; a picture already on the roll is never added
+twice, so adding a day again only brings what is new. A roll holds a
+*reference* to each picture — its name, size and content hash — never a copy of
+the file, so it reopens on another machine once the same pictures are in the
+Library there, and says *not in the Library* where they are not.
+
+**Developing.** A picture opens the same Develop sheet as Trips and the Studio
+— the sliders, the histogram, the before/after wipe and zoom, your presets —
+over the roll's look, which is edited in the sheet's Look section and saved on
+the roll. **Apply to N other pictures** writes the numbers onto the rest of the
+roll, each as its own copy; **Done** writes the picture in hand. The roll's
+contact sheet marks what is developed. The full-screen editor — a stage, a
+filmstrip with multi-select, crop, and export — comes next.
+
+**Keeping it.** A roll saves as you go, and one kept on a Winnow saves there
+after a few seconds of quiet, with the same status pill as a trip; the gallery
+moves, deletes and exports it (`.roll.json`, a backup — importing always makes a
+new roll). Thumbnails are baked here from the Library's files and never leave
+the browser.
 
 ## Telemetry tool
 

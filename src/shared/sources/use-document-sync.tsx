@@ -43,6 +43,12 @@ export interface DocumentSyncOptions<D extends SyncedDocument> {
   doc: D | null;
   driver: DocumentSyncDriver<D>;
   /**
+   * The bucket kind, when an instance may not keep every kind (`bucketHolds`):
+   * a roll asks for `'roll'`. Trips and projects pass nothing — every bucket
+   * keeps them.
+   */
+  kind?: string;
+  /**
    * A tool whose own local save is debounced (Trips) flushes it here first, so
    * a push never carries a document older than what is on screen. A tool whose
    * editor saves itself (the Studio) passes nothing.
@@ -125,7 +131,8 @@ export function useDocumentSync<D extends SyncedDocument>(options: DocumentSyncO
   }, []);
 
   const sourceId = doc?.sourceId ?? null;
-  const remote = useMemo(() => (sourceId ? remoteFor(sourceId) : null), [sourceId]);
+  const { kind } = options;
+  const remote = useMemo(() => (sourceId ? remoteFor(sourceId, kind) : null), [sourceId, kind]);
 
   const pushing = useRef(false);
   const flush = useCallback(
@@ -207,7 +214,7 @@ export function useDocumentSync<D extends SyncedDocument>(options: DocumentSyncO
       // simply dirty: it goes up on the next trigger.
       const rec = stored ?? newSyncRecord(opening.id, opening.sourceId, Date.now());
       setRecord(rec);
-      const r = remoteFor(opening.sourceId);
+      const r = remoteFor(opening.sourceId, opts.current.kind);
       // Not connected, or no bucket: the gallery's header says so.
       if (!r) return { doc: opening, replaced: false };
       const pulled = await driver.pull(r, opening.id, rec.etag, opening);
