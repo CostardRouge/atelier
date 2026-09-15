@@ -263,6 +263,21 @@ export function hasTimeline(caps: WinnowCapabilities | null | undefined): boolea
 }
 
 /**
+ * Whether an instance's document bucket keeps documents of `kind`. The bucket
+ * lists by kind and refuses one it does not know (400), so a client must not
+ * offer to keep a roll on an instance that only knows trips and projects: it
+ * would fail on the first push instead of being hidden. An instance that
+ * declares a bucket but no `kinds` predates the list and knew exactly the first
+ * two kinds; no bucket holds nothing.
+ */
+export function bucketHolds(caps: WinnowCapabilities | null | undefined, kind: string): boolean {
+  const documents = caps?.documents;
+  if (!documents?.bucket) return false;
+  if (!Array.isArray(documents.kinds)) return kind === 'trip' || kind === 'project';
+  return documents.kinds.includes(kind);
+}
+
+/**
  * The day range a leg's media is asked for. **Winnow has no `chapter_id`
  * filter** (checked against its `lib/filter.ts`, whose schema strips unknown
  * keys — so sending one narrowed nothing and quietly listed the whole

@@ -5,6 +5,7 @@ import {
   canWriteBack,
   chapterDays,
   chapterFromWire,
+  bucketHolds,
   hasTimeline,
   normalizeBaseUrl,
   sourceIdFor,
@@ -659,5 +660,27 @@ describe('WinnowClient requests', () => {
     expect(file.type).toBe('video/mp4');
     expect(file.size).toBe(3);
     expect(file.lastModified).toBe(1234);
+  });
+});
+
+describe('bucketHolds — which document kinds an instance keeps', () => {
+  const withDocs = (documents: unknown) => ({ documents }) as unknown as Parameters<typeof bucketHolds>[0];
+
+  it('keeps only the kinds its bucket lists', () => {
+    const caps = withDocs({ bucket: true, kinds: ['trip', 'project', 'roll'] });
+    expect(bucketHolds(caps, 'roll')).toBe(true);
+    expect(bucketHolds(caps, 'presets')).toBe(false);
+  });
+
+  it('reads a bucket that predates the list as the first two kinds', () => {
+    const caps = withDocs({ bucket: true });
+    expect(bucketHolds(caps, 'trip')).toBe(true);
+    expect(bucketHolds(caps, 'project')).toBe(true);
+    expect(bucketHolds(caps, 'roll')).toBe(false);
+  });
+
+  it('keeps nothing without a bucket or capabilities', () => {
+    expect(bucketHolds(withDocs({ bucket: false, kinds: ['roll'] }), 'roll')).toBe(false);
+    expect(bucketHolds(null, 'trip')).toBe(false);
   });
 });

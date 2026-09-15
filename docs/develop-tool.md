@@ -1,8 +1,8 @@
 # Develop — the third editor
 
 **Status (2026-09-15): the direction and eight choices are DECIDED by the
-maintainer (§2, §8); the shared foundations and D1 are BUILT; the tool itself
-is not.** From
+maintainer (§2, §8); the shared foundations, D1, D2's sync half and D3 are
+BUILT; the tool's screens are not.** From
 his brief of the same day (*"un troisième outil officiel de développement
 d'images … à peu près la même interface que la modale … je n'ai pas envie de
 réinventer la roue … si des choses communes peuvent être développées, on
@@ -55,28 +55,26 @@ The modal was split so a full-screen host lays out the same blocks
 ## 3. The roll
 
 ```ts
-/** shared/develop/roll-types.ts — pure, migrated like TripDoc and ProjectDoc. */
+/** shared/develop/roll-types.ts — BUILT (D3): pure, read through `readRollDoc`. */
 interface RollDoc {
   id: string;
-  version: number;
+  version: number;                  // ROLL_DOC_VERSION = 1
   name: string;
   /** The source it is kept in (local or a Winnow) — one source, never synced across. */
   sourceId: string;
   createdAt: number;
   updatedAt: number;
   pictures: RollPicture[];          // the strip's order
-  /** The roll's look, after every picture's develop — Trips' TripGrade shape. */
-  grade: SavedLutLayer[] | null;
-  outputTransform: OutputTransform;
-  export: RollExport;               // long edge or source size, JPEG quality, originals mode (Auto)
+  /** The roll's look, after every picture's develop — Trips' TripGrade shape; null = none. */
+  grade: { layers: SavedLutLayer[]; output: OutputTransform } | null;
+  export: { longEdge: number | null; quality: number; originals: 'auto' | 'proxies' | 'originals' };
 }
 interface RollPicture {
   id: string;
   ref: SavedMediaRef;               // hash-carrying, so a rename or an instance still finds it
   develop: DevelopSettings | null;  // null = as shot
-  framing: Framing | null;          // crop · straighten · flip (shared/media/framing.ts)
-  /** The frame shape of the crop: 'original' or a preset ratio. */
-  aspect: 'original' | string;
+  framing: Framing | null;          // null = uncropped (an untouched framing reads as null)
+  aspect: 'original' | string;      // an ASPECT_PRESETS id
 }
 ```
 
@@ -171,9 +169,11 @@ interface RollPicture {
   (2026-09-15, `c379211`: `use-document-sync.tsx` + `afterPull`); the gallery
   half (source list, remote lists, create-on-source, delete-from-source) waits
   for `ProjectGallery.tsx` to leave a parallel session's hands.**
-- **D3 — the roll model**: `roll-types.ts` + migration + spec, `roll-store.ts`,
-  `roll-remote.ts`, `roll-file.ts`; `remoteFor` reads `documents.kinds`.
-  Winnow: `DOC_KINDS` += `roll`, `presets` (a commit THERE).
+- **D3 — the roll model** — **BUILT 2026-09-15**: `roll-types.ts` + spec,
+  `roll-store.ts` (DB `atelier-develop` v1: `rolls`, `thumbs`, `sync`,
+  `presets`), `roll-remote.ts`, `roll-file.ts` + spec; `remoteFor(id, kind)`
+  reads `documents.kinds` through `bucketHolds`. Winnow: `DOC_KINDS` += `roll`,
+  `presets` (its commit `43f01e9`, not pushed).
 - **D4 — the preset book**: store, sync, the one-time merge from trips, every
   host switched to it.
 - **D5 — the tool shell**: registry entry (`group: 'editor'`, accepts photo),

@@ -95,3 +95,29 @@ races it, whichever comes first. The bars are a fixed light over `bg-frame`,
 never a theme token: `paper` is dark in the darkroom. Verified in the Browser
 pane on a PNG with a known 6.25 % white block: `whites 6.3 %` at as shot, 28 %
 at +1.5 EV (over the hook's stored +0.7), none and `blacks 2.5 %` at −2 EV.
+
+## The roll is read ONE way, wherever it comes from (2026-09-15, D3)
+
+`roll-types.ts` (`RollDoc` v1), `roll-store.ts`, `roll-remote.ts`, `roll-file.ts`
+— the trip's twins, built before any screen. Rules a later phase must keep:
+(1) **one reader** — the store, the instance and the `.roll.json` all go
+through `readRollDoc`, which drops a picture whose ref names nothing, keeps
+the first of two entries with one id, and stores an as-shot develop, an
+untouched framing and an empty look as `null` (one spelling each, so
+"developed" and "has a look" are simple tests). (2) **a picture is added
+once** — `addPictures` dedupes by source id → hash → name and size, so adding a
+day again never duplicates what was already developed. (3) **the database is
+`atelier-develop` v1 with FOUR stores from the start** (`rolls`, `thumbs` keyed
+by PICTURE id, `sync`, `presets` for D4's book) so no later phase needs an
+upgrade transaction; thumbnails are pruned by whoever removes a picture or
+deletes a roll. (4) **a kind is asked for** — `remoteFor(sourceId, kind)` and
+`rollRemoteFor` return null for an instance whose `documents.kinds` does not
+name `roll` (`bucketHolds`; a bucket with no list is read as trip + project
+only), so an instance without Winnow's `43f01e9` hides rolls instead of a 400
+on the first push. The trip and project drivers still call `remoteFor(id)`
+without a kind — unchanged, since every bucket keeps them. (5) the file is a
+BACKUP (fresh id, importing source, refs and custom `.cube` text travel), the
+trip file's rule, and a newer version is refused. Verified: 19 specs, and the
+store round-tripped in the Browser pane (put/get/list, a thumbnail written and
+pruned, a sync record, the four stores present). **Winnow's side was committed
+without its typecheck**: that checkout has no `node_modules`.

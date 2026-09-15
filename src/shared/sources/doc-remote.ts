@@ -9,7 +9,7 @@
  * client's own `WinnowError`; nothing retries a write on its own.
  */
 
-import { DOCS_APP, WinnowClient, WinnowError } from './winnow/client';
+import { DOCS_APP, WinnowClient, WinnowError, bucketHolds } from './winnow/client';
 import { getWinnowConnection } from './winnow/store';
 import { DEFAULT_SOURCE_ID } from './source';
 import type { PushFailure, SyncEvent, TheirCopy } from './doc-sync';
@@ -29,13 +29,16 @@ export function isRemoteSource(sourceId: string): boolean {
 
 /**
  * The instance a source id names, ready to talk to — or null for `local`, for
- * a host this browser has not connected, and for one whose capabilities say
- * it has no document bucket (a push there would only 404).
+ * a host this browser has not connected, for one whose capabilities say it has
+ * no document bucket (a push there would only 404), and, when `kind` is given,
+ * for one whose bucket does not keep that kind (`bucketHolds` — a push would
+ * only 400).
  */
-export function remoteFor(sourceId: string): RemoteSource | null {
+export function remoteFor(sourceId: string, kind?: string): RemoteSource | null {
   if (!isRemoteSource(sourceId)) return null;
   const conn = getWinnowConnection(sourceId);
   if (!conn || !conn.capabilities?.documents.bucket) return null;
+  if (kind !== undefined && !bucketHolds(conn.capabilities, kind)) return null;
   return {
     sourceId,
     label: conn.id,
