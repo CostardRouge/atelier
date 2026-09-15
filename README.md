@@ -612,7 +612,9 @@ stops are either the days other pieces tell — each flashing the photo that pie
 is made from, never its finished hook — or **pictures you pick**: choose a span
 (the trip so far, this leg, the last week, or any two dates), see every photo shot
 in it from the Library and, when one is connected, your Winnow, all of them
-ticked, and untick what does not belong. The sweep shows them in the order they
+ticked, and untick what does not belong — or add pictures straight from this
+computer, which join the Library and stay in the grid whatever day they were
+shot on. The sweep shows them in the order they
 were shot, several on one day holding the head on that day while they change;
 a picture from the instance is fetched only when the sweep draws it, cropped to
 the frame and graded with the piece, and never lands in the Library. Its sweep is

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
-import { isRawImage, type Asset } from '../../shared/library/assets';
+import { classifyPart, fileIdentity, isRawImage, type Asset } from '../../shared/library/assets';
 import { useObjectUrls } from '../../shared/lib/use-object-urls';
+import { pickFiles } from '../../shared/sources/file-sources';
 import { hashedMediaRef, knownIdentity } from '../../shared/projects/media-identity';
 import { readCapture, isoFromTimestamp } from '../../shared/roadtrip/media-date';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
@@ -15,6 +16,7 @@ import {
   mergePool,
   quickSpans,
   reachSpan,
+  sortPool,
   type DateSpan,
   type PoolCandidate,
 } from '../../shared/roadtrip/hooks/picture-pool';
@@ -167,6 +169,12 @@ function rowCandidate(row: WinnowAssetRow, host: string): Candidate | null {
  *   the Library's photographs, dated from their EXIF, and — when an instance
  *   is connected — what it holds for those days, asked once per span. The
  *   same picture in both is offered once (`picture-pool.ts`).
+ * - **Plus whatever you add from this computer**, which is the one thing the
+ *   span does NOT filter: a file the author picked by hand is chosen, not
+ *   found, so it stays in the grid whatever day it was shot on (and joins the
+ *   Library, where every other surface can then resolve it). Before this, a
+ *   picture the chooser could not date into the span meant closing the sheet,
+ *   opening the Library and dropping it there.
  * - **Nothing is fetched to choose.** The instance's tiles are its thumbnails;
  *   a picture's bytes are fetched only when the sweep draws it, at the
  *   editing rendition, and never land in the Library.
@@ -205,10 +213,27 @@ export default function HookPicturesModal({
   );
   const clipsLeftOut = scope.rows?.filter((row) => row.media_type === 'video').length ?? 0;
 
-  const pool = useMemo(
-    () => (span ? inSpan(mergePool(library.items, instance), span) : []),
-    [library.items, instance, span],
-  );
+  /**
+   * Files added from this computer while the sheet is open, by their file
+   * identity. They are in the pool whatever the span says: the author picked
+   * them, so hiding one because its EXIF day falls outside the days being
+   * looked at would read as the add having failed.
+   */
+  const [added, setAdded] = useState<ReadonlySet<string>>(() => new Set());
+  const [adding, setAdding] = useState(false);
+
+  const pool = useMemo(() => {
+    const merged = mergePool(library.items, instance);
+    const inside = span ? inSpan(merged, span) : [];
+    if (added.size === 0) return inside;
+    const keys = new Set(inside.map((c) => c.key));
+    const byHand = merged.filter(
+      (c) => c.origin === 'library' && added.has(fileIdentity(c.file)) && !keys.has(c.key),
+    );
+    // Kept in the pool's own order, so the grid does not jump when a date
+    // finally reads and a hand-added picture joins its own day.
+    return sortPool([...inside, ...byHand]);
+  }, [library.items, instance, span, added]);
   const groups = useMemo(() => groupByDay(pool, calendar), [pool, calendar]);
 
   // Unticked, by key. Every candidate is decided the first time it is SEEN:
@@ -223,13 +248,40 @@ export default function HookPicturesModal({
     if (!fresh.length) return;
     for (const c of fresh) seen.current.add(c.key);
     if (!openingSpan.current || !selected.length) return;
-    const skip = initialExclusions(fresh, selected);
+    // A picture added from this computer arrives TICKED whatever the held list
+    // says: it is not something that list failed to name, it is what the
+    // author has just gone and fetched.
+    const found = fresh.filter((c) => !(c.origin === 'library' && added.has(fileIdentity(c.file))));
+    const skip = initialExclusions(found, selected);
     if (skip.size) setExcluded((prev) => new Set([...prev, ...skip]));
-  }, [pool, selected]);
+  }, [pool, selected, added]);
 
   const changeSpan = (next: DateSpan) => {
     openingSpan.current = false;
     setSpan(next);
+  };
+
+  /**
+   * Take photographs from this computer. They go into the Library — the one
+   * place every other surface resolves a picture from — and are remembered
+   * here so the span cannot hide them. A clip or a RAW is refused rather than
+   * added invisibly: this grid is photographs only, and a picked clip is a
+   * promise the sweep cannot keep.
+   */
+  const addLocal = async () => {
+    if (adding) return;
+    setAdding(true);
+    try {
+      const picked = await pickFiles();
+      const photos = picked.filter(
+        (file) => classifyPart(file.name) === 'image' && !isRawImage(file.name),
+      );
+      if (photos.length === 0) return;
+      lib.addFiles(photos);
+      setAdded((prev) => new Set([...prev, ...photos.map(fileIdentity)]));
+    } finally {
+      setAdding(false);
+    }
   };
 
   const ticked = pool.filter((c) => !excluded.has(c.key));
@@ -293,8 +345,9 @@ export default function HookPicturesModal({
         <div>
           <h2 className="m-0 font-serif text-2xl">Pictures for the sweep</h2>
           <p className="m-0 mt-1 text-sm text-muted">
-            Everything shot over these days in {where}. All of it is taken — untick what does
-            not belong. The sweep shows them in the order they were shot.
+            Everything shot over these days in {where}, plus anything you add from this
+            computer. All of it is taken — untick what does not belong. They are shown in the
+            order they were shot.
           </p>
         </div>
 
@@ -372,6 +425,9 @@ export default function HookPicturesModal({
               {clipsLeftOut} {clipsLeftOut === 1 ? 'clip' : 'clips'} left out — photos only
             </span>
           )}
+          <Button size="sm" className="ml-auto" onClick={() => void addLocal()} disabled={adding}>
+            {adding ? 'Opening…' : 'Add from this computer…'}
+          </Button>
         </div>
 
         {scope.problem && (
@@ -391,7 +447,8 @@ export default function HookPicturesModal({
               {loading
                 ? 'Looking…'
                 : `Nothing shot between ${span ? formatIsoDate(span.from) : '—'} and ${span ? formatIsoDate(span.to) : '—'} in ${where}.`}
-              {!connection && !loading && ' Connect a Winnow on Sources to see what it holds for these days.'}
+              {!loading && ' Widen the days above, or add pictures from this computer.'}
+              {!connection && !loading && ' Connecting a Winnow on Sources also shows what it holds for these days.'}
             </p>
           ) : (
             <div className="flex flex-col gap-4">
@@ -440,9 +497,11 @@ export default function HookPicturesModal({
 
         <div className="flex items-center gap-3 gap-y-2 flex-wrap border-t border-line pt-4">
           <p className="m-0 text-xs text-muted grow shrink basis-[20rem] min-w-0">
-            {selected.length > 0
-              ? 'Only what is ticked in these days is kept.'
-              : 'Nothing is downloaded to choose: a picture is fetched when the sweep draws it.'}
+            {added.size > 0
+              ? `${added.size} ${added.size === 1 ? 'picture' : 'pictures'} added from this computer — they are in the Library now, whatever day they were shot.`
+              : selected.length > 0
+                ? 'Only what is ticked in these days is kept.'
+                : 'Nothing is downloaded to choose: a picture is fetched when the sweep draws it.'}
           </p>
           <div className="flex items-center gap-3 ml-auto">
             <Button variant="ghost" onClick={onCancel}>
