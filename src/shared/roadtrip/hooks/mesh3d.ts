@@ -217,32 +217,57 @@ export interface RenderedFace {
 
 /**
  * Every visible face of every part under `pose`, back to front — what the
- * paint draws in order. Parts are ordered by their centres, then a part's
- * faces by their own depth; culling is by the face's world normal against
- * the view.
+ * paint draws in order. Culling is by the face's world normal against the
+ * view; ordering is ONE sort over every visible face, keyed on the depth of
+ * the face's FARTHEST vertex.
+ *
+ * Not by part. Comparing two parts by their centres is only sound when
+ * neither one's span along the view contains the other's, and this model
+ * breaks that everywhere: a decal lies ON the face that carries it, the
+ * cabin sits ON a body whose top face spans the whole car. Where the
+ * comparison flipped, a whole part was painted over and simply was not
+ * there — the wrap-around corner lights lost to the body for a ~20° arc of
+ * headings at every elevation, the cabin lost to the body's top plate for up
+ * to 95° of them below 46°. Dissolving the grouping costs nothing, because a
+ * part is convex and, after culling, no two of its own visible faces overlap.
+ *
+ * The farthest vertex rather than the average: a face that spans the whole
+ * car then sorts by the end that is genuinely behind everything, so it is
+ * laid down first and cannot cover what stands in front of it. It is also
+ * exact for a decal, whose outline sits inside the face it is pushed off —
+ * depth is linear over a plane, so the maximum over the smaller polygon
+ * cannot exceed the maximum over the one containing it. An average key is
+ * measurably worse and the nearest vertex is worse still; `render-order.test.ts`
+ * is the gate that says so at every angle.
+ *
+ * Equal keys keep the order they were built in, so the same pose paints the
+ * same sequence twice — a video export cannot shimmer where a still looks
+ * right.
  */
 export function renderOrder(parts: readonly Part[], pose: Pose, light: Light = DEFAULT_LIGHT): RenderedFace[] {
   const view = viewDirection(pose.tilt);
-  const ordered = parts
-    .map((part) => ({ part, depth: project(toWorld(part.centre, pose), pose).depth }))
-    .sort((a, b) => b.depth - a.depth);
-
   const out: RenderedFace[] = [];
-  for (const { part } of ordered) {
+  const emitted: number[] = [];
+
+  for (const part of parts) {
     const spin = part.spin ? (pose.spins?.[part.id] ?? 0) : 0;
-    const faces: RenderedFace[] = [];
     for (const face of part.faces) {
       const world = face.verts.map((v) => {
         const turned = part.spin && spin !== 0 ? rotateAbout(v, part.spin.pivot, part.spin.axis, spin) : v;
         return toWorld(turned, pose);
       });
       const n = faceNormal(world);
+      // A polygon with no area has no normal to speak of — `faceNormal` hands
+      // back a default that would sail through the cull and paint a sliver.
+      if (n[0] === 0 && n[1] === 0 && n[2] === 1 && !hasArea(world)) continue;
       // Facing the camera means facing AGAINST the view direction.
       if (dot(n, view) >= -1e-9) continue;
       const projected = world.map((w) => project(w, pose));
-      const depth = projected.reduce((sum, p) => sum + p.depth, 0) / projected.length;
+      let depth = -Infinity;
+      for (const p of projected) if (p.depth > depth) depth = p.depth;
       const { shade, highlight } = lighting(n, light);
-      faces.push({
+      emitted.push(out.length);
+      out.push({
         points: projected.map(({ x, y }) => ({ x, y })),
         role: face.role,
         shade,
@@ -251,10 +276,23 @@ export function renderOrder(parts: readonly Part[], pose: Pose, light: Light = D
         depth,
       });
     }
-    faces.sort((a, b) => b.depth - a.depth);
-    out.push(...faces);
   }
-  return out;
+
+  return out
+    .map((face, i) => ({ face, i }))
+    .sort((a, b) => b.face.depth - a.face.depth || a.i - b.i)
+    .map(({ face }) => face);
+}
+
+/** Whether a polygon encloses any area at all, in the plane it spans. */
+function hasArea(verts: readonly Vec3[]): boolean {
+  for (let i = 2; i < verts.length; i++) {
+    const u = sub(verts[i - 1], verts[0]);
+    const v = sub(verts[i], verts[0]);
+    const c = cross(u, v);
+    if (Math.hypot(c[0], c[1], c[2]) > 1e-12) return true;
+  }
+  return false;
 }
 
 /** The context the paint accepts — both canvases the engine draws into. */
