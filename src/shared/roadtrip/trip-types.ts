@@ -39,6 +39,7 @@ import {
 } from './badge-layout';
 import { createShade, vignetteShade, type Shade } from './shades';
 import { defaultHookLayers, type HookLayer } from './hooks/hook-variant';
+import { mapFromRoute } from './hooks/map-plan';
 import { DEFAULT_CTA, type CtaSlide } from './cta-slide';
 import { defaultCarSpec, readCarSpec, type CarSpec } from './car-spec';
 import {
@@ -54,7 +55,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 19;
+export const TRIP_DOC_VERSION = 20;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers and the
@@ -1096,6 +1097,40 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
     // Read through `readCarSpec`: a document that never had a car lands on the
     // default, junk lands on the default, a partial spec keeps what it says.
     migrated.car = readCarSpec(migrated.car);
+  }
+
+  if (migrated.version < 20) {
+    // The Route trace is retired: the Itinerary replaces it (the maintainer's
+    // call, 2026-09-15). A piece composed with one is CONVERTED rather than
+    // dropped back to the plain badge — the trip's own located places become
+    // its stops, which is the line the Route was drawing, and every option
+    // that means the same thing in both comes across (`mapFromRoute`).
+    const places = (migrated.stages ?? []).flatMap((stage) =>
+      (stage.places ?? []).flatMap((place) =>
+        place.coords ? [{ name: place.name, lat: place.coords.lat, lon: place.coords.lon }] : [],
+      ),
+    );
+    const convert = (layers: HookLayer[] | undefined): HookLayer[] | undefined =>
+      layers?.map((layer) =>
+        layer?.id === 'route'
+          ? { id: 'map', options: { ...mapFromRoute(layer.options ?? {}, places, () => newId()) } }
+          : layer,
+      );
+    migrated.posts = (migrated.posts ?? []).map((post) => {
+      const hook = convert(post.badge?.hook);
+      return hook ? { ...post, badge: { ...post.badge, hook } } : post;
+    });
+    // The trip remembers a look per post KIND, so every one of them can be
+    // carrying a route it would hand to the next piece.
+    const kinds = Object.entries(migrated.hookDefaults ?? {});
+    if (kinds.length) {
+      migrated.hookDefaults = Object.fromEntries(
+        kinds.map(([kind, defaults]) => {
+          const hook = convert(defaults?.hook);
+          return [kind, hook ? { ...defaults, hook } : defaults];
+        }),
+      );
+    }
   }
 
   migrated.version = TRIP_DOC_VERSION;

@@ -9,7 +9,6 @@
 import { badgeVariant } from './badge';
 import { driveVariant } from './drive';
 import { scrubVariant } from './scrub';
-import { routeVariant } from './route';
 import { mapVariant } from './map';
 import {
   DEFAULT_HOOK_ID,
@@ -25,7 +24,6 @@ import {
 export const HOOK_VARIANTS: readonly HookVariant[] = [
   badgeVariant,
   scrubVariant,
-  routeVariant,
   driveVariant,
   mapVariant,
 ];

@@ -1,7 +1,8 @@
 /**
  * The itinerary's arithmetic — an AUTHORED map, unlike the route trace.
  *
- * The difference from `route-plan.ts` is the whole reason this variant exists,
+ * The difference from the RETIRED route trace is the whole reason this variant
+ * exists (it replaced it on 2026-09-15),
  * and it is a difference about what may be claimed. The route reads the trip's
  * legs and therefore refuses to pin a point: a place has no dates of its own,
  * so the document cannot say the piece happened *there*. Here the author says
@@ -24,9 +25,10 @@
  *   way `routeOptions` refuses a colour it cannot paint.
  *
  * Projection: equirectangular with the longitude scaled by the cosine of the
- * mean latitude — the same one `route-plan.ts` uses, honest at the scale of a
- * country, no tiles and no map library. Here it also has to run BACKWARDS, so
- * a click on the picking map becomes a pair of coordinates (`unproject`).
+ * mean latitude — `geo.ts`'s own, which every map-like opener shares, honest at
+ * the scale of a country, no tiles and no map library. Here it also has to run
+ * BACKWARDS, so a click on the picking map becomes a pair of coordinates
+ * (`unproject`).
  *
  * Pure and DOM-free.
  */
@@ -831,6 +833,73 @@ export function assignPictures(
     used += 1;
   }
   return { stops: out, used };
+}
+
+/**
+ * A stored `route` opener, read as an itinerary — the migration that retires
+ * the Route trace (2026-09-15).
+ *
+ * The two variants drew the same kind of picture from opposite ends: the
+ * Route derived its line from the trip's legs, this one is given its stops.
+ * So the conversion is exactly that — **the trip's own located places become
+ * the stops**, which is what the Route was drawing, and every option that
+ * means the same thing in both comes across so a piece keeps the look it was
+ * composed with. What has no counterpart is left at the itinerary's default:
+ * the Route's `scope`, its past/current/future colouring (an itinerary has
+ * one line and one pen) and its `ringCurrent`.
+ *
+ * Unknown or junk values are not the caller's problem: everything goes back
+ * through `mapOptions`, so a hand-edited document lands clamped.
+ */
+export function mapFromRoute(
+  raw: Readonly<Record<string, unknown>>,
+  places: readonly { name: string; lat: number; lon: number }[],
+  makeId: (index: number) => string,
+): MapOptions {
+  const carried: Record<string, unknown> = {
+    stops: stopsFromPlaces(places, makeId),
+    position: raw.position,
+    align: raw.align,
+    size: raw.size,
+    plate: raw.plate,
+    plateOpacity: raw.plateOpacity,
+    plateColor: raw.plateColor,
+    lineWidth: raw.lineWidth,
+    // The Route's "trip so far" is the line the pen draws here; its "legs
+    // ahead" is what is still to come. Its accent (the current leg) has no
+    // counterpart: an itinerary marks where the pen IS, not which leg a day
+    // belongs to, so that colour is the one thing a converted piece loses.
+    pathColor: raw.pastColor,
+    aheadColor: raw.futureColor,
+    aheadStyle: raw.futureStyle,
+    underlay: raw.underlay,
+    dots: raw.dots,
+    dotSize: raw.dotSize,
+    labels: raw.labels,
+    labelSize: raw.labelSize,
+    draw: raw.draw,
+    drawSeconds: raw.drawSeconds,
+    easing: raw.easing,
+    delaySeconds: raw.delaySeconds,
+    pen: raw.pen,
+    compass: raw.compass,
+    distance: raw.distance,
+    sound: raw.sound,
+    kit: raw.kit,
+    tickPitch: raw.tickPitch,
+    tickVolume: raw.tickVolume,
+    mixWithClip: raw.mixWithClip,
+    // The Route had no pictures at all, and an itinerary whose stops hold
+    // none would draw an empty card or an empty backdrop. Off is the honest
+    // conversion; the author switches it on when a stop has a picture.
+    media: 'off',
+    // A straight line, because that is what the Route drew.
+    curve: 0,
+  };
+  for (const key of Object.keys(carried)) {
+    if (carried[key] === undefined) delete carried[key];
+  }
+  return mapOptions(carried);
 }
 
 /** The trip's own located places as an itinerary — the one-click start. */

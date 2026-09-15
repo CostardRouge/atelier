@@ -10,7 +10,7 @@
  *   positions.** On places, the road is the trip so far — every leg up to
  *   the one this day belongs to, in the order they were lived — and the car
  *   arrives at the end of that leg: it marks the LEG, never a spot the dates
- *   cannot justify (`route-plan.ts`). On pictures, a photo whose EXIF says
+ *   cannot justify — the rule the retired route trace fixed. On pictures, a photo whose EXIF says
  *   where it was shot IS a stop, in the order they were shot; a photo without
  *   a position rides along with the stop before it, never on a spot of its
  *   own.
@@ -35,7 +35,7 @@
 import type { SoundEvent } from '../../audio/sound-event';
 import { EASINGS, EASING_IDS, type HookEasing } from './easing';
 import { haversineKm, projectionFor, type DistanceUnit, type GeoPoint, type Projection } from './geo';
-import { standingPiece } from './hook-calendar';
+import { currentLegIndex, standingPiece } from './hook-calendar';
 import {
   hookPictureKey,
   type HookDay,
@@ -44,7 +44,6 @@ import {
   type HookStage,
 } from './hook-variant';
 import { partitionPicked, readPicked, sampleEvenly } from './picked';
-import { currentLegIndex } from './route-plan';
 import { KIT_IDS, TICK_KITS, type TickKit } from './tick-kits';
 
 export type DriveStopsOn = 'places' | 'pictures';

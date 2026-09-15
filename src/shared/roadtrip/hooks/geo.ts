@@ -3,9 +3,9 @@
  * places into a box, the great-circle distance, its formatting, and the
  * placement of names beside dots.
  *
- * Grown in the route trace, lifted out the day the drive reached for the
- * same four things; `route-plan.ts` re-exports the old names so its stored
- * options and its tests never moved. A variant importing its sibling's plan
+ * Grown in the route trace, lifted out the day the drive reached for the same
+ * four things — and the only part of that variant that outlived it, since the
+ * Itinerary replaced it on 2026-09-15. A variant importing its sibling's plan
  * would be the "tool reaches into another tool" fault at a smaller scale.
  *
  * Pure and DOM-free. The projection is equirectangular with the longitude

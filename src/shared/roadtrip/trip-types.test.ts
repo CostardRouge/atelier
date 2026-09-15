@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { mapOptions } from './hooks/map-plan';
 import {
   DEFAULT_SLIDE_SECONDS,
   TRIP_DOC_VERSION,
@@ -131,6 +132,123 @@ describe('migrateTripDoc', () => {
   it('leaves a current document untouched', () => {
     const doc = createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04');
     expect(migrateTripDoc(doc)).toBe(doc);
+  });
+});
+
+describe('migrateTripDoc — v19 → v20, the Route becomes an Itinerary', () => {
+  /** A piece composed with the retired `route` opener, on a trip with legs. */
+  const v18 = () =>
+    ({
+      version: 18,
+      id: 't1',
+      name: 'West coast',
+      destination: 'Perth → Kalbarri',
+      startDate: '2025-03-01',
+      endDate: '2025-03-20',
+      stages: [
+        {
+          id: 's1',
+          name: '',
+          region: '',
+          startDate: '2025-03-01',
+          endDate: '2025-03-20',
+          places: [
+            { id: 'a', name: 'Perth', region: 'WA', coords: { lat: -31.95, lon: 115.86 } },
+            { id: 'b', name: 'Kalbarri', region: 'WA', coords: { lat: -27.71, lon: 114.16 } },
+            // Typed by hand, so it cannot be a point on a map.
+            { id: 'c', name: 'Somewhere', region: '', coords: null },
+          ],
+        },
+      ],
+      hookDefaults: {
+        reel: { hook: [{ id: 'route', options: { drawSeconds: 3 } }] },
+      },
+      posts: [
+        {
+          id: 'p1',
+          kind: 'reel',
+          date: '2025-03-12',
+          endDate: null,
+          title: 'Coral Bay',
+          publishedAt: null,
+          createdAt: 0,
+          badge: {
+            hook: [
+              {
+                id: 'route',
+                options: {
+                  position: 'bottom',
+                  size: 1.1,
+                  pastColor: '#ffee00',
+                  futureStyle: 'faint',
+                  drawSeconds: 3.2,
+                  compass: true,
+                  distance: 'km',
+                  sound: true,
+                  kit: 'wood',
+                },
+              },
+            ],
+          },
+        },
+        {
+          id: 'p2',
+          kind: 'photo',
+          date: '2025-03-13',
+          endDate: null,
+          title: '',
+          publishedAt: null,
+          createdAt: 0,
+          // A v18 document has a badge on every post; this one never left the
+          // plain opener.
+          badge: { hook: [{ id: 'badge', options: {} }] },
+        },
+      ],
+      createdAt: 0,
+      updatedAt: 0,
+    }) as unknown as TripDoc;
+
+  it('converts the layer rather than dropping the piece back to the badge', () => {
+    const doc = migrateTripDoc(v18());
+    expect(doc.posts[0].badge.hook[0].id).toBe('map');
+  });
+
+  it('seeds the stops from the trip’s own located places, in order', () => {
+    const o = mapOptions(migrateTripDoc(v18()).posts[0].badge.hook[0].options);
+    expect(o.stops.map((stop) => stop.name)).toEqual(['Perth', 'Kalbarri']);
+    expect(o.stops[0]).toMatchObject({ lat: -31.95, lon: 115.86 });
+  });
+
+  it('carries every option that means the same thing in both', () => {
+    const o = mapOptions(migrateTripDoc(v18()).posts[0].badge.hook[0].options);
+    expect(o).toMatchObject({
+      position: 'bottom',
+      size: 1.1,
+      pathColor: '#ffee00',
+      aheadStyle: 'faint',
+      drawSeconds: 3.2,
+      compass: true,
+      distance: 'km',
+      sound: true,
+      kit: 'wood',
+    });
+  });
+
+  it('starts with the pictures off and the line straight — what the Route drew', () => {
+    const o = mapOptions(migrateTripDoc(v18()).posts[0].badge.hook[0].options);
+    expect(o.media).toBe('off');
+    expect(o.curve).toBe(0);
+  });
+
+  it('converts the look the trip hands to the NEXT piece too', () => {
+    const doc = migrateTripDoc(v18());
+    expect(doc.hookDefaults.reel?.hook?.[0].id).toBe('map');
+  });
+
+  it('leaves a piece that never used it alone, and stays idempotent', () => {
+    const doc = migrateTripDoc(v18());
+    expect(doc.posts[1].badge.hook[0].id).toBe('badge');
+    expect(migrateTripDoc(doc)).toEqual(doc);
   });
 });
 

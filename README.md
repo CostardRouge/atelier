@@ -626,18 +626,7 @@ head. It **ticks** at every landing, a deeper tick where a leg of the trip
 begins and a low seat on today, in a choice of voices (ratchet, woodblock,
 typewriter, shutter) with a pitch, a drift along the sweep and a volume — the
 same sound the export writes, heard live behind a speaker toggle that is off on
-every visit. **Route** draws the trip's own shape from the legs' located places,
-the trip so far solid, this day's leg in the accent, the legs still ahead faint,
-and can draw itself — the pen travelling on the same five motions, after a
-hold if you want one, the legs ahead fading in behind it or there from the
-start. It is yours to place (top, middle or bottom, kept left, centre or right,
-at a size, on a translucent plate for a busy picture) and to dress (the line's
-width and three colours, the legs ahead dashed, faint or hidden, the dots and
-their size, the places' own names at the ends, on this day's leg or
-everywhere, a north arrow) — and it can say the distance so far, in km or
-miles, counting up with the pen: the straight-line sum of what it has drawn,
-never a road distance. It ticks, too, at every place the pen reaches, on the
-same voices as Défilé. **Virée** puts a little car on the map: a paper map of
+every visit. **Virée** puts a little car on the map: a paper map of
 the trip so far (drawn here — no tiles, nothing fetched), the road as a curve
 through its stops, and a cartoon Land Cruiser Prado, a miniature rendered in the
 browser with its wheels turning, driving from stop to stop. The stops are the
@@ -692,13 +681,21 @@ stem down to the dot), on a **card** under the map captioned with the stop's
 name, **filling the frame** behind the map with a dim so the line survives, or
 laid out as a **strip** along the edge with the stops still ahead held back. A
 stop that holds no picture draws nothing — never the one before it standing in
-— and the panel says so before you export. Its map is placed and dressed like
-the Route's (position, size, plate, line width and colours, dots, numbers,
-names, a north arrow, the distance, and a chart's lat/lon grid if you want
-one), the stops still ahead can be dashed, faint or hidden, the pen can be a
-dot or a little plane, the badge's caption can follow it from stop to stop, and
-it ticks at each arrival on the same voices. Every opener runs on the same
-clock as the badge, in the preview and in the file.
+— and the panel says so before you export. The map is yours to place (top,
+middle or bottom, kept left, centre or right, at a size, on a translucent
+plate for a busy picture, over a chart's lat/lon grid if you want one) and to
+dress: the line's width and its two colours, the stops still ahead dashed,
+faint or hidden, the dots and their size, numbers on them, the names at the
+ends, where the pen is, everywhere it has been or on every stop, a north
+arrow, and the distance travelled in km or miles counting up with the pen —
+the straight-line sum of what it has drawn, never a road distance. The pen can
+be a dot or a little plane, the badge's caption can follow it from stop to
+stop, and it ticks at each arrival on the same voices as Défilé. Every opener
+runs on the same clock as the badge, in the preview and in the file.
+
+*A **Route** opener used to draw the trip's own shape from the legs' located
+places; the Itinerary replaced it, and a piece composed with one is converted
+into an itinerary of those same places when the trip is next opened.*
 
 **Nothing is keyed by a file name.** A post records the *day* it tells, never a
 filename: exports get renamed and re-graded between tools, and a tracking system
