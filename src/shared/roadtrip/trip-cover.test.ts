@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { defaultCarSpec } from './car-spec';
 import {
   coverCandidateIds,
   coverTiles,
@@ -58,6 +59,7 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   sourceId: 'local',
   cover: defaultTripCover(),
   developPresets: [],
+  car: defaultCarSpec(),
   createdAt: 0,
   updatedAt: 0,
   ...over,
