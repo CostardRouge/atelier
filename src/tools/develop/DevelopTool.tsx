@@ -19,6 +19,7 @@ import {
   putSyncRecord,
 } from '../../shared/develop/roll-store';
 import type { RollDoc } from '../../shared/develop/roll-types';
+import useHistory, { type DocumentHistory } from '../../shared/history/use-history';
 import { requestPersistentStorage } from '../../shared/projects/project-store';
 import { useDocumentSync, type DocumentSyncDriver } from '../../shared/sources/use-document-sync';
 import RollGallery from './RollGallery';
@@ -77,6 +78,8 @@ export default function DevelopTool() {
   const saveTimer = useRef<number | null>(null);
   const pending = useRef<RollDoc | null>(null);
   const flushRef = useRef<() => Promise<void>>(async () => {});
+  /** The undo stack, read by the sync machine through a ref like the flush. */
+  const historyRef = useRef<DocumentHistory<RollDoc | null> | null>(null);
 
   // --- the remote machine --------------------------------------------------
   const syncDriver = useMemo<DocumentSyncDriver<RollDoc>>(
@@ -102,7 +105,12 @@ export default function DevelopTool() {
     onDiscardPending: () => {
       pending.current = null;
     },
-    onReplace: (doc) => setOpen(doc),
+    onReplace: (doc) => {
+      setOpen(doc);
+      // The instance's copy is not an edit: stepping back onto what it
+      // replaced would push the losing version straight back up.
+      historyRef.current?.reset(doc);
+    },
     onDeleted: () => {
       setOpen(null);
       navigate(DEVELOP_HOME);
@@ -139,6 +147,21 @@ export default function DevelopTool() {
     },
     [flush],
   );
+
+  // Undo and redo over the whole roll, watched at the funnel above
+  // (`shared/history/`): a picture added or dropped, reordered, developed,
+  // cropped, the roll's own look. The label is the picture being worked on, so
+  // one picture's slider never merges into the next picture's.
+  const history = useHistory<RollDoc | null>({
+    value: open,
+    subject: open?.id ?? null,
+    label: route.pictureId ? `picture:${route.pictureId}` : 'roll',
+    what: 'edit',
+    onRestore: (doc) => {
+      if (doc) handleChange(doc);
+    },
+  });
+  historyRef.current = history;
 
   // Opening a remote roll: the mirror opens at once, the instance is asked.
   const resumedFor = useRef<string | null>(null);
@@ -183,7 +206,12 @@ export default function DevelopTool() {
           onChange={handleChange}
           // A step along the strip replaces the entry, so Back leaves the roll.
           onOpenPicture={(id) => navigate(developPath(rollRef(open), id), { replace: true })}
-          headerExtra={sync.pill}
+          headerExtra={
+            <>
+              {history.control}
+              {sync.pill}
+            </>
+          }
         />
       )}
     </div>

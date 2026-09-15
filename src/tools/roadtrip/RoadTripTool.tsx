@@ -21,6 +21,7 @@ import {
 import type { IsoDate } from '../../shared/roadtrip/trip-days';
 import type { TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
 import { pullTrip, pushOnce } from '../../shared/roadtrip/trip-remote';
+import useHistory, { type DocumentHistory } from '../../shared/history/use-history';
 import { useDocumentSync, type DocumentSyncDriver } from '../../shared/sources/use-document-sync';
 import { hasTimeline } from '../../shared/sources/winnow/client';
 import { TIMELINE_SYNC_ENABLED } from '../../shared/sources/winnow/features';
@@ -159,6 +160,8 @@ export default function RoadTripTool() {
   const pending = useRef<TripDoc | null>(null);
   /** The local flush, read by the sync machine through a ref — it is declared after it. */
   const flushRef = useRef<() => Promise<void>>(async () => {});
+  /** The undo stack, read by the sync machine the same way. */
+  const historyRef = useRef<DocumentHistory<TripDoc | null> | null>(null);
 
   // --- the remote machine --------------------------------------------------
   // Shared with every document kind (`use-document-sync.tsx`); this tool only
@@ -187,7 +190,12 @@ export default function RoadTripTool() {
     onDiscardPending: () => {
       pending.current = null;
     },
-    onReplace: (doc) => setOpen(doc),
+    onReplace: (doc) => {
+      setOpen(doc);
+      // The instance's copy replacing the mirror is not an edit: undoing back
+      // onto what it replaced would push the losing version straight back up.
+      historyRef.current?.reset(doc);
+    },
     onDeleted: () => {
       setOpen(null);
       navigate(HOME_ROUTE);
@@ -227,6 +235,25 @@ export default function RoadTripTool() {
     },
     [flush],
   );
+
+  // --- undo and redo -------------------------------------------------------
+  // The shared engine (`shared/history/`) WATCHES the funnel above: every trip
+  // handed back through it is a step, wherever it came from — a badge dragged,
+  // a leg resized, a piece deleted, the cover picked from the gallery. Nothing
+  // below had to learn about it. The label is the screen you are on, so a
+  // gesture on one piece never merges with the trip-wide change made right
+  // after it; a restore goes back out through `handleChange`, which saves and
+  // marks the trip dirty exactly as an edit does.
+  const history = useHistory<TripDoc | null>({
+    value: open,
+    subject: open?.id ?? null,
+    label: route.postId ? `post:${route.postId}` : 'trip',
+    what: 'edit',
+    onRestore: (doc) => {
+      if (doc) handleChange(doc);
+    },
+  });
+  historyRef.current = history;
 
   // --- opening a remote trip: the resume workflow -------------------------
   // The mirror opens at once; the instance is asked whether it moved, and a
@@ -363,7 +390,12 @@ export default function RoadTripTool() {
           onBack={() => go(editingPost.date)}
           onChangePost={updatePost}
           onChangeTrip={handleChange}
-          headerExtra={sync.pill}
+          headerExtra={
+            <>
+              {history.control}
+              {sync.pill}
+            </>
+          }
         />
       ) : (
         <TripOverview
@@ -374,7 +406,12 @@ export default function RoadTripTool() {
           onShowTrips={() => navigate(HOME_ROUTE)}
           onChange={handleChange}
           onOpenPost={(post) => go(post.date, post.id)}
-          headerExtra={sync.pill}
+          headerExtra={
+            <>
+              {history.control}
+              {sync.pill}
+            </>
+          }
           timelineSources={completeSources}
           onCompleteFrom={(id) => openImport('complete', id)}
         />

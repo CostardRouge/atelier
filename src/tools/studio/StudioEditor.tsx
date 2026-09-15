@@ -97,6 +97,8 @@ import { reanchorInPlace } from '../../shared/overlay/draw-overlays';
 import { DEFAULT_GUIDES, type GuidesState } from '../../shared/overlay/guides';
 import { useOverlayStage } from '../../shared/overlay/use-overlay-stage';
 import { useLutStack } from '../../shared/lut/use-lut-stack';
+import { sameSlice } from '../../shared/history/history';
+import useHistory from '../../shared/history/use-history';
 import GradePanel from '../../shared/lut/GradePanel';
 import DevelopSheet from '../../shared/develop/DevelopSheet';
 import DevelopSection from '../../shared/develop/DevelopSection';
@@ -532,10 +534,25 @@ export default function StudioEditor({
   // One-shot restores from the document: the saved LUT, and the clip that was
   // active when the project was last saved (once the library holds it).
   const restoredRef = useRef(false);
+  // The grade arrives ASYNCHRONOUSLY (every built-in cube is fetched again), so
+  // the looks land after the first render. Until they have, the editor is still
+  // seeding itself from the document and nothing that arrives is an edit — see
+  // the history below, which would otherwise open a graded project on an undo
+  // that strips it. Two flags, not one, because React does NOT promise that
+  // the looks land in the same commit as a state set from the promise that
+  // brought them — measured landing one commit later, i.e. after a single gate
+  // had already opened. `restoreDone` is set after the restore's own writes,
+  // so every one of them is in the value by the commit that observes it, and
+  // `seeded` opens the gate one commit later still (the effect beside the
+  // history, below).
+  const [restoreDone, setRestoreDone] = useState(false);
+  const [seeded, setSeeded] = useState(false);
   useEffect(() => {
     if (restoredRef.current) return;
     restoredRef.current = true;
-    void lutStack.restore(project.lutStack, project.outputTransform);
+    void lutStack
+      .restore(project.lutStack, project.outputTransform)
+      .finally(() => setRestoreDone(true));
     if (project.media.activeId && clips.some((c) => c.id === project.media.activeId)) {
       lib.setActive(project.media.activeId);
     }
@@ -900,6 +917,111 @@ export default function StudioEditor({
     setTime(value);
     scrub.to(value);
   }
+
+  // --- undo and redo ------------------------------------------------------
+
+  /**
+   * The half of the editor's state a step of history holds: the COMPOSITION,
+   * and never the session around it. It is the autosave's dependency list, one
+   * object — what lands in the document is exactly what steps back — minus the
+   * two things a step must not carry: the media that is open (switching clips
+   * is navigation, not an edit, and stepping it back would move the ground
+   * under the change you meant to undo) and the clips themselves.
+   *
+   * Unlike Trips, the Studio has no single document in state: it holds a dozen
+   * `useState` values and assembles the document on save. So the history
+   * compares `sameSlice` rather than by identity — this object is rebuilt on
+   * every render, and so, sometimes, are its members: `useLutStack.restore`
+   * empties the stack onto a fresh `[]`, which means nothing and read as an
+   * edit. One level deeper is where that stops and no further: an item of an
+   * immutably updated collection is a new object exactly when it changed.
+   */
+  const edit = useMemo(
+    () => ({
+      elements,
+      guides,
+      theme,
+      scenes,
+      outro,
+      projectName,
+      aspectId,
+      timeShift,
+      timeScale,
+      trims,
+      develops,
+      exportFileName,
+      variants,
+      lutLayers: lutStack.layers,
+      lutOutput: lutStack.output,
+      lutText: lutStack.customText,
+    }),
+    [
+      elements,
+      guides,
+      theme,
+      scenes,
+      outro,
+      projectName,
+      aspectId,
+      timeShift,
+      timeScale,
+      trims,
+      develops,
+      exportFileName,
+      variants,
+      lutStack.layers,
+      lutStack.output,
+      lutStack.customText,
+    ],
+  );
+
+  const history = useHistory({
+    value: edit,
+    isSame: sameSlice,
+    what: 'edit',
+    // The grade lands after the first render; until it has, what arrives is
+    // the document finishing its own arrival, not an edit.
+    ready: seeded,
+    // A sheet holding its own draft owns the keyboard while it is up: its
+    // Cancel is what steps ITS work back, and the document behind it is not
+    // what the press is about.
+    enabled: !developOpen && !showSettings,
+    onRestore: (step) => {
+      setElements(step.elements);
+      setGuides(step.guides);
+      setTheme(step.theme);
+      setScenes(step.scenes);
+      setOutro(step.outro);
+      setProjectName(step.projectName);
+      setAspectId(step.aspectId);
+      setTimeShift(step.timeShift);
+      setTimeScale(step.timeScale);
+      setTrims(step.trims);
+      setDevelops(step.develops);
+      setExportFileName(step.exportFileName);
+      setVariants(step.variants);
+      // The live stack, not the saved one: `restore` re-fetches every built-in
+      // cube, and the await would land as a second, phantom step.
+      lutStack.revert(step.lutLayers, step.lutOutput, step.lutText);
+      // The selection is not part of a step, so an element that is no longer
+      // on the frame simply cannot stay selected.
+      setSelectedElementId((id) => (id && step.elements.some((el) => el.id === id) ? id : null));
+      // The handles are live state, derived from `trims` only when a clip
+      // opens; a restored trim has to reach them here, or the bar would keep
+      // showing the cut it just stepped away from.
+      if (activeId && duration > 0) {
+        setRange(restoreTrim(step.trims[activeId], duration, frameStep));
+      }
+    },
+  });
+
+  // The gate, opened one commit after the seeding was observed and AFTER the
+  // history's own effect in the same commit (effects run in declaration
+  // order), so the beginning it starts from already holds everything the
+  // document brought.
+  useEffect(() => {
+    if (restoreDone && !seeded) setSeeded(true);
+  }, [restoreDone, seeded]);
 
   // --- autosave -----------------------------------------------------------
 
@@ -1418,6 +1540,7 @@ export default function StudioEditor({
         back={{ label: 'Projects', onClick: onShowProjects }}
         trailing={
           <>
+            {history.control}
             {headerExtra}
             <span
               className={`${barPill} bg-paper font-mono text-2xs tracking-[0.1em] uppercase ${

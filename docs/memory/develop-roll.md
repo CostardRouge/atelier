@@ -141,3 +141,16 @@ and released → `Z` scale 1 ↔ 1.5 → Apply to 3 → removal of a developed p
 through the confirm → reload: route, develops, thumbnails pruned to three → the
 look's output transform saved as `grade`, back to `null` on None → phone: stage,
 strip, the bar's Develop opening the sheet.
+
+## Undo and redo over the roll (2026-09-15)
+
+**Fact.** `DevelopTool` wires the shared history engine exactly as Trips does —
+watched at its own `handleChange`, reset by the sync machine's `onReplace`, the
+buttons in the `headerExtra` slot beside the pill; the engine's rules are in
+`architecture.md`, the per-tool reasoning in `roadtrip.md`. The label is the
+picture the route names (`picture:<id>`), so one picture's slider never merges
+into the next picture's. **How to apply**: the editor's write-through is what
+the history sees, so one step is one write, not one slider frame — and a draft
+that has not been written through yet is not a step. Verified in headless
+Chromium against the IndexedDB document: a roll renamed, stepped back and
+forward again.

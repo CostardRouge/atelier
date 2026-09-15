@@ -336,6 +336,18 @@ down while you're typing in a field, and space is left alone whenever the
 focused element already answers to it (a button, a slider, a `<video>` with
 its own controls), so it never fires twice.
 
+**Undo and redo.** Two arrows sit at the top of the editor, next to the save
+state, and `⌘Z` / `⇧⌘Z` (`Ctrl+Z` / `Ctrl+Y` elsewhere) do the same from the
+keyboard. A step covers the composition — the elements, the guides, the style,
+the intro and the closing card, the name and the format, the trims, the
+develops, the export settings and the grade — and never what you are merely
+*looking at*: switching media is not an edit, and neither is the preview speed.
+A run of small changes made together (dragging a slider, typing a name) steps
+back as one, and inside a text field `⌘Z` stays the browser's own undo of the
+letters you are typing. Fifty steps are kept while the project is open; undoing
+is itself an edit, so it saves — and syncs — like any other. Trips and Develop
+carry the same pair, over the trip and over the roll.
+
 **Finding your way in a long deck.** The element list folds away behind a
 header carrying the count, and even open it is capped and scrolls on its own
 rather than pushing the style panel off the bottom. Selecting an element —
@@ -736,7 +748,10 @@ built on names goes stale the first time you touch Capture One. A post does
 point at a picture, but only as a hint for re-finding it — lose the file and the
 post still holds its day and its badge. Trips live in their own IndexedDB
 database and autosave as you edit; a refused write (private window, full disk)
-is said out loud rather than swallowed.
+is said out loud rather than swallowed. The two arrows at the top of the
+overview and of the piece editor — and `⌘Z` / `⇧⌘Z` — step the whole trip back
+and forward: a badge moved, a leg resized, a piece added or deleted, the look
+you were trying out.
 
 **A post is a deck.** The hook is slide one; add as many content pictures after
 it as you like, each with its own optional caption, and close on the trip's
@@ -877,7 +892,8 @@ last seen in the editor, and a dot marks what is developed. On a phone the
 picture and the strip share the screen and the controls open from the bottom
 bar. Selecting several pictures, crop, and export come next.
 
-**Keeping it.** A roll saves as you go, and one kept on a Winnow saves there
+**Keeping it.** A roll saves as you go — with the same undo and redo as the
+Studio and Trips, over the whole roll — and one kept on a Winnow saves there
 after a few seconds of quiet, with the same status pill as a trip; the gallery
 moves, deletes and exports it (`.roll.json`, a backup — importing always makes a
 new roll). Thumbnails are baked here from the Library's files and never leave

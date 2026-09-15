@@ -79,11 +79,24 @@ export interface LutStack {
   setInterpolation: (mode: Interpolation) => void;
   /** Replace the correction; `null` is "as shot". */
   setDevelop: (develop: DevelopSettings | null) => void;
+  /**
+   * The uploaded cubes' own text, keyed by layer id — what `toSaved` writes so
+   * a custom look survives a reload. Exposed for a host that holds the LIVE
+   * stack as a value (an undo history), which has to put this back with it.
+   */
+  customText: Record<string, string>;
   /** Rebuild the stack from a saved document. */
   restore: (
     saved: readonly SavedLutLayer[],
     output?: OutputTransform,
   ) => Promise<void>;
+  /**
+   * Put a LIVE stack back, synchronously: the layers exactly as they were,
+   * parsed cubes and all. The counterpart of `restore` for a step of history —
+   * `restore` re-fetches and re-parses, which is right when a document opens
+   * and wrong for a ⌘Z, where the await would land as a second, phantom step.
+   */
+  revert: (layers: LutLayer[], output: OutputTransform, customText: Record<string, string>) => void;
   /** The persistable shape of the current stack. */
   toSaved: () => SavedLutLayer[];
 }
@@ -244,6 +257,19 @@ export function useLutStack(): LutStack {
     setBusy(false);
   }, []);
 
+  const revert = useCallback(
+    (next: LutLayer[], nextOutput: OutputTransform, nextText: Record<string, string>) => {
+      // The arrays go back BY REFERENCE, never copied: a caller holding a
+      // history compares what it gets back against what it put in, and a copy
+      // — equal in every value — reads as a fresh edit and costs it the step
+      // it just took. Everything here is treated as immutable anyway.
+      setLayers(next);
+      setOutput(nextOutput);
+      setCustomText(nextText);
+    },
+    [],
+  );
+
   const toSaved = useCallback(
     (): SavedLutLayer[] =>
       layers.map((l) => ({
@@ -276,7 +302,9 @@ export function useLutStack(): LutStack {
     setOutput,
     setInterpolation,
     setDevelop,
+    customText,
     restore,
+    revert,
     toSaved,
   };
 }
