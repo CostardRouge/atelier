@@ -169,6 +169,16 @@ export function effectiveGear(gear: CarGear): CarGear {
   };
 }
 
+/** Whether two specs describe the same car, flag by flag. */
+export function sameCarSpec(a: CarSpec, b: CarSpec): boolean {
+  return (
+    a.model === b.model &&
+    a.color.toLowerCase() === b.color.toLowerCase() &&
+    a.finish === b.finish &&
+    GEAR_KEYS.every((key) => a.gear[key] === b.gear[key])
+  );
+}
+
 /** The preset a colour is, by its hex — "Custom" for any other. */
 export function colourName(color: string): string {
   const hex = color.toLowerCase();

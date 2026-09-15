@@ -10,6 +10,7 @@ import {
   effectiveGear,
   gearWords,
   readCarSpec,
+  sameCarSpec,
 } from './car-spec';
 
 describe('the default car', () => {
@@ -93,5 +94,16 @@ describe('describeCar', () => {
     const bare = { ...defaultCarSpec(), gear: { ...DEFAULT_GEAR, ...Object.fromEntries(GEAR_KEYS.map((k) => [k, false])) } };
     expect(describeCar(bare, 'Prado')).toBe('Prado · Raptor black, matte · no gear');
     expect(gearWords({ ...DEFAULT_GEAR, rack: false })).toEqual(['bull bar', 'spot lights', 'mud flaps', 'window visors', 'spare wheel', 'door mirrors']);
+  });
+});
+
+describe('sameCarSpec', () => {
+  it('is true for the same car whatever the case of its hex, false for one flag apart', () => {
+    const a = defaultCarSpec();
+    expect(sameCarSpec(a, defaultCarSpec())).toBe(true);
+    expect(sameCarSpec(a, { ...a, color: a.color.toUpperCase() })).toBe(true);
+    expect(sameCarSpec(a, { ...a, gear: { ...a.gear, spare: false } })).toBe(false);
+    expect(sameCarSpec(a, { ...a, finish: 'gloss' })).toBe(false);
+    expect(sameCarSpec(a, { ...a, color: '#1f3b2f' })).toBe(false);
   });
 });

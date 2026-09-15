@@ -33,6 +33,7 @@ import { formatTimecode } from '../../shared/lib/format';
 import IconButton from '../../shared/ui/IconButton';
 import OverflowMenu, { type OverflowItem } from '../../shared/ui/OverflowMenu';
 import { Icons } from '../../shared/ui/icons';
+import { prefersReducedMotion } from '../../shared/ui/reduced-motion';
 
 /** The open slide's clip, when it is one. */
 export interface StripClip {
@@ -483,8 +484,4 @@ export default function DeckStrip({
       )}
     </div>
   );
-}
-
-function prefersReducedMotion(): boolean {
-  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 }
