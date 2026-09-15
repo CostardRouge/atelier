@@ -81,6 +81,7 @@ describe('badgeContent — day', () => {
       counter: 'of 310',
       caption: null,
       timing: null,
+      exif: null,
     });
   });
 
@@ -223,6 +224,7 @@ describe('badgeContent — stage modes', () => {
       counter: 'of 4',
       caption: 'Western Australia',
       timing: null,
+      exif: null,
     });
   });
 
@@ -241,6 +243,56 @@ describe('badgeContent — stage modes', () => {
     const c = badgeContent(doc, post('2025-06-01'), opts({ mode: 'stage-day' }));
     expect(c).toMatchObject({ label: 'Day', headline: '93', counter: 'of 310' });
     expect(c!.caption).toBeNull();
+  });
+});
+
+describe('badgeContent — the camera credit', () => {
+  const LINE = 'DJI Mini 4 Pro · 24 mm · ƒ/1.7 · 1/240 · ISO 100';
+
+  it('draws the measured line when the piece asks for it', () => {
+    const c = badgeContent(
+      trip(),
+      post('2025-03-27'),
+      opts({ showExif: true, exposure: LINE }),
+    );
+    expect(c!.exif).toBe(LINE);
+  });
+
+  it('is absent until it is asked for — no stored piece gains a line', () => {
+    expect(badgeContent(trip(), post('2025-03-27'), opts({ exposure: LINE }))!.exif).toBeNull();
+  });
+
+  it('is absent over a picture that records nothing, rather than blank', () => {
+    for (const exposure of [null, undefined, '   ']) {
+      const c = badgeContent(trip(), post('2025-03-27'), opts({ showExif: true, exposure }));
+      expect(c!.exif).toBeNull();
+    }
+  });
+
+  it('never displaces the place or the WHEN line', () => {
+    const c = badgeContent(
+      trip({ stages: [stage('Kalbarri', '2025-03-25', '2025-03-28')] }),
+      post('2025-03-27'),
+      opts({
+        mode: 'stage-day',
+        timeAgo: 'days-ago',
+        today: '2026-08-24',
+        showExif: true,
+        exposure: LINE,
+      }),
+    );
+    expect(c!.caption).toBe('Western Australia');
+    expect(c!.timing).toBe('515 days ago');
+    expect(c!.exif).toBe(LINE);
+  });
+
+  it('takes an override, so a picture with no EXIF can still be credited', () => {
+    const c = badgeContent(
+      trip(),
+      post('2025-03-27'),
+      opts({ overrides: { exif: 'Shot on film' } }),
+    );
+    expect(c!.exif).toBe('Shot on film');
   });
 });
 

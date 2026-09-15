@@ -66,6 +66,13 @@ export function slideRender(
    * Passed in, never fetched: this module stays pure and DOM-free.
    */
   pictures?: ReadonlyMap<string, HookPicture>,
+  /**
+   * The hook picture's exposure line, measured by the caller from its EXIF —
+   * the badge's camera credit, drawn only when the piece asks for it. Passed
+   * in for the same reason the pictures are: reading a file is not this
+   * module's job, and every surface that draws a deck must draw the same line.
+   */
+  exposure?: string | null,
 ): SlideRender {
   if (slide.kind === 'cta') {
     const cta = ctaLayout(trip.cta, aspect);
@@ -106,6 +113,8 @@ export function slideRender(
     timeAgo: post.badge.timeAgo,
     referenceDate: post.badge.referenceDate,
     showPin: post.badge.showPin,
+    showExif: post.badge.showExif,
+    exposure,
     overrides: post.badge.textOverrides,
   });
 

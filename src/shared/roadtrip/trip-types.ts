@@ -56,7 +56,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 22;
+export const TRIP_DOC_VERSION = 23;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers and the
@@ -219,6 +219,14 @@ export interface PostBadge {
   referenceDate: IsoDate | null;
   /** Set the place behind the marker glyph. */
   showPin: boolean;
+  /**
+   * Credit the camera under the badge — body, lens, focal length, aperture,
+   * shutter, ISO, as the hook's picture itself records them. The LINE is never
+   * stored: it is measured from the picture in hand at every render, so a
+   * re-export, a swapped photograph or a proxy whose source vouches for its
+   * EXIF all say the truth rather than a stale copy of it.
+   */
+  showExif: boolean;
   /** How long the hook lasts, in seconds — what an exit animation lands on. */
   durationSeconds: number;
   /** What the hook slide is delivered as; see {@link SlideMedium}. */
@@ -324,6 +332,7 @@ export interface HookDefaults {
   mode: CounterMode;
   timeAgo: TimeAgoMode;
   showPin: boolean;
+  showExif: boolean;
   durationSeconds: number;
   /** How the hook is delivered, and how long it is on screen — see `PostBadge`. */
   medium: SlideMedium;
@@ -344,6 +353,7 @@ export function hookDefaultsFrom(badge: PostBadge): HookDefaults {
     mode: badge.mode,
     timeAgo: badge.timeAgo,
     showPin: badge.showPin,
+    showExif: badge.showExif,
     durationSeconds: badge.durationSeconds,
     medium: badge.medium,
     hookSeconds: badge.hookSeconds,
@@ -379,6 +389,7 @@ export function defaultPostBadge(
     // out, not to the trip's habits.
     referenceDate: null,
     showPin: defaults?.showPin ?? false,
+    showExif: defaults?.showExif ?? false,
     durationSeconds: defaults?.durationSeconds ?? DEFAULT_BADGE_DURATION,
     medium: defaults?.medium ?? 'auto',
     hookSeconds:
@@ -1179,6 +1190,22 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
         grade: gradeOrNull(slide.grade),
       })),
     }));
+  }
+
+  if (migrated.version < 23) {
+    // No badge credited its camera before this existed, and every stored one
+    // keeps saying exactly what it said: the credit is opt-in per piece, so
+    // `false` is not a default here but the whole migration.
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      badge: { ...post.badge, showExif: post.badge?.showExif ?? false },
+    }));
+    migrated.hookDefaults = Object.fromEntries(
+      Object.entries(migrated.hookDefaults ?? {}).map(([kind, defaults]) => [
+        kind,
+        defaults ? { ...defaults, showExif: defaults.showExif ?? false } : defaults,
+      ]),
+    ) as HookDefaultsByKind;
   }
 
   migrated.version = TRIP_DOC_VERSION;

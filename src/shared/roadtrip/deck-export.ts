@@ -51,6 +51,11 @@ export interface RenderDeckOptions {
    */
   pictures?: ReadonlyMap<string, HookPicture>;
   /**
+   * The hook picture's exposure line, when the piece credits its camera —
+   * measured where the file is (the editor), never re-read here.
+   */
+  exposure?: string | null;
+  /**
    * Which slides to render. Absent renders the whole deck, which is what the
    * PNG export has always done; the piece export passes the stills only,
    * because the rest of the deck is going out as video.
@@ -84,7 +89,7 @@ export async function renderDeck(
         // What this slide is made of — the badge, a caption or the trip's
         // card, each with its own framing — derived exactly as the stage and
         // the rail's thumbnails derive it.
-        ...slideRender(trip, post, slide, aspect, opts.pictures),
+        ...slideRender(trip, post, slide, aspect, opts.pictures, opts.exposure),
         source,
         timeSeconds: slide.kind === 'hook' ? opts.timeSeconds : 0,
         width: w,

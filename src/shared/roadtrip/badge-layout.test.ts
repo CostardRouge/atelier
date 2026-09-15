@@ -20,6 +20,7 @@ const full: BadgeContent = {
   counter: 'sur 310',
   caption: 'Kalbarri',
   timing: 'il y a 9 mois',
+  exif: 'DJI Mini 4 Pro · 24 mm · ƒ/1.7 · 1/240 · ISO 100',
 };
 
 const REEL = 9 / 16;
@@ -45,7 +46,7 @@ describe('heightFractionOf', () => {
 describe('badgeElements', () => {
   it('emits one text element per piece, in reading order', () => {
     const els = badgeElements(full, layout(), REEL);
-    expect(els).toHaveLength(6);
+    expect(els).toHaveLength(7);
     expect(els.every((e) => e.kind === 'text')).toBe(true);
     expect(els.map((e) => e.text)).toEqual([
       'Australie',
@@ -54,6 +55,7 @@ describe('badgeElements', () => {
       'sur 310',
       'Kalbarri',
       'il y a 9 mois',
+      'DJI Mini 4 Pro · 24 mm · ƒ/1.7 · 1/240 · ISO 100',
     ]);
   });
 
@@ -87,6 +89,7 @@ describe('badgeElements', () => {
       counter: null,
       caption: null,
       timing: null,
+      exif: null,
     };
     const els = badgeElements(bare, layout(), REEL);
     expect(els).toHaveLength(1);
@@ -110,6 +113,7 @@ describe('badgeElements', () => {
       'counter',
       'caption',
       'timing',
+      'exif',
     ]);
   });
 
@@ -121,6 +125,7 @@ describe('badgeElements', () => {
       pieceElementId('headline'),
       pieceElementId('caption'),
       pieceElementId('timing'),
+      pieceElementId('exif'),
     ]);
     expect(new Set(els.map((e) => e.id)).size).toBe(els.length);
   });
@@ -375,6 +380,7 @@ describe('badgeBlockExtent', () => {
       counter: null,
       caption: null,
       timing: null,
+      exif: null,
     };
     expect(badgeBlockExtent(empty, layout(), REEL)).toBeNull();
   });

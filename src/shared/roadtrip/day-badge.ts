@@ -79,7 +79,8 @@ export type BadgePiece =
   | 'headline'
   | 'counter'
   | 'caption'
-  | 'timing';
+  | 'timing'
+  | 'exif';
 
 export const BADGE_PIECES: readonly { id: BadgePiece; label: string }[] = [
   { id: 'kicker', label: 'Trip name' },
@@ -88,6 +89,7 @@ export const BADGE_PIECES: readonly { id: BadgePiece; label: string }[] = [
   { id: 'counter', label: 'Out of' },
   { id: 'caption', label: 'Place' },
   { id: 'timing', label: 'When' },
+  { id: 'exif', label: 'Camera' },
 ];
 
 /**
@@ -158,6 +160,8 @@ export interface BadgeContent {
   caption: string | null;
   /** Why it is going out now — "9 months ago", "1 year ago today". */
   timing: string | null;
+  /** What took it — "DJI Mini 4 Pro · 24 mm · ƒ/1.7 · 1/240 · ISO 100". */
+  exif: string | null;
 }
 
 export interface BadgeOptions {
@@ -169,6 +173,22 @@ export interface BadgeOptions {
   referenceDate?: IsoDate | null;
   /** Set the place behind the marker glyph. */
   showPin?: boolean;
+  /**
+   * Credit the camera. Off by default, and off on every piece composed before
+   * the line existed: a badge is a signature, and one that silently grew a
+   * sixth line the day the feature shipped would have changed every stored
+   * piece.
+   */
+  showExif?: boolean;
+  /**
+   * The exposure line as the caller MEASURED it from the hook's picture
+   * (`exposureSummary` over its effective EXIF) — never stored on the post,
+   * because it is a fact about the photograph and the photograph can be
+   * replaced. Absent, empty, or a picture that says nothing leaves the piece
+   * out entirely rather than drawing a blank or a guess, the same line the
+   * heading tape and the battery gauge hold.
+   */
+  exposure?: string | null;
   /**
    * Free text replacing a computed piece. An empty string means "computed",
    * not "blank" — clearing the field has to give the derived value back, or an
@@ -197,6 +217,18 @@ function timingFor(post: TripPost, opts: BadgeOptions): string | null {
   return timeAgoLine(post.date, reference, opts.timeAgo, opts.words.time);
 }
 
+/**
+ * The camera line, or null. Asked for and measured are both required: the
+ * toggle without a picture that says anything draws nothing, and a picture
+ * that says plenty draws nothing until it is asked for. An author who wants
+ * the line over a picture with no EXIF writes it as an override, like every
+ * other piece.
+ */
+function exifFor(opts: BadgeOptions): string | null {
+  if (!opts.showExif) return null;
+  return opts.exposure?.trim() || null;
+}
+
 /** Apply the author's free text over the derived pieces. */
 function applyOverrides(
   content: BadgeContent,
@@ -211,6 +243,7 @@ function applyOverrides(
     'counter',
     'caption',
     'timing',
+    'exif',
   ] as const) {
     const value = overrides[piece]?.trim();
     if (value) out[piece] = value;
@@ -365,6 +398,7 @@ export function badgeContent(
       counter: pieces.counter,
       caption: pieces.caption,
       timing: timingFor(post, opts),
+      exif: exifFor(opts),
     },
     opts.overrides,
   );
