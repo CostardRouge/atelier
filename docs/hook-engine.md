@@ -577,6 +577,17 @@ had, since Défilé and the Route each exercised only part of it.
   thumbnails pass them; the video paths already read them through the
   `ResolvedHook` the stage prepared.
 
+**What it needed SECOND (2026-09-15), and the line it drew.** The opener had
+to be draggable on the stage "like any other content", so `HookVariant` gained
+`frameBox` and `moveBy` — both optional, both pure, both **editor-only**. They
+are on the VARIANT and not on `HookRender` on purpose: the closure `prepare()`
+returns is what the stage, the PNG deck, the rail and both exports share, and
+none of them has any business knowing where a pointer is. A variant that
+offers neither is not grabbable, which is the right answer for the badge and
+for a scrub whose tape spans the frame. The stage's order of claim is
+elements → opener → picture, unchanged in spirit: the badge is composed far
+more often than the opener is placed.
+
 **What it says about `owns`.** It declares `frame`, though only its backdrop
 mode replaces the picture — the reading the scrub already used (it covers the
 frame only while it sweeps). `owns` is what a variant MAY do, not what it does

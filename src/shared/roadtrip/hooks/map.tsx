@@ -26,6 +26,7 @@ import {
   FieldRow,
   NumberField,
   RangeField,
+  Readout,
   SelectField,
   SwitchRow,
   ToggleField,
@@ -45,10 +46,13 @@ import {
   assignPictures,
   formatDistance,
   hopKms,
+  mapBox,
+  mapMoved,
   mapOptions,
   mapScore,
   mapTiming,
   mapWants,
+  moveMap,
   moveStop,
   otherPlaces,
   patchStop,
@@ -552,6 +556,23 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
             format={(v) => `${Math.round(v * 100)}%`}
           />
         </FieldRow>
+        {/*
+          A drag on the stage has to have a way back, or the coarse placement
+          above stops meaning anything — the one-way-door rule the cover panel
+          had to be taught. Shown only once there is something to undo.
+        */}
+        {mapMoved(o) && (
+          <FieldRow label="Moved" hint="Dragged away from the placement above.">
+            <Readout muted>
+              {`${o.offsetX >= 0 ? '+' : ''}${Math.round(o.offsetX * 100)}%, ${
+                o.offsetY >= 0 ? '+' : ''
+              }${Math.round(o.offsetY * 100)}%`}
+            </Readout>
+            <button type="button" onClick={() => set({ offsetX: 0, offsetY: 0 })} className={resetLink}>
+              Put it back
+            </button>
+          </FieldRow>
+        )}
         <FieldRow label="Plate" hint={o.plate ? undefined : 'A translucent panel behind the map, for a map over a busy picture.'}>
           <ToggleField label="Plate behind the map" checked={o.plate} onChange={(plate) => set({ plate })}>
             Behind the map
@@ -960,6 +981,17 @@ export const mapVariant: HookVariant = {
   // one, and the panel is where it gets filled.
   wantsPictures(options) {
     return mapWants(mapOptions(options));
+  },
+  // Pointed at and dragged on the stage like any other content. The box is
+  // the MAP's — everything else the opener draws is measured from it, so
+  // moving it moves the line, the dots, the names and the card together.
+  frameBox(options, _ctx, frame) {
+    const o = mapOptions(options);
+    if (o.stops.length === 0) return null;
+    return mapBox(frame.width, frame.height, o);
+  },
+  moveBy(options, dx, dy) {
+    return { ...moveMap(mapOptions(options), dx, dy) };
   },
   prepare(options, ctx) {
     const o = mapOptions(options);

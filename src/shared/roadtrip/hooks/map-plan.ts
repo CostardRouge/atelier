@@ -69,6 +69,13 @@ export interface MapOptions {
   position: MapPosition;
   align: MapAlign;
   size: number;
+  /**
+   * Where a drag on the stage has put the map, as a fraction of the frame's
+   * width and height. The coarse position/align stay the ANCHOR and this is
+   * the departure from it — the badge block's own model, one level down.
+   */
+  offsetX: number;
+  offsetY: number;
   plate: boolean;
   plateOpacity: number;
   plateColor: string;
@@ -128,6 +135,8 @@ export const MAP_DEFAULTS: MapOptions = {
   position: 'middle',
   align: 'center',
   size: 1,
+  offsetX: 0,
+  offsetY: 0,
   plate: false,
   plateOpacity: 0.35,
   plateColor: '#000000',
@@ -170,6 +179,8 @@ export const MAP_DEFAULTS: MapOptions = {
 /** The bounds every stored number is clamped to — a document is never trusted. */
 export const MAP_LIMITS = {
   size: { min: 0.5, max: 1.2 },
+  // Far enough to put the map in any corner, never far enough to lose it.
+  offset: { min: -0.45, max: 0.45 },
   plateOpacity: { min: 0.1, max: 0.9 },
   lineWidth: { min: 0.5, max: 2 },
   curve: { min: 0, max: 0.6 },
@@ -261,6 +272,8 @@ export function mapOptions(raw: Readonly<Record<string, unknown>>): MapOptions {
     position: oneOf(o.position, ['top', 'middle', 'bottom'], d.position),
     align: oneOf(o.align, ['left', 'center', 'right'], d.align),
     size: clamp(Number(o.size), L.size.min, L.size.max, d.size),
+    offsetX: clamp(Number(o.offsetX), L.offset.min, L.offset.max, d.offsetX),
+    offsetY: clamp(Number(o.offsetY), L.offset.min, L.offset.max, d.offsetY),
     plate: o.plate === true,
     plateOpacity: clamp(Number(o.plateOpacity), L.plateOpacity.min, L.plateOpacity.max, d.plateOpacity),
     plateColor: hex(o.plateColor, d.plateColor),
@@ -322,20 +335,44 @@ export interface LatLon {
   lon: number;
 }
 
-/** The box the map is fitted into, on a frame of `w`×`h`. */
-export function mapBox(
-  w: number,
-  h: number,
-  position: MapPosition,
-  align: MapAlign,
-  size: number,
-): Box {
-  const width = w * 0.76 * size;
-  const height = Math.min(h * 0.42, w * 0.95) * size;
-  const x = align === 'left' ? w * 0.08 : align === 'right' ? w * 0.92 - width : (w - width) / 2;
+/** How the map is placed: the coarse anchor, its size, and the drag's offset. */
+export type MapPlacement = Pick<MapOptions, 'position' | 'align' | 'size' | 'offsetX' | 'offsetY'>;
+
+/**
+ * The box the map is fitted into, on a frame of `w`×`h` — the anchor the
+ * author chose, plus wherever they have since dragged it. Everything else the
+ * opener draws is measured from this box, so the drag moves the line, the
+ * dots, the names and the card together.
+ */
+export function mapBox(w: number, h: number, p: MapPlacement): Box {
+  const width = w * 0.76 * p.size;
+  const height = Math.min(h * 0.42, w * 0.95) * p.size;
+  const x =
+    (p.align === 'left' ? w * 0.08 : p.align === 'right' ? w * 0.92 - width : (w - width) / 2) +
+    w * p.offsetX;
   const y =
-    position === 'top' ? h * 0.1 : position === 'bottom' ? h * 0.88 - height : (h - height) / 2;
+    (p.position === 'top' ? h * 0.1 : p.position === 'bottom' ? h * 0.88 - height : (h - height) / 2) +
+    h * p.offsetY;
   return { x, y, width, height };
+}
+
+/**
+ * The map after a drag of `dx`, `dy` — fractions of the frame, incremental.
+ * Clamped rather than free: a map dragged off the frame is a hook that draws
+ * nothing, with no way back but the panel.
+ */
+export function moveMap(o: MapOptions, dx: number, dy: number): MapOptions {
+  const L = MAP_LIMITS.offset;
+  return {
+    ...o,
+    offsetX: Math.min(L.max, Math.max(L.min, o.offsetX + dx)),
+    offsetY: Math.min(L.max, Math.max(L.min, o.offsetY + dy)),
+  };
+}
+
+/** Whether the map has been dragged away from the anchor it was placed on. */
+export function mapMoved(o: MapOptions): boolean {
+  return o.offsetX !== 0 || o.offsetY !== 0;
 }
 
 /**

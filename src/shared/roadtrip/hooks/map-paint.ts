@@ -101,7 +101,7 @@ export function paintMap(
   if (w <= 0 || h <= 0 || o.stops.length === 0) return;
 
   const u = w / 1080;
-  const box = mapBox(w, h, o.position, o.align, o.size);
+  const box = mapBox(w, h, o);
   // Every stop is fitted from the first frame — the pen reaches all of them,
   // so hiding the hops ahead must not let the map re-scale under the drawing.
   const { project } = fitProjection(o.stops, box, 8 * u);

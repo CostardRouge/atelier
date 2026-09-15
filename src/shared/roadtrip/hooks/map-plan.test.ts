@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { HookPickedPicture, HookStage } from './hook-variant';
 import {
   MAP_DEFAULTS,
+  MAP_LIMITS,
   MAP_MAX_STOPS,
   addStop,
   arcControl,
@@ -13,11 +14,13 @@ import {
   haversineKm,
   hopKms,
   mapBox,
+  mapMoved,
   mapOptions,
   mapScore,
   mapTiming,
   mapWants,
   mediaAt,
+  moveMap,
   moveStop,
   otherPlaces,
   patchStop,
@@ -136,7 +139,7 @@ describe('readStops', () => {
 });
 
 describe('fitProjection', () => {
-  const box = mapBox(1080, 1920, 'middle', 'center', 1);
+  const box = mapBox(1080, 1920, MAP_DEFAULTS);
 
   it('fits every point inside the box', () => {
     const { project } = fitProjection(STOPS, box, 8);
@@ -186,6 +189,37 @@ describe('fitProjection', () => {
     const beside = unproject({ x: at.x + 40, y: at.y });
     expect(Number.isFinite(beside.lat)).toBe(true);
     expect(beside.lon).not.toBeCloseTo(115.86, 3);
+  });
+});
+
+describe('moving the map', () => {
+  it('sits on its anchor until it is dragged', () => {
+    const anchored = mapBox(1000, 2000, MAP_DEFAULTS);
+    const moved = mapBox(1000, 2000, { ...MAP_DEFAULTS, offsetX: 0.1, offsetY: -0.05 });
+    expect(moved.x - anchored.x).toBeCloseTo(100, 6);
+    expect(moved.y - anchored.y).toBeCloseTo(-100, 6);
+    expect(moved.width).toBe(anchored.width);
+  });
+
+  it('accumulates a drag and clamps it, so the map can never be lost', () => {
+    const o = mapOptions({});
+    const once = moveMap(o, 0.2, 0.1);
+    expect(once.offsetX).toBeCloseTo(0.2, 9);
+    const twice = moveMap(once, 0.2, 0.1);
+    expect(twice.offsetX).toBeCloseTo(0.4, 9);
+    // Dragged far past the edge, in both directions.
+    expect(moveMap(twice, 5, 5).offsetX).toBe(MAP_LIMITS.offset.max);
+    expect(moveMap(twice, -5, -5).offsetY).toBe(MAP_LIMITS.offset.min);
+  });
+
+  it('says whether it has been moved, so the panel can offer the way back', () => {
+    expect(mapMoved(mapOptions({}))).toBe(false);
+    expect(mapMoved(moveMap(mapOptions({}), 0, 0.01))).toBe(true);
+  });
+
+  it('reads a stored offset through the same clamp as everything else', () => {
+    expect(mapOptions({ offsetX: 9, offsetY: 'left' }).offsetX).toBe(MAP_LIMITS.offset.max);
+    expect(mapOptions({ offsetY: 'left' }).offsetY).toBe(0);
   });
 });
 

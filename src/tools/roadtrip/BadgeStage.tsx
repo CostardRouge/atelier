@@ -27,7 +27,7 @@ import {
   type RenderBadgeOptions,
 } from '../../shared/roadtrip/badge-render';
 import type { HookBlock, Shade } from '../../shared/roadtrip/shades';
-import type { ResolvedHook } from '../../shared/roadtrip/hooks/hook-variant';
+import type { FrameRect, ResolvedHook } from '../../shared/roadtrip/hooks/hook-variant';
 import { TRIM_EPSILON, type TrimRange } from '../../shared/media/trim';
 import { clampPlaybackRate } from '../../shared/media/use-video-transport';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
@@ -50,6 +50,19 @@ export interface StagePlayback {
   onTime: (seconds: number) => void;
   /** Playback stopped on the out point. */
   onEnded: () => void;
+}
+
+/**
+ * What the opener is selected as. It is not an overlay element, so it has no
+ * element id — this one is reserved, parsed by nothing and understood by the
+ * editor as "the opener", which is what switches the inspector to its tab.
+ */
+export const HOOK_ID = 'hook';
+
+/** Whether a point in the canvas's own pixels is inside a reported rect. */
+function inRect(rect: FrameRect | null | undefined, px: number, py: number): boolean {
+  if (!rect) return false;
+  return px >= rect.x && px <= rect.x + rect.width && py >= rect.y && py <= rect.y + rect.height;
 }
 
 interface BadgeStageProps {
@@ -110,6 +123,20 @@ interface BadgeStageProps {
    */
   blockAnchor?: { x: number; y: number } | null;
   onMoveBlock?: (x: number, y: number) => void;
+  /**
+   * Where the OPENER's own drawing sits (`HookVariant.frameBox`), asked for
+   * at the stage's own pixel size. Given one, the opener is content like any
+   * other: a press on it selects it (`onSelect(HOOK_ID)`) and a drag moves it.
+   * The badge keeps first claim — an opener is placed once and a badge is
+   * composed constantly — so this is only ever tested where no element sits.
+   *
+   * A function rather than a rect because only the stage knows how big its
+   * canvas is, and a rect measured against another size would hit-test a
+   * place the drawing is not.
+   */
+  hookRectFor?: ((frame: { width: number; height: number }) => FrameRect | null) | null;
+  /** A drag of the opener: fractions of the frame, incremental. */
+  onMoveHook?: (dx: number, dy: number) => void;
   onSourceLoaded?: (info: { width: number; height: number; duration: number }) => void;
   /**
    * The width the picture wants from the height it was given (height ×
@@ -160,6 +187,8 @@ export default function BadgeStage({
   onActivate,
   blockAnchor = null,
   onMoveBlock,
+  hookRectFor = null,
+  onMoveHook,
   onSourceLoaded,
   onRendered,
   onFit,
@@ -320,6 +349,14 @@ export default function BadgeStage({
   const boxesRef = useRef<ElementBox[]>([]);
   const selectedRef = useRef(selectedId);
   selectedRef.current = selectedId;
+  const hookRectForRef = useRef(hookRectFor);
+  hookRectForRef.current = hookRectFor;
+  /** The opener's rect at the canvas's CURRENT size, or null. */
+  const hookRectNow = useCallback((): FrameRect | null => {
+    const canvas = canvasRef.current;
+    if (!canvas || !hookRectForRef.current) return null;
+    return hookRectForRef.current({ width: canvas.width, height: canvas.height });
+  }, []);
 
   /** The dashed outline around the selected element, on the chrome canvas. */
   const drawChrome = useCallback(() => {
@@ -335,7 +372,14 @@ export default function BadgeStage({
     const { width: w, height: h } = chrome;
     ctx.clearRect(0, 0, w, h);
     const sel = selectedRef.current;
-    const box = sel ? boxForId(boxesRef.current, sel) : null;
+    if (!sel) return;
+    // The opener is outlined from the rect the variant reports, elements from
+    // the boxes the last paint measured. Same dashes either way: a selection
+    // reads the same whatever kind of thing is selected.
+    const rect = sel === HOOK_ID ? hookRectNow() : null;
+    const box = rect
+      ? { x: rect.x, y: rect.y, w: rect.width, h: rect.height }
+      : boxForId(boxesRef.current, sel);
     if (!box) return;
     ctx.save();
     ctx.strokeStyle = '#d9442a';
@@ -343,7 +387,7 @@ export default function BadgeStage({
     ctx.setLineDash([h * 0.012, h * 0.012]);
     ctx.strokeRect(box.x, box.y, box.w, box.h);
     ctx.restore();
-  }, []);
+  }, [hookRectNow]);
 
   // One grader, kept across repaints and re-made only when the LUT or the
   // source's pixel size changes. A grader is a WebGL2 context; making one per
@@ -539,6 +583,7 @@ export default function BadgeStage({
         moved: boolean;
       }
     | { kind: 'picture'; lastPx: number; lastPy: number }
+    | { kind: 'hook'; lastPx: number; lastPy: number }
     | null
   >(null);
 
@@ -564,28 +609,41 @@ export default function BadgeStage({
       // the selection is about to focus.
       e.preventDefault();
       const id = hitTest(boxesRef.current, pt.px, pt.py);
-      onSelect(id);
-      press.current = id ? { id, x: e.clientX, y: e.clientY } : null;
-      if (id && blockAnchor && onMoveBlock) {
-        drag.current = {
-          kind: 'block',
-          startPx: pt.px,
-          startPy: pt.py,
-          start: blockAnchor,
-          moved: false,
-        };
-        canvasRef.current?.setPointerCapture(e.pointerId);
+      if (id) {
+        onSelect(id);
+        press.current = { id, x: e.clientX, y: e.clientY };
+        if (blockAnchor && onMoveBlock) {
+          drag.current = {
+            kind: 'block',
+            startPx: pt.px,
+            startPy: pt.py,
+            start: blockAnchor,
+            moved: false,
+          };
+          canvasRef.current?.setPointerCapture(e.pointerId);
+        }
         return;
       }
-      // Nothing under the pointer: the gesture is about the PICTURE. The
-      // badge keeps first claim on a press — a hook is composed far more
-      // often than it is reframed — so this only ever runs on bare picture.
-      if (!id && onFraming) {
+      // No element here, so the opener gets its turn: it is content too, and
+      // the badge keeping first claim is the only reason it is second.
+      if (inRect(hookRectNow(), pt.px, pt.py)) {
+        onSelect(HOOK_ID);
+        press.current = { id: HOOK_ID, x: e.clientX, y: e.clientY };
+        if (onMoveHook) {
+          drag.current = { kind: 'hook', lastPx: pt.px, lastPy: pt.py };
+          canvasRef.current?.setPointerCapture(e.pointerId);
+        }
+        return;
+      }
+      onSelect(null);
+      press.current = null;
+      // Nothing under the pointer at all: the gesture is about the PICTURE.
+      if (onFraming) {
         drag.current = { kind: 'picture', lastPx: pt.px, lastPy: pt.py };
         canvasRef.current?.setPointerCapture(e.pointerId);
       }
     },
-    [onSelect, blockAnchor, onMoveBlock, onFraming, toPixels],
+    [onSelect, blockAnchor, onMoveBlock, hookRectNow, onMoveHook, onFraming, toPixels],
   );
 
   const onPointerMove = useCallback(
@@ -595,7 +653,19 @@ export default function BadgeStage({
       if (!canvas || !pt) return;
       const d = drag.current;
       if (!d) {
-        if (onSelect) setHovering(hitTest(boxesRef.current, pt.px, pt.py) !== null);
+        if (onSelect) {
+          setHovering(
+            hitTest(boxesRef.current, pt.px, pt.py) !== null || inRect(hookRectNow(), pt.px, pt.py),
+          );
+        }
+        return;
+      }
+      if (d.kind === 'hook') {
+        // Incremental, in fractions of the frame: the variant clamps, and no
+        // start state can go stale under a re-render mid-drag.
+        onMoveHook?.((pt.px - d.lastPx) / canvas.width, (pt.py - d.lastPy) / canvas.height);
+        d.lastPx = pt.px;
+        d.lastPy = pt.py;
         return;
       }
       if (d.kind === 'picture') {
@@ -628,7 +698,7 @@ export default function BadgeStage({
       );
       onMoveBlock?.(next.x, next.y);
     },
-    [onSelect, onMoveBlock, onFraming, framing, toPixels],
+    [onSelect, onMoveBlock, onMoveHook, hookRectNow, onFraming, framing, toPixels],
   );
 
   const onPointerUp = useCallback((e: React.PointerEvent) => {
