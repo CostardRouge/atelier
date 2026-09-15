@@ -26,6 +26,7 @@ import {
   planarHops,
   quadAt,
   quadSplit,
+  quadTail,
   readStops,
   removeStop,
   stopsFromPlaces,
@@ -218,6 +219,32 @@ describe('arcs', () => {
     const part = quadSplit(a, control, b, 1);
     expect(part.control).toEqual(control);
     expect(part.end.x).toBeCloseTo(b.x, 9);
+  });
+
+  it('the tail starts where the drawn part ends, and lands on the same curve', () => {
+    const control = arcControl(a, b, 0.25);
+    for (const s of [0.15, 0.5, 0.9]) {
+      const drawn = quadSplit(a, control, b, s);
+      const tail = quadTail(a, control, b, s);
+      // The two halves meet exactly — the pen's tip is one point, not a seam.
+      expect(tail.start.x).toBeCloseTo(drawn.end.x, 9);
+      expect(tail.start.y).toBeCloseTo(drawn.end.y, 9);
+      expect(tail.end).toEqual(b);
+      // And the tail IS the rest of the same arc: its own midpoint sits on the
+      // whole curve, which is what makes the line ahead a bed the pen fills.
+      const mid = quadAt(tail.start, tail.control, tail.end, 0.5);
+      const onWhole = quadAt(a, control, b, s + (1 - s) * 0.5);
+      expect(mid.x).toBeCloseTo(onWhole.x, 9);
+      expect(mid.y).toBeCloseTo(onWhole.y, 9);
+    }
+  });
+
+  it('the tail is the whole curve when nothing is drawn yet', () => {
+    const control = arcControl(a, b, 0.3);
+    const tail = quadTail(a, control, b, 0);
+    expect(tail.start).toEqual(a);
+    expect(tail.control).toEqual(control);
+    expect(tail.end).toEqual(b);
   });
 });
 

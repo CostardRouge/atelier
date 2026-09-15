@@ -456,6 +456,28 @@ export function quadSplit(a: Point, c: Point, b: Point, s: number): { control: P
   };
 }
 
+/**
+ * The REST of a quadratic, from `s` to its end, as a quadratic of its own —
+ * the other half of the same split. It is what lets the line still to come go
+ * on being drawn under the pen: without it, the moment the pen entered a hop
+ * that hop's remainder vanished, and the shape of the journey stopped being
+ * readable exactly where it matters most.
+ */
+export function quadTail(
+  a: Point,
+  c: Point,
+  b: Point,
+  s: number,
+): { start: Point; control: Point; end: Point } {
+  const p01 = { x: a.x + (c.x - a.x) * s, y: a.y + (c.y - a.y) * s };
+  const p12 = { x: c.x + (b.x - c.x) * s, y: c.y + (b.y - c.y) * s };
+  return {
+    start: { x: p01.x + (p12.x - p01.x) * s, y: p01.y + (p12.y - p01.y) * s },
+    control: p12,
+    end: b,
+  };
+}
+
 /** Great-circle distance between two located places, in kilometres. */
 export function haversineKm(a: LatLon, b: LatLon): number {
   const R = 6371.0088;
