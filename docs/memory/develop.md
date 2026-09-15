@@ -6,6 +6,22 @@ Studio, or the Develop tool. The engine (the develop stage in the cube) is in
 `studio.md`; the tool's plan is `docs/develop-tool.md`; delivering from an
 original is `docs/develop-originals.md`.
 
+## The Develop tool is the third editor, over a roll (2026-09-15)
+
+**Decision (maintainer).** A third official tool beside the Studio and Trips,
+"with about the same interface as the modal". Four choices, all his: it opens
+a **roll** (a document of pictures, each with its develop and crop, plus the
+roll's look and export — not a Library view, which would lose its numbers on
+reload, and not a hash-keyed catalogue, which would break never-inherit);
+**presets are one personal book** shared by the tool and both modals, synced
+like a document, trips' lists merged in once and never written again; **v1**
+has crop · straighten · flip, JPEG export + send home, filmstrip + batch, a
+histogram; and **the shared foundations were built first**, the per-tool
+document plumbing left for the roll's own phase (the third copy is where it
+gets extracted). It reverses `photo-develop.md` §7.5 ("no ninth tool") and is
+NOT the photo studio `studio.md` rejected in August. Plan, seams and phases:
+`docs/develop-tool.md`.
+
 ## The workbench is shared blocks, and the modal is one layout of them (2026-09-15)
 
 **Decision.** The maintainer wants a third official tool for developing

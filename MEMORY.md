@@ -126,6 +126,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - Road Trip's grid draws its own hover card (fixed-positioned, pointer-transparent) because the native `title` is far too slow to sweep a calendar with — `roadtrip.md`.
 - Each post keeps a small JPEG of its HOOK in a second IndexedDB store, taken from the preview canvas, drawn at the piece's own orientation, and pruned on delete — `roadtrip.md`.
 - The Studio edits **stills on the same stage as clips** — a photo is a media a project holds beside its rushes, never a second kind of project — `studio.md`.
+- **Develop is the THIRD editor** (decided 2026-09-15, not built): it opens a **roll** — a document of pictures each with its develop and crop, the roll's look and export — kept locally or on a Winnow like trips and projects; presets are ONE personal book shared by the tool and both modals; v1 has crop · straighten · flip, JPEG export + send home, a filmstrip with batch, a histogram. The modal is already one layout of shared workbench blocks (`shared/develop/`), and a change to developing goes into a block — `develop.md`, `docs/develop-tool.md`.
 - A photograph is read as the **one telemetry cue it is worth** (`shared/exif/exif-cue.ts`), so the exposure, position and time elements work over it; what a still cannot answer (speed, heading) stays `—`, and a DRONE still does know its height above take-off — `studio.md`.
 - A source **vouches for the EXIF its proxy dropped** (`MediaOrigin.exif`, merged UNDER the file's own by the one read path, `shared/exif/read-exif.ts`): a re-encoded rendition carries no metadata, so the values Winnow parsed at ingest are what make a drone photo's exposure, position and altitude readable at all, and a panel says which instance vouched — `studio.md`.
 - A still has **no clock**: the deck is settled (`settleForStill`) before it reaches the renderer, or an entrance draws mid-slide and a later window draws nothing — `studio.md`.
@@ -272,6 +273,13 @@ anything about media sources or document storage:
   choices (the decoder is the one real dependency decision). Read it before
   touching `lut-stack.ts`, `use-lut-stack.ts`, anything about RAW files, or
   before adding a tone/colour control anywhere.
+- **`docs/develop-tool.md`** — the plan (2026-09-15) for the Develop tool, the
+  third editor: what the modal already shares (§1), the maintainer's four
+  decisions (§2), the roll document and the personal preset book (§3–§4), the
+  screens, the seams still missing (a framing-aware still export, the finals
+  panel in `shared/`, and extracting the document plumbing at this third
+  consumer), phases D1–D10 and what is still open (§8). Read it before
+  building anything in `shared/develop/` or a new document kind.
 - **`docs/develop-originals.md`** — the proposal (2026-09-15) for developing
   and delivering from the ORIGINAL rather than Winnow's proxy: two axes kept
   apart — *pixels* (proxy 2048 ↔ full size, exact, chosen at export per piece,

@@ -520,6 +520,10 @@ the publisher, and the verb costs one entry.
 
 ### 7.5 Standalone — the Studio already is one
 
+**REVERSED 2026-09-15**: the maintainer chose a third editor, the Develop
+tool, and it opens a document of its own (a roll) — `docs/develop-tool.md`.
+The paragraphs below are the reasoning that was set aside.
+
 The maintainer allowed a ninth tool. Recommended: **do not add one.** The
 Studio is a photo editor with a gallery, persistence on local or a Winnow,
 the grade, the export matrix and the finals write-back; `studio.md` records
@@ -699,7 +703,8 @@ Settled by the brief, to confirm:
 1. **A sheet, opened from the Picture tab and from the Grade tab** — his own
    call (*"un overlay ou une modale"*), measured right (F4).
 2. **No ninth tool**: the Studio is the standalone; a project kind opening on
-   the sheet if a front door is wanted (§7.5).
+   the sheet if a front door is wanted (§7.5). **Reversed 2026-09-15** — a
+   Develop tool over a roll, `docs/develop-tool.md`.
 3. **The parameter set** of §5.1 — in particular that *brillance* is
    vibrance, *darks* is blacks, and that temperature/tint join the list
    (a RAW without white balance is not developed).
