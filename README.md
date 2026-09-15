@@ -651,9 +651,9 @@ too. When the car arrives the map fades away and leaves the piece's own picture
 under the badge, or stays. Everything is yours: the road (curved or straight,
 the way ahead dashed, faint or hidden, a trail behind the car, its colours and
 width), the pictures (how they show, a beat per picture, whether the prints
-stay, their size, a pause at every stop), the car (its colour, its size, the
-camera's elevation over it, the spare on the tailgate, a roof rack, the
-mirrors), the map (paper or the picture itself, paper and ink colours, lines of
+stay, their size, a pause at every stop), the car (how big it is drawn and
+how steeply the camera looks at it, per piece — the car itself is the trip's,
+below), the map (paper or the picture itself, paper and ink colours, lines of
 latitude and longitude, a vignette, where it sits and how big, dots, the stops'
 names, a compass rose, a scale bar, the distance so far in km or miles counting
 up as it drives), the motion (the time on the road, the five motions, a hold
