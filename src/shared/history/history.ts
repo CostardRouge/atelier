@@ -137,14 +137,49 @@ export function seal<T>(history: HistoryState<T>): HistoryState<T> {
   return history.at === SEALED ? history : { ...history, at: SEALED };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value) as unknown;
+  return proto === Object.prototype || proto === null;
+}
+
+/**
+ * Two slices that mean the same composition.
+ *
+ * {@link shallowSame} asks whether every member is the SAME object, which is
+ * the right question for state held immutably — and the wrong one for a member
+ * a hook rebuilds while meaning nothing by it: a grade stack emptied onto a
+ * fresh `[]`, a record re-keyed with the same entries. Those read as an edit,
+ * and one arriving while a document is still opening costs an undo that strips
+ * what it finds. So an array or a plain record is compared ONE LEVEL DEEPER,
+ * by its own members' identity — and never further: an item of an immutably
+ * updated collection is a new object exactly when it changed, so this can
+ * never call two different compositions equal.
+ */
+export function sameSlice<T extends object>(a: T, b: T): boolean {
+  if (Object.is(a, b)) return true;
+  const left = a as Record<string, unknown>;
+  const right = b as Record<string, unknown>;
+  const keys = Object.keys(left);
+  if (keys.length !== Object.keys(right).length) return false;
+  return keys.every((k) => {
+    if (!Object.prototype.hasOwnProperty.call(right, k)) return false;
+    const x = left[k];
+    const y = right[k];
+    if (Object.is(x, y)) return true;
+    if (Array.isArray(x) && Array.isArray(y)) {
+      return x.length === y.length && x.every((v, i) => Object.is(v, y[i]));
+    }
+    return isRecord(x) && isRecord(y) && shallowSame(x, y);
+  });
+}
+
 /**
  * Same own keys, same values by `Object.is`.
  *
- * The comparison an editor needs when its "document" is a slice ASSEMBLED from
- * a dozen `useState` values (the Studio): the slice object is rebuilt on every
- * render, so identity says "edited" when nothing was. One level deep is exactly
- * right — each member of such a slice is itself held immutably, so an unchanged
- * member is the same object.
+ * The primitive {@link sameSlice} is built on, and what a caller wants when
+ * every member it compares is held immutably: an unchanged member is then the
+ * same object, so identity IS equality and nothing deeper is read.
  */
 export function shallowSame<T extends object>(a: T, b: T): boolean {
   if (Object.is(a, b)) return true;

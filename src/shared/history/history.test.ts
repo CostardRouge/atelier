@@ -7,6 +7,7 @@ import {
   record,
   redo,
   seal,
+  sameSlice,
   shallowSame,
   undo,
 } from './history';
@@ -117,6 +118,42 @@ describe('seal', () => {
   it('leaves an already closed history alone', () => {
     const h = newHistory(doc('a'));
     expect(seal(h)).toBe(h);
+  });
+});
+
+describe('sameSlice', () => {
+  it('reads a member REBUILT with the same contents as unchanged', () => {
+    // What `useLutStack.restore` does to an already empty stack, and what cost
+    // a graded project its grade the first time it opened: a fresh `[]` and a
+    // fresh `{}` mean nothing, and `shallowSame` calls them an edit.
+    expect(sameSlice({ layers: [], text: {} }, { layers: [], text: {} })).toBe(true);
+    expect(shallowSame({ layers: [], text: {} }, { layers: [], text: {} })).toBe(false);
+  });
+
+  it('sees a member appear, change, move or go', () => {
+    const a = { id: 'a' };
+    const b = { id: 'b' };
+    expect(sameSlice({ l: [a, b] }, { l: [a, b] })).toBe(true);
+    expect(sameSlice({ l: [a, b] }, { l: [b, a] })).toBe(false);
+    expect(sameSlice({ l: [a, b] }, { l: [a] })).toBe(false);
+    expect(sameSlice({ l: [a] }, { l: [{ id: 'a' }] })).toBe(false);
+    expect(sameSlice({ t: { x: 1 } }, { t: { x: 2 } })).toBe(false);
+    expect(sameSlice({ t: { x: 1 } }, { t: { x: 1, y: 1 } })).toBe(false);
+  });
+
+  it('stops at one level: a nested object is compared by identity', () => {
+    const inner = { deep: 1 };
+    expect(sameSlice({ t: { inner } }, { t: { inner } })).toBe(true);
+    // Two equal-but-rebuilt inner objects are an edit — which is right, since
+    // an immutable update only rebuilds what changed.
+    expect(sameSlice({ t: { inner: { deep: 1 } } }, { t: { inner: { deep: 1 } } })).toBe(false);
+  });
+
+  it('compares anything that is not an array or a plain record by identity', () => {
+    const when = new Date(0);
+    expect(sameSlice({ when }, { when })).toBe(true);
+    expect(sameSlice({ when }, { when: new Date(0) })).toBe(false);
+    expect(sameSlice({ n: 1, s: 'a', z: null }, { n: 1, s: 'a', z: null })).toBe(true);
   });
 });
 

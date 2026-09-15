@@ -97,7 +97,7 @@ import { reanchorInPlace } from '../../shared/overlay/draw-overlays';
 import { DEFAULT_GUIDES, type GuidesState } from '../../shared/overlay/guides';
 import { useOverlayStage } from '../../shared/overlay/use-overlay-stage';
 import { useLutStack } from '../../shared/lut/use-lut-stack';
-import { shallowSame } from '../../shared/history/history';
+import { sameSlice } from '../../shared/history/history';
 import useHistory from '../../shared/history/use-history';
 import GradePanel from '../../shared/lut/GradePanel';
 import DevelopSheet from '../../shared/develop/DevelopSheet';
@@ -538,12 +538,21 @@ export default function StudioEditor({
   // the looks land after the first render. Until they have, the editor is still
   // seeding itself from the document and nothing that arrives is an edit — see
   // the history below, which would otherwise open a graded project on an undo
-  // that strips it.
+  // that strips it. Two flags, not one, because React does NOT promise that
+  // the looks land in the same commit as a state set from the promise that
+  // brought them — measured landing one commit later, i.e. after a single gate
+  // had already opened. `restoreDone` is set after the restore's own writes,
+  // so every one of them is in the value by the commit that observes it, and
+  // `seeded` opens the gate one commit later still (the effect beside the
+  // history, below).
+  const [restoreDone, setRestoreDone] = useState(false);
   const [seeded, setSeeded] = useState(false);
   useEffect(() => {
     if (restoredRef.current) return;
     restoredRef.current = true;
-    void lutStack.restore(project.lutStack, project.outputTransform).finally(() => setSeeded(true));
+    void lutStack
+      .restore(project.lutStack, project.outputTransform)
+      .finally(() => setRestoreDone(true));
     if (project.media.activeId && clips.some((c) => c.id === project.media.activeId)) {
       lib.setActive(project.media.activeId);
     }
@@ -921,9 +930,11 @@ export default function StudioEditor({
    *
    * Unlike Trips, the Studio has no single document in state: it holds a dozen
    * `useState` values and assembles the document on save. So the history
-   * compares `shallowSame` rather than by identity — this object is rebuilt on
-   * every render, while each member inside it is held immutably and so is only
-   * a new object when it really changed.
+   * compares `sameSlice` rather than by identity — this object is rebuilt on
+   * every render, and so, sometimes, are its members: `useLutStack.restore`
+   * empties the stack onto a fresh `[]`, which means nothing and read as an
+   * edit. One level deeper is where that stops and no further: an item of an
+   * immutably updated collection is a new object exactly when it changed.
    */
   const edit = useMemo(
     () => ({
@@ -966,7 +977,7 @@ export default function StudioEditor({
 
   const history = useHistory({
     value: edit,
-    isSame: shallowSame,
+    isSame: sameSlice,
     what: 'edit',
     // The grade lands after the first render; until it has, what arrives is
     // the document finishing its own arrival, not an edit.
@@ -1003,6 +1014,14 @@ export default function StudioEditor({
       }
     },
   });
+
+  // The gate, opened one commit after the seeding was observed and AFTER the
+  // history's own effect in the same commit (effects run in declaration
+  // order), so the beginning it starts from already holds everything the
+  // document brought.
+  useEffect(() => {
+    if (restoreDone && !seeded) setSeeded(true);
+  }, [restoreDone, seeded]);
 
   // --- autosave -----------------------------------------------------------
 
