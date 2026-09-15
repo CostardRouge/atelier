@@ -10,7 +10,7 @@ import type {
   HookPictureStatus,
   HookPictureWant,
 } from '../../shared/roadtrip/hooks/hook-variant';
-import { coverCrop, perPicturePixels } from '../../shared/roadtrip/hooks/picture-budget';
+import { coverCrop, perPicturePixels, wholeCrop } from '../../shared/roadtrip/hooks/picture-budget';
 import { hookVariantById } from '../../shared/roadtrip/hooks/registry';
 import { WinnowError } from '../../shared/sources/winnow/client';
 import { fetchPreviewStill, resolvableSource } from '../../shared/sources/winnow/resolve-media';
@@ -115,7 +115,7 @@ export default function useHookPictures(
   const grade = lutToken(lut);
   // Everything a pass reads, as one string: the effect runs when an ANSWER
   // changes, never on a new array holding the same wants.
-  const wantsKey = wants.map((w) => `${w.key}@${w.atSeconds ?? ''}`).join('|');
+  const wantsKey = wants.map((w) => `${w.key}@${w.atSeconds ?? ''}${w.shape === 'own' ? '~' : ''}`).join('|');
   const passKey = `${wantsKey}#${aspect.toFixed(4)}#${Math.round(cap)}#${grade}`;
 
   const files = useMemo(() => {
@@ -157,7 +157,7 @@ export default function useHookPictures(
         setStatus({ pending, problems: NO_PROBLEMS });
 
         function sigOf(want: HookPictureWant): string {
-          return `${want.atSeconds ?? ''}#${aspect.toFixed(4)}#${Math.round(cap)}#${grade}`;
+          return `${want.atSeconds ?? ''}#${want.shape ?? 'frame'}#${aspect.toFixed(4)}#${Math.round(cap)}#${grade}`;
         }
 
         try {
@@ -254,7 +254,12 @@ async function loadPicture(
   }
 
   try {
-    const crop = coverCrop(full.width, full.height, aspect, cap);
+    // A print keeps the whole picture at its own shape; a flash is cropped to
+    // the frame's, since everything outside it would be decoded for nothing.
+    const crop =
+      want.shape === 'own'
+        ? wholeCrop(full.width, full.height, cap)
+        : coverCrop(full.width, full.height, aspect, cap);
     const cropped = await createImageBitmap(
       full,
       Math.round(crop.sx),

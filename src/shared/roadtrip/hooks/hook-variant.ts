@@ -148,6 +148,12 @@ export interface HookPickedPicture {
   date: string;
   /** The capture instant in ms, when known — orders one day's pictures. */
   takenAt?: number;
+  /**
+   * Where it was shot, when its EXIF (or the instance that parsed it) says —
+   * what lets a picture be a stop on a map. Absent is the normal case for a
+   * camera without GPS, never an error.
+   */
+  coords?: { lat: number; lon: number };
 }
 
 /**
@@ -169,7 +175,16 @@ export interface HookPictureWant {
   ref: SavedMediaRef;
   /** For a clip: the second its frame is taken at. Ignored for a still. */
   atSeconds?: number;
+  /**
+   * The shape it is decoded to. `frame` (the default) crops it to the
+   * output's own shape, for a picture that fills the frame; `own` keeps the
+   * picture whole at its own aspect, for one drawn as a print. See
+   * `picture-budget.ts` for what each costs.
+   */
+  shape?: HookPictureShape;
 }
+
+export type HookPictureShape = 'frame' | 'own';
 
 /**
  * One leg of the trip, as a hook reads it — its span and its LOCATED places in

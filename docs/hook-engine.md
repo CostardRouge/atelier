@@ -461,3 +461,72 @@ paint. What each group may say, and the rule each keeps to:
 - **The stack UI** (more than one layer) has no design. The storage is ready for
   it; the picker is not, and ordering + two `frame` owners need a screen before
   it can exist.
+
+## 13. Virée — the car on the map (2026-09-14)
+
+The third real variant, and the first that OWNS the frame with a drawing of
+its own rather than with pictures: a paper map, the road as a curve through
+the stops, and a cartoon Land Cruiser Prado driving it, halting at stops to
+show pictures. The maintainer's brief: *"une carte avec un tracé… des points
+que je choisis ou déterminés automatiquement en fonction des photos
+sélectionnées… une petite voiture en 3D, une Toyota Prado noire, cartoonish,
+élégante, optimisée, fluide… des moments d'arrêt pour montrer les photos…
+autour du point approché, en temps réel, en fond d'écran, ou pas du tout…
+surprends-moi"*. What it took, and what it changed in the contract: **one
+optional field again** — `HookPictureWant.shape` (`frame` | `own`, since a
+print wants the whole picture at its own aspect and a flash wants the frame's
+crop) — and `HookPickedPicture.coords`, so the chooser hands a variant WHERE a
+picture was shot. Nothing else in `HookVariant`, the resolver, the picker, the
+renderer or either export moved.
+
+- **Files.** `mesh3d.ts` (the renderer), `car-model.ts` (the Prado),
+  `drive-plan.ts` (stops, road, schedule, camera, furniture, score),
+  `drive-paint.ts` (the frame), `drive.tsx` (sketch, panel, entry). Shared,
+  lifted out of the route and Défilé when the drive wanted them: `geo.ts`
+  (projection, great-circle, distance format, name placement, and a
+  re-centrable `projectionFor`), `picked.ts` (the picked list's reading,
+  shot order, `partitionPicked`, `sampleEvenly`).
+- **The car is a software renderer of our own, not a 3D library.** ~180
+  flat-shaded faces meeting at an inked edge, every part CONVEX, so a
+  painter's algorithm (back-face culling within a part, nearer centre drawn
+  later between parts) is exact without a depth buffer; `outward()` winds
+  every face away from its centre at build time so no hand-typed order can
+  turn a face inside out. A 2.5D orthographic camera looks north and down at
+  a tilt; two lights and a highlight from the key let a BLACK car (the
+  maintainer's default) read as a shape. Wheels and spokes spin from the
+  distance travelled; the shadow is three ellipses, no blur. Why not
+  Three.js: a dependency the size of the rest of the tool, a WebGL context
+  per stage that is never reclaimed, and a copy per frame into the 2D
+  context every opener paints in.
+- **Stops, two sources, one refusal.** `places`: the legs' located places,
+  the trip so far, arriving where this day's leg ends — the leg, never a
+  spot the dates cannot justify, the route trace's rule. `pictures`: each
+  picked picture shot with a position is a stop in shot order (a run within
+  150 m is one stop). A picture WITHOUT a position rides with the stop shot
+  before it (pictures) or with the end of the leg its day belongs to
+  (places — the leg is dated, the place is not); one that fits nowhere is
+  counted (`LeftOut`) and said in the panel, never guessed onto the map.
+  The told days' pictures ride along on places (`includePieces`), at the
+  end of their leg.
+- **The clock is closed-form** (`buildSchedule`): a hold, runs between
+  halting stops sharing the driving time by length with a floor, a halt of
+  one beat per picture (a beat everywhere when asked), the arrival, a
+  0.7 s reveal. `plan.at(t)` is a function of `t` alone; the arrivals are the
+  easing's inverse at each stop's share of its run, so a tick lands on the
+  frame its dot fills. The path is measured in plan units (a 1000-box), the
+  camera one similarity transform (`viewAt`): whole route fitted, or zoomed
+  by a share with the car held at the centre.
+- **Pictures, four ways**, the maintainer's own list: `cards` (prints
+  popping beside the car, piled to one side of the stop — a pile, not a
+  spread, so a stop's pictures cover one patch and not the road; the car is
+  drawn OVER them, a toy standing on the map), `fill` (the picture takes the
+  frame while the car halts), `backdrop` (it takes the PAPER's place behind
+  the road and the car), `none`. The reveal at the end fades the whole map
+  off the piece's picture through one buffer canvas, so a fade of a hundred
+  strokes is one `drawImage`.
+- **Verified in headless Chromium**: the car at eight headings and three
+  tilts in four colours; eight frames of five option sets through the
+  variant itself (`prepare` → `paint`) on a three-leg fixture with generated
+  pictures; the panel mounted standalone, choosing pictures and switching the
+  stops' source updating its summary and its left-out line. NOT exercised: a
+  real export, the chooser reading GPS from real files, memory on a phone.

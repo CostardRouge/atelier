@@ -39,6 +39,7 @@ import {
   type HookPictureWant,
 } from './hook-variant';
 import { standingPiece } from './hook-calendar';
+import { partitionPicked, readPicked, sampleEvenly } from './picked';
 import { KIT_IDS, TICK_KITS, driftAt, type TickDrift, type TickKit } from './tick-kits';
 
 // The easings and the tick kits grew here and were lifted out once the route
@@ -224,8 +225,6 @@ export function edgeFadeAt(x: number, x0: number, x1: number, fade: boolean): nu
 
 
 
-const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
-
 /** One place the head comes to rest. */
 export interface ScrubStop {
   date: string;
@@ -336,21 +335,6 @@ export function scrubOptions(raw: Readonly<Record<string, unknown>>): ScrubOptio
 }
 
 /**
- * `k` items spread evenly over `items`, first and last always kept. Fewer than
- * `k` comes back whole: a sweep never repeats a day to reach a count.
- */
-export function sampleEvenly<T>(items: readonly T[], k: number): T[] {
-  if (k <= 0) return [];
-  if (items.length <= k) return [...items];
-  if (k === 1) return [items[items.length - 1]];
-  const out: T[] = [];
-  for (let i = 0; i < k; i++) {
-    out.push(items[Math.round((i * (items.length - 1)) / (k - 1))]);
-  }
-  return out;
-}
-
-/**
  * The time a stop is reached, as a fraction of the sweep: the easing's
  * inverse at the stop's share of the way. The first stop is at 0, the last at 1.
  */
@@ -384,72 +368,10 @@ export interface ScrubSeed {
   legStart: boolean;
 }
 
-/**
- * A stored picked list, read defensively: an entry with no readable ref or
- * day is dropped, a second entry for the same picture is dropped. What a newer
- * build wrote beside `ref` / `date` / `takenAt` is left behind, not trusted.
- */
-function readPicked(raw: unknown): HookPickedPicture[] {
-  if (!Array.isArray(raw)) return [];
-  const seen = new Set<string>();
-  const out: HookPickedPicture[] = [];
-  for (const item of raw) {
-    if (!item || typeof item !== 'object') continue;
-    const { ref, date, takenAt } = item as Record<string, unknown>;
-    if (typeof date !== 'string' || !ISO_DAY.test(date)) continue;
-    if (!ref || typeof ref !== 'object') continue;
-    const r = ref as Record<string, unknown>;
-    if (typeof r.name !== 'string' || !r.name) continue;
-    const clean = {
-      name: r.name,
-      size: Number.isFinite(r.size) ? Number(r.size) : 0,
-      lastModified: Number.isFinite(r.lastModified) ? Number(r.lastModified) : 0,
-      ...(typeof r.assetId === 'string' && r.assetId ? { assetId: r.assetId } : {}),
-      ...(typeof r.hash === 'string' && r.hash ? { hash: r.hash } : {}),
-    };
-    const key = hookPictureKey(clean);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({
-      ref: clean,
-      date,
-      ...(typeof takenAt === 'number' && Number.isFinite(takenAt) ? { takenAt } : {}),
-    });
-  }
-  return out;
-}
-
-/** Picked pictures in the order they were shot: day, then instant, then name. */
-export function sortPicked(picked: readonly HookPickedPicture[]): HookPickedPicture[] {
-  return [...picked].sort(
-    (a, b) =>
-      a.date.localeCompare(b.date) ||
-      (a.takenAt ?? Number.MAX_SAFE_INTEGER) - (b.takenAt ?? Number.MAX_SAFE_INTEGER) ||
-      a.ref.name.localeCompare(b.ref.name),
-  );
-}
-
-/**
- * Where each picked picture falls against this piece: on the tape (shot on a
- * day of the trip, no later than the piece's own), after it, or outside the
- * trip altogether. The panel says the last two out loud; the plan uses the first.
- */
-export function partitionPicked(
-  calendar: readonly HookDay[],
-  date: string,
-  picked: readonly HookPickedPicture[],
-): { inReach: HookPickedPicture[]; after: number; outside: number } {
-  const days = new Set(calendar.map((day) => day.date));
-  const inReach: HookPickedPicture[] = [];
-  let after = 0;
-  let outside = 0;
-  for (const picture of picked) {
-    if (!days.has(picture.date)) outside += 1;
-    else if (picture.date > date) after += 1;
-    else inReach.push(picture);
-  }
-  return { inReach: sortPicked(inReach), after, outside };
-}
+// The picked list's reading, its shot order, where each picture falls against
+// a piece and the even thinning live beside the contract since the drive
+// wanted them too (`picked.ts`); the old names stay exported here.
+export { partitionPicked, sampleEvenly, sortPicked } from './picked';
 
 /**
  * The stops a sweep makes, the hero last — or null when this piece's day is

@@ -18,6 +18,13 @@
 /** The long edge of a delivered frame — `longEdge` in every Trips export. */
 export const FRAME_LONG_EDGE = 1920;
 
+/**
+ * The long edge a picture drawn as a PRINT is decoded to — a card on a map
+ * covers at most about a third of the frame, so half the frame's edge is
+ * already more than it can show.
+ */
+export const PRINT_LONG_EDGE = 1080;
+
 /** Pixels the whole decoded set may hold: 32 MP, about 128 MB of RGBA. */
 export const PICTURES_PIXEL_BUDGET = 32_000_000;
 
@@ -63,4 +70,25 @@ export function coverCrop(
   const width = Math.max(1, Math.floor(Math.min(sw, frameW, capW)));
   const height = Math.max(1, Math.round(width / a));
   return { sx: (w - sw) / 2, sy: (h - sh) / 2, sw, sh, width, height };
+}
+
+/**
+ * The whole picture at its own shape, for one drawn as a print: no crop, the
+ * long edge no larger than `longEdge`, no more than `maxPixels`, never
+ * enlarged.
+ */
+export function wholeCrop(
+  srcW: number,
+  srcH: number,
+  maxPixels: number,
+  longEdge = PRINT_LONG_EDGE,
+): CoverCrop {
+  const w = Math.max(1, srcW);
+  const h = Math.max(1, srcH);
+  const a = w / h;
+  const byEdge = w >= h ? longEdge : longEdge * a;
+  const capW = Math.sqrt(Math.max(1, maxPixels) * a);
+  const width = Math.max(1, Math.floor(Math.min(w, byEdge, capW)));
+  const height = Math.max(1, Math.round(width / a));
+  return { sx: 0, sy: 0, sw: w, sh: h, width, height };
 }

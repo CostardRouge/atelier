@@ -635,8 +635,33 @@ their size, the places' own names at the ends, on this day's leg or
 everywhere, a north arrow) — and it can say the distance so far, in km or
 miles, counting up with the pen: the straight-line sum of what it has drawn,
 never a road distance. It ticks, too, at every place the pen reaches, on the
-same voices as Défilé. Every opener runs on the same clock as the badge, in the
-preview and in the file.
+same voices as Défilé. **Virée** puts a little car on the map: a paper map of
+the trip so far (drawn here — no tiles, nothing fetched), the road as a curve
+through its stops, and a cartoon Land Cruiser Prado, a miniature rendered in the
+browser with its wheels turning, driving from stop to stop. The stops are the
+legs' located places, arriving where this day's leg ends, or the **pictures
+you pick** — each one shot with a position in its EXIF is a stop, in the order
+they were shot, a run shot at one spot one stop. At a stop with pictures the car
+halts and they pop as **prints** beside it, piled like a stack on the map, or
+fill the frame, or take the paper's place behind the road while it halts; a
+picture without a position rides with the stop before it, or with the end of
+the leg its day belongs to, and anything that fits nowhere is counted in the
+panel rather than guessed onto the map. The told days' pictures can ride along
+too. When the car arrives the map fades away and leaves the piece's own picture
+under the badge, or stays. Everything is yours: the road (curved or straight,
+the way ahead dashed, faint or hidden, a trail behind the car, its colours and
+width), the pictures (how they show, a beat per picture, whether the prints
+stay, their size, a pause at every stop), the car (its colour, its size, the
+camera's elevation over it, the spare on the tailgate, a roof rack, the
+mirrors), the map (paper or the picture itself, paper and ink colours, lines of
+latitude and longitude, a vignette, where it sits and how big, dots, the stops'
+names, a compass rose, a scale bar, the distance so far in km or miles counting
+up as it drives), the motion (the time on the road, the five motions, a hold
+first, a beat at the end, whether the camera fits the whole route or follows
+the car at a zoom, the badge's place following the car), and the sound: a tick
+at every stop on the same voices, deeper where a leg begins, the seat on
+arrival, a shutter click as each print lands. Every opener runs on the same
+clock as the badge, in the preview and in the file.
 
 **Nothing is keyed by a file name.** A post records the *day* it tells, never a
 filename: exports get renamed and re-graded between tools, and a tracking system
