@@ -391,7 +391,10 @@ export default function DevelopSheet({
           <button
             type="button"
             onClick={onCancel}
-            className="font-mono text-3xs tracking-[0.12em] uppercase text-muted border border-line rounded-full px-2.5 py-[3px] hover:text-accent hover:border-line-strong transition-colors cursor-pointer"
+            // The zoom pill's own height (34px), the lightbox's rule: controls
+            // sharing a row share a height. Kept when the pill is absent, so the
+            // header does not change height as a picture decodes.
+            className="flex-none inline-flex items-center h-[2.125rem] font-mono text-3xs tracking-[0.12em] uppercase text-muted border border-line rounded-full px-3.5 hover:text-accent hover:border-line-strong transition-colors cursor-pointer"
             aria-label="Close"
           >
             close ✕
