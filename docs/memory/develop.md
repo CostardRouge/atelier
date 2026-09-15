@@ -75,3 +75,23 @@ preset list the maintainer chose for all three hosts (`docs/develop-tool.md`)
 is the same shape and must use them. The Studio's per-media map goes through
 ONE writer, `media-develop.ts`'s `writeDevelop` (Done and the batch verb had
 each a copy).
+
+## The histogram is a strip of what is DELIVERED (2026-09-15, D1)
+
+`histogram.ts` (pure, tested) + `DevelopHistogram.tsx`, read by
+`useDevelopPicture` and drawn at the top of the column. Rules: it measures the
+GRADED picture whole — never the split or "hold for before", which are ways of
+looking, not what goes out — so it is keyed on the source and the cube, not the
+wipe. It reads a 160 px copy (`HISTOGRAM_SAMPLE_EDGE`): the shape does not
+change with pixel count and a stage-sized read-back would cost tens of MB per
+slider step. Luma is Rec.709 on the ENCODED values (what a screen shows); a
+pixel is clipped when ANY channel is at 254+, crushed only when ALL are at 1-;
+the shape is scaled on the inner bins so a blown sky does not flatten the rest
+— the end bins are capped and the marks say the share in words. **Trap**: the
+read is scheduled on `requestAnimationFrame` so a slider paints first, but a
+page that is not compositing (the desktop app's hidden Browser pane) never
+fires rAF even while `visibilityState` says visible — a 120 ms `setTimeout`
+races it, whichever comes first. The bars are a fixed light over `bg-frame`,
+never a theme token: `paper` is dark in the darkroom. Verified in the Browser
+pane on a PNG with a known 6.25 % white block: `whites 6.3 %` at as shot, 28 %
+at +1.5 EV (over the hook's stored +0.7), none and `blacks 2.5 %` at −2 EV.

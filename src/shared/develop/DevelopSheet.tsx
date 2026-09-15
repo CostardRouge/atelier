@@ -11,6 +11,7 @@ import {
   DevelopLookSection,
   DevelopPresetsSection,
 } from './DevelopSections';
+import DevelopHistogram from './DevelopHistogram';
 import DevelopSliders from './DevelopSliders';
 import DevelopViewport, { DevelopCaption } from './DevelopViewport';
 import { useDevelopDraft, useTold } from './use-develop-draft';
@@ -147,6 +148,7 @@ export default function DevelopSheet({
 
           {/* The column: the pipeline in order, then the look under it. */}
           <div className="w-[22rem] flex-none min-h-0 overflow-y-auto overscroll-contain pr-1.5 flex flex-col gap-4 max-[820px]:w-full max-[820px]:flex-1">
+            <DevelopHistogram histogram={picture.histogram} />
             <DevelopSliders value={draft.draft} onChange={draft.set} />
             {presets && (
               <DevelopPresetsSection

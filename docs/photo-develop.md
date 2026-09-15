@@ -716,7 +716,8 @@ Open, and they gate a phase:
    refusal by the npm build turns this into "which wasm build do we
    maintain" (§6.2), which comes back to him as a question then.
 5. **The histogram** (§7.1) — one strip with two clip marks, or nothing,
-   given that Scopes was retired.
+   given that Scopes was retired. **Decided 2026-09-15: the strip, built
+   (`histogram.ts`, `DevelopHistogram`).**
 6. **Whether a developed picture goes home to Winnow as an edit** (§7.6) — a
    write to his own server, so a product call like the finals were.
 7. **When the bridge carries it** (§7.7) — with the theme, or now.

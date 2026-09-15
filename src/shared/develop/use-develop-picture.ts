@@ -5,6 +5,7 @@ import { holdGrades, type HeldGrader } from '../lut/held-grader';
 import { stageFrameSize } from '../overlay/stage-size';
 import { boundSource, loadBadgeSource, type BadgeSource } from '../roadtrip/badge-render';
 import { usePictureZoom, type PictureZoom } from '../ui/use-picture-zoom';
+import { HISTOGRAM_SAMPLE_EDGE, luminanceHistogram, type Histogram } from './histogram';
 
 /** How close to the frame's side the divider's handle may be held, in px. */
 const HANDLE_INSET = 14;
@@ -37,6 +38,12 @@ export interface DevelopPicture {
   setHolding: (on: boolean) => void;
   /** Something to compare: a picture, and a cube that changes it. */
   comparing: boolean;
+  /**
+   * The luminance histogram of the picture AS DELIVERED (graded, whole) —
+   * never of the split or of "before", which are ways of looking, not what
+   * goes out. Null until a picture has been read.
+   */
+  histogram: Histogram | null;
   /** Where the divider and its handle are drawn, in viewport pixels. */
   divider: { x: number; top: number; bottom: number };
   /** The wipe gesture, for the viewport element. */
@@ -150,6 +157,51 @@ export function useDevelopPicture({
     }
   }, [source, cube, wipe, holding, graderFor]);
 
+  // The histogram, read off a small copy of the graded picture one frame
+  // after it changes — so a slider step paints first and measures second, and
+  // a burst of steps measures once. Keyed on the picture and the cube only:
+  // the wipe and "hold for before" do not change what is delivered.
+  const [histogram, setHistogram] = useState<Histogram | null>(null);
+  const sampleRef = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    if (!source || source.width <= 0 || source.height <= 0) {
+      setHistogram(null);
+      return;
+    }
+    const measure = () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(fallback);
+      const k = Math.min(1, HISTOGRAM_SAMPLE_EDGE / Math.max(source.width, source.height));
+      const w = Math.max(1, Math.round(source.width * k));
+      const h = Math.max(1, Math.round(source.height * k));
+      if (!sampleRef.current) sampleRef.current = document.createElement('canvas');
+      const sample = sampleRef.current;
+      if (sample.width !== w || sample.height !== h) {
+        sample.width = w;
+        sample.height = h;
+      }
+      const ctx = sample.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return;
+      try {
+        const grader = graderFor(cube, source);
+        const graded = grader ? grader.render(source.image) : source.image;
+        ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
+        setHistogram(luminanceHistogram(ctx.getImageData(0, 0, w, h).data));
+      } catch {
+        // A frame released under us, or a picture the canvas may not read
+        // back: the strip keeps its last reading rather than breaking the sheet.
+      }
+    };
+    // The next frame, or a moment later where frames are not being drawn (a
+    // hidden pane still shows the sheet's numbers), whichever comes first.
+    const raf = requestAnimationFrame(measure);
+    const fallback = window.setTimeout(measure, 120);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(fallback);
+    };
+  }, [source, cube, graderFor]);
+
   const dragging = useRef<{ startX: number; live: boolean } | null>(null);
   const fingers = useRef(0);
   const zoomedRef = useRef(false);
@@ -176,7 +228,13 @@ export function useDevelopPicture({
       if (dragging.current || (touch && fingers.current > 1)) return;
       if (!wipeClaims(e.target, view.zoomed)) return;
       dragging.current = { startX: e.clientX, live: !touch };
-      e.currentTarget.setPointerCapture(e.pointerId);
+      // A pointer the browser no longer knows (a synthetic one) throws rather
+      // than answering; the wipe works without the capture either way.
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* not a live pointer */
+      }
       if (!touch) wipeFrom(e);
     },
     onPointerMove: (e) => {
@@ -216,6 +274,7 @@ export function useDevelopPicture({
     holding,
     setHolding,
     comparing: Boolean(source && cube && !holding),
+    histogram,
     divider,
     handlers,
   };

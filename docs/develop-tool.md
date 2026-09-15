@@ -1,12 +1,13 @@
 # Develop — the third editor
 
-**Status (2026-09-15): the direction and four choices are DECIDED by the
-maintainer; the shared foundations are BUILT; the tool itself is not.** From
+**Status (2026-09-15): the direction and eight choices are DECIDED by the
+maintainer (§2, §8); the shared foundations and D1 are BUILT; the tool itself
+is not.** From
 his brief of the same day (*"un troisième outil officiel de développement
 d'images … à peu près la même interface que la modale … je n'ai pas envie de
 réinventer la roue … si des choses communes peuvent être développées, on
-anticipe et on les développe"*). §1 is what exists; §2 the decisions; §3–§6
-the plan; §7 the phases in commits; §8 what is still open. Read
+anticipe et on les développe"*). §1 is what exists; §2 and §8 the decisions; §3–§6
+the plan; §7 the phases in commits. Read
 `docs/memory/develop.md` first, then `docs/photo-develop.md` (the engine and
 the modal) and `docs/develop-originals.md` (proxy, render, RAW).
 
@@ -161,8 +162,9 @@ interface RollPicture {
 
 ## 7. Phases (one commit each)
 
-- **D1 — the histogram block**, pure `histogram.ts` + spec + `DevelopHistogram`,
-  drawn in the modal. Useful before the tool exists.
+- **D1 — the histogram block** — **BUILT 2026-09-15**: pure `histogram.ts` +
+  spec, `DevelopHistogram`, read by `useDevelopPicture`, drawn at the top of
+  the modal's column. Useful before the tool exists.
 - **D2 — shared document plumbing**: `useDocumentSync`, gallery source helpers;
   Studio and Trips moved onto them, behaviour unchanged, their sync verified
   against a stub instance (the `testing.md` recipe).
@@ -186,12 +188,12 @@ interface RollPicture {
 RAW (O4–O6 of `develop-originals.md`) lands in the tool first, where it matters
 most, and the modals get it through the same blocks.
 
-## 8. Still open
+## 8. Decided later the same day (maintainer, 2026-09-15)
 
-- **The roll's look**: one LUT stack for the roll (recommended, Trips' trip
-  grade) or none in v1.
-- **A picture's rating or flags**: culling is Winnow's job; recommended none.
-- **"Send to Trips / to a Studio project"** from a roll (copy the develop into
-  a slide or `media.develops`): wanted, and when.
-- **The name on screen**: *Develop* (the suite's word, recommended) or
-  *Darkroom*.
+All four recommendations accepted (*"ok pour tes recommandations"*):
+
+- **The roll has a look** — one LUT stack for the roll, Trips' trip-grade
+  shape, applied after each picture's develop.
+- **No rating or flags** on a picture: culling is Winnow's job.
+- **"Send to Trips / to a Studio project"** from a roll comes AFTER v1.
+- **The name on screen is *Develop*** (the suite's word), slug `develop`.
