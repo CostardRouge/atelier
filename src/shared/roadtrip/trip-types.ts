@@ -29,6 +29,7 @@ import {
 import type { SavedMediaRef } from '../projects/project-types';
 import { DEFAULT_SOURCE_ID } from '../sources/source';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
+import { gradeOrNull } from '../lut/saved-grade';
 import type { OutputTransform } from '../lut/transfer';
 import { themeFromPreset, type StyleTheme } from '../overlay/title-styles';
 import {
@@ -55,7 +56,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 21;
+export const TRIP_DOC_VERSION = 22;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers and the
@@ -273,6 +274,19 @@ export interface PostBadge {
    */
   develop: DevelopSettings | null;
   /**
+   * The hook picture's own GRADE — the look, not the correction — or null to
+   * follow the piece's (and through it the trip's). The bottom rung of the
+   * chain `post-grade.ts` resolves.
+   *
+   * It is beside `develop` and not folded into it because the two answer
+   * different questions: a develop says what this photograph needed, a grade
+   * says what it is CONVERTED from and what look it wears. A deck mixing a
+   * D-Log drone clip with a phone photograph cannot wear one conversion LUT,
+   * which is the whole reason this rung exists. Never inherited by the next
+   * piece, for the same reason as the develop and the framing.
+   */
+  grade: TripGrade | null;
+  /**
    * Free text replacing a computed piece, per piece. An empty string means
    * "computed", never "blank": clearing the field gives the derived value
    * back, so an override is never a one-way door.
@@ -377,6 +391,7 @@ export function defaultPostBadge(
     videoSpeed: 1,
     framing: { ...DEFAULT_FRAMING },
     develop: null,
+    grade: null,
     textOverrides: {},
     pieceStyles: defaults ? structuredClone(defaults.pieceStyles) : {},
     hook: defaults?.hook ? structuredClone(defaults.hook) : defaultHookLayers(),
@@ -403,6 +418,8 @@ export interface PostSlide {
   framing: Framing;
   /** This picture's own correction, or null for as shot — see `PostBadge.develop`. */
   develop: DevelopSettings | null;
+  /** This picture's own grade, or null to follow the piece — see `PostBadge.grade`. */
+  grade: TripGrade | null;
   /** The author's own line over this picture; empty draws nothing. */
   caption: string;
   /** What this slide is delivered as; see {@link SlideMedium}. */
@@ -419,6 +436,7 @@ export function createPostSlide(media: SavedMediaRef | null = null): PostSlide {
     videoSpeed: 1,
     framing: { ...DEFAULT_FRAMING },
     develop: null,
+    grade: null,
     caption: '',
     medium: 'auto',
     seconds: DEFAULT_SLIDE_SECONDS,
@@ -465,9 +483,10 @@ export interface TripPost {
   projectId: string | null;
   /**
    * This piece's own grade, or null to FOLLOW THE TRIP's — the "empty means
-   * computed, never blank" rule again. A picture needing its own correction
-   * departs; everything else inherits the trip's look. One grade per post
-   * (every slide of the deck); a per-slide grade is a later change.
+   * computed, never blank" rule again. The MIDDLE rung of three: a picture
+   * that departs writes its own (`PostBadge.grade`, `PostSlide.grade`), a
+   * piece that departs writes this one for every picture it holds, and
+   * everything else inherits the trip's look. `post-grade.ts` owns the chain.
    */
   grade: TripGrade | null;
   publishedAt: number | null;
@@ -1144,6 +1163,22 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
     // A trip stamped v19 by the Itinerary branch skipped the car block above.
     // Idempotent on every other document: a car that is there is kept as is.
     migrated.car = readCarSpec(migrated.car);
+  }
+
+  if (migrated.version < 22) {
+    // Every picture gains a grade of its OWN, and every stored one starts
+    // null — which means "follow the piece", so nothing that was composed
+    // before this existed changes by a code value. Read through `gradeOrNull`
+    // so a hand-edited or foreign value lands as a sound grade or as nothing,
+    // never as a shape the bake would trip over.
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      badge: { ...post.badge, grade: gradeOrNull(post.badge?.grade) },
+      slides: (post.slides ?? []).map((slide) => ({
+        ...slide,
+        grade: gradeOrNull(slide.grade),
+      })),
+    }));
   }
 
   migrated.version = TRIP_DOC_VERSION;

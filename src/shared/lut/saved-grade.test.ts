@@ -1,0 +1,88 @@
+import { describe, expect, it } from 'vitest';
+import { gradeKey, gradeOrNull, type SavedGrade } from './saved-grade';
+import type { SavedLutLayer } from './use-lut-stack';
+
+const layer = (over: Partial<SavedLutLayer> = {}): SavedLutLayer => ({
+  id: 'l1',
+  source: 'builtin:dji-dlog-m',
+  name: 'DJI D-Log M',
+  customText: null,
+  intensity: 1,
+  enabled: true,
+  ...over,
+});
+
+describe('gradeKey', () => {
+  it('separates two grades that differ in anything a bake reads', () => {
+    const base: SavedGrade = { layers: [layer()], output: 'none' };
+    const key = gradeKey(base);
+    expect(gradeKey({ layers: [layer()], output: 'none' })).toBe(key);
+    expect(gradeKey({ ...base, output: 'rec709-to-srgb' })).not.toBe(key);
+    expect(gradeKey({ layers: [layer({ intensity: 0.5 })], output: 'none' })).not.toBe(key);
+    expect(gradeKey({ layers: [layer({ enabled: false })], output: 'none' })).not.toBe(key);
+    expect(gradeKey({ layers: [layer({ id: 'l2' })], output: 'none' })).not.toBe(key);
+    expect(gradeKey({ layers: [], output: 'none' })).not.toBe(key);
+  });
+
+  it('keeps an order change apart, and never reads a custom cube’s text', () => {
+    const a = layer({ id: 'a' });
+    const b = layer({ id: 'b', source: 'custom', customText: 'TITLE "a"\nLUT_3D_SIZE 2\n' });
+    expect(gradeKey({ layers: [a, b], output: 'none' })).not.toBe(
+      gradeKey({ layers: [b, a], output: 'none' }),
+    );
+    // The id IS the text's identity: an uploaded cube never changes under one.
+    // Anything else would stringify a megabyte per picture per render.
+    expect(gradeKey({ layers: [b], output: 'none' })).not.toContain('LUT_3D_SIZE');
+  });
+
+  it('answers for no grade at all', () => {
+    expect(gradeKey(null)).toBe('-');
+    expect(gradeKey(null)).not.toBe(gradeKey({ layers: [], output: 'none' }));
+  });
+});
+
+describe('gradeOrNull', () => {
+  it('reads a sound grade back as itself', () => {
+    const grade = { layers: [layer()], output: 'rec709-to-srgb' as const };
+    expect(gradeOrNull(JSON.parse(JSON.stringify(grade)))).toEqual(grade);
+  });
+
+  it('keeps an EMPTY grade — it is a real departure, not junk', () => {
+    expect(gradeOrNull({ layers: [], output: 'none' })).toEqual({ layers: [], output: 'none' });
+  });
+
+  it('is nothing at all for anything that is not a grade', () => {
+    for (const junk of [undefined, null, 0, 'none', [], { output: 'none' }, { layers: {} }]) {
+      expect(gradeOrNull(junk)).toBeNull();
+    }
+  });
+
+  it('drops a layer with no identity and clamps the rest to something bakeable', () => {
+    const read = gradeOrNull({
+      layers: [{ id: 'l1' }, { source: 'custom' }, null, { id: 'l2', source: 'custom' }],
+      output: 'made-up',
+    });
+    expect(read?.layers.map((l) => l.id)).toEqual(['l2']);
+    expect(read?.layers[0]).toEqual({
+      id: 'l2',
+      source: 'custom',
+      name: '',
+      customText: null,
+      intensity: 1,
+      enabled: true,
+    });
+    // An unknown transform is not applied on a guess.
+    expect(read?.output).toBe('none');
+  });
+
+  it('takes a layer nobody switched off as ON, and refuses a NaN strength', () => {
+    const read = gradeOrNull({
+      layers: [{ id: 'l1', source: 'custom', intensity: Number.NaN }],
+      output: 'none',
+    });
+    expect(read?.layers[0].enabled).toBe(true);
+    expect(read?.layers[0].intensity).toBe(1);
+    expect(gradeOrNull({ layers: [{ id: 'l1', source: 'c', enabled: false }], output: 'none' })
+      ?.layers[0].enabled).toBe(false);
+  });
+});

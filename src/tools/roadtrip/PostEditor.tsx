@@ -23,6 +23,7 @@ import {
   pieceElementId,
   pieceFromElementId,
 } from '../../shared/roadtrip/badge-layout';
+import { countOwnGrades, pictureKeyOf } from '../../shared/roadtrip/post-grade';
 import { hookVariantById, resolveHook } from '../../shared/roadtrip/hooks/registry';
 import { setHookOptions, type HookContext } from '../../shared/roadtrip/hooks/hook-variant';
 import { hookContextFor } from '../../shared/roadtrip/hooks/hook-context';
@@ -223,6 +224,12 @@ export default function PostEditor({
   const slide = slides[slideIndex];
   const isHook = slide.kind === 'hook';
   const isCta = slide.kind === 'cta';
+  /**
+   * Which picture of the piece the panels treat: the key the develop verbs
+   * and the grade chain both address a picture by (`post-grade.ts`). The
+   * closing card is `null` — it has no photograph to correct or to grade.
+   */
+  const picture = pictureKeyOf(slide);
 
   /** Write a picture to whichever slide is open. */
   const setSlideMedia = useCallback(
@@ -334,10 +341,11 @@ export default function PostEditor({
     [trip, post, aspect, content],
   );
   // The grade is bound here, before the opener's pictures: a flashed picture
-  // wears the piece's grade (without any one slide's develop), so a sweep and
-  // the picture it lands on read as one look.
-  const grade = useTripGrade(trip, post, onChangeTrip, onChangePost);
-  const flashLut = grade.stack.composeWith(null);
+  // wears the HOOK's grade (without any one slide's develop), so a sweep and
+  // the picture it lands on read as one look — which is now a chain, since a
+  // picture of the deck may carry a look of its own (`post-grade.ts`).
+  const grade = useTripGrade(trip, post, picture, onChangeTrip, onChangePost);
+  const flashLut = grade.lutFor({ ...slides[0], develop: null });
   const { pictures: hookPictures, status: hookPictureStatus } = useHookPictures(
     post.badge.hook,
     baseHookCtx,
@@ -448,9 +456,9 @@ export default function PostEditor({
   const [developOpen, setDevelopOpen] = useState(false);
   // The sheet's time-savers (`docs/photo-develop.md` §8): the presets are the
   // person's own book, drawn by the sheet itself; the trip adds two batch verbs that write a COPY onto each target now — the open
-  // slide is left to Done, which is what `developExcept` keeps out of the count.
-  const developExcept = isHook ? 'hook' : slide.slideId;
-  const otherSlides = isCta ? 0 : countPostPictures(post, developExcept);
+  // slide is left to Done, which is what `picture` keeps out of the count (the
+  // key naming the open picture, the same one the grade chain addresses).
+  const otherSlides = isCta ? 0 : countPostPictures(post, picture);
   const otherPieces = countDayPictures(trip, post);
   const developApplyTo = useMemo(() => {
     const verbs: DevelopApplyVerb[] = [];
@@ -460,7 +468,7 @@ export default function PostEditor({
         label: `Apply to ${otherSlides} other slide${otherSlides === 1 ? '' : 's'}`,
         hint: 'the other pictures of this piece',
         run: (settings: DevelopSettings) =>
-          onChangePost(applyDevelopToPost(post, settings, developExcept)),
+          onChangePost(applyDevelopToPost(post, settings, picture)),
       });
     }
     if (otherPieces > 0) {
@@ -473,7 +481,7 @@ export default function PostEditor({
       });
     }
     return verbs;
-  }, [otherSlides, otherPieces, post, trip, developExcept, onChangePost, onChangeTrip]);
+  }, [otherSlides, otherPieces, post, trip, picture, onChangePost, onChangeTrip]);
 
   async function addSlide() {
     const ref = activeFile ? await hashedMediaRef(activeFile) : null;
@@ -790,12 +798,12 @@ export default function PostEditor({
 
   // --- the grade: the Studio's stack, bound to the trip or to this piece ----
   // (bound above, beside the opener's pictures, which wear it too)
-  // One cube per SLIDE: the shared stack baked with that slide's own develop
-  // (memoised in the stack, so untouched slides share one cube). The stage
-  // reads the STORED develop even while the sheet is open — the sheet's
-  // draft rides `stack.composed`, which only the sheet itself paints from.
-  const lutFor = grade.stack.composeWith;
-  const lut = isCta ? null : lutFor(slide.develop);
+  // One cube per SLIDE: the grade that slide wears, baked with its own
+  // develop (memoised, so untouched slides share one cube). The stage reads
+  // the STORED develop even while the sheet is open — the sheet's draft rides
+  // `stack.composed`, which only the sheet itself paints from.
+  const lutFor = grade.lutFor;
+  const lut = isCta ? null : lutFor(slide);
 
   // Every cell of the rail, composed exactly as it will be delivered — the
   // crop, the caption, the badge, the grade. It needs the grade, so it sits
@@ -807,6 +815,7 @@ export default function PostEditor({
     post,
     aspect,
     slideCount: slides.length,
+    hookSlide: slides[0],
     // A still is taken SETTLED, never at the transport's time: a PNG caught
     // mid-entrance is a picture nobody composed. Only the still/PNG path
     // reads this — the video paths below drive their own per-frame clock
@@ -1319,8 +1328,9 @@ export default function PostEditor({
               onExportDeck={() => void exports.exportDeck()}
               onExportHookClip={() => void exports.exportHookClip()}
               onChangePost={onChangePost}
-              grade={grade.saved}
-              gradeScope={grade.scope}
+              grade={grade.hookGrade}
+              gradeScope={grade.hookScope}
+              ownGrades={countOwnGrades(post)}
             />
           )}
         </div>

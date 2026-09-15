@@ -135,6 +135,35 @@ describe('migrateTripDoc', () => {
   });
 });
 
+describe('migrateTripDoc — v21 → v22, every picture may depart', () => {
+  /** A v21 trip: a grade on the trip and on the piece, none on a picture. */
+  const v21 = () => {
+    const doc = createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04');
+    const post = createTripPost('carousel', '2025-03-27', 'Cliffs');
+    post.slides = [createPostSlide(null)];
+    delete (post.badge as Partial<typeof post.badge>).grade;
+    delete (post.slides[0] as Partial<(typeof post.slides)[0]>).grade;
+    return { ...doc, version: 21, posts: [post] } as TripDoc;
+  };
+
+  it('starts every picture on "follow the piece", so nothing changes look', () => {
+    const doc = migrateTripDoc(v21());
+    expect(doc.version).toBe(TRIP_DOC_VERSION);
+    expect(doc.posts[0].badge.grade).toBeNull();
+    expect(doc.posts[0].slides[0].grade).toBeNull();
+  });
+
+  it('keeps a grade a picture already carries, and refuses junk', () => {
+    const grade = { layers: [], output: 'rec709-to-srgb' };
+    const doc = v21();
+    doc.posts[0].badge.grade = grade as never;
+    (doc.posts[0].slides[0] as { grade?: unknown }).grade = 'a look';
+    const migrated = migrateTripDoc(doc);
+    expect(migrated.posts[0].badge.grade).toEqual(grade);
+    expect(migrated.posts[0].slides[0].grade).toBeNull();
+  });
+});
+
 describe('migrateTripDoc — v20 → v21, the car is repaired', () => {
   /** What the Itinerary branch stamped v19 — and main then stamped v20 — with no car. */
   const carless = (version: number) => {

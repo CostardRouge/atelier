@@ -11,8 +11,8 @@ import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { DEFAULT_DEVELOP, isDefaultDevelop, type DevelopSettings } from '../develop/develop';
 import { parseCube, type CubeLut } from '../lib/cube-parser';
 import { CUBE_ACCEPT, pickFile } from '../sources/file-sources';
-import { BUILTIN_LUTS } from './builtin-luts';
 import { composeLutStack, reorderLayer, type LutLayer } from './lut-stack';
+import { loadBuiltinLut, restoreLayers } from './restore-grade';
 import type { OutputTransform } from './transfer';
 import type { Interpolation } from './interpolate';
 import { useLutInterpolation } from './use-lut-interpolation';
@@ -94,16 +94,6 @@ function uid(): string {
     : `lut_${Math.random().toString(36).slice(2)}`;
 }
 
-/** Fetch + parse a built-in by id. Throws with a readable message. */
-async function loadBuiltin(builtinId: string): Promise<{ lut: CubeLut; name: string }> {
-  const entry = BUILTIN_LUTS.find((l) => l.id === builtinId);
-  if (!entry) throw new Error('That look is no longer available.');
-  const res = await fetch(entry.url);
-  const parsed = parseCube(await res.text());
-  if (!parsed) throw new Error(`Could not parse ${entry.name}.`);
-  return { lut: parsed, name: entry.name };
-}
-
 export function useLutStack(): LutStack {
   const [layers, setLayers] = useState<LutLayer[]>([]);
   const [output, setOutput] = useState<OutputTransform>('none');
@@ -174,7 +164,7 @@ export function useLutStack(): LutStack {
     setError(null);
     setBusy(true);
     try {
-      const { lut, name } = await loadBuiltin(builtinId);
+      const { lut, name } = await loadBuiltinLut(builtinId);
       setLayers((prev) => [
         ...prev,
         {
@@ -235,27 +225,20 @@ export function useLutStack(): LutStack {
     savedOutput: OutputTransform = 'none',
   ) => {
     setOutput(savedOutput);
-    if (saved.length === 0) return;
-    setBusy(true);
-    const texts: Record<string, string> = {};
-    const restored: LutLayer[] = [];
-    for (const s of saved) {
-      try {
-        if (s.source === 'custom') {
-          const parsed = s.customText ? parseCube(s.customText) : null;
-          // A custom look whose text didn't survive is dropped rather than
-          // silently graded as identity.
-          if (!parsed || !s.customText) continue;
-          texts[s.id] = s.customText;
-          restored.push({ ...s, lut: parsed });
-        } else {
-          const { lut, name } = await loadBuiltin(s.source.replace(/^builtin:/, ''));
-          restored.push({ ...s, name: s.name || name, lut });
-        }
-      } catch {
-        // A look that no longer exists just doesn't come back.
-      }
+    if (saved.length === 0) {
+      // An empty grade is a real one — the picture that wears no look while
+      // the trip wears one — so the stack has to EMPTY, not stay on whatever
+      // the last document put in it. Only relevant since a deck's pictures
+      // can each depart (`roadtrip/post-grade.ts`); before that every restore
+      // that mattered carried layers.
+      setCustomText({});
+      setLayers([]);
+      return;
     }
+    setBusy(true);
+    // One resolver for the whole suite (`saved-grade.ts`), shared with the
+    // read-only bake of the grades nobody is editing.
+    const { layers: restored, customText: texts } = await restoreLayers(saved);
     setCustomText(texts);
     setLayers(restored);
     setBusy(false);

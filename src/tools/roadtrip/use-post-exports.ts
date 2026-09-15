@@ -39,6 +39,12 @@ export interface PostExportInputs {
   timeSeconds: number;
   /** Finds a slide's picture in the Library by name. */
   resolve: (ref: { name: string } | null) => File | null;
+  /**
+   * The deck's first slide. The hook clip export composes from `post.badge`
+   * directly, but its LOOK is now a chain the piece alone cannot answer
+   * (`post-grade.ts`), and `lutFor` reads a slide.
+   */
+  hookSlide: DeckSlide;
   /** The hook's own clip and its measured dimensions. */
   hookFile: File | null;
   hookIsVideo: boolean;
@@ -61,10 +67,10 @@ export interface PostExportInputs {
   /** How long the burned-in clip runs, already clamped to the clip. */
   hookLength: number;
   /**
-   * The composed grade for a slide's own develop (`LutStack.composeWith`);
-   * null leaves that picture as shot.
+   * The cube a slide is rendered through — the grade it wears baked with its
+   * own develop (`TripGradeBinding.lutFor`); null leaves that picture as shot.
    */
-  lutFor: (develop: DeckSlide['develop']) => CubeLut | null;
+  lutFor: (slide: DeckSlide) => CubeLut | null;
   /** Called as an export starts, so the caller can bring the report into view. */
   onStart?: () => void;
 }
@@ -202,7 +208,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         // The hook's own framing, so the burned-in picture is cropped where
         // the preview showed it — the PNG deck goes through the same value.
         framing: post.badge.framing,
-        lut: inputs.lutFor(post.badge.develop),
+        lut: inputs.lutFor(inputs.hookSlide),
         onProgress,
       };
       const blob = hookIsVideo
@@ -267,7 +273,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       shades: isHook ? post.badge.shades : undefined,
       block: isHook ? inputs.block : null,
       framing: slide.framing,
-      lut: inputs.lutFor(slide.develop),
+      lut: inputs.lutFor(slide),
       onProgress,
     };
     if (classifyPart(file.name) !== 'video') {
@@ -330,7 +336,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
           timeSeconds: inputs.timeSeconds,
           resolve: inputs.resolve,
           pictures: inputs.hookPictures,
-          lutFor: (slide) => inputs.lutFor(slide.develop),
+          lutFor: inputs.lutFor,
           include: (slide) => wanted.has(slide.position),
           onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`),
         });
@@ -437,7 +443,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         timeSeconds: inputs.timeSeconds,
         resolve: inputs.resolve,
         pictures: inputs.hookPictures,
-        lutFor: (slide) => inputs.lutFor(slide.develop),
+        lutFor: inputs.lutFor,
         onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`),
       });
       if (!rendered.length) {
