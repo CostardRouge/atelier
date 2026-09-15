@@ -55,30 +55,28 @@ const EPSILON = 1e-3;
  * camera. THIS is the fault the maintainer reported — a piece of the car
  * simply not being there — so this is the gate that matters.
  *
- * It cannot be 100%: several parts are modelled INTO each other (the wheels
- * sink into the body, which has no arches cut in it; the cladding shares a
- * slab with it; the roof rails run through the basket's floor), and two
- * solids sharing a volume have no correct order at all, only a least-bad
- * one. Measured over the sweep the worst part keeps 20%; the ordering this
- * replaced buried the solar panel, its frame and the cabin to 0, 0 and 2%.
+ * It is not 100%, and the reason is no longer that solids are modelled into
+ * each other: the hull is cut into panels with real arches and nothing shares
+ * a volume any more. What is left is that a long panel is still keyed by its
+ * FARTHEST corner, so the bonnet sorts a little behind where its front half
+ * really is. Measured over the sweep the worst part keeps 54%, against 36%
+ * before the overlapping pairs were settled exactly, 20% before the hull was
+ * cut, and 0% under the ordering before that.
  */
-const MIN_KEPT = 0.15;
+const MIN_KEPT = 0.45;
 
 /** Below this a part is a speck on screen and a share of it means nothing. */
 const MIN_CLAIM = 40;
 
 /**
  * How much of one view of the car may show a surface that is not the nearest
- * one. A loose canary, not the gate: it is there to catch a gross regression,
- * and the number it allows is mostly not an ordering choice at all.
+ * one — a canary over the whole picture, where `MIN_KEPT` watches each part.
  *
- * What fills it is the wheels, which sink into a body that has no arches cut
- * in it, and that body's single top polygon spanning the whole car, which
- * therefore lands before everything else. Splitting that face into real
- * panels is the fix and was deliberately not taken (`roadtrip.md`). Measured
- * worst pose: 13.5%, against 37% under the ordering this replaced.
+ * Measured worst pose: 1.9%, from 7.3% before the overlapping pairs were
+ * settled exactly, 13.5% while the body was one box 4.6 m long with the
+ * wheels modelled inside it, and 37% under the ordering before that.
  */
-const TOLERANCE = 0.15;
+const TOLERANCE = 0.03;
 
 const poseAt = (headingDeg: number, tiltDeg: number): Pose => ({
   fx: Math.sin((headingDeg * Math.PI) / 180),
@@ -390,12 +388,50 @@ describe('the car is painted in the right order', () => {
     expect(lines, lines.join('\n')).toEqual([]);
   });
 
-  it('paints every face in one sequence, farthest first', () => {
-    const faces = renderOrder(GEARED, poseAt(56, 52));
-    expect(faces.length).toBeGreaterThan(80);
-    for (let i = 1; i < faces.length; i++) {
-      expect(faces[i].depth).toBeLessThanOrEqual(faces[i - 1].depth);
+  /**
+   * Farthest first is the SORT, and settling the overlapping pairs is a repair
+   * on top of it — so the sequence is no longer monotonic, and must not be:
+   * a long panel keyed by its far corner is exactly the case a single key gets
+   * wrong. What has to stay true is that the repair is a repair and not a
+   * second sort, so the faces it moves stay a small minority.
+   */
+  it('stays within a few moves of farthest-first', () => {
+    for (const tilt of TILTS) {
+      for (const heading of HEADINGS) {
+        const faces = renderOrder(GEARED, poseAt(heading, tilt));
+        expect(faces.length).toBeGreaterThan(80);
+        let moved = 0;
+        for (let i = 1; i < faces.length; i++) {
+          if (faces[i].depth > faces[i - 1].depth + 1e-9) moved += 1;
+        }
+        expect(moved / faces.length, `heading ${heading}° tilt ${tilt}°`).toBeLessThan(0.25);
+      }
     }
+  });
+
+  /**
+   * The three surfaces the maintainer named, at the angles that were worst for
+   * each. They were see-through because the body was one box keyed by its far
+   * end with the wheels modelled inside it; this is what says so in numbers.
+   */
+  it('keeps the bonnet, the glass and the flares solid', () => {
+    const thin: string[] = [];
+    for (const tilt of TILTS) {
+      for (const heading of HEADINGS) {
+        for (const part of mispainted(GEARED, poseAt(heading, tilt)).parts) {
+          const named =
+            part.id === 'body-bonnet' || part.id === 'cabin' || part.id.startsWith('flare-');
+          if (!named || part.claimed < MIN_CLAIM) continue;
+          const kept = part.kept / part.claimed;
+          if (kept < 0.7) {
+            thin.push(
+              `heading ${heading}° tilt ${tilt}°: ${part.id} shows ${(kept * 100).toFixed(0)}% of its ${part.claimed} samples`,
+            );
+          }
+        }
+      }
+    }
+    expect(thin, thin.join('\n')).toEqual([]);
   });
 
   it('paints the same sequence twice for the same pose', () => {
