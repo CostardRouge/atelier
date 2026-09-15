@@ -247,7 +247,7 @@ export interface RenderedFace {
 export function renderOrder(parts: readonly Part[], pose: Pose, light: Light = DEFAULT_LIGHT): RenderedFace[] {
   const view = viewDirection(pose.tilt);
   const out: RenderedFace[] = [];
-  const emitted: number[] = [];
+  const projectedDepths: number[][] = [];
 
   for (const part of parts) {
     const spin = part.spin ? (pose.spins?.[part.id] ?? 0) : 0;
@@ -266,7 +266,7 @@ export function renderOrder(parts: readonly Part[], pose: Pose, light: Light = D
       let depth = -Infinity;
       for (const p of projected) if (p.depth > depth) depth = p.depth;
       const { shade, highlight } = lighting(n, light);
-      emitted.push(out.length);
+      projectedDepths.push(projected.map((p) => p.depth));
       out.push({
         points: projected.map(({ x, y }) => ({ x, y })),
         role: face.role,
@@ -278,10 +278,177 @@ export function renderOrder(parts: readonly Part[], pose: Pose, light: Light = D
     }
   }
 
-  return out
-    .map((face, i) => ({ face, i }))
-    .sort((a, b) => b.face.depth - a.face.depth || a.i - b.i)
-    .map(({ face }) => face);
+  const rows = out
+    .map((face, i) => ({ face, i, ...placed(face, projectedDepths[i]) }))
+    .sort((a, b) => b.face.depth - a.face.depth || a.i - b.i);
+  settleOverlaps(rows);
+  return rows.map(({ face }) => face);
+}
+
+// --- settling the pairs a single key cannot order ------------------------------
+
+/** A face ready to be compared with another: where it lands, and how deep it is there. */
+interface Placed {
+  face: RenderedFace;
+  i: number;
+  /** The outline wound counter-clockwise, so one sign test decides "inside". */
+  ring: { x: number; y: number }[];
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+  /** Depth over the face as an affine function of the screen point. */
+  pa: number;
+  pb: number;
+  pc: number;
+}
+
+function placed(face: RenderedFace, depths: readonly number[]): Omit<Placed, 'face' | 'i'> {
+  const pts = face.points;
+  let x0 = Infinity;
+  let x1 = -Infinity;
+  let y0 = Infinity;
+  let y1 = -Infinity;
+  for (const p of pts) {
+    if (p.x < x0) x0 = p.x;
+    if (p.x > x1) x1 = p.x;
+    if (p.y < y0) y0 = p.y;
+    if (p.y > y1) y1 = p.y;
+  }
+  // The projection is affine and the face is planar, so depth really is affine
+  // in (x, y). Fitted from the corner pair that spans the most area, so a long
+  // thin face is not fitted from three points almost in a row.
+  const bi = 0;
+  let bj = 1;
+  let bk = 2;
+  // The first three corners span the plane well on a quad, which is most of
+  // the model; only a face they nearly line up on pays for the full search.
+  const span = Math.max(x1 - x0, y1 - y0);
+  let best = Math.abs(
+    (pts[1].x - pts[0].x) * (pts[2].y - pts[0].y) - (pts[2].x - pts[0].x) * (pts[1].y - pts[0].y),
+  );
+  if (best < span * span * 0.05) {
+    for (let j = 1; j < pts.length; j++) {
+      for (let k = j + 1; k < pts.length; k++) {
+        const area = Math.abs(
+          (pts[j].x - pts[0].x) * (pts[k].y - pts[0].y) - (pts[k].x - pts[0].x) * (pts[j].y - pts[0].y),
+        );
+        if (area > best) {
+          best = area;
+          bj = j;
+          bk = k;
+        }
+      }
+    }
+  }
+  const ax = pts[bj].x - pts[bi].x;
+  const ay = pts[bj].y - pts[bi].y;
+  const ad = depths[bj] - depths[bi];
+  const bx = pts[bk].x - pts[bi].x;
+  const by = pts[bk].y - pts[bi].y;
+  const bd = depths[bk] - depths[bi];
+  const det = ax * by - bx * ay;
+  const pa = det === 0 ? 0 : (ad * by - bd * ay) / det;
+  const pb = det === 0 ? 0 : (ax * bd - bx * ad) / det;
+  let ring = [...pts];
+  let twice = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const p = ring[i];
+    const q = ring[(i + 1) % ring.length];
+    twice += p.x * q.y - q.x * p.y;
+  }
+  if (twice < 0) ring = ring.reverse();
+  return { ring, x0, x1, y0, y1, pa, pb, pc: depths[bi] - pa * pts[bi].x - pb * pts[bi].y };
+}
+
+/** The part of `subject` inside the CONVEX `clip` — exact, the projection being affine. */
+function clipTo(subject: readonly { x: number; y: number }[], clip: readonly { x: number; y: number }[]) {
+  let poly = [...subject];
+  for (let i = 0; i < clip.length && poly.length; i++) {
+    const A = clip[i];
+    const B = clip[(i + 1) % clip.length];
+    const side = (p: { x: number; y: number }) => (B.x - A.x) * (p.y - A.y) - (B.y - A.y) * (p.x - A.x);
+    const input = poly;
+    poly = [];
+    for (let k = 0; k < input.length; k++) {
+      const P = input[k];
+      const Q = input[(k + 1) % input.length];
+      const sp = side(P);
+      const sq = side(Q);
+      if (sp >= 0) poly.push(P);
+      if (sp >= 0 !== sq >= 0) {
+        const t = sp / (sp - sq);
+        poly.push({ x: P.x + (Q.x - P.x) * t, y: P.y + (Q.y - P.y) * t });
+      }
+    }
+  }
+  return poly;
+}
+
+/** How far a face may lie behind another before the order between them matters. */
+const SETTLE_EPSILON = 1e-3;
+/** The overlap, in square pixels, below which a disagreement is a seam. */
+const SETTLE_MIN_AREA = 1;
+/** How far ahead a face is compared, and how many moves one frame may make. */
+const SETTLE_WINDOW = 24;
+const SETTLE_MOVES = 4;
+
+/**
+ * Put right the pairs a single depth key cannot order.
+ *
+ * Sorting by the farthest vertex is right almost everywhere and wrong in one
+ * shape of case: a LONG panel is keyed by its far corner, so it sorts behind
+ * things that stand under its near half — the bonnet against a front wheel.
+ * No key fixes that, because the two faces are simply not separable by one
+ * number.
+ *
+ * So the pairs that overlap on screen are asked the real question instead:
+ * clip one projected outline against the other and read each face's own plane
+ * depth at a point inside the shared region. A face that is really behind one
+ * drawn before it moves ahead of it.
+ *
+ * Bounded on purpose, and it never splits a polygon: each face is compared
+ * against the next few only, each may be moved a fixed number of times, so the
+ * pass cannot cycle and cannot grow with the model. A polygon split would be
+ * the textbook cure and is the one thing this must not do — the ink outline is
+ * stroked once per face, so a fragment would draw its own line and scribble a
+ * seam across the panel it came from.
+ */
+function settleOverlaps(rows: Placed[]): void {
+  const moves = new Int32Array(rows.length);
+  for (let i = 0; i < rows.length; i++) {
+    const under = rows[i];
+    const last = Math.min(rows.length, i + 1 + SETTLE_WINDOW);
+    for (let j = i + 1; j < last; j++) {
+      const over = rows[j];
+      if (moves[over.i] >= SETTLE_MOVES) continue;
+      if (over.x1 <= under.x0 || over.x0 >= under.x1 || over.y1 <= under.y0 || over.y0 >= under.y1) continue;
+      const shared = clipTo(over.ring, under.ring);
+      if (shared.length < 3) continue;
+      let twice = 0;
+      let cx = 0;
+      let cy = 0;
+      for (let k = 0; k < shared.length; k++) {
+        const p = shared[k];
+        const q = shared[(k + 1) % shared.length];
+        twice += p.x * q.y - q.x * p.y;
+        cx += p.x;
+        cy += p.y;
+      }
+      if (Math.abs(twice) / 2 < SETTLE_MIN_AREA) continue;
+      cx /= shared.length;
+      cy /= shared.length;
+      const deep = over.pa * cx + over.pb * cy + over.pc;
+      const near = under.pa * cx + under.pb * cy + under.pc;
+      // `over` is drawn later but lies behind `under` there: it belongs first.
+      if (deep > near + SETTLE_EPSILON) {
+        moves[over.i] += 1;
+        rows.splice(j, 1);
+        rows.splice(i, 0, over);
+        break;
+      }
+    }
+  }
 }
 
 /** Whether a polygon encloses any area at all, in the plane it spans. */
