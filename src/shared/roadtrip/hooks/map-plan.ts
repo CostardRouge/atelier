@@ -54,7 +54,7 @@ export type MapPosition = 'top' | 'middle' | 'bottom';
 export type MapAlign = 'left' | 'center' | 'right';
 /** How the hops the pen has not reached yet are drawn. */
 export type MapAhead = 'dashed' | 'faint' | 'hidden';
-export type MapLabels = 'none' | 'ends' | 'current' | 'all';
+export type MapLabels = 'none' | 'ends' | 'current' | 'passed' | 'all';
 export type MapDistance = 'off' | 'km' | 'mi';
 export type MapPen = 'dot' | 'plane' | 'none';
 /** Whether a picture's tile wears a paper border or is drawn bare. */
@@ -272,7 +272,7 @@ export function mapOptions(raw: Readonly<Record<string, unknown>>): MapOptions {
     dots: o.dots !== false,
     dotSize: clamp(Number(o.dotSize), L.dotSize.min, L.dotSize.max, d.dotSize),
     numbers: o.numbers === true,
-    labels: oneOf(o.labels, ['none', 'ends', 'current', 'all'], d.labels),
+    labels: oneOf(o.labels, ['none', 'ends', 'current', 'passed', 'all'], d.labels),
     labelSize: clamp(Number(o.labelSize), L.labelSize.min, L.labelSize.max, d.labelSize),
     context: o.context === true,
     draw: o.draw !== false,
@@ -664,11 +664,19 @@ export function pinAlphaAt(timing: MapTiming, t: number, index: number, fade: nu
   return fade > 0 ? Math.max(0, Math.min(1, (t - at) / fade)) : 1;
 }
 
-/** Which stops carry their name under `labels`, given where the pen is. */
+/**
+ * Which stops carry their name under `labels`, given where the pen is.
+ *
+ * `passed` is the one that accumulates: a name appears as the pen reaches its
+ * stop and STAYS, so the itinerary reads as a list being written rather than
+ * as one name following the pen around. `current` is the opposite reading and
+ * both are wanted — which is why this is a list of modes and not a switch.
+ */
 export function wantsLabel(labels: MapLabels, index: number, count: number, at: number): boolean {
   if (labels === 'none' || count === 0) return false;
   if (labels === 'all') return true;
   if (labels === 'current') return index === at;
+  if (labels === 'passed') return index <= at;
   return index === 0 || index === count - 1;
 }
 

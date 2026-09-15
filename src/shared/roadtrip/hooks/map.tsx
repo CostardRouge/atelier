@@ -697,7 +697,13 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         )}
         <FieldRow
           label="Names"
-          hint={o.labels === 'none' ? undefined : 'The names you gave the stops. One that would sit on another name, or on a picture, is left out.'}
+          hint={
+            o.labels === 'none'
+              ? undefined
+              : o.labels === 'passed'
+                ? 'A name appears as the pen reaches its stop and stays — the itinerary reads as a list being written. One that would sit on another name, or on a picture, is left out.'
+                : 'The names you gave the stops. One that would sit on another name, or on a picture, is left out.'
+          }
         >
           <SelectField
             label="Which stops carry their name"
@@ -707,6 +713,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
               { id: 'none', label: 'None' },
               { id: 'ends', label: 'The first and the last' },
               { id: 'current', label: 'Where the pen is' },
+              { id: 'passed', label: 'Everywhere it has been' },
               { id: 'all', label: 'Every stop' },
             ]}
           />

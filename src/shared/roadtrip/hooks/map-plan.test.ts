@@ -533,4 +533,17 @@ describe('wantsLabel', () => {
     expect(wantsLabel('current', 2, 3, 2)).toBe(true);
     expect(wantsLabel('current', 1, 3, 2)).toBe(false);
   });
+
+  it('keeps every name behind the pen under `passed`, and none ahead of it', () => {
+    expect(wantsLabel('passed', 0, 4, 2)).toBe(true);
+    expect(wantsLabel('passed', 2, 4, 2)).toBe(true);
+    expect(wantsLabel('passed', 3, 4, 2)).toBe(false);
+    // On the first stop it says one name, where `all` would already say four.
+    expect(wantsLabel('passed', 1, 4, 0)).toBe(false);
+  });
+
+  it('is a stored value like any other — an unknown one falls back', () => {
+    expect(mapOptions({ labels: 'passed' }).labels).toBe('passed');
+    expect(mapOptions({ labels: 'shouty' }).labels).toBe(MAP_DEFAULTS.labels);
+  });
 });
