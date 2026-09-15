@@ -44,7 +44,7 @@ import {
   screenSecondsOf,
 } from '../../shared/roadtrip/hook-video';
 import { badgeSettleSeconds } from '../../shared/roadtrip/badge-layout';
-import { screenLength } from '../../shared/roadtrip/deck-strip';
+import { loopsOpenSlide, screenLength, type LoopScope } from '../../shared/roadtrip/deck-strip';
 import { MIN_HOOK_SECONDS } from '../../shared/roadtrip/hook-video';
 import { setEnd, setStart, TRIM_EPSILON, type TrimRange } from '../../shared/media/trim';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
@@ -601,6 +601,9 @@ export default function PostEditor({
     [slides, clipDurations],
   );
   const slideKeys = useMemo(() => slides.map((s) => s.slideId ?? s.kind), [slides]);
+  // Playback always loops; this says over what — the whole piece, or the slide
+  // under the needle. The band's pill and `L` switch it.
+  const [loopScope, setLoopScope] = useState<LoopScope>('piece');
   const deck = useDeckTransport({
     lengths,
     keys: slideKeys,
@@ -610,6 +613,7 @@ export default function PostEditor({
       ? { start: clipRange.start, speed: slide.speed, playhead, seek: seekPlayhead }
       : null,
     pending: Boolean(slideFile) && !sourceReady,
+    scope: loopScope,
   });
 
   // The cut, opened on the band. It belongs to one clip: another slide, or a
@@ -691,6 +695,21 @@ export default function PostEditor({
         e.preventDefault();
         k.setClipRange(setEnd(k.clipRange, e.shiftKey ? k.duration : k.playhead, k.duration, MIN_CUT));
       }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // `L` switches what playback loops over — the piece or the open slide —
+  // never while typing, and not while the cut is open (it loops its stretch).
+  const trimOpenRef = useRef(trimOpen);
+  trimOpenRef.current = trimOpen;
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat || e.key.toLowerCase() !== 'l') return;
+      if (trimOpenRef.current || targetOwnsTyping(describeKeyTarget(e.target))) return;
+      e.preventDefault();
+      setLoopScope((s) => (s === 'piece' ? 'slide' : 'piece'));
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -1001,6 +1020,8 @@ export default function PostEditor({
             }
           : null
       }
+      loopScope={loopScope}
+      onLoopScope={setLoopScope}
       trimming={trimOpen}
       onTrimming={(on) => {
         deck.setPlaying(false);
@@ -1139,8 +1160,11 @@ export default function PostEditor({
                     playing: stagePlaying,
                     rate: slide.speed,
                     range: clipRange,
-                    // The cut loops while it is being made; the piece moves on.
-                    loop: trimOpen,
+                    // The cut loops while it is being made, and so does a clip
+                    // that loops on its own (asked for, or the whole piece);
+                    // otherwise the piece moves on when it ends.
+                    loop: trimOpen || loopsOpenSlide(loopScope, slides.length),
+                    key: slideKey,
                     onTime: setPlayhead,
                     onEnded: trimOpen ? () => setClipPlaying(false) : deck.onClipEnded,
                   }

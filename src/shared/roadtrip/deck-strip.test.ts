@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   locate,
+  loopsOpenSlide,
+  nextAtEnd,
   screenLength,
   snapToEdge,
   stepSlide,
@@ -12,6 +14,27 @@ import {
 // A hook of 5s, a still of 3s, a half-second clip, the closing card of 3s —
 // at 40 px a second with a 24 px floor and 2 px between cells.
 const layout = stripLayout([5, 3, 0.5, 3], 40, 24, 2);
+
+describe('looping', () => {
+  it('moves on through the piece and starts it over after the last slide', () => {
+    expect(nextAtEnd(0, 4, 'piece')).toBe(1);
+    expect(nextAtEnd(2, 4, 'piece')).toBe(3);
+    expect(nextAtEnd(3, 4, 'piece')).toBe(0);
+  });
+
+  it('starts the open slide over when the slide loops, or when it is the whole piece', () => {
+    expect(nextAtEnd(2, 4, 'slide')).toBe(2);
+    expect(nextAtEnd(0, 1, 'piece')).toBe(0);
+    expect(loopsOpenSlide('slide', 4)).toBe(true);
+    expect(loopsOpenSlide('piece', 4)).toBe(false);
+    expect(loopsOpenSlide('piece', 1)).toBe(true);
+  });
+
+  it('never points past the deck', () => {
+    expect(nextAtEnd(9, 4, 'slide')).toBe(3);
+    expect(nextAtEnd(0, 0, 'piece')).toBe(0);
+  });
+});
 
 describe('stripLayout', () => {
   it('lays the slides end to end on one clock', () => {

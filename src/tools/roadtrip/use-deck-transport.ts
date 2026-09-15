@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { locate, stripLayout } from '../../shared/roadtrip/deck-strip';
+import { locate, nextAtEnd, stripLayout, type LoopScope } from '../../shared/roadtrip/deck-strip';
 
 /** The open slide when it is a loaded clip: its own playhead is its clock. */
 export interface TransportClip {
@@ -21,6 +21,12 @@ interface DeckTransportInputs {
   clip: TransportClip | null;
   /** The open slide's picture is still decoding: a still's clock waits for it. */
   pending: boolean;
+  /**
+   * What starts over at an end: the whole piece, or the open slide. A CLIP
+   * that loops on its own is looped by the stage (`StagePlayback.loop`), so it
+   * never reports an end; a still loops on this hook's own clock.
+   */
+  scope: LoopScope;
 }
 
 export interface DeckTransport {
@@ -58,8 +64,9 @@ const END_TOLERANCE = 0.04;
  * element is the clock (the stage reports its playhead and says when it
  * stopped on the out point); on anything else — a photograph, the closing
  * card, a clip still decoding — a frame loop counts the slide's seconds. When
- * either runs out, the next slide opens and keeps playing; the last one
- * stops the piece where it ends, and pressing play there starts it over.
+ * either runs out, playback LOOPS (2026-09-15): over the whole piece, the
+ * next slide opening and the first after the last, or over the open slide
+ * alone (`scope`, `nextAtEnd`). It never stops on its own.
  *
  * The piece's time is DERIVED, never stored: the open slide's start plus how
  * far into it the clock is. A still's position is kept with the key of the
@@ -73,6 +80,7 @@ export function useDeckTransport({
   select,
   clip,
   pending,
+  scope,
 }: DeckTransportInputs): DeckTransport {
   const count = lengths.length;
   const open = Math.max(0, Math.min(index, count - 1));
@@ -91,8 +99,8 @@ export function useDeckTransport({
     : clamp(stillLocal, 0, length);
 
   // Read by callbacks that must not be rebuilt every frame.
-  const live = useRef({ open, key, keys, count, length, local, clip, select, pending, playing });
-  live.current = { open, key, keys, count, length, local, clip, select, pending, playing };
+  const live = useRef({ open, key, keys, count, length, local, clip, select, pending, playing, scope });
+  live.current = { open, key, keys, count, length, local, clip, select, pending, playing, scope };
 
   const goTo = useCallback((target: number, at = 0) => {
     const l = live.current;
@@ -106,8 +114,7 @@ export function useDeckTransport({
 
   const advance = useCallback(() => {
     const l = live.current;
-    if (l.open + 1 < l.count) goTo(l.open + 1, 0);
-    else setPlaying(false);
+    goTo(nextAtEnd(l.open, l.count, l.scope), 0);
   }, [goTo]);
 
   const toggle = useCallback(() => {
@@ -117,9 +124,9 @@ export function useDeckTransport({
       setPlaying(false);
       return;
     }
-    // Pressing play on the end of a slide moves on rather than replaying it,
-    // and on the end of the piece starts it over.
-    if (l.local >= l.length - END_TOLERANCE) goTo(l.open + 1 < l.count ? l.open + 1 : 0, 0);
+    // Pressing play on the end of a slide goes where the loop would: the next
+    // slide (the first after the last), or this one from its start.
+    if (l.local >= l.length - END_TOLERANCE) goTo(nextAtEnd(l.open, l.count, l.scope), 0);
     setPlaying(true);
   }, [goTo]);
 
@@ -157,9 +164,16 @@ export function useDeckTransport({
       if (l.pending && waited < PENDING_GRACE_SECONDS) {
         waited += dt;
       } else if (l.local + dt >= l.length) {
-        setStill({ key: l.key, local: l.length });
-        advance();
-        return;
+        const next = nextAtEnd(l.open, l.count, l.scope);
+        if (next !== l.open) {
+          setStill({ key: l.key, local: l.length });
+          advance();
+          return;
+        }
+        // The same slide again: nothing this effect depends on changes, so
+        // it would never run again — the clock starts the slide over itself
+        // and keeps counting.
+        setStill({ key: l.key, local: 0 });
       } else {
         setStill({ key: l.key, local: l.local + dt });
       }

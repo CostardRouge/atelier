@@ -46,6 +46,13 @@ export interface StagePlayback {
   range: TrimRange;
   /** Jump back to `start` on the out point instead of stopping there. */
   loop: boolean;
+  /**
+   * Which slide is playing. A new one starts its stretch over even when it is
+   * the same file with the same cut — the piece moving on (or looping back)
+   * from one such slide to the next changes nothing else this loop hears, and
+   * the clip would sit paused on the out point where the last one stopped.
+   */
+  key?: string;
   /** The playhead, in source seconds, once per frame while playing. */
   onTime: (seconds: number) => void;
   /** Playback stopped on the out point. */
@@ -333,10 +340,11 @@ export default function BadgeStage({
       cancelAnimationFrame(raf);
       v.pause();
     };
-    // The loop restarts when the stretch, the rate or the loop flag change
-    // under it; the callbacks are read through the ref.
+    // The loop restarts when the slide, the stretch, the rate or the loop flag
+    // change under it; the callbacks are read through the ref.
   }, [
     playing,
+    playback?.key,
     playback?.rate,
     playback?.range.start,
     playback?.range.end,

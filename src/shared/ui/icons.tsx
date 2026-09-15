@@ -91,6 +91,12 @@ export const Icons = {
   import: icon(<path d="M12 15V4m0 0L8 8m4-4 4 4M5 20h14" />),
   trash: icon(<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />),
   reset: icon(<path d="M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5" />),
+  /** Playback that starts over at the end — the whole of what is played. */
+  loop: icon(<path d="M17 3l3 3-3 3M20 6H8a4 4 0 0 0-4 4v1M7 21l-3-3 3-3M4 18h12a4 4 0 0 0 4-4v-1" />),
+  /** Playback that starts over on ONE item — the player's repeat-one. */
+  loopOne: icon(
+    <path d="M17 3l3 3-3 3M20 6H8a4 4 0 0 0-4 4v1M7 21l-3-3 3-3M4 18h12a4 4 0 0 0 4-4v-1M11 10.5l1.5-1v5" />,
+  ),
   search: icon(
     <>
       <circle cx="11" cy="11" r="6" />

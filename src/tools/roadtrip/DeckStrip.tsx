@@ -7,7 +7,8 @@
  * seconds its inspector gives it, and the slide under the needle IS the open
  * slide — dragging the band is scrubbing the piece and picking the slide in
  * one gesture, the thumb's own. ▶ plays the whole piece on the stage, slide
- * after slide (`use-deck-transport.ts`).
+ * after slide, and LOOPS — over the piece, or over the open slide alone when
+ * the loop pill (or `L`) says so (`use-deck-transport.ts`).
  *
  * It replaces three things that were stacked under (or beside) the picture:
  * the clip transport, the timeline of bars and, on a phone, the rail of
@@ -25,7 +26,15 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import type { DeckSlide } from '../../shared/roadtrip/deck';
-import { locate, snapToEdge, stepSlide, stripLayout, timeAtX, xAtTime } from '../../shared/roadtrip/deck-strip';
+import {
+  locate,
+  snapToEdge,
+  stepSlide,
+  stripLayout,
+  timeAtX,
+  xAtTime,
+  type LoopScope,
+} from '../../shared/roadtrip/deck-strip';
 import { CLIP_SPEEDS, MIN_HOOK_SECONDS, screenSecondsOf } from '../../shared/roadtrip/hook-video';
 import TrimBar from '../../shared/media/TrimBar';
 import type { TrimRange } from '../../shared/media/trim';
@@ -70,6 +79,9 @@ interface DeckStripProps {
   onIncludeCta: (on: boolean) => void;
   onEditClosingCard: () => void;
   clip: StripClip | null;
+  /** What playback loops over — the whole piece or the open slide. */
+  loopScope: LoopScope;
+  onLoopScope: (scope: LoopScope) => void;
   /** The band shows the clip's trim bar instead of the deck. */
   trimming: boolean;
   onTrimming: (on: boolean) => void;
@@ -119,6 +131,8 @@ export default function DeckStrip({
   onIncludeCta,
   onEditClosingCard,
   clip,
+  loopScope,
+  onLoopScope,
   trimming,
   onTrimming,
   sound,
@@ -310,6 +324,7 @@ export default function DeckStrip({
   }
   if (ci >= 0) menu.push({ id: 'remove', label: 'Remove this picture', danger: true, onSelect: onRemove });
 
+  const slideLoop = loopScope === 'slide';
   const length = lengths[index] ?? 0;
   const detail = !slide
     ? ''
@@ -328,8 +343,14 @@ export default function DeckStrip({
           type="button"
           onClick={onTogglePlay}
           className="flex-none w-8 h-8 border-0 rounded-full bg-ink text-paper cursor-pointer inline-flex items-center justify-center hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent [&>svg]:w-3.5 [&>svg]:h-3.5"
-          aria-label={playing ? 'Pause' : trimming ? 'Play the cut' : 'Play the piece'}
-          title={trimming ? 'Play the cut, looping (Space)' : 'Play the whole piece, slide after slide (Space)'}
+          aria-label={playing ? 'Pause' : trimming ? 'Play the cut' : slideLoop ? 'Play this slide' : 'Play the piece'}
+          title={
+            trimming
+              ? 'Play the cut, looping (Space)'
+              : slideLoop
+                ? 'Play this slide, looping (Space)'
+                : 'Play the whole piece, slide after slide, looping (Space)'
+          }
         >
           {playing ? Icons.pause : Icons.play}
         </button>
@@ -341,6 +362,21 @@ export default function DeckStrip({
           {slide ? slideName(slide) : ''}
           <span className="font-mono text-3xs text-muted"> · {detail}</span>
         </span>
+        {/* What the loop runs over. Hidden while the cut is open: the cut loops
+            its own stretch, whatever this says. */}
+        {!trimming && (
+          <button
+            type="button"
+            onClick={() => onLoopScope(slideLoop ? 'piece' : 'slide')}
+            aria-pressed={slideLoop}
+            aria-label={slideLoop ? 'Looping this slide — loop the whole piece' : 'Looping the whole piece — loop this slide'}
+            className={`${pill} inline-flex items-center gap-1 [&>svg]:w-3.5 [&>svg]:h-3.5 ${slideLoop ? pillOn : pillOff}`}
+            title={slideLoop ? 'Looping this slide — click for the whole piece (L)' : 'Looping the whole piece — click for this slide only (L)'}
+          >
+            {slideLoop ? Icons.loopOne : Icons.loop}
+            {!compact && <span>{slideLoop ? 'Slide' : 'Piece'}</span>}
+          </button>
+        )}
         {clip && (
           <select
             value={String(clip.speed)}
@@ -459,6 +495,11 @@ export default function DeckStrip({
                   <span className="absolute left-1 right-1 top-0.5 truncate font-mono text-3xs leading-tight text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.85)]">
                     {label}
                   </span>
+                  {slideLoop && i === index && (
+                    <span className="absolute right-0.5 bottom-0.5 grid place-items-center w-4 h-4 rounded-full bg-accent text-white [&>svg]:w-3 [&>svg]:h-3">
+                      {Icons.loopOne}
+                    </span>
+                  )}
                 </div>
               );
             })}

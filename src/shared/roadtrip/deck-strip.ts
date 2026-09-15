@@ -52,8 +52,29 @@ export function stripLayout(
 }
 
 /**
+ * What playback loops over: the whole piece, or the slide under the needle.
+ * Playback never stops at an end; this only says where it starts over.
+ */
+export type LoopScope = 'piece' | 'slide';
+
+/** The open slide starts over on its own: asked for, or the piece IS one slide. */
+export function loopsOpenSlide(scope: LoopScope, count: number): boolean {
+  return scope === 'slide' || count <= 1;
+}
+
+/**
+ * The slide that plays when the open one runs out: itself when it loops,
+ * otherwise the next — and the first after the last.
+ */
+export function nextAtEnd(open: number, count: number, scope: LoopScope): number {
+  if (count <= 0) return 0;
+  if (loopsOpenSlide(scope, count)) return Math.max(0, Math.min(open, count - 1));
+  return (open + 1) % count;
+}
+
+/**
  * The slide under a moment, and how far into it. The end of the piece belongs
- * to the last slide, at its own end — where playback stops.
+ * to the last slide, at its own end.
  */
 export function locate(layout: StripLayout, t: number): { index: number; local: number } {
   const { cells } = layout;
