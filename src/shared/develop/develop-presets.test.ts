@@ -22,6 +22,11 @@ describe('savePresetIn', () => {
     expect(list[0].settings.blacks).toBe(-6);
   });
 
+  it('treats a name as taken however it is cased, keeping the new spelling', () => {
+    const list = savePresetIn(savePresetIn([], 'Dusk', lifted, 'p1'), 'dusk', { ...DEFAULT_DEVELOP, blacks: -4 }, 'p2');
+    expect(list.map((p) => [p.id, p.name, p.settings.blacks])).toEqual([['p1', 'dusk', -4]]);
+  });
+
   it('hands back the same list for a blank name or an as-shot develop', () => {
     const list = savePresetIn([], 'Dusk', lifted, 'p1');
     expect(savePresetIn(list, '   ', lifted, 'p2')).toBe(list);

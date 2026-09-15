@@ -20,6 +20,7 @@
  */
 
 import type { SyncRecord } from '../sources/doc-sync';
+import { readPresetBook, type PresetBook } from './preset-book';
 import { migrateRollDoc, type RollDoc } from './roll-types';
 
 const DB_NAME = 'atelier-develop';
@@ -28,7 +29,7 @@ const DB_VERSION = 1;
 const ROLLS = 'rolls';
 const THUMBS = 'thumbs';
 const SYNC = 'sync';
-export const PRESETS_STORE = 'presets';
+const PRESETS = 'presets';
 
 interface ThumbRecord {
   /** The roll picture's id. */
@@ -42,7 +43,7 @@ function openDb(): Promise<IDBDatabase> {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
-      for (const name of [ROLLS, THUMBS, SYNC, PRESETS_STORE]) {
+      for (const name of [ROLLS, THUMBS, SYNC, PRESETS]) {
         if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, { keyPath: 'id' });
       }
     };
@@ -196,5 +197,40 @@ export async function deleteRollThumbs(pictureIds: readonly string[]): Promise<v
     }
   } catch {
     /* storage unusable: nothing to prune */
+  }
+}
+
+// --- the preset book --------------------------------------------------------
+
+/**
+ * The person's preset book — ONE row, whatever its id (`preset-book.ts`). The
+ * newest one wins should two ever be stored (a move that minted a new id and
+ * was interrupted before the old row went).
+ */
+export async function getPresetBook(): Promise<PresetBook | null> {
+  try {
+    const all = await withStore(PRESETS, 'readonly', (s) => s.getAll() as IDBRequest<unknown[]>);
+    const books = all.flatMap((raw) => readPresetBook(raw) ?? []).sort((a, b) => b.updatedAt - a.updatedAt);
+    return books[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Returns false when the write failed; the book lives on in memory. */
+export async function putPresetBook(book: PresetBook): Promise<boolean> {
+  try {
+    await withStore(PRESETS, 'readwrite', (s) => s.put(book));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function deletePresetBook(id: string): Promise<void> {
+  try {
+    await withStore(PRESETS, 'readwrite', (s) => s.delete(id));
+  } catch {
+    /* already gone or storage unusable */
   }
 }

@@ -12,7 +12,7 @@ import SectionLegend from '../ui/SectionLegend';
 import { DEFAULT_DEVELOP, describeDevelop, type DevelopSettings } from './develop';
 import { developButtonClass, developLinkClass } from './develop-classes';
 import { copyDevelop, hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from './develop-clipboard';
-import type { DevelopApplyVerb, DevelopPresets } from './develop-host';
+import type { DevelopApplyVerb, DevelopPresets, DevelopPresetsPlace } from './develop-host';
 
 /**
  * Copy · Paste · As shot. The clipboard is module state, so the same
@@ -103,6 +103,7 @@ export function DevelopPresetsSection({
           picture. There is no factory set.
         </p>
       </SectionLegend>
+      {presets.place && <PresetsPlaceRow place={presets.place} />}
       {presets.list.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {presets.list.map((p) => (
@@ -179,6 +180,53 @@ export function DevelopPresetsSection({
           Save current as…
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * Where a host's own preset list is kept, and the move to another source —
+ * offered only when a second source can keep it. The move is the person's
+ * gesture; what could not be done is said here, never swallowed.
+ */
+function PresetsPlaceRow({ place }: { place: DevelopPresetsPlace }) {
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const movable = place.options.length > 1;
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-3xs text-muted">
+        {/* With a picker, the picker names the place; the sentence says only how it stands. */}
+        <span>{place.status ?? (movable ? 'kept' : `kept in ${place.label}`)}</span>
+        {movable && (
+          <label className="inline-flex items-center gap-1">
+            <span className="sr-only">Keep your presets on</span>
+            <select
+              value={place.sourceId}
+              disabled={busy}
+              onChange={(e) => {
+                const target = e.target.value;
+                setBusy(true);
+                setProblem(null);
+                void place.onKeepOn(target).then((why) => {
+                  setBusy(false);
+                  setProblem(why);
+                });
+              }}
+              className="rounded-full border border-line-strong bg-paper px-1.5 py-0.5 font-mono text-3xs text-ink-soft cursor-pointer disabled:cursor-wait"
+              title="Keep your presets on another source — every Develop sheet reads the same book"
+            >
+              {place.options.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.id === place.sourceId ? `on ${o.label}` : `keep on ${o.label}`}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {busy && <span>moving…</span>}
+      </div>
+      {problem && <p className="m-0 text-xs text-accent-ink">{problem}</p>}
     </div>
   );
 }

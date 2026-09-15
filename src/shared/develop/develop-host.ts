@@ -17,6 +17,20 @@ export interface DevelopPresets {
   onRemove: (id: string) => void;
   /** Where they are kept, said in the section's ⓘ: "on the trip". */
   keptOn?: string;
+  /** Where the list lives and how to move it, for a host whose presets are a document of their own. */
+  place?: DevelopPresetsPlace;
+}
+
+export interface DevelopPresetsPlace {
+  /** "this browser", or the instance's host. */
+  label: string;
+  sourceId: string;
+  /** The sync sentence while it is kept on an instance, null otherwise. */
+  status: string | null;
+  /** Every source that can keep the list; a picker only when there is more than one. */
+  options: readonly { id: string; label: string }[];
+  /** Move it — resolves with the reason it could not, or null. */
+  onKeepOn: (sourceId: string) => Promise<string | null>;
 }
 
 /**

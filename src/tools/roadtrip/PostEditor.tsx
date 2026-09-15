@@ -16,8 +16,6 @@ import {
   applyDevelopToPost,
   countDayPictures,
   countPostPictures,
-  removePreset,
-  savePreset,
 } from '../../shared/roadtrip/develop-apply';
 import {
   badgeBlockExtent,
@@ -53,7 +51,6 @@ import { describeKeyTarget, targetOwnsSpace, targetOwnsTyping } from '../../shar
 import { usePublishMediaScope, type MediaScope } from '../../shared/sources/media-scope';
 import {
   createPostSlide,
-  newId,
   type PostBadge,
   type PostSlide,
   type TripDoc,
@@ -449,22 +446,12 @@ export default function PostEditor({
     [slide, post, onChangePost],
   );
   const [developOpen, setDevelopOpen] = useState(false);
-  // The sheet's time-savers (`docs/photo-develop.md` §8): the trip's presets,
-  // and two batch verbs that write a COPY onto each target now — the open
+  // The sheet's time-savers (`docs/photo-develop.md` §8): the presets are the
+  // person's own book, drawn by the sheet itself; the trip adds two batch verbs that write a COPY onto each target now — the open
   // slide is left to Done, which is what `developExcept` keeps out of the count.
   const developExcept = isHook ? 'hook' : slide.slideId;
   const otherSlides = isCta ? 0 : countPostPictures(post, developExcept);
   const otherPieces = countDayPictures(trip, post);
-  const developPresets = useMemo(
-    () => ({
-      list: trip.developPresets,
-      onSave: (name: string, settings: DevelopSettings) =>
-        onChangeTrip(savePreset(trip, name, settings, newId())),
-      onRemove: (id: string) => onChangeTrip(removePreset(trip, id)),
-      keptOn: 'on the trip',
-    }),
-    [trip, onChangeTrip],
-  );
   const developApplyTo = useMemo(() => {
     const verbs: DevelopApplyVerb[] = [];
     if (otherSlides > 0) {
@@ -1357,7 +1344,6 @@ export default function PostEditor({
         onCancel={() => setDevelopOpen(false)}
         lookHeader={<GradeScopeChips grade={grade} />}
         footerHint={isHook ? 'writes to the hook' : `writes to slide ${slide.position}`}
-        presets={developPresets}
         applyTo={developApplyTo}
       />
     )}

@@ -6,8 +6,6 @@ import {
   countDayPictures,
   countPostPictures,
   otherPostsOfDay,
-  removePreset,
-  savePreset,
 } from './develop-apply';
 import { createPostSlide, createTripDoc, createTripPost, type TripPost } from './trip-types';
 
@@ -65,27 +63,5 @@ describe('applyDevelopToDay', () => {
     expect(next.posts[2].badge.develop).toBeNull();
     // Nothing to write: the same document comes back.
     expect(applyDevelopToDay(trip, otherDay, lifted)).toBe(trip);
-  });
-});
-
-describe('presets', () => {
-  const trip = () => createTripDoc('T', 'D', '2025-07-01', '2025-07-10');
-
-  it('saves a copy under a trimmed name, replaces a name already taken, drops zeros and blanks', () => {
-    let t = savePreset(trip(), '  Desert noon ', lifted, 'p1');
-    expect(t.developPresets).toEqual([{ id: 'p1', name: 'Desert noon', settings: lifted }]);
-    expect(t.developPresets[0].settings).not.toBe(lifted);
-    t = savePreset(t, 'Desert noon', { ...DEFAULT_DEVELOP, blacks: -6 }, 'p2');
-    expect(t.developPresets).toHaveLength(1);
-    expect(t.developPresets[0].id).toBe('p1');
-    expect(t.developPresets[0].settings.blacks).toBe(-6);
-    expect(savePreset(t, '', lifted, 'p3')).toBe(t);
-    expect(savePreset(t, 'Zeros', { ...DEFAULT_DEVELOP }, 'p3')).toBe(t);
-  });
-
-  it('removes by id and is a no-op for an unknown one', () => {
-    const t = savePreset(trip(), 'Dusk', lifted, 'p1');
-    expect(removePreset(t, 'p1').developPresets).toEqual([]);
-    expect(removePreset(t, 'nope')).toBe(t);
   });
 });

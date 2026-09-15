@@ -1,6 +1,8 @@
 /**
- * Applying one develop to MANY pictures of a trip, and the trip's presets —
- * the time-savers of `docs/photo-develop.md` §8.
+ * Applying one develop to MANY pictures of a trip — a time-saver of
+ * `docs/photo-develop.md` §8. Presets are not the trip's any more: they live in
+ * the person's own book (`develop/use-preset-book.ts`), which took in each
+ * trip's old `developPresets` once.
  *
  * Every write is a COPY into each target's own field, never a reference: a
  * correction is about a picture and is never inherited (the framing rule), so
@@ -11,7 +13,6 @@
  */
 
 import { isDefaultDevelop, type DevelopSettings } from '../develop/develop';
-import { removePresetFrom, savePresetIn } from '../develop/develop-presets';
 import type { TripDoc, TripPost } from './trip-types';
 
 /** A develop as stored: a copy, or null for as shot. */
@@ -75,26 +76,4 @@ export function applyDevelopToDay(
 /** How many pictures `applyDevelopToDay` would write. */
 export function countDayPictures(trip: TripDoc, post: TripPost): number {
   return otherPostsOfDay(trip, post).reduce((n, p) => n + countPostPictures(p), 0);
-}
-
-// --- presets ---------------------------------------------------------------
-
-/**
- * The trip with a new preset holding a COPY of `settings` under `name` — the
- * list rules (a taken name replaced in place, nothing saved for a blank name
- * or an as-shot develop) are `savePresetIn`'s, shared with every Develop host.
- */
-export function savePreset(
-  trip: TripDoc,
-  name: string,
-  settings: DevelopSettings | null,
-  id: string,
-): TripDoc {
-  const developPresets = savePresetIn(trip.developPresets, name, settings, id);
-  return developPresets === trip.developPresets ? trip : { ...trip, developPresets: [...developPresets] };
-}
-
-export function removePreset(trip: TripDoc, id: string): TripDoc {
-  const developPresets = removePresetFrom(trip.developPresets, id);
-  return developPresets === trip.developPresets ? trip : { ...trip, developPresets: [...developPresets] };
 }

@@ -45,7 +45,8 @@ host:
   field), `DevelopApplySection`, `DevelopLookSection`. Each reports what it did
   through `onTold`.
 - `develop-host.ts` — the host contracts `DevelopPresets` (with `keptOn`, said
-  in the ⓘ) and `DevelopApplyVerb`.
+  in the ⓘ, and an optional `place`: where the list is kept and the move) and
+  `DevelopApplyVerb`.
 
 **Why**: the sheet held Trips' wording ("tick one in the Library", "kept on the
 trip") and a tool would otherwise have copied 700 lines including the grader
@@ -69,10 +70,9 @@ host (the tool's inspector, a lightbox verb) draws it rather than a copy.
 
 The list rules for presets (a taken name replaced in place keeping id and
 position; a blank name or an as-shot develop saves nothing and hands back the
-SAME list) are `develop-presets.ts`'s `savePresetIn` / `removePresetFrom`;
-Trips' `savePreset` / `removePreset` are wrappers over a trip. The personal
-preset list the maintainer chose for all three hosts (`docs/develop-tool.md`)
-is the same shape and must use them. The Studio's per-media map goes through
+SAME list; a name is taken whatever its casing, and the new spelling is kept)
+are `develop-presets.ts`'s `savePresetIn` / `removePresetFrom`, and the book
+(`preset-book.ts`) goes through them. The Studio's per-media map goes through
 ONE writer, `media-develop.ts`'s `writeDevelop` (Done and the batch verb had
 each a copy).
 
@@ -121,3 +121,45 @@ trip file's rule, and a newer version is refused. Verified: 19 specs, and the
 store round-tripped in the Browser pane (put/get/list, a thumbnail written and
 pruned, a sync record, the four stores present). **Winnow's side was committed
 without its typecheck**: that checkout has no `node_modules`.
+
+## The preset book is ONE live store every host reads (2026-09-15, D4)
+
+`preset-book.ts` (pure, tested), `preset-book-remote.ts` (kind `presets`),
+`use-preset-book.ts` (module state + `usePresetBookHost`). `DevelopSheet` draws
+the book when a host passes no `presets`, so Trips and the Studio get the same
+list with no host code; the tool will call `usePresetBookHost()` itself.
+Rules a later agent must keep:
+
+- **The id is a UUID, never a fixed `mine`.** Winnow's bucket key is
+  `(app, id)` — not per user — so a fixed id collides between two accounts on
+  one instance (the second gets a 404 on a foreign row). A second device finds
+  the book by LISTING kind `presets` when the person keeps theirs there, and
+  merges into that row's id.
+- **No conflict is ever handed to a person.** A 412 on push is pulled,
+  `mergeBooks`-ed (server order and id; the LOCAL copy of a name wins; local-only
+  names appended) and pushed again once; a record left in `conflict` heals on
+  the next trigger. The accepted cost: a preset deleted on one device can come
+  back from another's copy (no tombstones — a list of names is not worth them).
+- **A clean resume takes the server's copy; a dirty one merges.** A book the
+  instance no longer holds (another device took it home) stays here, kept in
+  this browser (`keepHere`) — never resurrected there on its own.
+- **Trips' old lists are merged in ONCE per trip** (`mergedTripIds`; the
+  book's numbers win on a name). `TripDoc.developPresets` stays on the
+  document and in `.roadtrip.json` but no host writes it any more — do not
+  "clean it up", a trip imported from an old file still carries a list to
+  merge. Trips' `savePreset` / `removePreset` wrappers are gone.
+- **Loaded lazily, once per tab**, when the first host subscribes — opening
+  the Studio or Trips never touches `listTrips` or the instance until a sheet
+  opens. Moving the book (`keepPresetBookOn`) is the person's gesture: the
+  target is written and acknowledged before the origin's copy is deleted, and
+  moving home deletes the instance's copy first (refused while unreachable).
+  The picker appears only when a second source keeps kind `presets`.
+
+Verified against the stub instance (`testing.md`'s recipe with `kinds`
+including `presets`): four trips merged into a fresh book; Keep on → list +
+PUT; a server-side change + a local save → PUT 412 → GET → PUT, both names
+kept; a reload with a clean record took the server's removal; a second book
+kept on the same instance merged into the first's row and its own row went; a
+move home sent DELETE with If-Match; a row deleted behind the browser's back
+came back as "kept in this browser". In the Trips sheet: the row, the picker
+moving it, "unsaved changes — saving to … shortly", then the idle PUT.

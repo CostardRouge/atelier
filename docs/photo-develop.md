@@ -334,7 +334,9 @@ never a second stack.
   settings }`), **portable**: a preset is the trip's habit like its words, so
   it travels in `.roadtrip.json` and the four `trip-file.ts` places gain a
   field. The Studio keeps no presets in v1; copy/paste (§8) crosses tools with
-  no storage.
+  no storage. *Superseded 2026-09-15: presets are one personal book every
+  Develop host shares (`docs/develop-tool.md` §4); the trip field is merged into
+  it once and no longer written.*
 
 ### 5.4 What is NOT stored
 

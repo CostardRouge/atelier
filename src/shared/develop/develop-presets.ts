@@ -25,7 +25,8 @@ export function savePresetIn(
 ): readonly DevelopPreset[] {
   const label = name.trim();
   if (!settings || isDefaultDevelop(settings) || !label) return list;
-  const existing = list.findIndex((p) => p.name === label);
+  // A name is a name however it is cased: "dusk" replaces "Dusk", in the new spelling.
+  const existing = list.findIndex((p) => p.name.trim().toLowerCase() === label.toLowerCase());
   const preset: DevelopPreset = {
     id: existing >= 0 ? list[existing].id : id,
     name: label,

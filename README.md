@@ -189,7 +189,7 @@ same-named other), follows a rename with them, and never enters
 sheet's header carry one set of numbers for the session, shared with Trips'
 sheet, and **Apply to N other media** writes the same numbers onto every other
 photo and clip of the project, each under its own hash, while Done writes the
-one in hand. The Studio keeps no presets; a trip's are Trips' own.
+one in hand. **Presets** are the same personal book as in Trips (below).
 
 **Output transform.** Conversion LUTs (D-Log→709, Apple Log→709, S-Log→709)
 are authored for a Rec.709 reference display — BT.1886, gamma 2.4, a dark
@@ -804,11 +804,15 @@ developing a RAW is what the next phases are for (`docs/photo-develop.md`).
 **The same light on many pictures.** The sheet's header has **Copy** and
 **Paste** — one set of numbers kept for the session, never stored, and the
 same clipboard the Studio's sheet reads, so a correction crosses the two tools
-in two clicks. **Presets** are the trip's own: `Save current as…` keeps the
-numbers under a name of your choosing (there is no factory set), a chip writes
-a copy of them onto the open picture, and × removes the preset without
-touching any picture it was applied to — a preset is applied, never followed.
-Presets travel in `.roadtrip.json`. **Apply to…** offers what is worth a batch:
+in two clicks. **Presets** are your own book, the same list in every Develop
+sheet (Trips and the Studio): `Save current as…` keeps the numbers under a name
+of your choosing (there is no factory set), a chip writes a copy of them onto
+the open picture, and × removes the preset without touching any picture it was
+applied to — a preset is applied, never followed. The book is kept in this
+browser, or on a connected Winnow if you pick it there, and then follows you to
+another device; a change made on two devices is merged by name, never asked
+about. The presets a trip kept before the book existed are brought in once.
+**Apply to…** offers what is worth a batch:
 *the other slides of this piece* and *the other pictures of this day*, each
 verb naming its count; a click writes the same numbers onto each of those
 pictures as its own copy, right away, while **Done** still writes the picture

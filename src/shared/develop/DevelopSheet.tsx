@@ -5,6 +5,7 @@ import useDialogKeys from '../ui/use-dialog-keys';
 import type { DevelopSettings } from './develop';
 import { developButtonClass, developLegendClass, developPillClass } from './develop-classes';
 import type { DevelopApplyVerb, DevelopPresets } from './develop-host';
+import { usePresetBookHost } from './use-preset-book';
 import {
   DevelopApplySection,
   DevelopClipboardActions,
@@ -46,7 +47,11 @@ export interface DevelopSheetProps {
   lookHeader?: ReactNode;
   /** What Done writes to, in the footer: "writes to this slide". */
   footerHint?: string;
-  /** The host's presets; a host with none passes nothing and the section is not drawn. */
+  /**
+   * The presets drawn beside the sliders. Omitted, it is the person's own book
+   * (`use-preset-book.ts`), the same list in every Develop host; a host passes
+   * a list only to show another one.
+   */
   presets?: DevelopPresets;
   /** Batch verbs the host offers (`DevelopApplyVerb`). */
   applyTo?: readonly DevelopApplyVerb[];
@@ -82,9 +87,11 @@ export default function DevelopSheet({
   onCancel,
   lookHeader,
   footerHint,
-  presets,
+  presets: hostPresets,
   applyTo,
 }: DevelopSheetProps) {
+  const book = usePresetBookHost();
+  const presets = hostPresets ?? book;
   const draft = useDevelopDraft(value, stack);
   const [told, tell] = useTold();
   const [naming, setNaming] = useState(false);
@@ -150,16 +157,14 @@ export default function DevelopSheet({
           <div className="w-[22rem] flex-none min-h-0 overflow-y-auto overscroll-contain pr-1.5 flex flex-col gap-4 max-[820px]:w-full max-[820px]:flex-1">
             <DevelopHistogram histogram={picture.histogram} />
             <DevelopSliders value={draft.draft} onChange={draft.set} />
-            {presets && (
-              <DevelopPresetsSection
-                presets={presets}
-                draft={draft.draft}
-                asShot={draft.asShot}
-                onApply={draft.setDraft}
-                onTold={tell}
-                onNaming={setNaming}
-              />
-            )}
+            <DevelopPresetsSection
+              presets={presets}
+              draft={draft.draft}
+              asShot={draft.asShot}
+              onApply={draft.setDraft}
+              onTold={tell}
+              onNaming={setNaming}
+            />
             {applyTo && <DevelopApplySection verbs={applyTo} draft={draft.draft} onTold={tell} />}
             <DevelopLookSection stack={stack} header={lookHeader} />
           </div>

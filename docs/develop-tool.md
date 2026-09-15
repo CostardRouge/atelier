@@ -95,12 +95,16 @@ interface RollPicture {
 
 ## 4. The personal preset book
 
-- One document per person: `PresetBook { version, presets: DevelopPreset[],
+- One document per person: `PresetBook { id, version, presets, mergedTripIds,
   updatedAt }`, local in `atelier-develop` (store `presets`, one row), and on a
-  Winnow as `kind: 'presets'`, id `mine` — the same `doc-sync` reducer and
-  `SyncPill`, shown in the tool's gallery bar.
+  Winnow as `kind: 'presets'` under a UUID — **not** a fixed `mine`, because the
+  bucket's key is `(app, id)` and two accounts on one instance would collide; a
+  second device finds it by listing the kind. The same `doc-sync` reducer,
+  its sentence drawn in the presets section with a "keep on" picker (built:
+  `use-preset-book.ts`, `develop.md`).
 - **Every host reads and writes the book** through `savePresetIn` /
-  `removePresetFrom`; the `DevelopPresets.keptOn` line says "in your presets".
+  `removePresetFrom`; a 412 is merged by name (`mergeBooks`) and pushed again,
+  never shown as a conflict.
 - **Migration, once**: on first load, each trip's `developPresets` are merged
   into the book by name (a name already in the book keeps the book's numbers);
   the trip field stays readable and travels in `.roadtrip.json`, but no host
@@ -173,8 +177,10 @@ interface RollPicture {
   `presets`), `roll-remote.ts`, `roll-file.ts` + spec; `remoteFor(id, kind)`
   reads `documents.kinds` through `bucketHolds`. Winnow: `DOC_KINDS` += `roll`,
   `presets` (its commit `43f01e9`, not pushed).
-- **D4 — the preset book**: store, sync, the one-time merge from trips, every
-  host switched to it.
+- **D4 — the preset book** — **BUILT 2026-09-15**: `preset-book.ts` + spec,
+  `preset-book-remote.ts` + spec, `use-preset-book.ts`; `DevelopSheet` draws the
+  book by default, so Trips and the Studio switched with no host code; Trips'
+  preset wrappers removed.
 - **D5 — the tool shell**: registry entry (`group: 'editor'`, accepts photo),
   routes, gallery, New roll, the Home door lookup, ledger counts.
 - **D6 — the editor**: stage + filmstrip + Develop tab from the workbench
