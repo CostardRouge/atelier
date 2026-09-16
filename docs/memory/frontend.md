@@ -317,6 +317,52 @@ The rule is **the larger of `window.innerHeight` and `visualViewport.height`, an
 
 **What it costs, and it is the right trade.** `useStageZoom`'s two-finger pinch and native panning are mutually exclusive: once the browser owns a gesture it cancels the pointers, so on a zone that lets it pan the pinch is best-effort and `StageZoomControl`'s +/− is the way in that always answers — which is now the case on both zones that zoom. No CI gate can see any of this — `touch-action` is a string in a class list and the failure is a gesture that does nothing — so check it with real touch events, not with a mouse.
 
+## A phone gets a SHEET or a DRAWER, and a picture being judged gets the drawer (2026-09-16)
+
+**Reported**: in the Develop tool on a phone, opening Develop, Crop or Export
+hid the picture *and* tinted what was left of it, so *"on ne voit pas la
+couleur officielle"* — the file's real colour, which is the one thing that tool
+exists to set. **Decision, the maintainer's**: the picture on top, the panel
+under it, fifty-fifty, and no overlay at all.
+
+`shared/ui/DockedDrawer.tsx` is the suite's fourth way of showing a panel, and
+`PanelHost` now picks between it and `BottomSheet` with `compactAs`. The rule
+that decides which: **a sheet's wash is a fair price for a panel you pick
+FROM** (the library, where you want all the library you can get and the stage
+behind is only context) **and a lie for a panel whose EFFECT you are watching**
+— a scrim over a photograph is a wrong answer to the question the sliders are
+asking. Only the Develop workbench passes `drawer`; everything else keeps the
+sheet.
+
+**This does not un-retire Trips' `DockedPanel`** (2026-09-12, above): what
+killed that was half a phone being too little library to pick from AND too
+little stage to compare against, plus a bottom bar whose cells behaved
+differently from one another. Neither applies here — a slider needs no room to
+be read, and the bar keeps working under the drawer. It works FOR it, in fact:
+the drawer leaves the bar uncovered, so a cell can be marked while its panel is
+up, which a sheet could never honestly do.
+
+**The share is a fraction of the COLUMN, and the default is 0.4, not 0.5.** The
+column's other half is not all picture — the name row, the filmstrip and the
+roll's status line take ~136px of it whatever the screen — so solving
+picture = drawer lands on 0.394. Measured at 390×844: picture 250px, drawer
+257px. A taller phone then spends its extra height on the photograph rather
+than on more panel, which is the right way round. The other two rests (0.28,
+0.6) are dragged or tapped from the handle, over `sheet-snap.ts`'s own
+arithmetic read against the column instead of the screen; the column's height
+is definite and does not move when the drawer does, so it is measured at
+pointerdown and nothing needs observing.
+
+**`order-last`, not a position in the caller's markup**: a workbench renders
+its stage and its panel together and the filmstrip belongs to the screen
+between them.
+
+**Prose is what the picture's half was being spent on.** With the drawer up,
+the caption under the stage and the roll's working-previews line are hidden on
+a compact shell — both wrap to three lines at 390px, and nobody reads a
+sentence while dragging a slider. They are back the moment the drawer is down
+and the stage owns the screen.
+
 ## The browser's OWN pinch is what "the pinch does nothing" means on a phone (2026-09-16)
 
 **Reported**: in the Develop tool on the maintainer's phone, *"les pinch, les

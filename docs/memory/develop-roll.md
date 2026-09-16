@@ -112,7 +112,7 @@ pure rules are `roll-editor.ts` (tested). Rules a later phase must keep:
   develop, the look and a batch landing in one tick compose instead of the last
   replacing a roll the others already moved on. Every writer goes through it.
 - **The workbench is keyed per picture and returns TWO grid cells** (the stage,
-  and `PanelHost`: a column, or a sheet on a phone) while the filmstrip is its
+  and `PanelHost`: a column, or a drawer on a phone) while the filmstrip is its
   parent's cell, so stepping remounts the draft (never-inherit) and never the
   strip (its scroll survives). The grid is inside an `@container` wrapper: the
   inspector narrows to 18rem under 880px of TOOL width, the Library's width
@@ -130,9 +130,11 @@ pure rules are `roll-editor.ts` (tested). Rules a later phase must keep:
   until released, `Z` fit ↔ one step closer, ⌘/Ctrl-C/V copy and paste the
   develop (⌘C yields to a text selection). A focused field or slider keeps them,
   and an open `alertdialog` keeps every key.
-- **Phone**: stage and strip share the height; the inspector is a `BottomSheet`
-  opened from the shell's bar (`Develop` beside Library), removal is a
-  desktop-hover verb for now.
+- **Phone**: stage and strip share the height; the inspector is a
+  `DockedDrawer` under them (rev. 2026-09-16 — it was a `BottomSheet`, whose
+  wash tinted the photograph being judged: `frontend.md`), opened from the
+  shell's bar (`Develop` beside Library) and marked there while it is up.
+  Removal is a desktop-hover verb for now.
 
 Verified in the Browser pane: four dropped JPEGs → a roll → +1.2 EV stored
 through the debounce → → / ← stepping with `history.length` unchanged and no

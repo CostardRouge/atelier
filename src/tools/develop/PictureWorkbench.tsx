@@ -46,9 +46,9 @@ const SNAPSHOT_DELAY_MS = 700;
 /**
  * ONE picture of a roll on the workbench — mounted with a `key` per picture,
  * so a draft never leaks onto the next photograph (the never-inherit rule).
- * It renders two grid cells (the stage, and the inspector — a column, or a
- * sheet on a phone) and leaves the filmstrip to its parent, so stepping along
- * the strip remounts this and never the strip.
+ * It renders two grid cells (the stage, and the inspector — a column beside
+ * the picture, or a DRAWER under it on a phone) and leaves the filmstrip to
+ * its parent, so stepping along the strip remounts this and never the strip.
  *
  * Unlike the modal there is no Done: the numbers are WRITTEN THROUGH to the
  * roll after a short rest, and on leaving the picture — the roll is the
@@ -339,7 +339,12 @@ export default function PictureWorkbench({
             className="flex-1"
           />
         )}
-        {cropping ? (
+        {/* The line under the picture is PROSE — what the numbers say, which
+            gesture applies. It wraps to three lines at 390px, and on a phone
+            with the drawer up those are three lines taken off the photograph
+            for a sentence nobody is reading while they drag a slider. It comes
+            back the moment the drawer is down and the stage owns the screen. */}
+        {compact && sheetOpen ? null : cropping ? (
           <p className="m-0 flex-none font-mono text-2xs text-faint leading-relaxed">
             {source
               ? `drag to move the picture, pinch or the wheel to zoom · ${framingDraft.fit === 'contain' ? 'whole picture, bars where it falls short' : 'filling the frame'}`
@@ -352,6 +357,11 @@ export default function PictureWorkbench({
 
       <PanelHost
         asSheet={compact}
+        // On a phone the inspector is a DRAWER, never the sheet: a sheet's wash
+        // sits over the photograph and tints it, so the one thing the tool
+        // exists to judge — the colour that will leave — cannot be seen while
+        // it is being set (`frontend.md`).
+        compactAs="drawer"
         open={sheetOpen}
         onClose={() => onSheetOpen(false)}
         title={`${tabLabel} · ${entry.ref.name}`}
