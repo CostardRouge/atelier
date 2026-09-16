@@ -115,10 +115,12 @@ describe('editing the strip', () => {
   });
 
   it('counts a picture as developed when it has a develop or a crop', () => {
-    let doc = roll(['a', 'b', 'c']);
+    let doc = roll(['a', 'b', 'c', 'd']);
     doc = patchPicture(doc, 'p1', { develop: { ...DEFAULT_DEVELOP, contrast: 10 } });
     doc = patchPicture(doc, 'p3', { framing: { ...DEFAULT_FRAMING, scale: 1.4 } });
-    expect(rollProgress(doc)).toEqual({ total: 3, developed: 2 });
+    // A shape alone is a crop: a free zone drawn with the corners pans nothing.
+    doc = patchPicture(doc, 'p4', { aspect: 'free:1.5' });
+    expect(rollProgress(doc)).toEqual({ total: 4, developed: 3 });
   });
 });
 

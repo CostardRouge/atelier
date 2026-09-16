@@ -13,7 +13,8 @@ import { copyDevelop, pasteDevelop } from '../../shared/develop/develop-clipboar
 import { developPillClass } from '../../shared/develop/develop-classes';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { pictureFidelity } from '../../shared/develop/picture-fidelity';
-import { WORKBENCH_TABS, editorKeyAction, pictureAspectRatio, type WorkbenchTab } from '../../shared/develop/roll-editor';
+import { freeAspectId, isFreeAspect, pictureAspectRatio } from '../../shared/develop/crop-aspect';
+import { WORKBENCH_TABS, editorKeyAction, type WorkbenchTab } from '../../shared/develop/roll-editor';
 import { framedThumbnail } from '../../shared/develop/roll-thumb';
 import type { RollPicture } from '../../shared/develop/roll-types';
 import { useDevelopDraft, useTold } from '../../shared/develop/use-develop-draft';
@@ -278,6 +279,7 @@ export default function PictureWorkbench({
   }, []);
 
   const cropping = tab === 'crop';
+  const freeShape = isFreeAspect(entry.aspect);
   const tabLabel = WORKBENCH_TABS.find((t) => t.id === tab)?.label ?? 'Develop';
 
   // The crop's zoom as the pill's own interface, so one control serves both
@@ -335,6 +337,10 @@ export default function PictureWorkbench({
             aspectRatio={aspectRatio}
             framing={framingDraft}
             onFraming={setFramingDraft}
+            // The handles exist only on a free zone, and they write the shape
+            // straight to the roll: the aspect is a discrete value the
+            // document holds, not a draft the workbench carries.
+            onAspectRatio={freeShape ? (ratio) => callbacks.current.onAspect(freeAspectId(ratio)) : undefined}
             emptyText={emptyText}
             className="flex-1"
           />
@@ -347,7 +353,9 @@ export default function PictureWorkbench({
         {compact && sheetOpen ? null : cropping ? (
           <p className="m-0 flex-none font-mono text-2xs text-faint leading-relaxed">
             {source
-              ? `drag to move the picture, pinch or the wheel to zoom · ${framingDraft.fit === 'contain' ? 'whole picture, bars where it falls short' : 'filling the frame'}`
+              ? `drag to move the picture, pinch or the wheel to zoom${
+                  freeShape ? ', the handles to set the shape' : ''
+                } · ${framingDraft.fit === 'contain' ? 'whole picture, bars where it falls short' : 'filling the frame'}`
               : 'the crop needs the picture'}
           </p>
         ) : (
@@ -391,6 +399,7 @@ export default function PictureWorkbench({
             <CropPanel
               framing={framingDraft}
               aspect={entry.aspect}
+              aspectRatio={aspectRatio}
               onFraming={setFramingDraft}
               onAspect={onAspect}
               verbs={cropApplyTo}

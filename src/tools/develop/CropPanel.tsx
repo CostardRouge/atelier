@@ -6,9 +6,16 @@ import {
   wrapDegrees,
   type Framing,
 } from '../../shared/media/framing';
+import {
+  FREE_ASPECT_MAX,
+  describeAspect,
+  freeAspectId,
+  isFreeAspect,
+} from '../../shared/develop/crop-aspect';
 import { developButtonClass } from '../../shared/develop/develop-classes';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import Button from '../../shared/ui/Button';
+import IconButton from '../../shared/ui/IconButton';
 import { FieldRow, InspectorSection, RangeField } from '../../shared/ui/Inspector';
 import { Icons } from '../../shared/ui/icons';
 import SectionLegend from '../../shared/ui/SectionLegend';
@@ -25,7 +32,15 @@ export interface CropApplyVerb {
 const ASPECT_OPTIONS = [
   { id: 'original', label: 'Original', title: 'The picture’s own shape, as shot' },
   ...[...ASPECT_PRESETS].sort((a, b) => a.w / a.h - b.w / b.h).map((p) => ({ id: p.id, label: p.id, title: p.label })),
+  { id: 'free', label: 'Free', title: 'Any shape — drag the frame’s corners, or the Shape slider' },
 ];
+
+/**
+ * The Shape slider runs on log₂ of the ratio, so a square sits in the middle
+ * and a step is the same amount of shape whichever way it goes — on a linear
+ * ratio the whole portrait half would be squeezed into a fifth of the track.
+ */
+const SHAPE_LIMIT = Math.log2(FREE_ASPECT_MAX);
 
 /**
  * The Develop tool's Crop tab: aspect, fit, zoom, rotation and the flips — the
@@ -33,10 +48,17 @@ const ASPECT_OPTIONS = [
  * photographer moving between the two finds the same controls under the same
  * names. Reset keeps the chosen fit, exactly as Trips' does: asking for the
  * whole picture is not a crop to undo.
+ *
+ * **Free** is the ninth shape and the only one that is not a named format: it
+ * holds whatever ratio the author drew on the stage, and it is seeded from the
+ * shape already on screen, so choosing it moves nothing — it only unlocks the
+ * frame's corners. The slider here is its keyboard and its phone way in, the
+ * way the zoom pill is the pinch's (`frontend.md`).
  */
 export default function CropPanel({
   framing,
   aspect,
+  aspectRatio,
   onFraming,
   onAspect,
   verbs = [],
@@ -44,11 +66,14 @@ export default function CropPanel({
 }: {
   framing: Framing;
   aspect: string;
+  /** The shape the frame is drawn at — what Free starts from, and what it says. */
+  aspectRatio: number;
   onFraming: (framing: Framing) => void;
   onAspect: (aspect: string) => void;
   verbs?: readonly CropApplyVerb[];
   onTold?: (message: string) => void;
 }) {
+  const free = isFreeAspect(aspect);
   return (
     <>
     <InspectorSection
@@ -64,6 +89,11 @@ export default function CropPanel({
             <strong>Fill</strong> covers the frame and crops what does not fit: it can never be
             zoomed out past covering or dragged off an edge. <strong>Whole</strong> shows all of
             the picture with black bars where it falls short of the frame.
+          </p>
+          <p>
+            <strong>Free</strong> is any shape you like: it starts from the one on screen, and the
+            frame’s eight handles then set it — drag a corner for both sides at once, an edge for
+            one. The frame grows about its middle, and the picture is placed inside it as ever.
           </p>
           <p>The flips mirror what the frame shows, whatever the picture’s rotation.</p>
         </>
@@ -82,12 +112,34 @@ export default function CropPanel({
           columns={3}
           size="sm"
           label="Aspect"
-          value={aspect}
-          onChange={onAspect}
+          value={free ? 'free' : aspect}
+          // Free is seeded from the shape already drawn: picking it changes
+          // nothing but what may now be changed.
+          onChange={(id) => onAspect(id === 'free' ? freeAspectId(aspectRatio) : id)}
           options={ASPECT_OPTIONS}
           className="flex-1 min-w-0"
         />
       </FieldRow>
+      {free && (
+        <FieldRow label="Shape">
+          <RangeField
+            label="Shape"
+            min={-SHAPE_LIMIT}
+            max={SHAPE_LIMIT}
+            step={0.01}
+            value={Math.log2(aspectRatio)}
+            onChange={(v) => onAspect(freeAspectId(2 ** v))}
+            format={(v) => describeAspect(2 ** v)}
+          />
+          <IconButton
+            size="sm"
+            label="Turn the frame: its width and its height swap"
+            onClick={() => onAspect(freeAspectId(1 / aspectRatio))}
+          >
+            {Icons.swap}
+          </IconButton>
+        </FieldRow>
+      )}
       <FieldRow label="Fit">
         <Segmented
           fill

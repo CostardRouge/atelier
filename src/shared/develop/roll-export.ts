@@ -14,6 +14,7 @@
 
 import { isRawImage } from '../library/assets';
 import { DEFAULT_FRAMING, framingTransform, type Framing } from '../media/framing';
+import { aspectFileTag } from './crop-aspect';
 import type { RollExport, RollOriginals } from './roll-types';
 
 export interface PictureSize {
@@ -195,8 +196,8 @@ export function deliverySummary(
 /** `IMG_0421.jpg` + `4:5` → `IMG_0421-developed-4x5.jpg`; never the source's own name. */
 export function exportName(refName: string, aspect: string): string {
   const base = refName.replace(/\.[^.]+$/, '') || 'picture';
-  const shape = aspect !== 'original' ? `-${aspect.replace(':', 'x')}` : '';
-  return `${base}-developed${shape}.jpg`;
+  const tag = aspectFileTag(aspect);
+  return `${base}-developed${tag ? `-${tag}` : ''}.jpg`;
 }
 
 /** The choices the Size select offers: the source's own, or a long edge. */

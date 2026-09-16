@@ -153,6 +153,7 @@ describe('names and sentences', () => {
   it('names the export after the picture, never the source name itself', () => {
     expect(exportName('IMG_0421.jpg', 'original')).toBe('IMG_0421-developed.jpg');
     expect(exportName('IMG_0421.webp', '4:5')).toBe('IMG_0421-developed-4x5.jpg');
+    expect(exportName('IMG_0421.jpg', 'free:1.3721')).toBe('IMG_0421-developed-crop.jpg');
     expect(exportName('.jpg', 'original')).toBe('picture-developed.jpg');
   });
 

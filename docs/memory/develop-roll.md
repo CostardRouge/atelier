@@ -237,6 +237,64 @@ the one addition to a shared block. Rules a later phase must keep:
   rounded-paper bg-surface p-3`, the `Segmented` strip pinned, the sections
   scrolling under it) — the `frontend.md` rule D6 had not yet applied.
 
+## A crop may be a FREE zone, on the same aspect field (2026-09-16)
+
+The maintainer asked to crop a free zone; the shapes were eight named formats
+and the picture's own. The whole vocabulary now lives in one pure module,
+`shared/develop/crop-aspect.ts`: `'original'`, a preset id, or **`'free:<w/h>'`
+carrying its own ratio** (four decimals, held between 5:1 and 1:5). Rules a
+later agent must keep:
+
+- **One field, not two.** The free shape rides `RollPicture.aspect`, so every
+  reader that already asks for a ratio (`roll-render`, the export, the
+  filmstrip cell, the crop stage) is unchanged, `copyCropTo` copies a free
+  shape with no new case, and no migration is owed. What it costs is that
+  module: `isStoredAspect` is what `readRollDoc` trusts, `aspectFileTag` is
+  what names the file (`-crop`, never the ratio — a second dot in a name),
+  `pictureAspectRatio` is the one reader, and `resizeAspectRatio` is the
+  stage's arithmetic, tested rather than buried in a pointer handler.
+- **Free is SEEDED from the shape on screen**, the grade rungs' idiom: picking
+  it moves nothing and only unlocks the frame. The reverse holds too — a
+  named format simply replaces it.
+- **The frame is reshaped from its CENTRE**, and a handle is read as a
+  distance from that centre rather than a delta from where the drag began: the
+  canvas is letterboxed in the middle of the stage whatever its ratio, so
+  there is nothing to anchor, nothing to accumulate and no drift, and the
+  gesture corrects itself once the fit has pinned an axis. A corner takes both
+  axes from the finger, an edge only its own.
+- **The handles need the stage's padding.** They straddle the frame's edge and
+  the stage must clip (`overflow-hidden`, the picture being larger than it), so
+  flush against it the two handles on the pinned axis are unhittable — which is
+  how the first draft silently did nothing on a wide picture. `p-3.5` is paid
+  at every aspect, so nothing moves when Free is picked.
+- **Their box is MEASURED, never described in CSS.** The canvas takes its shape
+  from its own intrinsic size against the stage's box (`max-w-full max-h-full
+  w-auto h-auto`); a wrapper asked to shrink-wrap that either stretches it (a
+  flex parent did, and a square crop came out 668×561) or loses the constraint
+  that letterboxes it. A `ResizeObserver` on the canvas feeds an overlay that
+  passes every pointer through but its handles.
+- **The shape has a control as well as a gesture** — a Shape slider on log₂ of
+  the ratio (a square in the middle, the same step either way) and a turn
+  button that inverts it — the zoom pill's rule in `frontend.md`: a gesture the
+  browser can take away needs a way in that always answers.
+- The aspect is written to the roll AT ONCE, not through the workbench's
+  200 ms timer (it is the document's, not a draft): a drag is many writes, and
+  the history engine's 700 ms label coalescing is what makes it ONE undo step
+  — measured, a half-second drag undoes in one.
+- `rollProgress` now counts an aspect other than `'original'` as a crop:
+  drawing a free zone with the corners leaves the framing untouched, and the
+  picture would otherwise read as one nobody had looked at.
+
+Verified in headless Chromium at 1400×900 and on an iPhone 13 viewport: Free
+left a 668×417.5 frame untouched and raised eight handles; a corner drag made
+it exactly square and stored `free:1`; an edge drag widened it to 1.28:1
+without touching the height; Turn gave `free:0.7806` and a 437.8×560.8 frame;
+the slider at log₂ = 1 said `2.00:1`; the Develop tab showed the 2:1 crop
+letterboxed and the filmstrip cell redrew to it; the Export tab read `File
+1600 px → 1600 · exact`; a reload kept the shape; on the phone a FINGER on the
+corner gave `free:1.0001`. Not driven: a written export file (the render path
+is the presets', only the ratio differs).
+
 Verified in the desktop app's Browser pane on four canvas-made JPEGs: −1.5 EV
 then `R` → the crop stage showed the DARKENED picture; 1:1 → a square crop
 centred; a drag panned it, the wheel zoomed to 2.12× and Reset appeared; +90°
