@@ -20,6 +20,7 @@ import {
   type MediaMeta,
 } from '../shared/library/AssetLibraryContext';
 import { isRawImage, type Asset, type AssetKind } from '../shared/library/assets';
+import { startAssetDrag } from '../shared/library/asset-drag';
 import { assetRemoteId, splitAssetsBySource } from '../shared/library/asset-source';
 import {
   assetUsableBy,
@@ -1101,6 +1102,11 @@ function AssetRow({
   const fpsLabel = fpsText(meta);
   const cadenceLine = cadenceSentence(meta, fpsLabel);
 
+  // Dragging the cover carries the asset's id: a tool that takes drops (a
+  // collage's cells) then fills the one the pointer is over, which is a
+  // gesture short of selecting the cell and ticking the picture.
+  const onDragStart = (e: React.DragEvent) => startAssetDrag(e.dataTransfer, asset.id);
+
   // The active row gets an accent ring; a merely-selected row a subtle one.
   const ring = active
     ? 'bg-surface shadow-[inset_0_0_0_2px_var(--color-accent)]'
@@ -1129,6 +1135,7 @@ function AssetRow({
           instead of resizing the box, and every title starts at the same x. */}
       <Cover
         onPreview={onPreview}
+        onDragStart={usable ? onDragStart : undefined}
         label={asset.baseName}
         fallback={isPhoto ? (meta?.imageType ?? '◇') : '▶'}
         thumbUrl={meta?.thumbUrl}
@@ -1227,6 +1234,8 @@ function AssetTile({
   return (
     <div
       ref={ref}
+      draggable={usable}
+      onDragStart={(e) => startAssetDrag(e.dataTransfer, asset.id)}
       className={`relative rounded-[10px] overflow-hidden bg-paper-2 ${className} ${
         usable ? '' : 'opacity-45'
       }`}
@@ -1279,6 +1288,7 @@ function AssetTile({
 
 function Cover({
   onPreview,
+  onDragStart,
   label,
   fallback,
   thumbUrl,
@@ -1286,6 +1296,8 @@ function Cover({
   fpsLabel,
 }: {
   onPreview: (() => void) | null;
+  /** Dragging the picture out of the library; absent, the cover is not draggable. */
+  onDragStart?: (e: React.DragEvent) => void;
   label: string;
   fallback: string;
   thumbUrl: string | undefined;
@@ -1322,12 +1334,20 @@ function Cover({
   const box =
     'relative flex-none w-20 h-14 rounded-sm overflow-hidden bg-frame flex items-center justify-center';
 
-  if (!onPreview) return <div className={box}>{frame}</div>;
+  if (!onPreview) {
+    return (
+      <div className={box} draggable={Boolean(onDragStart)} onDragStart={onDragStart}>
+        {frame}
+      </div>
+    );
+  }
   return (
     <button
       type="button"
       onClick={onPreview}
-      title={`Look at ${label}`}
+      draggable={Boolean(onDragStart)}
+      onDragStart={onDragStart}
+      title={onDragStart ? `Look at ${label} — or drag it onto the picture` : `Look at ${label}`}
       aria-label={`Look at ${label}`}
       className={`${box} cursor-zoom-in group/cover`}
     >
