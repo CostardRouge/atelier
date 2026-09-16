@@ -14,6 +14,8 @@
  * rises exactly as far in a 480px preview and a 4K export.
  */
 
+import { easeAt as curveEaseAt } from '../motion/easing';
+
 /**
  * How an element enters or leaves.
  * - `none`     it simply appears / disappears (a hard cut);
@@ -110,23 +112,13 @@ export function defaultStep(preset: AnimPreset = 'fade', duration = 0.5): AnimSt
   return { preset, duration, easing: 'out' };
 }
 
-function clamp01(v: number): number {
-  return v < 0 ? 0 : v > 1 ? 1 : v;
-}
-
-/** Eased progress. `out` decelerates (the arrival most titles want). */
+/**
+ * Eased progress. `out` decelerates (the arrival most titles want). The curves
+ * themselves live in `shared/motion/easing.ts`, the registry the openers read
+ * too, so a curve means the same thing on a badge and on a moving head.
+ */
 export function easeAt(easing: Easing, p: number): number {
-  const t = clamp01(p);
-  switch (easing) {
-    case 'in':
-      return t * t;
-    case 'out':
-      return 1 - (1 - t) * (1 - t);
-    case 'in-out':
-      return t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t);
-    default:
-      return t;
-  }
+  return curveEaseAt(easing, p);
 }
 
 /**
