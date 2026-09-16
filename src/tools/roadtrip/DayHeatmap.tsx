@@ -215,7 +215,7 @@ export default function DayHeatmap({
     {/* `overflow-x-auto` clips vertically too, so whatever is drawn past the
         grid — the loupe's grip above the month labels, its frame under the
         last lane — needs room INSIDE the box, not outside it. */}
-    <div ref={boxRef} className={`overflow-x-auto ${overlay ? 'pt-4 pb-3 pl-2 pr-2' : 'pb-1'}`}>
+    <div ref={boxRef} className={`overflow-x-auto ${overlay ? 'pt-4 pb-3 pl-3 pr-3' : 'pb-1'}`}>
       <div className="inline-flex gap-2" style={{ minWidth: '100%' }}>
         {/* Weekday rail — every other row, the way a calendar is skimmed. */}
         <div
@@ -298,7 +298,12 @@ export default function DayHeatmap({
                         borderRadius: cellRadius,
                         background: LEVELS[levelOf(cell)],
                         outline: isSelected ? '2px solid var(--color-ink)' : undefined,
-                        outlineOffset: isSelected ? 1 : undefined,
+                        // Flush against the cell (no offset): at the small end of
+                        // the fitted range the halo an offset adds is what let the
+                        // ring reach out far enough to visually merge with the
+                        // loupe frame's own border when the open day sits in its
+                        // edge column (see LoupeBrush's `OUTSET`).
+                        outlineOffset: isSelected ? 0 : undefined,
                         boxShadow: isToday && !isSelected ? 'inset 0 0 0 2px var(--color-muted)' : undefined,
                       }}
                     />

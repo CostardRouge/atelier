@@ -35,7 +35,7 @@ export interface CtaSlide {
 export const DEFAULT_CTA: CtaSlide = {
   headline: 'Made with Atelier',
   body: 'Free and open source. Runs in your browser — your photos never leave your machine.',
-  url: 'https://costardrouge.github.io/atelier/',
+  url: 'https://atelier.steeve.website',
   showQr: true,
   background: '#100f0d',
   ink: '#f4f0e7',

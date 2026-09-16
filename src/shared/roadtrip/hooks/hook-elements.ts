@@ -13,7 +13,12 @@
  */
 
 import type { OverlayElement } from '../../overlay/overlay-types';
-import { badgeElements, type BadgeLayout, type BadgePieceStyles } from '../badge-layout';
+import {
+  badgeElements,
+  type BadgeCascade,
+  type BadgeLayout,
+  type BadgePieceStyles,
+} from '../badge-layout';
 import type { BadgeContent } from '../day-badge';
 import type { ResolvedHook } from './hook-variant';
 
@@ -26,10 +31,11 @@ export function hookElementsAt(
   aspect: number,
   styles: BadgePieceStyles,
   durationSeconds: number,
+  cascade: BadgeCascade | null = null,
 ): ElementsAt | null {
   if (!hook?.rewrites || !content) return null;
   return (t) => {
     const at = hook.contentAt(content, t);
-    return at ? badgeElements(at, layout, aspect, styles, durationSeconds) : [];
+    return at ? badgeElements(at, layout, aspect, styles, durationSeconds, cascade) : [];
   };
 }

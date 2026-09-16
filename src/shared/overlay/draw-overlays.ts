@@ -20,7 +20,14 @@ import { smoothHeading } from '../telemetry/heading-smooth';
 import type { Anchor, LabelPlacement, OverlayElement } from './overlay-types';
 import { isHidden, transformAt, type Transform } from './animation';
 import { tipAngle } from './rotate-device';
-import { findScene, resolveScenes, resolveWindow, type Scene } from './scenes';
+import {
+  findScene,
+  resolveScenes,
+  resolveWindow,
+  sceneStaggerDelays,
+  staggeredAnimation,
+  type Scene,
+} from './scenes';
 import {
   halolight,
   resolveElementStyle,
@@ -1618,12 +1625,13 @@ export function drawOverlays(
   const elapsed = elapsedAt(opts);
   const layer = resolveScenes(opts?.scenes, elapsed);
   if (layer.scrim) drawScrim(ctx, layer.scrim, videoWidth, videoHeight);
+  const delays = sceneDelays(opts?.scenes, elements, videoWidth / videoHeight);
 
   for (const el of elements) {
     if (!el.visible) continue;
     const scene = findScene(opts?.scenes, el.sceneId);
     const win = resolveWindow(el, scene);
-    let tf = transformAt(el.animation, win, elapsed);
+    let tf = transformAt(staggeredAnimation(el.animation, delays.get(el.id) ?? 0), win, elapsed);
     if (!scene && layer.outsideAlpha < 1) {
       tf = { ...tf, alpha: tf.alpha * layer.outsideAlpha };
     }
@@ -1676,6 +1684,25 @@ function elapsedAt(opts?: DrawOptions): number {
 }
 
 /**
+ * The stagger every scene adds to its members' entrances, by element id —
+ * derived from where the elements sit, once per paint. Empty when no scene
+ * cascades, which costs nothing.
+ */
+function sceneDelays(
+  scenes: readonly Scene[] | undefined,
+  elements: readonly OverlayElement[],
+  aspect: number,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  if (!scenes) return out;
+  for (const scene of scenes) {
+    if (!scene.stagger) continue;
+    for (const [id, delay] of sceneStaggerDelays(scene, elements, aspect)) out.set(id, delay);
+  }
+  return out;
+}
+
+/**
  * Whether an element is on screen at this instant — the same answer
  * `drawOverlays` acts on, so hit boxes never outlive what is painted.
  */
@@ -1684,13 +1711,16 @@ function isOnScreen(
   opts: DrawOptions | undefined,
   elapsed: number,
   outsideAlpha: number,
+  extraDelay = 0,
 ): boolean {
   if (opts?.ghostId === el.id) return true;
   const scene = findScene(opts?.scenes, el.sceneId);
   // Held back by a solo scene counts as off screen: during an intro that hides
   // the HUD, a click on the picture must not land on an invisible readout.
   if (!scene && outsideAlpha <= 0) return false;
-  return !isHidden(transformAt(el.animation, resolveWindow(el, scene), elapsed));
+  return !isHidden(
+    transformAt(staggeredAnimation(el.animation, extraDelay), resolveWindow(el, scene), elapsed),
+  );
 }
 
 /** Geometry of one element in video-pixel space — used for hit-testing. */
@@ -1718,6 +1748,7 @@ export function measureOverlays(
   const theme = opts?.theme ?? null;
   const elapsed = elapsedAt(opts);
   const { outsideAlpha } = resolveScenes(opts?.scenes, elapsed);
+  const delays = sceneDelays(opts?.scenes, elements, videoWidth / videoHeight);
   const boxes: ElementBox[] = [];
   for (const el of elements) {
     if (!el.visible) continue;
@@ -1727,7 +1758,7 @@ export function measureOverlays(
     // An element that is not on screen has no box: clicking where a title will
     // be in two seconds must not grab it. The ghosted selection is the one
     // exception, and it is exactly why it is drawn.
-    if (!isOnScreen(el, opts, elapsed, outsideAlpha)) continue;
+    if (!isOnScreen(el, opts, elapsed, outsideAlpha, delays.get(el.id) ?? 0)) continue;
     // The box is deliberately measured WITHOUT the animation's transform: a
     // title that is mid-slide would otherwise squirm away from the pointer.
     if (el.kind === 'rotate-device') {

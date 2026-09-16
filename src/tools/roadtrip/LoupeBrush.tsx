@@ -36,8 +36,14 @@ interface LoupeBrushProps {
 
 const GRIP = 12;
 const HANDLE = 12;
-/** How far the frame stands off the columns it encloses. */
-const OUTSET = 5;
+/**
+ * How far the frame stands off the columns it encloses. Wider than the
+ * selected day's own 2px outline (`DayHeatmap.tsx`) plus its offset needs —
+ * at 5px the two visually merged into one lumpy line whenever the selected
+ * day sat in the loupe's own edge column (its usual place, since opening the
+ * loupe on a click centres or ends it there).
+ */
+const OUTSET = 8;
 /** Room under the last lane before the frame closes. */
 const BOTTOM = 8;
 /** A handle's hit zone, around its 26px pill. */

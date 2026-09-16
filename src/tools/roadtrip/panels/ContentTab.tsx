@@ -241,7 +241,7 @@ export default function ContentTab({
         {slide.kind !== 'cta' && (
           <SlideDelivery
             slide={slide}
-            animated={isHook && hookAnimates(post.badge.pieceStyles)}
+            animated={isHook && hookAnimates(post.badge.pieceStyles, post.badge.cascade)}
             clipSeconds={clipSeconds}
             clip={clip}
             onMedium={(medium) => (isHook ? patchBadge({ medium }) : patchSlide({ medium }))}

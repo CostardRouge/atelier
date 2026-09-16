@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { createIntroScene, resolveScenes, resolveWindow, type Scene } from './scenes';
+import {
+  createIntroScene,
+  resolveScenes,
+  resolveWindow,
+  sceneStaggerDelays,
+  staggeredAnimation,
+  type Scene,
+} from './scenes';
 import { createTextElement, type OverlayElement } from './overlay-types';
 
 function scene(over: Partial<Scene> = {}): Scene {
@@ -109,5 +116,32 @@ describe('resolveScenes', () => {
     const out = resolveScenes([a, b], 2);
     expect(out.scrim).toEqual({ color: '#fff', opacity: 0.9 });
     expect(out.outsideAlpha).toBe(0);
+  });
+});
+
+describe('a scene\'s cascade', () => {
+  const members = [
+    el({ id: 'title', sceneId: 'intro', x: 0.5, y: 0.4, sizeFrac: 0.1 }),
+    el({ id: 'sub', sceneId: 'intro', x: 0.5, y: 0.5, sizeFrac: 0.05 }),
+    el({ id: 'hud', sceneId: undefined, x: 0.1, y: 0.9, sizeFrac: 0.03 }),
+  ];
+
+  it('is nothing without a stagger, and ranks the members only', () => {
+    expect(sceneStaggerDelays(scene(), members, 9 / 16).size).toBe(0);
+    const delays = sceneStaggerDelays(scene({ stagger: { each: 0.3, order: 'rows' } }), members, 9 / 16);
+    expect([...delays.entries()]).toEqual([
+      ['title', 0],
+      ['sub', expect.closeTo(0.3, 9)],
+    ]);
+    expect(delays.has('hud')).toBe(false);
+  });
+
+  it('adds to an element\'s own delay and gives a plain element a cut on its beat', () => {
+    const own = staggeredAnimation({ in: { preset: 'fade', duration: 1, easing: 'out', delay: 0.2 } }, 0.3);
+    expect(own?.in?.delay).toBeCloseTo(0.5);
+    expect(own?.in?.preset).toBe('fade');
+    const cut = staggeredAnimation(undefined, 0.3);
+    expect(cut?.in).toEqual({ preset: 'none', duration: 0, easing: 'linear', delay: 0.3 });
+    expect(staggeredAnimation(undefined, 0)).toBeUndefined();
   });
 });

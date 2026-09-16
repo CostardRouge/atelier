@@ -5,6 +5,16 @@ import type { AssetKind } from '../../shared/library/assets';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import type { SavedMediaRef } from '../../shared/projects/project-types';
 import { hashedMediaRef } from '../../shared/projects/media-identity';
+import {
+  collageCellAt,
+  collageCellCount,
+  collageSettleSeconds,
+  swapCollageCells,
+  withCollageCell,
+  type CollageLead,
+  type SlideCollage,
+} from '../../shared/roadtrip/collage';
+import { normaliseCellPlace } from '../../shared/media/media-layout';
 import DevelopSheet from '../../shared/develop/DevelopSheet';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import type { DevelopSettings } from '../../shared/develop/develop';
@@ -36,6 +46,7 @@ import {
   contentSlideElements,
   deckSlides,
   moveItem,
+  type DeckSlide,
 } from '../../shared/roadtrip/deck';
 import {
   clipSlice,
@@ -232,31 +243,142 @@ export default function PostEditor({
    */
   const picture = pictureKeyOf(slide);
 
-  /** Write a picture to whichever slide is open. */
-  const setSlideMedia = useCallback(
-    (ref: SavedMediaRef | null) => {
+  // --- the collage: several pictures in this slide's frame ----------------
+  // Cell 0 is the slide itself (`collage.ts`); the inspector, the Library and
+  // the develop sheet all follow the SELECTED cell, which is what lets one
+  // Picture tab work a six-piece bento. The selection belongs to one slide.
+  const collage = slide.kind === 'cta' ? null : slide.collage;
+  const [selectedCell, setSelectedCellState] = useState(0);
+  const cellCount = collage ? collageCellCount(collage) : 1;
+  const cellIndex = collage ? Math.min(selectedCell, Math.max(0, cellCount - 1)) : 0;
+  // What the Library had ticked when a cell was selected. An EMPTY cell must
+  // not take that picture just for being looked at — the record-back below
+  // would otherwise copy the lead into every cell the author steps through —
+  // so the Library only writes into it once something ELSE is ticked; the
+  // ticked picture itself goes in through "Use the ticked picture".
+  const [cellBaseline, setCellBaseline] = useState<File | null>(null);
+  const activeFileRef = useRef(activeFile);
+  activeFileRef.current = activeFile;
+  const setSelectedCell = useCallback((i: number) => {
+    setSelectedCellState(Math.max(0, i));
+    setCellBaseline(activeFileRef.current);
+  }, []);
+  const lead: CollageLead = useMemo(
+    () => ({ media: slide.media, framing: slide.framing, develop: slide.develop }),
+    [slide.media, slide.framing, slide.develop],
+  );
+  const cell = collage ? collageCellAt(lead, collage, cellIndex) : null;
+
+  /**
+   * Write the open slide's lead and collage in one go — the hook's live on
+   * the badge, a carousel picture's on its slide, the split every per-picture
+   * field already makes.
+   */
+  const writeLead = useCallback(
+    (next: { lead: CollageLead; collage: SlideCollage | null }) => {
+      const fields = {
+        media: next.lead.media,
+        framing: next.lead.framing,
+        develop: next.lead.develop,
+        collage: next.collage,
+      };
       if (slide.kind === 'hook') {
-        onChangePost({ ...post, media: ref });
+        onChangePost({ ...post, media: fields.media, badge: { ...post.badge, ...fields } });
       } else if (slide.slideId) {
         onChangePost({
           ...post,
-          slides: post.slides.map((s) =>
-            s.id === slide.slideId ? { ...s, media: ref } : s,
-          ),
+          slides: post.slides.map((s) => (s.id === slide.slideId ? { ...s, ...fields } : s)),
         });
       }
     },
     [slide, post, onChangePost],
+  );
+  const setCollage = useCallback(
+    (next: SlideCollage | null) => writeLead({ lead, collage: next }),
+    [writeLead, lead],
+  );
+  /** Write one field of the SELECTED cell (the lead when it is cell 0). */
+  const patchCell = useCallback(
+    (i: number, patch: Parameters<typeof withCollageCell>[3]) => {
+      if (!collage) {
+        // No collage: cell 0 is the slide, written the way it always was.
+        writeLead({
+          lead: {
+            media: patch.media !== undefined ? patch.media : lead.media,
+            framing: patch.framing ?? lead.framing,
+            develop: patch.develop !== undefined ? patch.develop : lead.develop,
+          },
+          collage: null,
+        });
+        return;
+      }
+      writeLead(withCollageCell(lead, collage, i, patch));
+    },
+    [collage, lead, writeLead],
+  );
+  /**
+   * A picture dragged out of the Library onto a cell — the sidebar says WHICH
+   * picture, the stage says WHERE. It selects that cell as well as filling it:
+   * a drop is also a way of saying "this is the one I am working on", and it
+   * keeps the Library's own tick pointing at what the cell now holds.
+   */
+  const dropAsset = useCallback(
+    (i: number, assetId: string) => {
+      const asset = lib.assets.find((a) => a.id === assetId);
+      const file = asset ? pickable(asset) : null;
+      // A lone `.srt`, a RAW with no twin: nothing to compose over, so the
+      // drop is refused rather than emptying the cell.
+      if (!file) return;
+      setSelectedCell(i);
+      if (!lib.selection.has(assetId)) lib.toggle(assetId);
+      lib.setActive(assetId);
+      void hashedMediaRef(file).then((ref) => patchCell(i, { media: ref }));
+    },
+    [lib, patchCell, setSelectedCell],
+  );
+
+  const swapCells = useCallback(
+    (a: number, b: number) => {
+      if (collage) writeLead(swapCollageCells(lead, collage, a, b));
+    },
+    [collage, lead, writeLead],
+  );
+  const moveCell = useCallback(
+    (i: number, dx: number, dy: number) => {
+      if (!collage) return;
+      const from = collageCellAt(lead, collage, i).place;
+      const place = normaliseCellPlace({ ...from, dx: from.dx + dx, dy: from.dy + dy });
+      patchCell(i, { place });
+    },
+    [collage, lead, patchCell],
+  );
+
+  /** Write a picture to the SELECTED cell of whichever slide is open. */
+  const setSlideMedia = useCallback(
+    (ref: SavedMediaRef | null) => patchCell(cellIndex, { media: ref }),
+    [patchCell, cellIndex],
+  );
+  /**
+   * What the Library follows: the selected cell, wearing the slide's key
+   * plus its own index so stepping between cells re-points the Library the
+   * way stepping between slides does.
+   */
+  const librarySlide = useMemo<DeckSlide>(
+    () =>
+      collage && cellIndex > 0
+        ? { ...slide, media: cell?.media ?? null, slideId: `${slide.slideId ?? slide.kind}#${cellIndex}` }
+        : slide,
+    [slide, collage, cellIndex, cell?.media],
   );
 
   // The Library and the open slide point at the same picture, both ways —
   // and a picture the pool lost to a reload is fetched back from the instance
   // that holds it, rather than reported missing.
   const recovery = useSlideLibrary(
-    slide,
+    librarySlide,
     lib.assets,
     lib.setActive,
-    activeFile,
+    collage && cellIndex > 0 && !cell?.media && activeFile === cellBaseline ? null : activeFile,
     setSlideMedia,
     lib.addFiles,
   );
@@ -274,21 +396,7 @@ export default function PostEditor({
     [lib],
   );
 
-  const slideFile = isCta ? null : activeFile;
-  const missing = !isCta && slide.media !== null && activeFile === null;
-  const isVideo = Boolean(slideFile && !slideFile.type.startsWith('image/'));
-  // The stage's numbers are only this slide's once they describe THIS file:
-  // while the piece plays from a clip into another, the last clip's duration
-  // would otherwise cut the next one with a stretch it does not have.
-  const sourceReady = srcInfo.file === slideFile;
-  const duration = sourceReady ? srcInfo.duration : 0;
-
-  // --- the hook's own picture, whichever slide is open ---------------------
-  // The stage reports the OPEN slide's source; the hook clip export, the
-  // camera credit and the Studio bridge are about the piece and must work
-  // from a carousel's second slide too, so the hook's file and dimensions are
-  // kept apart. Resolved HERE, above the badge's words, because the credit is
-  // one of them.
+  /** A stored ref's file in the Library, by name, or null when it is not loaded. */
   const resolve = useCallback(
     (ref: { name: string } | null) => {
       if (!ref) return null;
@@ -302,6 +410,37 @@ export default function PostEditor({
     [lib.assets],
   );
 
+  // The stage's `file` is the LEAD's. Without a collage that is what the
+  // Library has ticked; with one, the Library follows the selected cell, so
+  // the lead is resolved from its own ref.
+  const slideFile = isCta ? null : collage ? resolve(slide.media) : activeFile;
+  const missing =
+    !isCta && (collage ? (cell?.media ?? null) : slide.media) !== null && activeFile === null;
+  /** Every drawn cell's file, the lead first — for the stage and the labels. */
+  const cellFiles = useMemo(
+    () =>
+      collage
+        ? Array.from({ length: cellCount }, (_, i) => resolve(collageCellAt(lead, collage, i).media))
+        : [slideFile],
+    [collage, cellCount, lead, resolve, slideFile],
+  );
+  const cellFile = cellFiles[cellIndex] ?? null;
+  // The selection is one slide's: a new slide starts on its lead.
+  const slideKeyForCell = slide.slideId ?? slide.kind;
+  useEffect(() => setSelectedCellState(0), [slideKeyForCell]);
+  const isVideo = Boolean(slideFile && !slideFile.type.startsWith('image/'));
+  // The stage's numbers are only this slide's once they describe THIS file:
+  // while the piece plays from a clip into another, the last clip's duration
+  // would otherwise cut the next one with a stretch it does not have.
+  const sourceReady = srcInfo.file === slideFile;
+  const duration = sourceReady ? srcInfo.duration : 0;
+
+  // --- the hook's own picture, whichever slide is open ---------------------
+  // The stage reports the OPEN slide's source; the hook clip export, the
+  // camera credit and the Studio bridge are about the piece and must work
+  // from a carousel's second slide too, so the hook's file and dimensions are
+  // kept apart. `resolve` itself sits above, beside the collage's cells, which
+  // need it first.
   const hookFile = isHook ? slideFile : resolve(post.media);
   const hookIsVideo = Boolean(hookFile && !hookFile.type.startsWith('image/'));
 
@@ -342,6 +481,7 @@ export default function PostEditor({
             aspect,
             post.badge.pieceStyles,
             post.badge.durationSeconds,
+            post.badge.cascade,
           )
         : [],
     [
@@ -349,6 +489,7 @@ export default function PostEditor({
       post.badge.layout,
       post.badge.pieceStyles,
       post.badge.durationSeconds,
+      post.badge.cascade,
       aspect,
     ],
   );
@@ -458,6 +599,16 @@ export default function PostEditor({
     },
     [slide, post, onChangePost],
   );
+  /** The SELECTED cell's framing — the slide's own when it is cell 0. */
+  const cellFraming = normaliseFraming(cell ? cell.framing : slide.framing);
+  const setCellFraming = useCallback(
+    (i: number, framing: Framing) => patchCell(i, { framing }),
+    [patchCell],
+  );
+  const setSelectedCellFraming = useCallback(
+    (framing: Framing) => patchCell(cellIndex, { framing }),
+    [patchCell, cellIndex],
+  );
 
   const patchSlide = (patch: Partial<PostSlide>) => {
     if (!slide.slideId) return;
@@ -473,18 +624,11 @@ export default function PostEditor({
    * reason: it is about one photograph. Null is as shot.
    */
   const setDevelop = useCallback(
-    (develop: DevelopSettings | null) => {
-      if (slide.kind === 'hook') {
-        onChangePost({ ...post, badge: { ...post.badge, develop } });
-      } else if (slide.slideId) {
-        onChangePost({
-          ...post,
-          slides: post.slides.map((s) => (s.id === slide.slideId ? { ...s, develop } : s)),
-        });
-      }
-    },
-    [slide, post, onChangePost],
+    (develop: DevelopSettings | null) => patchCell(cellIndex, { develop }),
+    [patchCell, cellIndex],
   );
+  /** The SELECTED cell's own correction. */
+  const cellDevelop = cell ? cell.develop : slide.develop;
   const [developOpen, setDevelopOpen] = useState(false);
   // The sheet's time-savers (`docs/photo-develop.md` §8): the presets are the
   // person's own book, drawn by the sheet itself; the trip adds two batch verbs that write a COPY onto each target now — the open
@@ -676,18 +820,24 @@ export default function PostEditor({
   // the composition every other surface (the band, the PNG) shows, and the one
   // a piece opens on — an opener that moves with no animated piece (a scrub)
   // settles past its own length.
-  const settle = badgeSettleSeconds(post.badge.pieceStyles);
+  const settle = badgeSettleSeconds(post.badge.pieceStyles, post.badge.cascade);
   const clipAtRest = !stagePlaying && playhead <= clipRange.start + TRIM_EPSILON;
   const stillAtRest = !deck.playing && deck.local <= TRIM_EPSILON;
   const composedView = isClipSlide ? clipAtRest : stillAtRest;
+  // A collage's cells have an entrance of their own on ANY slide, so a content
+  // slide has a clock too: at rest it shows the cells settled, playing it
+  // shows them arriving and leaving on the piece's transport.
+  const collageSettle = collageSettleSeconds(collage, aspect);
   const badgeTime = !isHook
-    ? 0
+    ? stillAtRest
+      ? collageSettle
+      : deck.local
     : isClipSlide
       ? clipAtRest
-        ? settle
+        ? Math.max(settle, collageSettle)
         : Math.max(0, (playhead - clipRange.start) / slide.speed)
       : stillAtRest
-        ? Math.max(settle, hook.seconds)
+        ? Math.max(settle, hook.seconds, collageSettle)
         : deck.local;
 
   // The opener's ticks, heard while whichever transport is actually driving
@@ -818,6 +968,17 @@ export default function PostEditor({
   // `stack.composed`, which only the sheet itself paints from.
   const lutFor = grade.lutFor;
   const lut = isCta ? null : lutFor(slide);
+  // Each cell's cube: the slide's grade baked with THAT cell's develop, the
+  // lead first — the same call the rail and the PNG deck make per cell.
+  const collageLuts = useMemo(
+    () =>
+      collage
+        ? Array.from({ length: cellCount }, (_, i) =>
+            lutFor({ ...slide, develop: collageCellAt(lead, collage, i).develop }),
+          )
+        : undefined,
+    [collage, cellCount, lead, lutFor, slide],
+  );
 
   // Every cell of the rail, composed exactly as it will be delivered — the
   // crop, the caption, the badge, the grade. It needs the grade, so it sits
@@ -1222,6 +1383,16 @@ export default function PostEditor({
             // The closing card carries no photograph, so there is nothing to
             // reframe there and a drag must not pretend otherwise.
             onFraming={isCta ? undefined : setFraming}
+            collage={collage}
+            collageFiles={cellFiles}
+            collageLuts={collageLuts}
+            collageSeconds={slide.seconds}
+            selectedCell={cellIndex}
+            onSelectCell={setSelectedCell}
+            onCellFraming={setCellFraming}
+            onMoveCell={moveCell}
+            onSwapCells={swapCells}
+            onDropAsset={isCta ? undefined : dropAsset}
             onSourceLoaded={onSourceLoaded}
             onRendered={captureThumb}
             onFit={setFitWidth}
@@ -1325,13 +1496,26 @@ export default function PostEditor({
               onPickFromSource={pickFromSource}
               patchBadge={patchBadge}
               patchSlide={patchSlide}
-              framing={normaliseFraming(slide.framing)}
-              onFraming={setFraming}
+              framing={cellFraming}
+              onFraming={setSelectedCellFraming}
               grade={grade}
               linkedToProject={post.projectId !== null}
-              develop={slide.develop}
+              develop={cellDevelop}
               onOpenDevelop={() => setDevelopOpen(true)}
               onResetDevelop={() => setDevelop(null)}
+              collage={collage}
+              lead={lead}
+              selectedCell={cellIndex}
+              onSelectCell={setSelectedCell}
+              activeFile={activeFile}
+              cellFiles={cellFiles}
+              onChangeCollage={setCollage}
+              onUseActiveInCell={() => {
+                if (!activeFile) return;
+                void hashedMediaRef(activeFile).then((ref) => patchCell(cellIndex, { media: ref }));
+              }}
+              onClearCell={() => patchCell(cellIndex, { media: null })}
+              cellFile={cellFile}
             />
           )}
 
@@ -1364,21 +1548,27 @@ export default function PostEditor({
 
     {developOpen && !isCta && (
       <DevelopSheet
-        file={slideFile}
-        videoTimeSeconds={slide.videoTimeSeconds}
-        title={slideFile?.name ?? 'this slide'}
-        fidelity={pictureFidelity(slideFile).chip}
-        note={pictureFidelity(slideFile).note}
+        file={cellFile}
+        videoTimeSeconds={cellIndex === 0 ? slide.videoTimeSeconds : 0}
+        title={cellFile?.name ?? 'this slide'}
+        fidelity={pictureFidelity(cellFile).chip}
+        note={pictureFidelity(cellFile).note}
         emptyText="This slide has no picture yet — tick one in the Library."
         stack={grade.stack}
-        value={slide.develop}
+        value={cellDevelop}
         onDone={(develop) => {
           setDevelop(develop);
           setDevelopOpen(false);
         }}
         onCancel={() => setDevelopOpen(false)}
         lookHeader={<GradeScopeChips grade={grade} />}
-        footerHint={isHook ? 'writes to the hook' : `writes to slide ${slide.position}`}
+        footerHint={
+          collage && cellIndex > 0
+            ? `writes to cell ${cellIndex + 1} of ${isHook ? 'the hook' : `slide ${slide.position}`}`
+            : isHook
+              ? 'writes to the hook'
+              : `writes to slide ${slide.position}`
+        }
         applyTo={developApplyTo}
       />
     )}

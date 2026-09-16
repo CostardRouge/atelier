@@ -15,8 +15,11 @@ import {
   badgeToPng,
   frameSize,
   loadBadgeSource,
+  loadCollageSources,
   type BadgeSource,
+  type CollageSources,
 } from './badge-render';
+import { collageSettleSeconds } from './collage';
 import { deckSlides, slideFileName, type DeckSlide } from './deck';
 import type { HookPicture } from './hooks/hook-variant';
 import { slideRender } from './slide-render';
@@ -81,9 +84,16 @@ export async function renderDeck(
 
   for (const slide of slides) {
     let source: BadgeSource | null = null;
+    let cells: CollageSources | null = null;
     try {
-      const file = opts.resolve(slide.media);
-      if (file) source = await loadBadgeSource(file, slide.videoTimeSeconds);
+      if (slide.collage) {
+        // Every cell's picture, the lead's first; each cell's cube is the
+        // slide's grade baked with THAT cell's develop.
+        cells = await loadCollageSources(slide, slide.collage, opts.resolve);
+      } else {
+        const file = opts.resolve(slide.media);
+        if (file) source = await loadBadgeSource(file, slide.videoTimeSeconds);
+      }
 
       const blob = await badgeToPng({
         // What this slide is made of — the badge, a caption or the trip's
@@ -91,7 +101,17 @@ export async function renderDeck(
         // the rail's thumbnails derive it.
         ...slideRender(trip, post, slide, aspect, opts.pictures, opts.exposure),
         source,
-        timeSeconds: slide.kind === 'hook' ? opts.timeSeconds : 0,
+        // A still: the cells at rest, never leaving — no screen time is passed.
+        collage: cells && slide.collage ? { collage: slide.collage, items: cells.items } : null,
+        collageLuts: cells
+          ? cells.items.map((item) => opts.lutFor?.({ ...slide, develop: item.develop }) ?? null)
+          : undefined,
+        // Settled: past the badge's entrances on the hook, and past the cells'
+        // own entrance on any slide that holds a collage.
+        timeSeconds: Math.max(
+          slide.kind === 'hook' ? opts.timeSeconds : 0,
+          collageSettleSeconds(slide.collage, aspect),
+        ),
         width: w,
         height: h,
         lut: opts.lutFor?.(slide) ?? null,
@@ -110,6 +130,7 @@ export async function renderDeck(
       // shortfall by comparing what came back with the deck's length.
     } finally {
       source?.release();
+      cells?.release();
       opts.onProgress?.(slide.position, slides.length);
     }
   }

@@ -9,8 +9,9 @@
 
 import { useState } from 'react';
 import type { Scene, SceneScrim } from './scenes';
+import { DEFAULT_STAGGER, STAGGER_ORDERS, newStaggerSeed } from './stagger';
 import Button from '../ui/Button';
-import { FieldRow, NumberField, RangeField, ToggleField } from '../ui/Inspector';
+import { FieldRow, NumberField, RangeField, SelectField, ToggleField } from '../ui/Inspector';
 
 interface ScenePanelProps {
   scene: Scene;
@@ -111,6 +112,62 @@ export default function ScenePanel({
               format={(v) => `${v.toFixed(2)} s`}
             />
           </FieldRow>
+        </>
+      )}
+
+      {/* One cascade over the scene's members, from where they sit — added to
+          each element's own delay, so the intro's titles arrive one rank after
+          another without a delay typed on each. */}
+      <FieldRow
+        label="Cascade"
+        hint={
+          scene.stagger
+            ? 'Added to each element’s own delay; an element with no entrance cuts in on its beat.'
+            : 'Spread the scene’s entrances by where its elements sit.'
+        }
+      >
+        <ToggleField
+          label="Cascade the scene’s elements"
+          checked={Boolean(scene.stagger)}
+          onChange={(on) => patch({ stagger: on ? { ...DEFAULT_STAGGER } : null })}
+        />
+      </FieldRow>
+      {scene.stagger && (
+        <>
+          <FieldRow label="Order">
+            <SelectField
+              label="Cascade order"
+              value={scene.stagger.order}
+              onChange={(order) =>
+                patch({
+                  stagger: {
+                    ...scene.stagger!,
+                    order,
+                    ...(order === 'random' && scene.stagger!.seed === undefined ? { seed: newStaggerSeed() } : {}),
+                  },
+                })
+              }
+              options={STAGGER_ORDERS.map((o) => ({ id: o.id, label: `${o.label} — ${o.hint}` }))}
+            />
+          </FieldRow>
+          <FieldRow label="Each">
+            <RangeField
+              label="Seconds between two ranks"
+              min={0}
+              max={1}
+              step={0.01}
+              value={scene.stagger.each}
+              onChange={(each) => patch({ stagger: { ...scene.stagger!, each } })}
+              format={(v) => `${v.toFixed(2)} s`}
+            />
+          </FieldRow>
+          {scene.stagger.order === 'random' && (
+            <FieldRow label="Shuffle">
+              <Button size="sm" onClick={() => patch({ stagger: { ...scene.stagger!, seed: newStaggerSeed() } })}>
+                Shuffle again
+              </Button>
+            </FieldRow>
+          )}
         </>
       )}
 
