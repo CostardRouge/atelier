@@ -8,6 +8,7 @@ import {
   normaliseFraming,
   panBy,
   reclampFraming,
+  sameFraming,
   scaleFramingBy,
   wrapDegrees,
   type Framing,
@@ -325,6 +326,14 @@ describe('isDefaultFraming and canPan', () => {
     expect(isDefaultFraming({ ...DEFAULT_FRAMING, rotation: 1 })).toBe(false);
     expect(isDefaultFraming({ ...DEFAULT_FRAMING, flipY: true })).toBe(false);
     expect(isDefaultFraming({ ...DEFAULT_FRAMING, fit: 'contain' })).toBe(false);
+  });
+
+  it('compares two framings by what they say, null included', () => {
+    expect(sameFraming(null, { ...DEFAULT_FRAMING })).toBe(true);
+    expect(sameFraming(null, undefined)).toBe(true);
+    expect(sameFraming({ ...DEFAULT_FRAMING, x: 0.25 }, { ...DEFAULT_FRAMING, x: 0.25 })).toBe(true);
+    expect(sameFraming({ ...DEFAULT_FRAMING, x: 0.25 }, { ...DEFAULT_FRAMING, x: 0.3 })).toBe(false);
+    expect(sameFraming(null, { ...DEFAULT_FRAMING, fit: 'contain' })).toBe(false);
   });
 
   it('says when there is nothing to drag', () => {
