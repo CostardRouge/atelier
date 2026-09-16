@@ -16,20 +16,31 @@
  * - `sync` — one record per roll kept on an instance (`sources/doc-sync.ts`),
  *   beside the document and never on it;
  * - `presets` — the personal preset book every Develop host shares (D4 of
- *   `docs/develop-tool.md`), one row.
+ *   `docs/develop-tool.md`), one row;
+ * - `folders` (v2) — the directory handles a roll's local pictures came from,
+ *   one row per roll (F4 of §9). THIS DEVICE's: never on the document, never
+ *   in the roll file, never on the wire — a handle means nothing elsewhere;
+ * - `previews` (v3) — a WORKING PREVIEW per local picture of a roll that asked
+ *   for them (F5): a 2048 px JPEG to develop from while the file is away. The
+ *   one place the suite keeps media bytes, by the maintainer's decision (Q2 of
+ *   §9) — local pictures only, per roll, opt-in, its weight said.
  */
 
 import type { SyncRecord } from '../sources/doc-sync';
+import type { PersistedDirectoryHandle } from '../sources/file-sources';
 import { readPresetBook, type PresetBook } from './preset-book';
 import { migrateRollDoc, type RollDoc } from './roll-types';
 
 const DB_NAME = 'atelier-develop';
 // Bumped only when an object store is added; a document migration runs on read.
-const DB_VERSION = 1;
+// v2 (2026-09-16): `folders`. v3 (same day): `previews`.
+const DB_VERSION = 3;
 const ROLLS = 'rolls';
 const THUMBS = 'thumbs';
 const SYNC = 'sync';
 const PRESETS = 'presets';
+const FOLDERS = 'folders';
+const PREVIEWS = 'previews';
 
 interface ThumbRecord {
   /** The roll picture's id. */
@@ -43,7 +54,7 @@ function openDb(): Promise<IDBDatabase> {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
-      for (const name of [ROLLS, THUMBS, SYNC, PRESETS]) {
+      for (const name of [ROLLS, THUMBS, SYNC, PRESETS, FOLDERS, PREVIEWS]) {
         if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, { keyPath: 'id' });
       }
     };
@@ -234,3 +245,100 @@ export async function deletePresetBook(id: string): Promise<void> {
     /* already gone or storage unusable */
   }
 }
+
+// --- the folders a roll's local pictures came from ---------------------------
+
+/** A remembered folder: what to call it, and the handle one permission click re-reads. */
+export interface RollFolder {
+  name: string;
+  handle: PersistedDirectoryHandle;
+}
+
+interface FoldersRecord {
+  /** The roll's id. */
+  id: string;
+  folders: RollFolder[];
+}
+
+export async function getRollFolders(rollId: string): Promise<RollFolder[]> {
+  try {
+    const rec = await withStore(FOLDERS, 'readonly', (s) => s.get(rollId) as IDBRequest<FoldersRecord | undefined>);
+    return rec?.folders ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Returns false when the write failed; the folders then last the session. */
+export async function putRollFolders(rollId: string, folders: RollFolder[]): Promise<boolean> {
+  try {
+    const rec: FoldersRecord = { id: rollId, folders };
+    await withStore(FOLDERS, 'readwrite', (s) => s.put(rec));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteRollFolders(rollId: string): Promise<void> {
+  try {
+    await withStore(FOLDERS, 'readwrite', (s) => s.delete(rollId));
+  } catch {
+    /* already gone or storage unusable */
+  }
+}
+
+// --- working previews (F5) ---------------------------------------------------
+
+interface PreviewRecord {
+  /** The roll picture's id. */
+  id: string;
+  rollId: string;
+  blob: Blob;
+  updatedAt: number;
+}
+
+/** Save one picture's working preview. Returns false when the browser refused. */
+export async function putRollPreview(pictureId: string, rollId: string, blob: Blob, now: number = Date.now()): Promise<boolean> {
+  try {
+    const record: PreviewRecord = { id: pictureId, rollId, blob, updatedAt: now };
+    await withStore(PREVIEWS, 'readwrite', (s) => s.put(record));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The working previews that exist for a roll, by picture id. */
+export async function getRollPreviews(rollId: string): Promise<Map<string, Blob>> {
+  const out = new Map<string, Blob>();
+  try {
+    const all = await withStore(PREVIEWS, 'readonly', (s) => s.getAll() as IDBRequest<PreviewRecord[]>);
+    for (const r of all) if (r.rollId === rollId) out.set(r.id, r.blob);
+  } catch {
+    /* none is a valid answer */
+  }
+  return out;
+}
+
+/** Prune: when pictures leave a roll, when a roll is deleted, when a roll stops keeping previews. */
+export async function deleteRollPreviews(pictureIds: readonly string[]): Promise<void> {
+  if (pictureIds.length === 0) return;
+  try {
+    const db = await openDb();
+    try {
+      const tx = db.transaction(PREVIEWS, 'readwrite');
+      const store = tx.objectStore(PREVIEWS);
+      for (const id of pictureIds) store.delete(id);
+      await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error ?? new Error('IndexedDB transaction failed'));
+      });
+    } finally {
+      db.close();
+    }
+  } catch {
+    /* storage unusable: nothing to prune */
+  }
+}
+

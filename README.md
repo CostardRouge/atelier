@@ -15,8 +15,9 @@ Today it ships ten tools, converging into a few editors:
   dates and every day of it becomes a cell in a contribution-style grid; the
   holes are the days you have never posted from.
 - **Develop** — gather the photographs you mean to develop into a **roll**,
-  kept in this browser or on your Winnow, and give each its own light and
-  colour under one look for the roll.
+  kept in this browser or on your Winnow; give each its own light, colour and
+  crop under one look for the roll, and export them — from the proxy or the
+  original — or send them home to the Winnow they came from.
 - **DJI Telemetry** — view DJI drone flight telemetry in sync with the video it
   was captured with.
 - **Telemetry Overlay** — place altitude, GPS and exposure readouts anywhere on
@@ -915,12 +916,26 @@ dresses every picture after its own correction.
 
 **Making a roll.** *New roll* asks for a name, where to keep it when a Winnow
 can keep rolls too, and whether to start with the photos ticked in the Library
-(a folder, or a day on your instance). Inside a roll, *Add N selected* adds the
-Library's ticked photos in order; a picture already on the roll is never added
-twice, so adding a day again only brings what is new. A roll holds a
+(a folder, or a day on your instance). Inside a roll, **Add** brings pictures in two ways: *A day
+on …* opens one day of your Winnow — photographs only, everything the roll
+does not have yet ticked, what it has already marked — and adds references
+without downloading anything; *N ticked in the Library* adds the photos
+ticked there, counting only those the roll does not hold yet. With one way
+available it is a single button, and it is gone when there is nothing to add. A roll holds a
 *reference* to each picture — its name, size and content hash — never a copy of
-the file, so it reopens on another machine once the same pictures are in the
-Library there, and says *not in the Library* where they are not.
+the file. A picture that came from your Winnow comes back by itself when the
+roll is opened, even after a reload and without passing through the Library:
+the picture you open is fetched from the instance, then its two neighbours on
+each side, and the filmstrip shows the instance's thumbnails meanwhile. It is
+only ever asked of an instance you connected, and the roll says so when it is
+not signed in (*Sign in*, *Try again*), when the instance no longer has a
+picture, or when a picture lives on an instance this browser is not connected
+to. A picture from your own disk is found again from the folder it came from:
+*Add › A folder on this computer…* remembers the folder for that roll, so the
+next visit reads it by itself where the browser still allows it, or after one
+click on **Reopen** — and dropping photographs or a folder anywhere on the roll
+finds the ones it already holds and adds the others. (Remembering a folder
+needs Chrome or Edge; elsewhere a pick or a drop lasts the session.)
 
 **Developing.** A roll opens in its editor: the picture large, the roll as a
 filmstrip under it, and beside it the same controls as the Develop sheet in
@@ -930,10 +945,43 @@ picture after its own correction. There is no Done: what you set is saved on
 the roll as you go. **←/→** move along the strip, **\\** held shows the picture
 as shot, **Z** goes closer and back, **⌘C / ⌘V** copy a develop from one
 picture to the next, and **Apply to N other pictures** writes it onto the rest
-of the roll, each as its own copy. A filmstrip cell shows the picture as it was
-last seen in the editor, and a dot marks what is developed. On a phone the
-picture and the strip share the screen and the controls open from the bottom
-bar. Selecting several pictures, crop, and export come next.
+of the roll, each as its own copy. **Shift-click** marks a range of the strip
+and **⌘/Ctrl-click** one picture, and the batch verbs then read the marks —
+*Apply to N selected*, *Paste to N selected*. A filmstrip cell shows the
+picture as it was last seen in the editor — developed and cropped — and a dot
+marks what is developed. On a phone the picture and the strip share the
+screen and the three tabs open from the bottom bar.
+
+**Cropping.** The **Crop** tab (**R**; **D** goes back to Develop) frames the
+developed picture into a shape — its own, or one of the suite's aspects —
+with the gestures Trips uses: drag to move it, the wheel or a trackpad pinch
+to zoom, a rotation slider and quarter turns to straighten, two flips. *Fill*
+covers the frame and can never open a gap; *Whole* shows all of the picture
+with black bars where it falls short. The crop belongs to the picture, is
+saved as you go, and is never inherited by the next one.
+
+**Exporting.** The **Export** tab writes JPEGs — this picture, the marked
+ones, or the whole roll — into a folder you choose (downloaded one by one
+where the browser has no folder picker). Each is decoded at its own size,
+developed under the roll's look and cropped as the stage showed it; the
+**Size** is a ceiling on the long edge and never upscales. For a picture that
+came from your Winnow, **Pixels** decides where its pixels come from: *Auto*
+fetches the full-size original only where the proxy could not fill the frame
+asked for, *Proxies* never fetches, *Originals* always does — and a *Delivers*
+line says, for the picture in hand, exactly what will be written
+(`Proxy 2000 px → 1080 · ×1.85 to spare`, `Original 6048 px → 1920 · ×3.15
+to spare`). A RAW original is never fetched: the render you developed is what
+leaves. Fetched originals are kept for the session only. After a run whose
+pictures came from an instance, **Send N files to …** uploads them home into
+that Winnow's finals, each linked to its own capture — the same panel the
+Studio uses, and the same rule: only what you just rendered, only to the
+instance it came from, never automatically.
+
+**From a picture.** Under any picture you are looking at large — in the
+Library's preview sheet, or a day on your Winnow — a **Develop** button adds
+it to the open roll and opens it there (a picture already on the roll is
+opened, never added twice); from the rolls gallery the same button starts a
+new roll from it.
 
 **Keeping it.** A roll saves as you go — with the same undo and redo as the
 Studio and Trips, over the whole roll — and one kept on a Winnow saves there
@@ -941,6 +989,15 @@ after a few seconds of quiet, with the same status pill as a trip; the gallery
 moves, deletes and exports it (`.roll.json`, a backup — importing always makes a
 new roll). Thumbnails are baked here from the Library's files and never leave
 the browser.
+
+**Working previews.** A roll with pictures from your own disk can keep a
+**working preview** of each — a 2048 px copy, stored in this browser only —
+so it opens and can be developed and cropped while the files themselves are
+away (on a phone, where a folder cannot be remembered, it is the only way).
+It is off until you ask for it on that roll (*Keep them*, with the weight said
+first), the strip and the chip say when a picture is shown from its preview,
+an export made from one says so, and *Stop keeping them* deletes them.
+Pictures from your Winnow never get one: the instance is where they live.
 
 ## Telemetry tool
 

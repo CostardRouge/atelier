@@ -13,8 +13,8 @@ const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 const field =
   'font-sans text-base px-3.5 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent';
 
-/** "Roll · 15 Sep" — a name to replace, never a blank one to fill in. */
-function defaultName(now = new Date()): string {
+/** "Roll · 15 Sep" — a name to replace, never a blank one to fill in. Also what a roll started from a picture is called. */
+export function defaultRollName(now = new Date()): string {
   return `Roll · ${now.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`;
 }
 
@@ -35,7 +35,7 @@ export default function NewRollModal({
   onCancel: () => void;
   onCreate: (choices: NewRollChoices) => void;
 }) {
-  const [name, setName] = useState(defaultName);
+  const [name, setName] = useState(defaultRollName);
   const [sourceId, setSourceId] = useState(DEFAULT_SOURCE_ID);
   const [withSelected, setWithSelected] = useState(selectedCount > 0);
   const inputRef = useRef<HTMLInputElement>(null);
