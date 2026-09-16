@@ -78,6 +78,21 @@ export const FRAMING_BARS = '#000000';
 /** The most a picture can be zoomed in. Past this a JPEG is mush anyway. */
 export const MAX_FRAMING_SCALE = 8;
 
+/**
+ * A zoom factor applied to a framing's scale, held between covering the frame
+ * and that ceiling.
+ *
+ * One function for every way a zoom is asked for — a wheel notch (`factor` =
+ * `exp(-deltaY / 400)`), the ratio between two fingers' distances, a button's
+ * step — so the three cannot round or clamp differently, which is exactly how
+ * a pinch and a slider end up disagreeing about where the picture is.
+ */
+export function scaleFramingBy(scale: number, factor: number): number {
+  const from = Number.isFinite(scale) ? scale : 1;
+  if (!Number.isFinite(factor) || factor <= 0) return clamp(from, 1, MAX_FRAMING_SCALE);
+  return clamp(from * factor, 1, MAX_FRAMING_SCALE);
+}
+
 export function isDefaultFraming(f: Framing | null | undefined): boolean {
   if (!f) return true;
   return (

@@ -760,7 +760,11 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                   </span>
                 )}
               </p>
-              {localCount > 0 && (
+              {/* Housekeeping, and it wraps to three lines at 390px: on a
+                  phone with the drawer up those are three lines taken off the
+                  photograph. It is back as soon as the drawer is down, which
+                  is when a roll's upkeep is read anyway. */}
+              {localCount > 0 && !(compact && sheetOpen) && (
                 <p className="m-0 font-mono text-2xs text-faint tabular-nums">
                   working previews ·{' '}
                   {previews.enabled ? (

@@ -112,7 +112,7 @@ pure rules are `roll-editor.ts` (tested). Rules a later phase must keep:
   develop, the look and a batch landing in one tick compose instead of the last
   replacing a roll the others already moved on. Every writer goes through it.
 - **The workbench is keyed per picture and returns TWO grid cells** (the stage,
-  and `PanelHost`: a column, or a sheet on a phone) while the filmstrip is its
+  and `PanelHost`: a column, or a drawer on a phone) while the filmstrip is its
   parent's cell, so stepping remounts the draft (never-inherit) and never the
   strip (its scroll survives). The grid is inside an `@container` wrapper: the
   inspector narrows to 18rem under 880px of TOOL width, the Library's width
@@ -130,9 +130,11 @@ pure rules are `roll-editor.ts` (tested). Rules a later phase must keep:
   until released, `Z` fit ↔ one step closer, ⌘/Ctrl-C/V copy and paste the
   develop (⌘C yields to a text selection). A focused field or slider keeps them,
   and an open `alertdialog` keeps every key.
-- **Phone**: stage and strip share the height; the inspector is a `BottomSheet`
-  opened from the shell's bar (`Develop` beside Library), removal is a
-  desktop-hover verb for now.
+- **Phone**: stage and strip share the height; the inspector is a
+  `DockedDrawer` under them (rev. 2026-09-16 — it was a `BottomSheet`, whose
+  wash tinted the photograph being judged: `frontend.md`), opened from the
+  shell's bar (`Develop` beside Library) and marked there while it is up.
+  Removal is a desktop-hover verb for now.
 
 Verified in the Browser pane: four dropped JPEGs → a roll → +1.2 EV stored
 through the debounce → → / ← stepping with `history.length` unchanged and no
@@ -219,11 +221,18 @@ the one addition to a shared block. Rules a later phase must keep:
 - **A cell is the picture as delivered — graded AND framed** (`framedThumbnail`,
   keyed on the crop too, never upscaled past the source's long edge). The
   other cells keep the D6 limit (as last seen).
-- The gestures are the badge stage's, deliberately: wheel = trackpad pinch,
-  `touch-none` on a canvas that writes both axes inside a fixed stage (not a
-  scroll box — `frontend.md`'s rule is about scrollers). No touch pinch and no
-  rotate handle, exactly as Trips: the slider and the turn buttons are the
-  rotation. Reset keeps the fit (Trips' rule: asking for Whole is not a crop).
+- The gestures are the badge stage's plus a PINCH (2026-09-16): wheel = trackpad
+  pinch, two fingers zoom the framing while moving it by their centre, and they
+  are heard on the STAGE rather than on the canvas — a phone letterboxes a
+  147px crop inside a 374px stage, so fingers landing either side of the
+  picture, which is how anything small is pinched, reached no listener at all.
+  `touch-none` moved to the stage with them and is right there (both axes, a
+  fixed-height box, not a scroll box — `frontend.md`'s rule is about
+  scrollers). One write per event, zoom before move: `panBy` clamps at the
+  scale it is given, and two writes in one event would each read the render's
+  copy and the second would throw the first away. No rotate handle, exactly as
+  Trips: the slider and the turn buttons are the rotation. Reset keeps the fit
+  (Trips' rule: asking for Whole is not a crop).
 - The docked inspector now wears the two editors' frame (`border border-line
   rounded-paper bg-surface p-3`, the `Segmented` strip pinned, the sections
   scrolling under it) — the `frontend.md` rule D6 had not yet applied.

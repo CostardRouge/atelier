@@ -20,11 +20,18 @@ import { useDevelopDraft, useTold } from '../../shared/develop/use-develop-draft
 import { useDevelopPicture, type DevelopFrame } from '../../shared/develop/use-develop-picture';
 import { usePresetBookHost } from '../../shared/develop/use-preset-book';
 import type { LutStack } from '../../shared/lut/use-lut-stack';
-import { DEFAULT_FRAMING, isDefaultFraming, type Framing } from '../../shared/media/framing';
+import {
+  DEFAULT_FRAMING,
+  MAX_FRAMING_SCALE,
+  isDefaultFraming,
+  scaleFramingBy,
+  type Framing,
+} from '../../shared/media/framing';
 import { describeKeyTarget, targetOwnsTyping } from '../../shared/media/transport-keys';
 import PanelHost from '../../shared/ui/PanelHost';
 import Segmented from '../../shared/ui/Segmented';
 import StageZoomControl from '../../shared/ui/StageZoomControl';
+import { STAGE_ZOOM_STEP, type ZoomControls } from '../../shared/ui/stage-zoom';
 import type { RollExport } from '../../shared/develop/roll-types';
 import CropPanel, { type CropApplyVerb } from './CropPanel';
 import ExportPanel, { type ExportVerb } from './ExportPanel';
@@ -39,9 +46,9 @@ const SNAPSHOT_DELAY_MS = 700;
 /**
  * ONE picture of a roll on the workbench — mounted with a `key` per picture,
  * so a draft never leaks onto the next photograph (the never-inherit rule).
- * It renders two grid cells (the stage, and the inspector — a column, or a
- * sheet on a phone) and leaves the filmstrip to its parent, so stepping along
- * the strip remounts this and never the strip.
+ * It renders two grid cells (the stage, and the inspector — a column beside
+ * the picture, or a DRAWER under it on a phone) and leaves the filmstrip to
+ * its parent, so stepping along the strip remounts this and never the strip.
  *
  * Unlike the modal there is no Done: the numbers are WRITTEN THROUGH to the
  * roll after a short rest, and on leaving the picture — the roll is the
@@ -273,6 +280,23 @@ export default function PictureWorkbench({
   const cropping = tab === 'crop';
   const tabLabel = WORKBENCH_TABS.find((t) => t.id === tab)?.label ?? 'Develop';
 
+  // The crop's zoom as the pill's own interface, so one control serves both
+  // stages: on the Develop tab it moves the VIEW (how closely the picture is
+  // being looked at, which never leaves), on the Crop tab the FRAMING (what is
+  // kept, which does). The step is the stages' own 1.25.
+  const framingZoom = useMemo<ZoomControls>(
+    () => ({
+      scale: framingDraft.scale,
+      label: `${framingDraft.scale.toFixed(2)}×`,
+      canZoomIn: framingDraft.scale < MAX_FRAMING_SCALE - 1e-6,
+      canZoomOut: framingDraft.scale > 1,
+      zoomIn: () => setFramingDraft((f) => ({ ...f, scale: scaleFramingBy(f.scale, STAGE_ZOOM_STEP) })),
+      zoomOut: () => setFramingDraft((f) => ({ ...f, scale: scaleFramingBy(f.scale, 1 / STAGE_ZOOM_STEP) })),
+      reset: () => setFramingDraft((f) => ({ ...f, scale: 1 })),
+    }),
+    [framingDraft.scale],
+  );
+
   return (
     <>
       <div className={compact ? 'flex-1 min-h-0 flex flex-col gap-2' : 'col-start-1 row-start-1 min-w-0 min-h-0 flex flex-col gap-2'}>
@@ -284,13 +308,20 @@ export default function PictureWorkbench({
           </span>
           {fidelity.chip && <span className={`${developPillClass} flex-none @max-[880px]:hidden`}>{fidelity.chip}</span>}
           {!cropping && (
-            <>
-              <DevelopClipboardActions draft={draft.draft} asShot={draft.asShot} onReplace={draft.setDraft} onTold={tell} />
-              {source && (
-                <StageZoomControl zoom={picture.view.zoom} hint="wheel, pinch, or Z" className="flex-none max-[820px]:hidden" />
-              )}
-            </>
+            <DevelopClipboardActions draft={draft.draft} asShot={draft.asShot} onReplace={draft.setDraft} onTold={tell} />
           )}
+          {/* The pill is drawn at EVERY width, phone included — the lightbox
+              hides it under 820px on the argument that the pinch is the gesture
+              there, and a stage that answers a pinch best-effort (the browser
+              can still take the fingers) needs the way in that always answers
+              (`frontend.md`, «what it costs»). On the crop it drives the
+              FRAMING's own zoom, which is what the picture is cropped by. */}
+          {source &&
+            (cropping ? (
+              <StageZoomControl zoom={framingZoom} hint="drag, pinch, or the wheel" className="flex-none" />
+            ) : (
+              <StageZoomControl zoom={picture.view.zoom} hint="wheel, pinch, or Z" className="flex-none" />
+            ))}
         </div>
         <DevelopViewport
           picture={picture}
@@ -308,10 +339,15 @@ export default function PictureWorkbench({
             className="flex-1"
           />
         )}
-        {cropping ? (
+        {/* The line under the picture is PROSE — what the numbers say, which
+            gesture applies. It wraps to three lines at 390px, and on a phone
+            with the drawer up those are three lines taken off the photograph
+            for a sentence nobody is reading while they drag a slider. It comes
+            back the moment the drawer is down and the stage owns the screen. */}
+        {compact && sheetOpen ? null : cropping ? (
           <p className="m-0 flex-none font-mono text-2xs text-faint leading-relaxed">
             {source
-              ? `drag to move the picture, wheel or pinch to zoom · ${framingDraft.fit === 'contain' ? 'whole picture, bars where it falls short' : 'filling the frame'}`
+              ? `drag to move the picture, pinch or the wheel to zoom · ${framingDraft.fit === 'contain' ? 'whole picture, bars where it falls short' : 'filling the frame'}`
               : 'the crop needs the picture'}
           </p>
         ) : (
@@ -321,6 +357,11 @@ export default function PictureWorkbench({
 
       <PanelHost
         asSheet={compact}
+        // On a phone the inspector is a DRAWER, never the sheet: a sheet's wash
+        // sits over the photograph and tints it, so the one thing the tool
+        // exists to judge — the colour that will leave — cannot be seen while
+        // it is being set (`frontend.md`).
+        compactAs="drawer"
         open={sheetOpen}
         onClose={() => onSheetOpen(false)}
         title={`${tabLabel} · ${entry.ref.name}`}
