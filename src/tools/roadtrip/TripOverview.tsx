@@ -4,6 +4,7 @@ import { applyTripDetails } from '../../shared/roadtrip/trip-edit';
 import { dayStageActions } from '../../shared/roadtrip/stage-edit';
 import { rulerBars, stageTint } from '../../shared/roadtrip/stage-ruler';
 import {
+  daysBetween,
   enumerateDays,
   formatIsoDate,
   isShortTrip,
@@ -385,8 +386,23 @@ export default function TripOverview({
     // dragged in a window scrolled away from the open day changes the trip,
     // and re-running here yanked the window back to that day mid-edit.
   }, [tripStart, tripEnd, selected]);
+  // The window as the RULER's gesture needs it: a swipe asks for weeks and is
+  // told how many it really got, so a throw stops at the end of the trip
+  // instead of gliding on against nothing. The mirror is what lets several
+  // asks inside one frame compose — `setLoupe`'s own state arrives a render
+  // later, and a glide does not wait for renders.
+  const loupeRef = useRef(loupe);
+  loupeRef.current = loupe;
   const panLoupe = useCallback(
-    (weeks: number) => setLoupe((l) => moveLoupe({ startDate: tripStart, endDate: tripEnd }, l, weeks * 7)),
+    (weeks: number) => {
+      const from = loupeRef.current;
+      const next = moveLoupe({ startDate: tripStart, endDate: tripEnd }, from, weeks * 7);
+      const days = daysBetween(from.start, next.start) ?? 0;
+      if (days === 0) return 0;
+      loupeRef.current = next;
+      setLoupe(next);
+      return days / 7;
+    },
     [tripStart, tripEnd],
   );
 
