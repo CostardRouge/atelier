@@ -316,7 +316,7 @@ pane: from the open roll, the Library's preview sheet drew `DEVELOP ON ROLL ·
 route; from the gallery the same sheet drew `DEVELOP · Develop` and the click
 made `Roll · 16 Sept` on `local` with that one picture and opened it.
 
-## Undo and redo over the roll (2026-09-15)
+## Undo and redo over the roll (2026-09-15, rev. 2026-09-16)
 
 **Fact.** `DevelopTool` wires the shared history engine exactly as Trips does —
 watched at its own `handleChange`, reset by the sync machine's `onReplace`, the
@@ -325,6 +325,31 @@ buttons in the `headerExtra` slot beside the pill; the engine's rules are in
 picture the route names (`picture:<id>`), so one picture's slider never merges
 into the next picture's. **How to apply**: the editor's write-through is what
 the history sees, so one step is one write, not one slider frame — and a draft
-that has not been written through yet is not a step. Verified in headless
-Chromium against the IndexedDB document: a roll renamed, stepped back and
-forward again.
+that has not been written through yet is not a step.
+
+**An editor with no Done needs its drafts level with the document in BOTH
+directions (`shared/develop/write-through.ts` + `use-write-through.ts`).** The
+maintainer's report was flat: *"undo redo dont work in develop"*. Half of it was
+the ⌘Z owner (`frontend.md`); the other half is that `PictureWorkbench` reads
+`entry.develop` and `entry.framing` ONCE — right, as the never-inherit rule, for
+a workbench keyed per picture — and so ignored the roll moving under it. An undo
+stepped the roll back correctly and the screen did not change at all: the
+sliders, the preview (the draft rides `stack.setDevelop`) and the crop stage all
+still showed the undone numbers, and the next nudge wrote them straight back
+over the step. **The rule, and its whole difficulty, is telling the two sides
+apart**: during a gesture the document LAGS the draft by the write's rest, so a
+lagging value must not read as somebody else's edit — which needs one remembered
+value, the last one handed to the document. The draft moved → a write is owed;
+the document moved to something this editor did not write (an undo, a redo, a
+batch verb, an instance's copy) → drop what was owed and re-seed. Dropping
+matters on its own: an undo landing inside the 200 ms rest would otherwise be
+put back a moment later by the write already in flight. A gesture that ends
+where it started owes nothing. The decision is pure and tested; the hook owns
+only the timer and the unmount flush (which is what keeps a picture's numbers
+when you step to the next one).
+
+Verified in headless Chromium against the running editor (a JPEG built on a
+canvas and dropped in through a synthetic `DataTransfer`): the exposure slider
+moved, ⌘Z **with the slider still focused** put it back, ⇧⌘Z returned it, both
+buttons the same, the crop's zoom stepped back and forward on its own draft, and
+an undo pressed inside a gesture's rest held instead of being overwritten.

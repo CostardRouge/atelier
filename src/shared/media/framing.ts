@@ -93,6 +93,27 @@ export function scaleFramingBy(scale: number, factor: number): number {
   return clamp(from * factor, 1, MAX_FRAMING_SCALE);
 }
 
+/**
+ * Two framings that put the picture in the same place — null reads as the
+ * default, the one spelling of "not framed" a document stores.
+ *
+ * By VALUE, never by identity: a caller comparing what it wrote against what
+ * came back is comparing two objects built a moment apart.
+ */
+export function sameFraming(a: Framing | null | undefined, b: Framing | null | undefined): boolean {
+  const x = a ?? DEFAULT_FRAMING;
+  const y = b ?? DEFAULT_FRAMING;
+  return (
+    x.scale === y.scale &&
+    x.x === y.x &&
+    x.y === y.y &&
+    x.rotation === y.rotation &&
+    x.flipX === y.flipX &&
+    x.flipY === y.flipY &&
+    x.fit === y.fit
+  );
+}
+
 export function isDefaultFraming(f: Framing | null | undefined): boolean {
   if (!f) return true;
   return (

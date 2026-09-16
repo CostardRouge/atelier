@@ -8,15 +8,22 @@ import {
 import DevelopHistogram from '../../shared/develop/DevelopHistogram';
 import DevelopSliders from '../../shared/develop/DevelopSliders';
 import DevelopViewport, { DevelopCaption } from '../../shared/develop/DevelopViewport';
-import { isDefaultDevelop, type DevelopSettings } from '../../shared/develop/develop';
+import { DEFAULT_DEVELOP, isDefaultDevelop, type DevelopSettings } from '../../shared/develop/develop';
 import { copyDevelop, pasteDevelop } from '../../shared/develop/develop-clipboard';
 import { developPillClass } from '../../shared/develop/develop-classes';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { pictureFidelity } from '../../shared/develop/picture-fidelity';
-import { WORKBENCH_TABS, editorKeyAction, pictureAspectRatio, type WorkbenchTab } from '../../shared/develop/roll-editor';
+import {
+  WORKBENCH_TABS,
+  editorKeyAction,
+  pictureAspectRatio,
+  sameDevelop,
+  type WorkbenchTab,
+} from '../../shared/develop/roll-editor';
 import { framedThumbnail } from '../../shared/develop/roll-thumb';
 import type { RollPicture } from '../../shared/develop/roll-types';
 import { useDevelopDraft, useTold } from '../../shared/develop/use-develop-draft';
+import { useWriteThrough } from '../../shared/develop/use-write-through';
 import { useDevelopPicture, type DevelopFrame } from '../../shared/develop/use-develop-picture';
 import { usePresetBookHost } from '../../shared/develop/use-preset-book';
 import type { LutStack } from '../../shared/lut/use-lut-stack';
@@ -24,6 +31,7 @@ import {
   DEFAULT_FRAMING,
   MAX_FRAMING_SCALE,
   isDefaultFraming,
+  sameFraming,
   scaleFramingBy,
   type Framing,
 } from '../../shared/media/framing';
@@ -38,8 +46,6 @@ import ExportPanel, { type ExportVerb } from './ExportPanel';
 import FramingStage from './FramingStage';
 import type { RollExports } from './use-roll-export';
 
-/** How long the numbers rest before they are written to the roll. */
-const WRITE_DELAY_MS = 200;
 /** How long the picture rests before its filmstrip cell is redrawn. */
 const SNAPSHOT_DELAY_MS = 700;
 
@@ -128,66 +134,31 @@ export default function PictureWorkbench({
   const fidelity = pictureFidelity(file);
 
   // --- write-through ---------------------------------------------------------
+  // Both drafts ride `use-write-through.ts`, which also takes the roll BACK
+  // when it moves under them: an undo, a redo, a batch verb or an instance's
+  // copy changes the stored value without this editor's doing, and a draft that
+  // ignored it would keep showing numbers the roll no longer holds — and write
+  // them back over the step at the next nudge.
   const callbacks = useRef({ onDevelop, onFraming, onAspect, onSnapshot, onStep, onTabChange });
   callbacks.current = { onDevelop, onFraming, onAspect, onSnapshot, onStep, onTabChange };
-  const pending = useRef<{ value: DevelopSettings | null } | null>(null);
-  const writeTimer = useRef<number | null>(null);
-  const mounted = useRef(false);
-  const value = draft.draft;
-  useEffect(() => {
-    // The first draft IS the stored develop: nothing to write.
-    if (!mounted.current) {
-      mounted.current = true;
-      return;
-    }
-    pending.current = { value: isDefaultDevelop(value) ? null : value };
-    if (writeTimer.current !== null) window.clearTimeout(writeTimer.current);
-    writeTimer.current = window.setTimeout(() => {
-      writeTimer.current = null;
-      const p = pending.current;
-      pending.current = null;
-      if (p) callbacks.current.onDevelop(p.value);
-    }, WRITE_DELAY_MS);
+  const { setDraft } = draft;
+  useWriteThrough<DevelopSettings>({
+    stored: entry.develop,
     // Keyed on the numbers themselves: `draft` is a new object every render.
-  }, [value]);
-  // Leaving the picture writes what has not been written yet.
-  useEffect(
-    () => () => {
-      if (writeTimer.current !== null) window.clearTimeout(writeTimer.current);
-      const p = pending.current;
-      pending.current = null;
-      if (p) callbacks.current.onDevelop(p.value);
-    },
-    [],
-  );
-
-  // --- the crop, written through the same way, on its own timer ------------
-  const framingPending = useRef<{ value: Framing | null } | null>(null);
-  const framingTimer = useRef<number | null>(null);
-  const framingMounted = useRef(false);
-  useEffect(() => {
-    if (!framingMounted.current) {
-      framingMounted.current = true;
-      return;
-    }
-    framingPending.current = { value: isDefaultFraming(framingDraft) ? null : framingDraft };
-    if (framingTimer.current !== null) window.clearTimeout(framingTimer.current);
-    framingTimer.current = window.setTimeout(() => {
-      framingTimer.current = null;
-      const p = framingPending.current;
-      framingPending.current = null;
-      if (p) callbacks.current.onFraming(p.value);
-    }, WRITE_DELAY_MS);
-  }, [framingDraft]);
-  useEffect(
-    () => () => {
-      if (framingTimer.current !== null) window.clearTimeout(framingTimer.current);
-      const p = framingPending.current;
-      framingPending.current = null;
-      if (p) callbacks.current.onFraming(p.value);
-    },
-    [],
-  );
+    draft: isDefaultDevelop(draft.draft) ? null : draft.draft,
+    same: sameDevelop,
+    onWrite: (value) => callbacks.current.onDevelop(value),
+    onReseed: (value) => setDraft(value ?? DEFAULT_DEVELOP),
+  });
+  // The crop, written through the same way, on its own timer: a drag fires far
+  // more often than a slider ever does.
+  useWriteThrough<Framing>({
+    stored: entry.framing,
+    draft: isDefaultFraming(framingDraft) ? null : framingDraft,
+    same: sameFraming,
+    onWrite: (value) => callbacks.current.onFraming(value),
+    onReseed: (value) => setFramingDraft(value ?? { ...DEFAULT_FRAMING }),
+  });
 
   // --- the filmstrip cell, redrawn as delivered once the picture rests -------
   // Delivered means graded AND framed: the strip shows the crop as well as
