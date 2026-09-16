@@ -885,9 +885,10 @@ dresses every picture after its own correction.
 
 **Making a roll.** *New roll* asks for a name, where to keep it when a Winnow
 can keep rolls too, and whether to start with the photos ticked in the Library
-(a folder, or a day on your instance). Inside a roll, *Add N selected* adds the
-Library's ticked photos in order; a picture already on the roll is never added
-twice, so adding a day again only brings what is new. A roll holds a
+(a folder, or a day on your instance). Inside a roll, *Add N from the Library* adds the
+Library's ticked photos in order — counting only those the roll does not hold
+yet, and gone from the bar when there are none — so ticking a day again only
+brings what is new. A roll holds a
 *reference* to each picture — its name, size and content hash — never a copy of
 the file. A picture that came from your Winnow comes back by itself when the
 roll is opened, even after a reload and without passing through the Library:

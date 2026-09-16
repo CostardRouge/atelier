@@ -143,6 +143,24 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     availability,
   );
 
+  // --- what the Library's ticks would ADD: only what the roll does not hold --
+  // The Library ticks whatever it imports, so its selection is mostly pictures
+  // the roll already has — counting them kept "Add 3 selected" on the bar for
+  // a roll that was complete (the maintainer's report, 2026-09-16).
+  const [newPhotos, setNewPhotos] = useState<readonly File[]>([]);
+  const pictureKey = roll.pictures.map((p) => p.id).join('|');
+  useEffect(() => {
+    let alive = true;
+    void hashedMediaRefs(selectedPhotos).then((refs) => {
+      if (!alive) return;
+      const held = latest.current.pictures;
+      setNewPhotos(selectedPhotos.filter((_, i) => !held.some((p) => sameMediaRef(p.ref, refs[i]))));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [selectedPhotos, pictureKey]);
+
   // --- thumbnails: stored, else baked as shot; the open one redraws graded --
   const [thumbs, setThumbs] = useState<ReadonlyMap<string, Blob>>(new Map());
   const thumbsRef = useRef(thumbs);
@@ -237,11 +255,11 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
 
   // --- verbs ----------------------------------------------------------------
   async function addSelected() {
-    if (selectedPhotos.length === 0) return;
+    if (newPhotos.length === 0) return;
     setAdding(true);
     setNotice(null);
     try {
-      const refs = await hashedMediaRefs(selectedPhotos);
+      const refs = await hashedMediaRefs(newPhotos);
       const before = latest.current.pictures.length;
       let added = 0;
       update((r) => {
@@ -399,7 +417,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   );
 
   const progress = rollProgress(roll);
-  const addLabel = selectedPhotos.length === 0 ? 'Add from Library' : `Add ${selectedPhotos.length} selected`;
+  const addLabel =
+    newPhotos.length === 0 ? 'Add from Library' : `Add ${newPhotos.length} from the Library`;
 
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-2">
@@ -408,19 +427,19 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         trailing={
           <>
             {headerExtra}
-            <Button
-              variant={roll.pictures.length === 0 ? 'primary' : 'default'}
-              icon={Icons.plus}
-              onClick={() => void addSelected()}
-              disabled={selectedPhotos.length === 0 || adding}
-              title={
-                selectedPhotos.length === 0
-                  ? 'Tick photos in the Library first — they are added here in that order'
-                  : 'Add the photos ticked in the Library; a picture already on the roll is not added twice'
-              }
-            >
-              {adding ? 'Adding…' : addLabel}
-            </Button>
+            {/* Only when the Library holds something the roll does not: a
+                ticked picture already on the roll is nothing to add. */}
+            {(newPhotos.length > 0 || adding) && (
+              <Button
+                variant="primary"
+                icon={Icons.plus}
+                onClick={() => void addSelected()}
+                disabled={adding}
+                title="Add the photos ticked in the Library that are not on this roll yet, in that order"
+              >
+                {adding ? 'Adding…' : addLabel}
+              </Button>
+            )}
           </>
         }
       >
@@ -431,7 +450,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         <EmptyState
           title="No pictures on this roll yet"
           actions={
-            <Button variant="primary" onClick={() => void addSelected()} disabled={selectedPhotos.length === 0}>
+            <Button variant="primary" onClick={() => void addSelected()} disabled={newPhotos.length === 0}>
               {addLabel}
             </Button>
           }

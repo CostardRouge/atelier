@@ -265,8 +265,10 @@ Phases, one commit each:
   pool of the roll's own), states in the filmstrip with the instance's
   thumbnail before a fetch, a status line with *Sign in* / *Try again* /
   *Sources*, and the export fetching what it needs on the spot.
-- **F2 — an honest add button**: count only what is not on the roll yet,
-  gather the ways in under one *Add* menu.
+- **F2 — an honest add button** — **BUILT 2026-09-16**: the bar's button
+  counts only the ticked photos the roll does not hold (`sameMediaRef` over
+  their hashed refs) and is not drawn when there are none; the one *Add* menu
+  arrives with F3, when there is a second way in to gather.
 - **F3 — add a day from a Winnow, inside the roll**: rows become refs without
   fetching a byte; the pictures follow F1.
 - **F4 — local files: the folder handle and re-linking by drop** (paliers A

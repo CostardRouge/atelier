@@ -51,3 +51,18 @@ deleted on the instance → `gone` in the cell, the line and the stage;
 *Export the roll* from the first picture after a reload wrote the five
 reachable pictures (fetching the two outside the pool, originals under Auto)
 and named the three it could not. The Library stayed empty throughout.
+
+## The add button counts only what the roll does not hold (2026-09-16, F2)
+
+The Library TICKS every asset it imports, so "the Library's selection" is
+mostly pictures a roll already has: counting it kept *Add 3 selected* on the
+bar of a complete roll. `RollEditor` now hashes the ticked photos
+(`hashedMediaRefs`, memoised) and keeps those no picture matches
+(`sameMediaRef`: asset id, else hash, else name and size); the button is drawn
+only when that list is not empty (the empty roll's own button stays, disabled,
+beside its explanation). **How to apply**: anything that offers "add what is
+ticked" filters against the document first — the Library's selection is not a
+statement about the roll. Verified in the pane: no button on a roll with
+nothing new ticked; two dropped JPEGs → *Add 2 from the Library*; after the
+click the button went away with both still ticked.
+
