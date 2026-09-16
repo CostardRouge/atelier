@@ -32,7 +32,7 @@ describe('rsEncode', () => {
 });
 
 describe('encodeQr — the frame', () => {
-  const m = encodeQr('https://costardrouge.github.io/atelier/')!;
+  const m = encodeQr('https://atelier.steeve.website')!;
 
   it('sizes the matrix as 4·version + 17', () => {
     expect(m.size).toBe(m.version * 4 + 17);
@@ -141,7 +141,7 @@ describe('encodeQr — the result is a real code', () => {
     for (const text of [
       'A',
       'x'.repeat(60),
-      'https://costardrouge.github.io/atelier/',
+      'https://atelier.steeve.website',
       '0'.repeat(200),
     ]) {
       const m = encodeQr(text)!;
