@@ -16,7 +16,8 @@
 
 import { developOrNull, type DevelopSettings } from './develop';
 import { isDefaultFraming, normaliseFraming, type Framing } from '../media/framing';
-import { ASPECT_PRESETS, type SavedMediaRef } from '../projects/project-types';
+import { type SavedMediaRef } from '../projects/project-types';
+import { isStoredAspect } from './crop-aspect';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
 import type { OutputTransform } from '../lut/transfer';
 import { DEFAULT_SOURCE_ID } from '../sources/source';
@@ -131,7 +132,6 @@ export function readMediaRef(raw: unknown): SavedMediaRef | null {
   };
 }
 
-const ASPECT_IDS: ReadonlySet<string> = new Set(ASPECT_PRESETS.map((a) => a.id));
 const OUTPUTS: ReadonlySet<string> = new Set(['none', 'rec709-to-srgb', 'rec709-24-to-22', 'srgb-to-rec709']);
 
 function readLayer(raw: unknown): SavedLutLayer | null {
@@ -183,9 +183,7 @@ function readPicture(raw: unknown): RollPicture | null {
     ref,
     develop: developOrNull(raw.develop),
     framing: readFraming(raw.framing),
-    aspect: typeof raw.aspect === 'string' && (raw.aspect === 'original' || ASPECT_IDS.has(raw.aspect))
-      ? raw.aspect
-      : 'original',
+    aspect: typeof raw.aspect === 'string' && isStoredAspect(raw.aspect) ? raw.aspect : 'original',
   };
 }
 
@@ -308,10 +306,17 @@ export function copyCropTo(
   return found ? { ...roll, pictures, updatedAt: now } : roll;
 }
 
-/** What the gallery card says: "18 of 42 developed" — a develop or a crop counts. */
+/**
+ * What the gallery card says: "18 of 42 developed" — a develop or a crop
+ * counts, and an ASPECT other than the picture's own is a crop on its own:
+ * drawing a free zone with the frame's corners leaves the framing untouched
+ * (nothing was panned or zoomed), and a picture that was plainly cropped must
+ * not read as one nobody has looked at.
+ */
 export function rollProgress(roll: RollDoc): { total: number; developed: number } {
   return {
     total: roll.pictures.length,
-    developed: roll.pictures.filter((p) => p.develop !== null || p.framing !== null).length,
+    developed: roll.pictures.filter((p) => p.develop !== null || p.framing !== null || p.aspect !== 'original')
+      .length,
   };
 }

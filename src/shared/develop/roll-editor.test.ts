@@ -4,7 +4,6 @@ import {
   editorKeyAction,
   openAfterRemoval,
   openPictureId,
-  pictureAspectRatio,
   pictureRange,
   sameDevelop,
   selectionAfterClick,
@@ -95,23 +94,6 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'r', metaKey: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'r', targetTypes: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'd', repeat: true }))).toBeNull();
-  });
-});
-
-describe('pictureAspectRatio', () => {
-  it('reads the picture’s own shape while its aspect is "original"', () => {
-    expect(pictureAspectRatio('original', 1200, 800)).toBeCloseTo(1.5);
-    expect(pictureAspectRatio('original', 800, 1200)).toBeCloseTo(2 / 3);
-    expect(pictureAspectRatio('original', 0, 0)).toBe(1);
-  });
-
-  it('reads a named preset regardless of the source', () => {
-    expect(pictureAspectRatio('1:1', 1200, 800)).toBe(1);
-    expect(pictureAspectRatio('9:16', 1200, 800)).toBeCloseTo(9 / 16);
-  });
-
-  it('falls back to the picture’s own shape for an unknown id', () => {
-    expect(pictureAspectRatio('made-up', 1200, 600)).toBeCloseTo(2);
   });
 });
 

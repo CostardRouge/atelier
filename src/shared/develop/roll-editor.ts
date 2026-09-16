@@ -4,7 +4,6 @@
  * (`tools/develop/RollEditor.tsx`) feeds it plain descriptions.
  */
 
-import { ASPECT_PRESETS } from '../projects/project-types';
 import { DEFAULT_DEVELOP, type DevelopSettings } from './develop';
 
 export type WorkbenchTab = 'develop' | 'crop' | 'export';
@@ -15,19 +14,6 @@ export const WORKBENCH_TABS: readonly { id: WorkbenchTab; label: string }[] = [
   { id: 'crop', label: 'Crop' },
   { id: 'export', label: 'Export' },
 ];
-
-/**
- * The w/h ratio a picture's crop stage frames into: one of the suite's aspect
- * presets, or the picture's OWN shape while its aspect is `'original'` (and a
- * safe square before a source has decoded at all).
- */
-export function pictureAspectRatio(aspect: string, sourceW: number, sourceH: number): number {
-  if (aspect !== 'original') {
-    const preset = ASPECT_PRESETS.find((p) => p.id === aspect);
-    if (preset) return preset.w / preset.h;
-  }
-  return sourceW > 0 && sourceH > 0 ? sourceW / sourceH : 1;
-}
 
 /** The picture the editor shows: the one the route names, else the first; null on an empty roll. */
 export function openPictureId(pictures: readonly { id: string }[], routeId: string | null): string | null {

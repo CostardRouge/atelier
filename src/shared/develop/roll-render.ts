@@ -21,7 +21,7 @@ import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
 import { DEFAULT_FRAMING, drawFramed, type Framing } from '../media/framing';
 import { decodePhoto } from '../media/photo-frame';
-import { pictureAspectRatio } from './roll-editor';
+import { pictureAspectRatio } from './crop-aspect';
 import { rollOutputSize, type PictureSize } from './roll-export';
 
 export interface RollRenderOptions {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CubeLut } from '../../shared/lib/cube-parser';
-import { pictureAspectRatio } from '../../shared/develop/roll-editor';
+import { pictureAspectRatio } from '../../shared/develop/crop-aspect';
 import {
   deliverySummary,
   describeRun,
