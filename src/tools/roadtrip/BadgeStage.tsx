@@ -11,7 +11,12 @@ import {
   type Framing,
 } from '../../shared/media/framing';
 import { cellAt, type CellRect } from '../../shared/media/media-layout';
-import { draggedAssetId, hasAssetDrag } from '../../shared/library/asset-drag';
+import {
+  activeAssetDrag,
+  hasAssetDrag,
+  type AssetDragItem,
+  type DropResult,
+} from '../../shared/library/asset-drag';
 import { boxForId, hitTest, type ElementBox } from '../../shared/overlay/draw-overlays';
 import {
   collageCellAt,
@@ -177,10 +182,11 @@ interface BadgeStageProps {
   onSwapCells?: (a: number, b: number) => void;
   /**
    * A picture dragged out of the Library and dropped on a cell: its index
-   * (0 without a collage — the slide's own picture) and the asset's id.
+   * (0 without a collage — the slide's own picture) and what is being
+   * dragged. Resolves once the picture is in place, or says why it is not.
    * Absent, the stage takes no drops.
    */
-  onDropAsset?: (cellIndex: number, assetId: string) => void;
+  onDropAsset?: (cellIndex: number, item: AssetDragItem) => Promise<DropResult>;
   onSourceLoaded?: (info: { width: number; height: number; duration: number }) => void;
   /**
    * The width the picture wants from the height it was given (height ×
@@ -1113,10 +1119,12 @@ export default function BadgeStage({
     (e: React.DragEvent) => {
       if (!onDropAsset || !hasAssetDrag(e.dataTransfer)) return;
       e.preventDefault();
-      const id = draggedAssetId(e.dataTransfer);
+      // The item, not the transfer: it carries the picture's name and a way
+      // to the file, where the transfer only carries a key.
+      const item = activeAssetDrag();
       const i = cellUnder(e);
       setDropCell(null);
-      if (id && i >= 0) onDropAsset(i, id);
+      if (item && i >= 0) void onDropAsset(i, item);
     },
     [onDropAsset, cellUnder],
   );

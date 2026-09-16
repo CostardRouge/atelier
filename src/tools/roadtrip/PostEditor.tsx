@@ -5,6 +5,7 @@ import type { AssetKind } from '../../shared/library/assets';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import type { SavedMediaRef } from '../../shared/projects/project-types';
 import { hashedMediaRef } from '../../shared/projects/media-identity';
+import type { AssetDragItem, DroppedAsset, DropResult } from '../../shared/library/asset-drag';
 import {
   collageCellAt,
   collageCellCount,
@@ -322,19 +323,47 @@ export default function PostEditor({
    * a drop is also a way of saying "this is the one I am working on", and it
    * keeps the Library's own tick pointing at what the cell now holds.
    */
+  //
+  // The picture may take seconds to arrive (a tile an instance still holds is
+  // fetched on drop), and the piece keeps changing meanwhile: the write goes
+  // through the LATEST `patchCell` and `lib`, never the ones this drop began
+  // with, or it would put back a document the author has already edited.
+  const patchCellRef = useRef(patchCell);
+  patchCellRef.current = patchCell;
+  const libRef = useRef(lib);
+  libRef.current = lib;
   const dropAsset = useCallback(
-    (i: number, assetId: string) => {
-      const asset = lib.assets.find((a) => a.id === assetId);
-      const file = asset ? pickable(asset) : null;
-      // A lone `.srt`, a RAW with no twin: nothing to compose over, so the
-      // drop is refused rather than emptying the cell.
-      if (!file) return;
+    async (i: number, item: AssetDragItem): Promise<DropResult> => {
+      let got: DroppedAsset | null = null;
+      try {
+        got = await item.resolve();
+      } catch (err) {
+        return { ok: false, reason: err instanceof Error ? err.message : String(err) };
+      }
+      if (!got) {
+        return {
+          ok: false,
+          reason:
+            item.origin === 'instance'
+              ? `${item.sourceLabel ?? 'The instance'} did not hand it over`
+              : 'Nothing to compose over in that file',
+        };
+      }
+      // WRITE FIRST, select after. Selecting a cell restarts the Library sync
+      // for it, and that sync re-activates whatever the cell holds — so a
+      // cell selected before the write was re-pointed at its OLD picture, and
+      // the sync then wrote the old picture back over the drop (measured: a
+      // drop on an occupied, unselected cell silently did nothing).
+      const ref = await hashedMediaRef(got.file);
+      patchCellRef.current(i, { media: ref });
       setSelectedCell(i);
-      if (!lib.selection.has(assetId)) lib.toggle(assetId);
-      lib.setActive(assetId);
-      void hashedMediaRef(file).then((ref) => patchCell(i, { media: ref }));
+      // Ticked (idempotent — a fetched tile is ticked already) and active, so
+      // the Library shows what the cell now holds.
+      libRef.current.select([got.assetId], true);
+      libRef.current.setActive(got.assetId);
+      return { ok: true };
     },
-    [lib, patchCell, setSelectedCell],
+    [setSelectedCell],
   );
 
   const swapCells = useCallback(
