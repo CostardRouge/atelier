@@ -2,13 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { isDefaultDevelop, type DevelopSettings } from '../../shared/develop/develop';
 import { hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from '../../shared/develop/develop-clipboard';
+import type { Framing } from '../../shared/media/framing';
 import {
+  WORKBENCH_TABS,
   openAfterRemoval,
   openPictureId,
   sameDevelop,
   selectionAfterClick,
   stepPicture,
   type SelectionModifiers,
+  type WorkbenchTab,
 } from '../../shared/develop/roll-editor';
 import { deleteRollThumbs, getRollThumbs, putRollThumb } from '../../shared/develop/roll-store';
 import { pictureThumbnail } from '../../shared/develop/roll-thumb';
@@ -63,6 +66,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const [adding, setAdding] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<RollPicture | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // Which inspector tab is open — kept here, not in the workbench, so it
+  // survives stepping to another picture (the workbench remounts per picture).
+  const [tab, setTab] = useState<WorkbenchTab>('develop');
 
   const latest = useRef(roll);
   latest.current = roll;
@@ -236,6 +242,15 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [update],
   );
 
+  const handleFraming = useCallback(
+    (id: string, framing: Framing | null) => update((r) => patchPicture(r, id, { framing })),
+    [update],
+  );
+  const handleAspect = useCallback(
+    (id: string, aspect: string) => update((r) => patchPicture(r, id, { aspect })),
+    [update],
+  );
+
   const writeDevelopTo = useCallback(
     (targets: readonly string[], develop: DevelopSettings | null) =>
       update((r) => ({
@@ -287,19 +302,23 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     ];
   }, [openId, others, roll.pictures, selectionTargets, canPaste, writeDevelopTo]);
 
-  // On a phone the inspector is a sheet, opened from the shell's bottom bar.
+  // On a phone the inspector is a sheet, opened from the shell's bottom bar;
+  // picking a section is also what raises it — the Studio's own convention.
   usePublishSectionBar(
     useMemo(
       () =>
         compact && open
           ? {
-              sections: [{ id: 'develop', label: 'Develop' }],
-              active: sheetOpen ? 'develop' : null,
+              sections: WORKBENCH_TABS,
+              active: sheetOpen ? tab : null,
               label: 'Develop inspector',
-              onSelect: () => setSheetOpen((o) => !o),
+              onSelect: (id: string) => {
+                setTab(id as WorkbenchTab);
+                setSheetOpen(true);
+              },
             }
           : null,
-      [compact, open, sheetOpen],
+      [compact, open, sheetOpen, tab],
     ),
   );
 
@@ -364,8 +383,12 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               compact={compact}
               sheetOpen={sheetOpen}
               onSheetOpen={setSheetOpen}
+              tab={tab}
+              onTabChange={setTab}
               applyTo={applyTo}
               onDevelop={(develop) => handleDevelop(open.id, develop)}
+              onFraming={(framing) => handleFraming(open.id, framing)}
+              onAspect={(aspect) => handleAspect(open.id, aspect)}
               onSnapshot={(blob) => handleSnapshot(open.id, blob)}
               onStep={step}
             />
@@ -388,7 +411,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                 )}
                 {notice && <span className="text-ink-soft"> · {notice}</span>}
                 {!compact && (
-                  <span className="text-faint"> · ←/→ picture · {'\\'} before · Z closer · Shift/⌘-click to select</span>
+                  <span className="text-faint">
+                    {' '}
+                    · ←/→ picture · {'\\'} before · Z closer · R crop · D develop · Shift/⌘-click to select
+                  </span>
                 )}
               </p>
               <Filmstrip

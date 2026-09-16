@@ -1,9 +1,9 @@
 # Develop — the third editor
 
 **Status (2026-09-16): the direction and eight choices are DECIDED by the
-maintainer (§2, §8); the shared foundations and D1–D7 are BUILT — the tool has
-its gallery, its full-screen editor (stage, filmstrip, the Develop inspector)
-and a filmstrip batch selection; crop (D8) is next.** From
+maintainer (§2, §8); the shared foundations and D1–D8 are BUILT — the tool has
+its gallery, its full-screen editor (stage, filmstrip, the Develop and Crop
+inspectors) and a filmstrip batch selection; export (D9) is next.** From
 his brief of the same day (*"un troisième outil officiel de développement
 d'images … à peu près la même interface que la modale … je n'ai pas envie de
 réinventer la roue … si des choses communes peuvent être développées, on
@@ -195,7 +195,13 @@ interface RollPicture {
 - **D7 — batch** — **BUILT 2026-09-16**: `selectionAfterClick` + `pictureRange`
   in `roll-editor.ts` (tested), the filmstrip's Shift/⌘-click, `DevelopApplyVerb`s
   that read the selection instead of "every other picture" once one exists.
-- **D8 — crop**: framing on the stage and the Crop tab.
+- **D8 — crop** — **BUILT 2026-09-16**: `FramingStage` (the delivered picture
+  framed into its aspect box over `shared/media/framing.ts`, drag pans, wheel
+  or pinch zooms) and `CropPanel` (aspect, fit, zoom, rotation, turn, flip,
+  reset — Trips' Framing section plus the aspect), the inspector's two tabs
+  (`WORKBENCH_TABS`, also the phone bar's cells), `R` / `D` keys,
+  `pictureAspectRatio` in `roll-editor.ts` (tested); the crop written through
+  on its own timer, the filmstrip cell redrawn framed (`framedThumbnail`).
 - **D9 — export**: framing-aware still export, full decode (the originals
   plan's O1 + O2 slot in here: Auto fetches an original only where needed),
   Send home (panel moved to shared).

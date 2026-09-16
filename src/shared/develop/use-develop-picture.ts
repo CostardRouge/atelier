@@ -53,6 +53,13 @@ export interface DevelopPicture {
    * decoded, or when the browser refuses the encode.
    */
   snapshot: (longEdge?: number) => Promise<Blob | null>;
+  /**
+   * The picture AS DELIVERED — graded whole through the one held grader — for
+   * a host that draws it its own way (the Develop tool's crop stage frames
+   * it into an aspect box). Null while nothing is decoded. Read at call time,
+   * like `snapshot`: a caller repaints on `source` and `cube`.
+   */
+  delivered: () => CanvasImageSource | null;
   /** The wipe gesture, for the viewport element. */
   handlers: {
     onPointerDown: (e: ReactPointerEvent<HTMLElement>) => void;
@@ -213,6 +220,12 @@ export function useDevelopPicture({
   // take the cube of THAT moment, not the one the closure was made with.
   const latest = useRef({ source, cube });
   latest.current = { source, cube };
+  const delivered = useCallback((): CanvasImageSource | null => {
+    const { source: s, cube: lut } = latest.current;
+    if (!s || s.width <= 0 || s.height <= 0) return null;
+    const grader = graderFor(lut, s);
+    return grader ? grader.render(s.image) : s.image;
+  }, [graderFor]);
   const snapshot = useCallback(
     async (longEdge = THUMB_LONG_EDGE): Promise<Blob | null> => {
       const { source: s, cube: lut } = latest.current;
@@ -311,6 +324,7 @@ export function useDevelopPicture({
     histogram,
     divider,
     snapshot,
+    delivered,
     handlers,
   };
 }

@@ -4,7 +4,29 @@
  * (`tools/develop/RollEditor.tsx`) feeds it plain descriptions.
  */
 
+import { ASPECT_PRESETS } from '../projects/project-types';
 import { DEFAULT_DEVELOP, type DevelopSettings } from './develop';
+
+export type WorkbenchTab = 'develop' | 'crop';
+
+/** The inspector's tabs, in order — the SAME list drives the desktop strip and the phone's bottom bar. */
+export const WORKBENCH_TABS: readonly { id: WorkbenchTab; label: string }[] = [
+  { id: 'develop', label: 'Develop' },
+  { id: 'crop', label: 'Crop' },
+];
+
+/**
+ * The w/h ratio a picture's crop stage frames into: one of the suite's aspect
+ * presets, or the picture's OWN shape while its aspect is `'original'` (and a
+ * safe square before a source has decoded at all).
+ */
+export function pictureAspectRatio(aspect: string, sourceW: number, sourceH: number): number {
+  if (aspect !== 'original') {
+    const preset = ASPECT_PRESETS.find((p) => p.id === aspect);
+    if (preset) return preset.w / preset.h;
+  }
+  return sourceW > 0 && sourceH > 0 ? sourceW / sourceH : 1;
+}
 
 /** The picture the editor shows: the one the route names, else the first; null on an empty roll. */
 export function openPictureId(pictures: readonly { id: string }[], routeId: string | null): string | null {
@@ -94,15 +116,24 @@ export interface EditorKeyPress {
   hasSelection: boolean;
 }
 
-export type EditorKeyAction = 'previous' | 'next' | 'hold' | 'zoom' | 'copy' | 'paste' | null;
+export type EditorKeyAction =
+  | 'previous'
+  | 'next'
+  | 'hold'
+  | 'zoom'
+  | 'copy'
+  | 'paste'
+  | 'crop'
+  | 'develop'
+  | null;
 
 /**
  * What a key press means in the editor, or null when it belongs to someone
  * else. ←/→ move along the strip, `\` holds "before" (its release is the
- * caller's), `Z` goes closer or back to the fit, ⌘/Ctrl-C and -V copy and
- * paste the develop. A field or a slider keeps every key it could use; a
- * held arrow does step (it is how a strip is swept), a held `\` does not
- * re-press.
+ * caller's), `Z` goes closer or back to the fit, `R` opens the Crop tab and
+ * `D` the Develop tab, ⌘/Ctrl-C and -V copy and paste the develop. A field or
+ * a slider keeps every key it could use; a held arrow does step (it is how a
+ * strip is swept), a held `\` does not re-press.
  */
 export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   if (press.targetTypes || press.altKey) return null;
@@ -120,5 +151,7 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   if (press.repeat) return null;
   if (press.key === '\\') return 'hold';
   if (press.key === 'z' || press.key === 'Z') return 'zoom';
+  if (press.key === 'r' || press.key === 'R') return 'crop';
+  if (press.key === 'd' || press.key === 'D') return 'develop';
   return null;
 }

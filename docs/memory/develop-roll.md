@@ -183,6 +183,49 @@ stayed as shot); Copy on the open picture then a fresh ⌘-click pair then
 "Paste to 2 selected" wrote the same +1.5 EV to those two; Clear dropped the
 badges and the verb reverted to "Apply to 5 other pictures".
 
+## The crop is a second tab over the SAME delivered picture (2026-09-16, D8)
+
+`FramingStage` + `CropPanel` (`tools/develop/`), `WORKBENCH_TABS` +
+`pictureAspectRatio` + the `R`/`D` keys in `roll-editor.ts` (tested),
+`framedThumbnail` in `roll-thumb.ts`, and `useDevelopPicture().delivered()` —
+the one addition to a shared block. Rules a later phase must keep:
+
+- **The crop stage draws `delivered()`, never `source.image`**: a crop is
+  judged on the developed picture. `delivered()` reads the ONE held grader at
+  call time, so a drag repaints from the held raster copy (`held-grader.ts`)
+  and never grades again; a caller repaints on `source` AND `cube`.
+- **`DevelopViewport` stays MOUNTED (`hidden`) while the crop is open.** Its
+  paint effect is keyed on the picture, the cube and the wipe — not on the
+  canvas element — so an unmounted viewport came back BLANK on the Develop
+  tab (the first D8 draft's fault). `usePictureZoom`'s ResizeObserver takes
+  the 0×0 of a hidden box and re-measures on return; nothing else is needed.
+- **The framing has its own write-through timer** (same 200 ms), separate from
+  the develop's: a drag fires per pointer move. An untouched framing is
+  written as `null` (`isDefaultFraming`), the aspect at once (discrete). The
+  open tab lives in `RollEditor`, never in the workbench: the workbench is
+  keyed per picture, and stepping must not drop you back to Develop.
+- **A cell is the picture as delivered — graded AND framed** (`framedThumbnail`,
+  keyed on the crop too, never upscaled past the source's long edge). The
+  other cells keep the D6 limit (as last seen).
+- The gestures are the badge stage's, deliberately: wheel = trackpad pinch,
+  `touch-none` on a canvas that writes both axes inside a fixed stage (not a
+  scroll box — `frontend.md`'s rule is about scrollers). No touch pinch and no
+  rotate handle, exactly as Trips: the slider and the turn buttons are the
+  rotation. Reset keeps the fit (Trips' rule: asking for Whole is not a crop).
+- The docked inspector now wears the two editors' frame (`border border-line
+  rounded-paper bg-surface p-3`, the `Segmented` strip pinned, the sections
+  scrolling under it) — the `frontend.md` rule D6 had not yet applied.
+
+Verified in the desktop app's Browser pane on four canvas-made JPEGs: −1.5 EV
+then `R` → the crop stage showed the DARKENED picture; 1:1 → a square crop
+centred; a drag panned it, the wheel zoomed to 2.12× and Reset appeared; +90°
+then Horizontal → −90° mirrored (`flipFraming`); `D` → the Develop viewport
+came back painted; the cell redrew square, turned, mirrored, dark; a reload
+read `{aspect: '1:1', framing: {rotation: -90, flipX: true, scale: 2.117, x:
+-0.3}}` from `atelier-develop` with the three untouched pictures `null`; on a
+375×812 phone the bar read LIBRARY · DEVELOP · CROP, Crop raised the sheet
+over the crop stage, Escape closed it.
+
 ## Undo and redo over the roll (2026-09-15)
 
 **Fact.** `DevelopTool` wires the shared history engine exactly as Trips does —
