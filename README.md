@@ -240,7 +240,9 @@ show in landscape. They are ordinary overlay elements — same fonts, same style
 theme, same dragging — placed in a **scene**: one shared window they all live
 in, and leave together. Inside it each element carries its own offset, so a
 subtitle can land half a second after the title; move the scene and the whole
-stagger moves with it. The scene can lay a **veil** over the picture (colour,
+stagger moves with it — or let the scene **cascade** its elements by where
+they sit (top to bottom, from the centre, the largest first, shuffled with a
+kept seed), added to each one's own offset. The scene can lay a **veil** over the picture (colour,
 strength, fade) so a title reads over any rush, and can **hold the rest of the
 deck back** while it plays, fading the telemetry HUD in when it ends — the HUD
 "boots up" after the hook.

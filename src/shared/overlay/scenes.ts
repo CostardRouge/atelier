@@ -19,8 +19,9 @@
  * intro moves everything staggered inside it.
  */
 
-import type { TimeWindow } from './animation';
+import type { ElementAnimation, TimeWindow } from './animation';
 import type { OverlayElement } from './overlay-types';
+import { staggerDelays, type Stagger } from './stagger';
 
 export interface SceneScrim {
   /** Any CSS colour the canvas understands. */
@@ -43,6 +44,54 @@ export interface Scene {
   solo: boolean;
   /** Seconds the held-back elements take to fade out and back in. 0 = a cut. */
   hudFade: number;
+  /**
+   * Spread the scene's elements' entrances over time by where they sit
+   * (`stagger.ts`) — a delay ADDED to each element's own, derived on every
+   * draw and never stored on the element. Absent or null: no cascade, which
+   * is what every scene written before 2026-09-16 means.
+   */
+  stagger?: Stagger | null;
+}
+
+/**
+ * The extra delay each of `scene`'s elements waits before its entrance, by
+ * element id — from the elements' positions on a frame of `aspect` (width
+ * over height), in the order they are listed. Empty without a stagger.
+ */
+export function sceneStaggerDelays(
+  scene: Scene,
+  elements: readonly OverlayElement[],
+  aspect: number,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  if (!scene.stagger) return out;
+  const members = elements.filter((el) => el.sceneId === scene.id);
+  if (!members.length) return out;
+  // Height units: x is a fraction of the width, sizeFrac of the shorter side.
+  const short = Math.min(aspect, 1);
+  const boxes = members.map((el) => ({
+    x: el.x * aspect,
+    y: el.y,
+    w: 0,
+    h: (el.sizeFrac ?? 0) * short,
+  }));
+  const delays = staggerDelays(boxes, { w: aspect, h: 1 }, scene.stagger);
+  members.forEach((el, i) => out.set(el.id, delays[i]));
+  return out;
+}
+
+/**
+ * An element's animation with the scene's stagger added to its entrance. An
+ * element with no entrance of its own gets a cut on its beat, so a stagger
+ * moves every member of the scene, not only the animated ones.
+ */
+export function staggeredAnimation(
+  anim: ElementAnimation | null | undefined,
+  extraDelay: number,
+): ElementAnimation | null | undefined {
+  if (!extraDelay) return anim;
+  const base = anim?.in ?? { preset: 'none' as const, duration: 0, easing: 'linear' as const };
+  return { ...anim, in: { ...base, delay: (base.delay ?? 0) + extraDelay } };
 }
 
 /** The id the studio gives its one scene today; the model already takes N. */
