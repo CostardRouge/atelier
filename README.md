@@ -752,7 +752,9 @@ to turn it, the arrow keys turn and tilt it; it stands still if your system
 asks for less motion), drawn by the very renderer the map uses, so what the
 garage shows is what the opener gets. The garage opens from the opener's own
 panel («Configure the car…», with Cancel and Done) and lives in the trip's
-settings as its Car section, where every switch writes at once.
+settings as its Car section, where every switch writes at once. On a wide
+screen both show the car beside its choices, which scroll on their own, so a
+switch far down the list is seen on the car the moment it flips.
 
 **Itinerary** is the one you compose yourself: pick the
 stops on a map — click to drop one where you like, drag it to move it, take
