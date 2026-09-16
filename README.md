@@ -634,6 +634,16 @@ appears where you asked for one: **Whole** shows the entire picture with
 them. The preview, the PNG deck and the burned-in hook clip all draw through
 the same transform. Each picture of a carousel is framed on its own.
 
+**A slide can hold several pictures.** The Picture tab's **Layout** section
+offers grids, stacks, bentos, insets and scattered prints; the slide's own
+picture is always the first cell, and the others are filled from the Library,
+which follows whichever cell is selected. Click a cell on the stage to select
+it, drag to reframe the picture inside it, use the wheel to zoom it, and hold
+(or Alt-drag) onto another cell to swap the two. Every cell keeps its own
+framing and develop; an empty cell shows the layout's background in the
+export, and a smaller layout keeps the extra pictures rather than dropping
+them. Collages are stills for now: a slide holding one is delivered as a PNG.
+
 **The picture can be helped.** A bright sky exactly where the hook sits is the
 normal case, so up to four **shades** can be laid over it. One shade is a
 direction, picked on a 3×3 grid whose cells show the gradient they draw — from
