@@ -7,12 +7,13 @@
 import { ASPECT_PRESETS } from '../projects/project-types';
 import { DEFAULT_DEVELOP, type DevelopSettings } from './develop';
 
-export type WorkbenchTab = 'develop' | 'crop';
+export type WorkbenchTab = 'develop' | 'crop' | 'export';
 
 /** The inspector's tabs, in order — the SAME list drives the desktop strip and the phone's bottom bar. */
 export const WORKBENCH_TABS: readonly { id: WorkbenchTab; label: string }[] = [
   { id: 'develop', label: 'Develop' },
   { id: 'crop', label: 'Crop' },
+  { id: 'export', label: 'Export' },
 ];
 
 /**

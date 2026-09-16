@@ -1,20 +1,22 @@
 import { useMemo, useState } from 'react';
-import {
-  WinnowClient,
-  WinnowError,
-  canWriteBack,
-} from '../../shared/sources/winnow/client';
-import { finalsPlan } from '../../shared/sources/winnow/finals';
-import { getWinnowConnection } from '../../shared/sources/winnow/store';
-import { formatBytes } from '../../shared/lib/format';
+import { WinnowClient, WinnowError, canWriteBack } from './client';
+import { finalsPlan } from './finals';
+import { getWinnowConnection } from './store';
+import { formatBytes } from '../../lib/format';
+import Button from '../../ui/Button';
 
 interface SendFinalsPanelProps {
   /** The deliverables the last export run produced, in order. */
   files: readonly File[];
-  /** The instance the source clip came from. */
+  /** The instance the source media came from. */
   sourceId: string;
-  /** The clip's identity as that instance vouched for it — `"<host>/<id>"`. */
+  /** The run's one capture as that instance vouched for it — `"<host>/<id>"` — or null. */
   assetId: string | null;
+  /**
+   * Each file's OWN capture, parallel to `files`, for a run that mixes
+   * several (a roll's pictures). Absent, `assetId` stands for every file.
+   */
+  assetIds?: readonly (string | null)[];
 }
 
 type Sending =
@@ -24,44 +26,51 @@ type Sending =
   | { state: 'failed'; message: string; login?: string; sent: number };
 
 /**
- * After an export whose clip came from a Winnow: send the finals HOME, so
+ * After an export whose media came from a Winnow: send the finals HOME, so
  * the instance's lineage (`original_asset_id`, `has_edit`, the exports of an
- * asset) records that this capture has been told. Bridge phase 2, scoped
- * by the timeline's chapter when one is known (§6).
+ * asset) records that this capture has been told — or, for a developed
+ * still, that it has an edit. Bridge phase 2, scoped by the timeline's
+ * chapter when one is known (§6).
  *
  * Opt-in, one click, and it says exactly what will leave: the files, their
  * weight, the host. It refuses before a byte moves when the plan is unsound
- * — a clip from another instance, a file over the upload limit, a read-only
- * account — because failing at 90 % of a 400 MB upload through a tunnel is
- * the worst way to learn any of that. Files go one request at a time (the
- * body limit is per request), then one `/api/reconcile` links them.
+ * — a picture from another instance, a file over the upload limit, a
+ * read-only account — because failing at 90 % of a 400 MB upload through a
+ * tunnel is the worst way to learn any of that. Files go one request at a
+ * time (the body limit is per request), each with its own capture's id,
+ * then one `/api/reconcile` links them.
  *
  * This is the third network exception, and the first WRITE: only ever to an
  * instance the user connected on `#/connect`, only what they just rendered.
+ * Engine-level since the Develop tool became its second consumer.
  */
-export default function SendFinalsPanel({ files, sourceId, assetId }: SendFinalsPanelProps) {
+export default function SendFinalsPanel({ files, sourceId, assetId, assetIds }: SendFinalsPanelProps) {
   const connection = getWinnowConnection(sourceId);
   const [sending, setSending] = useState<Sending>({ state: 'idle' });
 
   const plan = useMemo(
     () =>
       finalsPlan({
-        files: files.map((f) => ({ name: f.name, size: f.size })),
+        files: files.map((f, i) => ({
+          name: f.name,
+          size: f.size,
+          ...(assetIds ? { assetId: assetIds[i] ?? null } : {}),
+        })),
         assetId,
         targetSourceId: sourceId,
-        // The Studio does not know which chapter a clip belongs to: the asset
+        // Neither editor knows which chapter a media belongs to: the asset
         // row carries no chapter today. Finals land at the root, and Winnow's
         // own reconcile places them by lineage.
         chapterId: null,
         maxUploadBytes: connection?.capabilities?.limits?.maxUploadBytes ?? null,
       }),
-    [files, assetId, sourceId, connection],
+    [files, assetId, assetIds, sourceId, connection],
   );
 
   if (!connection) {
     return (
       <p className="m-0 text-xs text-muted">
-        This clip came from {sourceId}, which is not connected here any more — reconnect it to send the finals back.
+        This media came from {sourceId}, which is not connected here any more — reconnect it to send the finals back.
       </p>
     );
   }
@@ -75,7 +84,7 @@ export default function SendFinalsPanel({ files, sourceId, assetId }: SendFinals
       for (const [i, item] of plan.items.entries()) {
         setSending({ state: 'sending', index: i });
         await client.upload([{ file: files[i], path: item.path }], {
-          originalAssetId: plan.originalAssetId,
+          originalAssetId: item.originalAssetId,
           chapterId: plan.chapterId,
         });
         sent += 1;
@@ -132,15 +141,14 @@ export default function SendFinalsPanel({ files, sourceId, assetId }: SendFinals
             </p>
           ) : (
             <div className="flex items-center gap-3 flex-wrap">
-              <button
-                type="button"
+              <Button
+                size="sm"
                 onClick={() => void send()}
                 disabled={busy || plan.problems.length > 0}
-                className="px-3.5 py-[0.45rem] inline-flex items-center border border-line-strong rounded-full bg-paper text-ink-soft cursor-pointer text-xs font-semibold hover:border-accent hover:text-accent-ink disabled:opacity-50 disabled:cursor-default"
-                title="Upload the finals into this Winnow's finals root and link them to the capture"
+                title="Upload the finals into this Winnow's finals root and link them to their captures"
               >
                 {busy ? `Sending ${sending.index + 1}/${plan.items.length}…` : label}
-              </button>
+              </Button>
               {sending.state === 'failed' && (
                 <span className="text-xs text-danger" role="alert">
                   {sending.sent > 0 && `${sending.sent} sent, then: `}

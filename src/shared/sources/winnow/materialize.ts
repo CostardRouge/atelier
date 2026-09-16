@@ -117,6 +117,8 @@ export async function materialize(
     fidelity: options.fidelity,
     width: row.width,
     height: row.height,
+    name: row.filename,
+    bytes: row.file_size,
   };
   if (options.fidelity === 'proxy') {
     origin.fetchOriginal = () =>

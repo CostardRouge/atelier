@@ -21,6 +21,7 @@ import {
   removePictures,
   rollProgress,
   type RollDoc,
+  type RollExport,
   type RollPicture,
 } from '../../shared/develop/roll-types';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
@@ -32,8 +33,10 @@ import PageBar from '../../shared/ui/PageBar';
 import { Icons } from '../../shared/ui/icons';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
+import type { ExportVerb } from './ExportPanel';
 import Filmstrip from './Filmstrip';
 import PictureWorkbench from './PictureWorkbench';
+import { useRollExport } from './use-roll-export';
 import { useRollGrade } from './use-roll-grade';
 
 interface RollEditorProps {
@@ -250,6 +253,40 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     (id: string, aspect: string) => update((r) => patchPicture(r, id, { aspect })),
     [update],
   );
+  const handleExportSettings = useCallback(
+    (patch: Partial<RollExport>) => update((r) => ({ ...r, export: { ...r.export, ...patch }, updatedAt: Date.now() })),
+    [update],
+  );
+
+  // --- the still export (D9): each picture through its own cube --------------
+  const { composeWith } = stack;
+  const lutFor = useCallback((p: RollPicture) => composeWith(p.develop), [composeWith]);
+  const exports = useRollExport({ roll, files, openId, lutFor });
+  const { exportPictures } = exports;
+  const exportVerbs = useMemo<ExportVerb[]>(() => {
+    if (!openId) return [];
+    const verbs: ExportVerb[] = [
+      { id: 'open', label: 'Export this picture', run: () => void exportPictures([openId]) },
+    ];
+    if (visibleSelected.size > 0) {
+      const ids = roll.pictures.filter((p) => visibleSelected.has(p.id)).map((p) => p.id);
+      verbs.push({
+        id: 'selection',
+        label: `Export ${ids.length} selected`,
+        hint: 'the pictures marked in the filmstrip, in the strip’s order',
+        run: () => void exportPictures(ids),
+      });
+    }
+    if (roll.pictures.length > 1) {
+      verbs.push({
+        id: 'roll',
+        label: `Export the roll · ${roll.pictures.length}`,
+        hint: 'every picture on the roll, in the strip’s order',
+        run: () => void exportPictures(roll.pictures.map((p) => p.id)),
+      });
+    }
+    return verbs;
+  }, [openId, visibleSelected, roll.pictures, exportPictures]);
 
   const writeDevelopTo = useCallback(
     (targets: readonly string[], develop: DevelopSettings | null) =>
@@ -389,6 +426,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onDevelop={(develop) => handleDevelop(open.id, develop)}
               onFraming={(framing) => handleFraming(open.id, framing)}
               onAspect={(aspect) => handleAspect(open.id, aspect)}
+              exportSettings={roll.export}
+              onExportSettings={handleExportSettings}
+              exports={exports}
+              exportVerbs={exportVerbs}
               onSnapshot={(blob) => handleSnapshot(open.id, blob)}
               onStep={step}
             />

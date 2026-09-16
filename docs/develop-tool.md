@@ -1,9 +1,11 @@
 # Develop — the third editor
 
 **Status (2026-09-16): the direction and eight choices are DECIDED by the
-maintainer (§2, §8); the shared foundations and D1–D8 are BUILT — the tool has
-its gallery, its full-screen editor (stage, filmstrip, the Develop and Crop
-inspectors) and a filmstrip batch selection; export (D9) is next.** From
+maintainer (§2, §8); the shared foundations and D1–D9 are BUILT — the tool has
+its gallery, its full-screen editor (stage, filmstrip, the Develop, Crop and
+Export inspectors), a filmstrip batch selection and a still export that
+delivers from a proxy or its original; the Library verb and the README (D10)
+are next.** From
 his brief of the same day (*"un troisième outil officiel de développement
 d'images … à peu près la même interface que la modale … je n'ai pas envie de
 réinventer la roue … si des choses communes peuvent être développées, on
@@ -202,9 +204,17 @@ interface RollPicture {
   (`WORKBENCH_TABS`, also the phone bar's cells), `R` / `D` keys,
   `pictureAspectRatio` in `roll-editor.ts` (tested); the crop written through
   on its own timer, the filmstrip cell redrawn framed (`framedThumbnail`).
-- **D9 — export**: framing-aware still export, full decode (the originals
-  plan's O1 + O2 slot in here: Auto fetches an original only where needed),
-  Send home (panel moved to shared).
+- **D9 — export** — **BUILT 2026-09-16**: `roll-export.ts` (pure, tested:
+  `rollOutputSize`, `pixelHeadroom`, `choosePixels`, `deliverySummary`, the
+  *Delivers* line, names) and `roll-render.ts` (decode whole → grade through
+  the picture's own cube → `drawFramed` → JPEG), the Export tab
+  (`ExportPanel`: size, quality, `Auto · Proxies · Originals`, the line, the
+  verbs, the finals), `use-roll-export.ts`; `MediaOrigin.name`/`bytes` (O1),
+  originals held for the session (`shared/sources/original-cache.ts`, O2),
+  `SendFinalsPanel` moved to `shared/sources/winnow/` with per-file capture
+  ids (`FinalCandidate.assetId`), `shared/sources/deliver-files.ts`. The
+  framing seam landed over `drawFramed` in `roll-render.ts`, not on
+  `exportPhotoVariant` (§6): no Studio caller passes a framing to it yet.
 - **D10 — the Library verb and the README** (a new `## Develop tool` section,
   the Home and tool counts).
 

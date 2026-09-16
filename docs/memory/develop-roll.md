@@ -226,6 +226,55 @@ read `{aspect: '1:1', framing: {rotation: -90, flipX: true, scale: 2.117, x:
 375×812 phone the bar read LIBRARY · DEVELOP · CROP, Crop raised the sheet
 over the crop stage, Escape closed it.
 
+## The export decides its pixels before it reads one (2026-09-16, D9)
+
+`roll-export.ts` (pure, tested), `roll-render.ts`, `use-roll-export.ts`,
+`ExportPanel`, `shared/sources/original-cache.ts`, `shared/sources/deliver-files.ts`,
+`SendFinalsPanel` now in `shared/sources/winnow/`. Rules a later phase must keep:
+
+- **The long edge is a CAP, never a target**: `rollOutputSize` is the aspect
+  box the source covers at its own density, capped — a small file asked for
+  4096 delivers what it has. So the frame a proxy gives on its own is always
+  "exact", and the upscale question (`pixelHeadroom` < 1, F3 of
+  `develop-originals.md`) is asked against the frame the ORIGINAL could give:
+  that is what `Auto` fetches the original for, and the line then says
+  `· asked 1920` when the proxy delivered less. With Size = source, Auto
+  always turns to a decodable original — its pixels ARE the source size.
+- **A RAW original is never fetched** (`decodableOriginal`: jpg/png/webp/
+  avif/gif/bmp only — no HEIC, no TIFF): decision 4, the render the person
+  developed is what leaves, and the reason is said on the *Delivers* row.
+- **Each picture renders through its OWN cube** (`stack.composeWith(develop)`),
+  decoded whole, graded at source density, then `drawFramed` — the crop stage's
+  transform, so the file is the stage. The frame seam of `develop-tool.md` §6
+  lives here, not on `exportPhotoVariant`.
+- **A fetched original is held for the session by asset id**, never persisted
+  (decision 3): the second export of the same picture pays no fetch, whatever
+  mode. Measured in the pane: Auto → 1 fetch, Proxies → 0 and the proxy's
+  pixels, Originals → 0 and the held original's pixels.
+- **The finals plan links each file to ITS capture** (`FinalCandidate.assetId`,
+  `FinalsItem.originalAssetId`, one upload per file); a run is offered home
+  only when every picture came from ONE instance, and `plan.originalAssetId`
+  names the run's capture only when all files agree (the Studio's sentence).
+- `MediaOrigin.name`/`bytes` are what say whether an original is decodable and
+  what it weighs — read from Winnow's row at materialise; a file the person
+  opened has no origin and nothing to decide.
+- **Trap — verifying identity from the page**: `import('/atelier/src/…')` in
+  the pane makes a SECOND module instance once HMR has stamped the app's with
+  `?t=`; register through the URL `performance.getEntriesByType('resource')`
+  lists, or the app never sees the origin.
+
+Verified in the pane on canvas-made JPEGs with `showDirectoryPicker` stubbed
+and two files registered as proxies through the app's own module: A-land (1:1,
+zoomed, −1.5 EV) → `A-land-developed-1x1.jpg` 1000×1000, darkened; the roll →
+four files at 1000², 900×1400, 2000×900, 1200²; C-wide (proxy 2000×900,
+original 6000×2700 JPG) → `Original 6000 px → 6000 · exact`, Auto fetched once
+and wrote 6000×2700, Proxies wrote 2000×900 with no fetch, Originals wrote
+6000×2700 with no fetch; D-sq (proxy over a DNG) → `Proxy 1200 px → 1200 ·
+exact · asked 8000`, the RAW reason, no fetch under Originals; the finals panel
+appeared after the run and said the instance is not connected. Not exercised:
+a real upload (no instance) — the client path is the Studio's, unchanged but
+for `originalAssetId` per item.
+
 ## Undo and redo over the roll (2026-09-15)
 
 **Fact.** `DevelopTool` wires the shared history engine exactly as Trips does —

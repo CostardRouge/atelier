@@ -25,8 +25,11 @@ import { describeKeyTarget, targetOwnsTyping } from '../../shared/media/transpor
 import PanelHost from '../../shared/ui/PanelHost';
 import Segmented from '../../shared/ui/Segmented';
 import StageZoomControl from '../../shared/ui/StageZoomControl';
+import type { RollExport } from '../../shared/develop/roll-types';
 import CropPanel from './CropPanel';
+import ExportPanel, { type ExportVerb } from './ExportPanel';
 import FramingStage from './FramingStage';
+import type { RollExports } from './use-roll-export';
 
 /** How long the numbers rest before they are written to the roll. */
 const WRITE_DELAY_MS = 200;
@@ -65,6 +68,10 @@ export default function PictureWorkbench({
   onDevelop,
   onFraming,
   onAspect,
+  exportSettings,
+  onExportSettings,
+  exports,
+  exportVerbs,
   onSnapshot,
   onStep,
 }: {
@@ -83,6 +90,12 @@ export default function PictureWorkbench({
   onDevelop: (develop: DevelopSettings | null) => void;
   onFraming: (framing: Framing | null) => void;
   onAspect: (aspect: string) => void;
+  /** The roll's delivery settings, edited on the Export tab. */
+  exportSettings: RollExport;
+  onExportSettings: (patch: Partial<RollExport>) => void;
+  /** The roll's still export — its state and what the open picture delivers. */
+  exports: RollExports;
+  exportVerbs: readonly ExportVerb[];
   onSnapshot: (thumb: Blob) => void;
   onStep: (step: number) => void;
 }) {
@@ -321,8 +334,18 @@ export default function PictureWorkbench({
               <DevelopApplySection verbs={applyTo} draft={draft.draft} onTold={tell} />
               <DevelopLookSection stack={stack} />
             </>
-          ) : (
+          ) : tab === 'crop' ? (
             <CropPanel framing={framingDraft} aspect={entry.aspect} onFraming={setFramingDraft} onAspect={onAspect} />
+          ) : (
+            <ExportPanel
+              settings={exportSettings}
+              onSettings={onExportSettings}
+              delivery={exports.openDelivery}
+              verbs={exportVerbs}
+              exporting={exports.exporting}
+              note={exports.note}
+              lastRun={exports.lastRun}
+            />
           )}
         </div>
       </PanelHost>
