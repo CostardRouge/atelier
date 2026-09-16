@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { WinnowClient, type WinnowAssetRow } from './client';
-import { captureMtime, identityFor, materialize, plannedFiles } from './materialize';
+import { captureMtime, identityFor, materialize, plannedFiles, rowMediaRef } from './materialize';
 import {
   hashedMediaRef,
   knownIdentity,
@@ -186,3 +186,26 @@ describe('the origin a fetched file carries', () => {
     expect(original?.lastModified).toBe(clip.lastModified);
   });
 });
+
+describe('rowMediaRef', () => {
+  it('is the ref a fetched proxy would carry, but for its byte size', async () => {
+    const photo = row({ filename: 'DJI_0101.JPG', media_type: 'photo', sidecars: [] });
+    const c = clientServing({ '/api/assets/42/proxy': 10 });
+    const [file] = await materialize(c, 'winnow.example', photo, { fidelity: 'proxy' });
+    const fetched = await hashedMediaRef(file);
+    expect(rowMediaRef('winnow.example', photo)).toEqual({ ...fetched, size: 0 });
+    expect(rowMediaRef('winnow.example', photo)).toEqual({
+      name: 'DJI_0101.webp',
+      size: 0,
+      lastModified: Date.parse('2025-07-09T08:30:00.000Z'),
+      assetId: 'winnow.example/42',
+      hash: 'abc123',
+    });
+  });
+
+  it('carries no hash the instance did not give', () => {
+    expect(rowMediaRef('winnow.example', row({ content_hash: null })).hash).toBeUndefined();
+    expect(rowMediaRef('winnow.example', row()).name).toBe('DJI_0001.mp4');
+  });
+});
+

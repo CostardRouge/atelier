@@ -13,9 +13,9 @@
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import Button, { type ButtonSize, type ButtonVariant } from './Button';
 import IconButton from './IconButton';
 import { Icons } from './icons';
-import type { ButtonSize } from './Button';
 
 export interface OverflowItem {
   id: string;
@@ -36,6 +36,12 @@ interface OverflowMenuProps {
   side?: 'below' | 'above';
   align?: 'end' | 'start';
   className?: string;
+  /**
+   * A worded trigger instead of the ⋯ — for a menu that is a screen's VERB
+   * ("Add ▾") rather than a card's secondary actions. `label` still names it
+   * for a screen reader.
+   */
+  trigger?: { text: ReactNode; icon?: ReactNode; variant?: ButtonVariant };
 }
 
 export default function OverflowMenu({
@@ -45,6 +51,7 @@ export default function OverflowMenu({
   side = 'below',
   align = 'end',
   className = '',
+  trigger,
 }: OverflowMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -93,20 +100,37 @@ export default function OverflowMenu({
 
   return (
     <div ref={rootRef} className={`relative inline-flex ${className}`}>
-      <IconButton
-        size={size}
-        variant="ghost"
-        label={label}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen((o) => !o);
-        }}
-        className={open ? 'bg-paper-2 text-ink' : ''}
-      >
-        {Icons.more}
-      </IconButton>
+      {trigger ? (
+        <Button
+          variant={trigger.variant ?? 'default'}
+          icon={trigger.icon}
+          trailing={Icons.down}
+          aria-label={label}
+          aria-expanded={open}
+          aria-haspopup="menu"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen((o) => !o);
+          }}
+        >
+          {trigger.text}
+        </Button>
+      ) : (
+        <IconButton
+          size={size}
+          variant="ghost"
+          label={label}
+          aria-expanded={open}
+          aria-haspopup="menu"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen((o) => !o);
+          }}
+          className={open ? 'bg-paper-2 text-ink' : ''}
+        >
+          {Icons.more}
+        </IconButton>
+      )}
       {open && (
         <div
           role="menu"

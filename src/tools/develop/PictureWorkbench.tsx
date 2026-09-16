@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   DevelopApplySection,
   DevelopClipboardActions,
@@ -13,15 +13,23 @@ import { copyDevelop, pasteDevelop } from '../../shared/develop/develop-clipboar
 import { developPillClass } from '../../shared/develop/develop-classes';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { pictureFidelity } from '../../shared/develop/picture-fidelity';
-import { editorKeyAction } from '../../shared/develop/roll-editor';
+import { WORKBENCH_TABS, editorKeyAction, pictureAspectRatio, type WorkbenchTab } from '../../shared/develop/roll-editor';
+import { framedThumbnail } from '../../shared/develop/roll-thumb';
 import type { RollPicture } from '../../shared/develop/roll-types';
 import { useDevelopDraft, useTold } from '../../shared/develop/use-develop-draft';
 import { useDevelopPicture } from '../../shared/develop/use-develop-picture';
 import { usePresetBookHost } from '../../shared/develop/use-preset-book';
 import type { LutStack } from '../../shared/lut/use-lut-stack';
+import { DEFAULT_FRAMING, isDefaultFraming, type Framing } from '../../shared/media/framing';
 import { describeKeyTarget, targetOwnsTyping } from '../../shared/media/transport-keys';
 import PanelHost from '../../shared/ui/PanelHost';
+import Segmented from '../../shared/ui/Segmented';
 import StageZoomControl from '../../shared/ui/StageZoomControl';
+import type { RollExport } from '../../shared/develop/roll-types';
+import CropPanel from './CropPanel';
+import ExportPanel, { type ExportVerb } from './ExportPanel';
+import FramingStage from './FramingStage';
+import type { RollExports } from './use-roll-export';
 
 /** How long the numbers rest before they are written to the roll. */
 const WRITE_DELAY_MS = 200;
@@ -37,7 +45,15 @@ const SNAPSHOT_DELAY_MS = 700;
  *
  * Unlike the modal there is no Done: the numbers are WRITTEN THROUGH to the
  * roll after a short rest, and on leaving the picture — the roll is the
- * document, and the editor saves it the way Trips saves a trip.
+ * document, and the editor saves it the way Trips saves a trip. The crop is
+ * written the same way, on its own timer: a drag fires far more often than a
+ * slider ever does.
+ *
+ * Two tabs over one stage: Develop shows the picture with the wipe and the
+ * zoom; Crop frames the SAME delivered picture into its aspect box, where a
+ * drag moves it instead of comparing. The viewport stays mounted under the
+ * crop stage (hidden), because its paint is keyed on the picture, not on the
+ * canvas element — a remounted canvas would come back blank.
  */
 export default function PictureWorkbench({
   picture: entry,
@@ -46,33 +62,57 @@ export default function PictureWorkbench({
   compact,
   sheetOpen,
   onSheetOpen,
+  tab,
+  onTabChange,
   applyTo,
   onDevelop,
+  onFraming,
+  onAspect,
+  exportSettings,
+  onExportSettings,
+  exports,
+  exportVerbs,
   onSnapshot,
   onStep,
+  emptyText = 'This picture is not in the Library — open its folder, or take it from its day on your Winnow. Its numbers can still be set.',
 }: {
   picture: RollPicture;
-  /** The Library's file for it, or null when it is not there. */
+  /** Its bytes — the Library's or the roll's own — or null while they are not in hand. */
   file: File | null;
   /** The roll's look; the draft rides it. */
   stack: LutStack;
   compact: boolean;
   sheetOpen: boolean;
   onSheetOpen: (open: boolean) => void;
+  /** Which inspector tab is open — lifted to the editor so it survives stepping to another picture. */
+  tab: WorkbenchTab;
+  onTabChange: (tab: WorkbenchTab) => void;
   applyTo: readonly DevelopApplyVerb[];
   onDevelop: (develop: DevelopSettings | null) => void;
+  onFraming: (framing: Framing | null) => void;
+  onAspect: (aspect: string) => void;
+  /** The roll's delivery settings, edited on the Export tab. */
+  exportSettings: RollExport;
+  onExportSettings: (patch: Partial<RollExport>) => void;
+  /** The roll's still export — its state and what the open picture delivers. */
+  exports: RollExports;
+  exportVerbs: readonly ExportVerb[];
   onSnapshot: (thumb: Blob) => void;
   onStep: (step: number) => void;
+  /** What the stage says while the picture's bytes are not in hand. */
+  emptyText?: string;
 }) {
   const presets = usePresetBookHost();
   const draft = useDevelopDraft(entry.develop, stack);
   const [told, tell] = useTold();
   const picture = useDevelopPicture({ file, cube: stack.composed });
   const fidelity = pictureFidelity(file);
+  // Read once, like the develop: the workbench is keyed per picture.
+  const [framingDraft, setFramingDraft] = useState<Framing>(entry.framing ?? { ...DEFAULT_FRAMING });
 
   // --- write-through ---------------------------------------------------------
-  const callbacks = useRef({ onDevelop, onSnapshot, onStep });
-  callbacks.current = { onDevelop, onSnapshot, onStep };
+  const callbacks = useRef({ onDevelop, onFraming, onAspect, onSnapshot, onStep, onTabChange });
+  callbacks.current = { onDevelop, onFraming, onAspect, onSnapshot, onStep, onTabChange };
   const pending = useRef<{ value: DevelopSettings | null } | null>(null);
   const writeTimer = useRef<number | null>(null);
   const mounted = useRef(false);
@@ -104,17 +144,50 @@ export default function PictureWorkbench({
     [],
   );
 
+  // --- the crop, written through the same way, on its own timer ------------
+  const framingPending = useRef<{ value: Framing | null } | null>(null);
+  const framingTimer = useRef<number | null>(null);
+  const framingMounted = useRef(false);
+  useEffect(() => {
+    if (!framingMounted.current) {
+      framingMounted.current = true;
+      return;
+    }
+    framingPending.current = { value: isDefaultFraming(framingDraft) ? null : framingDraft };
+    if (framingTimer.current !== null) window.clearTimeout(framingTimer.current);
+    framingTimer.current = window.setTimeout(() => {
+      framingTimer.current = null;
+      const p = framingPending.current;
+      framingPending.current = null;
+      if (p) callbacks.current.onFraming(p.value);
+    }, WRITE_DELAY_MS);
+  }, [framingDraft]);
+  useEffect(
+    () => () => {
+      if (framingTimer.current !== null) window.clearTimeout(framingTimer.current);
+      const p = framingPending.current;
+      framingPending.current = null;
+      if (p) callbacks.current.onFraming(p.value);
+    },
+    [],
+  );
+
   // --- the filmstrip cell, redrawn as delivered once the picture rests -------
-  const { source, cube, snapshot } = picture;
+  // Delivered means graded AND framed: the strip shows the crop as well as
+  // the light. Keyed on the crop too, so a drag that rests redraws the cell.
+  const { source, cube, delivered } = picture;
+  const aspectRatio = pictureAspectRatio(entry.aspect, source?.width ?? 0, source?.height ?? 0);
   useEffect(() => {
     if (!source) return;
     const t = window.setTimeout(() => {
-      void snapshot().then((blob) => {
+      const image = delivered();
+      if (!image) return;
+      void framedThumbnail(image, source.width, source.height, aspectRatio, framingDraft).then((blob) => {
         if (blob) callbacks.current.onSnapshot(blob);
       });
     }, SNAPSHOT_DELAY_MS);
     return () => window.clearTimeout(t);
-  }, [source, cube, snapshot]);
+  }, [source, cube, delivered, aspectRatio, framingDraft]);
 
   // --- keys --------------------------------------------------------------------
   const keyState = useRef({ draft, picture, tell });
@@ -165,6 +238,14 @@ export default function PictureWorkbench({
           say('pasted');
           return;
         }
+        case 'crop':
+          e.preventDefault();
+          callbacks.current.onTabChange('crop');
+          return;
+        case 'develop':
+          e.preventDefault();
+          callbacks.current.onTabChange('develop');
+          return;
       }
     };
     const onUp = (e: KeyboardEvent) => {
@@ -178,6 +259,9 @@ export default function PictureWorkbench({
     };
   }, []);
 
+  const cropping = tab === 'crop';
+  const tabLabel = WORKBENCH_TABS.find((t) => t.id === tab)?.label ?? 'Develop';
+
   return (
     <>
       <div className={compact ? 'flex-1 min-h-0 flex flex-col gap-2' : 'col-start-1 row-start-1 min-w-0 min-h-0 flex flex-col gap-2'}>
@@ -188,38 +272,83 @@ export default function PictureWorkbench({
             {told && <span className="text-accent-ink" role="status"> · {told}</span>}
           </span>
           {fidelity.chip && <span className={`${developPillClass} flex-none @max-[880px]:hidden`}>{fidelity.chip}</span>}
-          <DevelopClipboardActions draft={draft.draft} asShot={draft.asShot} onReplace={draft.setDraft} onTold={tell} />
-          {source && (
-            <StageZoomControl zoom={picture.view.zoom} hint="wheel, pinch, or Z" className="flex-none max-[820px]:hidden" />
+          {!cropping && (
+            <>
+              <DevelopClipboardActions draft={draft.draft} asShot={draft.asShot} onReplace={draft.setDraft} onTold={tell} />
+              {source && (
+                <StageZoomControl zoom={picture.view.zoom} hint="wheel, pinch, or Z" className="flex-none max-[820px]:hidden" />
+              )}
+            </>
           )}
         </div>
         <DevelopViewport
           picture={picture}
           hasFile={Boolean(file)}
-          emptyText="This picture is not in the Library — open its folder, or take it from its day on your Winnow. Its numbers can still be set."
-          className="flex-1"
+          emptyText={emptyText}
+          className={cropping ? 'hidden' : 'flex-1'}
         />
-        <DevelopCaption draft={draft.draft} note={fidelity.note} picture={picture} />
+        {cropping && (
+          <FramingStage
+            picture={picture}
+            aspectRatio={aspectRatio}
+            framing={framingDraft}
+            onFraming={setFramingDraft}
+            emptyText={emptyText}
+            className="flex-1"
+          />
+        )}
+        {cropping ? (
+          <p className="m-0 flex-none font-mono text-2xs text-faint leading-relaxed">
+            {source
+              ? `drag to move the picture, wheel or pinch to zoom · ${framingDraft.fit === 'contain' ? 'whole picture, bars where it falls short' : 'filling the frame'}`
+              : 'the crop needs the picture'}
+          </p>
+        ) : (
+          <DevelopCaption draft={draft.draft} note={fidelity.note} picture={picture} />
+        )}
       </div>
 
       <PanelHost
         asSheet={compact}
         open={sheetOpen}
         onClose={() => onSheetOpen(false)}
-        title={`Develop · ${entry.ref.name}`}
-        className="col-start-2 row-start-1 row-span-2 min-h-0 overflow-y-auto overscroll-contain pr-1.5 flex flex-col gap-4"
+        title={`${tabLabel} · ${entry.ref.name}`}
+        // The docked inspector wears the frame both editors' inspectors wear
+        // (`frontend.md`): the tab strip pinned, the sections scrolling under it.
+        className="col-start-2 row-start-1 row-span-2 min-h-0 flex flex-col gap-3 border border-line rounded-paper bg-surface p-3"
       >
-        <DevelopHistogram histogram={picture.histogram} />
-        <DevelopSliders value={draft.draft} onChange={draft.set} />
-        <DevelopPresetsSection
-          presets={presets}
-          draft={draft.draft}
-          asShot={draft.asShot}
-          onApply={draft.setDraft}
-          onTold={tell}
-        />
-        <DevelopApplySection verbs={applyTo} draft={draft.draft} onTold={tell} />
-        <DevelopLookSection stack={stack} />
+        {!compact && (
+          <Segmented fill size="sm" label="Inspector" value={tab} onChange={onTabChange} options={WORKBENCH_TABS} className="flex-none" />
+        )}
+        <div className={compact ? 'flex flex-col gap-4' : 'flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain flex flex-col gap-4 -mr-3 pr-3'}>
+          {tab === 'develop' ? (
+            <>
+              <DevelopHistogram histogram={picture.histogram} />
+              <DevelopSliders value={draft.draft} onChange={draft.set} />
+              <DevelopPresetsSection
+                presets={presets}
+                draft={draft.draft}
+                asShot={draft.asShot}
+                onApply={draft.setDraft}
+                onTold={tell}
+              />
+              <DevelopApplySection verbs={applyTo} draft={draft.draft} onTold={tell} />
+              <DevelopLookSection stack={stack} />
+            </>
+          ) : tab === 'crop' ? (
+            <CropPanel framing={framingDraft} aspect={entry.aspect} onFraming={setFramingDraft} onAspect={onAspect} />
+          ) : (
+            <ExportPanel
+              settings={exportSettings}
+              onSettings={onExportSettings}
+              delivery={exports.openDelivery}
+              verbs={exportVerbs}
+              exporting={exports.exporting}
+              note={exports.note}
+              lastRun={exports.lastRun}
+            />
+          )}
+        </div>
       </PanelHost>
     </>
   );

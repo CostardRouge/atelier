@@ -147,6 +147,8 @@ Read before touching the shell (`src/app/`), the tool registry, the shared asset
 
 **Two consequences, both load-bearing.** `usePickFromInstance().pick` now resolves with the Library asset id it landed on, or **null** when nothing arrived: a verb chained onto a fetch must not run on a fetch that failed, or the new piece opens over a placeholder (the thumbnail rule in `roadtrip.md`). And the record is compared by IDENTITY, not field by field like `sameScope` — it carries closures — so the publisher memoises it; only one screen of one tool is ever mounted to publish.
 
+**A third (2026-09-16, the Develop tool's verb)**: `run()` is called in the SAME tick as the activation, so a verb that needs the active media itself must not read it in `run`'s closure — it asks (a pending flag) and an effect answers after the render. Trips' verbs never read it, which is why the trap stayed hidden — `develop-roll.md`.
+
 ## A remote ref is re-FETCHED, never cached (2026-09-06)
 
 **Decision, taken with the maintainer.** The library is `File`s in memory and a reload empties it. A folder file survives that (the document keeps a directory handle, one permission click re-reads it); a file fetched from a Winnow does not, so every restart used to mean finding the day on the calendar and ticking it again. `shared/sources/winnow/resolve-media.ts` answers it from the DOCUMENT instead: since phase 0 a `SavedMediaRef` carries `assetId = "<host>/<id>"`, so `refetchMedia` asks the instance for that row and runs it back through `materialize`.

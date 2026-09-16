@@ -10,6 +10,7 @@
 
 import { imageTypeLabel } from '../media/image-meta';
 import { mediaOrigin } from '../projects/media-identity';
+import { WORKING_PREVIEW_EDGE, isWorkingPreview } from './working-preview';
 
 export interface PictureFidelity {
   /** The chip beside the sheet's title, or null with no picture. */
@@ -20,6 +21,12 @@ export interface PictureFidelity {
 
 export function pictureFidelity(file: File | null): PictureFidelity {
   if (!file) return { chip: null, note: null };
+  if (isWorkingPreview(file)) {
+    return {
+      chip: `working preview · ${WORKING_PREVIEW_EDGE}`,
+      note: `its working preview, ${WORKING_PREVIEW_EDGE} px at most — reopen its folder to develop and export the file itself`,
+    };
+  }
   const origin = mediaOrigin(file);
   if (origin?.fidelity === 'proxy') {
     return {
