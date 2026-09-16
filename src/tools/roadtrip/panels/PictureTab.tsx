@@ -91,6 +91,8 @@ interface PictureTabProps {
   cellFiles: readonly (File | null)[];
   /** The selected cell's file — what the File row and the develop sheet are about. */
   cellFile: File | null;
+  /** The collage's pictures still being fetched back, or that could not be, by asset id. */
+  cellFetches: ReadonlyMap<string, SlideRecovery>;
   onChangeCollage: (collage: SlideCollage | null) => void;
   onUseActiveInCell: () => void;
   onClearCell: () => void;
@@ -181,6 +183,7 @@ export default function PictureTab({
   onSelectCell,
   activeFile,
   cellFiles,
+  cellFetches,
   cellFile,
   onChangeCollage,
   onUseActiveInCell,
@@ -230,7 +233,7 @@ export default function PictureTab({
                       </a>
                     )}
                   </span>
-                ) : !slideFile ? (
+                ) : !(collage ? cellFile : slideFile) ? (
                   recovery?.state === 'fetching'
                     ? `It lives on ${recovery.sourceId} — fetching it back…`
                     : missing
@@ -291,6 +294,7 @@ export default function PictureTab({
           onSelectCell={onSelectCell}
           activeFile={activeFile}
           cellFiles={cellFiles}
+          cellFetches={cellFetches}
           onChange={onChangeCollage}
           onUseActive={onUseActiveInCell}
           onClearCell={onClearCell}

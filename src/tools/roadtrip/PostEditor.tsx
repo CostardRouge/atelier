@@ -81,6 +81,7 @@ import ExportTab from './panels/ExportTab';
 import LookTab from './panels/LookTab';
 import PictureTab, { GradeScopeChips } from './panels/PictureTab';
 import PiecePicker from './panels/PiecePicker';
+import { useCollageRefetch } from './use-collage-refetch';
 import { useDeckTransport } from './use-deck-transport';
 import { usePostExports } from './use-post-exports';
 import useRailThumbs from './use-rail-thumbs';
@@ -401,17 +402,28 @@ export default function PostEditor({
     [slide, collage, cellIndex, cell?.media],
   );
 
+  // A collage's OTHER cells: the Library sync below only follows the selected
+  // one, so every drawn cell's instance-held picture is fetched back here,
+  // once per opening, without touching the active asset or the selection.
+  const collageRefs = useMemo(
+    () => (collage ? Array.from({ length: cellCount }, (_, i) => collageCellAt(lead, collage, i).media) : []),
+    [collage, cellCount, lead],
+  );
+  const collageFetch = useCollageRefetch(slide.slideId ?? slide.kind, collageRefs, lib.assets, lib.addFiles);
+
   // The Library and the open slide point at the same picture, both ways —
   // and a picture the pool lost to a reload is fetched back from the instance
   // that holds it, rather than reported missing.
-  const recovery = useSlideLibrary(
+  const libraryRecovery = useSlideLibrary(
     librarySlide,
     lib.assets,
     lib.setActive,
     collage && cellIndex > 0 && !cell?.media && activeFile === cellBaseline ? null : activeFile,
     setSlideMedia,
     lib.addFiles,
+    collageFetch.elsewhereFor(librarySlide.media),
   );
+  const recovery = libraryRecovery ?? (collage ? collageFetch.recoveryOf(librarySlide.media) : null);
 
   /**
    * A picture fetched from the day strip: into the pool, then made active —
@@ -1592,6 +1604,7 @@ export default function PostEditor({
               }}
               onClearCell={() => patchCell(cellIndex, { media: null })}
               cellFile={cellFile}
+              cellFetches={collageFetch.states}
             />
           )}
 
