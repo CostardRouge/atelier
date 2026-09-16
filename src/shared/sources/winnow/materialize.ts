@@ -35,6 +35,7 @@ import {
   type KnownIdentity,
   type MediaOrigin,
 } from '../../projects/media-identity';
+import type { SavedMediaRef } from '../../projects/project-types';
 import type { WinnowAssetRow, WinnowClient } from './client';
 import { exifFromRow } from './exif-from-row';
 
@@ -98,6 +99,29 @@ export function captureMtime(row: WinnowAssetRow): number {
   const day = /^(\d{4})-(\d{2})-(\d{2})/.exec(row.capture_date ?? '');
   if (day) return new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]), 12).getTime();
   return Date.now();
+}
+
+/**
+ * The ref a document would store for `row`'s PROXY, without fetching it — the
+ * name `materialize` gives the file, the capture's instant, and the identity it
+ * is vouched for with. What a document picks from an instance's list (a Develop
+ * roll adding a day) becomes a ref at no network cost, and the bytes follow
+ * when a picture is opened (`resolve-media.ts`).
+ *
+ * `size` is 0 — unknown until the proxy is fetched — which is harmless where
+ * it is read: a ref with an asset id is matched by that id (`sameMediaRef`),
+ * and the Library finds the fetched file by its name first (`findMedia`).
+ */
+export function rowMediaRef(sourceId: string, row: WinnowAssetRow): SavedMediaRef {
+  const { assetId, hash } = identityFor(sourceId, row);
+  const name = row.media_type === 'video' ? `${baseName(row.filename)}.mp4` : `${baseName(row.filename)}.webp`;
+  return {
+    name,
+    size: 0,
+    lastModified: captureMtime(row),
+    ...(assetId ? { assetId } : {}),
+    ...(hash ? { hash } : {}),
+  };
 }
 
 export async function materialize(

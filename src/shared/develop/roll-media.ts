@@ -138,3 +138,16 @@ export function availabilityText(name: string, a: PictureAvailability | undefine
       return `${name} is a file from this computer that is not open right now — add its folder in the Library. Its numbers can still be set.`;
   }
 }
+
+/**
+ * The calendar day a picture was taken, in THIS device's zone (`YYYY-MM-DD`)
+ * — the day the "add a day" sheet opens on. A ref's `lastModified` is the
+ * capture instant for a fetched file (`captureMtime`); an unknown one (0)
+ * falls back to `now`.
+ */
+export function pictureDay(lastModified: number, now: number = Date.now()): string {
+  const d = new Date(lastModified > 0 ? lastModified : now);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+

@@ -3,6 +3,7 @@ import {
   availabilityText,
   fetchOrder,
   keepWindow,
+  pictureDay,
   summarizeAvailability,
   type PictureAvailability,
 } from './roll-media';
@@ -74,3 +75,12 @@ describe('availabilityText', () => {
     expect(availabilityText('A.jpg', undefined)).toContain('from this computer');
   });
 });
+
+describe('pictureDay', () => {
+  it('reads the local calendar day of the capture, else of now', () => {
+    const noon = new Date(2026, 5, 10, 12).getTime();
+    expect(pictureDay(noon)).toBe('2026-06-10');
+    expect(pictureDay(0, new Date(2026, 0, 2, 9).getTime())).toBe('2026-01-02');
+  });
+});
+

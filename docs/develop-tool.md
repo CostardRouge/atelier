@@ -269,8 +269,11 @@ Phases, one commit each:
   counts only the ticked photos the roll does not hold (`sameMediaRef` over
   their hashed refs) and is not drawn when there are none; the one *Add* menu
   arrives with F3, when there is a second way in to gather.
-- **F3 — add a day from a Winnow, inside the roll**: rows become refs without
-  fetching a byte; the pictures follow F1.
+- **F3 — add a day from a Winnow, inside the roll** — **BUILT 2026-09-16**:
+  `WinnowDaySheet` (one day of the first connection, photos only, what the
+  roll lacks ticked), `rowMediaRef` beside `materialize` (+ spec: the ref a
+  fetched proxy would carry, size 0), and the bar's *Add* — a button for one
+  way in, a menu (`OverflowMenu`'s new worded trigger) for two.
 - **F4 — local files: the folder handle and re-linking by drop** (paliers A
   and B of the proposal).
 - **F5 — working previews** (palier C), local only, per roll.

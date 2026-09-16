@@ -13,7 +13,12 @@ import {
   type SelectionModifiers,
   type WorkbenchTab,
 } from '../../shared/develop/roll-editor';
-import { availabilityText, summarizeAvailability, type PictureAvailability } from '../../shared/develop/roll-media';
+import {
+  availabilityText,
+  pictureDay,
+  summarizeAvailability,
+  type PictureAvailability,
+} from '../../shared/develop/roll-media';
 import { deleteRollThumbs, getRollThumbs, putRollThumb } from '../../shared/develop/roll-store';
 import { pictureThumbnail } from '../../shared/develop/roll-thumb';
 import {
@@ -28,10 +33,13 @@ import {
 } from '../../shared/develop/roll-types';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { hashedMediaRefs } from '../../shared/projects/media-identity';
+import type { SavedMediaRef } from '../../shared/projects/project-types';
+import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
 import { usePublishMediaActions, type MediaActions } from '../../shared/sources/media-scope';
 import Button from '../../shared/ui/Button';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 import EmptyState from '../../shared/ui/EmptyState';
+import OverflowMenu, { type OverflowItem } from '../../shared/ui/OverflowMenu';
 import PageBar from '../../shared/ui/PageBar';
 import { Icons } from '../../shared/ui/icons';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
@@ -42,6 +50,7 @@ import PictureWorkbench from './PictureWorkbench';
 import { useRollExport } from './use-roll-export';
 import { useRollGrade } from './use-roll-grade';
 import { useRollMedia } from './use-roll-media';
+import WinnowDaySheet from './WinnowDaySheet';
 
 interface RollEditorProps {
   roll: RollDoc;
@@ -73,6 +82,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const [adding, setAdding] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<RollPicture | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [pickingDay, setPickingDay] = useState(false);
+  const { connection } = useWinnowConnection();
   // Which inspector tab is open — kept here, not in the workbench, so it
   // survives stepping to another picture (the workbench remounts per picture).
   const [tab, setTab] = useState<WorkbenchTab>('develop');
@@ -278,6 +289,19 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     }
   }
 
+  /** Refs picked from an instance's day: onto the roll, and the bytes follow when opened. */
+  function addRefs(refs: SavedMediaRef[], sourceId: string) {
+    setPickingDay(false);
+    const before = latest.current.pictures.length;
+    let added = 0;
+    update((r) => {
+      const next = addPictures(r, refs);
+      added = next.pictures.length - before;
+      return next;
+    });
+    setNotice(`added ${added} from ${sourceId}`);
+  }
+
   function remove(picture: RollPicture) {
     const nextOpen = openAfterRemoval(latest.current.pictures, picture.id, openId);
     update((r) => removePictures(r, [picture.id]));
@@ -419,6 +443,17 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const progress = rollProgress(roll);
   const addLabel =
     newPhotos.length === 0 ? 'Add from Library' : `Add ${newPhotos.length} from the Library`;
+  // The ways a picture gets onto the roll. One is a button; two are a menu.
+  const addItems: OverflowItem[] = [
+    ...(newPhotos.length > 0
+      ? [{ id: 'library', label: `${newPhotos.length} ticked in the Library`, onSelect: () => void addSelected() }]
+      : []),
+    ...(connection
+      ? [{ id: 'winnow', label: `A day on ${connection.id}…`, onSelect: () => setPickingDay(true) }]
+      : []),
+  ];
+  const dayLabel = connection ? `Add a day from ${connection.id}` : '';
+  const initialDay = pictureDay(open?.ref.lastModified ?? roll.pictures[roll.pictures.length - 1]?.ref.lastModified ?? 0);
 
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-2">
@@ -427,19 +462,32 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         trailing={
           <>
             {headerExtra}
-            {/* Only when the Library holds something the roll does not: a
-                ticked picture already on the roll is nothing to add. */}
-            {(newPhotos.length > 0 || adding) && (
+            {/* The Library's item only when it holds something the roll does
+                not: a ticked picture already on the roll is nothing to add. */}
+            {adding ? (
+              <Button variant="primary" icon={Icons.plus} disabled>
+                Adding…
+              </Button>
+            ) : addItems.length > 1 ? (
+              <OverflowMenu
+                label="Add pictures to this roll"
+                items={addItems}
+                trigger={{ text: 'Add', icon: Icons.plus, variant: newPhotos.length > 0 ? 'primary' : 'default' }}
+              />
+            ) : addItems[0]?.id === 'library' ? (
               <Button
                 variant="primary"
                 icon={Icons.plus}
                 onClick={() => void addSelected()}
-                disabled={adding}
                 title="Add the photos ticked in the Library that are not on this roll yet, in that order"
               >
-                {adding ? 'Adding…' : addLabel}
+                {addLabel}
               </Button>
-            )}
+            ) : addItems[0]?.id === 'winnow' ? (
+              <Button icon={Icons.plus} onClick={() => setPickingDay(true)}>
+                Add a day…
+              </Button>
+            ) : null}
           </>
         }
       >
@@ -450,13 +498,24 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         <EmptyState
           title="No pictures on this roll yet"
           actions={
-            <Button variant="primary" onClick={() => void addSelected()} disabled={newPhotos.length === 0}>
-              {addLabel}
-            </Button>
+            <>
+              {connection && (
+                <Button variant="primary" onClick={() => setPickingDay(true)}>
+                  {dayLabel}
+                </Button>
+              )}
+              <Button
+                variant={connection ? 'default' : 'primary'}
+                onClick={() => void addSelected()}
+                disabled={newPhotos.length === 0}
+              >
+                {addLabel}
+              </Button>
+            </>
           }
         >
-          Tick the photos you mean to develop in the Library — a folder, or a day on your Winnow — then add
-          them here. The roll keeps a reference to each and its own numbers, never a copy of the file.
+          Pick a day on your Winnow, or tick photos in the Library — a folder of your own — and add them
+          here. The roll keeps a reference to each and its own numbers, never a copy of the file.
         </EmptyState>
       ) : (
         // The container is the wrapper and the queried grid its CHILD: a
@@ -573,6 +632,15 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
             </div>
           </div>
         </div>
+      )}
+
+      {pickingDay && (
+        <WinnowDaySheet
+          initialDay={initialDay}
+          held={roll.pictures.map((p) => p.ref)}
+          onCancel={() => setPickingDay(false)}
+          onAdd={addRefs}
+        />
       )}
 
       {confirmRemove && (

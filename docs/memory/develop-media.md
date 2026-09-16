@@ -66,3 +66,25 @@ statement about the roll. Verified in the pane: no button on a roll with
 nothing new ticked; two dropped JPEGs → *Add 2 from the Library*; after the
 click the button went away with both still ticked.
 
+## A day of the instance is added from inside the roll, as refs (2026-09-16, F3)
+
+`WinnowDaySheet` lists ONE day of the first connection (`useScopeRows`, the
+Library tab's own read), photos only, opening on the open picture's capture
+day (`pictureDay`, local zone); what the roll lacks starts ticked, what it
+holds is drawn "on the roll" and cannot be ticked. **Adding fetches nothing**:
+each row becomes the ref its proxy would carry (`rowMediaRef` in
+`materialize.ts` — `<base>.webp`, the capture instant, `host/id`, the content
+hash, `size: 0` because the proxy's weight is unknown until fetched; tested
+equal to `hashedMediaRef` of a materialised proxy but for the size), and the
+bytes follow F1 when a picture is opened. **How to apply**: a surface that
+picks from an instance's list and stores refs builds them with `rowMediaRef`,
+never with a fetch-then-hash. **The bar's rule**: one way in is a plain button
+(*Add N from the Library*, or *Add a day…*), two are ONE *Add* menu —
+`OverflowMenu` gained an optional worded `trigger` for that, the ⋯ staying the
+default. The empty roll offers the day first when a Winnow is connected.
+Verified in the pane: the sheet opened on 10 June with the five pictures
+already on the roll untickable; the next day listed four photos (the video
+left out), all ticked; unticking one and *Add 3 to the roll* added three
+refs and fetched no proxy; opening the first fetched it and its two
+neighbours; with a new file ticked the bar became *Add ▾* with both items.
+
