@@ -87,7 +87,8 @@ import { useExposureLine } from './use-exposure-line';
 import { pickable, useSlideLibrary } from './use-slide-library';
 import { useTripGrade } from './use-trip-grade';
 import PageBar from '../../shared/ui/PageBar';
-import Button from '../../shared/ui/Button';
+import { buttonClass } from '../../shared/ui/Button';
+import IconButton from '../../shared/ui/IconButton';
 import PanelHost from '../../shared/ui/PanelHost';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
@@ -1220,6 +1221,60 @@ export default function PostEditor({
     />
   );
 
+  // The piece's ONE primary action, in the header where the maintainer looked
+  // for it. It is not the duplicate removed in `5d11245`: the Export tab's
+  // buttons are the per-format escapes FROM this one, which delivers the whole
+  // deck in the formats the slides say they are.
+  //
+  // While it runs the button IS the progress: a fill sweeping left to right
+  // over a number of fixed width. The sentence ("Encoding 2/3 · 42%…") goes to
+  // the tooltip — as a label it changed length every percent and made the bar
+  // jump. It is not `disabled` while it runs (that would fade the progress to
+  // 45%); a second press is simply ignored.
+  const exportRunning = exports.exporting !== null;
+  const exportPercent = exports.progress === null ? null : Math.round(exports.progress * 100);
+  const exportTitle = exportRunning
+    ? `${exports.exporting} — every slide of this piece`
+    : 'Export every slide of this piece, in the format it is';
+  const exportFace = (
+    <>
+      <span className="inline-flex shrink-0 [&>svg]:w-[1.1em] [&>svg]:h-[1.1em]">{Icons.export}</span>
+      {/* The bar's one word yields to a status pill that is speaking. */}
+      <span className="tabular-nums group-has-[[data-speaks]]/bar:hidden">
+        {exportRunning ? (exportPercent === null ? '…' : `${exportPercent} %`) : 'Export'}
+      </span>
+    </>
+  );
+  const exportButton = (
+    <button
+      type="button"
+      onClick={() => {
+        if (!exportRunning) void exports.exportPiece();
+      }}
+      aria-busy={exportRunning || undefined}
+      aria-label={exportTitle}
+      title={exportTitle}
+      className={buttonClass(
+        // `default` while running, not `primary` with overrides: two utilities
+        // of one property are ordered by Tailwind, not by this string.
+        exportRunning ? 'default' : 'primary',
+        'md',
+        'relative overflow-hidden min-w-[6.0625rem] group-has-[[data-speaks]]/bar:min-w-0 group-has-[[data-speaks]]/bar:w-[2.125rem] group-has-[[data-speaks]]/bar:px-0',
+      )}
+    >
+      {exportFace}
+      {exportRunning && (
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 flex items-center justify-center gap-1.5 bg-ink text-paper transition-[clip-path] duration-150 motion-reduce:transition-none"
+          style={{ clipPath: `inset(0 ${100 - (exportPercent ?? 0)}% 0 0)` }}
+        >
+          {exportFace}
+        </span>
+      )}
+    </button>
+  );
+
   return (
     // Wide: a two-column grid — the stage spans both rows on the left and
     // takes the section's whole height, the piece's header sits atop the
@@ -1245,49 +1300,35 @@ export default function PostEditor({
       } @min-[860px]:grid @min-[860px]:grid-cols-[minmax(0,1fr)_22rem] @min-[860px]:grid-rows-[auto_minmax(0,1fr)] @min-[860px]:gap-x-5 @min-[860px]:gap-y-3 @min-[860px]:overflow-hidden`}
     >
       <div className="flex flex-col gap-1 min-w-0 @min-[860px]:col-start-2 @min-[860px]:row-start-1">
-        {/* ONE row again, navigation and status together — the status pill is
-            no longer a sentence of uncontrolled length but a 1.9rem lozenge
-            like the buttons beside it (a dot, one word, the sentence in a
-            popover), so the ragged stack that forced it onto a line of its own
-            cannot come back. A whole line for "saved · just now" was a tenth
-            of a phone screen. Exporting has its own button on the Export tab —
-            this block is navigation and status only, never a second place to
-            trigger the same action. */}
+        {/* ONE row, and one LINE (2026-09-16): this bar lives in the
+            inspector's 352px column, and once undo/redo joined it the row
+            asked ~430px and broke in two. So the cells that took width without
+            saying anything went square — the way back is the chevron alone,
+            the trip's settings a cog — the history is one joined control,
+            and the bar says ONE word at most: "Export" at rest, a number
+            while it runs, and nothing while the status pill is the one
+            speaking (a conflict, a sign-in), when Export folds to its glyph
+            in the same place. Exporting per format stays on the Export tab;
+            this block is navigation, status and the piece's one action. */}
         <PageBar
-          back={{ label: 'Overview', onClick: onBack }}
+          back={{ label: 'Overview', title: 'Back to the overview', onClick: onBack, iconOnly: true }}
           trailing={
             <>
               {headerExtra}
-              {/* The piece's ONE primary action, in the header where the
-                  maintainer looked for it. It is not the duplicate that was
-                  removed in `5d11245`: the Export tab's buttons are the
-                  per-format escapes FROM this one, which delivers the whole
-                  deck in the formats the slides say they are. Pressing it
-                  switches to that tab, so the report is read where it is
-                  written. */}
-              <Button
-                variant="primary"
-                onClick={() => void exports.exportPiece()}
-                disabled={exports.exporting !== null}
-                title="Every slide of this piece, in the format it is"
-                icon={Icons.export}
-              >
-                {exports.exporting ?? 'Export'}
-              </Button>
+              {exportButton}
             </>
           }
         >
-          {/* What is true of the WHOLE trip lives behind this, exactly where
-              the Studio keeps a project's own settings — so the inspector on
-              the right is about the piece and nothing else. */}
-          <Button
-            onClick={() => setTripSheet('words')}
+          {/* What is true of the WHOLE trip lives behind this, beside the way
+              back to that trip — so the inspector below is about the piece
+              and nothing else. */}
+          <IconButton
+            label="Trip settings"
             title="Trip settings — the words, the closing card, what a new piece starts from"
-            className="font-mono text-2xs tracking-[0.06em] uppercase"
-            trailing={Icons.settings}
+            onClick={() => setTripSheet('words')}
           >
-            Trip
-          </Button>
+            {Icons.settings}
+          </IconButton>
         </PageBar>
         {/* Editable in place, like the Studio's project name: a piece is
             found again by what it is called, and having to go back to the

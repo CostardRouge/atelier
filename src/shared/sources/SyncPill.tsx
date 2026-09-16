@@ -224,6 +224,9 @@ export default function SyncPill({
         // No `title`: the browser's own tooltip would appear over the panel a
         // hover has just opened, saying the same sentence a second time.
         aria-label={text}
+        // Read by the bar around it: a pill that speaks takes the bar's one
+        // word (`PageBar`).
+        data-speaks={showLabel ? '' : undefined}
         className={`inline-flex items-center shrink-0 whitespace-nowrap h-[2.125rem] rounded-control border bg-paper font-mono text-2xs tracking-[0.06em] uppercase cursor-pointer transition-colors ${
           showLabel ? 'gap-1.5 px-2.5' : 'justify-center w-[2.125rem] px-0'
         } ${

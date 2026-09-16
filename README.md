@@ -607,7 +607,8 @@ scale, typewriter, wipe, with duration, easing and a stagger delay. The hook
 has a **duration**, which is what an exit animation lands on; playing the piece
 from the band under the preview shows the entrance land and the exit leave.
 
-**A look you like becomes the starting point.** ⚙ Trip → **New pieces** saves
+**A look you like becomes the starting point.** Trip settings (the ⚙ beside the
+way back) → **New pieces** saves
 the open piece's look (frame, opener, placement, shades, per-piece styling,
 what it counts) for the next piece of that kind in the trip; what a piece says
 about one day is never inherited. On the dev server only (`npm run dev`), a
