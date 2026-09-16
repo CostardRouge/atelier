@@ -142,6 +142,47 @@ through the confirm → reload: route, develops, thumbnails pruned to three → 
 look's output transform saved as `grade`, back to `null` on None → phone: stage,
 strip, the bar's Develop opening the sheet.
 
+## The filmstrip's batch is a Shift/⌘-click selection, apart from the open picture (2026-09-16, D7)
+
+`roll-editor.ts` gained `pictureRange` and `selectionAfterClick` (pure, tested):
+a plain click still opens a picture and never touches the selection (the
+caller only calls `selectionAfterClick` for a modified click); **Shift
+REPLACES the selection with the range from the anchor** (repeated Shift-clicks
+do not accumulate, matching Finder rather than a text-editor's extend-and-add)
+and never moves the anchor; **⌘/Ctrl toggles one picture in place** and
+becomes the new anchor. The anchor itself is not stored across an unrelated
+open-picture change: `RollEditor` resets it to null whenever `openId` changes
+by any OTHER means (a plain click, ←/→, the route), so the next Shift-click
+always ranges from the picture actually open, never a stale one.
+
+**The selection is a batch TARGET list, not a second "open".** `RollEditor`
+computes `selectionTargets` (the selection minus the open picture, since
+writing a picture's own develop onto itself is a no-op that would only
+confuse the count) and feeds `DevelopApplyVerb`s that read it: `Apply to N
+selected` writes the open draft to each target, and — only while something is
+copied (`hasCopiedDevelop`) — `Paste to N selected` writes the clipboard's
+develop instead, ignoring the draft `DevelopApplySection` always passes it (a
+verb's `run(settings)` is free to ignore `settings`, which is what makes a
+paste-verb fit the existing one-shape contract with no host change). With no
+selection the roll falls back to the original "Apply to N other pictures"
+(all of them). Clearing selects none via a `Clear` link beside the count in
+the progress line; a removed picture is filtered out of the selection by
+recomputing a `visibleSelected` view rather than pruning the raw state.
+
+**Why no shared code**: only this tool's filmstrip supports multi-select (the
+Trips/Studio modals show one picture), so the selection lives entirely in
+`tools/develop/` — `DevelopApplyVerb`'s existing contract needed no change.
+
+Verified in the Browser pane (six dropped JPEGs, no real Winnow needed):
+Shift-click from the open picture across three more selected exactly that
+range with checkmark badges; a repeat Shift-click at a nearer picture shrank
+the range instead of adding to it; ⌘-click toggled one picture in and back
+out while leaving the rest of the selection alone; "Apply to 3 selected"
+wrote +1.5 EV to the three non-open targets only (the other two, unselected,
+stayed as shot); Copy on the open picture then a fresh ⌘-click pair then
+"Paste to 2 selected" wrote the same +1.5 EV to those two; Clear dropped the
+badges and the verb reverted to "Apply to 5 other pictures".
+
 ## Undo and redo over the roll (2026-09-15)
 
 **Fact.** `DevelopTool` wires the shared history engine exactly as Trips does —

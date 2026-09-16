@@ -1,7 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { isDefaultDevelop, type DevelopSettings } from '../../shared/develop/develop';
-import { openAfterRemoval, openPictureId, sameDevelop, stepPicture } from '../../shared/develop/roll-editor';
+import { hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from '../../shared/develop/develop-clipboard';
+import {
+  openAfterRemoval,
+  openPictureId,
+  sameDevelop,
+  selectionAfterClick,
+  stepPicture,
+  type SelectionModifiers,
+} from '../../shared/develop/roll-editor';
 import { deleteRollThumbs, getRollThumbs, putRollThumb } from '../../shared/develop/roll-store';
 import { pictureThumbnail } from '../../shared/develop/roll-thumb';
 import {
@@ -73,6 +81,30 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const open = openId ? (roll.pictures.find((p) => p.id === openId) ?? null) : null;
   const openIdRef = useRef(openId);
   openIdRef.current = openId;
+
+  // --- batch selection (D7): a plain click opens, Shift/⌘ marks for a batch -
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [anchor, setAnchor] = useState<string | null>(null);
+  useEffect(() => {
+    // The open picture changing through any OTHER means (a plain click, a
+    // step, the route) becomes the anchor for the next Shift-click.
+    setAnchor(null);
+  }, [openId]);
+  const visibleSelected = useMemo(
+    () => new Set([...selected].filter((id) => roll.pictures.some((p) => p.id === id))),
+    [selected, roll.pictures],
+  );
+  const handleSelectClick = useCallback(
+    (id: string, mods: SelectionModifiers) => {
+      setSelected((s) => selectionAfterClick(latest.current.pictures, s, anchor ?? openIdRef.current ?? id, id, mods));
+      if (mods.metaKey || mods.ctrlKey) setAnchor(id);
+    },
+    [anchor],
+  );
+  const selectionTargets = useMemo(
+    () => [...visibleSelected].filter((id) => id !== openId),
+    [visibleSelected, openId],
+  );
 
   // --- the Library's photos, and where each picture's bytes are ------------
   const libraryPhotos = useMemo(
@@ -204,25 +236,56 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [update],
   );
 
+  const writeDevelopTo = useCallback(
+    (targets: readonly string[], develop: DevelopSettings | null) =>
+      update((r) => ({
+        ...r,
+        pictures: r.pictures.map((p) => (targets.includes(p.id) ? { ...p, develop: develop ? { ...develop } : null } : p)),
+        updatedAt: Date.now(),
+      })),
+    [update],
+  );
+  const canPaste = useSyncExternalStore(subscribeDevelopClipboard, hasCopiedDevelop);
   const others = roll.pictures.length - 1;
   const applyTo = useMemo<DevelopApplyVerb[]>(() => {
-    if (!openId || others <= 0) return [];
+    if (!openId) return [];
+    if (selectionTargets.length > 0) {
+      const n = selectionTargets.length;
+      const verbs: DevelopApplyVerb[] = [
+        {
+          id: 'selection',
+          label: `Apply to ${n} selected`,
+          hint: 'the pictures marked in the filmstrip, each as its own copy',
+          run: (settings: DevelopSettings) => writeDevelopTo(selectionTargets, isDefaultDevelop(settings) ? null : settings),
+        },
+      ];
+      if (canPaste) {
+        verbs.push({
+          id: 'paste-selection',
+          label: `Paste to ${n} selected`,
+          hint: 'the copied numbers, written onto each marked picture',
+          run: () => {
+            const pasted = pasteDevelop();
+            if (pasted) writeDevelopTo(selectionTargets, isDefaultDevelop(pasted) ? null : pasted);
+          },
+        });
+      }
+      return verbs;
+    }
+    if (others <= 0) return [];
     return [
       {
         id: 'roll',
         label: `Apply to ${others} other picture${others === 1 ? '' : 's'}`,
         hint: 'the rest of this roll, each as its own copy',
-        run: (settings: DevelopSettings) => {
-          const develop = isDefaultDevelop(settings) ? null : settings;
-          update((r) => ({
-            ...r,
-            pictures: r.pictures.map((p) => (p.id === openId ? p : { ...p, develop: develop ? { ...develop } : null })),
-            updatedAt: Date.now(),
-          }));
-        },
+        run: (settings: DevelopSettings) =>
+          writeDevelopTo(
+            roll.pictures.filter((p) => p.id !== openId).map((p) => p.id),
+            isDefaultDevelop(settings) ? null : settings,
+          ),
       },
     ];
-  }, [openId, others, update]);
+  }, [openId, others, roll.pictures, selectionTargets, canPaste, writeDevelopTo]);
 
   // On a phone the inspector is a sheet, opened from the shell's bottom bar.
   usePublishSectionBar(
@@ -310,16 +373,33 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               <p className="m-0 font-mono text-2xs text-muted tabular-nums">
                 {progress.developed} of {progress.total} developed
                 {roll.grade && <span className="text-faint"> · the roll has a look</span>}
+                {visibleSelected.size > 0 && (
+                  <span className="text-accent-ink">
+                    {' '}
+                    · {visibleSelected.size} selected{' '}
+                    <button
+                      type="button"
+                      onClick={() => setSelected(new Set())}
+                      className="underline underline-offset-2 cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  </span>
+                )}
                 {notice && <span className="text-ink-soft"> · {notice}</span>}
-                {!compact && <span className="text-faint"> · ←/→ picture · {'\\'} before · Z closer</span>}
+                {!compact && (
+                  <span className="text-faint"> · ←/→ picture · {'\\'} before · Z closer · Shift/⌘-click to select</span>
+                )}
               </p>
               <Filmstrip
                 pictures={roll.pictures}
                 openId={openId}
+                selectedIds={visibleSelected}
                 thumbs={thumbs}
                 inLibrary={files}
                 compact={compact}
                 onOpen={(id) => onOpenPicture(id)}
+                onSelectClick={handleSelectClick}
                 onRemove={(p) => (p.develop || p.framing ? setConfirmRemove(p) : remove(p))}
               />
             </div>

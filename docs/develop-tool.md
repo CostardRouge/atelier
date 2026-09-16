@@ -1,9 +1,9 @@
 # Develop — the third editor
 
 **Status (2026-09-16): the direction and eight choices are DECIDED by the
-maintainer (§2, §8); the shared foundations and D1–D6 are BUILT — the tool
-has its gallery and its full-screen editor (stage, filmstrip, the Develop
-inspector); batch (D7) is next.** From
+maintainer (§2, §8); the shared foundations and D1–D7 are BUILT — the tool has
+its gallery, its full-screen editor (stage, filmstrip, the Develop inspector)
+and a filmstrip batch selection; crop (D8) is next.** From
 his brief of the same day (*"un troisième outil officiel de développement
 d'images … à peu près la même interface que la modale … je n'ai pas envie de
 réinventer la roue … si des choses communes peuvent être développées, on
@@ -192,7 +192,9 @@ interface RollPicture {
   updater, a history-replacing step, the open cell redrawn as delivered, the
   inspector a sheet on a phone. Only the Develop inspector exists: the Crop and
   Export tabs arrive with D8 and D9, so no empty tab is drawn before them.
-- **D7 — batch**: selection, apply / paste to selection, counts in labels.
+- **D7 — batch** — **BUILT 2026-09-16**: `selectionAfterClick` + `pictureRange`
+  in `roll-editor.ts` (tested), the filmstrip's Shift/⌘-click, `DevelopApplyVerb`s
+  that read the selection instead of "every other picture" once one exists.
 - **D8 — crop**: framing on the stage and the Crop tab.
 - **D9 — export**: framing-aware still export, full decode (the originals
   plan's O1 + O2 slot in here: Auto fetches an original only where needed),

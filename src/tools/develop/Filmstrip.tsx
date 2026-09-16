@@ -1,29 +1,37 @@
 import { useEffect, useRef } from 'react';
 import { describeDevelop } from '../../shared/develop/develop';
+import type { SelectionModifiers } from '../../shared/develop/roll-editor';
 import type { RollPicture } from '../../shared/develop/roll-types';
 import { useObjectUrl } from '../../shared/media/use-object-url';
+import { Icons } from '../../shared/ui/icons';
 
 /**
- * The roll's pictures in a band under the stage, in the strip's order: a click
- * opens one, the open one is outlined and kept in view as ←/→ step, and a
- * corner × takes one off the roll. Adding is the bar's verb, never a second
- * copy here. Selecting several for a batch is D7's (`docs/develop-tool.md`).
+ * The roll's pictures in a band under the stage, in the strip's order: a
+ * plain click opens one (outlined, kept in view as ←/→ step), Shift or ⌘/Ctrl
+ * marks it for a batch instead (D7 of `docs/develop-tool.md`) — a checkmark
+ * badge, never a second ring colour that would fight the open one. A corner ×
+ * takes a picture off the roll. Adding is the bar's verb, never a second copy
+ * here.
  */
 export default function Filmstrip({
   pictures,
   openId,
+  selectedIds,
   thumbs,
   inLibrary,
   compact,
   onOpen,
+  onSelectClick,
   onRemove,
 }: {
   pictures: readonly RollPicture[];
   openId: string | null;
+  selectedIds: ReadonlySet<string>;
   thumbs: ReadonlyMap<string, Blob>;
   inLibrary: ReadonlyMap<string, File>;
   compact: boolean;
   onOpen: (id: string) => void;
+  onSelectClick: (id: string, mods: SelectionModifiers) => void;
   onRemove: (picture: RollPicture) => void;
 }) {
   const stripRef = useRef<HTMLOListElement>(null);
@@ -45,10 +53,12 @@ export default function Filmstrip({
           key={p.id}
           picture={p}
           open={p.id === openId}
+          selected={selectedIds.has(p.id)}
           thumb={thumbs.get(p.id) ?? null}
           inLibrary={inLibrary.has(p.id)}
           size={size}
           onOpen={() => onOpen(p.id)}
+          onSelectClick={(mods) => onSelectClick(p.id, mods)}
           onRemove={() => onRemove(p)}
         />
       ))}
@@ -59,18 +69,22 @@ export default function Filmstrip({
 function Cell({
   picture,
   open,
+  selected,
   thumb,
   inLibrary,
   size,
   onOpen,
+  onSelectClick,
   onRemove,
 }: {
   picture: RollPicture;
   open: boolean;
+  selected: boolean;
   thumb: Blob | null;
   inLibrary: boolean;
   size: string;
   onOpen: () => void;
+  onSelectClick: (mods: SelectionModifiers) => void;
   onRemove: () => void;
 }) {
   const url = useObjectUrl(thumb);
@@ -79,10 +93,17 @@ function Cell({
     <li className="group relative flex-none" data-picture={picture.id}>
       <button
         type="button"
-        onClick={onOpen}
+        onClick={(e) => {
+          if (e.shiftKey || e.metaKey || e.ctrlKey) {
+            onSelectClick({ shiftKey: e.shiftKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey });
+          } else {
+            onOpen();
+          }
+        }}
         aria-current={open ? 'true' : undefined}
-        aria-label={`${picture.ref.name}${developed ? ', developed' : ''}`}
-        title={`${picture.ref.name}${developed ? ` — ${describeDevelop(picture.develop) || 'cropped'}` : ' — as shot'}`}
+        aria-selected={selected ? 'true' : undefined}
+        aria-label={`${picture.ref.name}${developed ? ', developed' : ''}${selected ? ', selected' : ''}`}
+        title={`${picture.ref.name}${developed ? ` — ${describeDevelop(picture.develop) || 'cropped'}` : ' — as shot'} — Shift or ⌘/Ctrl-click to select for a batch`}
         className={`relative block ${size} p-0 rounded-paper overflow-hidden bg-frame cursor-pointer border-2 ${
           open ? 'border-accent' : 'border-transparent hover:border-line-strong'
         }`}
@@ -96,6 +117,14 @@ function Cell({
         )}
         {developed && (
           <span className="absolute left-1 bottom-1 w-1.5 h-1.5 rounded-full bg-accent ring-1 ring-[rgba(20,18,15,0.6)]" aria-hidden="true" />
+        )}
+        {selected && (
+          <span
+            className="absolute left-1 top-1 w-4 h-4 grid place-items-center rounded-full bg-accent text-paper text-3xs"
+            aria-hidden="true"
+          >
+            {Icons.check}
+          </span>
         )}
       </button>
       <button

@@ -42,6 +42,45 @@ export function sameDevelop(a: DevelopSettings | null, b: DevelopSettings | null
   return Object.keys({ ...x, ...y }).every((k) => x[k] === y[k]);
 }
 
+/** The pictures between `a` and `b`, inclusive, in strip order; an id off the roll reads as just the other end. */
+export function pictureRange(pictures: readonly { id: string }[], a: string, b: string): string[] {
+  const ia = pictures.findIndex((p) => p.id === a);
+  const ib = pictures.findIndex((p) => p.id === b);
+  if (ia < 0 || ib < 0) return [b];
+  const [lo, hi] = ia <= ib ? [ia, ib] : [ib, ia];
+  return pictures.slice(lo, hi + 1).map((p) => p.id);
+}
+
+export interface SelectionModifiers {
+  shiftKey: boolean;
+  metaKey: boolean;
+  ctrlKey: boolean;
+}
+
+/**
+ * What a MODIFIED filmstrip click does to the batch selection — a plain click
+ * never reaches this, it opens the picture instead. Shift REPLACES the
+ * selection with the range from the anchor (repeated shift-clicks do not
+ * accumulate, the anchor does not move); ⌘/Ctrl toggles one picture in place
+ * and becomes the anchor for the next shift-click.
+ */
+export function selectionAfterClick(
+  pictures: readonly { id: string }[],
+  selected: ReadonlySet<string>,
+  anchor: string,
+  id: string,
+  mods: SelectionModifiers,
+): ReadonlySet<string> {
+  if (mods.shiftKey) return new Set(pictureRange(pictures, anchor, id));
+  if (mods.metaKey || mods.ctrlKey) {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  }
+  return selected;
+}
+
 export interface EditorKeyPress {
   key: string;
   repeat: boolean;
