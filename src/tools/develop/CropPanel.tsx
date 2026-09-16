@@ -6,11 +6,21 @@ import {
   wrapDegrees,
   type Framing,
 } from '../../shared/media/framing';
+import { developButtonClass } from '../../shared/develop/develop-classes';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import Button from '../../shared/ui/Button';
 import { FieldRow, InspectorSection, RangeField } from '../../shared/ui/Inspector';
 import { Icons } from '../../shared/ui/icons';
+import SectionLegend from '../../shared/ui/SectionLegend';
 import Segmented from '../../shared/ui/Segmented';
+
+/** A batch verb of the Crop tab: handed this picture's crop on its click. */
+export interface CropApplyVerb {
+  id: string;
+  label: string;
+  hint?: string;
+  run: (crop: { aspect: string; framing: Framing }) => void;
+}
 
 const ASPECT_OPTIONS = [
   { id: 'original', label: 'Original', title: 'The picture’s own shape, as shot' },
@@ -29,13 +39,18 @@ export default function CropPanel({
   aspect,
   onFraming,
   onAspect,
+  verbs = [],
+  onTold,
 }: {
   framing: Framing;
   aspect: string;
   onFraming: (framing: Framing) => void;
   onAspect: (aspect: string) => void;
+  verbs?: readonly CropApplyVerb[];
+  onTold?: (message: string) => void;
 }) {
   return (
+    <>
     <InspectorSection
       id="develop.crop"
       title="Crop"
@@ -133,5 +148,32 @@ export default function CropPanel({
         </Button>
       </FieldRow>
     </InspectorSection>
+    {verbs.length > 0 && (
+      <div className="flex flex-col gap-2 pt-3 border-t border-line">
+        <SectionLegend label="Apply to…">
+          <p>
+            This aspect, fit, zoom, rotation, flips and position written onto other pictures, now,
+            each as its own copy. A position that would open a gap on a picture of another shape is
+            held at its edge.
+          </p>
+        </SectionLegend>
+        {verbs.map((verb) => (
+          <div key={verb.id} className="flex flex-col items-start gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                verb.run({ aspect, framing: { ...framing } });
+                onTold?.(`done · ${verb.label.toLowerCase()}`);
+              }}
+              className={developButtonClass}
+            >
+              {verb.label}
+            </button>
+            {verb.hint && <span className="font-mono text-3xs text-faint leading-relaxed">{verb.hint}</span>}
+          </div>
+        ))}
+      </div>
+    )}
+    </>
   );
 }

@@ -8,6 +8,7 @@ import {
   createRollDoc,
   migrateRollDoc,
   movePicture,
+  copyCropTo,
   patchPicture,
   readRollDoc,
   readRollExport,
@@ -97,6 +98,20 @@ describe('editing the strip', () => {
     expect(next.pictures[1]).toMatchObject({ id: 'p2', ref: { name: 'b' }, develop: lifted, aspect: '4:5' });
     expect(next.pictures[0]).toBe(doc.pictures[0]);
     expect(patchPicture(doc, 'nope', { aspect: '1:1' }, 9)).toBe(doc);
+  });
+
+  it('copies a crop onto other pictures, each its own copy, an untouched framing as null', () => {
+    const doc = roll(['a', 'b', 'c']);
+    const framing = { ...DEFAULT_FRAMING, scale: 1.5, rotation: 90, flipX: true, x: 0.2 };
+    const next = copyCropTo(doc, ['p2', 'p3'], { aspect: '4:5', framing }, 9);
+    expect(next.pictures[0]).toBe(doc.pictures[0]);
+    expect(next.pictures[1]).toMatchObject({ aspect: '4:5', framing });
+    expect(next.pictures[1].framing).not.toBe(next.pictures[2].framing);
+    expect(next.pictures[1].framing).not.toBe(framing);
+    expect(next.updatedAt).toBe(9);
+    const plain = copyCropTo(next, ['p2'], { aspect: 'original', framing: { ...DEFAULT_FRAMING } }, 10);
+    expect(plain.pictures[1]).toMatchObject({ aspect: 'original', framing: null });
+    expect(copyCropTo(doc, ['nope'], { aspect: '1:1', framing: null }, 9)).toBe(doc);
   });
 
   it('counts a picture as developed when it has a develop or a crop', () => {

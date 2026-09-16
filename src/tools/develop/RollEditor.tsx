@@ -27,6 +27,7 @@ import { formatBytes } from '../../shared/lib/format';
 import { pictureThumbnail } from '../../shared/develop/roll-thumb';
 import {
   addPictures,
+  copyCropTo,
   patchPicture,
   removePictures,
   rollProgress,
@@ -51,6 +52,7 @@ import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import type { ExportVerb } from './ExportPanel';
 import Filmstrip from './Filmstrip';
+import type { CropApplyVerb } from './CropPanel';
 import PictureWorkbench from './PictureWorkbench';
 import { useRollExport } from './use-roll-export';
 import { useRollGrade } from './use-roll-grade';
@@ -501,6 +503,32 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     ];
   }, [openId, others, roll.pictures, selectionTargets, canPaste, writeDevelopTo]);
 
+  const cropApplyTo = useMemo<CropApplyVerb[]>(() => {
+    if (!openId) return [];
+    const write = (targets: readonly string[]) => (crop: { aspect: string; framing: Framing }) =>
+      update((r) => copyCropTo(r, targets, crop));
+    if (selectionTargets.length > 0) {
+      const n = selectionTargets.length;
+      return [
+        {
+          id: 'selection',
+          label: `Apply to ${n} selected`,
+          hint: 'the pictures marked in the filmstrip, each as its own copy',
+          run: write(selectionTargets),
+        },
+      ];
+    }
+    if (others <= 0) return [];
+    return [
+      {
+        id: 'roll',
+        label: `Apply to ${others} other picture${others === 1 ? '' : 's'}`,
+        hint: 'the rest of this roll, each as its own copy',
+        run: write(roll.pictures.filter((p) => p.id !== openId).map((p) => p.id)),
+      },
+    ];
+  }, [openId, others, roll.pictures, selectionTargets, update]);
+
   // On a phone the inspector is a sheet, opened from the shell's bottom bar;
   // picking a section is also what raises it — the Studio's own convention.
   usePublishSectionBar(
@@ -636,6 +664,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               tab={tab}
               onTabChange={setTab}
               applyTo={applyTo}
+              cropApplyTo={cropApplyTo}
               onDevelop={(develop) => handleDevelop(open.id, develop)}
               onFraming={(framing) => handleFraming(open.id, framing)}
               onAspect={(aspect) => handleAspect(open.id, aspect)}

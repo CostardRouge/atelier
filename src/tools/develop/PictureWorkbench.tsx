@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   DevelopApplySection,
   DevelopClipboardActions,
@@ -17,7 +17,7 @@ import { WORKBENCH_TABS, editorKeyAction, pictureAspectRatio, type WorkbenchTab 
 import { framedThumbnail } from '../../shared/develop/roll-thumb';
 import type { RollPicture } from '../../shared/develop/roll-types';
 import { useDevelopDraft, useTold } from '../../shared/develop/use-develop-draft';
-import { useDevelopPicture } from '../../shared/develop/use-develop-picture';
+import { useDevelopPicture, type DevelopFrame } from '../../shared/develop/use-develop-picture';
 import { usePresetBookHost } from '../../shared/develop/use-preset-book';
 import type { LutStack } from '../../shared/lut/use-lut-stack';
 import { DEFAULT_FRAMING, isDefaultFraming, type Framing } from '../../shared/media/framing';
@@ -26,7 +26,7 @@ import PanelHost from '../../shared/ui/PanelHost';
 import Segmented from '../../shared/ui/Segmented';
 import StageZoomControl from '../../shared/ui/StageZoomControl';
 import type { RollExport } from '../../shared/develop/roll-types';
-import CropPanel from './CropPanel';
+import CropPanel, { type CropApplyVerb } from './CropPanel';
 import ExportPanel, { type ExportVerb } from './ExportPanel';
 import FramingStage from './FramingStage';
 import type { RollExports } from './use-roll-export';
@@ -65,6 +65,7 @@ export default function PictureWorkbench({
   tab,
   onTabChange,
   applyTo,
+  cropApplyTo,
   onDevelop,
   onFraming,
   onAspect,
@@ -88,6 +89,8 @@ export default function PictureWorkbench({
   tab: WorkbenchTab;
   onTabChange: (tab: WorkbenchTab) => void;
   applyTo: readonly DevelopApplyVerb[];
+  /** The crop's batch verbs — this picture's aspect and framing written onto others. */
+  cropApplyTo: readonly CropApplyVerb[];
   onDevelop: (develop: DevelopSettings | null) => void;
   onFraming: (framing: Framing | null) => void;
   onAspect: (aspect: string) => void;
@@ -105,10 +108,17 @@ export default function PictureWorkbench({
   const presets = usePresetBookHost();
   const draft = useDevelopDraft(entry.develop, stack);
   const [told, tell] = useTold();
-  const picture = useDevelopPicture({ file, cube: stack.composed });
-  const fidelity = pictureFidelity(file);
   // Read once, like the develop: the workbench is keyed per picture.
   const [framingDraft, setFramingDraft] = useState<Framing>(entry.framing ?? { ...DEFAULT_FRAMING });
+  // The crop stays visible on every tab: the Develop viewport shows the
+  // picture as it will leave, framed, while the Crop tab edits the frame.
+  const [ratio, setRatio] = useState(0);
+  const frame = useMemo<DevelopFrame | null>(
+    () => (ratio > 0 ? { aspectRatio: ratio, framing: framingDraft } : null),
+    [ratio, framingDraft],
+  );
+  const picture = useDevelopPicture({ file, cube: stack.composed, frame });
+  const fidelity = pictureFidelity(file);
 
   // --- write-through ---------------------------------------------------------
   const callbacks = useRef({ onDevelop, onFraming, onAspect, onSnapshot, onStep, onTabChange });
@@ -177,6 +187,7 @@ export default function PictureWorkbench({
   // the light. Keyed on the crop too, so a drag that rests redraws the cell.
   const { source, cube, delivered } = picture;
   const aspectRatio = pictureAspectRatio(entry.aspect, source?.width ?? 0, source?.height ?? 0);
+  useEffect(() => setRatio(source ? aspectRatio : 0), [source, aspectRatio]);
   useEffect(() => {
     if (!source) return;
     const t = window.setTimeout(() => {
@@ -336,7 +347,14 @@ export default function PictureWorkbench({
               <DevelopLookSection stack={stack} />
             </>
           ) : tab === 'crop' ? (
-            <CropPanel framing={framingDraft} aspect={entry.aspect} onFraming={setFramingDraft} onAspect={onAspect} />
+            <CropPanel
+              framing={framingDraft}
+              aspect={entry.aspect}
+              onFraming={setFramingDraft}
+              onAspect={onAspect}
+              verbs={cropApplyTo}
+              onTold={tell}
+            />
           ) : (
             <ExportPanel
               settings={exportSettings}

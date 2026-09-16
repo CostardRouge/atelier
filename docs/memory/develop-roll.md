@@ -190,6 +190,18 @@ badges and the verb reverted to "Apply to 5 other pictures".
 `framedThumbnail` in `roll-thumb.ts`, and `useDevelopPicture().delivered()` —
 the one addition to a shared block. Rules a later phase must keep:
 
+- **The crop is SEEN on every tab** (2026-09-16, the maintainer's report:
+  leaving Crop showed the whole picture again and read as a lost crop).
+  `useDevelopPicture` takes an optional `frame` (aspect ratio + framing) that
+  only its VIEWPORT paint and zoom read — the wipe is a clipped second
+  `drawFramed` of the untouched source, so before/after lines up on the crop;
+  the histogram, `delivered()` and `snapshot()` stay the whole picture (the
+  crop stage frames `delivered()` itself). The Trips/Studio modals pass no
+  frame and are unchanged. The export always applied the stored crop.
+- **The crop has its own Apply to** (`copyCropTo`, pure, tested): the open
+  picture's aspect + framing copied onto the selection, else every other
+  picture — never the develop. A pan is copied as is: `framingTransform`
+  clamps it to each picture's slack at draw. Same D6 limit on the other cells.
 - **The crop stage draws `delivered()`, never `source.image`**: a crop is
   judged on the developed picture. `delivered()` reads the ONE held grader at
   call time, so a drag repaints from the held raster copy (`held-grader.ts`)

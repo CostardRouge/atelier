@@ -287,6 +287,27 @@ export function patchPicture(
   return found ? { ...roll, pictures, updatedAt: now } : roll;
 }
 
+/**
+ * One picture's crop — aspect and framing — written onto others, each as its
+ * own copy. An untouched framing is stored as `null`, the reader's spelling;
+ * a pan is copied as is, since the draw clamps it to each picture's slack.
+ */
+export function copyCropTo(
+  roll: RollDoc,
+  ids: readonly string[],
+  crop: { aspect: string; framing: Framing | null },
+  now: number = Date.now(),
+): RollDoc {
+  const framing = crop.framing && !isDefaultFraming(crop.framing) ? crop.framing : null;
+  let found = false;
+  const pictures = roll.pictures.map((p) => {
+    if (!ids.includes(p.id)) return p;
+    found = true;
+    return { ...p, aspect: crop.aspect, framing: framing ? { ...framing } : null };
+  });
+  return found ? { ...roll, pictures, updatedAt: now } : roll;
+}
+
 /** What the gallery card says: "18 of 42 developed" — a develop or a crop counts. */
 export function rollProgress(roll: RollDoc): { total: number; developed: number } {
   return {
