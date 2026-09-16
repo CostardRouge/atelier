@@ -237,3 +237,39 @@ All four recommendations accepted (*"ok pour tes recommandations"*):
 - **No rating or flags** on a picture: culling is Winnow's job.
 - **"Send to Trips / to a Studio project"** from a roll comes AFTER v1.
 - **The name on screen is *Develop*** (the suite's word), slug `develop`.
+
+## 9. A roll finds its own pictures (maintainer, 2026-09-16)
+
+**The report.** A roll reopened after a reload showed its thumbnails and
+nothing else: a click said *not in the Library* until the day was found again
+in the sidebar and its pictures ticked. And *Add 3 selected* stayed on the bar
+for pictures already on the roll. His words: the Library is historical, the
+workflow should not have to pass through it, and a picture's link is already
+known. Winnow first, local files as a bonus. The proposal page:
+https://claude.ai/artifact/XhJEmU2YASJW6S5MedddV5 — **all its recommendations
+accepted**:
+
+- **Q1 — a picture the roll fetches does NOT enter the Library.** The roll is
+  the working list; the Library stays a place to choose from.
+- **Q2 — working previews for LOCAL files only**, opt-in per roll with the
+  weight shown; never for a Winnow picture, whose ref is its address. It
+  reverses `local-first.md`'s "no media bytes persisted" for that case only.
+- **Q3 — fetch the open picture and two neighbours each side**, the rest on
+  demand; widen only after measuring.
+
+Phases, one commit each:
+
+- **F1 — the roll fetches its Winnow pictures itself** — **BUILT
+  2026-09-16**: `roll-media.ts` + spec (order, window, states, the stage's
+  sentence), `use-roll-media.ts` (Library first, else `refetchMedia` into a
+  pool of the roll's own), states in the filmstrip with the instance's
+  thumbnail before a fetch, a status line with *Sign in* / *Try again* /
+  *Sources*, and the export fetching what it needs on the spot.
+- **F2 — an honest add button**: count only what is not on the roll yet,
+  gather the ways in under one *Add* menu.
+- **F3 — add a day from a Winnow, inside the roll**: rows become refs without
+  fetching a byte; the pictures follow F1.
+- **F4 — local files: the folder handle and re-linking by drop** (paliers A
+  and B of the proposal).
+- **F5 — working previews** (palier C), local only, per roll.
+

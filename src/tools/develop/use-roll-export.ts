@@ -57,19 +57,22 @@ function originalOf(origin: MediaOrigin | null): OriginalInfo | null {
 export function useRollExport({
   roll,
   files,
+  fileFor,
   openId,
   lutFor,
 }: {
   roll: RollDoc;
   files: ReadonlyMap<string, File>;
+  /** A picture's bytes for the run, fetched on the spot when they are not in hand. */
+  fileFor: (picture: RollPicture) => Promise<File | null>;
   openId: string | null;
   lutFor: (picture: RollPicture) => CubeLut | null;
 }): RollExports {
   const [exporting, setExporting] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [lastRun, setLastRun] = useState<RollRun | null>(null);
-  const latest = useRef({ roll, files, lutFor });
-  latest.current = { roll, files, lutFor };
+  const latest = useRef({ roll, files, fileFor, lutFor });
+  latest.current = { roll, files, fileFor, lutFor };
 
   // --- the open picture's own size, measured once per file, for the Delivers line
   const [openSize, setOpenSize] = useState<{ file: File; size: PictureSize } | null>(null);
@@ -100,7 +103,7 @@ export function useRollExport({
   }
 
   const exportPictures = useCallback(async (ids: readonly string[]) => {
-    const { roll: r, files: f, lutFor: cubeFor } = latest.current;
+    const { roll: r, files: f, fileFor: fetchFor, lutFor: cubeFor } = latest.current;
     const targets = ids.flatMap((id) => r.pictures.filter((p) => p.id === id));
     if (targets.length === 0) return;
     setNote(null);
@@ -111,12 +114,16 @@ export function useRollExport({
     const failures: string[] = [];
     try {
       for (const [i, picture] of targets.entries()) {
-        const file = f.get(picture.id);
+        const step = `${i + 1}/${targets.length}`;
+        let file = f.get(picture.id) ?? null;
         if (!file) {
-          failures.push(`${picture.ref.name} is not in the Library`);
+          setExporting(`Fetching ${step}…`);
+          file = await fetchFor(picture);
+        }
+        if (!file) {
+          failures.push(`${picture.ref.name} could not be found — not in the Library, and no connected instance holds it`);
           continue;
         }
-        const step = `${i + 1}/${targets.length}`;
         try {
           setExporting(`Measuring ${step}…`);
           const origin = mediaOrigin(file);

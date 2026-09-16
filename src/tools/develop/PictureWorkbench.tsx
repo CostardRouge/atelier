@@ -74,9 +74,10 @@ export default function PictureWorkbench({
   exportVerbs,
   onSnapshot,
   onStep,
+  emptyText = 'This picture is not in the Library — open its folder, or take it from its day on your Winnow. Its numbers can still be set.',
 }: {
   picture: RollPicture;
-  /** The Library's file for it, or null when it is not there. */
+  /** Its bytes — the Library's or the roll's own — or null while they are not in hand. */
   file: File | null;
   /** The roll's look; the draft rides it. */
   stack: LutStack;
@@ -98,6 +99,8 @@ export default function PictureWorkbench({
   exportVerbs: readonly ExportVerb[];
   onSnapshot: (thumb: Blob) => void;
   onStep: (step: number) => void;
+  /** What the stage says while the picture's bytes are not in hand. */
+  emptyText?: string;
 }) {
   const presets = usePresetBookHost();
   const draft = useDevelopDraft(entry.develop, stack);
@@ -258,8 +261,6 @@ export default function PictureWorkbench({
 
   const cropping = tab === 'crop';
   const tabLabel = WORKBENCH_TABS.find((t) => t.id === tab)?.label ?? 'Develop';
-  const emptyText =
-    'This picture is not in the Library — open its folder, or take it from its day on your Winnow. Its numbers can still be set.';
 
   return (
     <>

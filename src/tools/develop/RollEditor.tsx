@@ -13,6 +13,7 @@ import {
   type SelectionModifiers,
   type WorkbenchTab,
 } from '../../shared/develop/roll-editor';
+import { availabilityText, summarizeAvailability, type PictureAvailability } from '../../shared/develop/roll-media';
 import { deleteRollThumbs, getRollThumbs, putRollThumb } from '../../shared/develop/roll-store';
 import { pictureThumbnail } from '../../shared/develop/roll-thumb';
 import {
@@ -26,7 +27,7 @@ import {
   type RollPicture,
 } from '../../shared/develop/roll-types';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
-import { findMedia, hashedMediaRefs } from '../../shared/projects/media-identity';
+import { hashedMediaRefs } from '../../shared/projects/media-identity';
 import { usePublishMediaActions, type MediaActions } from '../../shared/sources/media-scope';
 import Button from '../../shared/ui/Button';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
@@ -40,6 +41,7 @@ import Filmstrip from './Filmstrip';
 import PictureWorkbench from './PictureWorkbench';
 import { useRollExport } from './use-roll-export';
 import { useRollGrade } from './use-roll-grade';
+import { useRollMedia } from './use-roll-media';
 
 interface RollEditorProps {
   roll: RollDoc;
@@ -129,23 +131,17 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         .map((a) => a.parts.image!),
     [lib.assets, lib.selection],
   );
-  const [files, setFiles] = useState<ReadonlyMap<string, File>>(new Map());
-  const refKey = roll.pictures.map((p) => `${p.id}:${p.ref.name}:${p.ref.hash ?? ''}`).join('|');
-  useEffect(() => {
-    let alive = true;
-    void (async () => {
-      const found = new Map<string, File>();
-      for (const p of latest.current.pictures) {
-        const file = await findMedia(p.ref, libraryPhotos);
-        if (file) found.set(p.id, file);
-      }
-      if (alive) setFiles(found);
-    })();
-    return () => {
-      alive = false;
-    };
-    // `refKey` stands for the pictures' identities.
-  }, [refKey, libraryPhotos]);
+  // The Library's file when it holds the picture, else the roll's own fetch
+  // from the instance its ref names — never a trip through the sidebar.
+  const { files, availability, fileFor, retryFailed, remoteThumb } = useRollMedia({
+    pictures: roll.pictures,
+    openId,
+    libraryPhotos,
+  });
+  const reach = summarizeAvailability(
+    roll.pictures.map((p) => p.id),
+    availability,
+  );
 
   // --- thumbnails: stored, else baked as shot; the open one redraws graded --
   const [thumbs, setThumbs] = useState<ReadonlyMap<string, Blob>>(new Map());
@@ -304,7 +300,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // --- the still export (D9): each picture through its own cube --------------
   const { composeWith } = stack;
   const lutFor = useCallback((p: RollPicture) => composeWith(p.develop), [composeWith]);
-  const exports = useRollExport({ roll, files, openId, lutFor });
+  const exports = useRollExport({ roll, files, fileFor, openId, lutFor });
   const { exportPictures } = exports;
   const exportVerbs = useMemo<ExportVerb[]>(() => {
     if (!openId) return [];
@@ -475,6 +471,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               exportVerbs={exportVerbs}
               onSnapshot={(blob) => handleSnapshot(open.id, blob)}
               onStep={step}
+              emptyText={availabilityText(open.ref.name, availability.get(open.id))}
             />
             <div className={`flex flex-col gap-1 min-w-0 ${compact ? 'flex-none' : 'col-start-1 row-start-2'}`}>
               <p className="m-0 font-mono text-2xs text-muted tabular-nums">
@@ -493,6 +490,47 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                     </button>
                   </span>
                 )}
+                {reach.fetching > 0 && (
+                  <span className="text-ink-soft">
+                    {' '}
+                    · fetching {reach.fetching} from {availabilityHost(availability, 'fetching')}
+                  </span>
+                )}
+                {reach.failed > 0 && (
+                  <span className="text-danger">
+                    {' '}
+                    · {reach.failed} could not be fetched — {reach.problem}{' '}
+                    {reach.loginUrl && (
+                      <a href={reach.loginUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+                        Sign in
+                      </a>
+                    )}{' '}
+                    <button type="button" onClick={retryFailed} className="underline underline-offset-2 cursor-pointer">
+                      Try again
+                    </button>
+                  </span>
+                )}
+                {reach.gone > 0 && (
+                  <span className="text-danger">
+                    {' '}
+                    · {reach.gone} no longer on {reach.sourceId}
+                  </span>
+                )}
+                {reach.unconnected > 0 && (
+                  <span className="text-ink-soft">
+                    {' '}
+                    · {reach.unconnected} on {reach.unconnectedSourceId}, not connected —{' '}
+                    <a href="#/sources" className="underline underline-offset-2">
+                      Sources
+                    </a>
+                  </span>
+                )}
+                {reach.local > 0 && (
+                  <span className="text-ink-soft">
+                    {' '}
+                    · {reach.local} from this computer, not open
+                  </span>
+                )}
                 {notice && <span className="text-ink-soft"> · {notice}</span>}
                 {!compact && (
                   <span className="text-faint">
@@ -506,7 +544,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                 openId={openId}
                 selectedIds={visibleSelected}
                 thumbs={thumbs}
-                inLibrary={files}
+                availability={availability}
+                remoteThumb={remoteThumb}
                 compact={compact}
                 onOpen={(id) => onOpenPicture(id)}
                 onSelectClick={handleSelectClick}
@@ -585,4 +624,12 @@ function RollTitle({ name, onRename }: { name: string; onRename: (name: string) 
       </button>
     </h1>
   );
+}
+
+/** The instance named by the first picture in `kind`, for a status line. */
+function availabilityHost(availability: ReadonlyMap<string, PictureAvailability>, kind: 'fetching'): string {
+  for (const a of availability.values()) {
+    if (a.kind === kind) return a.sourceId;
+  }
+  return 'its instance';
 }

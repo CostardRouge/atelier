@@ -889,8 +889,15 @@ can keep rolls too, and whether to start with the photos ticked in the Library
 Library's ticked photos in order; a picture already on the roll is never added
 twice, so adding a day again only brings what is new. A roll holds a
 *reference* to each picture — its name, size and content hash — never a copy of
-the file, so it reopens on another machine once the same pictures are in the
-Library there, and says *not in the Library* where they are not.
+the file. A picture that came from your Winnow comes back by itself when the
+roll is opened, even after a reload and without passing through the Library:
+the picture you open is fetched from the instance, then its two neighbours on
+each side, and the filmstrip shows the instance's thumbnails meanwhile. It is
+only ever asked of an instance you connected, and the roll says so when it is
+not signed in (*Sign in*, *Try again*), when the instance no longer has a
+picture, or when a picture lives on an instance this browser is not connected
+to. A file from your own disk is found again once its folder is back in the
+Library.
 
 **Developing.** A roll opens in its editor: the picture large, the roll as a
 filmstrip under it, and beside it the same controls as the Develop sheet in

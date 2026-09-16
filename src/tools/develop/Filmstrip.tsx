@@ -1,8 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { describeDevelop } from '../../shared/develop/develop';
 import type { SelectionModifiers } from '../../shared/develop/roll-editor';
+import type { PictureAvailability } from '../../shared/develop/roll-media';
 import type { RollPicture } from '../../shared/develop/roll-types';
 import { useObjectUrl } from '../../shared/media/use-object-url';
+import type { WinnowClient } from '../../shared/sources/winnow/client';
+import WinnowThumb from '../../shared/sources/winnow/WinnowThumb';
 import { Icons } from '../../shared/ui/icons';
 
 /**
@@ -18,7 +21,8 @@ export default function Filmstrip({
   openId,
   selectedIds,
   thumbs,
-  inLibrary,
+  availability,
+  remoteThumb,
   compact,
   onOpen,
   onSelectClick,
@@ -28,7 +32,10 @@ export default function Filmstrip({
   openId: string | null;
   selectedIds: ReadonlySet<string>;
   thumbs: ReadonlyMap<string, Blob>;
-  inLibrary: ReadonlyMap<string, File>;
+  /** Where each picture's bytes stand — a cell says it, the stage explains it. */
+  availability: ReadonlyMap<string, PictureAvailability>;
+  /** The instance's thumbnail, for a cell that has none of its own yet. */
+  remoteThumb: (picture: RollPicture) => { client: WinnowClient; id: number } | null;
   compact: boolean;
   onOpen: (id: string) => void;
   onSelectClick: (id: string, mods: SelectionModifiers) => void;
@@ -55,7 +62,8 @@ export default function Filmstrip({
           open={p.id === openId}
           selected={selectedIds.has(p.id)}
           thumb={thumbs.get(p.id) ?? null}
-          inLibrary={inLibrary.has(p.id)}
+          availability={availability.get(p.id)}
+          remote={thumbs.has(p.id) ? null : remoteThumb(p)}
           size={size}
           onOpen={() => onOpen(p.id)}
           onSelectClick={(mods) => onSelectClick(p.id, mods)}
@@ -71,7 +79,8 @@ function Cell({
   open,
   selected,
   thumb,
-  inLibrary,
+  availability,
+  remote,
   size,
   onOpen,
   onSelectClick,
@@ -81,7 +90,8 @@ function Cell({
   open: boolean;
   selected: boolean;
   thumb: Blob | null;
-  inLibrary: boolean;
+  availability: PictureAvailability | undefined;
+  remote: { client: WinnowClient; id: number } | null;
   size: string;
   onOpen: () => void;
   onSelectClick: (mods: SelectionModifiers) => void;
@@ -89,6 +99,9 @@ function Cell({
 }) {
   const url = useObjectUrl(thumb);
   const developed = picture.develop !== null || picture.framing !== null;
+  const kind = availability?.kind ?? 'local';
+  const fetching = kind === 'fetching';
+  const unreachable = kind === 'failed' || kind === 'gone' || kind === 'unconnected' || kind === 'local';
   return (
     <li className="group relative flex-none" data-picture={picture.id}>
       <button
@@ -102,17 +115,38 @@ function Cell({
         }}
         aria-current={open ? 'true' : undefined}
         aria-selected={selected ? 'true' : undefined}
-        aria-label={`${picture.ref.name}${developed ? ', developed' : ''}${selected ? ', selected' : ''}`}
+        aria-label={`${picture.ref.name}${developed ? ', developed' : ''}${selected ? ', selected' : ''}${
+          fetching ? ', fetching' : unreachable ? ', not available' : ''
+        }`}
         title={`${picture.ref.name}${developed ? ` — ${describeDevelop(picture.develop) || 'cropped'}` : ' — as shot'} — Shift or ⌘/Ctrl-click to select for a batch`}
         className={`relative block ${size} p-0 rounded-paper overflow-hidden bg-frame cursor-pointer border-2 ${
           open ? 'border-accent' : 'border-transparent hover:border-line-strong'
         }`}
       >
         {url ? (
-          <img src={url} alt="" className="block w-full h-full object-cover" />
+          <img
+            src={url}
+            alt=""
+            className={`block w-full h-full object-cover ${unreachable ? 'opacity-45 grayscale' : ''}`}
+          />
+        ) : remote && (kind === 'waiting' || kind === 'fetching') ? (
+          <WinnowThumb client={remote.client} id={remote.id} label={CELL_WORDS[kind]} box="w-full h-full" />
         ) : (
           <span className="absolute inset-0 grid place-items-center px-1 text-center font-mono text-3xs leading-tight text-muted">
-            {inLibrary ? '…' : 'not in library'}
+            {CELL_WORDS[kind]}
+          </span>
+        )}
+        {fetching && (
+          <span className="absolute inset-0 grid place-items-center bg-[rgba(13,12,10,0.5)]" aria-hidden="true">
+            <span className="w-4 h-4 rounded-full border-2 border-[rgba(251,248,241,0.3)] border-t-[rgba(251,248,241,0.95)] animate-spin motion-reduce:animate-none" />
+          </span>
+        )}
+        {unreachable && url && (
+          <span
+            className="absolute right-1 bottom-1 w-4 h-4 grid place-items-center rounded-full bg-surface border border-line-strong font-mono text-3xs text-danger"
+            aria-hidden="true"
+          >
+            !
           </span>
         )}
         {developed && (
@@ -139,3 +173,14 @@ function Cell({
     </li>
   );
 }
+
+/** What an empty cell says, in a word or two — the stage says the rest. */
+const CELL_WORDS: Record<PictureAvailability['kind'], string> = {
+  ready: '…',
+  fetching: '',
+  waiting: 'on its instance',
+  failed: 'not fetched',
+  gone: 'gone',
+  unconnected: 'not connected',
+  local: 'not open',
+};
