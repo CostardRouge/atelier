@@ -73,6 +73,9 @@ interface TripSettingsModalProps {
  * click away on the Look tab. Stages are edited on the trip's Overview, which
  * is one control away in the same bar.
  *
+ * The sheet is large on a desktop (80rem × 54rem at most) so the Car
+ * section can hold the rail, the turning car and its choices side by side.
+ *
  * Nothing is computed here and nothing autosaves differently: the trip is
  * written through `onChangeTrip` exactly as before, on every keystroke.
  */
@@ -138,7 +141,7 @@ export default function TripSettingsModal({
       aria-modal="true"
       aria-label="Trip settings"
     >
-      <div className="w-full max-w-[52rem] h-[min(90dvh,40rem)] flex flex-col overflow-hidden bg-surface border border-line rounded-paper-lg shadow-paper max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0">
+      <div className="w-full max-w-[80rem] h-[min(90dvh,54rem)] flex flex-col overflow-hidden bg-surface border border-line rounded-paper-lg shadow-paper max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0">
         <div className="flex-none flex items-baseline gap-3 px-6 pt-[1.4rem] pb-3.5 border-b border-line">
           <h2 className="m-0 flex-none whitespace-nowrap font-serif text-2xl">Trip settings</h2>
           <span className="min-w-0 font-mono text-2xs text-muted truncate">
@@ -365,7 +368,10 @@ export default function TripSettingsModal({
                     kept, and never becomes a piece’s camera.
                   </p>
                 </SectionLegend>
-                <div className="max-w-[32rem]">
+                {/* A definite height wide, so the garage can keep the car in
+                    view beside its own scrolling choices; narrow, the panel
+                    stacks and this pane scrolls. */}
+                <div className="min-[821px]:flex-1 min-[821px]:min-h-0">
                   <CarGaragePanel
                     value={trip.car}
                     onChange={(car) => onChangeTrip({ ...trip, car })}

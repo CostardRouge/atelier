@@ -92,6 +92,13 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
  * basket) is listed only while that one is on: its flag stays stored, so
  * turning the basket back on brings the load back with it — `effectiveGear`
  * is what the drawing reads.
+ *
+ * The panel lays itself out by its OWN width (a container query), because its
+ * two homes give it different room: past 44rem the car sits in one column
+ * and the choices scroll in the other, so a switch flipped far down the list
+ * is seen on the car at once — scrolling between the two was the complaint.
+ * Split, the panel fills its host's height (the host gives it a definite
+ * one); narrower, it stacks and the host scrolls, as before.
  */
 export default function CarGaragePanel({ value, onChange }: CarGaragePanelProps) {
   const model = CAR_MODELS.find((m) => m.id === value.model) ?? CAR_MODELS[0];
@@ -102,92 +109,101 @@ export default function CarGaragePanel({ value, onChange }: CarGaragePanelProps)
   const patchGear = (p: Partial<CarGear>) => onChange({ ...value, gear: { ...value.gear, ...p } });
 
   return (
-    <div className="flex flex-col gap-4">
-      <CarTurntable spec={value} className="h-[18rem] max-[820px]:h-[calc(var(--app-h)*0.36)]" />
-      <p className="m-0 text-xs leading-relaxed text-muted">{describeCar(value, model.name)}</p>
-
-      <FieldRow label="Model" hint={model.series}>
-        <SelectField
-          value={value.model}
-          options={CAR_MODELS.map((m) => ({ id: m.id, label: m.name }))}
-          onChange={(id) => patch({ model: id })}
-          label="Car model"
-        />
-      </FieldRow>
-
-      <FieldRow
-        label="Colour"
-        align="start"
-        hint={
-          preset
-            ? `${preset.name}${preset.note ? ` — ${preset.note.charAt(0).toLowerCase()}${preset.note.slice(1)}` : ''}`
-            : 'A colour of your own.'
-        }
-      >
-        <div className="flex flex-wrap items-center gap-1.5">
-          {CAR_COLOURS.map((c) => {
-            const on = c.hex === value.color.toLowerCase();
-            return (
-              <button
-                key={c.id}
-                type="button"
-                aria-label={c.name}
-                aria-pressed={on}
-                title={c.note ? `${c.name} — ${c.note}` : c.name}
-                onClick={() => patch({ color: c.hex, ...(c.finish ? { finish: c.finish } : {}) })}
-                className={`flex-none w-7 h-7 p-0 rounded-full border-2 cursor-pointer transition-[box-shadow,border-color] duration-150 ease-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 ${
-                  on ? 'border-accent shadow-[0_0_0_2px_var(--color-surface)_inset]' : 'border-line-strong hover:border-muted'
-                }`}
-                style={{ background: c.hex }}
-              />
-            );
-          })}
-          <input
-            type="color"
-            value={value.color}
-            onChange={(e) => patch({ color: e.target.value.toLowerCase() })}
-            aria-label="A custom colour"
-            title="A colour of your own"
-            className={swatchClass}
+    <div className="@container h-full">
+      <div className="flex flex-col gap-4 @min-[44rem]:h-full @min-[44rem]:grid @min-[44rem]:grid-cols-[minmax(0,1.2fr)_minmax(19rem,1fr)] @min-[44rem]:grid-rows-[minmax(0,1fr)] @min-[44rem]:gap-6">
+        <div className="flex flex-col gap-3 @min-[44rem]:min-h-0">
+          <CarTurntable
+            spec={value}
+            className="h-[18rem] max-[820px]:h-[calc(var(--app-h)*0.36)] @min-[44rem]:h-auto @min-[44rem]:flex-1 @min-[44rem]:min-h-[16rem]"
           />
+          <p className="m-0 text-xs leading-relaxed text-muted">{describeCar(value, model.name)}</p>
         </div>
-      </FieldRow>
 
-      <FieldRow label="Finish" hint={FINISHES.find((f) => f.id === value.finish)?.hint}>
-        <Segmented
-          options={FINISHES.map((f) => ({ id: f.id, label: f.label }))}
-          value={value.finish}
-          onChange={(finish) => patch({ finish })}
-          label="Finish"
-        />
-      </FieldRow>
+        <div className="flex flex-col gap-4 @min-[44rem]:min-h-0 @min-[44rem]:overflow-y-auto @min-[44rem]:overscroll-contain @min-[44rem]:pr-2 @min-[44rem]:pb-1">
+          <FieldRow label="Model" hint={model.series}>
+            <SelectField
+              value={value.model}
+              options={CAR_MODELS.map((m) => ({ id: m.id, label: m.name }))}
+              onChange={(id) => patch({ model: id })}
+              label="Car model"
+            />
+          </FieldRow>
 
-      {GEAR_GROUPS.map((group) => (
-        <Group key={group.title} title={group.title}>
-          {group.rows
-            .filter((row) => !row.needs || value.gear[row.needs])
-            .map((row) => (
-              <SwitchRow
-                key={row.key}
-                label={capitalise(GEAR_LABELS[row.key])}
-                checked={value.gear[row.key]}
-                onChange={(on) => patchGear({ [row.key]: on })}
-                hint={row.hint}
+          <FieldRow
+            label="Colour"
+            align="start"
+            hint={
+              preset
+                ? `${preset.name}${preset.note ? ` — ${preset.note.charAt(0).toLowerCase()}${preset.note.slice(1)}` : ''}`
+                : 'A colour of your own.'
+            }
+          >
+            <div className="flex flex-wrap items-center gap-1.5">
+              {CAR_COLOURS.map((c) => {
+                const on = c.hex === value.color.toLowerCase();
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    aria-label={c.name}
+                    aria-pressed={on}
+                    title={c.note ? `${c.name} — ${c.note}` : c.name}
+                    onClick={() => patch({ color: c.hex, ...(c.finish ? { finish: c.finish } : {}) })}
+                    className={`flex-none w-7 h-7 p-0 rounded-full border-2 cursor-pointer transition-[box-shadow,border-color] duration-150 ease-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 ${
+                      on ? 'border-accent shadow-[0_0_0_2px_var(--color-surface)_inset]' : 'border-line-strong hover:border-muted'
+                    }`}
+                    style={{ background: c.hex }}
+                  />
+                );
+              })}
+              <input
+                type="color"
+                value={value.color}
+                onChange={(e) => patch({ color: e.target.value.toLowerCase() })}
+                aria-label="A custom colour"
+                title="A colour of your own"
+                className={swatchClass}
               />
-            ))}
-        </Group>
-      ))}
+            </div>
+          </FieldRow>
 
-      <div className="pt-3 border-t border-line">
-        <button
-          type="button"
-          onClick={() => onChange(defaultCarSpec())}
-          disabled={isDefault}
-          title="The Prado as it was photographed: Raptor black, matte, everything fitted"
-          className={`${linkButton} disabled:opacity-45 disabled:cursor-default disabled:no-underline`}
-        >
-          Back to the default car
-        </button>
+          <FieldRow label="Finish" hint={FINISHES.find((f) => f.id === value.finish)?.hint}>
+            <Segmented
+              options={FINISHES.map((f) => ({ id: f.id, label: f.label }))}
+              value={value.finish}
+              onChange={(finish) => patch({ finish })}
+              label="Finish"
+            />
+          </FieldRow>
+
+          {GEAR_GROUPS.map((group) => (
+            <Group key={group.title} title={group.title}>
+              {group.rows
+                .filter((row) => !row.needs || value.gear[row.needs])
+                .map((row) => (
+                  <SwitchRow
+                    key={row.key}
+                    label={capitalise(GEAR_LABELS[row.key])}
+                    checked={value.gear[row.key]}
+                    onChange={(on) => patchGear({ [row.key]: on })}
+                    hint={row.hint}
+                  />
+                ))}
+            </Group>
+          ))}
+
+          <div className="pt-3 border-t border-line">
+            <button
+              type="button"
+              onClick={() => onChange(defaultCarSpec())}
+              disabled={isDefault}
+              title="The Prado as it was photographed: Raptor black, matte, everything fitted"
+              className={`${linkButton} disabled:opacity-45 disabled:cursor-default disabled:no-underline`}
+            >
+              Back to the default car
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

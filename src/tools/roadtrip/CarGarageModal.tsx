@@ -42,7 +42,7 @@ export default function CarGarageModal({ trip, onCancel, onDone }: CarGarageModa
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="w-full max-w-[44rem] h-[min(90dvh,46rem)] flex flex-col overflow-hidden bg-surface border border-line rounded-paper-lg shadow-paper max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0">
+      <div className="w-full max-w-[68rem] h-[min(90dvh,48rem)] flex flex-col overflow-hidden bg-surface border border-line rounded-paper-lg shadow-paper max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0">
         <div className="flex-none flex items-baseline gap-3 px-6 pt-[1.4rem] pb-3.5 border-b border-line">
           <h2 className="m-0 flex-none whitespace-nowrap font-serif text-2xl">Garage</h2>
           <span className="min-w-0 font-mono text-2xs text-muted truncate" title={describeCar(draft, carModel(draft.model).name)}>
