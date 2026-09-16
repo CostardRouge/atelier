@@ -899,8 +899,12 @@ each side, and the filmstrip shows the instance's thumbnails meanwhile. It is
 only ever asked of an instance you connected, and the roll says so when it is
 not signed in (*Sign in*, *Try again*), when the instance no longer has a
 picture, or when a picture lives on an instance this browser is not connected
-to. A file from your own disk is found again once its folder is back in the
-Library.
+to. A picture from your own disk is found again from the folder it came from:
+*Add › A folder on this computer…* remembers the folder for that roll, so the
+next visit reads it by itself where the browser still allows it, or after one
+click on **Reopen** — and dropping photographs or a folder anywhere on the roll
+finds the ones it already holds and adds the others. (Remembering a folder
+needs Chrome or Edge; elsewhere a pick or a drop lasts the session.)
 
 **Developing.** A roll opens in its editor: the picture large, the roll as a
 filmstrip under it, and beside it the same controls as the Develop sheet in

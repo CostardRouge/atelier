@@ -88,3 +88,36 @@ left out), all ticked; unticking one and *Add 3 to the roll* added three
 refs and fetched no proxy; opening the first fetched it and its two
 neighbours; with a new file ticked the bar became *Add ▾* with both items.
 
+## A roll remembers its local folders, and a drop re-links (2026-09-16, F4)
+
+**Decision (paliers A and B of §9).** A roll built from a folder keeps that
+folder's DIRECTORY HANDLE in `atelier-develop`'s `folders` store (DB v2, one
+row per roll), the Studio project's `dirHandle` rule applied to a roll —
+never on the document, never in `.roll.json`, never on the wire, pruned when
+the roll is deleted (the gallery's `deleteLocal` and the sync driver's
+`deleteDoc`). `use-roll-folders.ts` reads every remembered folder when the
+roll opens if `queryPermission` still says `granted` (Chromium's persistent
+permission), and otherwise lists it as waiting: the status line's *Reopen
+<folder>* asks once, inside the click. The listed files join the Library's
+for the same name-then-hash match (`useRollMedia`'s `localPhotos`); nothing
+enters the Library. **A drop anywhere on the editor** reads files and
+folders (`filesFromDataTransfer`, recursive), keeps the photographs
+(`photoFiles`: the Library's grouping, a RAW yielding to its JPEG), counts
+what the roll already holds as FOUND AGAIN and adds the rest
+(`splitByRoll`); in Chromium a dropped folder is remembered too.
+**Trap**: a `DataTransfer` is emptied when the drop event returns, so
+`dropDirectoryHandles` STARTS its `getAsFileSystemHandle` calls synchronously
+and is awaited afterwards — call it before any `await`. **Where it does not
+reach**: a browser without the File System Access API (Safari, iPhone) gets
+the files of a pick or a drop for the session and remembers nothing — that is
+what F5's working previews are for. **Testing trap**: a real, storable
+directory handle is had without a dialog from the origin-private file system
+(`navigator.storage.getDirectory()`); stub `showDirectoryPicker` to return one,
+and patch `FileSystemDirectoryHandle.prototype.queryPermission` to `'prompt'`
+then remount to reach the *Reopen* path. Verified that way in the pane: *Add ›
+A folder on this computer…* added three JPEGs and stored the handle; a reload
+with an empty Library showed them at once; with the permission made to ask,
+*Reopen Vercors* asked once and brought them back; a drop of a file already on
+the roll plus a new one said `found 1 again · added 1`, the overlay showing
+during the drag.
+

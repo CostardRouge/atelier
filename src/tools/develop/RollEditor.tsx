@@ -15,7 +15,9 @@ import {
 } from '../../shared/develop/roll-editor';
 import {
   availabilityText,
+  photoFiles,
   pictureDay,
+  splitByRoll,
   summarizeAvailability,
   type PictureAvailability,
 } from '../../shared/develop/roll-media';
@@ -34,6 +36,7 @@ import {
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { hashedMediaRefs } from '../../shared/projects/media-identity';
 import type { SavedMediaRef } from '../../shared/projects/project-types';
+import { dropDirectoryHandles, filesFromDataTransfer } from '../../shared/sources/file-sources';
 import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
 import { usePublishMediaActions, type MediaActions } from '../../shared/sources/media-scope';
 import Button from '../../shared/ui/Button';
@@ -49,6 +52,7 @@ import Filmstrip from './Filmstrip';
 import PictureWorkbench from './PictureWorkbench';
 import { useRollExport } from './use-roll-export';
 import { useRollGrade } from './use-roll-grade';
+import { useRollFolders } from './use-roll-folders';
 import { useRollMedia } from './use-roll-media';
 import WinnowDaySheet from './WinnowDaySheet';
 
@@ -144,10 +148,14 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   );
   // The Library's file when it holds the picture, else the roll's own fetch
   // from the instance its ref names — never a trip through the sidebar.
+  // A local picture is found in the Library OR in the folders the roll
+  // remembers and the files dropped on it (F4) — the same name-then-hash match.
+  const folders = useRollFolders(roll.id);
+  const localPhotos = useMemo(() => [...libraryPhotos, ...folders.photos], [libraryPhotos, folders.photos]);
   const { files, availability, fileFor, retryFailed, remoteThumb } = useRollMedia({
     pictures: roll.pictures,
     openId,
-    libraryPhotos,
+    localPhotos,
   });
   const reach = summarizeAvailability(
     roll.pictures.map((p) => p.id),
@@ -302,6 +310,58 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     setNotice(`added ${added} from ${sourceId}`);
   }
 
+  /**
+   * Files from this computer — a picked folder, or a drop: the pictures the
+   * roll already holds are simply found again (their bytes are now in hand),
+   * the others are added.
+   */
+  async function takeLocal(photos: readonly File[]) {
+    if (photos.length === 0) {
+      setNotice('no photographs in what was given');
+      return;
+    }
+    setAdding(true);
+    try {
+      const refs = await hashedMediaRefs(photos);
+      const { found, fresh } = splitByRoll(
+        latest.current.pictures.map((p) => p.ref),
+        refs,
+      );
+      if (fresh.length) update((r) => addPictures(r, fresh));
+      setNotice(
+        [found ? `found ${found} again` : '', fresh.length ? `added ${fresh.length}` : ''].filter(Boolean).join(' · ') ||
+          'nothing new',
+      );
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function addFolder() {
+    const photos = await folders.pickFolder();
+    if (photos) await takeLocal(photos);
+  }
+
+  const [dropping, setDropping] = useState(false);
+  const onDragOver = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('Files')) return;
+    e.preventDefault();
+    if (!dropping) setDropping(true);
+  };
+  const onDrop = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('Files')) return;
+    e.preventDefault();
+    setDropping(false);
+    // Both started INSIDE the event: a DataTransfer is emptied once it returns.
+    const handles = dropDirectoryHandles(e.dataTransfer);
+    const listed = filesFromDataTransfer(e.dataTransfer);
+    void Promise.all([listed, handles]).then(([dropped, folderHandles]) => {
+      const photos = photoFiles(dropped);
+      folders.accept(photos, folderHandles);
+      return takeLocal(photos);
+    });
+  };
+
   function remove(picture: RollPicture) {
     const nextOpen = openAfterRemoval(latest.current.pictures, picture.id, openId);
     update((r) => removePictures(r, [picture.id]));
@@ -451,12 +511,35 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     ...(connection
       ? [{ id: 'winnow', label: `A day on ${connection.id}…`, onSelect: () => setPickingDay(true) }]
       : []),
+    { id: 'folder', label: 'A folder on this computer…', onSelect: () => void addFolder() },
   ];
+  const addButtonLabel: Record<string, string> = {
+    library: addLabel,
+    winnow: 'Add a day…',
+    folder: 'Add a folder…',
+  };
   const dayLabel = connection ? `Add a day from ${connection.id}` : '';
   const initialDay = pictureDay(open?.ref.lastModified ?? roll.pictures[roll.pictures.length - 1]?.ref.lastModified ?? 0);
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 gap-2">
+    <div
+      className="relative flex flex-col flex-1 min-h-0 gap-2"
+      onDragOver={onDragOver}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false);
+      }}
+      onDrop={onDrop}
+    >
+      {dropping && (
+        <div
+          className="absolute inset-0 z-30 grid place-items-center rounded-paper-lg border-2 border-dashed border-accent bg-[rgba(20,18,15,0.55)] pointer-events-none"
+          aria-hidden="true"
+        >
+          <p className="m-0 max-w-[28rem] px-6 text-center text-sm text-paper">
+            Drop photographs or their folder: pictures already on the roll are found again, the others are added.
+          </p>
+        </div>
+      )}
       <PageBar
         back={{ label: 'Rolls', onClick: onBack }}
         trailing={
@@ -474,18 +557,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                 items={addItems}
                 trigger={{ text: 'Add', icon: Icons.plus, variant: newPhotos.length > 0 ? 'primary' : 'default' }}
               />
-            ) : addItems[0]?.id === 'library' ? (
-              <Button
-                variant="primary"
-                icon={Icons.plus}
-                onClick={() => void addSelected()}
-                title="Add the photos ticked in the Library that are not on this roll yet, in that order"
-              >
-                {addLabel}
-              </Button>
-            ) : addItems[0]?.id === 'winnow' ? (
-              <Button icon={Icons.plus} onClick={() => setPickingDay(true)}>
-                Add a day…
+            ) : addItems[0] ? (
+              <Button icon={Icons.plus} onClick={addItems[0].onSelect}>
+                {addButtonLabel[addItems[0].id]}
               </Button>
             ) : null}
           </>
@@ -504,18 +578,19 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                   {dayLabel}
                 </Button>
               )}
-              <Button
-                variant={connection ? 'default' : 'primary'}
-                onClick={() => void addSelected()}
-                disabled={newPhotos.length === 0}
-              >
-                {addLabel}
+              <Button variant={connection ? 'default' : 'primary'} onClick={() => void addFolder()}>
+                Add a folder…
               </Button>
+              {newPhotos.length > 0 && (
+                <Button variant="default" onClick={() => void addSelected()}>
+                  {addLabel}
+                </Button>
+              )}
             </>
           }
         >
-          Pick a day on your Winnow, or tick photos in the Library — a folder of your own — and add them
-          here. The roll keeps a reference to each and its own numbers, never a copy of the file.
+          Pick a day on your Winnow, a folder of your own, or drop photographs here. The roll keeps a
+          reference to each and its own numbers, never a copy of the file.
         </EmptyState>
       ) : (
         // The container is the wrapper and the queried grid its CHILD: a
@@ -606,7 +681,18 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                 {reach.local > 0 && (
                   <span className="text-ink-soft">
                     {' '}
-                    · {reach.local} from this computer, not open
+                    · {reach.local} from this computer, not open —{' '}
+                    {folders.waiting.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => void folders.reopen()}
+                        className="underline underline-offset-2 cursor-pointer text-accent-ink"
+                      >
+                        Reopen {folders.waiting.length === 1 ? folders.waiting[0].name : `${folders.waiting.length} folders`}
+                      </button>
+                    ) : (
+                      'drop their folder here'
+                    )}
                   </span>
                 )}
                 {notice && <span className="text-ink-soft"> · {notice}</span>}

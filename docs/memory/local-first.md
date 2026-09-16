@@ -28,7 +28,7 @@ Read before adding anything that could touch the network, read files, or persist
 
 ## Persistence is deliberately minimal (2026-08-20)
 
-**Decision (rev. 2026-08-21).** Two stores now exist: `localStorage` for UI prefs (sidebar collapse flag), and IndexedDB (`atelier-studio`) for studio project documents — including directory *handles* (structured-cloneable, unlike `File`s) and baked thumbnails. Media bytes are never persisted anywhere. **Why**: `File` handles cannot survive a reload; directory handles can, turning project reopen into one permission click. **How to apply**: storage failures must degrade silently to in-memory (the store already returns `[]`/false instead of throwing); `navigator.storage.persist()` is requested once per studio session; details in `studio.md`.
+**Decision (rev. 2026-08-21; 2026-09-16: a Develop roll keeps the directory handles its local pictures came from, the same way — `develop-media.md`).** Two stores now exist: `localStorage` for UI prefs (sidebar collapse flag), and IndexedDB (`atelier-studio`) for studio project documents — including directory *handles* (structured-cloneable, unlike `File`s) and baked thumbnails. Media bytes are never persisted anywhere. **Why**: `File` handles cannot survive a reload; directory handles can, turning project reopen into one permission click. **How to apply**: storage failures must degrade silently to in-memory (the store already returns `[]`/false instead of throwing); `navigator.storage.persist()` is requested once per studio session; details in `studio.md`.
 
 ## A future native shell is an accepted direction, not a plan (2026-08-20)
 

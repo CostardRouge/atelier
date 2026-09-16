@@ -49,8 +49,8 @@ function stillOf(files: File[] | null): File | null {
  * after a reload showed its thumbnails and nothing else until its day was
  * ticked again in the sidebar.
  *
- * - **The Library first**, by name then hash (`findMedia`): a folder's file or
- *   an instance's file the person brought in is used as it is.
+ * - **What is in hand first**, by name then hash (`findMedia`): the Library's
+ *   files, and the folders and drops the roll keeps (`use-roll-folders.ts`).
  * - **Else the instance its ref names**, fetched by the ROLL through
  *   `refetchMedia` — `materialize`, so the file is vouched for with the
  *   original's hash, its EXIF and a `fetchOriginal`, and the export's `Auto`
@@ -65,11 +65,12 @@ function stillOf(files: File[] | null): File | null {
 export function useRollMedia({
   pictures,
   openId,
-  libraryPhotos,
+  localPhotos,
 }: {
   pictures: readonly RollPicture[];
   openId: string | null;
-  libraryPhotos: readonly File[];
+  /** The photographs in hand on this device: the Library's, and the roll's own folders and drops. */
+  localPhotos: readonly File[];
 }): RollMedia {
   // A connection added or forgotten changes what can be fetched.
   const connections = useSyncExternalStore(subscribeWinnowConnections, listWinnowConnections);
@@ -87,7 +88,7 @@ export function useRollMedia({
     void (async () => {
       const found = new Map<string, File>();
       for (const p of latest.current) {
-        const file = await findMedia(p.ref, libraryPhotos);
+        const file = await findMedia(p.ref, localPhotos);
         if (file) found.set(p.id, file);
       }
       if (alive) setFromLibrary(found);
@@ -95,7 +96,7 @@ export function useRollMedia({
     return () => {
       alive = false;
     };
-  }, [refKey, libraryPhotos]);
+  }, [refKey, localPhotos]);
 
   // --- the roll's own half ---------------------------------------------------
   const [pool, setPool] = useState<ReadonlyMap<string, File>>(new Map());

@@ -16,20 +16,26 @@
  * - `sync` — one record per roll kept on an instance (`sources/doc-sync.ts`),
  *   beside the document and never on it;
  * - `presets` — the personal preset book every Develop host shares (D4 of
- *   `docs/develop-tool.md`), one row.
+ *   `docs/develop-tool.md`), one row;
+ * - `folders` (v2) — the directory handles a roll's local pictures came from,
+ *   one row per roll (F4 of §9). THIS DEVICE's: never on the document, never
+ *   in the roll file, never on the wire — a handle means nothing elsewhere.
  */
 
 import type { SyncRecord } from '../sources/doc-sync';
+import type { PersistedDirectoryHandle } from '../sources/file-sources';
 import { readPresetBook, type PresetBook } from './preset-book';
 import { migrateRollDoc, type RollDoc } from './roll-types';
 
 const DB_NAME = 'atelier-develop';
 // Bumped only when an object store is added; a document migration runs on read.
-const DB_VERSION = 1;
+// v2 (2026-09-16): `folders`.
+const DB_VERSION = 2;
 const ROLLS = 'rolls';
 const THUMBS = 'thumbs';
 const SYNC = 'sync';
 const PRESETS = 'presets';
+const FOLDERS = 'folders';
 
 interface ThumbRecord {
   /** The roll picture's id. */
@@ -43,7 +49,7 @@ function openDb(): Promise<IDBDatabase> {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
-      for (const name of [ROLLS, THUMBS, SYNC, PRESETS]) {
+      for (const name of [ROLLS, THUMBS, SYNC, PRESETS, FOLDERS]) {
         if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, { keyPath: 'id' });
       }
     };
@@ -234,3 +240,46 @@ export async function deletePresetBook(id: string): Promise<void> {
     /* already gone or storage unusable */
   }
 }
+
+// --- the folders a roll's local pictures came from ---------------------------
+
+/** A remembered folder: what to call it, and the handle one permission click re-reads. */
+export interface RollFolder {
+  name: string;
+  handle: PersistedDirectoryHandle;
+}
+
+interface FoldersRecord {
+  /** The roll's id. */
+  id: string;
+  folders: RollFolder[];
+}
+
+export async function getRollFolders(rollId: string): Promise<RollFolder[]> {
+  try {
+    const rec = await withStore(FOLDERS, 'readonly', (s) => s.get(rollId) as IDBRequest<FoldersRecord | undefined>);
+    return rec?.folders ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Returns false when the write failed; the folders then last the session. */
+export async function putRollFolders(rollId: string, folders: RollFolder[]): Promise<boolean> {
+  try {
+    const rec: FoldersRecord = { id: rollId, folders };
+    await withStore(FOLDERS, 'readwrite', (s) => s.put(rec));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteRollFolders(rollId: string): Promise<void> {
+  try {
+    await withStore(FOLDERS, 'readwrite', (s) => s.delete(rollId));
+  } catch {
+    /* already gone or storage unusable */
+  }
+}
+

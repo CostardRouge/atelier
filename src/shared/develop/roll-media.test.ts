@@ -3,7 +3,9 @@ import {
   availabilityText,
   fetchOrder,
   keepWindow,
+  photoFiles,
   pictureDay,
+  splitByRoll,
   summarizeAvailability,
   type PictureAvailability,
 } from './roll-media';
@@ -81,6 +83,24 @@ describe('pictureDay', () => {
     const noon = new Date(2026, 5, 10, 12).getTime();
     expect(pictureDay(noon)).toBe('2026-06-10');
     expect(pictureDay(0, new Date(2026, 0, 2, 9).getTime())).toBe('2026-01-02');
+  });
+});
+
+describe('photoFiles', () => {
+  it('keeps the photographs, a RAW yielding to its JPEG, and drops clips and logs', () => {
+    const f = (name: string) => new File(['x'], name);
+    const names = photoFiles([f('A.ARW'), f('A.JPG'), f('B.jpg'), f('C.MP4'), f('C.SRT'), f('.hidden.jpg')]).map((x) => x.name);
+    expect(names).toEqual(['A.JPG', 'B.jpg']);
+  });
+});
+
+describe('splitByRoll', () => {
+  const ref = (name: string, hash?: string) => ({ name, size: 10, lastModified: 1, ...(hash ? { hash } : {}) });
+  it('counts what the roll holds and keeps each new picture once', () => {
+    const held = [ref('A.jpg', 'ha'), ref('B.jpg', 'hb')];
+    const out = splitByRoll(held, [ref('renamed.jpg', 'ha'), ref('C.jpg', 'hc'), ref('C-copy.jpg', 'hc'), ref('D.jpg', 'hd')]);
+    expect(out.found).toBe(1);
+    expect(out.fresh.map((r) => r.name)).toEqual(['C.jpg', 'D.jpg']);
   });
 });
 

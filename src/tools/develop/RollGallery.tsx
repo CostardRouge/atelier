@@ -19,6 +19,7 @@ import {
 } from '../../shared/develop/roll-remote';
 import {
   deleteRoll,
+  deleteRollFolders,
   deleteRollThumbs,
   deleteSyncRecord,
   getRollThumbs,
@@ -277,8 +278,9 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
     deleteRemote: deleteRemoteRoll,
     deleteLocal: async (doc) => {
       await deleteRoll(doc.id);
-      // The thumbnails go with the roll: nothing else will ever prune them.
+      // The thumbnails and remembered folders go with the roll: nothing else will ever prune them.
       await deleteRollThumbs(doc.pictures.map((p) => p.id));
+      await deleteRollFolders(doc.id);
     },
     mirror: mirrorRoll,
     move: moveRoll,

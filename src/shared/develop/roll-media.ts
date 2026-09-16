@@ -12,6 +12,10 @@
  * Pure and DOM-free.
  */
 
+import { buildAssets } from '../library/assets';
+import type { SavedMediaRef } from '../projects/project-types';
+import { sameMediaRef } from './roll-types';
+
 /** What the editor can say about one picture's bytes. */
 export type PictureAvailability =
   /** In hand — from the Library, or fetched by the roll. */
@@ -135,7 +139,7 @@ export function availabilityText(name: string, a: PictureAvailability | undefine
       return `${name} is kept on ${a.sourceId}, which this browser is not connected to — connect it in Sources.`;
     case 'local':
     default:
-      return `${name} is a file from this computer that is not open right now — add its folder in the Library. Its numbers can still be set.`;
+      return `${name} is a file from this computer that is not open right now — reopen its folder, or drop it on the roll. Its numbers can still be set.`;
   }
 }
 
@@ -149,5 +153,30 @@ export function pictureDay(lastModified: number, now: number = Date.now()): stri
   const d = new Date(lastModified > 0 ? lastModified : now);
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/**
+ * The photographs among `files`, as the Library would read them: grouped by
+ * base name, a RAW yielding to its own JPEG, clips and logs left out.
+ */
+export function photoFiles(files: readonly File[]): File[] {
+  return buildAssets([...files]).flatMap((a) => (a.kind === 'photo' && a.parts.image ? [a.parts.image] : []));
+}
+
+/**
+ * What a set of incoming refs means for a roll: how many are pictures it
+ * already holds (found again), and which are new — each once, in order.
+ */
+export function splitByRoll(
+  held: readonly SavedMediaRef[],
+  incoming: readonly SavedMediaRef[],
+): { found: number; fresh: SavedMediaRef[] } {
+  let found = 0;
+  const fresh: SavedMediaRef[] = [];
+  for (const ref of incoming) {
+    if (held.some((h) => sameMediaRef(h, ref))) found += 1;
+    else if (!fresh.some((f) => sameMediaRef(f, ref))) fresh.push(ref);
+  }
+  return { found, fresh };
 }
 

@@ -274,7 +274,11 @@ Phases, one commit each:
   roll lacks ticked), `rowMediaRef` beside `materialize` (+ spec: the ref a
   fetched proxy would carry, size 0), and the bar's *Add* — a button for one
   way in, a menu (`OverflowMenu`'s new worded trigger) for two.
-- **F4 — local files: the folder handle and re-linking by drop** (paliers A
-  and B of the proposal).
+- **F4 — local files: the folder handle and re-linking by drop** — **BUILT
+  2026-09-16**: `atelier-develop` v2 with a `folders` store (per roll, per
+  device), `use-roll-folders.ts` (read at once where the permission holds,
+  *Reopen* otherwise), *Add › A folder on this computer…*, a drop anywhere on
+  the roll (found again, or added — `splitByRoll`, `photoFiles`, tested) and
+  `dropDirectoryHandles` to remember a dropped folder in Chromium.
 - **F5 — working previews** (palier C), local only, per roll.
 
