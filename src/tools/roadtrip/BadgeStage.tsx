@@ -1278,6 +1278,11 @@ export default function BadgeStage({
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
             onPointerLeave={() => setHovering(false)}
+            // Accepted on ENTER as well as over: the browser decides whether a
+            // drop is allowed from whichever of the two came last, and a quick
+            // flick released as it arrives never sees a `dragover` — measured,
+            // it silently fell back to the sidebar.
+            onDragEnter={onDragOver}
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
             onDrop={onDrop}

@@ -94,11 +94,35 @@ function emit(): void {
   for (const fn of listeners) fn();
 }
 
+/**
+ * A drag's end is only reported to its SOURCE — and a source can be gone by
+ * then (a tile disabled while its picture is fetched, a row filtered out, a
+ * day that changed), which left every target lit up for good (measured). So
+ * the page watches too: a drop anywhere ends it once the target has read the
+ * item, and so does the first pointer movement after, since no pointer event
+ * is dispatched while a drag is in progress.
+ */
+function watchForTheEnd(item: AssetDragItem): void {
+  if (typeof window === 'undefined') return;
+  const endThis = () => {
+    window.removeEventListener('drop', onDrop, true);
+    window.removeEventListener('dragend', endThis, true);
+    window.removeEventListener('pointermove', endThis, true);
+    if (current === item) endAssetDrag();
+  };
+  // Deferred: this listener runs BEFORE the target's own drop handler.
+  const onDrop = () => window.setTimeout(endThis, 0);
+  window.addEventListener('drop', onDrop, true);
+  window.addEventListener('dragend', endThis, true);
+  window.addEventListener('pointermove', endThis, true);
+}
+
 /** Start a drag: mark the transfer, and make the item readable by every target. */
 export function beginAssetDrag(data: DragData, item: AssetDragItem): void {
   startAssetDrag(data, item.key);
   current = item;
   emit();
+  watchForTheEnd(item);
 }
 
 /**

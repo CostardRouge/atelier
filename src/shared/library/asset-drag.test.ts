@@ -69,6 +69,30 @@ describe('the drag in flight', () => {
     expect(activeAssetDrag()).toBeNull();
   });
 
+  it('ends by itself when the page sees the drag is over, whatever became of its source', () => {
+    vi.useFakeTimers();
+    // Looked up at call time, so the page's timer is the faked one.
+    const page = Object.assign(new EventTarget(), {
+      setTimeout: (fn: () => void, ms?: number) => globalThis.setTimeout(fn, ms),
+    });
+    vi.stubGlobal('window', page);
+    try {
+      beginAssetDrag(transfer(), item('tile:gone'));
+      page.dispatchEvent(new Event('pointermove'));
+      expect(activeAssetDrag()).toBeNull();
+
+      beginAssetDrag(transfer(), item('tile:dropped'));
+      page.dispatchEvent(new Event('drop'));
+      // Still readable by the target's own drop handler, which runs after.
+      expect(activeAssetDrag()?.key).toBe('tile:dropped');
+      vi.runAllTimers();
+      expect(activeAssetDrag()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('tells its subscribers when it starts and ends, and only then', () => {
     const seen = vi.fn();
     const off = subscribeAssetDrag(seen);

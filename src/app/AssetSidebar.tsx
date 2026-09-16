@@ -272,6 +272,12 @@ export default function AssetSidebar({
    */
   const previewFirst = published?.intent !== 'pick';
 
+  // What each fetch brought, by the asset it became: a drop needs the FILE
+  // before the pool has regrouped around it.
+  const picked = useRef(new Map<string, File[]>());
+  const assetsRef = useRef(lib.assets);
+  assetsRef.current = lib.assets;
+
   /** A picture the instance holds, brought across — grid and lightbox alike. */
   const picker = usePickFromInstance(
     client,
@@ -394,6 +400,7 @@ export default function AssetSidebar({
 
   /** A picture fetched from the tiles: into the pool, then active. */
   function pickFromSource(files: File[], assetId: string) {
+    picked.current.set(assetId, files);
     lib.addFiles(files);
     lib.setActive(assetId);
   }
@@ -840,6 +847,29 @@ export default function AssetSidebar({
               activeId={lib.activeId}
               picker={picker}
               onPreview={previewFirst ? setPreview : null}
+              dragItemFor={(row) => {
+                const key = `${connection.id}/${row.id}`;
+                const host = shortHost(connection.id);
+                return {
+                  key: `remote:${key}`,
+                  label: row.filename.replace(/\.[^.]+$/, ''),
+                  // Already in the pool: it lands at once. Otherwise it is
+                  // fetched on drop, and the cell says so meanwhile.
+                  origin: inLibrary.has(key) ? 'library' : 'instance',
+                  sourceLabel: host,
+                  resolve: async () => {
+                    const assetId = await picker.pick(row);
+                    if (!assetId) return null;
+                    const media = picked.current
+                      .get(assetId)
+                      ?.find((f) => !/\.srt$/i.test(f.name));
+                    if (media) return { assetId, file: media };
+                    const asset = assetsRef.current.find((a) => a.id === assetId);
+                    const file = asset ? (asset.parts.image ?? asset.parts.video ?? null) : null;
+                    return file ? { assetId, file } : null;
+                  },
+                };
+              }}
             />
           </div>
         )}

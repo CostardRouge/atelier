@@ -3,6 +3,8 @@ import WinnowThumb from '../shared/sources/winnow/WinnowThumb';
 import type { WinnowConnection } from '../shared/sources/winnow/store';
 import type { ScopeRows } from '../shared/sources/winnow/use-scope-rows';
 import type { InstancePicker } from '../shared/sources/winnow/use-pick';
+import type { AssetDragItem } from '../shared/library/asset-drag';
+import { useAssetDragSource } from '../shared/library/use-asset-drag';
 
 interface WinnowScopeGridProps {
   connection: WinnowConnection;
@@ -43,6 +45,11 @@ interface WinnowScopeGridProps {
    * once. A real problem is never quiet: it is drawn here either way.
    */
   announce: boolean;
+  /**
+   * What dragging a tile carries — the picture, fetched on drop when the pool
+   * does not hold it yet. Absent, the tiles are not draggable.
+   */
+  dragItemFor?: (row: WinnowAssetRow) => AssetDragItem | null;
 }
 
 /**
@@ -78,6 +85,7 @@ export default function WinnowScopeGrid({
   picker,
   onPreview,
   announce,
+  dragItemFor,
 }: WinnowScopeGridProps) {
   const { rows, problem, reload } = scope;
   const { pick, fetching } = picker;
@@ -119,16 +127,16 @@ export default function WinnowScopeGrid({
             const have = inLibrary.get(`${connection.id}/${r.id}`);
             const active = have !== undefined && have === activeId;
             return (
-              <button
+              <WinnowTile
                 key={r.id}
-                type="button"
+                dragItem={dragItemFor?.(r) ?? null}
                 onClick={() => (onPreview ? onPreview(i) : void pick(r))}
                 disabled={fetching !== null}
-                aria-pressed={active}
+                active={active}
                 title={`${onPreview ? 'Look at' : 'Use'} ${r.filename}${
                   r.has_telemetry ? ' · flight log' : ''
-                }${have ? ' · in the library' : ''}`}
-                className={`relative block rounded-md overflow-hidden border bg-frame cursor-pointer p-0 disabled:cursor-wait transition-colors ${
+                }${have ? ' · in the library' : ''}${dragItemFor ? ' — or drag it onto the picture' : ''}`}
+                className={`relative block rounded-md overflow-hidden border bg-frame cursor-pointer p-0 disabled:cursor-wait transition-[border-color,opacity] ${
                   active
                     ? 'border-accent shadow-[inset_0_0_0_2px_var(--color-accent)]'
                     : have
@@ -174,7 +182,7 @@ export default function WinnowScopeGrid({
                     fetching…
                   </span>
                 )}
-              </button>
+              </WinnowTile>
             );
           })}
         </div>
@@ -206,5 +214,50 @@ export default function WinnowScopeGrid({
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * One tile of the instance's day — a button, and the handle of a drag onto the
+ * stage. While its picture travels it is left behind as a dashed, faded
+ * outline, exactly as a Library row is.
+ */
+function WinnowTile({
+  dragItem,
+  onClick,
+  disabled,
+  active,
+  title,
+  className,
+  children,
+}: {
+  dragItem: AssetDragItem | null;
+  onClick: () => void;
+  disabled: boolean;
+  active: boolean;
+  title: string;
+  className: string;
+  children: React.ReactNode;
+}) {
+  // The handlers stay on a disabled tile: it is disabled WHILE its own drop is
+  // being fetched, which is exactly when its drag ends. A disabled button
+  // cannot start a drag in the first place.
+  const drag = useAssetDragSource(dragItem);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={active}
+      title={title}
+      {...drag.props}
+      className={`${className} ${
+        drag.lifted
+          ? 'opacity-40 outline-dashed outline-[1.5px] outline-offset-[-1.5px] outline-accent'
+          : ''
+      }`}
+    >
+      {children}
+    </button>
   );
 }

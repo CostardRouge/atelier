@@ -345,7 +345,7 @@ export default function PostEditor({
           ok: false,
           reason:
             item.origin === 'instance'
-              ? `${item.sourceLabel ?? 'The instance'} did not hand it over`
+              ? `${item.sourceLabel ?? 'The instance'} did not hand it over — see the Library`
               : 'Nothing to compose over in that file',
         };
       }
