@@ -643,9 +643,13 @@ picture is always the first cell, and the others are filled from the Library,
 which follows whichever cell is selected. Click a cell on the stage to select
 it, drag to reframe the picture inside it, use the wheel to zoom it, and hold
 (or Alt-drag) onto another cell to swap the two. A picture can also be
-**dragged out of the Library straight onto a cell** — the cell lights up under
-the pointer, and dropping fills it and selects it; with no layout, a drop
-anywhere on the picture replaces the slide's own. Every cell keeps its own
+**dragged straight onto a cell** — grab any row of the Library, or a tile of
+the Winnow tab (it is fetched as it lands). As soon as a drag starts the stage
+shows every cell it can go in; the cell under the pointer says whether the
+picture will be placed there or replace the one it holds, a drop between two
+cells is refused, and the cell confirms when the picture has landed (or says
+why it could not). With no layout, a drop anywhere on the picture replaces the
+slide's own. Dragging is a mouse gesture; on a phone, use the cell stepper. Every cell keeps its own
 framing and develop; an empty cell shows the layout's background in the
 export, and a smaller layout keeps the extra pictures rather than dropping
 them. The Picture tab's **Motion** section lets the cells **arrive** (one

@@ -11,7 +11,15 @@ import {
   type Framing,
 } from '../../shared/media/framing';
 import { cellAt, type CellRect } from '../../shared/media/media-layout';
-import { draggedAssetId, hasAssetDrag } from '../../shared/library/asset-drag';
+import {
+  activeAssetDrag,
+  hasAssetDrag,
+  type AssetDragItem,
+  type DropResult,
+} from '../../shared/library/asset-drag';
+import { useAssetDrag } from '../../shared/library/use-asset-drag';
+import DropZones, { type DropState } from './DropZones';
+import { dropZones } from './drop-zones';
 import { boxForId, hitTest, type ElementBox } from '../../shared/overlay/draw-overlays';
 import {
   collageCellAt,
@@ -177,10 +185,17 @@ interface BadgeStageProps {
   onSwapCells?: (a: number, b: number) => void;
   /**
    * A picture dragged out of the Library and dropped on a cell: its index
-   * (0 without a collage — the slide's own picture) and the asset's id.
+   * (0 without a collage — the slide's own picture) and what is being
+   * dragged. Resolves once the picture is in place, or says why it is not.
    * Absent, the stage takes no drops.
    */
-  onDropAsset?: (cellIndex: number, assetId: string) => void;
+  onDropAsset?: (cellIndex: number, item: AssetDragItem) => Promise<DropResult>;
+  /**
+   * The name of what each drawn cell holds (the lead first; one entry without
+   * a collage), so a drop target can say "Replace pic-D" rather than a bare
+   * "Drop here". Null for an empty cell.
+   */
+  cellLabels?: readonly (string | null)[];
   onSourceLoaded?: (info: { width: number; height: number; duration: number }) => void;
   /**
    * The width the picture wants from the height it was given (height ×
@@ -243,6 +258,7 @@ export default function BadgeStage({
   onMoveCell,
   onSwapCells,
   onDropAsset,
+  cellLabels,
   onSourceLoaded,
   onRendered,
   onFit,
@@ -501,24 +517,12 @@ export default function BadgeStage({
     // The collage's cells: a number on each, a slot where one is empty, the
     // selected one outlined. Editor chrome only — the paint under it is what
     // the thumbnail and the export see.
-    // A picture hovering over the frame with no collage: the whole frame is
-    // the target, so it is outlined as one.
-    if (!collageRef.current && dropCellRef.current !== null) {
-      ctx.save();
-      ctx.strokeStyle = '#d9442a';
-      ctx.lineWidth = Math.max(2, Math.min(w, h) * 0.006);
-      ctx.strokeRect(0, 0, w, h);
-      ctx.fillStyle = 'rgba(217,68,42,0.16)';
-      ctx.fillRect(0, 0, w, h);
-      ctx.restore();
-    }
     if (collageRef.current) {
       const short = Math.min(w, h);
       const lead = sourceRef.current;
       cellRectsRef.current.forEach((c, i) => {
         const has = i === 0 ? Boolean(lead) : Boolean(cellSourcesRef.current[i]);
         const isSel = i === selectedCellRef.current && !selectedRef.current;
-        const isDrop = i === dropCellRef.current;
         ctx.save();
         ctx.translate(c.x + c.w / 2, c.y + c.h / 2);
         if (c.rotation) ctx.rotate((c.rotation * Math.PI) / 180);
@@ -541,15 +545,9 @@ export default function BadgeStage({
           ctx.lineTo(u * 0.8, u * 0.5);
           ctx.stroke();
         }
-        if (isDrop) {
-          // The cell a drop would land in: filled, not merely outlined — with
-          // six cells an outline alone reads as the selection.
-          ctx.fillStyle = 'rgba(217,68,42,0.22)';
-          ctx.fillRect(-c.w / 2, -c.h / 2, c.w, c.h);
-        }
-        if (isSel || isDrop) {
+        if (isSel) {
           ctx.strokeStyle = '#d9442a';
-          ctx.lineWidth = Math.max(2, short * (isDrop ? 0.006 : 0.005));
+          ctx.lineWidth = Math.max(2, short * 0.005);
           ctx.strokeRect(-c.w / 2, -c.h / 2, c.w, c.h);
         }
         const r = Math.max(9, short * 0.026);
@@ -1077,11 +1075,28 @@ export default function BadgeStage({
    * A picture dragged out of the Library. The cell under the pointer lights up
    * while it hovers — a drop has to say WHERE it will land, or it is a guess —
    * and dropping writes that cell. Without a collage the whole frame is cell 0,
-   * so the same gesture replaces the slide's own picture.
+   * so the same gesture replaces the slide's own picture. What the person sees
+   * throughout is `DropZones`, over the canvas.
    */
+  const dragItem = useAssetDrag();
+  const armed = Boolean(onDropAsset) && dragItem !== null;
   const [dropCell, setDropCell] = useState<number | null>(null);
-  const dropCellRef = useRef<number | null>(null);
-  dropCellRef.current = dropCell;
+  // What the last drop became — fetching, placed, failed — for a moment, and
+  // which picture it was (the drag item is gone by then).
+  const [settled, setSettled] = useState<{
+    cell: number;
+    phase: 'fetching' | 'placed' | 'failed';
+    reason?: string | null;
+    label: string;
+    source: string | null;
+  } | null>(null);
+  const settleSeq = useRef(0);
+  const settleTimer = useRef(0);
+  useEffect(() => () => window.clearTimeout(settleTimer.current), []);
+  // A drag that ends anywhere else leaves no hovered cell behind.
+  useEffect(() => {
+    if (!dragItem) setDropCell(null);
+  }, [dragItem]);
 
   const cellUnder = useCallback(
     (e: React.DragEvent): number => {
@@ -1097,12 +1112,13 @@ export default function BadgeStage({
   const onDragOver = useCallback(
     (e: React.DragEvent) => {
       if (!onDropAsset || !hasAssetDrag(e.dataTransfer)) return;
-      // Without this the browser refuses the drop and animates the picture
-      // back to the sidebar.
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
       const i = cellUnder(e);
       setDropCell(i < 0 ? null : i);
+      // Between two cells the drop is REFUSED — not accepted and ignored — so
+      // the browser shows its no-drop cursor and animates the picture back.
+      if (i < 0) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
     },
     [onDropAsset, cellUnder],
   );
@@ -1113,18 +1129,62 @@ export default function BadgeStage({
     (e: React.DragEvent) => {
       if (!onDropAsset || !hasAssetDrag(e.dataTransfer)) return;
       e.preventDefault();
-      const id = draggedAssetId(e.dataTransfer);
+      // The item, not the transfer: it carries the picture's name and a way
+      // to the file, where the transfer only carries a key.
+      const item = activeAssetDrag();
       const i = cellUnder(e);
       setDropCell(null);
-      if (id && i >= 0) onDropAsset(i, id);
+      if (!item || i < 0) return;
+      const seq = ++settleSeq.current;
+      window.clearTimeout(settleTimer.current);
+      const base = { cell: i, label: item.label, source: item.sourceLabel ?? null };
+      // A picture already in the Library lands at once; one an instance still
+      // holds is fetched first, and the cell says so meanwhile.
+      setSettled(item.origin === 'instance' ? { ...base, phase: 'fetching' } : null);
+      void onDropAsset(i, item).then(
+        (result) => {
+          if (settleSeq.current !== seq) return;
+          setSettled(
+            result.ok ? { ...base, phase: 'placed' } : { ...base, phase: 'failed', reason: result.reason },
+          );
+          settleTimer.current = window.setTimeout(
+            () => {
+              if (settleSeq.current === seq) setSettled(null);
+            },
+            result.ok ? 1100 : 3200,
+          );
+        },
+        (err: unknown) => {
+          if (settleSeq.current !== seq) return;
+          setSettled({ ...base, phase: 'failed', reason: err instanceof Error ? err.message : String(err) });
+          settleTimer.current = window.setTimeout(() => {
+            if (settleSeq.current === seq) setSettled(null);
+          }, 3200);
+        },
+      );
     },
     [onDropAsset, cellUnder],
   );
 
-  // The highlight lives on the chrome canvas, which only repaints when asked.
-  useEffect(() => {
-    drawChrome();
-  }, [dropCell, drawChrome]);
+  // The zones in the stage's CSS pixels, from the cells the last paint used.
+  // Only worked out while there is something to show.
+  const showDrop = armed || settled !== null;
+  const zones = showDrop
+    ? dropZones(
+        cellRectsRef.current,
+        canvasRef.current?.width ?? 0,
+        boxRef.current?.clientWidth ?? 0,
+        boxRef.current?.clientHeight ?? 0,
+        cellLabels ?? [],
+      )
+    : [];
+  const dropState: DropState = {
+    armed,
+    over: dropCell,
+    settled: settled && { cell: settled.cell, phase: settled.phase, reason: settled.reason },
+    label: settled?.label ?? dragItem?.label ?? '',
+    source: settled?.source ?? dragItem?.sourceLabel ?? null,
+  };
 
   const onPointerUp = useCallback((e: React.PointerEvent) => {
     const p = press.current;
@@ -1205,7 +1265,11 @@ export default function BadgeStage({
       >
         <div
           ref={boxRef}
-          className="relative rounded-paper border border-line-strong bg-frame overflow-hidden"
+          className={`relative rounded-paper border bg-frame overflow-hidden transition-[box-shadow,border-color] duration-150 motion-reduce:transition-none ${
+            armed
+              ? 'border-accent ring-2 ring-accent/40 ring-offset-2 ring-offset-paper'
+              : 'border-line-strong'
+          }`}
         >
           <canvas
             ref={canvasRef}
@@ -1214,6 +1278,11 @@ export default function BadgeStage({
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
             onPointerLeave={() => setHovering(false)}
+            // Accepted on ENTER as well as over: the browser decides whether a
+            // drop is allowed from whichever of the two came last, and a quick
+            // flick released as it arrives never sees a `dragover` — measured,
+            // it silently fell back to the sidebar.
+            onDragEnter={onDragOver}
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
             onDrop={onDrop}
@@ -1224,6 +1293,9 @@ export default function BadgeStage({
             aria-hidden="true"
             className="absolute inset-0 w-full h-full pointer-events-none"
           />
+          {onDropAsset && (
+            <DropZones zones={zones} state={dropState} collage={cellRectsRef.current.length > 0} />
+          )}
         </div>
         {loading && (
           <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-mono text-2xs text-paper bg-[rgba(20,18,15,0.7)] px-3 py-1.5 rounded-full">
