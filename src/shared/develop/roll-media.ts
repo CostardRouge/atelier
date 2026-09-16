@@ -18,8 +18,10 @@ import { sameMediaRef } from './roll-types';
 
 /** What the editor can say about one picture's bytes. */
 export type PictureAvailability =
-  /** In hand — from the Library, or fetched by the roll. */
+  /** In hand — from the Library, the roll's folders, or fetched by the roll. */
   | { kind: 'ready' }
+  /** Not in hand, but its working preview is (F5): developable, not full size. */
+  | { kind: 'preview' }
   /** Being fetched from its instance right now. */
   | { kind: 'fetching'; sourceId: string }
   /** On a connected instance, not asked for yet (it is not near the open picture). */
@@ -63,6 +65,8 @@ export function keepWindow(ids: readonly string[], openId: string | null, radius
 
 export interface AvailabilitySummary {
   fetching: number;
+  /** Shown from a working preview. */
+  previewed: number;
   /** Failed or gone, per instance: the problem worth saying once. */
   failed: number;
   gone: number;
@@ -84,6 +88,7 @@ export function summarizeAvailability(
 ): AvailabilitySummary {
   const out: AvailabilitySummary = {
     fetching: 0,
+    previewed: 0,
     failed: 0,
     gone: 0,
     unconnected: 0,
@@ -99,6 +104,9 @@ export function summarizeAvailability(
     switch (a.kind) {
       case 'fetching':
         out.fetching += 1;
+        break;
+      case 'preview':
+        out.previewed += 1;
         break;
       case 'failed':
         out.failed += 1;

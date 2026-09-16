@@ -22,6 +22,8 @@ import {
   type PictureAvailability,
 } from '../../shared/develop/roll-media';
 import { deleteRollThumbs, getRollThumbs, putRollThumb } from '../../shared/develop/roll-store';
+import { WORKING_PREVIEW_ESTIMATE_BYTES } from '../../shared/develop/working-preview';
+import { formatBytes } from '../../shared/lib/format';
 import { pictureThumbnail } from '../../shared/develop/roll-thumb';
 import {
   addPictures,
@@ -54,6 +56,7 @@ import { useRollExport } from './use-roll-export';
 import { useRollGrade } from './use-roll-grade';
 import { useRollFolders } from './use-roll-folders';
 import { useRollMedia } from './use-roll-media';
+import { useRollPreviews } from './use-roll-previews';
 import WinnowDaySheet from './WinnowDaySheet';
 
 interface RollEditorProps {
@@ -152,11 +155,28 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // remembers and the files dropped on it (F4) — the same name-then-hash match.
   const folders = useRollFolders(roll.id);
   const localPhotos = useMemo(() => [...libraryPhotos, ...folders.photos], [libraryPhotos, folders.photos]);
-  const { files, availability, fileFor, retryFailed, remoteThumb } = useRollMedia({
-    pictures: roll.pictures,
-    openId,
-    localPhotos,
-  });
+  const media = useRollMedia({ pictures: roll.pictures, openId, localPhotos });
+  const { retryFailed, remoteThumb } = media;
+  // A local picture whose file is away is developed from its working preview
+  // when the roll keeps them (F5); the real file always wins.
+  const previews = useRollPreviews({ rollId: roll.id, pictures: roll.pictures, realFiles: media.files });
+  const files = useMemo(() => {
+    const out = new Map(media.files);
+    for (const [id, file] of previews.files) if (!out.has(id)) out.set(id, file);
+    return out;
+  }, [media.files, previews.files]);
+  const availability = useMemo(() => {
+    const out = new Map(media.availability);
+    for (const id of previews.files.keys()) if (!media.files.has(id)) out.set(id, { kind: 'preview' });
+    return out as ReadonlyMap<string, PictureAvailability>;
+  }, [media.availability, media.files, previews.files]);
+  const mediaFileFor = media.fileFor;
+  const previewFiles = previews.files;
+  const fileFor = useCallback(
+    async (p: RollPicture) => (await mediaFileFor(p)) ?? previewFiles.get(p.id) ?? null,
+    [mediaFileFor, previewFiles],
+  );
+  const localCount = roll.pictures.filter((p) => !p.ref.assetId).length;
   const reach = summarizeAvailability(
     roll.pictures.map((p) => p.id),
     availability,
@@ -366,6 +386,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     const nextOpen = openAfterRemoval(latest.current.pictures, picture.id, openId);
     update((r) => removePictures(r, [picture.id]));
     void deleteRollThumbs([picture.id]);
+    previews.forget([picture.id]);
     if (nextOpen !== openId) onOpenPicture(nextOpen);
   }
 
@@ -678,6 +699,13 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                     </a>
                   </span>
                 )}
+                {reach.previewed > 0 && (
+                  <span className="text-ink-soft">
+                    {' '}
+                    · {reach.previewed} from {reach.previewed === 1 ? 'its' : 'their'} working preview
+                    {reach.previewed === 1 ? '' : 's'} — reopen the folder for full size
+                  </span>
+                )}
                 {reach.local > 0 && (
                   <span className="text-ink-soft">
                     {' '}
@@ -703,6 +731,39 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                   </span>
                 )}
               </p>
+              {localCount > 0 && (
+                <p className="m-0 font-mono text-2xs text-faint tabular-nums">
+                  working previews ·{' '}
+                  {previews.enabled ? (
+                    <>
+                      {previews.files.size} of {localCount} kept · {formatBytes(previews.bytes)}
+                      {previews.pending > 0 && ` · making ${previews.pending}`} ·{' '}
+                      <button
+                        type="button"
+                        onClick={() => previews.setEnabled(false)}
+                        className="underline underline-offset-2 cursor-pointer"
+                        title="Delete this roll's working previews from this browser"
+                      >
+                        Stop keeping them
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      off ·{' '}
+                      <button
+                        type="button"
+                        onClick={() => previews.setEnabled(true)}
+                        className="underline underline-offset-2 cursor-pointer text-accent-ink"
+                        title="Keep a 2048 px copy of each picture from this computer, in this browser, so the roll can be developed while its files are away"
+                      >
+                        Keep them
+                      </button>{' '}
+                      (≈ {formatBytes(localCount * WORKING_PREVIEW_ESTIMATE_BYTES)} for {localCount} picture
+                      {localCount === 1 ? '' : 's'} from this computer)
+                    </>
+                  )}
+                </p>
+              )}
               <Filmstrip
                 pictures={roll.pictures}
                 openId={openId}

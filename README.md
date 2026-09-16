@@ -959,6 +959,15 @@ moves, deletes and exports it (`.roll.json`, a backup — importing always makes
 new roll). Thumbnails are baked here from the Library's files and never leave
 the browser.
 
+**Working previews.** A roll with pictures from your own disk can keep a
+**working preview** of each — a 2048 px copy, stored in this browser only —
+so it opens and can be developed and cropped while the files themselves are
+away (on a phone, where a folder cannot be remembered, it is the only way).
+It is off until you ask for it on that roll (*Keep them*, with the weight said
+first), the strip and the chip say when a picture is shown from its preview,
+an export made from one says so, and *Stop keeping them* deletes them.
+Pictures from your Winnow never get one: the instance is where they live.
+
 ## Telemetry tool
 
 When a DJI drone records, the memory card holds both the video (`.mp4`) and a

@@ -177,6 +177,7 @@ function Cell({
 /** What an empty cell says, in a word or two — the stage says the rest. */
 const CELL_WORDS: Record<PictureAvailability['kind'], string> = {
   ready: '…',
+  preview: '…',
   fetching: '',
   waiting: 'on its instance',
   failed: 'not fetched',

@@ -50,6 +50,7 @@ describe('summarizeAvailability', () => {
     ]);
     expect(summarizeAvailability(ids, map)).toEqual({
       fetching: 1,
+      previewed: 0,
       failed: 2,
       gone: 1,
       unconnected: 1,
@@ -63,7 +64,8 @@ describe('summarizeAvailability', () => {
 
   it('says nothing about a roll whose pictures are all in hand', () => {
     const s = summarizeAvailability(['a'], new Map([['a', { kind: 'ready' } as PictureAvailability]]));
-    expect(s.fetching + s.failed + s.gone + s.unconnected + s.local).toBe(0);
+    expect(s.fetching + s.previewed + s.failed + s.gone + s.unconnected + s.local).toBe(0);
+    expect(summarizeAvailability(['a'], new Map([['a', { kind: 'preview' } as PictureAvailability]])).previewed).toBe(1);
     expect(s.sourceId).toBeNull();
   });
 });

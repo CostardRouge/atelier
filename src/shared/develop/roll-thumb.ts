@@ -45,7 +45,11 @@ export async function framedThumbnail(
   return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', THUMB_QUALITY));
 }
 
-export async function pictureThumbnail(file: File, longEdge = THUMB_LONG_EDGE): Promise<Blob | null> {
+export async function pictureThumbnail(
+  file: File,
+  longEdge = THUMB_LONG_EDGE,
+  quality = THUMB_QUALITY,
+): Promise<Blob | null> {
   let bitmap: ImageBitmap | null = null;
   try {
     bitmap = await createImageBitmap(file);
@@ -58,7 +62,7 @@ export async function pictureThumbnail(file: File, longEdge = THUMB_LONG_EDGE): 
     if (!ctx) return null;
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(bitmap, 0, 0, w, h);
-    return await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', THUMB_QUALITY));
+    return await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
   } catch {
     return null;
   } finally {

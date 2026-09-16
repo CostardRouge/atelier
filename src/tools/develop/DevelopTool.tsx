@@ -12,6 +12,7 @@ import { ROLL_DOC_KIND, pullRoll, pushOnce } from '../../shared/develop/roll-rem
 import {
   deleteRoll,
   deleteRollFolders,
+  deleteRollPreviews,
   deleteRollThumbs,
   deleteSyncRecord,
   getSyncRecord,
@@ -93,6 +94,7 @@ export default function DevelopTool() {
         await deleteRoll(doc.id);
         await deleteRollThumbs(doc.pictures.map((p) => p.id));
         await deleteRollFolders(doc.id);
+        await deleteRollPreviews(doc.pictures.map((p) => p.id));
       },
       push: pushOnce,
       pull: (remote, id, etag) => pullRoll(remote, id, etag),

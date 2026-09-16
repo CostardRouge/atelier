@@ -20,6 +20,7 @@ import {
 import {
   deleteRoll,
   deleteRollFolders,
+  deleteRollPreviews,
   deleteRollThumbs,
   deleteSyncRecord,
   getRollThumbs,
@@ -281,6 +282,7 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
       // The thumbnails and remembered folders go with the roll: nothing else will ever prune them.
       await deleteRollThumbs(doc.pictures.map((p) => p.id));
       await deleteRollFolders(doc.id);
+        await deleteRollPreviews(doc.pictures.map((p) => p.id));
     },
     mirror: mirrorRoll,
     move: moveRoll,

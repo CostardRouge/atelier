@@ -121,3 +121,33 @@ with an empty Library showed them at once; with the permission made to ask,
 the roll plus a new one said `found 1 again · added 1`, the overlay showing
 during the drag.
 
+## Working previews: the one place the suite keeps media bytes (2026-09-16, F5)
+
+**Decision (maintainer, Q2 of §9).** A roll may keep a WORKING PREVIEW of each
+LOCAL picture — a JPEG at `WORKING_PREVIEW_EDGE` (2048, a Winnow proxy's
+edge), quality 0.82 — in `atelier-develop`'s `previews` store (DB v3), so it
+can be developed while its file is away (Lightroom's smart previews; the only
+remedy on a browser that cannot remember a folder, an iPhone). **It reverses
+`local-first.md`'s "media bytes are never persisted" for that case only**:
+local pictures only (a ref without `assetId` — a Winnow picture's ref is its
+address, and a proxy cache was declined), per roll, opt-in on THIS device
+(`localStorage` flag `atelier.develop.previews.<roll>`), its weight said
+before (≈ 450 KB a picture) and after (the stored total), and turning it off
+DELETES them; pruned with a picture and with the roll. **How to apply**:
+- A preview is made only from the REAL file in hand, never from a preview,
+  one at a time (`use-roll-previews.ts`); the real file always wins over it.
+- A preview is an ordinary `File` named like the picture and MARKED
+  (`workingPreviewFile` / `isWorkingPreview`, a WeakSet): the fidelity chip
+  says `working preview · 2048`, the status line counts pictures shown from
+  one, and an export from one is written and named in the run's sentence
+  (`… left from its working preview, 2048 px at most`).
+- The two hooks meet in `RollEditor`: `useRollMedia` gives the real files,
+  `useRollPreviews` takes them and gives the previews, and the editor merges
+  (availability `preview`, and `fileFor` falling back to the preview).
+Verified in the pane: *Keep them* (≈ 3.1 MB said for seven local pictures)
+made three previews from the folder's files (72 KB); with the folder made
+unreachable and the roll remounted, VRC 2 showed with the `working preview`
+chip and the line said `3 from their working previews`; exporting it wrote
+the file and said it left from its preview; *Stop keeping them* deleted the
+three and the stage went back to "not open".
+

@@ -280,5 +280,8 @@ Phases, one commit each:
   *Reopen* otherwise), *Add › A folder on this computer…*, a drop anywhere on
   the roll (found again, or added — `splitByRoll`, `photoFiles`, tested) and
   `dropDirectoryHandles` to remember a dropped folder in Chromium.
-- **F5 — working previews** (palier C), local only, per roll.
+- **F5 — working previews** (palier C) — **BUILT 2026-09-16**: `previews`
+  store (DB v3), `working-preview.ts` (+ spec), `use-roll-previews.ts`, the
+  preview state in the strip and the status line, the fidelity chip, and the
+  export saying a picture left from its preview.
 

@@ -11,6 +11,7 @@ import {
 } from '../../shared/develop/roll-export';
 import { measurePicture, renderRollPicture } from '../../shared/develop/roll-render';
 import type { RollDoc, RollPicture } from '../../shared/develop/roll-types';
+import { WORKING_PREVIEW_EDGE, isWorkingPreview } from '../../shared/develop/working-preview';
 import { knownIdentity, mediaOrigin, type MediaOrigin } from '../../shared/projects/media-identity';
 import { deliverFiles } from '../../shared/sources/deliver-files';
 import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
@@ -123,6 +124,9 @@ export function useRollExport({
         if (!file) {
           failures.push(`${picture.ref.name} could not be found — not in the Library, and no connected instance holds it`);
           continue;
+        }
+        if (isWorkingPreview(file)) {
+          failures.push(`${picture.ref.name} left from its working preview, ${WORKING_PREVIEW_EDGE} px at most`);
         }
         try {
           setExporting(`Measuring ${step}…`);
