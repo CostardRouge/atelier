@@ -454,6 +454,11 @@ export default function PostEditor({
     [collage, cellCount, lead, resolve, slideFile],
   );
   const cellFile = cellFiles[cellIndex] ?? null;
+  /** What each cell holds, by name — what a drop target says it will replace. */
+  const cellLabels = useMemo(
+    () => cellFiles.map((f) => (f ? f.name.replace(/\.[^.]+$/, '') : null)),
+    [cellFiles],
+  );
   // The selection is one slide's: a new slide starts on its lead.
   const slideKeyForCell = slide.slideId ?? slide.kind;
   useEffect(() => setSelectedCellState(0), [slideKeyForCell]);
@@ -1422,6 +1427,7 @@ export default function PostEditor({
             onMoveCell={moveCell}
             onSwapCells={swapCells}
             onDropAsset={isCta ? undefined : dropAsset}
+            cellLabels={cellLabels}
             onSourceLoaded={onSourceLoaded}
             onRendered={captureThumb}
             onFit={setFitWidth}

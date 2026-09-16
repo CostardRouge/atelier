@@ -95,6 +95,8 @@ export const Icons = {
   // as one control rather than two unrelated arrows.
   undo: icon(<path d="M8 5 4 9l4 4M4 9h11a5 5 0 0 1 0 10h-4" />),
   redo: icon(<path d="m16 5 4 4-4 4M20 9H9a5 5 0 0 0 0 10h4" />),
+  /** One thing taking another's place — a picture dropped on a filled cell. */
+  swap: icon(<path d="M16 3l4 4-4 4M20 7H8M8 21l-4-4 4-4M4 17h12" />),
   /** Playback that starts over at the end — the whole of what is played. */
   loop: icon(<path d="M17 3l3 3-3 3M20 6H8a4 4 0 0 0-4 4v1M7 21l-3-3 3-3M4 18h12a4 4 0 0 0 4-4v-1" />),
   /** Playback that starts over on ONE item — the player's repeat-one. */
