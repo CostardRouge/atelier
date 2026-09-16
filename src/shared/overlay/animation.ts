@@ -57,6 +57,12 @@ export interface AnimStep {
   delay?: number;
   /** `steps` curve only: how many jumps it moves in (2–12, default 4). */
   steps?: number;
+  /**
+   * A PICTURE in a cell only: move (or zoom) the picture inside its mask
+   * rather than the cell itself, so the grid stays still while the picture
+   * arrives in it. Ignored by a text element.
+   */
+  inside?: boolean;
 }
 
 export interface ElementAnimation {

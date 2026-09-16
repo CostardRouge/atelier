@@ -16,6 +16,7 @@ import type { SavedMediaRef } from '../projects/project-types';
 import {
   collageCellAt,
   collageCellCount,
+  collageCellMotions,
   resolveCollage,
   type CollageLead,
   type SlideCollage,
@@ -289,6 +290,11 @@ export interface CollageRender {
   collage: SlideCollage;
   /** Cell by cell, the lead first; a short list leaves the rest empty. */
   items: readonly CollageItem[];
+  /**
+   * The slide's screen time — what the cells' exit is laid against. Absent
+   * (a still, a surface with no clock) means the cells never leave.
+   */
+  seconds?: number | null;
 }
 
 /** A collage's decoded pictures, cell by cell, and one call to free them all. */
@@ -339,10 +345,14 @@ function paintCollage(
   w: number,
   h: number,
   render: CollageRender,
+  timeSeconds: number,
 ): void {
   ctx.fillStyle = render.collage.background;
   ctx.fillRect(0, 0, w, h);
   const cells = resolveCollage(render.collage, w, h);
+  // The cells' entrances and exits at this moment — the engine's own
+  // transform per cell, from the same clock the badge is drawn at.
+  const motions = collageCellMotions(render.collage, cells, { w, h }, timeSeconds, render.seconds ?? null);
   const pictures: (LayoutPicture | null)[] = cells.map((_, i) => {
     const item = render.items[i];
     if (!item?.source || item.source.width <= 0 || item.source.height <= 0) return null;
@@ -358,6 +368,7 @@ function paintCollage(
     picture: (i) => pictures[i] ?? null,
     framing: (i) => render.items[i]?.framing ?? DEFAULT_FRAMING,
     spacing: render.collage.spacing,
+    motion: motions ? (i) => motions[i] ?? null : undefined,
   });
 }
 
@@ -473,7 +484,7 @@ export async function renderBadge(
   ctx.fillRect(0, 0, w, h);
 
   if (opts.collage) {
-    paintCollage(ctx, w, h, opts.collage);
+    paintCollage(ctx, w, h, opts.collage, opts.timeSeconds ?? 0);
   } else if (opts.source && opts.source.width > 0 && opts.source.height > 0) {
     // Grade at the source's own density, THEN frame it: grading the cropped
     // frame would give a different result at every output size (the

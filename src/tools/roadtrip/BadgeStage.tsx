@@ -163,6 +163,8 @@ interface BadgeStageProps {
   collageFiles?: readonly (File | null)[];
   /** Each cell's cube (the slide's grade baked with that cell's develop), the lead first. */
   collageLuts?: readonly (CubeLut | null)[];
+  /** The slide's screen time — what the cells' exit is laid against on the stage. */
+  collageSeconds?: number | null;
   /** The cell the inspector is about; 0 is the lead. Outlined on the stage. */
   selectedCell?: number;
   onSelectCell?: (i: number) => void;
@@ -227,6 +229,7 @@ export default function BadgeStage({
   collage = null,
   collageFiles,
   collageLuts,
+  collageSeconds = null,
   selectedCell = 0,
   onSelectCell,
   onCellFraming,
@@ -697,7 +700,7 @@ export default function BadgeStage({
           grader: i === 0 ? grader : cellGraderFor(i, source, cellLut),
         };
       });
-      collageRender = { collage, items };
+      collageRender = { collage, items, seconds: collageSeconds };
     } else {
       cellRectsRef.current = [];
     }
@@ -751,6 +754,7 @@ export default function BadgeStage({
     graderFor,
     collage,
     collageLuts,
+    collageSeconds,
     cellGraderFor,
     cellSeq,
     lut,

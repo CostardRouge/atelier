@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_FRAMING } from '../media/framing';
 import {
+  collageAnimates,
   collageCellAt,
   collageCellCount,
+  collageCellMotions,
   collageKept,
   collageMediaRefs,
+  collageSettleSeconds,
   createCollage,
+  mirroredExit,
   readCollage,
   resolveCollage,
   retemplateCollage,
@@ -41,6 +45,71 @@ describe('createCollage / readCollage', () => {
     expect(c.cells[0].framing.scale).toBe(2);
     expect(c.cells[1].media).toBeNull();
     expect(c.place).toEqual({ dx: 0, dy: 0, rotation: 0 });
+  });
+});
+
+describe('motion', () => {
+  const frame = { w: 1080, h: 1920 };
+  const enter = {
+    step: { preset: 'fade' as const, duration: 0.5, easing: 'linear' as const },
+    stagger: { each: 0.25, order: 'rows' as const },
+  };
+
+  it('is still without an entrance or an exit, and moves with either', () => {
+    const c = createCollage('grid-2x2')!;
+    expect(collageAnimates(c)).toBe(false);
+    expect(collageCellMotions(c, resolveCollage(c, 1080, 1920), frame, 1, 3)).toBeNull();
+    expect(collageAnimates({ ...c, enter })).toBe(true);
+    expect(collageAnimates({ ...c, exit: { step: enter.step, reverse: true } })).toBe(true);
+    expect(collageAnimates(null)).toBe(false);
+  });
+
+  it('lands a row at a time and settles after the last row plus the step', () => {
+    const c = { ...createCollage('grid-2x2')!, enter };
+    const cells = resolveCollage(c, 1080, 1920);
+    const at = (t: number) => collageCellMotions(c, cells, frame, t, null)!.map((m) => m!.transform.alpha);
+    expect(at(0)).toEqual([0, 0, 0, 0]);
+    expect(at(0.25)).toEqual([expect.closeTo(0.5, 6), expect.closeTo(0.5, 6), 0, 0]);
+    expect(at(1)).toEqual([1, 1, 1, 1]);
+    expect(collageSettleSeconds(c, 1080 / 1920)).toBeCloseTo(0.75);
+    expect(collageSettleSeconds(createCollage('grid-2x2'), 1)).toBe(0);
+  });
+
+  it('lays a staggered exit against the screen time as earlier window ends', () => {
+    const c = { ...createCollage('grid-2x2')!, enter, exit: { step: { ...enter.step, duration: 0.5 }, reverse: true } };
+    const cells = resolveCollage(c, 1080, 1920);
+    // Reverse (last in, first out): the bottom row arrived last, so its window
+    // ends first, at 3 − 0.25; the top row's ends at 3.
+    const at = (t: number) => collageCellMotions(c, cells, frame, t, 3)!.map((m) => m!.transform.alpha);
+    expect(at(2.9)).toEqual([expect.closeTo(0.2, 6), expect.closeTo(0.2, 6), 0, 0]);
+    const fifo = { ...c, exit: { ...c.exit!, reverse: false } };
+    expect(collageCellMotions(fifo, cells, frame, 2.9, 3)!.map((m) => m!.transform.alpha)).toEqual([
+      0,
+      0,
+      expect.closeTo(0.2, 6),
+      expect.closeTo(0.2, 6),
+    ]);
+    expect(at(3.1)).toEqual([0, 0, 0, 0]);
+    // A still (no screen time) never leaves.
+    expect(collageCellMotions(c, cells, frame, 10, null)!.map((m) => m!.transform.alpha)).toEqual([1, 1, 1, 1]);
+  });
+
+  it('mirrors an entrance into an exit travelling back, and reads stored motion', () => {
+    const mirrored = mirroredExit({
+      step: { preset: 'slide', duration: 0.4, easing: 'out', direction: 'up', delay: 1 },
+      stagger: { each: 0.1, order: 'sequence' },
+    });
+    expect(mirrored.step.direction).toBe('down');
+    expect(mirrored.step.delay).toBeUndefined();
+    expect(mirrored.reverse).toBe(true);
+    const read = readCollage({
+      template: 'grid-2x2',
+      enter: { step: { preset: 'scale', duration: 0.3, easing: 'back', inside: true }, stagger: { order: 'size' } },
+      exit: 'nope',
+    })!;
+    expect(read.enter?.step).toMatchObject({ preset: 'scale', easing: 'back', inside: true });
+    expect(read.enter?.stagger.order).toBe('size');
+    expect(read.exit).toBeNull();
   });
 });
 

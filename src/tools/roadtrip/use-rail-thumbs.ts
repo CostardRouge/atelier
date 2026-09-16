@@ -10,7 +10,7 @@ import {
   renderBadge,
   type BadgeSource,
 } from '../../shared/roadtrip/badge-render';
-import { collageMediaRefs } from '../../shared/roadtrip/collage';
+import { collageMediaRefs, collageSettleSeconds } from '../../shared/roadtrip/collage';
 import type { DeckSlide } from '../../shared/roadtrip/deck';
 import type { HookPicture } from '../../shared/roadtrip/hooks/hook-variant';
 import { slideRender } from '../../shared/roadtrip/slide-render';
@@ -254,9 +254,12 @@ export default function useRailThumbs({
                 }
               : null,
           // Past the opener too: a scrub's thumbnail mid-sweep would be
-          // another day's picture standing for this one.
-          timeSeconds:
+          // another day's picture standing for this one — and past a
+          // collage's own entrance on any slide.
+          timeSeconds: Math.max(
             job.slide.kind === 'hook' ? Math.max(settle, job.render.hook?.seconds ?? 0) : 0,
+            collageSettleSeconds(job.slide.collage, aspect),
+          ),
         });
       } finally {
         grader?.dispose();

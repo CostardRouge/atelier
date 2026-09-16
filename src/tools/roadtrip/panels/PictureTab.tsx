@@ -13,6 +13,7 @@ import { ASPECT_PRESETS } from '../../../shared/projects/project-types';
 import type { DeckSlide } from '../../../shared/roadtrip/deck';
 import type { CollageLead, SlideCollage } from '../../../shared/roadtrip/collage';
 import LayoutSection from './LayoutSection';
+import CollageMotionSection from './CollageMotionSection';
 import type { PostBadge, PostSlide, TripPost } from '../../../shared/roadtrip/trip-types';
 import type { SlideRecovery } from '../use-slide-library';
 import type { GradeScope, TripGradeBinding } from '../use-trip-grade';
@@ -294,6 +295,9 @@ export default function PictureTab({
           onUseActive={onUseActiveInCell}
           onClearCell={onClearCell}
         />
+      )}
+      {!isCta && collage && (
+        <CollageMotionSection collage={collage} seconds={slide.seconds} onChange={onChangeCollage} />
       )}
 
       {!isCta && (

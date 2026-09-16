@@ -642,7 +642,12 @@ it, drag to reframe the picture inside it, use the wheel to zoom it, and hold
 (or Alt-drag) onto another cell to swap the two. Every cell keeps its own
 framing and develop; an empty cell shows the layout's background in the
 export, and a smaller layout keeps the extra pictures rather than dropping
-them. Collages are stills for now: a slide holding one is delivered as a PNG.
+them. The Picture tab's **Motion** section lets the cells **arrive** (one
+entrance for all of them, spread by an order — from the centre, row by row,
+the biggest first, shuffled with a kept seed — optionally moving the picture
+inside its cell rather than the cell) and **leave** against the slide's screen
+time; a collage that moves is delivered as a video, one that does not as a
+PNG.
 
 **The badge can cascade.** Instead of a delay typed on each piece, the Look
 tab's **Cascade** gives the whole badge one entrance and spreads it over the

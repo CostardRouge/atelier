@@ -8,6 +8,7 @@ import { hashedMediaRef } from '../../shared/projects/media-identity';
 import {
   collageCellAt,
   collageCellCount,
+  collageSettleSeconds,
   swapCollageCells,
   withCollageCell,
   type CollageLead,
@@ -802,14 +803,20 @@ export default function PostEditor({
   const clipAtRest = !stagePlaying && playhead <= clipRange.start + TRIM_EPSILON;
   const stillAtRest = !deck.playing && deck.local <= TRIM_EPSILON;
   const composedView = isClipSlide ? clipAtRest : stillAtRest;
+  // A collage's cells have an entrance of their own on ANY slide, so a content
+  // slide has a clock too: at rest it shows the cells settled, playing it
+  // shows them arriving and leaving on the piece's transport.
+  const collageSettle = collageSettleSeconds(collage, aspect);
   const badgeTime = !isHook
-    ? 0
+    ? stillAtRest
+      ? collageSettle
+      : deck.local
     : isClipSlide
       ? clipAtRest
-        ? settle
+        ? Math.max(settle, collageSettle)
         : Math.max(0, (playhead - clipRange.start) / slide.speed)
       : stillAtRest
-        ? Math.max(settle, hook.seconds)
+        ? Math.max(settle, hook.seconds, collageSettle)
         : deck.local;
 
   // The opener's ticks, heard while whichever transport is actually driving
@@ -1358,6 +1365,7 @@ export default function PostEditor({
             collage={collage}
             collageFiles={cellFiles}
             collageLuts={collageLuts}
+            collageSeconds={slide.seconds}
             selectedCell={cellIndex}
             onSelectCell={setSelectedCell}
             onCellFraming={setCellFraming}

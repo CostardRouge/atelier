@@ -17,6 +17,7 @@
 
 import { drawFramed, type Framing } from './framing';
 import type { CellRect, LayoutSpacing } from './media-layout';
+import type { AnimDirection, Transform } from '../overlay/animation';
 
 export type Canvas2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -125,12 +126,46 @@ export function tile(
 const PRINT_BORDER = 0.02;
 const PRINT_RADIUS = 0.004;
 
+/**
+ * Where cell `i` is in its entrance or exit at the moment being painted —
+ * the overlay engine's own `Transform` plus how it is applied to a picture.
+ * Null (or absent) paints the cell at rest.
+ */
+export interface CellMotion {
+  transform: Transform;
+  /** The edge a reveal grows from; `right` when unsaid (today's left→right wipe). */
+  direction?: AnimDirection;
+  /** Move the picture inside the mask rather than the cell. */
+  inside?: boolean;
+}
+
 export interface DrawLayoutOptions {
   /** The picture for cell `i`, or null for an empty cell (which draws nothing). */
   picture: (i: number) => LayoutPicture | null;
   /** How cell `i`'s picture sits in it. */
   framing: (i: number) => Framing;
   spacing: LayoutSpacing;
+  /** Cell `i`'s motion at this moment; absent paints every cell at rest. */
+  motion?: (i: number) => CellMotion | null;
+}
+
+/** Clip to the revealed share of a box, growing from `direction`'s far edge. */
+function clipReveal(
+  ctx: Canvas2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  reveal: number,
+  direction: AnimDirection | undefined,
+): void {
+  const r = Math.max(0, Math.min(1, reveal));
+  ctx.beginPath();
+  if (direction === 'left') ctx.rect(x + w * (1 - r), y, w * r, h);
+  else if (direction === 'down') ctx.rect(x, y, w, h * r);
+  else if (direction === 'up') ctx.rect(x, y + h * (1 - r), w, h * r);
+  else ctx.rect(x, y, w * r, h);
+  ctx.clip();
 }
 
 /**
@@ -151,11 +186,17 @@ export function drawLayout(
     const picture = opts.picture(i);
     if (!picture || picture.width <= 0 || picture.height <= 0) return;
     if (cell.w <= 0 || cell.h <= 0) return;
-    drawCell(ctx, short, cell, picture, opts.framing(i), opts.spacing);
+    drawCell(ctx, short, cell, picture, opts.framing(i), opts.spacing, opts.motion?.(i) ?? null);
   });
 }
 
-/** One cell: its mount, its clip, its picture — about the cell's centre so a print can turn. */
+/**
+ * One cell: its mount, its clip, its picture — about the cell's centre so a
+ * print can turn. With a motion, the transform is applied the way the overlay
+ * engine applies it to text (alpha, an offset in short-side fractions, a scale
+ * about the centre, a reveal clip), either to the whole cell or, `inside`, to
+ * the picture behind the cell's mask.
+ */
 export function drawCell(
   ctx: Canvas2D,
   short: number,
@@ -163,13 +204,33 @@ export function drawCell(
   picture: LayoutPicture,
   framing: Framing,
   spacing: LayoutSpacing,
+  motion: CellMotion | null = null,
 ): void {
+  const tr = motion?.transform ?? null;
+  if (tr && (tr.alpha <= 0.001 || tr.reveal <= 0)) return;
   const print = cell.mount === 'print';
   const radius = print ? PRINT_RADIUS * short : spacing.radius * short;
   const border = print ? PRINT_BORDER * short : 0;
+  const inside = Boolean(motion?.inside) && tr !== null;
   ctx.save();
+  if (tr && tr.alpha < 1) ctx.globalAlpha *= tr.alpha;
   ctx.translate(cell.x + cell.w / 2, cell.y + cell.h / 2);
   if (cell.rotation) ctx.rotate((cell.rotation * Math.PI) / 180);
+  if (tr && tr.reveal < 1) {
+    clipReveal(
+      ctx,
+      -cell.w / 2 - border,
+      -cell.h / 2 - border,
+      cell.w + 2 * border,
+      cell.h + border * 3.4,
+      tr.reveal,
+      motion?.direction,
+    );
+  }
+  if (tr && !inside) {
+    ctx.translate(tr.dx * short, tr.dy * short);
+    if (tr.scale !== 1) ctx.scale(tr.scale, tr.scale);
+  }
 
   if (print) {
     // A print's paper, deeper at the foot the way a real one is, with its
@@ -194,6 +255,15 @@ export function drawCell(
   ctx.save();
   roundedRect(ctx, -cell.w / 2, -cell.h / 2, cell.w, cell.h, radius);
   ctx.clip();
+  if (tr && inside) {
+    // Behind the mask the offset is read against the CELL, so a slide travels
+    // the whole cell whatever its size, and a zoom only ever settles from
+    // larger — a picture smaller than its mask would show the ground.
+    const long = Math.max(cell.w, cell.h);
+    ctx.translate(tr.dx * long, tr.dy * long);
+    const s = tr.scale < 1 ? 1 + (1 - tr.scale) : tr.scale;
+    if (s !== 1) ctx.scale(s, s);
+  }
   ctx.translate(-cell.w / 2, -cell.h / 2);
   try {
     drawFramed(ctx, picture.image, picture.width, picture.height, cell.w, cell.h, framing);

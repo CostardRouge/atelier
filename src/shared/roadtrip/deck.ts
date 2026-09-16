@@ -26,7 +26,7 @@ import { OUTRO_SECONDS_DEFAULT } from '../overlay/outro-card';
 import type { SavedMediaRef } from '../projects/project-types';
 import type { BadgeCascade, BadgePieceStyles } from './badge-layout';
 import { clipSpeed } from './hook-video';
-import type { SlideCollage } from './collage';
+import { collageAnimates, type SlideCollage } from './collage';
 import type { SlideMedium, TripDoc, TripGrade, TripPost } from './trip-types';
 import { hookMoves } from './hooks/hook-context';
 
@@ -167,7 +167,9 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
         post.badge.medium,
         // An opener that plays (the scrub) moves the hook exactly as an
         // animated piece does: left as `auto`, it must leave as a video.
-        hookAnimates(post.badge.pieceStyles, post.badge.cascade) || hookMoves(trip, post),
+        hookAnimates(post.badge.pieceStyles, post.badge.cascade) ||
+          hookMoves(trip, post) ||
+          collageAnimates(post.badge.collage),
         post.media?.name ?? null,
       ),
       chosen: post.badge.medium,
@@ -188,9 +190,9 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       grade: slide.grade ?? null,
       collage: slide.collage ?? null,
       caption: slide.caption,
-      // A content slide has nothing animated on it yet; when a caption gains
-      // an animation, that flag is the only thing that changes here.
-      ...resolveSlideMedium(slide.medium, false, slide.media?.name ?? null),
+      // A content slide moves only when its collage's cells do; when a caption
+      // gains an animation, this flag is the only thing that changes here.
+      ...resolveSlideMedium(slide.medium, collageAnimates(slide.collage), slide.media?.name ?? null),
       chosen: slide.medium,
       seconds: slide.seconds,
       speed: isClip(slide.media?.name) ? clipSpeed(slide.videoSpeed) : 1,

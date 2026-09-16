@@ -37,6 +37,10 @@ import {
 } from '../media/media-layout';
 import { developOrNull, type DevelopSettings } from '../develop/develop';
 import type { SavedMediaRef } from '../projects/project-types';
+import { transformAt, type AnimStep } from '../overlay/animation';
+import { normaliseStagger, staggerDelays, staggerRanks, staggerSettle, type Stagger } from '../overlay/stagger';
+import type { CellMotion } from '../media/cell-paint';
+import { readAnimStep } from './badge-layout';
 
 /** One cell after the first: a picture, how it sits, how it is corrected. */
 export interface CollageCell {
@@ -45,6 +49,23 @@ export interface CollageCell {
   develop: DevelopSettings | null;
   /** Where the author moved this print, on a free layout; the template's place otherwise. */
   place: CellPlace;
+}
+
+/** How the cells ARRIVE: one step for all of them, spread by where they sit. */
+export interface CollageEnter {
+  step: AnimStep;
+  stagger: Stagger;
+}
+
+/**
+ * How the cells LEAVE, laid against the slide's screen time. `delay` is an
+ * entrance's alone in the engine, so a staggered exit is expressed as each
+ * cell's WINDOW ending earlier — the last to arrive leaves first when
+ * `reverse` is set, in arrival order otherwise.
+ */
+export interface CollageExit {
+  step: AnimStep;
+  reverse: boolean;
 }
 
 export interface SlideCollage {
@@ -57,6 +78,106 @@ export interface SlideCollage {
   cells: CollageCell[];
   /** Where the SLIDE's own print was moved, on a free layout. */
   place: CellPlace;
+  /** The cells' entrance, or null for cells that are simply there. */
+  enter: CollageEnter | null;
+  /** The cells' exit, or null for cells that stay to the slide's end. */
+  exit: CollageExit | null;
+}
+
+export function defaultCollageEnter(): CollageEnter {
+  return {
+    step: { preset: 'slide', duration: 0.5, easing: 'out-cubic', direction: 'up', distanceFrac: 0.06, inside: true },
+    stagger: { each: 0.1, order: 'center-out' },
+  };
+}
+
+export function defaultCollageExit(): CollageExit {
+  return { step: { preset: 'fade', duration: 0.4, easing: 'in' }, reverse: true };
+}
+
+/** Mirror an entrance into an exit: the same step, travelling back the way it came. */
+export function mirroredExit(enter: CollageEnter): CollageExit {
+  const flip = { up: 'down', down: 'up', left: 'right', right: 'left' } as const;
+  const direction = enter.step.direction ? flip[enter.step.direction] : undefined;
+  return {
+    step: { ...enter.step, delay: undefined, ...(direction ? { direction } : {}) },
+    reverse: true,
+  };
+}
+
+function readEnter(v: unknown): CollageEnter | null {
+  if (!v || typeof v !== 'object') return null;
+  const e = v as Partial<CollageEnter>;
+  if (!e.step || typeof e.step !== 'object') return null;
+  const step = readAnimStep(e.step);
+  if ((e.step as AnimStep).inside === true) step.inside = true;
+  return { step, stagger: normaliseStagger(e.stagger) };
+}
+
+function readExit(v: unknown): CollageExit | null {
+  if (!v || typeof v !== 'object') return null;
+  const e = v as Partial<CollageExit>;
+  if (!e.step || typeof e.step !== 'object') return null;
+  const step = readAnimStep(e.step);
+  if ((e.step as AnimStep).inside === true) step.inside = true;
+  return { step, reverse: e.reverse !== false };
+}
+
+/** True when the cells move at all — what makes a collage slide a video. */
+export function collageAnimates(collage: SlideCollage | null | undefined): boolean {
+  if (!collage) return false;
+  const enter = collage.enter ?? null;
+  const exit = collage.exit ?? null;
+  const moving = (e: { step: AnimStep; stagger?: Stagger } | null) =>
+    Boolean(e && (e.step.preset !== 'none' || (e.stagger && e.stagger.each > 0)));
+  return moving(enter) || Boolean(exit);
+}
+
+/**
+ * Every drawn cell's motion at `t` seconds into the slide, or null for a
+ * collage that does not move. `seconds` is the slide's screen time — what an
+ * exit is laid against; without one, cells that entered stay.
+ */
+export function collageCellMotions(
+  collage: SlideCollage,
+  cells: readonly CellRect[],
+  frame: { w: number; h: number },
+  t: number,
+  seconds: number | null,
+): (CellMotion | null)[] | null {
+  const enter = collage.enter ?? null;
+  const exit = collage.exit ?? null;
+  if (!enter && !exit) return null;
+  const delays = enter ? staggerDelays(cells, frame, enter.stagger) : cells.map(() => 0);
+  let ends: (number | null)[] = cells.map(() => null);
+  if (exit && seconds !== null) {
+    const stagger = enter?.stagger ?? { each: 0, order: 'sequence' as const };
+    const ranks = staggerRanks(cells, frame, stagger.order, stagger.seed ?? 0);
+    const top = Math.max(0, ...ranks);
+    // Reverse: last in, first out — the highest rank's window ends first.
+    ends = ranks.map((r) => seconds - (exit.reverse ? r : top - r) * Math.max(0, stagger.each));
+  }
+  return cells.map((_, i) => {
+    const anim = {
+      in: enter ? { ...enter.step, delay: delays[i] } : null,
+      out: exit && ends[i] !== null ? exit.step : null,
+    };
+    const transform = transformAt(anim, { start: 0, end: ends[i] }, t);
+    const step = t < (delays[i] + (enter?.step.duration ?? 0)) ? enter?.step : exit?.step;
+    return { transform, direction: step?.direction, inside: step?.inside };
+  });
+}
+
+/**
+ * When a collage slide is at rest — the last cell's entrance done. What a
+ * still of it is taken at; 0 with no entrance. Resolved on a frame of the
+ * slide's shape, since the ranks depend on where the cells are.
+ */
+export function collageSettleSeconds(collage: SlideCollage | null | undefined, aspect: number): number {
+  const enter = collage?.enter ?? null;
+  if (!collage || !enter) return 0;
+  const cells = resolveCollage(collage, aspect, 1);
+  return staggerSettle(staggerDelays(cells, { w: aspect, h: 1 }, enter.stagger), enter.step);
 }
 
 /** The suite's frame black — what a stage shows behind a picture that does not cover it. */
@@ -82,6 +203,8 @@ export function createCollage(template: string): SlideCollage | null {
     background: DEFAULT_COLLAGE_BACKGROUND,
     cells: Array.from({ length: Math.max(0, count - 1) }, () => createCollageCell()),
     place: { ...DEFAULT_CELL_PLACE },
+    enter: null,
+    exit: null,
   };
 }
 
@@ -131,6 +254,8 @@ export function readCollage(v: unknown): SlideCollage | null {
       };
     }),
     place: normaliseCellPlace(c.place),
+    enter: readEnter(c.enter),
+    exit: readExit(c.exit),
   };
 }
 

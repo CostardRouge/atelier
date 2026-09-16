@@ -19,6 +19,7 @@ import {
   type BadgeSource,
   type CollageSources,
 } from './badge-render';
+import { collageSettleSeconds } from './collage';
 import { deckSlides, slideFileName, type DeckSlide } from './deck';
 import type { HookPicture } from './hooks/hook-variant';
 import { slideRender } from './slide-render';
@@ -100,11 +101,17 @@ export async function renderDeck(
         // the rail's thumbnails derive it.
         ...slideRender(trip, post, slide, aspect, opts.pictures, opts.exposure),
         source,
+        // A still: the cells at rest, never leaving — no screen time is passed.
         collage: cells && slide.collage ? { collage: slide.collage, items: cells.items } : null,
         collageLuts: cells
           ? cells.items.map((item) => opts.lutFor?.({ ...slide, develop: item.develop }) ?? null)
           : undefined,
-        timeSeconds: slide.kind === 'hook' ? opts.timeSeconds : 0,
+        // Settled: past the badge's entrances on the hook, and past the cells'
+        // own entrance on any slide that holds a collage.
+        timeSeconds: Math.max(
+          slide.kind === 'hook' ? opts.timeSeconds : 0,
+          collageSettleSeconds(slide.collage, aspect),
+        ),
         width: w,
         height: h,
         lut: opts.lutFor?.(slide) ?? null,
