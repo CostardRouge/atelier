@@ -165,6 +165,61 @@ describe('migrateTripDoc — v22 → v23, the camera credit is opt-in', () => {
   });
 });
 
+describe('migrateTripDoc — v24 → v25, the badge may cascade', () => {
+  const v24 = () => {
+    const doc = createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04');
+    const post = createTripPost('reel', '2025-03-27', 'Cliffs');
+    delete (post.badge as Partial<typeof post.badge>).cascade;
+    return { ...doc, version: 24, posts: [post] } as TripDoc;
+  };
+
+  it('keeps every badge on its per-piece entrances', () => {
+    const doc = migrateTripDoc(v24());
+    expect(doc.version).toBe(TRIP_DOC_VERSION);
+    expect(doc.posts[0].badge.cascade).toBeNull();
+  });
+
+  it('keeps a sound cascade and refuses junk', () => {
+    const doc = v24();
+    doc.posts[0].badge.cascade = {
+      step: { preset: 'fade', duration: 0.4, easing: 'out' },
+      stagger: { each: 0.2, order: 'rows' },
+    };
+    const migrated = migrateTripDoc(doc);
+    expect(migrated.posts[0].badge.cascade?.stagger.order).toBe('rows');
+    (doc.posts[0].badge as { cascade?: unknown }).cascade = 'fast';
+    expect(migrateTripDoc(doc).posts[0].badge.cascade).toBeNull();
+  });
+});
+
+describe('migrateTripDoc — v23 → v24, a slide may hold several pictures', () => {
+  const v23 = () => {
+    const doc = createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04');
+    const post = createTripPost('carousel', '2025-03-27', 'Cliffs');
+    post.slides = [createPostSlide(null)];
+    delete (post.badge as Partial<typeof post.badge>).collage;
+    delete (post.slides[0] as Partial<(typeof post.slides)[0]>).collage;
+    return { ...doc, version: 23, posts: [post] } as TripDoc;
+  };
+
+  it('starts every slide on the one picture it always held', () => {
+    const doc = migrateTripDoc(v23());
+    expect(doc.version).toBe(TRIP_DOC_VERSION);
+    expect(doc.posts[0].badge.collage).toBeNull();
+    expect(doc.posts[0].slides[0].collage).toBeNull();
+  });
+
+  it('keeps a sound collage and turns an unknown template into none', () => {
+    const doc = v23();
+    doc.posts[0].badge.collage = { template: 'grid-2x2', cells: [] } as never;
+    (doc.posts[0].slides[0] as { collage?: unknown }).collage = { template: 'from-the-future' };
+    const migrated = migrateTripDoc(doc);
+    expect(migrated.posts[0].badge.collage?.template).toBe('grid-2x2');
+    expect(migrated.posts[0].badge.collage?.cells).toEqual([]);
+    expect(migrated.posts[0].slides[0].collage).toBeNull();
+  });
+});
+
 describe('migrateTripDoc — v21 → v22, every picture may depart', () => {
   /** A v21 trip: a grade on the trip and on the piece, none on a picture. */
   const v21 = () => {

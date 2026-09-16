@@ -10,7 +10,14 @@ import {
   panBy,
   type Framing,
 } from '../../shared/media/framing';
+import { cellAt, type CellRect } from '../../shared/media/media-layout';
 import { boxForId, hitTest, type ElementBox } from '../../shared/overlay/draw-overlays';
+import {
+  collageCellAt,
+  resolveCollage,
+  type CollageLead,
+  type SlideCollage,
+} from '../../shared/roadtrip/collage';
 import type { OverlayElement } from '../../shared/overlay/overlay-types';
 import type { StyleTheme } from '../../shared/overlay/title-styles';
 import { moveBlock } from '../../shared/roadtrip/badge-layout';
@@ -23,6 +30,7 @@ import {
   measureBadge,
   renderBadge,
   type BadgeSource,
+  type CollageItem,
   type QrDraw,
   type RenderBadgeOptions,
 } from '../../shared/roadtrip/badge-render';
@@ -144,6 +152,28 @@ interface BadgeStageProps {
   hookRectFor?: ((frame: { width: number; height: number }) => FrameRect | null) | null;
   /** A drag of the opener: fractions of the frame, incremental. */
   onMoveHook?: (dx: number, dy: number) => void;
+  /**
+   * Several pictures in this slide's frame. `file`, `framing` and `lut` are
+   * then its FIRST cell's; the others come through the three lists below, by
+   * cell index (the lead first, so `collageFiles[0]` is ignored in favour of
+   * `file`). Absent, the stage is the one-picture stage it always was.
+   */
+  collage?: SlideCollage | null;
+  /** The file each drawn cell resolves to, the lead first. */
+  collageFiles?: readonly (File | null)[];
+  /** Each cell's cube (the slide's grade baked with that cell's develop), the lead first. */
+  collageLuts?: readonly (CubeLut | null)[];
+  /** The slide's screen time — what the cells' exit is laid against on the stage. */
+  collageSeconds?: number | null;
+  /** The cell the inspector is about; 0 is the lead. Outlined on the stage. */
+  selectedCell?: number;
+  onSelectCell?: (i: number) => void;
+  /** Reframing cell `i`'s picture: a drag pans, the wheel zooms — at the CELL's size. */
+  onCellFraming?: (i: number, framing: Framing) => void;
+  /** A print dragged on a free layout: fractions of the frame, incremental. */
+  onMoveCell?: (i: number, dx: number, dy: number) => void;
+  /** Two cells' pictures exchanged — a hold, or an Alt-drag, onto another cell. */
+  onSwapCells?: (a: number, b: number) => void;
   onSourceLoaded?: (info: { width: number; height: number; duration: number }) => void;
   /**
    * The width the picture wants from the height it was given (height ×
@@ -196,6 +226,15 @@ export default function BadgeStage({
   onMoveBlock,
   hookRectFor = null,
   onMoveHook,
+  collage = null,
+  collageFiles,
+  collageLuts,
+  collageSeconds = null,
+  selectedCell = 0,
+  onSelectCell,
+  onCellFraming,
+  onMoveCell,
+  onSwapCells,
   onSourceLoaded,
   onRendered,
   onFit,
@@ -265,6 +304,71 @@ export default function BadgeStage({
     // `elements`/`theme` deliberately absent: they drive the paint below, not
     // the decode. `videoTimeSeconds` likewise — see the seek effect.
   }, [file]);
+
+  // The collage's OTHER cells, decoded within the stage's pixel budget like
+  // the lead, and released together. Keyed on the files' identities: a cell
+  // whose file did not change is not re-decoded when another cell's does.
+  const cellSourcesRef = useRef<(BadgeSource | null)[]>([]);
+  const [cellSeq, setCellSeq] = useState(0);
+  const cellFileKey = collage
+    ? (collageFiles ?? []).map((f) => (f ? `${f.name}|${f.size}|${f.lastModified}` : '')).join('\u0001')
+    : '';
+  useEffect(() => {
+    let cancelled = false;
+    const files = collage ? (collageFiles ?? []) : [];
+    const previous = cellSourcesRef.current;
+    const previousFiles = previousFilesRef.current;
+    const next: (BadgeSource | null)[] = files.map(() => null);
+    // Keep what already matches, release the rest.
+    files.forEach((f, i) => {
+      if (i > 0 && f && previousFiles[i] === f && previous[i]) next[i] = previous[i];
+    });
+    previous.forEach((src, i) => {
+      if (src && next[i] !== src) src.release();
+    });
+    cellSourcesRef.current = next;
+    previousFilesRef.current = files.slice();
+    const pending = files.map((f, i) => (i > 0 && f && !next[i] ? i : -1)).filter((i) => i >= 0);
+    if (pending.length === 0) {
+      setCellSeq((n) => n + 1);
+      return;
+    }
+    void Promise.all(
+      pending.map(async (i) => {
+        const f = files[i];
+        if (!f) return;
+        try {
+          const decoded = await loadBadgeSource(f, 0);
+          if (cancelled) {
+            decoded.release();
+            return;
+          }
+          const source = await boundSource(decoded);
+          if (cancelled || cellSourcesRef.current !== next) {
+            source.release();
+            return;
+          }
+          next[i] = source;
+        } catch {
+          // A cell that cannot be decoded is an empty cell, never a failed stage.
+        }
+      }),
+    ).then(() => {
+      if (!cancelled) setCellSeq((n) => n + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // The files' IDENTITIES are the dependency, not the array the caller built.
+  }, [cellFileKey]);
+  const previousFilesRef = useRef<readonly (File | null)[]>([]);
+  useEffect(
+    () => () => {
+      for (const src of cellSourcesRef.current) src?.release();
+      cellSourcesRef.current = [];
+    },
+    [],
+  );
 
   // Move the open clip to the asked-for moment, then repaint. `frameSeq` is
   // what makes the paint wait for the frame: painting on `videoTimeSeconds`
@@ -366,6 +470,13 @@ export default function BadgeStage({
     return hookRectForRef.current({ width: canvas.width, height: canvas.height });
   }, []);
 
+  /** The collage's cells at the canvas's current size, from the last paint. */
+  const cellRectsRef = useRef<CellRect[]>([]);
+  const selectedCellRef = useRef(selectedCell);
+  selectedCellRef.current = selectedCell;
+  const collageRef = useRef(collage);
+  collageRef.current = collage;
+
   /** The dashed outline around the selected element, on the chrome canvas. */
   const drawChrome = useCallback(() => {
     const chrome = chromeRef.current;
@@ -379,6 +490,55 @@ export default function BadgeStage({
     if (!ctx) return;
     const { width: w, height: h } = chrome;
     ctx.clearRect(0, 0, w, h);
+    // The collage's cells: a number on each, a slot where one is empty, the
+    // selected one outlined. Editor chrome only — the paint under it is what
+    // the thumbnail and the export see.
+    if (collageRef.current) {
+      const short = Math.min(w, h);
+      const lead = sourceRef.current;
+      cellRectsRef.current.forEach((c, i) => {
+        const has = i === 0 ? Boolean(lead) : Boolean(cellSourcesRef.current[i]);
+        const isSel = i === selectedCellRef.current && !selectedRef.current;
+        ctx.save();
+        ctx.translate(c.x + c.w / 2, c.y + c.h / 2);
+        if (c.rotation) ctx.rotate((c.rotation * Math.PI) / 180);
+        if (!has) {
+          ctx.fillStyle = 'rgba(147,139,124,0.16)';
+          ctx.fillRect(-c.w / 2, -c.h / 2, c.w, c.h);
+          ctx.setLineDash([short * 0.012, short * 0.01]);
+          ctx.strokeStyle = 'rgba(182,173,156,0.85)';
+          ctx.lineWidth = Math.max(1, short * 0.003);
+          ctx.strokeRect(-c.w / 2 + short * 0.006, -c.h / 2 + short * 0.006, c.w - short * 0.012, c.h - short * 0.012);
+          ctx.setLineDash([]);
+          const u = Math.min(c.w, c.h) * 0.14;
+          ctx.strokeStyle = 'rgba(182,173,156,0.95)';
+          ctx.lineWidth = Math.max(1.2, u * 0.08);
+          ctx.beginPath();
+          ctx.moveTo(-u * 0.8, u * 0.5);
+          ctx.lineTo(-u * 0.2, -u * 0.15);
+          ctx.lineTo(u * 0.2, u * 0.25);
+          ctx.lineTo(u * 0.45, 0);
+          ctx.lineTo(u * 0.8, u * 0.5);
+          ctx.stroke();
+        }
+        if (isSel) {
+          ctx.strokeStyle = '#d9442a';
+          ctx.lineWidth = Math.max(2, short * 0.005);
+          ctx.strokeRect(-c.w / 2, -c.h / 2, c.w, c.h);
+        }
+        const r = Math.max(9, short * 0.026);
+        ctx.fillStyle = isSel ? '#d9442a' : 'rgba(16,15,13,0.66)';
+        ctx.beginPath();
+        ctx.arc(-c.w / 2 + r * 1.3, -c.h / 2 + r * 1.3, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `600 ${r * 1.05}px 'JetBrains Mono', ui-monospace, monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(i + 1), -c.w / 2 + r * 1.3, -c.h / 2 + r * 1.35);
+        ctx.restore();
+      });
+    }
     const sel = selectedRef.current;
     if (!sel) return;
     // The opener is outlined from the rect the variant reports, elements from
@@ -425,6 +585,38 @@ export default function BadgeStage({
     graderRef.current = { lut, w: source.width, h: source.height, grader };
     return grader;
   }, [lut]);
+  // One held grader per collage cell, keyed on its cube and its source size —
+  // the lead's is `graderFor` above. Disposed with the stage.
+  const cellGradersRef = useRef<Map<number, { lut: CubeLut; w: number; h: number; grader: HeldGrader }>>(
+    new Map(),
+  );
+  const cellGraderFor = useCallback(
+    (i: number, source: BadgeSource | null, cellLut: CubeLut | null): HeldGrader | null => {
+      const cur = cellGradersRef.current.get(i);
+      if (!cellLut || !source || source.width <= 0) {
+        cur?.grader.dispose();
+        cellGradersRef.current.delete(i);
+        return null;
+      }
+      if (cur && cur.lut === cellLut && cur.w === source.width && cur.h === source.height) {
+        return cur.grader;
+      }
+      cur?.grader.dispose();
+      const size = stageFrameSize(source.width, source.height);
+      const grader = holdGrades(makeFrameGrader(cellLut, size.w, size.h));
+      cellGradersRef.current.set(i, { lut: cellLut, w: source.width, h: source.height, grader });
+      return grader;
+    },
+    [],
+  );
+  useEffect(
+    () => () => {
+      for (const entry of cellGradersRef.current.values()) entry.grader.dispose();
+      cellGradersRef.current.clear();
+    },
+    [],
+  );
+
   // The frame the held grade was taken from. A clip's element is the same
   // object whatever frame it shows, so every frame the stage is told about
   // (`frameSeq`: a seek landing, a playback tick) is a new picture to grade.
@@ -490,6 +682,28 @@ export default function BadgeStage({
       grader.invalidate();
       gradedSeqRef.current = frameSeq;
     }
+    let collageRender: RenderBadgeOptions['collage'] = null;
+    if (collage) {
+      const rects = resolveCollage(collage, w, h);
+      cellRectsRef.current = rects;
+      const lead: CollageLead = {
+        media: null,
+        framing: framing ?? DEFAULT_FRAMING,
+        develop: null,
+      };
+      const items: CollageItem[] = rects.map((_, i) => {
+        const source = i === 0 ? sourceRef.current : (cellSourcesRef.current[i] ?? null);
+        const cellLut = i === 0 ? lut : (collageLuts?.[i] ?? null);
+        return {
+          source,
+          framing: collageCellAt(lead, collage, i).framing,
+          grader: i === 0 ? grader : cellGraderFor(i, source, cellLut),
+        };
+      });
+      collageRender = { collage, items, seconds: collageSeconds };
+    } else {
+      cellRectsRef.current = [];
+    }
     const opts: RenderBadgeOptions = {
       source: sourceRef.current,
       elements,
@@ -503,6 +717,7 @@ export default function BadgeStage({
       hook,
       elementsAt,
       grader,
+      collage: collageRender,
       ghostId: selectedId,
     };
     void renderBadge(canvas, opts).then(() => {
@@ -537,6 +752,13 @@ export default function BadgeStage({
     longEdge,
     drawChrome,
     graderFor,
+    collage,
+    collageLuts,
+    collageSeconds,
+    cellGraderFor,
+    cellSeq,
+    lut,
+    selectedCell,
   ]);
 
   useEffect(() => () => sourceRef.current?.release(), []);
@@ -549,6 +771,14 @@ export default function BadgeStage({
   framingRef.current = framing;
   const onFramingRef = useRef(onFraming);
   onFramingRef.current = onFraming;
+  const onCellFramingRef = useRef(onCellFraming);
+  onCellFramingRef.current = onCellFraming;
+  /** Cell `i`'s framing as the document has it right now — the lead's is `framing`. */
+  const cellFramingAt = useCallback((i: number): Framing => {
+    const c = collageRef.current;
+    if (i === 0 || !c) return framingRef.current ?? DEFAULT_FRAMING;
+    return c.cells[i - 1]?.framing ?? DEFAULT_FRAMING;
+  }, []);
 
   /**
    * Zooming the picture INSIDE its frame with the wheel. Attached natively and
@@ -565,6 +795,21 @@ export default function BadgeStage({
     const canvas = canvasRef.current;
     if (!canvas || !onFraming) return;
     const onWheel = (e: WheelEvent) => {
+      const c = collageRef.current;
+      if (c && onCellFramingRef.current) {
+        const rect = canvas.getBoundingClientRect();
+        const px = (e.clientX - rect.left) * (canvas.width / rect.width);
+        const py = (e.clientY - rect.top) * (canvas.height / rect.height);
+        const i = cellAt(cellRectsRef.current, px, py);
+        if (i < 0) return;
+        const src = i === 0 ? sourceRef.current : cellSourcesRef.current[i];
+        if (!src) return;
+        e.preventDefault();
+        const cf = cellFramingAt(i);
+        const scale = Math.min(MAX_FRAMING_SCALE, Math.max(1, cf.scale * Math.exp(-e.deltaY / 400)));
+        if (scale !== cf.scale) onCellFramingRef.current(i, { ...cf, scale });
+        return;
+      }
       const source = sourceRef.current;
       if (!source) return;
       e.preventDefault();
@@ -578,7 +823,7 @@ export default function BadgeStage({
     };
     canvas.addEventListener('wheel', onWheel, { passive: false });
     return () => canvas.removeEventListener('wheel', onWheel);
-  }, [onFraming]);
+  }, [onFraming, cellFramingAt]);
   // Where a press landed, in CSS pixels, and on what — so a release can tell
   // a tap from a drag.
   const press = useRef<{ id: string; x: number; y: number } | null>(null);
@@ -592,6 +837,20 @@ export default function BadgeStage({
       }
     | { kind: 'picture'; lastPx: number; lastPy: number }
     | { kind: 'hook'; lastPx: number; lastPy: number }
+    | {
+        kind: 'cell';
+        i: number;
+        startPx: number;
+        startPy: number;
+        lastPx: number;
+        lastPy: number;
+        /** What the drag became: nothing yet, a reframe, a print moving, or a swap. */
+        mode: 'pending' | 'pan' | 'move' | 'swap';
+        /** The cell under the pointer while swapping. */
+        over: number;
+        shift: boolean;
+        timer: number;
+      }
     | null
   >(null);
 
@@ -645,14 +904,48 @@ export default function BadgeStage({
       }
       onSelect(null);
       press.current = null;
+      // A collage: the cell under the pointer is what the press is about. A
+      // hold becomes a swap; moving becomes a reframe (or, on a free layout,
+      // moving the print itself).
+      if (collageRef.current) {
+        const i = cellAt(cellRectsRef.current, pt.px, pt.py);
+        if (i < 0) return;
+        onSelectCell?.(i);
+        const d = {
+          kind: 'cell' as const,
+          i,
+          startPx: pt.px,
+          startPy: pt.py,
+          lastPx: pt.px,
+          lastPy: pt.py,
+          mode: e.altKey && onSwapCells ? ('swap' as const) : ('pending' as const),
+          over: i,
+          shift: e.shiftKey,
+          timer: 0,
+        };
+        if (onSwapCells) {
+          d.timer = window.setTimeout(() => {
+            if (drag.current === d && d.mode === 'pending') {
+              d.mode = 'swap';
+              setSwapping(true);
+            }
+          }, 420);
+        }
+        drag.current = d;
+        if (d.mode === 'swap') setSwapping(true);
+        canvasRef.current?.setPointerCapture(e.pointerId);
+        return;
+      }
       // Nothing under the pointer at all: the gesture is about the PICTURE.
       if (onFraming) {
         drag.current = { kind: 'picture', lastPx: pt.px, lastPy: pt.py };
         canvasRef.current?.setPointerCapture(e.pointerId);
       }
     },
-    [onSelect, blockAnchor, onMoveBlock, hookRectNow, onMoveHook, onFraming, toPixels],
+    [onSelect, blockAnchor, onMoveBlock, hookRectNow, onMoveHook, onFraming, toPixels, onSelectCell, onSwapCells],
   );
+  /** A swap is under way: the cursor says so. */
+  const [swapping, setSwapping] = useState(false);
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent) => {
@@ -666,6 +959,39 @@ export default function BadgeStage({
             hitTest(boxesRef.current, pt.px, pt.py) !== null || inRect(hookRectNow(), pt.px, pt.py),
           );
         }
+        return;
+      }
+      if (d.kind === 'cell') {
+        const dpr = canvas.width / canvas.getBoundingClientRect().width;
+        if (d.mode === 'pending' && Math.hypot(pt.px - d.startPx, pt.py - d.startPy) > 6 * dpr) {
+          window.clearTimeout(d.timer);
+          const free = cellRectsRef.current[d.i]?.mount === 'print';
+          d.mode = free && !d.shift && onMoveCell ? 'move' : 'pan';
+        }
+        if (d.mode === 'swap') {
+          d.over = cellAt(cellRectsRef.current, pt.px, pt.py);
+        } else if (d.mode === 'move') {
+          onMoveCell?.(d.i, (pt.px - d.lastPx) / canvas.width, (pt.py - d.lastPy) / canvas.height);
+        } else if (d.mode === 'pan') {
+          const cell = cellRectsRef.current[d.i];
+          const src = d.i === 0 ? sourceRef.current : cellSourcesRef.current[d.i];
+          if (cell && src && onCellFraming) {
+            // The delta in the CELL's own axes (a print may be turned), then
+            // `panBy` at the cell's size: the pan is a fraction of the cell's
+            // long edge, so it holds at any export size.
+            const a = (-cell.rotation * Math.PI) / 180;
+            const mx = pt.px - d.lastPx;
+            const my = pt.py - d.lastPy;
+            const lx = mx * Math.cos(a) - my * Math.sin(a);
+            const ly = mx * Math.sin(a) + my * Math.cos(a);
+            onCellFraming(
+              d.i,
+              panBy(cellFramingAt(d.i), src.width, src.height, cell.w, cell.h, lx, ly),
+            );
+          }
+        }
+        d.lastPx = pt.px;
+        d.lastPy = pt.py;
         return;
       }
       if (d.kind === 'hook') {
@@ -706,12 +1032,21 @@ export default function BadgeStage({
       );
       onMoveBlock?.(next.x, next.y);
     },
-    [onSelect, onMoveBlock, onMoveHook, hookRectNow, onFraming, framing, toPixels],
+    [onSelect, onMoveBlock, onMoveHook, hookRectNow, onFraming, framing, toPixels, onMoveCell, onCellFraming, cellFramingAt],
   );
 
   const onPointerUp = useCallback((e: React.PointerEvent) => {
     const p = press.current;
     press.current = null;
+    const d = drag.current;
+    if (d?.kind === 'cell') {
+      window.clearTimeout(d.timer);
+      if (d.mode === 'swap' && d.over >= 0 && d.over !== d.i) {
+        onSwapCellsRef.current?.(d.i, d.over);
+        onSelectCellRef.current?.(d.over);
+      }
+      setSwapping(false);
+    }
     // 4px, the threshold every other press-or-drag surface in the suite uses.
     if (p && Math.abs(e.clientX - p.x) <= 4 && Math.abs(e.clientY - p.y) <= 4) {
       onActivate?.(p.id);
@@ -726,9 +1061,18 @@ export default function BadgeStage({
     drag.current = null;
   }, [onActivate]);
 
+  const onSwapCellsRef = useRef(onSwapCells);
+  onSwapCellsRef.current = onSwapCells;
+  const onSelectCellRef = useRef(onSelectCell);
+  onSelectCellRef.current = onSelectCell;
+
   const cursor = !onSelect
     ? ''
-    : hovering
+    : swapping
+      ? 'cursor-copy'
+      : collage
+        ? 'cursor-grab active:cursor-grabbing'
+        : hovering
       ? blockAnchor
         ? 'cursor-grab active:cursor-grabbing'
         : 'cursor-pointer'

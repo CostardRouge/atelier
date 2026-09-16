@@ -24,8 +24,9 @@ import { DEFAULT_FRAMING, normaliseFraming, type Framing } from '../media/framin
 import type { DevelopSettings } from '../develop/develop';
 import { OUTRO_SECONDS_DEFAULT } from '../overlay/outro-card';
 import type { SavedMediaRef } from '../projects/project-types';
-import type { BadgePieceStyles } from './badge-layout';
+import type { BadgeCascade, BadgePieceStyles } from './badge-layout';
 import { clipSpeed } from './hook-video';
+import { collageAnimates, type SlideCollage } from './collage';
 import type { SlideMedium, TripDoc, TripGrade, TripPost } from './trip-types';
 import { hookMoves } from './hooks/hook-context';
 
@@ -76,6 +77,11 @@ export interface DeckSlide {
    * asks it for the cube rather than reading this.
    */
   grade: TripGrade | null;
+  /**
+   * Several pictures in this slide's frame, or null for one. `media`,
+   * `framing` and `develop` above are its first cell (`collage.ts`).
+   */
+  collage: SlideCollage | null;
   /** The author's own line over a content picture. */
   caption: string;
   /** What this slide is delivered as, `auto` already resolved. */
@@ -135,9 +141,9 @@ export function resolveSlideMedium(
   return { medium: 'image', reason: 'plain' };
 }
 
-/** True when any badge piece carries an animation — what makes a hook move. */
-export function hookAnimates(styles: BadgePieceStyles): boolean {
-  return Object.values(styles).some((style) => Boolean(style?.animation));
+/** True when any badge piece carries an animation, or the pieces cascade — what makes a hook move. */
+export function hookAnimates(styles: BadgePieceStyles, cascade?: BadgeCascade | null): boolean {
+  return Boolean(cascade) || Object.values(styles).some((style) => Boolean(style?.animation));
 }
 
 /**
@@ -155,12 +161,15 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       framing: normaliseFraming(post.badge.framing),
       develop: post.badge.develop ?? null,
       grade: post.badge.grade ?? null,
+      collage: post.badge.collage ?? null,
       caption: '',
       ...resolveSlideMedium(
         post.badge.medium,
         // An opener that plays (the scrub) moves the hook exactly as an
         // animated piece does: left as `auto`, it must leave as a video.
-        hookAnimates(post.badge.pieceStyles) || hookMoves(trip, post),
+        hookAnimates(post.badge.pieceStyles, post.badge.cascade) ||
+          hookMoves(trip, post) ||
+          collageAnimates(post.badge.collage),
         post.media?.name ?? null,
       ),
       chosen: post.badge.medium,
@@ -179,10 +188,11 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       framing: normaliseFraming(slide.framing),
       develop: slide.develop ?? null,
       grade: slide.grade ?? null,
+      collage: slide.collage ?? null,
       caption: slide.caption,
-      // A content slide has nothing animated on it yet; when a caption gains
-      // an animation, that flag is the only thing that changes here.
-      ...resolveSlideMedium(slide.medium, false, slide.media?.name ?? null),
+      // A content slide moves only when its collage's cells do; when a caption
+      // gains an animation, this flag is the only thing that changes here.
+      ...resolveSlideMedium(slide.medium, collageAnimates(slide.collage), slide.media?.name ?? null),
       chosen: slide.medium,
       seconds: slide.seconds,
       speed: isClip(slide.media?.name) ? clipSpeed(slide.videoSpeed) : 1,
@@ -204,6 +214,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       develop: null,
       // The closing card is drawn, not photographed: nothing to grade.
       grade: null,
+      collage: null,
       caption: '',
       // The closing card carries no picture and nothing animated, so it is a
       // still — and, inside a reel, the tail the Studio already appends, at

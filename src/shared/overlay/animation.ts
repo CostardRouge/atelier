@@ -14,6 +14,8 @@
  * rises exactly as far in a 480px preview and a 4K export.
  */
 
+import { easeAt as curveEaseAt, type EasingId } from '../motion/easing';
+
 /**
  * How an element enters or leaves.
  * - `none`     it simply appears / disappears (a hard cut);
@@ -29,7 +31,12 @@ export type AnimPreset = 'none' | 'fade' | 'slide' | 'scale' | 'typewriter' | 'w
  *  where it comes back from on the way in. */
 export type AnimDirection = 'up' | 'down' | 'left' | 'right';
 
-export type Easing = 'linear' | 'in' | 'out' | 'in-out';
+/**
+ * Any curve of the shared registry (`shared/motion/easing.ts`). The four
+ * quadratics were the whole list until 2026-09-16; the rest were added as
+ * string ids, so no stored document changes shape.
+ */
+export type Easing = EasingId;
 
 export interface AnimStep {
   preset: AnimPreset;
@@ -48,6 +55,14 @@ export interface AnimStep {
    * always laid against the window's end.
    */
   delay?: number;
+  /** `steps` curve only: how many jumps it moves in (2–12, default 4). */
+  steps?: number;
+  /**
+   * A PICTURE in a cell only: move (or zoom) the picture inside its mask
+   * rather than the cell itself, so the grid stays still while the picture
+   * arrives in it. Ignored by a text element.
+   */
+  inside?: boolean;
 }
 
 export interface ElementAnimation {
@@ -110,23 +125,17 @@ export function defaultStep(preset: AnimPreset = 'fade', duration = 0.5): AnimSt
   return { preset, duration, easing: 'out' };
 }
 
-function clamp01(v: number): number {
-  return v < 0 ? 0 : v > 1 ? 1 : v;
+/**
+ * Eased progress. `out` decelerates (the arrival most titles want). The curves
+ * themselves live in `shared/motion/easing.ts`, the registry the openers read
+ * too, so a curve means the same thing on a badge and on a moving head.
+ */
+export function easeAt(easing: Easing, p: number, steps?: number): number {
+  return curveEaseAt(easing, p, steps);
 }
 
-/** Eased progress. `out` decelerates (the arrival most titles want). */
-export function easeAt(easing: Easing, p: number): number {
-  const t = clamp01(p);
-  switch (easing) {
-    case 'in':
-      return t * t;
-    case 'out':
-      return 1 - (1 - t) * (1 - t);
-    case 'in-out':
-      return t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t);
-    default:
-      return t;
-  }
+function clamp01(v: number): number {
+  return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
 /**
@@ -169,7 +178,9 @@ function stepTransform(step: AnimStep, e: number, phase: 'in' | 'out'): Transfor
   // `k` is the distance from the resting state: 1 at the far end of the
   // animation, 0 once the element sits where it was placed.
   const k = phase === 'in' ? 1 - e : e;
-  const alpha = step.preset === 'none' ? 1 : 1 - k;
+  // An overshooting curve takes `k` below 0: a scale or an offset follows it
+  // past its rest, an opacity never gets brighter than 1.
+  const alpha = step.preset === 'none' ? 1 : clamp01(1 - k);
   const t: Transform = { alpha, dx: 0, dy: 0, scale: 1, reveal: 1, revealSteps: false };
 
   if (step.preset === 'slide') {
@@ -193,7 +204,7 @@ function stepTransform(step: AnimStep, e: number, phase: 'in' | 'out'): Transfor
     const from = step.scaleFrom ?? DEFAULT_SCALE_FROM;
     t.scale = 1 + (from - 1) * k;
   } else if (step.preset === 'typewriter' || step.preset === 'wipe') {
-    t.reveal = 1 - k;
+    t.reveal = clamp01(1 - k);
     t.revealSteps = step.preset === 'typewriter';
     // A reveal carries the whole statement: fading it as well would make the
     // last characters arrive twice as slowly as the first.
@@ -224,12 +235,12 @@ export function transformAt(
   if (anim?.in && t < ph.inEnd) {
     const span = ph.inEnd - ph.inStart;
     const p = span <= 0 ? 1 : (t - ph.inStart) / span;
-    return stepTransform(anim.in, easeAt(anim.in.easing, p), 'in');
+    return stepTransform(anim.in, easeAt(anim.in.easing, p, anim.in.steps), 'in');
   }
   if (anim?.out && ph.end != null && t >= ph.outStart) {
     const span = ph.end - ph.outStart;
     const p = span <= 0 ? 1 : (t - ph.outStart) / span;
-    return stepTransform(anim.out, easeAt(anim.out.easing, p), 'out');
+    return stepTransform(anim.out, easeAt(anim.out.easing, p, anim.out.steps), 'out');
   }
   return IDENTITY;
 }

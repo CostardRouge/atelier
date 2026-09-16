@@ -1,5 +1,6 @@
-import type { AnimPreset, AnimStep, Easing } from '../../shared/overlay/animation';
+import type { AnimPreset, AnimStep } from '../../shared/overlay/animation';
 import { defaultStep } from '../../shared/overlay/animation';
+import { CURVES, DEFAULT_STEPS, EASING_IDS, MAX_STEPS, MIN_STEPS } from '../../shared/motion/easing';
 import type { BadgePieceStyle } from '../../shared/roadtrip/badge-layout';
 import { FieldRow, RangeField, SelectField, ToggleField } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
@@ -27,7 +28,15 @@ const PRESETS: { id: AnimPreset; label: string }[] = [
   { id: 'wipe', label: 'Wipe' },
 ];
 
-const EASINGS: Easing[] = ['linear', 'in', 'out', 'in-out'];
+/** Every curve of the shared registry (`shared/motion/easing.ts`), by its own name. */
+const EASINGS = EASING_IDS.map((id) => ({
+  id,
+  label: CURVES[id].overshoots
+    ? `${CURVES[id].label} — overshoots`
+    : CURVES[id].stepped
+      ? `${CURVES[id].label} — in jumps`
+      : CURVES[id].label,
+}));
 
 /**
  * One optional colour: the switch decides whether the colour exists at all,
@@ -64,14 +73,21 @@ function OptionalColor({
   );
 }
 
-function StepRows({
+/**
+ * One animation step as inspector rows — the preset, its length, its curve,
+ * its direction. Shared with the badge's cascade, which derives every delay
+ * and so hides the Delay row.
+ */
+export function StepRows({
   which,
   step,
   onChange,
+  hideDelay = false,
 }: {
   which: 'In' | 'Out';
   step: AnimStep | null | undefined;
   onChange: (step: AnimStep | null) => void;
+  hideDelay?: boolean;
 }) {
   const preset = step?.preset ?? 'none';
   return (
@@ -99,7 +115,7 @@ function StepRows({
               format={(v) => `${v.toFixed(2)} s`}
             />
           </FieldRow>
-          {which === 'In' && (
+          {which === 'In' && !hideDelay && (
             <FieldRow label="Delay">
               <RangeField
                 label="In delay"
@@ -117,9 +133,22 @@ function StepRows({
               label={`${which} easing`}
               value={step.easing}
               onChange={(easing) => onChange({ ...step, easing })}
-              options={EASINGS.map((e) => ({ id: e, label: e }))}
+              options={EASINGS}
             />
           </FieldRow>
+          {step.easing === 'steps' && (
+            <FieldRow label="Steps">
+              <RangeField
+                label={`${which} steps`}
+                min={MIN_STEPS}
+                max={MAX_STEPS}
+                step={1}
+                value={step.steps ?? DEFAULT_STEPS}
+                onChange={(steps) => onChange({ ...step, steps })}
+                format={(v) => `${v}`}
+              />
+            </FieldRow>
+          )}
           {step.preset === 'slide' && (
             <FieldRow label="From">
               <SelectField

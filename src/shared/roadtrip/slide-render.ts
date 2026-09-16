@@ -133,6 +133,7 @@ export function slideRender(
           aspect,
           post.badge.pieceStyles,
           post.badge.durationSeconds,
+          post.badge.cascade,
         )
       : [],
     theme: trip.theme,
@@ -153,6 +154,7 @@ export function slideRender(
       aspect,
       post.badge.pieceStyles,
       post.badge.durationSeconds,
+      post.badge.cascade,
     ),
   };
 }

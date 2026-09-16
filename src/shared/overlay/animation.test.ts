@@ -121,6 +121,35 @@ describe('slide and scale', () => {
   });
 });
 
+describe('overshoot and steps', () => {
+  const open = { start: 0, end: null };
+
+  it('lets a scale overshoot its rest on back, and clamps the fade', () => {
+    const anim: ElementAnimation = {
+      in: { preset: 'scale', duration: 1, easing: 'back', scaleFrom: 0.4 },
+    };
+    let peak = 0;
+    for (let i = 0; i <= 40; i++) {
+      const t = transformAt(anim, open, i / 40);
+      peak = Math.max(peak, t.scale);
+      expect(t.alpha).toBeLessThanOrEqual(1);
+      expect(t.alpha).toBeGreaterThanOrEqual(0);
+    }
+    expect(peak).toBeGreaterThan(1.02);
+    expect(isIdentity(transformAt(anim, open, 1))).toBe(true);
+  });
+
+  it('moves a fade in whole jumps on steps', () => {
+    const anim: ElementAnimation = {
+      in: { preset: 'fade', duration: 1, easing: 'steps', steps: 4 },
+    };
+    expect(transformAt(anim, open, 0.1).alpha).toBe(0);
+    expect(transformAt(anim, open, 0.3).alpha).toBe(0.25);
+    expect(transformAt(anim, open, 0.8).alpha).toBe(0.75);
+    expect(isIdentity(transformAt(anim, open, 1))).toBe(true);
+  });
+});
+
 describe('phasesFor', () => {
   it('lays the exit against the window end', () => {
     const ph = phasesFor({ start: 2, end: 10 }, { in: fadeIn, out: fadeOut });

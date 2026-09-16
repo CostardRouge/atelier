@@ -240,7 +240,9 @@ show in landscape. They are ordinary overlay elements — same fonts, same style
 theme, same dragging — placed in a **scene**: one shared window they all live
 in, and leave together. Inside it each element carries its own offset, so a
 subtitle can land half a second after the title; move the scene and the whole
-stagger moves with it. The scene can lay a **veil** over the picture (colour,
+stagger moves with it — or let the scene **cascade** its elements by where
+they sit (top to bottom, from the centre, the largest first, shuffled with a
+kept seed), added to each one's own offset. The scene can lay a **veil** over the picture (colour,
 strength, fade) so a title reads over any rush, and can **hold the rest of the
 deck back** while it plays, fading the telemetry HUD in when it ends — the HUD
 "boots up" after the hook.
@@ -633,6 +635,30 @@ appears where you asked for one: **Whole** shows the entire picture with
 **black bars** where it falls short of the frame, and a drag slides it along
 them. The preview, the PNG deck and the burned-in hook clip all draw through
 the same transform. Each picture of a carousel is framed on its own.
+
+**A slide can hold several pictures.** The Picture tab's **Layout** section
+offers grids, stacks, bentos, insets and scattered prints; the slide's own
+picture is always the first cell, and the others are filled from the Library,
+which follows whichever cell is selected. Click a cell on the stage to select
+it, drag to reframe the picture inside it, use the wheel to zoom it, and hold
+(or Alt-drag) onto another cell to swap the two. Every cell keeps its own
+framing and develop; an empty cell shows the layout's background in the
+export, and a smaller layout keeps the extra pictures rather than dropping
+them. The Picture tab's **Motion** section lets the cells **arrive** (one
+entrance for all of them, spread by an order — from the centre, row by row,
+the biggest first, shuffled with a kept seed — optionally moving the picture
+inside its cell rather than the cell) and **leave** against the slide's screen
+time; a collage that moves is delivered as a video, one that does not as a
+PNG.
+
+**The badge can cascade.** Instead of a delay typed on each piece, the Look
+tab's **Cascade** gives the whole badge one entrance and spreads it over the
+pieces in an order — top to bottom, the numeral first, shuffled once with a
+seed that is kept, so the export lands exactly as the preview did. Every
+entrance and exit, on a badge piece or a Studio title, can now travel on more
+curves: the four eases, their cubic and exponential cousins, **Back** and
+**Spring** (which overshoot before they rest) and **Steps** (which moves in
+jumps, like stop-motion).
 
 **The picture can be helped.** A bright sky exactly where the hook sits is the
 normal case, so up to four **shades** can be laid over it. One shade is a

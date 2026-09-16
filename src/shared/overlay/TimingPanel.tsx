@@ -7,7 +7,8 @@
  * only — the legacy overlay page has no playhead origin to count from.
  */
 
-import type { AnimDirection, AnimPreset, AnimStep, Easing } from './animation';
+import type { AnimDirection, AnimPreset, AnimStep } from './animation';
+import { CURVES, DEFAULT_STEPS, EASING_IDS, MAX_STEPS, MIN_STEPS } from '../motion/easing';
 import type { OverlayElement } from './overlay-types';
 import type { Scene } from './scenes';
 import Button from '../ui/Button';
@@ -38,12 +39,15 @@ const DIRECTIONS: { value: AnimDirection; label: string }[] = [
   { value: 'right', label: 'Right' },
 ];
 
-const EASINGS: { value: Easing; label: string }[] = [
-  { value: 'out', label: 'Ease out' },
-  { value: 'in', label: 'Ease in' },
-  { value: 'in-out', label: 'Ease in-out' },
-  { value: 'linear', label: 'Linear' },
-];
+/** Every curve of the shared registry, the overshooting ones said so. */
+const EASINGS = EASING_IDS.map((id) => ({
+  id,
+  label: CURVES[id].overshoots
+    ? `${CURVES[id].label} — overshoots`
+    : CURVES[id].stepped
+      ? `${CURVES[id].label} — in jumps`
+      : CURVES[id].label,
+}));
 
 function defaultFor(phase: 'in' | 'out'): AnimStep {
   return { preset: 'fade', duration: phase === 'in' ? 0.5 : 0.4, easing: phase === 'in' ? 'out' : 'in' };
@@ -87,9 +91,22 @@ function StepControls({
               label="Curve"
               value={step.easing}
               onChange={(easing) => onChange({ ...step, easing })}
-              options={EASINGS.map((c) => ({ id: c.value, label: c.label }))}
+              options={EASINGS}
             />
           </FieldRow>
+          {step.easing === 'steps' && (
+            <FieldRow label="Steps">
+              <RangeField
+                label="Steps"
+                min={MIN_STEPS}
+                max={MAX_STEPS}
+                step={1}
+                value={step.steps ?? DEFAULT_STEPS}
+                onChange={(steps) => onChange({ ...step, steps })}
+                format={(v) => `${v}`}
+              />
+            </FieldRow>
+          )}
           {step.preset === 'slide' && (
             <>
               <FieldRow label="Direction">

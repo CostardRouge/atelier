@@ -16,6 +16,7 @@ import { describeDevelop, type DevelopSettings } from './develop';
  */
 export default function DevelopSection({
   id,
+  badge,
   info,
   develop,
   canOpen,
@@ -25,6 +26,8 @@ export default function DevelopSection({
 }: {
   /** The section's id, which keeps its fold remembered per editor. */
   id: string;
+  /** A small tag after the title — which cell of a collage the row is about. */
+  badge?: ReactNode;
   info: ReactNode;
   develop: DevelopSettings | null;
   /** A picture to develop is in hand. */
@@ -34,7 +37,7 @@ export default function DevelopSection({
   onReset: () => void;
 }) {
   return (
-    <InspectorSection id={id} title="Develop" info={info}>
+    <InspectorSection id={id} title="Develop" badge={badge} info={info}>
       <FieldRow label="Correction">
         <span
           className={`flex-1 min-w-0 truncate font-mono text-xs ${develop ? 'text-ink-soft' : 'text-muted'}`}

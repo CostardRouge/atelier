@@ -11,6 +11,9 @@ import {
 } from '../../../shared/media/framing';
 import { ASPECT_PRESETS } from '../../../shared/projects/project-types';
 import type { DeckSlide } from '../../../shared/roadtrip/deck';
+import type { CollageLead, SlideCollage } from '../../../shared/roadtrip/collage';
+import LayoutSection from './LayoutSection';
+import CollageMotionSection from './CollageMotionSection';
 import type { PostBadge, PostSlide, TripPost } from '../../../shared/roadtrip/trip-types';
 import type { SlideRecovery } from '../use-slide-library';
 import type { GradeScope, TripGradeBinding } from '../use-trip-grade';
@@ -75,6 +78,22 @@ interface PictureTabProps {
   onOpenDevelop: () => void;
   /** Back to as shot. */
   onResetDevelop: () => void;
+  /** Several pictures in this slide's frame, or null for one. */
+  collage: SlideCollage | null;
+  /** The slide's own picture, framing and develop — the collage's first cell. */
+  lead: CollageLead;
+  /** The cell the framing and develop above are about; 0 is the slide's own. */
+  selectedCell: number;
+  onSelectCell: (i: number) => void;
+  /** The Library's ticked picture. */
+  activeFile: File | null;
+  /** Every drawn cell's file, the lead first. */
+  cellFiles: readonly (File | null)[];
+  /** The selected cell's file — what the File row and the develop sheet are about. */
+  cellFile: File | null;
+  onChangeCollage: (collage: SlideCollage | null) => void;
+  onUseActiveInCell: () => void;
+  onClearCell: () => void;
 }
 
 /**
@@ -156,10 +175,22 @@ export default function PictureTab({
   develop,
   onOpenDevelop,
   onResetDevelop,
+  collage,
+  lead,
+  selectedCell,
+  onSelectCell,
+  activeFile,
+  cellFiles,
+  cellFile,
+  onChangeCollage,
+  onUseActiveInCell,
+  onClearCell,
 }: PictureTabProps) {
   const isHook = slide.kind === 'hook';
   const isCta = slide.kind === 'cta';
   const { stack, scope } = grade;
+  /** The tag the per-cell sections wear when the inspector is about a later cell. */
+  const cellBadge = collage && selectedCell > 0 ? `Cell ${selectedCell + 1}` : undefined;
 
   return (
     <div className="flex flex-col">
@@ -208,7 +239,9 @@ export default function PictureTab({
                 ) : undefined
               }
             >
-              <Readout muted={!slideFile}>{slideFile?.name ?? slide.media?.name ?? 'None'}</Readout>
+              <Readout muted={!(collage ? cellFile : slideFile)}>
+                {collage ? (cellFile?.name ?? 'None') : (slideFile?.name ?? slide.media?.name ?? 'None')}
+              </Readout>
             </FieldRow>
             {/* The filmstrip moves the IN point and keeps the slide's length —
                 it slides the whole stretch along the clip. The bar under the
@@ -248,10 +281,30 @@ export default function PictureTab({
         />
       )}
 
+      {/* Several pictures in the frame. Above the framing because the framing
+          and the develop below follow the cell selected here (or on the stage). */}
+      {!isCta && (
+        <LayoutSection
+          collage={collage}
+          lead={lead}
+          selectedCell={selectedCell}
+          onSelectCell={onSelectCell}
+          activeFile={activeFile}
+          cellFiles={cellFiles}
+          onChange={onChangeCollage}
+          onUseActive={onUseActiveInCell}
+          onClearCell={onClearCell}
+        />
+      )}
+      {!isCta && collage && (
+        <CollageMotionSection collage={collage} seconds={slide.seconds} onChange={onChangeCollage} />
+      )}
+
       {!isCta && (
         <InspectorSection
           id="piece.framing"
           title="Framing"
+          badge={cellBadge}
           info={
             <>
               <p>
@@ -385,6 +438,7 @@ export default function PictureTab({
       {!isCta && (
         <DevelopSection
           id="piece.develop"
+          badge={cellBadge}
           info={
             <p>
               This slide’s own correction — exposure, tone, colour — applied before the
@@ -393,8 +447,8 @@ export default function PictureTab({
             </p>
           }
           develop={develop}
-          canOpen={Boolean(slideFile)}
-          openTitle={slideFile ? 'Open the Develop sheet' : 'Tick a picture first'}
+          canOpen={Boolean(collage ? cellFile : slideFile)}
+          openTitle={(collage ? cellFile : slideFile) ? 'Open the Develop sheet' : 'Tick a picture first'}
           onOpen={onOpenDevelop}
           onReset={onResetDevelop}
         />

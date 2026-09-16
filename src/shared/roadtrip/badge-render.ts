@@ -10,7 +10,18 @@
  */
 
 import type { CubeLut } from '../lib/cube-parser';
+import { drawLayout, type LayoutPicture } from '../media/cell-paint';
 import { DEFAULT_FRAMING, drawFramed, type Framing } from '../media/framing';
+import type { SavedMediaRef } from '../projects/project-types';
+import {
+  collageCellAt,
+  collageCellCount,
+  collageCellMotions,
+  resolveCollage,
+  type CollageLead,
+  type SlideCollage,
+} from './collage';
+import type { DevelopSettings } from '../develop/develop';
 import { makeFrameGrader, type FrameGrader } from '../lut/frame-grader';
 import { drawQr, type QrDraw } from '../overlay/draw-qr';
 import { MAX_STAGE_PIXELS, stageFrameSize } from '../overlay/stage-size';
@@ -252,11 +263,113 @@ export interface RenderBadgeOptions {
    */
   framing?: Framing | null;
   /**
+   * Several pictures in the frame instead of `source` + `framing`: the
+   * collage's cells, each with its own decoded picture, framing and (caller-
+   * owned) grader. When set, `source`, `framing` and `grader` are not read —
+   * the lead picture is `items[0]`. Built by `loadCollageSources` + the
+   * caller's graders; see `collage.ts` for why cell 1 is the slide.
+   */
+  collage?: CollageRender | null;
+  /**
    * EDITOR ONLY: the selected element, drawn faintly even outside its window
    * so a piece that has exited stays visible and selectable while chosen.
    * Never set by an export — `badgeToPng` and `renderDeck` do not know it.
    */
   ghostId?: string | null;
+}
+
+/** One cell of a collage, ready to paint. */
+export interface CollageItem {
+  source: BadgeSource | null;
+  framing: Framing;
+  /** This cell's own cube as a grader the CALLER owns — see `grader` above. */
+  grader?: FrameGrader | null;
+}
+
+export interface CollageRender {
+  collage: SlideCollage;
+  /** Cell by cell, the lead first; a short list leaves the rest empty. */
+  items: readonly CollageItem[];
+  /**
+   * The slide's screen time — what the cells' exit is laid against. Absent
+   * (a still, a surface with no clock) means the cells never leave.
+   */
+  seconds?: number | null;
+}
+
+/** A collage's decoded pictures, cell by cell, and one call to free them all. */
+export interface CollageSources {
+  items: { source: BadgeSource | null; framing: Framing; develop: DevelopSettings | null }[];
+  release: () => void;
+}
+
+/**
+ * Decode every DRAWN cell's picture — the lead's included, as item 0 — from
+ * the files `resolve` finds. A cell whose file is gone or cannot be decoded
+ * is an empty cell, not a failed slide: losing one photograph of six must
+ * never cost the piece. `maxWidth` bounds every decode, as `loadBadgeSource`
+ * does for one; a collage shares the budget its consumer gives it.
+ */
+export async function loadCollageSources(
+  lead: CollageLead & { videoTimeSeconds: number },
+  collage: SlideCollage,
+  resolve: (ref: SavedMediaRef | null) => File | null,
+  maxWidth?: number,
+): Promise<CollageSources> {
+  const count = collageCellCount(collage);
+  const items: CollageSources['items'] = [];
+  for (let i = 0; i < count; i++) {
+    const cell = collageCellAt(lead, collage, i);
+    let source: BadgeSource | null = null;
+    const file = resolve(cell.media);
+    if (file) {
+      try {
+        source = await loadBadgeSource(file, i === 0 ? lead.videoTimeSeconds : 0, maxWidth);
+      } catch {
+        source = null;
+      }
+    }
+    items.push({ source, framing: cell.framing, develop: cell.develop });
+  }
+  return {
+    items,
+    release: () => {
+      for (const item of items) item.source?.release();
+    },
+  };
+}
+
+/** Paint a collage's cells over its background — the picture step of `renderBadge` when a slide holds several. */
+function paintCollage(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  render: CollageRender,
+  timeSeconds: number,
+): void {
+  ctx.fillStyle = render.collage.background;
+  ctx.fillRect(0, 0, w, h);
+  const cells = resolveCollage(render.collage, w, h);
+  // The cells' entrances and exits at this moment — the engine's own
+  // transform per cell, from the same clock the badge is drawn at.
+  const motions = collageCellMotions(render.collage, cells, { w, h }, timeSeconds, render.seconds ?? null);
+  const pictures: (LayoutPicture | null)[] = cells.map((_, i) => {
+    const item = render.items[i];
+    if (!item?.source || item.source.width <= 0 || item.source.height <= 0) return null;
+    // Graded at the source's own density, then framed — the photo-frame rule,
+    // per cell.
+    return {
+      image: item.grader ? item.grader.render(item.source.image) : item.source.image,
+      width: item.source.width,
+      height: item.source.height,
+    };
+  });
+  drawLayout(ctx, w, h, cells, {
+    picture: (i) => pictures[i] ?? null,
+    framing: (i) => render.items[i]?.framing ?? DEFAULT_FRAMING,
+    spacing: render.collage.spacing,
+    motion: motions ? (i) => motions[i] ?? null : undefined,
+  });
 }
 
 /** The overlay engine's options for a badge, shared by the paint and the measure. */
@@ -370,7 +483,9 @@ export async function renderBadge(
   ctx.fillStyle = opts.background ?? '#100f0d';
   ctx.fillRect(0, 0, w, h);
 
-  if (opts.source && opts.source.width > 0 && opts.source.height > 0) {
+  if (opts.collage) {
+    paintCollage(ctx, w, h, opts.collage, opts.timeSeconds ?? 0);
+  } else if (opts.source && opts.source.width > 0 && opts.source.height > 0) {
     // Grade at the source's own density, THEN frame it: grading the cropped
     // frame would give a different result at every output size (the
     // photo-frame rule). Shades, QR and the badge stay after.
@@ -401,19 +516,36 @@ export async function renderBadge(
  * is the correct lifetime there.
  */
 export async function badgeToPng(
-  opts: RenderBadgeOptions & { width: number; height: number; lut?: CubeLut | null },
+  opts: RenderBadgeOptions & {
+    width: number;
+    height: number;
+    lut?: CubeLut | null;
+    /** A collage's cube per cell (its own develop baked in); absent leaves every cell as shot. */
+    collageLuts?: readonly (CubeLut | null)[];
+  },
 ): Promise<Blob | null> {
   const canvas = document.createElement('canvas');
   canvas.width = opts.width;
   canvas.height = opts.height;
   const grader =
-    opts.lut && opts.source && opts.source.width > 0
+    !opts.collage && opts.lut && opts.source && opts.source.width > 0
       ? makeFrameGrader(opts.lut, opts.source.width, opts.source.height)
       : null;
+  // One grader per cell, for this one render, as the single picture's above.
+  const cellGraders = (opts.collage?.items ?? []).map((item, i) => {
+    const lut = opts.collageLuts?.[i] ?? null;
+    return lut && item.source && item.source.width > 0
+      ? makeFrameGrader(lut, item.source.width, item.source.height)
+      : null;
+  });
+  const collage = opts.collage
+    ? { ...opts.collage, items: opts.collage.items.map((item, i) => ({ ...item, grader: cellGraders[i] })) }
+    : opts.collage;
   try {
-    await renderBadge(canvas, { ...opts, grader });
+    await renderBadge(canvas, { ...opts, grader, collage });
   } finally {
     grader?.dispose();
+    for (const g of cellGraders) g?.dispose();
   }
   return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
 }
