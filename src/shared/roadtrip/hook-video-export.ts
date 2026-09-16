@@ -21,7 +21,14 @@ import { makeFrameGrader } from '../lut/frame-grader';
 import type { OverlayElement } from '../overlay/overlay-types';
 import type { StyleTheme } from '../overlay/title-styles';
 import { variantOutputSize, type ExportVariant } from '../projects/export-variants';
-import { loadBadgeSource, paintShades, renderBadge } from './badge-render';
+import {
+  loadBadgeSource,
+  paintShades,
+  renderBadge,
+  type BadgeSource,
+  type CollageItem,
+  type CollageRender,
+} from './badge-render';
 import type { HookBlock, Shade } from './shades';
 import type { ResolvedHook } from './hooks/hook-variant';
 import { BED_SAMPLE_RATE, renderBed } from '../audio/render-bed';
@@ -119,8 +126,20 @@ export function exportHookVideo(opts: HookVideoOptions): Promise<Blob> {
 }
 
 export interface HookStillVideoOptions {
-  /** The photograph the hook sits on. */
-  file: File;
+  /** The photograph the hook sits on — or none, when the slide is a collage. */
+  file?: File | null;
+  /**
+   * Several pictures instead of one: the collage's decoded cells (lead first,
+   * `loadCollageSources`), each cell's cube, and the frame's aspect — the
+   * output is the frame at the variant's resolution, whatever the cells hold.
+   * The cells are graded ONCE each, like the single picture below, and their
+   * entrance and exit run on the same clock the badge is painted at.
+   */
+  collage?: {
+    render: CollageRender;
+    luts: readonly (CubeLut | null)[];
+    aspect: number;
+  } | null;
   variant: ExportVariant;
   elements: OverlayElement[];
   theme: StyleTheme | null;
@@ -157,18 +176,24 @@ export interface HookStillVideoOptions {
  * only sound is the one the opener SCORES (a scrub's ticks), rendered offline
  * from the same plan the frames are painted from, so the two cannot drift.
  */
+/** A picture graded once into a bitmap the painter draws every frame. */
+async function gradedOnce(source: BadgeSource, lut: CubeLut | null): Promise<ImageBitmap | null> {
+  if (!lut || source.width <= 0 || source.height <= 0) return null;
+  const grader = makeFrameGrader(lut, source.width, source.height);
+  try {
+    return await createImageBitmap(grader.render(source.image) as CanvasImageSource);
+  } finally {
+    grader.dispose();
+  }
+}
+
 export async function exportHookStillVideo(opts: HookStillVideoOptions): Promise<Blob> {
+  if (opts.collage) return exportCollageStillVideo(opts, opts.collage);
+  if (!opts.file) throw new Error('This slide has no picture to paint.');
   const source = await loadBadgeSource(opts.file);
   let graded: ImageBitmap | null = null;
   try {
-    if (opts.lut && source.width > 0 && source.height > 0) {
-      const grader = makeFrameGrader(opts.lut, source.width, source.height);
-      try {
-        graded = await createImageBitmap(grader.render(source.image) as CanvasImageSource);
-      } finally {
-        grader.dispose();
-      }
-    }
+    graded = await gradedOnce(source, opts.lut ?? null);
     const picture = graded
       ? { image: graded as CanvasImageSource, width: source.width, height: source.height, release: () => {} }
       : source;
@@ -220,5 +245,78 @@ export async function exportHookStillVideo(opts: HookStillVideoOptions): Promise
   } finally {
     graded?.close();
     source.release();
+  }
+}
+
+/**
+ * A COLLAGE slide as a video: every cell graded once, then `renderBadge`
+ * painted frame by frame with the cells' own clock — the same composition
+ * the stage plays and the PNG deck draws settled. The output is the frame
+ * itself at the variant's resolution: a collage has no one source to size
+ * from, and never upscales a cell past what its picture holds regardless.
+ */
+async function exportCollageStillVideo(
+  opts: HookStillVideoOptions,
+  collage: NonNullable<HookStillVideoOptions['collage']>,
+): Promise<Blob> {
+  const graded: ImageBitmap[] = [];
+  try {
+    const items: CollageItem[] = [];
+    for (const [i, item] of collage.render.items.entries()) {
+      if (!item.source) {
+        items.push({ source: null, framing: item.framing });
+        continue;
+      }
+      const bitmap = await gradedOnce(item.source, collage.luts[i] ?? null);
+      if (bitmap) graded.push(bitmap);
+      items.push({
+        source: bitmap
+          ? { image: bitmap, width: item.source.width, height: item.source.height, release: () => {} }
+          : item.source,
+        framing: item.framing,
+      });
+    }
+    // A nominal source of the frame's own shape, large enough never to cap
+    // the variant's resolution.
+    const nominalW = collage.aspect >= 1 ? 4096 : Math.round(4096 * collage.aspect);
+    const nominalH = collage.aspect >= 1 ? Math.round(4096 / collage.aspect) : 4096;
+    const out = variantOutputSize(opts.variant, nominalW, nominalH);
+    const size = paintedOutputSize(out.w, out.h);
+    const canvas = document.createElement('canvas');
+    canvas.width = size.w;
+    canvas.height = size.h;
+
+    const score = opts.hook?.score() ?? [];
+    const audio = score.length
+      ? await renderBed(score, opts.seconds, { leadSeconds: aacPrimingSeconds(BED_SAMPLE_RATE) })
+      : null;
+
+    return await encodeFrames({
+      width: size.w,
+      height: size.h,
+      seconds: opts.seconds,
+      fps: opts.fps,
+      audio,
+      onAudioSkipped: opts.onAudioSkipped,
+      draw: async (tSeconds) => {
+        await renderBadge(canvas, {
+          source: null,
+          collage: { ...collage.render, items, seconds: opts.seconds },
+          elements: opts.elements,
+          elementsAt: opts.elementsAt ?? null,
+          hook: opts.hook ?? null,
+          theme: opts.theme,
+          timeSeconds: tSeconds,
+          shades: opts.shades,
+          block: opts.block ?? null,
+          grader: null,
+        });
+        return canvas;
+      },
+      onProgress: opts.onProgress,
+      signal: opts.signal,
+    });
+  } finally {
+    for (const bitmap of graded) bitmap.close();
   }
 }

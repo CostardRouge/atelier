@@ -4,6 +4,7 @@ import type { OverlayElement } from '../../shared/overlay/overlay-types';
 import { classifyPart } from '../../shared/library/assets';
 import { loadClipMeta } from '../../shared/media/video-metadata';
 import { contentSlideElements, type DeckSlide } from '../../shared/roadtrip/deck';
+import { loadCollageSources } from '../../shared/roadtrip/badge-render';
 import { renderDeck } from '../../shared/roadtrip/deck-export';
 import { exportPlan, type PlanItem } from '../../shared/roadtrip/export-plan';
 import {
@@ -229,14 +230,38 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
             srcHeight: meta.height,
             range: hookRange(post.badge.videoTimeSeconds, inputs.hookLength, meta.duration, speed),
           })
-        : await exportHookStillVideo({
-            ...shared,
-            file: hookFile,
-            seconds: inputs.hookLength,
-            onAudioSkipped: (reason) => {
-              audioSkipped = reason;
-            },
-          });
+        : post.badge.collage
+          ? await (async () => {
+              // The hook's collage, painted: its cells decoded and graded
+              // exactly as the piece export does for any collage slide.
+              const cells = await loadCollageSources(inputs.hookSlide, post.badge.collage!, inputs.resolve);
+              try {
+                return await exportHookStillVideo({
+                  ...shared,
+                  collage: {
+                    render: { collage: post.badge.collage!, items: cells.items, seconds: inputs.hookLength },
+                    luts: cells.items.map((cell) =>
+                      inputs.lutFor({ ...inputs.hookSlide, develop: cell.develop }),
+                    ),
+                    aspect: inputs.aspect,
+                  },
+                  seconds: inputs.hookLength,
+                  onAudioSkipped: (reason) => {
+                    audioSkipped = reason;
+                  },
+                });
+              } finally {
+                cells.release();
+              }
+            })()
+          : await exportHookStillVideo({
+              ...shared,
+              file: hookFile,
+              seconds: inputs.hookLength,
+              onAudioSkipped: (reason) => {
+                audioSkipped = reason;
+              },
+            });
       const name = hookVideoName(trip.name, post.title.trim() || `day-${post.date}`, variant);
       download(blob, name);
       // A clip that went out without the ticks it was composed with says so
@@ -268,8 +293,6 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     const { post, trip, aspect } = inputs;
     const { slide } = item;
     const isHook = slide.kind === 'hook';
-    const file = inputs.resolve(slide.media);
-    if (!file) throw new Error(`${slide.media?.name ?? 'This slide'} is not in the Library.`);
     const variant = hookVariant(post.badge.aspectId, 1080, slide.speed);
     const shared = {
       variant,
@@ -283,6 +306,27 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       lut: inputs.lutFor(slide),
       onProgress,
     };
+    // A collage is PAINTED, whatever its cells hold: every cell's picture
+    // decoded, each graded through the slide's grade with its own develop.
+    if (slide.collage) {
+      const cells = await loadCollageSources(slide, slide.collage, inputs.resolve);
+      try {
+        return await exportHookStillVideo({
+          ...shared,
+          collage: {
+            render: { collage: slide.collage, items: cells.items, seconds: item.seconds },
+            luts: cells.items.map((cell) => inputs.lutFor({ ...slide, develop: cell.develop })),
+            aspect,
+          },
+          seconds: item.seconds,
+          onAudioSkipped,
+        });
+      } finally {
+        cells.release();
+      }
+    }
+    const file = inputs.resolve(slide.media);
+    if (!file) throw new Error(`${slide.media?.name ?? 'This slide'} is not in the Library.`);
     if (classifyPart(file.name) !== 'video') {
       return exportHookStillVideo({ ...shared, file, seconds: item.seconds, onAudioSkipped });
     }
