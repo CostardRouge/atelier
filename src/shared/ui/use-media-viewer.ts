@@ -49,6 +49,7 @@ import {
   type Point,
   type View,
 } from './pan-zoom';
+import { blockNativeZoom } from './native-gestures';
 import type { ZoomControls } from './stage-zoom';
 
 /** Paper between two slots, so the neighbour arrives as a separate sheet. */
@@ -516,12 +517,17 @@ export function useMediaViewer({
       else settleBack();
     };
 
+    // WebKit's own pinch zooms the whole app and CANCELS every pointer below,
+    // which is what "the pinch does nothing" is on an iPhone — `touch-action`
+    // cannot reach it (`native-gestures.ts`).
+    const unblock = blockNativeZoom(el);
     // Capture, so nothing inside the slot can hide a finger from the deck.
     el.addEventListener('pointerdown', onDown, true);
     el.addEventListener('pointermove', onMove, true);
     el.addEventListener('pointerup', onUp, true);
     el.addEventListener('pointercancel', onUp, true);
     return () => {
+      unblock();
       el.removeEventListener('pointerdown', onDown, true);
       el.removeEventListener('pointermove', onMove, true);
       el.removeEventListener('pointerup', onUp, true);

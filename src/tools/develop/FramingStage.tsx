@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { DevelopPicture } from '../../shared/develop/use-develop-picture';
 import {
   DEFAULT_FRAMING,
-  MAX_FRAMING_SCALE,
   canPan,
   drawFramed,
   panBy,
+  scaleFramingBy,
   type Framing,
 } from '../../shared/media/framing';
 import { frameSize } from '../../shared/roadtrip/badge-render';
+import { blockNativeZoom } from '../../shared/ui/native-gestures';
 
 /** The crop preview's own pixel budget — a stage, never the export's density. */
 const CROP_LONG_EDGE = 1440;
@@ -17,10 +18,15 @@ const CROP_LONG_EDGE = 1440;
  * The Develop tool's Crop tab stage: the SAME decoded picture the Develop tab
  * grades, AS DELIVERED (`useDevelopPicture().delivered`, so a crop is judged
  * on the developed picture and never on the raw decode), drawn into the
- * chosen aspect box through `shared/media/framing.ts`'s own transform — one
- * drag pans, the wheel or a trackpad pinch zooms, exactly the gestures Trips'
- * badge stage uses over the same module, so a photographer's hand does not
- * relearn anything moving between the two.
+ * chosen aspect box through `shared/media/framing.ts`'s own transform.
+ *
+ * **Every gesture lands here, a finger's as well as a mouse's.** One pointer
+ * moves the picture; a wheel (which is also what a trackpad pinch sends)
+ * zooms about nothing in particular; and TWO fingers pinch to zoom while
+ * moving the picture by their centre, the develop viewport's own grammar
+ * (`use-picture-zoom.ts`) applied to a framing instead of a view. The pinch
+ * was missing until 2026-09-16 and there is no wheel on a phone, so the crop
+ * simply could not be zoomed there — while the caption promised it could.
  *
  * Kept apart from `DevelopViewport` rather than folded into it: that stage is
  * shared with the Trips and Studio modals, neither of which frames a picture
@@ -46,7 +52,9 @@ export default function FramingStage({
   className?: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const [pannable, setPannable] = useState(false);
+  const [moving, setMoving] = useState(false);
   const { source, cube, delivered } = picture;
 
   // Paint: the framed crop of the delivered picture, at the stage's own
@@ -72,103 +80,199 @@ export default function FramingStage({
     setPannable(canPan(source.width, source.height, w, h, framing));
   }, [source, cube, delivered, aspectRatio, framing]);
 
-  // The wheel (also what a trackpad pinch sends) zooms the framing — attached
-  // natively and NOT passively, exactly like the badge stage, or the page
-  // scrolls away under the picture instead of the picture zooming.
-  const framingRef = useRef(framing);
-  framingRef.current = framing;
-  const onFramingRef = useRef(onFraming);
-  onFramingRef.current = onFraming;
+  // Read by the native listeners, which are bound once: the framing changes on
+  // every pointer move, and re-binding a gesture mid-drag loses it.
+  const live = useRef({ framing, onFraming, source });
+  live.current = { framing, onFraming, source };
+  const hasSource = source !== null;
+
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const onWheel = (e: WheelEvent) => {
-      if (!source) return;
-      e.preventDefault();
-      const f = framingRef.current ?? DEFAULT_FRAMING;
-      const scale = Math.min(MAX_FRAMING_SCALE, Math.max(1, f.scale * Math.exp(-e.deltaY / 400)));
-      if (scale === f.scale) return;
-      onFramingRef.current({ ...f, scale });
+    const stage = stageRef.current;
+    if (!canvas || !stage) return;
+
+    /** A client point in the canvas's OWN pixels — which are the output frame's. */
+    const toPixels = (clientX: number, clientY: number) => {
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return null;
+      return {
+        px: (clientX - rect.left) * (canvas.width / rect.width),
+        py: (clientY - rect.top) * (canvas.height / rect.height),
+      };
     };
-    canvas.addEventListener('wheel', onWheel, { passive: false });
-    return () => canvas.removeEventListener('wheel', onWheel);
-  }, [source]);
 
-  const sourceRef = useRef(source);
-  sourceRef.current = source;
-  const drag = useRef<{ lastPx: number; lastPy: number } | null>(null);
-  const toPixels = useCallback((e: ReactPointerEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return null;
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return null;
-    return {
-      px: (e.clientX - rect.left) * (canvas.width / rect.width),
-      py: (e.clientY - rect.top) * (canvas.height / rect.height),
-    };
-  }, []);
-
-  const onPointerDown = useCallback(
-    (e: ReactPointerEvent<HTMLCanvasElement>) => {
-      if (e.button !== 0 || !sourceRef.current) return;
-      const pt = toPixels(e);
-      if (!pt) return;
-      drag.current = { lastPx: pt.px, lastPy: pt.py };
-      try {
-        e.currentTarget.setPointerCapture(e.pointerId);
-      } catch {
-        /* not a live pointer */
-      }
-    },
-    [toPixels],
-  );
-
-  const onPointerMove = useCallback(
-    (e: ReactPointerEvent<HTMLCanvasElement>) => {
-      const d = drag.current;
-      const canvas = canvasRef.current;
-      const src = sourceRef.current;
-      if (!d || !canvas || !src) return;
-      const pt = toPixels(e);
-      if (!pt) return;
-      // Deltas in the canvas's own pixels, which IS the output frame — `panBy`
-      // turns them into the picture's axes and clamps them, so no drag can
-      // ever open a gap at the edge.
-      onFramingRef.current(
-        panBy(framingRef.current ?? DEFAULT_FRAMING, src.width, src.height, canvas.width, canvas.height, pt.px - d.lastPx, pt.py - d.lastPy),
+    /**
+     * ONE write per event, zoom then move: a pinch does both, and two writes
+     * in one event would each read the render's copy of the framing — so the
+     * second would silently throw the first away. The zoom is applied before
+     * the move because `panBy` clamps against the transform at the scale it is
+     * given, and the scale the fingers just asked for is the one that counts.
+     */
+    const step = (factor: number, dpx: number, dpy: number) => {
+      const { source: src, framing: f0, onFraming: write } = live.current;
+      if (!src) return;
+      const f = f0 ?? DEFAULT_FRAMING;
+      const scale = scaleFramingBy(f.scale, factor);
+      if (scale === f.scale && dpx === 0 && dpy === 0) return;
+      const zoomed = scale === f.scale ? f : { ...f, scale };
+      write(
+        dpx === 0 && dpy === 0
+          ? zoomed
+          : panBy(zoomed, src.width, src.height, canvas.width, canvas.height, dpx, dpy),
       );
-      d.lastPx = pt.px;
-      d.lastPy = pt.py;
-    },
-    [toPixels],
-  );
+    };
+    const pan = (dpx: number, dpy: number) => step(1, dpx, dpy);
+    const zoom = (factor: number) => step(factor, 0, 0);
 
-  const onPointerUp = useCallback((e: ReactPointerEvent<HTMLCanvasElement>) => {
-    if (drag.current) {
-      try {
-        canvasRef.current?.releasePointerCapture(e.pointerId);
-      } catch {
-        /* capture may already be gone */
+    // The wheel, and the ⌘-wheel a trackpad pinch sends — non-passive, or the
+    // page scrolls away under the picture instead of the picture zooming.
+    const onWheel = (e: WheelEvent) => {
+      if (!live.current.source) return;
+      e.preventDefault();
+      zoom(Math.exp(-e.deltaY / 400));
+    };
+
+    // --- pointers: one moves, two pinch ------------------------------------
+    const touches = new Map<number, { x: number; y: number }>();
+    let pinch: { spread: number; scale: number } | null = null;
+    let drag: { id: number; lastPx: number; lastPy: number } | null = null;
+
+    const centre = () => {
+      const pts = [...touches.values()];
+      return {
+        x: pts.reduce((s, p) => s + p.x, 0) / pts.length,
+        y: pts.reduce((s, p) => s + p.y, 0) / pts.length,
+      };
+    };
+    const spread = () => {
+      const [a, b] = [...touches.values()];
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    };
+    const startDrag = (id: number, clientX: number, clientY: number) => {
+      const pt = toPixels(clientX, clientY);
+      if (!pt) return;
+      drag = { id, lastPx: pt.px, lastPy: pt.py };
+      setMoving(true);
+    };
+    const endDrag = () => {
+      drag = null;
+      setMoving(false);
+    };
+
+    const onDown = (e: PointerEvent) => {
+      if (!live.current.source) return;
+      if (e.pointerType === 'touch') {
+        touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (touches.size === 2) {
+          // A second finger turns the move into a pinch, and the move it was
+          // making is abandoned rather than fighting the fingers' centre.
+          pinch = { spread: spread(), scale: (live.current.framing ?? DEFAULT_FRAMING).scale };
+          endDrag();
+          return;
+        }
+        if (touches.size > 2) return;
+      } else if (e.button !== 0) {
+        return;
       }
-    }
-    drag.current = null;
-  }, []);
+      if (pinch) return;
+      startDrag(e.pointerId, e.clientX, e.clientY);
+      // A touch pointer is captured implicitly; a mouse leaving the canvas
+      // mid-drag is not, and a picture that stops moving at the frame's edge
+      // reads as a stuck drag.
+      if (e.pointerType !== 'touch') {
+        try {
+          stage.setPointerCapture(e.pointerId);
+        } catch {
+          /* not a live pointer */
+        }
+      }
+    };
+
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType === 'touch' && touches.has(e.pointerId)) {
+        const before = touches.size === 2 ? centre() : null;
+        touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (touches.size === 2 && pinch && before) {
+          e.preventDefault();
+          const after = centre();
+          const from = toPixels(before.x, before.y);
+          const to = toPixels(after.x, after.y);
+          // The scale the FINGERS ask for, measured from where the pinch
+          // started rather than from the last frame: a per-frame ratio
+          // compounds its own rounding and the picture drifts under the hand.
+          const wanted = pinch.spread > 0 ? scaleFramingBy(pinch.scale, spread() / pinch.spread) : null;
+          const have = (live.current.framing ?? DEFAULT_FRAMING).scale;
+          step(
+            wanted === null || have <= 0 ? 1 : wanted / have,
+            from && to ? to.px - from.px : 0,
+            from && to ? to.py - from.py : 0,
+          );
+          return;
+        }
+      }
+      if (!drag || e.pointerId !== drag.id) return;
+      const pt = toPixels(e.clientX, e.clientY);
+      if (!pt) return;
+      e.preventDefault();
+      pan(pt.px - drag.lastPx, pt.py - drag.lastPy);
+      drag.lastPx = pt.px;
+      drag.lastPy = pt.py;
+    };
+
+    const onUp = (e: PointerEvent) => {
+      if (e.pointerType === 'touch') {
+        touches.delete(e.pointerId);
+        if (pinch && touches.size < 2) {
+          pinch = null;
+          // The finger still down takes the move over, instead of being inert
+          // until it is lifted and put back.
+          const [id] = [...touches.keys()];
+          const at = id === undefined ? undefined : touches.get(id);
+          if (id !== undefined && at) startDrag(id, at.x, at.y);
+        }
+      }
+      if (drag && e.pointerId === drag.id) endDrag();
+    };
+
+    // WebKit's own pinch zooms the whole app and CANCELS these pointers
+    // (`native-gestures.ts`) — which is what "the pinch does nothing" was.
+    const unblock = blockNativeZoom(stage);
+    stage.addEventListener('wheel', onWheel, { passive: false });
+    stage.addEventListener('pointerdown', onDown);
+    stage.addEventListener('pointermove', onMove);
+    stage.addEventListener('pointerup', onUp);
+    stage.addEventListener('pointercancel', onUp);
+    return () => {
+      unblock();
+      stage.removeEventListener('wheel', onWheel);
+      stage.removeEventListener('pointerdown', onDown);
+      stage.removeEventListener('pointermove', onMove);
+      stage.removeEventListener('pointerup', onUp);
+      stage.removeEventListener('pointercancel', onUp);
+    };
+    // Bound once per mounted canvas — the element only exists while there is a
+    // picture: everything that moves is read off `live`.
+  }, [hasSource]);
 
   return (
-    <div className={`relative flex items-center justify-center overflow-hidden ${className ?? ''}`}>
+    // The gestures are heard on the STAGE, not on the canvas: a phone gives the
+    // crop a small letterboxed picture inside a wide box, so a pinch whose
+    // fingers land either side of it — the ordinary way to pinch something
+    // small — would reach no listener at all (measured at 390px: a 147px
+    // canvas in a 374px stage). `touch-none` comes with them, and is right
+    // here as on the badge stage: they write BOTH axes inside a fixed-height
+    // stage, which is not a scroll box.
+    <div
+      ref={stageRef}
+      className={`relative flex items-center justify-center overflow-hidden touch-none select-none ${
+        source && pannable ? (moving ? 'cursor-grabbing' : 'cursor-grab') : ''
+      } ${className ?? ''}`}
+    >
       {source ? (
-        // `touch-none` is right here, as on the badge stage: the drag writes
-        // BOTH axes and the canvas sits in a fixed-height stage, not a scroll box.
         <canvas
           ref={canvasRef}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
           aria-label="The picture, cropped"
-          className={`max-w-full max-h-full w-auto h-auto rounded-paper bg-frame touch-none ${
-            pannable ? 'cursor-grab active:cursor-grabbing' : ''
-          }`}
+          className="max-w-full max-h-full w-auto h-auto rounded-paper bg-frame"
         />
       ) : (
         <p className="m-0 max-w-xs text-center text-sm text-muted">{emptyText}</p>

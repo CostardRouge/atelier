@@ -317,6 +317,52 @@ The rule is **the larger of `window.innerHeight` and `visualViewport.height`, an
 
 **What it costs, and it is the right trade.** `useStageZoom`'s two-finger pinch and native panning are mutually exclusive: once the browser owns a gesture it cancels the pointers, so on a zone that lets it pan the pinch is best-effort and `StageZoomControl`'s +/− is the way in that always answers — which is now the case on both zones that zoom. No CI gate can see any of this — `touch-action` is a string in a class list and the failure is a gesture that does nothing — so check it with real touch events, not with a mouse.
 
+## The browser's OWN pinch is what "the pinch does nothing" means on a phone (2026-09-16)
+
+**Reported**: in the Develop tool on the maintainer's phone, *"les pinch, les
+zoom, le panning, tous ces événements ne fonctionnent pas forcément bien"*.
+Three faults of three different shapes, and only the first is invisible from a
+desktop.
+
+**The trap.** `touch-action: none` takes away every gesture the PAGE owns —
+scrolling, panning, double-tap zoom — and cannot reach the one the browser
+chrome owns: WebKit zooming the visual viewport. So on iOS a two-finger pinch
+over a picture magnifies the whole app, and the pointer events that were
+feeding the surface's own pinch are CANCELLED mid-gesture. There is nothing in
+the pointer code to find, because the pointers stop arriving. (`app-height.ts`
+already freezes its measurement under a pinch, which is how we know this
+happens here rather than in theory.) `shared/ui/native-gestures.ts`'s
+`blockNativeZoom(el)` refuses WebKit's `gesturestart`/`gesturechange`/
+`gestureend` — non-passive, or `preventDefault` is ignored — and that is the
+only handle on it. **How to apply**: any surface that answers a pinch itself
+calls it on its own element, and NEVER on the document: the reading pages must
+keep the browser's pinch, it is how someone enlarges text. It is a no-op
+outside WebKit, which is correct — `touch-action: none` suffices there. Bound
+on the develop viewport (`use-picture-zoom.ts`), the lightbox's deck
+(`use-media-viewer.ts`) and the crop stage.
+
+**A listener on the CANVAS is a listener a pinch can miss.** The crop stage's
+picture is letterboxed inside a wider box — 147px of canvas in a 374px stage at
+390px wide — and two fingers pinching something small land either side of it,
+outside the canvas, inside the stage. The gestures belong on the box the
+picture is centred IN, with `touch-none`, never on the picture.
+
+**A finger of a pinch is a finger even when it lands on a control, and a pinch
+that ends is not over.** Two bookkeeping rules that read as "the pinch is
+unreliable": a press over a button was returning before the touch was counted,
+so a pinch begun on the "hold for before" pill never became one and the count
+stayed one short for the rest of the gesture — count the finger, then let the
+control keep its press; and lifting one finger of a pinch left the other inert
+until it was lifted and put back, where it should take the pan over, which
+zoomed in is most of the gesture.
+
+**Where a pinch is best-effort, the pill is not optional.** `StageZoomControl`
+is drawn at every width in the Develop tool, phone included — the lightbox
+hides it under 820px on the argument that the pinch is the gesture there, and
+that argument only holds while the pinch cannot be taken away. On the crop tab
+it drives the FRAMING's scale (what is kept) rather than the view's (how
+closely it is being looked at), through the same `ZoomControls` interface.
+
 ## Looking at ONE picture is the other zoom, and it is a transform (2026-09-08, rev. 2026-09-09)
 
 **Decision.** ONE sheet shows a media large, wherever it lives: `shared/ui/MediaLightbox.tsx` over `shared/ui/pan-zoom.ts` + `use-media-viewer.ts` — a second primitive beside the zones', deliberately not the same one, and since 2026-09-10 the ONLY way to look closer at a picture. It knows nothing of sources; a caller hands it `LightboxItem`s (title, facts, kind, `src`, a `still` for the neighbour slots, the natural size, an `unavailable` reason, and whether the URLs need the cookie) plus the footer, which is the only thing the two callers do differently: `WinnowLightbox` brings the picture across, the Library sidebar puts it to work in the tool. A pool asset reaches it through object URLs the sidebar pins for a ±2 window around the open one (`shared/lib/use-object-urls.ts`) — `createObjectURL` reads nothing but pins the handle, so a library of thousands must not hold thousands. A RAW that arrived without its JPEG twin says so instead of handing the browser bytes it cannot decode. A zooming zone scales its LAYOUT so the browser's scroll box does the panning; a viewer's deck has to follow a finger *past its own edges*, which no scroll box does. So everything here is a `transform` and every limit is arithmetic we own (`panLimit`, `clampView`, `zoomAbout`, `rubberBand`, `swipeCommit` — all DOM-free, tested in `pan-zoom.test.ts`). Range is **fit to 8×**, in ×1.5 steps: fit is the floor because a viewer showing less than the whole picture shows nothing. `StageZoomControl` drives both, over a `ZoomControls` interface `StageZoom` now extends, with a `hint` prop for the gesture the surface really offers.
