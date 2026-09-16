@@ -641,7 +641,10 @@ offers grids, stacks, bentos, insets and scattered prints; the slide's own
 picture is always the first cell, and the others are filled from the Library,
 which follows whichever cell is selected. Click a cell on the stage to select
 it, drag to reframe the picture inside it, use the wheel to zoom it, and hold
-(or Alt-drag) onto another cell to swap the two. Every cell keeps its own
+(or Alt-drag) onto another cell to swap the two. A picture can also be
+**dragged out of the Library straight onto a cell** — the cell lights up under
+the pointer, and dropping fills it and selects it; with no layout, a drop
+anywhere on the picture replaces the slide's own. Every cell keeps its own
 framing and develop; an empty cell shows the layout's background in the
 export, and a smaller layout keeps the extra pictures rather than dropping
 them. The Picture tab's **Motion** section lets the cells **arrive** (one

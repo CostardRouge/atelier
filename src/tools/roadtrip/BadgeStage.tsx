@@ -11,6 +11,7 @@ import {
   type Framing,
 } from '../../shared/media/framing';
 import { cellAt, type CellRect } from '../../shared/media/media-layout';
+import { draggedAssetId, hasAssetDrag } from '../../shared/library/asset-drag';
 import { boxForId, hitTest, type ElementBox } from '../../shared/overlay/draw-overlays';
 import {
   collageCellAt,
@@ -174,6 +175,12 @@ interface BadgeStageProps {
   onMoveCell?: (i: number, dx: number, dy: number) => void;
   /** Two cells' pictures exchanged — a hold, or an Alt-drag, onto another cell. */
   onSwapCells?: (a: number, b: number) => void;
+  /**
+   * A picture dragged out of the Library and dropped on a cell: its index
+   * (0 without a collage — the slide's own picture) and the asset's id.
+   * Absent, the stage takes no drops.
+   */
+  onDropAsset?: (cellIndex: number, assetId: string) => void;
   onSourceLoaded?: (info: { width: number; height: number; duration: number }) => void;
   /**
    * The width the picture wants from the height it was given (height ×
@@ -235,6 +242,7 @@ export default function BadgeStage({
   onCellFraming,
   onMoveCell,
   onSwapCells,
+  onDropAsset,
   onSourceLoaded,
   onRendered,
   onFit,
@@ -493,12 +501,24 @@ export default function BadgeStage({
     // The collage's cells: a number on each, a slot where one is empty, the
     // selected one outlined. Editor chrome only — the paint under it is what
     // the thumbnail and the export see.
+    // A picture hovering over the frame with no collage: the whole frame is
+    // the target, so it is outlined as one.
+    if (!collageRef.current && dropCellRef.current !== null) {
+      ctx.save();
+      ctx.strokeStyle = '#d9442a';
+      ctx.lineWidth = Math.max(2, Math.min(w, h) * 0.006);
+      ctx.strokeRect(0, 0, w, h);
+      ctx.fillStyle = 'rgba(217,68,42,0.16)';
+      ctx.fillRect(0, 0, w, h);
+      ctx.restore();
+    }
     if (collageRef.current) {
       const short = Math.min(w, h);
       const lead = sourceRef.current;
       cellRectsRef.current.forEach((c, i) => {
         const has = i === 0 ? Boolean(lead) : Boolean(cellSourcesRef.current[i]);
         const isSel = i === selectedCellRef.current && !selectedRef.current;
+        const isDrop = i === dropCellRef.current;
         ctx.save();
         ctx.translate(c.x + c.w / 2, c.y + c.h / 2);
         if (c.rotation) ctx.rotate((c.rotation * Math.PI) / 180);
@@ -521,9 +541,15 @@ export default function BadgeStage({
           ctx.lineTo(u * 0.8, u * 0.5);
           ctx.stroke();
         }
-        if (isSel) {
+        if (isDrop) {
+          // The cell a drop would land in: filled, not merely outlined — with
+          // six cells an outline alone reads as the selection.
+          ctx.fillStyle = 'rgba(217,68,42,0.22)';
+          ctx.fillRect(-c.w / 2, -c.h / 2, c.w, c.h);
+        }
+        if (isSel || isDrop) {
           ctx.strokeStyle = '#d9442a';
-          ctx.lineWidth = Math.max(2, short * 0.005);
+          ctx.lineWidth = Math.max(2, short * (isDrop ? 0.006 : 0.005));
           ctx.strokeRect(-c.w / 2, -c.h / 2, c.w, c.h);
         }
         const r = Math.max(9, short * 0.026);
@@ -854,6 +880,18 @@ export default function BadgeStage({
     | null
   >(null);
 
+  /** A point in the canvas's own pixel space, from any pointer-ish event. */
+  const toCanvasPoint = useCallback((clientX: number, clientY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    return {
+      px: (clientX - rect.left) * (canvas.width / rect.width),
+      py: (clientY - rect.top) * (canvas.height / rect.height),
+    };
+  }, []);
+
   /** A pointer event in the canvas's own pixel space. */
   const toPixels = useCallback((e: React.PointerEvent) => {
     const canvas = canvasRef.current;
@@ -1035,6 +1073,59 @@ export default function BadgeStage({
     [onSelect, onMoveBlock, onMoveHook, hookRectNow, onFraming, framing, toPixels, onMoveCell, onCellFraming, cellFramingAt],
   );
 
+  /**
+   * A picture dragged out of the Library. The cell under the pointer lights up
+   * while it hovers — a drop has to say WHERE it will land, or it is a guess —
+   * and dropping writes that cell. Without a collage the whole frame is cell 0,
+   * so the same gesture replaces the slide's own picture.
+   */
+  const [dropCell, setDropCell] = useState<number | null>(null);
+  const dropCellRef = useRef<number | null>(null);
+  dropCellRef.current = dropCell;
+
+  const cellUnder = useCallback(
+    (e: React.DragEvent): number => {
+      const pt = toCanvasPoint(e.clientX, e.clientY);
+      if (!pt) return 0;
+      if (!cellRectsRef.current.length) return 0;
+      const i = cellAt(cellRectsRef.current, pt.px, pt.py);
+      return i < 0 ? -1 : i;
+    },
+    [toCanvasPoint],
+  );
+
+  const onDragOver = useCallback(
+    (e: React.DragEvent) => {
+      if (!onDropAsset || !hasAssetDrag(e.dataTransfer)) return;
+      // Without this the browser refuses the drop and animates the picture
+      // back to the sidebar.
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      const i = cellUnder(e);
+      setDropCell(i < 0 ? null : i);
+    },
+    [onDropAsset, cellUnder],
+  );
+
+  const onDragLeave = useCallback(() => setDropCell(null), []);
+
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      if (!onDropAsset || !hasAssetDrag(e.dataTransfer)) return;
+      e.preventDefault();
+      const id = draggedAssetId(e.dataTransfer);
+      const i = cellUnder(e);
+      setDropCell(null);
+      if (id && i >= 0) onDropAsset(i, id);
+    },
+    [onDropAsset, cellUnder],
+  );
+
+  // The highlight lives on the chrome canvas, which only repaints when asked.
+  useEffect(() => {
+    drawChrome();
+  }, [dropCell, drawChrome]);
+
   const onPointerUp = useCallback((e: React.PointerEvent) => {
     const p = press.current;
     press.current = null;
@@ -1123,6 +1214,9 @@ export default function BadgeStage({
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
             onPointerLeave={() => setHovering(false)}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
             className={`absolute inset-0 w-full h-full touch-none ${cursor}`}
           />
           <canvas

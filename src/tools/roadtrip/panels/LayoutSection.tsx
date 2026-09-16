@@ -142,6 +142,11 @@ export default function LayoutSection({
             and Shift-drag reframes it.
           </p>
           <p>
+            A picture can also be <strong>dragged straight from the Library</strong> onto the
+            cell it belongs in — the cell lights up as you hover it. (A mouse gesture: on a
+            phone, use the cell stepper and “Use the ticked picture”.)
+          </p>
+          <p>
             A smaller layout keeps the extra pictures rather than dropping them; an empty
             cell shows the background in the export.
           </p>

@@ -316,6 +316,27 @@ export default function PostEditor({
     },
     [collage, lead, writeLead],
   );
+  /**
+   * A picture dragged out of the Library onto a cell — the sidebar says WHICH
+   * picture, the stage says WHERE. It selects that cell as well as filling it:
+   * a drop is also a way of saying "this is the one I am working on", and it
+   * keeps the Library's own tick pointing at what the cell now holds.
+   */
+  const dropAsset = useCallback(
+    (i: number, assetId: string) => {
+      const asset = lib.assets.find((a) => a.id === assetId);
+      const file = asset ? pickable(asset) : null;
+      // A lone `.srt`, a RAW with no twin: nothing to compose over, so the
+      // drop is refused rather than emptying the cell.
+      if (!file) return;
+      setSelectedCell(i);
+      if (!lib.selection.has(assetId)) lib.toggle(assetId);
+      lib.setActive(assetId);
+      void hashedMediaRef(file).then((ref) => patchCell(i, { media: ref }));
+    },
+    [lib, patchCell, setSelectedCell],
+  );
+
   const swapCells = useCallback(
     (a: number, b: number) => {
       if (collage) writeLead(swapCollageCells(lead, collage, a, b));
@@ -1371,6 +1392,7 @@ export default function PostEditor({
             onCellFraming={setCellFraming}
             onMoveCell={moveCell}
             onSwapCells={swapCells}
+            onDropAsset={isCta ? undefined : dropAsset}
             onSourceLoaded={onSourceLoaded}
             onRendered={captureThumb}
             onFit={setFitWidth}
