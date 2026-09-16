@@ -15,6 +15,13 @@ export interface KeyTarget {
   isContentEditable: boolean;
   /** Explicit ARIA role, or null. */
   role: string | null;
+  /**
+   * An `<input>`'s own `type`, lowercased; null on everything else. Space and
+   * the letter shortcuts do not read it — an input is an input to them — but
+   * ⌘Z does: a slider is an input that holds no text and so has no undo of its
+   * own to protect (`undo-keys.ts`).
+   */
+  inputType?: string | null;
 }
 
 /** Space types a character, or moves a control's value. */
@@ -81,5 +88,6 @@ export function describeKeyTarget(target: EventTarget | null): KeyTarget | null 
     tagName: el.tagName,
     isContentEditable: el.isContentEditable === true,
     role: el.getAttribute?.('role') ?? null,
+    inputType: el.tagName === 'INPUT' ? (el.getAttribute?.('type') ?? 'text').toLowerCase() : null,
   };
 }

@@ -41,8 +41,18 @@ describe('undoKeyAction', () => {
 
   it('leaves a field its own undo', () => {
     expect(undoKeyAction(press({ target: target({ tagName: 'INPUT' }) }))).toBe(null);
+    expect(undoKeyAction(press({ target: target({ tagName: 'INPUT', inputType: 'text' }) }))).toBe(null);
+    expect(undoKeyAction(press({ target: target({ tagName: 'INPUT', inputType: 'number' }) }))).toBe(null);
     expect(undoKeyAction(press({ target: target({ tagName: 'TEXTAREA' }) }))).toBe(null);
     expect(undoKeyAction(press({ target: target({ isContentEditable: true }) }))).toBe(null);
+  });
+
+  it('acts with a slider focused — a range holds no text to undo', () => {
+    // Every develop number is an `<input type="range">` and a drag leaves it
+    // focused: standing down there swallowed every ⌘Z after the first edit.
+    expect(undoKeyAction(press({ target: target({ tagName: 'INPUT', inputType: 'range' }) }))).toBe('undo');
+    expect(undoKeyAction(press({ target: target({ tagName: 'INPUT', inputType: 'checkbox' }) }))).toBe('undo');
+    expect(undoKeyAction(press({ target: target({ tagName: 'SELECT' }) }))).toBe('undo');
   });
 
   it('acts with a button focused — a button undoes nothing of its own', () => {

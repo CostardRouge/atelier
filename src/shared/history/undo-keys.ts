@@ -13,7 +13,40 @@
  * Pure and DOM-free: the hook feeds it a plain description of the event.
  */
 
-import { targetOwnsTyping, type KeyTarget } from '../media/transport-keys';
+import { type KeyTarget } from '../media/transport-keys';
+
+/**
+ * Input types that hold no text, and so have no undo of their own to protect.
+ *
+ * A slider is the one that matters: every number in the suite is an `<input
+ * type="range">` (`RangeField`), and dragging one leaves it focused — so
+ * standing down for "a field" swallowed every ⌘Z from the first edit onwards,
+ * which is what made undo look broken in the Develop tool, where a slider is
+ * most of the tool. An unknown type keeps the field's claim: guessing wrong
+ * that way only costs a step, the other way it eats a half-typed word.
+ */
+const TEXTLESS_INPUT_TYPES = new Set([
+  'range',
+  'checkbox',
+  'radio',
+  'color',
+  'file',
+  'button',
+  'submit',
+  'reset',
+  'image',
+  'hidden',
+]);
+
+/** True where ⌘Z is the browser's undo of the letters being typed, and not the document's. */
+function fieldOwnsUndo(target: KeyTarget | null): boolean {
+  if (!target) return false;
+  if (target.isContentEditable) return true;
+  if (target.tagName === 'TEXTAREA') return true;
+  // A `<select>` types nothing either — only a field being typed IN wins.
+  if (target.tagName !== 'INPUT') return false;
+  return !TEXTLESS_INPUT_TYPES.has((target.inputType ?? '').toLowerCase());
+}
 
 /** The half of a `KeyboardEvent` the decision needs. */
 export interface UndoKeyPress {
@@ -49,7 +82,7 @@ export function undoKeyAction(press: UndoKeyPress): UndoKeyAction {
   // Exactly one of ⌘ / Ctrl.
   if (press.metaKey === press.ctrlKey) return null;
   // A field's own undo is the text being typed in it, and it wins.
-  if (targetOwnsTyping(press.target)) return null;
+  if (fieldOwnsUndo(press.target)) return null;
   const key = press.key.toLowerCase();
   if (key === 'z') return press.shiftKey ? 'redo' : 'undo';
   if (key === 'y' && !press.shiftKey) return 'redo';
