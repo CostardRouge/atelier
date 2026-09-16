@@ -15,8 +15,9 @@ Today it ships ten tools, converging into a few editors:
   dates and every day of it becomes a cell in a contribution-style grid; the
   holes are the days you have never posted from.
 - **Develop** — gather the photographs you mean to develop into a **roll**,
-  kept in this browser or on your Winnow, and give each its own light and
-  colour under one look for the roll.
+  kept in this browser or on your Winnow; give each its own light, colour and
+  crop under one look for the roll, and export them — from the proxy or the
+  original — or send them home to the Winnow they came from.
 - **DJI Telemetry** — view DJI drone flight telemetry in sync with the video it
   was captured with.
 - **Telemetry Overlay** — place altitude, GPS and exposure readouts anywhere on
@@ -899,10 +900,43 @@ picture after its own correction. There is no Done: what you set is saved on
 the roll as you go. **←/→** move along the strip, **\\** held shows the picture
 as shot, **Z** goes closer and back, **⌘C / ⌘V** copy a develop from one
 picture to the next, and **Apply to N other pictures** writes it onto the rest
-of the roll, each as its own copy. A filmstrip cell shows the picture as it was
-last seen in the editor, and a dot marks what is developed. On a phone the
-picture and the strip share the screen and the controls open from the bottom
-bar. Selecting several pictures, crop, and export come next.
+of the roll, each as its own copy. **Shift-click** marks a range of the strip
+and **⌘/Ctrl-click** one picture, and the batch verbs then read the marks —
+*Apply to N selected*, *Paste to N selected*. A filmstrip cell shows the
+picture as it was last seen in the editor — developed and cropped — and a dot
+marks what is developed. On a phone the picture and the strip share the
+screen and the three tabs open from the bottom bar.
+
+**Cropping.** The **Crop** tab (**R**; **D** goes back to Develop) frames the
+developed picture into a shape — its own, or one of the suite's aspects —
+with the gestures Trips uses: drag to move it, the wheel or a trackpad pinch
+to zoom, a rotation slider and quarter turns to straighten, two flips. *Fill*
+covers the frame and can never open a gap; *Whole* shows all of the picture
+with black bars where it falls short. The crop belongs to the picture, is
+saved as you go, and is never inherited by the next one.
+
+**Exporting.** The **Export** tab writes JPEGs — this picture, the marked
+ones, or the whole roll — into a folder you choose (downloaded one by one
+where the browser has no folder picker). Each is decoded at its own size,
+developed under the roll's look and cropped as the stage showed it; the
+**Size** is a ceiling on the long edge and never upscales. For a picture that
+came from your Winnow, **Pixels** decides where its pixels come from: *Auto*
+fetches the full-size original only where the proxy could not fill the frame
+asked for, *Proxies* never fetches, *Originals* always does — and a *Delivers*
+line says, for the picture in hand, exactly what will be written
+(`Proxy 2000 px → 1080 · ×1.85 to spare`, `Original 6048 px → 1920 · ×3.15
+to spare`). A RAW original is never fetched: the render you developed is what
+leaves. Fetched originals are kept for the session only. After a run whose
+pictures came from an instance, **Send N files to …** uploads them home into
+that Winnow's finals, each linked to its own capture — the same panel the
+Studio uses, and the same rule: only what you just rendered, only to the
+instance it came from, never automatically.
+
+**From a picture.** Under any picture you are looking at large — in the
+Library's preview sheet, or a day on your Winnow — a **Develop** button adds
+it to the open roll and opens it there (a picture already on the roll is
+opened, never added twice); from the rolls gallery the same button starts a
+new roll from it.
 
 **Keeping it.** A roll saves as you go — with the same undo and redo as the
 Studio and Trips, over the whole roll — and one kept on a Winnow saves there

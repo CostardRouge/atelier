@@ -1,11 +1,12 @@
 # Develop — the third editor
 
 **Status (2026-09-16): the direction and eight choices are DECIDED by the
-maintainer (§2, §8); the shared foundations and D1–D9 are BUILT — the tool has
-its gallery, its full-screen editor (stage, filmstrip, the Develop, Crop and
-Export inspectors), a filmstrip batch selection and a still export that
-delivers from a proxy or its original; the Library verb and the README (D10)
-are next.** From
+maintainer (§2, §8); the shared foundations and EVERY phase, D1–D10, are BUILT
+— the tool has its gallery, its full-screen editor (stage, filmstrip, the
+Develop, Crop and Export inspectors), a filmstrip batch selection, a still
+export that delivers from a proxy or its original and goes home, and the
+Library's `Develop` verb. What v1 leaves open is §8's "after v1" (send to
+Trips / a project) and the RAW path (O4–O6 of `develop-originals.md`).** From
 his brief of the same day (*"un troisième outil officiel de développement
 d'images … à peu près la même interface que la modale … je n'ai pas envie de
 réinventer la roue … si des choses communes peuvent être développées, on
@@ -215,8 +216,14 @@ interface RollPicture {
   ids (`FinalCandidate.assetId`), `shared/sources/deliver-files.ts`. The
   framing seam landed over `drawFramed` in `roll-render.ts`, not on
   `exportPhotoVariant` (§6): no Studio caller passes a framing to it yet.
-- **D10 — the Library verb and the README** (a new `## Develop tool` section,
-  the Home and tool counts).
+- **D10 — the Library verb and the README** — **BUILT 2026-09-16**: both
+  Develop screens publish a `Develop` `MediaAction` (the editor adds the
+  active picture to the open roll and opens it, never twice; the gallery
+  starts a new roll from it), answered in an effect after the render, never
+  in `run`'s closure (`develop-roll.md`); the README's `## Develop tool`
+  section extended (batch, crop, export, send home, the verb). The Home door
+  and the tool count needed nothing: D5 had built the door, and the README
+  already counted ten tools.
 
 RAW (O4–O6 of `develop-originals.md`) lands in the tool first, where it matters
 most, and the modals get it through the same blocks.

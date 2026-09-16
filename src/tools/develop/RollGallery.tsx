@@ -32,6 +32,7 @@ import { downloadBlob } from '../../shared/media/save';
 import { useObjectUrl } from '../../shared/media/use-object-url';
 import { hashedMediaRefs } from '../../shared/projects/media-identity';
 import { pickFile } from '../../shared/sources/file-sources';
+import { usePublishMediaActions, type MediaActions } from '../../shared/sources/media-scope';
 import { DEFAULT_SOURCE_ID, sourceById, type SourceInfo } from '../../shared/sources/source';
 import { sourceLabel } from '../../shared/sources/document-gallery';
 import { useDocumentGallery } from '../../shared/sources/use-document-gallery';
@@ -45,7 +46,7 @@ import { Icons } from '../../shared/ui/icons';
 import { pageScroll } from '../../shared/ui/page-scroll';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
-import NewRollModal, { type NewRollChoices } from './NewRollModal';
+import NewRollModal, { defaultRollName, type NewRollChoices } from './NewRollModal';
 
 interface RollGalleryProps {
   openRollId: string | null;
@@ -319,6 +320,46 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
             }
           : null,
       [compact, startImport],
+    ),
+  );
+
+  // --- the shell's verb: "Develop" under a picture being looked at (D10) ---
+  // A new roll from that one picture, named as the New-roll sheet would name
+  // it, kept in this browser, opened at once. The verb only asks; the effect
+  // answers after the render, from the active asset as it then is (`run` is
+  // called in the same tick as the activation — `RollEditor` has the note).
+  const [pendingNew, setPendingNew] = useState(0);
+  const activeFile = useMemo(() => {
+    const a = lib.assets.find((x) => x.id === lib.activeId);
+    return a?.kind === 'photo' && a.parts.image ? a.parts.image : null;
+  }, [lib.assets, lib.activeId]);
+  useEffect(() => {
+    if (pendingNew === 0) return;
+    setPendingNew(0);
+    if (!activeFile) {
+      setNotice('Only a photograph can start a roll.');
+      return;
+    }
+    void (async () => {
+      const refs = await hashedMediaRefs([activeFile]);
+      const doc = addPictures(createRollDoc(defaultRollName(), DEFAULT_SOURCE_ID), refs);
+      if (await createOn(doc, 'created')) onOpen(doc);
+    })();
+  }, [pendingNew, activeFile, createOn, onOpen, setNotice]);
+  usePublishMediaActions(
+    useMemo<MediaActions>(
+      () => ({
+        heading: 'Develop',
+        actions: [
+          {
+            id: 'new-roll',
+            label: 'Develop',
+            hint: 'a new roll from this picture, opened at once',
+            run: () => setPendingNew((n) => n + 1),
+          },
+        ],
+      }),
+      [],
     ),
   );
 

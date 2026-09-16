@@ -20,12 +20,14 @@ import {
   patchPicture,
   removePictures,
   rollProgress,
+  sameMediaRef,
   type RollDoc,
   type RollExport,
   type RollPicture,
 } from '../../shared/develop/roll-types';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { findMedia, hashedMediaRefs } from '../../shared/projects/media-identity';
+import { usePublishMediaActions, type MediaActions } from '../../shared/sources/media-scope';
 import Button from '../../shared/ui/Button';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 import EmptyState from '../../shared/ui/EmptyState';
@@ -195,6 +197,47 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     void putRollThumb(id, blob);
     setThumbs((cur) => new Map(cur).set(id, blob));
   }, []);
+
+  // --- the shell's verb: "Develop" under a picture being looked at (D10) ---
+  // `run` is called with the picture already ACTIVE in the Library — but in
+  // the same tick as the activation, so a closure would read the previous
+  // active asset. The verb only asks; the effect below answers once the
+  // render has caught up, from the active asset as it then is.
+  const [pendingAdd, setPendingAdd] = useState(0);
+  const activeFile = useMemo(() => {
+    const a = lib.assets.find((x) => x.id === lib.activeId);
+    return a?.kind === 'photo' && a.parts.image ? a.parts.image : null;
+  }, [lib.assets, lib.activeId]);
+  useEffect(() => {
+    if (pendingAdd === 0) return;
+    setPendingAdd(0);
+    if (!activeFile) {
+      setNotice('only a photograph can be developed');
+      return;
+    }
+    void (async () => {
+      const [ref] = await hashedMediaRefs([activeFile]);
+      // Never added twice: a picture already on the roll is opened instead.
+      update((r) => addPictures(r, [ref]));
+      const found = latest.current.pictures.find((p) => sameMediaRef(p.ref, ref));
+      if (found) onOpenPicture(found.id);
+    })();
+  }, [pendingAdd, activeFile, update, onOpenPicture]);
+  const offer = useMemo<MediaActions>(
+    () => ({
+      heading: `Develop on ${roll.name || 'this roll'}`,
+      actions: [
+        {
+          id: 'develop',
+          label: 'Develop',
+          hint: 'add this picture to the roll and open it — one already on the roll is opened, never added twice',
+          run: () => setPendingAdd((n) => n + 1),
+        },
+      ],
+    }),
+    [roll.name],
+  );
+  usePublishMediaActions(offer);
 
   // --- verbs ----------------------------------------------------------------
   async function addSelected() {

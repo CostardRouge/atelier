@@ -275,6 +275,26 @@ appeared after the run and said the instance is not connected. Not exercised:
 a real upload (no instance) — the client path is the Studio's, unchanged but
 for `originalAssetId` per item.
 
+## The Library's Develop verb answers AFTER the render (2026-09-16, D10)
+
+Both Develop screens publish one `MediaAction` (`usePublishMediaActions`):
+`RollEditor` adds the active picture to the open roll and opens it (a picture
+already on the roll is opened — `addPictures` dedupes, `sameMediaRef` finds
+it), `RollGallery` starts a roll named by `defaultRollName()` (exported from
+`NewRollModal`) on `local` and opens it. **Trap that shaped it**: the shell
+calls `run()` in the SAME tick as `lib.setActive(id)` (`AssetSidebar`'s
+`onRun`, the lightbox after its fetch), so a `run` that read `lib.activeId`
+from its closure would develop the PREVIOUS active asset. Trips never hit it
+because its verbs read nothing (the slide picks the active asset up later).
+So the verb only bumps a `pending` counter and an effect keyed on it AND on
+the active file does the work once React has rendered the activation; a
+non-photo says so in the notice and resets. **How to apply**: a verb that
+needs the active media itself never reads it inside `run`. Verified in the
+pane: from the open roll, the Library's preview sheet drew `DEVELOP ON ROLL ·
+… · Develop`, and the click added the new picture as the fifth and opened its
+route; from the gallery the same sheet drew `DEVELOP · Develop` and the click
+made `Roll · 16 Sept` on `local` with that one picture and opened it.
+
 ## Undo and redo over the roll (2026-09-15)
 
 **Fact.** `DevelopTool` wires the shared history engine exactly as Trips does —
