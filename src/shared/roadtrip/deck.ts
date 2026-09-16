@@ -24,7 +24,7 @@ import { DEFAULT_FRAMING, normaliseFraming, type Framing } from '../media/framin
 import type { DevelopSettings } from '../develop/develop';
 import { OUTRO_SECONDS_DEFAULT } from '../overlay/outro-card';
 import type { SavedMediaRef } from '../projects/project-types';
-import type { BadgePieceStyles } from './badge-layout';
+import type { BadgeCascade, BadgePieceStyles } from './badge-layout';
 import { clipSpeed } from './hook-video';
 import type { SlideCollage } from './collage';
 import type { SlideMedium, TripDoc, TripGrade, TripPost } from './trip-types';
@@ -141,9 +141,9 @@ export function resolveSlideMedium(
   return { medium: 'image', reason: 'plain' };
 }
 
-/** True when any badge piece carries an animation — what makes a hook move. */
-export function hookAnimates(styles: BadgePieceStyles): boolean {
-  return Object.values(styles).some((style) => Boolean(style?.animation));
+/** True when any badge piece carries an animation, or the pieces cascade — what makes a hook move. */
+export function hookAnimates(styles: BadgePieceStyles, cascade?: BadgeCascade | null): boolean {
+  return Boolean(cascade) || Object.values(styles).some((style) => Boolean(style?.animation));
 }
 
 /**
@@ -167,7 +167,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
         post.badge.medium,
         // An opener that plays (the scrub) moves the hook exactly as an
         // animated piece does: left as `auto`, it must leave as a video.
-        hookAnimates(post.badge.pieceStyles) || hookMoves(trip, post),
+        hookAnimates(post.badge.pieceStyles, post.badge.cascade) || hookMoves(trip, post),
         post.media?.name ?? null,
       ),
       chosen: post.badge.medium,

@@ -29,8 +29,8 @@ export type StaggerOrder =
   | 'random';
 
 export const STAGGER_ORDERS: readonly { id: StaggerOrder; label: string; hint: string }[] = [
-  { id: 'sequence', label: 'Sequence', hint: 'In cell order' },
-  { id: 'reverse', label: 'Reverse', hint: 'Last cell first' },
+  { id: 'sequence', label: 'Sequence', hint: 'In their own order' },
+  { id: 'reverse', label: 'Reverse', hint: 'The last one first' },
   { id: 'center-out', label: 'Centre out', hint: 'From the middle of the frame outwards' },
   { id: 'edges-in', label: 'Edges in', hint: 'From the edges towards the middle' },
   { id: 'rows', label: 'Rows', hint: 'Top row first, a row at a time' },

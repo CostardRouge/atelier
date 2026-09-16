@@ -146,7 +146,7 @@ export default function useRailThumbs({
 
   // The badge is drawn settled, whatever the transport is doing: a thumbnail
   // caught mid-entrance is a thumbnail that changes while you watch it.
-  const settle = badgeSettleSeconds(post.badge.pieceStyles);
+  const settle = badgeSettleSeconds(post.badge.pieceStyles, post.badge.cascade);
 
   const jobs = useMemo(
     () =>

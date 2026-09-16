@@ -73,14 +73,21 @@ function OptionalColor({
   );
 }
 
-function StepRows({
+/**
+ * One animation step as inspector rows — the preset, its length, its curve,
+ * its direction. Shared with the badge's cascade, which derives every delay
+ * and so hides the Delay row.
+ */
+export function StepRows({
   which,
   step,
   onChange,
+  hideDelay = false,
 }: {
   which: 'In' | 'Out';
   step: AnimStep | null | undefined;
   onChange: (step: AnimStep | null) => void;
+  hideDelay?: boolean;
 }) {
   const preset = step?.preset ?? 'none';
   return (
@@ -108,7 +115,7 @@ function StepRows({
               format={(v) => `${v.toFixed(2)} s`}
             />
           </FieldRow>
-          {which === 'In' && (
+          {which === 'In' && !hideDelay && (
             <FieldRow label="Delay">
               <RangeField
                 label="In delay"

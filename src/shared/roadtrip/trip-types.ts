@@ -43,6 +43,7 @@ import { defaultHookLayers, type HookLayer } from './hooks/hook-variant';
 import { mapFromRoute } from './hooks/map-plan';
 import { DEFAULT_CTA, type CtaSlide } from './cta-slide';
 import { readCollage, type SlideCollage } from './collage';
+import { readCascade, type BadgeCascade } from './badge-layout';
 import { defaultCarSpec, readCarSpec, type CarSpec } from './car-spec';
 import {
   DEFAULT_TIME_AGO_WORDS,
@@ -57,7 +58,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 24;
+export const TRIP_DOC_VERSION = 25;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers and the
@@ -296,6 +297,14 @@ export interface PostBadge {
    */
   grade: TripGrade | null;
   /**
+   * ONE entrance for every piece of the badge, spread over time by where the
+   * pieces sit (`badge-layout.ts`, `readCascade`) — or null, where each piece
+   * keeps the entrance its own style says, with its hand-typed delay. When
+   * set it replaces every piece's entrance; exits stay per piece. A look,
+   * so `hookDefaultsFrom` carries it to the next piece of the kind.
+   */
+  cascade: BadgeCascade | null;
+  /**
    * Several pictures in the hook's frame, or null for the one picture the
    * badge has always sat on. The hook's own picture is the collage's first
    * cell — `media`, `framing` and `develop` above stay what they are — so
@@ -348,6 +357,8 @@ export interface HookDefaults {
   hookSeconds: number;
   layout: BadgeLayout;
   pieceStyles: BadgePieceStyles;
+  /** The one entrance the pieces share, cascaded — see `PostBadge.cascade`. */
+  cascade: BadgeCascade | null;
   shades: Shade[];
   /** The opener a new piece of this kind starts on. */
   hook: HookLayer[];
@@ -368,6 +379,7 @@ export function hookDefaultsFrom(badge: PostBadge): HookDefaults {
     hookSeconds: badge.hookSeconds,
     layout: { ...badge.layout },
     pieceStyles: structuredClone(badge.pieceStyles),
+    cascade: badge.cascade ? structuredClone(badge.cascade) : null,
     shades: badge.shades.map((shade) => ({ ...shade, id: newId() })),
     hook: structuredClone(badge.hook),
   };
@@ -415,6 +427,7 @@ export function defaultPostBadge(
     collage: null,
     textOverrides: {},
     pieceStyles: defaults ? structuredClone(defaults.pieceStyles) : {},
+    cascade: defaults?.cascade ? structuredClone(defaults.cascade) : null,
     hook: defaults?.hook ? structuredClone(defaults.hook) : defaultHookLayers(),
   };
 }
@@ -1235,6 +1248,22 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
         collage: readCollage(slide.collage),
       })),
     }));
+  }
+
+  if (migrated.version < 25) {
+    // The badge's pieces may share one cascaded entrance. Every stored badge
+    // keeps its per-piece entrances (`cascade` starts null); a value that is
+    // there is read through `readCascade`, junk landing as none.
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      badge: { ...post.badge, cascade: readCascade(post.badge?.cascade) },
+    }));
+    migrated.hookDefaults = Object.fromEntries(
+      Object.entries(migrated.hookDefaults ?? {}).map(([kind, defaults]) => [
+        kind,
+        defaults ? { ...defaults, cascade: readCascade(defaults.cascade) } : defaults,
+      ]),
+    ) as HookDefaultsByKind;
   }
 
   migrated.version = TRIP_DOC_VERSION;

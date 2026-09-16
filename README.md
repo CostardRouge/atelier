@@ -644,6 +644,15 @@ framing and develop; an empty cell shows the layout's background in the
 export, and a smaller layout keeps the extra pictures rather than dropping
 them. Collages are stills for now: a slide holding one is delivered as a PNG.
 
+**The badge can cascade.** Instead of a delay typed on each piece, the Look
+tab's **Cascade** gives the whole badge one entrance and spreads it over the
+pieces in an order — top to bottom, the numeral first, shuffled once with a
+seed that is kept, so the export lands exactly as the preview did. Every
+entrance and exit, on a badge piece or a Studio title, can now travel on more
+curves: the four eases, their cubic and exponential cousins, **Back** and
+**Spring** (which overshoot before they rest) and **Steps** (which moves in
+jumps, like stop-motion).
+
 **The picture can be helped.** A bright sky exactly where the hook sits is the
 normal case, so up to four **shades** can be laid over it. One shade is a
 direction, picked on a 3×3 grid whose cells show the gradient they draw — from

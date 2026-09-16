@@ -459,6 +459,7 @@ export default function PostEditor({
             aspect,
             post.badge.pieceStyles,
             post.badge.durationSeconds,
+            post.badge.cascade,
           )
         : [],
     [
@@ -466,6 +467,7 @@ export default function PostEditor({
       post.badge.layout,
       post.badge.pieceStyles,
       post.badge.durationSeconds,
+      post.badge.cascade,
       aspect,
     ],
   );
@@ -796,7 +798,7 @@ export default function PostEditor({
   // the composition every other surface (the band, the PNG) shows, and the one
   // a piece opens on — an opener that moves with no animated piece (a scrub)
   // settles past its own length.
-  const settle = badgeSettleSeconds(post.badge.pieceStyles);
+  const settle = badgeSettleSeconds(post.badge.pieceStyles, post.badge.cascade);
   const clipAtRest = !stagePlaying && playhead <= clipRange.start + TRIM_EPSILON;
   const stillAtRest = !deck.playing && deck.local <= TRIM_EPSILON;
   const composedView = isClipSlide ? clipAtRest : stillAtRest;

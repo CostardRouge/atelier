@@ -17,8 +17,10 @@
  * Pure and DOM-free.
  */
 
-import type { ElementAnimation } from '../overlay/animation';
+import type { AnimDirection, AnimPreset, AnimStep, ElementAnimation } from '../overlay/animation';
+import { isEasingId } from '../motion/easing';
 import { snap } from '../overlay/guides';
+import { normaliseStagger, staggerDelays, type Stagger } from '../overlay/stagger';
 import {
   createTextElement,
   type Anchor,
@@ -70,6 +72,58 @@ export interface BadgePieceStyle {
 }
 
 export type BadgePieceStyles = Partial<Record<BadgePiece, BadgePieceStyle>>;
+
+/**
+ * ONE entrance for every piece, spread over time by where the pieces sit —
+ * the stack's order, its rows, the big numeral first… (`overlay/stagger.ts`).
+ * It replaces each piece's own entrance while it is set; a piece's EXIT stays
+ * its own. Delays are derived on every build, never stored, so re-measuring
+ * the badge never leaves a stale one behind.
+ */
+export interface BadgeCascade {
+  step: AnimStep;
+  stagger: Stagger;
+}
+
+const PRESETS: readonly AnimPreset[] = ['none', 'fade', 'slide', 'scale', 'typewriter', 'wipe'];
+const DIRECTIONS: readonly AnimDirection[] = ['up', 'down', 'left', 'right'];
+
+function finite(v: unknown): number | undefined {
+  return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+}
+
+/** Read an animation step out of anything; junk lands as a plain fade. */
+export function readAnimStep(v: unknown): AnimStep {
+  const s = (v && typeof v === 'object' ? v : {}) as Partial<AnimStep>;
+  const out: AnimStep = {
+    preset: PRESETS.includes(s.preset as AnimPreset) ? (s.preset as AnimPreset) : 'fade',
+    duration: Math.max(0, finite(s.duration) ?? 0.5),
+    easing: isEasingId(s.easing) ? s.easing : 'out',
+  };
+  if (DIRECTIONS.includes(s.direction as AnimDirection)) out.direction = s.direction;
+  const distance = finite(s.distanceFrac);
+  if (distance !== undefined) out.distanceFrac = distance;
+  const from = finite(s.scaleFrom);
+  if (from !== undefined) out.scaleFrom = from;
+  const steps = finite(s.steps);
+  if (steps !== undefined) out.steps = steps;
+  return out;
+}
+
+/** Read a cascade out of anything — null unless it holds a step. */
+export function readCascade(v: unknown): BadgeCascade | null {
+  if (!v || typeof v !== 'object') return null;
+  const c = v as Partial<BadgeCascade>;
+  if (!c.step || typeof c.step !== 'object') return null;
+  return { step: readAnimStep(c.step), stagger: normaliseStagger(c.stagger) };
+}
+
+export function defaultCascade(): BadgeCascade {
+  return {
+    step: { preset: 'slide', duration: 0.5, easing: 'out-cubic', direction: 'up', distanceFrac: 0.05 },
+    stagger: { each: 0.12, order: 'sequence' },
+  };
+}
 
 /**
  * Each piece's size as a multiple of the headline's, in drawing order. The
@@ -286,12 +340,26 @@ export function badgeElements(
   aspect: number,
   styles: BadgePieceStyles = {},
   durationSeconds: number = DEFAULT_BADGE_DURATION,
+  cascade: BadgeCascade | null = null,
 ): OverlayElement[] {
   const { pieces, heights, gaps, top } = blockMetrics(content, layout, aspect);
   if (!pieces.length) return [];
 
   const horizontal = horizontalOf(layout.anchor);
   const lineAnchor = `top-${horizontal}` as Anchor;
+
+  // The pieces' boxes in HEIGHT units (x scaled by the aspect), for the
+  // cascade to rank: a stack has one column, so `columns` ties and `rows`
+  // reads the stack top to bottom; a piece's width is unknown without a
+  // canvas and stands at nothing — `size` then ranks by height, the numeral
+  // first, which is what the ratios already mean.
+  let boxCursor = top;
+  const boxes = pieces.map((_, i) => {
+    const box = { x: layout.x * aspect, y: boxCursor, w: 0, h: heights[i] };
+    boxCursor += heights[i] + gaps[i];
+    return box;
+  });
+  const delays = cascade ? staggerDelays(boxes, { w: aspect, h: 1 }, cascade.stagger) : null;
 
   let cursor = top;
   return pieces.map((piece, i) => {
@@ -302,7 +370,19 @@ export function badgeElements(
     el.x = layout.x;
     el.y = cursor;
     el.sizeFrac = layout.sizeFrac * RATIOS[piece.key];
-    applyPieceStyle(el, style, durationSeconds);
+    applyPieceStyle(
+      el,
+      cascade && delays
+        ? {
+            ...style,
+            animation: {
+              in: { ...cascade.step, delay: delays[i] },
+              out: style?.animation?.out ?? null,
+            },
+          }
+        : style,
+      durationSeconds,
+    );
     cursor += heights[i] + gaps[i];
     return el;
   });
@@ -334,8 +414,18 @@ export function moveBlock(
  * export defaults to, so the PNG is never caught mid-slide. Zero when nothing
  * is animated.
  */
-export function badgeSettleSeconds(styles: BadgePieceStyles): number {
+export function badgeSettleSeconds(
+  styles: BadgePieceStyles,
+  cascade: BadgeCascade | null = null,
+): number {
   let settled = 0;
+  if (cascade) {
+    // The cascade replaces every entrance, so its own bound is the answer:
+    // the last of at most ORDER.length ranks plus the step. An upper bound —
+    // which pieces a badge really has depends on its content — and a still
+    // taken a little later than needed is still a still at rest.
+    return Math.max(0, cascade.stagger.each) * (ORDER.length - 1) + Math.max(0, cascade.step.duration);
+  }
   for (const style of Object.values(styles)) {
     const step = style?.animation?.in;
     if (!step) continue;

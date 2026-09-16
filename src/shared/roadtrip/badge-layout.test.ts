@@ -8,6 +8,7 @@ import {
   moveBlock,
   pieceElementId,
   pieceFromElementId,
+  readCascade,
   type BadgeLayout,
   type BadgePieceStyles,
 } from './badge-layout';
@@ -383,5 +384,54 @@ describe('badgeBlockExtent', () => {
       exif: null,
     };
     expect(badgeBlockExtent(empty, layout(), REEL)).toBeNull();
+  });
+});
+
+describe('the cascade', () => {
+  const cascade = {
+    step: { preset: 'fade' as const, duration: 0.4, easing: 'out' as const },
+    stagger: { each: 0.1, order: 'sequence' as const },
+  };
+
+  it('gives every piece the one entrance, delayed by its rank', () => {
+    const els = badgeElements(full, layout(), REEL, {}, 4, cascade);
+    const delays = els.map((el) => el.animation?.in?.delay ?? -1);
+    expect(delays).toEqual([0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6].map((d) => expect.closeTo(d, 9)));
+    expect(els.every((el) => el.animation?.in?.preset === 'fade')).toBe(true);
+    expect(els.every((el) => el.window?.start === 0 && el.window?.end === null)).toBe(true);
+  });
+
+  it('reverses the stack and lands the whole stack at once on columns', () => {
+    const reversed = badgeElements(full, layout(), REEL, {}, 4, {
+      ...cascade,
+      stagger: { each: 0.1, order: 'reverse' },
+    });
+    expect(reversed[0].animation?.in?.delay).toBeCloseTo(0.6);
+    expect(reversed[6].animation?.in?.delay).toBe(0);
+    const columns = badgeElements(full, layout(), REEL, {}, 4, {
+      ...cascade,
+      stagger: { each: 0.1, order: 'columns' },
+    });
+    expect(columns.every((el) => el.animation?.in?.delay === 0)).toBe(true);
+  });
+
+  it('keeps a piece\'s own exit and gives the window an end for it', () => {
+    const styles: BadgePieceStyles = {
+      headline: { animation: { in: { preset: 'scale', duration: 1, easing: 'in' }, out: { preset: 'fade', duration: 0.3, easing: 'in' } } },
+    };
+    const els = badgeElements(full, layout(), REEL, styles, 4, cascade);
+    const headline = els.find((el) => el.id === pieceElementId('headline'))!;
+    expect(headline.animation?.in?.preset).toBe('fade'); // the cascade's, not its own
+    expect(headline.animation?.out?.preset).toBe('fade');
+    expect(headline.window).toEqual({ start: 0, end: 4 });
+  });
+
+  it('settles after the last possible rank plus the step, and reads junk as none', () => {
+    expect(badgeSettleSeconds({}, cascade)).toBeCloseTo(0.6 + 0.4);
+    expect(readCascade(null)).toBeNull();
+    expect(readCascade({ stagger: {} })).toBeNull();
+    const read = readCascade({ step: { preset: 'zoom', duration: -1, easing: 'wobble' }, stagger: { order: 'rows' } })!;
+    expect(read.step).toEqual({ preset: 'fade', duration: 0, easing: 'out' });
+    expect(read.stagger).toEqual({ each: 0.1, order: 'rows' });
   });
 });

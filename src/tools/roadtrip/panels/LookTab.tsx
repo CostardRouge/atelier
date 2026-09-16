@@ -1,7 +1,10 @@
 import type { Anchor } from '../../../shared/overlay/overlay-types';
 import StylePanel from '../../../shared/overlay/StylePanel';
 import type { Shade } from '../../../shared/roadtrip/shades';
-import type { BadgePieceStyle } from '../../../shared/roadtrip/badge-layout';
+import { defaultCascade, type BadgePieceStyle } from '../../../shared/roadtrip/badge-layout';
+import { STAGGER_ORDERS, newStaggerSeed } from '../../../shared/overlay/stagger';
+import { StepRows } from '../PieceStylePanel';
+import { SelectField, ToggleField } from '../../../shared/ui/Inspector';
 import type { BadgePiece } from '../../../shared/roadtrip/day-badge';
 import type { PostBadge, TripDoc, TripPost } from '../../../shared/roadtrip/trip-types';
 import type { HookContext, HookPictureStatus } from '../../../shared/roadtrip/hooks/hook-variant';
@@ -155,6 +158,105 @@ export default function LookTab({
             }
           >
             <PieceStylePanel style={pieceStyle} onChange={setPieceStyle} />
+          </InspectorSection>
+
+          {/* One entrance for the whole badge, spread over the pieces by where
+              they sit — instead of a delay typed on each. Exits stay per piece. */}
+          <InspectorSection
+            id="piece.cascade"
+            title="Cascade"
+            badge={post.badge.cascade ? 'on' : undefined}
+            info={
+              <>
+                <p>
+                  One entrance shared by every piece of the badge, the pieces arriving one
+                  rank after another in the order chosen — top to bottom, the numeral
+                  first, shuffled… The delays follow from where the pieces sit, so nothing
+                  is typed per piece and nothing goes stale when the badge changes.
+                </p>
+                <p>
+                  While it is on it replaces each piece’s own entrance; an exit a piece has
+                  stays its own. A still is taken once the last piece has landed.
+                </p>
+              </>
+            }
+          >
+            <FieldRow label="Cascade">
+              <ToggleField
+                label="Cascade the pieces"
+                checked={Boolean(post.badge.cascade)}
+                onChange={(on) => patchBadge({ cascade: on ? defaultCascade() : null })}
+              />
+            </FieldRow>
+            {post.badge.cascade && (
+              <>
+                <StepRows
+                  which="In"
+                  step={post.badge.cascade.step}
+                  hideDelay
+                  onChange={(step) =>
+                    patchBadge({
+                      cascade: step
+                        ? { ...post.badge.cascade!, step }
+                        : { ...post.badge.cascade!, step: { preset: 'none', duration: 0, easing: 'linear' } },
+                    })
+                  }
+                />
+                <FieldRow label="Order">
+                  <SelectField
+                    label="Cascade order"
+                    value={post.badge.cascade.stagger.order}
+                    onChange={(order) =>
+                      patchBadge({
+                        cascade: {
+                          ...post.badge.cascade!,
+                          stagger: {
+                            ...post.badge.cascade!.stagger,
+                            order,
+                            ...(order === 'random' && post.badge.cascade!.stagger.seed === undefined
+                              ? { seed: newStaggerSeed() }
+                              : {}),
+                          },
+                        },
+                      })
+                    }
+                    options={STAGGER_ORDERS.map((o) => ({ id: o.id, label: `${o.label} — ${o.hint}` }))}
+                  />
+                </FieldRow>
+                <FieldRow label="Each">
+                  <RangeField
+                    label="Seconds between two ranks"
+                    min={0}
+                    max={0.6}
+                    step={0.01}
+                    value={post.badge.cascade.stagger.each}
+                    onChange={(each) =>
+                      patchBadge({
+                        cascade: { ...post.badge.cascade!, stagger: { ...post.badge.cascade!.stagger, each } },
+                      })
+                    }
+                    format={(v) => `${v.toFixed(2)} s`}
+                  />
+                </FieldRow>
+                {post.badge.cascade.stagger.order === 'random' && (
+                  <FieldRow label="Shuffle">
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        patchBadge({
+                          cascade: {
+                            ...post.badge.cascade!,
+                            stagger: { ...post.badge.cascade!.stagger, seed: newStaggerSeed() },
+                          },
+                        })
+                      }
+                    >
+                      Shuffle again
+                    </Button>
+                  </FieldRow>
+                )}
+              </>
+            )}
           </InspectorSection>
 
           <InspectorSection
