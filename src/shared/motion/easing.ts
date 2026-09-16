@@ -5,14 +5,17 @@
  * own four or five curves under different names, so a look could not say
  * the same thing in both places. Pure and DOM-free.
  *
- * Two rules the consumers depend on:
+ * Three rules the consumers depend on:
  *
- * - every curve is monotonic on 0..1, starts at 0 and ends at 1 — a stagger
- *   and a settle instant are computed from that;
- * - a curve that has a CLOSED-FORM inverse says so. A moving opener places
- *   its stops on the inverse and glides on the curve, so a stop is reached
- *   exactly at its time; it may only offer curves from `INVERTIBLE`. A curve
- *   that overshoots (back, spring) has no inverse and is for entrances only.
+ * - every curve starts at 0 and ends at 1;
+ * - a curve that has a CLOSED-FORM inverse says so, and is then monotonic. A
+ *   moving opener places its stops on the inverse and glides on the curve, so
+ *   a stop is reached exactly at its time; it may only offer `INVERTIBLE`;
+ * - a curve that OVERSHOOTS (back, spring) goes past 1 on the way to rest: a
+ *   scale or an offset follows it, an opacity clamps. It has no inverse and
+ *   is for entrances and exits, never for a head that must land on a day.
+ *
+ * `steps` moves in jumps — stop-motion, the one curve that takes a number.
  */
 
 export type EasingId =
@@ -23,19 +26,36 @@ export type EasingId =
   | 'in-cubic'
   | 'out-cubic'
   | 'in-out-cubic'
-  | 'out-expo';
+  | 'out-expo'
+  | 'back'
+  | 'spring'
+  | 'steps';
 
 export interface Curve {
   id: EasingId;
   label: string;
   /** Eased progress for `t` in 0..1. May exceed 1 on an overshooting curve. */
-  at: (t: number) => number;
+  at: (t: number, steps?: number) => number;
   /** The closed-form inverse, when the curve has one: `inverse(at(u)) === u`. */
   inverse?: (p: number) => number;
+  /** Goes past 1 before it rests. */
+  overshoots?: boolean;
+  /** Takes a step count. */
+  stepped?: boolean;
 }
 
-/** `ease-out-hard` is normalised so the curve really reaches 1 at t = 1. */
+/** `out-expo` is normalised so the curve really reaches 1 at t = 1. */
 const EXPO_TAIL = 1 - 2 ** -10;
+
+export const DEFAULT_STEPS = 4;
+export const MIN_STEPS = 2;
+export const MAX_STEPS = 12;
+
+/** A step count read out of anything. */
+export function clampSteps(n: number | undefined): number {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return DEFAULT_STEPS;
+  return Math.min(MAX_STEPS, Math.max(MIN_STEPS, Math.round(n)));
+}
 
 export const CURVES: Record<EasingId, Curve> = {
   linear: { id: 'linear', label: 'Linear', at: (t) => t, inverse: (p) => p },
@@ -67,6 +87,33 @@ export const CURVES: Record<EasingId, Curve> = {
     at: (t) => (t >= 1 ? 1 : (1 - 2 ** (-10 * t)) / EXPO_TAIL),
     inverse: (p) => -Math.log2(1 - p * EXPO_TAIL) / 10,
   },
+  back: {
+    id: 'back',
+    label: 'Back',
+    // The classic ease-out-back: overshoots by ~10% then settles.
+    at: (t) => {
+      const c1 = 1.70158;
+      const c3 = c1 + 1;
+      return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2;
+    },
+    overshoots: true,
+  },
+  spring: {
+    id: 'spring',
+    label: 'Spring',
+    // A damped oscillation that has died out by t = 1.
+    at: (t) => (t >= 1 ? 1 : 1 - Math.exp(-6.5 * t) * Math.cos(13 * t)),
+    overshoots: true,
+  },
+  steps: {
+    id: 'steps',
+    label: 'Steps',
+    at: (t, steps) => {
+      const n = clampSteps(steps);
+      return t >= 1 ? 1 : Math.floor(t * n) / n;
+    },
+    stepped: true,
+  },
 };
 
 export const EASING_IDS = Object.keys(CURVES) as EasingId[];
@@ -87,7 +134,7 @@ function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
-/** Eased progress, `p` clamped to 0..1 first. */
-export function easeAt(id: string, p: number): number {
-  return curveOf(id).at(clamp01(p));
+/** Eased progress, `p` clamped to 0..1 first. `steps` only matters to the stepped curve. */
+export function easeAt(id: string, p: number, steps?: number): number {
+  return curveOf(id).at(clamp01(p), steps);
 }
