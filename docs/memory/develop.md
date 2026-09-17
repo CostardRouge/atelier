@@ -212,3 +212,48 @@ Verified in the pane on a deliberately flat, warm JPEG (70..150, 1.18/0.82
 cast): Auto tone wrote `black 69 · white 155` and NO colour; Auto colour wrote
 temperature −100 (clamped, said) and tint −36; both pressed again changed
 nothing.
+
+## A RAW draws today, from the render its camera wrote inside it (2026-09-17, P3)
+
+`shared/exif/raw-probe.ts` (pure, 12 specs) walks a RAW's IFDs through
+`exif-parser.ts`'s OWN reader — `parseIfd`, `num`, `nums` are exported for it,
+so the suite has one TIFF parser and not two — and `extractRawPreview` slices
+the camera's embedded JPEG out. **No decoder, no dependency, no network**: a
+DNG or an ARW now opens in Develop, where it used to say "no browser decodes
+this". Rules:
+
+- **PHOTOMETRIC is the discriminator, never compression.** A DNG's sensor
+  plane is very often compression 7 as well (lossless JPEG), and taking it for
+  a preview hands the browser a CFA mosaic. A render says YCbCr or RGB (6, 2,
+  1); a sensor plane says 32803 (CFA) or 34892 (LinearRaw).
+- **Walk the SubIFDs (tag 330).** A DNG keeps the sensor plane and the
+  full-size render there; reading IFD0 alone finds the thumbnail and misses
+  both.
+- **Do NOT bounds-check the preview pointer inside the probe.** It reads only
+  the first megabyte, and a full-size render in a 60 MB DNG sits far past it —
+  checking there threw away the one preview worth having. `extractRawPreview`,
+  which knows the real file size, is where the pointer is checked. Pinned by a
+  spec with a 45 MB offset.
+- **The decode falls back in `loadBadgeSource`, not only in `decodePhoto`** —
+  that was the first attempt's mistake, and the picture stayed black. Every
+  editor stage decodes through `badge-render.ts`; `photo-frame.ts` is the
+  export path. Both now try the preview, and both keep the honest refusal for a
+  RAW that carries none.
+- **`pictureFidelity` tests `isRawImage` BEFORE the media type.** A RAW off a
+  disk usually carries an EMPTY type, so asking the type first labelled every
+  DNG a clip. The chip reads `RAW · camera render` and the note says it is the
+  camera's JPEG and not the sensor data — the picture on screen is a RENDER,
+  and letting it pass for the file's own pixels is the fabrication this rule
+  exists to stop.
+
+**What the spike still cannot answer**: decode time, heap and the JPEG XL
+question are the maintainer's own files' to settle (`docs/photo-editor.md` P3).
+`libraw-wasm` 1.6.0 is reachable from this container, so the measurement is one
+`npm i` away once a real DNG, ProRAW and ARW are in the scratchpad — never in
+the repo. `describeRaw` prints exactly what that spike needs to report
+(`8064×6048 · sensor JPEG XL · preview 4032×3024 · 2 opcode lists`).
+
+Verified in the pane on a synthetic DNG built around a real canvas JPEG: the
+probe read `4000×3000 · sensor JPEG · preview 640×480 · 1 opcode list`, the
+stage drew the embedded gradient, the chip read `RAW · CAMERA RENDER`, and the
+filmstrip cell showed it.

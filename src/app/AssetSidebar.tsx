@@ -1101,7 +1101,12 @@ function lightboxItem(
     // The cover the library already built, drawn under the file itself.
     still: meta?.thumbUrl ?? null,
     natural: meta?.width && meta?.height ? { width: meta.width, height: meta.height } : null,
-    unavailable: raw ? `${meta?.imageType ?? 'RAW'} — no browser decodes this; add its JPEG twin` : null,
+    // Not "add its JPEG twin" any more: Develop draws the render the camera
+    // wrote inside the file. This viewer is an <img> and cannot, so it says
+    // where the picture CAN be seen rather than that there is none.
+    unavailable: raw
+      ? `${meta?.imageType ?? 'RAW'} — no browser decodes this here; Develop shows the render inside it`
+      : null,
   };
 }
 

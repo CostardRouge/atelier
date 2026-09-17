@@ -15,6 +15,8 @@
  * element already hands over display-oriented frames.
  */
 
+import { isRawImage } from '../library/assets';
+import { extractRawPreview } from '../exif/raw-probe';
 import type { Cue } from '../telemetry/srt-parser';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
@@ -36,7 +38,7 @@ import { variantOutputSize, type ExportVariant } from '../projects/export-varian
 export class PhotoDecodeError extends Error {
   constructor(name: string) {
     super(
-      `This browser can't decode ${imageTypeLabel(name)} — export a JPEG or TIFF from your RAW developer and use that.`,
+      `This browser can't decode ${imageTypeLabel(name)}, and the file carries no render of its own — export a JPEG or TIFF from your RAW developer and use that.`,
     );
     this.name = 'PhotoDecodeError';
   }
@@ -49,9 +51,51 @@ export class PhotoDecodeError extends Error {
  * bug to swallow.
  */
 export async function decodePhoto(file: File): Promise<ImageBitmap> {
+  return (await decodePhotoSource(file)).bitmap;
+}
+
+/** A decoded picture, and whether it is the file itself or a render inside it. */
+export interface DecodedPhoto {
+  bitmap: ImageBitmap;
+  /**
+   * True when the bytes drawn are the camera's own embedded JPEG rather than
+   * the file's own pixels — a RAW. What is on screen is then a RENDER, not the
+   * sensor's data, and every panel showing it has to say so.
+   */
+  viaRawPreview: boolean;
+}
+
+/**
+ * Decode a picture, falling back to the render a RAW carries inside it.
+ *
+ * No browser decodes a sensor plane, but a camera writes its own JPEG into the
+ * file beside it — so a DNG or an ARW draws today, with no decoder fetched and
+ * no dependency added (`shared/exif/raw-probe.ts`). It is the camera's
+ * rendering, not ours: highlights above white are already gone from it, and
+ * that is exactly why the caller is told which it got.
+ */
+export async function decodePhotoSource(file: File): Promise<DecodedPhoto> {
   try {
-    return await createImageBitmap(file, { imageOrientation: 'from-image' });
+    return {
+      bitmap: await createImageBitmap(file, { imageOrientation: 'from-image' }),
+      viaRawPreview: false,
+    };
   } catch {
+    // Only a RAW is worth a second attempt: anything else the browser refused
+    // is simply a picture it cannot read, and probing it would be wasted work.
+    if (isRawImage(file.name)) {
+      try {
+        const preview = await extractRawPreview(file);
+        if (preview) {
+          return {
+            bitmap: await createImageBitmap(preview, { imageOrientation: 'from-image' }),
+            viaRawPreview: true,
+          };
+        }
+      } catch {
+        // A malformed or previewless RAW falls through to the honest refusal.
+      }
+    }
     throw new PhotoDecodeError(file.name);
   }
 }

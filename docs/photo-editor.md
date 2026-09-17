@@ -317,13 +317,21 @@ here is a channel GAIN, and an 8-bit render carries no as-shot white balance to
 offset from, so a kelvin number would be invented. It waits for the RAW path,
 where `AsShotNeutral` and a colour matrix make it real (P10).
 
-**P3 — the RAW spike** *(read-only, nothing committed to the render path)*. O4 of
-`develop-originals.md`, decided 2026-09-13 and never run: his DJI DNG, ProRAW
-lossless **and JPEG XL**, and an ARW — tag 259, the opcode lists, embedded
-preview sizes, then `libraw-wasm` decode time and heap at half and full size. It
-answers what P4's source node must accept, and a JPEG XL refusal by the npm
-build is a question that comes back to him (`photo-develop.md` §6.2). Real files
-stay in the scratchpad, never in the repo.
+**P3 — the RAW spike** *(PARTLY BUILT 2026-09-17)*. Built, and a gain on its
+own: `shared/exif/raw-probe.ts` reads a RAW's IFDs through the EXIF parser's
+own TIFF reader and `extractRawPreview` slices out the render the camera wrote
+inside the file — so **a DNG or an ARW opens in Develop today**, with no
+decoder fetched and no dependency added, wearing a `RAW · camera render` chip
+that says it is the camera's JPEG and not the sensor data. `describeRaw`
+prints what the rest of the spike must report.
+
+Still the maintainer's files' to answer, and nothing here can stand in for
+them: tag 259 and the opcode lists on his own DJI DNG, ProRAW (lossless **and
+JPEG XL**) and ARW; `libraw-wasm` decode time and heap at half and full size.
+`libraw-wasm` 1.6.0 is reachable from the container, so that is one `npm i`
+away once the files are in the scratchpad — never in the repo. A JPEG XL
+refusal by the npm build is what turns the decoder choice into "which wasm
+build do we maintain" (`photo-develop.md` §6.2), and that comes back to him.
 
 **P4 — the render core** *(two commits)*. `shared/render/`: a `RenderNode`
 contract, float16 ping-pong framebuffers, the SOURCE and CUBE nodes, and
