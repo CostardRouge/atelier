@@ -353,13 +353,27 @@ the crop leaves `drawFramed` for the warp; `CropStage` (the zone editor that
 replaced `FramingStage` on 2026-09-19, its arithmetic in `crop-rect.ts`) gains
 the keystone handles.
 
-**P6 — lens correction.** A small Lensfun-subset parser (pure, tested), his
-bodies and lenses committed under `public/lenses/`, matched on EXIF
+**P6 — lens correction** *(engine BUILT 2026-09-17 — `lens.ts` pure with 17
+specs and `lens-pass.ts`, one radial pass carrying distortion, lateral CA and
+vignetting together, measured against the pure module on a real GPU. The wiring
+commit follows.)*
+
+**The profile half is NOT built, deliberately, and is not merely unfinished.**
+A lens profile is MEASURED calibration data. There is no real Lensfun data here
+for the Mini 4 Pro or the Sony glass, and coefficients invented to fill the gap
+would be a fabricated correction — worse than none, because it looks
+authoritative. The same refusal as the battery gauge drawing `—`. So what ships
+is the engine plus manual sliders, which correct by eye against a straight edge
+and work on any lens; a profile, when there is real data for one, is a source of
+numbers for those same sliders and changes nothing below them.
+
+When it does come: a small Lensfun-subset parser (pure, tested), profiles
+committed under `public/lenses/`, matched on EXIF
 `Make`/`Model`/`LensModel`/`FocalLength`/`FNumber` — which `MediaOrigin.exif`
 already vouches for on a proxy (`studio.md`, «A source vouches») — interpolated
-between focal entries, plus manual k1/k2 · CA · vignetting sliders for anything
-unmatched. **F4 is the rule that shapes it**: a profile applies to a RAW, is OFF
-by default on a render, and the panel says why.
+between focal entries. **F4 is the rule that shapes it**: a profile applies to a
+RAW, is OFF by default on a render (a DJI JPEG and its embedded preview are
+already dewarped while the DNG is not), and the panel says why.
 
 **P7 — layers and procedural masks** *(two commits)*. The `EditStack` migration
 and the layer list; then `mask.ts` (linear, radial, luma/hue/sat range, combine),

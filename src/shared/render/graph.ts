@@ -182,8 +182,15 @@ export function createRenderGraph(
     gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, width, height, 0, gl.RGBA, texType, null);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    // LINEAR, and it only started mattering with the second pass that RESAMPLES.
+    // While every pass was 1:1 (the cube, a passthrough) each fragment read its
+    // own texel centre and the filter could not be told apart; a lens warp
+    // followed by a keystone reads BETWEEN texels, and NEAREST there is visible
+    // stair-stepping on every edge in the picture. RGBA16F is texture-filterable
+    // in core WebGL2 — it is RGBA32F that needs `OES_texture_float_linear`, the
+    // distinction the cube upload already turns on.
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);

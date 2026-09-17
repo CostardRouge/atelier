@@ -173,6 +173,99 @@ const out = await page.evaluate(async () => {
     };
   }
 
+  // --- the lens: does the GPU land a point where lensSampleRadius says? -----
+  //
+  // Distortion is radial, so a mirror is invisible to it — which is exactly why
+  // it needs measuring rather than reasoning about. A marker is put at a known
+  // radius on the horizontal centre line, warped, and its centroid's radius
+  // compared with the radius the pure module solves for. Vignetting is checked
+  // the same way, as a ratio the shader and `vignetteGain` must agree on.
+  {
+    const { createRenderGraph } = await import('/atelier/src/shared/render/graph.ts');
+    const { makeLensPass } = await import('/atelier/src/shared/render/lens-pass.ts');
+    const lens = await import('/atelier/src/shared/render/lens.ts');
+
+    const S = 192;
+    const HALF = 1 / Math.SQRT2; // a square frame: the corner sits at radius 1
+    const toRadius = (px) => Math.abs(px / S - 0.5) * 2 * HALF;
+
+    const draw = (paint) => {
+      const c = document.createElement('canvas');
+      c.width = S; c.height = S;
+      paint(c.getContext('2d'));
+      return c;
+    };
+    const run = (source, pass) => {
+      const cv = document.createElement('canvas');
+      const graph = createRenderGraph(cv);
+      graph.resize(S, S);
+      graph.render(source, [pass]);
+      const o = document.createElement('canvas'); o.width = S; o.height = S;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(cv, 0, 0);
+      const data = oc.getImageData(0, 0, S, S).data;
+      graph.dispose();
+      return data;
+    };
+
+    // A block on the centre line, well out towards the edge. Distortion is
+    // CUBIC in the radius, so near the middle it barely moves anything — a
+    // marker at 0.75 of the way out shifts by 0.007 and the run could not tell
+    // a working warp from a broken one. Not so far out that the warped block
+    // clips the frame, which would drag its centroid back inwards.
+    const MARK = Math.round(S * 0.88);
+    const marked = draw((g) => {
+      g.fillStyle = '#000'; g.fillRect(0, 0, S, S);
+      g.fillStyle = '#fff'; g.fillRect(MARK - 3, (S >> 1) - 3, 6, 6);
+    });
+    const sourceR = toRadius(MARK);
+
+    // Both terms at full barrel: a source point moves OUTWARD in the output, a
+    // direction no sign error can fake, and this is the exact corner where the
+    // radius map is closest to folding (`lens.ts`, f'(1) = 0.16).
+    const setting = { ...lens.DEFAULT_LENS, distortion: -100, distortion2: -100 };
+    const { k1, k2 } = lens.distortionTerms(setting);
+    // Solve lensSampleRadius(ro) = sourceR by bisection — monotone, so it has
+    // exactly one answer, which is the property the specs pin.
+    let lo = 0, hi = 2;
+    for (let i = 0; i < 80; i += 1) {
+      const mid = (lo + hi) / 2;
+      if (lens.lensSampleRadius(mid, k1, k2) < sourceR) lo = mid; else hi = mid;
+    }
+    const expectedR = (lo + hi) / 2;
+
+    const data = run(marked, makeLensPass(setting, 1));
+    let sx = 0, w = 0;
+    for (let y = 0; y < S; y += 1) for (let x = 0; x < S; x += 1) {
+      const v = data[(y * S + x) * 4];
+      if (v < 128) continue;
+      sx += x + 0.5; w += 1;
+    }
+    results.lens = {
+      lit: w,
+      sourceR: Number(sourceR.toFixed(4)),
+      expectedR: Number(expectedR.toFixed(4)),
+      // Undistorted, to keep on record that the warp is doing something: the
+      // marker would sit back at sourceR.
+      gotR: w ? Number(toRadius(sx / w).toFixed(4)) : null,
+    };
+
+    // Vignetting: a flat grey frame, corrected, read at the centre and at a
+    // known radius out along the centre line.
+    const flat = draw((g) => { g.fillStyle = '#808080'; g.fillRect(0, 0, S, S); });
+    const vig = { ...lens.DEFAULT_LENS, vignette: 60, vignetteMidpoint: 20 };
+    const vData = run(flat, makeLensPass(vig, 1));
+    const at = (x, y) => vData[((y * S + x) * 4)];
+    const centre = at(S >> 1, S >> 1);
+    const OUT = Math.round(S * 0.92);
+    results.vignette = {
+      centre,
+      out: at(OUT, S >> 1),
+      // What the pure module says that pixel should have become.
+      expected: Math.round(centre * lens.vignetteGain(toRadius(OUT), 60, 20)),
+    };
+  }
+
   return results;
 });
 
@@ -218,6 +311,42 @@ if (unmirroredOff < 0.02) {
   console.log('  FAIL  unmirrored agrees too, so this check proves nothing any more');
 } else {
   console.log(`  ok    unmirrored is ${unmirroredOff.toFixed(3)} away, so the mirror is doing the work`);
+}
+
+const lens = out.lens;
+console.log(
+  `\n  lens: a marker at radius ${lens.sourceR} lands at ${lens.gotR}, ` +
+    `lensSampleRadius solves for ${lens.expectedR}`,
+);
+if (!lens.lit) {
+  bad += 1;
+  console.log('  FAIL  nothing was lit at all — the warp threw the marker off the frame');
+} else if (Math.abs(lens.gotR - lens.expectedR) > 0.01) {
+  bad += 1;
+  console.log(
+    `  FAIL  the warp disagrees with lens.ts by ${Math.abs(lens.gotR - lens.expectedR).toFixed(4)}`,
+  );
+} else if (Math.abs(lens.gotR - lens.sourceR) < 0.01) {
+  // If the corrected radius equalled the source's, the pass did nothing and the
+  // check would pass on an empty shader for ever after.
+  bad += 1;
+  console.log('  FAIL  the marker did not move, so this check proves nothing any more');
+} else {
+  console.log(
+    `  ok    within ${Math.abs(lens.gotR - lens.expectedR).toFixed(4)}, ` +
+      `and it moved ${Math.abs(lens.gotR - lens.sourceR).toFixed(3)} to get there`,
+  );
+}
+
+const vig = out.vignette;
+console.log(
+  `  vignette: centre ${vig.centre}, corner ${vig.out}, vignetteGain says ${vig.expected}`,
+);
+if (Math.abs(vig.out - vig.expected) > 2) {
+  bad += 1;
+  console.log(`  FAIL  the lift disagrees with lens.ts by ${Math.abs(vig.out - vig.expected)} codes`);
+} else {
+  console.log(`  ok    within ${Math.abs(vig.out - vig.expected)} code(s) of it`);
 }
 
 if (errors.length) {

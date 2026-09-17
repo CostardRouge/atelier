@@ -152,3 +152,56 @@ Measured in the pane on a grid: the slider wrote `vertical: 70` through to the
 document, the stage tapered 400 → 394 → 374 → 362 → 350 px of covered width down
 the frame and went empty where the source ran out — a trapezoid, the right way
 up for a positive vertical.
+
+## The lens: one radial pass, and no profiles (2026-09-17, P6 engine)
+
+`lens.ts` (pure, 17 specs) + `lens-pass.ts`. Barrel/pincushion (Brown–Conrady,
+`r_source = r(1 + k1·r² + k2·r⁴)`), lateral CA and vignetting are ONE pass:
+all three are functions of the radius alone, so the shader computes it once,
+samples each channel at its own scale of it and multiplies by the gain there.
+Three passes would resample three times, and every resample after the first is
+blur paid for nothing.
+
+- **No profile database ships, and that is a decision, not a gap.** A lens
+  profile is MEASURED calibration data; inventing k1/k2 for a camera nobody
+  measured is a fabricated correction that looks authoritative — the battery
+  gauge's `—` again. The manual sliders correct by eye against a straight edge
+  and work on any lens. A profile, when there is real data, sets those same
+  numbers; it is not a second code path.
+- **The reaches are bounded by MONOTONICITY, not by taste.** `f'(r) = 1 + 3k1r²
+  + 5k2r⁴`, so the worst case is both sliders at −100 at the corner. At the
+  0.25/0.12 this started with that is −0.35 and the map turns back on itself
+  past r ≈ 0.90 — the corners FOLD. 0.18/0.06 gives +0.16. A spec walks the
+  frame at every extreme; that is how it was found, and it is why the pair
+  cannot be raised casually. 18 % at the corner is already far more than a real
+  lens asks.
+- **The radius is normalised to half the DIAGONAL** (Lensfun's convention), so
+  one number means the same on a 3:2 frame and on a 4:5 crop of it.
+- **Green never moves.** A fringe is red and blue landing at the wrong size, so
+  those are what get rescaled; a channel whose scale took it off the picture
+  keeps green's value rather than going black and painting a coloured edge of
+  its own.
+- **No y mirror, unlike the keystone** — every term is a function of DISTANCE
+  from the centre, which a flip leaves alone. `check-render.mjs` measures the
+  radius a marker really lands at, so a mirror creeping in would fail.
+- `VIGNETTE_REACH` is handed to the shader (`vignetteTerms`) rather than
+  written twice: the one duplication that would let the GPU drift from
+  `vignetteGain`.
+
+**The gate has two new rows.** A marker at a known radius, warped at full
+barrel, must land where `lensSampleRadius` solves for (bisection, which the
+monotonicity guarantees has one answer) — measured 0.5745 against 0.5759 — and
+a flat grey frame's corner must match `vignetteGain` to the code (it matches
+exactly). Both carry an anti-tautology assertion, like the keystone's
+unmirrored row: if the marker did NOT move, the check would pass on an empty
+shader for ever after. **It fired on the first run** — at 0.75 of the way out a
+CUBIC term shifts a point by 0.007, too little to tell a working warp from a
+broken one, so the marker sits at 0.88 where it moves 0.037.
+
+**The intermediate targets became LINEAR** in the same commit. While every pass
+was 1:1 (the cube, a passthrough) each fragment read its own texel centre and
+NEAREST was indistinguishable; a lens warp followed by a keystone reads BETWEEN
+texels, and NEAREST there is stair-stepping on every edge. `RGBA16F` is
+texture-filterable in core WebGL2 — it is `RGBA32F` that needs
+`OES_texture_float_linear`, the distinction the cube upload already turns on.
+The null result is unchanged by it (the 1:1 rows still read 0 codes).
