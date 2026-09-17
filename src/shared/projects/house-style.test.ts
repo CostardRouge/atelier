@@ -29,6 +29,7 @@ function styledProject(): ProjectDoc {
     lutStack: [
       { id: 'l1', source: 'builtin:classic-warm', name: 'Warm', customText: null, intensity: 0.7, enabled: true },
       { id: 'l2', source: 'custom', name: 'Mine.cube', customText: 'LUT_3D_SIZE 2', intensity: 1, enabled: true },
+      { id: 'l3', source: 'film', name: 'Reversal · vivid', customText: '{"stock":"reversal-vivid","response":{}}', intensity: 1, enabled: true },
     ],
     outputTransform: 'rec709-to-srgb',
     exportPrefs: { fileName: 'vol-du-soir', variants: doc.exportPrefs.variants },
@@ -71,8 +72,10 @@ describe('the Studio house style', () => {
 
   it('leaves an uploaded look out of the grade, and says which', () => {
     const snapshot = projectHouseStyleFrom(styledProject());
-    expect(snapshot.file.style.lutStack.map((l) => l.name)).toEqual(['Warm']);
+    expect(snapshot.file.style.lutStack.map((l) => l.name)).toEqual(['Warm', 'Reversal · vivid']);
     expect(snapshot.uploadedLooks).toEqual(['Mine.cube']);
+    // A film stock carries text too — settings, not a cube — and stays in the style.
+    expect(snapshot.file.style.lutStack.map((l) => l.id)).toEqual(['l1', 'l3']);
   });
 
   it('writes the same text for the same project', () => {

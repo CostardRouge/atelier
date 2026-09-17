@@ -1,10 +1,18 @@
 import { useState } from 'react';
+import { readFilmSettings, type FilmSettings } from '../film/emulsion';
+import { isFilmLayer } from '../film/film-layer';
+import { FILM_GROUP_LABEL, FILM_STOCKS, type FilmStockId } from '../film/stocks';
 import {
   LUT_GROUPS,
   UNGROUPED_LUTS,
 } from './builtin-luts';
+import FilmDials from './FilmDials';
+import { MAX_LAYER_INTENSITY } from './lut-stack';
 import { OUTPUT_TRANSFORM_OPTIONS } from './transfer';
 import type { LutStack } from './use-lut-stack';
+
+/** The picker's id for a film stock — no built-in id looks like this. */
+const FILM_PICK = 'film:';
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
 import Segmented from '../ui/Segmented';
@@ -45,10 +53,14 @@ export default function GradePanel({ stack }: GradePanelProps) {
           value={pick}
           onChange={(id) => {
             setPick('');
-            if (id) void stack.addBuiltin(id);
+            if (id.startsWith(FILM_PICK)) stack.addFilm(id.slice(FILM_PICK.length) as FilmStockId);
+            else if (id) void stack.addBuiltin(id);
           }}
           options={[
             { id: '', label: stack.busy ? 'Loading…' : 'Built-in…' },
+            // The film stocks are generated, not files: they sit beside the
+            // folder groups rather than in the manifest, which lists files.
+            ...FILM_STOCKS.map((s) => ({ id: `${FILM_PICK}${s.id}`, label: `${FILM_GROUP_LABEL} · ${s.name}` })),
             ...UNGROUPED_LUTS.map((l) => ({ id: l.id, label: l.name })),
             ...LUT_GROUPS.flatMap((g) => g.luts.map((l) => ({ id: l.id, label: `${g.label} · ${l.name}` }))),
           ]}
@@ -106,7 +118,7 @@ export default function GradePanel({ stack }: GradePanelProps) {
               <RangeField
                 label={`${layer.name} strength`}
                 min={0}
-                max={3}
+                max={MAX_LAYER_INTENSITY}
                 step={0.05}
                 value={layer.intensity}
                 disabled={!layer.enabled}
@@ -114,6 +126,12 @@ export default function GradePanel({ stack }: GradePanelProps) {
                 format={(v) => `${Math.round(v * 100)}%`}
               />
             </FieldRow>
+            {isFilmLayer(layer) && (
+              <FilmLayer
+                text={stack.customText[layer.id]}
+                onChange={(settings) => stack.setFilm(layer.id, settings)}
+              />
+            )}
           </div>
         ))
       )}
@@ -154,7 +172,23 @@ export default function GradePanel({ stack }: GradePanelProps) {
         {stack.layers.length > 1 && `${activeCount} of ${stack.layers.length} looks active. `}
         Looks apply top to bottom and bake into one LUT — the preview, the stills and every
         export grade identically. Above 100% a look extrapolates past what it was authored for.
+        A film stock goes after a conversion LUT, never before it.
       </p>
     </div>
   );
+}
+
+/** A film layer's dials, read from the settings the stack holds for it. */
+function FilmLayer({
+  text,
+  onChange,
+}: {
+  text: string | undefined;
+  onChange: (settings: FilmSettings) => void;
+}) {
+  const settings = readFilmSettings(text);
+  if (!settings) {
+    return <p className="m-0 text-xs text-danger">This film layer lost its settings — remove it and add the stock again.</p>;
+  }
+  return <FilmDials settings={settings} onChange={onChange} />;
 }

@@ -162,10 +162,12 @@ describe('reading a stored roll', () => {
   });
 
   it('keeps a look with layers or a transform, and reads its layers safely', () => {
+    // Strength is capped where every other reader caps it (3, over-applied), never at 1.
     expect(readRollGrade({ layers: [{ id: 'l', source: 'builtin:x', intensity: 7 }], output: 'bogus' })).toEqual({
-      layers: [{ id: 'l', source: 'builtin:x', name: 'l', customText: null, intensity: 1, enabled: true }],
+      layers: [{ id: 'l', source: 'builtin:x', name: 'l', customText: null, intensity: 3, enabled: true }],
       output: 'none',
     });
+    expect(readRollGrade({ layers: [{ id: 'l', source: 'builtin:x', intensity: 1.5 }], output: 'none' })?.layers[0].intensity).toBe(1.5);
     expect(readRollGrade({ layers: [{ nope: 1 }], output: 'rec709-to-srgb' })).toEqual({ layers: [], output: 'rec709-to-srgb' });
   });
 

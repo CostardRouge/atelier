@@ -54,6 +54,7 @@ function styledTrip(): TripDoc {
       layers: [
         { id: 'l1', source: 'classic-warm', name: 'Warm', customText: null, intensity: 0.7, enabled: true },
         { id: 'l2', source: 'upload', name: 'Mine.cube', customText: 'LUT_3D_SIZE 2', intensity: 1, enabled: true },
+        { id: 'l3', source: 'film', name: 'Negative · portrait', customText: '{"stock":"negative-portrait","response":{}}', intensity: 0.8, enabled: true },
       ],
       output: 'none',
     },
@@ -101,8 +102,10 @@ describe('the house style', () => {
 
   it('leaves an uploaded look out of the grade, and says which', () => {
     const snapshot = houseStyleFrom(styledTrip());
-    expect(snapshot.file.style.grade.layers.map((l) => l.name)).toEqual(['Warm']);
+    expect(snapshot.file.style.grade.layers.map((l) => l.name)).toEqual(['Warm', 'Negative · portrait']);
     expect(snapshot.uploadedLooks).toEqual(['Mine.cube']);
+    // A film stock carries text too — settings, not a cube — and stays in the style.
+    expect(snapshot.file.style.grade.layers.map((l) => l.id)).toEqual(['l1', 'l3']);
   });
 
   it('writes the same text for the same trip, shades included', () => {

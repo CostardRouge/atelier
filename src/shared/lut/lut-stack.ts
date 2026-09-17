@@ -42,6 +42,9 @@ const MAX_COMPOSED_SIZE = 64;
 /** Floor when an output transform is baked in; see `composeLutStack`. */
 const TRANSFORM_MIN_SIZE = 33;
 
+/** A layer's strength runs 0..3 — above 1 it extrapolates past the look. One number for every reader. */
+export const MAX_LAYER_INTENSITY = 3;
+
 /** One entry of the stack, with its parsed LUT resolved. */
 export interface LutLayer {
   id: string;

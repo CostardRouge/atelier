@@ -25,6 +25,9 @@ export interface SavedGrade {
   output: OutputTransform;
 }
 
+/** The `source` of a film layer — `shared/film/film-layer.ts` owns the layer, this module only recognises it. */
+const FILM_SOURCE = 'film';
+
 /**
  * A stable key for a stored grade — what makes "these two pictures wear the
  * same look" a string compare, and what a bake cache is keyed on.
@@ -34,13 +37,30 @@ export interface SavedGrade {
  * look is uploaded and its text never changes after, so the id says everything
  * the text would — and stringifying a megabyte of lattice once per picture per
  * render is how a deck of five makes a strength slider stutter.
+ *
+ * A FILM layer is the one exception, and the rationale is why: its text is a
+ * few dozen numbers that change on every dial move under one id, so the id
+ * says nothing about them — left out, two stocks under one id would share a
+ * baked cube and a deck would show one picture's film on another.
  */
 export function gradeKey(grade: SavedGrade | null): string {
   if (!grade) return '-';
   const layers = grade.layers.map(
-    (l) => `${l.id}:${l.source}:${l.intensity}:${l.enabled ? 1 : 0}`,
+    (l) =>
+      `${l.id}:${l.source}:${l.intensity}:${l.enabled ? 1 : 0}` +
+      (l.source === FILM_SOURCE ? `:${l.customText ?? ''}` : ''),
   );
   return [grade.output, ...layers].join('|');
+}
+
+/**
+ * True for a look UPLOADED from a `.cube` — text a house style cannot carry
+ * (its whole lattice would be committed) and a file format inlines. A film
+ * layer carries text too, but it is settings, not a cube, and it is exactly
+ * the kind of look a house style is for.
+ */
+export function isUploadedLook(layer: Pick<SavedLutLayer, 'source' | 'customText'>): boolean {
+  return layer.customText !== null && layer.source !== FILM_SOURCE;
 }
 
 /**
