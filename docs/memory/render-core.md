@@ -5,13 +5,32 @@ Read before touching `src/shared/render/`, `lut-gl.ts`, `frame-grader.ts` or
 pixel is. The brief and its phases are `docs/photo-editor.md`; the engine it
 grows from is `media-pipeline.md`.
 
-## Built so far (2026-09-17, P4 first commit)
+## Built so far (2026-09-17, P4 both commits)
 
 `shared/render/`: `glsl.ts` (the shared chunks), `pass-plan.ts` (pure, 8 specs),
 `graph.ts` (the core), `cube-pass.ts` (the look as a pass), `graph-grader.ts`
-(the core wearing `FrameGrader`). **Nothing in the app uses it yet** — the
-engine change is separated from the switch-over so it could be proved a null
-result first, and `scripts/check-render.mjs` is that proof.
+(the core wearing `FrameGrader`). The engine change was committed SEPARATELY
+from the switch-over so it could be proved a null result first;
+`scripts/check-render.mjs` is that proof.
+
+**`makeFrameGrader` now builds the core**, so the stage, every export, every
+thumbnail and both hook videos run on it — sixteen call sites, none of which
+changed a line. That is what a one-method seam buys, and it is why a later
+phase adds a pass rather than a second switch-over.
+
+**`createLutRenderer` is NOT retired**, and should not be: the LUT tool's live
+preview and the Studio stage drive its uniforms frame by frame (a split, a
+strength, a mode) rather than rebuilding a grader, which is a different job
+from grading one frame and handing it back.
+
+**The checker must build the old engine from `createLutRenderer` DIRECTLY.**
+Once `makeFrameGrader` returned the core, comparing against it compared the
+core with itself and passed no matter what — a gate that cannot fail. It
+constructs the old path by hand for that reason; do not "simplify" it back.
+
+`makeFrameGrader` passes `getDefaultLutInterpolation()` rather than a literal:
+the mode is a render preference somebody may have set to trilinear, and a
+hardcoded 'tetrahedral' would quietly ignore them in every export.
 
 ## At one pass it IS the old renderer
 

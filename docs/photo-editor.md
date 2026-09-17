@@ -333,7 +333,7 @@ away once the files are in the scratchpad — never in the repo. A JPEG XL
 refusal by the npm build is what turns the decoder choice into "which wasm
 build do we maintain" (`photo-develop.md` §6.2), and that comes back to him.
 
-**P4 — the render core** *(two commits; the FIRST is built 2026-09-17 — `shared/render/`, proved pixel-identical by `scripts/check-render.mjs`, with nothing switched over yet. The second moves the consumers)*. `shared/render/`: a `RenderNode`
+**P4 — the render core** *(two commits, BOTH BUILT 2026-09-17: `shared/render/` proved pixel-identical by `scripts/check-render.mjs`, then `makeFrameGrader` switched onto it so all sixteen consumers run on the core — `docs/memory/render-core.md`)*. `shared/render/`: a `RenderNode`
 contract, float16 ping-pong framebuffers, the SOURCE and CUBE nodes, and
 `renderPicture(source, edit)` with the one-cube fast path; `held-grader.ts` and
 `frame-grader.ts` become graph-backed at the one seam. Second commit:

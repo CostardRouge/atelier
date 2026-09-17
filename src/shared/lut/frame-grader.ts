@@ -6,8 +6,8 @@
  */
 
 import type { CubeLut } from '../lib/cube-parser';
-import { makeExportCanvas } from '../media/webcodecs-export';
-import { createLutRenderer } from './lut-gl';
+import { getDefaultLutInterpolation } from './lut-gl';
+import { makeGraphGrader } from '../render/graph-grader';
 
 export interface FrameGrader {
   /** Grade `source` through the LUT; returns the GL canvas to draw from. */
@@ -26,21 +26,15 @@ export function makeFrameGrader(
   height: number,
   intensity = 1,
 ): FrameGrader {
-  const canvas = makeExportCanvas(width, height);
-  const renderer = createLutRenderer(canvas);
-  if (!renderer) {
-    return { render: (s) => s, dispose() {} };
-  }
-  renderer.setLut(lut);
-  renderer.setIntensity(intensity);
-  renderer.resize(width, height);
-  return {
-    render(source) {
-      renderer.draw(source as TexImageSource);
-      return canvas;
-    },
-    dispose() {
-      renderer.dispose();
-    },
-  };
+  // THE seam, and the reason it is one method: sixteen call sites reach the
+  // GPU through here, so moving the engine underneath moves the stage, every
+  // export, every thumbnail and both hook videos at once — and none of them
+  // changes a line. The core is measured pixel-identical to the renderer it
+  // replaces (`scripts/check-render.mjs`, `docs/memory/render-core.md`).
+  //
+  // `createLutRenderer` is NOT retired: the LUT tool's live preview and the
+  // Studio stage drive its uniforms frame by frame (a split, a strength, a
+  // mode) rather than rebuilding, which is a different job from grading one
+  // frame and handing it back.
+  return makeGraphGrader(lut, width, height, intensity, getDefaultLutInterpolation());
 }

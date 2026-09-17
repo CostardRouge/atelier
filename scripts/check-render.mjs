@@ -34,8 +34,21 @@ page.on('pageerror', (e) => errors.push(String(e)));
 await page.goto(BASE, { waitUntil: 'networkidle' });
 
 const out = await page.evaluate(async () => {
-  const { makeFrameGrader } = await import('/atelier/src/shared/lut/frame-grader.ts');
+  // The OLD engine is built straight from `createLutRenderer`, never through
+  // `makeFrameGrader` — that seam now returns the core itself, so comparing
+  // against it would compare the core with the core and always pass.
+  const { createLutRenderer } = await import('/atelier/src/shared/lut/lut-gl.ts');
+  const { makeExportCanvas } = await import('/atelier/src/shared/media/webcodecs-export.ts');
   const { makeGraphGrader } = await import('/atelier/src/shared/render/graph-grader.ts');
+  const makeFrameGrader = (lut, w, h, intensity) => {
+    const canvas = makeExportCanvas(w, h);
+    const renderer = createLutRenderer(canvas);
+    if (!renderer) return { render: (s) => s, dispose() {} };
+    renderer.setLut(lut);
+    renderer.setIntensity(intensity);
+    renderer.resize(w, h);
+    return { render: (s) => (renderer.draw(s), canvas), dispose: () => renderer.dispose() };
+  };
   const { createRenderGraph, passthroughPass } = await import('/atelier/src/shared/render/graph.ts');
   const { makeCubePass } = await import('/atelier/src/shared/render/cube-pass.ts');
   const { composeLutStack } = await import('/atelier/src/shared/lut/lut-stack.ts');

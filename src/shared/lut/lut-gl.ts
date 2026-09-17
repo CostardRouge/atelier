@@ -68,6 +68,15 @@ void main() {
  */
 let defaultInterpolation: Interpolation = 'tetrahedral';
 
+/**
+ * The mode a new renderer starts with. Read by the render core, which builds
+ * its cube pass from the same preference — a grader that hardcoded
+ * 'tetrahedral' would quietly ignore someone who had chosen trilinear.
+ */
+export function getDefaultLutInterpolation(): Interpolation {
+  return defaultInterpolation;
+}
+
 /** Set the mode new renderers start with. Owned by `useLutInterpolation`. */
 export function setDefaultLutInterpolation(mode: Interpolation): void {
   defaultInterpolation = mode;
