@@ -30,6 +30,7 @@ import {
   type FilmResponse,
   type FilmSettings,
 } from './emulsion';
+import { DEFAULT_FILM_TEXTURE, type FilmTexture } from './film-texture';
 
 export type FilmStockId =
   | 'reversal-vivid'
@@ -46,12 +47,19 @@ export interface FilmStock {
   /** One line on what the parameters model — the settled row's hint. */
   note: string;
   response: FilmResponse;
+  /**
+   * The stock's grain and halation — read by the render graph's film node
+   * once it exists (`docs/film-simulation.md` §6), declared here so a stock
+   * is one thing. Nothing draws it yet.
+   */
+  texture: FilmTexture;
 }
 
 /** The picker group every stock sits under, beside APPLE / DJI / SONY. */
 export const FILM_GROUP_LABEL = 'FILM';
 
 const c = (over: Partial<FilmCurve>): FilmCurve => ({ ...NEUTRAL_CURVE, ...over });
+const t = (over: Partial<FilmTexture>): FilmTexture => ({ ...DEFAULT_FILM_TEXTURE, ...over });
 
 export const FILM_STOCKS: readonly FilmStock[] = [
   {
@@ -71,6 +79,7 @@ export const FILM_STOCKS: readonly FilmStock[] = [
       dye: 25,
       mono: null,
     },
+    texture: t({ grain: 0.15, grainSize: 0.0012, grainChroma: 0.1, halation: 0.2, halationRadius: 0.03, seed: 101 }),
   },
   {
     id: 'reversal-neutral',
@@ -89,6 +98,7 @@ export const FILM_STOCKS: readonly FilmStock[] = [
       dye: 5,
       mono: null,
     },
+    texture: t({ grain: 0.12, grainSize: 0.0012, grainChroma: 0.1, halation: 0.15, halationRadius: 0.03, seed: 102 }),
   },
   {
     id: 'negative-portrait',
@@ -107,6 +117,7 @@ export const FILM_STOCKS: readonly FilmStock[] = [
       dye: -5,
       mono: null,
     },
+    texture: t({ grain: 0.3, grainSize: 0.0016, grainChroma: 0.25, halation: 0.35, halationRadius: 0.04, seed: 103 }),
   },
   {
     id: 'negative-consumer',
@@ -125,6 +136,7 @@ export const FILM_STOCKS: readonly FilmStock[] = [
       dye: 15,
       mono: null,
     },
+    texture: t({ grain: 0.4, grainSize: 0.002, grainChroma: 0.3, halation: 0.3, halationRadius: 0.04, seed: 104 }),
   },
   {
     id: 'cross-process',
@@ -143,6 +155,7 @@ export const FILM_STOCKS: readonly FilmStock[] = [
       dye: 30,
       mono: null,
     },
+    texture: t({ grain: 0.35, grainSize: 0.0018, grainChroma: 0.35, halation: 0.2, halationRadius: 0.035, seed: 105 }),
   },
   {
     id: 'mono-panchromatic',
@@ -161,6 +174,7 @@ export const FILM_STOCKS: readonly FilmStock[] = [
       dye: 0,
       mono: { sensitivity: [0.3, 0.45, 0.25], filter: [1, 0.55, 0.2] },
     },
+    texture: t({ grain: 0.45, grainSize: 0.0018, grainChroma: 0, halation: 0.15, halationRadius: 0.035, halationTint: [1, 0.92, 0.8], seed: 106 }),
   },
 ];
 

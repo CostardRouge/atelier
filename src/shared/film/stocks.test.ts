@@ -16,6 +16,7 @@ import {
   type FilmStockId,
 } from './stocks';
 import { fromLinear } from '../lut/transfer';
+import { isSilentTexture, normaliseFilmTexture } from './film-texture';
 
 const MID_CODE = fromLinear(MID_GREY, 'srgb');
 const codes = (v: number) => v * 255;
@@ -81,6 +82,14 @@ describe('the stocks', () => {
         expect(y).toBeGreaterThanOrEqual(prev - 1e-9);
         prev = y;
       }
+    },
+  );
+
+  it.each(FILM_STOCKS.map((s) => [s.id, s] as const))(
+    '%s declares a texture every number of which is inside its range',
+    (_, stock) => {
+      expect(normaliseFilmTexture(stock.texture)).toEqual(stock.texture);
+      expect(isSilentTexture(stock.texture)).toBe(false);
     },
   );
 
