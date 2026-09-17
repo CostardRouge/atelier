@@ -12,6 +12,7 @@ import {
   DevelopLookSection,
   DevelopPresetsSection,
 } from './DevelopSections';
+import DevelopCurve from './DevelopCurve';
 import DevelopHistogram from './DevelopHistogram';
 import DevelopSliders from './DevelopSliders';
 import DevelopViewport, { DevelopCaption } from './DevelopViewport';
@@ -157,6 +158,11 @@ export default function DevelopSheet({
           <div className="w-[22rem] flex-none min-h-0 overflow-y-auto overscroll-contain pr-1.5 flex flex-col gap-4 max-[820px]:w-full max-[820px]:flex-1">
             <DevelopHistogram histogram={picture.histogram} />
             <DevelopSliders value={draft.draft} onChange={draft.set} />
+            <DevelopCurve
+              value={draft.draft.curves}
+              histogram={picture.histogram}
+              onChange={(curves) => draft.patch({ curves })}
+            />
             <DevelopPresetsSection
               presets={presets}
               draft={draft.draft}

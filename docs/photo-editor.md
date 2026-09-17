@@ -296,9 +296,12 @@ Four rules to carry:
 
 **P0 — this brief.** Recorded before any code, the repo's convention.
 
-**P1 — curves and levels** *(two commits; the ENGINE is built, 2026-09-17 —
-`curves.ts`, the two fields, the bake, 23 + 11 specs, nothing on screen. The
-panel is the second)*. A spline on the develop record, baked into the same
+**P1 — curves and levels** *(two commits, BOTH BUILT 2026-09-17: the engine —
+`curves.ts`, the two fields, the bake — then the editor, `DevelopCurve.tsx`
+over a pure `curve-edit.ts`, drawn by both hosts. **Levels deliberately have no
+panel**: a curve whose end points drag IS the black/white-point gesture, so the
+numeric row waits for the auto-adjust that computes it, P2)*. A spline on the
+develop record, baked into the same
 cube. `curves.ts` pure + tested. No core needed; the biggest daily-use gain per
 line in the whole plan, and the graph inherits it as node 2.
 

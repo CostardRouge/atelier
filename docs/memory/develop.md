@@ -96,3 +96,43 @@ races it, whichever comes first. The bars are a fixed light over `bg-frame`,
 never a theme token: `paper` is dark in the darkroom. Verified in the Browser
 pane on a PNG with a known 6.25 % white block: `whites 6.3 %` at as shot, 28 %
 at +1.5 EV (over the hook's stored +0.7), none and `blacks 2.5 %` at −2 EV.
+
+## The curve editor is a workbench block, and its drag taught two rules (2026-09-17, P1)
+
+`DevelopCurve.tsx` (the paint and the pointer plumbing) over `curve-edit.ts`
+(pure, 19 specs: `pointAt`, `moveCurvePoint`, `addCurvePoint`,
+`removeCurvePoint`, `curvePath`). One square with the picture's own histogram
+behind it, the five channel tabs, and the `curves.ts` spline over the identity
+diagonal. Drawn by BOTH hosts from the same block — `DevelopSheet` and the
+tool's `PictureWorkbench` each gained three lines — and the draft hook grew
+`patch(partial)` for a field `set(key, value)` cannot name.
+
+**Two rules the browser found, neither of which any test could have:**
+
+- **A drag must read the value from a REF, not from the render's closure.**
+  Pointermove fires far faster than React re-renders, so every move of a drag
+  applied to the curve as it was when the pointer went DOWN, and the last write
+  won: a drag from the middle of the diagonal stored TWO points instead of
+  three, silently throwing away the point the same gesture had just added.
+  `liveRef` (the curve) and `grabRef` (the point) advance synchronously on
+  every write; the `dragging` state is kept for the PAINT alone. Same family as
+  the crop pinch's "two writes in one event" (`develop-roll.md` D8) and the
+  roll's one updater — **assume it for any new drag that writes a structure.**
+- **`vectorEffect="non-scaling-stroke"` puts `strokeWidth` in SCREEN pixels.**
+  With a `0 0 1 1` viewBox a width of 0.008 is then sub-pixel and the curve did
+  not appear at all — invisible, with all four gates green and no console
+  error. Every stroke in that box now carries the attribute AND a pixel width.
+  A drawing whose only failure mode is "nothing is there" has to be looked at.
+
+**Levels have no panel on purpose.** The engine carries them
+(`curves.ts`), but a curve whose END points drag is already the black/white
+point gesture, so a second control for the same thing would be clutter. The
+numeric row arrives with the auto-adjust that computes it (P2 of
+`docs/photo-editor.md`), which is what levels are naturally the target of.
+
+Verified in headless Chromium against the real dev server, on a canvas-made
+gradient dropped onto a roll: the editor drew with the histogram behind it, a
+drag from mid-diagonal to 0.12 stored
+`luma: [{0,0},{0.5,0.68},{1,1}]` through the roll's write-through, the stage's
+pixels moved (26→49, 89→177, 150→255 on the ramp), the settled row read
+`curve luma`, the tab wore its dot, and no page error fired.

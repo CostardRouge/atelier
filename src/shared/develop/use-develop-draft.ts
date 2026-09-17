@@ -8,6 +8,11 @@ export interface DevelopDraft {
   setDraft: (next: DevelopSettings) => void;
   /** One slider. */
   set: (key: DevelopKey, value: number) => void;
+  /**
+   * Any other field at once — a curve, the levels. The record stopped being
+   * flat numbers, and `set` is for the sliders it names.
+   */
+  patch: (partial: Partial<DevelopSettings>) => void;
   /** Nothing moved: what Done hands back as null. */
   asShot: boolean;
   /** The draft as the host stores it: null when it is as shot. */
@@ -37,9 +42,13 @@ export function useDevelopDraft(value: DevelopSettings | null, stack: LutStack):
 
   const setDraft = useCallback((next: DevelopSettings) => setDraftState({ ...DEFAULT_DEVELOP, ...next }), []);
   const set = useCallback((key: DevelopKey, v: number) => setDraftState((d) => ({ ...d, [key]: v })), []);
+  const patch = useCallback(
+    (partial: Partial<DevelopSettings>) => setDraftState((d) => ({ ...d, ...partial })),
+    [],
+  );
   const asShot = isDefaultDevelop(draft);
   const result = useCallback(() => (isDefaultDevelop(draft) ? null : draft), [draft]);
-  return { draft, setDraft, set, asShot, result };
+  return { draft, setDraft, set, patch, asShot, result };
 }
 
 /**

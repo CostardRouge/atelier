@@ -5,6 +5,7 @@ import {
   DevelopLookSection,
   DevelopPresetsSection,
 } from '../../shared/develop/DevelopSections';
+import DevelopCurve from '../../shared/develop/DevelopCurve';
 import DevelopHistogram from '../../shared/develop/DevelopHistogram';
 import DevelopSliders from '../../shared/develop/DevelopSliders';
 import DevelopViewport, { DevelopCaption } from '../../shared/develop/DevelopViewport';
@@ -366,6 +367,11 @@ export default function PictureWorkbench({
             <>
               <DevelopHistogram histogram={picture.histogram} />
               <DevelopSliders value={draft.draft} onChange={draft.set} />
+              <DevelopCurve
+                value={draft.draft.curves}
+                histogram={picture.histogram}
+                onChange={(curves) => draft.patch({ curves })}
+              />
               <DevelopPresetsSection
                 presets={presets}
                 draft={draft.draft}
