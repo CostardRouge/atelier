@@ -110,10 +110,83 @@ const out = await page.evaluate(async () => {
     graph.dispose();
     results[kind + '_twoPass'] = worst(a, c);
   }
+  // --- the keystone: does the GPU warp agree with the pure module? ---------
+  //
+  // The question no reasoning settles: a texture's v axis and a screen's y axis
+  // disagree, and the vertex shader flips UVs for an ImageBitmap and not for a
+  // canvas. So a marker is put in a KNOWN corner, warped, and looked for where
+  // `keystoneMatrix` says it should be.
+  {
+    const { createRenderGraph } = await import('/atelier/src/shared/render/graph.ts');
+    const { makeKeystonePass, keystonePassFromMatrix } = await import(
+      '/atelier/src/shared/render/keystone-pass.ts'
+    );
+    const geo = await import('/atelier/src/shared/render/geometry.ts');
+
+    const S = 128;
+    const marked = document.createElement('canvas'); marked.width = S; marked.height = S;
+    const mg = marked.getContext('2d');
+    mg.fillStyle = '#000'; mg.fillRect(0, 0, S, S);
+    // One bright block, up and to the LEFT of centre: source point (-0.25,-0.25)
+    // in a y-DOWN centred space is the upper-left quadrant.
+    mg.fillStyle = '#fff'; mg.fillRect(S * 0.25 - 6, S * 0.25 - 6, 12, 12);
+
+    const keystone = { ...geo.DEFAULT_KEYSTONE, rotation: 90 };
+    const forward = geo.keystoneMatrix(keystone, 1);
+    // A 90 degree turn sends the upper-left to the upper-RIGHT in a y-down
+    // space, which is an unambiguous, sign-revealing answer.
+    const expected = geo.applyMatrix3(forward, -0.25, -0.25);
+
+    // The CENTROID of what is lit, so the answer is the middle of the marker
+    // rather than whichever of its pixels was scanned first.
+    const centroid = (data, n) => {
+      let sx = 0, sy = 0, w = 0;
+      for (let y = 0; y < n; y += 1) for (let x = 0; x < n; x += 1) {
+        const v = data[(y * n + x) * 4];
+        if (v < 128) continue;
+        sx += (x + 0.5) / n - 0.5; sy += (y + 0.5) / n - 0.5; w += 1;
+      }
+      return w ? [sx / w, sy / w] : null;
+    };
+
+    const run = (pass) => {
+      const cv = document.createElement('canvas');
+      const graph = createRenderGraph(cv);
+      graph.resize(S, S);
+      graph.render(marked, [pass]);
+      const o = document.createElement('canvas'); o.width = S; o.height = S;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(cv, 0, 0);
+      const at = centroid(oc.getImageData(0, 0, S, S).data, S);
+      graph.dispose();
+      return at;
+    };
+
+    results.keystone = {
+      expected: expected.map((v) => Number(v.toFixed(4))),
+      // What every consumer gets: the pass builds its own matrix.
+      viaPass: run(makeKeystonePass(keystone, 1)).map((v) => Number(v.toFixed(4))),
+      // And WITHOUT the mirror, to keep on record that it is load-bearing.
+      unmirrored: run(
+        keystonePassFromMatrix(geo.keystoneSampleMatrix(keystone, 1)),
+      ).map((v) => Number(v.toFixed(4))),
+    };
+  }
+
   return results;
 });
 
 await browser.close();
+
+const kx = out.keystone;
+const keyOff = Math.max(
+  Math.abs(kx.viaPass[0] - kx.expected[0]),
+  Math.abs(kx.viaPass[1] - kx.expected[1]),
+);
+const unmirroredOff = Math.max(
+  Math.abs(kx.unmirrored[0] - kx.expected[0]),
+  Math.abs(kx.unmirrored[1] - kx.expected[1]),
+);
 
 const rows = [
   ['canvas source, one pass', out.canvas.worst, 0],
@@ -128,6 +201,25 @@ for (const [name, worst, allowed] of rows) {
   if (!ok) bad += 1;
   console.log(`  ${ok ? 'ok  ' : 'FAIL'}  ${name.padEnd(40)} worst ${worst} code${worst === 1 ? '' : 's'} (allowed ${allowed})`);
 }
+console.log(
+  `\n  keystone: a 90 degree turn puts the marker at ${JSON.stringify(kx.viaPass)}, ` +
+    `the matrix says ${JSON.stringify(kx.expected)}`,
+);
+if (keyOff > 0.02) {
+  bad += 1;
+  console.log(`  FAIL  the warp disagrees with geometry.ts by ${keyOff.toFixed(3)}`);
+} else {
+  console.log(`  ok    within ${keyOff.toFixed(4)} of it`);
+}
+// The mirror is load-bearing: without it the marker lands somewhere else, and
+// a run where BOTH agree would mean the check had stopped proving anything.
+if (unmirroredOff < 0.02) {
+  bad += 1;
+  console.log('  FAIL  unmirrored agrees too, so this check proves nothing any more');
+} else {
+  console.log(`  ok    unmirrored is ${unmirroredOff.toFixed(3)} away, so the mirror is doing the work`);
+}
+
 if (errors.length) {
   bad += 1;
   console.log('\n  page errors:', errors.slice(0, 3));

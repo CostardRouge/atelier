@@ -342,7 +342,12 @@ contract, float16 ping-pong framebuffers, the SOURCE and CUBE nodes, and
 already cannot see. **Nothing changes on screen**, and the gate is exactly that:
 a pixel-for-pixel match against today's path.
 
-**P5 — geometry: the crop moves in, keystone arrives.** `geometry.ts` pure (a
+**P5 — geometry: keystone arrives** *(two commits; the ENGINE is built
+2026-09-17 — `geometry.ts` + `keystone-pass.ts`, the warp measured against the
+matrix on a real GPU, nothing wired yet. The panel and the document are the
+second. The crop is deliberately left on `drawFramed` for now: moving seven
+renderers off it is its own change, and a keystone corrects BEFORE a crop
+frames, so the two are independent.)* Originally: `geometry.ts` pure (a
 3×3 homography from four corner offsets or from V/H sliders, round-trip tested);
 the crop leaves `drawFramed` for the warp; `CropStage` (the zone editor that
 replaced `FramingStage` on 2026-09-19, its arithmetic in `crop-rect.ts`) gains

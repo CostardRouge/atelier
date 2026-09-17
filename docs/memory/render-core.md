@@ -87,3 +87,38 @@ the GLSL against `interpolate.ts`. `scripts/check-shader.mjs` now ASSEMBLES the
 shader from those chunks instead of regexing it out of `lut-gl.ts` — the regex
 broke the moment the shader was built from pieces, and importing cannot go
 stale that way.
+
+## The keystone: the first pass that MOVES a pixel (2026-09-17, P5 engine)
+
+`geometry.ts` (pure, 16 specs) + `keystone-pass.ts`. A homography carries the
+whole correction — converging verticals, converging horizontals, a rotation and
+the zoom that hides the corners a warp empties — in ONE 3×3 matrix, so one
+resample serves all of it. It is the first thing here a cube could never do: a
+3D LUT is handed a colour and no coordinate.
+
+- **The matrix is built and inverted in TypeScript, never in GLSL.** A warp is
+  drawn by walking the OUTPUT and asking where each pixel came from, so the
+  shader carries the INVERSE; everything about it is decided where a spec can
+  hold it, and the pass only applies what it is given.
+- **Conjugated by the aspect ratio** (`A · M · A⁻¹`, built in a square space),
+  or a rotation shears instead of turning and the same numbers mean different
+  things on a 4:5 crop. A spec measures the angle between two perpendicular
+  edges at 16:9 and asserts it survives.
+- **The order is fixed**: perspective → aspect stretch → rotation → zoom.
+- **Where the picture ran out it is EMPTY**, never the edge pixel smeared
+  outward: a warp genuinely has no data there, and the zoom is what hides it.
+- **A point bent past the horizon is null, not a huge number** — `applyMatrix3`
+  says so, and `keystoneSampleMatrix` answers null for numbers that fold the
+  plane so a caller draws unwarped rather than blank.
+
+**The y axis was MEASURED, not reasoned.** A texture's v axis and a screen's y
+axis disagree, and the vertex shader flips UVs for an `ImageBitmap` and not for
+a canvas — so `makeKeystonePass` mirrors y (`mirrorYMatrix`) and owns that
+itself rather than leaving a caller to get it right. A marker in a known corner
+turned 90° lands at exactly the matrix's prediction WITH the mirror and 0.5 away
+without it; `check-render.mjs` asserts both, the second so the check cannot
+quietly become a tautology.
+
+**The trap this file already knew and I walked into anyway**: a BACKTICK inside
+a GLSL comment ends the template literal and the file stops parsing
+(`media-pipeline.md`). Do not put one in shader source, not even in prose.
