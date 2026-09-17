@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import { toLinear } from '../lut/transfer';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
-import type { Framing } from '../media/framing';
+import { drawFramed, type Framing } from '../media/framing';
 import { borderLayout, scaleLayout, type RollBorder } from './border-layout';
 import { drawDelivered, drawPictureIn } from './border-paint';
 import { holdGrades, type HeldGrader } from '../lut/held-grader';
@@ -12,6 +12,8 @@ import { boundSource, frameSize, loadBadgeSource, type BadgeSource } from '../ro
 import { usePictureZoom, type PictureZoom } from '../ui/use-picture-zoom';
 import { HISTOGRAM_SAMPLE_EDGE, luminanceHistogram, type Histogram } from './histogram';
 import { measureSource, type SourceStats } from './auto-develop';
+import { isDefaultKeystone, sameKeystone, type Keystone } from '../render/geometry';
+import { makeKeystonePass } from '../render/keystone-pass';
 
 /** How close to the frame's side the divider's handle may be held, in px. */
 const HANDLE_INSET = 14;
@@ -121,10 +123,17 @@ export function useDevelopPicture({
   videoTimeSeconds = 0,
   cube,
   frame = null,
+  keystone = null,
 }: {
   file: File | null;
   videoTimeSeconds?: number;
   cube: CubeLut | null;
+  /**
+   * The perspective correction, applied on the GPU AFTER the look and BEFORE
+   * the crop frames what is left. Unlike the crop it is not a way of LOOKING:
+   * it is part of the picture, so the histogram and `delivered()` see it too.
+   */
+  keystone?: Keystone | null;
   /**
    * Show the picture CROPPED — the Develop tool keeps its crop visible while
    * the light is set. Only the viewport's paint and zoom read it: the
@@ -163,20 +172,49 @@ export function useDevelopPicture({
     };
   }, [file, videoTimeSeconds]);
 
-  const graderRef = useRef<{ lut: CubeLut; w: number; h: number; grader: HeldGrader } | null>(null);
-  const graderFor = useCallback((lut: CubeLut | null, s: BadgeSource): HeldGrader | null => {
-    const cur = graderRef.current;
-    if (!lut) {
+  const graderRef = useRef<{
+    lut: CubeLut | null;
+    key: Keystone | null;
+    w: number;
+    h: number;
+    grader: HeldGrader;
+  } | null>(null);
+  const graderFor = useCallback(
+    (lut: CubeLut | null, s: BadgeSource, key: Keystone | null): HeldGrader | null => {
+      const cur = graderRef.current;
+      // A keystone with NO look still needs the GPU: the warp is a pass, not a
+      // cube, so "no lut" stopped meaning "nothing to render" the day geometry
+      // arrived.
+      if (!lut && isDefaultKeystone(key)) {
+        cur?.grader.dispose();
+        graderRef.current = null;
+        return null;
+      }
+      if (
+        cur &&
+        cur.lut === lut &&
+        cur.w === s.width &&
+        cur.h === s.height &&
+        sameKeystone(cur.key, key)
+      ) {
+        return cur.grader;
+      }
       cur?.grader.dispose();
-      graderRef.current = null;
-      return null;
-    }
-    if (cur && cur.lut === lut && cur.w === s.width && cur.h === s.height) return cur.grader;
-    cur?.grader.dispose();
-    const grader = holdGrades(makeFrameGrader(lut, s.width, s.height));
-    graderRef.current = { lut, w: s.width, h: s.height, grader };
-    return grader;
-  }, []);
+      // Compared by VALUE: the panel hands down a new object on every slider
+      // step, and identity would rebuild the grader — and its WebGL context —
+      // per frame of a drag.
+      const warp = isDefaultKeystone(key) ? null : makeKeystonePass(key!, s.width / s.height);
+      // A null cube is legitimate now: `u_hasLut` is false and the warp is the
+      // whole of the work. The grader's own signature keeps the cube first
+      // because sixteen callers pass one.
+      const grader = holdGrades(
+        makeFrameGrader(lut as CubeLut, s.width, s.height, 1, warp ? [warp] : []),
+      );
+      graderRef.current = { lut, key: key ? { ...key } : null, w: s.width, h: s.height, grader };
+      return grader;
+    },
+    [],
+  );
   useEffect(
     () => () => {
       graderRef.current?.grader.dispose();
@@ -211,7 +249,7 @@ export function useDevelopPicture({
     }
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const grader = holding ? null : graderFor(cube, source);
+    const grader = holding ? null : graderFor(cube, source, keystone);
     const graded = grader ? grader.render(source.image) : source.image;
     const layout = delivered1 && framing ? scaleLayout(delivered1, w / delivered1.w) : null;
     if (layout && framing) {
@@ -237,7 +275,7 @@ export function useDevelopPicture({
         ctx.drawImage(source.image, sx, 0, source.width - sx, source.height, x, 0, w - x, h);
       }
     }
-  }, [source, canvasSize, delivered1, framing, border, cube, wipe, holding, graderFor]);
+  }, [source, canvasSize, delivered1, framing, border, cube, wipe, holding, keystone, graderFor]);
 
   // The histogram, read off a small copy of the graded picture one frame
   // after it changes — so a slider step paints first and measures second, and
@@ -265,7 +303,7 @@ export function useDevelopPicture({
       const ctx = sample.getContext('2d', { willReadFrequently: true });
       if (!ctx) return;
       try {
-        const grader = graderFor(cube, source);
+        const grader = graderFor(cube, source, keystone);
         const graded = grader ? grader.render(source.image) : source.image;
         ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
         setHistogram(luminanceHistogram(ctx.getImageData(0, 0, w, h).data));
@@ -282,7 +320,7 @@ export function useDevelopPicture({
       cancelAnimationFrame(raf);
       window.clearTimeout(fallback);
     };
-  }, [source, cube, graderFor]);
+  }, [source, cube, keystone, graderFor]);
 
   // The AS-SHOT measurement Auto reads. Keyed on the source alone — no cube,
   // no grader — so it is one read per picture and is unmoved by anything the
@@ -378,17 +416,17 @@ export function useDevelopPicture({
 
   // Read through refs: a snapshot is asked for after a quiet delay, and must
   // take the cube of THAT moment, not the one the closure was made with.
-  const latest = useRef({ source, cube });
-  latest.current = { source, cube };
+  const latest = useRef({ source, cube, keystone });
+  latest.current = { source, cube, keystone };
   const delivered = useCallback((): CanvasImageSource | null => {
-    const { source: s, cube: lut } = latest.current;
+    const { source: s, cube: lut, keystone: key } = latest.current;
     if (!s || s.width <= 0 || s.height <= 0) return null;
-    const grader = graderFor(lut, s);
+    const grader = graderFor(lut, s, key);
     return grader ? grader.render(s.image) : s.image;
   }, [graderFor]);
   const snapshot = useCallback(
     async (longEdge = THUMB_LONG_EDGE): Promise<Blob | null> => {
-      const { source: s, cube: lut } = latest.current;
+      const { source: s, cube: lut, keystone: key } = latest.current;
       if (!s || s.width <= 0 || s.height <= 0) return null;
       const { w, h } = thumbSize(s.width, s.height, longEdge);
       const out = document.createElement('canvas');
@@ -397,7 +435,7 @@ export function useDevelopPicture({
       const ctx = out.getContext('2d');
       if (!ctx) return null;
       try {
-        const grader = graderFor(lut, s);
+        const grader = graderFor(lut, s, key);
         const graded = grader ? grader.render(s.image) : s.image;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(graded, 0, 0, s.width, s.height, 0, 0, w, h);

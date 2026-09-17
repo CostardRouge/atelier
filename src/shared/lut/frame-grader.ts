@@ -8,6 +8,7 @@
 import type { CubeLut } from '../lib/cube-parser';
 import { getDefaultLutInterpolation } from './lut-gl';
 import { makeGraphGrader } from '../render/graph-grader';
+import type { RenderPass } from '../render/graph';
 
 export interface FrameGrader {
   /** Grade `source` through the LUT; returns the GL canvas to draw from. */
@@ -25,6 +26,12 @@ export function makeFrameGrader(
   width: number,
   height: number,
   intensity = 1,
+  /**
+   * Passes to run AFTER the look — a keystone, and in time a mask or a
+   * denoise. Empty for every caller that only grades, which is most of them,
+   * and then this is exactly what it always was.
+   */
+  passes: readonly RenderPass[] = [],
 ): FrameGrader {
   // THE seam, and the reason it is one method: sixteen call sites reach the
   // GPU through here, so moving the engine underneath moves the stage, every
@@ -36,5 +43,7 @@ export function makeFrameGrader(
   // Studio stage drive its uniforms frame by frame (a split, a strength, a
   // mode) rather than rebuilding, which is a different job from grading one
   // frame and handing it back.
-  return makeGraphGrader(lut, width, height, intensity, getDefaultLutInterpolation());
+  const grader = makeGraphGrader(lut, width, height, intensity, getDefaultLutInterpolation());
+  if (passes.length) grader.setExtraPasses(passes);
+  return grader;
 }

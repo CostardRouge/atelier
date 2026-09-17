@@ -122,3 +122,33 @@ quietly become a tautology.
 **The trap this file already knew and I walked into anyway**: a BACKTICK inside
 a GLSL comment ends the template literal and the file stops parsing
 (`media-pipeline.md`). Do not put one in shader source, not even in prose.
+
+## The keystone, wired (2026-09-17, P5 second commit)
+
+`RollPicture.keystone`, `KeystonePanel` on the Crop tab, and the warp reaching
+the stage, the thumbnail and the export. Rules a later phase must keep:
+
+- **`makeFrameGrader` gained an optional `passes` list** — the seam grew rather
+  than being bypassed, so a warp, and in time a mask or a denoise, reaches all
+  sixteen consumers the same way the look does. Empty for every caller that
+  only grades, which is most of them.
+- **"No look" stopped meaning "nothing to render".** A keystone with no cube
+  still needs the GPU, because the warp is a PASS and not a cube — `graderFor`
+  and `roll-render` both build a grader for either.
+- **The grader is keyed on the keystone BY VALUE** (`sameKeystone`). The panel
+  hands down a new object per slider step, and keying on identity would rebuild
+  the grader — and its WebGL context — on every frame of a drag.
+- **The warp runs at SOURCE density, before `drawFramed` cuts the frame.**
+  Correcting after the crop would resample a resample, and the crop is what
+  decides which of the corrected picture survives. The stage, the snapshot and
+  the export all keep that order.
+- **No migration**: the field is absent on every roll written before it, and
+  absent already means null.
+- Unlike the crop, a keystone is **not a way of LOOKING**: it is part of the
+  picture, so the histogram and `delivered()` see it. (The crop is deliberately
+  the other way — `develop-roll.md` D8.)
+
+Measured in the pane on a grid: the slider wrote `vertical: 70` through to the
+document, the stage tapered 400 → 394 → 374 → 362 → 350 px of covered width down
+the frame and went empty where the source ran out — a trapezoid, the right way
+up for a positive vertical.

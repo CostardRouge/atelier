@@ -20,6 +20,8 @@
 
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
+import { isDefaultKeystone, type Keystone } from '../render/geometry';
+import { makeKeystonePass } from '../render/keystone-pass';
 import { DEFAULT_FRAMING, type Framing } from '../media/framing';
 import { decodePhoto } from '../media/photo-frame';
 import { pictureAspectRatio } from './crop-aspect';
@@ -37,6 +39,11 @@ export interface RollRenderOptions {
   longEdge: number | null;
   /** JPEG quality 0..1. */
   quality: number;
+  /**
+   * The perspective correction, warped in BEFORE the crop frames the result —
+   * the stage's own order, so the file is what was on screen.
+   */
+  keystone?: Keystone | null;
 }
 
 export interface RollRendered {
@@ -73,7 +80,23 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Could not create a 2D canvas for export.');
     ctx.imageSmoothingQuality = 'high';
-    const grader = opts.lut ? makeFrameGrader(opts.lut, source.width, source.height, 1) : null;
+    // The warp runs at SOURCE density, with the look, before `drawFramed` cuts
+    // the frame — a keystone resampled after the crop would be resampling a
+    // resample. And a keystone with no look still needs the GPU, so the grader
+    // is built for either.
+    const warp = isDefaultKeystone(opts.keystone)
+      ? null
+      : makeKeystonePass(opts.keystone!, source.width / source.height);
+    const grader =
+      opts.lut || warp
+        ? makeFrameGrader(
+            opts.lut as CubeLut,
+            source.width,
+            source.height,
+            1,
+            warp ? [warp] : [],
+          )
+        : null;
     try {
       const graded = grader ? grader.render(bitmap) : bitmap;
       drawDelivered(ctx, graded, source.width, source.height, framing, layout, opts.border);

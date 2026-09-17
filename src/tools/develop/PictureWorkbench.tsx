@@ -23,6 +23,7 @@ import type { RollPicture } from '../../shared/develop/roll-types';
 import { useDevelopDraft, useTold } from '../../shared/develop/use-develop-draft';
 import { useWriteThrough } from '../../shared/develop/use-write-through';
 import { useDevelopPicture, type DevelopFrame } from '../../shared/develop/use-develop-picture';
+import { sameKeystone, type Keystone } from '../../shared/render/geometry';
 import { usePresetBookHost } from '../../shared/develop/use-preset-book';
 import type { LutStack } from '../../shared/lut/use-lut-stack';
 import { DEFAULT_FRAMING, isDefaultFraming, sameFraming, type Framing } from '../../shared/media/framing';
@@ -33,6 +34,7 @@ import StageZoomControl from '../../shared/ui/StageZoomControl';
 import { STAGE_ZOOM_STEP, zoomLabel, type ZoomControls } from '../../shared/ui/stage-zoom';
 import type { RollExport } from '../../shared/develop/roll-types';
 import CropPanel, { type CropApplyVerb } from './CropPanel';
+import KeystonePanel from './KeystonePanel';
 import type { BorderApplyVerb } from './BorderSection';
 import type { RollBorder } from '../../shared/develop/border-layout';
 import ExportPanel, { type ExportVerb } from './ExportPanel';
@@ -77,6 +79,7 @@ export default function PictureWorkbench({
   onBorder,
   onDevelop,
   onFraming,
+  onKeystone,
   onAspect,
   exportSettings,
   onExportSettings,
@@ -105,6 +108,7 @@ export default function PictureWorkbench({
   onBorder: (border: RollBorder | null) => void;
   onDevelop: (develop: DevelopSettings | null) => void;
   onFraming: (framing: Framing | null) => void;
+  onKeystone: (keystone: Keystone | null) => void;
   onAspect: (aspect: string) => void;
   /** The roll's delivery settings, edited on the Export tab. */
   exportSettings: RollExport;
@@ -130,7 +134,9 @@ export default function PictureWorkbench({
     () => (ratio > 0 ? { aspectRatio: ratio, framing: framingDraft, border } : null),
     [ratio, framingDraft, border],
   );
-  const picture = useDevelopPicture({ file, cube: stack.composed, frame });
+  // Read once, like the develop and the crop: the workbench is keyed per picture.
+  const [keystoneDraft, setKeystoneDraft] = useState<Keystone | null>(entry.keystone ?? null);
+  const picture = useDevelopPicture({ file, cube: stack.composed, frame, keystone: keystoneDraft });
   const fidelity = pictureFidelity(file);
 
   // --- write-through ---------------------------------------------------------
@@ -139,8 +145,8 @@ export default function PictureWorkbench({
   // copy changes the stored value without this editor's doing, and a draft that
   // ignored it would keep showing numbers the roll no longer holds — and write
   // them back over the step at the next nudge.
-  const callbacks = useRef({ onDevelop, onFraming, onAspect, onSnapshot, onStep, onTabChange });
-  callbacks.current = { onDevelop, onFraming, onAspect, onSnapshot, onStep, onTabChange };
+  const callbacks = useRef({ onDevelop, onFraming, onKeystone, onAspect, onSnapshot, onStep, onTabChange });
+  callbacks.current = { onDevelop, onFraming, onKeystone, onAspect, onSnapshot, onStep, onTabChange };
   const { setDraft } = draft;
   useWriteThrough<DevelopSettings>({
     stored: entry.develop,
@@ -152,6 +158,15 @@ export default function PictureWorkbench({
   });
   // The crop, written through the same way, on its own timer: a drag fires far
   // more often than a slider ever does.
+  // The warp, on its own timer like the crop: a slider fires far more often
+  // than a document should be written.
+  useWriteThrough<Keystone>({
+    stored: entry.keystone ?? null,
+    draft: keystoneDraft,
+    same: sameKeystone,
+    onWrite: (value) => callbacks.current.onKeystone(value),
+    onReseed: (value) => setKeystoneDraft(value),
+  });
   useWriteThrough<Framing>({
     stored: entry.framing,
     draft: isDefaultFraming(framingDraft) ? null : framingDraft,
@@ -412,6 +427,9 @@ export default function PictureWorkbench({
               borderVerbs={borderApplyTo}
               onTold={tell}
             />
+          ) : null}
+          {tab === 'crop' ? (
+            <KeystonePanel value={keystoneDraft} onChange={setKeystoneDraft} />
           ) : (
             <ExportPanel
               settings={exportSettings}
