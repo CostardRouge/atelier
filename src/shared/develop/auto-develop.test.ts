@@ -5,6 +5,7 @@ import {
   describeAutoTone,
   measureSource,
   percentile,
+  whiteBalanceFor,
   type SourceStats,
 } from './auto-develop';
 import { makeLevel } from './curves';
@@ -247,5 +248,34 @@ describe('the two verbs stay apart', () => {
     // And the encoded midpoint the levels produce is stable.
     const f = makeLevel(once.rgb!);
     expect(fromLinear(toLinear(f(0.5), 'srgb'), 'srgb')).toBeCloseTo(f(0.5), 9);
+  });
+});
+
+describe('whiteBalanceFor — the dropper and the button share one solve', () => {
+  it('neutralises the colour it is given', () => {
+    const picked: [number, number, number] = [
+      toLinear(150 / 255, 'srgb'),
+      toLinear(142 / 255, 'srgb'),
+      toLinear(130 / 255, 'srgb'),
+    ];
+    const { temperature, tint } = whiteBalanceFor(picked);
+    const out = developLinear(picked, { ...DEFAULT_DEVELOP, temperature, tint });
+    expect(out[0]).toBeCloseTo(out[1], 2);
+    expect(out[1]).toBeCloseTo(out[2], 2);
+  });
+
+  it('is what autoColour runs on the picture’s mean', () => {
+    const stats = measureSource(field([170, 160, 145], 64));
+    expect(autoColour(stats)).toEqual(whiteBalanceFor(stats.linearMean));
+  });
+
+  it('answers nothing for a black or unreadable pixel, rather than dividing by it', () => {
+    expect(whiteBalanceFor([0, 0, 0])).toEqual({ temperature: 0, tint: 0, clamped: false });
+    expect(whiteBalanceFor([0.3, 0, 0.3])).toEqual({ temperature: 0, tint: 0, clamped: false });
+    expect(whiteBalanceFor([NaN, 0.2, 0.2])).toEqual({ temperature: 0, tint: 0, clamped: false });
+  });
+
+  it('says so when the pixel it was given is past the sliders’ reach', () => {
+    expect(whiteBalanceFor([0.6, 0.3, 0.05]).clamped).toBe(true);
   });
 });

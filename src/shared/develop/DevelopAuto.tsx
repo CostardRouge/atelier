@@ -13,7 +13,7 @@ import {
 import type { DevelopSettings } from './develop';
 
 const AUTO_HINT =
-  'Tone reads where the picture’s light actually sits and writes a black point, a white point and a midtone gamma into Levels — it touches no colour. Colour neutralises the average cast by white balance, which is the wrong answer on a sunset or a candle-lit room, so it is a second button and never rides along with the first. Both are measured on the picture as shot, so pressing one twice gives the same answer rather than compounding.';
+  'Tone reads where the picture’s light actually sits and writes a black point, a white point and a midtone gamma into Levels — it touches no colour. Colour neutralises the AVERAGE cast, which is the wrong answer on a sunset or a candle-lit room, so it is a second button and never rides along with the first. Pick grey asks you instead: click something in the picture that ought to be neutral and the white balance is solved for that, which beats the average whenever the picture is not an average scene. All three are measured on the picture as shot, so pressing one twice gives the same answer rather than compounding.';
 
 const LEVELS_HINT =
   'Where the range is read FROM: everything at or under black becomes black, everything at or over white becomes white, and gamma bends what is between them. Auto tone writes these three; the curve’s own end points do the same thing by hand.';
@@ -29,10 +29,15 @@ export function DevelopAutoSection({
   stats,
   onPatch,
   onTold,
+  picking,
+  onPicking,
 }: {
   stats: SourceStats | null;
   onPatch: (partial: Partial<DevelopSettings>) => void;
   onTold: (message: string) => void;
+  /** Whether the eyedropper is armed; omitted, no dropper is drawn. */
+  picking?: boolean;
+  onPicking?: (on: boolean) => void;
 }) {
   const ready = Boolean(stats && stats.total > 0);
   return (
@@ -74,6 +79,18 @@ export function DevelopAutoSection({
         >
           Auto colour
         </button>
+        {onPicking && (
+          <button
+            type="button"
+            className={`${developButtonClass} ${picking ? 'border-accent text-accent-ink' : ''}`}
+            aria-pressed={picking}
+            disabled={!ready}
+            onClick={() => onPicking(!picking)}
+            title="Click something in the picture that should be grey"
+          >
+            {picking ? 'Pick\u2026' : 'Pick grey'}
+          </button>
+        )}
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import {
 } from '../../shared/develop/DevelopSections';
 import DevelopCurve from '../../shared/develop/DevelopCurve';
 import { DevelopAutoSection, DevelopLevelsSection } from '../../shared/develop/DevelopAuto';
+import { whiteBalanceFor } from '../../shared/develop/auto-develop';
 import DevelopHistogram from '../../shared/develop/DevelopHistogram';
 import DevelopSliders from '../../shared/develop/DevelopSliders';
 import DevelopViewport, { DevelopCaption } from '../../shared/develop/DevelopViewport';
@@ -320,6 +321,14 @@ export default function PictureWorkbench({
           hasFile={Boolean(file)}
           emptyText={emptyText}
           className={cropping ? 'hidden' : 'flex-1'}
+          onPick={(linear) => {
+            const { temperature, tint, clamped } = whiteBalanceFor(linear);
+            draft.patch({ temperature, tint });
+            tell(
+              `picked grey · temperature ${temperature}, tint ${tint}` +
+                (clamped ? ' · as far as the sliders reach' : ''),
+            );
+          }}
         />
         {cropping && (
           <CropStage
@@ -367,7 +376,13 @@ export default function PictureWorkbench({
           {tab === 'develop' ? (
             <>
               <DevelopHistogram histogram={picture.histogram} />
-              <DevelopAutoSection stats={picture.stats} onPatch={draft.patch} onTold={tell} />
+              <DevelopAutoSection
+                stats={picture.stats}
+                onPatch={draft.patch}
+                onTold={tell}
+                picking={picture.picking}
+                onPicking={picture.setPicking}
+              />
               <DevelopSliders value={draft.draft} onChange={draft.set} />
               <DevelopLevelsSection value={draft.draft.levels} onChange={(levels) => draft.patch({ levels })} />
               <DevelopCurve

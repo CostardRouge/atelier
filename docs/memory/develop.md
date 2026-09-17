@@ -182,6 +182,32 @@ for the RAW path (`AsShotNeutral` and a colour matrix are what make it real) —
 label, range and reset — because Levels needed it and a second copy is how two
 panels come to disagree about what a slider looks like.
 
+**The eyedropper is the same solve on a different input** (2026-09-17, P2's
+second commit). `whiteBalanceFor(linear)` is extracted from `autoColour`, which
+now calls it with the picture's mean while *Pick grey* calls it with the pixel
+the author said was neutral — one solve, so the button and the dropper can
+never disagree. Rules:
+
+- **It reads the picture AS SHOT**, never the graded canvas, or every pick
+  would be measured against the last one.
+- **It re-renders the ungraded source through the VERY SAME draw branch the
+  viewport paints with** (`drawFramed` when a crop is open, else the plain
+  `drawImage`) and reads there. That is why no inverse of the framing transform
+  has to be derived, and why a crop cannot make the dropper read the wrong
+  pixel — the one place a coordinate mapping could have gone quietly wrong.
+- **The letterbox is undone by hand, the zoom is not**: the canvas is
+  `object-contain`, so the bitmap sits inside the element box, but the box's
+  own `getBoundingClientRect` already carries the zoom/pan transform.
+- **A 5×5 average, not one pixel**: one pixel of a photograph is noise, and a
+  white balance set from noise wanders.
+- **While armed the dropper takes the gesture WHOLE** — the viewport's wipe and
+  pan handlers are dropped for that click, since they are the same pointer and
+  would drag the picture out from under the pick.
+
+Verified in the pane on a picture that is blue on the left and warm grey on the
+right: picking each half gave opposite answers (+100/+100 against −84/+36), which
+is what proves the mapping reads where the pointer actually is.
+
 Verified in the pane on a deliberately flat, warm JPEG (70..150, 1.18/0.82
 cast): Auto tone wrote `black 69 · white 155` and NO colour; Auto colour wrote
 temperature −100 (clamped, said) and tint −36; both pressed again changed

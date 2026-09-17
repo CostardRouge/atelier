@@ -14,6 +14,7 @@ import {
 } from './DevelopSections';
 import DevelopCurve from './DevelopCurve';
 import { DevelopAutoSection, DevelopLevelsSection } from './DevelopAuto';
+import { whiteBalanceFor } from './auto-develop';
 import DevelopHistogram from './DevelopHistogram';
 import DevelopSliders from './DevelopSliders';
 import DevelopViewport, { DevelopCaption } from './DevelopViewport';
@@ -146,6 +147,14 @@ export default function DevelopSheet({
               picture={picture}
               hasFile={Boolean(file)}
               emptyText={emptyText}
+              onPick={(linear) => {
+                const { temperature, tint, clamped } = whiteBalanceFor(linear);
+                draft.patch({ temperature, tint });
+                tell(
+                  `picked grey · temperature ${temperature}, tint ${tint}` +
+                    (clamped ? ' · as far as the sliders reach' : ''),
+                );
+              }}
               // On a phone the picture takes a fixed share of the MEASURED app
               // height (`--app-h`, never `vh`: a locked document is where a
               // stale unit can never be corrected — `frontend.md`) and the
@@ -158,7 +167,13 @@ export default function DevelopSheet({
           {/* The column: the pipeline in order, then the look under it. */}
           <div className="w-[22rem] flex-none min-h-0 overflow-y-auto overscroll-contain pr-1.5 flex flex-col gap-4 max-[820px]:w-full max-[820px]:flex-1">
             <DevelopHistogram histogram={picture.histogram} />
-            <DevelopAutoSection stats={picture.stats} onPatch={draft.patch} onTold={tell} />
+            <DevelopAutoSection
+              stats={picture.stats}
+              onPatch={draft.patch}
+              onTold={tell}
+              picking={picture.picking}
+              onPicking={picture.setPicking}
+            />
             <DevelopSliders value={draft.draft} onChange={draft.set} />
             <DevelopLevelsSection value={draft.draft.levels} onChange={(levels) => draft.patch({ levels })} />
             <DevelopCurve

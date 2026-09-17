@@ -305,12 +305,13 @@ develop record, baked into the same
 cube. `curves.ts` pure + tested. No core needed; the biggest daily-use gain per
 line in the whole plan, and the graph inherits it as node 2.
 
-**P2 — auto adjust, the levels row, then the eyedropper** *(two commits; the
-first is BUILT 2026-09-17)*. `auto-develop.ts` pure over an AS-SHOT read
+**P2 — auto adjust, the levels row, then the eyedropper** *(two commits, BOTH BUILT 2026-09-17)*. `auto-develop.ts` pure over an AS-SHOT read
 (`useDevelopPicture().stats`), as **two** verbs — Auto tone writes levels and
 touches no colour, Auto colour is a white balance and is exactly wrong on a
 sunset, so they never share a click — plus the Levels row they write into.
-Then the eyedropper that picks a neutral off the picture. Also no core.
+Then the eyedropper (*Pick grey*), which runs the SAME solve
+(`whiteBalanceFor`) on the pixel the author points at instead of on the mean.
+Also no core.
 **Kelvin is cut, and the reason is the anti-fabrication rule**: temperature
 here is a channel GAIN, and an 8-bit render carries no as-shot white balance to
 offset from, so a kelvin number would be invented. It waits for the RAW path,

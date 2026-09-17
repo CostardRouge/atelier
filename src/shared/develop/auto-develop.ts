@@ -150,20 +150,29 @@ export function autoTone(stats: SourceStats): Levels | null {
 }
 
 /**
- * Temperature and tint that make the average of the picture neutral —
+ * Temperature and tint that make the AVERAGE of the picture neutral —
  * grey-world, solved against this suite's own two gains rather than against a
  * colour temperature nobody here can measure.
+ */
+export function autoColour(stats: SourceStats): AutoColour {
+  if (!stats.counted) return { temperature: 0, tint: 0, clamped: false };
+  return whiteBalanceFor(stats.linearMean);
+}
+
+/**
+ * The temperature and tint that make ONE linear colour neutral.
+ *
+ * Auto colour hands it the picture's average (grey-world); the eyedropper
+ * hands it the pixel the author said was grey. Same solve, two inputs — a
+ * second copy is how the button and the dropper would come to disagree.
  *
  * `developLinear` multiplies red by `1 + t` and blue by `1 - t`, so balancing
  * them wants `t = (mB - mR) / (mB + mR)`; green is then brought to the level
- * the other two met at. Both are expressed back in slider units and clamped,
- * so a violently cast picture asks for what it can have and says no more.
+ * the other two met at.
  */
-export function autoColour(stats: SourceStats): AutoColour {
-  const [mr, mg, mb] = stats.linearMean;
-  if (!stats.counted || mr <= 0 || mg <= 0 || mb <= 0) {
-    return { temperature: 0, tint: 0, clamped: false };
-  }
+export function whiteBalanceFor(linear: readonly [number, number, number]): AutoColour {
+  const [mr, mg, mb] = linear;
+  if (!(mr > 0) || !(mg > 0) || !(mb > 0)) return { temperature: 0, tint: 0, clamped: false };
   const t = (mb - mr) / (mb + mr);
   // Rounded HERE, before green is solved: a slider holds whole units, and
   // solving the tint against a temperature finer than the one actually stored

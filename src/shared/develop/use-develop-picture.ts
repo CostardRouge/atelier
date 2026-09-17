@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
+import { toLinear } from '../lut/transfer';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
 import type { Framing } from '../media/framing';
@@ -64,6 +65,16 @@ export interface DevelopPicture {
    * so pressing it twice must give the same answer instead of compounding.
    */
   stats: SourceStats | null;
+  /** The eyedropper is armed: the next click on the picture picks a neutral. */
+  picking: boolean;
+  setPicking: (on: boolean) => void;
+  /**
+   * The colour under a client point, in LINEAR light, averaged over a small
+   * neighbourhood — or null when there is nothing to read. AS SHOT: a dropper
+   * must sample the picture, not the correction already on it, or every pick
+   * would be measured against the last one.
+   */
+  pickAt: (clientX: number, clientY: number) => [number, number, number] | null;
   /** Where the divider and its handle are drawn, in viewport pixels. */
   divider: { x: number; top: number; bottom: number };
   /**
@@ -304,6 +315,67 @@ export function useDevelopPicture({
     }
   }, [source]);
 
+  // --- the eyedropper -------------------------------------------------------
+  const [picking, setPicking] = useState(false);
+  const pickRef = useRef<HTMLCanvasElement | null>(null);
+  const pickAt = useCallback(
+    (clientX: number, clientY: number): [number, number, number] | null => {
+      const canvas = canvasRef.current;
+      if (!canvas || !source || !canvasSize) return null;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return null;
+      const { w, h } = canvasSize;
+      // `object-contain` letterboxes the BITMAP inside the element box, and the
+      // element box already carries the zoom/pan transform — so undo the
+      // letterbox here and the transform is undone for free by the rect.
+      const scale = Math.min(rect.width / w, rect.height / h);
+      const x = Math.round((clientX - rect.left - (rect.width - w * scale) / 2) / scale);
+      const y = Math.round((clientY - rect.top - (rect.height - h * scale) / 2) / scale);
+      if (x < 0 || y < 0 || x >= w || y >= h) return null;
+
+      // The UNGRADED picture, drawn through the very same branch the viewport
+      // paints with — so no inverse of the framing transform has to be derived,
+      // and a crop cannot make the dropper read the wrong pixel.
+      if (!pickRef.current) pickRef.current = document.createElement('canvas');
+      const off = pickRef.current;
+      if (off.width !== w || off.height !== h) {
+        off.width = w;
+        off.height = h;
+      }
+      const ctx = off.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return null;
+      try {
+        if (frameRatio && framing) {
+          ctx.clearRect(0, 0, w, h);
+          drawFramed(ctx, source.image, source.width, source.height, w, h, framing);
+        } else {
+          ctx.drawImage(source.image, 0, 0, source.width, source.height, 0, 0, w, h);
+        }
+        // A 5x5 average, the dropper every developer has: one pixel of a
+        // photograph is noise, and a white balance set from noise wanders.
+        const half = 2;
+        const sx = Math.max(0, x - half);
+        const sy = Math.max(0, y - half);
+        const sw = Math.min(w, x + half + 1) - sx;
+        const sh = Math.min(h, y + half + 1) - sy;
+        const data = ctx.getImageData(sx, sy, sw, sh).data;
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        const n = sw * sh;
+        for (let i = 0; i < n; i += 1) {
+          r += toLinear(data[i * 4] / 255, 'srgb');
+          g += toLinear(data[i * 4 + 1] / 255, 'srgb');
+          b += toLinear(data[i * 4 + 2] / 255, 'srgb');
+        }
+        return n ? [r / n, g / n, b / n] : null;
+      } catch {
+        return null;
+      }
+    },
+    [source, canvasSize, frameRatio, framing],
+  );
+
   // Read through refs: a snapshot is asked for after a quiet delay, and must
   // take the cube of THAT moment, not the one the closure was made with.
   const latest = useRef({ source, cube });
@@ -411,6 +483,9 @@ export function useDevelopPicture({
     comparing: Boolean(source && cube && !holding),
     histogram,
     stats,
+    picking,
+    setPicking,
+    pickAt,
     divider,
     snapshot,
     delivered,

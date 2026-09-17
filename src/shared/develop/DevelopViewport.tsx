@@ -14,6 +14,7 @@ export default function DevelopViewport({
   hasFile,
   emptyText = 'No picture to develop yet.',
   className = '',
+  onPick,
 }: {
   picture: DevelopPicture;
   /** A file was given, so an absent source means "decoding". */
@@ -21,15 +22,41 @@ export default function DevelopViewport({
   /** What an empty frame says — the host knows where a picture comes from. */
   emptyText?: string;
   className?: string;
+  /**
+   * The colour the eyedropper read, in linear light. Given, the viewport
+   * answers a click while `picture.picking` is on; omitted, there is no dropper.
+   */
+  onPick?: (linear: [number, number, number]) => void;
 }) {
   const { view, source, problem, cube, holding, wipe, divider, handlers } = picture;
+  const picking = Boolean(onPick && picture.picking && source);
   return (
     <div
       ref={view.viewportRef}
       className={`relative min-h-0 bg-frame rounded-paper overflow-hidden touch-none select-none ${
-        view.zoomed ? (view.panning ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-col-resize'
+        picking
+          ? 'cursor-crosshair'
+          : view.zoomed
+            ? view.panning
+              ? 'cursor-grabbing'
+              : 'cursor-grab'
+            : 'cursor-col-resize'
       } ${className}`}
-      {...handlers}
+      // While the dropper is armed it takes the gesture WHOLE: the wipe and the
+      // pan are the same pointer, and letting them run too would drag the
+      // picture out from under the pick.
+      {...(picking ? {} : handlers)}
+      onPointerDown={
+        picking
+          ? (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const read = picture.pickAt(e.clientX, e.clientY);
+              picture.setPicking(false);
+              if (read) onPick!(read);
+            }
+          : handlers.onPointerDown
+      }
     >
       <canvas
         ref={picture.canvasRef}
@@ -72,7 +99,15 @@ export default function DevelopViewport({
       {hasFile && !source && !problem && (
         <span className="absolute inset-0 grid place-items-center font-mono text-2xs text-muted">decoding…</span>
       )}
-      {source && cube && (
+      {picking && (
+        <span
+          className={`absolute top-2 left-2.5 ${developPillClass} bg-[rgba(251,248,241,0.92)] text-accent-ink border-accent`}
+          role="status"
+        >
+          click something grey
+        </span>
+      )}
+      {source && cube && !picking && (
         <>
           <span className={`absolute top-2 left-2.5 ${developPillClass} bg-[rgba(251,248,241,0.86)] text-ink-soft`}>
             {holding ? 'before' : wipe < 1 ? 'after · before' : 'after'}
