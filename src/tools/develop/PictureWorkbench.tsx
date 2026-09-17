@@ -6,6 +6,7 @@ import {
   DevelopPresetsSection,
 } from '../../shared/develop/DevelopSections';
 import DevelopCurve from '../../shared/develop/DevelopCurve';
+import { DevelopAutoSection, DevelopLevelsSection } from '../../shared/develop/DevelopAuto';
 import DevelopHistogram from '../../shared/develop/DevelopHistogram';
 import DevelopSliders from '../../shared/develop/DevelopSliders';
 import DevelopViewport, { DevelopCaption } from '../../shared/develop/DevelopViewport';
@@ -366,7 +367,9 @@ export default function PictureWorkbench({
           {tab === 'develop' ? (
             <>
               <DevelopHistogram histogram={picture.histogram} />
+              <DevelopAutoSection stats={picture.stats} onPatch={draft.patch} onTold={tell} />
               <DevelopSliders value={draft.draft} onChange={draft.set} />
+              <DevelopLevelsSection value={draft.draft.levels} onChange={(levels) => draft.patch({ levels })} />
               <DevelopCurve
                 value={draft.draft.curves}
                 histogram={picture.histogram}

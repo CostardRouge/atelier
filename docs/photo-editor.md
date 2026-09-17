@@ -305,10 +305,16 @@ develop record, baked into the same
 cube. `curves.ts` pure + tested. No core needed; the biggest daily-use gain per
 line in the whole plan, and the graph inherits it as node 2.
 
-**P2 — auto adjust, WB eyedropper, Kelvin.** `auto-develop.ts` pure over the
-existing `histogram.ts`; an eyedropper picking a neutral; the temperature slider
-reading in Kelvin where the source says what the picture was shot at. Also no
-core.
+**P2 — auto adjust, the levels row, then the eyedropper** *(two commits; the
+first is BUILT 2026-09-17)*. `auto-develop.ts` pure over an AS-SHOT read
+(`useDevelopPicture().stats`), as **two** verbs — Auto tone writes levels and
+touches no colour, Auto colour is a white balance and is exactly wrong on a
+sunset, so they never share a click — plus the Levels row they write into.
+Then the eyedropper that picks a neutral off the picture. Also no core.
+**Kelvin is cut, and the reason is the anti-fabrication rule**: temperature
+here is a channel GAIN, and an 8-bit render carries no as-shot white balance to
+offset from, so a kelvin number would be invented. It waits for the RAW path,
+where `AsShotNeutral` and a colour matrix make it real (P10).
 
 **P3 — the RAW spike** *(read-only, nothing committed to the render path)*. O4 of
 `develop-originals.md`, decided 2026-09-13 and never run: his DJI DNG, ProRAW

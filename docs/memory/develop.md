@@ -136,3 +136,53 @@ drag from mid-diagonal to 0.12 stored
 `luma: [{0,0},{0.5,0.68},{1,1}]` through the roll's write-through, the stage's
 pixels moved (26→49, 89→177, 150→255 on the ramp), the settled row read
 `curve luma`, the tab wore its dot, and no page error fired.
+
+## Auto is TWO verbs, measured on the picture as shot (2026-09-17, P2)
+
+`auto-develop.ts` (pure, 20 specs) + the `Auto` and `Levels` sections of
+`DevelopAuto.tsx`, drawn by both hosts; `useDevelopPicture` gained `stats`, an
+AS-SHOT read keyed on the source alone. Rules a later phase must keep:
+
+- **Tone and colour never share a click.** A tonal stretch is almost always an
+  improvement; a white balance is *exactly wrong* on a sunset, a candle-lit
+  room or anything warm on purpose. One "Auto" doing both would make the good
+  half unusable, so there are two buttons and no menu.
+- **Auto measures the SOURCE, never what is displayed**, so it SETS the numbers
+  instead of nudging them and a second press is the same answer. Driven in the
+  pane: pressing both twice more left every number identical. A read off the
+  graded result would compound, which is the whole reason `stats` is a second
+  sample and not the histogram.
+- **The maths is solved against this suite's own model**, not against a
+  textbook: the level's gamma is `ln(m)/ln(target)` because `makeLevel` raises
+  to `1/gamma`, and the white balance is solved for `developLinear`'s two
+  reaches (`TEMPERATURE_REACH`, `TINT_REACH`, exported for it). So what Auto
+  writes lands where it aimed — a spec develops a flat field through the
+  numbers and asserts the channels meet.
+- **Two traps the numbers hid.** Round the temperature BEFORE solving the
+  tint, or green aims at a level red and blue never reach (a slider holds whole
+  units). And solve the tint against the temperature actually KEPT: a cast past
+  the sliders' reach clamps, and the tint must aim at where red really landed.
+- **A clamp is said out loud** (`AutoColour.clamped` → "as far as the sliders
+  reach"): two gains with a range cannot neutralise every cast, and a panel
+  that quietly hands back a still-cast picture as though it were balanced is
+  the fabrication the battery gauge refuses.
+- **Clipped and crushed pixels do not vote** for the white balance: a blown sky
+  is (255,255,255) whatever it really was, and letting it in drags every
+  picture toward neutral.
+- **The median is pulled only PART of the way to mid-grey** (0.6 of it), so a
+  picture that is dark because it was meant to be keeps its character.
+
+**No Kelvin, and that is deliberate.** The brief listed a Kelvin readout;
+temperature here is a channel GAIN, and an 8-bit render carries no as-shot
+white balance to offset from, so a number in kelvin would be invented. It waits
+for the RAW path (`AsShotNeutral` and a colour matrix are what make it real) —
+`docs/photo-editor.md` P10.
+
+`DevelopSliders.tsx` gained `RangeSlider` — the same row with an explicit
+label, range and reset — because Levels needed it and a second copy is how two
+panels come to disagree about what a slider looks like.
+
+Verified in the pane on a deliberately flat, warm JPEG (70..150, 1.18/0.82
+cast): Auto tone wrote `black 69 · white 155` and NO colour; Auto colour wrote
+temperature −100 (clamped, said) and tint −36; both pressed again changed
+nothing.

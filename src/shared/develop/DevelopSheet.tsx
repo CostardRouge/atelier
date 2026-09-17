@@ -13,6 +13,7 @@ import {
   DevelopPresetsSection,
 } from './DevelopSections';
 import DevelopCurve from './DevelopCurve';
+import { DevelopAutoSection, DevelopLevelsSection } from './DevelopAuto';
 import DevelopHistogram from './DevelopHistogram';
 import DevelopSliders from './DevelopSliders';
 import DevelopViewport, { DevelopCaption } from './DevelopViewport';
@@ -157,7 +158,9 @@ export default function DevelopSheet({
           {/* The column: the pipeline in order, then the look under it. */}
           <div className="w-[22rem] flex-none min-h-0 overflow-y-auto overscroll-contain pr-1.5 flex flex-col gap-4 max-[820px]:w-full max-[820px]:flex-1">
             <DevelopHistogram histogram={picture.histogram} />
+            <DevelopAutoSection stats={picture.stats} onPatch={draft.patch} onTold={tell} />
             <DevelopSliders value={draft.draft} onChange={draft.set} />
+            <DevelopLevelsSection value={draft.draft.levels} onChange={(levels) => draft.patch({ levels })} />
             <DevelopCurve
               value={draft.draft.curves}
               histogram={picture.histogram}

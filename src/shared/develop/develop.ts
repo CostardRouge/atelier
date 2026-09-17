@@ -257,9 +257,9 @@ const CONTRAST_REACH = 0.6;
 /** Brightness −100..100 → gamma 2 .. 1/1.5. */
 const BRIGHTNESS_REACH = 0.5;
 /** Temperature ±100 → the red and blue gains move ±25 % against each other. */
-const TEMPERATURE_REACH = 0.25;
+export const TEMPERATURE_REACH = 0.25;
 /** Tint ±100 → the green gain moves ∓20 %. */
-const TINT_REACH = 0.2;
+export const TINT_REACH = 0.2;
 
 function clamp01(x: number): number {
   return x < 0 ? 0 : x > 1 ? 1 : x;

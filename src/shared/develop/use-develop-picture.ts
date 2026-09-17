@@ -10,6 +10,7 @@ import { THUMB_LONG_EDGE, THUMB_QUALITY, thumbSize } from '../roadtrip/thumbnail
 import { boundSource, frameSize, loadBadgeSource, type BadgeSource } from '../roadtrip/badge-render';
 import { usePictureZoom, type PictureZoom } from '../ui/use-picture-zoom';
 import { HISTOGRAM_SAMPLE_EDGE, luminanceHistogram, type Histogram } from './histogram';
+import { measureSource, type SourceStats } from './auto-develop';
 
 /** How close to the frame's side the divider's handle may be held, in px. */
 const HANDLE_INSET = 14;
@@ -57,6 +58,12 @@ export interface DevelopPicture {
    * goes out. Null until a picture has been read.
    */
   histogram: Histogram | null;
+  /**
+   * The picture AS SHOT, measured once — what Auto reads (`auto-develop.ts`).
+   * Never the graded result: Auto SETS the numbers rather than nudging them,
+   * so pressing it twice must give the same answer instead of compounding.
+   */
+  stats: SourceStats | null;
   /** Where the divider and its handle are drawn, in viewport pixels. */
   divider: { x: number; top: number; bottom: number };
   /**
@@ -266,6 +273,37 @@ export function useDevelopPicture({
     };
   }, [source, cube, graderFor]);
 
+  // The AS-SHOT measurement Auto reads. Keyed on the source alone — no cube,
+  // no grader — so it is one read per picture and is unmoved by anything the
+  // author has already dialled in.
+  const [stats, setStats] = useState<SourceStats | null>(null);
+  const statsRef = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    if (!source || source.width <= 0 || source.height <= 0) {
+      setStats(null);
+      return;
+    }
+    const k = Math.min(1, HISTOGRAM_SAMPLE_EDGE / Math.max(source.width, source.height));
+    const w = Math.max(1, Math.round(source.width * k));
+    const h = Math.max(1, Math.round(source.height * k));
+    if (!statsRef.current) statsRef.current = document.createElement('canvas');
+    const sample = statsRef.current;
+    if (sample.width !== w || sample.height !== h) {
+      sample.width = w;
+      sample.height = h;
+    }
+    const ctx = sample.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return;
+    try {
+      ctx.drawImage(source.image, 0, 0, source.width, source.height, 0, 0, w, h);
+      setStats(measureSource(ctx.getImageData(0, 0, w, h).data));
+    } catch {
+      // Same as the histogram's: a released frame or an unreadable picture
+      // leaves Auto without an answer rather than breaking the panel.
+      setStats(null);
+    }
+  }, [source]);
+
   // Read through refs: a snapshot is asked for after a quiet delay, and must
   // take the cube of THAT moment, not the one the closure was made with.
   const latest = useRef({ source, cube });
@@ -372,6 +410,7 @@ export function useDevelopPicture({
     setHolding,
     comparing: Boolean(source && cube && !holding),
     histogram,
+    stats,
     divider,
     snapshot,
     delivered,
