@@ -226,6 +226,41 @@ describe('composeLutStack — develop', () => {
     expect(composeLutStack([], 'none', 'trilinear', null)).toBeNull();
   });
 
+  it('bakes a tone curve faithfully at the 33 floor, which is why the floor is not raised', () => {
+    // MEASURED (2026-09-17) against the exact stage over a grey ramp and 4000
+    // colours, worst error in 8-bit codes at 33 / 49 / 64:
+    //   gentle S on luma  2.63 / 1.70 / 1.36     gentle S on rgb  0.13 / 0.06 / 0.03
+    //   hard S on rgb     0.53 / 0.24 / 0.15     lifted blacks    0.03 / 0.01 / 0.01
+    // — all at or under the quantisation step, for a bake of ~40 ms against
+    // ~250 ms at 64. A near-vertical cliff costs 10.7 codes at 33 and STILL
+    // 3.2 at 64, so the lattice is not its remedy and raising the floor would
+    // buy visible banding at the price of the freeze the strength slider had.
+    // The render core (`docs/photo-editor.md`) evaluates the curve per pixel
+    // and retires this error class; until then a curve steeper than about
+    // 1:10 is an approximation.
+    const sShaped = {
+      ...DEFAULT_DEVELOP,
+      curves: {
+        luma: [{ x: 0, y: 0 }, { x: 0.3, y: 0.08 }, { x: 0.7, y: 0.92 }, { x: 1, y: 1 }],
+        rgb: null,
+        red: null,
+        green: null,
+        blue: null,
+      },
+    };
+    const cube = composeLutStack([], 'none', 'tetrahedral', sShaped)!;
+    expect(cube.size).toBe(33);
+    const exact = developStage(sShaped);
+    let worst = 0;
+    for (let i = 0; i <= 64; i += 1) {
+      const v = i / 64;
+      const want = exact(v, v, v);
+      const got = sampleLut(cube, v, v, v);
+      for (let k = 0; k < 3; k += 1) worst = Math.max(worst, Math.abs(want[k] - got[k]) * 255);
+    }
+    expect(worst).toBeLessThan(3);
+  });
+
   it('bypasses the single-layer fast path and bakes an empty stack', () => {
     const only = half(9);
     expect(composeLutStack([layer({ lut: only })], 'none', 'trilinear', asShot)).toBe(only);

@@ -4,8 +4,6 @@
  * (`tools/develop/RollEditor.tsx`) feeds it plain descriptions.
  */
 
-import { DEFAULT_DEVELOP, type DevelopSettings } from './develop';
-
 export type WorkbenchTab = 'develop' | 'crop' | 'export';
 
 /** The inspector's tabs, in order — the SAME list drives the desktop strip and the phone's bottom bar. */
@@ -44,12 +42,13 @@ export function openAfterRemoval(
   return rest[Math.min(Math.max(at, 0), rest.length - 1)].id;
 }
 
-/** Two stored develops say the same thing — null and an untouched set are the same "as shot". */
-export function sameDevelop(a: DevelopSettings | null, b: DevelopSettings | null): boolean {
-  const x = { ...DEFAULT_DEVELOP, ...(a ?? {}) } as Record<string, number>;
-  const y = { ...DEFAULT_DEVELOP, ...(b ?? {}) } as Record<string, number>;
-  return Object.keys({ ...x, ...y }).every((k) => x[k] === y[k]);
-}
+/**
+ * Two stored develops say the same thing — null and an untouched set are the
+ * same "as shot". The comparison itself is engine-level (`develop.ts`): the
+ * record stopped being flat numbers when it gained curves and levels, and a
+ * key-by-key `===` would call two identical curves different.
+ */
+export { sameDevelop } from './develop';
 
 /** The pictures between `a` and `b`, inclusive, in strip order; an id off the roll reads as just the other end. */
 export function pictureRange(pictures: readonly { id: string }[], a: string, b: string): string[] {
