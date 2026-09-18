@@ -279,3 +279,53 @@ where it was drawn, the harness itself would be upside down and every row above
 would be measuring the wrong thing. The two warps are also compared with each
 other, because both being wrong the same way would still be one picture, and
 that is the failure the pair exists to catch.
+
+## Masks and layers, the engine (2026-09-18, P7 first commit)
+
+`render/mask.ts` (pure, 24 specs), `render/layer-pass.ts`,
+`develop/layer.ts` (pure, 14 specs), `develop/layer-render.ts`. Nothing on
+screen yet; the wiring commit follows.
+
+**A layer's adjustment IS a `DevelopSettings`.** Not a reduced set, not a
+parallel type — the very record the global develop uses, baked by the very
+`composeLutStack`. So a local exposure is the maths of a global one, local
+curves and local white balance arrive for nothing, and the panel that edits one
+edits the other. That reuse is the whole reason masking was affordable, and it
+is why `layer.ts` sits in `develop/` while the mask sits in `render/`.
+
+    out = mix(under, gradeThroughLut(under), mask × opacity)
+
+**A layer's cube carries NO look and NO output transform** — `composeLutStack([],
+'none', …, develop)`. The look is the picture's or the roll's and is applied
+once after the whole stack; the transform belongs to the delivery and is last.
+A layer carrying either would apply it once PER LAYER, an error that shows only
+where two layers overlap.
+
+**Programs are cached by pass id, so every layer needs its own** (`layer:<id>`).
+Two layers sharing an id would share a program and, through it, ONE uploaded
+cube — the second would grade with the first one's numbers.
+
+What a layer deliberately has NOT got: a blend mode (it was in the plan, is not
+in the ask, and an adjustment layer with a multiply mode is a compositing
+feature — opacity is the control that was asked for, and adding a mode later is
+one field and one `mix`), and a look of its own (a mask choosing between two
+conversion LUTs would put two conversions on one picture).
+
+Three mask shapes, all procedural and pure: **linear** (a bearing — 0 covers the
+top, 90 the right), **radial** (an ellipse, full INSIDE so what a panel draws is
+what is affected, the feather the band outside it), **luma** (a band of
+brightness, wherever it is in the frame). `smoothStep01` rather than a linear
+ramp, because a linear ramp has a corner at each end and a visible line where a
+mask begins is the one thing it must not have. No mask is the WHOLE picture,
+never none of it — a new layer is an ordinary global develop until a shape is
+picked.
+
+**The mask rows of the gate caught two HARNESS faults before they could be
+mistaken for shader ones.** Evaluating `maskAt` at a probe POINT while reading
+whichever texel contains it is off by up to half a texel, which on a steep
+feather is 0.043 — it looked exactly like a broken shader; the expectation is
+now taken at the texel centre the read comes from. And a luma mask over a flat
+white frame is one value everywhere, so that row would have passed on a shader
+that ignored the pixel entirely; it runs over a ramp, and every shape asserts a
+non-zero SPREAD for the same reason. Measured: all three within 0.0021 of the
+pure module, canvas and bitmap identical.

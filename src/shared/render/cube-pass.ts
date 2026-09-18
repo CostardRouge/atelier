@@ -65,26 +65,10 @@ export function makeCubePass(options: CubePassOptions): RenderPass {
       gl.uniform3f(gl.getUniformLocation(program, 'u_domainMin'), ...(lut?.domainMin ?? [0, 0, 0]));
       gl.uniform3f(gl.getUniformLocation(program, 'u_domainMax'), ...(lut?.domainMax ?? [1, 1, 1]));
 
-      // A `sampler3D` is bound EVEN WITH NO LOOK, to a 1-texel placeholder.
-      // Left unset it defaults to unit 0, where the `sampler2D` source already
-      // is — and two sampler types on one unit is INVALID_OPERATION at draw
-      // time, so the whole pass is dropped and the canvas stays black. Measured:
-      // the core's first run drew nothing, with GL error 1282 and no exception.
       if (!uploaded || uploaded.lut !== lut || uploaded.gl !== gl) {
         if (uploaded && uploaded.gl === gl) gl.deleteTexture(uploaded.tex);
-        const tex = gl.createTexture();
+        const tex = createCubeTexture(gl, lut);
         if (!tex) return;
-        gl.activeTexture(gl.TEXTURE1);
-        gl.bindTexture(gl.TEXTURE_3D, tex);
-        // `texImage3D` errors if FLIP_Y is left on from the source upload.
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        uploadCube(gl, lut);
         uploaded = { gl, tex, lut };
       } else {
         gl.activeTexture(gl.TEXTURE1);
@@ -95,6 +79,40 @@ export function makeCubePass(options: CubePassOptions): RenderPass {
       gl.activeTexture(gl.TEXTURE0);
     },
   };
+}
+
+/**
+ * A cube as a 3D texture on unit 1, made and filled — what every pass that
+ * grades needs, and the one place the two traps below are answered.
+ *
+ * **A `sampler3D` is bound EVEN WITH NO LOOK**, to a 1-texel placeholder. Left
+ * unset it defaults to unit 0, where the `sampler2D` source already is, and two
+ * sampler types on one unit is INVALID_OPERATION at draw time: the whole pass
+ * is dropped and the canvas stays black. Measured — the core's first run drew
+ * nothing, with GL error 1282 and no exception.
+ *
+ * The caller owns the texture and must delete it; the unit is left on 0, or the
+ * NEXT pass's `u_src` binding would land on unit 1.
+ */
+export function createCubeTexture(
+  gl: WebGL2RenderingContext,
+  lut: CubeLut | null,
+): WebGLTexture | null {
+  const tex = gl.createTexture();
+  if (!tex) return null;
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_3D, tex);
+  // `texImage3D` errors if FLIP_Y is left on from the source upload.
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  uploadCube(gl, lut);
+  gl.activeTexture(gl.TEXTURE0);
+  return tex;
 }
 
 /**

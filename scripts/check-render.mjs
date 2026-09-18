@@ -271,6 +271,116 @@ const out = await page.evaluate(async () => {
     };
   }
 
+  // --- the mask: does the shader agree with maskAt, point for point? --------
+  //
+  // A mask is a function of WHERE, so unlike the lens it is not symmetric in y
+  // and the source kind matters. The layer's develop is a cube that turns the
+  // picture BLACK, so the rendered value reads back as `1 − mask` directly: no
+  // grading arithmetic stands between the measurement and the mask.
+  {
+    const { createRenderGraph, passthroughPass } = await import('/atelier/src/shared/render/graph.ts');
+    const { makeLayerPass } = await import('/atelier/src/shared/render/layer-pass.ts');
+    const maskMod = await import('/atelier/src/shared/render/mask.ts');
+
+    // A cube mapping every colour to black: size 2, all zeros.
+    const toBlack = {
+      title: 'black', size: 2, domainMin: [0, 0, 0], domainMax: [1, 1, 1],
+      data: new Float32Array(2 * 2 * 2 * 3),
+    };
+
+    const W = 192, H = 128;
+    const AR = W / H;
+
+    // Flat white for the POSITIONAL shapes, and a ramp for the luma one -- a
+    // luma mask over a flat frame is one value everywhere, which would pass on
+    // a shader that ignored the pixel entirely.
+    const paint = (fill) => {
+      const c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      fill(c.getContext('2d'));
+      return c;
+    };
+    const white = paint((g) => { g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); });
+    const ramp = paint((g) => {
+      for (let x = 0; x < W; x += 1) {
+        const t = Math.round((x / (W - 1)) * 255);
+        g.fillStyle = `rgb(${t},${t},${t})`;
+        g.fillRect(x, 0, 1, H);
+      }
+    });
+
+    const shapes = {
+      linear: { source: white, mask: { ...maskMod.DEFAULT_LINEAR, x: 0.5, y: 0.45, angle: 25, feather: 0.4 } },
+      radial: { source: white, mask: { ...maskMod.DEFAULT_RADIAL, x: 0.4, y: 0.55, radiusX: 0.45, radiusY: 0.25, angle: 30, feather: 0.35 } },
+      luma: { source: ramp, mask: { ...maskMod.DEFAULT_LUMA, from: 0.25, to: 0.6, feather: 0.2 } },
+    };
+
+    // PIXELS, not fractions: the expectation is evaluated at the very texel
+    // centre the read comes from. Asking maskAt for the probe point while
+    // reading whichever texel contains it is off by up to half a texel, which
+    // on a steep feather is several 8-bit codes -- measured, 0.043 on the
+    // radial, and it looked exactly like a broken shader.
+    const probes = [];
+    for (const fx of [0.13, 0.37, 0.5, 0.71, 0.89]) {
+      for (const fy of [0.17, 0.42, 0.63, 0.86]) {
+        probes.push([Math.floor(fx * W), Math.floor(fy * H)]);
+      }
+    }
+    const uvOf = ([x, y]) => [(x + 0.5) / W, (y + 0.5) / H];
+
+    const readProbes = (canvas) => {
+      const o = document.createElement('canvas'); o.width = W; o.height = H;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(canvas, 0, 0);
+      const d = oc.getImageData(0, 0, W, H).data;
+      return probes.map(([x, y]) => d[(y * W + x) * 4] / 255);
+    };
+    const through = (source, passes) => {
+      const cv = document.createElement('canvas');
+      const graph = createRenderGraph(cv);
+      graph.resize(W, H);
+      graph.render(source, passes);
+      const got = readProbes(cv);
+      graph.dispose();
+      return got;
+    };
+
+    const rows = {};
+    for (const [name, { source, mask }] of Object.entries(shapes)) {
+      const bitmap = await createImageBitmap(source);
+      for (const [kind, from] of [['canvas', source], ['bitmap', bitmap]]) {
+        // What the source really is at each probe, measured rather than assumed
+        // -- a fill colour is rounded to 8 bits and the ramp is not exact.
+        const base = through(from, [passthroughPass]);
+        const got = through(from, [makeLayerPass({ lut: toBlack, mask, aspectRatio: AR, id: `m:${name}` })]);
+        let worst = 0;
+        probes.forEach(([, ], i) => {
+          if (base[i] < 0.15) return; // too dark to divide by
+          const measured = 1 - got[i] / base[i];
+          const [u, v] = uvOf(probes[i]);
+          const want = maskMod.maskAt(mask, u, v, base[i], AR);
+          worst = Math.max(worst, Math.abs(measured - want));
+        });
+        rows[`${name}_${kind}`] = Number(worst.toFixed(4));
+      }
+      bitmap.close();
+      // And that the shape is not accidentally uniform over these probes, which
+      // would make the rows above pass on a mask that does nothing.
+      const base = through(source, [passthroughPass]);
+      const spread = probes.map((p, i) => maskMod.maskAt(mask, ...uvOf(p), base[i], AR));
+      rows[`${name}_spread`] = Number((Math.max(...spread) - Math.min(...spread)).toFixed(3));
+    }
+    // Opacity ~0 must be the picture untouched, which is what lets a parked
+    // layer be skipped rather than mixed by zero.
+    {
+      const got = through(white, [
+        makeLayerPass({ lut: toBlack, mask: null, opacity: 0.0001, aspectRatio: AR, id: 'm:zero' }),
+      ]);
+      rows.nearlyOff = Number((1 - got[0]).toFixed(4));
+    }
+    results.mask = rows;
+  }
+
   return results;
 });
 
@@ -355,6 +465,27 @@ if (Math.abs(vig.out - vig.expected) > 2) {
   console.log(`  FAIL  the lift disagrees with lens.ts by ${Math.abs(vig.out - vig.expected)} codes`);
 } else {
   console.log(`  ok    within ${Math.abs(vig.out - vig.expected)} code(s) of it`);
+}
+
+const mask = out.mask;
+console.log('\n  masks, against maskAt over 20 points of the frame:');
+for (const shape of ['linear', 'radial', 'luma']) {
+  const spread = mask[`${shape}_spread`];
+  const worst = Math.max(mask[`${shape}_canvas`], mask[`${shape}_bitmap`]);
+  // 1/255 is one 8-bit code; the read-back is through a byte canvas.
+  const ok = worst <= 0.006 && spread > 0.05;
+  if (!ok) bad += 1;
+  console.log(
+    `  ${ok ? 'ok  ' : 'FAIL'}  ${shape.padEnd(7)} worst ${worst.toFixed(4)} ` +
+      `(canvas ${mask[`${shape}_canvas`]}, bitmap ${mask[`${shape}_bitmap`]}), ` +
+      `spread ${spread}${spread > 0.05 ? '' : ' — FLAT, so this row proves nothing'}`,
+  );
+}
+if (mask.nearlyOff > 0.002) {
+  bad += 1;
+  console.log(`  FAIL  a layer at opacity ~0 changed the picture by ${mask.nearlyOff}`);
+} else {
+  console.log(`  ok    a layer at opacity ~0 leaves the picture alone (${mask.nearlyOff})`);
 }
 
 if (errors.length) {
