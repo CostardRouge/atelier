@@ -19,6 +19,7 @@ import { isDefaultFraming, normaliseFraming, type Framing } from '../media/frami
 import { type SavedMediaRef } from '../projects/project-types';
 import { isStoredAspect } from './crop-aspect';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
+import { MAX_LAYER_INTENSITY } from '../lut/lut-stack';
 import type { OutputTransform } from '../lut/transfer';
 import { DEFAULT_SOURCE_ID } from '../sources/source';
 
@@ -141,7 +142,9 @@ function readLayer(raw: unknown): SavedLutLayer | null {
     source: raw.source,
     name: typeof raw.name === 'string' ? raw.name : raw.id,
     customText: typeof raw.customText === 'string' ? raw.customText : null,
-    intensity: Math.min(1, Math.max(0, finite(raw.intensity, 1))),
+    // The same 0..3 every other reader allows: capping at 1 silently dimmed
+    // an over-applied look the trip and the project kept.
+    intensity: Math.min(MAX_LAYER_INTENSITY, Math.max(0, finite(raw.intensity, 1))),
     enabled: raw.enabled !== false,
   };
 }

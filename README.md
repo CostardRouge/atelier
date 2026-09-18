@@ -178,6 +178,27 @@ instant A/B, reordered with ↑/↓. The stack **bakes into a single LUT**
 node graph), so the preview, the stills and every export variant still grade
 through one shader pass.
 
+**Film stocks: a look generated from an emulsion, not read from a file.** The
+same picker offers six **FILM** stocks beside the vendor LUTs — *Reversal ·
+vivid*, *Reversal · neutral*, *Negative · portrait*, *Negative · consumer*,
+*Cross-process*, *Monochrome · panchromatic* — named by emulsion class rather
+than by a brand, because each is a documented physical shape and not a claim
+about someone's film. A stock is a layer like any other (strength, bypass,
+order, house style, the `.atelier.json` and `.roadtrip.json` files), and its
+cube is generated from a small model of the emulsion: per-channel
+characteristic curves in stops (toe, straight line, shoulder — a different
+shape per channel is the crossover, cool shadows under warm highlights), the
+dye layers' overlap, coupler inhibition (a saturated colour melts toward
+neutral instead of clipping — the thing a saturation slider cannot do), a
+paper stage for the negatives, and dye saturation. Every stock keeps mid grey
+exactly where it was, so picking one never changes exposure. Its dials are
+live under the layer — pick a stock, then adjust coupling, rolloff, dye, the
+print and the three curves — and the layer says when it has departed from its
+stock. **Put it after a conversion LUT**: an emulsion applied to log footage is
+nonsense, and the stack's order is yours. Grain and halation are not here yet:
+they are spatial, not colour, and they arrive with the photo editor's render
+core (`docs/film-simulation.md`).
+
 **Develop: the media's own correction, before the look.** The Grade tab opens
 on one settled row — `As shot`, or `+0.7 EV · highlights −40` — and
 **Develop…** opens the same sheet Trips uses over the active photo *or clip*:

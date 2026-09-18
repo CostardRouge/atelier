@@ -444,3 +444,31 @@ catalogue at a hundred thousand pictures (Winnow is that, and already is); and
    `photo-develop.md`, P8 there) is still open and is not touched here.
 4. **The RAW-on-a-phone verdict** (decision 5 of `develop-originals.md` §7)
    still needs his iPhone.
+
+Three requirements P4 inherits from the film simulation
+(`docs/film-simulation.md` §6 and §10, decided 2026-09-17 — the maintainer
+chose to make grain and halation ONE node of this graph rather than build the
+multi-pass machinery twice; the pure maths is already in `shared/film/`):
+
+5. **A `FilmNode` runs on the CLIP path too.** "A clip takes the cube path"
+   (§5) is about masks and geometry, which are still-only; grain on a hook
+   video is the point of film, and the node has no spatial dependency on the
+   edit. The fast path is `SOURCE → CUBE → [FILM] → OUTPUT`, and that is what
+   clips take. The node sits between LOOK and OUTPUT, a fixed position.
+6. **The node needs the OUTPUT resolution and a source frame index.** Grain
+   must be band-limited against a downscale that happens AFTER the graph
+   (`film-noise.ts`: a tiled noise sampled `LINEAR` at one texel per cell,
+   never a per-fragment hash), sized as a fraction of the frame's height
+   (`film-texture.ts`, `grainUniforms`), and its field re-rolls per SOURCE
+   frame quantised to `grainFps` (`grainFrameIndex`, `grainPhase`) — never
+   per rAF. Halation's buffer is a function of the radius alone
+   (`halationBuffer`), so it is resolution-independent by construction. The
+   shader takes its blur weights from `gaussianKernel` and is compared to
+   `blurSeparable` by `readPixels` in `check-render.mjs`.
+7. **`gradeKey` and the graph-backed `holdGrades` fold the texture in**
+   (`filmTextureKey`): the texture changes nothing about the cube, so a cache
+   keyed on the cube alone serves the pre-film picture and the grain slider
+   looks dead on a still — the one surface where it is tuned. The texture is
+   stored on the grade beside the layers (`SavedGrade.film`, a version bump on
+   `TripGrade`, `ProjectDoc` and `RollDoc` when the node lands), because it
+   belongs to the stock and cascades with the rung.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gradeKey, gradeOrNull, type SavedGrade } from './saved-grade';
+import { gradeKey, gradeOrNull, isUploadedLook, type SavedGrade } from './saved-grade';
 import type { SavedLutLayer } from './use-lut-stack';
 
 const layer = (over: Partial<SavedLutLayer> = {}): SavedLutLayer => ({
@@ -35,9 +35,26 @@ describe('gradeKey', () => {
     expect(gradeKey({ layers: [b], output: 'none' })).not.toContain('LUT_3D_SIZE');
   });
 
+  it('folds a FILM layer’s settings in — its text changes under one id', () => {
+    const film = (customText: string) =>
+      layer({ id: 'f', source: 'film', customText, intensity: 1 });
+    const a = gradeKey({ layers: [film('{"stock":"a","response":{"dye":0}}')], output: 'none' });
+    const b = gradeKey({ layers: [film('{"stock":"a","response":{"dye":5}}')], output: 'none' });
+    expect(a).not.toBe(b);
+    expect(a).toContain('"dye":0');
+  });
+
   it('answers for no grade at all', () => {
     expect(gradeKey(null)).toBe('-');
     expect(gradeKey(null)).not.toBe(gradeKey({ layers: [], output: 'none' }));
+  });
+});
+
+describe('isUploadedLook', () => {
+  it('is an uploaded cube, never a built-in and never a film stock', () => {
+    expect(isUploadedLook(layer())).toBe(false);
+    expect(isUploadedLook(layer({ source: 'custom', customText: 'LUT_3D_SIZE 2' }))).toBe(true);
+    expect(isUploadedLook(layer({ source: 'film', customText: '{"stock":"x"}' }))).toBe(false);
   });
 });
 

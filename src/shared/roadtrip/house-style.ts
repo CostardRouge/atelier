@@ -26,6 +26,7 @@
  * Pure and DOM-free. The committed file is read by `house-style-bundle.ts`.
  */
 
+import { isUploadedLook } from '../lut/saved-grade';
 import { hookVariantById } from './hooks/registry';
 import type { HookLayer } from './hooks/hook-variant';
 import {
@@ -107,10 +108,12 @@ export function houseStyleFrom(trip: TripDoc): HouseStyleSnapshot {
   for (const [kind, defaults] of Object.entries(style.hookDefaults)) {
     if (defaults) hookDefaults[kind as keyof HookDefaultsByKind] = styleDefaults(defaults);
   }
-  const uploaded = style.grade.layers.filter((layer) => layer.customText !== null);
+  // An uploaded cube's whole lattice cannot be committed; a film stock's
+  // settings can, and are exactly what a house style is for.
+  const uploaded = style.grade.layers.filter(isUploadedLook);
   const grade: TripGrade = {
     ...style.grade,
-    layers: style.grade.layers.filter((layer) => layer.customText === null),
+    layers: style.grade.layers.filter((layer) => !isUploadedLook(layer)),
   };
   return {
     file: {

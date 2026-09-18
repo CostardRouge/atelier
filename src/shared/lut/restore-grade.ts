@@ -13,6 +13,7 @@
  * `saved-grade.ts`, so a node test can read one without any of this.
  */
 
+import { filmLayerFromSaved, isFilmLayer } from '../film/film-layer';
 import { parseCube, type CubeLut } from '../lib/cube-parser';
 import { BUILTIN_LUTS } from './builtin-luts';
 import type { LutLayer } from './lut-stack';
@@ -50,7 +51,7 @@ async function fetchBuiltin(builtinId: string): Promise<{ lut: CubeLut; name: st
 
 export interface RestoredLayers {
   layers: LutLayer[];
-  /** The raw `.cube` text of every uploaded layer that came back, by layer id. */
+  /** The raw `.cube` text of every uploaded layer, and the settings of every film layer, by id. */
   customText: Record<string, string>;
 }
 
@@ -65,7 +66,14 @@ export async function restoreLayers(saved: readonly SavedLutLayer[]): Promise<Re
   const layers: LutLayer[] = [];
   for (const s of saved) {
     try {
-      if (s.source === 'custom') {
+      if (isFilmLayer(s)) {
+        // Generated from its settings, never fetched — and the text goes
+        // back out with it, so a revert puts the same numbers back.
+        const layer = filmLayerFromSaved(s);
+        if (!layer || !s.customText) continue;
+        customText[s.id] = s.customText;
+        layers.push(layer);
+      } else if (s.source === 'custom') {
         const parsed = s.customText ? parseCube(s.customText) : null;
         if (!parsed || !s.customText) continue;
         customText[s.id] = s.customText;
