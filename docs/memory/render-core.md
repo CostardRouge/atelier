@@ -242,3 +242,40 @@ off the frame. Vignetting at −100 sank a corner from 237 to 88 with the centre
 untouched. **Preview = export**: the same picture through `renderRollPicture`
 put its lines within 0.0006 of the width of the stage's, which is under a
 source pixel.
+
+## `v_uv` is a TEXTURE coordinate, and its y is not constant (2026-09-18)
+
+**The bug this cost**: `makeKeystonePass` applied `mirrorYMatrix`
+unconditionally, which is right for a canvas source and MIRRORED for an
+`ImageBitmap` — so every decoded photograph, which is every real picture in the
+Develop tool, took its perspective correction upside down. A positive Vertical
+tapered the wrong way and Turn rotated the wrong way. It passed the gate
+because the gate drove a canvas.
+
+The helper's own comment named the reason it could not work: the disagreement
+"is not even constant", because the vertex shader flips UVs for an
+`ImageBitmap` (whose orientation is fixed at creation, so
+`UNPACK_FLIP_Y_WEBGL` is ignored for it) and not for a canvas. A constant
+mirror cannot express a non-constant flip. `mirrorYMatrix` is gone; a comment
+in `geometry.ts` says why, so it is not reinvented.
+
+**The rule now**: a pass that asks WHERE a pixel is converts with `imageUv`
+(`glsl.ts`), which reads the vertex shader's own `u_flipY` — one location per
+program name, so it is the very value the graph set — and is its own inverse,
+so the same call takes a computed image point back to a texture coordinate to
+sample at. A matrix in `geometry.ts` is then always in IMAGE space, y down from
+the top of the picture, and nothing outside the shader thinks about textures.
+An FBO always holds image-bottom at v = 0 whichever source fed it, and the
+graph already passes `u_flipY = 0` for those, so the same conversion is right
+for pass 2 and up.
+
+A COLOUR pass never notices any of this, and a RADIAL one does not either: a y
+mirror leaves every distance from the centre unchanged, which is why the lens
+is correct without converting and why its own gate row could be trusted.
+
+**Every geometry row of `check-render.mjs` now runs from BOTH source kinds**,
+plus a passthrough row from each — if an untouched marker did not come back
+where it was drawn, the harness itself would be upside down and every row above
+would be measuring the wrong thing. The two warps are also compared with each
+other, because both being wrong the same way would still be one picture, and
+that is the failure the pair exists to catch.

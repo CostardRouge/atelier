@@ -10,12 +10,17 @@
  * beyond the source's edge, and clamping to the edge pixel would smear a band
  * of invented picture along it — the same fabrication the battery gauge
  * refuses. The zoom is what hides the corners, and the panel says so.
+ *
+ * **It works in IMAGE coordinates, not texture ones** (`imageUv`, `glsl.ts`).
+ * That is not tidiness: `v_uv`'s y runs with the picture for a canvas source
+ * and against it for an `ImageBitmap`, so a matrix applied to `v_uv` directly
+ * is upside down for one of them. It was — every decoded photograph took its
+ * perspective correction mirrored until this was measured.
  */
 
-import { GLSL_VERSION } from './glsl';
+import { GLSL_VERSION, IMAGE_UV } from './glsl';
 import {
   keystoneSampleMatrix,
-  mirrorYMatrix,
   toColumnMajor,
   type Keystone,
   type Matrix3,
@@ -29,36 +34,36 @@ in vec2 v_uv;
 out vec4 outColor;
 
 uniform sampler2D u_src;
-// DESTINATION to SOURCE, in centred [-0.5,0.5] coordinates of THIS pass's uv
-// space. The caller mirrors y where its space does -- see mirrorYMatrix in
-// geometry.ts. NO BACKTICKS IN HERE: one ends the template literal, and the
-// file then fails to parse (media-pipeline.md has worn this before).
+// DESTINATION to SOURCE, in centred [-0.5,0.5] IMAGE coordinates -- y down from
+// the top of the picture, whichever way the texture happens to be stored.
+// NO BACKTICKS IN HERE: one ends the template literal, and the file then fails
+// to parse (media-pipeline.md has worn this before).
 uniform mat3 u_sample;
+${IMAGE_UV}
 
 void main() {
-  vec3 s = u_sample * vec3(v_uv - 0.5, 1.0);
+  vec2 img = imageUv(v_uv);
+  vec3 s = u_sample * vec3(img - 0.5, 1.0);
   // Bent through the horizon: no source point exists, so nothing is drawn.
   if (abs(s.z) < 1e-6) { outColor = vec4(0.0); return; }
-  vec2 uv = s.xy / s.z + 0.5;
+  vec2 at = s.xy / s.z + 0.5;
   // Outside the picture is EMPTY, never the edge pixel smeared outwards.
-  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) { outColor = vec4(0.0); return; }
-  outColor = texture(u_src, uv);
+  if (at.x < 0.0 || at.x > 1.0 || at.y < 0.0 || at.y > 1.0) { outColor = vec4(0.0); return; }
+  outColor = texture(u_src, imageUv(at));
 }`;
 
 /**
  * The warp for a keystone — the call every consumer should make.
  *
- * It inverts AND mirrors y itself, because the pass's uv space runs y the
- * opposite way from the screen space `geometry.ts` works in. **Measured, not
- * reasoned**: a marker in a known corner, turned 90 degrees, lands where
- * `keystoneMatrix` predicts only with the mirror — without it, at the negation.
- * `scripts/check-render.mjs` holds that, so nobody has to work it out again.
+ * The matrix goes in as `geometry.ts` states it, in image space; the shader
+ * converts. `scripts/check-render.mjs` drives a marker through it from BOTH a
+ * canvas and an `ImageBitmap`, so nobody has to work the convention out again.
  */
 export function makeKeystonePass(keystone: Keystone, aspectRatio = 1): RenderPass | null {
   const sample = keystoneSampleMatrix(keystone, aspectRatio);
   // Numbers that fold the plane: the caller draws unwarped rather than blank.
   if (!sample) return null;
-  return keystonePassFromMatrix(mirrorYMatrix(sample));
+  return keystonePassFromMatrix(sample);
 }
 
 /** The raw form, for a checker that wants to state the matrix itself. */

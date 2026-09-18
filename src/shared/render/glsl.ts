@@ -30,6 +30,32 @@ void main() {
 }`;
 
 /**
+ * IMAGE coordinates, for a pass that cares WHERE a pixel is.
+ *
+ * `v_uv` is a TEXTURE coordinate, and which way its y runs relative to the
+ * picture is NOT constant: the vertex shader flips for an `ImageBitmap` and
+ * not for a canvas, so the same shader sees the two sources upside down from
+ * each other. A colour pass never notices, and a radial one (the lens) is
+ * symmetric about the centre and does not care either — but a keystone, a mask
+ * or anything else that asks "how far down the frame am I" is wrong for one of
+ * the two source kinds unless it converts.
+ *
+ * `u_flipY` is the vertex shader's own uniform; a program has ONE location for
+ * a name, so declaring it here reads the very value the graph already sets.
+ *
+ * The map is its own inverse, so the same call takes a computed image point
+ * back to a texture coordinate to sample at.
+ *
+ * Measured, not reasoned: a marker in a known corner turned 90 degrees landed
+ * at the matrix's prediction for a canvas and at its y-negation for a bitmap.
+ * `scripts/check-render.mjs` now runs every geometry check on BOTH.
+ */
+export const IMAGE_UV = `
+uniform float u_flipY;
+vec2 imageUv(vec2 uv) { return vec2(uv.x, mix(1.0 - uv.y, uv.y, u_flipY)); }
+`;
+
+/**
  * The uniforms a LUT lookup reads. Declared apart from the functions so a pass
  * can put its own uniforms beside them without a name clash.
  */

@@ -117,10 +117,8 @@ const out = await page.evaluate(async () => {
   // canvas. So a marker is put in a KNOWN corner, warped, and looked for where
   // `keystoneMatrix` says it should be.
   {
-    const { createRenderGraph } = await import('/atelier/src/shared/render/graph.ts');
-    const { makeKeystonePass, keystonePassFromMatrix } = await import(
-      '/atelier/src/shared/render/keystone-pass.ts'
-    );
+    const { createRenderGraph, passthroughPass } = await import('/atelier/src/shared/render/graph.ts');
+    const { makeKeystonePass } = await import('/atelier/src/shared/render/keystone-pass.ts');
     const geo = await import('/atelier/src/shared/render/geometry.ts');
 
     const S = 128;
@@ -130,6 +128,11 @@ const out = await page.evaluate(async () => {
     // One bright block, up and to the LEFT of centre: source point (-0.25,-0.25)
     // in a y-DOWN centred space is the upper-left quadrant.
     mg.fillStyle = '#fff'; mg.fillRect(S * 0.25 - 6, S * 0.25 - 6, 12, 12);
+    // The SAME picture as an ImageBitmap. This is the whole point of the row
+    // pair: `v_uv`'s y runs with the picture for a canvas and against it for a
+    // bitmap, so a geometry pass that reads `v_uv` directly is upside down for
+    // one of them — which is exactly what shipped, and what `imageUv` fixes.
+    const markedBitmap = await createImageBitmap(marked);
 
     const keystone = { ...geo.DEFAULT_KEYSTONE, rotation: 90 };
     const forward = geo.keystoneMatrix(keystone, 1);
@@ -149,11 +152,11 @@ const out = await page.evaluate(async () => {
       return w ? [sx / w, sy / w] : null;
     };
 
-    const run = (pass) => {
+    const run = (source, pass) => {
       const cv = document.createElement('canvas');
       const graph = createRenderGraph(cv);
       graph.resize(S, S);
-      graph.render(marked, [pass]);
+      graph.render(source, [pass]);
       const o = document.createElement('canvas'); o.width = S; o.height = S;
       const oc = o.getContext('2d', { willReadFrequently: true });
       oc.drawImage(cv, 0, 0);
@@ -161,15 +164,17 @@ const out = await page.evaluate(async () => {
       graph.dispose();
       return at;
     };
+    const round = (p) => p.map((v) => Number(v.toFixed(4)));
 
     results.keystone = {
-      expected: expected.map((v) => Number(v.toFixed(4))),
-      // What every consumer gets: the pass builds its own matrix.
-      viaPass: run(makeKeystonePass(keystone, 1)).map((v) => Number(v.toFixed(4))),
-      // And WITHOUT the mirror, to keep on record that it is load-bearing.
-      unmirrored: run(
-        keystonePassFromMatrix(geo.keystoneSampleMatrix(keystone, 1)),
-      ).map((v) => Number(v.toFixed(4))),
+      expected: round(expected),
+      viaCanvas: round(run(marked, makeKeystonePass(keystone, 1))),
+      viaBitmap: round(run(markedBitmap, makeKeystonePass(keystone, 1))),
+      // Untouched, both ways: if a passthrough did NOT put the marker back at
+      // (-0.25,-0.25) the harness itself would be upside down and every row
+      // above it would be measuring the wrong thing.
+      restCanvas: round(run(marked, passthroughPass)),
+      restBitmap: round(run(markedBitmap, passthroughPass)),
     };
   }
 
@@ -272,14 +277,7 @@ const out = await page.evaluate(async () => {
 await browser.close();
 
 const kx = out.keystone;
-const keyOff = Math.max(
-  Math.abs(kx.viaPass[0] - kx.expected[0]),
-  Math.abs(kx.viaPass[1] - kx.expected[1]),
-);
-const unmirroredOff = Math.max(
-  Math.abs(kx.unmirrored[0] - kx.expected[0]),
-  Math.abs(kx.unmirrored[1] - kx.expected[1]),
-);
+const away = (a, b) => Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]));
 
 const rows = [
   ['canvas source, one pass', out.canvas.worst, 0],
@@ -294,23 +292,33 @@ for (const [name, worst, allowed] of rows) {
   if (!ok) bad += 1;
   console.log(`  ${ok ? 'ok  ' : 'FAIL'}  ${name.padEnd(40)} worst ${worst} code${worst === 1 ? '' : 's'} (allowed ${allowed})`);
 }
-console.log(
-  `\n  keystone: a 90 degree turn puts the marker at ${JSON.stringify(kx.viaPass)}, ` +
-    `the matrix says ${JSON.stringify(kx.expected)}`,
-);
-if (keyOff > 0.02) {
-  bad += 1;
-  console.log(`  FAIL  the warp disagrees with geometry.ts by ${keyOff.toFixed(3)}`);
-} else {
-  console.log(`  ok    within ${keyOff.toFixed(4)} of it`);
+console.log(`\n  keystone: a 90 degree turn; the matrix says ${JSON.stringify(kx.expected)}`);
+// The harness first: a passthrough must leave the marker where it was drawn,
+// from EITHER source kind, or every row here is measuring an upside-down page.
+for (const [name, at] of [['canvas', kx.restCanvas], ['ImageBitmap', kx.restBitmap]]) {
+  const off = away(at, [-0.25, -0.25]);
+  if (off > 0.02) {
+    bad += 1;
+    console.log(`  FAIL  untouched, a ${name} source puts the marker at ${JSON.stringify(at)}`);
+  }
 }
-// The mirror is load-bearing: without it the marker lands somewhere else, and
-// a run where BOTH agree would mean the check had stopped proving anything.
-if (unmirroredOff < 0.02) {
+// Then the warp itself, from both. A canvas and an ImageBitmap hand the shader
+// opposite y conventions, so one of them passing proves nothing about the
+// other — which is how a mirrored keystone shipped on every decoded photograph.
+for (const [name, at] of [['canvas     ', kx.viaCanvas], ['ImageBitmap', kx.viaBitmap]]) {
+  const off = away(at, kx.expected);
+  const ok = off <= 0.02;
+  if (!ok) bad += 1;
+  console.log(
+    `  ${ok ? 'ok  ' : 'FAIL'}  ${name} source lands at ${JSON.stringify(at)}` +
+      (ok ? `, within ${off.toFixed(4)}` : `, out by ${off.toFixed(3)}`),
+  );
+}
+// And the two must agree with EACH OTHER, which is the property that actually
+// broke: both could be wrong the same way and still be one picture.
+if (away(kx.viaCanvas, kx.viaBitmap) > 0.02) {
   bad += 1;
-  console.log('  FAIL  unmirrored agrees too, so this check proves nothing any more');
-} else {
-  console.log(`  ok    unmirrored is ${unmirroredOff.toFixed(3)} away, so the mirror is doing the work`);
+  console.log('  FAIL  the two source kinds warp differently');
 }
 
 const lens = out.lens;

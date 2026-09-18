@@ -210,17 +210,11 @@ export function toColumnMajor(m: Matrix3): Float32Array {
   return new Float32Array([m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]]);
 }
 
-/**
- * The same transform in a space whose y runs the other way: `F · M · F`, where
- * `F` mirrors y.
- *
- * It exists because a texture's v axis and a screen's y axis disagree, and the
- * disagreement is not even constant — the vertex shader flips UVs for an
- * `ImageBitmap` and not for a canvas. Rather than reason about which applies
- * where, a caller states the space it is in and `scripts/check-render.mjs`
- * proves the answer against this module on a real GPU.
- */
-export function mirrorYMatrix(m: Matrix3): Matrix3 {
-  const f: Matrix3 = [1, 0, 0, 0, -1, 0, 0, 0, 1];
-  return multiplyMatrix3(f, multiplyMatrix3(m, f));
-}
+// There WAS a `mirrorYMatrix` here, conjugating a transform into a space whose
+// y runs the other way, and `makeKeystonePass` applied it unconditionally. It
+// was the wrong shape of answer: its own comment said the disagreement "is not
+// even constant" — the vertex shader flips UVs for an `ImageBitmap` and not for
+// a canvas — and a constant mirror cannot express that. So it was right for a
+// canvas and mirrored every decoded photograph. The shader converts to image
+// coordinates instead (`imageUv` in `glsl.ts`), and a matrix here is always in
+// image space, y down from the top of the picture.
