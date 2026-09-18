@@ -402,8 +402,24 @@ Still ahead for masks: hue and saturation ranges, combining two masks, and
 DRAGGING the shape on the stage rather than setting it with sliders (a
 hit-tested overlay with its own gesture rules — a piece of work, not a control).
 
-**P8 — brush masks.** Vector strokes, rasterised on the GPU. Edge-snapping
-("auto mask") deferred.
+**P8 — brush masks** *(THREE commits, all BUILT 2026-09-18 — the stroke model
+and the rasteriser, a grader that swaps its passes, then the gesture;
+`render-layers.md` and `render-core.md` hold the rules.)*
+
+Strokes are VECTORS, so the document stays small and a mask painted on a preview
+delivers at full size. They are rasterised on the **CPU**, not the GPU as
+written here: a shader walking every segment of every stroke per pixel costs
+`pixels × points`, and the CPU can walk each stroke inside its own bounding box
+instead. What matters is that it rasterises the SAME function the pure module
+defines rather than an approximation of it, so the gate holds the GPU to the
+tolerance the procedural shapes get.
+
+It needed one thing this plan did not foresee: **a grader that swaps its passes
+instead of rebuilding its context**. A stroke adds a point per `pointermove`,
+and a new WebGL2 context per point is no gesture at all. That landed as its own
+commit, and the keystone and lens drags got it for nothing.
+
+Edge-snapping ("auto mask") stays deferred.
 
 **P9 — segmentation.** The model under `public/models/`, inference in a worker,
 the cached raster, `subject` / `background` as mask kinds. §4.3.
