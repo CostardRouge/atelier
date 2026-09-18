@@ -4,6 +4,7 @@ import { isDefaultDevelop, type DevelopSettings } from '../../shared/develop/dev
 import { hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from '../../shared/develop/develop-clipboard';
 import type { Keystone } from '../../shared/render/geometry';
 import type { LensCorrection } from '../../shared/render/lens';
+import type { AdjustLayer } from '../../shared/develop/layer';
 import type { Framing } from '../../shared/media/framing';
 import {
   WORKBENCH_TABS,
@@ -426,6 +427,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     (id: string, lens: LensCorrection | null) => update((r) => patchPicture(r, id, { lens })),
     [update],
   );
+  const handleLayers = useCallback(
+    (id: string, layers: AdjustLayer[]) => update((r) => patchPicture(r, id, { layers })),
+    [update],
+  );
   const handleAspect = useCallback(
     (id: string, aspect: string) => update((r) => patchPicture(r, id, { aspect })),
     [update],
@@ -716,6 +721,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onFraming={(framing) => handleFraming(open.id, framing)}
               onKeystone={(keystone) => handleKeystone(open.id, keystone)}
               onLens={(lens) => handleLens(open.id, lens)}
+              onLayers={(layers) => handleLayers(open.id, layers)}
               onAspect={(aspect) => handleAspect(open.id, aspect)}
               exportSettings={roll.export}
               onExportSettings={handleExportSettings}

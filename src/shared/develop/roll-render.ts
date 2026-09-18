@@ -23,6 +23,8 @@ import { makeFrameGrader } from '../lut/frame-grader';
 import type { Keystone } from '../render/geometry';
 import type { LensCorrection } from '../render/lens';
 import { geometryPasses, hasGeometry } from '../render/picture-geometry';
+import { drawingLayers, type AdjustLayer } from './layer';
+import { layerPasses } from './layer-render';
 import { DEFAULT_FRAMING, type Framing } from '../media/framing';
 import { decodePhoto } from '../media/photo-frame';
 import { pictureAspectRatio } from './crop-aspect';
@@ -47,6 +49,8 @@ export interface RollRenderOptions {
   keystone?: Keystone | null;
   /** The lens correction, warped in BEFORE the keystone — `picture-geometry.ts`. */
   lens?: LensCorrection | null;
+  /** Adjustment layers, bottom to top, applied after the look — `layer-render.ts`. */
+  layers?: readonly AdjustLayer[] | null;
 }
 
 export interface RollRendered {
@@ -88,10 +92,12 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
     // resample. Their ORDER is `picture-geometry.ts`'s to state, once, so this
     // and the stage cannot drift. And geometry with no look still needs the
     // GPU, so the grader is built for either.
-    const warps = geometryPasses(opts, source.width / source.height);
+    const ar = source.width / source.height;
+    const stack = drawingLayers(opts.layers);
+    const passes = [...geometryPasses(opts, ar), ...layerPasses(stack, ar)];
     const grader =
-      opts.lut || hasGeometry(opts)
-        ? makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, warps)
+      opts.lut || hasGeometry(opts) || stack.length > 0
+        ? makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, passes)
         : null;
     try {
       const graded = grader ? grader.render(bitmap) : bitmap;

@@ -377,10 +377,30 @@ between focal entries. **F4 is the rule that shapes it**: a profile applies to a
 RAW, is OFF by default on a render (a DJI JPEG and its embedded preview are
 already dewarped while the DNG is not), and the panel says why.
 
-**P7 — layers and procedural masks** *(two commits)*. The `EditStack` migration
-and the layer list; then `mask.ts` (linear, radial, luma/hue/sat range, combine),
-opacity, blend modes, and the red mask overlay. This is where *layers with
-opacity*, *gradients* and *creative vignetting* land.
+**P7 — layers and procedural masks** *(BOTH commits BUILT 2026-09-18 —
+`render/mask.ts` + `render/layer-pass.ts` + `develop/layer.ts` +
+`develop/layer-render.ts`, then `RollPicture.layers`, a fourth inspector tab and
+the stack reaching every renderer. `render-layers.md` holds the rules.)* This is
+where *layers with opacity*, *gradients* and *creative vignetting* land.
+
+Three departures from the plan above, each for a reason:
+
+- **No `EditStack` migration.** `RollPicture` is already flat — `develop`,
+  `framing`, `aspect`, `keystone`, `lens` — so layers arrived as one more
+  optional field rather than a rename that would churn every consumer for no
+  functional gain. The `EditStack` shape survives as what the RENDERERS take.
+- **Layers run after the one cube**, not between the develop and the look: a
+  local correction is then set on the picture as displayed rather than in the
+  log space a conversion LUT reads. §5's ordering and the cost of changing back
+  are recorded in `render-layers.md`.
+- **No blend modes.** They were in my plan and are not in the maintainer's
+  list; an adjustment layer with a multiply mode is a compositing feature, and
+  opacity is the control that was asked for. One field and one `mix` later, if
+  it is ever wanted.
+
+Still ahead for masks: hue and saturation ranges, combining two masks, and
+DRAGGING the shape on the stage rather than setting it with sliders (a
+hit-tested overlay with its own gesture rules — a piece of work, not a control).
 
 **P8 — brush masks.** Vector strokes, rasterised on the GPU. Edge-snapping
 ("auto mask") deferred.

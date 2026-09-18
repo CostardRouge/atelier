@@ -25,6 +25,17 @@ import { useWriteThrough } from '../../shared/develop/use-write-through';
 import { useDevelopPicture, type DevelopFrame } from '../../shared/develop/use-develop-picture';
 import { sameKeystone, type Keystone } from '../../shared/render/geometry';
 import { sameLens, type LensCorrection } from '../../shared/render/lens';
+import type { MaskKind } from '../../shared/render/mask';
+import {
+  addLayer,
+  createLayer,
+  drawingLayers,
+  moveLayer,
+  patchLayer,
+  removeLayer,
+  sameLayers,
+  type AdjustLayer,
+} from '../../shared/develop/layer';
 import { usePresetBookHost } from '../../shared/develop/use-preset-book';
 import type { LutStack } from '../../shared/lut/use-lut-stack';
 import { DEFAULT_FRAMING, isDefaultFraming, sameFraming, type Framing } from '../../shared/media/framing';
@@ -37,6 +48,8 @@ import type { RollExport } from '../../shared/develop/roll-types';
 import CropPanel, { type CropApplyVerb } from './CropPanel';
 import KeystonePanel from './KeystonePanel';
 import LensPanel from './LensPanel';
+import LayersPanel from './LayersPanel';
+import MaskPanel from './MaskPanel';
 import type { BorderApplyVerb } from './BorderSection';
 import type { RollBorder } from '../../shared/develop/border-layout';
 import ExportPanel, { type ExportVerb } from './ExportPanel';
@@ -83,6 +96,7 @@ export default function PictureWorkbench({
   onFraming,
   onKeystone,
   onLens,
+  onLayers,
   onAspect,
   exportSettings,
   onExportSettings,
@@ -113,6 +127,7 @@ export default function PictureWorkbench({
   onFraming: (framing: Framing | null) => void;
   onKeystone: (keystone: Keystone | null) => void;
   onLens: (lens: LensCorrection | null) => void;
+  onLayers: (layers: AdjustLayer[]) => void;
   onAspect: (aspect: string) => void;
   /** The roll's delivery settings, edited on the Export tab. */
   exportSettings: RollExport;
@@ -141,12 +156,23 @@ export default function PictureWorkbench({
   // Read once, like the develop and the crop: the workbench is keyed per picture.
   const [keystoneDraft, setKeystoneDraft] = useState<Keystone | null>(entry.keystone ?? null);
   const [lensDraft, setLensDraft] = useState<LensCorrection | null>(entry.lens ?? null);
+  // The stack is a draft like the rest, so a slider drag is one write-through
+  // rather than one document write per step.
+  const [layersDraft, setLayersDraft] = useState<AdjustLayer[]>(entry.layers ?? []);
+  const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+  const [showMask, setShowMask] = useState(false);
+  const selectedLayer = layersDraft.find((l) => l.id === selectedLayerId) ?? null;
+  const drawingCount = drawingLayers(layersDraft).length;
   const picture = useDevelopPicture({
     file,
     cube: stack.composed,
     frame,
     keystone: keystoneDraft,
     lens: lensDraft,
+    layers: layersDraft,
+    // Only while the layer is open AND the box is ticked: a red wash left on
+    // by accident would be mistaken for the picture.
+    showMaskOf: showMask && selectedLayer ? selectedLayer.id : null,
   });
   const fidelity = pictureFidelity(file);
 
@@ -156,8 +182,8 @@ export default function PictureWorkbench({
   // copy changes the stored value without this editor's doing, and a draft that
   // ignored it would keep showing numbers the roll no longer holds — and write
   // them back over the step at the next nudge.
-  const callbacks = useRef({ onDevelop, onFraming, onKeystone, onLens, onAspect, onSnapshot, onStep, onTabChange });
-  callbacks.current = { onDevelop, onFraming, onKeystone, onLens, onAspect, onSnapshot, onStep, onTabChange };
+  const callbacks = useRef({ onDevelop, onFraming, onKeystone, onLens, onLayers, onAspect, onSnapshot, onStep, onTabChange });
+  callbacks.current = { onDevelop, onFraming, onKeystone, onLens, onLayers, onAspect, onSnapshot, onStep, onTabChange };
   const { setDraft } = draft;
   useWriteThrough<DevelopSettings>({
     stored: entry.develop,
@@ -184,6 +210,13 @@ export default function PictureWorkbench({
     same: sameLens,
     onWrite: (value) => callbacks.current.onLens(value),
     onReseed: (value) => setLensDraft(value),
+  });
+  useWriteThrough<AdjustLayer[]>({
+    stored: entry.layers?.length ? entry.layers : null,
+    draft: layersDraft.length ? layersDraft : null,
+    same: (a, b) => sameLayers(a, b),
+    onWrite: (value) => callbacks.current.onLayers(value ?? []),
+    onReseed: (value) => setLayersDraft(value ?? []),
   });
   useWriteThrough<Framing>({
     stored: entry.framing,
@@ -384,7 +417,12 @@ export default function PictureWorkbench({
               : 'the crop needs the picture'}
           </p>
         ) : (
-          <DevelopCaption draft={draft.draft} note={fidelity.note} picture={picture} />
+          <DevelopCaption
+            draft={draft.draft}
+            note={fidelity.note}
+            picture={picture}
+            also={drawingCount ? `${drawingCount} layer${drawingCount === 1 ? '' : 's'}` : null}
+          />
         )}
       </div>
 
@@ -433,6 +471,61 @@ export default function PictureWorkbench({
               <DevelopApplySection verbs={applyTo} draft={draft.draft} onTold={tell} />
               <DevelopLookSection stack={stack} />
             </>
+          ) : tab === 'layers' ? (
+            <>
+              <LayersPanel
+                layers={layersDraft}
+                selectedId={selectedLayerId}
+                showMask={showMask}
+                onSelect={setSelectedLayerId}
+                onAdd={(kind: MaskKind | null) => {
+                  const made = createLayer(kind);
+                  setLayersDraft((list) => addLayer(list, made));
+                  setSelectedLayerId(made.id);
+                }}
+                onRemove={(id) => {
+                  setLayersDraft((list) => removeLayer(list, id));
+                  if (id === selectedLayerId) setSelectedLayerId(null);
+                }}
+                onMove={(id, delta) => setLayersDraft((list) => moveLayer(list, id, delta))}
+                onPatch={(id, patch) => setLayersDraft((list) => patchLayer(list, id, patch))}
+                onShowMask={setShowMask}
+              />
+              {selectedLayer && (
+                <>
+                  <MaskPanel
+                    layer={selectedLayer}
+                    onPatch={(patch) =>
+                      setLayersDraft((list) => patchLayer(list, selectedLayer.id, patch))
+                    }
+                  />
+                  {/* The SAME sliders the global develop uses, because a
+                      layer's adjustment IS a DevelopSettings — one maths, one
+                      panel, and a local exposure behaves like a global one. */}
+                  <DevelopSliders
+                    value={selectedLayer.develop}
+                    onChange={(key, v) =>
+                      setLayersDraft((list) =>
+                        patchLayer(list, selectedLayer.id, {
+                          develop: { ...selectedLayer.develop, [key]: v },
+                        }),
+                      )
+                    }
+                  />
+                  <DevelopCurve
+                    value={selectedLayer.develop.curves}
+                    histogram={picture.histogram}
+                    onChange={(curves) =>
+                      setLayersDraft((list) =>
+                        patchLayer(list, selectedLayer.id, {
+                          develop: { ...selectedLayer.develop, curves },
+                        }),
+                      )
+                    }
+                  />
+                </>
+              )}
+            </>
           ) : tab === 'crop' ? (
             <CropPanel
               picture={picture}
@@ -451,7 +544,7 @@ export default function PictureWorkbench({
               <KeystonePanel value={keystoneDraft} onChange={setKeystoneDraft} />
               <LensPanel value={lensDraft} onChange={setLensDraft} />
             </>
-          ) : (
+          ) : tab === 'export' ? (
             <ExportPanel
               settings={exportSettings}
               onSettings={onExportSettings}
@@ -461,7 +554,7 @@ export default function PictureWorkbench({
               note={exports.note}
               lastRun={exports.lastRun}
             />
-          )}
+          ) : null}
         </div>
       </PanelHost>
     </>

@@ -140,21 +140,31 @@ export function DevelopCaption({
   draft,
   note,
   picture,
+  also = null,
 }: {
   draft: DevelopSettings;
   note?: string | null;
   picture: DevelopPicture;
+  /**
+   * What ELSE is on the picture that the develop's own numbers do not say —
+   * layers, today. Without it the line reads "nothing changes the picture yet"
+   * over a picture a layer is visibly changing, because it was written when a
+   * cube was the only thing that could change one.
+   */
+  also?: string | null;
 }) {
   const { source, cube, view } = picture;
+  const touched = Boolean(cube) || Boolean(also);
   return (
     <p className="m-0 flex-none font-mono text-2xs text-faint leading-relaxed">
       {describeDevelop(draft)}
+      {also ? ` · ${also}` : ''}
       {note ? ` — ${note}` : ''}
-      {source && cube
+      {source && touched
         ? view.zoomed
           ? ' · drag to look around, the handle on the divider compares'
           : ' · drag across the picture to compare, wheel or pinch to look closer'
-        : source && !cube
+        : source
           ? ' · nothing changes the picture yet'
           : ''}
     </p>

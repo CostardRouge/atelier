@@ -62,3 +62,55 @@ export function layerPasses(
     return pass ? [pass] : [];
   });
 }
+
+/**
+ * Every colour to the same vermilion — the suite's accent, so the overlay reads
+ * as ours and not as a warning.
+ */
+const RED_CUBE: CubeLut = {
+  title: 'mask overlay',
+  size: 2,
+  domainMin: [0, 0, 0],
+  domainMax: [1, 1, 1],
+  data: (() => {
+    const data = new Float32Array(2 * 2 * 2 * 3);
+    for (let i = 0; i < 8; i += 1) {
+      data[i * 3] = 0.85;
+      data[i * 3 + 1] = 0.16;
+      data[i * 3 + 2] = 0.1;
+    }
+    return data;
+  })(),
+};
+
+/** How strongly the overlay tints — enough to read, not enough to hide the picture. */
+const OVERLAY_STRENGTH = 0.55;
+
+/**
+ * SHOW ME THE MASK: the layer's own shape painted over the picture in red.
+ *
+ * It is `makeLayerPass` again with a cube that maps every colour to one, rather
+ * than a second shader — so what is drawn is the mask the render really uses,
+ * down to the feather and the invert. A separate overlay shader would be a
+ * second implementation of `maskAt` to keep in step, which is the exact mistake
+ * `glsl.ts` exists to prevent.
+ *
+ * Null for a layer with no mask: tinting the whole frame says nothing.
+ */
+export function maskOverlayPass(
+  layer: AdjustLayer | null | undefined,
+  aspectRatio: number,
+): RenderPass | null {
+  if (!layer?.mask) return null;
+  return makeLayerPass({
+    lut: RED_CUBE,
+    mask: layer.mask,
+    invert: layer.invert,
+    opacity: OVERLAY_STRENGTH,
+    aspectRatio,
+    // Trilinear: a 2-point cube of one colour, where the lookup cannot matter,
+    // and this way the overlay never waits on a tetrahedral branch.
+    interpolation: 'trilinear',
+    id: `mask-overlay:${layer.id}`,
+  });
+}

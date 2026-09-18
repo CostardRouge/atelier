@@ -1,0 +1,103 @@
+# Masks and adjustment layers
+
+Read before touching `src/shared/render/mask.ts`, `layer-pass.ts`,
+`src/shared/develop/layer.ts` or `layer-render.ts` — a correction that applies
+only somewhere. The graph is `render-core.md`, the warps `render-geometry.md`,
+the brief `docs/photo-editor.md` §6.
+
+## Masks and layers, the engine (2026-09-18, P7 first commit)
+
+`render/mask.ts` (pure, 24 specs), `render/layer-pass.ts`,
+`develop/layer.ts` (pure, 14 specs), `develop/layer-render.ts`. Nothing on
+screen yet; the wiring commit follows.
+
+**A layer's adjustment IS a `DevelopSettings`.** Not a reduced set, not a
+parallel type — the very record the global develop uses, baked by the very
+`composeLutStack`. So a local exposure is the maths of a global one, local
+curves and local white balance arrive for nothing, and the panel that edits one
+edits the other. That reuse is the whole reason masking was affordable, and it
+is why `layer.ts` sits in `develop/` while the mask sits in `render/`.
+
+    out = mix(under, gradeThroughLut(under), mask × opacity)
+
+**A layer's cube carries NO look and NO output transform** — `composeLutStack([],
+'none', …, develop)`. The look is the picture's or the roll's and is applied
+once after the whole stack; the transform belongs to the delivery and is last.
+A layer carrying either would apply it once PER LAYER, an error that shows only
+where two layers overlap.
+
+**Programs are cached by pass id, so every layer needs its own** (`layer:<id>`).
+Two layers sharing an id would share a program and, through it, ONE uploaded
+cube — the second would grade with the first one's numbers.
+
+What a layer deliberately has NOT got: a blend mode (it was in the plan, is not
+in the ask, and an adjustment layer with a multiply mode is a compositing
+feature — opacity is the control that was asked for, and adding a mode later is
+one field and one `mix`), and a look of its own (a mask choosing between two
+conversion LUTs would put two conversions on one picture).
+
+Three mask shapes, all procedural and pure: **linear** (a bearing — 0 covers the
+top, 90 the right), **radial** (an ellipse, full INSIDE so what a panel draws is
+what is affected, the feather the band outside it), **luma** (a band of
+brightness, wherever it is in the frame). `smoothStep01` rather than a linear
+ramp, because a linear ramp has a corner at each end and a visible line where a
+mask begins is the one thing it must not have. No mask is the WHOLE picture,
+never none of it — a new layer is an ordinary global develop until a shape is
+picked.
+
+**The mask rows of the gate caught two HARNESS faults before they could be
+mistaken for shader ones.** Evaluating `maskAt` at a probe POINT while reading
+whichever texel contains it is off by up to half a texel, which on a steep
+feather is 0.043 — it looked exactly like a broken shader; the expectation is
+now taken at the texel centre the read comes from. And a luma mask over a flat
+white frame is one value everywhere, so that row would have passed on a shader
+that ignored the pixel entirely; it runs over a ramp, and every shape asserts a
+non-zero SPREAD for the same reason. Measured: all three within 0.0021 of the
+pure module, canvas and bitmap identical.
+
+## Layers, wired (2026-09-18, P7 second commit)
+
+`RollPicture.layers`, a fourth inspector tab (Develop · **Layers** · Crop ·
+Export), the mask editor, and the stack reaching the stage, the crop stage, the
+filmstrip cell, the thumbnail and the export. No migration: absent and empty
+mean the same.
+
+**Layers run AFTER the one cube, which departs from the brief's §5 ordering, on
+purpose.** §5 put them between the global develop and the look. That would mean
+splitting today's single cube in two whenever a layer exists, and — the reason
+that matters — a local correction would then be set in LOG space on footage
+wearing a conversion LUT: "−1 EV" on a D-Log picture would do something quite
+different from what the author is looking at. After the cube, a slider does
+what the screen shows. The cost is that a layer's correction is applied to
+display-referred values, which is what `develop.ts` is designed for anyway. If
+this ever proves wrong, the fix is two cube passes — develop, layers, look —
+and the fast path for a picture with no layers is unchanged either way.
+
+**Order in the grader is `[cube, …geometry, …layers]`**, and the geometry
+coming first is what makes a mask's coordinates the WARPED frame's — the frame
+the author is looking at and placing the mask on.
+
+**The list is drawn TOP FIRST and stored bottom-first.** Every layer UI since
+Photoshop shows the top of the stack at the top, so `LayersPanel` renders
+reversed; every helper in `layer.ts` speaks the real order and is addressed by
+id, so the reversal cannot leak into an index.
+
+**Show-the-mask is `makeLayerPass` again with a one-colour cube**, not a second
+shader — so what is painted is the mask the render really uses, feather and
+invert included. A separate overlay shader would be a second implementation of
+`maskAt` to keep in step, exactly what `glsl.ts` exists to prevent. It is a way
+of LOOKING, like the wipe: it never reaches `delivered()`, the histogram or the
+thumbnail.
+
+**A caption that keys on the cube alone lies once a layer exists.** The line
+under the picture said "nothing changes the picture yet" over a picture a layer
+was visibly darkening, because it was written when a cube was the only thing
+that could change one. `DevelopCaption` takes `also` now. The general rule: a
+status sentence must be keyed on everything that can make it false, and the
+render gained two new such things this week.
+
+Measured in the pane on a flat grey frame (154 everywhere): adding a layer
+changed nothing; exposure −3 under a default linear mask gave 57 at the top,
+148 at the middle, 154 at the bottom; the overlay painted [145,48,40] where the
+mask is full and nothing where it is empty. **Preview = export**, to the code:
+the same 57 / 148 / 154 out of `renderRollPicture`.

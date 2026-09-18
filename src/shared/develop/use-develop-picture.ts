@@ -21,6 +21,8 @@ import {
   sameGeometry,
   type PictureGeometry,
 } from '../render/picture-geometry';
+import { cloneLayers, drawingLayers, sameLayers, type AdjustLayer } from './layer';
+import { layerPasses, maskOverlayPass } from './layer-render';
 
 /** How close to the frame's side the divider's handle may be held, in px. */
 const HANDLE_INSET = 14;
@@ -133,6 +135,8 @@ export function useDevelopPicture({
   frame = null,
   keystone = null,
   lens = null,
+  layers = null,
+  showMaskOf = null,
 }: {
   file: File | null;
   videoTimeSeconds?: number;
@@ -148,6 +152,19 @@ export function useDevelopPicture({
    * holds that order for every renderer at once.
    */
   lens?: LensCorrection | null;
+  /**
+   * Adjustment layers, bottom to top. They run AFTER the one cube — a local
+   * correction is set on the picture as it is displayed, not in the log space
+   * a conversion LUT reads (`render-core.md`).
+   */
+  layers?: readonly AdjustLayer[] | null;
+  /**
+   * Paint one layer's mask over the picture in red. It is the layer pass again
+   * with a one-colour cube, so what is shown is the mask the render really
+   * uses. Never reaches `delivered()` or the histogram — it is a way of
+   * LOOKING, like the wipe.
+   */
+  showMaskOf?: string | null;
   /**
    * Show the picture CROPPED — the Develop tool keeps its crop visible while
    * the light is set. Only the viewport's paint and zoom read it: the
@@ -189,21 +206,34 @@ export function useDevelopPicture({
   // The two warps as one record, memoised by VALUE — every effect below takes
   // it as a dep, and the panels hand down a fresh object per slider step.
   const geometry = useMemo<PictureGeometry>(() => ({ lens, keystone }), [lens, keystone]);
+  // Only the layers that DRAW: a parked one must not rebuild the grader, and
+  // must not cost a pass.
+  const stack = useMemo(() => drawingLayers(layers), [layers]);
 
   const graderRef = useRef<{
     lut: CubeLut | null;
     geometry: PictureGeometry;
+    layers: AdjustLayer[];
+    overlay: string | null;
     w: number;
     h: number;
     grader: HeldGrader;
   } | null>(null);
   const graderFor = useCallback(
-    (lut: CubeLut | null, s: BadgeSource, geometry: PictureGeometry): HeldGrader | null => {
+    (
+      lut: CubeLut | null,
+      s: BadgeSource,
+      geometry: PictureGeometry,
+      stack: readonly AdjustLayer[],
+      overlay: string | null,
+    ): HeldGrader | null => {
       const cur = graderRef.current;
-      // Geometry with NO look still needs the GPU: a warp is a pass, not a
-      // cube, so "no lut" stopped meaning "nothing to render" the day geometry
-      // arrived.
-      if (!lut && !hasGeometry(geometry)) {
+      // Geometry or a layer with NO look still needs the GPU: both are passes,
+      // not cubes, so "no lut" stopped meaning "nothing to render" the day
+      // geometry arrived.
+      const overlayOf = overlay ? (stack.find((l) => l.id === overlay) ?? null) : null;
+      const needsGpu = Boolean(lut) || hasGeometry(geometry) || stack.length > 0 || Boolean(overlayOf?.mask);
+      if (!needsGpu) {
         cur?.grader.dispose();
         graderRef.current = null;
         return null;
@@ -213,7 +243,9 @@ export function useDevelopPicture({
         cur.lut === lut &&
         cur.w === s.width &&
         cur.h === s.height &&
-        sameGeometry(cur.geometry, geometry)
+        cur.overlay === overlay &&
+        sameGeometry(cur.geometry, geometry) &&
+        sameLayers(cur.layers, stack)
       ) {
         return cur.grader;
       }
@@ -221,12 +253,25 @@ export function useDevelopPicture({
       // Compared by VALUE: the panel hands down a new object on every slider
       // step, and identity would rebuild the grader — and its WebGL context —
       // per frame of a drag.
-      const warps = geometryPasses(geometry, s.width / s.height);
-      // A null cube is legitimate now: `u_hasLut` is false and the warps are
+      const ar = s.width / s.height;
+      const passes = [
+        ...geometryPasses(geometry, ar),
+        ...layerPasses(stack, ar),
+        ...(overlayOf ? [maskOverlayPass(overlayOf, ar)].flatMap((p) => (p ? [p] : [])) : []),
+      ];
+      // A null cube is legitimate now: `u_hasLut` is false and the passes are
       // the whole of the work. The grader's own signature keeps the cube first
       // because sixteen callers pass one.
-      const grader = holdGrades(makeFrameGrader(lut as CubeLut, s.width, s.height, 1, warps));
-      graderRef.current = { lut, geometry: cloneGeometry(geometry), w: s.width, h: s.height, grader };
+      const grader = holdGrades(makeFrameGrader(lut as CubeLut, s.width, s.height, 1, passes));
+      graderRef.current = {
+        lut,
+        geometry: cloneGeometry(geometry),
+        layers: cloneLayers(stack),
+        overlay,
+        w: s.width,
+        h: s.height,
+        grader,
+      };
       return grader;
     },
     [],
@@ -265,7 +310,7 @@ export function useDevelopPicture({
     }
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const grader = holding ? null : graderFor(cube, source, geometry);
+    const grader = holding ? null : graderFor(cube, source, geometry, stack, showMaskOf);
     const graded = grader ? grader.render(source.image) : source.image;
     const layout = delivered1 && framing ? scaleLayout(delivered1, w / delivered1.w) : null;
     if (layout && framing) {
@@ -291,7 +336,20 @@ export function useDevelopPicture({
         ctx.drawImage(source.image, sx, 0, source.width - sx, source.height, x, 0, w - x, h);
       }
     }
-  }, [source, canvasSize, delivered1, framing, border, cube, wipe, holding, geometry, graderFor]);
+  }, [
+    source,
+    canvasSize,
+    delivered1,
+    framing,
+    border,
+    cube,
+    wipe,
+    holding,
+    geometry,
+    stack,
+    showMaskOf,
+    graderFor,
+  ]);
 
   // The histogram, read off a small copy of the graded picture one frame
   // after it changes — so a slider step paints first and measures second, and
@@ -319,7 +377,7 @@ export function useDevelopPicture({
       const ctx = sample.getContext('2d', { willReadFrequently: true });
       if (!ctx) return;
       try {
-        const grader = graderFor(cube, source, geometry);
+        const grader = graderFor(cube, source, geometry, stack, null);
         const graded = grader ? grader.render(source.image) : source.image;
         ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
         setHistogram(luminanceHistogram(ctx.getImageData(0, 0, w, h).data));
@@ -336,7 +394,7 @@ export function useDevelopPicture({
       cancelAnimationFrame(raf);
       window.clearTimeout(fallback);
     };
-  }, [source, cube, geometry, graderFor]);
+  }, [source, cube, geometry, stack, graderFor]);
 
   // The AS-SHOT measurement Auto reads. Keyed on the source alone — no cube,
   // no grader — so it is one read per picture and is unmoved by anything the
@@ -438,17 +496,19 @@ export function useDevelopPicture({
   // callback that never changed left the crop stage showing a warp-less
   // picture until the cube or the crop moved. Fresh values through the ref,
   // a new function when what it would draw changes — both, not either.
-  const latest = useRef({ source, cube, geometry });
-  latest.current = { source, cube, geometry };
+  const latest = useRef({ source, cube, geometry, stack });
+  latest.current = { source, cube, geometry, stack };
   const delivered = useCallback((): CanvasImageSource | null => {
-    const { source: s, cube: lut, geometry: geo } = latest.current;
+    const { source: s, cube: lut, geometry: geo, stack: ly } = latest.current;
     if (!s || s.width <= 0 || s.height <= 0) return null;
-    const grader = graderFor(lut, s, geo);
+    // Never the overlay: this is what LEAVES, and a red wash is a way of
+    // looking, like the wipe.
+    const grader = graderFor(lut, s, geo, ly, null);
     return grader ? grader.render(s.image) : s.image;
-  }, [graderFor, source, cube, geometry]);
+  }, [graderFor, source, cube, geometry, stack]);
   const snapshot = useCallback(
     async (longEdge = THUMB_LONG_EDGE): Promise<Blob | null> => {
-      const { source: s, cube: lut, geometry: geo } = latest.current;
+      const { source: s, cube: lut, geometry: geo, stack: ly } = latest.current;
       if (!s || s.width <= 0 || s.height <= 0) return null;
       const { w, h } = thumbSize(s.width, s.height, longEdge);
       const out = document.createElement('canvas');
@@ -457,7 +517,7 @@ export function useDevelopPicture({
       const ctx = out.getContext('2d');
       if (!ctx) return null;
       try {
-        const grader = graderFor(lut, s, geo);
+        const grader = graderFor(lut, s, geo, ly, null);
         const graded = grader ? grader.render(s.image) : s.image;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(graded, 0, 0, s.width, s.height, 0, 0, w, h);
@@ -466,7 +526,7 @@ export function useDevelopPicture({
       }
       return new Promise((resolve) => out.toBlob(resolve, 'image/jpeg', THUMB_QUALITY));
     },
-    [graderFor, source, cube, geometry],
+    [graderFor, source, cube, geometry, stack],
   );
 
   const dragging = useRef<{ startX: number; live: boolean } | null>(null);

@@ -145,6 +145,55 @@ export function cloneLayers(layers: readonly AdjustLayer[] | null | undefined): 
   return (layers ?? []).map(cloneLayer);
 }
 
+// --- the list -----------------------------------------------------------------
+//
+// The array is BOTTOM to TOP: entry 0 is applied first and everything after it
+// reads what the one below wrote. A list on screen shows the top first, the way
+// every layer UI since Photoshop has, so it renders reversed — and these
+// helpers all speak the real order, so no index arithmetic crosses that seam.
+
+/** Appended on TOP, which is where a new layer belongs. Capped at `MAX_LAYERS`. */
+export function addLayer(
+  layers: readonly AdjustLayer[] | null | undefined,
+  layer: AdjustLayer,
+): AdjustLayer[] {
+  const list = layers ?? [];
+  if (list.length >= MAX_LAYERS) return [...list];
+  return [...list, layer];
+}
+
+export function removeLayer(
+  layers: readonly AdjustLayer[] | null | undefined,
+  id: string,
+): AdjustLayer[] {
+  return (layers ?? []).filter((l) => l.id !== id);
+}
+
+/** `delta` is in STACK terms: +1 is nearer the top, and the ends hold. */
+export function moveLayer(
+  layers: readonly AdjustLayer[] | null | undefined,
+  id: string,
+  delta: number,
+): AdjustLayer[] {
+  const list = [...(layers ?? [])];
+  const from = list.findIndex((l) => l.id === id);
+  if (from < 0) return list;
+  const to = Math.max(0, Math.min(list.length - 1, from + Math.trunc(delta)));
+  if (to === from) return list;
+  const [moved] = list.splice(from, 1);
+  list.splice(to, 0, moved);
+  return list;
+}
+
+/** One layer's own fields changed; its id never moves. */
+export function patchLayer(
+  layers: readonly AdjustLayer[] | null | undefined,
+  id: string,
+  patch: Partial<Omit<AdjustLayer, 'id'>>,
+): AdjustLayer[] {
+  return (layers ?? []).map((l) => (l.id === id ? { ...l, ...patch } : l));
+}
+
 /** The layer's own name, else what its mask is — never an empty row. */
 export function layerLabel(l: AdjustLayer): string {
   const named = l.name.trim();
