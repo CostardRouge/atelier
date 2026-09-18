@@ -2207,7 +2207,7 @@ export default function StudioEditor({
                     onReset={() => setActiveDevelop(null)}
                   />
                   <InspectorSection id="studio.grade" title="Grade">
-                    <GradePanel stack={lutStack} />
+                    <GradePanel stack={lutStack} previewImage={photo} />
                   </InspectorSection>
                 </>
               )}
