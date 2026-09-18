@@ -10,6 +10,7 @@ import {
   reclampFraming,
   sameFraming,
   scaleFramingBy,
+  unframePoint,
   wrapDegrees,
   type Framing,
 } from './framing';
@@ -365,5 +366,61 @@ describe('scaleFramingBy', () => {
     expect(scaleFramingBy(Number.NaN, 2)).toBe(2);
     expect(scaleFramingBy(Number.NaN, 1)).toBe(1);
     expect(scaleFramingBy(20, -1)).toBe(8);
+  });
+});
+
+describe('unframePoint', () => {
+  /** The forward map `drawFramed` composes, so the round trip is a real one. */
+  function framePoint(
+    srcX: number,
+    srcY: number,
+    srcW: number,
+    srcH: number,
+    dstW: number,
+    dstH: number,
+    framing: Framing,
+  ): [number, number] {
+    const t = framingTransform(srcW, srcH, dstW, dstH, framing);
+    let x = (srcX - srcW / 2) * t.scale * t.mirrorX;
+    let y = (srcY - srcH / 2) * t.scale * t.mirrorY;
+    x += t.panX;
+    y += t.panY;
+    const cos = Math.cos(t.angle);
+    const sin = Math.sin(t.angle);
+    return [x * cos - y * sin + dstW / 2, x * sin + y * cos + dstH / 2];
+  }
+
+  const cases: { name: string; framing: Framing }[] = [
+    { name: 'untouched', framing: { ...DEFAULT_FRAMING } },
+    { name: 'zoomed and panned', framing: { ...DEFAULT_FRAMING, scale: 1.8, x: 0.1, y: -0.2 } },
+    { name: 'rotated', framing: { ...DEFAULT_FRAMING, rotation: 23 } },
+    { name: 'flipped both ways', framing: { ...DEFAULT_FRAMING, flipX: true, flipY: true } },
+    { name: 'whole, with bars', framing: { ...DEFAULT_FRAMING, fit: 'contain' } },
+    { name: 'everything at once', framing: { ...DEFAULT_FRAMING, scale: 2.2, rotation: -37, flipX: true, x: 0.3 } },
+  ];
+
+  it('round-trips the transform drawFramed composes', () => {
+    for (const { framing } of cases) {
+      for (const [sw, sh, dw, dh] of [[800, 600, 400, 500], [1000, 1000, 300, 900], [640, 480, 640, 480]]) {
+        for (const [sx, sy] of [[0, 0], [sw / 2, sh / 2], [sw, sh], [sw * 0.3, sh * 0.8]]) {
+          const [dx, dy] = framePoint(sx, sy, sw, sh, dw, dh, framing);
+          const [bx, by] = unframePoint(dx, dy, sw, sh, dw, dh, framing);
+          expect(bx).toBeCloseTo(sx, 6);
+          expect(by).toBeCloseTo(sy, 6);
+        }
+      }
+    }
+  });
+
+  it('puts the middle of an untouched frame at the middle of the picture', () => {
+    expect(unframePoint(200, 250, 800, 600, 400, 500, DEFAULT_FRAMING)).toEqual([400, 300]);
+  });
+
+  it('answers OUTSIDE the picture for a point the crop cut away', () => {
+    // A zoomed crop shows less than the whole picture, so a corner of the frame
+    // is inside it — but with bars (contain) the corner is outside, and the
+    // caller needs to be able to tell rather than being handed a clamp.
+    const [x, y] = unframePoint(0, 0, 800, 600, 400, 500, { ...DEFAULT_FRAMING, fit: 'contain' });
+    expect(x < 0 || y < 0).toBe(true);
   });
 });

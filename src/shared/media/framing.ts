@@ -381,6 +381,44 @@ interface FramingContext {
  * reuses one canvas for every frame, and a bar left unpainted would show the
  * previous frame through it.
  */
+/**
+ * Where a point of the DRAWN frame came from in the source picture, in source
+ * pixels — the exact inverse of what `drawFramed` composes.
+ *
+ * Painting a mask on a cropped, straightened, flipped view needs this and there
+ * is no honest way around it: the eyedropper dodges the question by re-drawing
+ * the picture through the same branch and reading a pixel, which answers "what
+ * colour" without ever answering "where". A stroke has to know where.
+ *
+ * The forward transform is `translate · rotate · pan · scale` applied to the
+ * source centred on its middle, so the inverse is those four undone in reverse.
+ * A spec round-trips it rather than trusting the derivation.
+ */
+export function unframePoint(
+  dstX: number,
+  dstY: number,
+  srcW: number,
+  srcH: number,
+  dstW: number,
+  dstH: number,
+  framing: Framing = DEFAULT_FRAMING,
+): [number, number] {
+  const t = framingTransform(srcW, srcH, dstW, dstH, framing);
+  let x = dstX - dstW / 2;
+  let y = dstY - dstH / 2;
+  const cos = Math.cos(-t.angle);
+  const sin = Math.sin(-t.angle);
+  const rx = x * cos - y * sin;
+  const ry = x * sin + y * cos;
+  x = rx - t.panX;
+  y = ry - t.panY;
+  // The scale can never be 0: `framingTransform` derives it from the source and
+  // the frame, both of which this function's callers have checked are positive.
+  x /= t.scale * t.mirrorX;
+  y /= t.scale * t.mirrorY;
+  return [x + srcW / 2, y + srcH / 2];
+}
+
 export function drawFramed(
   ctx: FramingContext,
   image: CanvasImageSource,

@@ -142,6 +142,41 @@ ABSENCE of a mask means the whole picture. The placeholder texel bound when
 there are no strokes is therefore 0, not 255 — 255 there would make a fresh
 brush layer apply to the whole frame.
 
-Not built yet, and the reason the panel still says numbers: the painting
-GESTURE. It needs pointer capture on the stage sharing a surface with the wipe,
-the pan and the eyedropper, which is a piece of work rather than a control.
+## Painting, the gesture (2026-09-18, P8 second commit)
+
+A drag on the picture lays a stroke when Paint is on. What it cost, and what it
+taught:
+
+- **It needed the grader to stop rebuilding its context per change** — a stroke
+  adds a point per `pointermove`, and a new WebGL2 context per point is not a
+  slow gesture, it is no gesture at all. `render-core.md`, «Passes are SWAPPED».
+- **`unframePoint` (`media/framing.ts`) is the inverse of `drawFramed`**, and a
+  painted mask is the first thing that needed it. The eyedropper dodges the
+  question by re-drawing the picture through the same branch and reading a
+  pixel, which answers "what colour" without ever answering "where"; a stroke
+  has to know where. A spec round-trips the forward map rather than trusting the
+  derivation.
+- **A point outside the picture starts nothing**, and a pointer that LEAVES it
+  mid-stroke does not end the stroke — a hand that strays over the edge and
+  comes back carries on, which is what every editor does. A cancelled pointer
+  does end it, or the next press would continue a stroke the author thought was
+  finished.
+- **The live stroke rides a ref as well as the draft.** A state read inside a
+  `pointermove` closure is one frame behind and would drop points, the same trap
+  the curve editor's drag wore. Each move REWRITES the last stroke rather than
+  adding one.
+- **Points closer than a fraction of the radius are dropped**: they add nothing
+  the brush does not already cover, and each one is rasterised again.
+- **The brush lives beside the layer, not on it.** A brush is a tool; each
+  stroke keeps the size and softness it was painted with, which is what lets a
+  soft edge and a hard one live in one mask.
+- **The kind is "Painted" and the verb is "Paint".** They were both "Paint" for
+  one run and the pane showed two identical buttons doing different things.
+- A caption that offers the wipe while a drag paints is offering a gesture the
+  picture has already given away, so `DevelopPicture.painting` exists and the
+  caption reads it.
+
+Measured in the pane: switching a layer to Painted left the picture untouched
+(the empty rule), one diagonal drag darkened exactly where the pointer went and
+nowhere else, and the roll stored one stroke of 13 points at radius 0.12.
+**Preview = export**, to the code: 57 / 154 / 154 both ways.

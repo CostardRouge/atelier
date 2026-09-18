@@ -25,7 +25,13 @@ import { useWriteThrough } from '../../shared/develop/use-write-through';
 import { useDevelopPicture, type DevelopFrame } from '../../shared/develop/use-develop-picture';
 import { sameKeystone, type Keystone } from '../../shared/render/geometry';
 import { sameLens, type LensCorrection } from '../../shared/render/lens';
-import type { MaskKind } from '../../shared/render/mask';
+import {
+  DEFAULT_BRUSH_HARDNESS,
+  DEFAULT_BRUSH_RADIUS,
+  MAX_STROKES,
+  type BrushStroke,
+  type MaskKind,
+} from '../../shared/render/mask';
 import {
   addLayer,
   createLayer,
@@ -161,8 +167,69 @@ export default function PictureWorkbench({
   const [layersDraft, setLayersDraft] = useState<AdjustLayer[]>(entry.layers ?? []);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [showMask, setShowMask] = useState(false);
+  // What the NEXT stroke is painted with. Kept beside the layer rather than on
+  // it: a brush is a tool, and each stroke keeps the settings it was made with
+  // so a soft edge and a hard one can live in the same mask.
+  const [brush, setBrush] = useState({
+    radius: DEFAULT_BRUSH_RADIUS,
+    hardness: DEFAULT_BRUSH_HARDNESS,
+    erase: false,
+  });
+  const [painting, setPainting] = useState(false);
   const selectedLayer = layersDraft.find((l) => l.id === selectedLayerId) ?? null;
   const drawingCount = drawingLayers(layersDraft).length;
+
+  // --- painting ------------------------------------------------------------
+  // The live stroke rides a REF and the draft alike: the ref is what the next
+  // point is appended to, because a state read inside a pointermove closure is
+  // one frame behind and would drop points (the same trap the curve editor's
+  // drag wore). Each move rewrites the LAST stroke rather than adding one.
+  const strokeRef = useRef<BrushStroke | null>(null);
+  const paintTarget = painting && selectedLayer?.mask?.kind === 'brush' ? selectedLayer : null;
+  const paintId = paintTarget?.id ?? null;
+  const brushRef = useRef(brush);
+  brushRef.current = brush;
+  const paint = useMemo(
+    () =>
+      paintId
+        ? {
+            onStart: (point: [number, number]) => {
+              const made: BrushStroke = { points: [point], ...brushRef.current };
+              strokeRef.current = made;
+              setLayersDraft((list) =>
+                list.map((l) => {
+                  if (l.id !== paintId || l.mask?.kind !== 'brush') return l;
+                  if (l.mask.strokes.length >= MAX_STROKES) return l;
+                  return { ...l, mask: { kind: 'brush', strokes: [...l.mask.strokes, made] } };
+                }),
+              );
+            },
+            onMove: (point: [number, number]) => {
+              const live = strokeRef.current;
+              if (!live) return;
+              const last = live.points[live.points.length - 1];
+              // Points closer than this add nothing the radius does not already
+              // cover, and every one of them is rasterised again.
+              const step = Math.max(0.004, live.radius * 0.12);
+              if (Math.hypot(point[0] - last[0], point[1] - last[1]) < step) return;
+              const grown: BrushStroke = { ...live, points: [...live.points, point] };
+              strokeRef.current = grown;
+              setLayersDraft((list) =>
+                list.map((l) => {
+                  if (l.id !== paintId || l.mask?.kind !== 'brush' || l.mask.strokes.length === 0) return l;
+                  const strokes = [...l.mask.strokes];
+                  strokes[strokes.length - 1] = grown;
+                  return { ...l, mask: { kind: 'brush', strokes } };
+                }),
+              );
+            },
+            onEnd: () => {
+              strokeRef.current = null;
+            },
+          }
+        : null,
+    [paintId],
+  );
   const picture = useDevelopPicture({
     file,
     cube: stack.composed,
@@ -170,6 +237,7 @@ export default function PictureWorkbench({
     keystone: keystoneDraft,
     lens: lensDraft,
     layers: layersDraft,
+    paint,
     // Only while the layer is open AND the box is ticked: a red wash left on
     // by accident would be mistaken for the picture.
     showMaskOf: showMask && selectedLayer ? selectedLayer.id : null,
@@ -497,6 +565,28 @@ export default function PictureWorkbench({
                     layer={selectedLayer}
                     onPatch={(patch) =>
                       setLayersDraft((list) => patchLayer(list, selectedLayer.id, patch))
+                    }
+                    brush={brush}
+                    onBrush={(patch) => setBrush((b) => ({ ...b, ...patch }))}
+                    painting={painting}
+                    onPainting={setPainting}
+                    onUndoStroke={() =>
+                      setLayersDraft((list) =>
+                        list.map((l) =>
+                          l.id === selectedLayer.id && l.mask?.kind === 'brush'
+                            ? { ...l, mask: { kind: 'brush', strokes: l.mask.strokes.slice(0, -1) } }
+                            : l,
+                        ),
+                      )
+                    }
+                    onClearStrokes={() =>
+                      setLayersDraft((list) =>
+                        list.map((l) =>
+                          l.id === selectedLayer.id && l.mask?.kind === 'brush'
+                            ? { ...l, mask: { kind: 'brush', strokes: [] } }
+                            : l,
+                        ),
+                      )
                     }
                   />
                   {/* The SAME sliders the global develop uses, because a

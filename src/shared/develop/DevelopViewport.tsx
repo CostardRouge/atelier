@@ -153,20 +153,21 @@ export function DevelopCaption({
    */
   also?: string | null;
 }) {
-  const { source, cube, view } = picture;
+  const { source, cube, view, painting } = picture;
   const touched = Boolean(cube) || Boolean(also);
+  // While a drag PAINTS, it does not compare: offering the wipe would be
+  // offering a gesture the picture has already given away.
+  const gesture = painting
+    ? ' · drag across the picture to paint the mask'
+    : view.zoomed
+      ? ' · drag to look around, the handle on the divider compares'
+      : ' · drag across the picture to compare, wheel or pinch to look closer';
   return (
     <p className="m-0 flex-none font-mono text-2xs text-faint leading-relaxed">
       {describeDevelop(draft)}
       {also ? ` · ${also}` : ''}
       {note ? ` — ${note}` : ''}
-      {source && touched
-        ? view.zoomed
-          ? ' · drag to look around, the handle on the divider compares'
-          : ' · drag across the picture to compare, wheel or pinch to look closer'
-        : source
-          ? ' · nothing changes the picture yet'
-          : ''}
+      {source && (touched || painting) ? gesture : source ? ' · nothing changes the picture yet' : ''}
     </p>
   );
 }

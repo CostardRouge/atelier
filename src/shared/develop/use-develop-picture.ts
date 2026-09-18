@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import { toLinear } from '../lut/transfer';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
-import { drawFramed, type Framing } from '../media/framing';
+import { drawFramed, unframePoint, type Framing } from '../media/framing';
 import { borderLayout, scaleLayout, type RollBorder } from './border-layout';
 import { drawDelivered, drawPictureIn } from './border-paint';
 import { holdGrades, type HeldGrader } from '../lut/held-grader';
@@ -76,6 +76,11 @@ export interface DevelopPicture {
    * so pressing it twice must give the same answer instead of compounding.
    */
   stats: SourceStats | null;
+  /**
+   * A drag on the picture lays a stroke rather than moving the divider — so a
+   * caption that offers the wipe can stop offering it.
+   */
+  painting: boolean;
   /** The eyedropper is armed: the next click on the picture picks a neutral. */
   picking: boolean;
   setPicking: (on: boolean) => void;
@@ -86,6 +91,11 @@ export interface DevelopPicture {
    * would be measured against the last one.
    */
   pickAt: (clientX: number, clientY: number) => [number, number, number] | null;
+  /**
+   * Where a client point lands in the SOURCE picture, as [0,1]; null outside
+   * it. What a painted mask's strokes are made of.
+   */
+  pointAt: (clientX: number, clientY: number) => [number, number] | null;
   /** Where the divider and its handle are drawn, in viewport pixels. */
   divider: { x: number; top: number; bottom: number };
   /**
@@ -137,6 +147,7 @@ export function useDevelopPicture({
   lens = null,
   layers = null,
   showMaskOf = null,
+  paint = null,
 }: {
   file: File | null;
   videoTimeSeconds?: number;
@@ -165,6 +176,17 @@ export function useDevelopPicture({
    * LOOKING, like the wipe.
    */
   showMaskOf?: string | null;
+  /**
+   * Painting: a drag on the picture becomes a stroke instead of moving the
+   * divider. The host owns the strokes, because they belong to a layer in its
+   * document — this only turns the pointer into a point of the SOURCE picture
+   * and says when the stroke starts and ends.
+   */
+  paint?: {
+    onStart: (point: [number, number]) => void;
+    onMove: (point: [number, number]) => void;
+    onEnd: () => void;
+  } | null;
   /**
    * Show the picture CROPPED — the Develop tool keeps its crop visible while
    * the light is set. Only the viewport's paint and zoom read it: the
@@ -496,6 +518,38 @@ export function useDevelopPicture({
     [source, canvasSize, frameRatio, framing],
   );
 
+  /**
+   * Where a client point lands in the SOURCE picture, as [0,1] — null outside
+   * it, which is how a stroke painted off the edge of a crop is refused rather
+   * than clamped onto the border.
+   *
+   * `pickAt` dodges the inverse by re-drawing the picture and reading a pixel,
+   * which answers "what colour" without answering "where". A stroke has to
+   * know where, so this goes through `unframePoint`.
+   */
+  const pointAt = useCallback(
+    (clientX: number, clientY: number): [number, number] | null => {
+      const canvas = canvasRef.current;
+      if (!canvas || !source || !canvasSize) return null;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return null;
+      const { w, h } = canvasSize;
+      // The same letterbox undo as `pickAt`: the element box carries the
+      // zoom/pan transform, so the rect undoes it for free.
+      const scale = Math.min(rect.width / w, rect.height / h);
+      const x = (clientX - rect.left - (rect.width - w * scale) / 2) / scale;
+      const y = (clientY - rect.top - (rect.height - h * scale) / 2) / scale;
+      if (x < 0 || y < 0 || x > w || y > h) return null;
+      if (!frameRatio || !framing) {
+        return [x / w, y / h];
+      }
+      const [sx, sy] = unframePoint(x, y, source.width, source.height, w, h, framing);
+      if (sx < 0 || sy < 0 || sx > source.width || sy > source.height) return null;
+      return [sx / source.width, sy / source.height];
+    },
+    [source, canvasSize, frameRatio, framing],
+  );
+
   // Read through refs: a snapshot is asked for after a quiet delay, and must
   // take the cube of THAT moment, not the one the closure was made with.
   //
@@ -551,6 +605,7 @@ export function useDevelopPicture({
   });
   zoomedRef.current = view.zoomed;
 
+  const painting = useRef(false);
   const wipeFrom = (e: ReactPointerEvent<HTMLElement>) => {
     const f = view.fractionAt(e.clientX, e.clientY).x;
     setWipe(Math.min(1, Math.max(0, f)));
@@ -561,6 +616,22 @@ export function useDevelopPicture({
       if (touch) fingers.current += 1;
       // A second finger is the pinch's (`onTakeover`), never a wipe.
       if (dragging.current || (touch && fingers.current > 1)) return;
+      // Painting takes the pointer ahead of the wipe, and only from the
+      // picture itself: a control laid over it keeps its press, and a point
+      // outside the frame starts nothing.
+      if (paint && !(e.target as Element | null)?.closest?.('button')) {
+        const at = pointAt(e.clientX, e.clientY);
+        if (at) {
+          painting.current = true;
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+          } catch {
+            /* not a live pointer */
+          }
+          paint.onStart(at);
+          return;
+        }
+      }
       if (!wipeClaims(e.target, view.zoomed)) return;
       dragging.current = { startX: e.clientX, live: !touch };
       // A pointer the browser no longer knows (a synthetic one) throws rather
@@ -573,6 +644,14 @@ export function useDevelopPicture({
       if (!touch) wipeFrom(e);
     },
     onPointerMove: (e) => {
+      if (painting.current && paint) {
+        const at = pointAt(e.clientX, e.clientY);
+        // A pointer that leaves the picture mid-stroke does NOT end it: a hand
+        // that strays over the edge and comes back should carry on the same
+        // stroke, which is what every editor does.
+        if (at) paint.onMove(at);
+        return;
+      }
       const d = dragging.current;
       if (!d) return;
       if (!d.live && Math.abs(e.clientX - d.startX) > TOUCH_SLOP) d.live = true;
@@ -580,12 +659,23 @@ export function useDevelopPicture({
     },
     onPointerUp: (e) => {
       if (e.pointerType === 'touch') fingers.current = Math.max(0, fingers.current - 1);
+      if (painting.current) {
+        painting.current = false;
+        paint?.onEnd();
+        return;
+      }
       // A finger that never travelled was a tap: it places the divider.
       if (dragging.current && !dragging.current.live) wipeFrom(e);
       dragging.current = null;
     },
     onPointerCancel: (e) => {
       if (e.pointerType === 'touch') fingers.current = Math.max(0, fingers.current - 1);
+      if (painting.current) {
+        painting.current = false;
+        // A cancelled stroke still ENDS: leaving it open would have the next
+        // press continue a stroke the author thought was finished.
+        paint?.onEnd();
+      }
       dragging.current = null;
     },
   };
@@ -611,9 +701,11 @@ export function useDevelopPicture({
     comparing: Boolean(source && cube && !holding),
     histogram,
     stats,
+    painting: Boolean(paint),
     picking,
     setPicking,
     pickAt,
+    pointAt,
     divider,
     snapshot,
     delivered,
