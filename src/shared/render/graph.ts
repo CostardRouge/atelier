@@ -43,6 +43,13 @@ export interface RenderPass {
    * texture unit 0 taken by the input; a pass uses unit 1 and up.
    */
   setUniforms?: (gl: WebGL2RenderingContext, program: WebGLProgram) => void;
+  /**
+   * Free whatever this pass uploaded — a cube, a mask map. Called when the
+   * pass is REPLACED as well as when the graph goes, which only started
+   * mattering once a graph outlived its pass list: before that the context was
+   * torn down with every change and took every texture with it.
+   */
+  dispose?: (gl: WebGL2RenderingContext) => void;
 }
 
 export interface RenderGraph {
@@ -55,6 +62,8 @@ export interface RenderGraph {
    */
   render(source: TexImageSource, passes: readonly RenderPass[]): HTMLCanvasElement | OffscreenCanvas;
   resize(width: number, height: number): void;
+  /** Run a pass's own `dispose` against this graph's context. */
+  releasePass(pass: RenderPass): void;
   dispose(): void;
 }
 
@@ -213,6 +222,11 @@ export function createRenderGraph(
         canvas.width = width;
         canvas.height = height;
       }
+    },
+
+    releasePass(pass) {
+      if (disposed) return;
+      pass.dispose?.(gl);
     },
 
     render(source, passes) {

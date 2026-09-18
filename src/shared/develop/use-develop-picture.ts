@@ -238,27 +238,35 @@ export function useDevelopPicture({
         graderRef.current = null;
         return null;
       }
+      // Compared by VALUE: the panel hands down a new object on every slider
+      // step, and identity would rebuild the grader per frame of a drag.
+      const sized = cur && cur.lut === lut && cur.w === s.width && cur.h === s.height;
       if (
-        cur &&
-        cur.lut === lut &&
-        cur.w === s.width &&
-        cur.h === s.height &&
+        sized &&
         cur.overlay === overlay &&
         sameGeometry(cur.geometry, geometry) &&
         sameLayers(cur.layers, stack)
       ) {
         return cur.grader;
       }
-      cur?.grader.dispose();
-      // Compared by VALUE: the panel hands down a new object on every slider
-      // step, and identity would rebuild the grader — and its WebGL context —
-      // per frame of a drag.
       const ar = s.width / s.height;
       const passes = [
         ...geometryPasses(geometry, ar),
         ...layerPasses(stack, ar),
         ...(overlayOf ? [maskOverlayPass(overlayOf, ar)].flatMap((p) => (p ? [p] : [])) : []),
       ];
+      // Only the PASSES moved, so swap them rather than rebuilding: the
+      // context, its programs and the uploaded source all survive, which is
+      // what makes a warp or a mask draggable at all. A new LOOK is still a
+      // new grader — the cube is baked, not a pass.
+      if (sized && cur.grader.setPasses) {
+        cur.grader.setPasses(passes);
+        cur.geometry = cloneGeometry(geometry);
+        cur.layers = cloneLayers(stack);
+        cur.overlay = overlay;
+        return cur.grader;
+      }
+      cur?.grader.dispose();
       // A null cube is legitimate now: `u_hasLut` is false and the passes are
       // the whole of the work. The grader's own signature keeps the cube first
       // because sixteen callers pass one.

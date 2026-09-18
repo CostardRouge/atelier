@@ -237,5 +237,15 @@ export function makeLayerPass(options: LayerPassOptions): RenderPass | null {
       gl.uniform1f(at('u_invert'), invert ? 1 : 0);
       gl.uniform1f(at('u_opacity'), Math.min(1, Math.max(0, opacity)));
     },
+    dispose(gl) {
+      // A graph now OUTLIVES its pass list (`setExtraPasses`), so the two
+      // textures a layer uploads are no longer freed by the context dying with
+      // it. One layer's cube is a megabyte at 33 lattice points; a drag that
+      // leaked one per step would fill a GPU in seconds.
+      if (uploaded?.gl === gl) gl.deleteTexture(uploaded.tex);
+      if (maskTex?.gl === gl) gl.deleteTexture(maskTex.tex);
+      uploaded = null;
+      maskTex = null;
+    },
   };
 }

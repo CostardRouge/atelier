@@ -21,7 +21,8 @@
  * must not pay a readback (~3 ms at a 4K frame) for a result it throws away.
  */
 
-import type { FrameGrader } from './frame-grader';
+import type { FrameGrader, PassGrader } from './frame-grader';
+import type { RenderPass } from '../render/graph';
 
 export type RasterSurface = OffscreenCanvas | HTMLCanvasElement;
 
@@ -38,6 +39,12 @@ export type CopyPicture = (
 export interface HeldGrader extends FrameGrader {
   /** Forget the held grade: the next render grades again. */
   invalidate(): void;
+  /**
+   * Change the passes under the held grade, where the grader supports it
+   * (`PassGrader`) — and forget the held copy, since the picture it holds was
+   * made with the old ones. Absent for a grader that cannot.
+   */
+  setPasses?: (passes: readonly RenderPass[]) => void;
 }
 
 function isCanvas(source: CanvasImageSource): source is RasterSurface {
@@ -89,8 +96,19 @@ export function holdGrades(inner: FrameGrader, copy: CopyPicture = copyToRaster)
   let held: RasterSurface | null = null;
   let surface: RasterSurface | null = null;
   let copyTried = false;
+  const swappable = (inner as Partial<PassGrader>).setPasses;
 
   return {
+    ...(swappable
+      ? {
+          setPasses(passes: readonly RenderPass[]) {
+            swappable.call(inner, passes);
+            // The held copy was graded through the passes that just left.
+            graded = null;
+            held = null;
+          },
+        }
+      : {}),
     render(next) {
       if (graded === null || next !== source) {
         graded = inner.render(next);

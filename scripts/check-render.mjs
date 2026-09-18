@@ -395,6 +395,58 @@ const out = await page.evaluate(async () => {
     results.mask = rows;
   }
 
+  // --- swapping passes: is a reused grader the same as a fresh one? --------
+  //
+  // `graderFor` stopped rebuilding the grader when only the passes move, so a
+  // context now outlives its pass list. Two ways that goes wrong in silence: a
+  // stale held copy served after the swap, and the replaced pass's textures
+  // leaking (which nothing here can see, but `dispose` is what answers it).
+  {
+    const { makeFrameGrader } = await import('/atelier/src/shared/lut/frame-grader.ts');
+    const { holdGrades } = await import('/atelier/src/shared/lut/held-grader.ts');
+    const { makeLayerPass } = await import('/atelier/src/shared/render/layer-pass.ts');
+    const maskMod = await import('/atelier/src/shared/render/mask.ts');
+
+    const W = 160, H = 120;
+    const grey = document.createElement('canvas');
+    grey.width = W; grey.height = H;
+    const gg = grey.getContext('2d');
+    gg.fillStyle = '#9a9a9a'; gg.fillRect(0, 0, W, H);
+
+    const toBlack = {
+      title: 'black', size: 2, domainMin: [0, 0, 0], domainMax: [1, 1, 1],
+      data: new Float32Array(2 * 2 * 2 * 3),
+    };
+    const passFor = (y) => makeLayerPass({
+      lut: toBlack,
+      mask: { ...maskMod.DEFAULT_LINEAR, x: 0.5, y, angle: 0, feather: 0.2 },
+      aspectRatio: W / H,
+      id: 'swap',
+    });
+    const readTop = (canvas) => {
+      const o = document.createElement('canvas'); o.width = W; o.height = H;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(canvas, 0, 0);
+      const d = oc.getImageData(0, 0, W, H).data;
+      const at = (fy) => d[((Math.round(H * fy) * W) + (W >> 1)) * 4];
+      return [at(0.08), at(0.5), at(0.92)];
+    };
+
+    // One grader, graded at y = 0.2, then SWAPPED to y = 0.8 and graded again.
+    const reused = holdGrades(makeFrameGrader(null, W, H, 1, [passFor(0.2)]));
+    readTop(reused.render(grey));
+    reused.setPasses([passFor(0.8)]);
+    const swapped = readTop(reused.render(grey));
+    reused.dispose();
+
+    // A grader built from scratch at y = 0.8, which is the answer.
+    const fresh = holdGrades(makeFrameGrader(null, W, H, 1, [passFor(0.8)]));
+    const built = readTop(fresh.render(grey));
+    fresh.dispose();
+
+    results.swap = { swapped, built, canSwap: Boolean(reused.setPasses) };
+  }
+
   return results;
 });
 
@@ -500,6 +552,25 @@ if (mask.nearlyOff > 0.002) {
   console.log(`  FAIL  a layer at opacity ~0 changed the picture by ${mask.nearlyOff}`);
 } else {
   console.log(`  ok    a layer at opacity ~0 leaves the picture alone (${mask.nearlyOff})`);
+}
+
+const swap = out.swap;
+if (!swap.canSwap) {
+  bad += 1;
+  console.log('\n  FAIL  the held grader cannot swap its passes at all');
+} else {
+  const off = Math.max(...swap.swapped.map((v, i) => Math.abs(v - swap.built[i])));
+  const ok = off <= 1;
+  if (!ok) bad += 1;
+  console.log(
+    `\n  ${ok ? 'ok  ' : 'FAIL'}  a grader whose passes were swapped reads ` +
+      `${JSON.stringify(swap.swapped)}, a fresh one ${JSON.stringify(swap.built)}`,
+  );
+  // And that the swap CHANGED something, or the row would pass on a no-op.
+  if (swap.built[0] === swap.built[2]) {
+    bad += 1;
+    console.log('  FAIL  the two pass sets draw the same picture, so this proves nothing');
+  }
 }
 
 if (errors.length) {

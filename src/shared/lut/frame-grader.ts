@@ -17,6 +17,18 @@ export interface FrameGrader {
 }
 
 /**
+ * A grader whose passes can be CHANGED without rebuilding it.
+ *
+ * The look is baked into a cube and a new look is a new grader, which is right
+ * — but a warp, a mask or a layer is a pass, and those move on every step of a
+ * drag. Rebuilding for each one meant a new WebGL2 context per step, which is
+ * both the slowest thing here and the one resource a page has a hard cap on.
+ */
+export interface PassGrader extends FrameGrader {
+  setPasses(passes: readonly RenderPass[]): void;
+}
+
+/**
  * Build a grader sized to `width`×`height`. If WebGL2 is unavailable it returns
  * a pass-through (the source unchanged) so an export degrades to un-graded
  * rather than failing outright. `intensity` is the LUT strength (1 = 100%).
@@ -32,7 +44,7 @@ export function makeFrameGrader(
    * and then this is exactly what it always was.
    */
   passes: readonly RenderPass[] = [],
-): FrameGrader {
+): PassGrader {
   // THE seam, and the reason it is one method: sixteen call sites reach the
   // GPU through here, so moving the engine underneath moves the stage, every
   // export, every thumbnail and both hook videos at once — and none of them
@@ -45,5 +57,9 @@ export function makeFrameGrader(
   // frame and handing it back.
   const grader = makeGraphGrader(lut, width, height, intensity, getDefaultLutInterpolation());
   if (passes.length) grader.setExtraPasses(passes);
-  return grader;
+  return {
+    render: (source) => grader.render(source),
+    setPasses: (next) => grader.setExtraPasses(next),
+    dispose: () => grader.dispose(),
+  };
 }

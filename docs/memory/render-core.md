@@ -96,3 +96,30 @@ outgrew the ~150-line budget together:
 - `render-geometry.md` — the lens and the keystone, and the `imageUv` rule
   every pass that asks WHERE a pixel is must follow.
 - `render-layers.md` — masks and adjustment layers.
+
+## Passes are SWAPPED, not rebuilt (2026-09-18)
+
+A look is baked into a cube, so a new look is rightly a new grader. A warp, a
+mask or a layer is a PASS, and those move on every step of a drag — and the
+grader was being rebuilt for each one, which meant **a new WebGL2 context per
+slider step**. That is both the slowest thing here and the one resource a page
+has a hard cap on; it is why painting a mask was not possible at all.
+
+`makeFrameGrader` now returns a `PassGrader` with `setPasses`, `holdGrades`
+forwards it (dropping the held copy, which was graded through the passes that
+just left), and `graderFor` takes that path whenever the cube and the size are
+unchanged. The context, its programs and the uploaded source all survive.
+
+**A graph now OUTLIVES its pass list, and that made a leak possible that could
+not exist before.** A pass's own textures — a layer's cube, a painted mask's
+alpha map — used to be freed by the context dying with every change. So
+`RenderPass` gained `dispose(gl)`, `setExtraPasses` releases the passes it
+replaces, and `makeLayerPass` implements it. One layer's cube is about a
+megabyte at 33 lattice points; a drag leaking one per step would fill a GPU in
+seconds.
+
+**The gate has a row for it**, because both failure modes are silent: a stale
+held copy served after the swap, and a swap that quietly did nothing. It renders
+through one grader, swaps its passes, renders again, and compares against a
+grader built fresh with the second set — plus an assertion that the two sets
+draw *different* pictures, or the row would pass on a no-op. Measured identical.

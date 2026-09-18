@@ -21,7 +21,16 @@ import { createRenderGraph, type RenderPass, type RenderPrecision } from './grap
 export interface GraphGrader extends FrameGrader {
   /** What the intermediate buffers really are here — 'byte' where float16 cannot be rendered to. */
   precision: RenderPrecision;
-  /** The passes after the look: none yet, and the reason the core exists. */
+  /**
+   * The passes after the look — a warp, a layer, in time a denoise.
+   *
+   * Swapping them is deliberately CHEAP: the context, its programs and the
+   * source texture all survive, so a slider drag that changes a mask or a
+   * keystone costs one re-upload of that pass's own uniforms rather than a new
+   * WebGL2 context per step. The passes it replaces are released here, because
+   * a graph that outlives its pass list no longer takes their textures down
+   * with it.
+   */
   setExtraPasses(passes: readonly RenderPass[]): void;
 }
 
@@ -55,6 +64,7 @@ export function makeGraphGrader(
   return {
     precision: graph.precision,
     setExtraPasses(passes) {
+      for (const pass of extra) if (!passes.includes(pass)) graph.releasePass(pass);
       extra = passes;
     },
     render(source) {
@@ -66,6 +76,8 @@ export function makeGraphGrader(
       return canvas;
     },
     dispose() {
+      for (const pass of extra) graph.releasePass(pass);
+      extra = [];
       graph.dispose();
     },
   };
