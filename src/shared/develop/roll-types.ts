@@ -15,6 +15,7 @@
  */
 
 import { keystoneOrNull, type Keystone } from '../render/geometry';
+import { lensOrNull, type LensCorrection } from '../render/lens';
 import { developOrNull, type DevelopSettings } from './develop';
 import { isDefaultFraming, normaliseFraming, type Framing } from '../media/framing';
 import { type SavedMediaRef } from '../projects/project-types';
@@ -81,6 +82,13 @@ export interface RollPicture {
    * what of it is kept.
    */
   keystone?: Keystone | null;
+  /**
+   * Distortion, lateral CA and vignetting (`shared/render/lens.ts`), or null.
+   * It runs BEFORE the keystone: a lens un-bends the picture, and only then
+   * does a perspective correction have straight verticals to work with
+   * (`shared/render/picture-geometry.ts` states that order once).
+   */
+  lens?: LensCorrection | null;
 }
 
 export interface RollDoc {
@@ -131,6 +139,7 @@ export function createRollPicture(ref: SavedMediaRef, id: string = newRollId()):
     aspect: 'original',
     border: null,
     keystone: null,
+    lens: null,
   };
 }
 
@@ -225,6 +234,7 @@ function readPicture(raw: unknown): RollPicture | null {
     // Absent on every roll written before the warp existed, and `null` there
     // means exactly what it means now — so there is no migration to run.
     keystone: keystoneOrNull(raw.keystone),
+    lens: lensOrNull(raw.lens),
   };
 }
 
@@ -314,7 +324,7 @@ export function movePicture(roll: RollDoc, from: number, to: number, now: number
 export function patchPicture(
   roll: RollDoc,
   id: string,
-  patch: Partial<Pick<RollPicture, 'develop' | 'framing' | 'aspect' | 'border' | 'keystone'>>,
+  patch: Partial<Pick<RollPicture, 'develop' | 'framing' | 'aspect' | 'border' | 'keystone' | 'lens'>>,
   now: number = Date.now(),
 ): RollDoc {
   let found = false;

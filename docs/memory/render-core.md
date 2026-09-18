@@ -205,3 +205,40 @@ texels, and NEAREST there is stair-stepping on every edge. `RGBA16F` is
 texture-filterable in core WebGL2 — it is `RGBA32F` that needs
 `OES_texture_float_linear`, the distinction the cube upload already turns on.
 The null result is unchanged by it (the 1:1 rows still read 0 codes).
+
+## The lens, wired — and the repaint bug it uncovered (2026-09-18, P6 second commit)
+
+`RollPicture.lens`, a Lens section under Perspective on the Crop tab, and the
+correction reaching the stage, the crop stage, the filmstrip cell, the
+thumbnail and the export. No migration: absent already means null.
+
+**`picture-geometry.ts` is where the ORDER lives, and it is the point of the
+module.** A picture now carries two warps and will carry a third; which runs
+first is a real decision — a lens un-bends the picture, and only a rectilinear
+picture has straight verticals for a perspective correction to make parallel,
+while correcting perspective first would hand the lens a picture whose
+distortion is no longer radial about the centre, the one assumption the model
+rests on. The stage, the snapshot, the filmstrip cell and the export all build
+that list, and two of them disagreeing is how a preview stops predicting a
+file. `geometryPasses`, `hasGeometry`, `sameGeometry` and `cloneGeometry`
+replaced the per-warp calls at every site; the grader is keyed on the whole
+record by value.
+
+**The bug this found was already shipped, in the keystone.** `FramingStage`
+repaints on `[source, cube, delivered, …]`, but `delivered` was a
+`useCallback` over `[graderFor]` alone — a stable identity — so the CROP STAGE
+never redrew when the geometry changed. It read the fresh value through the
+`latest` ref whenever something else made it repaint, which is exactly why it
+looked as though it worked. **A callback that reads through a ref still needs
+its identity to track what it would draw**: fresh values through the ref, a new
+function when the inputs move — both, not either. `delivered` and `snapshot`
+now depend on `[graderFor, source, cube, geometry]`.
+
+Measured in the pane on a 100 px grid, barrel at −100: the lines moved from
+`1 · 180 · 360 · 540 · 720 · 900 · 1080 · 1260 · 1438` to
+`134 · 347 · 538 · 720 · 901 · 1092 · 1305` — the centre a fixed point, the
+displacement symmetric and growing with the radius, the outermost pair pushed
+off the frame. Vignetting at −100 sank a corner from 237 to 88 with the centre
+untouched. **Preview = export**: the same picture through `renderRollPicture`
+put its lines within 0.0006 of the width of the stage's, which is under a
+source pixel.

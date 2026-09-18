@@ -20,8 +20,9 @@
 
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
-import { isDefaultKeystone, type Keystone } from '../render/geometry';
-import { makeKeystonePass } from '../render/keystone-pass';
+import type { Keystone } from '../render/geometry';
+import type { LensCorrection } from '../render/lens';
+import { geometryPasses, hasGeometry } from '../render/picture-geometry';
 import { DEFAULT_FRAMING, type Framing } from '../media/framing';
 import { decodePhoto } from '../media/photo-frame';
 import { pictureAspectRatio } from './crop-aspect';
@@ -44,6 +45,8 @@ export interface RollRenderOptions {
    * the stage's own order, so the file is what was on screen.
    */
   keystone?: Keystone | null;
+  /** The lens correction, warped in BEFORE the keystone — `picture-geometry.ts`. */
+  lens?: LensCorrection | null;
 }
 
 export interface RollRendered {
@@ -80,22 +83,15 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Could not create a 2D canvas for export.');
     ctx.imageSmoothingQuality = 'high';
-    // The warp runs at SOURCE density, with the look, before `drawFramed` cuts
+    // The warps run at SOURCE density, with the look, before `drawFramed` cuts
     // the frame — a keystone resampled after the crop would be resampling a
-    // resample. And a keystone with no look still needs the GPU, so the grader
-    // is built for either.
-    const warp = isDefaultKeystone(opts.keystone)
-      ? null
-      : makeKeystonePass(opts.keystone!, source.width / source.height);
+    // resample. Their ORDER is `picture-geometry.ts`'s to state, once, so this
+    // and the stage cannot drift. And geometry with no look still needs the
+    // GPU, so the grader is built for either.
+    const warps = geometryPasses(opts, source.width / source.height);
     const grader =
-      opts.lut || warp
-        ? makeFrameGrader(
-            opts.lut as CubeLut,
-            source.width,
-            source.height,
-            1,
-            warp ? [warp] : [],
-          )
+      opts.lut || hasGeometry(opts)
+        ? makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, warps)
         : null;
     try {
       const graded = grader ? grader.render(bitmap) : bitmap;

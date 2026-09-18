@@ -24,6 +24,7 @@ import { useDevelopDraft, useTold } from '../../shared/develop/use-develop-draft
 import { useWriteThrough } from '../../shared/develop/use-write-through';
 import { useDevelopPicture, type DevelopFrame } from '../../shared/develop/use-develop-picture';
 import { sameKeystone, type Keystone } from '../../shared/render/geometry';
+import { sameLens, type LensCorrection } from '../../shared/render/lens';
 import { usePresetBookHost } from '../../shared/develop/use-preset-book';
 import type { LutStack } from '../../shared/lut/use-lut-stack';
 import { DEFAULT_FRAMING, isDefaultFraming, sameFraming, type Framing } from '../../shared/media/framing';
@@ -35,6 +36,7 @@ import { STAGE_ZOOM_STEP, zoomLabel, type ZoomControls } from '../../shared/ui/s
 import type { RollExport } from '../../shared/develop/roll-types';
 import CropPanel, { type CropApplyVerb } from './CropPanel';
 import KeystonePanel from './KeystonePanel';
+import LensPanel from './LensPanel';
 import type { BorderApplyVerb } from './BorderSection';
 import type { RollBorder } from '../../shared/develop/border-layout';
 import ExportPanel, { type ExportVerb } from './ExportPanel';
@@ -80,6 +82,7 @@ export default function PictureWorkbench({
   onDevelop,
   onFraming,
   onKeystone,
+  onLens,
   onAspect,
   exportSettings,
   onExportSettings,
@@ -109,6 +112,7 @@ export default function PictureWorkbench({
   onDevelop: (develop: DevelopSettings | null) => void;
   onFraming: (framing: Framing | null) => void;
   onKeystone: (keystone: Keystone | null) => void;
+  onLens: (lens: LensCorrection | null) => void;
   onAspect: (aspect: string) => void;
   /** The roll's delivery settings, edited on the Export tab. */
   exportSettings: RollExport;
@@ -136,7 +140,14 @@ export default function PictureWorkbench({
   );
   // Read once, like the develop and the crop: the workbench is keyed per picture.
   const [keystoneDraft, setKeystoneDraft] = useState<Keystone | null>(entry.keystone ?? null);
-  const picture = useDevelopPicture({ file, cube: stack.composed, frame, keystone: keystoneDraft });
+  const [lensDraft, setLensDraft] = useState<LensCorrection | null>(entry.lens ?? null);
+  const picture = useDevelopPicture({
+    file,
+    cube: stack.composed,
+    frame,
+    keystone: keystoneDraft,
+    lens: lensDraft,
+  });
   const fidelity = pictureFidelity(file);
 
   // --- write-through ---------------------------------------------------------
@@ -145,8 +156,8 @@ export default function PictureWorkbench({
   // copy changes the stored value without this editor's doing, and a draft that
   // ignored it would keep showing numbers the roll no longer holds — and write
   // them back over the step at the next nudge.
-  const callbacks = useRef({ onDevelop, onFraming, onKeystone, onAspect, onSnapshot, onStep, onTabChange });
-  callbacks.current = { onDevelop, onFraming, onKeystone, onAspect, onSnapshot, onStep, onTabChange };
+  const callbacks = useRef({ onDevelop, onFraming, onKeystone, onLens, onAspect, onSnapshot, onStep, onTabChange });
+  callbacks.current = { onDevelop, onFraming, onKeystone, onLens, onAspect, onSnapshot, onStep, onTabChange };
   const { setDraft } = draft;
   useWriteThrough<DevelopSettings>({
     stored: entry.develop,
@@ -166,6 +177,13 @@ export default function PictureWorkbench({
     same: sameKeystone,
     onWrite: (value) => callbacks.current.onKeystone(value),
     onReseed: (value) => setKeystoneDraft(value),
+  });
+  useWriteThrough<LensCorrection>({
+    stored: entry.lens ?? null,
+    draft: lensDraft,
+    same: sameLens,
+    onWrite: (value) => callbacks.current.onLens(value),
+    onReseed: (value) => setLensDraft(value),
   });
   useWriteThrough<Framing>({
     stored: entry.framing,
@@ -429,7 +447,10 @@ export default function PictureWorkbench({
             />
           ) : null}
           {tab === 'crop' ? (
-            <KeystonePanel value={keystoneDraft} onChange={setKeystoneDraft} />
+            <>
+              <KeystonePanel value={keystoneDraft} onChange={setKeystoneDraft} />
+              <LensPanel value={lensDraft} onChange={setLensDraft} />
+            </>
           ) : (
             <ExportPanel
               settings={exportSettings}

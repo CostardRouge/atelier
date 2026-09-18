@@ -353,10 +353,12 @@ the crop leaves `drawFramed` for the warp; `CropStage` (the zone editor that
 replaced `FramingStage` on 2026-09-19, its arithmetic in `crop-rect.ts`) gains
 the keystone handles.
 
-**P6 — lens correction** *(engine BUILT 2026-09-17 — `lens.ts` pure with 17
-specs and `lens-pass.ts`, one radial pass carrying distortion, lateral CA and
-vignetting together, measured against the pure module on a real GPU. The wiring
-commit follows.)*
+**P6 — lens correction** *(BOTH commits BUILT — `lens.ts` pure with 17 specs
+and `lens-pass.ts`, one radial pass carrying distortion, lateral CA and
+vignetting together, measured against the pure module on a real GPU; then
+`RollPicture.lens`, the Crop tab's Lens section, and the correction reaching
+every renderer through `picture-geometry.ts`, which is now the ONE place the
+order of the warps is stated.)*
 
 **The profile half is NOT built, deliberately, and is not merely unfinished.**
 A lens profile is MEASURED calibration data. There is no real Lensfun data here
