@@ -6,18 +6,25 @@
  * is in (`docs/photo-editor.md` §2.2). A mask is a function of WHERE, so it
  * needed the multi-pass core before it could exist at all.
  *
- * Three shapes, which between them cover *linear and radial gradients*,
- * *creative vignetting* and range selection from the maintainer's list:
+ * Four shapes, which between them cover *masking*, *linear and radial
+ * gradients* and *creative vignetting* from the maintainer's list:
  *
  * - **linear** — a straight edge with a soft transition. A darkened sky.
  * - **radial** — an ellipse, rotatable. A subject lifted out of its surround,
  *   or a vignette drawn on purpose rather than corrected away.
  * - **luma** — a band of BRIGHTNESS rather than a place: the shadows alone, or
  *   the highlights alone, wherever they are in the frame.
+ * - **brush** — painted strokes, kept as VECTORS so the document stays small
+ *   and a mask painted on a preview delivers at full size.
  *
- * Every shape is procedural and PURE, so a spec holds its maths and the GPU
- * only mirrors it (`scripts/check-render.mjs` proves the two agree). A brush is
- * the phase after this one, and it is a different thing: strokes, rasterised.
+ * Every shape is PURE here, so a spec holds its maths. The first three are a
+ * few numbers the shader mirrors directly; a brush would cost `pixels × points`
+ * that way, so the CPU rasterises the SAME function into an alpha map
+ * (`brush-raster.ts`) and the GPU samples it. `scripts/check-render.mjs` holds
+ * all four to this module.
+ *
+ * An empty shape is EMPTY: a brush with no strokes covers nothing. Only the
+ * absence of a mask altogether means the whole picture.
  *
  * **The coordinate space is the lens's**, and deliberately so: centred, with
  * the frame's corner at radius 1 (half the diagonal). One convention across
@@ -27,7 +34,7 @@
  * Pure and DOM-free.
  */
 
-export type MaskKind = 'linear' | 'radial' | 'luma';
+export type MaskKind = 'linear' | 'radial' | 'luma' | 'brush';
 
 export interface LinearMask {
   kind: 'linear';
@@ -70,7 +77,32 @@ export interface LumaMask {
   feather: number;
 }
 
-export type Mask = LinearMask | RadialMask | LumaMask;
+/**
+ * One painted stroke: a polyline with a width and a softness.
+ *
+ * **Vector, never pixels.** The document stays small and resolution-free, a
+ * crop or a re-export re-rasterises correctly, and a stroke painted on a 2048 px
+ * preview is the same stroke when the 48-megapixel original is delivered
+ * (`docs/photo-editor.md` §6). Storing the raster instead would tie a roll to
+ * the screen it was painted on.
+ */
+export interface BrushStroke {
+  /** In [0,1] frame coordinates, in the order they were painted. */
+  points: readonly (readonly [number, number])[];
+  /** Half-width, as a fraction of the half-diagonal — the shared unit. */
+  radius: number;
+  /** 0 is a soft edge that fades across the whole radius, 1 is a hard one. */
+  hardness: number;
+  /** This stroke takes coverage AWAY: the eraser, as a stroke rather than a mode. */
+  erase: boolean;
+}
+
+export interface BrushMask {
+  kind: 'brush';
+  strokes: readonly BrushStroke[];
+}
+
+export type Mask = LinearMask | RadialMask | LumaMask | BrushMask;
 
 export const DEFAULT_LINEAR: Readonly<LinearMask> = Object.freeze({
   kind: 'linear',
@@ -90,6 +122,15 @@ export const DEFAULT_RADIAL: Readonly<RadialMask> = Object.freeze({
   feather: 0.3,
 });
 
+export const DEFAULT_BRUSH: Readonly<BrushMask> = Object.freeze({
+  kind: 'brush',
+  strokes: Object.freeze([]) as readonly BrushStroke[],
+});
+
+/** Where a new stroke starts, before the author touches the size or the softness. */
+export const DEFAULT_BRUSH_RADIUS = 0.12;
+export const DEFAULT_BRUSH_HARDNESS = 0.5;
+
 export const DEFAULT_LUMA: Readonly<LumaMask> = Object.freeze({
   kind: 'luma',
   from: 0,
@@ -101,6 +142,7 @@ export const DEFAULT_LUMA: Readonly<LumaMask> = Object.freeze({
 export function defaultMask(kind: MaskKind): Mask {
   if (kind === 'radial') return { ...DEFAULT_RADIAL };
   if (kind === 'luma') return { ...DEFAULT_LUMA };
+  if (kind === 'brush') return { kind: 'brush', strokes: [] };
   return { ...DEFAULT_LINEAR };
 }
 
@@ -149,6 +191,107 @@ export function framePoint(u: number, v: number, aspectRatio: number): [number, 
   return [((u - 0.5) * 2 * ar) / d, ((v - 0.5) * 2) / d];
 }
 
+/** The squared distance from `p` to the segment `a`–`b`. */
+function distanceToSegment(
+  px: number,
+  py: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  // A stroke of one point is a dab, and its "segment" is that point.
+  const t = len2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
+  const qx = ax + t * dx - px;
+  const qy = ay + t * dy - py;
+  return Math.hypot(qx, qy);
+}
+
+/**
+ * A stroke's points in the shared CENTRED space.
+ *
+ * They are stored in [0,1] frame coordinates, because that is what a pointer
+ * gives and what survives a change of preview size. Distance, though, must be
+ * measured centred: the two axes are scaled differently there (`framePoint`),
+ * so a circle in centred space is an ellipse in [0,1] space and a radius
+ * compared across the two means nothing. Converting the points once per stroke
+ * rather than per texel is why this is its own function.
+ */
+export function strokePoints(stroke: BrushStroke, aspectRatio: number): [number, number][] {
+  return stroke.points.map(([x, y]) => framePoint(x, y, aspectRatio));
+}
+
+/**
+ * How much a stroke of this shape covers a point, both already CENTRED.
+ *
+ * `hardness` decides where the fall begins — at 1 the whole radius is solid and
+ * only the last hair softens (never a bare step, which would alias); at 0 it
+ * fades from the spine outward.
+ */
+export function coverageAt(
+  points: readonly (readonly [number, number])[],
+  radius: number,
+  hardness: number,
+  px: number,
+  py: number,
+): number {
+  const r = Math.max(radius, 1e-6);
+  if (points.length === 0) return 0;
+  let best: number;
+  if (points.length === 1) {
+    best = Math.hypot(points[0][0] - px, points[0][1] - py);
+  } else {
+    best = Infinity;
+    for (let i = 1; i < points.length; i += 1) {
+      const d = distanceToSegment(px, py, points[i - 1][0], points[i - 1][1], points[i][0], points[i][1]);
+      if (d < best) best = d;
+      // Nothing beyond here can be closer than the spine itself.
+      if (best === 0) break;
+    }
+  }
+  if (best >= r) return 0;
+  // The solid core, as a fraction of the radius. Capped below 1 so even the
+  // hardest brush keeps one soft hair and does not draw a jagged edge.
+  const core = clamp(hardness, 0, 1) * 0.95;
+  return smoothStep01((1 - best / r) / (1 - core));
+}
+
+/** The same, from the stroke itself — for a spec, or a one-off question. */
+export function strokeCoverage(
+  stroke: BrushStroke,
+  px: number,
+  py: number,
+  aspectRatio = 1,
+): number {
+  return coverageAt(strokePoints(stroke, aspectRatio), stroke.radius, stroke.hardness, px, py);
+}
+
+/**
+ * The whole painted mask at a CENTRED point: the strokes laid down in order,
+ * each adding coverage or taking it away.
+ *
+ * Order matters and is the order they were painted — an eraser only removes
+ * what is already there, so a stroke painted AFTER it comes back. That is what
+ * makes painting feel like painting rather than like set arithmetic.
+ */
+export function brushCoverageAt(
+  strokes: readonly BrushStroke[],
+  px: number,
+  py: number,
+  aspectRatio = 1,
+): number {
+  let out = 0;
+  for (const stroke of strokes) {
+    const c = strokeCoverage(stroke, px, py, aspectRatio);
+    if (c <= 0) continue;
+    out = stroke.erase ? out * (1 - c) : out + (1 - out) * c;
+  }
+  return out;
+}
+
 /**
  * How much of the adjustment lands at this point: 0 to 1.
  *
@@ -178,6 +321,10 @@ export function maskAt(
   }
 
   const [px, py] = framePoint(u, v, aspectRatio);
+
+  if (mask.kind === 'brush') {
+    return brushCoverageAt(mask.strokes, px, py, aspectRatio);
+  }
 
   if (mask.kind === 'linear') {
     const [cx, cy] = framePoint(mask.x, mask.y, aspectRatio);
@@ -240,6 +387,34 @@ export function normaliseMask(raw: unknown): Mask | null {
       feather: clamp(num(src.feather, DEFAULT_LUMA.feather), 0, 1),
     };
   }
+  if (src.kind === 'brush') {
+    const raw = Array.isArray(src.strokes) ? src.strokes : [];
+    const strokes: BrushStroke[] = [];
+    for (const entry of raw) {
+      if (!entry || typeof entry !== 'object') continue;
+      const e = entry as Record<string, unknown>;
+      const pts = Array.isArray(e.points) ? e.points : [];
+      const points: [number, number][] = [];
+      for (const p of pts) {
+        if (!Array.isArray(p) || p.length < 2) continue;
+        const x = num(p[0], NaN);
+        const y = num(p[1], NaN);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+        points.push([clamp(x, -1, 2), clamp(y, -1, 2)]);
+      }
+      // A stroke with no point draws nothing, so it is not kept: an empty
+      // entry would otherwise survive every round trip for ever.
+      if (points.length === 0) continue;
+      strokes.push({
+        points,
+        radius: clamp(num(e.radius, DEFAULT_BRUSH_RADIUS), 0.002, 2),
+        hardness: clamp(num(e.hardness, DEFAULT_BRUSH_HARDNESS), 0, 1),
+        erase: e.erase === true,
+      });
+      if (strokes.length >= MAX_STROKES) break;
+    }
+    return { kind: 'brush', strokes };
+  }
   if (src.kind !== 'linear') return null;
   return {
     kind: 'linear',
@@ -250,9 +425,30 @@ export function normaliseMask(raw: unknown): Mask | null {
   };
 }
 
+/**
+ * The cap on one mask's strokes. A painted mask is rasterised stroke by stroke
+ * within each one's own bounding box, so the cost is in the area covered rather
+ * than the count — but a document with no limit at all is a document that can
+ * be made unopenable.
+ */
+export const MAX_STROKES = 500;
+
 export function sameMask(a: Mask | null | undefined, b: Mask | null | undefined): boolean {
   if (!a || !b) return !a && !b;
   if (a.kind !== b.kind) return false;
+  if (a.kind === 'brush' && b.kind === 'brush') {
+    if (a.strokes.length !== b.strokes.length) return false;
+    return a.strokes.every((s, i) => {
+      const t = b.strokes[i];
+      return (
+        s.radius === t.radius &&
+        s.hardness === t.hardness &&
+        s.erase === t.erase &&
+        s.points.length === t.points.length &&
+        s.points.every((p, k) => p[0] === t.points[k][0] && p[1] === t.points[k][1])
+      );
+    });
+  }
   if (a.kind === 'luma' && b.kind === 'luma') {
     return a.from === b.from && a.to === b.to && a.feather === b.feather;
   }
@@ -272,7 +468,16 @@ export function sameMask(a: Mask | null | undefined, b: Mask | null | undefined)
 }
 
 export function cloneMask(m: Mask | null | undefined): Mask | null {
-  return m ? ({ ...m } as Mask) : null;
+  if (!m) return null;
+  // A brush holds arrays, so a spread would alias the very strokes a live
+  // draft is about to push a point onto.
+  if (m.kind === 'brush') {
+    return {
+      kind: 'brush',
+      strokes: m.strokes.map((s) => ({ ...s, points: s.points.map((p) => [p[0], p[1]] as const) })),
+    };
+  }
+  return { ...m } as Mask;
 }
 
 /** `radial · 40 %`, `linear · 0°`, `shadows`, or `the whole picture`. */
@@ -280,6 +485,10 @@ export function describeMask(m: Mask | null | undefined): string {
   if (!m) return 'the whole picture';
   if (m.kind === 'linear') return `linear · ${Math.round(m.angle)}°`;
   if (m.kind === 'radial') return `radial · ${Math.round(m.radiusX * 100)} %`;
+  if (m.kind === 'brush') {
+    const n = m.strokes.length;
+    return n === 0 ? 'painted · nothing yet' : `painted · ${n} stroke${n === 1 ? '' : 's'}`;
+  }
   // A luma band gets a WORD where it has one: "shadows" says more than
   // "0.00–0.35" to anybody, and the numbers are on the sliders anyway.
   if (m.to <= 0.4 && m.from <= 0.05) return 'shadows';

@@ -11,6 +11,7 @@ import {
   normaliseMask,
   sameMask,
   smoothStep01,
+  type BrushMask,
   type LinearMask,
   type LumaMask,
   type RadialMask,
@@ -175,7 +176,32 @@ describe('the record', () => {
     expect(normaliseMask(null)).toBeNull();
     expect(normaliseMask(42)).toBeNull();
     expect(normaliseMask({})).toBeNull();
-    expect(normaliseMask({ kind: 'brush' })).toBeNull();
+    expect(normaliseMask({ kind: 'lasso' })).toBeNull();
+  });
+
+  it('keeps an EMPTY painted mask, because picking the brush is a choice', () => {
+    // Unlike an unknown kind: the author chose to paint and has not painted
+    // yet, which is a state the panel must be able to show.
+    expect(normaliseMask({ kind: 'brush' })).toEqual({ kind: 'brush', strokes: [] });
+    // A stroke with no point draws nothing and would survive every round trip,
+    // so it is dropped.
+    expect(normaliseMask({ kind: 'brush', strokes: [{ points: [] }, 7] })).toEqual({
+      kind: 'brush',
+      strokes: [],
+    });
+    const one = normaliseMask({ kind: 'brush', strokes: [{ points: [[0.1, 0.2]], radius: 9 }] }) as BrushMask;
+    expect(one.kind).toBe('brush');
+    expect(one.strokes[0]).toMatchObject({ radius: 2, erase: false });
+  });
+
+  it('compares and clones a painted mask by its strokes, never by reference', () => {
+    const a = normaliseMask({ kind: 'brush', strokes: [{ points: [[0.1, 0.2], [0.3, 0.4]] }] }) as BrushMask;
+    const b = normaliseMask({ kind: 'brush', strokes: [{ points: [[0.1, 0.2], [0.3, 0.4]] }] }) as BrushMask;
+    expect(sameMask(a, b)).toBe(true);
+    const held = cloneMask(a)!;
+    // A spread would alias the very array a live drag is about to push onto.
+    (a.strokes[0].points as [number, number][]).push([0.9, 0.9]);
+    expect(sameMask(held, a)).toBe(false);
   });
 
   it('clamps what it keeps', () => {

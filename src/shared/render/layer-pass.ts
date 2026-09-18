@@ -24,11 +24,12 @@ import type { CubeLut } from '../lib/cube-parser';
 import type { Interpolation } from '../lut/interpolate';
 import { GLSL_VERSION, IMAGE_UV, LUT_LOOKUP, LUT_UNIFORMS } from './glsl';
 import { REC709_LUMA, type Mask } from './mask';
+import { rasteriseBrush } from './brush-raster';
 import { createCubeTexture } from './cube-pass';
 import type { RenderPass } from './graph';
 
 /** What `u_maskKind` means. 0 is "no mask", which covers the whole picture. */
-const KIND = { none: 0, linear: 1, radial: 2, luma: 3 } as const;
+const KIND = { none: 0, linear: 1, radial: 2, luma: 3, brush: 4 } as const;
 
 const FRAGMENT = `${GLSL_VERSION}
 precision highp float;
@@ -52,11 +53,20 @@ uniform vec2 u_maskBand;    // luma: (from, to)
 uniform float u_maskFeather;
 uniform float u_invert;
 uniform float u_opacity;
+// The painted mask's alpha map, on unit 2. Bound even when unused, for the same
+// reason the cube is: an unset sampler defaults to unit 0.
+uniform sampler2D u_maskTex;
 
 // Mirrors maskAt in mask.ts. GLSL's smoothstep IS s*s*(3-2s) clamped, which is
 // the same ramp the pure module uses -- do not "improve" one without the other.
 float maskValue(vec2 img, float luma) {
   if (u_maskKind == ${KIND.none}) return 1.0;
+
+  // A painted mask is the one kind the CPU rasterises (brush-raster.ts): a
+  // shader walking every segment of every stroke per pixel would cost pixels x
+  // points. Row 0 of the map is the TOP of the picture, which is what imageUv
+  // already gives, so no flip enters here.
+  if (u_maskKind == ${KIND.brush}) return texture(u_maskTex, img).r;
 
   if (u_maskKind == ${KIND.luma}) {
     if (u_maskFeather <= 0.0) {
@@ -136,14 +146,19 @@ export function makeLayerPass(options: LayerPassOptions): RenderPass | null {
   // The centre in the shared space, computed here rather than in the shader so
   // `framePoint` has one implementation and the spec holds it.
   const centre = (m: Mask | null): [number, number] => {
-    if (!m || m.kind === 'luma') return [0, 0];
+    if (!m || m.kind === 'luma' || m.kind === 'brush') return [0, 0];
     return [(m.x - 0.5) * span[0], (m.y - 0.5) * span[1]];
   };
   const kind = mask ? KIND[mask.kind] : KIND.none;
-  const angle = mask && mask.kind !== 'luma' ? (mask.angle * Math.PI) / 180 : 0;
+  const shaped = mask && (mask.kind === 'linear' || mask.kind === 'radial') ? mask : null;
+  const angle = shaped ? (shaped.angle * Math.PI) / 180 : 0;
   const [cx, cy] = centre(mask);
+  // Rasterised ONCE per pass, not per draw: a pass is rebuilt whenever the
+  // mask changes by value, so this is exactly as often as the strokes move.
+  const raster = mask?.kind === 'brush' && mask.strokes.length ? rasteriseBrush(mask.strokes, ar) : null;
 
   let uploaded: { gl: WebGL2RenderingContext; tex: WebGLTexture } | null = null;
+  let maskTex: { gl: WebGL2RenderingContext; tex: WebGLTexture } | null = null;
 
   return {
     id,
@@ -168,6 +183,41 @@ export function makeLayerPass(options: LayerPassOptions): RenderPass | null {
       gl.uniform1i(at('u_lut'), 1);
       gl.activeTexture(gl.TEXTURE0);
 
+      // Unit 2, for the same reason the cube takes unit 1: an unset sampler
+      // defaults to unit 0, where the source already is.
+      if (!maskTex || maskTex.gl !== gl) {
+        const tex = gl.createTexture();
+        if (tex) {
+          gl.activeTexture(gl.TEXTURE2);
+          gl.bindTexture(gl.TEXTURE_2D, tex);
+          // NOT flipped: row 0 of the map is the top of the picture, which is
+          // what `imageUv` hands the sampler.
+          gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+          gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          if (raster) {
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, raster.width, raster.height, 0, gl.RED, gl.UNSIGNED_BYTE, raster.data);
+          } else {
+            // One EMPTY texel. Zero rather than one, because a brush mask with
+            // no strokes reads this and must cover nothing — an empty shape is
+            // empty, and 255 here would make a fresh brush layer apply to the
+            // whole picture. Every other kind never samples it.
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 1, 1, 0, gl.RED, gl.UNSIGNED_BYTE, new Uint8Array([0]));
+          }
+          maskTex = { gl, tex };
+        }
+      }
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, maskTex?.tex ?? null);
+      gl.uniform1i(at('u_maskTex'), 2);
+      gl.activeTexture(gl.TEXTURE0);
+
+      // A painted mask with no strokes covers NOTHING, unlike every other kind
+      // — an empty shape is empty, and treating it as the whole picture would
+      // make a fresh brush layer apply everywhere.
       gl.uniform1i(at('u_maskKind'), kind);
       gl.uniform2f(at('u_span'), span[0], span[1]);
       gl.uniform2f(at('u_maskCentre'), cx, cy);
@@ -183,7 +233,7 @@ export function makeLayerPass(options: LayerPassOptions): RenderPass | null {
         mask && mask.kind === 'luma' ? mask.from : 0,
         mask && mask.kind === 'luma' ? mask.to : 1,
       );
-      gl.uniform1f(at('u_maskFeather'), mask ? Math.max(mask.feather, 0) : 0);
+      gl.uniform1f(at('u_maskFeather'), mask && mask.kind !== 'brush' ? Math.max(mask.feather, 0) : 0);
       gl.uniform1f(at('u_invert'), invert ? 1 : 0);
       gl.uniform1f(at('u_opacity'), Math.min(1, Math.max(0, opacity)));
     },

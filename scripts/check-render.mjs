@@ -313,6 +313,20 @@ const out = await page.evaluate(async () => {
       linear: { source: white, mask: { ...maskMod.DEFAULT_LINEAR, x: 0.5, y: 0.45, angle: 25, feather: 0.4 } },
       radial: { source: white, mask: { ...maskMod.DEFAULT_RADIAL, x: 0.4, y: 0.55, radiusX: 0.45, radiusY: 0.25, angle: 30, feather: 0.35 } },
       luma: { source: ramp, mask: { ...maskMod.DEFAULT_LUMA, from: 0.25, to: 0.6, feather: 0.2 } },
+      // A painted mask is the one kind the CPU rasterises, so this row checks
+      // something the others do not: that the alpha map is uploaded the right
+      // way up and sampled in image coordinates. A y flip here would put the
+      // stroke at the wrong end of the frame and nothing else would notice.
+      brush: {
+        source: white,
+        mask: {
+          kind: 'brush',
+          strokes: [
+            { points: [[0.25, 0.3], [0.7, 0.45]], radius: 0.22, hardness: 0.4, erase: false },
+            { points: [[0.5, 0.38]], radius: 0.08, hardness: 1, erase: true },
+          ],
+        },
+      },
     };
 
     // PIXELS, not fractions: the expectation is evaluated at the very texel
@@ -469,7 +483,7 @@ if (Math.abs(vig.out - vig.expected) > 2) {
 
 const mask = out.mask;
 console.log('\n  masks, against maskAt over 20 points of the frame:');
-for (const shape of ['linear', 'radial', 'luma']) {
+for (const shape of ['linear', 'radial', 'luma', 'brush']) {
   const spread = mask[`${shape}_spread`];
   const worst = Math.max(mask[`${shape}_canvas`], mask[`${shape}_bitmap`]);
   // 1/255 is one 8-bit code; the read-back is through a byte canvas.

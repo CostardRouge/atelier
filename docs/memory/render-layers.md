@@ -101,3 +101,47 @@ changed nothing; exposure −3 under a default linear mask gave 57 at the top,
 148 at the middle, 154 at the bottom; the overlay painted [145,48,40] where the
 mask is full and nothing where it is empty. **Preview = export**, to the code:
 the same 57 / 148 / 154 out of `renderRollPicture`.
+
+## The painted mask: vector strokes, rasterised on the CPU (2026-09-18, P8 engine)
+
+`mask.ts` gained a `brush` kind and the coverage maths; `brush-raster.ts` turns
+strokes into an alpha map; `layer-pass.ts` samples it on unit 2.
+
+**Strokes are VECTORS, never pixels.** The document stays small and
+resolution-free, a crop re-rasterises correctly, and a mask painted on a 2048 px
+preview is the same mask when the 48-megapixel original is delivered. Storing
+the raster would tie a roll to the screen it was painted on.
+
+**The CPU rasterises, and it is the SAME function, not an approximation.** A
+fragment shader walking every segment of every stroke per pixel costs
+`pixels × points` — hundreds of millions for an ordinary mask — so the map is
+built once and sampled. Every texel is `brushCoverageAt` at that texel's centre,
+so the raster and the pure module agree by construction and the gate holds the
+GPU to the same tolerance as the procedural shapes (measured 0.0008, TIGHTER
+than them, because the only error left is 8-bit quantisation). The obvious
+alternative, Canvas2D round-capped strokes under `ctx.filter` blur, would have
+been quicker to write and would have been a second, different falloff that
+nothing could check.
+
+**Cost is the area PAINTED, not the frame**: each stroke is walked only inside
+its own bounding box. That is what makes a live drag possible at all, and a spec
+asserts it.
+
+**Points are stored in [0,1] and distance is measured CENTRED.** They are not
+the same space — `framePoint` scales the axes differently, so a circle in one is
+an ellipse in the other — and comparing a radius across them means nothing. The
+first version did exactly that and every coverage came back 0; `strokePoints`
+converts once per stroke rather than per texel.
+
+**Strokes composite in the order they were painted**, and an eraser only removes
+what is already down — so a stroke painted after it comes back. Painting, not
+set arithmetic. It is also why this cannot be one pass over a merged shape.
+
+**An empty painted mask covers NOTHING**, unlike every other kind: only the
+ABSENCE of a mask means the whole picture. The placeholder texel bound when
+there are no strokes is therefore 0, not 255 — 255 there would make a fresh
+brush layer apply to the whole frame.
+
+Not built yet, and the reason the panel still says numbers: the painting
+GESTURE. It needs pointer capture on the stage sharing a surface with the wipe,
+the pan and the eyedropper, which is a piece of work rather than a control.
