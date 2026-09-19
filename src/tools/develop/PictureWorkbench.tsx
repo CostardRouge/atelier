@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DevelopApplySection,
   DevelopClipboardActions,
@@ -187,6 +187,10 @@ export default function PictureWorkbench({
   // maintainer does not want the numbers in front of him while he works, and
   // when he does they belong over the photograph, not under it.
   const [factsOn, setFactsOn] = useLocalFlag('atelier.develop.facts', false);
+  // The before/after split, as a switch. On by default — it is what the editor
+  // has always done — but a divider is a second thing on the picture, and the
+  // hours spent on a mask are exactly the hours it is in the way.
+  const [compareOn, setCompareOn] = useLocalFlag('atelier.develop.compare', true);
   const [helpOpen, setHelpOpen] = useState(false);
   // The subject rasters come BACK through state, because the two hooks need
   // each other: the stage decodes the picture the model segments, and the model
@@ -287,6 +291,7 @@ export default function PictureWorkbench({
     layers: layersDraft,
     subjectMasks: subjectRasters,
     paint,
+    compare: compareOn,
     // Only while the layer is open AND the box is ticked: a red wash left on
     // by accident would be mistaken for the picture.
     showMaskOf: showMask && selectedLayer ? selectedLayer.id : null,
@@ -495,6 +500,29 @@ export default function PictureWorkbench({
   const tabLabel = WORKBENCH_TABS.find((t) => t.id === tab)?.label ?? 'Develop';
 
   /**
+   * The points the author picked for the OPEN subject layer, drawn on the
+   * picture. They were invisible until now, which made the documented
+   * tap-a-marker-to-remove gesture unaimable — the maintainer's *"i can not
+   * see"*.
+   */
+  const subjectMarks = useMemo<readonly (readonly [number, number])[] | null>(
+    () => (selectedLayer?.mask?.kind === 'subject' ? selectedLayer.mask.points : null),
+    [selectedLayer],
+  );
+  const unmarkSubject = useCallback(
+    (index: number) => {
+      setLayersDraft((list) =>
+        list.map((l) =>
+          l.id === paintId && l.mask?.kind === 'subject'
+            ? { ...l, mask: { ...l.mask, points: l.mask.points.filter((_, i) => i !== index) } }
+            : l,
+        ),
+      );
+    },
+    [paintId],
+  );
+
+  /**
    * The facts drawn down the picture's corner, one per line: what the numbers
    * say, what else is on it, what the picture IS. The gesture hints that used
    * to ride the same sentence are gone from here — they live in the shortcuts
@@ -551,6 +579,34 @@ export default function PictureWorkbench({
                 )}
               </>
             ))}
+          {/* The split, as a switch. It says what it IS rather than what
+              pressing it does, like every other pill in this bar; while a mask
+              tool holds the pointer the hook has suspended it anyway, and the
+              pill says that too rather than lying about a divider nobody can
+              see. */}
+          {source && !cropping && (
+            <button
+              type="button"
+              className={`${developPillClass} flex-none cursor-pointer hover:border-accent ${
+                compareOn ? '' : 'text-faint'
+              }`}
+              onClick={() => setCompareOn(!compareOn)}
+              aria-pressed={compareOn}
+              title={
+                compareOn
+                  ? 'The before/after divider is on — a drag across the picture places it'
+                  : 'The before/after divider is off — the whole picture is shown corrected'
+              }
+            >
+              {!compareOn
+                ? 'compare off'
+                : picture.painting || picture.picking
+                  ? // Said out loud rather than drawn as a live divider that a
+                    // tap would move: this is the state the maintainer reported.
+                    'compare · held'
+                  : 'compare'}
+            </button>
+          )}
           {/* The legend that used to run along the bottom of the editor, as a
               verb. Drawn at every width: on a phone there are no keys, but the
               GESTURES it lists are exactly the ones a finger has to discover. */}
@@ -570,6 +626,11 @@ export default function PictureWorkbench({
           emptyText={emptyText}
           pixelView={pixelView}
           facts={facts}
+          marks={subjectMarks}
+          // Shown whenever the subject layer is open — a picked point is a fact
+          // about the layer, not about the tool — but removable only while Pick
+          // is on, so a settled mask cannot be edited by a stray click.
+          onUnmark={paintKind === 'subject' ? unmarkSubject : undefined}
           className={cropping ? 'hidden' : 'flex-1'}
           onPick={(linear) => {
             const { temperature, tint, clamped } = whiteBalanceFor(linear);

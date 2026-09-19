@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import { toLinear } from '../lut/transfer';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
-import { drawFramed, unframePoint, type Framing } from '../media/framing';
+import { drawFramed, framePoint, unframePoint, type Framing } from '../media/framing';
 import { borderLayout, scaleLayout, type RollBorder } from './border-layout';
 import { drawDelivered, drawPictureIn } from './border-paint';
 import { holdGrades, type HeldGrader } from '../lut/held-grader';
@@ -98,6 +98,17 @@ export interface DevelopPicture {
    * it. What a painted mask's strokes are made of.
    */
   pointAt: (clientX: number, clientY: number) => [number, number] | null;
+  /**
+   * The other way: where a point of the SOURCE picture, as [0,1], is drawn on
+   * the stage — in the VIEWPORT's own pixels, so a marker can be positioned
+   * beside the divider and follow the same zoom and pan.
+   *
+   * Computed from the view's arithmetic (`view.rect`), never from a measured
+   * `getBoundingClientRect()`: during a render the canvas still carries the
+   * PREVIOUS transform, so a measured marker would lag the picture by a frame
+   * on every pan. `inside` is false for a point the crop cut away.
+   */
+  stagePoint: (sx: number, sy: number) => { x: number; y: number; inside: boolean } | null;
   /** Where the divider and its handle are drawn, in viewport pixels. */
   divider: { x: number; top: number; bottom: number };
   /**
@@ -151,6 +162,7 @@ export function useDevelopPicture({
   showMaskOf = null,
   paint = null,
   subjectMasks = null,
+  compare = true,
 }: {
   file: File | null;
   videoTimeSeconds?: number;
@@ -207,12 +219,38 @@ export function useDevelopPicture({
    * histogram, `delivered()` and `snapshot()` stay the whole picture.
    */
   frame?: DevelopFrame | null;
+  /**
+   * Whether the before/after split is offered at all. The host's own switch:
+   * a divider is a second thing on the picture, and there are hours of work
+   * where it is only in the way.
+   *
+   * Turning it off does not FORGET where the divider was — it stops splitting
+   * (`shownWipe` goes to 1, the whole picture delivered) and puts the line
+   * back exactly where it was when it comes on again.
+   */
+  compare?: boolean;
 }): DevelopPicture {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [source, setSource] = useState<BadgeSource | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [wipe, setWipe] = useState(1);
   const [holding, setHolding] = useState(false);
+  const [picking, setPickingState] = useState(false);
+  /**
+   * While a MASK TOOL holds the pointer, the split is suspended — the whole
+   * picture is delivered and the divider is not drawn.
+   *
+   * The maintainer's report: *"when I pick a segmentation layer i can not see
+   * and it also move the compare line"*. Both halves are this. A picture left
+   * split at 0.5 shows the layer's effect on ONE side, so a subject tapped on
+   * the other side visibly did nothing; and a tap that missed the frame fell
+   * through to the wipe and threw the divider. The grey dropper was already
+   * right — it takes the pointer whole — and this is the same rule for the
+   * other two tools. The wipe is REMEMBERED, not reset: it is back where it
+   * was the moment the tool is put down.
+   */
+  const suspended = Boolean(paint) || picking;
+  const shownWipe = compare && !suspended ? wipe : 1;
 
   useEffect(() => {
     let cancelled = false;
@@ -375,8 +413,8 @@ export function useDevelopPicture({
     // The wipe: the untouched picture to the RIGHT of the divider, the way the
     // shader's own split works — graded on the left. The divider itself is
     // drawn over the canvas, in the page, so it stays a hairline at any zoom.
-    if (grader && wipe < 1) {
-      const x = Math.round(wipe * w);
+    if (grader && shownWipe < 1) {
+      const x = Math.round(shownWipe * w);
       if (layout && framing) {
         ctx.save();
         ctx.beginPath();
@@ -385,7 +423,7 @@ export function useDevelopPicture({
         drawPictureIn(ctx, source.image, source.width, source.height, framing, layout);
         ctx.restore();
       } else {
-        const sx = Math.round(wipe * source.width);
+        const sx = Math.round(shownWipe * source.width);
         ctx.drawImage(source.image, sx, 0, source.width - sx, source.height, x, 0, w - x, h);
       }
     }
@@ -396,7 +434,7 @@ export function useDevelopPicture({
     framing,
     border,
     cube,
-    wipe,
+    shownWipe,
     holding,
     geometry,
     stack,
@@ -482,7 +520,7 @@ export function useDevelopPicture({
   }, [source]);
 
   // --- the eyedropper -------------------------------------------------------
-  const [picking, setPicking] = useState(false);
+  const setPicking = setPickingState;
   const pickRef = useRef<HTMLCanvasElement | null>(null);
   const pickAt = useCallback(
     (clientX: number, clientY: number): [number, number, number] | null => {
@@ -656,6 +694,10 @@ export function useDevelopPicture({
           return;
         }
       }
+      // The split is off, or a mask tool has the pointer: there is no divider
+      // to place, and a drag that moved an invisible line would be a bug the
+      // author could only find by turning compare back on.
+      if (!compare || suspended) return;
       if (!wipeClaims(e.target, view.zoomed)) return;
       dragging.current = { startX: e.clientX, live: !touch };
       // A pointer the browser no longer knows (a synthetic one) throws rather
@@ -707,8 +749,29 @@ export function useDevelopPicture({
   // The divider, where the picture is — held inside the frame so its handle
   // can always be reached, even when the line itself is panned out of view.
   const { rect, viewport } = view;
+
+  const stagePoint = useCallback(
+    (sx: number, sy: number) => {
+      if (!source || !canvasSize) return null;
+      const { w, h } = canvasSize;
+      if (!(w > 0) || !(h > 0) || !(rect.width > 0) || !(rect.height > 0)) return null;
+      const [x, y] =
+        frameRatio && framing
+          ? framePoint(sx * source.width, sy * source.height, source.width, source.height, w, h, framing)
+          : [sx * w, sy * h];
+      return {
+        x: rect.x + (x / w) * rect.width,
+        y: rect.y + (y / h) * rect.height,
+        inside: x >= 0 && y >= 0 && x <= w && y <= h,
+      };
+    },
+    [source, canvasSize, frameRatio, framing, rect.x, rect.y, rect.width, rect.height],
+  );
   const divider = {
-    x: Math.min(Math.max(rect.x + wipe * rect.width, HANDLE_INSET), Math.max(HANDLE_INSET, viewport.width - HANDLE_INSET)),
+    x: Math.min(
+      Math.max(rect.x + shownWipe * rect.width, HANDLE_INSET),
+      Math.max(HANDLE_INSET, viewport.width - HANDLE_INSET),
+    ),
     top: Math.max(0, rect.y),
     bottom: Math.min(viewport.height, rect.y + rect.height),
   };
@@ -719,10 +782,10 @@ export function useDevelopPicture({
     canvasRef,
     cube,
     view,
-    wipe,
+    wipe: shownWipe,
     holding,
     setHolding,
-    comparing: Boolean(source && cube && !holding),
+    comparing: Boolean(source && cube && !holding && compare && !suspended),
     histogram,
     stats,
     painting: Boolean(paint),
@@ -731,6 +794,7 @@ export function useDevelopPicture({
     setPicking,
     pickAt,
     pointAt,
+    stagePoint,
     divider,
     snapshot,
     delivered,

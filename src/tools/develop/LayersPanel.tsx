@@ -92,15 +92,26 @@ export default function LayersPanel({
                   selected ? 'border-accent bg-surface-raised' : 'border-line'
                 }`}
               >
-                <input
-                  type="checkbox"
-                  checked={layer.enabled}
-                  aria-label={`${layerLabel(layer)} on`}
-                  onChange={(e) => onPatch(layer.id, { enabled: e.target.checked })}
-                />
+                {/* Visibility is a VERB, not a field: the maintainer asked for
+                    "an option to toggle visibility of a layer", and a bare
+                    checkbox beside a name reads as "include this one" rather
+                    than "show it". Same size and same row as the other three
+                    verbs, and an eye crossed out says which state it is in —
+                    an unticked box only ever says which state it is not. */}
+                <IconButton
+                  size="sm"
+                  label={layer.enabled ? `Hide ${layerLabel(layer)}` : `Show ${layerLabel(layer)}`}
+                  aria-pressed={!layer.enabled}
+                  className={layer.enabled ? undefined : 'text-faint'}
+                  onClick={() => onPatch(layer.id, { enabled: !layer.enabled })}
+                >
+                  {layer.enabled ? Icons.eye : Icons.eyeOff}
+                </IconButton>
                 <button
                   type="button"
-                  className="flex-1 min-w-0 text-left font-mono text-2xs truncate bg-transparent border-0 p-0 text-ink"
+                  className={`flex-1 min-w-0 text-left font-mono text-2xs truncate bg-transparent border-0 p-0 ${
+                    layer.enabled ? 'text-ink' : 'text-faint line-through'
+                  }`}
                   onClick={() => onSelect(selected ? null : layer.id)}
                 >
                   {layerLabel(layer)}

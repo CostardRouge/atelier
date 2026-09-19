@@ -18,8 +18,21 @@ export default function DevelopViewport({
   onPick,
   pixelView = 'smooth',
   facts = null,
+  marks = null,
+  onUnmark,
 }: {
   picture: DevelopPicture;
+  /**
+   * Points the author PICKED on the picture, in the source's own [0,1] — a
+   * subject mask's taps. Drawn as `+` discs that follow the zoom and the pan.
+   *
+   * They were invisible until 2026-09-19, which made the documented
+   * tap-a-marker-to-remove gesture unusable: nothing said where a marker was,
+   * so nothing could be aimed at. A point the crop cut away is not drawn.
+   */
+  marks?: readonly (readonly [number, number])[] | null;
+  /** Taking one off. Given, a marker answers its own click and shows `−`. */
+  onUnmark?: (index: number) => void;
   /**
    * The picture's own facts, drawn DOWN its bottom-left corner — what the
    * numbers say, what the picture is, what else is on it. Over the photograph
@@ -47,17 +60,24 @@ export default function DevelopViewport({
 }) {
   const { view, source, problem, cube, holding, wipe, divider, handlers } = picture;
   const picking = Boolean(onPick && picture.picking && source);
+  // A tap-gesture mask tool is armed: the pointer ADDS a point, and the native
+  // `copy` cursor is the browser's own `+` badge saying so.
+  const tapping = !picking && picture.painting && picture.paintGesture === 'tap';
   return (
     <div
       ref={view.viewportRef}
       className={`relative min-h-0 bg-frame rounded-paper overflow-hidden touch-none select-none ${
         picking
           ? 'cursor-crosshair'
-          : view.zoomed
+          : tapping
+            ? 'cursor-copy'
+            : view.zoomed
             ? view.panning
               ? 'cursor-grabbing'
               : 'cursor-grab'
-            : 'cursor-col-resize'
+            : picture.comparing
+              ? 'cursor-col-resize'
+              : 'cursor-default'
       } ${className}`}
       // While the dropper is armed it takes the gesture WHOLE: the wipe and the
       // pan are the same pointer, and letting them run too would drag the
@@ -128,6 +148,44 @@ export default function DevelopViewport({
           click something grey
         </span>
       )}
+      {source &&
+        marks?.map(([sx, sy], i) => {
+          const at = picture.stagePoint(sx, sy);
+          if (!at || !at.inside) return null;
+          return (
+            <button
+              key={`${sx},${sy},${i}`}
+              type="button"
+              // Its OWN press, and it never reaches the stage: the tap path
+              // below would hit-test the same marker on state this click has
+              // already changed, and remove it twice — which lands as an ADD.
+              onPointerDown={
+                onUnmark
+                  ? (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onUnmark(i);
+                    }
+                  : undefined
+              }
+              disabled={!onUnmark}
+              className={`absolute -translate-x-1/2 -translate-y-1/2 grid place-items-center w-5 h-5 rounded-full bg-[rgba(251,248,241,0.92)] border border-line-strong text-ink-soft shadow-paper group ${
+                onUnmark ? 'cursor-pointer hover:border-accent hover:text-accent-ink' : 'pointer-events-none'
+              }`}
+              style={{ left: at.x, top: at.y }}
+              title={onUnmark ? 'Take this point off the subject' : 'A point of the subject'}
+              aria-label={onUnmark ? `Take subject point ${i + 1} off` : `Subject point ${i + 1}`}
+            >
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round">
+                {/* `+` at rest, `−` under the pointer: the vertical stroke is
+                    what the hover takes away, so the icon SAYS what the click
+                    will do rather than what the marker is. */}
+                <path d="M5 12h14" />
+                <path d="M12 5v14" className={onUnmark ? 'group-hover:hidden' : ''} />
+              </svg>
+            </button>
+          );
+        })}
       {facts && facts.length > 0 && source && (
         <div
           // Pointer-transparent: the facts sit ON the picture, and the picture
@@ -200,8 +258,12 @@ export function DevelopCaption({
       ? ' · tap the subject on the picture'
       : ' · drag across the picture to paint the mask'
     : view.zoomed
-      ? ' · drag to look around, the handle on the divider compares'
-      : ' · drag across the picture to compare, wheel or pinch to look closer';
+      ? picture.comparing
+        ? ' · drag to look around, the handle on the divider compares'
+        : ' · drag to look around'
+      : picture.comparing
+        ? ' · drag across the picture to compare, wheel or pinch to look closer'
+        : ' · wheel or pinch to look closer';
   return (
     <p className="m-0 flex-none font-mono text-2xs text-faint leading-relaxed">
       {describeDevelop(draft)}

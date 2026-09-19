@@ -419,6 +419,38 @@ export function unframePoint(
   return [x + srcW / 2, y + srcH / 2];
 }
 
+/**
+ * Where a point of the SOURCE picture lands in the drawn frame, in frame
+ * pixels — `unframePoint` the other way round, and the same four steps in the
+ * forward order.
+ *
+ * Needed to DRAW something at a stored point: a subject mask's picked markers
+ * live in the source's own [0,1], and a marker the author cannot see is a
+ * marker they cannot tap off again. The answer may fall OUTSIDE the frame (a
+ * point cropped away), which is a fact about the crop and not an error — the
+ * caller decides whether to draw it.
+ *
+ * A spec round-trips it against `unframePoint` rather than trusting either
+ * derivation.
+ */
+export function framePoint(
+  srcX: number,
+  srcY: number,
+  srcW: number,
+  srcH: number,
+  dstW: number,
+  dstH: number,
+  framing: Framing = DEFAULT_FRAMING,
+): [number, number] {
+  const t = framingTransform(srcW, srcH, dstW, dstH, framing);
+  const x = (srcX - srcW / 2) * t.scale * t.mirrorX + t.panX;
+  const y = (srcY - srcH / 2) * t.scale * t.mirrorY + t.panY;
+  // `unframePoint` rotates by −angle, so this one rotates by +angle.
+  const cos = Math.cos(t.angle);
+  const sin = Math.sin(t.angle);
+  return [x * cos - y * sin + dstW / 2, x * sin + y * cos + dstH / 2];
+}
+
 export function drawFramed(
   ctx: FramingContext,
   image: CanvasImageSource,

@@ -508,3 +508,57 @@ Driven headless: the legend is gone from the roll editor's footer, `I` toggles
 the corner stack (`+0.7 EV`, then the picture's material) and survives a reload
 as `0`/`1`, `H` opens AND closes the sheet, `?` opens it, Escape and the bar's
 verb close it.
+
+## 2026-09-19 — The compare is a switch, and a picked point is visible
+
+**The maintainer, on the subject mask: *"we need a way to toggle on and off the
+a/b compare feature vertical, because when I pick a segmentation layer i can not
+see and it also move the compare line… when we pick grey we have the right
+behavior, we disable the compare feature temporarily until the pick is done"*.**
+
+Three faults under one report, and the third is the one that mattered.
+
+**(1) The split hid the very thing being edited.** A picture left wiped at 0.5
+draws the layer's effect on ONE side; a subject tapped on the other side
+visibly did nothing. **(2) A tap that missed the frame fell through to the wipe
+and threw the divider.** Both are cured by SUSPENDING the compare whenever a
+mask tool holds the pointer — the rule the grey dropper already followed by
+taking the pointer whole. `useDevelopPicture` now derives `suspended` from
+`paint || picking`: `comparing` goes false, the shown wipe goes to 1 (the whole
+picture delivered), the divider is not drawn and a drag places nothing. The
+stored wipe is REMEMBERED, so the line is back where it was the moment the tool
+is put down. Beside it, a plain switch the host owns — `compare`, a browser
+preference, on by default — because a divider is a second thing on a photograph
+and the hours spent on a mask are exactly the hours it is in the way.
+
+**(3) The markers did not exist.** `MaskPanel` documents *"tapping a marker you
+already placed removes it"*, and the code did hit-test one — but nothing was
+ever DRAWN, so there was nothing to aim at. That is the literal reading of "i
+can not see", and it needed the forward map: `framePoint` (`media/framing.ts`,
+the exact inverse of `unframePoint`, which the spec had been carrying as a
+private copy) plus `DevelopPicture.stagePoint`. **`stagePoint` is computed from
+the view's own arithmetic (`view.rect`), never from a measured
+`getBoundingClientRect()`** — during a render the canvas still carries the
+PREVIOUS transform, so a measured marker lags the picture by a frame on every
+pan, the same class of bug as the async-paint size read.
+
+**The + and − the maintainer asked for, as native as they go.** The viewport
+wears `cursor: copy` — the browser's own `+` badge — while a tap-gesture tool is
+armed, each marker draws a `+` disc, and the one under the pointer loses its
+vertical stroke to become `−`: the icon says what the CLICK will do, not what
+the marker is. A marker answers its own press and STOPS it: letting it bubble
+would run the stage's hit-test against state the click had already changed,
+which removes twice and lands as an add. Markers are drawn whenever the subject
+layer is open (a picked point is a fact about the layer) and removable only
+while Pick is on.
+
+**A layer's visibility is a VERB** (his fifth ask): an eye / crossed-eye
+`IconButton` in the layer's own row of verbs, with the name struck through when
+it is off. The bare checkbox it replaces read as "include this one" rather than
+"show it", and an unticked box only ever says which state it is NOT.
+
+Driven headless: the pill splits and unsplits, a drag while off moves nothing,
+the divider returns to 0.45 where it was; Pick arms the `copy` cursor and holds
+the compare, a tap draws its marker at the tapped pixel, a second adds, clicking
+a marker takes it off, putting the tool down brings the divider back; the eye
+hides and shows.

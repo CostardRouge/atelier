@@ -10,6 +10,7 @@ import {
   reclampFraming,
   sameFraming,
   scaleFramingBy,
+  framePoint,
   unframePoint,
   wrapDegrees,
   type Framing,
@@ -369,27 +370,11 @@ describe('scaleFramingBy', () => {
   });
 });
 
-describe('unframePoint', () => {
-  /** The forward map `drawFramed` composes, so the round trip is a real one. */
-  function framePoint(
-    srcX: number,
-    srcY: number,
-    srcW: number,
-    srcH: number,
-    dstW: number,
-    dstH: number,
-    framing: Framing,
-  ): [number, number] {
-    const t = framingTransform(srcW, srcH, dstW, dstH, framing);
-    let x = (srcX - srcW / 2) * t.scale * t.mirrorX;
-    let y = (srcY - srcH / 2) * t.scale * t.mirrorY;
-    x += t.panX;
-    y += t.panY;
-    const cos = Math.cos(t.angle);
-    const sin = Math.sin(t.angle);
-    return [x * cos - y * sin + dstW / 2, x * sin + y * cos + dstH / 2];
-  }
-
+describe('framePoint / unframePoint', () => {
+  // The forward map used to be written out HERE, as the test's own copy of
+  // what `drawFramed` composes. Drawing a subject's markers needs it in the
+  // app, so it shipped (`framePoint`) and this spec now round-trips the
+  // shipped pair rather than a private twin of one of them.
   const cases: { name: string; framing: Framing }[] = [
     { name: 'untouched', framing: { ...DEFAULT_FRAMING } },
     { name: 'zoomed and panned', framing: { ...DEFAULT_FRAMING, scale: 1.8, x: 0.1, y: -0.2 } },
@@ -399,7 +384,19 @@ describe('unframePoint', () => {
     { name: 'everything at once', framing: { ...DEFAULT_FRAMING, scale: 2.2, rotation: -37, flipX: true, x: 0.3 } },
   ];
 
-  it('round-trips the transform drawFramed composes', () => {
+  it('frames the middle of the picture onto the middle of the frame', () => {
+    // The anti-tautology row: a round trip alone would pass for two functions
+    // that agreed on the WRONG transform, so one value is asserted outright.
+    expect(framePoint(400, 300, 800, 600, 400, 500, DEFAULT_FRAMING)).toEqual([200, 250]);
+    // A flip mirrors the frame, so a point a third from the left lands a third
+    // from the right — the same fact the flipped `drawFramed` draws.
+    const [fx] = framePoint(0, 300, 800, 600, 400, 500, { ...DEFAULT_FRAMING, flipX: true });
+    const [ux] = framePoint(0, 300, 800, 600, 400, 500, DEFAULT_FRAMING);
+    expect(fx).toBeCloseTo(400 - ux, 6);
+    expect(fx).not.toBeCloseTo(ux, 3);
+  });
+
+  it('round-trips: a source point framed and unframed is itself', () => {
     for (const { framing } of cases) {
       for (const [sw, sh, dw, dh] of [[800, 600, 400, 500], [1000, 1000, 300, 900], [640, 480, 640, 480]]) {
         for (const [sx, sy] of [[0, 0], [sw / 2, sh / 2], [sw, sh], [sw * 0.3, sh * 0.8]]) {

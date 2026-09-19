@@ -162,6 +162,15 @@ export const Icons = {
       <path d="M8 7.5 20 18M8 16.5 20 6" />
     </>,
   ),
+  /** Shown / hidden — a layer's own visibility, the editor's oldest verb. */
+  eye: icon(<path d="M2 12s3.8-6 10-6 10 6 10 6-3.8 6-10 6-10-6-10-6z M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" />),
+  eyeOff: icon(
+    <>
+      <path d="M10.6 6.2A9.8 9.8 0 0 1 12 6c6.2 0 10 6 10 6a18 18 0 0 1-3.2 3.7M6.5 8.3A18 18 0 0 0 2 12s3.8 6 10 6a9.6 9.6 0 0 0 4-.85" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+      <path d="M3 3l18 18" />
+    </>,
+  ),
   sun: icon(
     <>
       <circle cx="12" cy="12" r="4" />
