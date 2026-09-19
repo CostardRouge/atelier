@@ -978,12 +978,20 @@ picture as it was last seen in the editor — developed and cropped — and a do
 marks what is developed. On a phone the picture and the strip share the
 screen and the three tabs open from the bottom bar.
 
-**Cropping.** The **Crop** tab (**R**; **D** goes back to Develop) frames the
-developed picture into a shape — its own, or one of the suite's aspects —
-with the gestures Trips uses: drag to move it, the wheel or a trackpad pinch
-to zoom, a rotation slider and quarter turns to straighten, two flips. *Fill*
-covers the frame and can never open a gap; *Whole* shows all of the picture
-with black bars where it falls short. The crop belongs to the picture, is
+**Cropping.** The **Crop** tab (**R**; **D** goes back to Develop) shows the
+whole developed picture, still, with the part you keep drawn over it and the
+rest darkened. Drag inside the zone to move it, on the picture to draw a new
+one, or one of its eight handles to move that edge or corner — the opposite
+one stays where it was. A **format** holds its shape (*Free*, the picture's
+*Original*, or one of the suite's aspects; **X** swaps portrait and
+landscape, Shift holds the shape in Free); a double-click takes the largest
+zone of it, and the arrow keys nudge the zone once the stage has been touched.
+**Straighten** turns the picture *under* the zone, which shrinks just enough
+to keep clear of the corners and grows back to what you drew when you
+straighten back; **Level** corrects the angle from a line you draw along the
+horizon. The quarter turns take the zone with the picture, and the two flips
+mirror what the frame shows. A pinch, the wheel or the ± pill looks closer at
+the picture without touching the crop. The crop belongs to the picture, is
 saved as you go, and is never inherited by the next one.
 
 **Exporting.** The **Export** tab writes JPEGs — this picture, the marked

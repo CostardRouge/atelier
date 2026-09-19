@@ -324,7 +324,9 @@ a pixel-for-pixel match against today's path.
 
 **P5 — geometry: the crop moves in, keystone arrives.** `geometry.ts` pure (a
 3×3 homography from four corner offsets or from V/H sliders, round-trip tested);
-the crop leaves `drawFramed` for the warp; `FramingStage` gains the handles.
+the crop leaves `drawFramed` for the warp; `CropStage` (the zone editor that
+replaced `FramingStage` on 2026-09-19, its arithmetic in `crop-rect.ts`) gains
+the keystone handles.
 
 **P6 — lens correction.** A small Lensfun-subset parser (pure, tested), his
 bodies and lenses committed under `public/lenses/`, matched on EXIF

@@ -27,11 +27,12 @@ import { describeKeyTarget, targetOwnsTyping } from '../../shared/media/transpor
 import PanelHost from '../../shared/ui/PanelHost';
 import Segmented from '../../shared/ui/Segmented';
 import StageZoomControl from '../../shared/ui/StageZoomControl';
+import { STAGE_ZOOM_STEP, zoomLabel, type ZoomControls } from '../../shared/ui/stage-zoom';
 import type { RollExport } from '../../shared/develop/roll-types';
 import CropPanel, { type CropApplyVerb } from './CropPanel';
 import ExportPanel, { type ExportVerb } from './ExportPanel';
 import CropStage from './CropStage';
-import { useCropZone } from './use-crop-zone';
+import { CROP_VIEW_FIT, CROP_VIEW_MAX, useCropZone } from './use-crop-zone';
 import type { RollExports } from './use-roll-export';
 
 /** How long the picture rests before its filmstrip cell is redrawn. */
@@ -207,6 +208,10 @@ export default function PictureWorkbench({
           return;
         case 'zoom':
           e.preventDefault();
+          if (open === 'crop') {
+            c.setView((v) => (v.zoom > 1 ? CROP_VIEW_FIT : { zoom: STAGE_ZOOM_STEP * STAGE_ZOOM_STEP, x: v.x, y: v.y }));
+            return;
+          }
           if (pic.view.zoomed) pic.view.zoom.reset();
           else pic.view.zoom.zoomIn();
           return;
@@ -251,6 +256,27 @@ export default function PictureWorkbench({
   }, []);
 
   const cropping = tab === 'crop';
+  // The crop stage's pill: the VIEW's zoom (inspection), never the crop's —
+  // the zone's size is the crop. Drawn at every width, the pinch's twin
+  // (`frontend.md`: a pinch the browser can take away needs a way in that
+  // always answers). Steps zoom about the middle of the view.
+  const { view: cropView, setView: setCropView } = crop;
+  const cropZoom = useMemo<ZoomControls>(() => {
+    const by = (f: number) =>
+      setCropView((v) => {
+        const zoom = Math.max(1, Math.min(CROP_VIEW_MAX, v.zoom * f));
+        return zoom === 1 ? CROP_VIEW_FIT : { zoom, x: (v.x * zoom) / v.zoom, y: (v.y * zoom) / v.zoom };
+      });
+    return {
+      scale: cropView.zoom,
+      label: zoomLabel(cropView.zoom),
+      canZoomIn: cropView.zoom < CROP_VIEW_MAX - 1e-6,
+      canZoomOut: cropView.zoom > 1,
+      zoomIn: () => by(STAGE_ZOOM_STEP),
+      zoomOut: () => by(1 / STAGE_ZOOM_STEP),
+      reset: () => setCropView(CROP_VIEW_FIT),
+    };
+  }, [cropView, setCropView]);
   const tabLabel = WORKBENCH_TABS.find((t) => t.id === tab)?.label ?? 'Develop';
 
   return (
@@ -272,9 +298,12 @@ export default function PictureWorkbench({
               can still take the fingers) needs the way in that always answers
               (`frontend.md`, «what it costs»). On the crop it drives the
               FRAMING's own zoom, which is what the picture is cropped by. */}
-          {source && !cropping && (
-            <StageZoomControl zoom={picture.view.zoom} hint="wheel, pinch, or Z" className="flex-none" />
-          )}
+          {source &&
+            (cropping ? (
+              <StageZoomControl zoom={cropZoom} hint="look closer: pinch or the wheel — the crop stays" className="flex-none" />
+            ) : (
+              <StageZoomControl zoom={picture.view.zoom} hint="wheel, pinch, or Z" className="flex-none" />
+            ))}
         </div>
         <DevelopViewport
           picture={picture}

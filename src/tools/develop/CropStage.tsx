@@ -14,7 +14,8 @@ import {
   type PictureDims,
 } from '../../shared/develop/crop-rect';
 import type { DevelopPicture } from '../../shared/develop/use-develop-picture';
-import type { CropZoneApi } from './use-crop-zone';
+import { blockNativeZoom } from '../../shared/ui/native-gestures';
+import { CROP_VIEW_MAX, type CropView, type CropZoneApi } from './use-crop-zone';
 
 /** The dark laid over what the crop cuts away — the prototype's, measured against paper and black. */
 const VEIL = 'rgba(10, 9, 8, 0.66)';
@@ -35,19 +36,48 @@ const HANDLE_CURSOR: Record<CropHandle, string> = {
 };
 
 type Gesture =
-  | { kind: 'resize'; id: number; handle: CropHandle; start: CropZone }
+  | { kind: 'resize'; id: number; handle: CropHandle; start: CropZone; grabX: number; grabY: number }
   | { kind: 'move'; id: number; lastX: number; lastY: number }
   | { kind: 'level'; id: number; x1: number; y1: number }
   | { kind: 'draw'; id: number; anchor: { x: number; y: number }; startX: number; startY: number; drawing: boolean; drew: boolean };
 
-/** The stage's fit: the quarter-turned picture in the box, fitted ONCE — a fine angle never refits it. */
-function viewFor(box: { w: number; h: number }, src: PictureDims, rotation: number) {
+/**
+ * The stage's fit: the quarter-turned picture in the box, fitted ONCE — a fine
+ * angle never refits it — then the inspection zoom and pan, which only a pinch,
+ * the wheel or the pill move.
+ */
+function viewFor(box: { w: number; h: number }, src: PictureDims, rotation: number, view: CropView) {
   const { quarter } = splitRotation(rotation);
   const odd = Math.abs(quarter) % 180 === 90;
   const qw = odd ? src.height : src.width;
   const qh = odd ? src.width : src.height;
-  const k = Math.max(0.0001, Math.min((box.w - 2 * PAD) / qw, (box.h - 2 * PAD) / qh));
-  return { k, ox: box.w / 2, oy: box.h / 2 };
+  const fit = Math.max(0.0001, Math.min((box.w - 2 * PAD) / qw, (box.h - 2 * PAD) / qh));
+  const k = fit * view.zoom;
+  const { x, y } = clampPan(view, qw * k, qh * k, box);
+  return { k, ox: box.w / 2 + x, oy: box.h / 2 + y };
+}
+
+/** A pan held where the picture still meets the middle of the stage. */
+function clampPan(view: CropView, pw: number, ph: number, box: { w: number; h: number }) {
+  const mx = Math.max(0, (pw - box.w) / 2 + PAD);
+  const my = Math.max(0, (ph - box.h) / 2 + PAD);
+  return { x: Math.max(-mx, Math.min(mx, view.x)), y: Math.max(-my, Math.min(my, view.y)) };
+}
+
+/** The view zoomed by `factor` about a stage point, that point kept still. */
+function zoomViewAbout(
+  view: CropView,
+  factor: number,
+  px: number,
+  py: number,
+  box: { w: number; h: number },
+): CropView {
+  const zoom = Math.max(1, Math.min(CROP_VIEW_MAX, view.zoom * factor));
+  const f = zoom / view.zoom;
+  // The point's offset from the view's origin grows by f; move the origin so it stays under the pointer.
+  const ox = box.w / 2 + view.x;
+  const oy = box.h / 2 + view.y;
+  return zoom === 1 ? { zoom: 1, x: 0, y: 0 } : { zoom, x: px - (px - ox) * f - box.w / 2, y: py - (py - oy) * f - box.h / 2 };
 }
 
 /** Which handle a point (CSS px) is on, corners before edges; `tol` is the hit radius. */
@@ -141,7 +171,7 @@ export default function CropStage({
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, box.w, box.h);
-    const { k, ox, oy } = viewFor(box, src, framing.rotation);
+    const { k, ox, oy } = viewFor(box, src, framing.rotation, crop.view);
     const image = delivered();
     const angle = (framing.rotation * Math.PI) / 180;
     if (image) {
@@ -231,7 +261,7 @@ export default function CropStage({
       ctx.stroke();
       ctx.lineWidth = 1;
     }
-  }, [box, src, zone, framing, source, cube, delivered, active, rotating, line]);
+  }, [box, src, zone, framing, source, cube, delivered, active, rotating, line, crop.view]);
 
   // --- gestures -----------------------------------------------------------------
   const live = useRef({ crop, box });
@@ -241,6 +271,17 @@ export default function CropStage({
     const stage = stageRef.current;
     if (!stage) return;
     let gesture: Gesture | null = null;
+    // Fingers down, for the pinch: two of them zoom the VIEW, never the zone.
+    const touches = new Map<number, { x: number; y: number }>();
+    let pinch: { spread: number; view: CropView; cx: number; cy: number } | null = null;
+    const spread = () => {
+      const [a, b] = [...touches.values()];
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    };
+    const centre = () => {
+      const pts = [...touches.values()];
+      return { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+    };
     // The zone as THIS gesture last wrote it: a render may lag a pointer frame,
     // and two moves in one frame must compose, not both start from the render.
     let current: CropZone | null = null;
@@ -248,7 +289,7 @@ export default function CropStage({
     const geometry = () => {
       const { crop: c, box: b } = live.current;
       if (!c.src || !c.zone || !b) return null;
-      const v = viewFor(b, c.src, c.framing.rotation);
+      const v = viewFor(b, c.src, c.framing.rotation, c.view);
       return { c, v, src: c.src, deg: c.framing.rotation };
     };
     const local = (e: PointerEvent | MouseEvent) => {
@@ -268,6 +309,21 @@ export default function CropStage({
       if (e.pointerType !== 'touch' && e.button !== 0) return;
       stage.focus({ preventScroll: true });
       const p = local(e);
+      if (e.pointerType === 'touch') {
+        touches.set(e.pointerId, p);
+        if (touches.size === 2) {
+          // The second finger turns whatever the first began into a pinch —
+          // the zone keeps what that finger already did, and stops there.
+          gesture = null;
+          current = null;
+          setActive(false);
+          setLine(null);
+          const c = centre();
+          pinch = { spread: spread(), view: live.current.crop.view, cx: c.x, cy: c.y };
+          return;
+        }
+        if (touches.size > 2 || pinch) return;
+      }
       const zone = g.c.zone!;
       const tol = e.pointerType === 'touch' ? 22 : 10;
       const handle = handleAt(edges(zone, g.v), p.x, p.y, tol);
@@ -277,7 +333,11 @@ export default function CropStage({
       if (g.c.levelling) {
         gesture = { kind: 'level', id: e.pointerId, x1: zx, y1: zy };
       } else if (handle) {
-        gesture = { kind: 'resize', id: e.pointerId, handle, start: zone };
+        // Where the finger took the handle, from the edge itself: a finger
+        // lands up to 22px off it, and the edge must not jump under it.
+        const edgeX = handle.includes('e') ? zone.cx + zone.w / 2 : handle.includes('w') ? zone.cx - zone.w / 2 : zx;
+        const edgeY = handle.includes('s') ? zone.cy + zone.h / 2 : handle.includes('n') ? zone.cy - zone.h / 2 : zy;
+        gesture = { kind: 'resize', id: e.pointerId, handle, start: zone, grabX: edgeX - zx, grabY: edgeY - zy };
       } else if (
         zx > zone.cx - zone.w / 2 &&
         zx < zone.cx + zone.w / 2 &&
@@ -303,6 +363,20 @@ export default function CropStage({
       const g = geometry();
       if (!g) return;
       const p = local(e);
+      if (e.pointerType === 'touch' && touches.has(e.pointerId)) {
+        touches.set(e.pointerId, p);
+        if (pinch && touches.size === 2) {
+          e.preventDefault();
+          const b = live.current.box;
+          if (!b) return;
+          const c = centre();
+          // Measured from where the pinch began, never per frame: a ratio
+          // compounded frame by frame drifts under the hand.
+          const zoomed = zoomViewAbout(pinch.view, pinch.spread > 0 ? spread() / pinch.spread : 1, pinch.cx, pinch.cy, b);
+          live.current.crop.setView({ ...zoomed, x: zoomed.x + c.x - pinch.cx, y: zoomed.y + c.y - pinch.cy });
+          return;
+        }
+      }
       if (!gesture) {
         // Hover: the cursor says what a press would do.
         if (e.pointerType === 'touch') return;
@@ -330,7 +404,7 @@ export default function CropStage({
       }
       if (gesture.kind === 'resize') {
         const lock = g.c.lock ?? freeLock(gesture.start);
-        next = resizeZone(gesture.start, current, gesture.handle, zx, zy, lock, g.deg, g.src);
+        next = resizeZone(gesture.start, current, gesture.handle, zx + gesture.grabX, zy + gesture.grabY, lock, g.deg, g.src);
       } else if (gesture.kind === 'move') {
         next = moveZone(current, zx - gesture.lastX, zy - gesture.lastY, g.deg, g.src);
         // The pointer's own position, not the zone's: a move held at an edge
@@ -361,6 +435,14 @@ export default function CropStage({
     };
 
     const onUp = (e: PointerEvent) => {
+      if (e.pointerType === 'touch') {
+        touches.delete(e.pointerId);
+        if (pinch) {
+          // The pinch ends with the fingers; the one left does not start a move.
+          if (touches.size === 0) pinch = null;
+          return;
+        }
+      }
       if (!gesture || e.pointerId !== gesture.id) return;
       if (gesture.kind === 'level' && e.type === 'pointerup') {
         const g = geometry();
@@ -406,6 +488,18 @@ export default function CropStage({
       g.c.setZone(moveZone(g.c.zone!, d[0], d[1], g.deg, g.src));
     };
 
+    // The wheel, and the ⌘-wheel a trackpad pinch sends: the view, about the pointer.
+    const onWheel = (e: WheelEvent) => {
+      const b = live.current.box;
+      if (!b || !geometry()) return;
+      e.preventDefault();
+      const p = local(e);
+      live.current.crop.setView((v) => zoomViewAbout(v, Math.exp(-e.deltaY / 400), p.x, p.y, b));
+    };
+
+    // WebKit's own pinch magnifies the whole app and cancels these pointers.
+    const unblock = blockNativeZoom(stage);
+    stage.addEventListener('wheel', onWheel, { passive: false });
     stage.addEventListener('pointerdown', onDown);
     stage.addEventListener('pointermove', onMove);
     stage.addEventListener('pointerup', onUp);
@@ -413,6 +507,8 @@ export default function CropStage({
     stage.addEventListener('dblclick', onDouble);
     stage.addEventListener('keydown', onKey);
     return () => {
+      unblock();
+      stage.removeEventListener('wheel', onWheel);
       stage.removeEventListener('pointerdown', onDown);
       stage.removeEventListener('pointermove', onMove);
       stage.removeEventListener('pointerup', onUp);
@@ -425,7 +521,7 @@ export default function CropStage({
   // The size tag, in the FILE's pixels, while a gesture is on.
   let tag: { x: number; y: number; text: string } | null = null;
   if (active && box && src && zone) {
-    const v = viewFor(box, src, framing.rotation);
+    const v = viewFor(box, src, framing.rotation, crop.view);
     const px = zoneInSourcePixels(zone, src, sourceSize);
     const top = v.oy + v.k * (zone.cy - zone.h / 2);
     tag = {

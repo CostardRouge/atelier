@@ -57,7 +57,23 @@ export interface CropZoneApi {
   setLevelling: (on: boolean) => void;
   /** The zone last DRAWN (not fitted after a rotation). */
   intent: MutableRefObject<CropZone | null>;
+  /**
+   * How closely the STAGE looks at the picture — inspection only, never the
+   * zone: a pinch or the wheel on the crop stage moves this, and the crop is
+   * exactly what it was. `x`/`y` pan the view in CSS px.
+   */
+  view: CropView;
+  setView: (view: CropView | ((v: CropView) => CropView)) => void;
 }
+
+export interface CropView {
+  zoom: number;
+  x: number;
+  y: number;
+}
+
+export const CROP_VIEW_FIT: CropView = { zoom: 1, x: 0, y: 0 };
+export const CROP_VIEW_MAX = 8;
 
 /** How long the dense grid stays after the angle last moved. */
 const ROTATING_MS = 700;
@@ -107,6 +123,7 @@ export function useCropZone({
   const written = useRef<{ aspect: string; framing: Framing } | null>(null);
   const [rotating, setRotating] = useState(false);
   const [levelling, setLevelling] = useState(false);
+  const [view, setView] = useState<CropView>(CROP_VIEW_FIT);
   const rotatingTimer = useRef(0);
   useEffect(() => () => window.clearTimeout(rotatingTimer.current), []);
 
@@ -299,5 +316,7 @@ export function useCropZone({
     levelling,
     setLevelling,
     intent,
+    view,
+    setView,
   };
 }
