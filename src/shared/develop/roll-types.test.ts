@@ -8,6 +8,7 @@ import {
   createRollDoc,
   migrateRollDoc,
   movePicture,
+  copyCropTo,
   patchPicture,
   readRollDoc,
   readRollExport,
@@ -99,11 +100,27 @@ describe('editing the strip', () => {
     expect(patchPicture(doc, 'nope', { aspect: '1:1' }, 9)).toBe(doc);
   });
 
+  it('copies a crop onto other pictures, each its own copy, an untouched framing as null', () => {
+    const doc = roll(['a', 'b', 'c']);
+    const framing = { ...DEFAULT_FRAMING, scale: 1.5, rotation: 90, flipX: true, x: 0.2 };
+    const next = copyCropTo(doc, ['p2', 'p3'], { aspect: '4:5', framing }, 9);
+    expect(next.pictures[0]).toBe(doc.pictures[0]);
+    expect(next.pictures[1]).toMatchObject({ aspect: '4:5', framing });
+    expect(next.pictures[1].framing).not.toBe(next.pictures[2].framing);
+    expect(next.pictures[1].framing).not.toBe(framing);
+    expect(next.updatedAt).toBe(9);
+    const plain = copyCropTo(next, ['p2'], { aspect: 'original', framing: { ...DEFAULT_FRAMING } }, 10);
+    expect(plain.pictures[1]).toMatchObject({ aspect: 'original', framing: null });
+    expect(copyCropTo(doc, ['nope'], { aspect: '1:1', framing: null }, 9)).toBe(doc);
+  });
+
   it('counts a picture as developed when it has a develop or a crop', () => {
-    let doc = roll(['a', 'b', 'c']);
+    let doc = roll(['a', 'b', 'c', 'd']);
     doc = patchPicture(doc, 'p1', { develop: { ...DEFAULT_DEVELOP, contrast: 10 } });
     doc = patchPicture(doc, 'p3', { framing: { ...DEFAULT_FRAMING, scale: 1.4 } });
-    expect(rollProgress(doc)).toEqual({ total: 3, developed: 2 });
+    // A shape alone is a crop: a free zone drawn with the corners pans nothing.
+    doc = patchPicture(doc, 'p4', { aspect: 'free:1.5' });
+    expect(rollProgress(doc)).toEqual({ total: 4, developed: 3 });
   });
 });
 
@@ -145,10 +162,12 @@ describe('reading a stored roll', () => {
   });
 
   it('keeps a look with layers or a transform, and reads its layers safely', () => {
+    // Strength is capped where every other reader caps it (3, over-applied), never at 1.
     expect(readRollGrade({ layers: [{ id: 'l', source: 'builtin:x', intensity: 7 }], output: 'bogus' })).toEqual({
-      layers: [{ id: 'l', source: 'builtin:x', name: 'l', customText: null, intensity: 1, enabled: true }],
+      layers: [{ id: 'l', source: 'builtin:x', name: 'l', customText: null, intensity: 3, enabled: true }],
       output: 'none',
     });
+    expect(readRollGrade({ layers: [{ id: 'l', source: 'builtin:x', intensity: 1.5 }], output: 'none' })?.layers[0].intensity).toBe(1.5);
     expect(readRollGrade({ layers: [{ nope: 1 }], output: 'rec709-to-srgb' })).toEqual({ layers: [], output: 'rec709-to-srgb' });
   });
 

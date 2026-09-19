@@ -49,7 +49,7 @@ import GuidesControl from '../../shared/overlay/GuidesControl';
 import { exportOverlayVideoViaSeek } from '../../shared/overlay/export-overlay-seek';
 import { exportVariantVideo, outroTail } from '../../shared/media/export-variant';
 import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
-import SendFinalsPanel from './SendFinalsPanel';
+import SendFinalsPanel from '../../shared/sources/winnow/SendFinalsPanel';
 import { readEffectiveExif } from '../../shared/exif/read-exif';
 import { downloadBlob } from '../../shared/media/save';
 import { frameGrabName, grabFrame } from '../../shared/media/frame-grab';
@@ -2207,7 +2207,7 @@ export default function StudioEditor({
                     onReset={() => setActiveDevelop(null)}
                   />
                   <InspectorSection id="studio.grade" title="Grade">
-                    <GradePanel stack={lutStack} />
+                    <GradePanel stack={lutStack} previewImage={photo} />
                   </InspectorSection>
                 </>
               )}

@@ -86,6 +86,14 @@ export interface PostExportInputs {
 export interface PostExports {
   /** A running export's progress line, or null when idle. */
   exporting: string | null;
+  /**
+   * How far the running export is through the WHOLE job, 0–1, or null while
+   * a step has no measure (opening, writing). The header's button draws this
+   * as its own fill and a number of fixed width, while the sentence above
+   * goes to its tooltip — a label that changes length every percent made the
+   * whole bar jump.
+   */
+  progress: number | null;
   /** The last export's outcome, in a sentence. */
   note: string | null;
   /**
@@ -156,7 +164,14 @@ function explainFailure(
  * time and the author reads them in the same place.
  */
 export function usePostExports(inputs: PostExportInputs): PostExports {
-  const [exporting, setExporting] = useState<string | null>(null);
+  const [exporting, setLine] = useState<string | null>(null);
+  const [progress, setProgress] = useState<number | null>(null);
+  // The line and its measure always change together, so a stale ratio can
+  // never sit beside a new sentence.
+  const setExporting = (line: string | null, ratio: number | null = null) => {
+    setLine(line);
+    setProgress(ratio);
+  };
   const [note, setNote] = useState<string | null>(null);
   const [undecodable, setUndecodable] = useState<File | null>(null);
 
@@ -190,10 +205,10 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     }
     setNote(null);
     setUndecodable(null);
-    setExporting('Encoding…');
+    setExporting('Encoding…', 0);
     let audioSkipped: string | null = null;
     const onProgress = (p: ExportProgress) =>
-      setExporting(p.ratio === null ? `${p.phase}…` : `Encoding ${Math.round(p.ratio * 100)}%…`);
+      setExporting(p.ratio === null ? `${p.phase}…` : `Encoding ${Math.round(p.ratio * 100)}%…`, p.ratio);
     try {
       // The stage measures the hook's clip while it shows it; a piece opened
       // on another slide has not shown it yet, so the size is read from the
@@ -390,7 +405,8 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
           exposure: inputs.exposure,
           lutFor: inputs.lutFor,
           include: (slide) => wanted.has(slide.position),
-          onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`),
+          // One job for the whole piece: the stills are its first items.
+          onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`, done / items.length),
         });
         rendered.push(...out);
       }
@@ -409,6 +425,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
                 p.ratio === null
                   ? `${p.phase}…`
                   : `Encoding ${i + 1}/${clips.length} · ${Math.round(p.ratio * 100)}%…`,
+                (items.length - clips.length + i + (p.ratio ?? 0)) / items.length,
               ),
             // Not a failure — the file is delivered — but a departure from what
             // was composed, reported with the delivery like one.
@@ -497,7 +514,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         pictures: inputs.hookPictures,
         exposure: inputs.exposure,
         lutFor: inputs.lutFor,
-        onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`),
+        onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`, done / total),
       });
       if (!rendered.length) {
         setNote('Nothing could be rendered — check the pictures are loaded.');
@@ -536,5 +553,5 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     }
   }
 
-  return { exporting, note, undecodable, exportPiece, exportDeck, exportHookClip };
+  return { exporting, progress, note, undecodable, exportPiece, exportDeck, exportHookClip };
 }

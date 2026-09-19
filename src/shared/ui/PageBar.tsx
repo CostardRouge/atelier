@@ -30,6 +30,7 @@
 
 import type { ReactNode } from 'react';
 import Button from './Button';
+import IconButton from './IconButton';
 import { useIsCompact } from './use-layout-mode';
 import { Icons } from './icons';
 
@@ -49,6 +50,13 @@ interface PageBarProps {
     label: string;
     onClick: () => void;
     title?: string;
+    /**
+     * The chevron alone, the place moving into the tooltip and the accessible
+     * name. For a bar that lives in a narrow column (the Trips piece editor's
+     * 352px inspector) and could not otherwise hold its row on one line; a
+     * screen with room keeps the word.
+     */
+    iconOnly?: boolean;
   };
   /** The screen's own pills, after the back one. */
   children?: ReactNode;
@@ -65,12 +73,20 @@ export default function PageBar({ back, children, trailing }: PageBarProps) {
   const compact = useIsCompact();
 
   return (
-    <div className={`flex items-center gap-2 flex-wrap min-w-0 ${compact ? 'mt-3' : ''}`}>
-      {back && (
-        <Button onClick={back.onClick} title={back.title} icon={Icons.back}>
-          {back.label}
-        </Button>
-      )}
+    // `group/bar` lets a cell react to another without a prop threaded between
+    // them: the piece editor's Export drops its word while a status pill in
+    // the same bar is speaking (`data-speaks`), so the bar says one word at most.
+    <div className={`group/bar flex items-center gap-2 flex-wrap min-w-0 ${compact ? 'mt-3' : ''}`}>
+      {back &&
+        (back.iconOnly ? (
+          <IconButton onClick={back.onClick} label={back.title ?? `Back to the ${back.label.toLowerCase()}`}>
+            {Icons.back}
+          </IconButton>
+        ) : (
+          <Button onClick={back.onClick} title={back.title} icon={Icons.back}>
+            {back.label}
+          </Button>
+        ))}
       {children}
       {trailing && (
         <span className="flex items-center gap-2 ml-auto min-w-0">{trailing}</span>

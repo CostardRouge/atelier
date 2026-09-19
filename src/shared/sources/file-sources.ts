@@ -305,3 +305,21 @@ export async function filesFromDataTransfer(
   const nested = await Promise.all(entries.map(readDropEntry));
   return nested.flat();
 }
+
+/**
+ * The FOLDERS in a drop, as handles a document can keep (Chromium's
+ * `getAsFileSystemHandle`). Must be CALLED inside the drop event, before any
+ * await: a `DataTransfer`'s items are emptied once the event returns, so the
+ * requests are started synchronously here and only awaited afterwards. Files
+ * and non-Chromium browsers yield nothing.
+ */
+export function dropDirectoryHandles(dataTransfer: DataTransfer): Promise<PersistedDirectoryHandle[]> {
+  type WithHandle = DataTransferItem & { getAsFileSystemHandle?: () => Promise<{ kind: string } | null> };
+  const pending = Array.from(dataTransfer.items ?? [])
+    .filter((item) => item.kind === 'file')
+    .map((item) => (item as WithHandle).getAsFileSystemHandle?.() ?? Promise.resolve(null));
+  return Promise.all(pending.map((p) => p.catch(() => null))).then((handles) =>
+    handles.filter((h): h is PersistedDirectoryHandle => h?.kind === 'directory'),
+  );
+}
+

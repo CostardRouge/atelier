@@ -24,6 +24,7 @@
  * Pure and DOM-free. The committed file is read by `house-style-bundle.ts`.
  */
 
+import { isUploadedLook } from '../lut/saved-grade';
 import { HOOK_SCENE_ID, isHookElement, isRoadtripOutro } from '../roadtrip/hook-scene';
 import {
   PROJECT_FILE_KIND,
@@ -89,13 +90,13 @@ export function projectHouseStyleFrom(project: ProjectHouseStyle): ProjectHouseS
         elements,
         scenes,
         outro,
-        lutStack: style.lutStack.filter((layer) => layer.customText === null),
+        // An uploaded cube's lattice cannot be committed; a film stock's
+        // settings can, and are exactly what a house style is for.
+        lutStack: style.lutStack.filter((layer) => !isUploadedLook(layer)),
         exportPrefs: { ...style.exportPrefs, fileName: null },
       },
     },
-    uploadedLooks: style.lutStack
-      .filter((layer) => layer.customText !== null)
-      .map((layer) => layer.name),
+    uploadedLooks: style.lutStack.filter(isUploadedLook).map((layer) => layer.name),
     leftTrips,
   };
 }

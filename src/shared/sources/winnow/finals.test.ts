@@ -76,4 +76,34 @@ describe('finalsPlan', () => {
   it('has nothing to send from an empty run', () => {
     expect(finalsPlan({ files: [], assetId: null, targetSourceId: HOST, maxUploadBytes: null }).problems[0]).toMatch(/export first/);
   });
+
+  it('links each file of a mixed run to its OWN capture, and names the run\'s one only when they agree', () => {
+    const mixed = [
+      { name: 'a-developed.jpg', size: 10, assetId: `${HOST}/1` },
+      { name: 'b-developed.jpg', size: 10, assetId: `${HOST}/2` },
+      { name: 'c-developed.jpg', size: 10, assetId: null },
+    ];
+    const plan = finalsPlan({ files: mixed, assetId: null, targetSourceId: HOST, maxUploadBytes: null });
+    expect(plan.items.map((i) => i.originalAssetId)).toEqual([1, 2, null]);
+    expect(plan.originalAssetId).toBeNull();
+    expect(plan.notes[0]).toMatch(/1 of these carry no Winnow id/);
+    expect(plan.problems).toEqual([]);
+    const same = finalsPlan({ files: mixed.slice(0, 1), assetId: null, targetSourceId: HOST, maxUploadBytes: null });
+    expect(same.originalAssetId).toBe(1);
+  });
+
+  it('refuses the one file of a run that came from another instance, by name', () => {
+    const plan = finalsPlan({
+      files: [
+        { name: 'a.jpg', size: 10, assetId: `${HOST}/1` },
+        { name: 'b.jpg', size: 10, assetId: 'other.example/9' },
+      ],
+      assetId: null,
+      targetSourceId: HOST,
+      maxUploadBytes: null,
+    });
+    expect(plan.problems).toHaveLength(1);
+    expect(plan.problems[0]).toContain('b.jpg');
+    expect(plan.problems[0]).toContain('other.example');
+  });
 });

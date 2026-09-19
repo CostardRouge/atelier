@@ -58,6 +58,14 @@ export interface MediaOrigin {
   /** The ORIGINAL's pixel size, when the source knows it. */
   width: number | null;
   height: number | null;
+  /**
+   * The ORIGINAL's own file name and weight (O1 of `docs/develop-originals.md`):
+   * its extension says whether a browser could decode it at all — a RAW is
+   * delivered from its render, never fetched blind — and the bytes say what
+   * a fetch would cost through a tunnel. Absent when the source does not say.
+   */
+  name?: string;
+  bytes?: number | null;
   fetchOriginal?: () => Promise<File>;
   /**
    * What the source knows about the CAPTURE's EXIF — exposure, position, the

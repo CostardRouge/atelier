@@ -30,6 +30,32 @@ export interface SlideRecovery {
   loginUrl?: string;
 }
 
+/** What another fetcher is doing with a picture — see `useSlideLibrary`. */
+export interface ElsewhereFetch {
+  stateOf: (ref: SavedMediaRef) => SlideRecovery['state'] | null;
+  current: SlideRecovery['state'] | null;
+}
+
+/** What a failed fetch from `sourceId` tells the author. */
+export function recoveryFromError(err: unknown, sourceId: string): SlideRecovery {
+  const unauthenticated = err instanceof WinnowError && err.kind === 'unauthenticated';
+  return {
+    state: 'failed',
+    sourceId,
+    problem: unauthenticated
+      ? `Not signed in to ${sourceId}.`
+      : err instanceof Error
+        ? err.message
+        : String(err),
+    ...(unauthenticated ? { loginUrl: `https://${sourceId}/login` } : {}),
+  };
+}
+
+/** What an instance that answered "no such asset" tells the author. */
+export function recoveryGone(ref: SavedMediaRef, sourceId: string): SlideRecovery {
+  return { state: 'failed', sourceId, problem: `${sourceId} no longer has “${ref.name}”.` };
+}
+
 /**
  * Keep the Library and the open slide pointed at the same picture, both
  * ways: opening a slide activates its picture, and from then on picking
@@ -55,6 +81,16 @@ export function useSlideLibrary(
   activeFile: File | null,
   setSlideMedia: (ref: SavedMediaRef | null) => void,
   addFiles?: (files: File[]) => void,
+  /**
+   * Another fetcher that may already have taken this slide's picture on (a
+   * collage fetching all its cells, `use-collage-refetch.ts`). While it is
+   * `fetching`, the restore waits for the pool to change instead of asking a
+   * second time; once it has `failed`, the restore stands down and leaves the
+   * reporting to it. `stateOf` is read synchronously, so a claim made in the
+   * same commit is seen; `current` is this slide's state as rendered, so a
+   * failure re-runs the restore.
+   */
+  fetchedElsewhere?: ElsewhereFetch,
 ): SlideRecovery | null {
   const isCta = slide.kind === 'cta';
   const restoredFor = useRef<string | null>(null);
@@ -64,6 +100,9 @@ export function useSlideLibrary(
   // fresh callback on some renders, and re-running the restore would re-fetch.
   const addFilesRef = useRef(addFiles);
   addFilesRef.current = addFiles;
+  const elsewhereRef = useRef(fetchedElsewhere?.stateOf);
+  elsewhereRef.current = fetchedElsewhere?.stateOf;
+  const elsewhereNow = fetchedElsewhere?.current ?? null;
 
   useEffect(() => {
     if (restoredFor.current === slideKey) return;
@@ -91,6 +130,15 @@ export function useSlideLibrary(
         restoredFor.current = slideKey;
         return;
       }
+      const elsewhere = elsewhereRef.current?.(want) ?? null;
+      if (elsewhere) {
+        // While fetching: not claimed — the pool changing when those bytes
+        // land re-runs this, and the picture is activated then. Once failed:
+        // claimed, so ticking another picture still re-points the slide.
+        if (elsewhere === 'failed') restoredFor.current = slideKey;
+        setRecovery(null);
+        return;
+      }
       const sourceId = resolvableSource(want);
       const add = addFilesRef.current;
       if (!sourceId || !add) {
@@ -112,31 +160,17 @@ export function useSlideLibrary(
           restoredFor.current = null;
           setRecovery(null);
         } else {
-          setRecovery({
-            state: 'failed',
-            sourceId,
-            problem: `${sourceId} no longer has “${want.name}”.`,
-          });
+          setRecovery(recoveryGone(want, sourceId));
         }
       } catch (err) {
         if (cancelled) return;
-        const unauthenticated = err instanceof WinnowError && err.kind === 'unauthenticated';
-        setRecovery({
-          state: 'failed',
-          sourceId,
-          problem: unauthenticated
-            ? `Not signed in to ${sourceId}.`
-            : err instanceof Error
-              ? err.message
-              : String(err),
-          ...(unauthenticated ? { loginUrl: `https://${sourceId}/login` } : {}),
-        });
+        setRecovery(recoveryFromError(err, sourceId));
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [slideKey, slide.media, isCta, assets, setActive]);
+  }, [slideKey, slide.media, isCta, assets, setActive, elsewhereNow]);
 
   useEffect(() => {
     if (restoredFor.current !== slideKey || !activeFile || isCta) return;

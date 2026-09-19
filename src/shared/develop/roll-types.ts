@@ -16,8 +16,10 @@
 
 import { developOrNull, type DevelopSettings } from './develop';
 import { isDefaultFraming, normaliseFraming, type Framing } from '../media/framing';
-import { ASPECT_PRESETS, type SavedMediaRef } from '../projects/project-types';
+import { type SavedMediaRef } from '../projects/project-types';
+import { isStoredAspect } from './crop-aspect';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
+import { MAX_LAYER_INTENSITY } from '../lut/lut-stack';
 import type { OutputTransform } from '../lut/transfer';
 import { DEFAULT_SOURCE_ID } from '../sources/source';
 
@@ -131,7 +133,6 @@ export function readMediaRef(raw: unknown): SavedMediaRef | null {
   };
 }
 
-const ASPECT_IDS: ReadonlySet<string> = new Set(ASPECT_PRESETS.map((a) => a.id));
 const OUTPUTS: ReadonlySet<string> = new Set(['none', 'rec709-to-srgb', 'rec709-24-to-22', 'srgb-to-rec709']);
 
 function readLayer(raw: unknown): SavedLutLayer | null {
@@ -141,7 +142,9 @@ function readLayer(raw: unknown): SavedLutLayer | null {
     source: raw.source,
     name: typeof raw.name === 'string' ? raw.name : raw.id,
     customText: typeof raw.customText === 'string' ? raw.customText : null,
-    intensity: Math.min(1, Math.max(0, finite(raw.intensity, 1))),
+    // The same 0..3 every other reader allows: capping at 1 silently dimmed
+    // an over-applied look the trip and the project kept.
+    intensity: Math.min(MAX_LAYER_INTENSITY, Math.max(0, finite(raw.intensity, 1))),
     enabled: raw.enabled !== false,
   };
 }
@@ -183,9 +186,7 @@ function readPicture(raw: unknown): RollPicture | null {
     ref,
     develop: developOrNull(raw.develop),
     framing: readFraming(raw.framing),
-    aspect: typeof raw.aspect === 'string' && (raw.aspect === 'original' || ASPECT_IDS.has(raw.aspect))
-      ? raw.aspect
-      : 'original',
+    aspect: typeof raw.aspect === 'string' && isStoredAspect(raw.aspect) ? raw.aspect : 'original',
   };
 }
 
@@ -287,10 +288,38 @@ export function patchPicture(
   return found ? { ...roll, pictures, updatedAt: now } : roll;
 }
 
-/** What the gallery card says: "18 of 42 developed" — a develop or a crop counts. */
+/**
+ * One picture's crop — aspect and framing — written onto others, each as its
+ * own copy. An untouched framing is stored as `null`, the reader's spelling;
+ * a pan is copied as is, since the draw clamps it to each picture's slack.
+ */
+export function copyCropTo(
+  roll: RollDoc,
+  ids: readonly string[],
+  crop: { aspect: string; framing: Framing | null },
+  now: number = Date.now(),
+): RollDoc {
+  const framing = crop.framing && !isDefaultFraming(crop.framing) ? crop.framing : null;
+  let found = false;
+  const pictures = roll.pictures.map((p) => {
+    if (!ids.includes(p.id)) return p;
+    found = true;
+    return { ...p, aspect: crop.aspect, framing: framing ? { ...framing } : null };
+  });
+  return found ? { ...roll, pictures, updatedAt: now } : roll;
+}
+
+/**
+ * What the gallery card says: "18 of 42 developed" — a develop or a crop
+ * counts, and an ASPECT other than the picture's own is a crop on its own:
+ * drawing a free zone with the frame's corners leaves the framing untouched
+ * (nothing was panned or zoomed), and a picture that was plainly cropped must
+ * not read as one nobody has looked at.
+ */
 export function rollProgress(roll: RollDoc): { total: number; developed: number } {
   return {
     total: roll.pictures.length,
-    developed: roll.pictures.filter((p) => p.develop !== null || p.framing !== null).length,
+    developed: roll.pictures.filter((p) => p.develop !== null || p.framing !== null || p.aspect !== 'original')
+      .length,
   };
 }

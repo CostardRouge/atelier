@@ -160,7 +160,7 @@ export function DevelopPresetsSection({
             placeholder="Name this light"
             aria-label="Preset name"
             autoFocus
-            className="flex-1 min-w-0 px-2.5 py-[0.3rem] rounded-full border border-line-strong bg-paper text-base leading-tight text-ink focus:outline-none focus:border-accent"
+            className="flex-1 min-w-0 px-2.5 py-[0.3rem] rounded-full border border-line-strong bg-paper text-xs max-[820px]:text-base leading-tight text-ink placeholder:text-faint focus:outline-none focus:border-accent"
           />
           <button type="submit" className={developButtonClass} disabled={!presetName.trim()}>
             Save

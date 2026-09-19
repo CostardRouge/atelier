@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
+import { drawFramed, type Framing } from '../media/framing';
 import { holdGrades, type HeldGrader } from '../lut/held-grader';
 import { stageFrameSize } from '../overlay/stage-size';
 import { THUMB_LONG_EDGE, THUMB_QUALITY, thumbSize } from '../roadtrip/thumbnail';
-import { boundSource, loadBadgeSource, type BadgeSource } from '../roadtrip/badge-render';
+import { boundSource, frameSize, loadBadgeSource, type BadgeSource } from '../roadtrip/badge-render';
 import { usePictureZoom, type PictureZoom } from '../ui/use-picture-zoom';
 import { HISTOGRAM_SAMPLE_EDGE, luminanceHistogram, type Histogram } from './histogram';
 
@@ -22,6 +23,13 @@ function wipeClaims(target: EventTarget | null, zoomed: boolean): boolean {
   const el = target as Element | null;
   if (el?.closest?.('button')) return false;
   return !zoomed || Boolean(el?.closest?.('[data-wipe-handle]'));
+}
+
+/** The crop a host wants the viewport to show: the aspect box and the framing inside it. */
+export interface DevelopFrame {
+  /** w / h of the box. */
+  aspectRatio: number;
+  framing: Framing;
 }
 
 export interface DevelopPicture {
@@ -53,6 +61,13 @@ export interface DevelopPicture {
    * decoded, or when the browser refuses the encode.
    */
   snapshot: (longEdge?: number) => Promise<Blob | null>;
+  /**
+   * The picture AS DELIVERED — graded whole through the one held grader — for
+   * a host that draws it its own way (the Develop tool's crop stage frames
+   * it into an aspect box). Null while nothing is decoded. Read at call time,
+   * like `snapshot`: a caller repaints on `source` and `cube`.
+   */
+  delivered: () => CanvasImageSource | null;
   /** The wipe gesture, for the viewport element. */
   handlers: {
     onPointerDown: (e: ReactPointerEvent<HTMLElement>) => void;
@@ -83,10 +98,17 @@ export function useDevelopPicture({
   file,
   videoTimeSeconds = 0,
   cube,
+  frame = null,
 }: {
   file: File | null;
   videoTimeSeconds?: number;
   cube: CubeLut | null;
+  /**
+   * Show the picture CROPPED — the Develop tool keeps its crop visible while
+   * the light is set. Only the viewport's paint and zoom read it: the
+   * histogram, `delivered()` and `snapshot()` stay the whole picture.
+   */
+  frame?: DevelopFrame | null;
 }): DevelopPicture {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [source, setSource] = useState<BadgeSource | null>(null);
@@ -141,10 +163,20 @@ export function useDevelopPicture({
     [],
   );
 
+  const frameRatio = frame && frame.aspectRatio > 0 ? frame.aspectRatio : null;
+  const framing = frame?.framing ?? null;
+  // What the canvas holds: the whole picture, or its crop at the same density
+  // (the crop's long edge is the stage budget's long edge).
+  const canvasSize = useMemo(() => {
+    if (!source || source.width <= 0 || source.height <= 0) return null;
+    const whole = stageFrameSize(source.width, source.height);
+    return frameRatio ? frameSize(frameRatio, Math.max(whole.w, whole.h)) : whole;
+  }, [source, frameRatio]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !source || source.width <= 0) return;
-    const { w, h } = stageFrameSize(source.width, source.height);
+    if (!canvas || !source || !canvasSize) return;
+    const { w, h } = canvasSize;
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
@@ -153,16 +185,30 @@ export function useDevelopPicture({
     if (!ctx) return;
     const grader = holding ? null : graderFor(cube, source);
     const graded = grader ? grader.render(source.image) : source.image;
-    ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
+    if (frameRatio && framing) {
+      ctx.clearRect(0, 0, w, h);
+      drawFramed(ctx, graded, source.width, source.height, w, h, framing);
+    } else {
+      ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
+    }
     // The wipe: the untouched picture to the RIGHT of the divider, the way the
     // shader's own split works — graded on the left. The divider itself is
     // drawn over the canvas, in the page, so it stays a hairline at any zoom.
     if (grader && wipe < 1) {
       const x = Math.round(wipe * w);
-      const sx = Math.round(wipe * source.width);
-      ctx.drawImage(source.image, sx, 0, source.width - sx, source.height, x, 0, w - x, h);
+      if (frameRatio && framing) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, 0, w - x, h);
+        ctx.clip();
+        drawFramed(ctx, source.image, source.width, source.height, w, h, framing);
+        ctx.restore();
+      } else {
+        const sx = Math.round(wipe * source.width);
+        ctx.drawImage(source.image, sx, 0, source.width - sx, source.height, x, 0, w - x, h);
+      }
     }
-  }, [source, cube, wipe, holding, graderFor]);
+  }, [source, canvasSize, frameRatio, framing, cube, wipe, holding, graderFor]);
 
   // The histogram, read off a small copy of the graded picture one frame
   // after it changes — so a slider step paints first and measures second, and
@@ -213,6 +259,12 @@ export function useDevelopPicture({
   // take the cube of THAT moment, not the one the closure was made with.
   const latest = useRef({ source, cube });
   latest.current = { source, cube };
+  const delivered = useCallback((): CanvasImageSource | null => {
+    const { source: s, cube: lut } = latest.current;
+    if (!s || s.width <= 0 || s.height <= 0) return null;
+    const grader = graderFor(lut, s);
+    return grader ? grader.render(s.image) : s.image;
+  }, [graderFor]);
   const snapshot = useCallback(
     async (longEdge = THUMB_LONG_EDGE): Promise<Blob | null> => {
       const { source: s, cube: lut } = latest.current;
@@ -239,7 +291,7 @@ export function useDevelopPicture({
   const dragging = useRef<{ startX: number; live: boolean } | null>(null);
   const fingers = useRef(0);
   const zoomedRef = useRef(false);
-  const natural = useMemo(() => (source ? { width: source.width, height: source.height } : null), [source]);
+  const natural = useMemo(() => (canvasSize ? { width: canvasSize.w, height: canvasSize.h } : null), [canvasSize]);
   const view = usePictureZoom({
     natural,
     resetKey: source,
@@ -311,6 +363,7 @@ export function useDevelopPicture({
     histogram,
     divider,
     snapshot,
+    delivered,
     handlers,
   };
 }

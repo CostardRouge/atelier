@@ -8,7 +8,7 @@ Read before touching UI, layout, the design tokens, or any MapLibre pane.
 
 **There is ONE button, one icon button and one segmented control (2026-09-13).** `shared/ui/Button` (`primary` · `default` · `ghost` · `danger`, sizes `sm` 28px · `md` 34px · `lg` 40px, `rounded-control` = 11px, Winnow's recipe with Atelier's vermilion on hover), `IconButton` (square, `label` REQUIRED — it becomes the accessible name and the tooltip) and `Segmented` (a recessed well with the chosen option raised on a paper tile, `aria-pressed` buttons, the one look for "chosen"). `buttonClass()` is exported for a `<label>` or `<a>` that must look like a button. `PageBar`'s back pill IS a `Button`, and `barPill` is now that `md` geometry with no skin, so a screen's own pill stays one band with it. `Segmented` takes `columns` (2026-09-13) for a choice wider than one row — Trips' eight formats sit on a 4-column well — so a chip grid is never hand-rolled beside it. **How to apply**: never write a new `pill`/`btn`/`chip` constant — reach for these; a control that needs a fifth variant is a design question, not a class string. Legacy constants still exist in the tools not yet migrated (`panels/ui.ts`, `StagesPanel`, `SourcesScreen`, `WinnowBrowser`, `DayPanel`…); retire them screen by screen as the audit's plan reaches each one.
 
-**Icons are SVGs from `shared/ui/icons.tsx`, never Unicode glyphs (2026-09-13).** One 24-grid, stroke 1.7, `currentColor`, `1em` — the same drawings Winnow ships, kept in the repo (no icon package: no dependency, no request). `Icons.play`/`pause` replaced the `❚❚`/`▶` string copied into seven players; `Icons.settings`, `back`, `export`, `check`, `down`/`chevronRight` replaced the bar and fold glyphs. **How to apply**: a control's glyph comes from `Icons`; a glyph that is CONTENT (the `→` between two places, the `◆` marker, a `▶` kind chip on a thumbnail) stays text. Add a missing icon to the module rather than typing a character — a glyph is drawn by whichever font the platform substitutes.
+**Icons are SVGs from `shared/ui/icons.tsx`, never Unicode glyphs (2026-09-13).** One 24-grid, stroke 1.7, `currentColor`, `1em` — the same drawings Winnow ships, kept in the repo (no icon package: no dependency, no request). `Icons.play`/`pause` replaced the `❚❚`/`▶` string copied into seven players; `Icons.settings`, `back`, `export`, `check`, `down`/`chevronRight` replaced the bar and fold glyphs. **How to apply**: a control's glyph comes from `Icons`; a glyph that is CONTENT (the `→` between two places, the `◆` marker, a `▶` kind chip on a thumbnail) stays text. Add a missing icon to the module rather than typing a character — a glyph is drawn by whichever font the platform substitutes. **An icon must read ALONE (2026-09-16).** `settings` was a circle with eight rays — fine beside the word, a SUN (brightness, in a grading suite) once the Trips piece bar dropped the word; it is a toothed cog now. Judge a new glyph with its label covered.
 
 **An EMPTY library starts as the rail (2026-09-13).** **The rail is 64px wide and reaches under the shell's 16px gutter (`-ml-4 w-16`), with no top padding and `md` (34px) icon buttons**: the maintainer saw its icons off-centre and lower than the back pill — they were centred in a 48px column that started AFTER the gutter (26px from the page edge, 10px from the rule) and sat under 12px of padding. Centre a rail between the page edge and its rule, and put its first control on the bar's line. With no asset and no instance connected, `App.tsx` forces the docked library to its 48px rail whatever the size's stored preference: the column was a drop zone, one sentence and "0 selected" for a fifth of the screen. The rail carries an add button (`IconButton` + `Icons.plus`, primary while empty) so the way in never waits for the panel; expanding the empty rail is one click (`peeked`) and writes the size's preference, and the first file to arrive lets that preference apply again — so on a desktop the panel opens by itself. The tablet rule (rail by default under 1180px) is untouched.
 
@@ -165,9 +165,11 @@ Read before touching UI, layout, the design tokens, or any MapLibre pane.
 
 **Trap.** The listener is mounted once (deps `[spaceToggles]`) and calls `togglePlay` through a ref refreshed on every render. Re-wiring it on `resetKey` like the media listeners looked equivalent and is not: Compare's `togglePlay` closes over `aIsVideo`/`bIsVideo` state, and a stale closure would toggle the wrong pair after a swap.
 
-## ⌘Z is the third window-bound key, and the one that may repeat (2026-09-15)
+## ⌘Z is the third window-bound key, and the one that may repeat (2026-09-15, rev. 2026-09-16)
 
-**Decision.** `shared/history/undo-keys.ts` is the third key-ownership module beside `transport-keys.ts` (space) and `dialog-keys.ts` (Enter, Escape), bound on `window` by `use-history.tsx`. It yields to ONE thing only, and narrowly — `targetOwnsTyping`, a field or a contenteditable, where ⌘Z is the browser's own undo of the letters being typed and taking it would throw a half-typed name away to step the whole document back instead. A focused BUTTON keeps nothing here (a button undoes nothing of its own), which is the same narrow/wide split the trim keys taught: `targetOwnsSpace` for a toggle, `targetOwnsTyping` for everything else.
+**Decision.** `shared/history/undo-keys.ts` is the third key-ownership module beside `transport-keys.ts` (space) and `dialog-keys.ts` (Enter, Escape), bound on `window` by `use-history.tsx`. It yields to ONE thing only, and narrowly — a place where TEXT is being typed, where ⌘Z is the browser's own undo of the letters and taking it would throw a half-typed name away to step the whole document back instead. A focused BUTTON keeps nothing here (a button undoes nothing of its own), which is the same narrow/wide split the trim keys taught: `targetOwnsSpace` for a toggle, `targetOwnsTyping` for everything else.
+
+**Trap (2026-09-16, the maintainer's "undo redo dont work in develop").** It is narrower than `targetOwnsTyping`, which answers for a TAG: an `<input>` is an input to the letter shortcuts, but a `type="range"` holds no text and has no undo of its own to protect — and every number in the suite is a `RangeField`, an `<input type="range">` that a drag leaves FOCUSED. Standing down for it swallowed every ⌘Z from the first edit onwards, worst in the Develop tool where a slider is most of the tool. So `KeyTarget` carries the input's own `inputType` (filled by `describeKeyTarget`, ignored by space and the letter keys) and `undo-keys.ts` asks its own question: contenteditable and `<textarea>` yes, `<select>` no, `<input>` only when its type is not one of the textless ones (range, checkbox, radio, colour, file, the button types). **An unknown type keeps the field's claim** — guessing wrong that way costs a step, the other way it eats a half-typed word.
 
 **How to apply.** Both accelerators are read on every platform rather than sniffing for a Mac — ⌘Z / ⇧⌘Z and Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z — since a browser on either can be driven by the other's keyboard; exactly one of ⌘/Ctrl must be held and Alt never. It `preventDefault`s when it acts, or the browser's own undo fires as well on whatever field it last touched. **A held key repeats here, deliberately**, against the rule the space key set: space is a toggle, where a repeat flips the transport forever, while holding undo to walk back a stack is what every editor does. The accelerator is shown in the button's `title` only, never drawn beside it.
 
@@ -199,9 +201,9 @@ The kind chip (`video+srt`, `video`, `photo`, …) is back to its original full-
 
 **A viewport query IS right for a modal** — the container-query rule (`studio.md`, `roadtrip.md`) exists because the Library sidebar eats 288px a tool cannot see; a `position: fixed` overlay spans the viewport, so `max-[820px]:` measures exactly what the sheet gets. Use `dvh`, never `vh`: on iOS Safari `vh` is the *large* viewport, so a `max-h-[90vh]` card can hang behind the toolbar with its Apply button under it.
 
-**`hidden` loses to a base class carrying `inline-flex`.** Tailwind orders `display` utilities in its own layer, not by the order written in `className`, so `` `${pill} hidden max-[820px]:inline-flex` `` rendered the control at every width (measured at 834px). A conditionally-hidden button spells its own classes out rather than borrowing a shared pill.
+**`hidden` loses to a base class carrying `inline-flex`.** Tailwind orders `display` utilities in its own layer, not by the order written in `className`, so `` `${pill} hidden max-[820px]:inline-flex` `` rendered the control at every width (measured at 834px). A conditionally-hidden button spells its own classes out rather than borrowing a shared pill. **Not just `display`**: `w-40 … max-[820px]:w-full` on the LUT gallery's search field measured 197px wide on a 390px viewport (`LutGalleryModal`, 2026-09-18) — same layer-ordering trap, on `width`. The fix that holds for any property: give the responsive-only element its OWN row/className rather than layering a base utility and a `max-[…]:` override of the same property on one element.
 
-**Touch sizing, applied at the same breakpoint.** Controls go up a size and any `<select>` or `<input>` reaches **16px** — below that, iOS zooms the page on focus and never zooms back. That is also why two native date fields no longer share a 390px row (`NewTripModal`), and why the filter selects wrap two-per-line on a phone (`basis-[10rem]`) instead of one being squeezed against the tabs. Calendar cells drop `aspect-square` when the calendar owns the full width (100px-tall squares on an iPad) for a `min-h-[3.5rem]` band.
+**Touch sizing, applied at the same breakpoint.** Controls go up a size and any `<select>` or `<input>` reaches **16px** — below that, iOS zooms the page on focus and never zooms back. The 16px is for the PHONE only: a field that wears it at every width looks oversized beside its own `text-xs` buttons (the maintainer's report on the preset-name field, 2026-09-16) — write `text-xs max-[820px]:text-base`. That is also why two native date fields no longer share a 390px row (`NewTripModal`), and why the filter selects wrap two-per-line on a phone (`basis-[10rem]`) instead of one being squeezed against the tabs. Calendar cells drop `aspect-square` when the calendar owns the full width (100px-tall squares on an iPad) for a `min-h-[3.5rem]` band.
 
 **Long action rows follow the two-group shape** documented above for the transport: `[choice + hint]` with `grow shrink basis-[20rem]`, then `[cancel + go]` with `ml-auto`, so the actions never get stranded alone on a line while the hint keeps the one above. Any modal deep enough to scroll pins that row (`sticky bottom-0 -mx-6 px-6 pb-6 bg-surface`, container `px-6 pt-6`) — `ProjectSettingsModal` already did; `NewProjectModal` and `NewTripModal` now do too.
 
@@ -259,6 +261,8 @@ The rule is **the larger of `window.innerHeight` and `visualViewport.height`, an
 
 **Measured after, at 390 · 744 · 834 · 1280 · 1440**: the back pill sits 12px under the masthead's border at every width — its own `mt-3` on a phone, `<main>`'s above one — 30px tall, on all three screens, with 0px document overflow. The five screens' root sections all carry `gap-4` now — Trips and the Studio gallery were on `gap-5`, so a screen's vertical rhythm is one number. **The one place the pill is not in the same COLUMN** is the piece editor above 860px, where the head sits over the inspector rather than over the stage: that is the two-column decision in `roadtrip.md` (a head spanning both columns cost the portrait preview 60px), and it stands.
 
+**The piece editor's bar holds ONE line, and a bar says ONE word at most (2026-09-16, the maintainer's pick from the *Barre de pièce Trips* artifact, https://claude.ai/artifact/XfP9xWRC5ttSTbvqR4xMXy).** Once undo/redo joined it, the bar in the 352px inspector column asked ~430px and broke in two. It is now `[‹] [⚙]` · `[↶|↷] [●] [Export]` (~300px): `PageBar`'s `back.iconOnly` (chevron alone, the place in the tooltip and accessible name — only this screen uses it; screens with room keep the word), the trip's settings as a cog `IconButton`, the joined history, and Export as the only word. **The one-word rule**: a status pill that is speaking (`data-speaks`, set by `SyncPill` when `pillNeedsAction`) takes the word and Export folds to its 34px glyph in place — done in CSS with `group/bar` on `PageBar` and `group-has-[[data-speaks]]/bar:`, no prop threaded. **While exporting the button IS the progress**: `usePostExports` exposes `progress` (0–1 over the WHOLE job, null for unmeasured steps) beside its sentence; the button draws a clipped ink layer over a `default` face and a tabular `42 %`, fixed min-width, the sentence in the tooltip — a label that changed length every percent made the bar jump, and `disabled` would fade the fill to 45% (a second press is ignored instead). Rejected: history on the deck band (the busiest row, and the overview has no band), undo in a ⋯ menu (a phone's only undo), the name in the bar (~50px left), Export label-less (a filled square is found slower than a word). **Not driven in a browser**: the running fill (starting an export opens a save picker); the speaking fold was checked by injecting a `data-speaks` pill at 352px.
+
 **A STATUS in that bar collapses to its dot (rev. 2026-09-10; the viewport check dropped 2026-09-13).** `SyncPill` already did — a coloured dot and one word, the word dropped at `compact` unless `pillNeedsAction` — and the Studio's own local save badge was still a full text pill beside it, so the two status objects on one row disagreed about their own shape. It follows the same rule now: the same 7px dot, the same 1.9rem lozenge, the word only when the state is waiting on the author (`storage-error`, never "Saved" — a reassurance is not a thing to read at 390px). Both keep an `sr-only` live region with the full sentence, so nothing is lost to a screen reader. **`useIsCompact()` gating the word was removed 2026-09-13**: a desktop toolbar packed as tight as the Trip piece editor's (`< Overview` · `TRIP` · the pill · `Export`) wrapped on "Saved" too, not only under 820px — so the word now shows only for `pillNeedsAction`, at every width. **How to apply**: a new status in a `PageBar` is a dot plus an optional word, and the word surviving at all is what a waiting-on-the-author state buys, never screen width.
 
 ## A header row of pill buttons: wrap it, and collapse the status into it (rev. 2026-09-10)
@@ -312,8 +316,102 @@ The rule is **the larger of `window.innerHeight` and `visualViewport.height`, an
 - **A flex child that scrolls also becomes crushable** (2026-09-10). An `overflow` other than `visible` sets the item's AUTOMATIC MINIMUM SIZE to zero, on the cross axis too — so the moment that counts strip could scroll sideways, the column above squeezed it from 47px to 18px with the numbers sheared off at the waist. `flex-none` (or an explicit basis) is part of making a flex item scroll, not tidiness. Same family as the `min-h-0` rules above, running the other way: there the automatic minimum stops a child shrinking; here `overflow` removes it and nothing does.
 - **The scroll box gets `overscroll-x-contain`**, or a track sitting on its first day hands the next swipe to the browser, which reads it as *Back*.
 - **A drag over things that are CLICKED is decided, never claimed at pointerdown** (2026-09-14, the Trips loupe's body over its day cells): a mouse drags past a slop, a finger only after a still hold (a travelling finger is a scroll), the ending click is swallowed in the capture phase, and once held a finger's travel is kept from the browser by `preventDefault` on a NON-PASSIVE `touchmove` — `touch-action` cannot help, it is fixed before the hold is known. `shared/ui/press-intent.ts` holds the thresholds.
+- **`touch-pan-y` alone loses the gesture one frame in — a surface that PANS sideways must TAKE it** (2026-09-16, reported from the maintainer's phone on the stage ruler: "the event only works on the first instant"). `pan-y` leaves the vertical axis to the page, so the small vertical component every real swipe has starts the page scrolling, and the browser then CANCELS the pointer: the pan moves once and dies. Measured here with `Input.dispatchTouchEvent`: from the second `touchmove` on, `cancelable` is already `false` — the browser had taken the gesture. The cure is the loupe's, one rule above, generalised: decide the direction on the first travel past the slop (dominant axis wins, `swipeIntent`), then hold the gesture with `preventDefault` on a non-passive `touchmove` for as long as it lasts. `touch-pan-y` stays on the surface — it is what keeps a vertical swipe the page's — but it is the FALLBACK, never the mechanism. `shared/ui/fling.ts` (pure, tested) + `shared/ui/use-fling-pan.ts` do this, with the throw a phone expects after the lift (velocity blended over the last samples, `0.93` per 16ms, nothing under 0.08 px/ms, none at all from a cancelled gesture, from a finger that had stopped ≥80ms before lifting, or under `prefers-reduced-motion`) and a `false` from the caller stopping the glide at a real edge. A gesture surface reaches for it rather than reading `pointermove` by hand.
+- **Bind native listeners from the REF callback, never from an effect beside it** (2026-09-16, and it cost an hour of "the element is right, the listeners are there, nothing answers"). A hook that attached in a `ref` callback and detached in a `useEffect` cleanup works in production and is DEAD in dev: StrictMode runs the simulated remount, the cleanup pulls every listener off the node, and React never calls the ref again because the node did not change. A ref callback is called with `null` on the real unmount, so attach and detach both belong there and the pairing cannot come apart.
 
 **What it costs, and it is the right trade.** `useStageZoom`'s two-finger pinch and native panning are mutually exclusive: once the browser owns a gesture it cancels the pointers, so on a zone that lets it pan the pinch is best-effort and `StageZoomControl`'s +/− is the way in that always answers — which is now the case on both zones that zoom. No CI gate can see any of this — `touch-action` is a string in a class list and the failure is a gesture that does nothing — so check it with real touch events, not with a mouse.
+
+## A phone gets a SHEET or a DRAWER, and a picture being judged gets the drawer (2026-09-16)
+
+**Reported**: in the Develop tool on a phone, opening Develop, Crop or Export
+hid the picture *and* tinted what was left of it, so *"on ne voit pas la
+couleur officielle"* — the file's real colour, which is the one thing that tool
+exists to set. **Decision, the maintainer's**: the picture on top, the panel
+under it, fifty-fifty, and no overlay at all.
+
+`shared/ui/DockedDrawer.tsx` is the suite's fourth way of showing a panel, and
+`PanelHost` now picks between it and `BottomSheet` with `compactAs`. The rule
+that decides which: **a sheet's wash is a fair price for a panel you pick
+FROM** (the library, where you want all the library you can get and the stage
+behind is only context) **and a lie for a panel whose EFFECT you are watching**
+— a scrim over a photograph is a wrong answer to the question the sliders are
+asking. Only the Develop workbench passes `drawer`; everything else keeps the
+sheet.
+
+**This does not un-retire Trips' `DockedPanel`** (2026-09-12, above): what
+killed that was half a phone being too little library to pick from AND too
+little stage to compare against, plus a bottom bar whose cells behaved
+differently from one another. Neither applies here — a slider needs no room to
+be read, and the bar keeps working under the drawer. It works FOR it, in fact:
+the drawer leaves the bar uncovered, so a cell can be marked while its panel is
+up, which a sheet could never honestly do.
+
+**The share is a fraction of the COLUMN, and the default is 0.4, not 0.5.** The
+column's other half is not all picture — the name row, the filmstrip and the
+roll's status line take ~136px of it whatever the screen — so solving
+picture = drawer lands on 0.394. Measured at 390×844: picture 250px, drawer
+257px. A taller phone then spends its extra height on the photograph rather
+than on more panel, which is the right way round. The other two rests (0.28,
+0.6) are dragged or tapped from the handle, over `sheet-snap.ts`'s own
+arithmetic read against the column instead of the screen; the column's height
+is definite and does not move when the drawer does, so it is measured at
+pointerdown and nothing needs observing.
+
+**`order-last`, not a position in the caller's markup**: a workbench renders
+its stage and its panel together and the filmstrip belongs to the screen
+between them.
+
+**Prose is what the picture's half was being spent on.** With the drawer up,
+the caption under the stage and the roll's working-previews line are hidden on
+a compact shell — both wrap to three lines at 390px, and nobody reads a
+sentence while dragging a slider. They are back the moment the drawer is down
+and the stage owns the screen.
+
+## The browser's OWN pinch is what "the pinch does nothing" means on a phone (2026-09-16)
+
+**Reported**: in the Develop tool on the maintainer's phone, *"les pinch, les
+zoom, le panning, tous ces événements ne fonctionnent pas forcément bien"*.
+Three faults of three different shapes, and only the first is invisible from a
+desktop.
+
+**The trap.** `touch-action: none` takes away every gesture the PAGE owns —
+scrolling, panning, double-tap zoom — and cannot reach the one the browser
+chrome owns: WebKit zooming the visual viewport. So on iOS a two-finger pinch
+over a picture magnifies the whole app, and the pointer events that were
+feeding the surface's own pinch are CANCELLED mid-gesture. There is nothing in
+the pointer code to find, because the pointers stop arriving. (`app-height.ts`
+already freezes its measurement under a pinch, which is how we know this
+happens here rather than in theory.) `shared/ui/native-gestures.ts`'s
+`blockNativeZoom(el)` refuses WebKit's `gesturestart`/`gesturechange`/
+`gestureend` — non-passive, or `preventDefault` is ignored — and that is the
+only handle on it. **How to apply**: any surface that answers a pinch itself
+calls it on its own element, and NEVER on the document: the reading pages must
+keep the browser's pinch, it is how someone enlarges text. It is a no-op
+outside WebKit, which is correct — `touch-action: none` suffices there. Bound
+on the develop viewport (`use-picture-zoom.ts`), the lightbox's deck
+(`use-media-viewer.ts`) and the crop stage.
+
+**A listener on the CANVAS is a listener a pinch can miss.** The crop stage's
+picture is letterboxed inside a wider box — 147px of canvas in a 374px stage at
+390px wide — and two fingers pinching something small land either side of it,
+outside the canvas, inside the stage. The gestures belong on the box the
+picture is centred IN, with `touch-none`, never on the picture.
+
+**A finger of a pinch is a finger even when it lands on a control, and a pinch
+that ends is not over.** Two bookkeeping rules that read as "the pinch is
+unreliable": a press over a button was returning before the touch was counted,
+so a pinch begun on the "hold for before" pill never became one and the count
+stayed one short for the rest of the gesture — count the finger, then let the
+control keep its press; and lifting one finger of a pinch left the other inert
+until it was lifted and put back, where it should take the pan over, which
+zoomed in is most of the gesture.
+
+**Where a pinch is best-effort, the pill is not optional.** `StageZoomControl`
+is drawn at every width in the Develop tool, phone included — the lightbox
+hides it under 820px on the argument that the pinch is the gesture there, and
+that argument only holds while the pinch cannot be taken away. On the crop tab
+it drives the FRAMING's scale (what is kept) rather than the view's (how
+closely it is being looked at), through the same `ZoomControls` interface.
 
 ## Looking at ONE picture is the other zoom, and it is a transform (2026-09-08, rev. 2026-09-09)
 

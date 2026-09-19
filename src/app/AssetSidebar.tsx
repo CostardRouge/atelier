@@ -20,7 +20,8 @@ import {
   type MediaMeta,
 } from '../shared/library/AssetLibraryContext';
 import { isRawImage, type Asset, type AssetKind } from '../shared/library/assets';
-import { startAssetDrag } from '../shared/library/asset-drag';
+import type { AssetDragItem } from '../shared/library/asset-drag';
+import { useAssetDragSource } from '../shared/library/use-asset-drag';
 import { assetRemoteId, splitAssetsBySource } from '../shared/library/asset-source';
 import {
   assetUsableBy,
@@ -271,6 +272,12 @@ export default function AssetSidebar({
    */
   const previewFirst = published?.intent !== 'pick';
 
+  // What each fetch brought, by the asset it became: a drop needs the FILE
+  // before the pool has regrouped around it.
+  const picked = useRef(new Map<string, File[]>());
+  const assetsRef = useRef(lib.assets);
+  assetsRef.current = lib.assets;
+
   /** A picture the instance holds, brought across — grid and lightbox alike. */
   const picker = usePickFromInstance(
     client,
@@ -393,6 +400,7 @@ export default function AssetSidebar({
 
   /** A picture fetched from the tiles: into the pool, then active. */
   function pickFromSource(files: File[], assetId: string) {
+    picked.current.set(assetId, files);
     lib.addFiles(files);
     lib.setActive(assetId);
   }
@@ -839,6 +847,29 @@ export default function AssetSidebar({
               activeId={lib.activeId}
               picker={picker}
               onPreview={previewFirst ? setPreview : null}
+              dragItemFor={(row) => {
+                const key = `${connection.id}/${row.id}`;
+                const host = shortHost(connection.id);
+                return {
+                  key: `remote:${key}`,
+                  label: row.filename.replace(/\.[^.]+$/, ''),
+                  // Already in the pool: it lands at once. Otherwise it is
+                  // fetched on drop, and the cell says so meanwhile.
+                  origin: inLibrary.has(key) ? 'library' : 'instance',
+                  sourceLabel: host,
+                  resolve: async () => {
+                    const assetId = await picker.pick(row);
+                    if (!assetId) return null;
+                    const media = picked.current
+                      .get(assetId)
+                      ?.find((f) => !/\.srt$/i.test(f.name));
+                    if (media) return { assetId, file: media };
+                    const asset = assetsRef.current.find((a) => a.id === assetId);
+                    const file = asset ? (asset.parts.image ?? asset.parts.video ?? null) : null;
+                    return file ? { assetId, file } : null;
+                  },
+                };
+              }}
             />
           </div>
         )}
@@ -1060,6 +1091,30 @@ function lightboxItem(
   };
 }
 
+/**
+ * What dragging a pool asset carries: the picture is already here, so the
+ * drop gets its file at once. The file a slide composes over is the image,
+ * else the clip — the same pick the editor's own Library sync makes.
+ */
+function libraryDragItem(asset: Asset): AssetDragItem | null {
+  const file = asset.parts.image ?? asset.parts.video ?? null;
+  if (!file) return null;
+  return {
+    key: `asset:${asset.id}`,
+    label: asset.baseName,
+    origin: 'library',
+    resolve: async () => ({ assetId: asset.id, file }),
+  };
+}
+
+/** The drag a pool asset's row or tile wears — see `useAssetDragSource`. */
+function useLibraryDrag(asset: Asset, usable: boolean) {
+  return useAssetDragSource(usable ? libraryDragItem(asset) : null);
+}
+
+/** How a source looks while its picture travels: left behind as a dashed, faded outline. */
+const LIFTED = 'opacity-40 outline-dashed outline-[1.5px] outline-offset-[-1.5px] outline-accent';
+
 interface AssetRowProps {
   asset: Asset;
   meta: MediaMeta | undefined;
@@ -1102,10 +1157,11 @@ function AssetRow({
   const fpsLabel = fpsText(meta);
   const cadenceLine = cadenceSentence(meta, fpsLabel);
 
-  // Dragging the cover carries the asset's id: a tool that takes drops (a
-  // collage's cells) then fills the one the pointer is over, which is a
-  // gesture short of selecting the cell and ticking the picture.
-  const onDragStart = (e: React.DragEvent) => startAssetDrag(e.dataTransfer, asset.id);
+  // The WHOLE row is the handle — the maintainer grabbed it by its name, not
+  // only by its cover. A tool that takes drops (a collage's cells) then fills
+  // the one the pointer is over: a gesture short of selecting the cell and
+  // ticking the picture. While it travels the row is shown lifted out.
+  const drag = useLibraryDrag(asset, usable);
 
   // The active row gets an accent ring; a merely-selected row a subtle one.
   const ring = active
@@ -1117,8 +1173,11 @@ function AssetRow({
   return (
     <div
       ref={ref}
-      className={`group flex items-center gap-2.5 px-2 py-1.5 mb-1 rounded-[11px] hover:bg-surface ${ring} ${
+      {...drag.props}
+      className={`group flex items-center gap-2.5 px-2 py-1.5 mb-1 rounded-[11px] hover:bg-surface transition-opacity ${ring} ${
         usable ? '' : 'opacity-45'
+      } ${
+        drag.lifted ? LIFTED : ''
       }`}
     >
       <input
@@ -1135,7 +1194,7 @@ function AssetRow({
           instead of resizing the box, and every title starts at the same x. */}
       <Cover
         onPreview={onPreview}
-        onDragStart={usable ? onDragStart : undefined}
+        draggable={usable}
         label={asset.baseName}
         fallback={isPhoto ? (meta?.imageType ?? '◇') : '▶'}
         thumbUrl={meta?.thumbUrl}
@@ -1231,14 +1290,14 @@ function AssetTile({
     if (inView) onEnsure();
   }, [inView, onEnsure]);
 
+  const drag = useLibraryDrag(asset, usable);
   return (
     <div
       ref={ref}
-      draggable={usable}
-      onDragStart={(e) => startAssetDrag(e.dataTransfer, asset.id)}
-      className={`relative rounded-[10px] overflow-hidden bg-paper-2 ${className} ${
+      {...drag.props}
+      className={`relative rounded-[10px] overflow-hidden bg-paper-2 transition-opacity ${className} ${
         usable ? '' : 'opacity-45'
-      }`}
+      } ${drag.lifted ? LIFTED : ''}`}
     >
       <button
         type="button"
@@ -1253,7 +1312,12 @@ function AssetTile({
         className="absolute inset-0 w-full h-full p-0 border-0 bg-transparent cursor-pointer disabled:cursor-default flex items-center justify-center"
       >
         {meta?.thumbUrl ? (
-          <img src={meta.thumbUrl} alt="" className="w-full h-full object-cover block" />
+          <img
+            src={meta.thumbUrl}
+            alt=""
+            draggable={false}
+            className="w-full h-full object-cover block"
+          />
         ) : (
           <span className="font-mono text-3xs text-muted uppercase" aria-hidden="true">
             {asset.parts.video ? '▶' : (meta?.imageType ?? '◇')}
@@ -1288,7 +1352,7 @@ function AssetTile({
 
 function Cover({
   onPreview,
-  onDragStart,
+  draggable = false,
   label,
   fallback,
   thumbUrl,
@@ -1296,8 +1360,8 @@ function Cover({
   fpsLabel,
 }: {
   onPreview: (() => void) | null;
-  /** Dragging the picture out of the library; absent, the cover is not draggable. */
-  onDragStart?: (e: React.DragEvent) => void;
+  /** The row around it can be dragged — the cover says so with its cursor. */
+  draggable?: boolean;
   label: string;
   fallback: string;
   thumbUrl: string | undefined;
@@ -1307,7 +1371,12 @@ function Cover({
   const frame = (
     <>
       {thumbUrl ? (
-        <img src={thumbUrl} alt="" className="w-full h-full object-contain block" />
+        <img
+          src={thumbUrl}
+          alt=""
+          draggable={false}
+          className="w-full h-full object-contain block"
+        />
       ) : (
         <span
           className="font-mono text-3xs text-muted uppercase tracking-wide"
@@ -1335,19 +1404,13 @@ function Cover({
     'relative flex-none w-20 h-14 rounded-sm overflow-hidden bg-frame flex items-center justify-center';
 
   if (!onPreview) {
-    return (
-      <div className={box} draggable={Boolean(onDragStart)} onDragStart={onDragStart}>
-        {frame}
-      </div>
-    );
+    return <div className={`${box} ${draggable ? 'cursor-grab active:cursor-grabbing' : ''}`}>{frame}</div>;
   }
   return (
     <button
       type="button"
       onClick={onPreview}
-      draggable={Boolean(onDragStart)}
-      onDragStart={onDragStart}
-      title={onDragStart ? `Look at ${label} — or drag it onto the picture` : `Look at ${label}`}
+      title={draggable ? `Look at ${label} — or drag the row onto the picture` : `Look at ${label}`}
       aria-label={`Look at ${label}`}
       className={`${box} cursor-zoom-in group/cover`}
     >

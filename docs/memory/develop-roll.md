@@ -112,7 +112,7 @@ pure rules are `roll-editor.ts` (tested). Rules a later phase must keep:
   develop, the look and a batch landing in one tick compose instead of the last
   replacing a roll the others already moved on. Every writer goes through it.
 - **The workbench is keyed per picture and returns TWO grid cells** (the stage,
-  and `PanelHost`: a column, or a sheet on a phone) while the filmstrip is its
+  and `PanelHost`: a column, or a drawer on a phone) while the filmstrip is its
   parent's cell, so stepping remounts the draft (never-inherit) and never the
   strip (its scroll survives). The grid is inside an `@container` wrapper: the
   inspector narrows to 18rem under 880px of TOOL width, the Library's width
@@ -130,9 +130,11 @@ pure rules are `roll-editor.ts` (tested). Rules a later phase must keep:
   until released, `Z` fit ↔ one step closer, ⌘/Ctrl-C/V copy and paste the
   develop (⌘C yields to a text selection). A focused field or slider keeps them,
   and an open `alertdialog` keeps every key.
-- **Phone**: stage and strip share the height; the inspector is a `BottomSheet`
-  opened from the shell's bar (`Develop` beside Library), removal is a
-  desktop-hover verb for now.
+- **Phone**: stage and strip share the height; the inspector is a
+  `DockedDrawer` under them (rev. 2026-09-16 — it was a `BottomSheet`, whose
+  wash tinted the photograph being judged: `frontend.md`), opened from the
+  shell's bar (`Develop` beside Library) and marked there while it is up.
+  Removal is a desktop-hover verb for now.
 
 Verified in the Browser pane: four dropped JPEGs → a roll → +1.2 EV stored
 through the debounce → → / ← stepping with `history.length` unchanged and no
@@ -142,7 +144,237 @@ through the confirm → reload: route, develops, thumbnails pruned to three → 
 look's output transform saved as `grade`, back to `null` on None → phone: stage,
 strip, the bar's Develop opening the sheet.
 
-## Undo and redo over the roll (2026-09-15)
+## The filmstrip's batch is a Shift/⌘-click selection, apart from the open picture (2026-09-16, D7)
+
+`roll-editor.ts` gained `pictureRange` and `selectionAfterClick` (pure, tested):
+a plain click still opens a picture and never touches the selection (the
+caller only calls `selectionAfterClick` for a modified click); **Shift
+REPLACES the selection with the range from the anchor** (repeated Shift-clicks
+do not accumulate, matching Finder rather than a text-editor's extend-and-add)
+and never moves the anchor; **⌘/Ctrl toggles one picture in place** and
+becomes the new anchor. The anchor itself is not stored across an unrelated
+open-picture change: `RollEditor` resets it to null whenever `openId` changes
+by any OTHER means (a plain click, ←/→, the route), so the next Shift-click
+always ranges from the picture actually open, never a stale one.
+
+**The selection is a batch TARGET list, not a second "open".** `RollEditor`
+computes `selectionTargets` (the selection minus the open picture, since
+writing a picture's own develop onto itself is a no-op that would only
+confuse the count) and feeds `DevelopApplyVerb`s that read it: `Apply to N
+selected` writes the open draft to each target, and — only while something is
+copied (`hasCopiedDevelop`) — `Paste to N selected` writes the clipboard's
+develop instead, ignoring the draft `DevelopApplySection` always passes it (a
+verb's `run(settings)` is free to ignore `settings`, which is what makes a
+paste-verb fit the existing one-shape contract with no host change). With no
+selection the roll falls back to the original "Apply to N other pictures"
+(all of them). Clearing selects none via a `Clear` link beside the count in
+the progress line; a removed picture is filtered out of the selection by
+recomputing a `visibleSelected` view rather than pruning the raw state.
+
+**Why no shared code**: only this tool's filmstrip supports multi-select (the
+Trips/Studio modals show one picture), so the selection lives entirely in
+`tools/develop/` — `DevelopApplyVerb`'s existing contract needed no change.
+
+Verified in the Browser pane (six dropped JPEGs, no real Winnow needed):
+Shift-click from the open picture across three more selected exactly that
+range with checkmark badges; a repeat Shift-click at a nearer picture shrank
+the range instead of adding to it; ⌘-click toggled one picture in and back
+out while leaving the rest of the selection alone; "Apply to 3 selected"
+wrote +1.5 EV to the three non-open targets only (the other two, unselected,
+stayed as shot); Copy on the open picture then a fresh ⌘-click pair then
+"Paste to 2 selected" wrote the same +1.5 EV to those two; Clear dropped the
+badges and the verb reverted to "Apply to 5 other pictures".
+
+## The crop is a second tab over the SAME delivered picture (2026-09-16, D8)
+
+`FramingStage` + `CropPanel` (`tools/develop/`), `WORKBENCH_TABS` +
+`pictureAspectRatio` + the `R`/`D` keys in `roll-editor.ts` (tested),
+`framedThumbnail` in `roll-thumb.ts`, and `useDevelopPicture().delivered()` —
+the one addition to a shared block. Rules a later phase must keep:
+
+- **The crop is SEEN on every tab** (2026-09-16, the maintainer's report:
+  leaving Crop showed the whole picture again and read as a lost crop).
+  `useDevelopPicture` takes an optional `frame` (aspect ratio + framing) that
+  only its VIEWPORT paint and zoom read — the wipe is a clipped second
+  `drawFramed` of the untouched source, so before/after lines up on the crop;
+  the histogram, `delivered()` and `snapshot()` stay the whole picture (the
+  crop stage frames `delivered()` itself). The Trips/Studio modals pass no
+  frame and are unchanged. The export always applied the stored crop.
+- **The crop has its own Apply to** (`copyCropTo`, pure, tested): the open
+  picture's aspect + framing copied onto the selection, else every other
+  picture — never the develop. A pan is copied as is: `framingTransform`
+  clamps it to each picture's slack at draw. Same D6 limit on the other cells.
+- **The crop stage draws `delivered()`, never `source.image`**: a crop is
+  judged on the developed picture. `delivered()` reads the ONE held grader at
+  call time, so a drag repaints from the held raster copy (`held-grader.ts`)
+  and never grades again; a caller repaints on `source` AND `cube`.
+- **`DevelopViewport` stays MOUNTED (`hidden`) while the crop is open.** Its
+  paint effect is keyed on the picture, the cube and the wipe — not on the
+  canvas element — so an unmounted viewport came back BLANK on the Develop
+  tab (the first D8 draft's fault). `usePictureZoom`'s ResizeObserver takes
+  the 0×0 of a hidden box and re-measures on return; nothing else is needed.
+- **The framing has its own write-through timer** (same 200 ms), separate from
+  the develop's: a drag fires per pointer move. An untouched framing is
+  written as `null` (`isDefaultFraming`), the aspect at once (discrete). The
+  open tab lives in `RollEditor`, never in the workbench: the workbench is
+  keyed per picture, and stepping must not drop you back to Develop.
+- **A cell is the picture as delivered — graded AND framed** (`framedThumbnail`,
+  keyed on the crop too, never upscaled past the source's long edge). The
+  other cells keep the D6 limit (as last seen).
+- The gestures are the badge stage's plus a PINCH (2026-09-16): wheel = trackpad
+  pinch, two fingers zoom the framing while moving it by their centre, and they
+  are heard on the STAGE rather than on the canvas — a phone letterboxes a
+  147px crop inside a 374px stage, so fingers landing either side of the
+  picture, which is how anything small is pinched, reached no listener at all.
+  `touch-none` moved to the stage with them and is right there (both axes, a
+  fixed-height box, not a scroll box — `frontend.md`'s rule is about
+  scrollers). One write per event, zoom before move: `panBy` clamps at the
+  scale it is given, and two writes in one event would each read the render's
+  copy and the second would throw the first away. No rotate handle, exactly as
+  Trips: the slider and the turn buttons are the rotation. Reset keeps the fit
+  (Trips' rule: asking for Whole is not a crop).
+- The docked inspector now wears the two editors' frame (`border border-line
+  rounded-paper bg-surface p-3`, the `Segmented` strip pinned, the sections
+  scrolling under it) — the `frontend.md` rule D6 had not yet applied.
+
+## A crop may be a FREE zone, on the same aspect field (2026-09-16)
+
+The maintainer asked to crop a free zone; the shapes were eight named formats
+and the picture's own. The whole vocabulary now lives in one pure module,
+`shared/develop/crop-aspect.ts`: `'original'`, a preset id, or **`'free:<w/h>'`
+carrying its own ratio** (four decimals, held between 5:1 and 1:5). Rules a
+later agent must keep:
+
+- **One field, not two.** The free shape rides `RollPicture.aspect`, so every
+  reader that already asks for a ratio (`roll-render`, the export, the
+  filmstrip cell, the crop stage) is unchanged, `copyCropTo` copies a free
+  shape with no new case, and no migration is owed. What it costs is that
+  module: `isStoredAspect` is what `readRollDoc` trusts, `aspectFileTag` is
+  what names the file (`-crop`, never the ratio — a second dot in a name),
+  `pictureAspectRatio` is the one reader, and `resizeAspectRatio` is the
+  stage's arithmetic, tested rather than buried in a pointer handler.
+- **Free is SEEDED from the shape on screen**, the grade rungs' idiom: picking
+  it moves nothing and only unlocks the frame. The reverse holds too — a
+  named format simply replaces it.
+- **The frame is reshaped from its CENTRE**, and a handle is read as a
+  distance from that centre rather than a delta from where the drag began: the
+  canvas is letterboxed in the middle of the stage whatever its ratio, so
+  there is nothing to anchor, nothing to accumulate and no drift, and the
+  gesture corrects itself once the fit has pinned an axis. A corner takes both
+  axes from the finger, an edge only its own.
+- **The handles need the stage's padding.** They straddle the frame's edge and
+  the stage must clip (`overflow-hidden`, the picture being larger than it), so
+  flush against it the two handles on the pinned axis are unhittable — which is
+  how the first draft silently did nothing on a wide picture. `p-3.5` is paid
+  at every aspect, so nothing moves when Free is picked.
+- **Their box is MEASURED, never described in CSS.** The canvas takes its shape
+  from its own intrinsic size against the stage's box (`max-w-full max-h-full
+  w-auto h-auto`); a wrapper asked to shrink-wrap that either stretches it (a
+  flex parent did, and a square crop came out 668×561) or loses the constraint
+  that letterboxes it. A `ResizeObserver` on the canvas feeds an overlay that
+  passes every pointer through but its handles.
+- **The shape has a control as well as a gesture** — a Shape slider on log₂ of
+  the ratio (a square in the middle, the same step either way) and a turn
+  button that inverts it — the zoom pill's rule in `frontend.md`: a gesture the
+  browser can take away needs a way in that always answers.
+- The aspect is written to the roll AT ONCE, not through the workbench's
+  200 ms timer (it is the document's, not a draft): a drag is many writes, and
+  the history engine's 700 ms label coalescing is what makes it ONE undo step
+  — measured, a half-second drag undoes in one.
+- `rollProgress` now counts an aspect other than `'original'` as a crop:
+  drawing a free zone with the corners leaves the framing untouched, and the
+  picture would otherwise read as one nobody had looked at.
+
+Verified in headless Chromium at 1400×900 and on an iPhone 13 viewport: Free
+left a 668×417.5 frame untouched and raised eight handles; a corner drag made
+it exactly square and stored `free:1`; an edge drag widened it to 1.28:1
+without touching the height; Turn gave `free:0.7806` and a 437.8×560.8 frame;
+the slider at log₂ = 1 said `2.00:1`; the Develop tab showed the 2:1 crop
+letterboxed and the filmstrip cell redrew to it; the Export tab read `File
+1600 px → 1600 · exact`; a reload kept the shape; on the phone a FINGER on the
+corner gave `free:1.0001`. Not driven: a written export file (the render path
+is the presets', only the ratio differs).
+
+Verified in the desktop app's Browser pane on four canvas-made JPEGs: −1.5 EV
+then `R` → the crop stage showed the DARKENED picture; 1:1 → a square crop
+centred; a drag panned it, the wheel zoomed to 2.12× and Reset appeared; +90°
+then Horizontal → −90° mirrored (`flipFraming`); `D` → the Develop viewport
+came back painted; the cell redrew square, turned, mirrored, dark; a reload
+read `{aspect: '1:1', framing: {rotation: -90, flipX: true, scale: 2.117, x:
+-0.3}}` from `atelier-develop` with the three untouched pictures `null`; on a
+375×812 phone the bar read LIBRARY · DEVELOP · CROP, Crop raised the sheet
+over the crop stage, Escape closed it.
+
+## The export decides its pixels before it reads one (2026-09-16, D9)
+
+`roll-export.ts` (pure, tested), `roll-render.ts`, `use-roll-export.ts`,
+`ExportPanel`, `shared/sources/original-cache.ts`, `shared/sources/deliver-files.ts`,
+`SendFinalsPanel` now in `shared/sources/winnow/`. Rules a later phase must keep:
+
+- **The long edge is a CAP, never a target**: `rollOutputSize` is the aspect
+  box the source covers at its own density, capped — a small file asked for
+  4096 delivers what it has. So the frame a proxy gives on its own is always
+  "exact", and the upscale question (`pixelHeadroom` < 1, F3 of
+  `develop-originals.md`) is asked against the frame the ORIGINAL could give:
+  that is what `Auto` fetches the original for, and the line then says
+  `· asked 1920` when the proxy delivered less. With Size = source, Auto
+  always turns to a decodable original — its pixels ARE the source size.
+- **A RAW original is never fetched** (`decodableOriginal`: jpg/png/webp/
+  avif/gif/bmp only — no HEIC, no TIFF): decision 4, the render the person
+  developed is what leaves, and the reason is said on the *Delivers* row.
+- **Each picture renders through its OWN cube** (`stack.composeWith(develop)`),
+  decoded whole, graded at source density, then `drawFramed` — the crop stage's
+  transform, so the file is the stage. The frame seam of `develop-tool.md` §6
+  lives here, not on `exportPhotoVariant`.
+- **A fetched original is held for the session by asset id**, never persisted
+  (decision 3): the second export of the same picture pays no fetch, whatever
+  mode. Measured in the pane: Auto → 1 fetch, Proxies → 0 and the proxy's
+  pixels, Originals → 0 and the held original's pixels.
+- **The finals plan links each file to ITS capture** (`FinalCandidate.assetId`,
+  `FinalsItem.originalAssetId`, one upload per file); a run is offered home
+  only when every picture came from ONE instance, and `plan.originalAssetId`
+  names the run's capture only when all files agree (the Studio's sentence).
+- `MediaOrigin.name`/`bytes` are what say whether an original is decodable and
+  what it weighs — read from Winnow's row at materialise; a file the person
+  opened has no origin and nothing to decide.
+- **Trap — verifying identity from the page**: `import('/atelier/src/…')` in
+  the pane makes a SECOND module instance once HMR has stamped the app's with
+  `?t=`; register through the URL `performance.getEntriesByType('resource')`
+  lists, or the app never sees the origin.
+
+Verified in the pane on canvas-made JPEGs with `showDirectoryPicker` stubbed
+and two files registered as proxies through the app's own module: A-land (1:1,
+zoomed, −1.5 EV) → `A-land-developed-1x1.jpg` 1000×1000, darkened; the roll →
+four files at 1000², 900×1400, 2000×900, 1200²; C-wide (proxy 2000×900,
+original 6000×2700 JPG) → `Original 6000 px → 6000 · exact`, Auto fetched once
+and wrote 6000×2700, Proxies wrote 2000×900 with no fetch, Originals wrote
+6000×2700 with no fetch; D-sq (proxy over a DNG) → `Proxy 1200 px → 1200 ·
+exact · asked 8000`, the RAW reason, no fetch under Originals; the finals panel
+appeared after the run and said the instance is not connected. Not exercised:
+a real upload (no instance) — the client path is the Studio's, unchanged but
+for `originalAssetId` per item.
+
+## The Library's Develop verb answers AFTER the render (2026-09-16, D10)
+
+Both Develop screens publish one `MediaAction` (`usePublishMediaActions`):
+`RollEditor` adds the active picture to the open roll and opens it (a picture
+already on the roll is opened — `addPictures` dedupes, `sameMediaRef` finds
+it), `RollGallery` starts a roll named by `defaultRollName()` (exported from
+`NewRollModal`) on `local` and opens it. **Trap that shaped it**: the shell
+calls `run()` in the SAME tick as `lib.setActive(id)` (`AssetSidebar`'s
+`onRun`, the lightbox after its fetch), so a `run` that read `lib.activeId`
+from its closure would develop the PREVIOUS active asset. Trips never hit it
+because its verbs read nothing (the slide picks the active asset up later).
+So the verb only bumps a `pending` counter and an effect keyed on it AND on
+the active file does the work once React has rendered the activation; a
+non-photo says so in the notice and resets. **How to apply**: a verb that
+needs the active media itself never reads it inside `run`. Verified in the
+pane: from the open roll, the Library's preview sheet drew `DEVELOP ON ROLL ·
+… · Develop`, and the click added the new picture as the fifth and opened its
+route; from the gallery the same sheet drew `DEVELOP · Develop` and the click
+made `Roll · 16 Sept` on `local` with that one picture and opened it.
+
+## Undo and redo over the roll (2026-09-15, rev. 2026-09-16)
 
 **Fact.** `DevelopTool` wires the shared history engine exactly as Trips does —
 watched at its own `handleChange`, reset by the sync machine's `onReplace`, the
@@ -151,6 +383,31 @@ buttons in the `headerExtra` slot beside the pill; the engine's rules are in
 picture the route names (`picture:<id>`), so one picture's slider never merges
 into the next picture's. **How to apply**: the editor's write-through is what
 the history sees, so one step is one write, not one slider frame — and a draft
-that has not been written through yet is not a step. Verified in headless
-Chromium against the IndexedDB document: a roll renamed, stepped back and
-forward again.
+that has not been written through yet is not a step.
+
+**An editor with no Done needs its drafts level with the document in BOTH
+directions (`shared/develop/write-through.ts` + `use-write-through.ts`).** The
+maintainer's report was flat: *"undo redo dont work in develop"*. Half of it was
+the ⌘Z owner (`frontend.md`); the other half is that `PictureWorkbench` reads
+`entry.develop` and `entry.framing` ONCE — right, as the never-inherit rule, for
+a workbench keyed per picture — and so ignored the roll moving under it. An undo
+stepped the roll back correctly and the screen did not change at all: the
+sliders, the preview (the draft rides `stack.setDevelop`) and the crop stage all
+still showed the undone numbers, and the next nudge wrote them straight back
+over the step. **The rule, and its whole difficulty, is telling the two sides
+apart**: during a gesture the document LAGS the draft by the write's rest, so a
+lagging value must not read as somebody else's edit — which needs one remembered
+value, the last one handed to the document. The draft moved → a write is owed;
+the document moved to something this editor did not write (an undo, a redo, a
+batch verb, an instance's copy) → drop what was owed and re-seed. Dropping
+matters on its own: an undo landing inside the 200 ms rest would otherwise be
+put back a moment later by the write already in flight. A gesture that ends
+where it started owes nothing. The decision is pure and tested; the hook owns
+only the timer and the unmount flush (which is what keeps a picture's numbers
+when you step to the next one).
+
+Verified in headless Chromium against the running editor (a JPEG built on a
+canvas and dropped in through a synthetic `DataTransfer`): the exposure slider
+moved, ⌘Z **with the slider still focused** put it back, ⇧⌘Z returned it, both
+buttons the same, the crop's zoom stepped back and forward on its own draft, and
+an undo pressed inside a gesture's rest held instead of being overwritten.

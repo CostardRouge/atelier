@@ -8,6 +8,8 @@ import {
   normaliseFraming,
   panBy,
   reclampFraming,
+  sameFraming,
+  scaleFramingBy,
   wrapDegrees,
   type Framing,
 } from './framing';
@@ -326,10 +328,42 @@ describe('isDefaultFraming and canPan', () => {
     expect(isDefaultFraming({ ...DEFAULT_FRAMING, fit: 'contain' })).toBe(false);
   });
 
+  it('compares two framings by what they say, null included', () => {
+    expect(sameFraming(null, { ...DEFAULT_FRAMING })).toBe(true);
+    expect(sameFraming(null, undefined)).toBe(true);
+    expect(sameFraming({ ...DEFAULT_FRAMING, x: 0.25 }, { ...DEFAULT_FRAMING, x: 0.25 })).toBe(true);
+    expect(sameFraming({ ...DEFAULT_FRAMING, x: 0.25 }, { ...DEFAULT_FRAMING, x: 0.3 })).toBe(false);
+    expect(sameFraming(null, { ...DEFAULT_FRAMING, fit: 'contain' })).toBe(false);
+  });
+
   it('says when there is nothing to drag', () => {
     expect(canPan(1000, 1000, 1000, 1000, DEFAULT_FRAMING)).toBe(false);
     expect(canPan(1000, 1000, 1000, 1000, { ...DEFAULT_FRAMING, scale: 1.5 })).toBe(true);
     // A 3:2 photo in a 9:16 frame has room sideways with no zoom at all.
     expect(canPan(3000, 2000, 1080, 1920, DEFAULT_FRAMING)).toBe(true);
+  });
+});
+
+describe('scaleFramingBy', () => {
+  it('holds a zoom between covering and the ceiling', () => {
+    expect(scaleFramingBy(1, 2)).toBe(2);
+    expect(scaleFramingBy(2, 0.25)).toBe(1);
+    expect(scaleFramingBy(6, 4)).toBe(8);
+  });
+
+  it('answers the three ways a zoom is asked for with one number', () => {
+    // A wheel notch, a pinch ratio and a button step reaching the same scale.
+    const wheel = scaleFramingBy(1, Math.exp(-(-400) / 400));
+    expect(wheel).toBeCloseTo(Math.E, 10);
+    expect(scaleFramingBy(2, 1.5)).toBe(3);
+  });
+
+  it('refuses a factor that is not one', () => {
+    expect(scaleFramingBy(2, 0)).toBe(2);
+    expect(scaleFramingBy(2, Number.NaN)).toBe(2);
+    // A scale that is not a number reads as covering, and the zoom then applies.
+    expect(scaleFramingBy(Number.NaN, 2)).toBe(2);
+    expect(scaleFramingBy(Number.NaN, 1)).toBe(1);
+    expect(scaleFramingBy(20, -1)).toBe(8);
   });
 });

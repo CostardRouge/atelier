@@ -340,7 +340,7 @@ not re-propose them without a new decision from the maintainer.
 
 | Idea | Why it is off the list |
 | --- | --- |
-| Real HDR (HLG/PQ) export | Ruled out 2026-08-21; only the notice (#03) is open |
+| Real HDR (HLG/PQ) **video** export | Ruled out 2026-08-21; only the notice (#03) is open. **Stills are not covered by that ruling** — HDR for photographs was taken up on 2026-09-17, `docs/photo-editor.md` §4.4 |
 | SD-card / DCIM import | Abandoned — it fights the folder-first workflow |
 | The 8-bit LUT fallback clamp | Dead code on the maintainer's machine; the float path is always taken |
 | Multi-clip timeline in a project | One clip per project; a future multi-clip is a *list of compositions*, not a rewrite |

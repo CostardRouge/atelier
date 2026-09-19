@@ -15,6 +15,7 @@
  * differently from the preview that was approved.
  */
 
+import { mulberry32 } from '../lib/prng';
 import type { Rect } from '../media/compose-layout';
 import type { AnimStep } from './animation';
 
@@ -58,16 +59,8 @@ export interface Size {
 /** How close two keys may be, as a share of the short side, and still share a rank. */
 const TIE = 0.02;
 
-/** A small deterministic PRNG (mulberry32) — the same seed shuffles the same way everywhere. */
-function rng(seed: number): () => number {
-  let s = seed | 0;
-  return () => {
-    s = (s + 0x6d2b79f5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+/** The suite's one seeded PRNG (`shared/lib/prng.ts`) — the same seed shuffles the same way everywhere. */
+const rng = mulberry32;
 
 /**
  * The rank of every box, 0 first. Ranks are dense (0, 1, 2…) and ties share

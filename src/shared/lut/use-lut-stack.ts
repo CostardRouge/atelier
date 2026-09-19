@@ -9,6 +9,9 @@
 
 import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { DEFAULT_DEVELOP, isDefaultDevelop, type DevelopSettings } from '../develop/develop';
+import type { FilmSettings } from '../film/emulsion';
+import { isFilmLayer, newFilmLayer, withFilmSettings } from '../film/film-layer';
+import type { FilmStockId } from '../film/stocks';
 import { parseCube, type CubeLut } from '../lib/cube-parser';
 import { CUBE_ACCEPT, pickFile } from '../sources/file-sources';
 import { composeLutStack, reorderLayer, type LutLayer } from './lut-stack';
@@ -22,7 +25,10 @@ export interface SavedLutLayer {
   id: string;
   source: string;
   name: string;
-  /** Raw `.cube` text for an uploaded look; null for built-ins. */
+  /**
+   * Raw `.cube` text for an uploaded look, a film stock's settings as JSON
+   * (`shared/film/film-layer.ts`); null for built-ins.
+   */
   customText: string | null;
   intensity: number;
   enabled: boolean;
@@ -71,6 +77,10 @@ export interface LutStack {
   error: string | null;
   addBuiltin: (builtinId: string) => Promise<void>;
   addCustom: () => Promise<void>;
+  /** A film stock as a new layer at the end of the stack — generated, nothing to fetch. */
+  addFilm: (stockId: FilmStockId) => void;
+  /** Re-dial a film layer: its cube is regenerated (cached by settings), its name says where it stands. */
+  setFilm: (id: string, settings: FilmSettings) => void;
   remove: (id: string) => void;
   move: (id: string, delta: -1 | 1) => void;
   setIntensity: (id: string, intensity: number) => void;
@@ -214,6 +224,23 @@ export function useLutStack(): LutStack {
     ]);
   }, []);
 
+  const addFilm = useCallback((stockId: FilmStockId) => {
+    setError(null);
+    const { layer, text } = newFilmLayer(uid(), stockId);
+    setCustomText((prev) => ({ ...prev, [layer.id]: text }));
+    setLayers((prev) => [...prev, layer]);
+  }, []);
+
+  const setFilm = useCallback((id: string, settings: FilmSettings) => {
+    setLayers((prev) => {
+      const current = prev.find((l) => l.id === id);
+      if (!current || !isFilmLayer(current)) return prev;
+      const { layer, text } = withFilmSettings(current, settings);
+      setCustomText((texts) => ({ ...texts, [id]: text }));
+      return prev.map((l) => (l.id === id ? layer : l));
+    });
+  }, []);
+
   const remove = useCallback((id: string) => {
     setLayers((prev) => prev.filter((l) => l.id !== id));
   }, []);
@@ -276,7 +303,7 @@ export function useLutStack(): LutStack {
         id: l.id,
         source: l.source,
         name: l.name,
-        customText: l.source === 'custom' ? (customText[l.id] ?? null) : null,
+        customText: l.source === 'custom' || isFilmLayer(l) ? (customText[l.id] ?? null) : null,
         intensity: l.intensity,
         enabled: l.enabled,
       })),
@@ -295,6 +322,8 @@ export function useLutStack(): LutStack {
     error,
     addBuiltin,
     addCustom,
+    addFilm,
+    setFilm,
     remove,
     move,
     setIntensity,

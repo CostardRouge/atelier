@@ -1,9 +1,12 @@
 # Develop — the third editor
 
 **Status (2026-09-16): the direction and eight choices are DECIDED by the
-maintainer (§2, §8); the shared foundations and D1–D6 are BUILT — the tool
-has its gallery and its full-screen editor (stage, filmstrip, the Develop
-inspector); batch (D7) is next.** From
+maintainer (§2, §8); the shared foundations and EVERY phase, D1–D10, are BUILT
+— the tool has its gallery, its full-screen editor (stage, filmstrip, the
+Develop, Crop and Export inspectors), a filmstrip batch selection, a still
+export that delivers from a proxy or its original and goes home, and the
+Library's `Develop` verb. What v1 leaves open is §8's "after v1" (send to
+Trips / a project) and the RAW path (O4–O6 of `develop-originals.md`).** From
 his brief of the same day (*"un troisième outil officiel de développement
 d'images … à peu près la même interface que la modale … je n'ai pas envie de
 réinventer la roue … si des choses communes peuvent être développées, on
@@ -192,13 +195,35 @@ interface RollPicture {
   updater, a history-replacing step, the open cell redrawn as delivered, the
   inspector a sheet on a phone. Only the Develop inspector exists: the Crop and
   Export tabs arrive with D8 and D9, so no empty tab is drawn before them.
-- **D7 — batch**: selection, apply / paste to selection, counts in labels.
-- **D8 — crop**: framing on the stage and the Crop tab.
-- **D9 — export**: framing-aware still export, full decode (the originals
-  plan's O1 + O2 slot in here: Auto fetches an original only where needed),
-  Send home (panel moved to shared).
-- **D10 — the Library verb and the README** (a new `## Develop tool` section,
-  the Home and tool counts).
+- **D7 — batch** — **BUILT 2026-09-16**: `selectionAfterClick` + `pictureRange`
+  in `roll-editor.ts` (tested), the filmstrip's Shift/⌘-click, `DevelopApplyVerb`s
+  that read the selection instead of "every other picture" once one exists.
+- **D8 — crop** — **BUILT 2026-09-16**: `FramingStage` (the delivered picture
+  framed into its aspect box over `shared/media/framing.ts`, drag pans, wheel
+  or pinch zooms) and `CropPanel` (aspect, fit, zoom, rotation, turn, flip,
+  reset — Trips' Framing section plus the aspect), the inspector's two tabs
+  (`WORKBENCH_TABS`, also the phone bar's cells), `R` / `D` keys,
+  `pictureAspectRatio` in `roll-editor.ts` (tested); the crop written through
+  on its own timer, the filmstrip cell redrawn framed (`framedThumbnail`).
+- **D9 — export** — **BUILT 2026-09-16**: `roll-export.ts` (pure, tested:
+  `rollOutputSize`, `pixelHeadroom`, `choosePixels`, `deliverySummary`, the
+  *Delivers* line, names) and `roll-render.ts` (decode whole → grade through
+  the picture's own cube → `drawFramed` → JPEG), the Export tab
+  (`ExportPanel`: size, quality, `Auto · Proxies · Originals`, the line, the
+  verbs, the finals), `use-roll-export.ts`; `MediaOrigin.name`/`bytes` (O1),
+  originals held for the session (`shared/sources/original-cache.ts`, O2),
+  `SendFinalsPanel` moved to `shared/sources/winnow/` with per-file capture
+  ids (`FinalCandidate.assetId`), `shared/sources/deliver-files.ts`. The
+  framing seam landed over `drawFramed` in `roll-render.ts`, not on
+  `exportPhotoVariant` (§6): no Studio caller passes a framing to it yet.
+- **D10 — the Library verb and the README** — **BUILT 2026-09-16**: both
+  Develop screens publish a `Develop` `MediaAction` (the editor adds the
+  active picture to the open roll and opens it, never twice; the gallery
+  starts a new roll from it), answered in an effect after the render, never
+  in `run`'s closure (`develop-roll.md`); the README's `## Develop tool`
+  section extended (batch, crop, export, send home, the verb). The Home door
+  and the tool count needed nothing: D5 had built the door, and the README
+  already counted ten tools.
 
 RAW (O4–O6 of `develop-originals.md`) lands in the tool first, where it matters
 most, and the modals get it through the same blocks.
@@ -212,3 +237,51 @@ All four recommendations accepted (*"ok pour tes recommandations"*):
 - **No rating or flags** on a picture: culling is Winnow's job.
 - **"Send to Trips / to a Studio project"** from a roll comes AFTER v1.
 - **The name on screen is *Develop*** (the suite's word), slug `develop`.
+
+## 9. A roll finds its own pictures (maintainer, 2026-09-16)
+
+**The report.** A roll reopened after a reload showed its thumbnails and
+nothing else: a click said *not in the Library* until the day was found again
+in the sidebar and its pictures ticked. And *Add 3 selected* stayed on the bar
+for pictures already on the roll. His words: the Library is historical, the
+workflow should not have to pass through it, and a picture's link is already
+known. Winnow first, local files as a bonus. The proposal page:
+https://claude.ai/artifact/XhJEmU2YASJW6S5MedddV5 — **all its recommendations
+accepted**:
+
+- **Q1 — a picture the roll fetches does NOT enter the Library.** The roll is
+  the working list; the Library stays a place to choose from.
+- **Q2 — working previews for LOCAL files only**, opt-in per roll with the
+  weight shown; never for a Winnow picture, whose ref is its address. It
+  reverses `local-first.md`'s "no media bytes persisted" for that case only.
+- **Q3 — fetch the open picture and two neighbours each side**, the rest on
+  demand; widen only after measuring.
+
+Phases, one commit each:
+
+- **F1 — the roll fetches its Winnow pictures itself** — **BUILT
+  2026-09-16**: `roll-media.ts` + spec (order, window, states, the stage's
+  sentence), `use-roll-media.ts` (Library first, else `refetchMedia` into a
+  pool of the roll's own), states in the filmstrip with the instance's
+  thumbnail before a fetch, a status line with *Sign in* / *Try again* /
+  *Sources*, and the export fetching what it needs on the spot.
+- **F2 — an honest add button** — **BUILT 2026-09-16**: the bar's button
+  counts only the ticked photos the roll does not hold (`sameMediaRef` over
+  their hashed refs) and is not drawn when there are none; the one *Add* menu
+  arrives with F3, when there is a second way in to gather.
+- **F3 — add a day from a Winnow, inside the roll** — **BUILT 2026-09-16**:
+  `WinnowDaySheet` (one day of the first connection, photos only, what the
+  roll lacks ticked), `rowMediaRef` beside `materialize` (+ spec: the ref a
+  fetched proxy would carry, size 0), and the bar's *Add* — a button for one
+  way in, a menu (`OverflowMenu`'s new worded trigger) for two.
+- **F4 — local files: the folder handle and re-linking by drop** — **BUILT
+  2026-09-16**: `atelier-develop` v2 with a `folders` store (per roll, per
+  device), `use-roll-folders.ts` (read at once where the permission holds,
+  *Reopen* otherwise), *Add › A folder on this computer…*, a drop anywhere on
+  the roll (found again, or added — `splitByRoll`, `photoFiles`, tested) and
+  `dropDirectoryHandles` to remember a dropped folder in Chromium.
+- **F5 — working previews** (palier C) — **BUILT 2026-09-16**: `previews`
+  store (DB v3), `working-preview.ts` (+ spec), `use-roll-previews.ts`, the
+  preview state in the strip and the status line, the fidelity chip, and the
+  export saying a picture left from its preview.
+

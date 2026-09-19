@@ -236,6 +236,31 @@ html[data-surface='darkroom'] {
   }
 }
 
+/* A drop target's label arriving (`tools/roadtrip/DropZones.tsx`): a short
+   rise from a hair smaller, so the chip reads as a response to the pointer
+   rather than as something that was always there. */
+@keyframes drop-chip {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* A picture landing in a cell: one ring spreading from the cell's edge and
+   fading, the confirmation a hand expects at the end of a drag. */
+@keyframes drop-settle {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 60%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 18px color-mix(in srgb, var(--color-accent) 0%, transparent);
+  }
+}
+
 @keyframes pulse-dot {
   0%,
   100% {

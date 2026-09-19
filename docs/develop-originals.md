@@ -1,8 +1,13 @@
 # Develop on the original — proxy, full-size render, RAW
 
-**Status (2026-09-15): DECIDED — the maintainer accepted all six
-recommendations of §7 the same day (*"je suis ok pour les recommandations"*);
-nothing is built yet, O1 + O2 come first.** Written from the
+**Status (2026-09-15, rev. 2026-09-16): DECIDED — the maintainer accepted all
+six recommendations of §7 the same day (*"je suis ok pour les
+recommandations"*). O1 + O2 are BUILT in the Develop tool (D9 of
+`develop-tool.md`: `MediaOrigin.name`/`bytes`, `pixelHeadroom`, the *Delivers*
+line, `Auto · Proxies · Originals`, originals held for the session in
+`shared/sources/original-cache.ts`) — not yet in Trips' Export tab or for
+Studio stills, which still deliver from the proxy; O3–O7 are not built.**
+Written from the
 maintainer's question of the same day (*"c'est ok de jouer sur le proxy, mais
 […] le fichier RAW final — à quel moment ? bosser sur le proxy et à l'export
 utiliser les mêmes réglages sur le RAW final ? […] pour les carrousels

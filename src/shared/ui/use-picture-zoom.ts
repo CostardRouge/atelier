@@ -15,6 +15,7 @@ import {
   type Point,
   type View,
 } from './pan-zoom';
+import { blockNativeZoom } from './native-gestures';
 import { zoomLabel, type ZoomControls } from './stage-zoom';
 
 interface PictureZoomOptions {
@@ -173,12 +174,16 @@ export function usePictureZoom({ natural, resetKey, claim, onTakeover }: Picture
     };
 
     const onDown = (e: PointerEvent) => {
-      // A control over the picture (hold for before) keeps its own press.
-      if ((e.target as Element | null)?.closest?.('button, [data-pan-ignore]')) return;
-      setSettling(false);
+      // A control over the picture (hold for before) keeps its own press — but
+      // its FINGER is still one of the two a pinch is made of. Counting it only
+      // when it lands on bare picture is what made a pinch beginning on the
+      // "before" pill do nothing at all, and left the count one short for the
+      // rest of the gesture.
+      const overControl = Boolean((e.target as Element | null)?.closest?.('button, [data-pan-ignore]'));
       if (e.pointerType === 'touch') {
         touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (touches.size === 2) {
+          setSettling(false);
           pinch = { spread: spread(), scale: live.current.view.scale };
           endDrag();
           live.current.onTakeover?.();
@@ -188,6 +193,8 @@ export function usePictureZoom({ natural, resetKey, claim, onTakeover }: Picture
       } else if (e.button !== 0) {
         return;
       }
+      if (overControl) return;
+      setSettling(false);
       const l = live.current;
       if (pinch || l.claim?.(e) || l.view.scale <= MIN_VIEW_ZOOM) return;
       drag = { id: e.pointerId, startX: e.clientX, startY: e.clientY, lastX: e.clientX, lastY: e.clientY, moving: false };
@@ -231,16 +238,30 @@ export function usePictureZoom({ natural, resetKey, claim, onTakeover }: Picture
     const onUp = (e: PointerEvent) => {
       if (e.pointerType === 'touch') {
         touches.delete(e.pointerId);
-        if (touches.size < 2) pinch = null;
+        if (pinch && touches.size < 2) {
+          pinch = null;
+          // One finger of a pinch lifted, the other still on the picture: it
+          // takes the pan over, rather than being inert until it is lifted and
+          // put back down. Zoomed in, that second half is most of the gesture.
+          const [id] = [...touches.keys()];
+          const at = id === undefined ? undefined : touches.get(id);
+          if (id !== undefined && at && live.current.view.scale > MIN_VIEW_ZOOM) {
+            drag = { id, startX: at.x, startY: at.y, lastX: at.x, lastY: at.y, moving: true };
+            setPanning(true);
+          }
+        }
       }
       if (drag && e.pointerId === drag.id) endDrag();
     };
 
+    // The browser's OWN pinch would cancel every pointer above (`native-gestures.ts`).
+    const unblock = blockNativeZoom(el);
     el.addEventListener('pointerdown', onDown);
     el.addEventListener('pointermove', onMove);
     el.addEventListener('pointerup', onUp);
     el.addEventListener('pointercancel', onUp);
     return () => {
+      unblock();
       el.removeEventListener('pointerdown', onDown);
       el.removeEventListener('pointermove', onMove);
       el.removeEventListener('pointerup', onUp);

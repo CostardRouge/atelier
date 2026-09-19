@@ -65,10 +65,13 @@ export const Icons = {
       <circle cx="18" cy="12" r="1.2" fill="currentColor" stroke="none" />
     </>,
   ),
+  // A cog with rounded teeth. It was a circle with eight rays, which reads as
+  // a sun (a brightness control, in a suite that grades pictures) the moment
+  // it stands alone without the word beside it.
   settings: icon(
     <>
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
       <circle cx="12" cy="12" r="3" />
-      <path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8" />
     </>,
   ),
   info: icon(
@@ -95,6 +98,8 @@ export const Icons = {
   // as one control rather than two unrelated arrows.
   undo: icon(<path d="M8 5 4 9l4 4M4 9h11a5 5 0 0 1 0 10h-4" />),
   redo: icon(<path d="m16 5 4 4-4 4M20 9H9a5 5 0 0 0 0 10h4" />),
+  /** One thing taking another's place — a picture dropped on a filled cell. */
+  swap: icon(<path d="M16 3l4 4-4 4M20 7H8M8 21l-4-4 4-4M4 17h12" />),
   /** Playback that starts over at the end — the whole of what is played. */
   loop: icon(<path d="M17 3l3 3-3 3M20 6H8a4 4 0 0 0-4 4v1M7 21l-3-3 3-3M4 18h12a4 4 0 0 0 4-4v-1" />),
   /** Playback that starts over on ONE item — the player's repeat-one. */

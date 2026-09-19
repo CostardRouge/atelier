@@ -4,12 +4,23 @@ import {
   editorKeyAction,
   openAfterRemoval,
   openPictureId,
+  pictureRange,
   sameDevelop,
+  selectionAfterClick,
   stepPicture,
   type EditorKeyPress,
+  type SelectionModifiers,
 } from './roll-editor';
 
 const strip = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+const wideStrip = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }];
+
+const mods = (over: Partial<SelectionModifiers>): SelectionModifiers => ({
+  shiftKey: false,
+  metaKey: false,
+  ctrlKey: false,
+  ...over,
+});
 
 const press = (over: Partial<EditorKeyPress>): EditorKeyPress => ({
   key: '',
@@ -73,5 +84,49 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'ArrowRight', shiftKey: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'c', metaKey: true, shiftKey: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'x' }))).toBeNull();
+  });
+
+  it('opens the Crop tab on R and the Develop tab on D', () => {
+    expect(editorKeyAction(press({ key: 'r' }))).toBe('crop');
+    expect(editorKeyAction(press({ key: 'R' }))).toBe('crop');
+    expect(editorKeyAction(press({ key: 'd' }))).toBe('develop');
+    expect(editorKeyAction(press({ key: 'D' }))).toBe('develop');
+    expect(editorKeyAction(press({ key: 'r', metaKey: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'r', targetTypes: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'd', repeat: true }))).toBeNull();
+  });
+});
+
+describe('pictureRange', () => {
+  it('spans the strip between two ids, whichever comes first', () => {
+    expect(pictureRange(wideStrip, 'a', 'c')).toEqual(['a', 'b', 'c']);
+    expect(pictureRange(wideStrip, 'c', 'a')).toEqual(['a', 'b', 'c']);
+    expect(pictureRange(wideStrip, 'b', 'b')).toEqual(['b']);
+  });
+
+  it('reads an id off the roll as just the other end', () => {
+    expect(pictureRange(wideStrip, 'gone', 'b')).toEqual(['b']);
+  });
+});
+
+describe('selectionAfterClick', () => {
+  it('replaces the selection with the range from the anchor on Shift, without moving the anchor', () => {
+    const first = selectionAfterClick(wideStrip, new Set(), 'a', 'c', mods({ shiftKey: true }));
+    expect(first).toEqual(new Set(['a', 'b', 'c']));
+    // A second Shift-click from the SAME anchor replaces, it does not accumulate.
+    const second = selectionAfterClick(wideStrip, first, 'a', 'b', mods({ shiftKey: true }));
+    expect(second).toEqual(new Set(['a', 'b']));
+  });
+
+  it('toggles one picture in place on ⌘/Ctrl-click, keeping the rest', () => {
+    const withB = selectionAfterClick(wideStrip, new Set(['a']), 'a', 'b', mods({ metaKey: true }));
+    expect(withB).toEqual(new Set(['a', 'b']));
+    const withoutA = selectionAfterClick(wideStrip, withB, 'b', 'a', mods({ ctrlKey: true }));
+    expect(withoutA).toEqual(new Set(['b']));
+  });
+
+  it('leaves the selection alone on a plain click — that is the caller’s open, not a selection click', () => {
+    const selected = new Set(['a', 'b']);
+    expect(selectionAfterClick(wideStrip, selected, 'a', 'c', mods({}))).toBe(selected);
   });
 });

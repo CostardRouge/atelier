@@ -14,6 +14,8 @@ import {
 import Button from '../../../shared/ui/Button';
 import { FieldRow, InspectorSection, RangeField, Readout, swatchClass } from '../../../shared/ui/Inspector';
 import { Icons } from '../../../shared/ui/icons';
+import { refetchKey, refetchSummary } from '../collage-refetch';
+import type { SlideRecovery } from '../use-slide-library';
 
 /** The grounds a collage can sit on: the frame's black, the suite's papers, a sand, the accent. */
 const BACKGROUNDS: readonly { color: string; name: string }[] = [
@@ -77,6 +79,8 @@ interface LayoutSectionProps {
   activeFile: File | null;
   /** The file each drawn cell resolves to, lead first, for the labels. */
   cellFiles: readonly (File | null)[];
+  /** Pictures being fetched back from their instance, or that could not be, by asset id. */
+  cellFetches: ReadonlyMap<string, SlideRecovery>;
   onChange: (collage: SlideCollage | null) => void;
   /** Put the ticked picture in the selected cell. */
   onUseActive: () => void;
@@ -100,6 +104,7 @@ export default function LayoutSection({
   onSelectCell,
   activeFile,
   cellFiles,
+  cellFetches,
   onChange,
   onUseActive,
   onClearCell,
@@ -109,6 +114,9 @@ export default function LayoutSection({
   const cell = collage ? collageCellAt(lead, collage, selectedCell) : null;
   const cellFile = cellFiles[selectedCell] ?? null;
   const kept = collage ? collageKept(collage) : [];
+  const cellKey = refetchKey(cell?.media);
+  const cellFetch = cellKey ? (cellFetches.get(cellKey) ?? null) : null;
+  const fetchSummary = collage ? refetchSummary(cellFetches) : null;
   const activeIsHere = Boolean(
     activeFile && cell?.media && cell.media.name.toLowerCase() === activeFile.name.toLowerCase(),
   );
@@ -249,9 +257,17 @@ export default function LayoutSection({
             label="Cell"
             align="start"
             hint={
-              selectedCell === 0
-                ? 'The first cell is this slide’s own picture — the Library follows it.'
-                : 'The Library follows the selected cell: tick a picture there to put it here.'
+              cellFetch?.state === 'fetching' ? (
+                `This cell’s picture lives on ${cellFetch.sourceId} — fetching it back…`
+              ) : cellFetch?.state === 'failed' ? (
+                <span className="text-danger" role="alert">
+                  {cellFetch.problem}
+                </span>
+              ) : selectedCell === 0 ? (
+                'The first cell is this slide’s own picture — the Library follows it.'
+              ) : (
+                'The Library follows the selected cell: tick a picture there to put it here.'
+              )
             }
           >
             <div className="flex-1 min-w-0 flex flex-col gap-1.5">
@@ -292,6 +308,12 @@ export default function LayoutSection({
               </div>
             </div>
           </FieldRow>
+
+          {fetchSummary && (
+            <p className="m-0 text-xs text-muted" role="status">
+              {fetchSummary}
+            </p>
+          )}
 
           {kept.length > 0 && (
             <FieldRow label="Kept" align="start" hint="Not drawn by this layout; a bigger one brings them back.">
