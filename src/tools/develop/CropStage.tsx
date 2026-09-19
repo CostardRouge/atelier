@@ -37,6 +37,7 @@ const HANDLE_CURSOR: Record<CropHandle, string> = {
 type Gesture =
   | { kind: 'resize'; id: number; handle: CropHandle; start: CropZone }
   | { kind: 'move'; id: number; lastX: number; lastY: number }
+  | { kind: 'level'; id: number; x1: number; y1: number }
   | { kind: 'draw'; id: number; anchor: { x: number; y: number }; startX: number; startY: number; drawing: boolean; drew: boolean };
 
 /** The stage's fit: the quarter-turned picture in the box, fitted ONCE — a fine angle never refits it. */
@@ -105,9 +106,11 @@ export default function CropStage({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [box, setBox] = useState<{ w: number; h: number } | null>(null);
   const [active, setActive] = useState(false);
+  // The Level tool's line while it is drawn, in the zone's frame.
+  const [line, setLine] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const { source, cube, delivered } = picture;
   const hasSource = source !== null;
-  const { src, zone, framing } = crop;
+  const { src, zone, framing, rotating, levelling } = crop;
 
   // The stage's own size, measured — the canvas fills it.
   useEffect(() => {
@@ -181,6 +184,22 @@ export default function CropStage({
     }
     ctx.strokeStyle = active ? 'rgba(255, 255, 255, 0.55)' : 'rgba(255, 255, 255, 0.2)';
     ctx.stroke();
+    // While the angle moves, a dense grid: straightening is judged against
+    // lines, and thirds are too few to read a horizon by.
+    if (rotating) {
+      const cell = Math.max(14, Math.min(w, h) / 12);
+      ctx.beginPath();
+      for (let x = l + cell; x < l + w - 1; x += cell) {
+        ctx.moveTo(x, t);
+        ctx.lineTo(x, t + h);
+      }
+      for (let y = t + cell; y < t + h - 1; y += cell) {
+        ctx.moveTo(l, y);
+        ctx.lineTo(l + w, y);
+      }
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+      ctx.stroke();
+    }
     // The zone's edge.
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
     ctx.strokeRect(l + 0.5, t + 0.5, w - 1, h - 1);
@@ -202,7 +221,17 @@ export default function CropStage({
     ctx.fillRect(l + w / 2 - bar / 2, t + h, bar, thick);
     ctx.fillRect(l - thick, t + h / 2 - bar / 2, thick, bar);
     ctx.fillRect(l + w, t + h / 2 - bar / 2, thick, bar);
-  }, [box, src, zone, framing, source, cube, delivered, active]);
+    // The Level line, drawn over everything while it is being laid.
+    if (line) {
+      ctx.beginPath();
+      ctx.moveTo(ox + k * line.x1, oy + k * line.y1);
+      ctx.lineTo(ox + k * line.x2, oy + k * line.y2);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#d9442a';
+      ctx.stroke();
+      ctx.lineWidth = 1;
+    }
+  }, [box, src, zone, framing, source, cube, delivered, active, rotating, line]);
 
   // --- gestures -----------------------------------------------------------------
   const live = useRef({ crop, box });
@@ -245,7 +274,9 @@ export default function CropStage({
       const zx = (p.x - g.v.ox) / g.v.k;
       const zy = (p.y - g.v.oy) / g.v.k;
       current = zone;
-      if (handle) {
+      if (g.c.levelling) {
+        gesture = { kind: 'level', id: e.pointerId, x1: zx, y1: zy };
+      } else if (handle) {
         gesture = { kind: 'resize', id: e.pointerId, handle, start: zone };
       } else if (
         zx > zone.cx - zone.w / 2 &&
@@ -275,6 +306,10 @@ export default function CropStage({
       if (!gesture) {
         // Hover: the cursor says what a press would do.
         if (e.pointerType === 'touch') return;
+        if (g.c.levelling) {
+          stage.style.cursor = 'crosshair';
+          return;
+        }
         const zone = g.c.zone!;
         const handle = handleAt(edges(zone, g.v), p.x, p.y, 10);
         const e2 = edges(zone, g.v);
@@ -289,6 +324,10 @@ export default function CropStage({
       // In Free, Shift holds the ratio the gesture started with.
       const freeLock = (z: CropZone) => (e.shiftKey ? z.w / z.h : null);
       let next: CropZone | null = null;
+      if (gesture.kind === 'level') {
+        setLine({ x1: gesture.x1, y1: gesture.y1, x2: zx, y2: zy });
+        return;
+      }
       if (gesture.kind === 'resize') {
         const lock = g.c.lock ?? freeLock(gesture.start);
         next = resizeZone(gesture.start, current, gesture.handle, zx, zy, lock, g.deg, g.src);
@@ -323,6 +362,19 @@ export default function CropStage({
 
     const onUp = (e: PointerEvent) => {
       if (!gesture || e.pointerId !== gesture.id) return;
+      if (gesture.kind === 'level' && e.type === 'pointerup') {
+        const g = geometry();
+        const p = local(e);
+        if (g) {
+          const x2 = (p.x - g.v.ox) / g.v.k;
+          const y2 = (p.y - g.v.oy) / g.v.k;
+          // A click is not a line: under a few pixels the tool stays armed.
+          if (Math.hypot(x2 - gesture.x1, y2 - gesture.y1) * g.v.k >= 12) g.c.level(gesture.x1, gesture.y1, x2, y2);
+        }
+        setLine(null);
+      } else if (gesture.kind === 'level') {
+        setLine(null);
+      }
       gesture = null;
       current = null;
       setActive(false);
@@ -396,6 +448,11 @@ export default function CropStage({
       {hasSource ? (
         <>
           <canvas ref={canvasRef} aria-hidden className="absolute inset-0 w-full h-full" />
+          {levelling && !line && (
+            <span className="absolute left-1/2 top-3 -translate-x-1/2 pointer-events-none rounded-sm bg-ink/80 px-2 py-1 font-mono text-2xs text-paper whitespace-nowrap">
+              draw a line along the horizon, or along an upright
+            </span>
+          )}
           {tag && (
             <span
               className="absolute pointer-events-none rounded-sm bg-ink/80 px-1.5 py-0.5 font-mono text-2xs tabular-nums text-paper whitespace-nowrap"

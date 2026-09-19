@@ -461,3 +461,18 @@ within 1e-6 of 1 and a pan under 1e-9 to exact values: the largest zone is
 built a hair inside (`fitAround`'s 1 − 1e-9), and a stored `scale:
 1.000000001` made an untouched picture count as developed — measured in the
 pane. (6) A preset without a turned twin (4:5) swaps into Free.
+
+**Rotation under the zone** (`use-crop-zone.ts`): Straighten is the FINE
+angle (±45° inside the current quarter, `splitRotation`), the quarter turns
+turn the zone WITH the picture (`quarterTurnZone`, exact, no refit), the flips
+mirror the zone's centre and negate the angle (`flipFraming`'s rule), and
+Level turns a line drawn on the stage into a correction of the fine angle.
+The hook remembers what it last WROTE: when the stored crop differs (an undo,
+a batch verb), the intent is re-read from the zone on screen, so a rotation
+after an undo never refits a stale zone. Verified in the pane on a JPEG with a
+3° horizon: Level along it gave −3.0° with the zone shrunk just enough and the
+dense grid up; Straight gave the 4:5 zone back and the roll stored `framing:
+null`; +90° turned a 4:5 zone into 5:4 over the same part; Horizontal then
+stored `rotation: -90, flipX: true` and the Develop viewport showed the same
+crop mirrored. Trap: the pane's screenshot can lag a click by a frame — read
+the stored roll before concluding a button did nothing.

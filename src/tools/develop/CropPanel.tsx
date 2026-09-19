@@ -1,4 +1,5 @@
-import { flipFraming, isDefaultFraming, wrapDegrees, type Framing } from '../../shared/media/framing';
+import { isDefaultFraming, type Framing } from '../../shared/media/framing';
+import { splitRotation } from '../../shared/develop/crop-rect';
 import { describeAspect } from '../../shared/develop/crop-aspect';
 import { developButtonClass } from '../../shared/develop/develop-classes';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
@@ -66,6 +67,12 @@ export default function CropPanel({
               its shape from the opposite corner; <strong>X</strong> or the turn button swaps portrait
               and landscape.
             </p>
+            <p>
+              <strong>Straighten</strong> turns the picture under the zone, which shrinks just enough to
+              keep clear of the corners — and grows back to what you drew when you straighten back.
+              <strong> Level</strong>: draw a line along the horizon (or an upright) and the angle is
+              corrected by it. The quarter turns take the zone with the picture.
+            </p>
             <p>The flips mirror what the frame shows, whatever the picture’s rotation.</p>
           </>
         }
@@ -98,38 +105,46 @@ export default function CropPanel({
             {Icons.swap}
           </IconButton>
         </FieldRow>
-        <FieldRow label="Rotation">
+        <FieldRow label="Straighten">
           <RangeField
-            label="Rotation"
-            min={-180}
-            max={180}
-            step={0.5}
-            value={framing.rotation}
-            onChange={(rotation) => crop.setFraming({ ...framing, rotation })}
-            format={(v) => `${Math.round(v)}°`}
+            label="Straighten"
+            min={-45}
+            max={45}
+            step={0.1}
+            value={splitRotation(framing.rotation).fine}
+            onChange={crop.straighten}
+            format={(v) => `${v.toFixed(1)}°`}
           />
         </FieldRow>
-        <FieldRow label="Turn">
+        <FieldRow label="Level">
           <Button
             size="sm"
-            onClick={() => crop.setFraming({ ...framing, rotation: wrapDegrees(framing.rotation - 90) })}
-            title="Turn a quarter anticlockwise"
+            variant={crop.levelling ? 'primary' : 'default'}
+            aria-pressed={crop.levelling}
+            onClick={() => crop.setLevelling(!crop.levelling)}
+            title="Draw a line along the horizon, or along something that should stand upright"
           >
+            {crop.levelling ? 'Draw the line…' : 'Level'}
+          </Button>
+          {splitRotation(framing.rotation).fine !== 0 && (
+            <Button size="sm" variant="ghost" onClick={() => crop.straighten(0)}>
+              Straight
+            </Button>
+          )}
+        </FieldRow>
+        <FieldRow label="Turn">
+          <Button size="sm" onClick={() => crop.quarterTurn(-1)} title="Turn a quarter anticlockwise">
             −90°
           </Button>
-          <Button
-            size="sm"
-            onClick={() => crop.setFraming({ ...framing, rotation: wrapDegrees(framing.rotation + 90) })}
-            title="Turn a quarter clockwise"
-          >
+          <Button size="sm" onClick={() => crop.quarterTurn(1)} title="Turn a quarter clockwise">
             +90°
           </Button>
         </FieldRow>
         <FieldRow label="Flip">
-          <Button size="sm" icon={Icons.flipHorizontal} onClick={() => crop.setFraming(flipFraming(framing, 'x'))} title="Mirror the picture left to right">
+          <Button size="sm" icon={Icons.flipHorizontal} onClick={() => crop.flip('x')} title="Mirror the picture left to right">
             Horizontal
           </Button>
-          <Button size="sm" icon={Icons.flipVertical} onClick={() => crop.setFraming(flipFraming(framing, 'y'))} title="Mirror the picture top to bottom">
+          <Button size="sm" icon={Icons.flipVertical} onClick={() => crop.flip('y')} title="Mirror the picture top to bottom">
             Vertical
           </Button>
         </FieldRow>
