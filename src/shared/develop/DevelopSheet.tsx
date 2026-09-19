@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import type { LutStack } from '../lut/use-lut-stack';
 import StageZoomControl from '../ui/StageZoomControl';
 import useDialogKeys from '../ui/use-dialog-keys';
+import { usePixelView } from '../ui/use-pixel-view';
 import type { DevelopSettings } from './develop';
 import { developButtonClass, developLegendClass, developPillClass } from './develop-classes';
 import type { DevelopApplyVerb, DevelopPresets } from './develop-host';
@@ -99,6 +100,7 @@ export default function DevelopSheet({
   const [told, tell] = useTold();
   const [naming, setNaming] = useState(false);
   const picture = useDevelopPicture({ file, videoTimeSeconds, cube: stack.composed });
+  const [pixelView, setPixelView] = usePixelView();
 
   const done = () => onDone(draft.result());
   // While a preset is being named, Enter belongs to that field's own form.
@@ -128,6 +130,23 @@ export default function DevelopSheet({
           {picture.source && (
             <StageZoomControl zoom={picture.view.zoom} hint="wheel, or pinch" className="flex-none max-[820px]:hidden" />
           )}
+          {/* Only where it means anything: below 1:1 the browser is downscaling
+              and `pixelated` is simply worse. The preference is the machine's,
+              shared with the Develop tool (`use-pixel-view.ts`). */}
+          {picture.source && picture.view.magnifying && (
+            <button
+              type="button"
+              className={`${developPillClass} flex-none cursor-pointer hover:border-accent max-[820px]:hidden`}
+              onClick={() => setPixelView(pixelView === 'pixels' ? 'smooth' : 'pixels')}
+              title={
+                pixelView === 'pixels'
+                  ? 'Pixels as pixels — past 100 % nothing is invented between them'
+                  : 'Smoothed — past 100 % the gradients between pixels are the browser’s, not the picture’s'
+              }
+            >
+              {pixelView === 'pixels' ? 'pixels' : 'smooth'}
+            </button>
+          )}
           <button
             type="button"
             onClick={onCancel}
@@ -147,6 +166,7 @@ export default function DevelopSheet({
               picture={picture}
               hasFile={Boolean(file)}
               emptyText={emptyText}
+              pixelView={pixelView}
               onPick={(linear) => {
                 const { temperature, tint, clamped } = whiteBalanceFor(linear);
                 draft.patch({ temperature, tint });

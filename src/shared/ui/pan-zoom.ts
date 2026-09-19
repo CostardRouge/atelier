@@ -16,6 +16,17 @@
 /** Fit is the floor: a viewer showing less than the whole picture shows nothing. */
 export const MIN_VIEW_ZOOM = 1;
 export const MAX_VIEW_ZOOM = 8;
+/**
+ * How far INSPECTING one picture goes — 4000 %, Lightroom's own ceiling.
+ *
+ * The lightbox keeps 8×, which is a way of LOOKING at a photograph. This is for
+ * pixel peeping, and past `onePixelZoom` what is magnified is the PREVIEW's
+ * pixels rather than the file's, because the develop stage works to a pixel
+ * budget (`media-pipeline.md`). That is worth doing and worth saying: the
+ * viewport marks where 1:1 falls, and the rendering can be switched to
+ * un-smoothed so a magnified pixel looks like a pixel rather than like detail.
+ */
+export const INSPECT_MAX_ZOOM = 40;
 /** One press of + or −. Coarser than a stage's: there is no document to aim at. */
 export const VIEW_ZOOM_STEP = 1.5;
 
@@ -80,6 +91,20 @@ export function pixelCeiling(natural: Box | null, contained: Box, devicePixelRat
   const dpr = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;
   if (!natural || !(natural.width > 0) || !(contained.width > 0)) return 2;
   return Math.min(MAX_VIEW_ZOOM, Math.max(2, natural.width / (contained.width * dpr)));
+}
+
+/**
+ * The scale at which ONE pixel of the picture covers one device pixel — the
+ * honest 100 %, and where magnifying stops adding detail.
+ *
+ * It used to be the CEILING (`pixelCeiling`, still the lightbox's). It is now a
+ * landmark: the viewport says when the view crosses it, because past it a
+ * smooth resample is inventing a gradient between real pixels.
+ */
+export function onePixelZoom(natural: Box | null, contained: Box, devicePixelRatio: number): number {
+  const dpr = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;
+  if (!natural || !(natural.width > 0) || !(contained.width > 0)) return 1;
+  return Math.max(MIN_VIEW_ZOOM, natural.width / (contained.width * dpr));
 }
 
 /**

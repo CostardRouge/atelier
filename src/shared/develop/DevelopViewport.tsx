@@ -1,5 +1,6 @@
 import { describeDevelop, type DevelopSettings } from './develop';
 import { developPillClass } from './develop-classes';
+import { imageRenderingFor, type PixelView } from '../ui/use-pixel-view';
 import type { DevelopPicture } from './use-develop-picture';
 
 /**
@@ -15,8 +16,15 @@ export default function DevelopViewport({
   emptyText = 'No picture to develop yet.',
   className = '',
   onPick,
+  pixelView = 'smooth',
 }: {
   picture: DevelopPicture;
+  /**
+   * How a MAGNIFIED picture is drawn. Only past 1:1 does it change anything,
+   * and there it decides whether a magnified pixel looks like a pixel or like
+   * a gradient nothing photographed (`use-pixel-view.ts`).
+   */
+  pixelView?: PixelView;
   /** A file was given, so an absent source means "decoding". */
   hasFile: boolean;
   /** What an empty frame says — the host knows where a picture comes from. */
@@ -65,6 +73,10 @@ export default function DevelopViewport({
           transform: view.transform,
           // A finger is followed as it moves; a button is animated.
           transition: view.settling ? 'transform 220ms var(--ease-paper)' : undefined,
+          // Below 1:1 the browser is DOWNSCALING, where `pixelated` is simply
+          // worse — it aliases a picture nobody asked to inspect. The choice
+          // only takes effect where it means something.
+          imageRendering: view.magnifying ? imageRenderingFor(pixelView) : undefined,
         }}
         aria-label="The picture, corrected"
       />

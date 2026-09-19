@@ -61,6 +61,7 @@ import { describeKeyTarget, targetOwnsTyping } from '../../shared/media/transpor
 import PanelHost from '../../shared/ui/PanelHost';
 import Segmented from '../../shared/ui/Segmented';
 import StageZoomControl from '../../shared/ui/StageZoomControl';
+import { usePixelView } from '../../shared/ui/use-pixel-view';
 import { STAGE_ZOOM_STEP, zoomLabel, type ZoomControls } from '../../shared/ui/stage-zoom';
 import type { RollExport } from '../../shared/develop/roll-types';
 import CropPanel, { type CropApplyVerb } from './CropPanel';
@@ -179,6 +180,7 @@ export default function PictureWorkbench({
   const [layersDraft, setLayersDraft] = useState<AdjustLayer[]>(entry.layers ?? []);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [showMask, setShowMask] = useState(false);
+  const [pixelView, setPixelView] = usePixelView();
   // The subject rasters come BACK through state, because the two hooks need
   // each other: the stage decodes the picture the model segments, and the model
   // produces the map the stage draws. One extra commit per answer, which is
@@ -498,13 +500,32 @@ export default function PictureWorkbench({
             (cropping ? (
               <StageZoomControl zoom={cropZoom} hint="look closer: pinch or the wheel — the crop stays" className="flex-none" />
             ) : (
-              <StageZoomControl zoom={picture.view.zoom} hint="wheel, pinch, or Z" className="flex-none" />
+              <>
+                <StageZoomControl zoom={picture.view.zoom} hint="wheel, pinch, or Z" className="flex-none" />
+                {/* Only where it means anything: below 1:1 the browser is
+                    downscaling and `pixelated` is simply worse. */}
+                {picture.view.magnifying && (
+                  <button
+                    type="button"
+                    className={`${developPillClass} flex-none cursor-pointer hover:border-accent`}
+                    onClick={() => setPixelView(pixelView === 'pixels' ? 'smooth' : 'pixels')}
+                    title={
+                      pixelView === 'pixels'
+                        ? 'Pixels as pixels — past 100 % nothing is invented between them'
+                        : 'Smoothed — past 100 % the gradients between pixels are the browser\u2019s, not the picture\u2019s'
+                    }
+                  >
+                    {pixelView === 'pixels' ? 'pixels' : 'smooth'}
+                  </button>
+                )}
+              </>
             ))}
         </div>
         <DevelopViewport
           picture={picture}
           hasFile={Boolean(file)}
           emptyText={emptyText}
+          pixelView={pixelView}
           className={cropping ? 'hidden' : 'flex-1'}
           onPick={(linear) => {
             const { temperature, tint, clamped } = whiteBalanceFor(linear);
