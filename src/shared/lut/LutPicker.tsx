@@ -1,4 +1,8 @@
+import { useState } from 'react';
 import { BUILTIN_LUTS, LUT_GROUPS, UNGROUPED_LUTS } from './builtin-luts';
+import LutGalleryModal, { type LutPreviewSource } from './LutGalleryModal';
+import IconButton from '../ui/IconButton';
+import { Icons } from '../ui/icons';
 
 interface LutPickerProps {
   selected: string;
@@ -9,6 +13,8 @@ interface LutPickerProps {
   onIntensityChange: (value: number) => void;
   onSelect: (value: string) => void;
   onUpload: () => void;
+  /** The tool's own open picture, if it has one handy — the gallery's truest preview. */
+  previewImage?: LutPreviewSource | null;
 }
 
 // Re-export so consumers don't need a second import path for the LUT list.
@@ -28,13 +34,23 @@ export default function LutPicker({
   onIntensityChange,
   onSelect,
   onUpload,
+  previewImage = null,
 }: LutPickerProps) {
+  const [gallery, setGallery] = useState(false);
   return (
     <>
       <label className="flex items-center gap-2 min-w-0 pl-1.5">
         <span className="font-mono text-2xs tracking-[0.16em] uppercase text-muted select-none">
           Look
         </span>
+        <IconButton
+          label="Browse looks with a live preview"
+          size="sm"
+          variant="ghost"
+          onClick={() => setGallery(true)}
+        >
+          {Icons.grid}
+        </IconButton>
         <div className="relative inline-flex items-center min-w-0">
           <select
             className="appearance-none min-w-0 max-w-full overflow-hidden text-ellipsis font-sans text-sm font-semibold text-ink bg-paper border border-line-strong rounded-full h-[2.3rem] pl-[0.9rem] pr-[2.2rem] cursor-pointer hover:border-faint focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-colors disabled:opacity-60 disabled:cursor-default"
@@ -120,6 +136,19 @@ export default function LutPicker({
             {Math.round(intensity * 100)}%
           </span>
         </label>
+      )}
+
+      {gallery && (
+        <LutGalleryModal
+          selected={selected}
+          allowNone
+          previewImage={previewImage}
+          onPick={(id) => {
+            onSelect(id);
+            setGallery(false);
+          }}
+          onClose={() => setGallery(false)}
+        />
       )}
     </>
   );

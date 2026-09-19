@@ -7,6 +7,7 @@ import {
   UNGROUPED_LUTS,
 } from './builtin-luts';
 import FilmDials from './FilmDials';
+import LutGalleryModal, { type LutPreviewSource } from './LutGalleryModal';
 import { MAX_LAYER_INTENSITY } from './lut-stack';
 import { OUTPUT_TRANSFORM_OPTIONS } from './transfer';
 import type { LutStack } from './use-lut-stack';
@@ -21,6 +22,8 @@ import { Icons } from '../ui/icons';
 
 interface GradePanelProps {
   stack: LutStack;
+  /** The picture on the stage, if there is one — the gallery's truest preview. */
+  previewImage?: LutPreviewSource | null;
 }
 
 /**
@@ -32,8 +35,14 @@ interface GradePanelProps {
  * The stack bakes into a single LUT, so the preview, the stills and every
  * export variant grade through exactly one shader pass.
  */
-export default function GradePanel({ stack }: GradePanelProps) {
+export default function GradePanel({ stack, previewImage = null }: GradePanelProps) {
   const [pick, setPick] = useState('');
+  const [gallery, setGallery] = useState(false);
+
+  const pickLook = (id: string) => {
+    if (id.startsWith(FILM_PICK)) stack.addFilm(id.slice(FILM_PICK.length) as FilmStockId);
+    else void stack.addBuiltin(id);
+  };
 
   const activeCount = stack.layers.filter(
     (l) => l.enabled && l.intensity > 0,
@@ -53,8 +62,7 @@ export default function GradePanel({ stack }: GradePanelProps) {
           value={pick}
           onChange={(id) => {
             setPick('');
-            if (id.startsWith(FILM_PICK)) stack.addFilm(id.slice(FILM_PICK.length) as FilmStockId);
-            else if (id) void stack.addBuiltin(id);
+            if (id) pickLook(id);
           }}
           options={[
             { id: '', label: stack.busy ? 'Loading…' : 'Built-in…' },
@@ -65,10 +73,30 @@ export default function GradePanel({ stack }: GradePanelProps) {
             ...LUT_GROUPS.flatMap((g) => g.luts.map((l) => ({ id: l.id, label: `${g.label} · ${l.name}` }))),
           ]}
         />
+        <IconButton
+          label="Browse looks with a live preview"
+          size="sm"
+          variant="ghost"
+          onClick={() => setGallery(true)}
+        >
+          {Icons.grid}
+        </IconButton>
         <Button size="sm" onClick={() => void stack.addCustom()} title="Load a .cube file from disk">
           .cube…
         </Button>
       </FieldRow>
+
+      {gallery && (
+        <LutGalleryModal
+          includeFilm
+          previewImage={previewImage}
+          onPick={(id) => {
+            pickLook(id);
+            setGallery(false);
+          }}
+          onClose={() => setGallery(false)}
+        />
+      )}
 
       {stack.error && <p className="m-0 text-xs text-danger">{stack.error}</p>}
 
