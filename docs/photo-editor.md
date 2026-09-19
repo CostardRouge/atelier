@@ -80,7 +80,7 @@ not seven.**
 
 ### 2.4 The roll already holds a picture's treatment
 
-`RollPicture` (`shared/develop/roll-types.ts`, `ROLL_DOC_VERSION = 1`) carries
+`RollPicture` (`shared/develop/roll-types.ts`, `ROLL_DOC_VERSION = 2` since the border of 2026-09-19) carries
 `develop`, `framing` and `aspect`; `RollDoc` carries the roll's `grade` and
 `export`. The document shape to grow is here, and it has a migration reader
 (`readRollDoc`) already.
@@ -244,7 +244,7 @@ never disagree.
 ## 6. The model
 
 `shared/render/edit.ts`. `RollPicture.develop` becomes `RollPicture.edit`,
-`ROLL_DOC_VERSION` 1 → 2; an old `develop` reads straight into `edit.base`,
+`ROLL_DOC_VERSION` 2 → 3 (v2 went to the border, 2026-09-19); an old `develop` reads straight into `edit.base`,
 `framing`/`aspect` into `edit.geometry`, layers default to `[]` — so no existing
 roll changes appearance, which is the migration's test.
 

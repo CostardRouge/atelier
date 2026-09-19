@@ -8,6 +8,7 @@ import {
   createRollDoc,
   migrateRollDoc,
   movePicture,
+  copyBorderTo,
   copyCropTo,
   patchPicture,
   readRollDoc,
@@ -112,6 +113,43 @@ describe('editing the strip', () => {
     const plain = copyCropTo(next, ['p2'], { aspect: 'original', framing: { ...DEFAULT_FRAMING } }, 10);
     expect(plain.pictures[1]).toMatchObject({ aspect: 'original', framing: null });
     expect(copyCropTo(doc, ['nope'], { aspect: '1:1', framing: null }, 9)).toBe(doc);
+  });
+
+  it('copies a border onto other pictures and leaves their crops alone', () => {
+    let doc = roll(['a', 'b', 'c']);
+    doc = patchPicture(doc, 'p2', { aspect: '1:1', framing: { ...DEFAULT_FRAMING, scale: 2 } }, 5);
+    const border = { aspect: '4:5', fill: 'blur', margin: { x: 0.1, y: 0.02 } };
+    const next = copyBorderTo(doc, ['p2', 'p3'], border, 9);
+    expect(next.pictures[0]).toBe(doc.pictures[0]);
+    expect(next.pictures[1]).toMatchObject({ aspect: '1:1', framing: { scale: 2 }, border });
+    expect(next.pictures[1].border).not.toBe(border);
+    expect(next.pictures[1].border!.margin).not.toBe(next.pictures[2].border!.margin);
+    // Taking it off, and a copy that changes nothing, which returns the roll itself.
+    expect(copyBorderTo(next, ['p2'], null, 10).pictures[1].border).toBeNull();
+    expect(copyBorderTo(next, ['p2', 'p3'], { ...border, margin: { ...border.margin } }, 11)).toBe(next);
+  });
+
+  it('reads a border, and a v1 Whole framing that is exactly one as one', () => {
+    const raw = {
+      id: 'r',
+      pictures: [
+        { id: 'a', ref: ref('a'), aspect: '4:5', framing: { ...DEFAULT_FRAMING, fit: 'contain' } },
+        { id: 'b', ref: ref('b'), aspect: '4:5', framing: { ...DEFAULT_FRAMING, fit: 'contain', rotation: 90 } },
+        { id: 'c', ref: ref('c'), border: { aspect: null, fill: '#ffffff', margin: { x: 0.1, y: 0.1 } } },
+      ],
+    };
+    const doc = readRollDoc(raw)!;
+    expect(doc.version).toBe(2);
+    expect(doc.pictures[0]).toMatchObject({
+      aspect: 'original',
+      framing: null,
+      border: { aspect: '4:5', fill: '#000000', margin: { x: 0, y: 0 } },
+    });
+    // A quarter-turned Whole is not a border without the picture's size: it stays contain.
+    expect(doc.pictures[1]).toMatchObject({ aspect: '4:5', framing: { fit: 'contain', rotation: 90 }, border: null });
+    expect(doc.pictures[2].border).toEqual({ aspect: null, fill: '#ffffff', margin: { x: 0.1, y: 0.1 } });
+    // Reading it again changes nothing.
+    expect(readRollDoc(doc)).toEqual({ ...doc, updatedAt: doc.updatedAt, createdAt: doc.createdAt });
   });
 
   it('counts a picture as developed when it has a develop or a crop', () => {

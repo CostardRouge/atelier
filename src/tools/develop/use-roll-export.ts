@@ -101,6 +101,7 @@ export function useRollExport({
       originalOf(origin),
       open.framing,
       pictureAspectRatio(open.aspect, openSize.size.width, openSize.size.height),
+      open.border,
       roll.export,
     );
   }
@@ -144,6 +145,7 @@ export function useRollExport({
               originalOf(origin),
               picture.framing,
               pictureAspectRatio(picture.aspect, size.width, size.height),
+              picture.border,
               r.export,
             );
             if (summary.from === 'original') {
@@ -164,6 +166,7 @@ export function useRollExport({
           const out = await renderRollPicture(source, {
             framing: picture.framing,
             aspect: picture.aspect,
+            border: picture.border,
             lut: cubeFor(picture),
             longEdge: r.export.longEdge,
             quality: r.export.quality,

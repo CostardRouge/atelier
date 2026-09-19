@@ -10,8 +10,10 @@
  * a browser without it) yields null and the cell says so.
  */
 
-import { drawFramed, type Framing } from '../media/framing';
-import { frameSize } from '../roadtrip/badge-render';
+import type { Framing } from '../media/framing';
+import { borderLayout, scaleLayout, type RollBorder } from './border-layout';
+import { drawDelivered } from './border-paint';
+import { cropZoneSize } from './roll-export';
 import { THUMB_LONG_EDGE, THUMB_QUALITY, thumbSize } from '../roadtrip/thumbnail';
 
 /**
@@ -27,10 +29,18 @@ export async function framedThumbnail(
   srcH: number,
   aspectRatio: number,
   framing: Framing,
+  border: RollBorder | null = null,
   longEdge = THUMB_LONG_EDGE,
 ): Promise<Blob | null> {
   if (srcW <= 0 || srcH <= 0) return null;
-  const { w, h } = frameSize(aspectRatio > 0 ? aspectRatio : srcW / srcH, Math.min(longEdge, Math.max(srcW, srcH)));
+  // The delivered canvas at the thumbnail's size: a small crop is drawn at the
+  // cell's size too — a cell is looked at, not delivered.
+  const zone = cropZoneSize({ width: srcW, height: srcH }, aspectRatio > 0 ? aspectRatio : srcW / srcH, framing);
+  const full = borderLayout(zone.w, zone.h, border);
+  const k = longEdge / Math.max(full.w, full.h);
+  const w = Math.max(1, Math.round(full.w * k));
+  const h = Math.max(1, Math.round(full.h * k));
+  const layout = scaleLayout(full, w / full.w);
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
@@ -38,7 +48,7 @@ export async function framedThumbnail(
   if (!ctx) return null;
   try {
     ctx.imageSmoothingQuality = 'high';
-    drawFramed(ctx, image, srcW, srcH, w, h, framing);
+    drawDelivered(ctx, image, srcW, srcH, framing, layout, border);
   } catch {
     return null;
   }

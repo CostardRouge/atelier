@@ -408,3 +408,45 @@ byte-identical; in Free, a finger 19 px inside the right edge dragged 60 px
 moved that edge exactly 60 px, the left edge and the height untouched (read
 back by hover-scanning the stage's cursor zones); under Original the same drag
 kept 1.5:1 about the centre. Not driven: a real phone, a real multi-touch.
+
+## A picture may be delivered on a BORDER (2026-09-19, roll v2)
+
+**Decision (maintainer, over a second prototype).** Coloured bars or margins
+round the crop, a subsection of the Crop tab; blur is wanted. `RollPicture.border`
+(`null` = the file IS the crop) — `aspect` (the file's shape or null for crop +
+margins), `fill` (`#rrggbb` or `'blur'`), `margin` {x, y} as fractions of the
+CROP's short side, the picture always centred (v1). `border-layout.ts` (pure,
+tested: the layout, the reader, `legacyWholeBorder`, a box blur),
+`border-paint.ts` (the ONE painter: export, cell, viewport, panel preview).
+Rules a later agent must keep:
+
+- **`ROLL_DOC_VERSION` is 2.** The lift lives in `readPicture` and is
+  idempotent. `photo-editor.md`'s edit-stack migration becomes v2 → v3.
+- **A crop leaves at the source's OWN density** (`deliveredLayout`,
+  `cropZoneSize`): the file is the zone (+ border), capped by the long edge,
+  never the aspect box with a small zone blown up into it — which is what D9
+  did, a zoomed crop reading `×1.50 upscaled`. So a proxy is only ever
+  upscaled against what the ORIGINAL could give, and `Auto`'s question is
+  unchanged. The *Delivers* line names the crop's long edge when a border makes
+  the file larger than it.
+- **Legacy Whole** (`fit: 'contain'`, D8): read as zone = whole picture +
+  `border {aspect: <old aspect>, fill: '#000000', margin 0}` ONLY when exactly
+  representable without the picture's size — scale 1, a half turn at most, no
+  pan (any pan when the aspect was `original`). Same composition, but now at
+  the picture's own density instead of the aspect box's: bigger file, same
+  picture. Anything else (a quarter turn, a zoom, a pan, a tilt) STAYS
+  `contain` and renders through `drawFramed`'s legacy path unchanged; the crop
+  stage reads it as its cover twin and the first crop gesture replaces it.
+- **The blur fill blurs a 48 px copy of the crop** (three box passes, then
+  scaled to cover, darkened 18%), so preview and file blur the same picture
+  whatever their size — no `ctx.filter` (Safari).
+- **Apply to is TWO verbs** (the maintainer's one change to the prototype):
+  `copyCropTo` never touches the border, `copyBorderTo` (pure, tested) never
+  the crop, so a roll can wear one border over crops that each differ.
+- `rollProgress` counts a border as looked at.
+
+Verified in the pane through the app's own `renderRollPicture` on a 3000×2000
+half-blue/half-green JPEG: a 10 % vermilion border on a 1:1 file → 3400×3400,
+vermilion outside, blue and green inside; a 1:1 crop at scale 2 → 1000×1000
+(the zone, native density); a blur border on 9:16 → 3200×5689 with the fill
+blue on the left and green on the right, darkened (208 against 254).

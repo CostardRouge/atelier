@@ -997,8 +997,10 @@ saved as you go, and is never inherited by the next one.
 **Exporting.** The **Export** tab writes JPEGs — this picture, the marked
 ones, or the whole roll — into a folder you choose (downloaded one by one
 where the browser has no folder picker). Each is decoded at its own size,
-developed under the roll's look and cropped as the stage showed it; the
-**Size** is a ceiling on the long edge and never upscales. For a picture that
+developed under the roll's look and cropped as the stage showed it — a crop
+leaves at the picture's own density, so a small zone makes a small file, never
+one blown up to fill its aspect; the **Size** is a ceiling on the long edge and
+never upscales. For a picture that
 came from your Winnow, **Pixels** decides where its pixels come from: *Auto*
 fetches the full-size original only where the proxy could not fill the frame
 asked for, *Proxies* never fetches, *Originals* always does — and a *Delivers*

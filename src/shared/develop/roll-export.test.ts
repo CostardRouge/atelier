@@ -4,6 +4,8 @@ import {
   choosePixels,
   decodableOriginal,
   deliversLine,
+  cropZoneSize,
+  deliveredLayout,
   deliverySummary,
   describeRun,
   exportName,
@@ -97,11 +99,33 @@ describe('deliversLine', () => {
   });
 });
 
+describe('the delivered layout', () => {
+  it('is the crop at the source’s own density, capped and never upscaled', () => {
+    const d = deliveredLayout(proxy, 1, { ...DEFAULT_FRAMING, scale: 2 }, null, null);
+    expect(d.zone.w).toBeCloseTo(768, 6);
+    expect(d.out).toEqual({ w: 768, h: 768 });
+    expect(deliveredLayout(proxy, 1, { ...DEFAULT_FRAMING, scale: 2 }, null, 512).out).toEqual({ w: 512, h: 512 });
+    expect(cropZoneSize(proxy, 1, null)).toEqual({ w: 1536, h: 1536 });
+  });
+
+  it('keeps a legacy Whole framing in its aspect box', () => {
+    const d = deliveredLayout(proxy, 4 / 5, { ...DEFAULT_FRAMING, fit: 'contain' }, null, null);
+    expect(d.out).toEqual({ w: 1229, h: 1536 });
+  });
+
+  it('places the crop in its border, centred, on the rounded canvas', () => {
+    const d = deliveredLayout(proxy, proxy.width / proxy.height, null, { aspect: null, fill: '#000000', margin: { x: 0.25, y: 0 } }, 1000);
+    expect(d.out.w).toBe(1000);
+    expect(d.layout.x).toBeCloseTo((d.layout.w - d.layout.pw) / 2, 9);
+    expect(d.layout.w).toBeCloseTo(1000, 9);
+  });
+});
+
 describe('deliverySummary', () => {
   const settings = { longEdge: 1920, originals: 'auto' as const };
 
   it('delivers a local file from itself and says so', () => {
-    const s = deliverySummary(proxy, false, null, null, proxy.width / proxy.height, settings);
+    const s = deliverySummary(proxy, false, null, null, proxy.width / proxy.height, null, settings);
     expect(s.from).toBe('file');
     expect(s.out).toEqual({ w: 1920, h: 1440 });
     expect(s.line).toMatch(/^File 2048 px → 1920 · ×1\.07 to spare$/);
@@ -109,7 +133,7 @@ describe('deliverySummary', () => {
   });
 
   it('turns to the original when the proxy crop would upscale, and sizes the frame from it', () => {
-    const s = deliverySummary(proxy, true, original, null, 4 / 5, settings);
+    const s = deliverySummary(proxy, true, original, null, 4 / 5, null, settings);
     expect(s.from).toBe('original');
     expect(s.out).toEqual({ w: 1536, h: 1920 });
     expect(s.line).toMatch(/^Original 6048 px → 1920/);
@@ -117,30 +141,39 @@ describe('deliverySummary', () => {
   });
 
   it('stays on the proxy when it has the pixels, and under Proxies delivers what it has and says what was asked', () => {
-    const own = deliverySummary(proxy, true, original, null, 16 / 9, settings);
+    const own = deliverySummary(proxy, true, original, null, 16 / 9, null, settings);
     expect(own.from).toBe('file');
     expect(own.line).toBe('Proxy 2048 px → 1920 · ×1.07 to spare');
-    const forced = deliverySummary(proxy, true, original, null, 4 / 5, { ...settings, originals: 'proxies' });
+    const forced = deliverySummary(proxy, true, original, null, 4 / 5, null, { ...settings, originals: 'proxies' });
     expect(forced.from).toBe('file');
     expect(forced.out).toEqual({ w: 1229, h: 1536 });
     expect(forced.line).toBe('Proxy 1536 px → 1536 · exact · asked 1920');
   });
 
   it('with Source size asked, Auto turns to the original: its pixels ARE the source size', () => {
-    const s = deliverySummary(proxy, true, original, null, proxy.width / proxy.height, { longEdge: null, originals: 'auto' });
+    const s = deliverySummary(proxy, true, original, null, proxy.width / proxy.height, null, { longEdge: null, originals: 'auto' });
     expect(s.from).toBe('original');
     expect(s.out).toEqual({ w: 8064, h: 6048 });
     expect(s.line).toBe('Original 8064 px → 8064 · exact');
   });
 
-  it('a zoomed crop upscales the file itself, and the line says so', () => {
-    const s = deliverySummary(proxy, false, null, { ...DEFAULT_FRAMING, scale: 1.6 }, proxy.width / proxy.height, settings);
+  it('a smaller crop delivers at its own density, never blown up to the aspect box', () => {
+    const s = deliverySummary(proxy, false, null, { ...DEFAULT_FRAMING, scale: 1.6 }, proxy.width / proxy.height, null, settings);
     expect(s.from).toBe('file');
-    expect(s.line).toBe('File 1280 px → 1920 · ×1.50 upscaled');
+    expect(s.out).toEqual({ w: 1280, h: 960 });
+    expect(s.line).toBe('File 1280 px → 1280 · exact');
+  });
+
+  it('counts the border in the file and says the crop it carries', () => {
+    const border = { aspect: '1:1', fill: '#ffffff', margin: { x: 0.1, y: 0.1 } };
+    const s = deliverySummary(proxy, false, null, null, proxy.width / proxy.height, border, { longEdge: null, originals: 'auto' });
+    // 2048 × 1536 + 10 % of 1536 each side → 2355.2 × 1843.2, squared → 2355 × 2355.
+    expect(s.out).toEqual({ w: 2355, h: 2355 });
+    expect(s.line).toBe('File 2048 px → 2355 · exact');
   });
 
   it('delivers from the render when the original is a RAW, and says why', () => {
-    const s = deliverySummary(proxy, true, { ...original, name: 'DJI_0421.DNG' }, null, 4 / 5, {
+    const s = deliverySummary(proxy, true, { ...original, name: 'DJI_0421.DNG' }, null, 4 / 5, null, {
       ...settings,
       originals: 'originals',
     });

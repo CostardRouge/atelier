@@ -115,9 +115,10 @@ export default function PictureWorkbench({
   // The crop stays visible on every tab: the Develop viewport shows the
   // picture as it will leave, framed, while the Crop tab edits the frame.
   const [ratio, setRatio] = useState(0);
+  const border = entry.border;
   const frame = useMemo<DevelopFrame | null>(
-    () => (ratio > 0 ? { aspectRatio: ratio, framing: framingDraft } : null),
-    [ratio, framingDraft],
+    () => (ratio > 0 ? { aspectRatio: ratio, framing: framingDraft, border } : null),
+    [ratio, framingDraft, border],
   );
   const picture = useDevelopPicture({ file, cube: stack.composed, frame });
   const fidelity = pictureFidelity(file);
@@ -169,12 +170,12 @@ export default function PictureWorkbench({
     const t = window.setTimeout(() => {
       const image = delivered();
       if (!image) return;
-      void framedThumbnail(image, source.width, source.height, aspectRatio, framingDraft).then((blob) => {
+      void framedThumbnail(image, source.width, source.height, aspectRatio, framingDraft, border).then((blob) => {
         if (blob) callbacks.current.onSnapshot(blob);
       });
     }, SNAPSHOT_DELAY_MS);
     return () => window.clearTimeout(t);
-  }, [source, cube, delivered, aspectRatio, framingDraft]);
+  }, [source, cube, delivered, aspectRatio, framingDraft, border]);
 
   // --- keys --------------------------------------------------------------------
   const keyState = useRef({ draft, picture, tell, crop, tab });

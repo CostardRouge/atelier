@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
-import { drawFramed, type Framing } from '../media/framing';
+import type { Framing } from '../media/framing';
+import { borderLayout, scaleLayout, type RollBorder } from './border-layout';
+import { drawDelivered, drawPictureIn } from './border-paint';
 import { holdGrades, type HeldGrader } from '../lut/held-grader';
 import { stageFrameSize } from '../overlay/stage-size';
 import { THUMB_LONG_EDGE, THUMB_QUALITY, thumbSize } from '../roadtrip/thumbnail';
@@ -30,6 +32,8 @@ export interface DevelopFrame {
   /** w / h of the box. */
   aspectRatio: number;
   framing: Framing;
+  /** The border it is delivered on, when it has one — the viewport shows the file. */
+  border?: RollBorder | null;
 }
 
 export interface DevelopPicture {
@@ -165,13 +169,19 @@ export function useDevelopPicture({
 
   const frameRatio = frame && frame.aspectRatio > 0 ? frame.aspectRatio : null;
   const framing = frame?.framing ?? null;
+  const border = frame?.border ?? null;
+  // The delivered canvas in the crop's own units (a crop of frameRatio × 1).
+  const delivered1 = useMemo(
+    () => (frameRatio ? borderLayout(frameRatio, 1, border) : null),
+    [frameRatio, border],
+  );
   // What the canvas holds: the whole picture, or its crop at the same density
   // (the crop's long edge is the stage budget's long edge).
   const canvasSize = useMemo(() => {
     if (!source || source.width <= 0 || source.height <= 0) return null;
     const whole = stageFrameSize(source.width, source.height);
-    return frameRatio ? frameSize(frameRatio, Math.max(whole.w, whole.h)) : whole;
-  }, [source, frameRatio]);
+    return delivered1 ? frameSize(delivered1.w / delivered1.h, Math.max(whole.w, whole.h)) : whole;
+  }, [source, delivered1]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -185,9 +195,10 @@ export function useDevelopPicture({
     if (!ctx) return;
     const grader = holding ? null : graderFor(cube, source);
     const graded = grader ? grader.render(source.image) : source.image;
-    if (frameRatio && framing) {
+    const layout = delivered1 && framing ? scaleLayout(delivered1, w / delivered1.w) : null;
+    if (layout && framing) {
       ctx.clearRect(0, 0, w, h);
-      drawFramed(ctx, graded, source.width, source.height, w, h, framing);
+      drawDelivered(ctx, graded, source.width, source.height, framing, layout, border);
     } else {
       ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
     }
@@ -196,19 +207,19 @@ export function useDevelopPicture({
     // drawn over the canvas, in the page, so it stays a hairline at any zoom.
     if (grader && wipe < 1) {
       const x = Math.round(wipe * w);
-      if (frameRatio && framing) {
+      if (layout && framing) {
         ctx.save();
         ctx.beginPath();
         ctx.rect(x, 0, w - x, h);
         ctx.clip();
-        drawFramed(ctx, source.image, source.width, source.height, w, h, framing);
+        drawPictureIn(ctx, source.image, source.width, source.height, framing, layout);
         ctx.restore();
       } else {
         const sx = Math.round(wipe * source.width);
         ctx.drawImage(source.image, sx, 0, source.width - sx, source.height, x, 0, w - x, h);
       }
     }
-  }, [source, canvasSize, frameRatio, framing, cube, wipe, holding, graderFor]);
+  }, [source, canvasSize, delivered1, framing, border, cube, wipe, holding, graderFor]);
 
   // The histogram, read off a small copy of the graded picture one frame
   // after it changes — so a slider step paints first and measures second, and

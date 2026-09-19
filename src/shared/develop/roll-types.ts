@@ -18,13 +18,18 @@ import { developOrNull, type DevelopSettings } from './develop';
 import { isDefaultFraming, normaliseFraming, type Framing } from '../media/framing';
 import { type SavedMediaRef } from '../projects/project-types';
 import { isStoredAspect } from './crop-aspect';
+import { legacyWholeBorder, readBorder, sameBorder, type RollBorder } from './border-layout';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
 import { MAX_LAYER_INTENSITY } from '../lut/lut-stack';
 import type { OutputTransform } from '../lut/transfer';
 import { DEFAULT_SOURCE_ID } from '../sources/source';
 
-/** Bumped with a migration block in `migrateRollDoc`, never without. */
-export const ROLL_DOC_VERSION = 1;
+/**
+ * Bumped with a migration block in `migrateRollDoc`, never without.
+ * v2 (2026-09-19): `RollPicture.border`, and a legacy Whole framing that is
+ * exactly a border read as one (`legacyWholeBorder`).
+ */
+export const ROLL_DOC_VERSION = 2;
 
 /** The roll's look, after every picture's develop — Trips' `TripGrade` shape. */
 export interface RollGrade {
@@ -66,6 +71,8 @@ export interface RollPicture {
   /** Null is uncropped. Crop · straighten · flip (`shared/media/framing.ts`). */
   framing: Framing | null;
   aspect: RollAspect;
+  /** Null is no border: the file is exactly the crop (`border-layout.ts`, v2). */
+  border: RollBorder | null;
 }
 
 export interface RollDoc {
@@ -108,7 +115,7 @@ export function createRollDoc(
 }
 
 export function createRollPicture(ref: SavedMediaRef, id: string = newRollId()): RollPicture {
-  return { id, ref: { ...ref }, develop: null, framing: null, aspect: 'original' };
+  return { id, ref: { ...ref }, develop: null, framing: null, aspect: 'original', border: null };
 }
 
 // --- reading what was stored ------------------------------------------------
@@ -181,12 +188,24 @@ function readPicture(raw: unknown): RollPicture | null {
   if (!isRecord(raw)) return null;
   const ref = readMediaRef(raw.ref);
   if (!ref) return null;
+  let framing = readFraming(raw.framing);
+  let aspect = typeof raw.aspect === 'string' && isStoredAspect(raw.aspect) ? raw.aspect : 'original';
+  let border = readBorder(raw.border);
+  // v1 → v2: a Whole framing that IS a border becomes one. Idempotent, so it
+  // is simply part of reading: v2 never writes `contain`.
+  const legacy = framing ? legacyWholeBorder(aspect, framing) : null;
+  if (legacy) {
+    aspect = legacy.aspect;
+    framing = isDefaultFraming(legacy.framing) ? null : legacy.framing;
+    border = border ?? legacy.border;
+  }
   return {
     id: typeof raw.id === 'string' && raw.id ? raw.id : newRollId(),
     ref,
     develop: developOrNull(raw.develop),
-    framing: readFraming(raw.framing),
-    aspect: typeof raw.aspect === 'string' && isStoredAspect(raw.aspect) ? raw.aspect : 'original',
+    framing,
+    aspect,
+    border,
   };
 }
 
@@ -221,7 +240,7 @@ export function readRollDoc(raw: unknown, fallbackSourceId: string = DEFAULT_SOU
   };
 }
 
-/** A roll as the store hands it back, on the current shape. Version 1 has no older shape to lift. */
+/** A roll as the store hands it back, on the current shape — v1's lift (the border, a legacy Whole) is `readPicture`'s. */
 export function migrateRollDoc(doc: RollDoc): RollDoc {
   return readRollDoc(doc, doc.sourceId) ?? createRollDoc(doc.name ?? '', doc.sourceId, Date.now(), doc.id);
 }
@@ -276,7 +295,7 @@ export function movePicture(roll: RollDoc, from: number, to: number, now: number
 export function patchPicture(
   roll: RollDoc,
   id: string,
-  patch: Partial<Pick<RollPicture, 'develop' | 'framing' | 'aspect'>>,
+  patch: Partial<Pick<RollPicture, 'develop' | 'framing' | 'aspect' | 'border'>>,
   now: number = Date.now(),
 ): RollDoc {
   let found = false;
@@ -310,6 +329,26 @@ export function copyCropTo(
 }
 
 /**
+ * One picture's BORDER written onto others, each as its own copy — never the
+ * crop: the maintainer asked for the two apart (2026-09-19), so a roll can wear
+ * one border over crops that each differ. `null` takes the border off.
+ */
+export function copyBorderTo(
+  roll: RollDoc,
+  ids: readonly string[],
+  border: RollBorder | null,
+  now: number = Date.now(),
+): RollDoc {
+  let changed = false;
+  const pictures = roll.pictures.map((p) => {
+    if (!ids.includes(p.id) || sameBorder(p.border, border)) return p;
+    changed = true;
+    return { ...p, border: border ? { ...border, margin: { ...border.margin } } : null };
+  });
+  return changed ? { ...roll, pictures, updatedAt: now } : roll;
+}
+
+/**
  * What the gallery card says: "18 of 42 developed" — a develop or a crop
  * counts, and an ASPECT other than the picture's own is a crop on its own:
  * drawing a free zone with the frame's corners leaves the framing untouched
@@ -319,7 +358,8 @@ export function copyCropTo(
 export function rollProgress(roll: RollDoc): { total: number; developed: number } {
   return {
     total: roll.pictures.length,
-    developed: roll.pictures.filter((p) => p.develop !== null || p.framing !== null || p.aspect !== 'original')
-      .length,
+    developed: roll.pictures.filter(
+      (p) => p.develop !== null || p.framing !== null || p.aspect !== 'original' || p.border !== null,
+    ).length,
   };
 }

@@ -62,7 +62,7 @@ The modal was split so a full-screen host lays out the same blocks
 /** shared/develop/roll-types.ts — BUILT (D3): pure, read through `readRollDoc`. */
 interface RollDoc {
   id: string;
-  version: number;                  // ROLL_DOC_VERSION = 1
+  version: number;                  // ROLL_DOC_VERSION = 2 since the border (2026-09-19)
   name: string;
   /** The source it is kept in (local or a Winnow) — one source, never synced across. */
   sourceId: string;
