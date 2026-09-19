@@ -32,6 +32,18 @@ import {
   type BrushStroke,
   type MaskKind,
 } from '../../shared/render/mask';
+import { useSubjectMasks } from '../../shared/develop/use-subject-masks';
+import type { BrushRaster } from '../../shared/render/brush-raster';
+
+type SubjectRasters = ReadonlyMap<string, BrushRaster>;
+const EMPTY_RASTERS: SubjectRasters = new Map();
+
+/**
+ * How near a tap must land to count as a tap ON an existing point rather than
+ * beside it, in [0,1] frame coordinates. Generous, because the markers are
+ * small and un-picking by accident is cheaper to undo than failing to un-pick.
+ */
+const SUBJECT_HIT_RADIUS = 0.04;
 import {
   addLayer,
   createLayer,
@@ -167,6 +179,11 @@ export default function PictureWorkbench({
   const [layersDraft, setLayersDraft] = useState<AdjustLayer[]>(entry.layers ?? []);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [showMask, setShowMask] = useState(false);
+  // The subject rasters come BACK through state, because the two hooks need
+  // each other: the stage decodes the picture the model segments, and the model
+  // produces the map the stage draws. One extra commit per answer, which is
+  // once per tap rather than once per frame.
+  const [subjectRasters, setSubjectRasters] = useState<SubjectRasters>(EMPTY_RASTERS);
   // What the NEXT stroke is painted with. Kept beside the layer rather than on
   // it: a brush is a tool, and each stroke keeps the settings it was made with
   // so a soft edge and a hard one can live in the same mask.
@@ -185,8 +202,8 @@ export default function PictureWorkbench({
   // one frame behind and would drop points (the same trap the curve editor's
   // drag wore). Each move rewrites the LAST stroke rather than adding one.
   const strokeRef = useRef<BrushStroke | null>(null);
-  const paintTarget = painting && selectedLayer?.mask?.kind === 'brush' ? selectedLayer : null;
-  const paintId = paintTarget?.id ?? null;
+  const paintKind = painting ? selectedLayer?.mask?.kind : undefined;
+  const paintId = paintKind === 'brush' || paintKind === 'subject' ? (selectedLayer?.id ?? null) : null;
   const brushRef = useRef(brush);
   brushRef.current = brush;
   const paint = useMemo(
@@ -194,6 +211,25 @@ export default function PictureWorkbench({
       paintId
         ? {
             onStart: (point: [number, number]) => {
+              if (paintKind === 'subject') {
+                // A tap ADDS a point, and a tap on one REMOVES it — the
+                // click-a-marker-to-unpick gesture, which is how a subject is
+                // narrowed after the model took in too much.
+                setLayersDraft((list) =>
+                  list.map((l) => {
+                    if (l.id !== paintId || l.mask?.kind !== 'subject') return l;
+                    const hit = l.mask.points.findIndex(
+                      ([x, y]) => Math.hypot(x - point[0], y - point[1]) < SUBJECT_HIT_RADIUS,
+                    );
+                    const points =
+                      hit >= 0
+                        ? l.mask.points.filter((_, i) => i !== hit)
+                        : [...l.mask.points, point];
+                    return { ...l, mask: { ...l.mask, points } };
+                  }),
+                );
+                return;
+              }
               const made: BrushStroke = { points: [point], ...brushRef.current };
               strokeRef.current = made;
               setLayersDraft((list) =>
@@ -205,6 +241,8 @@ export default function PictureWorkbench({
               );
             },
             onMove: (point: [number, number]) => {
+              // A subject is TAPPED, never dragged: the model answers a point.
+              if (paintKind === 'subject') return;
               const live = strokeRef.current;
               if (!live) return;
               const last = live.points[live.points.length - 1];
@@ -226,9 +264,10 @@ export default function PictureWorkbench({
             onEnd: () => {
               strokeRef.current = null;
             },
+            gesture: paintKind === 'subject' ? ('tap' as const) : ('drag' as const),
           }
         : null,
-    [paintId],
+    [paintId, paintKind],
   );
   const picture = useDevelopPicture({
     file,
@@ -237,12 +276,24 @@ export default function PictureWorkbench({
     keystone: keystoneDraft,
     lens: lensDraft,
     layers: layersDraft,
+    subjectMasks: subjectRasters,
     paint,
     // Only while the layer is open AND the box is ticked: a red wash left on
     // by accident would be mistaken for the picture.
     showMaskOf: showMask && selectedLayer ? selectedLayer.id : null,
   });
   const fidelity = pictureFidelity(file);
+  const subject = useSubjectMasks({
+    layers: layersDraft,
+    // `BadgeSource.image` is typed as `CanvasImageSource`, which admits an
+    // SVGImageElement nothing here ever produces and no GPU can upload —
+    // narrowed rather than widening the model's own contract.
+    source: (picture.source?.image as TexImageSource | undefined) ?? null,
+    // Per PICTURE: one picture's subject must never be shown on another.
+    pictureKey: entry.id,
+  });
+  const { rasters: resolvedSubjects } = subject;
+  useEffect(() => setSubjectRasters(resolvedSubjects), [resolvedSubjects]);
 
   // --- write-through ---------------------------------------------------------
   // Both drafts ride `use-write-through.ts`, which also takes the roll BACK
@@ -570,6 +621,24 @@ export default function PictureWorkbench({
                     onBrush={(patch) => setBrush((b) => ({ ...b, ...patch }))}
                     painting={painting}
                     onPainting={setPainting}
+                    subject={
+                      selectedLayer.mask?.kind === 'subject'
+                        ? {
+                            working: subject.working === selectedLayer.id,
+                            state: subject.state,
+                            resolved: subjectRasters.has(selectedLayer.id),
+                          }
+                        : null
+                    }
+                    onClearSubject={() =>
+                      setLayersDraft((list) =>
+                        list.map((l) =>
+                          l.id === selectedLayer.id && l.mask?.kind === 'subject'
+                            ? { ...l, mask: { ...l.mask, points: [] } }
+                            : l,
+                        ),
+                      )
+                    }
                     onUndoStroke={() =>
                       setLayersDraft((list) =>
                         list.map((l) =>

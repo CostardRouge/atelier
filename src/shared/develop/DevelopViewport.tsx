@@ -153,12 +153,14 @@ export function DevelopCaption({
    */
   also?: string | null;
 }) {
-  const { source, cube, view, painting } = picture;
+  const { source, cube, view, painting, paintGesture } = picture;
   const touched = Boolean(cube) || Boolean(also);
   // While a drag PAINTS, it does not compare: offering the wipe would be
   // offering a gesture the picture has already given away.
   const gesture = painting
-    ? ' · drag across the picture to paint the mask'
+    ? paintGesture === 'tap'
+      ? ' · tap the subject on the picture'
+      : ' · drag across the picture to paint the mask'
     : view.zoomed
       ? ' · drag to look around, the handle on the divider compares'
       : ' · drag across the picture to compare, wheel or pinch to look closer';

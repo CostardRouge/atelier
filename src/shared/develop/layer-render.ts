@@ -21,6 +21,7 @@ import type { Interpolation } from '../lut/interpolate';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeLayerPass } from '../render/layer-pass';
 import type { RenderPass } from '../render/graph';
+import type { BrushRaster } from '../render/brush-raster';
 import { drawingLayers, type AdjustLayer } from './layer';
 import type { DevelopSettings } from './develop';
 
@@ -43,6 +44,13 @@ export function layerPasses(
   layers: readonly AdjustLayer[] | null | undefined,
   aspectRatio: number,
   interpolation: Interpolation = getDefaultLutInterpolation(),
+  /**
+   * Alpha maps for the masks this module cannot compute — a segmented subject,
+   * resolved by `use-subject-masks.ts`. A layer asking for one that is not here
+   * yet draws NOTHING rather than everything: a subject still being thought
+   * about must not apply to the whole picture for four seconds.
+   */
+  rasters?: ReadonlyMap<string, BrushRaster> | null,
 ): RenderPass[] {
   return drawingLayers(layers).flatMap((layer) => {
     const cube = layerCube(layer.develop, interpolation);
@@ -54,6 +62,7 @@ export function layerPasses(
       opacity: layer.opacity,
       aspectRatio,
       interpolation,
+      raster: rasters?.get(layer.id) ?? null,
       // Keyed by the LAYER's id: the graph caches programs by pass id, and two
       // layers sharing one would share a program and, through it, one uploaded
       // cube — the second layer would then grade with the first one's numbers.
@@ -100,11 +109,13 @@ const OVERLAY_STRENGTH = 0.55;
 export function maskOverlayPass(
   layer: AdjustLayer | null | undefined,
   aspectRatio: number,
+  raster?: BrushRaster | null,
 ): RenderPass | null {
   if (!layer?.mask) return null;
   return makeLayerPass({
     lut: RED_CUBE,
     mask: layer.mask,
+    raster: raster ?? null,
     invert: layer.invert,
     opacity: OVERLAY_STRENGTH,
     aspectRatio,

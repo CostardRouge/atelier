@@ -81,6 +81,8 @@ export interface DevelopPicture {
    * caption that offers the wipe can stop offering it.
    */
   painting: boolean;
+  /** What a press on the picture does while `painting` — for the caption. */
+  paintGesture: 'drag' | 'tap';
   /** The eyedropper is armed: the next click on the picture picks a neutral. */
   picking: boolean;
   setPicking: (on: boolean) => void;
@@ -148,6 +150,7 @@ export function useDevelopPicture({
   layers = null,
   showMaskOf = null,
   paint = null,
+  subjectMasks = null,
 }: {
   file: File | null;
   videoTimeSeconds?: number;
@@ -177,6 +180,11 @@ export function useDevelopPicture({
    */
   showMaskOf?: string | null;
   /**
+   * Alpha maps for the SUBJECT layers, resolved by the model — the one mask
+   * kind the renderer cannot compute for itself (`use-subject-masks.ts`).
+   */
+  subjectMasks?: ReadonlyMap<string, import('../render/brush-raster').BrushRaster> | null;
+  /**
    * Painting: a drag on the picture becomes a stroke instead of moving the
    * divider. The host owns the strokes, because they belong to a layer in its
    * document — this only turns the pointer into a point of the SOURCE picture
@@ -186,6 +194,12 @@ export function useDevelopPicture({
     onStart: (point: [number, number]) => void;
     onMove: (point: [number, number]) => void;
     onEnd: () => void;
+    /**
+     * What the gesture IS, for the caption: a painted mask is dragged, a
+     * subject is tapped. Offering a drag for something you tap is offering the
+     * wrong gesture as confidently as offering the wipe was.
+     */
+    gesture?: 'drag' | 'tap';
   } | null;
   /**
    * Show the picture CROPPED — the Develop tool keeps its crop visible while
@@ -237,6 +251,7 @@ export function useDevelopPicture({
     geometry: PictureGeometry;
     layers: AdjustLayer[];
     overlay: string | null;
+    rasters: ReadonlyMap<string, import('../render/brush-raster').BrushRaster> | null;
     w: number;
     h: number;
     grader: HeldGrader;
@@ -248,6 +263,7 @@ export function useDevelopPicture({
       geometry: PictureGeometry,
       stack: readonly AdjustLayer[],
       overlay: string | null,
+      rasters: ReadonlyMap<string, import('../render/brush-raster').BrushRaster> | null,
     ): HeldGrader | null => {
       const cur = graderRef.current;
       // Geometry or a layer with NO look still needs the GPU: both are passes,
@@ -266,6 +282,7 @@ export function useDevelopPicture({
       if (
         sized &&
         cur.overlay === overlay &&
+        cur.rasters === rasters &&
         sameGeometry(cur.geometry, geometry) &&
         sameLayers(cur.layers, stack)
       ) {
@@ -274,8 +291,12 @@ export function useDevelopPicture({
       const ar = s.width / s.height;
       const passes = [
         ...geometryPasses(geometry, ar),
-        ...layerPasses(stack, ar),
-        ...(overlayOf ? [maskOverlayPass(overlayOf, ar)].flatMap((p) => (p ? [p] : [])) : []),
+        ...layerPasses(stack, ar, undefined, rasters),
+        ...(overlayOf
+          ? [maskOverlayPass(overlayOf, ar, rasters?.get(overlayOf.id) ?? null)].flatMap((p) =>
+              p ? [p] : [],
+            )
+          : []),
       ];
       // Only the PASSES moved, so swap them rather than rebuilding: the
       // context, its programs and the uploaded source all survive, which is
@@ -286,6 +307,7 @@ export function useDevelopPicture({
         cur.geometry = cloneGeometry(geometry);
         cur.layers = cloneLayers(stack);
         cur.overlay = overlay;
+        cur.rasters = rasters;
         return cur.grader;
       }
       cur?.grader.dispose();
@@ -298,6 +320,7 @@ export function useDevelopPicture({
         geometry: cloneGeometry(geometry),
         layers: cloneLayers(stack),
         overlay,
+        rasters,
         w: s.width,
         h: s.height,
         grader,
@@ -340,7 +363,7 @@ export function useDevelopPicture({
     }
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const grader = holding ? null : graderFor(cube, source, geometry, stack, showMaskOf);
+    const grader = holding ? null : graderFor(cube, source, geometry, stack, showMaskOf, subjectMasks);
     const graded = grader ? grader.render(source.image) : source.image;
     const layout = delivered1 && framing ? scaleLayout(delivered1, w / delivered1.w) : null;
     if (layout && framing) {
@@ -378,6 +401,7 @@ export function useDevelopPicture({
     geometry,
     stack,
     showMaskOf,
+    subjectMasks,
     graderFor,
   ]);
 
@@ -407,7 +431,7 @@ export function useDevelopPicture({
       const ctx = sample.getContext('2d', { willReadFrequently: true });
       if (!ctx) return;
       try {
-        const grader = graderFor(cube, source, geometry, stack, null);
+        const grader = graderFor(cube, source, geometry, stack, null, subjectMasks);
         const graded = grader ? grader.render(source.image) : source.image;
         ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
         setHistogram(luminanceHistogram(ctx.getImageData(0, 0, w, h).data));
@@ -424,7 +448,7 @@ export function useDevelopPicture({
       cancelAnimationFrame(raf);
       window.clearTimeout(fallback);
     };
-  }, [source, cube, geometry, stack, graderFor]);
+  }, [source, cube, geometry, stack, subjectMasks, graderFor]);
 
   // The AS-SHOT measurement Auto reads. Keyed on the source alone — no cube,
   // no grader — so it is one read per picture and is unmoved by anything the
@@ -558,19 +582,19 @@ export function useDevelopPicture({
   // callback that never changed left the crop stage showing a warp-less
   // picture until the cube or the crop moved. Fresh values through the ref,
   // a new function when what it would draw changes — both, not either.
-  const latest = useRef({ source, cube, geometry, stack });
-  latest.current = { source, cube, geometry, stack };
+  const latest = useRef({ source, cube, geometry, stack, subjectMasks });
+  latest.current = { source, cube, geometry, stack, subjectMasks };
   const delivered = useCallback((): CanvasImageSource | null => {
-    const { source: s, cube: lut, geometry: geo, stack: ly } = latest.current;
+    const { source: s, cube: lut, geometry: geo, stack: ly, subjectMasks: rs } = latest.current;
     if (!s || s.width <= 0 || s.height <= 0) return null;
     // Never the overlay: this is what LEAVES, and a red wash is a way of
     // looking, like the wipe.
-    const grader = graderFor(lut, s, geo, ly, null);
+    const grader = graderFor(lut, s, geo, ly, null, rs);
     return grader ? grader.render(s.image) : s.image;
-  }, [graderFor, source, cube, geometry, stack]);
+  }, [graderFor, source, cube, geometry, stack, subjectMasks]);
   const snapshot = useCallback(
     async (longEdge = THUMB_LONG_EDGE): Promise<Blob | null> => {
-      const { source: s, cube: lut, geometry: geo, stack: ly } = latest.current;
+      const { source: s, cube: lut, geometry: geo, stack: ly, subjectMasks: rs } = latest.current;
       if (!s || s.width <= 0 || s.height <= 0) return null;
       const { w, h } = thumbSize(s.width, s.height, longEdge);
       const out = document.createElement('canvas');
@@ -579,7 +603,7 @@ export function useDevelopPicture({
       const ctx = out.getContext('2d');
       if (!ctx) return null;
       try {
-        const grader = graderFor(lut, s, geo, ly, null);
+        const grader = graderFor(lut, s, geo, ly, null, rs);
         const graded = grader ? grader.render(s.image) : s.image;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(graded, 0, 0, s.width, s.height, 0, 0, w, h);
@@ -588,7 +612,7 @@ export function useDevelopPicture({
       }
       return new Promise((resolve) => out.toBlob(resolve, 'image/jpeg', THUMB_QUALITY));
     },
-    [graderFor, source, cube, geometry, stack],
+    [graderFor, source, cube, geometry, stack, subjectMasks],
   );
 
   const dragging = useRef<{ startX: number; live: boolean } | null>(null);
@@ -702,6 +726,7 @@ export function useDevelopPicture({
     histogram,
     stats,
     painting: Boolean(paint),
+    paintGesture: paint?.gesture ?? 'drag',
     picking,
     setPicking,
     pickAt,

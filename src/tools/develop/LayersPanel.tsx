@@ -7,13 +7,14 @@ import { MAX_LAYERS, layerLabel, type AdjustLayer } from '../../shared/develop/l
 import type { MaskKind } from '../../shared/render/mask';
 
 const HINT =
-  'A layer is an ordinary develop that applies only where its mask says. Linear is a straight edge with a soft transition — a darkened sky; radial is an ellipse — a face lifted out of its surround, or a vignette drawn on purpose; brightness picks a band of tone wherever it falls in the frame; painted is drawn by hand on the picture. Everything on the Develop tab works inside a layer, so a local exposure, a local white balance and a local curve are the same controls you already know. Layers apply on top of the picture as you see it, after its own develop and its look, so what a slider does here is what you are looking at.';
+  'A layer is an ordinary develop that applies only where its mask says. Linear is a straight edge with a soft transition — a darkened sky; radial is an ellipse — a face lifted out of its surround, or a vignette drawn on purpose; brightness picks a band of tone wherever it falls in the frame; painted is drawn by hand on the picture; subject is found by a model from a point you tap. Everything on the Develop tab works inside a layer, so a local exposure, a local white balance and a local curve are the same controls you already know. Layers apply on top of the picture as you see it, after its own develop and its look, so what a slider does here is what you are looking at.';
 
 const KINDS: readonly { kind: MaskKind | null; label: string }[] = [
   { kind: 'linear', label: 'Linear' },
   { kind: 'radial', label: 'Radial' },
   { kind: 'luma', label: 'Brightness' },
   { kind: 'brush', label: 'Painted' },
+  { kind: 'subject', label: 'Subject' },
   { kind: null, label: 'Whole picture' },
 ];
 

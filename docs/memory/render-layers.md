@@ -232,3 +232,43 @@ same branch, the same orientation).
 16.9 MB of model. Verified by a probe in headless Chromium: the GPU delegate
 initialised, `segmentSubject` answered in ~4 s cold (that includes the download)
 and returned a mask covering 19 % of the frame against the ~21 % actually drawn.
+
+## The subject, wired (2026-09-19, P9 second commit)
+
+A `Subject` mask kind in both panels, tap-to-pick on the stage, and the rasters
+reaching every renderer.
+
+**The two hooks need each other**, so the rasters come back through state: the
+stage decodes the picture the model segments, and the model produces the map the
+stage draws. One extra commit per answer — which is once per tap, not once per
+frame — and it is why `useSubjectMasks` is called after `useDevelopPicture` and
+fed back rather than composed.
+
+**A tap ADDS a point; a tap on one REMOVES it** (`SUBJECT_HIT_RADIUS`), the
+click-a-marker-to-unpick gesture `p5-templates` settled on. It is how a subject
+is narrowed after the model took in too much. A subject is never DRAGGED — the
+model answers a point — so `paint.onMove` returns early for it, and the whole
+painting seam is reused rather than a second gesture written.
+
+**A layer whose raster has not arrived draws NOTHING, not everything.** The
+alternative is a fresh subject applying to the whole picture for the four
+seconds the model thinks, which reads as a bug and is one.
+
+**The last good raster stays up while a new one is computed**, and the cache is
+keyed by picture + model + points rather than by layer — so two layers on one
+subject segment once, an undo that brings a subject back is free, and moving a
+slider never re-runs a four-second inference.
+
+Two things the pane showed that no test would have. The mask kind control went
+to six options and ran them together as "Radial BrightnessPainted" — `Segmented`
+already has `columns` for a choice bigger than a row. And the caption offered
+"drag across the picture to paint the mask" for something you TAP, so `paint`
+declares its `gesture` now; offering the wrong gesture is the same fault as the
+caption that went on offering the wipe.
+
+Measured in the pane on a figure over a flat ground: before any point the
+picture is untouched; one tap on the body darkened the whole figure INCLUDING
+the head (one tap, the connected subject) at −3 EV and left both far corners of
+the ground exactly as shot; the roll stored `points: [[0.5, 0.62]]` with the
+model id and **no pixels**; tapping the same marker again took it back to zero
+points.

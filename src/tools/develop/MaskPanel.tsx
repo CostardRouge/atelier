@@ -18,7 +18,11 @@ const KIND_OPTIONS: readonly { id: string; label: string }[] = [
   { id: 'radial', label: 'Radial' },
   { id: 'luma', label: 'Brightness' },
   { id: 'brush', label: 'Painted' },
+  { id: 'subject', label: 'Subject' },
 ];
+
+const SUBJECT_HINT =
+  'A model finds the subject you tap. Turn Pick on and tap the thing you mean — a person, a car, a dog — and tap again anywhere else to add to it, which is how you take in someone AND their bag. Tapping a marker you already placed removes it. It is the whole subject the model returns, not a region you drew, so it follows an edge better than a brush and understands nothing about why you chose it: if it takes in too much, remove the point and tap somewhere more specific, or fall back to painting. “Background” is this mask inverted — the checkbox below.';
 
 const PAINT_HINT =
   'With Paint on, a drag across the picture lays a stroke; the before/after wipe waits until it is off. Erase takes coverage away, and only from what is already there — a stroke painted after an eraser comes back, because strokes apply in the order they were made. Size and Softness are set before a stroke, not after: each stroke keeps the ones it was painted with, which is what lets a soft edge and a hard one live in the same mask.';
@@ -46,6 +50,8 @@ export default function MaskPanel({
   onPainting,
   onUndoStroke,
   onClearStrokes,
+  subject,
+  onClearSubject,
 }: {
   layer: AdjustLayer;
   onPatch: (patch: Partial<Omit<AdjustLayer, 'id'>>) => void;
@@ -56,6 +62,9 @@ export default function MaskPanel({
   onPainting: (on: boolean) => void;
   onUndoStroke: () => void;
   onClearStrokes: () => void;
+  /** Present only for a subject mask — how its segmentation is getting on. */
+  subject: { working: boolean; state: string; resolved: boolean } | null;
+  onClearSubject: () => void;
 }) {
   const mask = layer.mask;
   const kind: string = mask?.kind ?? 'none';
@@ -77,7 +86,10 @@ export default function MaskPanel({
         <p>{HINT}</p>
       </SectionLegend>
 
-      <Segmented fill size="sm" label="Mask" value={kind} onChange={setKind} options={KIND_OPTIONS} />
+      {/* Six kinds do not fit one row at an inspector's width — the labels ran
+          together as "Radial BrightnessPainted". `columns` is what this control
+          has for a choice bigger than a row. */}
+      <Segmented columns={3} size="sm" label="Mask" value={kind} onChange={setKind} options={KIND_OPTIONS} />
 
       {mask?.kind === 'linear' && (
         <>
@@ -247,6 +259,38 @@ export default function MaskPanel({
               nothing painted yet — an empty painted mask covers nothing, so the layer does nothing
             </span>
           )}
+        </>
+      )}
+
+      {mask?.kind === 'subject' && (
+        <>
+          <SectionLegend label="Subject">
+            <p>{SUBJECT_HINT}</p>
+          </SectionLegend>
+          <div className="flex flex-wrap items-center gap-1">
+            <Button
+              size="sm"
+              variant={painting ? 'primary' : 'ghost'}
+              onClick={() => onPainting(!painting)}
+            >
+              {painting ? 'Picking' : 'Pick'}
+            </Button>
+            <span className="flex-1" />
+            <Button size="sm" variant="ghost" disabled={!mask.points.length} onClick={onClearSubject}>
+              Clear
+            </Button>
+          </div>
+          <span className="font-mono text-3xs text-faint">
+            {subject?.state === 'unavailable'
+              ? 'the model could not be loaded — every other mask still works'
+              : mask.points.length === 0
+                ? 'tap the subject on the picture'
+                : subject?.working
+                  ? `finding it… (${mask.points.length} point${mask.points.length === 1 ? '' : 's'})`
+                  : subject?.resolved
+                    ? `${mask.points.length} point${mask.points.length === 1 ? '' : 's'} · tap a marker to remove it`
+                    : 'the model is loading — 17 MB, once per visit'}
+          </span>
         </>
       )}
 
