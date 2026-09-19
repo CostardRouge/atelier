@@ -411,3 +411,36 @@ canvas and dropped in through a synthetic `DataTransfer`): the exposure slider
 moved, ⌘Z **with the slider still focused** put it back, ⇧⌘Z returned it, both
 buttons the same, the crop's zoom stepped back and forward on its own draft, and
 an undo pressed inside a gesture's rest held instead of being overwritten.
+
+## The crop is a ZONE drawn over the whole picture (2026-09-19)
+
+**Decision (maintainer, over two prototypes he reviewed and accepted in
+full).** The D8 crop stage made the crop zone BE the canvas, letterboxed in the
+stage: a handle changed the canvas's aspect, so the whole view resized, the
+axis it was fitted on flipped as its ratio crossed the stage's (a horizontal
+drag moved the vertical), the zone grew from its centre and the picture
+re-zoomed to cover, so what was cut was never seen. He wants the classic crop:
+the whole picture still, a zone drawn over it, the cut part under a veil, the
+picture turning UNDER the zone. Develop tool only — Trips keeps its framing
+grammar and its Whole.
+
+**Nothing migrates.** `shared/develop/crop-rect.ts` (pure, tested) turns a
+zone `{cx, cy, w, h}` — source pixels, the TURNED picture's frame, origin at
+its centre — into the `aspect` + `Framing` (`fit: 'cover'`) the roll already
+stores, and back through `framingTransform` itself, so the zone read from a
+stored crop is what the renderers will cut (the pan clamped as they clamp it).
+Round-trips are pinned at 0°, 2.6°, 45°, 90° and with flips. Rules a later
+agent must keep: (1) **every gesture is a candidate then a clamp** —
+`clampToward` bisects from the last VALID zone toward the candidate,
+interpolating the four EDGES, which is what keeps a handle anchored, a locked
+ratio locked and a drag stopped at the edge instead of jumping; a starting zone
+that is not valid is returned untouched. (2) **Valid** = every corner inside
+the turned picture (Fill's invariant), no smaller than `MAX_FRAMING_SCALE`
+allows, a ratio inside the free aspect's 1:5..5:1. (3) **A move slides**: the
+whole move as far as it goes, then the rest on x, then on y. (4) **Rotation
+works from an INTENT** (`fitIntent`): the last zone the author drew, shrunk
+just enough at the new angle and never grown past it, so 3° then 0° gives the
+drawn zone back; a centre that fell off is pulled toward the middle only as
+far as the smallest zone needs. (5) `EPS` in the containment test is 1e-9 of
+the long side: at 1e-6 a 3000 px picture let a zone overhang by 3 mpx and the
+edge tests failed — keep the tolerance float-sized, never pixel-sized.
