@@ -48,6 +48,7 @@ import {
 import EmptyState from '../shared/ui/EmptyState';
 import { Icons } from '../shared/ui/icons';
 import IconButton from '../shared/ui/IconButton';
+import OverflowMenu, { type OverflowItem } from '../shared/ui/OverflowMenu';
 
 /** Short, human label for a kind chip. */
 function kindLabel(kind: AssetKind): string {
@@ -426,6 +427,16 @@ export default function AssetSidebar({
   // than none because they read as a supported layout.
   if (collapsed && variant === 'docked') {
     const empty = lib.assets.length === 0;
+    // The rail's own Add — the same two gestures the expanded panel's "Add"
+    // row offers (files, a folder), plus the way to a Winnow once there
+    // isn't one yet, so this menu is never missing something the panel has.
+    const addItems: OverflowItem[] = [
+      { id: 'files', label: 'Add files', onSelect: () => void run(pickFiles) },
+      { id: 'folder', label: 'Add a folder', onSelect: () => void run(pickDirectory) },
+      ...(!connection
+        ? [{ id: 'sources', label: 'Connect a Winnow', onSelect: () => navigate('/sources') }]
+        : []),
+    ];
     return (
       // The rail reaches under the shell's 16px gutter (`-ml-4 w-16`), so its
       // icons are centred between the page's edge and the rule at its right
@@ -437,15 +448,18 @@ export default function AssetSidebar({
           {Icons.forward}
         </IconButton>
         {/* Adding is the rail's own verb — an empty library starts as this
-            rail (App.tsx), so the way in must not wait for the panel. */}
-        <IconButton
+            rail (App.tsx), so the way in must not wait for the panel. A menu
+            rather than a bare button: the rail otherwise only ever offered
+            "add files", so "add a folder" needed the panel reopened first. */}
+        <OverflowMenu
+          label={busy ? 'Opening…' : 'Add…'}
+          icon={Icons.plus}
           variant={empty ? 'primary' : 'default'}
-          label={busy ? 'Opening…' : 'Add files'}
+          size="md"
           disabled={busy}
-          onClick={() => void run(pickFiles)}
-        >
-          {Icons.plus}
-        </IconButton>
+          items={addItems}
+          align="start"
+        />
         <span
           className={`w-[2.125rem] h-[2.125rem] grid place-items-center rounded-control font-mono text-2xs ${
             empty ? 'bg-paper-2 text-muted' : 'bg-ink text-paper'

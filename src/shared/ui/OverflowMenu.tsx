@@ -42,6 +42,15 @@ interface OverflowMenuProps {
    * for a screen reader.
    */
   trigger?: { text: ReactNode; icon?: ReactNode; variant?: ButtonVariant };
+  /**
+   * The glyph on the icon-only trigger (ignored once `trigger` is set) —
+   * `Icons.more` by default, for a menu that IS a rail's own verb rather
+   * than a card's secondary actions (the collapsed library's Add).
+   */
+  icon?: ReactNode;
+  /** The icon-only trigger's variant — `ghost` by default, the ⋯'s own. */
+  variant?: ButtonVariant;
+  disabled?: boolean;
 }
 
 export default function OverflowMenu({
@@ -52,6 +61,9 @@ export default function OverflowMenu({
   align = 'end',
   className = '',
   trigger,
+  icon,
+  variant,
+  disabled = false,
 }: OverflowMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -118,17 +130,18 @@ export default function OverflowMenu({
       ) : (
         <IconButton
           size={size}
-          variant="ghost"
+          variant={variant ?? 'ghost'}
           label={label}
           aria-expanded={open}
           aria-haspopup="menu"
+          disabled={disabled}
           onClick={(e) => {
             e.stopPropagation();
             setOpen((o) => !o);
           }}
           className={open ? 'bg-paper-2 text-ink' : ''}
         >
-          {Icons.more}
+          {icon ?? Icons.more}
         </IconButton>
       )}
       {open && (
