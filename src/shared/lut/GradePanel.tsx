@@ -17,7 +17,7 @@ const FILM_PICK = 'film:';
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
 import Segmented from '../ui/Segmented';
-import { FieldRow, RangeField, SelectField, ToggleField } from '../ui/Inspector';
+import { FieldRow, NativeSelect, RangeField, SelectField, ToggleField } from '../ui/Inspector';
 import { Icons } from '../ui/icons';
 
 interface GradePanelProps {
@@ -57,22 +57,43 @@ export default function GradePanel({ stack, previewImage = null }: GradePanelPro
   return (
     <div className="flex flex-col gap-2.5">
       <FieldRow label="Add a look">
-        <SelectField
+        {/* Native optgroups, one per family — the same grouping the Look
+            picker and the gallery use, rather than a flat list whose group
+            name is repeated as a prefix on every line. */}
+        <NativeSelect
           label="Add a built-in look"
           value={pick}
-          onChange={(id) => {
+          onChange={(e) => {
+            const id = e.target.value;
             setPick('');
             if (id) pickLook(id);
           }}
-          options={[
-            { id: '', label: stack.busy ? 'Loading…' : 'Built-in…' },
-            // The film stocks are generated, not files: they sit beside the
-            // folder groups rather than in the manifest, which lists files.
-            ...FILM_STOCKS.map((s) => ({ id: `${FILM_PICK}${s.id}`, label: `${FILM_GROUP_LABEL} · ${s.name}` })),
-            ...UNGROUPED_LUTS.map((l) => ({ id: l.id, label: l.name })),
-            ...LUT_GROUPS.flatMap((g) => g.luts.map((l) => ({ id: l.id, label: `${g.label} · ${l.name}` }))),
-          ]}
-        />
+        >
+          <option value="">{stack.busy ? 'Loading…' : 'Built-in…'}</option>
+          {/* The film stocks are generated, not files: they sit beside the
+              folder groups rather than in the manifest, which lists files. */}
+          <optgroup label={FILM_GROUP_LABEL}>
+            {FILM_STOCKS.map((s) => (
+              <option key={s.id} value={`${FILM_PICK}${s.id}`}>
+                {s.name}
+              </option>
+            ))}
+          </optgroup>
+          {UNGROUPED_LUTS.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.name}
+            </option>
+          ))}
+          {LUT_GROUPS.map((g) => (
+            <optgroup key={g.label} label={g.label}>
+              {g.luts.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </NativeSelect>
         <IconButton
           label="Browse looks with a live preview"
           size="sm"
