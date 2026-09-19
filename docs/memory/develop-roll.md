@@ -467,3 +467,44 @@ other pictures* gave the three the border and left every aspect and framing
 byte-identical; after a reload the Develop viewport showed the crop on its
 blur. Not driven: a real phone, the free colour picker's native dialog, a
 Winnow original through Auto with a border (the arithmetic is tested).
+
+## 2026-09-19 — The stage gets its room back: help behind a key, facts in a corner
+
+**The maintainer, looking at the editor: *"we have a bunch of text under the
+media preview, keyboard shortcuts legend etc, lets have it under a shortcut: h
+or a help icon"* and *"we also have edit details displayed underneath the media
+preview, i dont need to see them"*.** Four lines of grey prose sat under every
+photograph — the develop's numbers, the picture's material, which gesture
+applied, and six shortcuts — and on a narrow screen they wrapped to eight.
+
+**Two different things, so two different answers.** What TEACHES (the six
+shortcuts, and every gesture hint that used to ride the caption) is read once
+and then costs the picture room every day after: it went behind `H`, `?`, and a
+`?` verb in the stage bar (`shared/develop/DevelopShortcuts.tsx`), where it
+could finally say MORE than it did as a sentence — the drag, the pinch, the
+divider's handle, the filmstrip's modifiers. What the picture SAYS about itself
+is still worth having at hand, so it moved ONTO the photograph: a corner stack,
+one fact per line, toggled by `I` and off by default (`DevelopViewport`'s
+`facts` prop, `developLines` in `develop.ts`, `useLocalFlag`). Over the picture
+rather than under it because a stage is where the room is, and a corner costs
+nothing when there is nothing to say.
+
+**Rules that came out of it.** (1) A fact list and a settled row must never be
+able to disagree: `developLines` is the source and `describeDevelop` is its
+`join(' · ')`, asserted in the test — and no entry may contain the separator, or
+a corner draws two facts as one. (2) The CROP stage keeps its line UNDER the
+picture: its framing handles reach into every corner, so an overlay there would
+cover a grip. (3) `?` is read BEFORE `editorKeyAction`'s blanket refusal of
+shift chords — on most layouts it cannot be typed without shift, and a help key
+nobody can press is not a help key. (4) A browser preference, never a document
+(`shared/ui/use-local-flag.ts`, the generic shape of the rule `use-pixel-view.ts`
+and the gallery's card/band choice already followed).
+
+The Develop SHEET (Trips, the Studio) keeps its caption under the picture: it
+is a modal with no `I` and no stage bar, and the facts are the only thing it
+says. If it ever grows the overlay, it grows the key with it.
+
+Driven headless: the legend is gone from the roll editor's footer, `I` toggles
+the corner stack (`+0.7 EV`, then the picture's material) and survives a reload
+as `0`/`1`, `H` opens AND closes the sheet, `?` opens it, Escape and the bar's
+verb close it.

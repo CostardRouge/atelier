@@ -808,12 +808,13 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                   </span>
                 )}
                 {notice && <span className="text-ink-soft"> · {notice}</span>}
-                {!compact && (
-                  <span className="text-faint">
-                    {' '}
-                    · ←/→ picture · {'\\'} before · Z closer · R crop · D develop · Shift/⌘-click to select
-                  </span>
-                )}
+                {/* The shortcuts used to run along here as a seventh clause.
+                    They are behind `H` and the stage bar's `?` now
+                    (`DevelopShortcuts.tsx`): a legend read once still cost the
+                    photograph three wrapped lines every day after. What stays
+                    on this line is STATE — how far the roll has got, and what
+                    could not be reached, which is the half that asks for a
+                    click. */}
               </p>
               {/* Housekeeping, and it wraps to three lines at 390px: on a
                   phone with the drawer up those are three lines taken off the

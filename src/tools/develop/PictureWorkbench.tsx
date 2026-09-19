@@ -10,8 +10,8 @@ import { DevelopAutoSection, DevelopLevelsSection } from '../../shared/develop/D
 import { whiteBalanceFor } from '../../shared/develop/auto-develop';
 import DevelopHistogram from '../../shared/develop/DevelopHistogram';
 import DevelopSliders from '../../shared/develop/DevelopSliders';
-import DevelopViewport, { DevelopCaption } from '../../shared/develop/DevelopViewport';
-import { DEFAULT_DEVELOP, isDefaultDevelop, type DevelopSettings } from '../../shared/develop/develop';
+import DevelopViewport from '../../shared/develop/DevelopViewport';
+import { DEFAULT_DEVELOP, developLines, isDefaultDevelop, type DevelopSettings } from '../../shared/develop/develop';
 import { copyDevelop, pasteDevelop } from '../../shared/develop/develop-clipboard';
 import { developPillClass } from '../../shared/develop/develop-classes';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
@@ -62,6 +62,8 @@ import PanelHost from '../../shared/ui/PanelHost';
 import Segmented from '../../shared/ui/Segmented';
 import StageZoomControl from '../../shared/ui/StageZoomControl';
 import { usePixelView } from '../../shared/ui/use-pixel-view';
+import { useLocalFlag } from '../../shared/ui/use-local-flag';
+import DevelopShortcuts from '../../shared/develop/DevelopShortcuts';
 import { STAGE_ZOOM_STEP, zoomLabel, type ZoomControls } from '../../shared/ui/stage-zoom';
 import type { RollExport } from '../../shared/develop/roll-types';
 import CropPanel, { type CropApplyVerb } from './CropPanel';
@@ -181,6 +183,11 @@ export default function PictureWorkbench({
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [showMask, setShowMask] = useState(false);
   const [pixelView, setPixelView] = usePixelView();
+  // What the picture SAYS about itself, and where. Off by default — the
+  // maintainer does not want the numbers in front of him while he works, and
+  // when he does they belong over the photograph, not under it.
+  const [factsOn, setFactsOn] = useLocalFlag('atelier.develop.facts', false);
+  const [helpOpen, setHelpOpen] = useState(false);
   // The subject rasters come BACK through state, because the two hooks need
   // each other: the stage decodes the picture the model segments, and the model
   // produces the map the stage draws. One extra commit per answer, which is
@@ -375,8 +382,8 @@ export default function PictureWorkbench({
   }, [source, cube, delivered, aspectRatio, framingDraft, border]);
 
   // --- keys --------------------------------------------------------------------
-  const keyState = useRef({ draft, picture, tell, crop, tab });
-  keyState.current = { draft, picture, tell, crop, tab };
+  const keyState = useRef({ draft, picture, tell, crop, tab, factsOn, setFactsOn });
+  keyState.current = { draft, picture, tell, crop, tab, factsOn, setFactsOn };
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
@@ -435,6 +442,16 @@ export default function PictureWorkbench({
           e.preventDefault();
           callbacks.current.onTabChange('develop');
           return;
+        case 'help':
+          e.preventDefault();
+          // The same key closes it: a sheet opened by a letter that then does
+          // nothing is a sheet you have to reach for the mouse to be rid of.
+          setHelpOpen((was) => !was);
+          return;
+        case 'facts':
+          e.preventDefault();
+          keyState.current.setFactsOn(!keyState.current.factsOn);
+          return;
         case 'swap':
           if (open !== 'crop') return;
           e.preventDefault();
@@ -476,6 +493,20 @@ export default function PictureWorkbench({
     };
   }, [cropView, setCropView]);
   const tabLabel = WORKBENCH_TABS.find((t) => t.id === tab)?.label ?? 'Develop';
+
+  /**
+   * The facts drawn down the picture's corner, one per line: what the numbers
+   * say, what else is on it, what the picture IS. The gesture hints that used
+   * to ride the same sentence are gone from here — they live in the shortcuts
+   * sheet now, where a hint can be read once rather than stared at all day.
+   */
+  const facts = useMemo<string[] | null>(() => {
+    if (!factsOn) return null;
+    const lines = developLines(draft.draft);
+    if (drawingCount) lines.push(`${drawingCount} layer${drawingCount === 1 ? '' : 's'}`);
+    if (fidelity.note) lines.push(fidelity.note);
+    return lines;
+  }, [factsOn, draft.draft, drawingCount, fidelity.note]);
 
   return (
     <>
@@ -520,12 +551,25 @@ export default function PictureWorkbench({
                 )}
               </>
             ))}
+          {/* The legend that used to run along the bottom of the editor, as a
+              verb. Drawn at every width: on a phone there are no keys, but the
+              GESTURES it lists are exactly the ones a finger has to discover. */}
+          <button
+            type="button"
+            className={`${developPillClass} flex-none cursor-pointer hover:border-accent`}
+            onClick={() => setHelpOpen(true)}
+            title="Keys and gestures (H)"
+            aria-label="Keys and gestures"
+          >
+            ?
+          </button>
         </div>
         <DevelopViewport
           picture={picture}
           hasFile={Boolean(file)}
           emptyText={emptyText}
           pixelView={pixelView}
+          facts={facts}
           className={cropping ? 'hidden' : 'flex-1'}
           onPick={(linear) => {
             const { temperature, tint, clamped } = whiteBalanceFor(linear);
@@ -545,24 +589,16 @@ export default function PictureWorkbench({
             className="flex-1"
           />
         )}
-        {/* The line under the picture is PROSE — what the numbers say, which
-            gesture applies. It wraps to three lines at 390px, and on a phone
-            with the drawer up those are three lines taken off the photograph
-            for a sentence nobody is reading while they drag a slider. It comes
-            back the moment the drawer is down and the stage owns the screen. */}
-        {compact && sheetOpen ? null : cropping ? (
+        {/* The crop's own line stays UNDER the stage: the framing handles
+            reach into every corner of that picture, so a box over it would
+            cover a grip. On the Develop tab the same facts are drawn IN the
+            corner instead (`facts`), where the room is. */}
+        {cropping && !(compact && sheetOpen) && (
           <p className="m-0 flex-none font-mono text-2xs text-faint leading-relaxed">
             {source
               ? 'drag inside to move · on the picture to draw · a handle to resize · double-click for the largest'
               : 'the crop needs the picture'}
           </p>
-        ) : (
-          <DevelopCaption
-            draft={draft.draft}
-            note={fidelity.note}
-            picture={picture}
-            also={drawingCount ? `${drawingCount} layer${drawingCount === 1 ? '' : 's'}` : null}
-          />
         )}
       </div>
 
@@ -737,6 +773,8 @@ export default function PictureWorkbench({
           ) : null}
         </div>
       </PanelHost>
+
+      {helpOpen && <DevelopShortcuts onClose={() => setHelpOpen(false)} />}
     </>
   );
 }

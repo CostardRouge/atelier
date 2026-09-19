@@ -489,14 +489,19 @@ export function signed(n: number, digits = 0): string {
 }
 
 /**
- * One line for a settled row: `As shot`, or the non-zero fields in slider
- * order — `+0.7 EV · highlights −40 · vibrance +15 · curve luma+red`. Exposure
- * leads and carries its unit; the others are `name value`. A shape has no one
- * number, so it names the channels it touches and nothing else — the row is a
- * sentence, not a serialisation.
+ * What this develop says, ONE FACT PER ENTRY: `As shot` alone, or the non-zero
+ * fields in slider order — `+0.7 EV`, `highlights −40`, `vibrance +15`,
+ * `curve luma+red`. Exposure leads and carries its unit; the others are
+ * `name value`. A shape has no one number, so it names the channels it touches
+ * and nothing else — these are sentences, not a serialisation.
+ *
+ * Kept as a LIST because the two readers want different shapes: a settled row
+ * wants one line (`describeDevelop` joins it), the facts drawn over the picture
+ * want a stack, where a long correction that used to wrap mid-fact now reads
+ * down a corner.
  */
-export function describeDevelop(d: DevelopSettings | null | undefined): string {
-  if (!d || isDefaultDevelop(d)) return 'As shot';
+export function developLines(d: DevelopSettings | null | undefined): string[] {
+  if (!d || isDefaultDevelop(d)) return ['As shot'];
   const parts: string[] = [];
   for (const k of DEVELOP_KEYS) {
     const v = d[k];
@@ -508,5 +513,10 @@ export function describeDevelop(d: DevelopSettings | null | undefined): string {
   if (levels) parts.push(levels);
   const curves = describeCurves(d.curves);
   if (curves) parts.push(curves);
-  return parts.join(' · ');
+  return parts;
+}
+
+/** The same facts as ONE line, for a settled row. */
+export function describeDevelop(d: DevelopSettings | null | undefined): string {
+  return developLines(d).join(' · ');
 }

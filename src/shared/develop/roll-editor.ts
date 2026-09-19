@@ -113,13 +113,17 @@ export type EditorKeyAction =
   | 'crop'
   | 'develop'
   | 'swap'
+  | 'help'
+  | 'facts'
   | null;
 
 /**
  * What a key press means in the editor, or null when it belongs to someone
  * else. ←/→ move along the strip, `\` holds "before" (its release is the
  * caller's), `Z` goes closer or back to the fit, `R` opens the Crop tab and
- * `D` the Develop tab, `X` swaps the crop's orientation, ⌘/Ctrl-C and -V copy and paste the develop. A field or
+ * `D` the Develop tab, `X` swaps the crop's orientation, `H` (or `?`) the
+ * shortcuts and `I` the facts over the picture, ⌘/Ctrl-C and -V copy and paste
+ * the develop. A field or
  * a slider keeps every key it could use; a held arrow does step (it is how a
  * strip is swept), a held `\` does not re-press.
  */
@@ -133,6 +137,9 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
     if (k === 'v') return 'paste';
     return null;
   }
+  // `?` is the one key reached WITH shift on most layouts, so it is read
+  // before the blanket refusal below: a help key nobody can press is not one.
+  if (press.key === '?') return press.repeat ? null : 'help';
   if (press.shiftKey) return null;
   if (press.key === 'ArrowLeft') return 'previous';
   if (press.key === 'ArrowRight') return 'next';
@@ -143,5 +150,7 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   if (press.key === 'd' || press.key === 'D') return 'develop';
   // The crop's portrait ↔ landscape; the editor answers it on the Crop tab only.
   if (press.key === 'x' || press.key === 'X') return 'swap';
+  if (press.key === 'h' || press.key === 'H') return 'help';
+  if (press.key === 'i' || press.key === 'I') return 'facts';
   return null;
 }

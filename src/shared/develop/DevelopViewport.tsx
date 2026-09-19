@@ -17,8 +17,17 @@ export default function DevelopViewport({
   className = '',
   onPick,
   pixelView = 'smooth',
+  facts = null,
 }: {
   picture: DevelopPicture;
+  /**
+   * The picture's own facts, drawn DOWN its bottom-left corner — what the
+   * numbers say, what the picture is, what else is on it. Over the photograph
+   * rather than under it, one fact per line: a stage is where the room is, and
+   * a corner costs nothing when there is nothing to say (omit it and no box is
+   * drawn). The host decides whether they are showing (`I`).
+   */
+  facts?: readonly string[] | null;
   /**
    * How a MAGNIFIED picture is drawn. Only past 1:1 does it change anything,
    * and there it decides whether a magnified pixel looks like a pixel or like
@@ -118,6 +127,23 @@ export default function DevelopViewport({
         >
           click something grey
         </span>
+      )}
+      {facts && facts.length > 0 && source && (
+        <div
+          // Pointer-transparent: the facts sit ON the picture, and the picture
+          // under them still answers a drag, a wipe and a paint stroke.
+          className="absolute bottom-2 left-2.5 max-w-[60%] pointer-events-none flex flex-col items-start gap-0.5"
+          role="status"
+        >
+          {facts.map((line) => (
+            <span
+              key={line}
+              className="font-mono text-2xs text-ink-soft bg-[rgba(251,248,241,0.84)] rounded-[0.25rem] px-1.5 py-0.5 leading-snug"
+            >
+              {line}
+            </span>
+          ))}
+        </div>
       )}
       {source && cube && !picking && (
         <>

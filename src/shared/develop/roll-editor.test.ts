@@ -86,6 +86,24 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'q' }))).toBeNull();
   });
 
+  it('opens the shortcuts on H and the facts on I', () => {
+    expect(editorKeyAction(press({ key: 'h' }))).toBe('help');
+    expect(editorKeyAction(press({ key: 'H' }))).toBe('help');
+    expect(editorKeyAction(press({ key: 'i' }))).toBe('facts');
+    expect(editorKeyAction(press({ key: 'I' }))).toBe('facts');
+  });
+
+  it('answers `?` although it is a shifted key — every other shift chord is not ours', () => {
+    // On most layouts `?` cannot be pressed WITHOUT shift, so the blanket
+    // refusal would have made the help key unreachable.
+    expect(editorKeyAction(press({ key: '?', shiftKey: true }))).toBe('help');
+    expect(editorKeyAction(press({ key: '?' }))).toBe('help');
+    expect(editorKeyAction(press({ key: '?', repeat: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: '?', targetTypes: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: '?', metaKey: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'h', shiftKey: true }))).toBeNull();
+  });
+
   it('opens the Crop tab on R and the Develop tab on D', () => {
     expect(editorKeyAction(press({ key: 'r' }))).toBe('crop');
     expect(editorKeyAction(press({ key: 'R' }))).toBe('crop');

@@ -4,6 +4,7 @@ import {
   DEFAULT_DEVELOP,
   DEVELOP_KEYS,
   describeDevelop,
+  developLines,
   developLinear,
   developOrNull,
   developStage,
@@ -271,6 +272,19 @@ describe('describeDevelop', () => {
       '+0.7 EV · highlights −40 · vibrance +15',
     );
     expect(describeDevelop(dev({ exposure: -1.25, blacks: 6 }))).toBe('−1.25 EV · blacks +6');
+  });
+
+  it('developLines is the same facts one per entry, and the line is its join', () => {
+    // The overlay over the picture stacks them; a settled row joins them. One
+    // reader must never be able to say something the other cannot.
+    expect(developLines(null)).toEqual(['As shot']);
+    expect(developLines(DEFAULT_DEVELOP)).toEqual(['As shot']);
+    const d = dev({ vibrance: 15, highlights: -40, exposure: 0.7 });
+    expect(developLines(d)).toEqual(['+0.7 EV', 'highlights −40', 'vibrance +15']);
+    expect(developLines(d).join(' · ')).toBe(describeDevelop(d));
+    // Every entry is ONE fact: none of them carries the separator itself, or a
+    // corner would draw two facts on a line and call it one.
+    for (const line of developLines(d)) expect(line).not.toContain('·');
   });
 
   it('signed() prints a typographic minus and no sign on zero', () => {
