@@ -15,6 +15,7 @@
 import { isRawImage } from '../library/assets';
 import { DEFAULT_FRAMING, framingTransform, type Framing } from '../media/framing';
 import { aspectFileTag } from './crop-aspect';
+import { borderLayout, scaleLayout, type BorderLayout, type RollBorder } from './border-layout';
 import type { RollExport, RollOriginals } from './roll-types';
 
 export interface PictureSize {
@@ -54,6 +55,63 @@ export function rollOutputSize(
   const cap = longEdge !== null && longEdge > 0 ? Math.min(longEdge, long) : long;
   const k = cap / long;
   return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) };
+}
+
+/**
+ * The crop's own size in the source's pixels — the zone the crop stage drew
+ * (`crop-rect.ts`), read through the renderer's transform so a clamped pan or
+ * a turned picture gives what will really be cut. A legacy Whole framing
+ * (`contain`) has no zone: its "crop" is the aspect box it letterboxes into,
+ * as it always was.
+ */
+export function cropZoneSize(
+  src: PictureSize,
+  aspectRatio: number,
+  framing: Framing | null,
+): { w: number; h: number } {
+  const box = rollOutputSize(src, aspectRatio, null);
+  if (!framing || framing.fit === 'contain' || box.w <= 0) return box;
+  const t = framingTransform(src.width, src.height, box.w, box.h, framing);
+  return t.scale > 0 ? { w: box.w / t.scale, h: box.h / t.scale } : box;
+}
+
+/** What a picture delivers: the canvas (capped), where the crop sits in it, and the crop's own size. */
+export interface DeliveredLayout {
+  out: { w: number; h: number };
+  /** The canvas and the crop's rectangle, in OUTPUT pixels (unrounded). */
+  layout: BorderLayout;
+  /** The crop in the source's pixels. */
+  zone: { w: number; h: number };
+}
+
+/**
+ * The file a picture becomes: its crop at the source's OWN density (a zone of
+ * 1200 px on a 6000 px picture is 1200 px, never blown up to the aspect box),
+ * inside its border, capped to the roll's long edge — never upscaled.
+ */
+export function deliveredLayout(
+  src: PictureSize,
+  aspectRatio: number,
+  framing: Framing | null,
+  border: RollBorder | null,
+  longEdge: number | null,
+): DeliveredLayout {
+  const zone = cropZoneSize(src, aspectRatio, framing);
+  const full = borderLayout(zone.w, zone.h, border);
+  const long = Math.max(full.w, full.h);
+  if (!(long > 0)) return { out: { w: 0, h: 0 }, layout: full, zone };
+  const k = longEdge !== null && longEdge > 0 ? Math.min(1, longEdge / long) : 1;
+  const out = { w: Math.max(1, Math.round(full.w * k)), h: Math.max(1, Math.round(full.h * k)) };
+  // Scaled onto the ROUNDED canvas, so the rectangle and the file agree.
+  const layout = scaleLayout(full, out.w / full.w);
+  return { out, layout, zone };
+}
+
+/** Source pixels per output pixel for this delivery — 1 exact, below 1 upscaled. */
+export function deliveryHeadroom(src: PictureSize, aspectRatio: number, framing: Framing | null, d: DeliveredLayout): number {
+  if (framing?.fit === 'contain') return pixelHeadroom(src, framing, { w: d.layout.pw, h: d.layout.ph });
+  const zone = cropZoneSize(src, aspectRatio, framing);
+  return d.layout.pw > 0 ? zone.w / d.layout.pw : 0;
 }
 
 /**
@@ -127,9 +185,11 @@ export function deliversLine(
   out: { w: number; h: number },
   headroom: number,
   askedLong: number | null = null,
+  /** The crop's own long edge in the source — say it when a border makes the file larger than the crop. */
+  cropLong: number | null = null,
 ): string {
   const outLong = Math.max(out.w, out.h);
-  const srcLong = Math.round(outLong * headroom);
+  const srcLong = cropLong !== null ? Math.round(cropLong) : Math.round(outLong * headroom);
   const verdict =
     headroom <= 0
       ? 'nothing to draw'
@@ -170,25 +230,39 @@ export function deliverySummary(
   original: OriginalInfo | null,
   framing: Framing | null,
   aspectRatio: number,
+  border: RollBorder | null,
   settings: Pick<RollExport, 'longEdge' | 'originals'>,
 ): DeliverySummary {
   const known = fileIsProxy && original && original.width && original.height ? original : null;
   const best = known ? { width: known.width!, height: known.height! } : file;
-  const asked = rollOutputSize(best, aspectRatio, settings.longEdge);
-  const fileHeadroom = pixelHeadroom(file, framing, asked);
+  const asked = deliveredLayout(best, aspectRatio, framing, border, settings.longEdge);
+  const bordered = border !== null;
+  const fileHeadroom = deliveryHeadroom(file, aspectRatio, framing, asked);
   const choice = choosePixels(settings.originals, fileHeadroom, fileIsProxy ? original : null);
   if (choice.from === 'original' && known) {
-    const headroom = pixelHeadroom(best, framing, asked);
-    return { from: 'original', out: asked, headroom, line: deliversLine('Original', asked, headroom), reason: choice.reason };
+    const headroom = deliveryHeadroom(best, aspectRatio, framing, asked);
+    return {
+      from: 'original',
+      out: asked.out,
+      headroom,
+      line: deliversLine('Original', asked.out, headroom, null, bordered ? Math.max(asked.zone.w, asked.zone.h) : null),
+      reason: choice.reason,
+    };
   }
-  const out = rollOutputSize(file, aspectRatio, settings.longEdge);
-  const headroom = pixelHeadroom(file, framing, out);
+  const own = deliveredLayout(file, aspectRatio, framing, border, settings.longEdge);
+  const headroom = deliveryHeadroom(file, aspectRatio, framing, own);
   const label = fileIsProxy ? 'Proxy' : 'File';
   return {
     from: choice.from,
-    out,
+    out: own.out,
     headroom,
-    line: deliversLine(label, out, headroom, Math.max(asked.w, asked.h)),
+    line: deliversLine(
+      label,
+      own.out,
+      headroom,
+      Math.max(asked.out.w, asked.out.h),
+      bordered ? Math.max(own.zone.w, own.zone.h) : null,
+    ),
     reason: choice.from === 'original' ? 'the original will be measured once fetched' : choice.reason,
   };
 }

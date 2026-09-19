@@ -34,6 +34,8 @@ export interface RollExports {
   lastRun: RollRun | null;
   /** What the OPEN picture will deliver, or null until its size is known. */
   openDelivery: DeliverySummary | null;
+  /** The open picture's FILE size in pixels, once measured — the crop's tag reads it. */
+  openSize: PictureSize | null;
   /** Render the pictures named and hand them over. */
   exportPictures: (ids: readonly string[]) => Promise<void>;
 }
@@ -99,6 +101,7 @@ export function useRollExport({
       originalOf(origin),
       open.framing,
       pictureAspectRatio(open.aspect, openSize.size.width, openSize.size.height),
+      open.border,
       roll.export,
     );
   }
@@ -142,6 +145,7 @@ export function useRollExport({
               originalOf(origin),
               picture.framing,
               pictureAspectRatio(picture.aspect, size.width, size.height),
+              picture.border,
               r.export,
             );
             if (summary.from === 'original') {
@@ -162,6 +166,7 @@ export function useRollExport({
           const out = await renderRollPicture(source, {
             framing: picture.framing,
             aspect: picture.aspect,
+            border: picture.border,
             lut: cubeFor(picture),
             longEdge: r.export.longEdge,
             quality: r.export.quality,
@@ -198,5 +203,6 @@ export function useRollExport({
     }
   }, []);
 
-  return { exporting, note, lastRun, openDelivery, exportPictures };
+  const measuredOpen = openFile && openSize && openSize.file === openFile ? openSize.size : null;
+  return { exporting, note, lastRun, openDelivery, openSize: measuredOpen, exportPictures };
 }

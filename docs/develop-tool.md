@@ -62,7 +62,7 @@ The modal was split so a full-screen host lays out the same blocks
 /** shared/develop/roll-types.ts — BUILT (D3): pure, read through `readRollDoc`. */
 interface RollDoc {
   id: string;
-  version: number;                  // ROLL_DOC_VERSION = 1
+  version: number;                  // ROLL_DOC_VERSION = 2 since the border (2026-09-19)
   name: string;
   /** The source it is kept in (local or a Winnow) — one source, never synced across. */
   sourceId: string;
@@ -205,6 +205,9 @@ interface RollPicture {
   (`WORKBENCH_TABS`, also the phone bar's cells), `R` / `D` keys,
   `pictureAspectRatio` in `roll-editor.ts` (tested); the crop written through
   on its own timer, the filmstrip cell redrawn framed (`framedThumbnail`).
+  **Replaced 2026-09-19** by the classic crop — `CropStage` (the whole picture
+  still, a zone drawn over it, the picture turning under it; `crop-rect.ts`)
+  — with the same stored fields: `develop-roll.md`, «The crop is a ZONE».
 - **D9 — export** — **BUILT 2026-09-16**: `roll-export.ts` (pure, tested:
   `rollOutputSize`, `pixelHeadroom`, `choosePixels`, `deliverySummary`, the
   *Delivers* line, names) and `roll-render.ts` (decode whole → grade through

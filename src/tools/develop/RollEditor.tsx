@@ -27,6 +27,7 @@ import { formatBytes } from '../../shared/lib/format';
 import { pictureThumbnail } from '../../shared/develop/roll-thumb';
 import {
   addPictures,
+  copyBorderTo,
   copyCropTo,
   patchPicture,
   removePictures,
@@ -53,6 +54,8 @@ import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import type { ExportVerb } from './ExportPanel';
 import Filmstrip from './Filmstrip';
 import type { CropApplyVerb } from './CropPanel';
+import type { BorderApplyVerb } from './BorderSection';
+import type { RollBorder } from '../../shared/develop/border-layout';
 import PictureWorkbench from './PictureWorkbench';
 import { useRollExport } from './use-roll-export';
 import { useRollGrade } from './use-roll-grade';
@@ -417,6 +420,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     (id: string, aspect: string) => update((r) => patchPicture(r, id, { aspect })),
     [update],
   );
+  const handleBorder = useCallback(
+    (id: string, border: RollBorder | null) => update((r) => copyBorderTo(r, [id], border)),
+    [update],
+  );
   const handleExportSettings = useCallback(
     (patch: Partial<RollExport>) => update((r) => ({ ...r, export: { ...r.export, ...patch }, updatedAt: Date.now() })),
     [update],
@@ -512,7 +519,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       return [
         {
           id: 'selection',
-          label: `Apply to ${n} selected`,
+          label: `Apply crop to ${n} selected`,
           hint: 'the pictures marked in the filmstrip, each as its own copy',
           run: write(selectionTargets),
         },
@@ -522,8 +529,36 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     return [
       {
         id: 'roll',
-        label: `Apply to ${others} other picture${others === 1 ? '' : 's'}`,
+        label: `Apply crop to ${others} other picture${others === 1 ? '' : 's'}`,
         hint: 'the rest of this roll, each as its own copy',
+        run: write(roll.pictures.filter((p) => p.id !== openId).map((p) => p.id)),
+      },
+    ];
+  }, [openId, others, roll.pictures, selectionTargets, update]);
+
+  // The border's own verbs, apart from the crop's: a roll can wear ONE border
+  // over crops that each differ (the maintainer's change to the prototype).
+  const borderApplyTo = useMemo<BorderApplyVerb[]>(() => {
+    if (!openId) return [];
+    const write = (targets: readonly string[]) => (border: RollBorder | null) =>
+      update((r) => copyBorderTo(r, targets, border));
+    if (selectionTargets.length > 0) {
+      const n = selectionTargets.length;
+      return [
+        {
+          id: 'selection',
+          label: `Apply borders to ${n} selected`,
+          hint: 'the pictures marked in the filmstrip, their crops untouched',
+          run: write(selectionTargets),
+        },
+      ];
+    }
+    if (others <= 0) return [];
+    return [
+      {
+        id: 'roll',
+        label: `Apply borders to ${others} other picture${others === 1 ? '' : 's'}`,
+        hint: 'the whole roll, each keeping its own crop',
         run: write(roll.pictures.filter((p) => p.id !== openId).map((p) => p.id)),
       },
     ];
@@ -665,6 +700,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onTabChange={setTab}
               applyTo={applyTo}
               cropApplyTo={cropApplyTo}
+              borderApplyTo={borderApplyTo}
+              onBorder={(border) => handleBorder(open.id, border)}
               onDevelop={(develop) => handleDevelop(open.id, develop)}
               onFraming={(framing) => handleFraming(open.id, framing)}
               onAspect={(aspect) => handleAspect(open.id, aspect)}

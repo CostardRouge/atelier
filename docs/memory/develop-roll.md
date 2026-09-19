@@ -185,125 +185,42 @@ stayed as shot); Copy on the open picture then a fresh ⌘-click pair then
 "Paste to 2 selected" wrote the same +1.5 EV to those two; Clear dropped the
 badges and the verb reverted to "Apply to 5 other pictures".
 
-## The crop is a second tab over the SAME delivered picture (2026-09-16, D8)
+## The crop is a second tab over the SAME delivered picture (2026-09-16, D8; rev. 2026-09-19)
 
-`FramingStage` + `CropPanel` (`tools/develop/`), `WORKBENCH_TABS` +
-`pictureAspectRatio` + the `R`/`D` keys in `roll-editor.ts` (tested),
-`framedThumbnail` in `roll-thumb.ts`, and `useDevelopPicture().delivered()` —
-the one addition to a shared block. Rules a later phase must keep:
+`CropStage` + `CropPanel` (`tools/develop/`; the D8 `FramingStage` is gone,
+see «The crop is a ZONE» below), `WORKBENCH_TABS` + `pictureAspectRatio` + the
+`R`/`D`/`X` keys in `roll-editor.ts` (tested), `framedThumbnail` in
+`roll-thumb.ts`, and `useDevelopPicture().delivered()` — the one addition to a
+shared block. Rules a later phase must keep:
 
-- **The crop is SEEN on every tab** (2026-09-16, the maintainer's report:
-  leaving Crop showed the whole picture again and read as a lost crop).
-  `useDevelopPicture` takes an optional `frame` (aspect ratio + framing) that
-  only its VIEWPORT paint and zoom read — the wipe is a clipped second
-  `drawFramed` of the untouched source, so before/after lines up on the crop;
-  the histogram, `delivered()` and `snapshot()` stay the whole picture (the
-  crop stage frames `delivered()` itself). The Trips/Studio modals pass no
-  frame and are unchanged. The export always applied the stored crop.
-- **The crop has its own Apply to** (`copyCropTo`, pure, tested): the open
-  picture's aspect + framing copied onto the selection, else every other
-  picture — never the develop. A pan is copied as is: `framingTransform`
-  clamps it to each picture's slack at draw. Same D6 limit on the other cells.
+- **The crop is SEEN on every tab** (the maintainer's report: leaving Crop
+  showed the whole picture again and read as a lost crop). `useDevelopPicture`
+  takes an optional `frame` that only its VIEWPORT paint and zoom read — the
+  wipe is a clipped second `drawFramed` of the untouched source; the
+  histogram, `delivered()` and `snapshot()` stay the whole picture. The
+  Trips/Studio modals pass no frame and are unchanged.
+- **The crop has its own Apply to** (`copyCropTo`, pure, tested): aspect +
+  framing onto the selection, else every other picture — never the develop. A
+  pan is copied as is: `framingTransform` clamps it to each picture's slack.
 - **The crop stage draws `delivered()`, never `source.image`**: a crop is
-  judged on the developed picture. `delivered()` reads the ONE held grader at
-  call time, so a drag repaints from the held raster copy (`held-grader.ts`)
-  and never grades again; a caller repaints on `source` AND `cube`.
-- **`DevelopViewport` stays MOUNTED (`hidden`) while the crop is open.** Its
-  paint effect is keyed on the picture, the cube and the wipe — not on the
-  canvas element — so an unmounted viewport came back BLANK on the Develop
-  tab (the first D8 draft's fault). `usePictureZoom`'s ResizeObserver takes
-  the 0×0 of a hidden box and re-measures on return; nothing else is needed.
-- **The framing has its own write-through timer** (same 200 ms), separate from
-  the develop's: a drag fires per pointer move. An untouched framing is
-  written as `null` (`isDefaultFraming`), the aspect at once (discrete). The
-  open tab lives in `RollEditor`, never in the workbench: the workbench is
-  keyed per picture, and stepping must not drop you back to Develop.
-- **A cell is the picture as delivered — graded AND framed** (`framedThumbnail`,
-  keyed on the crop too, never upscaled past the source's long edge). The
-  other cells keep the D6 limit (as last seen).
-- The gestures are the badge stage's plus a PINCH (2026-09-16): wheel = trackpad
-  pinch, two fingers zoom the framing while moving it by their centre, and they
-  are heard on the STAGE rather than on the canvas — a phone letterboxes a
-  147px crop inside a 374px stage, so fingers landing either side of the
-  picture, which is how anything small is pinched, reached no listener at all.
-  `touch-none` moved to the stage with them and is right there (both axes, a
-  fixed-height box, not a scroll box — `frontend.md`'s rule is about
-  scrollers). One write per event, zoom before move: `panBy` clamps at the
-  scale it is given, and two writes in one event would each read the render's
-  copy and the second would throw the first away. No rotate handle, exactly as
-  Trips: the slider and the turn buttons are the rotation. Reset keeps the fit
-  (Trips' rule: asking for Whole is not a crop).
-- The docked inspector now wears the two editors' frame (`border border-line
-  rounded-paper bg-surface p-3`, the `Segmented` strip pinned, the sections
-  scrolling under it) — the `frontend.md` rule D6 had not yet applied.
-
-## A crop may be a FREE zone, on the same aspect field (2026-09-16)
-
-The maintainer asked to crop a free zone; the shapes were eight named formats
-and the picture's own. The whole vocabulary now lives in one pure module,
-`shared/develop/crop-aspect.ts`: `'original'`, a preset id, or **`'free:<w/h>'`
-carrying its own ratio** (four decimals, held between 5:1 and 1:5). Rules a
-later agent must keep:
-
-- **One field, not two.** The free shape rides `RollPicture.aspect`, so every
-  reader that already asks for a ratio (`roll-render`, the export, the
-  filmstrip cell, the crop stage) is unchanged, `copyCropTo` copies a free
-  shape with no new case, and no migration is owed. What it costs is that
-  module: `isStoredAspect` is what `readRollDoc` trusts, `aspectFileTag` is
-  what names the file (`-crop`, never the ratio — a second dot in a name),
-  `pictureAspectRatio` is the one reader, and `resizeAspectRatio` is the
-  stage's arithmetic, tested rather than buried in a pointer handler.
-- **Free is SEEDED from the shape on screen**, the grade rungs' idiom: picking
-  it moves nothing and only unlocks the frame. The reverse holds too — a
-  named format simply replaces it.
-- **The frame is reshaped from its CENTRE**, and a handle is read as a
-  distance from that centre rather than a delta from where the drag began: the
-  canvas is letterboxed in the middle of the stage whatever its ratio, so
-  there is nothing to anchor, nothing to accumulate and no drift, and the
-  gesture corrects itself once the fit has pinned an axis. A corner takes both
-  axes from the finger, an edge only its own.
-- **The handles need the stage's padding.** They straddle the frame's edge and
-  the stage must clip (`overflow-hidden`, the picture being larger than it), so
-  flush against it the two handles on the pinned axis are unhittable — which is
-  how the first draft silently did nothing on a wide picture. `p-3.5` is paid
-  at every aspect, so nothing moves when Free is picked.
-- **Their box is MEASURED, never described in CSS.** The canvas takes its shape
-  from its own intrinsic size against the stage's box (`max-w-full max-h-full
-  w-auto h-auto`); a wrapper asked to shrink-wrap that either stretches it (a
-  flex parent did, and a square crop came out 668×561) or loses the constraint
-  that letterboxes it. A `ResizeObserver` on the canvas feeds an overlay that
-  passes every pointer through but its handles.
-- **The shape has a control as well as a gesture** — a Shape slider on log₂ of
-  the ratio (a square in the middle, the same step either way) and a turn
-  button that inverts it — the zoom pill's rule in `frontend.md`: a gesture the
-  browser can take away needs a way in that always answers.
-- The aspect is written to the roll AT ONCE, not through the workbench's
-  200 ms timer (it is the document's, not a draft): a drag is many writes, and
-  the history engine's 700 ms label coalescing is what makes it ONE undo step
-  — measured, a half-second drag undoes in one.
-- `rollProgress` now counts an aspect other than `'original'` as a crop:
-  drawing a free zone with the corners leaves the framing untouched, and the
-  picture would otherwise read as one nobody had looked at.
-
-Verified in headless Chromium at 1400×900 and on an iPhone 13 viewport: Free
-left a 668×417.5 frame untouched and raised eight handles; a corner drag made
-it exactly square and stored `free:1`; an edge drag widened it to 1.28:1
-without touching the height; Turn gave `free:0.7806` and a 437.8×560.8 frame;
-the slider at log₂ = 1 said `2.00:1`; the Develop tab showed the 2:1 crop
-letterboxed and the filmstrip cell redrew to it; the Export tab read `File
-1600 px → 1600 · exact`; a reload kept the shape; on the phone a FINGER on the
-corner gave `free:1.0001`. Not driven: a written export file (the render path
-is the presets', only the ratio differs).
-
-Verified in the desktop app's Browser pane on four canvas-made JPEGs: −1.5 EV
-then `R` → the crop stage showed the DARKENED picture; 1:1 → a square crop
-centred; a drag panned it, the wheel zoomed to 2.12× and Reset appeared; +90°
-then Horizontal → −90° mirrored (`flipFraming`); `D` → the Develop viewport
-came back painted; the cell redrew square, turned, mirrored, dark; a reload
-read `{aspect: '1:1', framing: {rotation: -90, flipX: true, scale: 2.117, x:
--0.3}}` from `atelier-develop` with the three untouched pictures `null`; on a
-375×812 phone the bar read LIBRARY · DEVELOP · CROP, Crop raised the sheet
-over the crop stage, Escape closed it.
+  judged on the developed picture, repainted from the held raster copy
+  (`held-grader.ts`) on `source` AND `cube`, never graded again per drag.
+- **`DevelopViewport` stays MOUNTED (`hidden`) while the crop is open**: its
+  paint is keyed on the picture, not the canvas element, so an unmounted one
+  came back BLANK.
+- **The framing has its own 200 ms write-through timer**; the aspect is written
+  to the roll AT ONCE (it is the document's, not a draft) and the history's
+  700 ms label coalescing makes a drag ONE undo step. An untouched framing is
+  `null`. The open tab lives in `RollEditor`, so stepping keeps it.
+- **A cell is the picture as delivered — graded AND framed** (`framedThumbnail`).
+- **The free shape rides `aspect`** (`'free:<w/h>'`, four decimals, 1:5..5:1,
+  `crop-aspect.ts`): every ratio reader is unchanged, `aspectFileTag` names the
+  file `-crop`, and `rollProgress` counts an aspect other than `'original'` as
+  a crop even with an untouched framing.
+- Gestures are heard on the STAGE, not a canvas inside it, with `touch-none`
+  there (a fixed-height box, not a scroller) and `blockNativeZoom` — a phone's
+  fingers land either side of a small picture.
+- The docked inspector wears the two editors' frame (`frontend.md`).
 
 ## The export decides its pixels before it reads one (2026-09-16, D9)
 
@@ -411,3 +328,142 @@ canvas and dropped in through a synthetic `DataTransfer`): the exposure slider
 moved, ⌘Z **with the slider still focused** put it back, ⇧⌘Z returned it, both
 buttons the same, the crop's zoom stepped back and forward on its own draft, and
 an undo pressed inside a gesture's rest held instead of being overwritten.
+
+## The crop is a ZONE drawn over the whole picture (2026-09-19)
+
+**Decision (maintainer, over two prototypes he reviewed and accepted in
+full).** The D8 crop stage made the crop zone BE the canvas, letterboxed in the
+stage: a handle changed the canvas's aspect, so the whole view resized, the
+axis it was fitted on flipped as its ratio crossed the stage's (a horizontal
+drag moved the vertical), the zone grew from its centre and the picture
+re-zoomed to cover, so what was cut was never seen. He wants the classic crop:
+the whole picture still, a zone drawn over it, the cut part under a veil, the
+picture turning UNDER the zone. Develop tool only — Trips keeps its framing
+grammar and its Whole.
+
+**Nothing migrates.** `shared/develop/crop-rect.ts` (pure, tested) turns a
+zone `{cx, cy, w, h}` — source pixels, the TURNED picture's frame, origin at
+its centre — into the `aspect` + `Framing` (`fit: 'cover'`) the roll already
+stores, and back through `framingTransform` itself, so the zone read from a
+stored crop is what the renderers will cut (the pan clamped as they clamp it).
+Round-trips are pinned at 0°, 2.6°, 45°, 90° and with flips. Rules a later
+agent must keep: (1) **every gesture is a candidate then a clamp** —
+`clampToward` bisects from the last VALID zone toward the candidate,
+interpolating the four EDGES, which is what keeps a handle anchored, a locked
+ratio locked and a drag stopped at the edge instead of jumping; a starting zone
+that is not valid is returned untouched. (2) **Valid** = every corner inside
+the turned picture (Fill's invariant), no smaller than `MAX_FRAMING_SCALE`
+allows, a ratio inside the free aspect's 1:5..5:1. (3) **A move slides**: the
+whole move as far as it goes, then the rest on x, then on y. (4) **Rotation
+works from an INTENT** (`fitIntent`): the last zone the author drew, shrunk
+just enough at the new angle and never grown past it, so 3° then 0° gives the
+drawn zone back; a centre that fell off is pulled toward the middle only as
+far as the smallest zone needs. (5) `EPS` in the containment test is 1e-9 of
+the long side: at 1e-6 a 3000 px picture let a zone overhang by 3 mpx and the
+edge tests failed — keep the tolerance float-sized, never pixel-sized.
+
+**The stage** (`CropStage` + `use-crop-zone.ts`, replacing `FramingStage`;
+`resizeAspectRatio` retired). Rules: (1) the zone is DERIVED from what the roll
+stores (aspect + the framing draft), never kept beside it — an undo or a batch
+verb moves it with no wiring; only the lit chip and the intent live in the
+hook. (2) The view is fitted ONCE on the quarter-turned picture: a fine angle
+never refits it, and nothing a gesture does resizes it. (3) One canvas draws
+picture, veil (even-odd), dashed outline, thirds and handles; the size tag is
+the only DOM element, in the FILE's pixels (`RollExports.openSize`), not the
+decoded preview's. (4) The stage takes focus on a press, and only a FOCUSED
+stage claims the arrows (`preventDefault`, which the editor's window handler
+respects) — unfocused, ←/→ still step the roll. `X` is an editor key
+(`'swap'`), answered on the Crop tab only. (5) `cropFromZone` snaps a scale
+within 1e-6 of 1 and a pan under 1e-9 to exact values: the largest zone is
+built a hair inside (`fitAround`'s 1 − 1e-9), and a stored `scale:
+1.000000001` made an untouched picture count as developed — measured in the
+pane. (6) A preset without a turned twin (4:5) swaps into Free.
+
+**Rotation under the zone** (`use-crop-zone.ts`): Straighten is the FINE
+angle (±45° inside the current quarter, `splitRotation`), the quarter turns
+turn the zone WITH the picture (`quarterTurnZone`, exact, no refit), the flips
+mirror the zone's centre and negate the angle (`flipFraming`'s rule), and
+Level turns a line drawn on the stage into a correction of the fine angle.
+The hook remembers what it last WROTE: when the stored crop differs (an undo,
+a batch verb), the intent is re-read from the zone on screen, so a rotation
+after an undo never refits a stale zone. Verified in the pane on a JPEG with a
+3° horizon: Level along it gave −3.0° with the zone shrunk just enough and the
+dense grid up; Straight gave the 4:5 zone back and the roll stored `framing:
+null`; +90° turned a 4:5 zone into 5:4 over the same part; Horizontal then
+stored `rotation: -90, flipX: true` and the Develop viewport showed the same
+crop mirrored. Trap: the pane's screenshot can lag a click by a frame — read
+the stored roll before concluding a button did nothing.
+
+**Phone and the view.** A pinch, the wheel and the ± pill zoom the stage's
+VIEW (`CropView` in `use-crop-zone.ts`, 1..8×, about the fingers' centre,
+measured from where the pinch began) — never the zone; `Z` toggles it on the
+Crop tab. A second finger cancels the one-finger gesture and the finger left
+after a pinch starts nothing. A finger's hit radius on a handle is 22 px (a
+44 px target) against 10 for a mouse, and the handle keeps its GRAB offset: a
+finger landing 19 px inside the edge made the edge jump to it until the offset
+was kept. The inspector is the D6 `DockedDrawer` under the stage, so it never
+covers the zone. Verified in the pane at 375×812 with synthetic touch
+pointers: a two-finger spread took the view to 400% with the stored framing
+byte-identical; in Free, a finger 19 px inside the right edge dragged 60 px
+moved that edge exactly 60 px, the left edge and the height untouched (read
+back by hover-scanning the stage's cursor zones); under Original the same drag
+kept 1.5:1 about the centre. Not driven: a real phone, a real multi-touch.
+
+## A picture may be delivered on a BORDER (2026-09-19, roll v2)
+
+**Decision (maintainer, over a second prototype).** Coloured bars or margins
+round the crop, a subsection of the Crop tab; blur is wanted. `RollPicture.border`
+(`null` = the file IS the crop) — `aspect` (the file's shape or null for crop +
+margins), `fill` (`#rrggbb` or `'blur'`), `margin` {x, y} as fractions of the
+CROP's short side, the picture always centred (v1). `border-layout.ts` (pure,
+tested: the layout, the reader, `legacyWholeBorder`, a box blur),
+`border-paint.ts` (the ONE painter: export, cell, viewport, panel preview).
+Rules a later agent must keep:
+
+- **`ROLL_DOC_VERSION` is 2.** The lift lives in `readPicture` and is
+  idempotent. `photo-editor.md`'s edit-stack migration becomes v2 → v3.
+- **A crop leaves at the source's OWN density** (`deliveredLayout`,
+  `cropZoneSize`): the file is the zone (+ border), capped by the long edge,
+  never the aspect box with a small zone blown up into it — which is what D9
+  did, a zoomed crop reading `×1.50 upscaled`. So a proxy is only ever
+  upscaled against what the ORIGINAL could give, and `Auto`'s question is
+  unchanged. The *Delivers* line names the crop's long edge when a border makes
+  the file larger than it.
+- **Legacy Whole** (`fit: 'contain'`, D8): read as zone = whole picture +
+  `border {aspect: <old aspect>, fill: '#000000', margin 0}` ONLY when exactly
+  representable without the picture's size — scale 1, a half turn at most, no
+  pan (any pan when the aspect was `original`). Same composition, but now at
+  the picture's own density instead of the aspect box's: bigger file, same
+  picture. Anything else (a quarter turn, a zoom, a pan, a tilt) STAYS
+  `contain` and renders through `drawFramed`'s legacy path unchanged; the crop
+  stage reads it as its cover twin and the first crop gesture replaces it.
+- **The blur fill blurs a 48 px copy of the crop** (three box passes, then
+  scaled to cover, darkened 18%), so preview and file blur the same picture
+  whatever their size — no `ctx.filter` (Safari).
+- **Apply to is TWO verbs** (the maintainer's one change to the prototype):
+  `copyCropTo` never touches the border, `copyBorderTo` (pure, tested) never
+  the crop, so a roll can wear one border over crops that each differ.
+- `rollProgress` counts a border as looked at.
+
+Verified in the pane through the app's own `renderRollPicture` on a 3000×2000
+half-blue/half-green JPEG: a 10 % vermilion border on a 1:1 file → 3400×3400,
+vermilion outside, blue and green inside; a 1:1 crop at scale 2 → 1000×1000
+(the zone, native density); a blur border on 9:16 → 3200×5689 with the fill
+blue on the left and green on the right, darkened (208 against 254).
+
+**The Borders UI** (`BorderSection.tsx`, under Crop in the same tab): a switch
+in the section's header (off → `null`; on again restores the last border this
+visit, not the default), the FILE format (Free = `aspect: null`), four swatches
++ `<input type="color">` + Blur, two margin sliders 0–25 % linked by default,
+and a "What the export delivers" preview drawn by `drawDelivered` with the
+export's size (`openDelivery.out`) under it — the stage keeps the whole
+picture for cropping, so the panel is where a border is seen while set. Every
+change is written to the roll at once (`copyBorderTo(roll, [id], …)`), like
+the aspect. Verified in the pane: on, 4:5, Blur → preview 0.8 and "delivers
+2512 × 3140 px"; *Export this picture* (showDirectoryPicker stubbed) wrote
+`A-tilt-developed-crop.jpg` at 2512×3140 whose pixels at three points equal
+the preview's exactly (blur top 89,133,178; sky; grass); *Apply borders to 3
+other pictures* gave the three the border and left every aspect and framing
+byte-identical; after a reload the Develop viewport showed the crop on its
+blur. Not driven: a real phone, the free colour picker's native dialog, a
+Winnow original through Auto with a border (the arithmetic is tested).

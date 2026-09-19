@@ -80,7 +80,7 @@ not seven.**
 
 ### 2.4 The roll already holds a picture's treatment
 
-`RollPicture` (`shared/develop/roll-types.ts`, `ROLL_DOC_VERSION = 1`) carries
+`RollPicture` (`shared/develop/roll-types.ts`, `ROLL_DOC_VERSION = 2` since the border of 2026-09-19) carries
 `develop`, `framing` and `aspect`; `RollDoc` carries the roll's `grade` and
 `export`. The document shape to grow is here, and it has a migration reader
 (`readRollDoc`) already.
@@ -244,7 +244,7 @@ never disagree.
 ## 6. The model
 
 `shared/render/edit.ts`. `RollPicture.develop` becomes `RollPicture.edit`,
-`ROLL_DOC_VERSION` 1 → 2; an old `develop` reads straight into `edit.base`,
+`ROLL_DOC_VERSION` 2 → 3 (v2 went to the border, 2026-09-19); an old `develop` reads straight into `edit.base`,
 `framing`/`aspect` into `edit.geometry`, layers default to `[]` — so no existing
 roll changes appearance, which is the migration's test.
 
@@ -324,7 +324,9 @@ a pixel-for-pixel match against today's path.
 
 **P5 — geometry: the crop moves in, keystone arrives.** `geometry.ts` pure (a
 3×3 homography from four corner offsets or from V/H sliders, round-trip tested);
-the crop leaves `drawFramed` for the warp; `FramingStage` gains the handles.
+the crop leaves `drawFramed` for the warp; `CropStage` (the zone editor that
+replaced `FramingStage` on 2026-09-19, its arithmetic in `crop-rect.ts`) gains
+the keystone handles.
 
 **P6 — lens correction.** A small Lensfun-subset parser (pure, tested), his
 bodies and lenses committed under `public/lenses/`, matched on EXIF

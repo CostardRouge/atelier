@@ -13,7 +13,7 @@ import { copyDevelop, pasteDevelop } from '../../shared/develop/develop-clipboar
 import { developPillClass } from '../../shared/develop/develop-classes';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { pictureFidelity } from '../../shared/develop/picture-fidelity';
-import { freeAspectId, isFreeAspect, pictureAspectRatio } from '../../shared/develop/crop-aspect';
+import { pictureAspectRatio } from '../../shared/develop/crop-aspect';
 import { WORKBENCH_TABS, editorKeyAction, sameDevelop, type WorkbenchTab } from '../../shared/develop/roll-editor';
 import { framedThumbnail } from '../../shared/develop/roll-thumb';
 import type { RollPicture } from '../../shared/develop/roll-types';
@@ -22,23 +22,19 @@ import { useWriteThrough } from '../../shared/develop/use-write-through';
 import { useDevelopPicture, type DevelopFrame } from '../../shared/develop/use-develop-picture';
 import { usePresetBookHost } from '../../shared/develop/use-preset-book';
 import type { LutStack } from '../../shared/lut/use-lut-stack';
-import {
-  DEFAULT_FRAMING,
-  MAX_FRAMING_SCALE,
-  isDefaultFraming,
-  sameFraming,
-  scaleFramingBy,
-  type Framing,
-} from '../../shared/media/framing';
+import { DEFAULT_FRAMING, isDefaultFraming, sameFraming, type Framing } from '../../shared/media/framing';
 import { describeKeyTarget, targetOwnsTyping } from '../../shared/media/transport-keys';
 import PanelHost from '../../shared/ui/PanelHost';
 import Segmented from '../../shared/ui/Segmented';
 import StageZoomControl from '../../shared/ui/StageZoomControl';
-import { STAGE_ZOOM_STEP, type ZoomControls } from '../../shared/ui/stage-zoom';
+import { STAGE_ZOOM_STEP, zoomLabel, type ZoomControls } from '../../shared/ui/stage-zoom';
 import type { RollExport } from '../../shared/develop/roll-types';
 import CropPanel, { type CropApplyVerb } from './CropPanel';
+import type { BorderApplyVerb } from './BorderSection';
+import type { RollBorder } from '../../shared/develop/border-layout';
 import ExportPanel, { type ExportVerb } from './ExportPanel';
-import FramingStage from './FramingStage';
+import CropStage from './CropStage';
+import { CROP_VIEW_FIT, CROP_VIEW_MAX, useCropZone } from './use-crop-zone';
 import type { RollExports } from './use-roll-export';
 
 /** How long the picture rests before its filmstrip cell is redrawn. */
@@ -74,6 +70,8 @@ export default function PictureWorkbench({
   onTabChange,
   applyTo,
   cropApplyTo,
+  borderApplyTo,
+  onBorder,
   onDevelop,
   onFraming,
   onAspect,
@@ -99,6 +97,9 @@ export default function PictureWorkbench({
   applyTo: readonly DevelopApplyVerb[];
   /** The crop's batch verbs — this picture's aspect and framing written onto others. */
   cropApplyTo: readonly CropApplyVerb[];
+  /** The border's own batch verbs — never the crop (the maintainer's two verbs). */
+  borderApplyTo: readonly BorderApplyVerb[];
+  onBorder: (border: RollBorder | null) => void;
   onDevelop: (develop: DevelopSettings | null) => void;
   onFraming: (framing: Framing | null) => void;
   onAspect: (aspect: string) => void;
@@ -121,9 +122,10 @@ export default function PictureWorkbench({
   // The crop stays visible on every tab: the Develop viewport shows the
   // picture as it will leave, framed, while the Crop tab edits the frame.
   const [ratio, setRatio] = useState(0);
+  const border = entry.border;
   const frame = useMemo<DevelopFrame | null>(
-    () => (ratio > 0 ? { aspectRatio: ratio, framing: framingDraft } : null),
-    [ratio, framingDraft],
+    () => (ratio > 0 ? { aspectRatio: ratio, framing: framingDraft, border } : null),
+    [ratio, framingDraft, border],
   );
   const picture = useDevelopPicture({ file, cube: stack.composed, frame });
   const fidelity = pictureFidelity(file);
@@ -161,21 +163,30 @@ export default function PictureWorkbench({
   const { source, cube, delivered } = picture;
   const aspectRatio = pictureAspectRatio(entry.aspect, source?.width ?? 0, source?.height ?? 0);
   useEffect(() => setRatio(source ? aspectRatio : 0), [source, aspectRatio]);
+  // The Crop tab's zone, measured on the decoded picture and written back as
+  // the aspect (to the roll, at once) and the framing (through its draft).
+  const crop = useCropZone({
+    src: source ? { width: source.width, height: source.height } : null,
+    aspect: entry.aspect,
+    framing: framingDraft,
+    onAspect: (aspect) => callbacks.current.onAspect(aspect),
+    onFraming: setFramingDraft,
+  });
   useEffect(() => {
     if (!source) return;
     const t = window.setTimeout(() => {
       const image = delivered();
       if (!image) return;
-      void framedThumbnail(image, source.width, source.height, aspectRatio, framingDraft).then((blob) => {
+      void framedThumbnail(image, source.width, source.height, aspectRatio, framingDraft, border).then((blob) => {
         if (blob) callbacks.current.onSnapshot(blob);
       });
     }, SNAPSHOT_DELAY_MS);
     return () => window.clearTimeout(t);
-  }, [source, cube, delivered, aspectRatio, framingDraft]);
+  }, [source, cube, delivered, aspectRatio, framingDraft, border]);
 
   // --- keys --------------------------------------------------------------------
-  const keyState = useRef({ draft, picture, tell });
-  keyState.current = { draft, picture, tell };
+  const keyState = useRef({ draft, picture, tell, crop, tab });
+  keyState.current = { draft, picture, tell, crop, tab };
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
@@ -192,7 +203,7 @@ export default function PictureWorkbench({
         hasSelection: Boolean(window.getSelection()?.toString()),
       });
       if (!action) return;
-      const { draft: d, picture: pic, tell: say } = keyState.current;
+      const { draft: d, picture: pic, tell: say, crop: c, tab: open } = keyState.current;
       switch (action) {
         case 'previous':
         case 'next':
@@ -205,6 +216,10 @@ export default function PictureWorkbench({
           return;
         case 'zoom':
           e.preventDefault();
+          if (open === 'crop') {
+            c.setView((v) => (v.zoom > 1 ? CROP_VIEW_FIT : { zoom: STAGE_ZOOM_STEP * STAGE_ZOOM_STEP, x: v.x, y: v.y }));
+            return;
+          }
           if (pic.view.zoomed) pic.view.zoom.reset();
           else pic.view.zoom.zoomIn();
           return;
@@ -230,6 +245,11 @@ export default function PictureWorkbench({
           e.preventDefault();
           callbacks.current.onTabChange('develop');
           return;
+        case 'swap':
+          if (open !== 'crop') return;
+          e.preventDefault();
+          c.swap();
+          return;
       }
     };
     const onUp = (e: KeyboardEvent) => {
@@ -244,25 +264,28 @@ export default function PictureWorkbench({
   }, []);
 
   const cropping = tab === 'crop';
-  const freeShape = isFreeAspect(entry.aspect);
+  // The crop stage's pill: the VIEW's zoom (inspection), never the crop's —
+  // the zone's size is the crop. Drawn at every width, the pinch's twin
+  // (`frontend.md`: a pinch the browser can take away needs a way in that
+  // always answers). Steps zoom about the middle of the view.
+  const { view: cropView, setView: setCropView } = crop;
+  const cropZoom = useMemo<ZoomControls>(() => {
+    const by = (f: number) =>
+      setCropView((v) => {
+        const zoom = Math.max(1, Math.min(CROP_VIEW_MAX, v.zoom * f));
+        return zoom === 1 ? CROP_VIEW_FIT : { zoom, x: (v.x * zoom) / v.zoom, y: (v.y * zoom) / v.zoom };
+      });
+    return {
+      scale: cropView.zoom,
+      label: zoomLabel(cropView.zoom),
+      canZoomIn: cropView.zoom < CROP_VIEW_MAX - 1e-6,
+      canZoomOut: cropView.zoom > 1,
+      zoomIn: () => by(STAGE_ZOOM_STEP),
+      zoomOut: () => by(1 / STAGE_ZOOM_STEP),
+      reset: () => setCropView(CROP_VIEW_FIT),
+    };
+  }, [cropView, setCropView]);
   const tabLabel = WORKBENCH_TABS.find((t) => t.id === tab)?.label ?? 'Develop';
-
-  // The crop's zoom as the pill's own interface, so one control serves both
-  // stages: on the Develop tab it moves the VIEW (how closely the picture is
-  // being looked at, which never leaves), on the Crop tab the FRAMING (what is
-  // kept, which does). The step is the stages' own 1.25.
-  const framingZoom = useMemo<ZoomControls>(
-    () => ({
-      scale: framingDraft.scale,
-      label: `${framingDraft.scale.toFixed(2)}×`,
-      canZoomIn: framingDraft.scale < MAX_FRAMING_SCALE - 1e-6,
-      canZoomOut: framingDraft.scale > 1,
-      zoomIn: () => setFramingDraft((f) => ({ ...f, scale: scaleFramingBy(f.scale, STAGE_ZOOM_STEP) })),
-      zoomOut: () => setFramingDraft((f) => ({ ...f, scale: scaleFramingBy(f.scale, 1 / STAGE_ZOOM_STEP) })),
-      reset: () => setFramingDraft((f) => ({ ...f, scale: 1 })),
-    }),
-    [framingDraft.scale],
-  );
 
   return (
     <>
@@ -285,7 +308,7 @@ export default function PictureWorkbench({
               FRAMING's own zoom, which is what the picture is cropped by. */}
           {source &&
             (cropping ? (
-              <StageZoomControl zoom={framingZoom} hint="drag, pinch, or the wheel" className="flex-none" />
+              <StageZoomControl zoom={cropZoom} hint="look closer: pinch or the wheel — the crop stays" className="flex-none" />
             ) : (
               <StageZoomControl zoom={picture.view.zoom} hint="wheel, pinch, or Z" className="flex-none" />
             ))}
@@ -297,15 +320,10 @@ export default function PictureWorkbench({
           className={cropping ? 'hidden' : 'flex-1'}
         />
         {cropping && (
-          <FramingStage
+          <CropStage
             picture={picture}
-            aspectRatio={aspectRatio}
-            framing={framingDraft}
-            onFraming={setFramingDraft}
-            // The handles exist only on a free zone, and they write the shape
-            // straight to the roll: the aspect is a discrete value the
-            // document holds, not a draft the workbench carries.
-            onAspectRatio={freeShape ? (ratio) => callbacks.current.onAspect(freeAspectId(ratio)) : undefined}
+            crop={crop}
+            sourceSize={exports.openSize}
             emptyText={emptyText}
             className="flex-1"
           />
@@ -318,9 +336,7 @@ export default function PictureWorkbench({
         {compact && sheetOpen ? null : cropping ? (
           <p className="m-0 flex-none font-mono text-2xs text-faint leading-relaxed">
             {source
-              ? `drag to move the picture, pinch or the wheel to zoom${
-                  freeShape ? ', the handles to set the shape' : ''
-                } · ${framingDraft.fit === 'contain' ? 'whole picture, bars where it falls short' : 'filling the frame'}`
+              ? 'drag inside to move · on the picture to draw · a handle to resize · double-click for the largest'
               : 'the crop needs the picture'}
           </p>
         ) : (
@@ -362,12 +378,14 @@ export default function PictureWorkbench({
             </>
           ) : tab === 'crop' ? (
             <CropPanel
-              framing={framingDraft}
+              picture={picture}
+              crop={crop}
               aspect={entry.aspect}
-              aspectRatio={aspectRatio}
-              onFraming={setFramingDraft}
-              onAspect={onAspect}
+              border={entry.border}
+              onBorder={onBorder}
+              deliveredSize={exports.openDelivery?.out ?? null}
               verbs={cropApplyTo}
+              borderVerbs={borderApplyTo}
               onTold={tell}
             />
           ) : (

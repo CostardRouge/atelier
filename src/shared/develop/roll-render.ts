@@ -1,9 +1,10 @@
 /**
  * The still export a roll makes: ONE picture, decoded at its own density,
- * graded whole (develop → look → output, the one cube), then framed into its
- * aspect box through `drawFramed` — crop, straighten and flip at source
- * density, the same transform the crop stage drew with — and encoded as a
- * JPEG at the roll's quality.
+ * graded whole (develop → look → output, the one cube), then its crop drawn at
+ * the source's own density (`deliveredLayout`: the zone, never blown up to an
+ * aspect box) through `drawFramed` — crop, straighten and flip, the same
+ * transform the crop stage drew with — on its border's canvas
+ * (`border-paint.ts`), and encoded as a JPEG at the roll's quality.
  *
  * The seam `docs/develop-tool.md` §6 named ("a still export that takes a
  * framing"): it lives here over `drawFramed` rather than on
@@ -19,14 +20,18 @@
 
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
-import { DEFAULT_FRAMING, drawFramed, type Framing } from '../media/framing';
+import { DEFAULT_FRAMING, type Framing } from '../media/framing';
 import { decodePhoto } from '../media/photo-frame';
 import { pictureAspectRatio } from './crop-aspect';
-import { rollOutputSize, type PictureSize } from './roll-export';
+import { drawDelivered } from './border-paint';
+import type { RollBorder } from './border-layout';
+import { deliveredLayout, type PictureSize } from './roll-export';
 
 export interface RollRenderOptions {
   framing: Framing | null;
   aspect: string;
+  /** The canvas round the crop (`border-layout.ts`), or null for the crop alone. */
+  border: RollBorder | null;
   /** The picture's own cube — its develop under the roll's look — or null as shot. */
   lut: CubeLut | null;
   longEdge: number | null;
@@ -59,7 +64,8 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
   try {
     const source = { width: bitmap.width, height: bitmap.height };
     const ratio = pictureAspectRatio(opts.aspect, source.width, source.height);
-    const out = rollOutputSize(source, ratio, opts.longEdge);
+    const framing = opts.framing ?? DEFAULT_FRAMING;
+    const { out, layout } = deliveredLayout(source, ratio, opts.framing, opts.border, opts.longEdge);
     if (out.w <= 0 || out.h <= 0) throw new Error('This picture has no pixels to deliver.');
     const canvas = document.createElement('canvas');
     canvas.width = out.w;
@@ -70,7 +76,7 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
     const grader = opts.lut ? makeFrameGrader(opts.lut, source.width, source.height, 1) : null;
     try {
       const graded = grader ? grader.render(bitmap) : bitmap;
-      drawFramed(ctx, graded, source.width, source.height, out.w, out.h, opts.framing ?? DEFAULT_FRAMING);
+      drawDelivered(ctx, graded, source.width, source.height, framing, layout, opts.border);
     } finally {
       grader?.dispose();
     }
