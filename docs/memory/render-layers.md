@@ -180,3 +180,55 @@ Measured in the pane: switching a layer to Painted left the picture untouched
 (the empty rule), one diagonal drag darkened exactly where the pointer went and
 nowhere else, and the roll stored one stroke of 13 points at radius 0.12.
 **Preview = export**, to the code: 57 / 154 / 154 both ways.
+
+## The subject mask: a model, from our own origin (2026-09-19, P9 engine)
+
+`shared/segment/segmenter.ts` + a `subject` mask kind. The recipe is the
+maintainer's own, taken from `CostardRouge/p5-templates` when he pointed at it:
+`public/assets/libraries/mediapipe/` there, `public/models/mediapipe/` here.
+
+**Everything is served from our own origin and nothing loads at boot.**
+MediaPipe's `vision_bundle.js`, the wasm and the model all sit under `public/`,
+dynamically imported the first time a subject mask is asked for. So the README's
+network callout is unchanged and a page that never opens one pays nothing — a
+file under `public/` is fetched only when something asks for it.
+
+**The real cost is the WASM, not the model.** The brief said "a ~5 MB
+MediaPipe-class model"; the model is 6.2 MB and `vision_wasm_internal.wasm` is
+another 9.6 MB, with `vision_bundle.js` at 877 KB — **16.9 MB**. The `nosimd`
+twin (another 9.1 MB) is deliberately NOT shipped: every browser that can run
+this suite at all (WebGL2, WebCodecs, File System Access) has wasm SIMD, and a
+`FilesetResolver` only reaches for the nosimd build on one that does not.
+
+**`InteractiveSegmenter` + `magic_touch`, not `deeplabv3`.** The brief recorded
+"subject/background, never click-anywhere"; his own photo tooling is exactly
+click-anywhere, and it is the better answer — semantic segmentation answers
+about CATEGORIES ("this region is a person"), and a photographer pointing at the
+second of three people is asking about THIS ONE. Several points are segmented
+and unioned, which is how one taps a person, then their bag. "Background" is not
+a second model: it is this mask under the layer's existing `invert`.
+
+**The selected object is category 0, and everything else is 255** — backwards
+from the obvious reading. Measured: a bright disc pointed at dead centre came
+back 0 at the disc and 255 in the corners, and `p5-templates` defaults its own
+`inverse` flag to true over the same model. Reading it the other way selects the
+BACKGROUND, which looks like a working feature until somebody notices the
+adjustment landed everywhere except the subject.
+
+**One inference at a time.** The task has a single result slot, so two in flight
+can have their answers swapped and a mask attributed to the wrong point is a
+subject that jumps. Points are segmented in sequence — the same shape
+`p5-templates` settled on.
+
+**What is stored is the REQUEST, never the pixels**: the points and the model
+id. The raster is derived, reproducible from the picture and the model, so it
+would break `.roll.json`'s portability for no gain; the model id on the mask is
+what refuses a raster cached by an older build. `maskAt` therefore cannot answer
+for this kind and returns 0 — the renderer never asks it, because the raster
+reaches the GPU through the very path a painted mask already uses (unit 2, the
+same branch, the same orientation).
+
+**Nothing in `npm test` can see any of this** — it needs a browser, a GPU and
+16.9 MB of model. Verified by a probe in headless Chromium: the GPU delegate
+initialised, `segmentSubject` answered in ~4 s cold (that includes the download)
+and returned a mask covering 19 % of the frame against the ~21 % actually drawn.

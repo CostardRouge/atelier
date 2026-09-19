@@ -34,7 +34,7 @@
  * Pure and DOM-free.
  */
 
-export type MaskKind = 'linear' | 'radial' | 'luma' | 'brush';
+export type MaskKind = 'linear' | 'radial' | 'luma' | 'brush' | 'subject';
 
 export interface LinearMask {
   kind: 'linear';
@@ -102,7 +102,28 @@ export interface BrushMask {
   strokes: readonly BrushStroke[];
 }
 
-export type Mask = LinearMask | RadialMask | LumaMask | BrushMask;
+/**
+ * The SUBJECT the author pointed at, segmented by a model.
+ *
+ * What is stored is the REQUEST — the points and which model answered them —
+ * never the pixels. The raster is derived data: reproducible from the picture
+ * and the model, so putting it in `.roll.json` would break the file's
+ * portability for no gain (`docs/photo-editor.md` §3, F6). It is cached beside
+ * the thumbnails instead and regenerated on a version mismatch.
+ *
+ * `maskAt` therefore cannot answer for this kind — it has no model — and says
+ * so by returning 0. The GPU is handed the cached raster, through the very path
+ * a painted mask already uses.
+ */
+export interface SubjectMask {
+  kind: 'subject';
+  /** Where the author tapped, in [0,1] frame coordinates. */
+  points: readonly (readonly [number, number])[];
+  /** Which model produced the cached raster; a mismatch refuses the cache. */
+  model: string;
+}
+
+export type Mask = LinearMask | RadialMask | LumaMask | BrushMask | SubjectMask;
 
 export const DEFAULT_LINEAR: Readonly<LinearMask> = Object.freeze({
   kind: 'linear',
@@ -127,6 +148,12 @@ export const DEFAULT_BRUSH: Readonly<BrushMask> = Object.freeze({
   strokes: Object.freeze([]) as readonly BrushStroke[],
 });
 
+/**
+ * The model a subject mask is made with. Stored on the mask, so a raster cached
+ * by an older build is refused rather than shown as though it were current.
+ */
+export const SUBJECT_MODEL = 'mediapipe/magic_touch@1';
+
 /** Where a new stroke starts, before the author touches the size or the softness. */
 export const DEFAULT_BRUSH_RADIUS = 0.12;
 export const DEFAULT_BRUSH_HARDNESS = 0.5;
@@ -143,6 +170,7 @@ export function defaultMask(kind: MaskKind): Mask {
   if (kind === 'radial') return { ...DEFAULT_RADIAL };
   if (kind === 'luma') return { ...DEFAULT_LUMA };
   if (kind === 'brush') return { kind: 'brush', strokes: [] };
+  if (kind === 'subject') return { kind: 'subject', points: [], model: SUBJECT_MODEL };
   return { ...DEFAULT_LINEAR };
 }
 
@@ -326,6 +354,11 @@ export function maskAt(
     return brushCoverageAt(mask.strokes, px, py, aspectRatio);
   }
 
+  // A SUBJECT cannot be answered here: it takes a model, and this module is
+  // pure. 0 rather than 1, for the same reason an empty brush covers nothing —
+  // and the renderer never asks, because it samples the cached raster.
+  if (mask.kind === 'subject') return 0;
+
   if (mask.kind === 'linear') {
     const [cx, cy] = framePoint(mask.x, mask.y, aspectRatio);
     const a = (mask.angle * Math.PI) / 180;
@@ -415,6 +448,22 @@ export function normaliseMask(raw: unknown): Mask | null {
     }
     return { kind: 'brush', strokes };
   }
+  if (src.kind === 'subject') {
+    const raw = Array.isArray(src.points) ? src.points : [];
+    const points: [number, number][] = [];
+    for (const p of raw) {
+      if (!Array.isArray(p) || p.length < 2) continue;
+      const x = num(p[0], NaN);
+      const y = num(p[1], NaN);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      points.push([clamp(x, 0, 1), clamp(y, 0, 1)]);
+    }
+    return {
+      kind: 'subject',
+      points,
+      model: typeof src.model === 'string' && src.model ? src.model : SUBJECT_MODEL,
+    };
+  }
   if (src.kind !== 'linear') return null;
   return {
     kind: 'linear',
@@ -436,6 +485,13 @@ export const MAX_STROKES = 500;
 export function sameMask(a: Mask | null | undefined, b: Mask | null | undefined): boolean {
   if (!a || !b) return !a && !b;
   if (a.kind !== b.kind) return false;
+  if (a.kind === 'subject' && b.kind === 'subject') {
+    return (
+      a.model === b.model &&
+      a.points.length === b.points.length &&
+      a.points.every((p, i) => p[0] === b.points[i][0] && p[1] === b.points[i][1])
+    );
+  }
   if (a.kind === 'brush' && b.kind === 'brush') {
     if (a.strokes.length !== b.strokes.length) return false;
     return a.strokes.every((s, i) => {
@@ -477,6 +533,9 @@ export function cloneMask(m: Mask | null | undefined): Mask | null {
       strokes: m.strokes.map((s) => ({ ...s, points: s.points.map((p) => [p[0], p[1]] as const) })),
     };
   }
+  if (m.kind === 'subject') {
+    return { kind: 'subject', model: m.model, points: m.points.map((p) => [p[0], p[1]] as const) };
+  }
   return { ...m } as Mask;
 }
 
@@ -488,6 +547,10 @@ export function describeMask(m: Mask | null | undefined): string {
   if (m.kind === 'brush') {
     const n = m.strokes.length;
     return n === 0 ? 'painted · nothing yet' : `painted · ${n} stroke${n === 1 ? '' : 's'}`;
+  }
+  if (m.kind === 'subject') {
+    const n = m.points.length;
+    return n === 0 ? 'subject · tap it' : `subject · ${n} point${n === 1 ? '' : 's'}`;
   }
   // A luma band gets a WORD where it has one: "shadows" says more than
   // "0.00–0.35" to anybody, and the numbers are on the sliders anyway.

@@ -10,11 +10,13 @@ import {
   maskAt,
   normaliseMask,
   sameMask,
+  SUBJECT_MODEL,
   smoothStep01,
   type BrushMask,
   type LinearMask,
   type LumaMask,
   type RadialMask,
+  type SubjectMask,
 } from './mask';
 
 const linear = (over: Partial<LinearMask> = {}): LinearMask => ({ ...DEFAULT_LINEAR, ...over });
@@ -168,6 +170,51 @@ describe('a luma mask', () => {
   it('is symmetric about a symmetric band', () => {
     const m = luma({ from: 0.4, to: 0.6, feather: 0.2 });
     expect(maskAt(m, 0, 0, 0.3)).toBeCloseTo(maskAt(m, 0, 0, 0.7), 12);
+  });
+});
+
+describe('a subject mask', () => {
+  it('stores the REQUEST, not the pixels', () => {
+    const m = normaliseMask({ kind: 'subject', points: [[0.4, 0.6]] }) as SubjectMask;
+    expect(m.kind).toBe('subject');
+    expect(m.points).toEqual([[0.4, 0.6]]);
+    // The model is stamped on, so a raster cached by an older build is refused
+    // rather than shown as though it were current.
+    expect(m.model).toBe(SUBJECT_MODEL);
+    expect('data' in m).toBe(false);
+  });
+
+  it('cannot be answered without the model, and says 0 rather than guessing', () => {
+    // 0 and not 1, for the same reason an empty brush covers nothing: the
+    // renderer never asks — it samples the cached raster.
+    expect(maskAt({ kind: 'subject', points: [[0.5, 0.5]], model: 'x' }, 0.5, 0.5, 0.5)).toBe(0);
+  });
+
+  it('drops a junk point and clamps the rest into the frame', () => {
+    const m = normaliseMask({
+      kind: 'subject',
+      points: [[0.5, 0.5], 'nope', [2, -3], [Number.NaN, 0.5]],
+    }) as SubjectMask;
+    expect(m.points).toEqual([[0.5, 0.5], [1, 0]]);
+  });
+
+  it('compares by its points AND its model', () => {
+    const a = { kind: 'subject', points: [[0.5, 0.5]], model: 'a' } as SubjectMask;
+    expect(sameMask(a, { ...a, points: [[0.5, 0.5]] })).toBe(true);
+    expect(sameMask(a, { ...a, model: 'b' })).toBe(false);
+    expect(sameMask(a, { ...a, points: [[0.5, 0.6]] })).toBe(false);
+  });
+
+  it('clones deeply enough to be held against a live draft', () => {
+    const live = normaliseMask({ kind: 'subject', points: [[0.5, 0.5]] }) as SubjectMask;
+    const held = cloneMask(live)!;
+    (live.points as [number, number][]).push([0.2, 0.2]);
+    expect(sameMask(held, live)).toBe(false);
+  });
+
+  it('says how many points, or asks for one', () => {
+    expect(describeMask({ kind: 'subject', points: [], model: 'x' })).toBe('subject · tap it');
+    expect(describeMask({ kind: 'subject', points: [[0.5, 0.5]], model: 'x' })).toBe('subject · 1 point');
   });
 });
 

@@ -24,12 +24,12 @@ import type { CubeLut } from '../lib/cube-parser';
 import type { Interpolation } from '../lut/interpolate';
 import { GLSL_VERSION, IMAGE_UV, LUT_LOOKUP, LUT_UNIFORMS } from './glsl';
 import { REC709_LUMA, type Mask } from './mask';
-import { rasteriseBrush } from './brush-raster';
+import { rasteriseBrush, type BrushRaster } from './brush-raster';
 import { createCubeTexture } from './cube-pass';
 import type { RenderPass } from './graph';
 
 /** What `u_maskKind` means. 0 is "no mask", which covers the whole picture. */
-const KIND = { none: 0, linear: 1, radial: 2, luma: 3, brush: 4 } as const;
+const KIND = { none: 0, linear: 1, radial: 2, luma: 3, brush: 4, subject: 4 } as const;
 
 const FRAGMENT = `${GLSL_VERSION}
 precision highp float;
@@ -62,10 +62,11 @@ uniform sampler2D u_maskTex;
 float maskValue(vec2 img, float luma) {
   if (u_maskKind == ${KIND.none}) return 1.0;
 
-  // A painted mask is the one kind the CPU rasterises (brush-raster.ts): a
-  // shader walking every segment of every stroke per pixel would cost pixels x
-  // points. Row 0 of the map is the TOP of the picture, which is what imageUv
-  // already gives, so no flip enters here.
+  // The RASTER kinds -- a painted mask (brush-raster.ts) and a segmented
+  // subject -- share one branch and one texture, because by the time they reach
+  // here they are the same thing: an alpha map in image order. Row 0 of the map
+  // is the TOP of the picture, which is what imageUv already gives, so no flip
+  // enters here.
   if (u_maskKind == ${KIND.brush}) return texture(u_maskTex, img).r;
 
   if (u_maskKind == ${KIND.luma}) {
@@ -115,6 +116,11 @@ export interface LayerPassOptions {
   aspectRatio?: number;
   interpolation?: Interpolation;
   /**
+   * The alpha map for a mask this module cannot compute — a segmented subject,
+   * resolved and cached by the caller. Ignored for every other kind.
+   */
+  raster?: BrushRaster | null;
+  /**
    * Distinguishes this pass from the other layers' in the graph's program
    * cache — programs are keyed by `id`, and every layer shares one shader, so
    * they must NOT share an id or they would share a cache entry and, with it,
@@ -145,17 +151,24 @@ export function makeLayerPass(options: LayerPassOptions): RenderPass | null {
   const span: [number, number] = [(ar / diagonal) * 2, (1 / diagonal) * 2];
   // The centre in the shared space, computed here rather than in the shader so
   // `framePoint` has one implementation and the spec holds it.
-  const centre = (m: Mask | null): [number, number] => {
-    if (!m || m.kind === 'luma' || m.kind === 'brush') return [0, 0];
-    return [(m.x - 0.5) * span[0], (m.y - 0.5) * span[1]];
-  };
   const kind = mask ? KIND[mask.kind] : KIND.none;
+  // Only the two PLACED shapes have a centre, an angle and a feather; the rest
+  // read none of those uniforms.
   const shaped = mask && (mask.kind === 'linear' || mask.kind === 'radial') ? mask : null;
+  const centre = (): [number, number] =>
+    shaped ? [(shaped.x - 0.5) * span[0], (shaped.y - 0.5) * span[1]] : [0, 0];
   const angle = shaped ? (shaped.angle * Math.PI) / 180 : 0;
-  const [cx, cy] = centre(mask);
+  const [cx, cy] = centre();
   // Rasterised ONCE per pass, not per draw: a pass is rebuilt whenever the
-  // mask changes by value, so this is exactly as often as the strokes move.
-  const raster = mask?.kind === 'brush' && mask.strokes.length ? rasteriseBrush(mask.strokes, ar) : null;
+  // mask changes by value, so this is exactly as often as the strokes move. A
+  // SUBJECT cannot be rasterised here — it takes a model and an await — so its
+  // map is supplied by the caller, which resolves and caches it.
+  const raster =
+    mask?.kind === 'brush' && mask.strokes.length
+      ? rasteriseBrush(mask.strokes, ar)
+      : mask?.kind === 'subject'
+        ? (options.raster ?? null)
+        : null;
 
   let uploaded: { gl: WebGL2RenderingContext; tex: WebGLTexture } | null = null;
   let maskTex: { gl: WebGL2RenderingContext; tex: WebGLTexture } | null = null;
@@ -233,7 +246,10 @@ export function makeLayerPass(options: LayerPassOptions): RenderPass | null {
         mask && mask.kind === 'luma' ? mask.from : 0,
         mask && mask.kind === 'luma' ? mask.to : 1,
       );
-      gl.uniform1f(at('u_maskFeather'), mask && mask.kind !== 'brush' ? Math.max(mask.feather, 0) : 0);
+      gl.uniform1f(
+        at('u_maskFeather'),
+        shaped || mask?.kind === 'luma' ? Math.max((mask as { feather: number }).feather, 0) : 0,
+      );
       gl.uniform1f(at('u_invert'), invert ? 1 : 0);
       gl.uniform1f(at('u_opacity'), Math.min(1, Math.max(0, opacity)));
     },
