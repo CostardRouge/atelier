@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import type { LutStack } from '../lut/use-lut-stack';
 import StageZoomControl from '../ui/StageZoomControl';
 import useDialogKeys from '../ui/use-dialog-keys';
+import { usePixelView } from '../ui/use-pixel-view';
 import type { DevelopSettings } from './develop';
 import { developButtonClass, developLegendClass, developPillClass } from './develop-classes';
 import type { DevelopApplyVerb, DevelopPresets } from './develop-host';
@@ -12,6 +13,9 @@ import {
   DevelopLookSection,
   DevelopPresetsSection,
 } from './DevelopSections';
+import DevelopCurve from './DevelopCurve';
+import { DevelopAutoSection, DevelopLevelsSection } from './DevelopAuto';
+import { whiteBalanceFor } from './auto-develop';
 import DevelopHistogram from './DevelopHistogram';
 import DevelopSliders from './DevelopSliders';
 import DevelopViewport, { DevelopCaption } from './DevelopViewport';
@@ -96,6 +100,7 @@ export default function DevelopSheet({
   const [told, tell] = useTold();
   const [naming, setNaming] = useState(false);
   const picture = useDevelopPicture({ file, videoTimeSeconds, cube: stack.composed });
+  const [pixelView, setPixelView] = usePixelView();
 
   const done = () => onDone(draft.result());
   // While a preset is being named, Enter belongs to that field's own form.
@@ -125,6 +130,23 @@ export default function DevelopSheet({
           {picture.source && (
             <StageZoomControl zoom={picture.view.zoom} hint="wheel, or pinch" className="flex-none max-[820px]:hidden" />
           )}
+          {/* Only where it means anything: below 1:1 the browser is downscaling
+              and `pixelated` is simply worse. The preference is the machine's,
+              shared with the Develop tool (`use-pixel-view.ts`). */}
+          {picture.source && picture.view.magnifying && (
+            <button
+              type="button"
+              className={`${developPillClass} flex-none cursor-pointer hover:border-accent max-[820px]:hidden`}
+              onClick={() => setPixelView(pixelView === 'pixels' ? 'smooth' : 'pixels')}
+              title={
+                pixelView === 'pixels'
+                  ? 'Pixels as pixels — past 100 % nothing is invented between them'
+                  : 'Smoothed — past 100 % the gradients between pixels are the browser’s, not the picture’s'
+              }
+            >
+              {pixelView === 'pixels' ? 'pixels' : 'smooth'}
+            </button>
+          )}
           <button
             type="button"
             onClick={onCancel}
@@ -144,6 +166,15 @@ export default function DevelopSheet({
               picture={picture}
               hasFile={Boolean(file)}
               emptyText={emptyText}
+              pixelView={pixelView}
+              onPick={(linear) => {
+                const { temperature, tint, clamped } = whiteBalanceFor(linear);
+                draft.patch({ temperature, tint });
+                tell(
+                  `picked grey · temperature ${temperature}, tint ${tint}` +
+                    (clamped ? ' · as far as the sliders reach' : ''),
+                );
+              }}
               // On a phone the picture takes a fixed share of the MEASURED app
               // height (`--app-h`, never `vh`: a locked document is where a
               // stale unit can never be corrected — `frontend.md`) and the
@@ -156,7 +187,20 @@ export default function DevelopSheet({
           {/* The column: the pipeline in order, then the look under it. */}
           <div className="w-[22rem] flex-none min-h-0 overflow-y-auto overscroll-contain pr-1.5 flex flex-col gap-4 max-[820px]:w-full max-[820px]:flex-1">
             <DevelopHistogram histogram={picture.histogram} />
+            <DevelopAutoSection
+              stats={picture.stats}
+              onPatch={draft.patch}
+              onTold={tell}
+              picking={picture.picking}
+              onPicking={picture.setPicking}
+            />
             <DevelopSliders value={draft.draft} onChange={draft.set} />
+            <DevelopLevelsSection value={draft.draft.levels} onChange={(levels) => draft.patch({ levels })} />
+            <DevelopCurve
+              value={draft.draft.curves}
+              histogram={picture.histogram}
+              onChange={(curves) => draft.patch({ curves })}
+            />
             <DevelopPresetsSection
               presets={presets}
               draft={draft.draft}

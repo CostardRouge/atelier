@@ -6,13 +6,26 @@
  */
 
 import type { CubeLut } from '../lib/cube-parser';
-import { makeExportCanvas } from '../media/webcodecs-export';
-import { createLutRenderer } from './lut-gl';
+import { getDefaultLutInterpolation } from './lut-gl';
+import { makeGraphGrader } from '../render/graph-grader';
+import type { RenderPass } from '../render/graph';
 
 export interface FrameGrader {
   /** Grade `source` through the LUT; returns the GL canvas to draw from. */
   render(source: CanvasImageSource): CanvasImageSource;
   dispose(): void;
+}
+
+/**
+ * A grader whose passes can be CHANGED without rebuilding it.
+ *
+ * The look is baked into a cube and a new look is a new grader, which is right
+ * — but a warp, a mask or a layer is a pass, and those move on every step of a
+ * drag. Rebuilding for each one meant a new WebGL2 context per step, which is
+ * both the slowest thing here and the one resource a page has a hard cap on.
+ */
+export interface PassGrader extends FrameGrader {
+  setPasses(passes: readonly RenderPass[]): void;
 }
 
 /**
@@ -25,22 +38,28 @@ export function makeFrameGrader(
   width: number,
   height: number,
   intensity = 1,
-): FrameGrader {
-  const canvas = makeExportCanvas(width, height);
-  const renderer = createLutRenderer(canvas);
-  if (!renderer) {
-    return { render: (s) => s, dispose() {} };
-  }
-  renderer.setLut(lut);
-  renderer.setIntensity(intensity);
-  renderer.resize(width, height);
+  /**
+   * Passes to run AFTER the look — a keystone, and in time a mask or a
+   * denoise. Empty for every caller that only grades, which is most of them,
+   * and then this is exactly what it always was.
+   */
+  passes: readonly RenderPass[] = [],
+): PassGrader {
+  // THE seam, and the reason it is one method: sixteen call sites reach the
+  // GPU through here, so moving the engine underneath moves the stage, every
+  // export, every thumbnail and both hook videos at once — and none of them
+  // changes a line. The core is measured pixel-identical to the renderer it
+  // replaces (`scripts/check-render.mjs`, `docs/memory/render-core.md`).
+  //
+  // `createLutRenderer` is NOT retired: the LUT tool's live preview and the
+  // Studio stage drive its uniforms frame by frame (a split, a strength, a
+  // mode) rather than rebuilding, which is a different job from grading one
+  // frame and handing it back.
+  const grader = makeGraphGrader(lut, width, height, intensity, getDefaultLutInterpolation());
+  if (passes.length) grader.setExtraPasses(passes);
   return {
-    render(source) {
-      renderer.draw(source as TexImageSource);
-      return canvas;
-    },
-    dispose() {
-      renderer.dispose();
-    },
+    render: (source) => grader.render(source),
+    setPasses: (next) => grader.setExtraPasses(next),
+    dispose: () => grader.dispose(),
   };
 }

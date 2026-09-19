@@ -20,6 +20,11 @@
 
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
+import type { Keystone } from '../render/geometry';
+import type { LensCorrection } from '../render/lens';
+import { geometryPasses, hasGeometry } from '../render/picture-geometry';
+import { drawingLayers, type AdjustLayer } from './layer';
+import { layerPasses } from './layer-render';
 import { DEFAULT_FRAMING, type Framing } from '../media/framing';
 import { decodePhoto } from '../media/photo-frame';
 import { pictureAspectRatio } from './crop-aspect';
@@ -37,6 +42,15 @@ export interface RollRenderOptions {
   longEdge: number | null;
   /** JPEG quality 0..1. */
   quality: number;
+  /**
+   * The perspective correction, warped in BEFORE the crop frames the result —
+   * the stage's own order, so the file is what was on screen.
+   */
+  keystone?: Keystone | null;
+  /** The lens correction, warped in BEFORE the keystone — `picture-geometry.ts`. */
+  lens?: LensCorrection | null;
+  /** Adjustment layers, bottom to top, applied after the look — `layer-render.ts`. */
+  layers?: readonly AdjustLayer[] | null;
 }
 
 export interface RollRendered {
@@ -73,7 +87,18 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Could not create a 2D canvas for export.');
     ctx.imageSmoothingQuality = 'high';
-    const grader = opts.lut ? makeFrameGrader(opts.lut, source.width, source.height, 1) : null;
+    // The warps run at SOURCE density, with the look, before `drawFramed` cuts
+    // the frame — a keystone resampled after the crop would be resampling a
+    // resample. Their ORDER is `picture-geometry.ts`'s to state, once, so this
+    // and the stage cannot drift. And geometry with no look still needs the
+    // GPU, so the grader is built for either.
+    const ar = source.width / source.height;
+    const stack = drawingLayers(opts.layers);
+    const passes = [...geometryPasses(opts, ar), ...layerPasses(stack, ar)];
+    const grader =
+      opts.lut || hasGeometry(opts) || stack.length > 0
+        ? makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, passes)
+        : null;
     try {
       const graded = grader ? grader.render(bitmap) : bitmap;
       drawDelivered(ctx, graded, source.width, source.height, framing, layout, opts.border);

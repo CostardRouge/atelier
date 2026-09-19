@@ -14,6 +14,9 @@
  * build wrote is left behind rather than trusted. Pure and DOM-free.
  */
 
+import { keystoneOrNull, type Keystone } from '../render/geometry';
+import { lensOrNull, type LensCorrection } from '../render/lens';
+import { readLayers, type AdjustLayer } from './layer';
 import { developOrNull, type DevelopSettings } from './develop';
 import { isDefaultFraming, normaliseFraming, type Framing } from '../media/framing';
 import { type SavedMediaRef } from '../projects/project-types';
@@ -73,6 +76,27 @@ export interface RollPicture {
   aspect: RollAspect;
   /** Null is no border: the file is exactly the crop (`border-layout.ts`, v2). */
   border: RollBorder | null;
+  /**
+   * The perspective correction (`shared/render/geometry.ts`), or null for
+   * none. It is applied BEFORE the crop frames the result: a keystone takes
+   * the converging verticals out of the picture, and the crop then decides
+   * what of it is kept.
+   */
+  keystone?: Keystone | null;
+  /**
+   * Distortion, lateral CA and vignetting (`shared/render/lens.ts`), or null.
+   * It runs BEFORE the keystone: a lens un-bends the picture, and only then
+   * does a perspective correction have straight verticals to work with
+   * (`shared/render/picture-geometry.ts` states that order once).
+   */
+  lens?: LensCorrection | null;
+  /**
+   * Adjustment layers, BOTTOM to TOP (`shared/develop/layer.ts`). Absent and
+   * empty mean the same thing, so nothing is migrated. They apply after the
+   * picture's own develop and look, on the picture as it is DISPLAYED — see
+   * `render-core.md` for why that order was chosen over the brief's.
+   */
+  layers?: AdjustLayer[];
 }
 
 export interface RollDoc {
@@ -115,7 +139,17 @@ export function createRollDoc(
 }
 
 export function createRollPicture(ref: SavedMediaRef, id: string = newRollId()): RollPicture {
-  return { id, ref: { ...ref }, develop: null, framing: null, aspect: 'original', border: null };
+  return {
+    id,
+    ref: { ...ref },
+    develop: null,
+    framing: null,
+    aspect: 'original',
+    border: null,
+    keystone: null,
+    lens: null,
+    layers: [],
+  };
 }
 
 // --- reading what was stored ------------------------------------------------
@@ -206,6 +240,11 @@ function readPicture(raw: unknown): RollPicture | null {
     framing,
     aspect,
     border,
+    // Absent on every roll written before the warp existed, and `null` there
+    // means exactly what it means now — so there is no migration to run.
+    keystone: keystoneOrNull(raw.keystone),
+    lens: lensOrNull(raw.lens),
+    layers: readLayers(raw.layers),
   };
 }
 
@@ -295,7 +334,9 @@ export function movePicture(roll: RollDoc, from: number, to: number, now: number
 export function patchPicture(
   roll: RollDoc,
   id: string,
-  patch: Partial<Pick<RollPicture, 'develop' | 'framing' | 'aspect' | 'border'>>,
+  patch: Partial<
+    Pick<RollPicture, 'develop' | 'framing' | 'aspect' | 'border' | 'keystone' | 'lens' | 'layers'>
+  >,
   now: number = Date.now(),
 ): RollDoc {
   let found = false;

@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { isDefaultDevelop, type DevelopSettings } from '../../shared/develop/develop';
 import { hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from '../../shared/develop/develop-clipboard';
+import type { Keystone } from '../../shared/render/geometry';
+import type { LensCorrection } from '../../shared/render/lens';
+import type { AdjustLayer } from '../../shared/develop/layer';
 import type { Framing } from '../../shared/media/framing';
 import {
   WORKBENCH_TABS,
@@ -416,6 +419,18 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     (id: string, framing: Framing | null) => update((r) => patchPicture(r, id, { framing })),
     [update],
   );
+  const handleKeystone = useCallback(
+    (id: string, keystone: Keystone | null) => update((r) => patchPicture(r, id, { keystone })),
+    [update],
+  );
+  const handleLens = useCallback(
+    (id: string, lens: LensCorrection | null) => update((r) => patchPicture(r, id, { lens })),
+    [update],
+  );
+  const handleLayers = useCallback(
+    (id: string, layers: AdjustLayer[]) => update((r) => patchPicture(r, id, { layers })),
+    [update],
+  );
   const handleAspect = useCallback(
     (id: string, aspect: string) => update((r) => patchPicture(r, id, { aspect })),
     [update],
@@ -704,6 +719,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onBorder={(border) => handleBorder(open.id, border)}
               onDevelop={(develop) => handleDevelop(open.id, develop)}
               onFraming={(framing) => handleFraming(open.id, framing)}
+              onKeystone={(keystone) => handleKeystone(open.id, keystone)}
+              onLens={(lens) => handleLens(open.id, lens)}
+              onLayers={(layers) => handleLayers(open.id, layers)}
               onAspect={(aspect) => handleAspect(open.id, aspect)}
               exportSettings={roll.export}
               onExportSettings={handleExportSettings}
@@ -790,12 +808,13 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                   </span>
                 )}
                 {notice && <span className="text-ink-soft"> · {notice}</span>}
-                {!compact && (
-                  <span className="text-faint">
-                    {' '}
-                    · ←/→ picture · {'\\'} before · Z closer · R crop · D develop · Shift/⌘-click to select
-                  </span>
-                )}
+                {/* The shortcuts used to run along here as a seventh clause.
+                    They are behind `H` and the stage bar's `?` now
+                    (`DevelopShortcuts.tsx`): a legend read once still cost the
+                    photograph three wrapped lines every day after. What stays
+                    on this line is STATE — how far the roll has got, and what
+                    could not be reached, which is the half that asks for a
+                    click. */}
               </p>
               {/* Housekeeping, and it wraps to three lines at 390px: on a
                   phone with the drawer up those are three lines taken off the

@@ -10,7 +10,7 @@
  * Pure and DOM-free; `useSyncExternalStore`-shaped so a button can follow it.
  */
 
-import { DEFAULT_DEVELOP, isDefaultDevelop, type DevelopSettings } from './develop';
+import { cloneDevelop, isDefaultDevelop, type DevelopSettings } from './develop';
 
 let held: DevelopSettings | null = null;
 const listeners = new Set<() => void>();
@@ -21,13 +21,13 @@ function notify(): void {
 
 /** Keep a copy of `settings`; an as-shot develop clears the clipboard. */
 export function copyDevelop(settings: DevelopSettings | null): void {
-  held = settings && !isDefaultDevelop(settings) ? { ...settings } : null;
+  held = settings && !isDefaultDevelop(settings) ? cloneDevelop(settings) : null;
   notify();
 }
 
 /** What was copied, as a fresh object, or null when nothing is held. */
 export function pasteDevelop(): DevelopSettings | null {
-  return held ? { ...DEFAULT_DEVELOP, ...held } : null;
+  return held ? cloneDevelop(held) : null;
 }
 
 export function hasCopiedDevelop(): boolean {

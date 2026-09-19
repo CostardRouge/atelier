@@ -4,13 +4,12 @@
  * (`tools/develop/RollEditor.tsx`) feeds it plain descriptions.
  */
 
-import { DEFAULT_DEVELOP, type DevelopSettings } from './develop';
-
-export type WorkbenchTab = 'develop' | 'crop' | 'export';
+export type WorkbenchTab = 'develop' | 'layers' | 'crop' | 'export';
 
 /** The inspector's tabs, in order — the SAME list drives the desktop strip and the phone's bottom bar. */
 export const WORKBENCH_TABS: readonly { id: WorkbenchTab; label: string }[] = [
   { id: 'develop', label: 'Develop' },
+  { id: 'layers', label: 'Layers' },
   { id: 'crop', label: 'Crop' },
   { id: 'export', label: 'Export' },
 ];
@@ -44,12 +43,13 @@ export function openAfterRemoval(
   return rest[Math.min(Math.max(at, 0), rest.length - 1)].id;
 }
 
-/** Two stored develops say the same thing — null and an untouched set are the same "as shot". */
-export function sameDevelop(a: DevelopSettings | null, b: DevelopSettings | null): boolean {
-  const x = { ...DEFAULT_DEVELOP, ...(a ?? {}) } as Record<string, number>;
-  const y = { ...DEFAULT_DEVELOP, ...(b ?? {}) } as Record<string, number>;
-  return Object.keys({ ...x, ...y }).every((k) => x[k] === y[k]);
-}
+/**
+ * Two stored develops say the same thing — null and an untouched set are the
+ * same "as shot". The comparison itself is engine-level (`develop.ts`): the
+ * record stopped being flat numbers when it gained curves and levels, and a
+ * key-by-key `===` would call two identical curves different.
+ */
+export { sameDevelop } from './develop';
 
 /** The pictures between `a` and `b`, inclusive, in strip order; an id off the roll reads as just the other end. */
 export function pictureRange(pictures: readonly { id: string }[], a: string, b: string): string[] {
@@ -113,13 +113,17 @@ export type EditorKeyAction =
   | 'crop'
   | 'develop'
   | 'swap'
+  | 'help'
+  | 'facts'
   | null;
 
 /**
  * What a key press means in the editor, or null when it belongs to someone
  * else. ←/→ move along the strip, `\` holds "before" (its release is the
  * caller's), `Z` goes closer or back to the fit, `R` opens the Crop tab and
- * `D` the Develop tab, `X` swaps the crop's orientation, ⌘/Ctrl-C and -V copy and paste the develop. A field or
+ * `D` the Develop tab, `X` swaps the crop's orientation, `H` (or `?`) the
+ * shortcuts and `I` the facts over the picture, ⌘/Ctrl-C and -V copy and paste
+ * the develop. A field or
  * a slider keeps every key it could use; a held arrow does step (it is how a
  * strip is swept), a held `\` does not re-press.
  */
@@ -133,6 +137,9 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
     if (k === 'v') return 'paste';
     return null;
   }
+  // `?` is the one key reached WITH shift on most layouts, so it is read
+  // before the blanket refusal below: a help key nobody can press is not one.
+  if (press.key === '?') return press.repeat ? null : 'help';
   if (press.shiftKey) return null;
   if (press.key === 'ArrowLeft') return 'previous';
   if (press.key === 'ArrowRight') return 'next';
@@ -143,5 +150,7 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   if (press.key === 'd' || press.key === 'D') return 'develop';
   // The crop's portrait ↔ landscape; the editor answers it on the Crop tab only.
   if (press.key === 'x' || press.key === 'X') return 'swap';
+  if (press.key === 'h' || press.key === 'H') return 'help';
+  if (press.key === 'i' || press.key === 'I') return 'facts';
   return null;
 }

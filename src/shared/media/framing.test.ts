@@ -10,6 +10,8 @@ import {
   reclampFraming,
   sameFraming,
   scaleFramingBy,
+  framePoint,
+  unframePoint,
   wrapDegrees,
   type Framing,
 } from './framing';
@@ -365,5 +367,57 @@ describe('scaleFramingBy', () => {
     expect(scaleFramingBy(Number.NaN, 2)).toBe(2);
     expect(scaleFramingBy(Number.NaN, 1)).toBe(1);
     expect(scaleFramingBy(20, -1)).toBe(8);
+  });
+});
+
+describe('framePoint / unframePoint', () => {
+  // The forward map used to be written out HERE, as the test's own copy of
+  // what `drawFramed` composes. Drawing a subject's markers needs it in the
+  // app, so it shipped (`framePoint`) and this spec now round-trips the
+  // shipped pair rather than a private twin of one of them.
+  const cases: { name: string; framing: Framing }[] = [
+    { name: 'untouched', framing: { ...DEFAULT_FRAMING } },
+    { name: 'zoomed and panned', framing: { ...DEFAULT_FRAMING, scale: 1.8, x: 0.1, y: -0.2 } },
+    { name: 'rotated', framing: { ...DEFAULT_FRAMING, rotation: 23 } },
+    { name: 'flipped both ways', framing: { ...DEFAULT_FRAMING, flipX: true, flipY: true } },
+    { name: 'whole, with bars', framing: { ...DEFAULT_FRAMING, fit: 'contain' } },
+    { name: 'everything at once', framing: { ...DEFAULT_FRAMING, scale: 2.2, rotation: -37, flipX: true, x: 0.3 } },
+  ];
+
+  it('frames the middle of the picture onto the middle of the frame', () => {
+    // The anti-tautology row: a round trip alone would pass for two functions
+    // that agreed on the WRONG transform, so one value is asserted outright.
+    expect(framePoint(400, 300, 800, 600, 400, 500, DEFAULT_FRAMING)).toEqual([200, 250]);
+    // A flip mirrors the frame, so a point a third from the left lands a third
+    // from the right — the same fact the flipped `drawFramed` draws.
+    const [fx] = framePoint(0, 300, 800, 600, 400, 500, { ...DEFAULT_FRAMING, flipX: true });
+    const [ux] = framePoint(0, 300, 800, 600, 400, 500, DEFAULT_FRAMING);
+    expect(fx).toBeCloseTo(400 - ux, 6);
+    expect(fx).not.toBeCloseTo(ux, 3);
+  });
+
+  it('round-trips: a source point framed and unframed is itself', () => {
+    for (const { framing } of cases) {
+      for (const [sw, sh, dw, dh] of [[800, 600, 400, 500], [1000, 1000, 300, 900], [640, 480, 640, 480]]) {
+        for (const [sx, sy] of [[0, 0], [sw / 2, sh / 2], [sw, sh], [sw * 0.3, sh * 0.8]]) {
+          const [dx, dy] = framePoint(sx, sy, sw, sh, dw, dh, framing);
+          const [bx, by] = unframePoint(dx, dy, sw, sh, dw, dh, framing);
+          expect(bx).toBeCloseTo(sx, 6);
+          expect(by).toBeCloseTo(sy, 6);
+        }
+      }
+    }
+  });
+
+  it('puts the middle of an untouched frame at the middle of the picture', () => {
+    expect(unframePoint(200, 250, 800, 600, 400, 500, DEFAULT_FRAMING)).toEqual([400, 300]);
+  });
+
+  it('answers OUTSIDE the picture for a point the crop cut away', () => {
+    // A zoomed crop shows less than the whole picture, so a corner of the frame
+    // is inside it — but with bars (contain) the corner is outside, and the
+    // caller needs to be able to tell rather than being handed a clamp.
+    const [x, y] = unframePoint(0, 0, 800, 600, 400, 500, { ...DEFAULT_FRAMING, fit: 'contain' });
+    expect(x < 0 || y < 0).toBe(true);
   });
 });

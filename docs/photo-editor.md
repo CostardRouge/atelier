@@ -296,24 +296,44 @@ Four rules to carry:
 
 **P0 — this brief.** Recorded before any code, the repo's convention.
 
-**P1 — curves and levels.** A spline on the develop record, baked into the same
+**P1 — curves and levels** *(two commits, BOTH BUILT 2026-09-17: the engine —
+`curves.ts`, the two fields, the bake — then the editor, `DevelopCurve.tsx`
+over a pure `curve-edit.ts`, drawn by both hosts. **Levels deliberately have no
+panel**: a curve whose end points drag IS the black/white-point gesture, so the
+numeric row waits for the auto-adjust that computes it, P2)*. A spline on the
+develop record, baked into the same
 cube. `curves.ts` pure + tested. No core needed; the biggest daily-use gain per
 line in the whole plan, and the graph inherits it as node 2.
 
-**P2 — auto adjust, WB eyedropper, Kelvin.** `auto-develop.ts` pure over the
-existing `histogram.ts`; an eyedropper picking a neutral; the temperature slider
-reading in Kelvin where the source says what the picture was shot at. Also no
-core.
+**P2 — auto adjust, the levels row, then the eyedropper** *(two commits, BOTH BUILT 2026-09-17)*. `auto-develop.ts` pure over an AS-SHOT read
+(`useDevelopPicture().stats`), as **two** verbs — Auto tone writes levels and
+touches no colour, Auto colour is a white balance and is exactly wrong on a
+sunset, so they never share a click — plus the Levels row they write into.
+Then the eyedropper (*Pick grey*), which runs the SAME solve
+(`whiteBalanceFor`) on the pixel the author points at instead of on the mean.
+Also no core.
+**Kelvin is cut, and the reason is the anti-fabrication rule**: temperature
+here is a channel GAIN, and an 8-bit render carries no as-shot white balance to
+offset from, so a kelvin number would be invented. It waits for the RAW path,
+where `AsShotNeutral` and a colour matrix make it real (P10).
 
-**P3 — the RAW spike** *(read-only, nothing committed to the render path)*. O4 of
-`develop-originals.md`, decided 2026-09-13 and never run: his DJI DNG, ProRAW
-lossless **and JPEG XL**, and an ARW — tag 259, the opcode lists, embedded
-preview sizes, then `libraw-wasm` decode time and heap at half and full size. It
-answers what P4's source node must accept, and a JPEG XL refusal by the npm
-build is a question that comes back to him (`photo-develop.md` §6.2). Real files
-stay in the scratchpad, never in the repo.
+**P3 — the RAW spike** *(PARTLY BUILT 2026-09-17)*. Built, and a gain on its
+own: `shared/exif/raw-probe.ts` reads a RAW's IFDs through the EXIF parser's
+own TIFF reader and `extractRawPreview` slices out the render the camera wrote
+inside the file — so **a DNG or an ARW opens in Develop today**, with no
+decoder fetched and no dependency added, wearing a `RAW · camera render` chip
+that says it is the camera's JPEG and not the sensor data. `describeRaw`
+prints what the rest of the spike must report.
 
-**P4 — the render core** *(two commits)*. `shared/render/`: a `RenderNode`
+Still the maintainer's files' to answer, and nothing here can stand in for
+them: tag 259 and the opcode lists on his own DJI DNG, ProRAW (lossless **and
+JPEG XL**) and ARW; `libraw-wasm` decode time and heap at half and full size.
+`libraw-wasm` 1.6.0 is reachable from the container, so that is one `npm i`
+away once the files are in the scratchpad — never in the repo. A JPEG XL
+refusal by the npm build is what turns the decoder choice into "which wasm
+build do we maintain" (`photo-develop.md` §6.2), and that comes back to him.
+
+**P4 — the render core** *(two commits, BOTH BUILT 2026-09-17: `shared/render/` proved pixel-identical by `scripts/check-render.mjs`, then `makeFrameGrader` switched onto it so all sixteen consumers run on the core — `docs/memory/render-core.md`)*. `shared/render/`: a `RenderNode`
 contract, float16 ping-pong framebuffers, the SOURCE and CUBE nodes, and
 `renderPicture(source, edit)` with the one-cube fast path; `held-grader.ts` and
 `frame-grader.ts` become graph-backed at the one seam. Second commit:
@@ -322,30 +342,109 @@ contract, float16 ping-pong framebuffers, the SOURCE and CUBE nodes, and
 already cannot see. **Nothing changes on screen**, and the gate is exactly that:
 a pixel-for-pixel match against today's path.
 
-**P5 — geometry: the crop moves in, keystone arrives.** `geometry.ts` pure (a
+**P5 — geometry: keystone arrives** *(two commits, BOTH BUILT 2026-09-17 — `geometry.ts` + `keystone-pass.ts` with
+the warp measured against the matrix on a real GPU, then the document field,
+the Crop tab's Perspective panel and the warp reaching the stage, the thumbnail
+and the export. The crop is deliberately left on `drawFramed` for now: moving seven
+renderers off it is its own change, and a keystone corrects BEFORE a crop
+frames, so the two are independent.)* Originally: `geometry.ts` pure (a
 3×3 homography from four corner offsets or from V/H sliders, round-trip tested);
 the crop leaves `drawFramed` for the warp; `CropStage` (the zone editor that
 replaced `FramingStage` on 2026-09-19, its arithmetic in `crop-rect.ts`) gains
 the keystone handles.
 
-**P6 — lens correction.** A small Lensfun-subset parser (pure, tested), his
-bodies and lenses committed under `public/lenses/`, matched on EXIF
+**P6 — lens correction** *(BOTH commits BUILT — `lens.ts` pure with 17 specs
+and `lens-pass.ts`, one radial pass carrying distortion, lateral CA and
+vignetting together, measured against the pure module on a real GPU; then
+`RollPicture.lens`, the Crop tab's Lens section, and the correction reaching
+every renderer through `picture-geometry.ts`, which is now the ONE place the
+order of the warps is stated.)*
+
+**The profile half is NOT built, deliberately, and is not merely unfinished.**
+A lens profile is MEASURED calibration data. There is no real Lensfun data here
+for the Mini 4 Pro or the Sony glass, and coefficients invented to fill the gap
+would be a fabricated correction — worse than none, because it looks
+authoritative. The same refusal as the battery gauge drawing `—`. So what ships
+is the engine plus manual sliders, which correct by eye against a straight edge
+and work on any lens; a profile, when there is real data for one, is a source of
+numbers for those same sliders and changes nothing below them.
+
+When it does come: a small Lensfun-subset parser (pure, tested), profiles
+committed under `public/lenses/`, matched on EXIF
 `Make`/`Model`/`LensModel`/`FocalLength`/`FNumber` — which `MediaOrigin.exif`
 already vouches for on a proxy (`studio.md`, «A source vouches») — interpolated
-between focal entries, plus manual k1/k2 · CA · vignetting sliders for anything
-unmatched. **F4 is the rule that shapes it**: a profile applies to a RAW, is OFF
-by default on a render, and the panel says why.
+between focal entries. **F4 is the rule that shapes it**: a profile applies to a
+RAW, is OFF by default on a render (a DJI JPEG and its embedded preview are
+already dewarped while the DNG is not), and the panel says why.
 
-**P7 — layers and procedural masks** *(two commits)*. The `EditStack` migration
-and the layer list; then `mask.ts` (linear, radial, luma/hue/sat range, combine),
-opacity, blend modes, and the red mask overlay. This is where *layers with
-opacity*, *gradients* and *creative vignetting* land.
+**P7 — layers and procedural masks** *(BOTH commits BUILT 2026-09-18 —
+`render/mask.ts` + `render/layer-pass.ts` + `develop/layer.ts` +
+`develop/layer-render.ts`, then `RollPicture.layers`, a fourth inspector tab and
+the stack reaching every renderer. `render-layers.md` holds the rules.)* This is
+where *layers with opacity*, *gradients* and *creative vignetting* land.
 
-**P8 — brush masks.** Vector strokes, rasterised on the GPU. Edge-snapping
-("auto mask") deferred.
+Three departures from the plan above, each for a reason:
 
-**P9 — segmentation.** The model under `public/models/`, inference in a worker,
-the cached raster, `subject` / `background` as mask kinds. §4.3.
+- **No `EditStack` migration.** `RollPicture` is already flat — `develop`,
+  `framing`, `aspect`, `keystone`, `lens` — so layers arrived as one more
+  optional field rather than a rename that would churn every consumer for no
+  functional gain. The `EditStack` shape survives as what the RENDERERS take.
+- **Layers run after the one cube**, not between the develop and the look: a
+  local correction is then set on the picture as displayed rather than in the
+  log space a conversion LUT reads. §5's ordering and the cost of changing back
+  are recorded in `render-layers.md`.
+- **No blend modes.** They were in my plan and are not in the maintainer's
+  list; an adjustment layer with a multiply mode is a compositing feature, and
+  opacity is the control that was asked for. One field and one `mix` later, if
+  it is ever wanted.
+
+Still ahead for masks: hue and saturation ranges, combining two masks, and
+DRAGGING the shape on the stage rather than setting it with sliders (a
+hit-tested overlay with its own gesture rules — a piece of work, not a control).
+
+**P8 — brush masks** *(THREE commits, all BUILT 2026-09-18 — the stroke model
+and the rasteriser, a grader that swaps its passes, then the gesture;
+`render-layers.md` and `render-core.md` hold the rules.)*
+
+Strokes are VECTORS, so the document stays small and a mask painted on a preview
+delivers at full size. They are rasterised on the **CPU**, not the GPU as
+written here: a shader walking every segment of every stroke per pixel costs
+`pixels × points`, and the CPU can walk each stroke inside its own bounding box
+instead. What matters is that it rasterises the SAME function the pure module
+defines rather than an approximation of it, so the gate holds the GPU to the
+tolerance the procedural shapes get.
+
+It needed one thing this plan did not foresee: **a grader that swaps its passes
+instead of rebuilding its context**. A stroke adds a point per `pointermove`,
+and a new WebGL2 context per point is no gesture at all. That landed as its own
+commit, and the keystone and lens drags got it for nothing.
+
+Edge-snapping ("auto mask") stays deferred.
+
+**P9 — segmentation** *(BOTH commits BUILT 2026-09-19 — the model and the
+segmenter, then the tap gesture and the rasters everywhere; `render-layers.md`.)*
+The README's network callout is unchanged: everything is served from our own
+origin and dynamically imported on the first ask, so a page that never opens a
+subject mask pays nothing.
+
+Three things the maintainer's own `p5-templates` settled that §4.3 had wrong:
+
+- **The cost is the WASM, not the model.** 16.9 MB, not "a ~5 MB
+  MediaPipe-class model": the model is 6.2 MB and `vision_wasm_internal.wasm` is
+  another 9.6 MB. The `nosimd` twin (9.1 MB more) is not shipped — every browser
+  that can run this suite has wasm SIMD.
+- **Click-anywhere is the feature**, not the thing to avoid. `InteractiveSegmenter`
+  over `magic_touch`, several points unioned. Semantic segmentation
+  (`deeplabv3`) answers about CATEGORIES, and a photographer pointing at the
+  second of three people is asking about THIS ONE. "Background" is this mask
+  under the layer's existing `invert`, not a second model.
+- **The selected object is category 0**, everything else 255 — backwards from
+  the obvious reading, and reading it the other way selects the background.
+
+Still open: persisting the cached raster (it is a session cache today, so a
+reopened picture re-segments), and a faster path than one sequential inference
+per point.
+
 
 **P10 — RAW develop.** O5: `raw-decoder.ts` behind `libraw-wasm`, dynamically
 imported (the MapLibre rule — never in the main bundle), in a worker, opt-in per

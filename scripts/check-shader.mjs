@@ -27,34 +27,30 @@
  * [0,1] since the framebuffer clamps on write while the pure module does not.
  */
 import { chromium } from 'playwright';
-import { readFileSync } from 'node:fs';
 import { createServer } from 'vite';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 
-/** Pull the two shader sources straight out of lut-gl.ts. */
-function shaderSources() {
-  const src = readFileSync(new URL('../src/shared/lut/lut-gl.ts', import.meta.url), 'utf8');
-  const grab = (name) => {
-    const m = new RegExp(`const ${name} = \`([\\s\\S]*?)\`;`).exec(src);
-    if (!m) throw new Error(`could not extract ${name} from lut-gl.ts`);
-    return m[1];
-  };
-  return { VERT: grab('VERT_SRC'), FRAG: grab('FRAG_SRC') };
-}
-
-/** Load the pure module through Vite so the .ts is the single source of truth. */
-async function loadInterpolate() {
+/**
+ * Load the pure modules through Vite so the .ts files are the single source of
+ * truth — the shader CHUNKS included, since the lookup moved to
+ * `shared/render/glsl.ts` to be shared with the render core. Regexing the
+ * source out of `lut-gl.ts` used to work and stopped the moment the shader was
+ * assembled from pieces; importing it cannot go stale that way.
+ */
+async function loadModules() {
   const server = await createServer({
     root: ROOT,
     logLevel: 'error',
     server: { middlewareMode: true },
-    // We only ever SSR-load one dependency-free module; letting Vite scan the
+    // We only ever SSR-load dependency-free modules; letting Vite scan the
     // app's entry races with close() and prints an alarming, harmless error.
     optimizeDeps: { noDiscovery: true, include: [] },
   });
   try {
-    return await server.ssrLoadModule('/src/shared/lut/interpolate.ts');
+    const interpolate = await server.ssrLoadModule('/src/shared/lut/interpolate.ts');
+    const glsl = await server.ssrLoadModule('/src/shared/render/glsl.ts');
+    return { interpolate, glsl };
   } finally {
     await server.close();
   }
@@ -81,7 +77,28 @@ const inputs = [];
 for (let i = 0; i <= 12; i += 1) inputs.push([i / 12, i / 12, i / 12]);
 for (const t of [[0.15, 0.7, 0.35], [0.85, 0.25, 0.6], [0.05, 0.95, 0.5], [0.5, 0.1, 0.9]]) inputs.push(t);
 
-const { VERT, FRAG } = shaderSources();
+// The very shader `lut-gl.ts` builds, assembled from the same chunks.
+const { interpolate: interp, glsl } = await loadModules();
+const VERT = glsl.VERTEX_SRC;
+const FRAG = `${glsl.GLSL_VERSION}
+precision highp float;
+precision highp sampler3D;
+
+in vec2 v_uv;
+out vec4 outColor;
+
+uniform sampler2D u_video;
+uniform bool u_split;
+uniform float u_splitX;
+${glsl.LUT_UNIFORMS}
+${glsl.LUT_LOOKUP}
+
+void main() {
+  vec4 src = texture(u_video, v_uv);
+  vec3 graded = gradeThroughLut(src.rgb);
+  vec3 rgb = (u_split && v_uv.x > u_splitX) ? src.rgb : graded;
+  outColor = vec4(rgb, src.a);
+}`;
 
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium',
@@ -191,7 +208,7 @@ if (gpu.error) {
   process.exit(1);
 }
 
-const { sampleTetrahedral, sampleTrilinear } = await loadInterpolate();
+const { sampleTetrahedral, sampleTrilinear } = interp;
 const q = (c) => c.map((v) => Math.round(v * 255) / 255);
 const clamp01 = (c) => c.map((v) => (v < 0 ? 0 : v > 1 ? 1 : v));
 /** The framebuffer is 8-bit, so half a code is rounding, not disagreement. */

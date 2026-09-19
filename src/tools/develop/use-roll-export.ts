@@ -170,6 +170,9 @@ export function useRollExport({
             lut: cubeFor(picture),
             longEdge: r.export.longEdge,
             quality: r.export.quality,
+            keystone: picture.keystone ?? null,
+            lens: picture.lens ?? null,
+            layers: picture.layers ?? null,
           });
           rendered.push(
             new File([out.blob], exportName(picture.ref.name, picture.aspect), {

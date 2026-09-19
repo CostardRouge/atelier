@@ -96,3 +96,164 @@ races it, whichever comes first. The bars are a fixed light over `bg-frame`,
 never a theme token: `paper` is dark in the darkroom. Verified in the Browser
 pane on a PNG with a known 6.25 % white block: `whites 6.3 %` at as shot, 28 %
 at +1.5 EV (over the hook's stored +0.7), none and `blacks 2.5 %` at −2 EV.
+
+## The curve editor is a workbench block, and its drag taught two rules (2026-09-17, P1)
+
+`DevelopCurve.tsx` (the paint and the pointer plumbing) over `curve-edit.ts`
+(pure, 19 specs: `pointAt`, `moveCurvePoint`, `addCurvePoint`,
+`removeCurvePoint`, `curvePath`). One square with the picture's own histogram
+behind it, the five channel tabs, and the `curves.ts` spline over the identity
+diagonal. Drawn by BOTH hosts from the same block — `DevelopSheet` and the
+tool's `PictureWorkbench` each gained three lines — and the draft hook grew
+`patch(partial)` for a field `set(key, value)` cannot name.
+
+**Two rules the browser found, neither of which any test could have:**
+
+- **A drag must read the value from a REF, not from the render's closure.**
+  Pointermove fires far faster than React re-renders, so every move of a drag
+  applied to the curve as it was when the pointer went DOWN, and the last write
+  won: a drag from the middle of the diagonal stored TWO points instead of
+  three, silently throwing away the point the same gesture had just added.
+  `liveRef` (the curve) and `grabRef` (the point) advance synchronously on
+  every write; the `dragging` state is kept for the PAINT alone. Same family as
+  the crop pinch's "two writes in one event" (`develop-roll.md` D8) and the
+  roll's one updater — **assume it for any new drag that writes a structure.**
+- **`vectorEffect="non-scaling-stroke"` puts `strokeWidth` in SCREEN pixels.**
+  With a `0 0 1 1` viewBox a width of 0.008 is then sub-pixel and the curve did
+  not appear at all — invisible, with all four gates green and no console
+  error. Every stroke in that box now carries the attribute AND a pixel width.
+  A drawing whose only failure mode is "nothing is there" has to be looked at.
+
+**Levels have no panel on purpose.** The engine carries them
+(`curves.ts`), but a curve whose END points drag is already the black/white
+point gesture, so a second control for the same thing would be clutter. The
+numeric row arrives with the auto-adjust that computes it (P2 of
+`docs/photo-editor.md`), which is what levels are naturally the target of.
+
+Verified in headless Chromium against the real dev server, on a canvas-made
+gradient dropped onto a roll: the editor drew with the histogram behind it, a
+drag from mid-diagonal to 0.12 stored
+`luma: [{0,0},{0.5,0.68},{1,1}]` through the roll's write-through, the stage's
+pixels moved (26→49, 89→177, 150→255 on the ramp), the settled row read
+`curve luma`, the tab wore its dot, and no page error fired.
+
+## Auto is TWO verbs, measured on the picture as shot (2026-09-17, P2)
+
+`auto-develop.ts` (pure, 20 specs) + the `Auto` and `Levels` sections of
+`DevelopAuto.tsx`, drawn by both hosts; `useDevelopPicture` gained `stats`, an
+AS-SHOT read keyed on the source alone. Rules a later phase must keep:
+
+- **Tone and colour never share a click.** A tonal stretch is almost always an
+  improvement; a white balance is *exactly wrong* on a sunset, a candle-lit
+  room or anything warm on purpose. One "Auto" doing both would make the good
+  half unusable, so there are two buttons and no menu.
+- **Auto measures the SOURCE, never what is displayed**, so it SETS the numbers
+  instead of nudging them and a second press is the same answer. Driven in the
+  pane: pressing both twice more left every number identical. A read off the
+  graded result would compound, which is the whole reason `stats` is a second
+  sample and not the histogram.
+- **The maths is solved against this suite's own model**, not against a
+  textbook: the level's gamma is `ln(m)/ln(target)` because `makeLevel` raises
+  to `1/gamma`, and the white balance is solved for `developLinear`'s two
+  reaches (`TEMPERATURE_REACH`, `TINT_REACH`, exported for it). So what Auto
+  writes lands where it aimed — a spec develops a flat field through the
+  numbers and asserts the channels meet.
+- **Two traps the numbers hid.** Round the temperature BEFORE solving the
+  tint, or green aims at a level red and blue never reach (a slider holds whole
+  units). And solve the tint against the temperature actually KEPT: a cast past
+  the sliders' reach clamps, and the tint must aim at where red really landed.
+- **A clamp is said out loud** (`AutoColour.clamped` → "as far as the sliders
+  reach"): two gains with a range cannot neutralise every cast, and a panel
+  that quietly hands back a still-cast picture as though it were balanced is
+  the fabrication the battery gauge refuses.
+- **Clipped and crushed pixels do not vote** for the white balance: a blown sky
+  is (255,255,255) whatever it really was, and letting it in drags every
+  picture toward neutral.
+- **The median is pulled only PART of the way to mid-grey** (0.6 of it), so a
+  picture that is dark because it was meant to be keeps its character.
+
+**No Kelvin, and that is deliberate.** The brief listed a Kelvin readout;
+temperature here is a channel GAIN, and an 8-bit render carries no as-shot
+white balance to offset from, so a number in kelvin would be invented. It waits
+for the RAW path (`AsShotNeutral` and a colour matrix are what make it real) —
+`docs/photo-editor.md` P10.
+
+`DevelopSliders.tsx` gained `RangeSlider` — the same row with an explicit
+label, range and reset — because Levels needed it and a second copy is how two
+panels come to disagree about what a slider looks like.
+
+**The eyedropper is the same solve on a different input** (2026-09-17, P2's
+second commit). `whiteBalanceFor(linear)` is extracted from `autoColour`, which
+now calls it with the picture's mean while *Pick grey* calls it with the pixel
+the author said was neutral — one solve, so the button and the dropper can
+never disagree. Rules:
+
+- **It reads the picture AS SHOT**, never the graded canvas, or every pick
+  would be measured against the last one.
+- **It re-renders the ungraded source through the VERY SAME draw branch the
+  viewport paints with** (`drawFramed` when a crop is open, else the plain
+  `drawImage`) and reads there. That is why no inverse of the framing transform
+  has to be derived, and why a crop cannot make the dropper read the wrong
+  pixel — the one place a coordinate mapping could have gone quietly wrong.
+- **The letterbox is undone by hand, the zoom is not**: the canvas is
+  `object-contain`, so the bitmap sits inside the element box, but the box's
+  own `getBoundingClientRect` already carries the zoom/pan transform.
+- **A 5×5 average, not one pixel**: one pixel of a photograph is noise, and a
+  white balance set from noise wanders.
+- **While armed the dropper takes the gesture WHOLE** — the viewport's wipe and
+  pan handlers are dropped for that click, since they are the same pointer and
+  would drag the picture out from under the pick.
+
+Verified in the pane on a picture that is blue on the left and warm grey on the
+right: picking each half gave opposite answers (+100/+100 against −84/+36), which
+is what proves the mapping reads where the pointer actually is.
+
+Verified in the pane on a deliberately flat, warm JPEG (70..150, 1.18/0.82
+cast): Auto tone wrote `black 69 · white 155` and NO colour; Auto colour wrote
+temperature −100 (clamped, said) and tint −36; both pressed again changed
+nothing.
+
+## A RAW draws today, from the render its camera wrote inside it (2026-09-17, P3)
+
+`shared/exif/raw-probe.ts` (pure, 12 specs) walks a RAW's IFDs through
+`exif-parser.ts`'s OWN reader — `parseIfd`, `num`, `nums` are exported for it,
+so the suite has one TIFF parser and not two — and `extractRawPreview` slices
+the camera's embedded JPEG out. **No decoder, no dependency, no network**: a
+DNG or an ARW now opens in Develop, where it used to say "no browser decodes
+this". Rules:
+
+- **PHOTOMETRIC is the discriminator, never compression.** A DNG's sensor
+  plane is very often compression 7 as well (lossless JPEG), and taking it for
+  a preview hands the browser a CFA mosaic. A render says YCbCr or RGB (6, 2,
+  1); a sensor plane says 32803 (CFA) or 34892 (LinearRaw).
+- **Walk the SubIFDs (tag 330).** A DNG keeps the sensor plane and the
+  full-size render there; reading IFD0 alone finds the thumbnail and misses
+  both.
+- **Do NOT bounds-check the preview pointer inside the probe.** It reads only
+  the first megabyte, and a full-size render in a 60 MB DNG sits far past it —
+  checking there threw away the one preview worth having. `extractRawPreview`,
+  which knows the real file size, is where the pointer is checked. Pinned by a
+  spec with a 45 MB offset.
+- **The decode falls back in `loadBadgeSource`, not only in `decodePhoto`** —
+  that was the first attempt's mistake, and the picture stayed black. Every
+  editor stage decodes through `badge-render.ts`; `photo-frame.ts` is the
+  export path. Both now try the preview, and both keep the honest refusal for a
+  RAW that carries none.
+- **`pictureFidelity` tests `isRawImage` BEFORE the media type.** A RAW off a
+  disk usually carries an EMPTY type, so asking the type first labelled every
+  DNG a clip. The chip reads `RAW · camera render` and the note says it is the
+  camera's JPEG and not the sensor data — the picture on screen is a RENDER,
+  and letting it pass for the file's own pixels is the fabrication this rule
+  exists to stop.
+
+**What the spike still cannot answer**: decode time, heap and the JPEG XL
+question are the maintainer's own files' to settle (`docs/photo-editor.md` P3).
+`libraw-wasm` 1.6.0 is reachable from this container, so the measurement is one
+`npm i` away once a real DNG, ProRAW and ARW are in the scratchpad — never in
+the repo. `describeRaw` prints exactly what that spike needs to report
+(`8064×6048 · sensor JPEG XL · preview 4032×3024 · 2 opcode lists`).
+
+Verified in the pane on a synthetic DNG built around a real canvas JPEG: the
+probe read `4000×3000 · sensor JPEG · preview 640×480 · 1 opcode list`, the
+stage drew the embedded gradient, the chip read `RAW · CAMERA RENDER`, and the
+filmstrip cell showed it.

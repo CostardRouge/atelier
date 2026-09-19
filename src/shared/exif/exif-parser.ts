@@ -90,7 +90,8 @@ const TYPE_SIZE: Record<number, number> = {
   12: 8, // DOUBLE
 };
 
-interface Entry {
+/** One IFD entry. Exported so the RAW probe walks the SAME TIFF reader. */
+export interface Entry {
   type: number;
   count: number;
   /** Absolute offset (into the buffer) of the value bytes. */
@@ -150,7 +151,7 @@ function valueOffsetOf(
 }
 
 /** Parse one IFD into a tag→entry map. Stops cleanly on any out-of-bounds read. */
-function parseIfd(
+export function parseIfd(
   view: DataView,
   tiffStart: number,
   ifdOffset: number,
@@ -176,7 +177,7 @@ function parseIfd(
 }
 
 /** First numeric value of an entry, or undefined if missing/out of bounds. */
-function num(view: DataView, entry: Entry | undefined, little: boolean): number | undefined {
+export function num(view: DataView, entry: Entry | undefined, little: boolean): number | undefined {
   if (!entry) return undefined;
   const size = TYPE_SIZE[entry.type] ?? 0;
   if (size === 0 || entry.valueOffset + size > view.byteLength) return undefined;
@@ -185,7 +186,7 @@ function num(view: DataView, entry: Entry | undefined, little: boolean): number 
 }
 
 /** All numeric values of an entry (e.g. the 3 rationals of a GPS coordinate). */
-function nums(view: DataView, entry: Entry | undefined, little: boolean): number[] | undefined {
+export function nums(view: DataView, entry: Entry | undefined, little: boolean): number[] | undefined {
   if (!entry) return undefined;
   const size = TYPE_SIZE[entry.type] ?? 0;
   if (size === 0 || entry.valueOffset + size * entry.count > view.byteLength) {

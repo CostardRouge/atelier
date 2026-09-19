@@ -6,7 +6,8 @@ import {
   containedSize,
   pictureFraction,
   pictureRect,
-  pixelCeiling,
+  INSPECT_MAX_ZOOM,
+  onePixelZoom,
   stepViewZoom,
   zoomAbout,
   zoomByPinchRatio,
@@ -42,6 +43,14 @@ export interface PictureZoom {
   zoomed: boolean;
   /** A drag is panning the picture right now. */
   panning: boolean;
+  /**
+   * The scale at which one pixel of the picture covers one device pixel. Above
+   * it, what grows is a preview pixel and not detail — which is why it is
+   * exposed rather than merely enforced.
+   */
+  onePixel: number;
+  /** The view is past 1:1: a smooth resample is inventing what it draws. */
+  magnifying: boolean;
   zoom: ZoomControls;
   /** Where a pointer falls on the picture, as a share of its width and height. */
   fractionAt: (clientX: number, clientY: number) => Point;
@@ -65,8 +74,10 @@ const PAN_SLOP = 3;
  * deck an "off" switch would put those fixes at risk for nothing. The
  * arithmetic is the same module (`pan-zoom.ts`).
  *
- * The ceiling is the picture's own pixels (`pixelCeiling`): past one pixel of
- * the picture per device pixel there is nothing more to see, only enlargement.
+ * The ceiling is `INSPECT_MAX_ZOOM` — 4000 %, Lightroom's. One pixel of the
+ * picture per device pixel (`onePixel`) is no longer the ceiling but a
+ * LANDMARK: past it what grows is a preview pixel, and the viewport says so by
+ * offering to draw it un-smoothed rather than by refusing to go there.
  *
  * What the gestures mean, the lightbox's grammar: ⌘/ctrl-wheel (a trackpad
  * pinch) and a bare vertical wheel zoom about the pointer; a sideways wheel
@@ -83,7 +94,12 @@ export function usePictureZoom({ natural, resetKey, claim, onTakeover }: Picture
 
   const content = useMemo(() => containedSize(natural, viewport), [natural, viewport]);
   const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1;
-  const max = pixelCeiling(natural, content, dpr);
+  // Where 1:1 falls, and how far past it the view may go. The ceiling used to
+  // BE 1:1, which stopped a develop well short of what a photographer inspects
+  // at — 4000 % is Lightroom's, and `onePixel` is what tells the viewport when
+  // it has crossed into magnifying preview pixels.
+  const onePixel = onePixelZoom(natural, content, dpr);
+  const max = Math.max(onePixel, INSPECT_MAX_ZOOM);
 
   // Read by the native listeners, which are bound once.
   const live = useRef({ view, viewport, content, max, claim, onTakeover });
@@ -289,6 +305,8 @@ export function usePictureZoom({ natural, resetKey, claim, onTakeover }: Picture
     transform: `translate3d(${view.x}px, ${view.y}px, 0) scale(${view.scale})`,
     settling,
     zoomed: view.scale > MIN_VIEW_ZOOM,
+    onePixel,
+    magnifying: view.scale > onePixel * 1.001,
     panning,
     zoom: {
       scale: view.scale,

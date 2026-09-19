@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   FITTED,
+  INSPECT_MAX_ZOOM,
   MAX_VIEW_ZOOM,
   MIN_VIEW_ZOOM,
   clampView,
   clampViewZoom,
   containedSize,
+  onePixelZoom,
   panLimit,
   pictureFraction,
   pictureRect,
@@ -211,6 +213,31 @@ describe('pixelCeiling', () => {
     expect(pixelCeiling({ width: 12000, height: 8000 }, { width: 300, height: 200 }, 1)).toBe(MAX_VIEW_ZOOM);
     expect(pixelCeiling(null, viewport, 2)).toBe(2);
     expect(pixelCeiling({ width: 3000, height: 2000 }, { width: 600, height: 400 }, Number.NaN)).toBe(5);
+  });
+});
+
+describe('onePixelZoom', () => {
+  it('is 1:1 and has NO ceiling of its own — inspecting goes past it', () => {
+    // The same picture `pixelCeiling` answers 2.5× for: the landmark agrees.
+    expect(onePixelZoom({ width: 3000, height: 2000 }, { width: 600, height: 400 }, 2)).toBeCloseTo(2.5);
+    // Where `pixelCeiling` would clamp to 8×, the landmark says the truth: 40×.
+    expect(onePixelZoom({ width: 12000, height: 8000 }, { width: 300, height: 200 }, 1)).toBeCloseTo(40);
+    expect(pixelCeiling({ width: 12000, height: 8000 }, { width: 300, height: 200 }, 1)).toBe(MAX_VIEW_ZOOM);
+  });
+
+  it('never claims a picture is 1:1 below the fit, and answers the fit when unknown', () => {
+    // A small picture blown up to fill the box is already past its own pixels;
+    // saying so as "0.4×" would put the landmark under a view that cannot exist.
+    expect(onePixelZoom({ width: 240, height: 160 }, { width: 600, height: 400 }, 1)).toBe(MIN_VIEW_ZOOM);
+    expect(onePixelZoom(null, viewport, 2)).toBe(MIN_VIEW_ZOOM);
+    expect(onePixelZoom({ width: 3000, height: 2000 }, { width: 600, height: 400 }, Number.NaN)).toBeCloseTo(5);
+  });
+
+  it('leaves room to inspect: the develop ceiling is above 1:1 on a normal picture', () => {
+    const one = onePixelZoom({ width: 6000, height: 4000 }, { width: 1200, height: 800 }, 2);
+    expect(one).toBeCloseTo(2.5);
+    expect(INSPECT_MAX_ZOOM).toBeGreaterThan(one);
+    expect(clampViewZoom(99, Math.max(one, INSPECT_MAX_ZOOM))).toBe(INSPECT_MAX_ZOOM);
   });
 });
 

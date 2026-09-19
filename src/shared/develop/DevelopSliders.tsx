@@ -1,5 +1,5 @@
 import SectionLegend from '../ui/SectionLegend';
-import { DEVELOP_RANGES, signed, type DevelopKey, type DevelopSettings } from './develop';
+import { DEVELOP_RANGES, signed, type DevelopKey, type DevelopRange, type DevelopSettings } from './develop';
 
 const LABELS: Readonly<Record<DevelopKey, string>> = {
   exposure: 'Exposure',
@@ -59,26 +59,38 @@ export default function DevelopSliders({
 }
 
 /**
- * One slider: its name, its value in the mono face, the range. Double-click
- * the row to put it back to 0; Shift with the arrow keys steps ten at a time.
+ * ONE slider, for anything with a name, a range and a value it goes back to.
+ *
+ * Generalised when Levels needed the same row (`DevelopAuto.tsx`): a second
+ * copy is how two panels come to disagree about what a slider looks like and
+ * which keys it answers. `DevelopSlider` below is this one, keyed on a
+ * develop's own field.
  */
-export function DevelopSlider({
-  k,
+export function RangeSlider({
+  label,
   value,
+  range,
+  reset = 0,
+  printed,
   onChange,
 }: {
-  k: DevelopKey;
+  label: string;
   value: number;
+  range: DevelopRange;
+  /** Where a double-click puts it — 0 for a develop's fields, 1 for a gamma. */
+  reset?: number;
+  /** The value as words; the signed form when a caller says nothing. */
+  printed?: string;
   onChange: (v: number) => void;
 }) {
-  const range = DEVELOP_RANGES[k];
-  const printed = k === 'exposure' ? `${signed(value, 2)} ${range.unit}` : signed(value);
   return (
-    <div className="flex flex-col gap-1" onDoubleClick={() => onChange(0)}>
+    <div className="flex flex-col gap-1" onDoubleClick={() => onChange(reset)}>
       <div className="flex items-baseline justify-between">
-        <span className="text-xs text-ink">{LABELS[k]}</span>
-        <span className={`font-mono text-2xs tabular-nums ${value === 0 ? 'text-faint' : 'text-ink-soft'}`}>
-          {printed}
+        <span className="text-xs text-ink">{label}</span>
+        <span
+          className={`font-mono text-2xs tabular-nums ${value === reset ? 'text-faint' : 'text-ink-soft'}`}
+        >
+          {printed ?? signed(value)}
         </span>
       </div>
       <input
@@ -97,8 +109,34 @@ export function DevelopSlider({
           onChange(Math.min(range.max, Math.max(range.min, value + dir * range.step * 10)));
         }}
         className="w-full accent-accent cursor-pointer"
-        aria-label={LABELS[k]}
+        aria-label={label}
       />
     </div>
+  );
+}
+
+/**
+ * One slider of a develop: its name, its value in the mono face, the range.
+ * Double-click the row to put it back to 0; Shift with the arrow keys steps
+ * ten at a time.
+ */
+export function DevelopSlider({
+  k,
+  value,
+  onChange,
+}: {
+  k: DevelopKey;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  const range = DEVELOP_RANGES[k];
+  return (
+    <RangeSlider
+      label={LABELS[k]}
+      value={value}
+      range={range}
+      printed={k === 'exposure' ? `${signed(value, 2)} ${range.unit}` : signed(value)}
+      onChange={onChange}
+    />
   );
 }

@@ -25,6 +25,25 @@
  */
 
 import { fromLinear, toLinear } from '../lut/transfer';
+import {
+  cloneCurves,
+  cloneLevels,
+  curvesOrNull,
+  describeCurves,
+  describeLevels,
+  isDefaultCurves,
+  isDefaultLevels,
+  levelsOrNull,
+  makeChannelShaper,
+  makeLumaShaper,
+  normaliseCurves,
+  normaliseLevels,
+  sameCurves,
+  sameLevels,
+  type ChannelShaper,
+  type Levels,
+  type ToneCurves,
+} from './curves';
 
 export interface DevelopSettings {
   /** Stops, −3..+3. A linear gain in scene light. */
@@ -57,9 +76,19 @@ export interface DevelopSettings {
    * which is what protects skin.
    */
   vibrance: number;
+  /**
+   * The five tone curves (`curves.ts`), or null for none. NOT a slider: it is
+   * the control the eleven numbers above cannot express — one part of the
+   * range moved while the rest stays. Optional so every stored develop
+   * written before it existed reads without a migration.
+   */
+  curves?: ToneCurves | null;
+  /** Levels per channel (`curves.ts`), or null for none. The same, coarser. */
+  levels?: Levels | null;
 }
 
-export type DevelopKey = keyof DevelopSettings;
+/** The NUMERIC fields — a key a panel can draw as a slider. */
+export type DevelopKey = Exclude<keyof DevelopSettings, 'curves' | 'levels'>;
 
 /** The sliders, in the order every panel draws them. */
 export const DEVELOP_KEYS: readonly DevelopKey[] = [
@@ -115,11 +144,43 @@ export const DEFAULT_DEVELOP: Readonly<DevelopSettings> = Object.freeze({
   tint: 0,
   saturation: 0,
   vibrance: 0,
+  curves: null,
+  levels: null,
 });
 
 export function isDefaultDevelop(d: DevelopSettings | null | undefined): boolean {
   if (!d) return true;
-  return DEVELOP_KEYS.every((k) => d[k] === 0);
+  return DEVELOP_KEYS.every((k) => d[k] === 0) && isDefaultCurves(d.curves) && isDefaultLevels(d.levels);
+}
+
+/**
+ * A DEEP copy. The record stopped being flat numbers when it gained curves and
+ * levels, so a `{ ...settings }` now shares its nested shapes: a preset and the
+ * picture it was saved from would hold the SAME point list, and an editor that
+ * moved a point would move both. Everything that keeps a develop for later — the
+ * clipboard, a preset, a batch verb — clones through here.
+ */
+export function cloneDevelop(d: DevelopSettings | null | undefined): DevelopSettings {
+  const src = d ?? DEFAULT_DEVELOP;
+  const out = { ...DEFAULT_DEVELOP, ...src };
+  out.curves = cloneCurves(src.curves);
+  out.levels = cloneLevels(src.levels);
+  return out;
+}
+
+/**
+ * Two stored develops say the same thing — null and an untouched set are both
+ * "as shot". Curves and levels are compared by VALUE: reference equality would
+ * report every remount as a change and dirty a document that did not move.
+ */
+export function sameDevelop(a: DevelopSettings | null | undefined, b: DevelopSettings | null | undefined): boolean {
+  const x = { ...DEFAULT_DEVELOP, ...(a ?? {}) };
+  const y = { ...DEFAULT_DEVELOP, ...(b ?? {}) };
+  return (
+    DEVELOP_KEYS.every((k) => x[k] === y[k]) &&
+    sameCurves(x.curves, y.curves) &&
+    sameLevels(x.levels, y.levels)
+  );
 }
 
 /**
@@ -136,6 +197,8 @@ export function normaliseDevelop(raw: unknown): DevelopSettings {
     const { min, max } = DEVELOP_RANGES[k];
     out[k] = v < min ? min : v > max ? max : v;
   }
+  out.curves = curvesOrNull(normaliseCurves(src.curves));
+  out.levels = levelsOrNull(normaliseLevels(src.levels));
   return out;
 }
 
@@ -194,9 +257,9 @@ const CONTRAST_REACH = 0.6;
 /** Brightness −100..100 → gamma 2 .. 1/1.5. */
 const BRIGHTNESS_REACH = 0.5;
 /** Temperature ±100 → the red and blue gains move ±25 % against each other. */
-const TEMPERATURE_REACH = 0.25;
+export const TEMPERATURE_REACH = 0.25;
 /** Tint ±100 → the green gain moves ∓20 %. */
-const TINT_REACH = 0.2;
+export const TINT_REACH = 0.2;
 
 function clamp01(x: number): number {
   return x < 0 ? 0 : x > 1 ? 1 : x;
@@ -247,16 +310,53 @@ function toneCurve(L: number, d: DevelopSettings): number {
 }
 
 /**
+ * The curve and level maps a develop needs, resolved ONCE — the `makeTransfer`
+ * rule. A develop with neither is the common case and pays nothing.
+ */
+export interface DevelopShapers {
+  /** The luma curve on encoded LUMINANCE, applied as a ratio. */
+  luma: ((L: number) => number) | null;
+  /** Levels and the rgb / per-channel curves, on encoded channel values. */
+  channels: ChannelShaper | null;
+}
+
+const NO_SHAPERS: DevelopShapers = Object.freeze({ luma: null, channels: null });
+
+export function makeDevelopShapers(d: DevelopSettings): DevelopShapers {
+  if (isDefaultCurves(d.curves) && isDefaultLevels(d.levels)) return NO_SHAPERS;
+  return { luma: makeLumaShaper(d.curves), channels: makeChannelShaper(d.curves, d.levels) };
+}
+
+/**
+ * One channel through the per-channel map. A curve is DISPLAY-REFERRED: it is
+ * drawn on [0,1], so a pixel carrying a RAW's headroom is read at white. Where
+ * the map leaves that value alone the linear value is handed back UNTOUCHED, so
+ * headroom survives a curve that does not reach it — and an unshaped pixel is
+ * bit-identical, the encode/decode pair not being exact to the last ulp.
+ */
+function shapeChannel(lin: number, channel: 0 | 1 | 2, shape: ChannelShaper): number {
+  const encoded = fromLinear(lin > 1 ? 1 : lin, 'srgb');
+  const out = shape(encoded, channel);
+  return out === encoded ? lin : toLinear(out, 'srgb');
+}
+
+/**
  * Develop one pixel in LINEAR light. Input is ≥ 0 and may exceed 1 (a RAW's
  * headroom); output is ≥ 0 and is NOT clamped — the caller encodes and
  * clamps for its own medium. The identity when every field is 0.
  *
- * Order: white balance → exposure → the luminance curve as one ratio →
- * saturation and vibrance around the new luminance.
+ * Order: white balance → exposure → the luminance curve as one ratio → the
+ * luma curve, also as a ratio → levels and the per-channel curves → saturation
+ * and vibrance around the new luminance.
+ *
+ * `shapers` is the resolved curve/level maps. Pass it in any loop —
+ * `developStage` does; omitting it resolves them per pixel, which is only
+ * right for a one-off call.
  */
 export function developLinear(
   rgb: readonly [number, number, number],
   d: DevelopSettings,
+  shapers: DevelopShapers = makeDevelopShapers(d),
 ): [number, number, number] {
   let r = rgb[0] < 0 ? 0 : rgb[0];
   let g = rgb[1] < 0 ? 0 : rgb[1];
@@ -295,6 +395,31 @@ export function developLinear(
     }
   }
 
+  // The luma curve rides the same ratio as the sliders' curve, for the same
+  // reason: a grey must stay grey and no hue may rotate.
+  if (shapers.luma) {
+    const Yl = LUM_R * r + LUM_G * g + LUM_B * b;
+    if (Yl > 0) {
+      const Yc = Yl > 1 ? 1 : Yl;
+      const L = fromLinear(Yc, 'srgb');
+      const Lout = shapers.luma(L);
+      if (Lout !== L) {
+        const ratio = toLinear(Lout, 'srgb') / Yc;
+        r *= ratio;
+        g *= ratio;
+        b *= ratio;
+      }
+    }
+  }
+
+  // Levels and the rgb / per-channel curves, which move channels against each
+  // other on purpose — that is what tells them from the luma curve above.
+  if (shapers.channels) {
+    r = shapeChannel(r, 0, shapers.channels);
+    g = shapeChannel(g, 1, shapers.channels);
+    b = shapeChannel(b, 2, shapers.channels);
+  }
+
   if (d.saturation || d.vibrance) {
     const Y2 = LUM_R * r + LUM_G * g + LUM_B * b;
     let amount = d.saturation / 100;
@@ -329,10 +454,12 @@ export function developStage(
   d: DevelopSettings,
 ): (r: number, g: number, b: number) => [number, number, number] {
   if (isDefaultDevelop(d)) return (r, g, b) => [r, g, b];
+  const shapers = makeDevelopShapers(d);
   return (r, g, b) => {
     const out = developLinear(
       [toLinear(r, 'srgb'), toLinear(g, 'srgb'), toLinear(b, 'srgb')],
       d,
+      shapers,
     );
     return [fromLinear(out[0], 'srgb'), fromLinear(out[1], 'srgb'), fromLinear(out[2], 'srgb')];
   };
@@ -362,12 +489,19 @@ export function signed(n: number, digits = 0): string {
 }
 
 /**
- * One line for a settled row: `As shot`, or the non-zero fields in slider
- * order — `+0.7 EV · highlights −40 · vibrance +15`. Exposure leads and
- * carries its unit; the others are `name value`.
+ * What this develop says, ONE FACT PER ENTRY: `As shot` alone, or the non-zero
+ * fields in slider order — `+0.7 EV`, `highlights −40`, `vibrance +15`,
+ * `curve luma+red`. Exposure leads and carries its unit; the others are
+ * `name value`. A shape has no one number, so it names the channels it touches
+ * and nothing else — these are sentences, not a serialisation.
+ *
+ * Kept as a LIST because the two readers want different shapes: a settled row
+ * wants one line (`describeDevelop` joins it), the facts drawn over the picture
+ * want a stack, where a long correction that used to wrap mid-fact now reads
+ * down a corner.
  */
-export function describeDevelop(d: DevelopSettings | null | undefined): string {
-  if (!d || isDefaultDevelop(d)) return 'As shot';
+export function developLines(d: DevelopSettings | null | undefined): string[] {
+  if (!d || isDefaultDevelop(d)) return ['As shot'];
   const parts: string[] = [];
   for (const k of DEVELOP_KEYS) {
     const v = d[k];
@@ -375,5 +509,14 @@ export function describeDevelop(d: DevelopSettings | null | undefined): string {
     if (k === 'exposure') parts.push(`${signed(v, 2).replace(/\.?0+$/, '')} EV`);
     else parts.push(`${LABELS[k]} ${signed(v)}`);
   }
-  return parts.join(' · ');
+  const levels = describeLevels(d.levels);
+  if (levels) parts.push(levels);
+  const curves = describeCurves(d.curves);
+  if (curves) parts.push(curves);
+  return parts;
+}
+
+/** The same facts as ONE line, for a settled row. */
+export function describeDevelop(d: DevelopSettings | null | undefined): string {
+  return developLines(d).join(' · ');
 }

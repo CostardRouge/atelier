@@ -9,6 +9,8 @@
  * difference between the two is the canvas they are handed.
  */
 
+import { isRawImage } from '../library/assets';
+import { extractRawPreview } from '../exif/raw-probe';
 import type { CubeLut } from '../lib/cube-parser';
 import { drawLayout, type LayoutPicture } from '../media/cell-paint';
 import { DEFAULT_FRAMING, drawFramed, type Framing } from '../media/framing';
@@ -117,8 +119,31 @@ export async function loadBadgeSource(
       release: () => bitmap.close(),
     };
   } catch {
+    // A RAW: no browser decodes a sensor plane, but the camera wrote its own
+    // JPEG inside the file, and that needs no decoder at all
+    // (`shared/exif/raw-probe.ts`). It is a RENDER, not the sensor's data —
+    // `pictureFidelity` is what says so where the picture is shown.
+    if (isRawImage(file.name)) {
+      try {
+        const preview = await extractRawPreview(file);
+        if (preview) {
+          const bitmap = await createImageBitmap(
+            preview,
+            maxWidth ? { resizeWidth: maxWidth, resizeQuality: 'high' } : undefined,
+          );
+          return {
+            image: bitmap,
+            width: bitmap.width,
+            height: bitmap.height,
+            release: () => bitmap.close(),
+          };
+        }
+      } catch {
+        // A previewless or malformed RAW falls through to the honest refusal.
+      }
+    }
     throw new Error(
-      `The browser cannot decode ${file.name}. Camera RAW usually needs its JPEG beside it — point this at an exported file instead.`,
+      `The browser cannot decode ${file.name}, and the file carries no render of its own — point this at an exported JPEG instead.`,
     );
   }
 }

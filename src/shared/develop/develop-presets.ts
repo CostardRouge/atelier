@@ -7,7 +7,7 @@
  * A preset holds a COPY of numbers: applied, never followed. Pure and DOM-free.
  */
 
-import { isDefaultDevelop, type DevelopPreset, type DevelopSettings } from './develop';
+import { cloneDevelop, isDefaultDevelop, type DevelopPreset, type DevelopSettings } from './develop';
 
 /**
  * The list with a preset holding a copy of `settings` under `name`. A name
@@ -30,7 +30,7 @@ export function savePresetIn(
   const preset: DevelopPreset = {
     id: existing >= 0 ? list[existing].id : id,
     name: label,
-    settings: { ...settings },
+    settings: cloneDevelop(settings),
   };
   return existing >= 0 ? list.map((p, i) => (i === existing ? preset : p)) : [...list, preset];
 }
