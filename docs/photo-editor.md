@@ -421,8 +421,30 @@ commit, and the keystone and lens drags got it for nothing.
 
 Edge-snapping ("auto mask") stays deferred.
 
-**P9 — segmentation.** The model under `public/models/`, inference in a worker,
-the cached raster, `subject` / `background` as mask kinds. §4.3.
+**P9 — segmentation** *(BOTH commits BUILT 2026-09-19 — the model and the
+segmenter, then the tap gesture and the rasters everywhere; `render-layers.md`.)*
+The README's network callout is unchanged: everything is served from our own
+origin and dynamically imported on the first ask, so a page that never opens a
+subject mask pays nothing.
+
+Three things the maintainer's own `p5-templates` settled that §4.3 had wrong:
+
+- **The cost is the WASM, not the model.** 16.9 MB, not "a ~5 MB
+  MediaPipe-class model": the model is 6.2 MB and `vision_wasm_internal.wasm` is
+  another 9.6 MB. The `nosimd` twin (9.1 MB more) is not shipped — every browser
+  that can run this suite has wasm SIMD.
+- **Click-anywhere is the feature**, not the thing to avoid. `InteractiveSegmenter`
+  over `magic_touch`, several points unioned. Semantic segmentation
+  (`deeplabv3`) answers about CATEGORIES, and a photographer pointing at the
+  second of three people is asking about THIS ONE. "Background" is this mask
+  under the layer's existing `invert`, not a second model.
+- **The selected object is category 0**, everything else 255 — backwards from
+  the obvious reading, and reading it the other way selects the background.
+
+Still open: persisting the cached raster (it is a session cache today, so a
+reopened picture re-segments), and a faster path than one sequential inference
+per point.
+
 
 **P10 — RAW develop.** O5: `raw-decoder.ts` behind `libraw-wasm`, dynamically
 imported (the MapLibre rule — never in the main bundle), in a worker, opt-in per
