@@ -994,6 +994,16 @@ mirror what the frame shows. A pinch, the wheel or the ± pill looks closer at
 the picture without touching the crop. The crop belongs to the picture, is
 saved as you go, and is never inherited by the next one.
 
+**Borders.** Under the crop, **Borders** puts a canvas round it: a **file**
+format the bars reach (*Free* is the crop plus its margins; 4:5, 9:16, 1:1… for
+a post), a **fill** — black, white, paper, vermilion, any colour, or **Blur**,
+the picture itself softened behind it, made on your machine — and two
+**margins**, left·right and top·bottom, as a share of the crop's short side so
+they look the same at any size (linked unless you unlink them). A small
+preview above it shows the file exactly as the export will write it, with its
+size. **Apply crop to…** and **Apply borders to…** are separate: one border
+can go on a whole roll whose crops each differ.
+
 **Exporting.** The **Export** tab writes JPEGs — this picture, the marked
 ones, or the whole roll — into a folder you choose (downloaded one by one
 where the browser has no folder picker). Each is decoded at its own size,

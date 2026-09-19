@@ -450,3 +450,20 @@ half-blue/half-green JPEG: a 10 % vermilion border on a 1:1 file → 3400×3400,
 vermilion outside, blue and green inside; a 1:1 crop at scale 2 → 1000×1000
 (the zone, native density); a blur border on 9:16 → 3200×5689 with the fill
 blue on the left and green on the right, darkened (208 against 254).
+
+**The Borders UI** (`BorderSection.tsx`, under Crop in the same tab): a switch
+in the section's header (off → `null`; on again restores the last border this
+visit, not the default), the FILE format (Free = `aspect: null`), four swatches
++ `<input type="color">` + Blur, two margin sliders 0–25 % linked by default,
+and a "What the export delivers" preview drawn by `drawDelivered` with the
+export's size (`openDelivery.out`) under it — the stage keeps the whole
+picture for cropping, so the panel is where a border is seen while set. Every
+change is written to the roll at once (`copyBorderTo(roll, [id], …)`), like
+the aspect. Verified in the pane: on, 4:5, Blur → preview 0.8 and "delivers
+2512 × 3140 px"; *Export this picture* (showDirectoryPicker stubbed) wrote
+`A-tilt-developed-crop.jpg` at 2512×3140 whose pixels at three points equal
+the preview's exactly (blur top 89,133,178; sky; grass); *Apply borders to 3
+other pictures* gave the three the border and left every aspect and framing
+byte-identical; after a reload the Develop viewport showed the crop on its
+blur. Not driven: a real phone, the free colour picker's native dialog, a
+Winnow original through Auto with a border (the arithmetic is tested).

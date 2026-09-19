@@ -30,6 +30,8 @@ import StageZoomControl from '../../shared/ui/StageZoomControl';
 import { STAGE_ZOOM_STEP, zoomLabel, type ZoomControls } from '../../shared/ui/stage-zoom';
 import type { RollExport } from '../../shared/develop/roll-types';
 import CropPanel, { type CropApplyVerb } from './CropPanel';
+import type { BorderApplyVerb } from './BorderSection';
+import type { RollBorder } from '../../shared/develop/border-layout';
 import ExportPanel, { type ExportVerb } from './ExportPanel';
 import CropStage from './CropStage';
 import { CROP_VIEW_FIT, CROP_VIEW_MAX, useCropZone } from './use-crop-zone';
@@ -68,6 +70,8 @@ export default function PictureWorkbench({
   onTabChange,
   applyTo,
   cropApplyTo,
+  borderApplyTo,
+  onBorder,
   onDevelop,
   onFraming,
   onAspect,
@@ -93,6 +97,9 @@ export default function PictureWorkbench({
   applyTo: readonly DevelopApplyVerb[];
   /** The crop's batch verbs — this picture's aspect and framing written onto others. */
   cropApplyTo: readonly CropApplyVerb[];
+  /** The border's own batch verbs — never the crop (the maintainer's two verbs). */
+  borderApplyTo: readonly BorderApplyVerb[];
+  onBorder: (border: RollBorder | null) => void;
   onDevelop: (develop: DevelopSettings | null) => void;
   onFraming: (framing: Framing | null) => void;
   onAspect: (aspect: string) => void;
@@ -370,7 +377,17 @@ export default function PictureWorkbench({
               <DevelopLookSection stack={stack} />
             </>
           ) : tab === 'crop' ? (
-            <CropPanel crop={crop} aspect={entry.aspect} verbs={cropApplyTo} onTold={tell} />
+            <CropPanel
+              picture={picture}
+              crop={crop}
+              aspect={entry.aspect}
+              border={entry.border}
+              onBorder={onBorder}
+              deliveredSize={exports.openDelivery?.out ?? null}
+              verbs={cropApplyTo}
+              borderVerbs={borderApplyTo}
+              onTold={tell}
+            />
           ) : (
             <ExportPanel
               settings={exportSettings}

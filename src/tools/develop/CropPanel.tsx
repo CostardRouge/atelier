@@ -9,6 +9,9 @@ import { FieldRow, InspectorSection, RangeField } from '../../shared/ui/Inspecto
 import { Icons } from '../../shared/ui/icons';
 import SectionLegend from '../../shared/ui/SectionLegend';
 import Segmented from '../../shared/ui/Segmented';
+import type { RollBorder } from '../../shared/develop/border-layout';
+import type { DevelopPicture } from '../../shared/develop/use-develop-picture';
+import BorderSection, { type BorderApplyVerb } from './BorderSection';
 import type { CropZoneApi } from './use-crop-zone';
 
 /** A batch verb of the Crop tab: handed this picture's crop on its click. */
@@ -37,14 +40,24 @@ const FORMAT_OPTIONS = [
  * Borders' job.
  */
 export default function CropPanel({
+  picture,
   crop,
   aspect,
+  border,
+  onBorder,
+  deliveredSize,
   verbs = [],
+  borderVerbs = [],
   onTold,
 }: {
+  picture: DevelopPicture;
   crop: CropZoneApi;
   aspect: string;
+  border: RollBorder | null;
+  onBorder: (border: RollBorder | null) => void;
+  deliveredSize: { w: number; h: number } | null;
   verbs?: readonly CropApplyVerb[];
+  borderVerbs?: readonly BorderApplyVerb[];
   onTold?: (message: string) => void;
 }) {
   const { framing, zone } = crop;
@@ -174,6 +187,15 @@ export default function CropPanel({
           ))}
         </div>
       )}
+      <BorderSection
+        picture={picture}
+        crop={crop}
+        border={border}
+        onBorder={onBorder}
+        deliveredSize={deliveredSize}
+        verbs={borderVerbs}
+        onTold={onTold}
+      />
     </>
   );
 }
