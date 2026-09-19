@@ -16,9 +16,8 @@
  * shape with no new case, and a roll written before free crops existed still
  * reads. What it costs is this module: one place that knows the spelling.
  *
- * Pure and DOM-free — the stage's resize arithmetic lives here too, so what a
- * corner drag means is a tested function rather than a line buried in a
- * pointer handler.
+ * Pure and DOM-free. The crop stage's arithmetic — what a handle, a move or a
+ * rotation does to the zone — is `crop-rect.ts`.
  */
 
 import { ASPECT_PRESETS } from '../projects/project-types';
@@ -100,42 +99,3 @@ export type CropHandle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 
 /** Clockwise from the top left — the order the stage draws them in. */
 export const CROP_HANDLES: readonly CropHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
-
-/**
- * The shape a resize drag asks for.
- *
- * The frame is CENTRED on its stage — the canvas is letterboxed in the middle
- * of the box whatever its ratio — so a handle is read as a DISTANCE FROM THAT
- * CENTRE rather than as a delta from where the drag started: the frame grows
- * and shrinks about its middle, the handle stays under the finger, and there
- * is nothing accumulated to drift. It also means the drag is self-correcting
- * once the frame has hit the stage's edge and stopped growing.
- *
- * A corner takes both axes from the finger. An edge takes its own axis from
- * the finger and the other from the frame as it is drawn now, so dragging the
- * right edge widens the frame without touching its height.
- *
- * `dx`/`dy` are the pointer's offset from the frame's centre and `frameW`/
- * `frameH` the frame's size on screen — the same unit, whichever it is.
- */
-export function resizeAspectRatio(
-  handle: CropHandle,
-  dx: number,
-  dy: number,
-  frameW: number,
-  frameH: number,
-): number {
-  const ax = Math.abs(dx);
-  const ay = Math.abs(dy);
-  // A finger dragged right onto the centre asks for a frame of no width: the
-  // narrowest shape is the answer, where `clampFreeAspect` reads a ratio of
-  // nothing as the nonsense a stored document might hold.
-  const drawn = (ratio: number) => (ratio > 0 ? clampFreeAspect(ratio) : FREE_ASPECT_MIN);
-  // A corner on the centre line asks for one of no height, and the clamp is
-  // the answer there too, not a division that would run away.
-  if (handle.length === 2) return ay < 1 ? FREE_ASPECT_MAX : drawn(ax / ay);
-  if (handle === 'e' || handle === 'w') {
-    return frameH > 0 ? drawn((ax * 2) / frameH) : 1;
-  }
-  return ay < 1 ? FREE_ASPECT_MAX : drawn(frameW / (ay * 2));
-}

@@ -112,13 +112,14 @@ export type EditorKeyAction =
   | 'paste'
   | 'crop'
   | 'develop'
+  | 'swap'
   | null;
 
 /**
  * What a key press means in the editor, or null when it belongs to someone
  * else. ←/→ move along the strip, `\` holds "before" (its release is the
  * caller's), `Z` goes closer or back to the fit, `R` opens the Crop tab and
- * `D` the Develop tab, ⌘/Ctrl-C and -V copy and paste the develop. A field or
+ * `D` the Develop tab, `X` swaps the crop's orientation, ⌘/Ctrl-C and -V copy and paste the develop. A field or
  * a slider keeps every key it could use; a held arrow does step (it is how a
  * strip is swept), a held `\` does not re-press.
  */
@@ -140,5 +141,7 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   if (press.key === 'z' || press.key === 'Z') return 'zoom';
   if (press.key === 'r' || press.key === 'R') return 'crop';
   if (press.key === 'd' || press.key === 'D') return 'develop';
+  // The crop's portrait ↔ landscape; the editor answers it on the Crop tab only.
+  if (press.key === 'x' || press.key === 'X') return 'swap';
   return null;
 }

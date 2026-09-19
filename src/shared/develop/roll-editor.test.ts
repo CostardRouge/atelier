@@ -83,7 +83,7 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'z', metaKey: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'ArrowRight', shiftKey: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'c', metaKey: true, shiftKey: true }))).toBeNull();
-    expect(editorKeyAction(press({ key: 'x' }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'q' }))).toBeNull();
   });
 
   it('opens the Crop tab on R and the Develop tab on D', () => {
@@ -91,6 +91,8 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'R' }))).toBe('crop');
     expect(editorKeyAction(press({ key: 'd' }))).toBe('develop');
     expect(editorKeyAction(press({ key: 'D' }))).toBe('develop');
+    expect(editorKeyAction(press({ key: 'x' }))).toBe('swap');
+    expect(editorKeyAction(press({ key: 'X' }))).toBe('swap');
     expect(editorKeyAction(press({ key: 'r', metaKey: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'r', targetTypes: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'd', repeat: true }))).toBeNull();

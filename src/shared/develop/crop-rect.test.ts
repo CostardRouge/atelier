@@ -74,6 +74,11 @@ describe('the zone ↔ the stored crop', () => {
     expectZone(square, { cx: 0, cy: 0, w: 2000, h: 2000 });
   });
 
+  it('stores the largest zone as an untouched framing', () => {
+    const f = cropFromZone(SRC, maxZone(1.5, 0, SRC), 0, false, false);
+    expect(f).toEqual({ ...DEFAULT_FRAMING });
+  });
+
   it('clamps a stored pan the way the renderer does', () => {
     const zone = zoneFromCrop(SRC, 1, { ...DEFAULT_FRAMING, x: 5 });
     // A square at scale 1 can only slide 500 px along x.

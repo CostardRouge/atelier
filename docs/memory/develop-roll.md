@@ -444,3 +444,20 @@ drawn zone back; a centre that fell off is pulled toward the middle only as
 far as the smallest zone needs. (5) `EPS` in the containment test is 1e-9 of
 the long side: at 1e-6 a 3000 px picture let a zone overhang by 3 mpx and the
 edge tests failed — keep the tolerance float-sized, never pixel-sized.
+
+**The stage** (`CropStage` + `use-crop-zone.ts`, replacing `FramingStage`;
+`resizeAspectRatio` retired). Rules: (1) the zone is DERIVED from what the roll
+stores (aspect + the framing draft), never kept beside it — an undo or a batch
+verb moves it with no wiring; only the lit chip and the intent live in the
+hook. (2) The view is fitted ONCE on the quarter-turned picture: a fine angle
+never refits it, and nothing a gesture does resizes it. (3) One canvas draws
+picture, veil (even-odd), dashed outline, thirds and handles; the size tag is
+the only DOM element, in the FILE's pixels (`RollExports.openSize`), not the
+decoded preview's. (4) The stage takes focus on a press, and only a FOCUSED
+stage claims the arrows (`preventDefault`, which the editor's window handler
+respects) — unfocused, ←/→ still step the roll. `X` is an editor key
+(`'swap'`), answered on the Crop tab only. (5) `cropFromZone` snaps a scale
+within 1e-6 of 1 and a pan under 1e-9 to exact values: the largest zone is
+built a hair inside (`fitAround`'s 1 − 1e-9), and a stored `scale:
+1.000000001` made an untouched picture count as developed — measured in the
+pane. (6) A preset without a turned twin (4:5) swaps into Free.

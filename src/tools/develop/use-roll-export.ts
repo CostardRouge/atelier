@@ -34,6 +34,8 @@ export interface RollExports {
   lastRun: RollRun | null;
   /** What the OPEN picture will deliver, or null until its size is known. */
   openDelivery: DeliverySummary | null;
+  /** The open picture's FILE size in pixels, once measured — the crop's tag reads it. */
+  openSize: PictureSize | null;
   /** Render the pictures named and hand them over. */
   exportPictures: (ids: readonly string[]) => Promise<void>;
 }
@@ -198,5 +200,6 @@ export function useRollExport({
     }
   }, []);
 
-  return { exporting, note, lastRun, openDelivery, exportPictures };
+  const measuredOpen = openFile && openSize && openSize.file === openFile ? openSize.size : null;
+  return { exporting, note, lastRun, openDelivery, openSize: measuredOpen, exportPictures };
 }

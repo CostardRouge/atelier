@@ -9,7 +9,6 @@ import {
   isFreeAspect,
   isStoredAspect,
   pictureAspectRatio,
-  resizeAspectRatio,
 } from './crop-aspect';
 
 describe('pictureAspectRatio', () => {
@@ -83,37 +82,5 @@ describe('describeAspect', () => {
     expect(describeAspect(1.5)).toBe('1.50:1');
     expect(describeAspect(0.8)).toBe('1:1.25');
     expect(describeAspect(1.001)).toBe('1:1');
-  });
-});
-
-describe('resizeAspectRatio', () => {
-  const frame = { w: 400, h: 300 };
-
-  it('takes both axes from the finger at a corner', () => {
-    expect(resizeAspectRatio('se', 200, 100, frame.w, frame.h)).toBeCloseTo(2);
-    // The frame grows about its centre, so the far corners read the same.
-    expect(resizeAspectRatio('nw', -200, -100, frame.w, frame.h)).toBeCloseTo(2);
-    expect(resizeAspectRatio('ne', 100, -200, frame.w, frame.h)).toBeCloseTo(0.5);
-  });
-
-  it('widens from a side without touching the height', () => {
-    // 300px tall, the finger 300px from the centre: a 600×300 frame.
-    expect(resizeAspectRatio('e', 300, 0, frame.w, frame.h)).toBeCloseTo(2);
-    expect(resizeAspectRatio('w', -75, 40, frame.w, frame.h)).toBeCloseTo(0.5);
-  });
-
-  it('heightens from the top or the bottom without touching the width', () => {
-    // 400px wide, the finger 200px from the centre: a 400×400 frame.
-    expect(resizeAspectRatio('s', 0, 200, frame.w, frame.h)).toBeCloseTo(1);
-    expect(resizeAspectRatio('n', 30, -400, frame.w, frame.h)).toBeCloseTo(0.5);
-  });
-
-  it('answers the extreme shape rather than dividing by nothing', () => {
-    expect(resizeAspectRatio('se', 200, 0, frame.w, frame.h)).toBe(FREE_ASPECT_MAX);
-    expect(resizeAspectRatio('s', 0, 0, frame.w, frame.h)).toBe(FREE_ASPECT_MAX);
-    expect(resizeAspectRatio('e', 9999, 0, frame.w, frame.h)).toBe(FREE_ASPECT_MAX);
-    expect(resizeAspectRatio('e', 0, 0, frame.w, frame.h)).toBe(FREE_ASPECT_MIN);
-    expect(resizeAspectRatio('se', 0, 200, frame.w, frame.h)).toBe(FREE_ASPECT_MIN);
-    expect(resizeAspectRatio('e', 10, 0, frame.w, 0)).toBe(1);
   });
 });

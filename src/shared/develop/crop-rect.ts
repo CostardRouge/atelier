@@ -109,14 +109,18 @@ export function cropFromZone(
 ): Framing {
   const { cos, sin } = turn(rotation);
   const base = zoneBase(zone.w, zone.h, rotation, src);
-  const scale = Math.min(MAX_FRAMING_SCALE, Math.max(1, base > 0 ? 1 / base : 1));
+  const raw = Math.min(MAX_FRAMING_SCALE, Math.max(1, base > 0 ? 1 / base : 1));
+  // Float noise snapped away: the largest zone must store as scale 1, or an
+  // untouched picture reads as cropped (`isDefaultFraming`) and counts as developed.
+  const scale = Math.abs(raw - 1) < 1e-6 ? 1 : raw;
   const unit = Math.max(zone.w, zone.h);
   const px = -(zone.cx * cos + zone.cy * sin);
   const py = -(-zone.cx * sin + zone.cy * cos);
+  const snap = (v: number) => (Math.abs(v) < 1e-9 ? 0 : v);
   return {
     scale,
-    x: unit > 0 ? px / unit || 0 : 0,
-    y: unit > 0 ? py / unit || 0 : 0,
+    x: unit > 0 ? snap(px / unit) : 0,
+    y: unit > 0 ? snap(py / unit) : 0,
     rotation: wrapDegrees(rotation),
     flipX,
     flipY,
