@@ -19,7 +19,20 @@ import { EXIF_SLICE_BYTES } from '../../shared/exif/exif-parser';
 import { exportExifBlock, stampExif, type ExifAccount } from '../../shared/exif/stamp-exif';
 import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
 import { formatBytes } from '../../shared/lib/format';
-import { isRawDevelop, rawGainOf, withoutBase } from '../../shared/develop/develop';
+import {
+  BASE_LABELS,
+  baseRung,
+  developBase,
+  isRawDevelop,
+  rawGainOf,
+  withoutBase,
+} from '../../shared/develop/develop';
+import {
+  calibrationAt,
+  readRawCalibration,
+  topRung,
+  type RawCalibration,
+} from '../../shared/raw/calibration';
 import { isRawImage } from '../../shared/library/assets';
 import { canDecodeRaw } from '../../shared/raw/raw-decoder';
 
@@ -123,6 +136,24 @@ export function useRollExport({
     };
   }, [openFile]);
 
+  // What the OPEN picture's own file is calibrated for — from the RAW in
+  // hand: the file itself, or an original already held. Nothing is fetched
+  // for a sentence; without it the row simply says less.
+  const [rawCal, setRawCal] = useState<{ file: File; cal: RawCalibration | null } | null>(null);
+  useEffect(() => {
+    if (!openFile) return;
+    const held = knownIdentity(openFile)?.assetId ?? null;
+    const source = canDecodeRaw(openFile) ? openFile : held ? heldOriginal(held) : null;
+    if (!source) return;
+    let alive = true;
+    void readRawCalibration(source).then((cal) => {
+      if (alive) setRawCal({ file: openFile, cal });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [openFile]);
+
   const open = openId ? (roll.pictures.find((p) => p.id === openId) ?? null) : null;
   let openDelivery: DeliverySummary | null = null;
   if (open && openFile && openSize && openSize.file === openFile) {
@@ -138,10 +169,18 @@ export function useRollExport({
     );
     if (isRawDevelop(open.develop)) {
       // The row was measured on the render; a RAW develop leaves from the
-      // sensor's data at its own density, and the reason says so.
+      // sensor's data at its own density, and the reason says so — including
+      // the one way the file can differ from the stage: the export climbs to
+      // the top rung the file carries, and a picture left standing on `gain`
+      // will deliver a calibration the preview did not show.
+      const at = developBase(open.develop);
+      const top = rawCal?.file === openFile ? topRung(rawCal.cal) : at;
       openDelivery = {
         ...openDelivery,
-        reason: 'developed on its RAW — delivered from the sensor’s data, decoded at its own size',
+        reason:
+          baseRung(top) > baseRung(at)
+            ? `developed on its RAW at ${BASE_LABELS[at]} — the export climbs to ${BASE_LABELS[top]}, the calibration its own file carries, so the file will differ from the stage`
+            : `developed on its RAW at ${BASE_LABELS[at]} — delivered from the sensor’s data, decoded at its own size`,
       };
     }
   }
@@ -222,6 +261,17 @@ export function useRollExport({
             }
             if (rawFile) raw = { file: rawFile, gain: rawGainOf(picture.develop) };
             else failures.push(`${picture.ref.name} is developed on its RAW, which is not reachable here — its render left instead`);
+          }
+          // WITHIN the RAW rungs, the export climbs to the top one the file
+          // can give: the calibration is the body's own, it is two GPU passes,
+          // and there is no reason to deliver less of it than exists. It
+          // never crosses proxy → gain, which is decision 4 and the rule
+          // `raw.md` states twice: numbers nobody has seen on the sensor's
+          // data are never applied to it by an export.
+          let calibration = null as ReturnType<typeof calibrationAt> | null;
+          if (raw) {
+            const cal = await readRawCalibration(raw.file);
+            calibration = calibrationAt(topRung(cal), cal);
           }
           // Decide from the file's own pixels which pixels to deliver from.
           const size = raw ? null : await measurePicture(file);
@@ -324,6 +374,7 @@ export function useRollExport({
             // which the write-through keeps level with the stack.
             film: r.grade?.film ?? null,
             raw,
+            calibration,
             hdr,
             stamp,
           });

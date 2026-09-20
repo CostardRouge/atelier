@@ -96,13 +96,20 @@ export default function ExportPanel({
               this session only.
             </p>
             <p>
-              A <strong>RAW</strong> original is a special case: no browser decodes a sensor plane,
+              A picture developed on its <strong>RAW</strong> leaves from the sensor’s data, and the
+              export climbs to the top rung of calibration its own file carries — the gain map and
+              the rectilinear warp the body was measured for. It never crosses from the proxy to
+              the sensor by itself: numbers nobody has seen on the sensor’s data are never applied
+              to it at the door.
+            </p>
+            <p>
+              A <strong>RAW</strong> original is a special case for PIXELS too: no browser decodes a sensor plane,
               so all that can be taken from one is the render its camera wrote inside it — which on
               a DJI is 960 × 540, smaller than the proxy. Its real size is read from the file’s head
               before anything is fetched, and the LARGER of that render and the proxy delivers. The
               whole RAW is pulled only when its render genuinely has more pixels than the proxy and
-              the frame needs them. To deliver from the sensor itself, develop the picture on its
-              RAW (the Base section).
+              the frame needs them. To deliver from the sensor itself, climb the picture’s own
+              ladder — the chip above the photograph.
             </p>
           </>
         }

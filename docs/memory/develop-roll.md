@@ -311,6 +311,21 @@ shared block. Rules a later phase must keep:
   overflow, and *Export this picture* wrote `DJI_0101.jpg 960×540` — the
   picker-first order (`pickDeliveryTarget` → render → `deliverFilesTo`) is
   what makes that work at any width, and it is unchanged.
+- **The export climbs the RAW ladder to the top rung the FILE can give, and
+  never crosses `proxy` → `gain`** (2026-09-20, the maintainer's "always max"
+  with the one boundary it does not override). Within the RAW rungs there is
+  no reason to deliver less calibration than the body was measured for — it
+  is two GPU passes — so the run reads `topRung(cal)` and renders through
+  `calibrationAt` at it. Crossing from the proxy to the sensor, by contrast,
+  is refused exactly as it always was (`develop-originals.md` §7.4,
+  `raw.md`): numbers nobody has seen on the sensor's data are never applied to
+  it at the door, and a RAW never checked in Develop still leaves from its
+  render with the run saying so. Because the PREVIEW already carries the
+  calibration from `gain map` up, the climb changes the file only for a
+  picture left standing on `gain` — and that is the one case the *Delivers*
+  row names: *"developed on its RAW at Gain — the export climbs to Gain map +
+  warp, the calibration its own file carries, so the file will differ from the
+  stage"*. Measured in the pane.
 - **Each picture renders through its OWN cube** (`stack.composeWith(develop)`),
   decoded whole, graded at source density, then `drawFramed` — the crop stage's
   transform, so the file is the stage. The frame seam of `develop-tool.md` §6
