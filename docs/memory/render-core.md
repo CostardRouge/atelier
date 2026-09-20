@@ -71,6 +71,15 @@ that promises it must ask.
   `OES_texture_float_linear`, and an incomplete texture samples BLACK.**
   `lut-gl.ts` had always branched to `RGBA8` for it; copying its GLSL without
   copying that branch is what made the core's first run black on SwiftShader.
+  **Since 2026-09-20 the branch falls to `RGBA16F`, never to 8-bit**, and it
+  is ONE function for both shaders (`uploadCube`, `cube-pass.ts`): the 8-bit
+  branch clamped the cube's output to [0,1] and quantised it, which threw away
+  a conversion LUT's highlight rolloff above white on every GPU that took it,
+  silently. Half-float is filterable in core WebGL2 and takes the same `FLOAT`
+  upload; measured against the float path: worst 1 code. The gate has a row
+  that takes the extension away by hand (on BOTH canvas prototypes — the
+  grader draws on an `OffscreenCanvas`), because this GPU has it and the
+  fallback would otherwise run nowhere a gate could see.
 - **`bindAttribLocation` before linking.** The graph sets its quad up once, on
   one VAO, against attribute location 0 — but GLSL may put `a_pos` anywhere
   unless told, and then the quad draws nothing.

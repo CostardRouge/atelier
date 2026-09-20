@@ -12,7 +12,8 @@
  * `sampler3D` left on texture unit 0 beside the source's `sampler2D` (an
  * INVALID_OPERATION that drops the draw, silently), and an `RGBA32F` cube set
  * to LINEAR on a GPU without `OES_texture_float_linear` (an incomplete texture,
- * which samples black).
+ * which samples black). The last row takes that extension away by hand, so
+ * the half-float cube the core falls to there is measured too.
  *
  * Usage: `npm run dev` in one shell, then
  *   node scripts/check-render.mjs
@@ -463,6 +464,50 @@ const out = await page.evaluate(async () => {
     results.swap = { swapped, built, swappedBitmap, again, canSwap: Boolean(reused.setPasses) };
   }
 
+  // --- the cube without OES_texture_float_linear: half-float, never 8-bit --
+  //
+  // This GPU has the extension, so the fallback would otherwise run nowhere a
+  // gate can see it — which is how the old RGBA8 branch clamped a cube's
+  // highlight rolloff for years on the GPUs that took it. The extension is
+  // taken away here by hand, on every context made inside the block, and the
+  // same look must come back within a code of the float path and be a picture.
+  {
+    const { makeGraphGrader } = await import('/atelier/src/shared/render/graph-grader.ts');
+    const { cubeInternalFormat } = await import('/atelier/src/shared/render/cube-pass.ts');
+
+    const withFloat = makeGraphGrader(cube, W, H, 1, 'tetrahedral');
+    const a = read(withFloat.render(bitmap));
+    withFloat.dispose();
+
+    // The grader draws on an OffscreenCanvas where there is one, an element
+    // elsewhere: both are patched, so the row cannot pass by missing the path.
+    const protos = [HTMLCanvasElement.prototype, OffscreenCanvas.prototype];
+    const real = protos.map((p) => p.getContext);
+    let formatSeen = null;
+    protos.forEach((proto, i) => {
+      proto.getContext = function (kind, ...rest) {
+        const ctx = real[i].call(this, kind, ...rest);
+        if (ctx && kind === 'webgl2') {
+          const realGetExtension = ctx.getExtension.bind(ctx);
+          ctx.getExtension = (name) => (name === 'OES_texture_float_linear' ? null : realGetExtension(name));
+          formatSeen = cubeInternalFormat(ctx) === ctx.RGBA16F ? 'RGBA16F' : 'RGBA32F';
+        }
+        return ctx;
+      };
+    });
+    let b;
+    try {
+      const withoutFloat = makeGraphGrader(cube, W, H, 1, 'tetrahedral');
+      b = read(withoutFloat.render(bitmap));
+      withoutFloat.dispose();
+    } finally {
+      protos.forEach((proto, i) => { proto.getContext = real[i]; });
+    }
+    let sum = 0;
+    for (let i = 0; i < b.length; i += 4) sum += b[i] + b[i + 1] + b[i + 2];
+    results.halfCube = { ...worst(a, b), format: formatSeen, mean: sum / (b.length / 4) / 3 };
+  }
+
   return results;
 });
 
@@ -597,6 +642,18 @@ if (!swap.canSwap) {
     bad += 1;
     console.log('  FAIL  the two pass sets draw the same picture, so this proves nothing');
   }
+}
+
+const half = out.halfCube;
+{
+  const okFormat = half.format === 'RGBA16F';
+  const okValue = half.worst <= 1 && half.mean > 16;
+  if (!okFormat || !okValue) bad += 1;
+  console.log(
+    `\n  ${okFormat && okValue ? 'ok  ' : 'FAIL'}  without OES_texture_float_linear the cube is ${half.format}` +
+      `, worst ${half.worst} code${half.worst === 1 ? '' : 's'} from the float path (allowed 1)` +
+      (half.mean > 16 ? '' : ' — and the picture is BLACK'),
+  );
 }
 
 if (errors.length) {
