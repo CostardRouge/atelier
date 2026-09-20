@@ -224,6 +224,13 @@ export interface DevelopPicture {
   /** Why it could not be decoded, in the decoder's words. */
   problem: string | null;
   canvasRef: RefObject<HTMLCanvasElement>;
+  /**
+   * The stage canvas's own size in pixels — the RENDER size, within the stage
+   * budget and never the file's. What tells a panel whether a grain cell can
+   * be resolved here at all (`film-texture.ts`, `grainShowable`). Null while
+   * there is nothing decoded.
+   */
+  canvasSize: { w: number; h: number } | null;
   /** The cube it is painted through: develop → look → output. */
   cube: CubeLut | null;
   view: PictureZoom;
@@ -631,6 +638,10 @@ export function useDevelopPicture({
     detail,
     pixelScale,
     repair,
+    // The TEXTURE is a dep like any other: `graderFor` is a stable callback,
+    // so a value only it reads would never repaint the stage — the trap
+    // `render-geometry.md` records for the keystone's own callback.
+    film,
     graderFor,
   ]);
 
@@ -1025,6 +1036,7 @@ export function useDevelopPicture({
     subjectMasks,
     detail,
     repair,
+    film,
     holding,
     shownWipe,
     pixelView,
@@ -1149,6 +1161,7 @@ export function useDevelopPicture({
     source,
     problem,
     canvasRef,
+    canvasSize,
     cube,
     view,
     wipe: shownWipe,

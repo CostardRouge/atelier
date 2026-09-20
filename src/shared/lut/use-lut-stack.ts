@@ -12,7 +12,7 @@ import { DEFAULT_DEVELOP, isDefaultDevelop, type DevelopSettings } from '../deve
 import type { FilmSettings } from '../film/emulsion';
 import type { FilmTexture } from '../film/film-texture';
 import { isFilmLayer, newFilmLayer, withFilmSettings } from '../film/film-layer';
-import type { FilmStockId } from '../film/stocks';
+import { textureOf, type FilmStockId } from '../film/stocks';
 import { parseCube, type CubeLut } from '../lib/cube-parser';
 import { CUBE_ACCEPT, pickFile } from '../sources/file-sources';
 import { isPackLayer, writePackRef, PACK_SOURCE, type PackRef } from './lut-pack';
@@ -258,6 +258,11 @@ export function useLutStack(): LutStack {
     const { layer, text } = newFilmLayer(uid(), stockId);
     setCustomText((prev) => ({ ...prev, [layer.id]: text }));
     setLayers((prev) => [...prev, layer]);
+    // A stock brings its own grain and halation — half of what a stock IS, and
+    // the half the cube cannot carry. Only where the grade carries none yet:
+    // a texture the author already dialled is theirs, and a second stock must
+    // not overwrite it.
+    setTexture((prev) => prev ?? textureOf(stockId));
   }, []);
 
   const addPackLook = useCallback(async (ref: PackRef, name?: string) => {

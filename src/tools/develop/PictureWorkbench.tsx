@@ -973,7 +973,7 @@ export default function PictureWorkbench({
                 onTold={tell}
               />
               <DevelopApplySection verbs={applyTo} draft={draft.draft} onTold={tell} />
-              <DevelopLookSection stack={stack} />
+              <DevelopLookSection stack={stack} previewHeight={picture.canvasSize?.h ?? null} />
             </>
           ) : tab === 'detail' ? (
             <>

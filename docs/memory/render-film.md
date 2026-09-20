@@ -197,7 +197,35 @@ pass owns with a `sampler3D`.
 - **The legacy overlay and composer tools** hold no `SavedGrade`, so there is
   no texture to give them.
 
-## What is NOT here yet
+## The panel, and the badge that has to be honest (2026-09-20)
 
-The panel's texture section and the badge (`grainShowable`) —
-`docs/film-simulation.md` §7's last entry.
+`FilmTextureDials` sits in `GradePanel` BETWEEN the stack and the output
+transform, which is where the node draws: after the cube, before the delivery.
+It edits the grade's texture, never a layer's.
+
+**Sizes are shown as fractions of the HEIGHT (`h/667`), never in pixels** — a
+pixel would be a different grain at every export size, which is the one thing
+the design exists to prevent.
+
+**Adding a film stock brings its texture**, but only where the grade carries
+none: half of what a stock IS lives there, and a texture the author already
+dialled is theirs (`textureOf`, a COPY — the stock's record must not be edited
+in place through a document that happens to hold it).
+
+**Two badges, both visible states and never tooltips**, because the panel
+would otherwise read as a broken slider:
+- the cell's size in THIS preview's pixels, and *"finer than this preview can
+  show — it will be there in the export"* below `MIN_CELL_PX`, where the node
+  fades the grain out rather than aliasing it. Measured in the browser: at a
+  600 px stage the default cell is **0.9 px** and nothing is drawn; coarsened
+  to `h/100` it is **6.0 px** and the picture moves by 6 codes.
+- `previewDraws={false}`, which the Studio passes, says outright that ITS
+  stage does not draw the texture at all.
+
+**The trap this cost, found by driving it and not by a test.** The workbench's
+paint effect reads the texture only through `graderFor`, a `useCallback` with
+no deps — so the stage never repainted when the texture changed and the whole
+feature looked dead. The same trap `render-geometry.md` records for the
+keystone's callback: **a value a stable callback reads is still a dependency of
+the effect that calls it.** Both the stage's effect and the loupe's now list
+it. Lint cannot see this; a browser can.
