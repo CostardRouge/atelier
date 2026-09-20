@@ -244,6 +244,39 @@ export interface WinnowChapter {
 }
 
 /**
+ * One row of `GET /api/assets/geo?by=day`, **as the instance sends it** — no
+ * normalising here, because the fields already carry the names
+ * `shared/roadtrip/day-track.ts` reads. Neither module imports the other, the
+ * arrangement `WinnowChapter` has with `TimelineChapter`: the generic client
+ * never learns what a trip is, and the reader stays pure and testable with no
+ * instance in sight.
+ *
+ * **Read against Winnow's own `src/app/api/assets/geo/route.ts`** (2026-09-20),
+ * not assumed — the route's header calls this shape a cross-repo contract, to
+ * be changed additively or not at all. What the fields mean there:
+ *
+ * - `date` is `assets.capture_date` VERBATIM, never recomputed from the
+ *   instant. Both repos hold that rule for the same reason.
+ * - `lat`/`lon` are the MEDIAN of the day's rows — and of its *trustworthy*
+ *   rows alone whenever it has any, so five real fixes decide a day that also
+ *   holds eight hundred bulk-accepted suggestions.
+ * - `count` is every live asset matching the filters that day, positioned or
+ *   not, RAW+JPEG companions included (the branch does not collapse groups).
+ * - `measured` is how many of those carry a non-inferred position.
+ * - `source` is `'measured'` when any trustworthy row placed the day,
+ *   `'inferred'` when only guessed ones did, and **null on a declared gap** —
+ *   a day holding media and no position at all, which is still sent.
+ */
+export interface WinnowGeoDay {
+  date: string;
+  lat: number | null;
+  lon: number | null;
+  count: number;
+  measured: number;
+  source: 'measured' | 'inferred' | null;
+}
+
+/**
  * Whether browsing by leg is worth offering.
  *
  * **`TIMELINE_SYNC_ENABLED` decides first, and it is off** — Winnow's
@@ -764,6 +797,46 @@ export class WinnowClient {
     return (raw.chapters ?? [])
       .map(chapterFromWire)
       .filter((c): c is WinnowChapter => c !== null);
+  }
+
+  /**
+   * `GET /api/assets/geo?date_from&date_to&by=day` → `{ days: [...] }`, ONE
+   * row per capture day: its median position, how many media it holds, how
+   * many of those carry a trustworthy fix, and whether the point rests only
+   * on batch-guessed ones.
+   *
+   * It is a **cross-repo contract**, agreed with Winnow on 2026-09-20 and
+   * documented in that route's own header: change it additively or not at
+   * all. Three of its rules are what this method is shaped by:
+   *
+   * - **A day with media and no position at all is still sent**, with null
+   *   coordinates — a *declared gap*. That is why one request answers the
+   *   whole question: "no data for this day" and "no media that day" are
+   *   different, and only the first appears in the answer.
+   * - **Never send `has_gps` here.** It is a legal filter and it would drop
+   *   exactly those gap rows, leaving a trip that looks fully placed.
+   * - Days are grouped on `capture_date` verbatim, never recomputed from the
+   *   instant — the rule both repos hold (`trip-days.ts` subtracts in UTC by
+   *   design, and recomputing walks a third of an Australian trip back a day).
+   *
+   * The rows come back as the instance sent them. `WinnowGeoDay`'s field names
+   * deliberately match what `shared/roadtrip/day-track.ts` reads, and neither
+   * module imports the other — the arrangement `WinnowChapter` already has
+   * with `TimelineChapter`, so the generic client never learns what a trip is.
+   */
+  async geoDays(
+    span: { from: string; to: string },
+    filter: FilterQuery = {},
+  ): Promise<WinnowGeoDay[]> {
+    const raw = await this.json<{ days?: WinnowGeoDay[] }>(
+      this.url('/api/assets/geo', {
+        date_from: span.from,
+        date_to: span.to,
+        by: 'day',
+        ...filterParams(filter),
+      }),
+    );
+    return raw.days ?? [];
   }
 
   /**

@@ -54,6 +54,9 @@ interface TripOverviewProps {
   /** Connected Winnows with a timeline, offered on the stages panel. */
   timelineSources?: string[];
   onCompleteFrom?: (sourceId: string) => void;
+  /** Instances the itinerary can be deduced from — a date range, not a timeline. */
+  deduceSources?: string[];
+  onDeduceFrom?: (sourceId: string) => void;
 }
 
 /**
@@ -179,6 +182,8 @@ export default function TripOverview({
   headerExtra,
   timelineSources,
   onCompleteFrom,
+  deduceSources,
+  onDeduceFrom,
 }: TripOverviewProps) {
   const compact = useIsCompact();
   const coverage = useMemo(() => tripCoverage(trip), [trip]);
@@ -560,6 +565,8 @@ export default function TripOverview({
         onChange={setStages}
         timelineSources={timelineSources}
         onCompleteFrom={onCompleteFrom}
+        deduceSources={deduceSources}
+        onDeduceFrom={onDeduceFrom}
       />
 
       {selected && (

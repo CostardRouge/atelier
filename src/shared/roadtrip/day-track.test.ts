@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { dayPointsFrom, readDayPoint } from './day-track';
+import { readDayPoint, readDayTrack } from './day-track';
 
+/** A row shaped exactly as `GET /api/assets/geo?by=day` sends one. */
 const row = (extra: Record<string, unknown> = {}) => ({
   date: '2025-11-02',
   lat: -31.95,
   lon: 115.86,
   count: 120,
   measured: 40,
-  inferred: false,
+  source: 'measured',
   ...extra,
 });
 
@@ -19,6 +20,16 @@ describe('readDayPoint', () => {
       lon: 115.86,
       count: 120,
       measured: 40,
+      inferred: false,
+    });
+  });
+
+  it('reads provenance from the word the instance really sends', () => {
+    expect(readDayPoint(row({ source: 'inferred' }))).toMatchObject({ inferred: true });
+    expect(readDayPoint(row({ source: 'measured' }))).toMatchObject({ inferred: false });
+    // `source` wins over the counts, so a day placed by five real fixes among
+    // eight hundred bulk-accepted ones is still measured.
+    expect(readDayPoint(row({ source: 'measured', measured: 5, count: 805 }))).toMatchObject({
       inferred: false,
     });
   });
@@ -48,13 +59,12 @@ describe('readDayPoint', () => {
     expect(readDayPoint(row({ lat: 0, lon: 115.86 }))).not.toBeNull();
   });
 
-  it('takes the instance at its word about provenance', () => {
-    expect(readDayPoint(row({ inferred: true, measured: 40 }))).toMatchObject({
-      inferred: true,
-    });
+  it('still understands a boolean, for an older or stubbed instance', () => {
+    const bare = { date: '2025-11-02', lat: -31.95, lon: 115.86, count: 120, measured: 40 };
+    expect(readDayPoint({ ...bare, inferred: true })).toMatchObject({ inferred: true });
   });
 
-  it('falls back to the counts only when provenance is not stated', () => {
+  it('falls back to the counts only when provenance is not stated at all', () => {
     const bare = { date: '2025-11-02', lat: -31.95, lon: 115.86, count: 120 };
     expect(readDayPoint({ ...bare, measured: 0 })).toMatchObject({ inferred: true });
     expect(readDayPoint({ ...bare, measured: 3 })).toMatchObject({ inferred: false });
@@ -70,9 +80,9 @@ describe('readDayPoint', () => {
   });
 });
 
-describe('dayPointsFrom', () => {
+describe('readDayTrack', () => {
   it('puts the days in calendar order whatever order they arrived in', () => {
-    const points = dayPointsFrom([
+    const { points } = readDayTrack([
       row({ date: '2025-11-04' }),
       row({ date: '2025-11-02' }),
       row({ date: '2025-11-03' }),
@@ -80,8 +90,20 @@ describe('dayPointsFrom', () => {
     expect(points.map((p) => p.date)).toEqual(['2025-11-02', '2025-11-03', '2025-11-04']);
   });
 
+  it('keeps a DECLARED GAP apart, which is why one request is enough', () => {
+    // A day matching the filters with no position at all is still sent, with
+    // null coordinates. That is "no data for this day", not "no media".
+    const { points, blind } = readDayTrack([
+      row({ date: '2025-11-02' }),
+      { date: '2025-11-03', lat: null, lon: null, count: 84, measured: 0, source: null },
+      row({ date: '2025-11-04' }),
+    ]);
+    expect(points.map((p) => p.date)).toEqual(['2025-11-02', '2025-11-04']);
+    expect(blind).toEqual(['2025-11-03']);
+  });
+
   it('keeps the FIRST of a repeated day, so page order cannot decide', () => {
-    const points = dayPointsFrom([
+    const { points } = readDayTrack([
       row({ date: '2025-11-02', count: 1 }),
       row({ date: '2025-11-02', count: 999 }),
     ]);
@@ -89,8 +111,22 @@ describe('dayPointsFrom', () => {
     expect(points[0].count).toBe(1);
   });
 
-  it('drops what it cannot read without dropping the rest', () => {
-    const points = dayPointsFrom([row({ date: 'hier' }), row({ date: '2025-11-03' })]);
+  it('never lets one date be both placed and blind', () => {
+    const { points, blind } = readDayTrack([
+      row({ date: '2025-11-02' }),
+      { date: '2025-11-02', lat: null, lon: null, count: 5, measured: 0, source: null },
+    ]);
+    expect(points.map((p) => p.date)).toEqual(['2025-11-02']);
+    expect(blind).toEqual([]);
+  });
+
+  it('drops a row that is neither a position nor a gap', () => {
+    const { points, blind } = readDayTrack([row({ date: 'hier' }), row({ date: '2025-11-03' })]);
     expect(points.map((p) => p.date)).toEqual(['2025-11-03']);
+    expect(blind).toEqual([]);
+  });
+
+  it('has nothing to say about an empty answer', () => {
+    expect(readDayTrack([])).toEqual({ points: [], blind: [] });
   });
 });
