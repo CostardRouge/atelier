@@ -176,6 +176,7 @@ const out = await page.evaluate(async () => {
       restCanvas: round(run(marked, passthroughPass)),
       restBitmap: round(run(markedBitmap, passthroughPass)),
     };
+    markedBitmap.close();
   }
 
   // --- the lens: does the GPU land a point where lensSampleRadius says? -----
@@ -444,7 +445,22 @@ const out = await page.evaluate(async () => {
     const built = readTop(fresh.render(grey));
     fresh.dispose();
 
-    results.swap = { swapped, built, canSwap: Boolean(reused.setPasses) };
+    // The same again from an ImageBitmap, which the graph uploads ONCE and
+    // keeps across a swap: this row is what proves the kept upload is the
+    // picture and not a stale or empty texture. A canvas is re-uploaded every
+    // time, so the row above cannot see that path at all.
+    const greyBitmap = await createImageBitmap(grey);
+    const reusedB = holdGrades(makeFrameGrader(null, W, H, 1, [passFor(0.2)]));
+    readTop(reusedB.render(greyBitmap));
+    reusedB.setPasses([passFor(0.8)]);
+    const swappedBitmap = readTop(reusedB.render(greyBitmap));
+    // And a THIRD render with the same bitmap and the same passes: the cached
+    // upload, drawn again, must still be the picture.
+    const again = readTop(reusedB.render(greyBitmap));
+    reusedB.dispose();
+    greyBitmap.close();
+
+    results.swap = { swapped, built, swappedBitmap, again, canSwap: Boolean(reused.setPasses) };
   }
 
   return results;
@@ -565,6 +581,16 @@ if (!swap.canSwap) {
   console.log(
     `\n  ${ok ? 'ok  ' : 'FAIL'}  a grader whose passes were swapped reads ` +
       `${JSON.stringify(swap.swapped)}, a fresh one ${JSON.stringify(swap.built)}`,
+  );
+  const offB = Math.max(
+    ...swap.swappedBitmap.map((v, i) => Math.abs(v - swap.built[i])),
+    ...swap.again.map((v, i) => Math.abs(v - swap.built[i])),
+  );
+  const okB = offB <= 1;
+  if (!okB) bad += 1;
+  console.log(
+    `  ${okB ? 'ok  ' : 'FAIL'}  the same from a kept bitmap upload: after the swap ` +
+      `${JSON.stringify(swap.swappedBitmap)}, drawn again ${JSON.stringify(swap.again)}`,
   );
   // And that the swap CHANGED something, or the row would pass on a no-op.
   if (swap.built[0] === swap.built[2]) {

@@ -108,7 +108,31 @@ has a hard cap on; it is why painting a mask was not possible at all.
 `makeFrameGrader` now returns a `PassGrader` with `setPasses`, `holdGrades`
 forwards it (dropping the held copy, which was graded through the passes that
 just left), and `graderFor` takes that path whenever the cube and the size are
-unchanged. The context, its programs and the uploaded source all survive.
+unchanged. The context and its programs survive — and since 2026-09-20 so
+does the uploaded source, for a BITMAP: this entry claimed that from the
+start, and it was false. `render()` called `texImage2D` on every call, so a
+pass swap re-uploaded the whole stage-budget picture (tens of MB) per slider
+step. An `ImageBitmap` is immutable, so the graph now keys the upload on its
+identity and skips it; a canvas or a video can change under one identity and
+is uploaded every time, as before. **A claim about what the GPU does is not
+true until a gate row draws it** — the swap row now runs from a bitmap too,
+drawn three times, and would read a stale or empty texture as a failure.
+
+## Three rules the graph now enforces itself (2026-09-20, the audit)
+
+- **A lost context is said once and drawn around.** `render()` checks
+  `isContextLost()` and returns the canvas untouched: iOS takes contexts back
+  under memory pressure, and a lost one accepts every call and draws nothing,
+  which is a black stage with no error anywhere.
+- **The first draw of each program is checked with `gl.getError()`, in dev
+  only.** Every trap above (two sampler types on one unit, an incomplete
+  texture) is an `INVALID_OPERATION` the driver reports there and nowhere
+  else, and each was found by hand. Never per frame — `getError` stalls the
+  pipeline — but once per program id is exactly when a new pass could have
+  got it wrong, and the render gate runs on the dev server so it sees it too.
+- The GL error class is now `console.error`'d with the pass id; a silent
+  fallback to an unprocessed picture is the failure this whole file exists to
+  prevent.
 
 **A graph now OUTLIVES its pass list, and that made a leak possible that could
 not exist before.** A pass's own textures — a layer's cube, a painted mask's

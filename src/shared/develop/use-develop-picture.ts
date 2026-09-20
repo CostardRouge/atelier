@@ -337,9 +337,9 @@ export function useDevelopPicture({
           : []),
       ];
       // Only the PASSES moved, so swap them rather than rebuilding: the
-      // context, its programs and the uploaded source all survive, which is
-      // what makes a warp or a mask draggable at all. A new LOOK is still a
-      // new grader — the cube is baked, not a pass.
+      // context, its programs and (for a bitmap) the uploaded source all
+      // survive, which is what makes a warp or a mask draggable at all. A new
+      // LOOK is still a new grader — the cube is baked, not a pass.
       if (sized && cur.grader.setPasses) {
         cur.grader.setPasses(passes);
         cur.geometry = cloneGeometry(geometry);

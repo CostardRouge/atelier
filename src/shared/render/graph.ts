@@ -176,6 +176,21 @@ export function createRenderGraph(
   const programs = new Map<string, WebGLProgram | null>();
   const targets: (Target | null)[] = [null, null];
   let disposed = false;
+  /**
+   * The source the texture on unit 0 currently holds, when that is knowable.
+   *
+   * An `ImageBitmap` is IMMUTABLE — its pixels are fixed at creation — so the
+   * same object rendered twice needs no second upload, and a pass swap (a mask
+   * dragged, a keystone moved) costs the passes alone. Before this every
+   * `render` re-uploaded the whole picture: tens of megabytes per slider step
+   * for a stage-budget still, which `render-core.md` claimed was not happening.
+   * A canvas or a video can change under the same identity, so those are
+   * uploaded every time, as before.
+   */
+  let uploaded: ImageBitmap | null = null;
+  /** Programs whose first draw has been checked for a GL error (dev only). */
+  const checked = new Set<string>();
+  let lostSaid = false;
 
   const targetAt = (index: 0 | 1, width: number, height: number): Target | null => {
     const held = targets[index];
@@ -231,24 +246,39 @@ export function createRenderGraph(
 
     render(source, passes) {
       if (disposed) return canvas;
+      // A context the browser took back (memory pressure on a phone, a GPU
+      // reset) accepts every call and draws nothing: without this the stage
+      // would go black with no error anywhere. Said once, not per frame.
+      if (gl.isContextLost()) {
+        if (!lostSaid) {
+          lostSaid = true;
+          console.warn('[render] the WebGL context was lost; the picture is drawn unprocessed');
+        }
+        return canvas;
+      }
       const list = passes.length ? passes : [PASSTHROUGH];
       const plan = planPasses(list.length);
       const width = canvas.width;
       const height = canvas.height;
 
-      // The source, uploaded once for the whole chain.
+      // The source, uploaded once for the whole chain — and, for a bitmap,
+      // once for its LIFETIME on this graph.
       gl.bindVertexArray(vao);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, sourceTex);
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-      // IGNORED for an ImageBitmap, whose orientation is fixed at creation —
-      // so a decoded photo arrives in image order while a video or a canvas
-      // arrives flipped, and the vertex shader's `u_flipY` compensates. The
-      // rule `lut-gl.ts` learnt the hard way; an FBO round trip is neutral
-      // under one UV convention, so only the FIRST pass has to care.
-      const bitmapSource =
-        typeof ImageBitmap !== 'undefined' && source instanceof ImageBitmap ? 1 : 0;
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+      // `UNPACK_FLIP_Y_WEBGL` is IGNORED for an ImageBitmap, whose orientation
+      // is fixed at creation — so a decoded photo arrives in image order while
+      // a video or a canvas arrives flipped, and the vertex shader's `u_flipY`
+      // compensates. The rule `lut-gl.ts` learnt the hard way; an FBO round
+      // trip is neutral under one UV convention, so only the FIRST pass has to
+      // care.
+      const bitmap = typeof ImageBitmap !== 'undefined' && source instanceof ImageBitmap ? source : null;
+      const bitmapSource = bitmap ? 1 : 0;
+      if (!bitmap || bitmap !== uploaded) {
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+        uploaded = bitmap;
+      }
 
       const needed = targetsNeeded(list.length);
       for (let i = 0; i < needed; i += 1) {
@@ -283,6 +313,20 @@ export function createRenderGraph(
         );
         gl.viewport(0, 0, width, height);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+        // The FIRST draw of each program is checked for a GL error, in
+        // development only. Every trap `render-core.md` records — two sampler
+        // types on one unit, an incomplete texture — is an INVALID_OPERATION
+        // the driver reports here and nowhere else, and each was found by
+        // hand. `getError` stalls the pipeline, so it is never per frame:
+        // once per program, which is when a new pass could have got it wrong.
+        if (import.meta.env.DEV && !checked.has(pass.id)) {
+          checked.add(pass.id);
+          const error = gl.getError();
+          if (error !== gl.NO_ERROR) {
+            console.error(`[render] pass "${pass.id}" left GL error 0x${error.toString(16)} on its first draw`);
+          }
+        }
       }
 
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -292,6 +336,7 @@ export function createRenderGraph(
     dispose() {
       if (disposed) return;
       disposed = true;
+      uploaded = null;
       for (const program of programs.values()) if (program) gl.deleteProgram(program);
       programs.clear();
       for (const target of targets) {
