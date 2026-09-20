@@ -73,7 +73,7 @@ describe('pictureFidelity', () => {
   });
 
   it('names the sensor on a RAW base', () => {
-    const f = pictureFidelity(file('DJI_0101.DNG', ''), 'raw', { width: 8064, height: 4536 });
+    const f = pictureFidelity(file('DJI_0101.DNG', ''), 'gain', { width: 8064, height: 4536 });
     expect(f.chip).toBe('RAW · 16-bit linear · 8064 × 4536');
     expect(f.note).toContain('8064 × 4536 · 36.6 MP');
   });

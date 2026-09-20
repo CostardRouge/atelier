@@ -16,6 +16,7 @@
  */
 
 import { isRawImage } from '../library/assets';
+import { baseRung, type DevelopBase } from './develop';
 import { imageTypeLabel } from '../media/image-meta';
 import { mediaOrigin } from '../projects/media-identity';
 import { WORKING_PREVIEW_EDGE, isWorkingPreview } from './working-preview';
@@ -92,23 +93,37 @@ function sizeClause(pixels: FidelityPixels | null | undefined): string {
 }
 
 /**
- * `base` is the material the develop acts on: on `raw` the picture on screen
- * is the SENSOR's data decoded to linear light (`shared/raw/`), whatever the
- * file in hand is — a local DNG, or a proxy whose RAW original was fetched.
+ * `base` is the RUNG of the material ladder the develop stands on
+ * (`develop.ts`): above `proxy` the picture on screen is the SENSOR's data
+ * decoded to linear light (`shared/raw/`), whatever the file in hand is — a
+ * local DNG, or a proxy whose RAW original was fetched — and the higher rungs
+ * add the camera's own calibration on top.
  *
  * `pixels` is what the host measured, and is optional on purpose: the
  * sentence never invents a size it was not given.
  */
 export function pictureFidelity(
   file: File | null,
-  base: 'render' | 'raw' | null | undefined = null,
+  base: DevelopBase | null | undefined = null,
   pixels: FidelityPixels | null = null,
 ): PictureFidelity {
   if (!file) return { chip: null, note: null };
-  if (base === 'raw') {
+  if (baseRung(base) > 0) {
+    const adds =
+      base === 'gainMapWarp'
+        ? ' · gain map + warp'
+        : base === 'gainMap'
+          ? ' · gain map'
+          : '';
+    const applied =
+      base === 'gainMapWarp'
+        ? ', with the shading and the rectilinear warp its file was calibrated for'
+        : base === 'gainMap'
+          ? ', with the shading its file was calibrated for'
+          : ', with none of the calibration its file carries';
     return {
-      chip: `RAW · 16-bit linear${chipPixels(pixels)}`,
-      note: `the sensor’s own data, decoded to linear light: what it kept above the displayed white is here to bring back${sizeClause(pixels)}`,
+      chip: `RAW · 16-bit linear${adds}${chipPixels(pixels)}`,
+      note: `the sensor’s own data, decoded to linear light${applied}: what it kept above the displayed white is here to bring back${sizeClause(pixels)}`,
     };
   }
   if (isWorkingPreview(file)) {

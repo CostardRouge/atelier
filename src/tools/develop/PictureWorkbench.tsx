@@ -11,12 +11,26 @@ import { whiteBalanceFor } from '../../shared/develop/auto-develop';
 import DevelopHistogram from '../../shared/develop/DevelopHistogram';
 import DevelopSliders from '../../shared/develop/DevelopSliders';
 import DevelopViewport from '../../shared/develop/DevelopViewport';
-import { DEFAULT_DEVELOP, developLines, isDefaultDevelop, signed, type DevelopSettings } from '../../shared/develop/develop';
+import {
+  DEFAULT_DEVELOP,
+  baseRung,
+  developBase,
+  developLines,
+  isDefaultDevelop,
+  signed,
+  type DevelopSettings,
+} from '../../shared/develop/develop';
+import {
+  calibrationAt,
+  readRawCalibration,
+  rungsFor,
+  type RawCalibration,
+} from '../../shared/raw/calibration';
 import { copyDevelop, pasteDevelop } from '../../shared/develop/develop-clipboard';
 import { developPillClass } from '../../shared/develop/develop-classes';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { pictureFidelity } from '../../shared/develop/picture-fidelity';
-import { DevelopBaseSection, type RawOffer } from '../../shared/develop/DevelopBase';
+import { DevelopBaseMenu, type RawOffer } from '../../shared/develop/DevelopBase';
 import { canDecodeRaw } from '../../shared/raw/raw-decoder';
 import { isRawImage } from '../../shared/library/assets';
 import { rawSizes } from '../../shared/exif/raw-probe';
@@ -389,7 +403,7 @@ export default function PictureWorkbench({
   const origin = useMemo(() => (file ? mediaOrigin(file) : null), [file]);
   const rawOffer: RawOffer | null =
     file && canDecodeRaw(file) ? 'file' : origin?.name && isRawImage(origin.name) && origin.fetchOriginal ? 'original' : null;
-  const wantsRaw = draft.draft.base === 'raw' && rawOffer !== null;
+  const wantsRaw = baseRung(draft.draft.base) > 0 && rawOffer !== null;
   const [rawFile, setRawFile] = useState<File | null>(null);
   const [rawStatus, setRawStatus] = useState<string | null>(null);
   const { patch: patchDraft } = draft;
@@ -425,6 +439,28 @@ export default function PictureWorkbench({
     };
   }, [wantsRaw, rawFile, file, rawOffer, origin, tell, patchDraft]);
   const rawGain = draft.draft.rawGain ?? null;
+  // The calibration the FILE carries, read from a megabyte of its head once
+  // the RAW itself is in hand — it is what decides whether the two top rungs
+  // are offered at all, and what the passes apply at them.
+  const [calibration, setCalibration] = useState<RawCalibration | null>(null);
+  useEffect(() => {
+    setCalibration(null);
+    const source = rawFile ?? (file && canDecodeRaw(file) ? file : null);
+    if (!source) return;
+    let alive = true;
+    void readRawCalibration(source).then((cal) => {
+      if (alive) setCalibration(cal);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [rawFile, file]);
+  const rungs = rungsFor(calibration);
+  // A rung the file cannot reach is never left standing: a picture developed
+  // on `gainMapWarp` and then opened from a file whose opcodes are gone falls
+  // back to what IS there, rather than claiming a correction it cannot apply.
+  const rung = rungs.includes(developBase(draft.draft)) ? developBase(draft.draft) : rungs[rungs.length - 1];
+  const applied = calibrationAt(rung, calibration);
   // The sensor's own pixels, read from the RAW's head alone (a megabyte, no
   // decoder): what the render on screen is measured against. A proxy's
   // original needs no read at all — its source already said.
@@ -468,13 +504,18 @@ export default function PictureWorkbench({
     pixelScale: stageWidth && fullWidth ? Math.min(1, stageWidth / fullWidth) : 1,
     loupe: true,
     pixelView,
+    // The camera's own calibration at the rung this picture stands on — the
+    // shading grid first on the sensor's data, the warp before the lens. The
+    // PREVIEW carries it from `gain map` up, so export-at-max is a no-op for
+    // shading and preview = export holds by construction (`raw.md`).
+    calibration: wantsRaw ? applied : null,
     // The measured exposure is STORED the moment it is known, so the export's
     // decode applies the same number (`raw.md`). Once: a stored gain is never
     // overwritten by a later decode's measurement.
     onRawDecoded: (info) => {
       setRawSize({ w: info.sourceWidth, h: info.sourceHeight });
       if (rawGain === null) {
-        patchDraft({ base: 'raw', rawGain: info.gain });
+        patchDraft({ base: developBase(draft.draft) === 'proxy' ? 'gain' : draft.draft.base, rawGain: info.gain });
         const ev = Math.log2(info.gain);
         tell(`RAW · ${info.width}×${info.height}${info.halved ? ' (half size)' : ''} · metered ${ev ? `${signed(ev, 1)} EV` : 'at its white'}`);
       }
@@ -827,7 +868,39 @@ export default function PictureWorkbench({
             {entry.ref.name}
             {told && <span className="text-accent-ink" role="status"> · {told}</span>}
           </span>
-          {fidelity.chip && <span className={`${developPillClass} flex-none @max-[880px]:hidden`}>{fidelity.chip}</span>}
+          {/* The chip IS the ladder (2026-09-20): it already says what the
+              picture is, so what it could be hangs off the same word, above
+              the photograph. Below 880px of tool width there is no room for
+              it, exactly as before — the Develop tab's sections are where a
+              narrow screen goes. */}
+          {fidelity.chip &&
+            (rawOffer ? (
+              <DevelopBaseMenu
+                className="flex-none @max-[880px]:hidden"
+                chip={fidelity.chip}
+                offer={rawOffer}
+                base={rung}
+                rungs={rungs}
+                onBase={(next) => {
+                  if (next === 'proxy') {
+                    patchDraft({ base: null, rawGain: null });
+                    return;
+                  }
+                  const climbing = baseRung(draft.draft.base) === 0;
+                  patchDraft({ base: next });
+                  if (climbing && !draft.asShot) {
+                    tell('your numbers now act on the RAW — another starting point');
+                  }
+                }}
+                status={wantsRaw && (rawStatus || !picture.source) ? (rawStatus ?? 'decoding the sensor’s data…') : null}
+                gain={wantsRaw ? rawGain : null}
+                originalName={origin?.name ?? null}
+                originalBytes={origin?.bytes ?? null}
+                calibration={calibration?.summary ?? null}
+              />
+            ) : (
+              <span className={`${developPillClass} flex-none @max-[880px]:hidden`}>{fidelity.chip}</span>
+            ))}
           {!cropping && (
             <DevelopClipboardActions draft={draft.draft} asShot={draft.asShot} onReplace={draft.setDraft} onTold={tell} />
           )}
@@ -970,23 +1043,6 @@ export default function PictureWorkbench({
           {tab === 'develop' ? (
             <>
               <DevelopHistogram histogram={picture.histogram} />
-              <DevelopBaseSection
-                offer={rawOffer}
-                base={draft.draft.base === 'raw' ? 'raw' : 'render'}
-                onBase={(base) => {
-                  if (base === 'raw') {
-                    patchDraft({ base: 'raw' });
-                    if (!draft.asShot) tell('your numbers now act on the RAW — another starting point');
-                  } else {
-                    patchDraft({ base: null, rawGain: null });
-                  }
-                }}
-                status={wantsRaw && (rawStatus || !picture.source) ? (rawStatus ?? 'decoding the sensor’s data…') : null}
-                gain={draft.draft.base === 'raw' ? rawGain : null}
-                originalName={origin?.name ?? null}
-                originalBytes={origin?.bytes ?? null}
-                numbersSet={!draft.asShot}
-              />
               <DevelopAutoSection
                 stats={picture.stats}
                 onPatch={draft.patch}

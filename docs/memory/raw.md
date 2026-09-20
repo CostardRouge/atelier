@@ -110,15 +110,67 @@ Rules a later agent must keep:
 - **Nothing is invented.** A file with no opcodes yields null and the rungs
   above `gain` are simply not offered.
 
+## The four rungs: a LADDER, not a switch (2026-09-20)
+
+**Decision (maintainer).** `DevelopSettings.base` was `render | raw`. It is
+now four rungs, **each a real and nameable amount of the camera's own
+calibration**:
+
+| rung | what it adds |
+| --- | --- |
+| `proxy` | the 8-bit picture every browser decodes — the embedded render, or a source's proxy |
+| `gain` | the sensor decoded to linear light, with the measured `rawGain` |
+| `gainMap` | and the DNG's GainMap applied (`render-gain-map.md`) |
+| `gainMapWarp` | and its WarpRectilinear (`camera-warp.ts`) |
+
+Rules a later agent must keep:
+
+- **`proxy` is the ABSENCE of a base**, never a stored value — which is what
+  keeps "empty means as shot" true and what made the migration cost nothing:
+  `render` → null, `raw` → `gain`. No stored document changed meaning, because
+  `raw` WAS the sensor with its gain and no calibration, which is exactly what
+  `gain` means. `normaliseBase` is the one reader.
+- **A rung is offered only where the FILE carries the opcode**
+  (`raw/calibration.ts`, `rungsFor`): no GainMap, no `gainMap` rung. This is
+  the P6 rule — a correction nobody measured is worse than none — applied
+  where the measured data finally exists.
+- **A rung a file cannot reach is never left standing.** A picture developed
+  on `gainMapWarp` and re-opened from a file whose opcodes are gone falls back
+  to the top rung that IS there, rather than claiming a correction it cannot
+  apply.
+- **Each rung contains the one below**, so `calibrationAt` is a comparison and
+  not a switch, and climbing can never lose what was already applied.
+- **The base still travels nowhere.** `withoutBase` strips all four; a preset,
+  a paste and a batch verb keep each target's own.
+- **The calibration is read once per file and held for the session**
+  (`readRawCalibration`), the shape `original-cache.ts` already uses: a stage
+  that re-reads a header on every repaint is a stage that stutters.
+- **`developLines` names the rung** (`RAW + gain map +2.0 EV metered`): "RAW"
+  alone let a picture with 2.5 stops taken out of its corners read the same as
+  one without.
+
+**The PREVIEW carries the calibration from `gain map` up** — the maintainer's
+own recommendation, and the reason it is right: a GainMap multiply and a
+radial warp are one GPU pass each, trivial beside the decode itself (4.4 s
+whole, 456 ms at the stage budget), so applying them on the stage makes
+export-at-max a no-op for shading and `preview = export` hold by
+construction rather than by a warning.
+
 ## The tool (2026-09-20, P10 second commit)
 
-`DevelopBaseSection` (`shared/develop/DevelopBase.tsx`, drawn under the
-histogram of the Develop tab, only where a RAW is REACHABLE: the file itself
-is one, or a proxy's original is — `MediaOrigin.name`) is a Segmented
-*Camera render · RAW* with one status line: what RAW would fetch and weigh,
-"decoding…", or "the sensor's data, metered +x.x EV". The modal hosts (Trips,
-the Studio) never see it — the maintainer's call that they keep the simple
-sheet.
+**The ladder hangs off the FIDELITY CHIP** (`DevelopBaseMenu`,
+`shared/develop/DevelopBase.tsx`, an `OverflowMenu` whose worded trigger IS
+the chip — the maintainer's placement, 2026-09-20). The chip already says
+what the picture IS, so what it could be belongs on the same word, above the
+photograph, where the question comes up. It replaced the Develop tab's
+`DevelopBaseSection`: one control for one value, never two. Each rung's line
+says what it ADDS, and the foot of the menu says what the FILE asks for in
+the numbers a person can check (`gain map up to 5.93× · warp ×1.049 · CA
+0.9 px at the corner`) rather than a promise. Drawn only where a RAW is
+REACHABLE (the file itself is one, or a proxy's original is —
+`MediaOrigin.name`), and hidden under 880px of tool width as the chip always
+was. The modal hosts (Trips, the Studio) never see it — the maintainer's
+call that they keep the simple sheet.
 
 - **`useDevelopPicture` takes a `raw` option** (the file and the stored gain)
   and decodes through `decodeRaw` at the STAGE budget (half size when it
