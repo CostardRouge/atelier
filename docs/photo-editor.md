@@ -512,15 +512,24 @@ the picture, clicked off while Repair is armed. Held to the pure module by the
 render gate from both source kinds within 2 codes (measured 1). Not a
 content-aware fill, deliberately.
 
-**P13 — HDR delivery.** The float core already gives the headroom; this adds an
-HDR-capable preview canvas (detected, and saying so plainly where the display or
-the browser cannot) and the **Ultra HDR JPEG** export: an SDR base, a computed
-gain map, both encoded through `canvas.toBlob`, wrapped in a hand-written
-MPF/XMP container. Hand-written on purpose — it is the repo's own tradition
-(`exif-parser.ts`, `qr.ts`, the `colr` guard) and it avoids a new wasm
-dependency for a few hundred lines of segment writing. **The claim is only made
+**P13 — HDR delivery** *(BUILT 2026-09-20 — `shared/hdr/gain-map.ts`,
+`ultra-hdr.ts`, `ultra-hdr-export.ts`, `hdr-display.ts`, `RollExport.hdr`, the
+Export tab's HDR section; the rules are `docs/memory/hdr.md`)*. The float core
+already gives the headroom; this adds the **Ultra HDR JPEG** export — an SDR
+base, a gain map MEASURED from a second render of the picture developed the
+asked stops darker (where the SDR ran out at white the sensor's own highlights
+are what the map carries; where it had room the map is flat), both encoded
+through `canvas.toBlob`, wrapped in a hand-written MPF/XMP container. Hand-
+written on purpose — the repo's own tradition (`exif-parser.ts`, `qr.ts`, the
+`colr` guard) — and read back by the same module. **The claim is only made
 after decoding the file back**, exactly as the AAC priming measurement was
-(`media-pipeline.md`).
+(`media-pipeline.md`): the numbers, the map's codes and the lifted peak are
+held to what was written, or the plain JPEG leaves and says why. Offered only
+to a picture developed on its RAW — a render holds nothing above white. The
+HDR-capable preview canvas is DETECTED and said plainly (`(dynamic-range:
+high)` for the display, a `rec2100` context echo for the canvas — no browser
+grants one without a flag in 2026), so the stage stays the SDR base and no
+preview pretends; an HDR stage waits for the day `canvas` turns true.
 
 ## 8. Where each ask lands
 

@@ -19,7 +19,7 @@ function sample(): RollDoc {
   return {
     ...doc,
     grade: { layers: [{ id: 'l1', source: 'custom', name: 'Mine', customText: 'LUT_3D_SIZE 2', intensity: 0.6, enabled: true }], output: 'rec709-to-srgb' },
-    export: { longEdge: 2048, quality: 0.85, originals: 'originals' },
+    export: { longEdge: 2048, quality: 0.85, originals: 'originals', hdr: true, hdrStops: 3 },
   };
 }
 

@@ -51,17 +51,28 @@ export interface RollExport {
   /** JPEG quality, 0.5..1. */
   quality: number;
   originals: RollOriginals;
+  /**
+   * Deliver an Ultra HDR JPEG (`shared/hdr/`): the SDR picture with a gain
+   * map inside it, for a picture developed on its RAW — a render holds
+   * nothing above white and leaves as a plain JPEG, said in the run.
+   */
+  hdr: boolean;
+  /** How far above white the map may reach, in stops: the RAW is developed this much darker to find them. */
+  hdrStops: number;
 }
 
 export const DEFAULT_ROLL_EXPORT: Readonly<RollExport> = Object.freeze({
   longEdge: null,
   quality: 0.92,
   originals: 'auto',
+  hdr: false,
+  hdrStops: 2,
 });
 
 export const ROLL_EXPORT_LIMITS = {
   longEdge: { min: 256, max: 16384 },
   quality: { min: 0.5, max: 1 },
+  hdrStops: { min: 1, max: 4 },
 } as const;
 
 /** A picture's crop shape: its own, or one of the suite's aspect presets. */
@@ -224,6 +235,10 @@ export function readRollExport(raw: unknown): RollExport {
     longEdge: edge,
     quality: Math.min(quality.max, Math.max(quality.min, finite(raw.quality, DEFAULT_ROLL_EXPORT.quality))),
     originals: raw.originals === 'proxies' || raw.originals === 'originals' ? raw.originals : 'auto',
+    hdr: raw.hdr === true,
+    hdrStops: Math.round(
+      Math.min(ROLL_EXPORT_LIMITS.hdrStops.max, Math.max(ROLL_EXPORT_LIMITS.hdrStops.min, finite(raw.hdrStops, DEFAULT_ROLL_EXPORT.hdrStops))),
+    ),
   };
 }
 

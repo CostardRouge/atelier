@@ -27,6 +27,8 @@ export interface RollRun {
   assetIds: (string | null)[];
   /** The one instance the run's pictures came from, when they came from one. */
   sourceId: string | null;
+  /** The HDR delivery, when the roll asked for one: how many files carry a gain map, and the most it lifts. */
+  hdr: { asked: number; ultra: number; headroom: number; checked: number | null } | null;
 }
 
 export interface RollExports {
@@ -127,6 +129,7 @@ export function useRollExport({
     const assetIds: (string | null)[] = [];
     const sourceIds = new Set<string>();
     const failures: string[] = [];
+    const hdrRun = r.export.hdr ? { asked: 0, ultra: 0, headroom: 0, checked: null as number | null } : null;
     try {
       for (const [i, picture] of targets.entries()) {
         const step = `${i + 1}/${targets.length}`;
@@ -198,6 +201,20 @@ export function useRollExport({
           // A RAW develop whose RAW is out of reach renders its numbers on the
           // render WITHOUT the base: the gain belongs to the sensor's range.
           const develop = raw ? picture.develop : picture.develop && isRawDevelop(picture.develop) ? withoutBase(picture.develop) : picture.develop;
+          // The HDR delivery needs the sensor's data: an 8-bit render holds
+          // nothing above white, and a map made from one would be flat. So
+          // it is asked only of a picture leaving from its RAW, and the run
+          // says which ones did not.
+          let hdr: { lut: CubeLut | null; stops: number } | null = null;
+          if (hdrRun) {
+            if (raw && develop) {
+              hdrRun.asked += 1;
+              const stops = r.export.hdrStops;
+              hdr = { lut: cubeFor({ ...picture, develop: { ...develop, exposure: develop.exposure - stops } }), stops };
+            } else {
+              failures.push(`${picture.ref.name} left as a plain JPEG: HDR needs the RAW base, a render holds nothing above white`);
+            }
+          }
           const out = await renderRollPicture(source, {
             framing: picture.framing,
             aspect: picture.aspect,
@@ -211,7 +228,17 @@ export function useRollExport({
             detail: picture.detail ?? null,
             repair: picture.repair ?? null,
             raw,
+            hdr,
           });
+          if (hdrRun && out.hdr) {
+            if (out.hdr.ultra) {
+              hdrRun.ultra += 1;
+              hdrRun.headroom = Math.max(hdrRun.headroom, out.hdr.headroom);
+              if (out.hdr.checked !== null) hdrRun.checked = Math.max(hdrRun.checked ?? 0, out.hdr.checked);
+            } else {
+              failures.push(`${picture.ref.name} left as a plain JPEG: ${out.hdr.reason ?? 'no gain map'}`);
+            }
+          }
           if (out.gradedAt.width < out.source.width || out.gradedAt.height < out.source.height) {
             failures.push(
               `${picture.ref.name} was graded at ${out.gradedAt.width}×${out.gradedAt.height}, the most this GPU renders on one edge — its ${out.source.width}×${out.source.height} were resampled`,
@@ -241,7 +268,7 @@ export function useRollExport({
       // Kept for the send-home panel: only the files from ONE instance, so
       // the plan refuses nothing it did not have to.
       const sourceId = sourceIds.size === 1 ? [...sourceIds][0] : null;
-      setLastRun({ files: rendered, assetIds, sourceId });
+      setLastRun({ files: rendered, assetIds, sourceId, hdr: hdrRun });
     } catch (err) {
       setNote(err instanceof Error ? err.message : 'The pictures could not be exported.');
     } finally {

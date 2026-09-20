@@ -37,6 +37,7 @@ import { pictureAspectRatio } from './crop-aspect';
 import { drawDelivered } from './border-paint';
 import type { RollBorder } from './border-layout';
 import { deliveredLayout, type PictureSize } from './roll-export';
+import { encodeUltraHdr, type UltraHdrResult } from '../hdr/ultra-hdr-export';
 
 export interface RollRenderOptions {
   framing: Framing | null;
@@ -69,10 +70,20 @@ export interface RollRenderOptions {
    * beside it is then only what the picture IS; nothing of it is decoded.
    */
   raw?: { file: File; gain: number } | null;
+  /**
+   * Deliver an Ultra HDR JPEG: `lut` is the picture's cube developed `stops`
+   * DARKER — the same numbers with the exposure lowered — which is where the
+   * sensor's highlights above the SDR white are still readable
+   * (`shared/hdr/gain-map.ts`, `hdrRendition`). The picture is rendered
+   * twice, framed the same, and the two become the base and the map.
+   */
+  hdr?: { lut: CubeLut | null; stops: number } | null;
 }
 
 export interface RollRendered {
   blob: Blob;
+  /** What the HDR delivery came to, when one was asked — `ultra` false means the plain JPEG left, with the reason. */
+  hdr: Pick<UltraHdrResult, 'ultra' | 'headroom' | 'checked' | 'reason'> | null;
   width: number;
   height: number;
   /** The decoded source's own size — what the frame was cut from. */
@@ -131,11 +142,18 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
     const grader = needsGpu && fit
       ? makeFrameGrader(opts.lut as CubeLut, fit.width, fit.height, 1, passes, pre)
       : null;
+    // The darker render for the gain map takes a grader of its own with
+    // fresh passes: a pass holds textures on the context it first drew on.
+    const darkGrader = opts.hdr && fit
+      ? makeFrameGrader(opts.hdr.lut as CubeLut, fit.width, fit.height, 1, freshPasses(opts, ar, stack, gradedAt.width / source.width), freshPre(opts, ar, patches, gradedAt.width / source.width))
+      : null;
     try {
       const graded = grader && fit ? grader.render(fit.image) : bitmap;
-      return await deliver(graded, source, gradedAt, opts);
+      const darker = darkGrader && fit ? copyOf(darkGrader.render(fit.image)) : null;
+      return await deliver(graded, source, gradedAt, opts, darker);
     } finally {
       grader?.dispose();
+      darkGrader?.dispose();
       fit?.release();
     }
   } finally {
@@ -167,11 +185,43 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
   // A RAW is never drawn without the GPU: its half-floats have no 2D form,
   // and its develop is never default (the gain alone is a stage).
   const grader = makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, passes, pre);
+  const darkGrader = opts.hdr
+    ? makeFrameGrader(opts.hdr.lut as CubeLut, source.width, source.height, 1, freshPasses(opts, ar, stack, source.width / decoded.sourceWidth), freshPre(opts, ar, opts.repair ?? [], source.width / decoded.sourceWidth))
+    : null;
   try {
-    return await deliver(grader.render(decoded.half), source, source, opts);
+    // Copied out: two graders' canvases are two contexts, but the SDR one is
+    // read by `deliver` after the darker has drawn, and a grader's canvas is
+    // only its LAST render.
+    const darker = darkGrader ? copyOf(darkGrader.render(decoded.half)) : null;
+    return await deliver(grader.render(decoded.half), source, source, opts, darker);
   } finally {
     grader.dispose();
+    darkGrader?.dispose();
   }
+}
+
+/** The passes after the cube, built anew for a second grader. */
+function freshPasses(opts: RollRenderOptions, ar: number, stack: readonly AdjustLayer[], scale: number) {
+  return [...geometryPasses(opts, ar), ...layerPasses(stack, ar), ...detailPasses(opts.detail, scale).post];
+}
+
+/** The passes before the cube, built anew for a second grader. */
+function freshPre(opts: RollRenderOptions, ar: number, patches: readonly Patch[], scale: number) {
+  const repairPass = makeRepairPass(patches, ar);
+  return [...(repairPass ? [repairPass] : []), ...detailPasses(opts.detail, scale).pre];
+}
+
+/** A grader's canvas copied to a 2D canvas, so a second render cannot replace it. */
+function copyOf(image: CanvasImageSource): HTMLCanvasElement {
+  const w = 'width' in image && typeof image.width === 'number' ? image.width : 0;
+  const h = 'height' in image && typeof image.height === 'number' ? image.height : 0;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Could not copy the darker render.');
+  ctx.drawImage(image, 0, 0);
+  return canvas;
 }
 
 /** Cut, border and encode a graded picture — the one place the file's frame is made. */
@@ -180,6 +230,7 @@ async function deliver(
   source: PictureSize,
   gradedAt: PictureSize,
   opts: RollRenderOptions,
+  darker: HTMLCanvasElement | null = null,
 ): Promise<RollRendered> {
   const ratio = pictureAspectRatio(opts.aspect, source.width, source.height);
   const framing = opts.framing ?? DEFAULT_FRAMING;
@@ -192,7 +243,27 @@ async function deliver(
   if (!ctx) throw new Error('Could not create a 2D canvas for export.');
   ctx.imageSmoothingQuality = 'high';
   drawDelivered(ctx, graded, gradedAt.width, gradedAt.height, framing, layout, opts.border);
+  if (darker && opts.hdr) {
+    // The darker render, framed and bordered the same, so the map lines up
+    // with the base pixel for pixel.
+    const dark = document.createElement('canvas');
+    dark.width = out.w;
+    dark.height = out.h;
+    const dctx = dark.getContext('2d');
+    if (!dctx) throw new Error('Could not create a 2D canvas for the HDR export.');
+    dctx.imageSmoothingQuality = 'high';
+    drawDelivered(dctx, darker, gradedAt.width, gradedAt.height, framing, layout, opts.border);
+    const result = await encodeUltraHdr(canvas, dark, opts.hdr.stops, opts.quality);
+    return {
+      blob: result.blob,
+      width: out.w,
+      height: out.h,
+      source,
+      gradedAt,
+      hdr: { ultra: result.ultra, headroom: result.headroom, checked: result.checked, reason: result.reason },
+    };
+  }
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', opts.quality));
   if (!blob) throw new Error('The browser could not encode this picture.');
-  return { blob, width: out.w, height: out.h, source, gradedAt };
+  return { blob, width: out.w, height: out.h, source, gradedAt, hdr: null };
 }

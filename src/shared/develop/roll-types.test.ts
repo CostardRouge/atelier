@@ -194,7 +194,7 @@ describe('reading a stored roll', () => {
     expect(doc.pictures[1].develop?.exposure).toBe(1);
     expect(doc.pictures[1].framing?.scale).toBe(2);
     expect(doc.grade).toBeNull();
-    expect(doc.export).toEqual({ longEdge: 16384, quality: 1, originals: 'auto' });
+    expect(doc.export).toEqual({ longEdge: 16384, quality: 1, originals: 'auto', hdr: false, hdrStops: 2 });
     expect(doc.sourceId).toBe('winnow.example');
     expect('future' in doc).toBe(false);
   });
@@ -214,7 +214,12 @@ describe('reading a stored roll', () => {
       longEdge: 1920,
       quality: 0.8,
       originals: 'proxies',
+      hdr: false,
+      hdrStops: 2,
     });
+    // The HDR delivery: off unless said, its reach clamped to the stops a RAW keeps.
+    expect(readRollExport({ hdr: true, hdrStops: 9.6 })).toMatchObject({ hdr: true, hdrStops: 4 });
+    expect(readRollExport({ hdr: 'yes', hdrStops: 0 })).toMatchObject({ hdr: false, hdrStops: 1 });
     expect(readRollExport({ longEdge: null })).toEqual({ ...DEFAULT_ROLL_EXPORT });
     expect(readRollExport('junk')).toEqual({ ...DEFAULT_ROLL_EXPORT });
   });
