@@ -140,6 +140,21 @@ export interface WinnowCapabilities {
     /** The body cap per document, in bytes; the client checks it BEFORE a PUT. */
     maxBytes?: number | null;
   };
+  /**
+   * The BINARY bucket beside the documents (Winnow's migration 0044): blobs
+   * keyed by their own SHA-256, for what a 1 MiB document cannot hold — a
+   * purchased LUT lattice is 1.5–2 MB. **Absent on an instance that predates
+   * it**, which is why `hasFileBucket` treats absence as "no", unlike the
+   * timeline: here a 404 would be the only other way to find out, and it
+   * would come after the bytes had already been read.
+   */
+  files?: {
+    bucket: boolean;
+    /** Cap per file, in bytes. The client checks it before sending. */
+    maxBytes?: number | null;
+    /** What this account may hold for this app, in bytes. */
+    quotaBytes?: number | null;
+  };
   scheduling: { reminders: boolean };
   limits: { maxUploadBytes: number | null };
   storage: { driver: string; signedRedirects: boolean };
@@ -338,6 +353,16 @@ export function chapterDays(
  * Whether the signed-in account may send files back. Winnow's `viewer` role
  * is read-only; a button that would answer 403 is worse than a sentence.
  */
+/**
+ * Whether this instance keeps a client app's BINARY files. Absence is "no":
+ * the feature was added after the document bucket, and an instance that does
+ * not name it would answer a PUT with a 404 the client can only discover
+ * after uploading.
+ */
+export function hasFileBucket(caps: WinnowCapabilities | null | undefined): boolean {
+  return caps?.files?.bucket === true;
+}
+
 export function canWriteBack(caps: WinnowCapabilities | null | undefined): boolean {
   const role = caps?.viewer?.role;
   return role === 'admin' || role === 'editor';
@@ -1106,6 +1131,104 @@ export class WinnowClient {
     if (ifMatch) headers['If-Match'] = ifMatch;
     await this.request(this.docsUrl(app, id), { method: 'DELETE', headers });
   }
+
+  // --- the file bucket ----------------------------------------------------
+  //
+  // Content-addressed: the id IS the SHA-256 of the bytes, so there is no
+  // etag dance here and no `If-Match` — the same id can only ever mean the
+  // same bytes. That is what makes a re-push a no-op and the answer
+  // cacheable forever.
+
+  private filesUrl(app: string, id?: string) {
+    const base = `/api/apps/${encodeURIComponent(app)}/files`;
+    return this.url(id === undefined ? base : `${base}/${encodeURIComponent(id)}`);
+  }
+
+  /**
+   * Which blobs this account already holds for the app — ids and sizes, never
+   * bytes. It is what turns "push my whole pack" into "push the three it is
+   * missing".
+   */
+  async listAppFiles(app: string): Promise<{ files: AppFileRow[]; used: number; quota: number | null; maxBytes: number | null }> {
+    const raw = await this.json<{
+      files?: AppFileRow[];
+      used?: number;
+      quota?: number;
+      maxBytes?: number;
+    }>(this.filesUrl(app));
+    return {
+      files: raw.files ?? [],
+      used: typeof raw.used === 'number' ? raw.used : 0,
+      quota: typeof raw.quota === 'number' ? raw.quota : null,
+      maxBytes: typeof raw.maxBytes === 'number' ? raw.maxBytes : null,
+    };
+  }
+
+  /**
+   * One blob's bytes, or null when this account does not hold that hash —
+   * which is an ordinary answer here (a look pushed from another device, a
+   * pack half uploaded), not a failure to report.
+   */
+  async getAppFile(app: string, hash: string): Promise<Uint8Array | null> {
+    try {
+      const res = await this.request(this.filesUrl(app, hash));
+      return new Uint8Array(await res.arrayBuffer());
+    } catch (err) {
+      if (err instanceof WinnowError && err.kind === 'notfound') return null;
+      throw err;
+    }
+  }
+
+  /**
+   * Store a blob under its own hash. The instance verifies the hash and
+   * refuses a body that does not match, so a corrupted upload is an error
+   * rather than a file that grades wrongly forever.
+   */
+  async putAppFile(
+    app: string,
+    hash: string,
+    bytes: Uint8Array,
+    mediaType = 'application/octet-stream',
+    maxBytes: number | null = null,
+  ): Promise<{ created: boolean }> {
+    if (maxBytes !== null && bytes.byteLength > maxBytes) {
+      throw new WinnowError(
+        'protocol',
+        `This look is ${formatBytes(bytes.byteLength)}, over the instance’s cap of ${formatBytes(maxBytes)}.`,
+        413,
+      );
+    }
+    // A copy detached from any larger buffer: what is sent must be exactly
+    // the blob, whatever view it arrived in.
+    const body = new Uint8Array(bytes.byteLength);
+    body.set(bytes);
+    const res = await this.request(this.filesUrl(app, hash), {
+      method: 'PUT',
+      // Not a safelisted type, so the browser preflights — the same CSRF
+      // story the document PUT relies on.
+      headers: { 'Content-Type': mediaType, Accept: 'application/json' },
+      body,
+    });
+    try {
+      const raw = (await res.json()) as { created?: boolean };
+      return { created: raw.created === true };
+    } catch {
+      return { created: false };
+    }
+  }
+
+  /** Forget a blob there. Absent is not an error. */
+  async deleteAppFile(app: string, hash: string): Promise<void> {
+    await this.request(this.filesUrl(app, hash), { method: 'DELETE' });
+  }
+}
+
+/** One row of the file bucket's listing. */
+export interface AppFileRow {
+  id: string;
+  bytes: number;
+  mediaType: string;
+  createdAt: string;
 }
 
 /** What a 412 carries: `{ error, etag, updated_at }` — read leniently. */
