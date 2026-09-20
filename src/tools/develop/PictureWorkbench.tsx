@@ -19,6 +19,7 @@ import { pictureFidelity } from '../../shared/develop/picture-fidelity';
 import { DevelopBaseSection, type RawOffer } from '../../shared/develop/DevelopBase';
 import { canDecodeRaw } from '../../shared/raw/raw-decoder';
 import { isRawImage } from '../../shared/library/assets';
+import { rawSizes } from '../../shared/exif/raw-probe';
 import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
 import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
 import { formatBytes } from '../../shared/lib/format';
@@ -424,6 +425,25 @@ export default function PictureWorkbench({
     };
   }, [wantsRaw, rawFile, file, rawOffer, origin, tell, patchDraft]);
   const rawGain = draft.draft.rawGain ?? null;
+  // The sensor's own pixels, read from the RAW's head alone (a megabyte, no
+  // decoder): what the render on screen is measured against. A proxy's
+  // original needs no read at all — its source already said.
+  const [sensorSize, setSensorSize] = useState<{ width: number; height: number } | null>(null);
+  useEffect(() => {
+    setSensorSize(null);
+    if (!file || !isRawImage(file.name)) return;
+    let alive = true;
+    void rawSizes(file).then((sizes) => {
+      if (alive) setSensorSize(sizes.sensor);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [file]);
+  const proxyOriginalSize =
+    origin?.fidelity === 'proxy' && origin.width && origin.height
+      ? { width: origin.width, height: origin.height }
+      : null;
   const fullWidth = (wantsRaw ? rawSize?.w : null) ?? exports.openSize?.width ?? null;
   const picture = useDevelopPicture({
     file,
@@ -460,7 +480,23 @@ export default function PictureWorkbench({
       }
     },
   });
-  const fidelity = pictureFidelity(file, draft.draft.base);
+  // What the picture IS, with the pixels it really has: the file's own,
+  // measured for the *Delivers* row, or the sensor's once the RAW is decoded —
+  // and, beside them, what the file holds and the screen is not showing (the
+  // sensor plane of a RAW, the original behind a proxy). A 960 × 540 render
+  // inside a 36-megapixel DNG says so here rather than merely looking soft.
+  const measured = exports.openSize;
+  const fidelityPixels = useMemo(() => {
+    if (wantsRaw && rawSize) return { width: rawSize.w, height: rawSize.h };
+    if (!measured) return null;
+    return {
+      width: measured.width,
+      height: measured.height,
+      viaRawPreview: measured.viaRawPreview,
+      full: sensorSize ?? proxyOriginalSize,
+    };
+  }, [wantsRaw, rawSize, measured, sensorSize, proxyOriginalSize]);
+  const fidelity = pictureFidelity(file, draft.draft.base, fidelityPixels);
   const subject = useSubjectMasks({
     layers: layersDraft,
     // `BadgeSource.image` is typed as `CanvasImageSource`, which admits an

@@ -22,6 +22,20 @@ export interface PictureSize {
   height: number;
 }
 
+/**
+ * The picture in hand as the delivery knows it: its pixels, and whether they
+ * are the render a camera wrote inside a RAW (`MeasuredPicture`). The label on
+ * the *Delivers* row turns on that flag — `File 8064 px` over a DNG whose only
+ * decodable half is 960 × 540 is the one sentence the plan must never say.
+ */
+export type DeliverySource = PictureSize & { viaRawPreview?: boolean };
+
+/** What the *Delivers* row calls the pixels it is measuring. */
+export function sourceLabel(fileIsProxy: boolean, source: DeliverySource): string {
+  if (fileIsProxy) return 'Proxy';
+  return source.viaRawPreview ? 'Camera render' : 'File';
+}
+
 /** What a source says about the picture's original, when the file in hand is a proxy. */
 export interface OriginalInfo {
   width: number | null;
@@ -224,7 +238,7 @@ export interface DeliverySummary {
  * the file delivers what it has and the line says what was asked.
  */
 export function deliverySummary(
-  file: PictureSize,
+  file: DeliverySource,
   fileIsProxy: boolean,
   original: OriginalInfo | null,
   framing: Framing | null,
@@ -250,7 +264,7 @@ export function deliverySummary(
   }
   const own = deliveredLayout(file, aspectRatio, framing, border, settings.longEdge);
   const headroom = deliveryHeadroom(file, aspectRatio, framing, own);
-  const label = fileIsProxy ? 'Proxy' : 'File';
+  const label = sourceLabel(fileIsProxy, file);
   return {
     from: choice.from,
     out: own.out,

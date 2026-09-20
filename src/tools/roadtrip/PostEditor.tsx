@@ -19,7 +19,6 @@ import { normaliseCellPlace } from '../../shared/media/media-layout';
 import DevelopSheet from '../../shared/develop/DevelopSheet';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import type { DevelopSettings } from '../../shared/develop/develop';
-import { pictureFidelity } from '../../shared/develop/picture-fidelity';
 import { normaliseFraming, type Framing } from '../../shared/media/framing';
 import { badgeContent, type BadgePiece } from '../../shared/roadtrip/day-badge';
 import {
@@ -1629,8 +1628,6 @@ export default function PostEditor({
         file={cellFile}
         videoTimeSeconds={cellIndex === 0 ? slide.videoTimeSeconds : 0}
         title={cellFile?.name ?? 'this slide'}
-        fidelity={pictureFidelity(cellFile).chip}
-        note={pictureFidelity(cellFile).note}
         emptyText="This slide has no picture yet — tick one in the Library."
         stack={grade.stack}
         value={cellDevelop}

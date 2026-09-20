@@ -254,3 +254,38 @@ export async function extractRawPreview(file: Blob): Promise<Blob | null> {
   if (offset + length > file.size) return null;
   return file.slice(offset, offset + length, 'image/jpeg');
 }
+
+/** What a RAW holds, in two sizes, read from its head alone. */
+export interface RawSizes {
+  /** The sensor plane's own pixels, when the file states them. */
+  sensor: { width: number; height: number } | null;
+  /** The biggest embedded render a browser could draw, when its size is stated. */
+  render: { width: number; height: number } | null;
+}
+
+/** The two sizes from a head already in hand — pure, so a fetched head needs no second read. */
+export function rawSizesFrom(head: ArrayBuffer): RawSizes {
+  const probe = probeRaw(head);
+  if (!probe) return { sensor: null, render: null };
+  const sensor = sensorIfd(probe);
+  const preview = probe.preview;
+  return {
+    sensor: sensor?.width && sensor?.height ? { width: sensor.width, height: sensor.height } : null,
+    render: preview?.width && preview?.height ? { width: preview.width, height: preview.height } : null,
+  };
+}
+
+/**
+ * The two sizes of a RAW on hand: what its sensor holds, and what of it a
+ * browser can actually draw. A megabyte of the head, never the file — which is
+ * the whole point: the answer to "why is this DNG pixelated" is a pair of
+ * numbers the IFDs state, and no decoder is needed to read them.
+ */
+export async function rawSizes(file: Blob): Promise<RawSizes> {
+  try {
+    const head = await file.slice(0, Math.min(RAW_PROBE_BYTES, file.size)).arrayBuffer();
+    return rawSizesFrom(head);
+  } catch {
+    return { sensor: null, render: null };
+  }
+}

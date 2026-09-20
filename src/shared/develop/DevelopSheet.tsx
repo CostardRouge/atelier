@@ -21,6 +21,8 @@ import DevelopSliders from './DevelopSliders';
 import DevelopViewport, { DevelopCaption } from './DevelopViewport';
 import { useDevelopDraft, useTold } from './use-develop-draft';
 import { useDevelopPicture } from './use-develop-picture';
+import { usePicturePixels } from './use-picture-pixels';
+import { pictureFidelity } from './picture-fidelity';
 
 export interface DevelopSheetProps {
   /** The picture, or null when the slide has none — the controls still show. */
@@ -29,7 +31,13 @@ export interface DevelopSheetProps {
   videoTimeSeconds?: number;
   /** What the sheet is about, in the header: usually the file's name. */
   title: string;
-  /** What the picture IS — `JPEG · 8-bit`, `proxy · 8-bit`, later `RAW · 16-bit`. */
+  /**
+   * What the picture IS, when the host knows better than the sheet can. Left
+   * out — which is what both hosts do — the sheet says it itself, from the
+   * file and the pixels it measures (`usePicturePixels`): one sentence for
+   * every Develop screen, so Trips and the Studio cannot drift apart from the
+   * tool (2026-09-20).
+   */
   fidelity?: string | null;
   /** One line under the picture: what this picture can and cannot give back. */
   note?: string | null;
@@ -97,6 +105,13 @@ export default function DevelopSheet({
   const book = usePresetBookHost();
   const presets = hostPresets ?? book;
   const draft = useDevelopDraft(value, stack);
+  // What the picture is, said with its pixels. The host may override both,
+  // but neither does: the sheet is where the file is, so this is where the
+  // measurement belongs.
+  const pixels = usePicturePixels(file);
+  const own = pictureFidelity(file, draft.draft.base, pixels);
+  const chip = fidelity ?? own.chip;
+  const caption = note ?? own.note;
   const [told, tell] = useTold();
   const [naming, setNaming] = useState(false);
   const [pixelView, setPixelView] = usePixelView();
@@ -133,7 +148,7 @@ export default function DevelopSheet({
           <h2 className="m-0 font-serif text-lg min-w-0 truncate" title={title}>
             Develop · {title}
           </h2>
-          {fidelity && <span className={developPillClass}>{fidelity}</span>}
+          {chip && <span className={developPillClass}>{chip}</span>}
           <span className="flex-1" />
           <DevelopClipboardActions draft={draft.draft} asShot={draft.asShot} onReplace={draft.setDraft} onTold={tell} />
           {/* In the header, never over the picture (the lightbox's rule); under
@@ -192,7 +207,7 @@ export default function DevelopSheet({
               // column scrolls under it.
               className="flex-1 max-[820px]:flex-none max-[820px]:h-[calc(var(--app-h)*0.38)]"
             />
-            <DevelopCaption draft={draft.draft} note={note} picture={picture} />
+            <DevelopCaption draft={draft.draft} note={caption} picture={picture} />
           </div>
 
           {/* The column: the pipeline in order, then the look under it. */}

@@ -277,6 +277,12 @@ shared block. Rules a later phase must keep:
   vouched for. The choice and the block are `shared/exif/stamp-exif.ts`; a
   picture that ends up on the poorest account, or on none, is SAID in the run's
   sentence rather than filed away silently.
+- **The row NAMES the pixels it measured** (2026-09-20): `sourceLabel` reads
+  `Camera render` where the file in hand is a RAW — `MeasuredPicture.viaRawPreview`
+  from `measurePicture`, which now decodes through `decodePhotoSource` — so a
+  DNG says `Camera render 960 px → 1920 · ×2.00 upscaled · asked 1920` instead
+  of `File 8064 px`, which was the one sentence the plan must never say. The
+  fidelity half of it is `develop.md`, «A picture says its PIXELS».
 - **A RAW original is never fetched** (`decodableOriginal`: jpg/png/webp/
   avif/gif/bmp only — no HEIC, no TIFF): decision 4, the render the person
   developed is what leaves, and the reason is said on the *Delivers* row.

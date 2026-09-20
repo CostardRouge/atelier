@@ -9,7 +9,7 @@ import {
   type OriginalInfo,
   type PictureSize,
 } from '../../shared/develop/roll-export';
-import { measurePicture, renderRollPicture } from '../../shared/develop/roll-render';
+import { measurePicture, renderRollPicture, type MeasuredPicture } from '../../shared/develop/roll-render';
 import type { RollDoc, RollPicture } from '../../shared/develop/roll-types';
 import { WORKING_PREVIEW_EDGE, isWorkingPreview } from '../../shared/develop/working-preview';
 import { knownIdentity, mediaOrigin, type MediaOrigin } from '../../shared/projects/media-identity';
@@ -50,8 +50,12 @@ export interface RollExports {
   lastRun: RollRun | null;
   /** What the OPEN picture will deliver, or null until its size is known. */
   openDelivery: DeliverySummary | null;
-  /** The open picture's FILE size in pixels, once measured — the crop's tag reads it. */
-  openSize: PictureSize | null;
+  /**
+   * The open picture's FILE size in pixels, once measured — the crop's tag
+   * reads it, and so does the fidelity chip, which says whether those pixels
+   * are the file's own or the render inside a RAW.
+   */
+  openSize: MeasuredPicture | null;
   /** Render the pictures named and hand them over. */
   exportPictures: (ids: readonly string[]) => Promise<void>;
 }
@@ -94,7 +98,7 @@ export function useRollExport({
   latest.current = { roll, files, fileFor, lutFor };
 
   // --- the open picture's own size, measured once per file, for the Delivers line
-  const [openSize, setOpenSize] = useState<{ file: File; size: PictureSize } | null>(null);
+  const [openSize, setOpenSize] = useState<{ file: File; size: MeasuredPicture } | null>(null);
   const openFile = openId ? (files.get(openId) ?? null) : null;
   useEffect(() => {
     if (!openFile) return;

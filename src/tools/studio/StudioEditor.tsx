@@ -103,7 +103,6 @@ import GradePanel from '../../shared/lut/GradePanel';
 import DevelopSheet from '../../shared/develop/DevelopSheet';
 import DevelopSection from '../../shared/develop/DevelopSection';
 import type { DevelopSettings } from '../../shared/develop/develop';
-import { pictureFidelity } from '../../shared/develop/picture-fidelity';
 import { restoreDevelop, writeDevelop, type SavedDevelop } from '../../shared/projects/media-develop';
 import type { StyleTheme } from '../../shared/overlay/title-styles';
 import StylePanel from '../../shared/overlay/StylePanel';
@@ -1598,8 +1597,6 @@ export default function StudioEditor({
           file={activeFile}
           videoTimeSeconds={developAt}
           title={activeFile.name}
-          fidelity={pictureFidelity(activeFile).chip}
-          note={pictureFidelity(activeFile).note}
           stack={lutStack}
           value={activeDevelop}
           onDone={(next) => {
