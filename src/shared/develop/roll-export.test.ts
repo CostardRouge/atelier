@@ -183,11 +183,12 @@ describe('deliverySummary', () => {
 });
 
 describe('names and sentences', () => {
-  it('names the export after the picture, never the source name itself', () => {
-    expect(exportName('IMG_0421.jpg', 'original')).toBe('IMG_0421-developed.jpg');
-    expect(exportName('IMG_0421.webp', '4:5')).toBe('IMG_0421-developed-4x5.jpg');
-    expect(exportName('IMG_0421.jpg', 'free:1.3721')).toBe('IMG_0421-developed-crop.jpg');
-    expect(exportName('.jpg', 'original')).toBe('picture-developed.jpg');
+  it('names the export EXACTLY after the picture — the pairing convention', () => {
+    expect(exportName('DJI_0101.JPG')).toBe('DJI_0101.jpg');
+    // The proxy's own extension never reaches the file: a JPEG leaves.
+    expect(exportName('IMG_0421.webp')).toBe('IMG_0421.jpg');
+    expect(exportName('a.b.tif')).toBe('a.b.jpg');
+    expect(exportName('.jpg')).toBe('picture.jpg');
   });
 
   it('maps a stored long edge to a Size choice and back to source', () => {

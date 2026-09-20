@@ -236,6 +236,17 @@ shared block. Rules a later phase must keep:
   that is what `Auto` fetches the original for, and the line then says
   `· asked 1920` when the proxy delivered less. With Size = source, Auto
   always turns to a decodable original — its pixels ARE the source size.
+- **An export is named EXACTLY after its picture** (2026-09-20, his own
+  convention): `DJI_0101.JPG` → `DJI_0101.jpg`, no `-developed`, no shape tag.
+  He keeps a source folder and a Gallery folder side by side and pairs them BY
+  NAME — by eye, and the way Winnow's `reconcile` would — so a word added to
+  the name breaks the pairing, which is the whole point of the file. Only the
+  extension changes: a JPEG leaves, whatever the picture was developed from
+  (his call; he will say if another format is ever wanted). Collisions are
+  numbered, never stamped with a date (`shared/sources/unique-name.ts`:
+  `-1`, `-2`, `-3`, case-folded because his volume is) — inside a run, where
+  two crops of one picture want one name, and against the folder being written
+  into. `aspectFileTag` went out with the tag; `crop-aspect.ts` keeps the rest.
 - **A RAW original is never fetched** (`decodableOriginal`: jpg/png/webp/
   avif/gif/bmp only — no HEIC, no TIFF): decision 4, the render the person
   developed is what leaves, and the reason is said on the *Delivers* row.

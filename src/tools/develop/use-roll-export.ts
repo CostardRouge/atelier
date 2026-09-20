@@ -14,6 +14,7 @@ import type { RollDoc, RollPicture } from '../../shared/develop/roll-types';
 import { WORKING_PREVIEW_EDGE, isWorkingPreview } from '../../shared/develop/working-preview';
 import { knownIdentity, mediaOrigin, type MediaOrigin } from '../../shared/projects/media-identity';
 import { deliverFiles } from '../../shared/sources/deliver-files';
+import { uniqueName } from '../../shared/sources/unique-name';
 import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
 import { formatBytes } from '../../shared/lib/format';
 
@@ -124,6 +125,10 @@ export function useRollExport({
     const assetIds: (string | null)[] = [];
     const sourceIds = new Set<string>();
     const failures: string[] = [];
+    // A run names each file after its picture, so two crops of ONE picture
+    // want one name: the second is numbered here, before the folder is even
+    // chosen. Case-folded, like the volume it will land on.
+    const named = new Set<string>();
     try {
       for (const [i, picture] of targets.entries()) {
         const step = `${i + 1}/${targets.length}`;
@@ -182,8 +187,10 @@ export function useRollExport({
             lens: picture.lens ?? null,
             layers: picture.layers ?? null,
           });
+          const name = uniqueName(exportName(picture.ref.name), (c) => named.has(c.toLowerCase()));
+          named.add(name.toLowerCase());
           rendered.push(
-            new File([out.blob], exportName(picture.ref.name, picture.aspect), {
+            new File([out.blob], name, {
               type: 'image/jpeg',
               lastModified: file.lastModified,
             }),

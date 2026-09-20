@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   FREE_ASPECT_MAX,
   FREE_ASPECT_MIN,
-  aspectFileTag,
   describeAspect,
   freeAspectId,
   freeAspectRatio,
@@ -66,14 +65,6 @@ describe('a free aspect', () => {
     expect(isStoredAspect('free:1.5')).toBe(true);
     expect(isStoredAspect('free:banana')).toBe(false);
     expect(isStoredAspect('made-up')).toBe(false);
-  });
-});
-
-describe('aspectFileTag', () => {
-  it('names a preset by its shape and a free zone as a crop', () => {
-    expect(aspectFileTag('original')).toBe('');
-    expect(aspectFileTag('4:5')).toBe('4x5');
-    expect(aspectFileTag('free:1.3721')).toBe('crop');
   });
 });
 
