@@ -48,6 +48,12 @@ export interface PackLook {
   bytes?: number;
   /** SHA-256 of the source file, lowercase hex — the vault's and file store's key. */
   hash?: string;
+  /**
+   * The look baked onto its family's reference at import, as a data URL
+   * (`pack-thumbs.ts`): ~4 KB, so the picker draws 25 purchased looks without
+   * decoding 41 MB of lattices, and a phone draws them at all.
+   */
+  thumb?: string;
 }
 
 /** The pack index — the small JSON half, the one that syncs (§5.1). */
@@ -145,6 +151,11 @@ function readLook(raw: Record<string, unknown>): PackLook {
     ...(lattice ? { lattice } : {}),
     ...(bytes ? { bytes } : {}),
     ...(typeof raw.hash === 'string' && raw.hash ? { hash: raw.hash } : {}),
+    // A data URL and nothing else: a stored index is untrusted input, and an
+    // arbitrary string here would go straight into an <img src>.
+    ...(typeof raw.thumb === 'string' && raw.thumb.startsWith('data:image/')
+      ? { thumb: raw.thumb }
+      : {}),
   };
 }
 

@@ -36,6 +36,7 @@ import {
   syntheticPreviewSample,
   type RgbBitmap,
 } from './lut-preview';
+import LutPackImportModal from './LutPackImportModal';
 import LutThumb from './LutThumb';
 import { loadBuiltinLut } from './restore-grade';
 import { useLutInterpolation } from './use-lut-interpolation';
@@ -137,6 +138,7 @@ export default function LutGalleryModal({
   const [customLabel, setCustomLabel] = useState<string | null>(null);
   const [imageBusy, setImageBusy] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [packs, setPacks] = useState(false);
 
   const effectiveSource = customImage ?? previewImage;
   const [sample, setSample] = useState<RgbBitmap>(() =>
@@ -210,6 +212,8 @@ export default function LutGalleryModal({
   const showNone =
     allowNone && (!q || 'no look'.includes(q) || 'original'.includes(q) || 'none'.includes(q));
 
+  if (packs) return <LutPackImportModal onClose={() => setPacks(false)} />;
+
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[rgba(20,18,15,0.45)] backdrop-blur-[2px] max-[820px]:p-0"
@@ -226,9 +230,17 @@ export default function LutGalleryModal({
             <h2 className="m-0 font-serif text-2xl">{title}</h2>
             <p className="m-0 mt-1 text-sm text-muted">Every look, baked live — click one to use it.</p>
           </div>
-          <IconButton label="Close" variant="ghost" onClick={onClose}>
-            {Icons.close}
-          </IconButton>
+          <div className="flex items-center gap-1">
+            {/* Purchased packs live in this browser's vault, not in the
+                build, so importing one is a verb of the picker rather than
+                a setting somewhere else (`docs/lut-packs.md` §6). */}
+            <Button size="sm" variant="ghost" onClick={() => setPacks(true)}>
+              Packs…
+            </Button>
+            <IconButton label="Close" variant="ghost" onClick={onClose}>
+              {Icons.close}
+            </IconButton>
+          </div>
         </div>
 
         <div className="flex flex-col gap-2.5 border-y border-line py-3">
