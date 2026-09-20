@@ -12,7 +12,8 @@
  * `sampler3D` left on texture unit 0 beside the source's `sampler2D` (an
  * INVALID_OPERATION that drops the draw, silently), and an `RGBA32F` cube set
  * to LINEAR on a GPU without `OES_texture_float_linear` (an incomplete texture,
- * which samples black).
+ * which samples black). The last row takes that extension away by hand, so
+ * the half-float cube the core falls to there is measured too.
  *
  * Usage: `npm run dev` in one shell, then
  *   node scripts/check-render.mjs
@@ -176,6 +177,7 @@ const out = await page.evaluate(async () => {
       restCanvas: round(run(marked, passthroughPass)),
       restBitmap: round(run(markedBitmap, passthroughPass)),
     };
+    markedBitmap.close();
   }
 
   // --- the lens: does the GPU land a point where lensSampleRadius says? -----
@@ -256,19 +258,32 @@ const out = await page.evaluate(async () => {
     };
 
     // Vignetting: a flat grey frame, corrected, read at the centre and at a
-    // known radius out along the centre line.
-    const flat = draw((g) => { g.fillStyle = '#808080'; g.fillRect(0, 0, S, S); });
-    const vig = { ...lens.DEFAULT_LENS, vignette: 60, vignetteMidpoint: 20 };
-    const vData = run(flat, makeLensPass(vig, 1));
-    const at = (x, y) => vData[((y * S + x) * 4)];
-    const centre = at(S >> 1, S >> 1);
+    // known radius out along the centre line. The gain is on LIGHT, so the
+    // expectation goes through `vignetteEncoded`, and a DARK frame is run too:
+    // on mid grey a gain on the code and a gain on the light are a few codes
+    // apart, on a dark one they are far apart, which is what tells the two
+    // shaders from each other.
     const OUT = Math.round(S * 0.92);
-    results.vignette = {
-      centre,
-      out: at(OUT, S >> 1),
-      // What the pure module says that pixel should have become.
-      expected: Math.round(centre * lens.vignetteGain(toRadius(OUT), 60, 20)),
+    const vignetteRow = (fill, amount, midpoint) => {
+      const vig = { ...lens.DEFAULT_LENS, vignette: amount, vignetteMidpoint: midpoint };
+      const flat = draw((g) => { g.fillStyle = fill; g.fillRect(0, 0, S, S); });
+      const vData = run(flat, makeLensPass(vig, 1));
+      const at = (x, y) => vData[((y * S + x) * 4)];
+      const centre = at(S >> 1, S >> 1);
+      return {
+        centre,
+        out: at(OUT, S >> 1),
+        // What the pure module says that pixel should have become.
+        expected: Math.round(255 * lens.vignetteEncoded(centre / 255, toRadius(OUT), amount, midpoint)),
+        // What a gain on the CODE would have given, so the row is known to
+        // tell the two apart.
+        onCode: Math.round(Math.min(255, centre * lens.vignetteGain(toRadius(OUT), amount, midpoint))),
+      };
     };
+    results.vignette = vignetteRow('#808080', 60, 20);
+    // The full lift from the centre out, on a dark frame: where a gain on the
+    // code and a gain on the light are furthest apart.
+    results.vignetteDark = vignetteRow('#404040', 100, 0);
   }
 
   // --- the mask: does the shader agree with maskAt, point for point? --------
@@ -444,7 +459,93 @@ const out = await page.evaluate(async () => {
     const built = readTop(fresh.render(grey));
     fresh.dispose();
 
-    results.swap = { swapped, built, canSwap: Boolean(reused.setPasses) };
+    // The same again from an ImageBitmap, which the graph uploads ONCE and
+    // keeps across a swap: this row is what proves the kept upload is the
+    // picture and not a stale or empty texture. A canvas is re-uploaded every
+    // time, so the row above cannot see that path at all.
+    const greyBitmap = await createImageBitmap(grey);
+    const reusedB = holdGrades(makeFrameGrader(null, W, H, 1, [passFor(0.2)]));
+    readTop(reusedB.render(greyBitmap));
+    reusedB.setPasses([passFor(0.8)]);
+    const swappedBitmap = readTop(reusedB.render(greyBitmap));
+    // And a THIRD render with the same bitmap and the same passes: the cached
+    // upload, drawn again, must still be the picture.
+    const again = readTop(reusedB.render(greyBitmap));
+    reusedB.dispose();
+    greyBitmap.close();
+
+    results.swap = { swapped, built, swappedBitmap, again, canSwap: Boolean(reused.setPasses) };
+  }
+
+  // --- a picture past the GPU's edge cap: fitted, graded, and not black ----
+  //
+  // The cap is asked of the GPU once; a bitmap one thousand pixels wider is
+  // handed to `fitPhotoForRender`, which must bring it to the cap, and the
+  // fitted copy must then grade to a picture rather than to the black an
+  // oversize upload silently gives.
+  {
+    const { fitPhotoForRender } = await import('/atelier/src/shared/media/photo-frame.ts');
+    const { maxRenderSize } = await import('/atelier/src/shared/render/graph-grader.ts');
+    const cap = maxRenderSize();
+    const wide = document.createElement('canvas');
+    wide.width = cap + 1000; wide.height = 8;
+    const wg = wide.getContext('2d');
+    wg.fillStyle = '#9a9a9a'; wg.fillRect(0, 0, wide.width, 8);
+    const big = await createImageBitmap(wide);
+    const fit = await fitPhotoForRender(big);
+    const grader = makeGraphGrader(cube, fit.width, fit.height, 1, 'tetrahedral');
+    const o = document.createElement('canvas'); o.width = fit.width; o.height = fit.height;
+    const oc = o.getContext('2d', { willReadFrequently: true });
+    oc.drawImage(grader.render(fit.image), 0, 0);
+    const px = oc.getImageData(fit.width >> 1, 4, 1, 1).data;
+    grader.dispose();
+    fit.release();
+    big.close();
+    results.fit = { cap, bigWidth: wide.width, fitWidth: fit.width, resampled: fit.resampled, pixel: [px[0], px[1], px[2]] };
+  }
+
+  // --- the cube without OES_texture_float_linear: half-float, never 8-bit --
+  //
+  // This GPU has the extension, so the fallback would otherwise run nowhere a
+  // gate can see it — which is how the old RGBA8 branch clamped a cube's
+  // highlight rolloff for years on the GPUs that took it. The extension is
+  // taken away here by hand, on every context made inside the block, and the
+  // same look must come back within a code of the float path and be a picture.
+  {
+    const { makeGraphGrader } = await import('/atelier/src/shared/render/graph-grader.ts');
+    const { cubeInternalFormat } = await import('/atelier/src/shared/render/cube-pass.ts');
+
+    const withFloat = makeGraphGrader(cube, W, H, 1, 'tetrahedral');
+    const a = read(withFloat.render(bitmap));
+    withFloat.dispose();
+
+    // The grader draws on an OffscreenCanvas where there is one, an element
+    // elsewhere: both are patched, so the row cannot pass by missing the path.
+    const protos = [HTMLCanvasElement.prototype, OffscreenCanvas.prototype];
+    const real = protos.map((p) => p.getContext);
+    let formatSeen = null;
+    protos.forEach((proto, i) => {
+      proto.getContext = function (kind, ...rest) {
+        const ctx = real[i].call(this, kind, ...rest);
+        if (ctx && kind === 'webgl2') {
+          const realGetExtension = ctx.getExtension.bind(ctx);
+          ctx.getExtension = (name) => (name === 'OES_texture_float_linear' ? null : realGetExtension(name));
+          formatSeen = cubeInternalFormat(ctx) === ctx.RGBA16F ? 'RGBA16F' : 'RGBA32F';
+        }
+        return ctx;
+      };
+    });
+    let b;
+    try {
+      const withoutFloat = makeGraphGrader(cube, W, H, 1, 'tetrahedral');
+      b = read(withoutFloat.render(bitmap));
+      withoutFloat.dispose();
+    } finally {
+      protos.forEach((proto, i) => { proto.getContext = real[i]; });
+    }
+    let sum = 0;
+    for (let i = 0; i < b.length; i += 4) sum += b[i] + b[i + 1] + b[i + 2];
+    results.halfCube = { ...worst(a, b), format: formatSeen, mean: sum / (b.length / 4) / 3 };
   }
 
   return results;
@@ -522,15 +623,20 @@ if (!lens.lit) {
   );
 }
 
-const vig = out.vignette;
-console.log(
-  `  vignette: centre ${vig.centre}, corner ${vig.out}, vignetteGain says ${vig.expected}`,
-);
-if (Math.abs(vig.out - vig.expected) > 2) {
-  bad += 1;
-  console.log(`  FAIL  the lift disagrees with lens.ts by ${Math.abs(vig.out - vig.expected)} codes`);
-} else {
-  console.log(`  ok    within ${Math.abs(vig.out - vig.expected)} code(s) of it`);
+for (const [name, vig] of [['mid grey', out.vignette], ['dark grey', out.vignetteDark]]) {
+  console.log(
+    `  vignette on ${name}: centre ${vig.centre}, corner ${vig.out}, ` +
+      `vignetteEncoded says ${vig.expected} (a gain on the code would say ${vig.onCode})`,
+  );
+  if (Math.abs(vig.out - vig.expected) > 2) {
+    bad += 1;
+    console.log(`  FAIL  the lift disagrees with lens.ts by ${Math.abs(vig.out - vig.expected)} codes`);
+  } else if (Math.abs(vig.expected - vig.onCode) <= 2) {
+    bad += 1;
+    console.log('  FAIL  light and code agree here, so this row cannot tell them apart');
+  } else {
+    console.log(`  ok    within ${Math.abs(vig.out - vig.expected)} code(s) of it, in light`);
+  }
 }
 
 const mask = out.mask;
@@ -566,11 +672,46 @@ if (!swap.canSwap) {
     `\n  ${ok ? 'ok  ' : 'FAIL'}  a grader whose passes were swapped reads ` +
       `${JSON.stringify(swap.swapped)}, a fresh one ${JSON.stringify(swap.built)}`,
   );
+  const offB = Math.max(
+    ...swap.swappedBitmap.map((v, i) => Math.abs(v - swap.built[i])),
+    ...swap.again.map((v, i) => Math.abs(v - swap.built[i])),
+  );
+  const okB = offB <= 1;
+  if (!okB) bad += 1;
+  console.log(
+    `  ${okB ? 'ok  ' : 'FAIL'}  the same from a kept bitmap upload: after the swap ` +
+      `${JSON.stringify(swap.swappedBitmap)}, drawn again ${JSON.stringify(swap.again)}`,
+  );
   // And that the swap CHANGED something, or the row would pass on a no-op.
   if (swap.built[0] === swap.built[2]) {
     bad += 1;
     console.log('  FAIL  the two pass sets draw the same picture, so this proves nothing');
   }
+}
+
+const fit = out.fit;
+{
+  const okCap = Number.isFinite(fit.cap) && fit.cap >= 2048;
+  const okFit = fit.resampled && fit.fitWidth === fit.cap;
+  const okPixel = fit.pixel.some((v) => v > 16);
+  if (!okCap || !okFit || !okPixel) bad += 1;
+  console.log(
+    `\n  ${okCap && okFit && okPixel ? 'ok  ' : 'FAIL'}  this GPU takes ${fit.cap} px on one edge; a ${fit.bigWidth} px picture ` +
+      `is fitted to ${fit.fitWidth}${fit.resampled ? '' : ' (NOT resampled)'} and grades to ${JSON.stringify(fit.pixel)}` +
+      (okPixel ? '' : ' — BLACK'),
+  );
+}
+
+const half = out.halfCube;
+{
+  const okFormat = half.format === 'RGBA16F';
+  const okValue = half.worst <= 1 && half.mean > 16;
+  if (!okFormat || !okValue) bad += 1;
+  console.log(
+    `\n  ${okFormat && okValue ? 'ok  ' : 'FAIL'}  without OES_texture_float_linear the cube is ${half.format}` +
+      `, worst ${half.worst} code${half.worst === 1 ? '' : 's'} from the float path (allowed 1)` +
+      (half.mean > 16 ? '' : ' — and the picture is BLACK'),
+  );
 }
 
 if (errors.length) {

@@ -62,7 +62,9 @@ export async function pictureThumbnail(
 ): Promise<Blob | null> {
   let bitmap: ImageBitmap | null = null;
   try {
-    bitmap = await createImageBitmap(file);
+    // Upright, as every other decode in the suite (`decodePhoto`): a cell
+    // must show the picture the way the stage and the export will.
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
     const { w, h } = thumbSize(bitmap.width, bitmap.height, longEdge);
     if (!w || !h) return null;
     const canvas = document.createElement('canvas');

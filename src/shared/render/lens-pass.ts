@@ -17,7 +17,7 @@
  * lands a marker at, so a mirror creeping in would show up as a failure.
  */
 
-import { GLSL_VERSION } from './glsl';
+import { GLSL_VERSION, SRGB_TRANSFER } from './glsl';
 import {
   chromaScales,
   distortionTerms,
@@ -40,6 +40,7 @@ uniform float u_k2;
 uniform vec2 u_chroma;     // red and blue scales; green is the reference at 1.0
 uniform float u_vigAmount;
 uniform float u_vigStart;
+${SRGB_TRANSFER}
 
 // Where a corrected point at radius r came from. Mirrors lensSampleRadius in
 // lens.ts -- the two MUST agree, and check-render.mjs is what proves it.
@@ -83,8 +84,11 @@ void main() {
 
   if (u_vigAmount != 0.0 && r > u_vigStart) {
     float t = (r - u_vigStart) / max(1e-6, 1.0 - u_vigStart);
-    // Squared, so there is no visible ring where the lift begins.
-    rgb *= 1.0 + u_vigAmount * t * t;
+    // Squared, so there is no visible ring where the lift begins. A gain on
+    // LIGHT, so it is applied to the decoded value: the lens lost light at the
+    // corner, not code, and multiplying the encoded value would lift a dark
+    // corner three times as much as a bright one (vignetteEncoded, lens.ts).
+    rgb = linearToSrgb(srgbToLinear(rgb) * (1.0 + u_vigAmount * t * t));
   }
 
   outColor = vec4(rgb, green.a);

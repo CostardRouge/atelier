@@ -31,6 +31,7 @@
  */
 
 import type { BrushRaster } from '../render/brush-raster';
+import { exceedsRenderSize, fitRenderSize } from '../render/render-size';
 
 /**
  * Where the files are, under the deployed base — NEVER a hardcoded `/models/`.
@@ -145,19 +146,89 @@ export function disposeSegmenter(): void {
  */
 const isSubject = (category: number): number => (category === 0 ? 255 : 0);
 
-/** One point's mask, or null when the model refused. */
-async function segmentOne(
+/**
+ * The long edge the model is SHOWN, and so the size of the mask it returns.
+ *
+ * `magic_touch` resamples its input to a few hundred pixels inside, so showing
+ * it a stage-budget picture (4K) buys no precision — it costs an upload and a
+ * downscale per point, and the category mask comes back at the INPUT's size:
+ * 12 MB per point at 4K, copied, unioned and cached. 1024 is the painted
+ * mask's own density (`BRUSH_RASTER_LONG_EDGE`), sampled bilinearly by the
+ * same pass, and a mask is a soft thing by design.
+ */
+export const SEGMENT_INPUT_LONG_EDGE = 1024;
+
+/**
+ * How long one point is waited for before it is given up as null. A model that
+ * never answers (a lost GPU delegate, a wasm that stalled) used to leave the
+ * promise pending for ever — the panel said "working" for good and every later
+ * point queued behind it.
+ */
+export const SEGMENT_TIMEOUT_MS = 20_000;
+
+/** A source as the model is shown it — the caller's, or a smaller copy. */
+export interface SegmentSource {
+  image: TexImageSource;
+  release: () => void;
+}
+
+/**
+ * Bring what the model is shown within `SEGMENT_INPUT_LONG_EDGE`, once for a
+ * whole set of points. A source already small enough, or one whose size cannot
+ * be read, is used as it is.
+ */
+export async function prepareSegmentSource(
+  source: TexImageSource,
+  longEdge = SEGMENT_INPUT_LONG_EDGE,
+): Promise<SegmentSource> {
+  const asIs: SegmentSource = { image: source, release: () => {} };
+  const { width, height } = source as { width?: unknown; height?: unknown };
+  if (typeof width !== 'number' || typeof height !== 'number') return asIs;
+  if (!exceedsRenderSize(width, height, longEdge)) return asIs;
+  if (typeof createImageBitmap !== 'function') return asIs;
+  const fitted = fitRenderSize(width, height, longEdge);
+  try {
+    const small = await createImageBitmap(source as ImageBitmapSource, {
+      resizeWidth: fitted.width,
+      resizeHeight: fitted.height,
+      resizeQuality: 'high',
+    });
+    return { image: small, release: () => small.close() };
+  } catch {
+    return asIs;
+  }
+}
+
+/**
+ * One point's mask, normalised to the raster every layer pass draws (the
+ * subject 255, the rest 0), or null when the model refused or did not answer
+ * in time.
+ */
+export async function segmentPoint(
   source: TexImageSource,
   point: SubjectPoint,
-): Promise<{ data: Uint8Array; width: number; height: number } | null> {
+  timeoutMs = SEGMENT_TIMEOUT_MS,
+): Promise<BrushRaster | null> {
   const model = await loadSegmenter();
   if (!model) return null;
   return new Promise((resolve) => {
     let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      console.warn(`[segment] the model did not answer within ${timeoutMs} ms; the point is dropped`);
+      resolve(null);
+    }, timeoutMs);
     try {
       model.segment(source, { keypoint: { x: point.x, y: point.y } }, (result) => {
-        if (settled) return;
+        if (settled) {
+          // Too late: the answer belongs to nobody, but its buffers are still ours to free.
+          result.categoryMask?.close();
+          result.close?.();
+          return;
+        }
         settled = true;
+        clearTimeout(timer);
         const mask = result.categoryMask;
         if (!mask) {
           resolve(null);
@@ -165,7 +236,9 @@ async function segmentOne(
         }
         // Copied out before `close()`: the buffer is the task's, and reading it
         // after the result is closed is reading freed memory.
-        const data = new Uint8Array(mask.getAsUint8Array());
+        const categories = mask.getAsUint8Array();
+        const data = new Uint8Array(categories.length);
+        for (let i = 0; i < categories.length; i += 1) data[i] = isSubject(categories[i]);
         const { width, height } = mask;
         mask.close();
         result.close?.();
@@ -174,10 +247,27 @@ async function segmentOne(
     } catch {
       if (!settled) {
         settled = true;
+        clearTimeout(timer);
         resolve(null);
       }
     }
   });
+}
+
+/**
+ * UNION: a second point ADDS to the subject, it does not replace it. A mask of
+ * another size is stale (another picture, another input size) and is refused —
+ * the first operand wins, so a caller composing in order keeps what it has.
+ * Pure; the result is a fresh raster and neither operand is touched.
+ */
+export function unionMasks(a: BrushRaster | null, b: BrushRaster | null): BrushRaster | null {
+  if (!a) return b ? { data: new Uint8Array(b.data), width: b.width, height: b.height } : null;
+  if (!b || b.width !== a.width || b.height !== a.height) {
+    return { data: new Uint8Array(a.data), width: a.width, height: a.height };
+  }
+  const data = new Uint8Array(a.data.length);
+  for (let i = 0; i < data.length; i += 1) data[i] = Math.max(a.data[i], b.data[i]);
+  return { data, width: a.width, height: a.height };
 }
 
 /**
@@ -188,7 +278,9 @@ async function segmentOne(
  * sequence. That is the same shape `p5-templates` settled on, and the reason is
  * not tidiness: a single result slot means two inferences in flight can have
  * their answers swapped, and a mask attributed to the wrong point is a subject
- * that jumps.
+ * that jumps. `useSubjectMasks` caches per POINT and composes with
+ * `unionMasks` itself, so a third tap costs one inference, not three; this is
+ * the one-shot form for a caller with no cache.
  *
  * Null when the model is unavailable, so a caller can say so rather than
  * showing an empty mask that looks like a failure to segment.
@@ -198,22 +290,12 @@ export async function segmentSubject(
   points: readonly SubjectPoint[],
 ): Promise<BrushRaster | null> {
   if (points.length === 0) return null;
-  let out: BrushRaster | null = null;
-  for (const point of points) {
-    const one = await segmentOne(source, point);
-    if (!one) continue;
-    if (!out || out.width !== one.width || out.height !== one.height) {
-      out = {
-        data: new Uint8Array(one.data.length),
-        width: one.width,
-        height: one.height,
-      };
-      for (let i = 0; i < one.data.length; i += 1) out.data[i] = isSubject(one.data[i]);
-      continue;
-    }
-    // UNION: a second point adds to the subject, it does not replace it. A mask
-    // of another size is stale (a different picture) and is skipped above.
-    for (let i = 0; i < one.data.length; i += 1) if (!one.data[i]) out.data[i] = 255;
+  const shown = await prepareSegmentSource(source);
+  try {
+    let out: BrushRaster | null = null;
+    for (const point of points) out = unionMasks(out, await segmentPoint(shown.image, point));
+    return out;
+  } finally {
+    shown.release();
   }
-  return out;
 }

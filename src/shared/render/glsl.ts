@@ -56,6 +56,31 @@ vec2 imageUv(vec2 uv) { return vec2(uv.x, mix(1.0 - uv.y, uv.y, u_flipY)); }
 `;
 
 /**
+ * The sRGB transfer, both ways, for a pass that must work on LIGHT.
+ *
+ * The values crossing the graph are sRGB-ENCODED (`render-core.md`); a gain
+ * on light — vignetting, an exposure — multiplied into the encoded value is a
+ * different, tone-dependent correction: ×1.8 on a dark corner is ×3 on its
+ * light. So such a pass decodes, multiplies and encodes inside itself, with
+ * the same piecewise curve `lut/transfer.ts` holds (the toe kept — a bare
+ * 2.2 power blocks the shadows). Above white the power extends unclamped, so
+ * float16 headroom survives; below black the toe's slope is mirrored, so a
+ * negative overshoot comes back where it went in.
+ */
+export const SRGB_TRANSFER = `
+vec3 srgbToLinear(vec3 c) {
+  vec3 a = abs(c);
+  vec3 lin = mix(pow((a + 0.055) / 1.055, vec3(2.4)), a / 12.92, lessThanEqual(a, vec3(0.04045)));
+  return sign(c) * lin;
+}
+vec3 linearToSrgb(vec3 c) {
+  vec3 a = abs(c);
+  vec3 enc = mix(1.055 * pow(a, vec3(1.0 / 2.4)) - 0.055, a * 12.92, lessThanEqual(a, vec3(0.04045 / 12.92)));
+  return sign(c) * enc;
+}
+`;
+
+/**
  * The uniforms a LUT lookup reads. Declared apart from the functions so a pass
  * can put its own uniforms beside them without a name clash.
  */

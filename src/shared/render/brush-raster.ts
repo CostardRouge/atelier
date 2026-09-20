@@ -101,10 +101,14 @@ export function rasteriseBrush(
     if (x1 < x0 || y1 < y0) continue;
 
     for (let y = y0; y <= y1; y += 1) {
-      const v = (y + 0.5) / height;
+      // `framePoint`, written out: the hot loop of a live drag runs it once
+      // per texel of the stroke's box, and a tuple allocated per texel is a
+      // million short-lived objects per pointermove on a 1024-wide map —
+      // measurable GC pauses in the middle of a stroke. The row's y is
+      // shared by the whole row, so it is computed once here.
+      const py = (((y + 0.5) / height - 0.5) * 2) / diagonal;
       for (let x = x0; x <= x1; x += 1) {
-        const u = (x + 0.5) / width;
-        const [px, py] = framePoint(u, v, ar);
+        const px = (((x + 0.5) / width - 0.5) * 2 * ar) / diagonal;
         const c = coverageAt(centred, stroke.radius, stroke.hardness, px, py);
         if (c <= 0) continue;
         const i = y * width + x;

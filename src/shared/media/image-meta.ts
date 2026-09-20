@@ -33,7 +33,10 @@ export interface ImageMeta {
 export async function loadImageMeta(file: File): Promise<ImageMeta> {
   const imageType = imageTypeLabel(file.name);
   try {
-    const bitmap = await createImageBitmap(file);
+    // Upright, as `decodePhoto` decodes it: the width and height shown here
+    // must be the ones the export will cut from, or a phone portrait is
+    // listed sideways.
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
     const { width, height } = bitmap;
     const scale = Math.min(1, 200 / Math.max(1, width));
     const cw = Math.max(1, Math.round(width * scale));

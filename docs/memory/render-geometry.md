@@ -104,12 +104,26 @@ blur paid for nothing.
 - `VIGNETTE_REACH` is handed to the shader (`vignetteTerms`) rather than
   written twice: the one duplication that would let the GPU drift from
   `vignetteGain`.
+- **The vignette gain is applied to LIGHT, never to the code (2026-09-20, the
+  audit).** The first version multiplied the sRGB-encoded value, which is a
+  tone-dependent correction: ×1.8 on a dark corner is ×3 on its light, on a
+  bright one barely ×2, and a corner comes back the wrong tone on anything but
+  the mid grey the gate happened to test. `lens-pass.ts` now decodes,
+  multiplies and encodes inside itself through `SRGB_TRANSFER` (`glsl.ts`,
+  the piecewise curve of `lut/transfer.ts`, unclamped above white so the
+  headroom survives), and `vignetteEncoded` (`lens.ts`) is the pure twin the
+  gate holds it to. **The gate's vignette row now runs on a DARK frame as well,
+  and asserts the two shaders could be told apart**: on mid grey at a modest
+  gain they sit a few codes apart, which is exactly why the first row passed
+  on the wrong maths. The rule for any later gain on light — an exposure
+  layer, a graduated filter, halation — is the same: decode, multiply, encode,
+  and a gate row where the two readings differ by more than the tolerance.
 
 **The gate has two new rows.** A marker at a known radius, warped at full
 barrel, must land where `lensSampleRadius` solves for (bisection, which the
 monotonicity guarantees has one answer) — measured 0.5745 against 0.5759 — and
-a flat grey frame's corner must match `vignetteGain` to the code (it matches
-exactly). Both carry an anti-tautology assertion, like the keystone's
+a flat grey frame's corner must match `vignetteEncoded` to the code (it matches
+exactly, on mid grey and on dark grey). Both carry an anti-tautology assertion, like the keystone's
 unmirrored row: if the marker did NOT move, the check would pass on an empty
 shader for ever after. **It fired on the first run** — at 0.75 of the way out a
 CUBIC term shifts a point by 0.007, too little to tell a working warp from a

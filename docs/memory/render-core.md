@@ -71,6 +71,15 @@ that promises it must ask.
   `OES_texture_float_linear`, and an incomplete texture samples BLACK.**
   `lut-gl.ts` had always branched to `RGBA8` for it; copying its GLSL without
   copying that branch is what made the core's first run black on SwiftShader.
+  **Since 2026-09-20 the branch falls to `RGBA16F`, never to 8-bit**, and it
+  is ONE function for both shaders (`uploadCube`, `cube-pass.ts`): the 8-bit
+  branch clamped the cube's output to [0,1] and quantised it, which threw away
+  a conversion LUT's highlight rolloff above white on every GPU that took it,
+  silently. Half-float is filterable in core WebGL2 and takes the same `FLOAT`
+  upload; measured against the float path: worst 1 code. The gate has a row
+  that takes the extension away by hand (on BOTH canvas prototypes — the
+  grader draws on an `OffscreenCanvas`), because this GPU has it and the
+  fallback would otherwise run nowhere a gate could see.
 - **`bindAttribLocation` before linking.** The graph sets its quad up once, on
   one VAO, against attribute location 0 — but GLSL may put `a_pos` anywhere
   unless told, and then the quad draws nothing.
@@ -108,7 +117,52 @@ has a hard cap on; it is why painting a mask was not possible at all.
 `makeFrameGrader` now returns a `PassGrader` with `setPasses`, `holdGrades`
 forwards it (dropping the held copy, which was graded through the passes that
 just left), and `graderFor` takes that path whenever the cube and the size are
-unchanged. The context, its programs and the uploaded source all survive.
+unchanged. The context and its programs survive — and since 2026-09-20 so
+does the uploaded source, for a BITMAP: this entry claimed that from the
+start, and it was false. `render()` called `texImage2D` on every call, so a
+pass swap re-uploaded the whole stage-budget picture (tens of MB) per slider
+step. An `ImageBitmap` is immutable, so the graph now keys the upload on its
+identity and skips it; a canvas or a video can change under one identity and
+is uploaded every time, as before. **A claim about what the GPU does is not
+true until a gate row draws it** — the swap row now runs from a bitmap too,
+drawn three times, and would read a stale or empty texture as a failure.
+
+## Three rules the graph now enforces itself (2026-09-20, the audit)
+
+- **A lost context is said once and drawn around.** `render()` checks
+  `isContextLost()` and returns the canvas untouched: iOS takes contexts back
+  under memory pressure, and a lost one accepts every call and draws nothing,
+  which is a black stage with no error anywhere.
+- **The first draw of each program is checked with `gl.getError()`, in dev
+  only.** Every trap above (two sampler types on one unit, an incomplete
+  texture) is an `INVALID_OPERATION` the driver reports there and nowhere
+  else, and each was found by hand. Never per frame — `getError` stalls the
+  pipeline — but once per program id is exactly when a new pass could have
+  got it wrong, and the render gate runs on the dev server so it sees it too.
+- The GL error class is now `console.error`'d with the pass id; a silent
+  fallback to an unprocessed picture is the failure this whole file exists to
+  prevent.
+
+**The GPU has an EDGE CAP, and past it the picture is black, not slow
+(2026-09-20, the audit).** A texture and a framebuffer stop at
+`MAX_TEXTURE_SIZE` on one edge — 8192 on SwiftShader and older mobile GPUs,
+16384 on most desktops — and an upload past it is refused with an
+INVALID_VALUE nobody reads: the texture stays incomplete and samples black,
+so a 61-megapixel still (9504 px) delivered on an 8192 GPU was a black JPEG
+with every gate green. The graph now reads the smallest of its texture,
+renderbuffer and viewport limits (`RenderGraph.maxSize`) and says ONCE, in
+the console, when a source or a target is past it; `maxRenderSize()`
+(`graph-grader.ts`) asks it of a 1×1 graph once per page; `render-size.ts`
+is the pure fit (long edge to the cap, never up); and `fitPhotoForRender`
+(`photo-frame.ts`) is what the three full-density still exports — the roll,
+the Studio still, the badge PNG — call before building their grader, drawing
+with the size it hands back. "Grade at source density" therefore means "at
+the source's density or the GPU's cap, whichever is smaller", and the roll
+export SAYS when it was the cap (`RollRendered.gradedAt`, a note in the run's
+summary), because a delivery must never claim pixels it resampled away. The
+gate has a row for it: a picture a thousand pixels past this GPU's cap,
+fitted and graded to a picture. The stage never meets the cap — it works to a
+pixel budget — and a video frame is never past it.
 
 **A graph now OUTLIVES its pass list, and that made a leak possible that could
 not exist before.** A pass's own textures — a layer's cube, a painted mask's
