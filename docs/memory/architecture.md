@@ -208,3 +208,36 @@ opinion — the same anti-fabrication line the badge and the battery gauge hold.
 - **React does not promise that a promise's state lands in the same commit as a flag set from it** — measured: the looks landed one commit AFTER the `ready` flag they were supposed to close. So an editor that seeds asynchronously wants two flags, the first set after the seeding writes (every one of them is then in the value by the commit that observes it) and the second opening the gate a commit later, from an effect declared AFTER the history's own.
 - The buttons are **always both drawn**, disabled when there is nothing to step to: a control that appears once you have edited is one nobody knows is there, and a phone has no ⌘Z at all. They are ONE control (2026-09-16): two bare halves under one border, a hairline element between them (a `border-l` on a half loses to its `border-0` by Tailwind's order), a half with nothing to do greying its glyph rather than fading whole — the pair costs one gap less in a tight bar and reads as the mirrored arc it is.
 - What is NOT in a history: anything the document does not hold. A deleted piece comes back without its baked thumbnail (it re-bakes), and an export already written stays written.
+
+## EXIF is WRITTEN two ways, and the copy is the good one (2026-09-20)
+
+**Decision.** A developed picture leaves carrying the original's metadata, and
+`shared/exif/` gained the writing half for it: `exif-block.ts` moves the
+original JPEG's own `APP1` block across without interpreting it, and
+`exif-build.ts` constructs one from an `ExifData` where no block can be moved.
+
+**Why.** A canvas encodes PIXELS — the JPEG it hands over has no GPS, no body,
+no capture time — and the maintainer looks his photographs up by exactly those
+(2026-09-20: *"j'ai besoin de conserver l'exif… mais vraiment au maximum"*).
+The copy is preferred because it keeps what no struct models, the MAKER NOTES
+above all; the build is the fallback, and it is bounded by what `ExifData`
+holds, which Winnow's own row is bounded by too (`exif-from-row.ts` carries no
+make, model or lens on purpose).
+
+**How to apply.**
+
+- Three tags are corrected on a copied block, and only three: the ORIENTATION
+  to 1 (a delivered picture is already the way up it was looked at, and a
+  viewer honouring the original's tag turns it twice), the pixel dimensions to
+  the delivered ones, and the THUMBNAIL cut loose by zeroing IFD0's next-IFD
+  pointer — the original's thumbnail shows the picture before the development,
+  and a file that previews as its own undeveloped self reads as broken.
+- A copied block cannot come from a DNG or an ARW: their TIFF stream IS the
+  file, so those rebuild. A segment also caps a block at 65527 bytes, which a
+  copy can exceed; `withExifBlock` throws rather than write a file no reader
+  parses, and the caller falls back to the build.
+- `relativeAltitude` (DJI's height above take-off) is deliberately NOT written:
+  it is an XMP property, not an EXIF tag, and an invented EXIF home for it puts
+  a number where no reader looks. An XMP packet is its own job.
+- `parseExif` takes `ArrayBufferLike` since, so a `Uint8Array`'s `.buffer` goes
+  in without a cast and the writer is read back by the reader in one line.
