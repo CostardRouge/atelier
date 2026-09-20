@@ -1,8 +1,10 @@
 /**
- * "Choose a look" — a rail of families on the left, a grid of looks baked
- * live on the right, so picking one means looking at the actual result
+ * "Choose a look" — a rail of families on the left, a grid of looks on a real
+ * photograph on the right, so picking one means looking at the actual result
  * instead of reading a name off a `<select>`. A tile click IS the choice —
  * there is nothing further to confirm, since seeing it first was the point.
+ * The ★ in a tile's corner is the one thing on it that is not the choice:
+ * it builds the Favourites row at the top of the rail (§6).
  *
  * **The rail is what makes a purchased pack affordable** (variant B of
  * `docs/lut-packs.md` §6, the maintainer's choice): only the open node's
@@ -47,6 +49,7 @@ import {
 } from './lut-preview';
 import LutPackImportModal from './LutPackImportModal';
 import LutThumb from './LutThumb';
+import { useLutFavourites, toggleFavourite } from './use-lut-favourites';
 import { useLutInterpolation } from './use-lut-interpolation';
 import { useLutPacks } from './use-lut-packs';
 
@@ -76,7 +79,11 @@ export interface LutGalleryModalProps {
   allowNone?: boolean;
   /** Include the film stocks section — `GradePanel`'s "Add a look" already offers them. */
   includeFilm?: boolean;
-  /** A picture already open in the host tool — the truest preview. Falls back to a test chart. */
+  /**
+   * A picture already open in the host tool. It is OFFERED — "Preview on the
+   * open picture" — and never taken by default: the shipped tiles cost
+   * nothing, and a live bake costs a lattice per look (§7).
+   */
   previewImage?: LutPreviewSource | null;
   title?: string;
   onPick: (id: string) => void;
@@ -127,9 +134,10 @@ export default function LutGalleryModal({
 
   const effectiveSource = liveOn === 'custom' ? customImage : liveOn === 'open' ? previewImage : null;
 
+  const favourites = useLutFavourites();
   const nodes = useMemo(
-    () => galleryNodes(packIndexes, includeFilm, effectiveSource ? null : thumbs),
-    [packIndexes, includeFilm, effectiveSource, thumbs],
+    () => galleryNodes(packIndexes, includeFilm, effectiveSource ? null : thumbs, favourites),
+    [packIndexes, includeFilm, effectiveSource, thumbs, favourites],
   );
 
   // A pack forgotten while its node was open, or a first import: the rail
@@ -426,7 +434,9 @@ export default function LutGalleryModal({
                         bitmap={previews[item.id]}
                         failed={resolved[item.id] === 'error'}
                         selected={selected === item.id}
+                        favourite={favourites.includes(item.id)}
                         onPick={onPick}
+                        onToggleFavourite={toggleFavourite}
                       />
                     ))}
                   </div>
@@ -485,7 +495,17 @@ function RailRow({
   );
 }
 
-/** One look: the whole tile is the pick, exactly like `HookPicturesModal`'s grid. */
+/**
+ * One look: the whole tile is the pick, exactly like `HookPicturesModal`'s
+ * grid — plus a ★ in its corner, which is the one thing on the tile that is
+ * NOT the pick. That is why the tile is a `<div>` holding two buttons rather
+ * than a button with a button inside it, which is invalid HTML and leaves the
+ * star unreachable from a keyboard.
+ *
+ * The star is drawn at every width rather than on hover: a phone has no
+ * hover, and a control you can only find with a pointer is a control half the
+ * devices do not have.
+ */
 function Tile({
   id,
   name,
@@ -493,7 +513,9 @@ function Tile({
   bitmap,
   failed = false,
   selected,
+  favourite = false,
   onPick,
+  onToggleFavourite,
 }: {
   id: string;
   name: string;
@@ -501,30 +523,55 @@ function Tile({
   bitmap?: RgbBitmap | undefined;
   failed?: boolean;
   selected: boolean;
+  favourite?: boolean;
   onPick: (id: string) => void;
+  /** Omitted for "No look (original)", which is the absence of a look, not one. */
+  onToggleFavourite?: (id: string) => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={() => onPick(id)}
-      aria-pressed={selected}
-      title={name}
-      className={`group flex flex-col gap-1 p-1 rounded-control border cursor-pointer bg-paper text-left transition-colors ${
+    <div
+      className={`group relative flex flex-col gap-1 p-1 rounded-control border bg-paper transition-colors ${
         selected ? 'border-accent ring-2 ring-accent/40' : 'border-line hover:border-line-strong'
       }`}
     >
-      <span className="block w-full h-[74px] rounded-[6px] overflow-hidden bg-paper-2 max-[820px]:h-[92px]">
-        {thumb ? (
-          // Baked at import on the reference this look's family asks for —
-          // nothing to decode here, which is what lets a pack be drawn at all.
-          <img src={thumb} alt="" className="w-full h-full object-cover" />
-        ) : failed ? (
-          <span className="grid place-items-center w-full h-full font-mono text-3xs text-danger">failed</span>
-        ) : (
-          <LutThumb bitmap={bitmap} />
-        )}
-      </span>
-      <span className="block text-2xs leading-tight text-ink-soft truncate group-hover:text-ink">{name}</span>
-    </button>
+      <button
+        type="button"
+        onClick={() => onPick(id)}
+        aria-pressed={selected}
+        title={name}
+        className="flex flex-col gap-1 cursor-pointer text-left"
+      >
+        <span className="block w-full h-[74px] rounded-[6px] overflow-hidden bg-paper-2 max-[820px]:h-[92px]">
+          {thumb ? (
+            // Baked once already — at import for a pack, at
+            // `gen-lut-thumbs.mjs` time for a built-in — on the reference this
+            // look's family asks for. Nothing is decoded here, which is what
+            // lets the gallery open without touching a `.cube` at all.
+            <img src={thumb} alt="" className="w-full h-full object-cover" />
+          ) : failed ? (
+            <span className="grid place-items-center w-full h-full font-mono text-3xs text-danger">failed</span>
+          ) : (
+            <LutThumb bitmap={bitmap} />
+          )}
+        </span>
+        <span className="block text-2xs leading-tight text-ink-soft truncate group-hover:text-ink">{name}</span>
+      </button>
+      {onToggleFavourite && (
+        <button
+          type="button"
+          onClick={() => onToggleFavourite(id)}
+          aria-pressed={favourite}
+          aria-label={favourite ? `Remove ${name} from favourites` : `Add ${name} to favourites`}
+          title={favourite ? 'In your favourites' : 'Add to favourites'}
+          className={`absolute top-1.5 right-1.5 grid place-items-center w-6 h-6 rounded-full text-xs leading-none transition-colors ${
+            favourite
+              ? 'bg-accent-wash text-accent-ink'
+              : 'bg-[rgba(20,18,15,0.35)] text-paper opacity-70 hover:opacity-100'
+          }`}
+        >
+          <span aria-hidden="true">{favourite ? '★' : '☆'}</span>
+        </button>
+      )}
+    </div>
   );
 }

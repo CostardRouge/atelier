@@ -390,8 +390,15 @@ upload on a trip's Grade, then the trip exported: **139 804 bytes before,
 before today holds an inlined lattice and must keep rendering — verified by
 importing exactly such a trip file. Nothing writes that shape any more.
 
-Not built yet: ★ favourites (§6) — hiding answers "only what I keep",
-and a starred shortlist can come with the sync.
+**★ favourites (§6) are built (2026-09-20)**, the last piece of the picker:
+`use-lut-favourites.ts` holds the starred pick ids in `localStorage` — a
+working preference, never on a document, and never on a pack index, since a
+favourite spans built-ins, film stocks and every pack at once. A ★ in a
+tile's corner builds the Favourites row at the top of the rail, and the same
+list becomes the first `<optgroup>` of `GradePanel`'s "Add a look". A star
+whose look is gone is kept and simply not drawn, so forgetting a pack and
+importing it again does not cost the stars. Hiding still answers "only what I
+keep"; this is the shortlist beside it.
 
 Step 8 can move before 3 (it helps the built-ins on its own). Every step
 ends with typecheck + lint + test + build green (CI's four gates) and a

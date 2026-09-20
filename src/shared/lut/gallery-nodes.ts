@@ -60,6 +60,8 @@ export interface GalleryNode {
 
 const BUILTIN_ROOT = 'builtin';
 const FILM_NODE = 'film';
+/** The starred shortlist's own row — `use-lut-favourites.ts` holds the list. */
+export const FAVOURITES_NODE = 'favourites';
 
 /** A pack look's pick id — what `GradePanel` turns back into a reference. */
 export function packPickId(packId: string, lookId: string): string {
@@ -90,6 +92,7 @@ export function galleryNodes(
   packs: readonly LutPackIndex[],
   includeFilm: boolean,
   thumbs: Readonly<Record<string, string>> | null = {},
+  favourites: readonly string[] = [],
 ): GalleryNode[] {
   const nodes: GalleryNode[] = [];
   /** A tile a build already baked, if this is not the live mode. */
@@ -160,6 +163,19 @@ export function galleryNodes(
         ...(node.hint ? { hint: node.hint } : {}),
         items: (direct.length ? direct : branch).map((l) => packItem(pack, l, thumbs !== null)),
       });
+    }
+  }
+
+  // ★ Favourites, first in the rail (§6). It repeats items the other nodes
+  // own — which is exactly what `aggregate` already means here, and what
+  // keeps a search from listing every starred look twice. A star whose look
+  // is gone (a pack forgotten, a `.cube` dropped from the build) is left out
+  // silently: the list keeps it, so re-importing the pack brings it back.
+  if (favourites.length) {
+    const byId = new Map(nodes.flatMap((n) => n.items).map((item) => [item.id, item]));
+    const items = favourites.map((id) => byId.get(id)).filter((i): i is GalleryItem => !!i);
+    if (items.length) {
+      nodes.unshift({ id: FAVOURITES_NODE, label: '★ Favourites', depth: 0, aggregate: true, items });
     }
   }
 
