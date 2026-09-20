@@ -85,26 +85,61 @@ export function readDayPoint(raw: unknown): DayPoint | null {
   // trust the smaller number rather than the flattering one.
   const measured = count > 0 ? Math.min(reported, count) : reported;
 
-  // `inferred` is the instance's own word. Fall back to the counts only when
-  // it is absent — a row that says nothing about provenance and holds no
-  // measured fix is, by construction, inferred.
+  // `source` is the instance's own word, and the one it really sends: a day
+  // holding any trustworthy fix is placed by those alone and reported
+  // "measured", else "inferred". `inferred: boolean` is read too because an
+  // older or stubbed instance may say it that way, and the counts are the last
+  // resort — a row that says nothing about provenance and holds no measured
+  // fix is, by construction, inferred.
   const inferred =
-    typeof row.inferred === 'boolean' ? row.inferred : measured === 0;
+    row.source === 'inferred' ? true
+    : row.source === 'measured' ? false
+    : typeof row.inferred === 'boolean' ? row.inferred
+    : measured === 0;
 
   return { date, lat, lon, count, measured, inferred };
 }
 
 /**
- * The rows this module will work on: validated, in calendar order, one per
- * day. A repeated date keeps the FIRST row — a duplicate is the instance
+ * The days an instance answered with, split into the two things they are.
+ *
+ * A day the filters match but that holds NO position is still sent, with null
+ * coordinates — the instance calls it a *declared gap*, and it is the reason
+ * this feature needs one request rather than two: "no data for this day" and
+ * "no media that day" are different answers, and only the first appears here
+ * at all. Reading them from the same response is also what keeps the two
+ * counts from ever disagreeing.
+ *
+ * A repeated date keeps the FIRST row — a duplicate is the instance
  * contradicting itself, and picking the later one silently would make the
- * result depend on the order a page arrived in.
+ * result depend on the order a page arrived in. A row whose date is not a
+ * calendar day is dropped entirely: it is neither a position nor a gap.
  */
-export function dayPointsFrom(rows: readonly unknown[]): DayPoint[] {
-  const byDate = new Map<IsoDate, DayPoint>();
+export interface DayTrack {
+  /** Days with a position, in calendar order. */
+  points: DayPoint[];
+  /** Days holding media and no position at all, in calendar order. */
+  blind: IsoDate[];
+}
+
+export function readDayTrack(rows: readonly unknown[]): DayTrack {
+  const points = new Map<IsoDate, DayPoint>();
+  const blind = new Set<IsoDate>();
+
   for (const raw of rows) {
+    if (!raw || typeof raw !== 'object') continue;
+    const date = (raw as { date?: unknown }).date;
+    if (typeof date !== 'string' || !isIsoDate(date)) continue;
+    if (points.has(date) || blind.has(date)) continue;
+
     const point = readDayPoint(raw);
-    if (point && !byDate.has(point.date)) byDate.set(point.date, point);
+    if (point) points.set(date, point);
+    else blind.add(date);
   }
-  return [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+  const byDate = (a: IsoDate, b: IsoDate) => (a < b ? -1 : a > b ? 1 : 0);
+  return {
+    points: [...points.values()].sort((a, b) => byDate(a.date, b.date)),
+    blind: [...blind].sort(byDate),
+  };
 }

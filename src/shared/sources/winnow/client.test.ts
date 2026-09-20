@@ -500,6 +500,36 @@ describe('WinnowClient requests', () => {
     });
   });
 
+  it('asks for one position per day, and never narrows to what is already placed', async () => {
+    const fetchImpl = vi.fn<FetchLike>(async () => ok({ days: [] }));
+    await client(fetchImpl).geoDays({ from: '2025-11-02', to: '2026-02-11' });
+    const url = new URL(fetchImpl.mock.calls[0][0]);
+    expect(url.pathname).toBe('/api/assets/geo');
+    // `has_gps` is a legal filter here and would drop the DECLARED GAPS — the
+    // days holding media and no position, which are the whole reason one
+    // request answers the question. Pinning the entire query is what keeps a
+    // later "just narrow it a bit" from silently making a trip look placed.
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      date_from: '2025-11-02',
+      date_to: '2026-02-11',
+      by: 'day',
+    });
+  });
+
+  it('hands the day rows on as the instance sent them', async () => {
+    const c = client(async () =>
+      ok({
+        days: [
+          { date: '2025-11-02', lat: -31.95, lon: 115.86, count: 120, measured: 40, source: 'measured' },
+          { date: '2025-11-03', lat: null, lon: null, count: 84, measured: 0, source: null },
+        ],
+      }),
+    );
+    const days = await c.geoDays({ from: '2025-11-02', to: '2025-11-03' });
+    expect(days).toHaveLength(2);
+    expect(days[1]).toMatchObject({ date: '2025-11-03', lat: null, source: null });
+  });
+
   it('asks the real timeline route, under the same filters', async () => {
     const fetchImpl = vi.fn<FetchLike>(async () => ok({ chapters: [] }));
     await client(fetchImpl).timeline({ mediaType: 'video' });
