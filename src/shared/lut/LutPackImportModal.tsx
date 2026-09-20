@@ -21,9 +21,9 @@ import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
 import { Icons } from '../ui/icons';
 import useDialogKeys from '../ui/use-dialog-keys';
-import { prettyName, type LutPackIndex } from './lut-pack';
+import { flattenNodes, prettyName, type LutPackIndex } from './lut-pack';
 import { cubeEntries, importPackFromFolder, type ImportFailure } from './pack-import';
-import { removePack } from './pack-vault';
+import { removePack, setPackHidden } from './pack-vault';
 import { useLutPacks } from './use-lut-packs';
 
 interface Picked {
@@ -142,28 +142,7 @@ export default function LutPackImportModal({ onClose, onImported }: LutPackImpor
                 In this browser
               </h3>
               {packs.map((pack) => (
-                <div
-                  key={pack.id}
-                  className="flex items-center gap-3 px-3 py-2 border border-line rounded-control bg-paper"
-                >
-                  <span className="flex-1 min-w-0">
-                    <span className="block text-sm font-medium text-ink truncate">
-                      {pack.name || 'Pack'}
-                      {pack.author && <span className="text-muted"> · {pack.author}</span>}
-                    </span>
-                    <span className="block font-mono text-2xs text-muted">
-                      {pack.looks.length} looks
-                    </span>
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => void removePack(pack.id)}
-                    title="Forget this pack and its looks on this device"
-                  >
-                    Forget
-                  </Button>
-                </div>
+                <PackRow key={pack.id} pack={pack} />
               ))}
             </section>
           )}
@@ -282,4 +261,91 @@ export default function LutPackImportModal({ onClose, onImported }: LutPackImpor
     </div>,
     document.body,
   );
+}
+
+/**
+ * One pack in the vault: what it holds, what shows in the pickers, and the
+ * verb that forgets it.
+ *
+ * Hiding is PRESENTATION — the looks stay stored and a grade already wearing
+ * a hidden one still renders (`docs/lut-packs.md` §6). It is the answer to a
+ * pack whose cameras you do not own: 25 looks of which you shoot four.
+ */
+function PackRow({ pack }: { pack: LutPackIndex }) {
+  const [open, setOpen] = useState(false);
+  const hidden = new Set(pack.hidden);
+  const toggle = (id: string) => {
+    const next = new Set(hidden);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    void setPackHidden(pack.id, [...next]);
+  };
+
+  return (
+    <div className="flex flex-col gap-2 px-3 py-2 border border-line rounded-control bg-paper">
+      <div className="flex items-center gap-3">
+        <span className="flex-1 min-w-0">
+          <span className="block text-sm font-medium text-ink truncate">
+            {pack.name || 'Pack'}
+            {pack.author && <span className="text-muted"> · {pack.author}</span>}
+          </span>
+          <span className="block font-mono text-2xs text-muted">
+            {pack.looks.length} looks
+            {hidden.size > 0 && ` · ${pack.looks.length - visibleCount(pack)} hidden`}
+          </span>
+        </span>
+        {pack.tree.length > 0 && (
+          <Button size="sm" variant="ghost" onClick={() => setOpen((v) => !v)}>
+            {open ? 'Done' : 'What shows…'}
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => void removePack(pack.id)}
+          title="Forget this pack and its looks on this device"
+        >
+          Forget
+        </Button>
+      </div>
+
+      {open && (
+        <ul className="m-0 p-0 list-none flex flex-col gap-1 border-t border-line pt-2">
+          {flattenNodes(pack.tree).map(({ node, depth }) => (
+            <li key={node.id}>
+              <label
+                className="flex items-center gap-2 text-xs text-ink-soft"
+                style={{ paddingLeft: `${depth * 0.9}rem` }}
+              >
+                <input
+                  type="checkbox"
+                  className="accent-accent"
+                  checked={!hidden.has(node.id)}
+                  onChange={() => toggle(node.id)}
+                />
+                <span className="flex-1 min-w-0 truncate">{node.label}</span>
+                {/* What the node HOLDS, not what shows: a count that fell to
+                    zero the moment you unticked it would read as a category
+                    that lost its looks. */}
+                <span className="font-mono text-2xs text-muted tabular-nums">
+                  {branchCount(pack, node.id)}
+                </span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function branchCount(pack: LutPackIndex, nodeId: string): number {
+  return pack.looks.filter((l) => l.node === nodeId || l.node.startsWith(`${nodeId}/`)).length;
+}
+
+function visibleCount(pack: LutPackIndex): number {
+  const hidden = new Set(pack.hidden);
+  return pack.looks.filter(
+    (l) => !hidden.has(l.id) && ![...hidden].some((h) => l.node === h || l.node.startsWith(`${h}/`)),
+  ).length;
 }
