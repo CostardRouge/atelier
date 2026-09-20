@@ -290,6 +290,10 @@ export function useRollExport({
             layers: picture.layers ?? null,
             detail: picture.detail ?? null,
             repair: picture.repair ?? null,
+            // The ROLL's texture, not the picture's: grain and halation belong
+            // to the stock, which dresses the whole roll. The document's copy,
+            // which the write-through keeps level with the stack.
+            film: r.grade?.film ?? null,
             raw,
             hdr,
             stamp,

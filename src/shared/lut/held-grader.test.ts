@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { FrameGrader } from './frame-grader';
+import type { FrameGrader, PassGrader } from './frame-grader';
 import { holdGrades, type CopyPicture, type RasterSurface } from './held-grader';
 
 /** Stand-ins: the holding logic only compares identities, never reads pixels. */
@@ -46,6 +46,44 @@ describe('holdGrades', () => {
     for (let i = 0; i < 5; i++) held.render(picture(`frame ${i}`));
     expect(render).toHaveBeenCalledTimes(5);
     expect(copy).not.toHaveBeenCalled();
+  });
+
+  it('grades again for a new SOURCE instant — the film node re-rolls its field there', () => {
+    const { grader, render } = fakeGrader();
+    const held = holdGrades(grader, fakeCopy());
+    const clip = picture('video');
+    held.render(clip, 0);
+    held.render(clip, 0);
+    expect(render).toHaveBeenCalledTimes(1);
+    // A clip's element is the SAME object at every frame, so without this it
+    // would be served the grain of whichever frame was graded first.
+    held.render(clip, 1 / 30);
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(render).toHaveBeenLastCalledWith(clip, 1 / 30);
+    // And a still, which passes none, holds exactly as it always did.
+    const photo = picture('photo');
+    held.render(photo);
+    held.render(photo);
+    expect(render).toHaveBeenCalledTimes(3);
+  });
+
+  it('forgets the held copy when the film texture is swapped, and only where it can be', () => {
+    const { grader, render } = fakeGrader();
+    const setFilm = vi.fn();
+    const swappable: PassGrader = { ...grader, setPasses: vi.fn(), setFilm };
+    const held = holdGrades(swappable, fakeCopy());
+    const photo = picture('photo');
+    held.render(photo);
+    held.render(photo);
+    expect(render).toHaveBeenCalledTimes(1);
+    // On a still the texture is the only thing the grain slider can move:
+    // without dropping the held copy the slider would be inert.
+    held.setFilm?.(null);
+    expect(setFilm).toHaveBeenCalledWith(null);
+    held.render(photo);
+    expect(render).toHaveBeenCalledTimes(2);
+    // A grader that cannot swap one does not pretend to.
+    expect(holdGrades(fakeGrader().grader, fakeCopy()).setFilm).toBeUndefined();
   });
 
   it('grades the same element again after invalidate — a clip whose frame moved', () => {

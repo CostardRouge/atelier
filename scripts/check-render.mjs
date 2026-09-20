@@ -893,6 +893,65 @@ const out = await page.evaluate(async () => {
       rows.sizes = { worst, spread };
     }
 
+    // 6. THE SEAM: `makeFrameGrader` builds the node, in a FIXED position no
+    //    caller chooses — after the look and after every extra pass — and it
+    //    swaps in place rather than rebuilding, since the grain slider moves
+    //    on every step of a drag.
+    {
+      const { makeFrameGrader } = await import('/atelier/src/shared/lut/frame-grader.ts');
+      const { makeSharpenPass } = await import('/atelier/src/shared/render/detail-pass.ts');
+      const dm = await import('/atelier/src/shared/render/detail.ts');
+      const W = 384, H = 320;
+      const src = paint(W, H, (x, y) => [0.45 + 0.1 * Math.sin(x / 11), 0.45, 0.45 + 0.1 * Math.cos(y / 9)]);
+      const texture = { ...tx.DEFAULT_FILM_TEXTURE, grain: 0.9, grainSize: 0.01, grainFps: 0, seed: 41 };
+      const readOf = (canvas) => {
+        const o = document.createElement('canvas'); o.width = W; o.height = H;
+        const oc = o.getContext('2d', { willReadFrequently: true });
+        oc.drawImage(canvas, 0, 0);
+        return oc.getImageData(0, 0, W, H).data;
+      };
+      const spread = (a, b) => { let w = 0; for (let i = 0; i < a.length; i++) if (i % 4 !== 3) w = Math.max(w, Math.abs(a[i] - b[i])); return w; };
+
+      const plainG = makeFrameGrader(null, W, H, 1);
+      const plain = readOf(plainG.render(src.canvas));
+      plainG.dispose();
+
+      // A silent texture through the seam must be the same picture as none.
+      const silentG = makeFrameGrader(null, W, H, 1, [], [], { ...tx.DEFAULT_FILM_TEXTURE, grain: 0, halation: 0 });
+      const silent = spread(plain, readOf(silentG.render(src.canvas)));
+      silentG.dispose();
+
+      // Built with the texture, against the same grader SWAPPED onto it.
+      const builtG = makeFrameGrader(null, W, H, 1, [], [], texture);
+      const built = readOf(builtG.render(src.canvas));
+      builtG.dispose();
+      const swapG = makeFrameGrader(null, W, H, 1);
+      readOf(swapG.render(src.canvas));
+      swapG.setFilm(texture);
+      const swapped = spread(built, readOf(swapG.render(src.canvas)));
+      swapG.dispose();
+
+      // And the POSITION: with a sharpen among the extra passes, the grain
+      // must be added AFTER it. Sharpening grain would amplify it, so the two
+      // orders are far apart — the row asserts the node is last by comparing
+      // against a picture sharpened first and grained after, built by hand.
+      const terms = dm.detailTerms({ ...dm.DEFAULT_DETAIL, sharpen: 100, sharpenRadius: 1.5 }, 1);
+      const lastG = makeFrameGrader(null, W, H, 1, [makeSharpenPass(terms)], [], texture);
+      const last = readOf(lastG.render(src.canvas));
+      lastG.dispose();
+      // Sharpened alone, then the SAME texture over it in a second graph:
+      // that is what "the node is last" must equal.
+      const sharpG = makeFrameGrader(null, W, H, 1, [makeSharpenPass(terms)]);
+      const sharpened = await createImageBitmap(sharpG.render(src.canvas));
+      sharpG.dispose();
+      const overG = makeFrameGrader(null, W, H, 1, [], [], texture);
+      const over = readOf(overG.render(sharpened));
+      overG.dispose();
+      sharpened.close();
+
+      results.seam = { silent, swapped, ordered: spread(last, over), moved: spread(plain, built) };
+    }
+
     results.film = rows;
   }
 
@@ -1157,6 +1216,21 @@ const film = out.film;
     fr.repaint === 0 && fr.withinBucket === 0 && fr.nextBucket > 4 && fr.frozen === 0,
     `the field is the SOURCE frame's: a repaint ${fr.repaint}, the same 1/24 bucket ${fr.withinBucket}, ` +
       `the next one ${fr.nextBucket} (must differ), frozen at 0 fps ${fr.frozen}`,
+  );
+  const seam = out.seam;
+  say(
+    seam.silent === 0,
+    `through makeFrameGrader a silent texture is the same picture as none (${seam.silent})`,
+  );
+  say(
+    seam.swapped <= 1 && seam.moved > 8,
+    `a texture SWAPPED onto a grader is the one it was built with: worst ${seam.swapped} code(s), ` +
+      `and the texture moved the picture by ${seam.moved}`,
+  );
+  say(
+    seam.ordered <= 2,
+    `the node is LAST — grain after a sharpen, not sharpened: worst ${seam.ordered} code(s) against ` +
+      'the same texture drawn over a separately sharpened picture (allowed 2)',
   );
   say(
     film.sizes.worst <= 2 && film.sizes.spread > 8,

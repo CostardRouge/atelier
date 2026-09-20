@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { filmTextureKey, isSilentTexture, type FilmTexture } from '../../shared/film/film-texture';
 import type { CubeLut } from '../../shared/lib/cube-parser';
 import { makeFrameGrader } from '../../shared/lut/frame-grader';
 import { holdGrades, type HeldGrader } from '../../shared/lut/held-grader';
@@ -122,6 +123,13 @@ interface BadgeStageProps {
   qr?: QrDraw | null;
   /** The composed grade the picture goes through, or null for the picture as shot. */
   lut?: CubeLut | null;
+  /**
+   * The grade's film TEXTURE — grain and halation — drawn by ONE node after
+   * the look. The stage is where a piece's grain is SEEN; a cell finer than
+   * the stage can resolve fades out rather than aliasing, and the panel says
+   * so (`render-film.md`).
+   */
+  film?: FilmTexture | null;
   /** How the picture sits in the frame. */
   framing?: Framing | null;
   /**
@@ -239,6 +247,7 @@ export default function BadgeStage({
   background,
   qr,
   lut = null,
+  film = null,
   framing = null,
   onFraming,
   selectedId = null,
@@ -590,25 +599,40 @@ export default function BadgeStage({
   // picture under it has not changed, so it is graded once and drawn many
   // times (`held-grader.ts`). A clip over the pixel budget is graded into a
   // budget-sized canvas — its element cannot be resampled ahead of the GPU.
-  const graderRef = useRef<{ lut: CubeLut; w: number; h: number; grader: HeldGrader } | null>(
-    null,
-  );
+  const graderRef = useRef<{
+    lut: CubeLut | null;
+    film: string;
+    w: number;
+    h: number;
+    grader: HeldGrader;
+  } | null>(null);
+  const filmKey = filmTextureKey(film);
   const graderFor = useCallback((source: BadgeSource | null): HeldGrader | null => {
     const cur = graderRef.current;
-    if (!lut || !source || source.width <= 0) {
+    // A texture with no look is still a render: the node is the only thing
+    // that draws it.
+    if ((!lut && isSilentTexture(film)) || !source || source.width <= 0) {
       cur?.grader.dispose();
       graderRef.current = null;
       return null;
     }
     if (cur && cur.lut === lut && cur.w === source.width && cur.h === source.height) {
-      return cur.grader;
+      // The texture alone moved: SWAP it rather than rebuilding, or the grain
+      // slider is a new WebGL2 context per step (`render-core.md`).
+      if (cur.film !== filmKey && cur.grader.setFilm) {
+        cur.grader.setFilm(film);
+        cur.film = filmKey;
+      }
+      if (cur.film === filmKey) return cur.grader;
     }
     cur?.grader.dispose();
     const size = stageFrameSize(source.width, source.height);
-    const grader = holdGrades(makeFrameGrader(lut, size.w, size.h));
-    graderRef.current = { lut, w: source.width, h: source.height, grader };
+    const grader = holdGrades(
+      makeFrameGrader(lut as CubeLut, size.w, size.h, 1, [], [], film),
+    );
+    graderRef.current = { lut, film: filmKey, w: source.width, h: source.height, grader };
     return grader;
-  }, [lut]);
+  }, [lut, film, filmKey]);
   // One held grader per collage cell, keyed on its cube and its source size —
   // the lead's is `graderFor` above. Disposed with the stage.
   const cellGradersRef = useRef<Map<number, { lut: CubeLut; w: number; h: number; grader: HeldGrader }>>(
@@ -782,6 +806,7 @@ export default function BadgeStage({
     cellGraderFor,
     cellSeq,
     lut,
+    filmKey,
     selectedCell,
   ]);
 

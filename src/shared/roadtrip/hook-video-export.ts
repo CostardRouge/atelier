@@ -17,6 +17,7 @@ import { exportVariantVideo } from '../media/export-variant';
 import { encodeFrames, paintedOutputSize } from '../media/render-video';
 import type { ExportProgress } from '../media/webcodecs-export';
 import type { TrimRange } from '../media/trim';
+import { isSilentTexture, type FilmTexture } from '../film/film-texture';
 import { makeFrameGrader } from '../lut/frame-grader';
 import type { OverlayElement } from '../overlay/overlay-types';
 import type { StyleTheme } from '../overlay/title-styles';
@@ -56,6 +57,8 @@ export interface HookVideoOptions {
    * leaves the clip as shot.
    */
   lut?: CubeLut | null;
+  /** The grade's film TEXTURE — grain and halation — drawn by ONE node after the look. */
+  film?: FilmTexture | null;
   /** The piece's prepared opener, painted under the shades at the clip's clock. */
   hook?: ResolvedHook | null;
   /** The badge's elements at a moment, when the opener rewrites its words. */
@@ -92,6 +95,9 @@ export function exportHookVideo(opts: HookVideoOptions): Promise<Blob> {
       cues: [],
       lut: opts.lut ?? null,
       intensity: 1,
+      // A clip takes the film node: `SOURCE → CUBE → [FILM] → OUTPUT`, the
+      // fast path, and grain on a moving picture is the point of a stock.
+      film: opts.film ?? null,
       theme: opts.theme,
       srcWidth: opts.srcWidth,
       srcHeight: opts.srcHeight,
@@ -151,6 +157,14 @@ export interface HookStillVideoOptions {
   shades?: readonly Shade[];
   block?: HookBlock | null;
   lut?: CubeLut | null;
+  /**
+   * The film TEXTURE. On a PAINTED clip the grain is FROZEN: the picture is
+   * graded once into a bitmap the painter draws every frame, and grading per
+   * frame would be one WebGL2 render per frame for a picture that cannot
+   * change. A photograph's grain does not move, which is also what a stock
+   * with `grainFps: 0` asks for.
+   */
+  film?: FilmTexture | null;
   /** The piece's prepared opener — see {@link HookVideoOptions.hook}. */
   hook?: ResolvedHook | null;
   elementsAt?: ElementsAt | null;
@@ -177,9 +191,13 @@ export interface HookStillVideoOptions {
  * from the same plan the frames are painted from, so the two cannot drift.
  */
 /** A picture graded once into a bitmap the painter draws every frame. */
-async function gradedOnce(source: BadgeSource, lut: CubeLut | null): Promise<ImageBitmap | null> {
-  if (!lut || source.width <= 0 || source.height <= 0) return null;
-  const grader = makeFrameGrader(lut, source.width, source.height);
+async function gradedOnce(
+  source: BadgeSource,
+  lut: CubeLut | null,
+  film: FilmTexture | null = null,
+): Promise<ImageBitmap | null> {
+  if ((!lut && isSilentTexture(film)) || source.width <= 0 || source.height <= 0) return null;
+  const grader = makeFrameGrader(lut as CubeLut, source.width, source.height, 1, [], [], film);
   try {
     return await createImageBitmap(grader.render(source.image) as CanvasImageSource);
   } finally {
@@ -193,7 +211,7 @@ export async function exportHookStillVideo(opts: HookStillVideoOptions): Promise
   const source = await loadBadgeSource(opts.file);
   let graded: ImageBitmap | null = null;
   try {
-    graded = await gradedOnce(source, opts.lut ?? null);
+    graded = await gradedOnce(source, opts.lut ?? null, opts.film ?? null);
     const picture = graded
       ? { image: graded as CanvasImageSource, width: source.width, height: source.height, release: () => {} }
       : source;
@@ -220,6 +238,10 @@ export async function exportHookStillVideo(opts: HookStillVideoOptions): Promise
       height: size.h,
       seconds: opts.seconds,
       fps: opts.fps,
+      // The grain is frozen here (the picture is graded once), so it costs an
+      // I-frame and nothing after — but a still whose every frame carries a
+      // fixed noise field still defeats a budget tuned for smooth footage.
+      grained: (opts.film?.grain ?? 0) > 0,
       audio,
       onAudioSkipped: opts.onAudioSkipped,
       // The same render the stage and the PNG deck go through, at a clock
@@ -267,7 +289,7 @@ async function exportCollageStillVideo(
         items.push({ source: null, framing: item.framing });
         continue;
       }
-      const bitmap = await gradedOnce(item.source, collage.luts[i] ?? null);
+      const bitmap = await gradedOnce(item.source, collage.luts[i] ?? null, opts.film ?? null);
       if (bitmap) graded.push(bitmap);
       items.push({
         source: bitmap
@@ -296,6 +318,10 @@ async function exportCollageStillVideo(
       height: size.h,
       seconds: opts.seconds,
       fps: opts.fps,
+      // The grain is frozen here (the picture is graded once), so it costs an
+      // I-frame and nothing after — but a still whose every frame carries a
+      // fixed noise field still defeats a budget tuned for smooth footage.
+      grained: (opts.film?.grain ?? 0) > 0,
       audio,
       onAudioSkipped: opts.onAudioSkipped,
       draw: async (tSeconds) => {

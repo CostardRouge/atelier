@@ -441,6 +441,10 @@ export default function PictureWorkbench({
     raw: wantsRaw && rawFile ? { file: rawFile, gain: rawGain } : null,
     detail: detailDraft,
     repair: repairDraft,
+    // The roll's texture, drawn by the node after everything: the stage is
+    // where grain is DIALLED and the loupe is where it is judged, since a
+    // cell finer than the stage can resolve fades out rather than aliasing.
+    film: stack.film,
     pixelScale: stageWidth && fullWidth ? Math.min(1, stageWidth / fullWidth) : 1,
     loupe: true,
     pixelView,

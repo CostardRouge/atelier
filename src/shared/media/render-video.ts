@@ -73,6 +73,8 @@ export interface EncodeFramesOptions {
   audio?: AudioBuffer | null;
   /** Told why `audio` did not make it into the file, when it did not. */
   onAudioSkipped?: (reason: string) => void;
+  /** This clip's grade carries film GRAIN — see `ExportOptions.grained`. */
+  grained?: boolean;
   onProgress?: (p: ExportProgress) => void;
   signal?: AbortSignal;
 }
@@ -155,7 +157,7 @@ export async function encodeFrames(opts: EncodeFramesOptions): Promise<Blob> {
   const encoderConfig: Omit<VideoEncoderConfig, 'codec'> = {
     width: w,
     height: h,
-    bitrate: deriveBitrate(w, h, fps),
+    bitrate: deriveBitrate(w, h, fps, opts.grained),
     framerate: fps,
   };
   const codec = await pickAvcCodec(encoderConfig);

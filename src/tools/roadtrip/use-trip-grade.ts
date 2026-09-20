@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
+import type { FilmTexture } from '../../shared/film/film-texture';
 import type { CubeLut } from '../../shared/lib/cube-parser';
 import { gradeKey } from '../../shared/lut/saved-grade';
 import { useGradeCubes } from '../../shared/lut/use-grade-cubes';
@@ -38,6 +39,14 @@ export interface TripGradeBinding {
    * its deferred bake; a picture that departed reads its own stored grade.
    */
   lutFor: (picture: GradedPicture) => CubeLut | null;
+  /**
+   * The film TEXTURE one picture of the deck is rendered through — the twin of
+   * `lutFor`, down to the rung: the texture cascades with the look because it
+   * belongs to the stock (`render-film.md`). The open picture reads the LIVE
+   * stack, so the grain slider moves what is on screen; a picture that
+   * departed reads its own stored grade.
+   */
+  filmFor: (picture: GradedPicture) => FilmTexture | null;
   /** The grade the HOOK wears, and its rung — what the Studio bridge sends over. */
   hookGrade: TripGrade;
   hookScope: GradeScope;
@@ -142,6 +151,17 @@ export function useTripGrade(
     [trip, post, picture, stack.composeWith, cubeFor],
   );
 
+  const filmFor = useCallback(
+    (target: GradedPicture): FilmTexture | null => {
+      // The closing card is drawn, not photographed: there is nothing to grain.
+      if (target.kind === 'cta') return null;
+      const key = pictureKeyOf(target);
+      if (sameGradeRung(post, key, picture)) return stack.film;
+      return gradeShownBy(trip, post, key).film ?? null;
+    },
+    [trip, post, picture, stack.film],
+  );
+
   return {
     stack,
     scope,
@@ -149,6 +169,7 @@ export function useTripGrade(
     canDepart: picture !== null,
     saved: savedOf(stack),
     lutFor,
+    filmFor,
     hookGrade: gradeShownBy(trip, post, HOOK_PICTURE),
     hookScope: gradeScopeOf(post, HOOK_PICTURE),
   };

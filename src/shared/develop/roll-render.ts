@@ -18,6 +18,7 @@
  * applies, and is accepted for a delivery.
  */
 
+import { isSilentTexture, type FilmTexture } from '../film/film-texture';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
 import type { Keystone } from '../render/geometry';
@@ -62,6 +63,15 @@ export interface RollRenderOptions {
   detail?: DetailSettings | null;
   /** Heal and clone patches — `render/repair.ts`; drawn first, on the source. */
   repair?: readonly Patch[] | null;
+  /**
+   * The roll's film TEXTURE — grain and halation — drawn by ONE node LAST
+   * (`render-film.md`). At the density the picture is GRADED at, which is the
+   * source's or the GPU's cap: a grain cell is a fraction of the frame's
+   * height, so the delivery's own resample lands it exactly where the stage
+   * showed it. The HDR rendition takes the same texture, or its gain map
+   * would be measured against a picture with no grain in it.
+   */
+  film?: FilmTexture | null;
   /**
    * Deliver from the SENSOR's data (`DevelopSettings.base: 'raw'`): the RAW
    * to decode and the gain the develop stores, which `lut` already carries.
@@ -136,7 +146,12 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
     const stack = drawingLayers(opts.layers);
     const patches = opts.repair ?? [];
     const needsGpu =
-      Boolean(opts.lut) || hasGeometry(opts) || stack.length > 0 || !isDefaultDetail(opts.detail) || patches.length > 0;
+      Boolean(opts.lut) ||
+      hasGeometry(opts) ||
+      stack.length > 0 ||
+      !isDefaultDetail(opts.detail) ||
+      patches.length > 0 ||
+      !isSilentTexture(opts.film);
     // "Source density" stops at the GPU's own edge cap: a picture past it is
     // fitted first, and the size it was really graded at is reported.
     const fit = needsGpu ? await fitPhotoForRender(bitmap) : null;
@@ -148,12 +163,12 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
     const pre = [...(repairPass ? [repairPass] : []), ...detailPre];
     const passes = [...geometryPasses(opts, ar), ...layerPasses(stack, ar), ...post];
     const grader = needsGpu && fit
-      ? makeFrameGrader(opts.lut as CubeLut, fit.width, fit.height, 1, passes, pre)
+      ? makeFrameGrader(opts.lut as CubeLut, fit.width, fit.height, 1, passes, pre, opts.film ?? null)
       : null;
     // The darker render for the gain map takes a grader of its own with
     // fresh passes: a pass holds textures on the context it first drew on.
     const darkGrader = opts.hdr && fit
-      ? makeFrameGrader(opts.hdr.lut as CubeLut, fit.width, fit.height, 1, freshPasses(opts, ar, stack, gradedAt.width / source.width), freshPre(opts, ar, patches, gradedAt.width / source.width))
+      ? makeFrameGrader(opts.hdr.lut as CubeLut, fit.width, fit.height, 1, freshPasses(opts, ar, stack, gradedAt.width / source.width), freshPre(opts, ar, patches, gradedAt.width / source.width), opts.film ?? null)
       : null;
     try {
       const graded = grader && fit ? grader.render(fit.image) : bitmap;
@@ -192,9 +207,9 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
   const passes = [...geometryPasses(opts, ar), ...layerPasses(stack, ar), ...post];
   // A RAW is never drawn without the GPU: its half-floats have no 2D form,
   // and its develop is never default (the gain alone is a stage).
-  const grader = makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, passes, pre);
+  const grader = makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, passes, pre, opts.film ?? null);
   const darkGrader = opts.hdr
-    ? makeFrameGrader(opts.hdr.lut as CubeLut, source.width, source.height, 1, freshPasses(opts, ar, stack, source.width / decoded.sourceWidth), freshPre(opts, ar, opts.repair ?? [], source.width / decoded.sourceWidth))
+    ? makeFrameGrader(opts.hdr.lut as CubeLut, source.width, source.height, 1, freshPasses(opts, ar, stack, source.width / decoded.sourceWidth), freshPre(opts, ar, opts.repair ?? [], source.width / decoded.sourceWidth), opts.film ?? null)
     : null;
   try {
     // Copied out: two graders' canvases are two contexts, but the SDR one is

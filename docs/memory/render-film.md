@@ -138,8 +138,66 @@ an object still goes through `normaliseFilmTexture`, which clamps every number:
 a hand edit or a newer build's value lands sound where it can, the way a layer
 does.
 
+## The switch-over: one seam, a fixed position, a source instant (2026-09-20)
+
+`makeFrameGrader` grew a **seventh argument**, the texture, and
+`makeGraphGrader` puts the node LAST of all — after the look and after every
+extra pass. No caller places it: grain that a sharpen then amplified, or a
+keystone resampled, would be neither grain nor sharp, and on the clip's fast
+path (no extras) last IS `SOURCE → CUBE → [FILM] → OUTPUT`. A gate row proves
+the order by comparing a grader with a sharpen + texture against the same
+texture drawn over a separately sharpened picture.
+
+`FrameGrader.render` grew a **second argument**: which SOURCE instant the frame
+is. Every still passes nothing and stays on field 0 — so the seam is what it
+always was for them — and a clip passes its own timestamp, which is why a
+24 fps stock over 60 fps footage re-rolls every other frame instead of boiling,
+and why a DUPLICATED frame (`frame-rate.ts`) carries the grain of the frame it
+really is.
+
+`PassGrader.setFilm` / `HeldGrader.setFilm` swap the texture in place, for the
+reason `setExtraPasses` exists: the grain and halation sliders move on every
+step of a drag, and a rebuilt grader is a new WebGL2 context per step.
+
+**"No look" stopped meaning "nothing to render"** — again. Geometry made that
+true first; a texture with nothing but grain in it makes it true once more, so
+every `needsGpu` test in the suite now asks `isSilentTexture` too
+(`use-develop-picture.ts`, `roll-render.ts`, `photo-frame.ts`,
+`export-variant.ts`, `badge-render.ts`, `BadgeStage.tsx`).
+
+**The bitrate.** Film grain is a new, uncorrelated field every frame by
+construction, so there is nothing for a P-frame to predict: at the default
+~0.12 bpp the grain the stock asked for comes back as blocking. `deriveBitrate`
+takes `grained` and spends ~0.18. Keyed on `film.grain`, not on the texture —
+halation is a blur and costs nothing.
+
+**A trap the gate caught and nothing else could have.**
+`UNPACK_FLIP_Y_WEBGL` is context-global, the graph leaves it TRUE after a
+source upload, and `createCubeTexture` turns it off (a `texImage3D` errors with
+it on) and leaves it off. So the noise tile was uploaded flipped or not
+depending on whether the LOOK happened to be re-uploaded in the same render —
+a grader BUILT with a texture and the same grader SWAPPED onto one drew two
+different fields, both plausible. **Rule: an upload SAYS its unpack state,
+never inherits it.** The node's samplers also moved off unit 1, which the cube
+pass owns with a `sampler3D`.
+
+## What the node does NOT reach, and why
+
+- **The Studio's STAGE.** It drives `createLutRenderer` frame by frame for its
+  split and its strength rather than building a grader (`render-core.md`, «not
+  retired»), so it previews no grain. Its EXPORTS carry it, both still and
+  clip. Putting the node there means building the multi-pass machinery in
+  `lut-gl.ts` — the very thing `docs/film-simulation.md` §4.5 declined.
+- **Thumbnails**: rail thumbs and roll thumbs pass no texture at all, by
+  design (§6) — a grain cell is invisible at that size and costs a node.
+- **A PAINTED clip** (a hook over a photograph) grades ONCE into a bitmap the
+  painter draws every frame, so its grain is FROZEN. Grading per frame would be
+  one WebGL2 render per frame for a picture that cannot change; a photograph's
+  grain does not move anyway, which is what `grainFps: 0` asks for.
+- **The legacy overlay and composer tools** hold no `SavedGrade`, so there is
+  no texture to give them.
+
 ## What is NOT here yet
 
-The graders (the node reaching the stage, the exports and the clip path), the
-panel's texture section, the badge and the bitrate bump for grained exports —
+The panel's texture section and the badge (`grainShowable`) —
 `docs/film-simulation.md` §7's last entry.

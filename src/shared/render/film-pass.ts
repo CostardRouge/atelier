@@ -173,6 +173,18 @@ void main() {
 const at = (gl: WebGL2RenderingContext, program: WebGLProgram, name: string) =>
   gl.getUniformLocation(program, name);
 
+/**
+ * The texture units this node's own samplers live on.
+ *
+ * Unit 0 is the graph's input, and unit 1 is NOT free: the cube pass — which
+ * always runs before this one — leaves its `sampler3D` bound there. Two
+ * sampler types on one unit is the very trap `render-core.md` records, and
+ * while a program that samples only 2D is within its rights, there is nothing
+ * to gain by standing on it.
+ */
+const NOISE_UNIT = { unit: 0x84c2 as const, index: 2 }; // gl.TEXTURE2
+const HALO_UNIT = { unit: 0x84c3 as const, index: 3 }; // gl.TEXTURE3
+
 interface Buffer {
   fbo: WebGLFramebuffer;
   tex: WebGLTexture;
@@ -253,8 +265,18 @@ export function makeFilmPass(
     if (built) return;
     built = true;
     noiseTex = gl.createTexture();
-    gl.activeTexture(gl.TEXTURE1);
+    gl.activeTexture(NOISE_UNIT.unit);
     gl.bindTexture(gl.TEXTURE_2D, noiseTex);
+    // SAY the unpack state; never inherit it. `UNPACK_FLIP_Y_WEBGL` is global
+    // to the context and the graph leaves it TRUE after a source upload —
+    // except where the cube pass created its 3D texture in the same render,
+    // which turns it off and leaves it off. So the tile was uploaded flipped
+    // or not depending on whether the LOOK happened to be re-uploaded that
+    // frame: a grader built with a texture and the same grader SWAPPED onto
+    // one drew two different fields, which the render gate caught and nothing
+    // else could have. The tile is generated in row order and read in row
+    // order (`sampleGrainTile`), so the flip is off.
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.texImage2D(
       gl.TEXTURE_2D,
       0,
@@ -335,17 +357,17 @@ export function makeFilmPass(
     },
 
     setUniforms(gl, program) {
-      gl.activeTexture(gl.TEXTURE1);
+      gl.activeTexture(NOISE_UNIT.unit);
       gl.bindTexture(gl.TEXTURE_2D, noiseTex);
-      gl.uniform1i(at(gl, program, 'u_noise'), 1);
+      gl.uniform1i(at(gl, program, 'u_noise'), NOISE_UNIT.index);
 
       // A sampler left unset defaults to unit 0, where the source already is —
       // two sampler types on one unit is an INVALID_OPERATION that drops the
-      // draw silently (`render-core.md`). Unit 2 is bound whether or not there
-      // is a halo; `u_hasHalo` is what decides the read.
-      gl.activeTexture(gl.TEXTURE2);
+      // draw silently (`render-core.md`). The halo's unit is bound whether or
+      // not there is a halo; `u_hasHalo` is what decides the read.
+      gl.activeTexture(HALO_UNIT.unit);
       gl.bindTexture(gl.TEXTURE_2D, haloReady ? (buffers[0]?.tex ?? noiseTex) : noiseTex);
-      gl.uniform1i(at(gl, program, 'u_halo'), 2);
+      gl.uniform1i(at(gl, program, 'u_halo'), HALO_UNIT.index);
       gl.uniform1i(at(gl, program, 'u_hasHalo'), haloReady ? 1 : 0);
 
       const [px, py] = grainPhase(

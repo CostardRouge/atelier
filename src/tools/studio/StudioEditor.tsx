@@ -1193,6 +1193,7 @@ export default function StudioEditor({
       cue: cues[0] ?? null,
       lut,
       intensity: 1,
+      film: lutStack.film,
       theme,
       timeShift,
     });
@@ -1215,6 +1216,8 @@ export default function StudioEditor({
       cues,
       lut,
       intensity: 1,
+      // A clip takes the film node too: `SOURCE → CUBE → [FILM] → OUTPUT`.
+      film: lutStack.film,
       theme,
       timeShift,
       scenes,
