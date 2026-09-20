@@ -33,7 +33,13 @@ shows the base. Three modules, all pure but the last:
   `no-irregular-whitespace`, and the Write tool turns the escape into the
   byte.
 - `ultra-hdr-export.ts` — the DOM half: two delivered canvases in, the
-  file out, and the CHECK that earns the name.
+  file out, and the CHECK that earns the name. **Metadata goes on the base
+  BEFORE the container is written** (`stampBase`, fed by
+  `RollRenderOptions.stamp`): the MPF entry counts the gain map's offset from
+  the base's own bytes, so an EXIF segment inserted afterwards moved the map
+  out from under it (found 2026-09-20 when the export pass and this met on
+  `main`; the reader's `Length` fallback hid it). A stamp is a step of the
+  render, never a pass over its output.
 
 ## Where the headroom comes from, and why a render is refused
 

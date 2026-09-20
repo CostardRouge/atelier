@@ -26,7 +26,7 @@ import {
 import { transcodeStore } from '../../shared/media/transcode-store';
 import type { HookBlock } from '../../shared/roadtrip/shades';
 import type { TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
-import { canWriteToDisk, pickWritableDirectory, writeItems } from '../../shared/sources/write-files';
+import { deliverFilesTo, pickDeliveryTarget, type DeliveryTarget } from '../../shared/sources/deliver-files';
 import type { HookPicture, ResolvedHook } from '../../shared/roadtrip/hooks/hook-variant';
 import type { ElementsAt } from '../../shared/roadtrip/hooks/hook-elements';
 
@@ -385,6 +385,12 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       return;
     }
 
+    // Where it lands, asked FIRST: the folder picker opens only in the few
+    // seconds the click is honoured for, and a piece renders longer than that
+    // (`deliver-files.ts`).
+    const target = await askTarget();
+    if (!target) return;
+
     const items = plan.items.filter((i) => i.blocker === null);
     const rendered: { name: string; blob: Blob }[] = [];
     setExporting('Rendering…');
@@ -449,7 +455,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       }
       setExporting('Writing…');
       const short = plan.items.length - rendered.length;
-      await deliver(rendered, short, [...plan.blockers, ...failures]);
+      await deliver(target, rendered, short, [...plan.blockers, ...failures]);
     } catch (err) {
       setNote(explainFailure(err, 'The piece could not be exported.').note);
     } finally {
@@ -458,11 +464,27 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
   }
 
   /**
-   * Hand a rendered set over: a folder keeps the deck in order on disk, and
-   * where the picker is unavailable each file is downloaded in turn, which is
-   * the only thing a non-Chromium browser can do.
+   * Where a run will land, asked from the click that starts it. Null when the
+   * picker was dismissed, or refused — and a refusal is said, never swallowed.
+   */
+  async function askTarget(): Promise<DeliveryTarget | null> {
+    try {
+      const target = await pickDeliveryTarget();
+      if (!target) setNote('No folder was chosen — nothing was rendered.');
+      return target;
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : 'No folder could be chosen.');
+      return null;
+    }
+  }
+
+  /**
+   * Hand a rendered set over to the target chosen up front: a folder keeps
+   * the deck in order on disk; where the picker is unavailable each file is
+   * downloaded in turn, which is the only thing a non-Chromium browser can do.
    */
   async function deliver(
+    target: DeliveryTarget,
     rendered: { name: string; blob: Blob }[],
     short: number,
     blockers: string[] = [],
@@ -470,18 +492,12 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     const tail =
       (short ? ` · ${short} could not be written` : '') +
       (blockers.length ? ` — ${blockers[0]}` : '');
-    if (canWriteToDisk()) {
-      let dir: FileSystemDirectoryHandle;
-      try {
-        dir = await pickWritableDirectory();
-      } catch {
-        return; // dismissed
-      }
-      const res = await writeItems(
-        dir,
-        rendered.map((r) => ({ name: r.name, file: new File([r.blob], r.name) })),
-        { replace: true },
-      );
+    const res = await deliverFilesTo(
+      target,
+      rendered.map((r) => new File([r.blob], r.name)),
+      { replace: true },
+    );
+    if (res.method === 'folder') {
       setNote(
         `${res.written} file${res.written === 1 ? '' : 's'} written` +
           (res.errors.length ? ` · ${res.errors.length} failed to write` : '') +
@@ -489,10 +505,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       );
       return;
     }
-    for (const r of rendered) download(r.blob, r.name);
-    setNote(
-      `${rendered.length} file${rendered.length === 1 ? '' : 's'} downloaded` + tail,
-    );
+    setNote(`${res.written} file${res.written === 1 ? '' : 's'} downloaded` + tail);
   }
 
   /**
@@ -503,6 +516,8 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
   async function exportDeck() {
     inputs.onStart?.();
     setNote(null);
+    const target = await askTarget();
+    if (!target) return;
     setExporting('Rendering…');
     try {
       const rendered = await renderDeck({
@@ -522,32 +537,17 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         return;
       }
       const short = inputs.slideCount - rendered.length;
-
-      if (canWriteToDisk()) {
-        let dir: FileSystemDirectoryHandle;
-        try {
-          dir = await pickWritableDirectory();
-        } catch {
-          return; // dismissed
-        }
-        setExporting('Writing…');
-        const res = await writeItems(
-          dir,
-          rendered.map((r) => ({ name: r.name, file: new File([r.blob], r.name) })),
-          { replace: true },
-        );
-        setNote(
-          `${res.written} slide${res.written === 1 ? '' : 's'} written` +
-            (short ? ` · ${short} could not be rendered` : '') +
-            (res.errors.length ? ` · ${res.errors.length} failed to write` : ''),
-        );
-      } else {
-        for (const r of rendered) download(r.blob, r.name);
-        setNote(
-          `${rendered.length} slide${rendered.length === 1 ? '' : 's'} downloaded` +
-            (short ? ` · ${short} could not be rendered` : ''),
-        );
-      }
+      setExporting('Writing…');
+      const res = await deliverFilesTo(
+        target,
+        rendered.map((r) => new File([r.blob], r.name)),
+        { replace: true },
+      );
+      setNote(
+        `${res.written} slide${res.written === 1 ? '' : 's'} ${res.method === 'folder' ? 'written' : 'downloaded'}` +
+          (short ? ` · ${short} could not be rendered` : '') +
+          (res.method === 'folder' && res.errors.length ? ` · ${res.errors.length} failed to write` : ''),
+      );
     } catch (err) {
       setNote(explainFailure(err, 'The slides could not be exported.').note);
     } finally {

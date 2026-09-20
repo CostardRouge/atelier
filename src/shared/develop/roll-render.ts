@@ -78,6 +78,14 @@ export interface RollRenderOptions {
    * twice, framed the same, and the two become the base and the map.
    */
   hdr?: { lut: CubeLut | null; stops: number } | null;
+  /**
+   * The delivered JPEG's metadata, applied HERE and not after: an Ultra HDR
+   * file is the base JPEG plus segments whose offsets count from the base's
+   * own bytes, so a segment inserted afterwards (an EXIF block) shifts the
+   * gain map out from under its MPF entry. The stamp is given the SDR base
+   * and the delivered size, and runs before the container is written.
+   */
+  stamp?: ((jpeg: Blob, delivered: PictureSize) => Promise<Blob>) | null;
 }
 
 export interface RollRendered {
@@ -253,7 +261,8 @@ async function deliver(
     if (!dctx) throw new Error('Could not create a 2D canvas for the HDR export.');
     dctx.imageSmoothingQuality = 'high';
     drawDelivered(dctx, darker, gradedAt.width, gradedAt.height, framing, layout, opts.border);
-    const result = await encodeUltraHdr(canvas, dark, opts.hdr.stops, opts.quality);
+    const delivered = { width: out.w, height: out.h };
+    const result = await encodeUltraHdr(canvas, dark, opts.hdr.stops, opts.quality, opts.stamp ? (b) => opts.stamp!(b, delivered) : null);
     return {
       blob: result.blob,
       width: out.w,
@@ -263,7 +272,8 @@ async function deliver(
       hdr: { ultra: result.ultra, headroom: result.headroom, checked: result.checked, reason: result.reason },
     };
   }
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', opts.quality));
-  if (!blob) throw new Error('The browser could not encode this picture.');
+  const encoded = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', opts.quality));
+  if (!encoded) throw new Error('The browser could not encode this picture.');
+  const blob = opts.stamp ? await opts.stamp(encoded, { width: out.w, height: out.h }) : encoded;
   return { blob, width: out.w, height: out.h, source, gradedAt, hdr: null };
 }

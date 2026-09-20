@@ -139,15 +139,18 @@ DELETES them; pruned with a picture and with the roll. **How to apply**:
 - A preview is an ordinary `File` named like the picture and MARKED
   (`workingPreviewFile` / `isWorkingPreview`, a WeakSet): the fidelity chip
   says `working preview · 2048`, the status line counts pictures shown from
-  one, and an export from one is written and named in the run's sentence
-  (`… left from its working preview, 2048 px at most`).
+  one, and an export from one is REFUSED and said in the run's sentence
+  (`… was left out: only its 2048 px working preview is in hand — reopen the
+  roll's folder and export again`; 2026-09-20, the maintainer's quality
+  report): a 2048 px file under the picture's own name would sit in his
+  Gallery folder beside the original as if it were the picture.
 - The two hooks meet in `RollEditor`: `useRollMedia` gives the real files,
   `useRollPreviews` takes them and gives the previews, and the editor merges
   (availability `preview`, and `fileFor` falling back to the preview).
 Verified in the pane: *Keep them* (≈ 3.1 MB said for seven local pictures)
 made three previews from the folder's files (72 KB); with the folder made
 unreachable and the roll remounted, VRC 2 showed with the `working preview`
-chip and the line said `3 from their working previews`; exporting it wrote
-the file and said it left from its preview; *Stop keeping them* deleted the
-three and the stage went back to "not open".
+chip and the line said `3 from their working previews`; *Stop keeping them*
+deleted the three and the stage went back to "not open". (Exporting from a
+preview was written and said at the time; it is refused since 2026-09-20.)
 
