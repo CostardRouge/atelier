@@ -109,10 +109,7 @@ export async function loadBadgeSource(
     // frame comes out under twice the cap, which is the point. It can enlarge
     // a picture smaller than the cap; harmless at thumbnail sizes, and a
     // browser that ignores the option simply decodes at full size.
-    const bitmap = await createImageBitmap(
-      file,
-      maxWidth ? { resizeWidth: maxWidth, resizeQuality: 'high' } : undefined,
-    );
+    const bitmap = await createImageBitmap(file, decodeOptions(maxWidth));
     return {
       image: bitmap,
       width: bitmap.width,
@@ -128,10 +125,7 @@ export async function loadBadgeSource(
       try {
         const preview = await extractRawPreview(file);
         if (preview) {
-          const bitmap = await createImageBitmap(
-            preview,
-            maxWidth ? { resizeWidth: maxWidth, resizeQuality: 'high' } : undefined,
-          );
+          const bitmap = await createImageBitmap(preview, decodeOptions(maxWidth));
           return {
             image: bitmap,
             width: bitmap.width,
@@ -147,6 +141,17 @@ export async function loadBadgeSource(
       `The browser cannot decode ${file.name}, and the file carries no render of its own — point this at an exported JPEG instead.`,
     );
   }
+}
+
+/**
+ * How a still is decoded here: UPRIGHT, the way `decodePhoto` and every other
+ * file decode in the suite does it, so a phone portrait sits the same way on
+ * a badge as on the Studio stage; and, for a rail cell, bounded on its width.
+ */
+function decodeOptions(maxWidth?: number): ImageBitmapOptions {
+  return maxWidth
+    ? { imageOrientation: 'from-image', resizeWidth: maxWidth, resizeQuality: 'high' }
+    : { imageOrientation: 'from-image' };
 }
 
 /**

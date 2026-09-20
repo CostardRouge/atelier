@@ -68,10 +68,15 @@ export interface RollRendered {
   gradedAt: PictureSize;
 }
 
-/** The picture's own pixel size, decoded and closed; null when the browser cannot read it. */
+/**
+ * The picture's own pixel size, decoded and closed; null when the browser
+ * cannot read it. Decoded UPRIGHT, exactly as `renderRollPicture` will decode
+ * it: the delivery plan is drawn from this size, and a portrait measured
+ * sideways would plan a crop the render then cuts from the other axis.
+ */
 export async function measurePicture(file: File): Promise<PictureSize | null> {
   try {
-    const bitmap = await createImageBitmap(file);
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
     const size = { width: bitmap.width, height: bitmap.height };
     bitmap.close();
     return size;
