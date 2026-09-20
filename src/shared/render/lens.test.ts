@@ -9,10 +9,12 @@ import {
   lensSampleRadius,
   normaliseLens,
   sameLens,
+  vignetteEncoded,
   vignetteGain,
   vignetteTerms,
   type LensCorrection,
 } from './lens';
+import { fromLinear, toLinear } from '../lut/transfer';
 
 const lens = (over: Partial<LensCorrection>): LensCorrection => ({ ...DEFAULT_LENS, ...over });
 
@@ -122,6 +124,37 @@ describe('vignetteGain', () => {
         expect(1 + a * t * t).toBeCloseTo(vignetteGain(r, amount, mid), 12);
       }
     }
+  });
+});
+
+describe('vignetteEncoded', () => {
+  it('leaves the centre, and everything, alone when there is nothing to do', () => {
+    expect(vignetteEncoded(0.3, 0, 100, 50)).toBe(0.3);
+    expect(vignetteEncoded(0.3, 1, 0, 50)).toBe(0.3);
+    expect(vignetteEncoded(0.3, 0.4, 100, 50)).toBe(0.3);
+  });
+
+  it('is the gain applied to LIGHT: doubling the light is not doubling the code', () => {
+    // A gain of 2 at the corner: 0.5 encoded is 0.214 linear, ×2 is 0.428
+    // linear, which encodes to 0.69 — not 1.0.
+    const encoded = 0.5;
+    const gain = vignetteGain(1, 100, 50);
+    expect(gain).toBeCloseTo(1.8, 12);
+    const got = vignetteEncoded(encoded, 1, 100, 50);
+    expect(got).toBeCloseTo(fromLinear(toLinear(encoded, 'srgb') * gain, 'srgb'), 12);
+    expect(got).toBeLessThan(encoded * gain);
+  });
+
+  it('lifts a dark corner and a bright one by the same ratio of LIGHT', () => {
+    const ratio = (v: number) =>
+      toLinear(vignetteEncoded(v, 1, 60, 20), 'srgb') / toLinear(v, 'srgb');
+    expect(ratio(0.2)).toBeCloseTo(ratio(0.6), 6);
+    expect(ratio(0.2)).toBeCloseTo(vignetteGain(1, 60, 20), 6);
+  });
+
+  it('sinks a corner for a negative amount, never below black', () => {
+    expect(vignetteEncoded(0.4, 1, -100, 50)).toBeLessThan(0.4);
+    expect(vignetteEncoded(0.4, 1, -100, 50)).toBeGreaterThanOrEqual(0);
   });
 });
 

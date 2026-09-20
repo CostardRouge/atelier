@@ -258,19 +258,32 @@ const out = await page.evaluate(async () => {
     };
 
     // Vignetting: a flat grey frame, corrected, read at the centre and at a
-    // known radius out along the centre line.
-    const flat = draw((g) => { g.fillStyle = '#808080'; g.fillRect(0, 0, S, S); });
-    const vig = { ...lens.DEFAULT_LENS, vignette: 60, vignetteMidpoint: 20 };
-    const vData = run(flat, makeLensPass(vig, 1));
-    const at = (x, y) => vData[((y * S + x) * 4)];
-    const centre = at(S >> 1, S >> 1);
+    // known radius out along the centre line. The gain is on LIGHT, so the
+    // expectation goes through `vignetteEncoded`, and a DARK frame is run too:
+    // on mid grey a gain on the code and a gain on the light are a few codes
+    // apart, on a dark one they are far apart, which is what tells the two
+    // shaders from each other.
     const OUT = Math.round(S * 0.92);
-    results.vignette = {
-      centre,
-      out: at(OUT, S >> 1),
-      // What the pure module says that pixel should have become.
-      expected: Math.round(centre * lens.vignetteGain(toRadius(OUT), 60, 20)),
+    const vignetteRow = (fill, amount, midpoint) => {
+      const vig = { ...lens.DEFAULT_LENS, vignette: amount, vignetteMidpoint: midpoint };
+      const flat = draw((g) => { g.fillStyle = fill; g.fillRect(0, 0, S, S); });
+      const vData = run(flat, makeLensPass(vig, 1));
+      const at = (x, y) => vData[((y * S + x) * 4)];
+      const centre = at(S >> 1, S >> 1);
+      return {
+        centre,
+        out: at(OUT, S >> 1),
+        // What the pure module says that pixel should have become.
+        expected: Math.round(255 * lens.vignetteEncoded(centre / 255, toRadius(OUT), amount, midpoint)),
+        // What a gain on the CODE would have given, so the row is known to
+        // tell the two apart.
+        onCode: Math.round(Math.min(255, centre * lens.vignetteGain(toRadius(OUT), amount, midpoint))),
+      };
     };
+    results.vignette = vignetteRow('#808080', 60, 20);
+    // The full lift from the centre out, on a dark frame: where a gain on the
+    // code and a gain on the light are furthest apart.
+    results.vignetteDark = vignetteRow('#404040', 100, 0);
   }
 
   // --- the mask: does the shader agree with maskAt, point for point? --------
@@ -610,15 +623,20 @@ if (!lens.lit) {
   );
 }
 
-const vig = out.vignette;
-console.log(
-  `  vignette: centre ${vig.centre}, corner ${vig.out}, vignetteGain says ${vig.expected}`,
-);
-if (Math.abs(vig.out - vig.expected) > 2) {
-  bad += 1;
-  console.log(`  FAIL  the lift disagrees with lens.ts by ${Math.abs(vig.out - vig.expected)} codes`);
-} else {
-  console.log(`  ok    within ${Math.abs(vig.out - vig.expected)} code(s) of it`);
+for (const [name, vig] of [['mid grey', out.vignette], ['dark grey', out.vignetteDark]]) {
+  console.log(
+    `  vignette on ${name}: centre ${vig.centre}, corner ${vig.out}, ` +
+      `vignetteEncoded says ${vig.expected} (a gain on the code would say ${vig.onCode})`,
+  );
+  if (Math.abs(vig.out - vig.expected) > 2) {
+    bad += 1;
+    console.log(`  FAIL  the lift disagrees with lens.ts by ${Math.abs(vig.out - vig.expected)} codes`);
+  } else if (Math.abs(vig.expected - vig.onCode) <= 2) {
+    bad += 1;
+    console.log('  FAIL  light and code agree here, so this row cannot tell them apart');
+  } else {
+    console.log(`  ok    within ${Math.abs(vig.out - vig.expected)} code(s) of it, in light`);
+  }
 }
 
 const mask = out.mask;
