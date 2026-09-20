@@ -16,6 +16,8 @@
 
 import { keystoneOrNull, type Keystone } from '../render/geometry';
 import { lensOrNull, type LensCorrection } from '../render/lens';
+import { detailOrNull, type DetailSettings } from '../render/detail';
+import { readPatches, type Patch } from '../render/repair';
 import { readLayers, type AdjustLayer } from './layer';
 import { developOrNull, type DevelopSettings } from './develop';
 import { isDefaultFraming, normaliseFraming, type Framing } from '../media/framing';
@@ -57,6 +59,14 @@ export interface RollExport {
    * may already be sitting under.
    */
   replace: boolean;
+  /**
+   * Deliver an Ultra HDR JPEG (`shared/hdr/`): the SDR picture with a gain
+   * map inside it, for a picture developed on its RAW — a render holds
+   * nothing above white and leaves as a plain JPEG, said in the run.
+   */
+  hdr: boolean;
+  /** How far above white the map may reach, in stops: the RAW is developed this much darker to find them. */
+  hdrStops: number;
 }
 
 export const DEFAULT_ROLL_EXPORT: Readonly<RollExport> = Object.freeze({
@@ -64,11 +74,14 @@ export const DEFAULT_ROLL_EXPORT: Readonly<RollExport> = Object.freeze({
   quality: 0.92,
   originals: 'auto',
   replace: false,
+  hdr: false,
+  hdrStops: 2,
 });
 
 export const ROLL_EXPORT_LIMITS = {
   longEdge: { min: 256, max: 16384 },
   quality: { min: 0.5, max: 1 },
+  hdrStops: { min: 1, max: 4 },
 } as const;
 
 /** A picture's crop shape: its own, or one of the suite's aspect presets. */
@@ -99,6 +112,18 @@ export interface RollPicture {
    * (`shared/render/picture-geometry.ts` states that order once).
    */
   lens?: LensCorrection | null;
+  /**
+   * Denoise, defringe and sharpen (`shared/render/detail.ts`), or null for
+   * none. The noise passes run FIRST, on the source before the develop; the
+   * sharpen LAST, after every warp and layer — `detail.ts` states why.
+   */
+  detail?: DetailSettings | null;
+  /**
+   * Heal and clone patches (`shared/render/repair.ts`), in order, drawn as
+   * ONE pass on the source before everything else. Absent and empty mean the
+   * same thing.
+   */
+  repair?: Patch[];
   /**
    * Adjustment layers, BOTTOM to TOP (`shared/develop/layer.ts`). Absent and
    * empty mean the same thing, so nothing is migrated. They apply after the
@@ -157,6 +182,8 @@ export function createRollPicture(ref: SavedMediaRef, id: string = newRollId()):
     border: null,
     keystone: null,
     lens: null,
+    detail: null,
+    repair: [],
     layers: [],
   };
 }
@@ -220,6 +247,10 @@ export function readRollExport(raw: unknown): RollExport {
     // Anything but a stored `true` reads as off, so a roll written before the
     // choice existed keeps what is in its folder.
     replace: raw.replace === true,
+    hdr: raw.hdr === true,
+    hdrStops: Math.round(
+      Math.min(ROLL_EXPORT_LIMITS.hdrStops.max, Math.max(ROLL_EXPORT_LIMITS.hdrStops.min, finite(raw.hdrStops, DEFAULT_ROLL_EXPORT.hdrStops))),
+    ),
   };
 }
 
@@ -256,6 +287,8 @@ function readPicture(raw: unknown): RollPicture | null {
     // means exactly what it means now — so there is no migration to run.
     keystone: keystoneOrNull(raw.keystone),
     lens: lensOrNull(raw.lens),
+    detail: detailOrNull(raw.detail),
+    repair: readPatches(raw.repair),
     layers: readLayers(raw.layers),
   };
 }
@@ -347,7 +380,7 @@ export function patchPicture(
   roll: RollDoc,
   id: string,
   patch: Partial<
-    Pick<RollPicture, 'develop' | 'framing' | 'aspect' | 'border' | 'keystone' | 'lens' | 'layers'>
+    Pick<RollPicture, 'develop' | 'framing' | 'aspect' | 'border' | 'keystone' | 'lens' | 'detail' | 'repair' | 'layers'>
   >,
   now: number = Date.now(),
 ): RollDoc {

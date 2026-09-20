@@ -19,6 +19,9 @@ import { EXIF_SLICE_BYTES } from '../../shared/exif/exif-parser';
 import { exportExifBlock, stampExif } from '../../shared/exif/stamp-exif';
 import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
 import { formatBytes } from '../../shared/lib/format';
+import { isRawDevelop, rawGainOf, withoutBase } from '../../shared/develop/develop';
+import { isRawImage } from '../../shared/library/assets';
+import { canDecodeRaw } from '../../shared/raw/raw-decoder';
 
 /**
  * What the last run rendered, and each file's own capture on its instance.
@@ -35,6 +38,8 @@ export interface RollRun {
   assetIds: (string | null)[];
   /** The one instance the run's pictures came from, when they came from one. */
   sourceId: string | null;
+  /** The HDR delivery, when the roll asked for one: how many files carry a gain map, and the most it lifts. */
+  hdr: { asked: number; ultra: number; headroom: number; checked: number | null } | null;
 }
 
 export interface RollExports {
@@ -115,6 +120,14 @@ export function useRollExport({
       open.border,
       roll.export,
     );
+    if (isRawDevelop(open.develop)) {
+      // The row was measured on the render; a RAW develop leaves from the
+      // sensor's data at its own density, and the reason says so.
+      openDelivery = {
+        ...openDelivery,
+        reason: 'developed on its RAW — delivered from the sensor’s data, decoded at its own size',
+      };
+    }
   }
 
   const exportPictures = useCallback(async (ids: readonly string[]) => {
@@ -127,6 +140,7 @@ export function useRollExport({
     const assetIds: (string | null)[] = [];
     const sourceIds = new Set<string>();
     const failures: string[] = [];
+    const hdrRun = r.export.hdr ? { asked: 0, ultra: 0, headroom: 0, checked: null as number | null } : null;
     // A run names each file after its picture, so two crops of ONE picture
     // want one name: the second is numbered here, before the folder is even
     // chosen. Case-folded, like the volume it will land on.
@@ -151,8 +165,29 @@ export function useRollExport({
           const origin = mediaOrigin(file);
           const identity = knownIdentity(file);
           let source = file;
+          // A picture developed on its RAW leaves from the sensor's data: the
+          // file itself when it is the RAW, else the proxy's original, held
+          // for the session like any fetched original (decision 3). Not
+          // reachable, the render leaves instead and the run says so —
+          // never the RAW with numbers nobody has seen on it, and never
+          // silently the wrong material.
+          let raw: { file: File; gain: number } | null = null;
+          if (isRawDevelop(picture.develop)) {
+            let rawFile: File | null = canDecodeRaw(file) ? file : null;
+            if (!rawFile && origin?.name && isRawImage(origin.name) && origin.fetchOriginal) {
+              const key = identity?.assetId ?? null;
+              rawFile = key ? heldOriginal(key) : null;
+              if (!rawFile) {
+                setExporting(`Fetching the RAW ${step}${origin.bytes ? ` · ${formatBytes(origin.bytes)}` : ''}…`);
+                rawFile = await origin.fetchOriginal();
+                if (key) holdOriginal(key, rawFile);
+              }
+            }
+            if (rawFile) raw = { file: rawFile, gain: rawGainOf(picture.develop) };
+            else failures.push(`${picture.ref.name} is developed on its RAW, which is not reachable here — its render left instead`);
+          }
           // Decide from the file's own pixels which pixels to deliver from.
-          const size = await measurePicture(file);
+          const size = raw ? null : await measurePicture(file);
           if (size && origin?.fidelity === 'proxy' && origin.fetchOriginal) {
             const summary = deliverySummary(
               size,
@@ -179,10 +214,11 @@ export function useRollExport({
           // The EXIF comes from the ORIGINAL whatever the pixels came from
           // (`shared/exif/stamp-exif.ts`): the original itself when the run
           // has it, else its head alone — a quarter of a megabyte instead of
-          // the whole capture — else what the instance vouched for.
+          // the whole capture — else what the instance vouched for. A RAW
+          // leaving from its own file is that original.
           const key = identity?.assetId ?? null;
           const originalFile =
-            source !== file ? source : origin?.fidelity === 'proxy' ? (key ? heldOriginal(key) : null) : file;
+            raw?.file ?? (source !== file ? source : origin?.fidelity === 'proxy' ? (key ? heldOriginal(key) : null) : file);
           let head: Uint8Array | null = null;
           if (originalFile) {
             head = new Uint8Array(await originalFile.slice(0, EXIF_SLICE_BYTES).arrayBuffer());
@@ -194,18 +230,48 @@ export function useRollExport({
               .catch(() => null);
           }
 
-          setExporting(`Rendering ${step}…`);
+          setExporting(raw ? `Decoding the RAW ${step}…` : `Rendering ${step}…`);
+          // A RAW develop whose RAW is out of reach renders its numbers on the
+          // render WITHOUT the base: the gain belongs to the sensor's range.
+          const develop = raw ? picture.develop : picture.develop && isRawDevelop(picture.develop) ? withoutBase(picture.develop) : picture.develop;
+          // The HDR delivery needs the sensor's data: an 8-bit render holds
+          // nothing above white, and a map made from one would be flat. So
+          // it is asked only of a picture leaving from its RAW, and the run
+          // says which ones did not.
+          let hdr: { lut: CubeLut | null; stops: number } | null = null;
+          if (hdrRun) {
+            if (raw && develop) {
+              hdrRun.asked += 1;
+              const stops = r.export.hdrStops;
+              hdr = { lut: cubeFor({ ...picture, develop: { ...develop, exposure: develop.exposure - stops } }), stops };
+            } else {
+              failures.push(`${picture.ref.name} left as a plain JPEG: HDR needs the RAW base, a render holds nothing above white`);
+            }
+          }
           const out = await renderRollPicture(source, {
             framing: picture.framing,
             aspect: picture.aspect,
             border: picture.border,
-            lut: cubeFor(picture),
+            lut: cubeFor({ ...picture, develop }),
             longEdge: r.export.longEdge,
             quality: r.export.quality,
             keystone: picture.keystone ?? null,
             lens: picture.lens ?? null,
             layers: picture.layers ?? null,
+            detail: picture.detail ?? null,
+            repair: picture.repair ?? null,
+            raw,
+            hdr,
           });
+          if (hdrRun && out.hdr) {
+            if (out.hdr.ultra) {
+              hdrRun.ultra += 1;
+              hdrRun.headroom = Math.max(hdrRun.headroom, out.hdr.headroom);
+              if (out.hdr.checked !== null) hdrRun.checked = Math.max(hdrRun.checked ?? 0, out.hdr.checked);
+            } else {
+              failures.push(`${picture.ref.name} left as a plain JPEG: ${out.hdr.reason ?? 'no gain map'}`);
+            }
+          }
           if (out.gradedAt.width < out.source.width || out.gradedAt.height < out.source.height) {
             failures.push(
               `${picture.ref.name} was graded at ${out.gradedAt.width}×${out.gradedAt.height}, the most this GPU renders on one edge — its ${out.source.width}×${out.source.height} were resampled`,
@@ -254,7 +320,7 @@ export function useRollExport({
       // Only the files from ONE instance, so a future send-home plan refuses
       // nothing it did not have to.
       const sourceId = sourceIds.size === 1 ? [...sourceIds][0] : null;
-      setLastRun({ files: rendered, assetIds, sourceId });
+      setLastRun({ files: rendered, assetIds, sourceId, hdr: hdrRun });
     } catch (err) {
       setNote(err instanceof Error ? err.message : 'The pictures could not be exported.');
     } finally {

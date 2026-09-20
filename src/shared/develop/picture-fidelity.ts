@@ -20,8 +20,19 @@ export interface PictureFidelity {
   note: string | null;
 }
 
-export function pictureFidelity(file: File | null): PictureFidelity {
+/**
+ * `base` is the material the develop acts on: on `raw` the picture on screen
+ * is the SENSOR's data decoded to linear light (`shared/raw/`), whatever the
+ * file in hand is — a local DNG, or a proxy whose RAW original was fetched.
+ */
+export function pictureFidelity(file: File | null, base: 'render' | 'raw' | null | undefined = null): PictureFidelity {
   if (!file) return { chip: null, note: null };
+  if (base === 'raw') {
+    return {
+      chip: 'RAW · 16-bit linear',
+      note: 'the sensor’s own data, decoded to linear light: what it kept above the displayed white is here to bring back',
+    };
+  }
   if (isWorkingPreview(file)) {
     return {
       chip: `working preview · ${WORKING_PREVIEW_EDGE}`,

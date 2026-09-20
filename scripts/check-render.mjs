@@ -32,6 +32,13 @@ const browser = await chromium.launch({
 const page = await browser.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
+// A shader the driver refuses is a `console.error` from the graph and a pass
+// that draws NOTHING — black, which a row reads as "worst 190 codes" and
+// never as the compile log that names the line. Relayed, so it does.
+page.on('console', (m) => {
+  // A font or a tile the sandbox's network refuses is not a rendering fault.
+  if (m.type() === 'error' && !m.text().startsWith('Failed to load resource')) errors.push(m.text());
+});
 await page.goto(BASE, { waitUntil: 'networkidle' });
 
 const out = await page.evaluate(async () => {
@@ -504,6 +511,213 @@ const out = await page.evaluate(async () => {
     results.fit = { cap, bigWidth: wide.width, fitWidth: fit.width, resampled: fit.resampled, pixel: [px[0], px[1], px[2]] };
   }
 
+  // --- a half-float source: a decoded RAW, uploaded as RGB16F ------------
+  //
+  // Three things only a draw can settle: that the typed-array upload lands
+  // the RIGHT WAY UP (it honours the flip flag a bitmap ignores), that an ODD
+  // width survives the 6-byte texel rows (UNPACK_ALIGNMENT), and that the
+  // same picture as a half image and as an 8-bit canvas grade to the same
+  // bytes through the cube.
+  {
+    const { toHalf } = await import('/atelier/src/shared/render/half-image.ts');
+    const { makeGraphGrader } = await import('/atelier/src/shared/render/graph-grader.ts');
+    const HW = 191, HH = 97; // odd on purpose
+    const cvs = document.createElement('canvas'); cvs.width = HW; cvs.height = HH;
+    const hg = cvs.getContext('2d');
+    const rgb = new Float32Array(HW * HH * 3);
+    for (let y = 0; y < HH; y++) for (let x = 0; x < HW; x++) {
+      // A ramp, with a bright block in the TOP-LEFT corner.
+      const block = x < 24 && y < 24;
+      const r = block ? 1 : x / (HW - 1);
+      const g = block ? 1 : y / (HH - 1);
+      const b = block ? 1 : 0.25;
+      rgb.set([r, g, b], (y * HW + x) * 3);
+      hg.fillStyle = `rgb(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)})`;
+      hg.fillRect(x, y, 1, 1);
+    }
+    // The SAME numbers the canvas holds — quantised to 8 bits — so the two
+    // sources differ in nothing but the upload path; a half image fed the
+    // exact floats is MORE precise than the canvas and reads 2 codes off
+    // through a steep curve, which is right and not what this row measures.
+    const halfData = new Uint16Array(rgb.length);
+    for (let i = 0; i < rgb.length; i++) halfData[i] = toHalf(Math.round(rgb[i] * 255) / 255);
+    const halfImg = { kind: 'half', width: HW, height: HH, data: halfData };
+    const readAll = (canvas) => {
+      const o = document.createElement('canvas'); o.width = HW; o.height = HH;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(canvas, 0, 0);
+      return oc.getImageData(0, 0, HW, HH).data;
+    };
+    // Untouched: the half image through no look.
+    const plain = makeGraphGrader(null, HW, HH, 1, 'tetrahedral');
+    const p = readAll(plain.render(halfImg));
+    plain.dispose();
+    const at = (d, x, y) => [d[(y * HW + x) * 4], d[(y * HW + x) * 4 + 1], d[(y * HW + x) * 4 + 2]];
+    // Through the look, both ways.
+    const gHalf = makeGraphGrader(cube, HW, HH, 1, 'tetrahedral');
+    const a = readAll(gHalf.render(halfImg));
+    gHalf.dispose();
+    const gCanvas = makeGraphGrader(cube, HW, HH, 1, 'tetrahedral');
+    const b = readAll(gCanvas.render(cvs));
+    gCanvas.dispose();
+    let worstRamp = 0;
+    for (let y = 0; y < HH; y += 7) for (let x = 0; x < HW; x += 5) {
+      const got = at(p, x, y);
+      const block = x < 24 && y < 24;
+      const want = block ? [255, 255, 255] : [Math.round((x / (HW - 1)) * 255), Math.round((y / (HH - 1)) * 255), Math.round(0.25 * 255)];
+      for (let c = 0; c < 3; c++) worstRamp = Math.max(worstRamp, Math.abs(got[c] - want[c]));
+    }
+    const w = worst(a, b);
+    const wi = Math.floor(w.at / 4);
+    const spread = [0, 0, 0, 0];
+    for (let i = 0; i < a.length; i++) if (i % 4 !== 3) spread[Math.min(3, Math.abs(a[i] - b[i]))]++;
+    const plainCanvas = makeGraphGrader(null, HW, HH, 1, 'tetrahedral');
+    const pc = readAll(plainCanvas.render(cvs));
+    plainCanvas.dispose();
+    const plainDiff = worst(p, pc).worst;
+    results.half = {
+      spread, plainDiff,
+      topLeft: at(p, 4, 4), bottomLeft: at(p, 4, HH - 4), bottomRight: at(p, HW - 4, HH - 4),
+      worstRamp,
+      graded: w.worst,
+      where: { x: wi % HW, y: Math.floor(wi / HW), half: at(a, wi % HW, Math.floor(wi / HW)), canvas: at(b, wi % HW, Math.floor(wi / HW)), plain: at(p, wi % HW, Math.floor(wi / HW)) },
+    };
+  }
+
+  // --- detail: the four neighbourhood passes against detail.ts -------------
+  //
+  // Each shader is a transcription of a pure function over a small noisy
+  // picture; the GPU's output is compared with the pure output at a grid of
+  // probes. A pass that read the wrong texel, flipped an axis or lost a tap
+  // shows here and nowhere else.
+  {
+    const { createRenderGraph } = await import('/atelier/src/shared/render/graph.ts');
+    const dm = await import('/atelier/src/shared/render/detail.ts');
+    const dp = await import('/atelier/src/shared/render/detail-pass.ts');
+    const DW = 64, DH = 48;
+    // Deterministic noise over a tone edge, a purple fringe on it.
+    let seed = 12345;
+    const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    const purple = dm.fromYcc(0.5, 0.06, 0.06);
+    const rgb = new Float32Array(DW * DH * 3);
+    const dc = document.createElement('canvas'); dc.width = DW; dc.height = DH;
+    const dg = dc.getContext('2d');
+    for (let y = 0; y < DH; y++) for (let x = 0; x < DW; x++) {
+      let base = x < 28 ? 0.25 : x < 31 ? null : 0.75;
+      let px;
+      if (base === null) px = purple;
+      else px = [base + (rnd() - 0.5) * 0.08, base + (rnd() - 0.5) * 0.08, base + (rnd() - 0.5) * 0.08];
+      // Quantise to 8 bits so the canvas and the pure image hold the same numbers.
+      px = px.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255) / 255);
+      rgb.set(px, (y * DW + x) * 3);
+      dg.fillStyle = `rgb(${Math.round(px[0] * 255)},${Math.round(px[1] * 255)},${Math.round(px[2] * 255)})`;
+      dg.fillRect(x, y, 1, 1);
+    }
+    const img = { width: DW, height: DH, data: rgb };
+    const settings = { ...dm.DEFAULT_DETAIL, luminance: 60, colour: 50, defringe: 100, sharpen: 80, sharpenRadius: 1.2 };
+    const terms = dm.detailTerms(settings, 1);
+    const through = (passes) => {
+      const cv = document.createElement('canvas');
+      const graph = createRenderGraph(cv);
+      graph.resize(DW, DH);
+      graph.render(dc, passes);
+      const o = document.createElement('canvas'); o.width = DW; o.height = DH;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(cv, 0, 0);
+      const d = oc.getImageData(0, 0, DW, DH).data;
+      graph.dispose();
+      return d;
+    };
+    const probes = [];
+    for (let y = 3; y < DH - 3; y += 6) for (let x = 3; x < DW - 3; x += 5) probes.push([x, y]);
+    const compare = (gpu, pure) => {
+      let worst = 0;
+      for (const [x, y] of probes) {
+        const want = dm.pixelAt(pure, x, y);
+        for (let c = 0; c < 3; c++) worst = Math.max(worst, Math.abs(gpu[(y * DW + x) * 4 + c] - Math.round(Math.max(0, Math.min(1, want[c])) * 255)));
+      }
+      return worst;
+    };
+    const rows = {};
+    rows.chroma = compare(
+      through([dp.makeChromaBlurPass(terms, 'x'), dp.makeChromaBlurPass(terms, 'y')]),
+      dm.applyDetail(dm.applyDetail(img, (i, x, y) => dm.chromaBlurAt(i, x, y, terms, 'x')), (i, x, y) => dm.chromaBlurAt(i, x, y, terms, 'y')),
+    );
+    rows.denoise = compare(through([dp.makeBilateralPass(terms)]), dm.applyDetail(img, (i, x, y) => dm.bilateralAt(i, x, y, terms)));
+    rows.defringe = compare(through([dp.makeDefringePass(terms)]), dm.applyDetail(img, (i, x, y) => dm.defringeAt(i, x, y, terms)));
+    rows.sharpen = compare(through([dp.makeSharpenPass(terms)]), dm.applyDetail(img, (i, x, y) => dm.sharpenAt(i, x, y, terms)));
+    // And that each did something: the pure output differs from the source.
+    const moved = (pure) => { let m = 0; for (let i = 0; i < rgb.length; i++) m = Math.max(m, Math.abs(pure.data[i] - rgb[i])); return m; };
+    rows.movedDenoise = moved(dm.applyDetail(img, (i, x, y) => dm.bilateralAt(i, x, y, terms)));
+    rows.movedSharpen = moved(dm.applyDetail(img, (i, x, y) => dm.sharpenAt(i, x, y, terms)));
+    results.detail = rows;
+  }
+
+  // --- repair: heal and clone against repair.ts, from BOTH source kinds ----
+  //
+  // A patch is a function of WHERE, so like the keystone it must be checked
+  // from a canvas AND an ImageBitmap: the two hand the shader opposite y
+  // conventions, and a pass that read v_uv directly would put a patch on the
+  // wrong side of the frame for one of them. The pure module samples
+  // bilinearly exactly as the GPU does, so the tolerance is tight.
+  {
+    const { createRenderGraph } = await import('/atelier/src/shared/render/graph.ts');
+    const rp = await import('/atelier/src/shared/render/repair.ts');
+    const { makeRepairPass } = await import('/atelier/src/shared/render/repair-pass.ts');
+    const RW = 96, RH = 64;
+    const AR = RW / RH;
+    // A soft field with a dark spot near the top-left, and a darker band on the right.
+    const rgb = new Float32Array(RW * RH * 3);
+    const rc = document.createElement('canvas'); rc.width = RW; rc.height = RH;
+    const rg = rc.getContext('2d');
+    for (let y = 0; y < RH; y++) for (let x = 0; x < RW; x++) {
+      let v = 0.6 + 0.1 * Math.sin(x / 9) + 0.05 * Math.cos(y / 7);
+      if (Math.hypot(x - 24, y - 20) < 4) v = 0.15;
+      if (x > 70) v -= 0.25;
+      const px = [v, v * 0.95, v * 0.9].map((c) => Math.round(Math.max(0, Math.min(1, c)) * 255) / 255);
+      rgb.set(px, (y * RW + x) * 3);
+      rg.fillStyle = `rgb(${Math.round(px[0] * 255)},${Math.round(px[1] * 255)},${Math.round(px[2] * 255)})`;
+      rg.fillRect(x, y, 1, 1);
+    }
+    const img = { width: RW, height: RH, data: rgb };
+    const patches = [
+      { id: 'h', kind: 'heal', x: 24 / RW, y: 20 / RH, radius: 0.12, feather: 0.5, dx: 0.25, dy: 0.1 },
+      { id: 'c', kind: 'clone', x: 0.8, y: 0.7, radius: 0.15, feather: 0.3, dx: -0.4, dy: -0.2 },
+    ];
+    const bitmap = await createImageBitmap(rc);
+    const through = (source) => {
+      const cv = document.createElement('canvas');
+      const graph = createRenderGraph(cv);
+      graph.resize(RW, RH);
+      graph.render(source, [makeRepairPass(patches, AR)]);
+      const o = document.createElement('canvas'); o.width = RW; o.height = RH;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(cv, 0, 0);
+      const d = oc.getImageData(0, 0, RW, RH).data;
+      graph.dispose();
+      return d;
+    };
+    const probes = [];
+    for (let y = 2; y < RH - 2; y += 4) for (let x = 2; x < RW - 2; x += 5) probes.push([x, y]);
+    const compare = (gpu) => {
+      let worst = 0;
+      for (const [x, y] of probes) {
+        const want = rp.repairAt(img, (x + 0.5) / RW, (y + 0.5) / RH, patches, AR);
+        for (let c = 0; c < 3; c++) worst = Math.max(worst, Math.abs(gpu[(y * RW + x) * 4 + c] - Math.round(Math.max(0, Math.min(1, want[c])) * 255)));
+      }
+      return worst;
+    };
+    const spotBefore = rgb[(20 * RW + 24) * 3];
+    const healedCanvas = through(rc);
+    results.repair = {
+      canvas: compare(healedCanvas),
+      bitmap: compare(through(bitmap)),
+      spotBefore: Math.round(spotBefore * 255),
+      spotAfter: healedCanvas[(20 * RW + 24) * 4],
+    };
+    bitmap.close();
+  }
+
   // --- the cube without OES_texture_float_linear: half-float, never 8-bit --
   //
   // This GPU has the extension, so the fallback would otherwise run nowhere a
@@ -699,6 +913,48 @@ const fit = out.fit;
     `\n  ${okCap && okFit && okPixel ? 'ok  ' : 'FAIL'}  this GPU takes ${fit.cap} px on one edge; a ${fit.bigWidth} px picture ` +
       `is fitted to ${fit.fitWidth}${fit.resampled ? '' : ' (NOT resampled)'} and grades to ${JSON.stringify(fit.pixel)}` +
       (okPixel ? '' : ' — BLACK'),
+  );
+}
+
+const hs = out.half;
+{
+  const upright = hs.topLeft.every((v) => v > 240) && hs.bottomLeft[0] < 40 && hs.bottomRight[0] > 215;
+  const okRamp = hs.worstRamp <= 1;
+  // Two codes, not one: a half-float a hair UNDER k/255 is written to the
+  // 8-bit canvas as k−1 on this GPU (measured — the untouched pictures already
+  // differ by one code in places), and a steep curve makes that two. An 8-bit
+  // source never meets it, since its values are exactly k/255; a RAW's values
+  // are continuous and meet it everywhere, harmlessly.
+  const okGrade = hs.graded <= 2 && hs.plainDiff <= 1;
+  if (!upright || !okRamp || !okGrade) bad += 1;
+  console.log(
+    `\n  ${upright && okRamp && okGrade ? 'ok  ' : 'FAIL'}  a half-float source (191×97, odd): ` +
+      `${upright ? 'the right way up' : `UPSIDE DOWN or wrong (top-left ${JSON.stringify(hs.topLeft)}, bottom-left ${JSON.stringify(hs.bottomLeft)})`}` +
+      `, ramp within ${hs.worstRamp} code${hs.worstRamp === 1 ? '' : 's'}, graded within ${hs.graded} of the same canvas ` +
+      `(${hs.spread[0]} pixels equal, ${hs.spread[1]} one code off, ${hs.spread[2] + hs.spread[3]} two)`,
+  );
+}
+
+const det = out.detail;
+console.log('\n  detail, against detail.ts at 96 probes of a noisy edge:');
+for (const name of ['chroma', 'denoise', 'defringe', 'sharpen']) {
+  const worst = det[name];
+  const ok = worst <= 2;
+  if (!ok) bad += 1;
+  console.log(`  ${ok ? 'ok  ' : 'FAIL'}  ${name.padEnd(9)} worst ${worst} code${worst === 1 ? '' : 's'} (allowed 2)`);
+}
+if (det.movedDenoise < 0.01 || det.movedSharpen < 0.01) {
+  bad += 1;
+  console.log('  FAIL  a pass moved nothing, so its row proves nothing');
+}
+
+const rep = out.repair;
+{
+  const ok = rep.canvas <= 2 && rep.bitmap <= 2 && rep.spotAfter > rep.spotBefore + 40;
+  if (!ok) bad += 1;
+  console.log(
+    `\n  ${ok ? 'ok  ' : 'FAIL'}  repair against repair.ts: canvas worst ${rep.canvas}, ImageBitmap worst ${rep.bitmap} code(s) (allowed 2); ` +
+      `the spot went ${rep.spotBefore} → ${rep.spotAfter}${rep.spotAfter > rep.spotBefore + 40 ? '' : ' — NOT healed'}`,
   );
 }
 

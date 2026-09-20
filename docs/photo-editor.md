@@ -447,30 +447,89 @@ reopened picture re-segments), and a faster path than one sequential inference
 per point.
 
 
-**P10 — RAW develop.** O5: `raw-decoder.ts` behind `libraw-wasm`, dynamically
-imported (the MapLibre rule — never in the main bundle), in a worker, opt-in per
-file, decoded to a budget; `DevelopSettings.base: 'render' | 'raw'`;
-`developedAtDecode` and `composedForDeveloped`, which already exist for it. This
-is where white balance stops being an approximation and highlight recovery
-starts recovering something.
+**P10 — RAW develop** *(BOTH commits BUILT 2026-09-20 — the engine, then the
+tool; the rules are `docs/memory/raw.md`)*. O5: `raw-decoder.ts` behind
+`libraw-wasm`, dynamically imported (the MapLibre rule — never in the main
+bundle), in its own worker, opt-in per picture, decoded to a budget;
+`DevelopSettings.base: 'render' | 'raw'`. This is where white balance stops
+being an approximation and highlight recovery starts recovering something.
 
-**P11 — detail** *(two commits)*. Wavelet chroma + guided-filter luma denoise,
-defringe, sharpen — classic, per §4.3. Plus the **loupe at one source pixel per
-device pixel**, because F5. `usePictureZoom` already reaches one *preview* pixel
-per device pixel; what is missing is the full-resolution decode under it.
+Four things the build settled against the plan:
 
-**P12 — repair.** Dust detection and removal, healing, clone, as one `Patch[]`
-list and one composite pass.
+- **It works without cross-origin isolation** (measured), so GitHub Pages is
+  not the obstacle it is for a multi-threaded ffmpeg.
+- **The decoder's `gamm` option is ignored** — the output is always dcraw's
+  BT.709 curve — so the wrapper inverts that curve exactly rather than asking
+  for linear.
+- **The develop is NOT applied at decode** (`developedAtDecode` was the
+  plan's word for it): one decode serves every slider, because the cube
+  survives as the develop with the sensor's range as its `[0,1]` and a
+  MEASURED gain (`rawGain`, stored so preview = export) bringing the picture
+  to its own exposure before the sliders. The graph gained a half-float
+  source for it (`render/half-image.ts`, `RGB16F`).
+- **Kelvin stays cut**: the RAW's `AsShotNeutral` is applied by the decoder
+  as the camera's white balance, and temperature/tint remain gains against
+  it. A Kelvin readout needs the colour matrices and is a later refinement.
 
-**P13 — HDR delivery.** The float core already gives the headroom; this adds an
-HDR-capable preview canvas (detected, and saying so plainly where the display or
-the browser cannot) and the **Ultra HDR JPEG** export: an SDR base, a computed
-gain map, both encoded through `canvas.toBlob`, wrapped in a hand-written
-MPF/XMP container. Hand-written on purpose — it is the repo's own tradition
-(`exif-parser.ts`, `qr.ts`, the `colr` guard) and it avoids a new wasm
-dependency for a few hundred lines of segment writing. **The claim is only made
+Verified in headless Chromium on a synthetic 12 MP DNG dropped on the
+Develop tool: the Base section offers RAW, the switch decodes at half size
+in the stage (2000×1500, metered), the chip reads `RAW · 16-bit linear`,
+−1.5 EV brings a clipped patch to 160, and *Export this picture* decodes the
+whole 4000×3000 and writes pixels equal to the stage's to the code. Still
+his to run: a real DJI DNG, ProRAW (lossless and JPEG XL) and ARW through
+this path — the JPEG XL answer (§11) is unchanged — and the heap on his
+iPhone (decision 5 of `develop-originals.md` §7).
+
+**P11 — detail** *(two commits; the FIRST is BUILT 2026-09-20 — `render/detail.ts`
++ `detail-pass.ts`, `RollPicture.detail`, a fifth *Detail* tab; the rules are
+`docs/memory/render-detail.md`)*. Classic, per §4.3 — but not as written here:
+a separable Gaussian on the chroma alone and a 7×7 bilateral on the luma
+rather than wavelets and a guided filter, because each is one bounded
+fragment kernel with a pure twin the render gate holds it to (chroma within
+1 code, the rest 0). Defringe gates purple chroma on a steep luma edge; sharpen
+is an unsharp mask on the luma applied as one ratio. Noise runs BEFORE the
+cube on the source, sharpen LAST after every warp (`makeFrameGrader` gained a
+`before` list). Kernels are in SOURCE pixels, scaled by the stage — a fair
+preview and not the truth, which is the second commit's reason to exist: the
+**loupe at one source pixel per device pixel**, because F5 — *BUILT 2026-09-20
+in both Develop hosts*: past the stage's 1:1 the picture is decoded whole
+(capped at the GPU) into a second grader with the same chain and its window
+drawn in viewport space over the stage, released when the view comes back
+(`docs/memory/render-detail.md`, «The loupe»).
+
+**P12 — repair** *(BUILT 2026-09-20 — `render/repair.ts` + `repair-pass.ts`,
+`RollPicture.repair`, the Repair section at the top of the Detail tab; the
+rules are `docs/memory/render-repair.md`)*. Dust detection and removal,
+healing, clone, as one `Patch[]` list and one composite pass — the pass runs
+FIRST, on the source, so a copied pixel takes the same develop, look, warp and
+denoise as its neighbours. A heal matches the destination's SURROUNDINGS and
+never its middle (the mean of a dust spot is the dust); a clone copies the
+source exactly. Dust is found on the stage's decode by a pure walk
+(`detectDust`: small, dark, roughly round, sourced from the cleanest of four
+neighbours) and never stored — only the patches it answers are. A tap heals a
+spot from beside it, a drag says where to borrow from; a patch is two rings on
+the picture, clicked off while Repair is armed. Held to the pure module by the
+render gate from both source kinds within 2 codes (measured 1). Not a
+content-aware fill, deliberately.
+
+**P13 — HDR delivery** *(BUILT 2026-09-20 — `shared/hdr/gain-map.ts`,
+`ultra-hdr.ts`, `ultra-hdr-export.ts`, `hdr-display.ts`, `RollExport.hdr`, the
+Export tab's HDR section; the rules are `docs/memory/hdr.md`)*. The float core
+already gives the headroom; this adds the **Ultra HDR JPEG** export — an SDR
+base, a gain map MEASURED from a second render of the picture developed the
+asked stops darker (where the SDR ran out at white the sensor's own highlights
+are what the map carries; where it had room the map is flat), both encoded
+through `canvas.toBlob`, wrapped in a hand-written MPF/XMP container. Hand-
+written on purpose — the repo's own tradition (`exif-parser.ts`, `qr.ts`, the
+`colr` guard) — and read back by the same module. **The claim is only made
 after decoding the file back**, exactly as the AAC priming measurement was
-(`media-pipeline.md`).
+(`media-pipeline.md`): the numbers, the map's codes and the lifted peak are
+held to what was written, or the plain JPEG leaves and says why. Offered only
+to a picture developed on its RAW — a render holds nothing above white. The
+HDR-capable preview canvas is DETECTED and said plainly (`(dynamic-range:
+high)` for the display, a `rec2100` context echo for the canvas — no browser
+grants one without a flag in 2026), so the stage stays the SDR base and no
+preview pretends; an HDR stage waits for the day `canvas` turns true.
 
 ## 8. Where each ask lands
 

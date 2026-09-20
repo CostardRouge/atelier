@@ -4,6 +4,26 @@ import Button from '../../shared/ui/Button';
 import { FieldRow, InspectorSection, RangeField, SelectField, SwitchRow } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
+import { hdrSupport } from '../../shared/hdr/hdr-display';
+import type { RollRun } from './use-roll-export';
+
+const HDR_STOPS: readonly { id: string; label: string }[] = [
+  { id: '1', label: '1 stop' },
+  { id: '2', label: '2 stops' },
+  { id: '3', label: '3 stops' },
+  { id: '4', label: '4 stops' },
+];
+
+/** The last run's HDR outcome in one line, or null when none was asked. */
+function describeHdrRun(hdr: RollRun['hdr']): string | null {
+  if (!hdr) return null;
+  if (hdr.asked === 0) return 'no picture in the run was developed on its RAW, so none carried a gain map';
+  const head = `${hdr.ultra} of ${hdr.asked} left as Ultra HDR`;
+  if (hdr.ultra === 0) return `${head} — the others had nothing above white`;
+  const reach = ` · up to ${hdr.headroom.toFixed(1)} stops above white`;
+  const check = hdr.checked !== null ? ` · read back within ${hdr.checked.toFixed(2)} stops` : '';
+  return head + reach + check;
+}
 
 /** One export verb: what it renders, and how many. */
 export interface ExportVerb {
@@ -37,6 +57,7 @@ export default function ExportPanel({
   verbs,
   exporting,
   note,
+  hdrRun = null,
 }: {
   settings: RollExport;
   onSettings: (patch: Partial<RollExport>) => void;
@@ -45,6 +66,8 @@ export default function ExportPanel({
   verbs: readonly ExportVerb[];
   exporting: string | null;
   note: string | null;
+  /** The last run's HDR outcome — the one part of the run the panel still shows. */
+  hdrRun?: RollRun['hdr'];
 }) {
   const { quality } = ROLL_EXPORT_LIMITS;
   return (
@@ -116,6 +139,51 @@ export default function ExportPanel({
             {delivery ? delivery.line : '—'}
           </span>
         </FieldRow>
+      </InspectorSection>
+
+      <InspectorSection
+        id="develop.hdr"
+        title="HDR"
+        info={
+          <>
+            <p>
+              An <strong>Ultra HDR JPEG</strong> is an ordinary JPEG — every viewer shows it — carrying a small
+              second picture, the <strong>gain map</strong>: how much brighter each pixel may go on a display with
+              headroom. A viewer that reads gain maps (a phone, a recent browser on an HDR screen) lifts the
+              highlights; everything else shows the base.
+            </p>
+            <p>
+              The map is measured, never invented: the picture is developed again, darker by the stops asked, and
+              where the SDR ran out at white the sensor’s own highlights are what the map carries. Only a picture{' '}
+              <strong>developed on its RAW</strong> has them — an 8-bit render holds nothing above white and leaves
+              as a plain JPEG, said in the run. The file is read back and its map checked against the rendition
+              before it is called Ultra HDR.
+            </p>
+          </>
+        }
+      >
+        <SwitchRow
+          label="Deliver Ultra HDR JPEG"
+          name="Ultra HDR"
+          checked={settings.hdr}
+          onChange={(hdr) => onSettings({ hdr })}
+          hint={<p>{hdrSupport().line}</p>}
+        />
+        {settings.hdr && (
+          <FieldRow label="Reach" hint="how far above white the map may reach — the RAW is developed this much darker to find what is there">
+            <SelectField
+              label="HDR reach"
+              value={String(settings.hdrStops)}
+              options={HDR_STOPS}
+              onChange={(id) => onSettings({ hdrStops: Number(id) })}
+            />
+          </FieldRow>
+        )}
+        {hdrRun && !exporting && (
+          <p className="m-0 font-mono text-2xs text-ink-soft" role="status">
+            {describeHdrRun(hdrRun)}
+          </p>
+        )}
       </InspectorSection>
 
       <InspectorSection

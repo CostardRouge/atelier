@@ -4,6 +4,21 @@ import { imageRenderingFor, type PixelView } from '../ui/use-pixel-view';
 import type { DevelopPicture } from './use-develop-picture';
 
 /**
+ * A repair patch as the viewport draws it: two discs in the source's own
+ * [0,1], the destination and where its pixels come from, with the radius as
+ * shares of the frame's width and height (`repair.ts`, `patchExtent`).
+ */
+export interface RepairRing {
+  x: number;
+  y: number;
+  sx: number;
+  sy: number;
+  ru: number;
+  rv: number;
+  kind: 'heal' | 'clone';
+}
+
+/**
  * The picture being developed: the canvas, the before/after divider and its
  * handle, the state lines (no picture, decoding, a decoder's refusal), and the
  * two pills over it. Everything it shows is `useDevelopPicture`'s; the host
@@ -20,8 +35,19 @@ export default function DevelopViewport({
   facts = null,
   marks = null,
   onUnmark,
+  rings = null,
+  onUnring,
 }: {
   picture: DevelopPicture;
+  /**
+   * The picture's repair patches, drawn as rings that follow the zoom and the
+   * pan: the destination solid, its source dashed, joined by a hair. Placed
+   * in SOURCE coordinates, where the pass runs — under a warp they sit where
+   * the pixels were, exactly as the subject marks do.
+   */
+  rings?: readonly RepairRing[] | null;
+  /** Taking a patch off. Given, a destination ring answers its own click. */
+  onUnring?: (index: number) => void;
   /**
    * Points the author PICKED on the picture, in the source's own [0,1] — a
    * subject mask's taps. Drawn as `+` discs that follow the zoom and the pan.
@@ -109,6 +135,29 @@ export default function DevelopViewport({
         }}
         aria-label="The picture, corrected"
       />
+      {/* The loupe: the file's own pixels, drawn in VIEWPORT space over the
+          stage while the view is past the stage's 1:1. Sized 0 and drawing
+          nothing when it is not (`use-develop-picture.ts`, «the loupe»). */}
+      <canvas
+        ref={picture.loupe.canvasRef}
+        className="absolute inset-0 w-full h-full pointer-events-none"
+        aria-hidden="true"
+      />
+      {picture.loupe.active && (
+        <span
+          className={`absolute top-2 right-2.5 ${developPillClass} bg-[rgba(251,248,241,0.86)] text-ink-soft`}
+          role="status"
+          title="Past the stage's own pixels the file is decoded whole and drawn at its own density"
+        >
+          {picture.loupe.state === 'decoding'
+            ? 'loupe · decoding…'
+            : picture.loupe.state === 'ready'
+              ? `loupe · ${picture.loupe.longEdge ?? ''} px`
+              : picture.loupe.state === 'same'
+                ? 'loupe · the file has no more'
+                : 'loupe · could not decode'}
+        </span>
+      )}
       {picture.comparing && (
         <div
           data-wipe-handle
@@ -186,6 +235,58 @@ export default function DevelopViewport({
             </button>
           );
         })}
+      {source && rings && rings.length > 0 && (
+        <svg
+          className="absolute inset-0 w-full h-full overflow-visible"
+          style={{ pointerEvents: 'none' }}
+          aria-hidden={!onUnring}
+        >
+          {rings.map((ring, i) => {
+            const at = picture.stagePoint(ring.x, ring.y);
+            if (!at) return null;
+            // The radius in screen pixels: a point one radius to the right,
+            // measured as a vector so a rotated framing keeps a circle a circle.
+            const edge = picture.stagePoint(ring.x + ring.ru, ring.y);
+            const r = edge ? Math.max(3, Math.hypot(edge.x - at.x, edge.y - at.y)) : 6;
+            const from = picture.stagePoint(ring.sx, ring.sy);
+            const stroke = ring.kind === 'heal' ? 'rgba(251,248,241,0.92)' : 'rgba(255,220,120,0.92)';
+            return (
+              <g key={`${ring.x},${ring.y},${i}`}>
+                {from && (
+                  <>
+                    <line x1={at.x} y1={at.y} x2={from.x} y2={from.y} stroke={stroke} strokeWidth={1} strokeDasharray="2 3" opacity={0.7} />
+                    <circle cx={from.x} cy={from.y} r={r} fill="none" stroke={stroke} strokeWidth={1.2} strokeDasharray="3 3" />
+                  </>
+                )}
+                <circle cx={at.x} cy={at.y} r={r} fill="none" stroke="rgba(20,18,14,0.55)" strokeWidth={3} />
+                <circle
+                  cx={at.x}
+                  cy={at.y}
+                  r={r}
+                  fill={onUnring ? 'rgba(251,248,241,0.001)' : 'none'}
+                  stroke={stroke}
+                  strokeWidth={1.4}
+                  style={onUnring ? { pointerEvents: 'all', cursor: 'pointer' } : undefined}
+                  // Its OWN press, never the stage's: a click that reached
+                  // the paint seam would place a new patch under the one
+                  // it just removed.
+                  onPointerDown={
+                    onUnring
+                      ? (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onUnring(i);
+                        }
+                      : undefined
+                  }
+                >
+                  {onUnring && <title>Take this patch off</title>}
+                </circle>
+              </g>
+            );
+          })}
+        </svg>
+      )}
       {facts && facts.length > 0 && source && (
         <div
           // Pointer-transparent: the facts sit ON the picture, and the picture

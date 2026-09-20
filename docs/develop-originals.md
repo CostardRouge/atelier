@@ -6,7 +6,13 @@ recommandations"*). O1 + O2 are BUILT in the Develop tool (D9 of
 `develop-tool.md`: `MediaOrigin.name`/`bytes`, `pixelHeadroom`, the *Delivers*
 line, `Auto · Proxies · Originals`, originals held for the session in
 `shared/sources/original-cache.ts`) — not yet in Trips' Export tab or for
-Studio stills, which still deliver from the proxy; O3–O7 are not built.**
+Studio stills, which still deliver from the proxy. O5 and O6 are BUILT in
+the Develop tool on 2026-09-20 (P10 of `photo-editor.md`, rules in
+`docs/memory/raw.md`): the Base section, `DevelopSettings.base` with its
+measured `rawGain`, the decode in the stage at the pixel budget and at
+export at the size the delivery needs, a proxy's RAW original fetched and
+held for the session, and an unreachable RAW leaving from its render with
+the run saying so. O3, O4 (his own files) and O7 are not built.**
 Written from the
 maintainer's question of the same day (*"c'est ok de jouer sur le proxy, mais
 […] le fichier RAW final — à quel moment ? bosser sur le proxy et à l'export

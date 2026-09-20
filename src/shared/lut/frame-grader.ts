@@ -9,10 +9,17 @@ import type { CubeLut } from '../lib/cube-parser';
 import { getDefaultLutInterpolation } from './lut-gl';
 import { makeGraphGrader } from '../render/graph-grader';
 import type { RenderPass } from '../render/graph';
+import type { HalfImage } from '../render/half-image';
+
+/**
+ * What a grader takes: any picture a canvas can draw, or a half-float picture
+ * of our own (a decoded RAW, `render/half-image.ts`) that only the GPU can.
+ */
+export type GradeSource = CanvasImageSource | HalfImage;
 
 export interface FrameGrader {
   /** Grade `source` through the LUT; returns the GL canvas to draw from. */
-  render(source: CanvasImageSource): CanvasImageSource;
+  render(source: GradeSource): CanvasImageSource;
   dispose(): void;
 }
 
@@ -25,7 +32,8 @@ export interface FrameGrader {
  * both the slowest thing here and the one resource a page has a hard cap on.
  */
 export interface PassGrader extends FrameGrader {
-  setPasses(passes: readonly RenderPass[]): void;
+  /** The passes after the look, and — second — those before it, on the source. */
+  setPasses(passes: readonly RenderPass[], before?: readonly RenderPass[]): void;
 }
 
 /**
@@ -44,6 +52,8 @@ export function makeFrameGrader(
    * and then this is exactly what it always was.
    */
   passes: readonly RenderPass[] = [],
+  /** Passes to run BEFORE the look, on the source — a denoise (`detail.ts`). */
+  before: readonly RenderPass[] = [],
 ): PassGrader {
   // THE seam, and the reason it is one method: sixteen call sites reach the
   // GPU through here, so moving the engine underneath moves the stage, every
@@ -56,10 +66,10 @@ export function makeFrameGrader(
   // mode) rather than rebuilding, which is a different job from grading one
   // frame and handing it back.
   const grader = makeGraphGrader(lut, width, height, intensity, getDefaultLutInterpolation());
-  if (passes.length) grader.setExtraPasses(passes);
+  if (passes.length || before.length) grader.setExtraPasses(passes, before);
   return {
     render: (source) => grader.render(source),
-    setPasses: (next) => grader.setExtraPasses(next),
+    setPasses: (next, nextBefore = []) => grader.setExtraPasses(next, nextBefore),
     dispose: () => grader.dispose(),
   };
 }

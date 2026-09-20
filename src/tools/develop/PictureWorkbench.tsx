@@ -11,11 +11,17 @@ import { whiteBalanceFor } from '../../shared/develop/auto-develop';
 import DevelopHistogram from '../../shared/develop/DevelopHistogram';
 import DevelopSliders from '../../shared/develop/DevelopSliders';
 import DevelopViewport from '../../shared/develop/DevelopViewport';
-import { DEFAULT_DEVELOP, developLines, isDefaultDevelop, type DevelopSettings } from '../../shared/develop/develop';
+import { DEFAULT_DEVELOP, developLines, isDefaultDevelop, signed, type DevelopSettings } from '../../shared/develop/develop';
 import { copyDevelop, pasteDevelop } from '../../shared/develop/develop-clipboard';
 import { developPillClass } from '../../shared/develop/develop-classes';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { pictureFidelity } from '../../shared/develop/picture-fidelity';
+import { DevelopBaseSection, type RawOffer } from '../../shared/develop/DevelopBase';
+import { canDecodeRaw } from '../../shared/raw/raw-decoder';
+import { isRawImage } from '../../shared/library/assets';
+import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
+import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
+import { formatBytes } from '../../shared/lib/format';
 import { pictureAspectRatio } from '../../shared/develop/crop-aspect';
 import { WORKBENCH_TABS, editorKeyAction, sameDevelop, type WorkbenchTab } from '../../shared/develop/roll-editor';
 import { framedThumbnail } from '../../shared/develop/roll-thumb';
@@ -69,6 +75,22 @@ import type { RollExport } from '../../shared/develop/roll-types';
 import CropPanel, { type CropApplyVerb } from './CropPanel';
 import KeystonePanel from './KeystonePanel';
 import LensPanel from './LensPanel';
+import DetailPanel from './DetailPanel';
+import RepairPanel, { DEFAULT_REPAIR_TOOL, type RepairTool } from './RepairPanel';
+import { describeDetail, sameDetail, type DetailImage, type DetailSettings } from '../../shared/render/detail';
+import {
+  DUST_SCAN_EDGE,
+  MAX_PATCHES,
+  describePatches,
+  detectDust,
+  newPatchId,
+  patchCoverageAt,
+  patchExtent,
+  patchSource,
+  samePatches,
+  type Patch,
+} from '../../shared/render/repair';
+import type { RepairRing } from '../../shared/develop/DevelopViewport';
 import LayersPanel from './LayersPanel';
 import MaskPanel from './MaskPanel';
 import type { BorderApplyVerb } from './BorderSection';
@@ -117,6 +139,8 @@ export default function PictureWorkbench({
   onFraming,
   onKeystone,
   onLens,
+  onDetail,
+  onRepair,
   onLayers,
   onAspect,
   exportSettings,
@@ -148,6 +172,8 @@ export default function PictureWorkbench({
   onFraming: (framing: Framing | null) => void;
   onKeystone: (keystone: Keystone | null) => void;
   onLens: (lens: LensCorrection | null) => void;
+  onDetail: (detail: DetailSettings | null) => void;
+  onRepair: (repair: Patch[]) => void;
   onLayers: (layers: AdjustLayer[]) => void;
   onAspect: (aspect: string) => void;
   /** The roll's delivery settings, edited on the Export tab. */
@@ -177,6 +203,17 @@ export default function PictureWorkbench({
   // Read once, like the develop and the crop: the workbench is keyed per picture.
   const [keystoneDraft, setKeystoneDraft] = useState<Keystone | null>(entry.keystone ?? null);
   const [lensDraft, setLensDraft] = useState<LensCorrection | null>(entry.lens ?? null);
+  const [detailDraft, setDetailDraft] = useState<DetailSettings | null>(entry.detail ?? null);
+  // The patch list, a draft like the rest: a drag setting a source fires per
+  // pointermove, and each move must not be a document write.
+  const [repairDraft, setRepairDraft] = useState<Patch[]>(entry.repair ?? []);
+  const [repairTool, setRepairTool] = useState<RepairTool>({ ...DEFAULT_REPAIR_TOOL });
+  const [repairing, setRepairing] = useState(false);
+  const [finding, setFinding] = useState<string | null>(null);
+  // The FILE's own width, for the kernels: a RAW's sensor once decoded, else
+  // the measured file; the stage's width follows the decode one render later.
+  const [rawSize, setRawSize] = useState<{ w: number; h: number } | null>(null);
+  const [stageWidth, setStageWidth] = useState(0);
   // The stack is a draft like the rest, so a slider drag is one write-through
   // rather than one document write per step.
   const [layersDraft, setLayersDraft] = useState<AdjustLayer[]>(entry.layers ?? []);
@@ -219,7 +256,7 @@ export default function PictureWorkbench({
   const paintId = paintKind === 'brush' || paintKind === 'subject' ? (selectedLayer?.id ?? null) : null;
   const brushRef = useRef(brush);
   brushRef.current = brush;
-  const paint = useMemo(
+  const layerPaint = useMemo(
     () =>
       paintId
         ? {
@@ -282,6 +319,112 @@ export default function PictureWorkbench({
         : null,
     [paintId, paintKind],
   );
+  // --- repairing -------------------------------------------------------------
+  // The same seam, and the same rule as a stroke: the patch being placed rides
+  // a ref, because the pointermove closure reads state one frame behind. A
+  // press places the patch and gives it a default source — beside it, to the
+  // right, mirrored when that would leave the frame; a drag that clears the
+  // patch's own disc then moves the source to where the pointer ends, so a tap
+  // heals a spot and a drag says where to borrow from. Only on the Detail tab:
+  // the verb lives there, and a tool armed on a tab that does not show it is
+  // a gesture nobody can see the reason for.
+  const repairActive = repairing && tab === 'detail';
+  const liveRepairRef = useRef<Patch | null>(null);
+  const repairToolRef = useRef(repairTool);
+  repairToolRef.current = repairTool;
+  const [pictureAspect, setPictureAspect] = useState(1);
+  const repairPaint = useMemo(
+    () =>
+      repairActive
+        ? {
+            onStart: (point: [number, number]) => {
+              const tool = repairToolRef.current;
+              const seed: Patch = {
+                id: newPatchId(),
+                kind: tool.kind,
+                x: point[0],
+                y: point[1],
+                radius: tool.radius,
+                feather: tool.feather,
+                dx: 0,
+                dy: 0,
+              };
+              const { ru } = patchExtent(seed, pictureAspect);
+              // Two and a half radii to the right keeps the discs apart; a
+              // patch near the right edge borrows from its left instead.
+              const dx = point[0] + ru * 2.5 + ru <= 1 ? ru * 2.5 : -ru * 2.5;
+              const made = { ...seed, dx };
+              liveRepairRef.current = made;
+              setRepairDraft((list) => (list.length >= MAX_PATCHES ? list : [...list, made]));
+            },
+            onMove: (point: [number, number]) => {
+              const live = liveRepairRef.current;
+              if (!live) return;
+              const { ru, rv } = patchExtent(live, pictureAspect);
+              const dx = point[0] - live.x;
+              const dy = point[1] - live.y;
+              // Inside its own disc the source would copy the defect onto
+              // itself: the default stays until the drag clears it.
+              if (Math.hypot(dx / ru, dy / rv) < 1) return;
+              const moved = { ...live, dx, dy };
+              liveRepairRef.current = moved;
+              setRepairDraft((list) => list.map((p) => (p.id === moved.id ? moved : p)));
+            },
+            onEnd: () => {
+              liveRepairRef.current = null;
+            },
+            gesture: 'drag' as const,
+          }
+        : null,
+    [repairActive, pictureAspect],
+  );
+  const paint = repairPaint ?? layerPaint;
+  // --- the RAW base ----------------------------------------------------------
+  // Where the sensor's data would come from: the file itself when it is a
+  // RAW, else a proxy's RAW original, fetched once and held for the session
+  // (`original-cache.ts`, decision 3). Nothing is fetched or decoded until the
+  // base says `raw`; back on the render the decode is dropped with the
+  // source, and the held original costs no second fetch.
+  const origin = useMemo(() => (file ? mediaOrigin(file) : null), [file]);
+  const rawOffer: RawOffer | null =
+    file && canDecodeRaw(file) ? 'file' : origin?.name && isRawImage(origin.name) && origin.fetchOriginal ? 'original' : null;
+  const wantsRaw = draft.draft.base === 'raw' && rawOffer !== null;
+  const [rawFile, setRawFile] = useState<File | null>(null);
+  const [rawStatus, setRawStatus] = useState<string | null>(null);
+  const { patch: patchDraft } = draft;
+  useEffect(() => {
+    if (!wantsRaw || rawFile || !file || !rawOffer) return;
+    if (rawOffer === 'file') {
+      setRawFile(file);
+      return;
+    }
+    const key = knownIdentity(file)?.assetId ?? null;
+    const held = key ? heldOriginal(key) : null;
+    if (held) {
+      setRawFile(held);
+      return;
+    }
+    let alive = true;
+    setRawStatus(`fetching the RAW${origin?.bytes ? ` · ${formatBytes(origin.bytes)}` : ''}…`);
+    origin!.fetchOriginal!()
+      .then((fetched) => {
+        if (!alive) return;
+        if (key) holdOriginal(key, fetched);
+        setRawFile(fetched);
+        setRawStatus(null);
+      })
+      .catch((err: unknown) => {
+        if (!alive) return;
+        setRawStatus(null);
+        tell(`the RAW could not be fetched: ${err instanceof Error ? err.message : String(err)}`);
+        patchDraft({ base: null, rawGain: null });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [wantsRaw, rawFile, file, rawOffer, origin, tell, patchDraft]);
+  const rawGain = draft.draft.rawGain ?? null;
+  const fullWidth = (wantsRaw ? rawSize?.w : null) ?? exports.openSize?.width ?? null;
   const picture = useDevelopPicture({
     file,
     cube: stack.composed,
@@ -295,8 +438,25 @@ export default function PictureWorkbench({
     // Only while the layer is open AND the box is ticked: a red wash left on
     // by accident would be mistaken for the picture.
     showMaskOf: showMask && selectedLayer ? selectedLayer.id : null,
+    raw: wantsRaw && rawFile ? { file: rawFile, gain: rawGain } : null,
+    detail: detailDraft,
+    repair: repairDraft,
+    pixelScale: stageWidth && fullWidth ? Math.min(1, stageWidth / fullWidth) : 1,
+    loupe: true,
+    pixelView,
+    // The measured exposure is STORED the moment it is known, so the export's
+    // decode applies the same number (`raw.md`). Once: a stored gain is never
+    // overwritten by a later decode's measurement.
+    onRawDecoded: (info) => {
+      setRawSize({ w: info.sourceWidth, h: info.sourceHeight });
+      if (rawGain === null) {
+        patchDraft({ base: 'raw', rawGain: info.gain });
+        const ev = Math.log2(info.gain);
+        tell(`RAW · ${info.width}×${info.height}${info.halved ? ' (half size)' : ''} · metered ${ev ? `${signed(ev, 1)} EV` : 'at its white'}`);
+      }
+    },
   });
-  const fidelity = pictureFidelity(file);
+  const fidelity = pictureFidelity(file, draft.draft.base);
   const subject = useSubjectMasks({
     layers: layersDraft,
     // `BadgeSource.image` is typed as `CanvasImageSource`, which admits an
@@ -315,16 +475,18 @@ export default function PictureWorkbench({
   // copy changes the stored value without this editor's doing, and a draft that
   // ignored it would keep showing numbers the roll no longer holds — and write
   // them back over the step at the next nudge.
-  const callbacks = useRef({ onDevelop, onFraming, onKeystone, onLens, onLayers, onAspect, onSnapshot, onStep, onTabChange });
-  callbacks.current = { onDevelop, onFraming, onKeystone, onLens, onLayers, onAspect, onSnapshot, onStep, onTabChange };
-  const { setDraft } = draft;
+  const callbacks = useRef({ onDevelop, onFraming, onKeystone, onLens, onDetail, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange });
+  callbacks.current = { onDevelop, onFraming, onKeystone, onLens, onDetail, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange };
+  const { replace } = draft;
   useWriteThrough<DevelopSettings>({
     stored: entry.develop,
     // Keyed on the numbers themselves: `draft` is a new object every render.
     draft: isDefaultDevelop(draft.draft) ? null : draft.draft,
     same: sameDevelop,
     onWrite: (value) => callbacks.current.onDevelop(value),
-    onReseed: (value) => setDraft(value ?? DEFAULT_DEVELOP),
+    // The WHOLE record, material included: an undo that takes a picture back
+    // off its RAW must put the base back with the numbers.
+    onReseed: (value) => replace(value ?? DEFAULT_DEVELOP),
   });
   // The crop, written through the same way, on its own timer: a drag fires far
   // more often than a slider ever does.
@@ -343,6 +505,20 @@ export default function PictureWorkbench({
     same: sameLens,
     onWrite: (value) => callbacks.current.onLens(value),
     onReseed: (value) => setLensDraft(value),
+  });
+  useWriteThrough<DetailSettings>({
+    stored: entry.detail ?? null,
+    draft: detailDraft,
+    same: sameDetail,
+    onWrite: (value) => callbacks.current.onDetail(value),
+    onReseed: (value) => setDetailDraft(value),
+  });
+  useWriteThrough<Patch[]>({
+    stored: entry.repair?.length ? entry.repair : null,
+    draft: repairDraft.length ? repairDraft : null,
+    same: (a, b) => samePatches(a, b),
+    onWrite: (value) => callbacks.current.onRepair(value ?? []),
+    onReseed: (value) => setRepairDraft(value ?? []),
   });
   useWriteThrough<AdjustLayer[]>({
     stored: entry.layers?.length ? entry.layers : null,
@@ -365,6 +541,70 @@ export default function PictureWorkbench({
   const { source, cube, delivered } = picture;
   const aspectRatio = pictureAspectRatio(entry.aspect, source?.width ?? 0, source?.height ?? 0);
   useEffect(() => setRatio(source ? aspectRatio : 0), [source, aspectRatio]);
+  useEffect(() => setStageWidth(source?.width ?? 0), [source]);
+  useEffect(() => setPictureAspect(source && source.height > 0 ? source.width / source.height : 1), [source]);
+
+  // --- finding dust ------------------------------------------------------------
+  // The stage's own decode, read back once at the scan's edge and walked by
+  // the pure module. Nothing is stored but the patches it answers; a spot
+  // already under a patch is not answered twice.
+  const findDust = useCallback(() => {
+    if (!source) {
+      setFinding('the picture is not decoded yet');
+      return;
+    }
+    const k = Math.min(1, DUST_SCAN_EDGE / Math.max(source.width, source.height));
+    const w = Math.max(8, Math.round(source.width * k));
+    const h = Math.max(8, Math.round(source.height * k));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return;
+    ctx.drawImage(source.image, 0, 0, source.width, source.height, 0, 0, w, h);
+    const bytes = ctx.getImageData(0, 0, w, h).data;
+    const data = new Float32Array(w * h * 3);
+    for (let i = 0, j = 0; i < bytes.length; i += 4, j += 3) {
+      data[j] = bytes[i] / 255;
+      data[j + 1] = bytes[i + 1] / 255;
+      data[j + 2] = bytes[i + 2] / 255;
+    }
+    const img: DetailImage = { width: w, height: h, data };
+    const ar = source.width / source.height;
+    const found = detectDust(img, { makeId: newPatchId });
+    setRepairDraft((list) => {
+      const fresh = found.filter((p) => !list.some((have) => patchCoverageAt(have, p.x, p.y, ar) > 0));
+      const room = Math.max(0, MAX_PATCHES - list.length);
+      const added = fresh.slice(0, room);
+      setFinding(
+        found.length === 0
+          ? 'no dust found'
+          : added.length === 0
+            ? room === 0
+              ? `${found.length} found, no room left`
+              : `${found.length} found, already patched`
+            : `${added.length} spot${added.length === 1 ? '' : 's'} healed`,
+      );
+      return added.length ? [...list, ...added] : list;
+    });
+  }, [source]);
+  useEffect(() => {
+    if (!finding) return;
+    const t = window.setTimeout(() => setFinding(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [finding]);
+  /** The patches as rings on the picture: the destination solid, its source dashed. */
+  const rings = useMemo<readonly RepairRing[] | null>(() => {
+    if (!repairDraft.length) return null;
+    return repairDraft.map((p) => {
+      const from = patchSource(p);
+      const { ru, rv } = patchExtent(p, pictureAspect);
+      return { x: p.x, y: p.y, sx: from.x, sy: from.y, ru, rv, kind: p.kind };
+    });
+  }, [repairDraft, pictureAspect]);
+  const unring = useCallback((index: number) => {
+    setRepairDraft((list) => list.filter((_, i) => i !== index));
+  }, []);
   // The Crop tab's zone, measured on the decoded picture and written back as
   // the aspect (to the roll, at once) and the framing (through its draft).
   const crop = useCropZone({
@@ -532,9 +772,11 @@ export default function PictureWorkbench({
     if (!factsOn) return null;
     const lines = developLines(draft.draft);
     if (drawingCount) lines.push(`${drawingCount} layer${drawingCount === 1 ? '' : 's'}`);
+    if (detailDraft) lines.push(describeDetail(detailDraft));
+    if (repairDraft.length) lines.push(describePatches(repairDraft));
     if (fidelity.note) lines.push(fidelity.note);
     return lines;
-  }, [factsOn, draft.draft, drawingCount, fidelity.note]);
+  }, [factsOn, draft.draft, drawingCount, detailDraft, repairDraft, fidelity.note]);
 
   return (
     <>
@@ -631,6 +873,10 @@ export default function PictureWorkbench({
           // about the layer, not about the tool — but removable only while Pick
           // is on, so a settled mask cannot be edited by a stray click.
           onUnmark={paintKind === 'subject' ? unmarkSubject : undefined}
+          // The rings show on every tab — a patch is a fact about the
+          // picture — and come off only while Repair is armed.
+          rings={rings}
+          onUnring={repairActive ? unring : undefined}
           className={cropping ? 'hidden' : 'flex-1'}
           onPick={(linear) => {
             const { temperature, tint, clamped } = whiteBalanceFor(linear);
@@ -684,6 +930,23 @@ export default function PictureWorkbench({
           {tab === 'develop' ? (
             <>
               <DevelopHistogram histogram={picture.histogram} />
+              <DevelopBaseSection
+                offer={rawOffer}
+                base={draft.draft.base === 'raw' ? 'raw' : 'render'}
+                onBase={(base) => {
+                  if (base === 'raw') {
+                    patchDraft({ base: 'raw' });
+                    if (!draft.asShot) tell('your numbers now act on the RAW — another starting point');
+                  } else {
+                    patchDraft({ base: null, rawGain: null });
+                  }
+                }}
+                status={wantsRaw && (rawStatus || !picture.source) ? (rawStatus ?? 'decoding the sensor’s data…') : null}
+                gain={draft.draft.base === 'raw' ? rawGain : null}
+                originalName={origin?.name ?? null}
+                originalBytes={origin?.bytes ?? null}
+                numbersSet={!draft.asShot}
+              />
               <DevelopAutoSection
                 stats={picture.stats}
                 onPatch={draft.patch}
@@ -707,6 +970,21 @@ export default function PictureWorkbench({
               />
               <DevelopApplySection verbs={applyTo} draft={draft.draft} onTold={tell} />
               <DevelopLookSection stack={stack} />
+            </>
+          ) : tab === 'detail' ? (
+            <>
+              <RepairPanel
+                patches={repairDraft}
+                tool={repairTool}
+                onTool={(patch) => setRepairTool((t) => ({ ...t, ...patch }))}
+                repairing={repairing}
+                onRepairing={setRepairing}
+                onFindDust={findDust}
+                finding={finding}
+                onRemoveLast={() => setRepairDraft((list) => list.slice(0, -1))}
+                onClear={() => setRepairDraft([])}
+              />
+              <DetailPanel value={detailDraft} onChange={setDetailDraft} />
             </>
           ) : tab === 'layers' ? (
             <>
@@ -829,6 +1107,7 @@ export default function PictureWorkbench({
               verbs={exportVerbs}
               exporting={exports.exporting}
               note={exports.note}
+              hdrRun={exports.lastRun?.hdr ?? null}
             />
           ) : null}
         </div>

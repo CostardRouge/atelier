@@ -15,6 +15,7 @@ import type { CubeLut } from '../lib/cube-parser';
 import { drawLayout, type LayoutPicture } from '../media/cell-paint';
 import { DEFAULT_FRAMING, drawFramed, type Framing } from '../media/framing';
 import { fitPhotoForRender } from '../media/photo-frame';
+import type { HalfImage } from '../render/half-image';
 import type { SavedMediaRef } from '../projects/project-types';
 import {
   collageCellAt,
@@ -46,6 +47,13 @@ export interface BadgeSource {
   image: CanvasImageSource;
   width: number;
   height: number;
+  /**
+   * The picture as the GPU takes it, when it is more than `image` can hold:
+   * a decoded RAW's half-floats (`render/half-image.ts`). A grader renders
+   * this when it is here; `image` is then the same picture AS SHOT, 8-bit,
+   * for every 2D draw (the wipe's untouched side, the dropper, a thumbnail).
+   */
+  gpu?: HalfImage;
   /** Frees the decoded bitmap / detaches the video element. */
   release: () => void;
   /**

@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { LutStack } from '../lut/use-lut-stack';
-import { DEFAULT_DEVELOP, isDefaultDevelop, type DevelopKey, type DevelopSettings } from './develop';
+import { DEFAULT_DEVELOP, isDefaultDevelop, withoutBase, type DevelopKey, type DevelopSettings } from './develop';
 
 export interface DevelopDraft {
   draft: DevelopSettings;
-  /** Replace every number at once — a paste, a preset, "As shot". */
+  /**
+   * Replace every NUMBER at once — a paste, a preset, "As shot". The material
+   * (`base`, `rawGain`) is kept: it is a fact about this picture's bytes, not
+   * a setting a preset carries (`withoutBase`).
+   */
   setDraft: (next: DevelopSettings) => void;
+  /** Replace the WHOLE record, material included — what the document hands back on an undo. */
+  replace: (next: DevelopSettings) => void;
   /** One slider. */
   set: (key: DevelopKey, value: number) => void;
   /**
@@ -40,15 +46,22 @@ export function useDevelopDraft(value: DevelopSettings | null, stack: LutStack):
   }, [draft, setDevelop]);
   useEffect(() => () => setDevelop(null), [setDevelop]);
 
-  const setDraft = useCallback((next: DevelopSettings) => setDraftState({ ...DEFAULT_DEVELOP, ...next }), []);
+  const setDraft = useCallback(
+    (next: DevelopSettings) =>
+      setDraftState((d) => ({ ...DEFAULT_DEVELOP, ...next, base: d.base ?? null, rawGain: d.rawGain ?? null })),
+    [],
+  );
+  const replace = useCallback((next: DevelopSettings) => setDraftState({ ...DEFAULT_DEVELOP, ...next }), []);
   const set = useCallback((key: DevelopKey, v: number) => setDraftState((d) => ({ ...d, [key]: v })), []);
   const patch = useCallback(
     (partial: Partial<DevelopSettings>) => setDraftState((d) => ({ ...d, ...partial })),
     [],
   );
-  const asShot = isDefaultDevelop(draft);
+  // "As shot" is about the NUMBERS: a RAW base with every slider at 0 is as
+  // shot on its material, and the verb that zeroes the sliders has nothing to do.
+  const asShot = isDefaultDevelop(withoutBase(draft));
   const result = useCallback(() => (isDefaultDevelop(draft) ? null : draft), [draft]);
-  return { draft, setDraft, set, patch, asShot, result };
+  return { draft, setDraft, replace, set, patch, asShot, result };
 }
 
 /**

@@ -10,7 +10,7 @@
  * Pure and DOM-free; `useSyncExternalStore`-shaped so a button can follow it.
  */
 
-import { cloneDevelop, isDefaultDevelop, type DevelopSettings } from './develop';
+import { cloneDevelop, isDefaultDevelop, withoutBase, type DevelopSettings } from './develop';
 
 let held: DevelopSettings | null = null;
 const listeners = new Set<() => void>();
@@ -21,7 +21,10 @@ function notify(): void {
 
 /** Keep a copy of `settings`; an as-shot develop clears the clipboard. */
 export function copyDevelop(settings: DevelopSettings | null): void {
-  held = settings && !isDefaultDevelop(settings) ? cloneDevelop(settings) : null;
+  // The NUMBERS travel, never the material: a base is a fact about one
+  // picture's bytes, and its metered gain on a JPEG would be stops too bright.
+  const numbers = settings ? withoutBase(settings) : null;
+  held = numbers && !isDefaultDevelop(numbers) ? cloneDevelop(numbers) : null;
   notify();
 }
 
