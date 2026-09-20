@@ -123,3 +123,65 @@ switch decoded 2000×1500 at half size, metered at its white (a patch above
 saturation clips more than 1 %), −1.5 EV read 160 on the clipped patch, and
 the export decoded the whole 4000×3000 and wrote the same 160 — preview =
 export from two decodes of two sizes, which is what storing the gain buys.
+
+## What a DJI DNG actually holds (measured 2026-09-20, body FC8482)
+
+Two files off the maintainer's own drone (DJI Fly, `dji_fly_*_photo.DNG`,
+74 MB each), walked by `probeRaw` itself and decoded in the browser pane —
+this replaces the format EXAMPLE `develop.md` carried, which was never a
+measurement:
+
+- **IFD0** — 160×90 JPEG thumbnail.
+- **SubIFD** — 8064×4536 CFA, **compression 1, uncompressed** 16 bits,
+  73 156 608 bytes: the file, near enough. Black 4096, white 65472, 16:9 at
+  capture. No JPEG XL on this body, so P3's decoder question does not arise
+  for it — ProRAW and ARW are still unanswered.
+- **SubIFD1** — **960×540** JPEG, 762 KB. The only thing a browser can draw.
+
+**0.52 of 36.6 megapixels — 8.4× short on the long edge.** That is the whole
+of "macOS shows it sharp, Atelier shows it pixelated": nothing in
+`pickPreview` is wrong (it takes the larger of the two JPEGs correctly), the
+render simply is not in the file, and macOS is not showing a preview at all —
+it demosaics the CFA plane and applies the opcodes below. Any stage wider than
+960 px upscales; the 640 px thumbnail is the one surface the embedded render
+is honestly big enough for. **A camera that writes a preview this small is the
+case `DevelopSettings.base` exists for** — what nothing says today is the
+PIXEL count: `pictureFidelity` names the bits and never the size, and
+`DecodedPhoto.viaRawPreview` is returned by `photo-frame.ts` and read by
+nobody.
+
+Decode timings, this Mac, the 74 MB already in memory: **4.4 s** whole
+(8064×4536, including the wasm's first load), **456 ms** at
+`budgetPixels: 3840×2160` — LibRaw's half (4032×2268) box-averaged to
+2016×1134. So the panel's "a few seconds, once" is right for the first decode
+and pessimistic for every one after.
+
+## LibRaw skips the DNG opcodes, and DJI's are enormous (2026-09-20)
+
+`OpcodeList3` on that body carries **GainMap + WarpRectilinear**, and LibRaw
+applies neither:
+
+- **GainMap** (12 364 bytes) — a 32×32 grid over three planes, corner gains
+  **5.93 / 5.06 / 4.97** (R/G/B) against 1.00 at the centre: about **2.5
+  stops** of vignetting, and a different figure per channel, so colour shading
+  as well. Measured against DJI's own render on patches 5 % in from each
+  corner, LibRaw's corners land at **0.44–0.51** of where the render puts them
+  relative to the centre.
+- **WarpRectilinear** (164 bytes) — three planes, so lateral CA as well as
+  distortion: `k0 ≈ 0.9530` (a uniform 4.7 % scale), `k1..k3` of order 1e-4,
+  centre 0.5,0.5.
+
+So `base: 'raw'` on a DJI file is sharper than the render and **wrong**: dark
+corners, uncorrected barrel distortion, and a frame 4.7 % off the render's
+scale. Saying it is the floor; correcting it is the cure. Showing it as the
+better material without saying either is the fabrication this file's rules
+exist to stop.
+
+**And it retires the reason P6 shipped with no lens profiles.** The index
+records "a profile is MEASURED calibration data and invented coefficients
+would be a fabricated correction". A DNG carries that calibration for the
+exact body and lens, inside the file, in the DNG spec's own units — and
+`render/lens.ts` + `lens-pass.ts` already do the radial warp and the
+per-channel scale it asks for. Both blobs are tiny and sit in the head the
+probe already reads, so `raw-probe.ts`'s TIFF reader is the whole of the
+parsing work.

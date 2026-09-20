@@ -246,12 +246,14 @@ this". Rules:
   and letting it pass for the file's own pixels is the fabrication this rule
   exists to stop.
 
-**What the spike still cannot answer**: decode time, heap and the JPEG XL
-question are the maintainer's own files' to settle (`docs/photo-editor.md` P3).
-`libraw-wasm` 1.6.0 is reachable from this container, so the measurement is one
-`npm i` away once a real DNG, ProRAW and ARW are in the scratchpad — never in
-the repo. `describeRaw` prints exactly what that spike needs to report
-(`8064×6048 · sensor JPEG XL · preview 4032×3024 · 2 opcode lists`).
+**The spike is ANSWERED for a DJI DNG** (2026-09-20, two of the maintainer's
+own files): an uncompressed 16-bit sensor plane, a **960×540** embedded render
+against 8064×4536, GainMap + WarpRectilinear opcodes LibRaw ignores, and the
+decode timings — all of it in `raw.md`, «What a DJI DNG actually holds». The
+`8064×6048 · sensor JPEG XL · preview 4032×3024` line once written here was a
+format EXAMPLE and never a measurement; the real files say something else, and
+this is why a DNG looks pixelated beside macOS. ProRAW JPEG XL and ARW still
+need his files (`docs/photo-editor.md` P3).
 
 Verified in the pane on a synthetic DNG built around a real canvas JPEG: the
 probe read `4000×3000 · sensor JPEG · preview 640×480 · 1 opcode list`, the
