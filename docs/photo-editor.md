@@ -497,8 +497,20 @@ in both Develop hosts*: past the stage's 1:1 the picture is decoded whole
 drawn in viewport space over the stage, released when the view comes back
 (`docs/memory/render-detail.md`, «The loupe»).
 
-**P12 — repair.** Dust detection and removal, healing, clone, as one `Patch[]`
-list and one composite pass.
+**P12 — repair** *(BUILT 2026-09-20 — `render/repair.ts` + `repair-pass.ts`,
+`RollPicture.repair`, the Repair section at the top of the Detail tab; the
+rules are `docs/memory/render-repair.md`)*. Dust detection and removal,
+healing, clone, as one `Patch[]` list and one composite pass — the pass runs
+FIRST, on the source, so a copied pixel takes the same develop, look, warp and
+denoise as its neighbours. A heal matches the destination's SURROUNDINGS and
+never its middle (the mean of a dust spot is the dust); a clone copies the
+source exactly. Dust is found on the stage's decode by a pure walk
+(`detectDust`: small, dark, roughly round, sourced from the cleanest of four
+neighbours) and never stored — only the patches it answers are. A tap heals a
+spot from beside it, a drag says where to borrow from; a patch is two rings on
+the picture, clicked off while Repair is armed. Held to the pure module by the
+render gate from both source kinds within 2 codes (measured 1). Not a
+content-aware fill, deliberately.
 
 **P13 — HDR delivery.** The float core already gives the headroom; this adds an
 HDR-capable preview canvas (detected, and saying so plainly where the display or

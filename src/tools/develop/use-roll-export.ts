@@ -209,6 +209,7 @@ export function useRollExport({
             lens: picture.lens ?? null,
             layers: picture.layers ?? null,
             detail: picture.detail ?? null,
+            repair: picture.repair ?? null,
             raw,
           });
           if (out.gradedAt.width < out.source.width || out.gradedAt.height < out.source.height) {

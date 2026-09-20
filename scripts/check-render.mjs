@@ -32,6 +32,13 @@ const browser = await chromium.launch({
 const page = await browser.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
+// A shader the driver refuses is a `console.error` from the graph and a pass
+// that draws NOTHING — black, which a row reads as "worst 190 codes" and
+// never as the compile log that names the line. Relayed, so it does.
+page.on('console', (m) => {
+  // A font or a tile the sandbox's network refuses is not a rendering fault.
+  if (m.type() === 'error' && !m.text().startsWith('Failed to load resource')) errors.push(m.text());
+});
 await page.goto(BASE, { waitUntil: 'networkidle' });
 
 const out = await page.evaluate(async () => {
@@ -646,6 +653,71 @@ const out = await page.evaluate(async () => {
     results.detail = rows;
   }
 
+  // --- repair: heal and clone against repair.ts, from BOTH source kinds ----
+  //
+  // A patch is a function of WHERE, so like the keystone it must be checked
+  // from a canvas AND an ImageBitmap: the two hand the shader opposite y
+  // conventions, and a pass that read v_uv directly would put a patch on the
+  // wrong side of the frame for one of them. The pure module samples
+  // bilinearly exactly as the GPU does, so the tolerance is tight.
+  {
+    const { createRenderGraph } = await import('/atelier/src/shared/render/graph.ts');
+    const rp = await import('/atelier/src/shared/render/repair.ts');
+    const { makeRepairPass } = await import('/atelier/src/shared/render/repair-pass.ts');
+    const RW = 96, RH = 64;
+    const AR = RW / RH;
+    // A soft field with a dark spot near the top-left, and a darker band on the right.
+    const rgb = new Float32Array(RW * RH * 3);
+    const rc = document.createElement('canvas'); rc.width = RW; rc.height = RH;
+    const rg = rc.getContext('2d');
+    for (let y = 0; y < RH; y++) for (let x = 0; x < RW; x++) {
+      let v = 0.6 + 0.1 * Math.sin(x / 9) + 0.05 * Math.cos(y / 7);
+      if (Math.hypot(x - 24, y - 20) < 4) v = 0.15;
+      if (x > 70) v -= 0.25;
+      const px = [v, v * 0.95, v * 0.9].map((c) => Math.round(Math.max(0, Math.min(1, c)) * 255) / 255);
+      rgb.set(px, (y * RW + x) * 3);
+      rg.fillStyle = `rgb(${Math.round(px[0] * 255)},${Math.round(px[1] * 255)},${Math.round(px[2] * 255)})`;
+      rg.fillRect(x, y, 1, 1);
+    }
+    const img = { width: RW, height: RH, data: rgb };
+    const patches = [
+      { id: 'h', kind: 'heal', x: 24 / RW, y: 20 / RH, radius: 0.12, feather: 0.5, dx: 0.25, dy: 0.1 },
+      { id: 'c', kind: 'clone', x: 0.8, y: 0.7, radius: 0.15, feather: 0.3, dx: -0.4, dy: -0.2 },
+    ];
+    const bitmap = await createImageBitmap(rc);
+    const through = (source) => {
+      const cv = document.createElement('canvas');
+      const graph = createRenderGraph(cv);
+      graph.resize(RW, RH);
+      graph.render(source, [makeRepairPass(patches, AR)]);
+      const o = document.createElement('canvas'); o.width = RW; o.height = RH;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(cv, 0, 0);
+      const d = oc.getImageData(0, 0, RW, RH).data;
+      graph.dispose();
+      return d;
+    };
+    const probes = [];
+    for (let y = 2; y < RH - 2; y += 4) for (let x = 2; x < RW - 2; x += 5) probes.push([x, y]);
+    const compare = (gpu) => {
+      let worst = 0;
+      for (const [x, y] of probes) {
+        const want = rp.repairAt(img, (x + 0.5) / RW, (y + 0.5) / RH, patches, AR);
+        for (let c = 0; c < 3; c++) worst = Math.max(worst, Math.abs(gpu[(y * RW + x) * 4 + c] - Math.round(Math.max(0, Math.min(1, want[c])) * 255)));
+      }
+      return worst;
+    };
+    const spotBefore = rgb[(20 * RW + 24) * 3];
+    const healedCanvas = through(rc);
+    results.repair = {
+      canvas: compare(healedCanvas),
+      bitmap: compare(through(bitmap)),
+      spotBefore: Math.round(spotBefore * 255),
+      spotAfter: healedCanvas[(20 * RW + 24) * 4],
+    };
+    bitmap.close();
+  }
+
   // --- the cube without OES_texture_float_linear: half-float, never 8-bit --
   //
   // This GPU has the extension, so the fallback would otherwise run nowhere a
@@ -874,6 +946,16 @@ for (const name of ['chroma', 'denoise', 'defringe', 'sharpen']) {
 if (det.movedDenoise < 0.01 || det.movedSharpen < 0.01) {
   bad += 1;
   console.log('  FAIL  a pass moved nothing, so its row proves nothing');
+}
+
+const rep = out.repair;
+{
+  const ok = rep.canvas <= 2 && rep.bitmap <= 2 && rep.spotAfter > rep.spotBefore + 40;
+  if (!ok) bad += 1;
+  console.log(
+    `\n  ${ok ? 'ok  ' : 'FAIL'}  repair against repair.ts: canvas worst ${rep.canvas}, ImageBitmap worst ${rep.bitmap} code(s) (allowed 2); ` +
+      `the spot went ${rep.spotBefore} → ${rep.spotAfter}${rep.spotAfter > rep.spotBefore + 40 ? '' : ' — NOT healed'}`,
+  );
 }
 
 const half = out.halfCube;

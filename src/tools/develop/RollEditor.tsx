@@ -5,6 +5,7 @@ import { hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from '../..
 import type { Keystone } from '../../shared/render/geometry';
 import type { LensCorrection } from '../../shared/render/lens';
 import type { DetailSettings } from '../../shared/render/detail';
+import type { Patch } from '../../shared/render/repair';
 import type { AdjustLayer } from '../../shared/develop/layer';
 import type { Framing } from '../../shared/media/framing';
 import {
@@ -424,6 +425,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     (id: string, keystone: Keystone | null) => update((r) => patchPicture(r, id, { keystone })),
     [update],
   );
+  const handleRepair = useCallback(
+    (id: string, repair: Patch[]) => update((r) => patchPicture(r, id, { repair })),
+    [update],
+  );
   const handleDetail = useCallback(
     (id: string, detail: DetailSettings | null) => update((r) => patchPicture(r, id, { detail })),
     [update],
@@ -737,6 +742,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onKeystone={(keystone) => handleKeystone(open.id, keystone)}
               onLens={(lens) => handleLens(open.id, lens)}
               onDetail={(detail) => handleDetail(open.id, detail)}
+              onRepair={(repair) => handleRepair(open.id, repair)}
               onLayers={(layers) => handleLayers(open.id, layers)}
               onAspect={(aspect) => handleAspect(open.id, aspect)}
               exportSettings={roll.export}

@@ -17,6 +17,7 @@
 import { keystoneOrNull, type Keystone } from '../render/geometry';
 import { lensOrNull, type LensCorrection } from '../render/lens';
 import { detailOrNull, type DetailSettings } from '../render/detail';
+import { readPatches, type Patch } from '../render/repair';
 import { readLayers, type AdjustLayer } from './layer';
 import { developOrNull, type DevelopSettings } from './develop';
 import { isDefaultFraming, normaliseFraming, type Framing } from '../media/framing';
@@ -98,6 +99,12 @@ export interface RollPicture {
    */
   detail?: DetailSettings | null;
   /**
+   * Heal and clone patches (`shared/render/repair.ts`), in order, drawn as
+   * ONE pass on the source before everything else. Absent and empty mean the
+   * same thing.
+   */
+  repair?: Patch[];
+  /**
    * Adjustment layers, BOTTOM to TOP (`shared/develop/layer.ts`). Absent and
    * empty mean the same thing, so nothing is migrated. They apply after the
    * picture's own develop and look, on the picture as it is DISPLAYED — see
@@ -156,6 +163,7 @@ export function createRollPicture(ref: SavedMediaRef, id: string = newRollId()):
     keystone: null,
     lens: null,
     detail: null,
+    repair: [],
     layers: [],
   };
 }
@@ -253,6 +261,7 @@ function readPicture(raw: unknown): RollPicture | null {
     keystone: keystoneOrNull(raw.keystone),
     lens: lensOrNull(raw.lens),
     detail: detailOrNull(raw.detail),
+    repair: readPatches(raw.repair),
     layers: readLayers(raw.layers),
   };
 }
@@ -344,7 +353,7 @@ export function patchPicture(
   roll: RollDoc,
   id: string,
   patch: Partial<
-    Pick<RollPicture, 'develop' | 'framing' | 'aspect' | 'border' | 'keystone' | 'lens' | 'detail' | 'layers'>
+    Pick<RollPicture, 'develop' | 'framing' | 'aspect' | 'border' | 'keystone' | 'lens' | 'detail' | 'repair' | 'layers'>
   >,
   now: number = Date.now(),
 ): RollDoc {

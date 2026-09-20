@@ -29,6 +29,8 @@ import type { PixelView } from '../ui/use-pixel-view';
 import { decodeRaw, type RawMeta } from '../raw/raw-decoder';
 import { isDefaultDetail, sameDetail, type DetailSettings } from '../render/detail';
 import { detailPasses } from '../render/detail-pass';
+import { samePatches, type Patch } from '../render/repair';
+import { makeRepairPass } from '../render/repair-pass';
 import { maxRenderSize } from '../render/graph-grader';
 
 /** How close to the frame's side the divider's handle may be held, in px. */
@@ -56,6 +58,7 @@ interface GraderRecord {
   overlay: string | null;
   rasters: ReadonlyMap<string, BrushRaster> | null;
   detail: DetailSettings | null;
+  repair: Patch[];
   scale: number;
   w: number;
   h: number;
@@ -88,14 +91,21 @@ function graderFrom(
   rasters: ReadonlyMap<string, BrushRaster> | null,
   detail: DetailSettings | null,
   scale: number,
+  repair: readonly Patch[] | null = null,
 ): HeldGrader | null {
     const cur = slot.current;
     // Geometry or a layer with NO look still needs the GPU: both are passes,
     // not cubes, so "no lut" stopped meaning "nothing to render" the day
     // geometry arrived.
     const overlayOf = overlay ? (stack.find((l) => l.id === overlay) ?? null) : null;
+    const patches = repair ?? [];
     const needsGpu =
-      Boolean(lut) || hasGeometry(geometry) || stack.length > 0 || Boolean(overlayOf?.mask) || !isDefaultDetail(detail);
+      Boolean(lut) ||
+      hasGeometry(geometry) ||
+      stack.length > 0 ||
+      Boolean(overlayOf?.mask) ||
+      !isDefaultDetail(detail) ||
+      patches.length > 0;
     if (!needsGpu) {
       cur?.grader.dispose();
       slot.current = null;
@@ -111,6 +121,7 @@ function graderFrom(
       sameGeometry(cur.geometry, geometry) &&
       sameLayers(cur.layers, stack) &&
       sameDetail(cur.detail, detail) &&
+      samePatches(cur.repair, patches) &&
       cur.scale === scale
     ) {
       return cur.grader;
@@ -120,7 +131,12 @@ function graderFrom(
     const overlayPass = overlayOf ? cache.overlay(overlayOf, ar, rasters?.get(overlayOf.id) ?? null) : null;
     // Noise and fringe BEFORE the cube, on the source; sharpen AFTER every
     // warp and layer, so nothing resamples it (`detail.ts`, «Order»).
-    const { pre, post } = detailPasses(detail, scale);
+    // Repair FIRST, on the source: a copied pixel then takes the same
+    // develop, look, warp and layer as its neighbours, and a denoise sees a
+    // repaired picture.
+    const { pre: detailPre, post } = detailPasses(detail, scale);
+    const repairPass = makeRepairPass(patches, ar);
+    const pre = [...(repairPass ? [repairPass] : []), ...detailPre];
     const passes = [
       ...geometryPasses(geometry, ar),
       ...cache.passes(stack, ar, rasters),
@@ -138,6 +154,7 @@ function graderFrom(
       cur.overlay = overlay;
       cur.rasters = rasters;
       cur.detail = detail ? { ...detail } : null;
+      cur.repair = patches.map((p) => ({ ...p }));
       cur.scale = scale;
       return cur.grader;
     }
@@ -153,6 +170,7 @@ function graderFrom(
       overlay,
       rasters,
       detail: detail ? { ...detail } : null,
+      repair: patches.map((p) => ({ ...p })),
       scale,
       w: s.width,
       h: s.height,
@@ -314,6 +332,7 @@ export function useDevelopPicture({
   pixelScale = 1,
   loupe = false,
   pixelView = 'smooth',
+  repair = null,
 }: {
   file: File | null;
   videoTimeSeconds?: number;
@@ -339,6 +358,8 @@ export function useDevelopPicture({
   loupe?: boolean;
   /** How the loupe draws past the FILE's 1:1: smoothed, or pixels as pixels. */
   pixelView?: PixelView;
+  /** Heal and clone patches (`render/repair.ts`), drawn first on the source. */
+  repair?: readonly Patch[] | null;
   /**
    * The stage's pixels per SOURCE pixel (≤ 1): a kernel is stated in source
    * pixels, and the preview scales it so a 1 px sharpen reads roughly as one
@@ -502,7 +523,8 @@ export function useDevelopPicture({
       rasters: ReadonlyMap<string, BrushRaster> | null,
       detail: DetailSettings | null,
       scale: number,
-    ): HeldGrader | null => graderFrom(stageSlot.current, lut, s, geometry, stack, overlay, rasters, detail, scale),
+      patches: readonly Patch[] | null,
+    ): HeldGrader | null => graderFrom(stageSlot.current, lut, s, geometry, stack, overlay, rasters, detail, scale, patches),
     [],
   );
   useEffect(
@@ -539,7 +561,7 @@ export function useDevelopPicture({
     }
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const grader = holding ? null : graderFor(cube, source, geometry, stack, showMaskOf, subjectMasks, detail, pixelScale);
+    const grader = holding ? null : graderFor(cube, source, geometry, stack, showMaskOf, subjectMasks, detail, pixelScale, repair);
     const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
     const layout = delivered1 && framing ? scaleLayout(delivered1, w / delivered1.w) : null;
     if (layout && framing) {
@@ -580,6 +602,7 @@ export function useDevelopPicture({
     subjectMasks,
     detail,
     pixelScale,
+    repair,
     graderFor,
   ]);
 
@@ -609,7 +632,7 @@ export function useDevelopPicture({
       const ctx = sample.getContext('2d', { willReadFrequently: true });
       if (!ctx) return;
       try {
-        const grader = graderFor(cube, source, geometry, stack, null, subjectMasks, detail, pixelScale);
+        const grader = graderFor(cube, source, geometry, stack, null, subjectMasks, detail, pixelScale, repair);
         const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
         ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
         setHistogram(luminanceHistogram(ctx.getImageData(0, 0, w, h).data));
@@ -626,7 +649,7 @@ export function useDevelopPicture({
       cancelAnimationFrame(raf);
       window.clearTimeout(fallback);
     };
-  }, [source, cube, geometry, stack, subjectMasks, detail, pixelScale, graderFor]);
+  }, [source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, graderFor]);
 
   // The AS-SHOT measurement Auto reads. Keyed on the source alone — no cube,
   // no grader — so it is one read per picture and is unmoved by anything the
@@ -760,19 +783,19 @@ export function useDevelopPicture({
   // callback that never changed left the crop stage showing a warp-less
   // picture until the cube or the crop moved. Fresh values through the ref,
   // a new function when what it would draw changes — both, not either.
-  const latest = useRef({ source, cube, geometry, stack, subjectMasks, detail, pixelScale });
-  latest.current = { source, cube, geometry, stack, subjectMasks, detail, pixelScale };
+  const latest = useRef({ source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair });
+  latest.current = { source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair };
   const delivered = useCallback((): CanvasImageSource | null => {
-    const { source: s, cube: lut, geometry: geo, stack: ly, subjectMasks: rs, detail: dt, pixelScale: sc } = latest.current;
+    const { source: s, cube: lut, geometry: geo, stack: ly, subjectMasks: rs, detail: dt, pixelScale: sc, repair: rp } = latest.current;
     if (!s || s.width <= 0 || s.height <= 0) return null;
     // Never the overlay: this is what LEAVES, and a red wash is a way of
     // looking, like the wipe.
-    const grader = graderFor(lut, s, geo, ly, null, rs, dt, sc);
+    const grader = graderFor(lut, s, geo, ly, null, rs, dt, sc, rp);
     return grader ? grader.render(s.gpu ?? s.image) : s.image;
-  }, [graderFor, source, cube, geometry, stack, subjectMasks, detail, pixelScale]);
+  }, [graderFor, source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair]);
   const snapshot = useCallback(
     async (longEdge = THUMB_LONG_EDGE): Promise<Blob | null> => {
-      const { source: s, cube: lut, geometry: geo, stack: ly, subjectMasks: rs, detail: dt, pixelScale: sc } = latest.current;
+      const { source: s, cube: lut, geometry: geo, stack: ly, subjectMasks: rs, detail: dt, pixelScale: sc, repair: rp } = latest.current;
       if (!s || s.width <= 0 || s.height <= 0) return null;
       const { w, h } = thumbSize(s.width, s.height, longEdge);
       const out = document.createElement('canvas');
@@ -781,7 +804,7 @@ export function useDevelopPicture({
       const ctx = out.getContext('2d');
       if (!ctx) return null;
       try {
-        const grader = graderFor(lut, s, geo, ly, null, rs, dt, sc);
+        const grader = graderFor(lut, s, geo, ly, null, rs, dt, sc, rp);
         const graded = grader ? grader.render(s.gpu ?? s.image) : s.image;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(graded, 0, 0, s.width, s.height, 0, 0, w, h);
@@ -790,7 +813,7 @@ export function useDevelopPicture({
       }
       return new Promise((resolve) => out.toBlob(resolve, 'image/jpeg', THUMB_QUALITY));
     },
-    [graderFor, source, cube, geometry, stack, subjectMasks, detail, pixelScale],
+    [graderFor, source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair],
   );
 
   const dragging = useRef<{ startX: number; live: boolean } | null>(null);
@@ -938,7 +961,7 @@ export function useDevelopPicture({
     const f = full.source;
     const grader = holding
       ? null
-      : graderFrom(loupeSlot.current, cube, f, geometry, stack, null, subjectMasks, detail, f.width / full.fileWidth);
+      : graderFrom(loupeSlot.current, cube, f, geometry, stack, null, subjectMasks, detail, f.width / full.fileWidth, repair);
     const graded = grader ? grader.render(f.gpu ?? f.image) : f.image;
     // The stage canvas (w×h) sits at `rect` in the viewport: the same picture
     // is drawn from the file's pixels under that very transform, in device
@@ -973,6 +996,7 @@ export function useDevelopPicture({
     stack,
     subjectMasks,
     detail,
+    repair,
     holding,
     shownWipe,
     pixelView,
