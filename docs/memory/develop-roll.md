@@ -306,7 +306,11 @@ shared block. Rules a later phase must keep:
   and the row read *"its original is a RAW whose own render is 960 px against
   the proxy's 2048 — the proxy is what leaves"*; the 6048 px one delivered
   `DJI_0202.jpg 6048×4032` after ONE fetch, the row reading `Original render
-  6048 px → 6048 · exact`, and Proxies held it at `2048 · exact · asked 6048`.
+  6048 px → 6048 · exact`, and Proxies held it at `2048 · exact · asked 6048`. Driven at **390 px** too, where the row lives in the
+  docked drawer: `Camera render 960 px → 960 · exact`, no horizontal
+  overflow, and *Export this picture* wrote `DJI_0101.jpg 960×540` — the
+  picker-first order (`pickDeliveryTarget` → render → `deliverFilesTo`) is
+  what makes that work at any width, and it is unchanged.
 - **Each picture renders through its OWN cube** (`stack.composeWith(develop)`),
   decoded whole, graded at source density, then `drawFramed` — the crop stage's
   transform, so the file is the stage. The frame seam of `develop-tool.md` §6
