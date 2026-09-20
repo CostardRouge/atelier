@@ -280,9 +280,22 @@ that would be ~150 MB of text parsed to draw a grid. Instead:
 
 - Feasible because the baking code is already pure and DOM-free
   (`lut-preview.ts` → `bakeLutPreview`, `interpolate.ts`, `cube-parser.ts`;
-  the film stocks' `filmCubeFor` likewise): a Vite plugin runs it in Node at
-  build, like `virtual:luts`. Encoding an image in Node needs no new
-  dependency beyond a tiny PNG writer over `zlib`, or ship raw RGB.
+  the film stocks' `filmCubeFor` likewise).
+- **Built (2026-09-20) as a generator run by hand, NOT the Vite plugin this
+  paragraph originally proposed.** The plugin idea ran into a cost this repo
+  has already priced three times: baking in Node needs a JPEG **decoder** for
+  the references and an image **encoder** for the tiles — `sharp`, a native
+  module — and `scripts/gen-icons.mjs` says why that is not a project
+  dependency, *"CI would pay for a native install on every job"*. A plugin
+  would also make every `vite build` and every `npm run dev` decode two JPEGs
+  and bake ~34 lattices, where `virtual:luts` is only a directory scan. So
+  `scripts/gen-lut-thumbs.mjs` writes `public/lut-thumbs/` (34 WebP tiles +
+  `index.json`, 192 KB) and it is committed, the same shape as `gen-luts.mjs`,
+  `gen-icons.mjs` and `gen-gazetteer.mjs`. Reasoning and the "how to apply" in
+  `docs/memory/deployment.md`. **Measured**, walking all six rail families:
+  **28 `.cube` requests (37 MB) before, 0 after**. A missing tile — or a
+  missing manifest entirely — falls back to baking live, so forgetting to
+  re-run the generator is a cost, never a breakage.
 - **The log-input trap** (true today too): a conversion or one-click LUT
   expects LOG input; on a display-referred image — the synthetic chart
   included — it previews wrong (over-contrasted, over-saturated). So the
@@ -336,7 +349,7 @@ and resets the select). Carried by this pull request. Memory:
 | 5 ✅ | Winnow | `lutpack` kind + the file store routes + migration + capabilities (§4.4) | Winnow's own tests; curl with a session cookie |
 | 6 ✅ | Atelier | **Sync**: push index + files on import, pull the index on connect, fetch a lattice on first use and cache it | Mac imports, iPhone (or a second browser profile) grades offline after one use |
 | 7 ✅ | Atelier | **"Upload .cube" goes into the vault** (a look of one personal pack — see below), so no document ever inlines a lattice again (§3.1) | a trip export after an upload holds no `customText` for it |
-| 8 | Atelier | **Pre-baked thumbnails** for built-ins at build, each look read on the reference its family asks for (§7); live "on my picture" as an explicit choice | the gallery opens without fetching or parsing any `.cube` |
+| 8 ✅ | Atelier | **Pre-baked thumbnails** for built-ins, each look read on the reference its family asks for (§7); live "on my picture" as an explicit choice | the gallery opens without fetching or parsing any `.cube` |
 
 **What steps 1–4 landed** (`shared/lut/`): `lut-pack.ts` (the index, the
 names, the reference a document stores), `pack-codec.ts` (unorm16 over the

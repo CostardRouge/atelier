@@ -7,21 +7,25 @@
  * **The rail is what makes a purchased pack affordable** (variant B of
  * `docs/lut-packs.md` §6, the maintainer's choice): only the open node's
  * looks are ever resolved, so a 25-look pack of 65³ lattices — 41 MB — never
- * has to be decoded to draw a screen. A pack look does not even bake: its
- * thumbnail was baked once at import, on the reference its family asks for
- * (`pack-thumbs.ts`). On a phone the rail becomes a row of crumbs.
+ * has to be decoded to draw a screen. On a phone the rail becomes a row of
+ * crumbs.
  *
- * The sample is the truest thing on hand: a picture already open in the host
- * tool when one is passed in, otherwise a photo the author loads right here
- * ("Preview on a photo…"), otherwise a procedural test chart
- * (`lut-preview.ts`) — a sky, a neutral ramp, saturated colour and a skin
- * tone, the handful of things a look actually changes.
+ * **Opening it costs nothing (§7).** Every tile it draws was baked once
+ * already: a pack's at import (`pack-thumbs.ts`), a built-in's and a film
+ * stock's by `scripts/gen-lut-thumbs.mjs` and shipped in `public/lut-thumbs/`
+ * — each look on the reference its family asks for, since a conversion LUT
+ * read on a display-referred picture previews over-contrasted. So the gallery
+ * opens without fetching or parsing a single `.cube`, where it used to fetch
+ * and parse all 37 MB of them on every open to redraw pixels that could not
+ * have changed.
  *
- * Every built-in or film look is resolved (fetched + parsed, or generated)
- * one at a time with a tick between each: a screenful of film stocks is real
- * CPU, ~100 ms apiece (`film-layer.ts`), and baking them as one burst would
- * hold a frame. Thumbnails pop in as they finish rather than all at once,
- * which reads as the grid filling in rather than the modal being slow.
+ * **"On my picture" is still here, as a CHOICE**: the open picture the host
+ * passed in, or a photo the author loads right here. Then — and only then —
+ * every look on screen resolves its lattice and is baked live, one at a time
+ * with a tick between each, because a screenful of film stocks is real CPU
+ * (~100 ms apiece, `film-layer.ts`) and one burst would hold a frame.
+ * Thumbnails pop in as they finish, which reads as the grid filling in rather
+ * than the modal being slow.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -33,6 +37,7 @@ import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
 import { Icons } from '../ui/icons';
 import useDialogKeys from '../ui/use-dialog-keys';
+import { loadBuiltinThumbs } from './builtin-thumbs';
 import { galleryNodes, matchingItems, type GalleryNode } from './gallery-nodes';
 import {
   PREVIEW_SAMPLE_SIZE,
@@ -89,10 +94,6 @@ export default function LutGalleryModal({
 }: LutGalleryModalProps) {
   const { interpolation } = useLutInterpolation();
   const packIndexes = useLutPacks();
-  const nodes = useMemo(
-    () => galleryNodes(packIndexes, includeFilm),
-    [packIndexes, includeFilm],
-  );
 
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string>(() => (includeFilm ? 'film' : 'builtin'));
@@ -102,12 +103,39 @@ export default function LutGalleryModal({
   const [imageBusy, setImageBusy] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   const [packsOpen, setPacksOpen] = useState(false);
+  /**
+   * Which picture the looks are shown on. `null` — the default — is the
+   * shipped tiles, each look on the reference its family asks for and nothing
+   * fetched or parsed at all. Anything else is the LIVE bake, which is now an
+   * explicit choice (`docs/lut-packs.md` §7): it is worth a lattice per look
+   * only when the author asked to see them on this picture.
+   */
+  const [liveOn, setLiveOn] = useState<'open' | 'custom' | null>(null);
+
+  // The shipped tiles. `{}` until they answer, and `{}` for good if this build
+  // ships none — in which case every look simply bakes live, as it used to.
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let live = true;
+    void loadBuiltinThumbs().then((t) => {
+      if (live) setThumbs(t);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const effectiveSource = liveOn === 'custom' ? customImage : liveOn === 'open' ? previewImage : null;
+
+  const nodes = useMemo(
+    () => galleryNodes(packIndexes, includeFilm, effectiveSource ? null : thumbs),
+    [packIndexes, includeFilm, effectiveSource, thumbs],
+  );
 
   // A pack forgotten while its node was open, or a first import: the rail
   // must never point at a node that is gone.
   const open = nodes.find((n) => n.id === openId) ?? nodes[0] ?? null;
 
-  const effectiveSource = customImage ?? previewImage;
   const [sample, setSample] = useState<RgbBitmap>(() =>
     effectiveSource ? sampleFromImage(effectiveSource, PREVIEW_SAMPLE_SIZE) : syntheticPreviewSample(),
   );
@@ -178,6 +206,7 @@ export default function LutGalleryModal({
     try {
       setCustomImage(await decodePhoto(file));
       setCustomLabel(file.name);
+      setLiveOn('custom');
     } catch {
       setImageError(`Could not read “${file.name}” as a photo.`);
     } finally {
@@ -209,7 +238,9 @@ export default function LutGalleryModal({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="m-0 font-serif text-2xl">{title}</h2>
-            <p className="m-0 mt-1 text-sm text-muted">Every look, baked live — click one to use it.</p>
+            <p className="m-0 mt-1 text-sm text-muted">
+              Every look, on a real picture — click one to use it.
+            </p>
           </div>
           <div className="flex items-center gap-1">
             {/* Purchased packs live in this browser's vault, not in the
@@ -225,27 +256,45 @@ export default function LutGalleryModal({
         </div>
 
         <div className="flex flex-col gap-2.5 border-y border-line py-3">
+          {/* What the looks are shown ON. The default costs nothing — the
+              tiles were baked once, each look on the reference its family
+              asks for — so putting them on YOUR picture is a choice you make
+              rather than a price you pay for opening the picker
+              (`docs/lut-packs.md` §7). */}
           <div className="flex items-center gap-3 flex-wrap">
-            <span className="w-8 h-8 rounded-control overflow-hidden border border-line shrink-0">
-              <LutThumb bitmap={sample} />
-            </span>
+            {effectiveSource && (
+              <span className="w-8 h-8 rounded-control overflow-hidden border border-line shrink-0">
+                <LutThumb bitmap={sample} />
+              </span>
+            )}
             <span className="text-xs text-muted min-w-0 truncate">
-              Previewing on{' '}
-              {customLabel ? `“${customLabel}”` : previewImage ? 'the open picture' : 'a sample chart'}
+              {liveOn === 'custom' && customLabel
+                ? `Previewing on “${customLabel}”`
+                : liveOn === 'open'
+                  ? 'Previewing on the open picture'
+                  : 'Each look on its own reference frame — log looks on a D-Log M frame, the rest on a photograph'}
             </span>
-            <Button size="sm" variant="ghost" onClick={() => void chooseImage()} disabled={imageBusy}>
-              {imageBusy ? 'Reading…' : 'Preview on a photo…'}
+            {previewImage && liveOn !== 'open' && (
+              <Button size="sm" variant="ghost" onClick={() => setLiveOn('open')}>
+                Preview on the open picture
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                // Already decoded once this session: switching back costs no
+                // second read of the file.
+                if (customImage) setLiveOn('custom');
+                else void chooseImage();
+              }}
+              disabled={imageBusy || liveOn === 'custom'}
+            >
+              {imageBusy ? 'Reading…' : customImage ? `Preview on “${customLabel}”` : 'Preview on a photo…'}
             </Button>
-            {customImage && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  setCustomImage(null);
-                  setCustomLabel(null);
-                }}
-              >
-                Use {previewImage ? 'the open picture' : 'the sample chart'}
+            {liveOn && (
+              <Button size="sm" variant="ghost" onClick={() => setLiveOn(null)}>
+                Use the reference frames
               </Button>
             )}
           </div>
@@ -318,6 +367,7 @@ export default function LutGalleryModal({
                     <Tile
                       id="none"
                       name="No look (original)"
+                      {...(effectiveSource ? {} : thumbs.none ? { thumb: thumbs.none } : {})}
                       bitmap={noneBitmap}
                       selected={selected === 'none'}
                       onPick={onPick}
