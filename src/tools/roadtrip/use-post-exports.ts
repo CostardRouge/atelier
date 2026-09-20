@@ -4,9 +4,11 @@ import type { CubeLut } from '../../shared/lib/cube-parser';
 import type { OverlayElement } from '../../shared/overlay/overlay-types';
 import { classifyPart } from '../../shared/library/assets';
 import { loadClipMeta } from '../../shared/media/video-metadata';
-import { contentSlideElements, type DeckSlide } from '../../shared/roadtrip/deck';
-import { loadCollageSources } from '../../shared/roadtrip/badge-render';
-import { renderDeck } from '../../shared/roadtrip/deck-export';
+import { contentSlideElements, deckSlides, type DeckSlide } from '../../shared/roadtrip/deck';
+import { frameSize, loadCollageSources } from '../../shared/roadtrip/badge-render';
+import { DECK_LONG_EDGE, renderDeck } from '../../shared/roadtrip/deck-export';
+import { deliveryFor } from '../../shared/develop/delivery-source';
+import type { RollOriginals } from '../../shared/develop/roll-types';
 import { exportPlan, type PlanItem } from '../../shared/roadtrip/export-plan';
 import {
   clipSpeed,
@@ -82,6 +84,14 @@ export interface PostExportInputs {
   lutFor: (slide: DeckSlide) => CubeLut | null;
   /** The film TEXTURE that slide wears — `TripGradeBinding.filmFor`, the twin of `lutFor`. */
   filmFor: (slide: DeckSlide) => FilmTexture | null;
+  /**
+   * WHICH PIXELS the stills leave from (O2 of `docs/develop-originals.md`):
+   * `auto` fetches a source's original only for a picture whose proxy would
+   * be upscaled into the deck's frame, `proxies` never, `originals` whenever
+   * there is one this browser can read. The clips are untouched — the
+   * Studio's own export already fetches a clip's capture.
+   */
+  originals: RollOriginals;
   /** Called as an export starts, so the caller can bring the report into view. */
   onStart?: () => void;
 }
@@ -168,6 +178,45 @@ function explainFailure(
  */
 export function usePostExports(inputs: PostExportInputs): PostExports {
   const [exporting, setLine] = useState<string | null>(null);
+  /**
+   * Which pixels each STILL slide leaves from, decided before a frame is
+   * drawn, and a resolver that hands the renderer what was chosen.
+   *
+   * The deck renderer knows nothing about sources — its `resolve` is injected
+   * exactly so that it stays testable and free of the library — so the
+   * substitution happens here, by wrapping that resolver. A collage slide is
+   * deliberately left alone: each of its cells is drawn into a fraction of
+   * the frame, so asking the whole frame's question for one would fetch an
+   * original to fill a box a quarter its size.
+   */
+  async function pixelsForStills(
+    slides: readonly DeckSlide[],
+  ): Promise<(ref: { name: string } | null) => File | null> {
+    const base = inputs.resolve;
+    if (inputs.originals === 'proxies') return base;
+    const out = frameSize(inputs.aspect, DECK_LONG_EDGE);
+    const swap = new Map<File, File>();
+    for (const slide of slides) {
+      if (slide.collage) continue;
+      const file = base(slide.media);
+      if (!file || swap.has(file) || classifyPart(file.name) === 'video') continue;
+      try {
+        const chosen = await deliveryFor(file, slide.framing, out, inputs.originals, (line) =>
+          setExporting(line),
+        );
+        if (chosen.file !== file) swap.set(file, chosen.file);
+      } catch {
+        // Knowing nothing about a picture is never a reason to drop it: the
+        // slide leaves from the file in hand, exactly as it always did.
+      }
+    }
+    if (swap.size === 0) return base;
+    return (ref) => {
+      const file = base(ref);
+      return file ? (swap.get(file) ?? file) : null;
+    };
+  }
+
   const [progress, setProgress] = useState<number | null>(null);
   // The line and its measure always change together, so a stale ratio can
   // never sit beside a new sentence.
@@ -405,13 +454,15 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       const stills = items.filter((i) => i.medium === 'image');
       if (stills.length) {
         const wanted = new Set(stills.map((i) => i.position));
+        setExporting('Choosing the pixels…');
+        const resolve = await pixelsForStills(stills.map((i) => i.slide));
         const out = await renderDeck({
           trip: inputs.trip,
           post: inputs.post,
           aspect: inputs.aspect,
-          longEdge: 1920,
+          longEdge: DECK_LONG_EDGE,
           timeSeconds: inputs.timeSeconds,
-          resolve: inputs.resolve,
+          resolve,
           pictures: inputs.hookPictures,
           exposure: inputs.exposure,
           lutFor: inputs.lutFor,
@@ -524,15 +575,17 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     setNote(null);
     const target = await askTarget();
     if (!target) return;
-    setExporting('Rendering…');
+    setExporting('Choosing the pixels…');
     try {
+      const resolve = await pixelsForStills(deckSlides(inputs.trip, inputs.post));
+      setExporting('Rendering…');
       const rendered = await renderDeck({
         trip: inputs.trip,
         post: inputs.post,
         aspect: inputs.aspect,
-        longEdge: 1920,
+        longEdge: DECK_LONG_EDGE,
         timeSeconds: inputs.timeSeconds,
-        resolve: inputs.resolve,
+        resolve,
         pictures: inputs.hookPictures,
         exposure: inputs.exposure,
         lutFor: inputs.lutFor,

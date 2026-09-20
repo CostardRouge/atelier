@@ -8,6 +8,7 @@ import {
   deliveredLayout,
   deliverySummary,
   describeRun,
+  fixedFrameDelivery,
   exportName,
   longEdgeChoiceId,
   pixelHeadroom,
@@ -220,6 +221,47 @@ describe('deliverySummary', () => {
     );
     expect(s.from).toBe('original');
     expect(s.line).toMatch(/^Original render /);
+  });
+});
+
+describe('fixedFrameDelivery — Trips and the Studio, whose frame is the frame', () => {
+  const deck = { w: 1536, h: 1920 };
+
+  it('says the proxy is upscaled into the deck, and Auto fetches for it (F3, measured)', () => {
+    const s = fixedFrameDelivery(proxy, true, original, null, deck, 'auto');
+    expect(s.from).toBe('original');
+    expect(s.reason).toMatch(/×1\.25/);
+    // The frame is written whatever happens — it is a frame, not a cap.
+    expect(s.out).toEqual(deck);
+    expect(s.headroom).toBeCloseTo(3.15, 2);
+    expect(s.line).toMatch(/^Original \d+ px → 1920 · ×3\.15 to spare$/);
+  });
+
+  it('holds the proxy where the frame fits it, and wherever Proxies is asked', () => {
+    const small = { w: 1229, h: 1536 };
+    expect(fixedFrameDelivery(proxy, true, original, null, small, 'auto').from).toBe('file');
+    const held = fixedFrameDelivery(proxy, true, original, null, deck, 'proxies');
+    expect(held.from).toBe('file');
+    expect(held.line).toBe('Proxy 1536 px → 1920 · ×1.25 upscaled');
+  });
+
+  it('never fetches a RAW whose render is smaller than the proxy', () => {
+    const raw = { ...original, name: 'DJI_0421.DNG', render: { width: 960, height: 540 } };
+    const s = fixedFrameDelivery(proxy, true, raw, null, deck, 'originals');
+    expect(s.from).toBe('file');
+    expect(s.reason).toMatch(/960 px against the proxy’s 2048/);
+  });
+
+  it('calls a file that IS the original by its own name', () => {
+    const s = fixedFrameDelivery(original, false, null, null, deck, 'auto');
+    expect(s.from).toBe('file');
+    expect(s.line).toMatch(/^File /);
+    expect(s.reason).toBeNull();
+  });
+
+  it('says a RAW render is a RAW render, wherever it is measured', () => {
+    const s = fixedFrameDelivery({ width: 960, height: 540, viaRawPreview: true }, false, null, null, deck, 'auto');
+    expect(s.line).toMatch(/^Camera render /);
   });
 });
 

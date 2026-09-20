@@ -6,19 +6,18 @@ import {
   describeRun,
   exportName,
   type DeliverySummary,
-  type OriginalInfo,
   type PictureSize,
 } from '../../shared/develop/roll-export';
 import { measurePicture, renderRollPicture, type MeasuredPicture } from '../../shared/develop/roll-render';
 import type { RollDoc, RollPicture } from '../../shared/develop/roll-types';
 import { WORKING_PREVIEW_EDGE, isWorkingPreview } from '../../shared/develop/working-preview';
-import { knownIdentity, mediaOrigin, type MediaOrigin } from '../../shared/projects/media-identity';
+import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
+import { isProxyOverRaw, originalOf, rawRenderOf } from '../../shared/develop/delivery-source';
 import { deliverFilesTo, pickDeliveryTarget } from '../../shared/sources/deliver-files';
 import { uniqueName } from '../../shared/sources/unique-name';
 import { EXIF_SLICE_BYTES } from '../../shared/exif/exif-parser';
-import { RAW_PROBE_BYTES, rawSizes, rawSizesFrom } from '../../shared/exif/raw-probe';
 import { exportExifBlock, stampExif, type ExifAccount } from '../../shared/exif/stamp-exif';
-import { heldOriginal, heldRawRender, holdOriginal, holdRawRender } from '../../shared/sources/original-cache';
+import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
 import { formatBytes } from '../../shared/lib/format';
 import { isRawDevelop, rawGainOf, withoutBase } from '../../shared/develop/develop';
 import { isRawImage } from '../../shared/library/assets';
@@ -59,60 +58,6 @@ export interface RollExports {
   openSize: MeasuredPicture | null;
   /** Render the pictures named and hand them over. */
   exportPictures: (ids: readonly string[]) => Promise<void>;
-}
-
-function originalOf(origin: MediaOrigin | null, render: PictureSize | null = null): OriginalInfo | null {
-  if (!origin || origin.fidelity !== 'proxy') return null;
-  return {
-    width: origin.width,
-    height: origin.height,
-    name: origin.name ?? null,
-    bytes: origin.bytes ?? null,
-    render,
-  };
-}
-
-/**
- * How big the render inside a proxy's RAW original really is, read from that
- * file's HEAD and remembered for the session.
- *
- * The run pulls a head for every proxy anyway — the original's EXIF has to
- * travel whatever the pixels do — so asking a RAW for a megabyte instead of a
- * quarter of one is the whole cost of knowing, and knowing is what lets the
- * delivery take the LARGER of that render and the proxy instead of assuming
- * (`develop-originals.md` decision 4, corrected). Cached in
- * `original-cache.ts`, by the source's own asset id, so the *Delivers* row
- * and the run agree and neither reads the head twice.
- */
-async function rawRenderOf(
-  origin: MediaOrigin,
-  key: string | null,
-): Promise<{ render: PictureSize | null; head: Uint8Array | null }> {
-  const held = key ? heldOriginal(key) : null;
-  if (held) {
-    const sizes = await rawSizes(held);
-    if (key) holdRawRender(key, sizes.render);
-    return { render: sizes.render, head: null };
-  }
-  if (key) {
-    const known = heldRawRender(key);
-    if (known !== undefined) return { render: known, head: null };
-  }
-  if (!origin.fetchOriginalHead) return { render: null, head: null };
-  try {
-    const buffer = await origin.fetchOriginalHead(RAW_PROBE_BYTES);
-    const render = rawSizesFrom(buffer).render;
-    if (key) holdRawRender(key, render);
-    return { render, head: new Uint8Array(buffer) };
-  } catch {
-    if (key) holdRawRender(key, null);
-    return { render: null, head: null };
-  }
-}
-
-/** True when the file in hand is a proxy whose original is a RAW. */
-function isProxyOverRaw(origin: MediaOrigin | null): boolean {
-  return origin?.fidelity === 'proxy' && !!origin.name && isRawImage(origin.name);
 }
 
 /**

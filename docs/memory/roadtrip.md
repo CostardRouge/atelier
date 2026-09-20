@@ -521,6 +521,45 @@ The shape it was given, which any future network feature should copy: the client
 
 **A blocked item stays visible, struck through, with its sentence.** Hiding it would answer "why is my hook not in the folder" with silence. And a clip that fails mid-run costs only itself: each is caught, the stills already rendered are still delivered, and the failures are named alongside them. **The check that a container can be demuxed applies only to a CLIP** — running `hookSourceProblem` over a photograph blocks every animated hook that sits on a still, which is the whole feature (caught by a test, not by reading).
 
+## A still leaves from the pixels the frame needs (2026-09-20, O2)
+
+**Decision** (`docs/develop-originals.md` O2, agreed 2026-09-15 and built here
+for the first time). Trips delivered every still from whatever was in the
+Library, which for a Winnow picture is a 2048 px proxy — and the deck's frame
+is 1920 on the long edge, so a landscape proxy cropped to 4:5 is already
+upscaled ×1.25 before a framing zoom touches it. The Export tab now carries
+the same `Auto · Proxies · Originals` the Develop tool has, with its
+*Delivers* row.
+
+Rules a later agent must keep:
+
+- **The decision and its arithmetic are the roll's, shared, never a second
+  copy**: `fixedFrameDelivery` (`shared/develop/roll-export.ts`, for a host
+  whose frame is a FRAME and not a cap) over `deliveryFor`
+  (`delivery-source.ts`, which fetches and holds), and `useDeliveryRow` for
+  the row. A RAW's rule travels with them: only the render inside it, measured
+  first (`develop-roll.md`).
+- **The renderer is not told about sources.** `renderDeck`'s `resolve` is
+  injected precisely so it knows nothing of the Library, so the substitution
+  is a WRAPPER round that resolver, built before the run
+  (`pixelsForStills`). Nothing in `deck-export.ts` changed but the export of
+  `DECK_LONG_EDGE`, which the row must measure against or it lies.
+- **A collage slide is left alone**, deliberately: each cell is drawn into a
+  fraction of the frame, so asking the whole frame's question for one would
+  pull an original to fill a box a quarter its size.
+- **A picture that cannot be measured still leaves.** Knowing nothing is not
+  a reason to drop a slide that used to render.
+- **It is an export-DOOR choice** — session state beside *Everything as
+  images*, not on the trip: which pixels cross a tunnel today is about this
+  machine and this run, never about the piece. (`imagesOnly` set the
+  precedent; the Studio's `renderFromProxy` is the same shape.)
+
+Measured in the pane on a 2048×1365 proxy over a 6000×4000 original, a 4:5
+piece: Auto read `Original 4000 px → 1920 · ×2.08 to spare` and its PNG run
+fetched the original once; Proxies read `Proxy 1365 px → 1920 · ×1.41
+upscaled` and fetched nothing. Both wrote `…-01-hook.png` at 1536×1920 — the
+frame is the frame; what changes is where its pixels came from.
+
 ## The QR is generated here, and it is verified by decoding (2026-08-24)
 
 **Decision.** `shared/lib/qr.ts` is a hand-rolled encoder (byte mode, EC level M, versions 1–10). **Why not a library**: a card that fetched its own QR from a service would be the single place this suite phoned home, and the local-first line is the product. It is ~250 lines against a spec that has not moved since 2000 — unlike Dexie, it earns the code it costs.

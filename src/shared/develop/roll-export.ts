@@ -356,6 +356,45 @@ export function deliverySummary(
 }
 
 /**
+ * The same decision where the output frame is FIXED rather than capped —
+ * Trips' deck (1920 on the long edge, whatever the picture gives) and a
+ * Studio variant, both of which will upscale rather than deliver less.
+ *
+ * The roll's own `deliverySummary` cannot answer for them: its long edge is a
+ * cap, so a proxy's frame is always "exact" there and the upscale question
+ * is asked against what the original could give. Here the frame is the
+ * frame, so the question is simply whether the pixels in hand fill it —
+ * which is what `pixelHeadroom` has always answered (F3 of
+ * `docs/develop-originals.md`: a landscape proxy cropped to 4:5 at a 1920
+ * export is ×1.25 upscaled). Everything else — which pixels, why, and the
+ * sentence — is the roll's, shared rather than written a second time.
+ */
+export function fixedFrameDelivery(
+  file: DeliverySource,
+  fileIsProxy: boolean,
+  original: OriginalInfo | null,
+  framing: Framing | null,
+  out: { w: number; h: number },
+  mode: RollOriginals,
+): DeliverySummary {
+  const fileHeadroom = pixelHeadroom(file, framing, out);
+  const choice = choosePixels(mode, fileHeadroom, fileIsProxy ? original : null, file);
+  const best = fileIsProxy && original ? originalPixels(original) : null;
+  if (choice.from === 'original' && best) {
+    const headroom = pixelHeadroom(best, framing, out);
+    const label = isRawImage(original?.name ?? '') ? 'Original render' : 'Original';
+    return { from: 'original', out, headroom, line: deliversLine(label, out, headroom), reason: choice.reason };
+  }
+  return {
+    from: 'file',
+    out,
+    headroom: fileHeadroom,
+    line: deliversLine(sourceLabel(fileIsProxy, file), out, fileHeadroom),
+    reason: choice.from === 'original' ? 'the original will be measured once fetched' : choice.reason,
+  };
+}
+
+/**
  * `DJI_0101.JPG` → `DJI_0101.jpg`: EXACTLY the picture's own name, with the
  * extension a JPEG deserves (2026-09-20, the maintainer's convention — his
  * Gallery holds the developed file under the capture's name, which is what
