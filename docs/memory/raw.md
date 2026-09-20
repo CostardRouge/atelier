@@ -167,15 +167,19 @@ applies neither:
   as well. Measured against DJI's own render on patches 5 % in from each
   corner, LibRaw's corners land at **0.44–0.51** of where the render puts them
   relative to the centre.
-- **WarpRectilinear** (164 bytes) — three planes, so lateral CA as well as
-  distortion: `k0 ≈ 0.9530` (a uniform 4.7 % scale), `k1..k3` of order 1e-4,
-  centre 0.5,0.5.
+- **WarpRectilinear** (164 bytes) — three planes, centre 0.5,0.5, and it is
+  **almost entirely a 4.93 % magnification**: the green plane is `k0 = 0.9530`
+  with `k1 = k2 = k3 = 0` EXACTLY, a pure scale, and the red and blue planes
+  deviate from their own `k0` by at most 0.6 px and 1.2 px at the corner. So
+  this lens needs no distortion correction worth a pixel; what the two other
+  planes carry is lateral CA, +0.70 px R−G and −0.22 px B−G at the corner.
 
-So `base: 'raw'` on a DJI file is sharper than the render and **wrong**: dark
-corners, uncorrected barrel distortion, and a frame 4.7 % off the render's
-scale. Saying it is the floor; correcting it is the cure. Showing it as the
-better material without saying either is the fabrication this file's rules
-exist to stop.
+So `base: 'raw'` on a DJI file is sharper than the render and **wrong**, but
+not in equal parts: the corners are the fault (2.5 stops), the frame is 4.93 %
+wider than the render's, and the distortion everyone expects a drone lens to
+need is simply not in the numbers. Saying it is the floor; correcting it is
+the cure. Showing it as the better material without saying either is the
+fabrication this file's rules exist to stop.
 
 **And it retires the reason P6 shipped with no lens profiles.** The index
 records "a profile is MEASURED calibration data and invented coefficients
