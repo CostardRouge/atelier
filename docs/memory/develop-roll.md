@@ -257,6 +257,19 @@ shared block. Rules a later phase must keep:
   `DJI_0101.jpg` — which is the case that matters, since an export named after
   its picture is exactly what would otherwise land on its own original. A
   DOWNLOAD cannot honour the choice: the browser numbers a repeat itself.
+- **A delivered picture carries the ORIGINAL's EXIF, whatever its pixels came
+  from** (2026-09-20, the maintainer's rule: *"il faut que je puisse à la fin
+  exporter… avec les informations du fichier original"*). Where the pixels come
+  from and where the metadata comes from are two questions, and only the first
+  is a trade-off — he develops on a proxy for the speed of it and still needs
+  the file he keeps to read like the capture. The run asks in this order: the
+  original itself when it has it (fetched for the pixels, or held from a
+  previous run), else `MediaOrigin.fetchOriginalHead` — a quarter of a megabyte
+  instead of twenty-odd, and what stops the transfer is CANCELLING the body,
+  since Winnow's download route ignores `Range` —, else what the instance
+  vouched for. The choice and the block are `shared/exif/stamp-exif.ts`; a
+  picture that ends up on the poorest account, or on none, is SAID in the run's
+  sentence rather than filed away silently.
 - **A RAW original is never fetched** (`decodableOriginal`: jpg/png/webp/
   avif/gif/bmp only — no HEIC, no TIFF): decision 4, the render the person
   developed is what leaves, and the reason is said on the *Delivers* row.
@@ -291,6 +304,20 @@ shared block. Rules a later phase must keep:
   the pane makes a SECOND module instance once HMR has stamped the app's with
   `?t=`; register through the URL `performance.getEntriesByType('resource')`
   lists, or the app never sees the origin.
+
+Verified again in the pane on 2026-09-20 for the export pass (the name, the
+overwrite guard, the EXIF): a camera-like JPEG built in the page (gradient +
+a block from `exif-build.ts`) answered the Library's transient file input
+(patch `HTMLInputElement.prototype.click` for `type === 'file'` — the app has
+no standing file input to set `.files` on), `showDirectoryPicker` returned an
+OPFS directory, and two runs with Replace OFF wrote `DJI_0101.jpg` then
+`DJI_0101-1.jpg` with the sentence *"1 picture written · 1 numbered, the folder
+already held that name"*; a third with Replace ON wrote no third file. Both
+files read back through `parseExif` with the make, model, lens, ISO, shutter,
+aperture, focal length, GPS, altitude and capture time of the original, and
+decoded at 1600×1200 — the splice does not break the JPEG. NOT verifiable
+there: the case-insensitive collision (`DJI_0101.JPG` against `DJI_0101.jpg`),
+because OPFS is case-sensitive while the volume this lands on is not.
 
 Verified in the pane on canvas-made JPEGs with `showDirectoryPicker` stubbed
 and two files registered as proxies through the app's own module: A-land (1:1,

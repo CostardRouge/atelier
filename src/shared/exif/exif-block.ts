@@ -86,7 +86,7 @@ function holdsExif(bytes: Uint8Array, segment: Segment): boolean {
 }
 
 /** The TIFF block inside a JPEG's EXIF `APP1`, or null when it carries none. */
-export function readExifBlock(jpeg: Uint8Array): Uint8Array | null {
+export function readExifBlock(jpeg: Uint8Array): Uint8Array<ArrayBuffer> | null {
   if (!isJpeg(jpeg)) return null;
   for (const segment of headerSegments(jpeg)) {
     if (holdsExif(jpeg, segment)) return jpeg.slice(segment.body + EXIF_ID.length, segment.end);
@@ -103,7 +103,7 @@ export function readExifBlock(jpeg: Uint8Array): Uint8Array | null {
  * writing a file no reader can parse: the caller falls back to a block it
  * built itself, which is small by construction.
  */
-export function withExifBlock(jpeg: Uint8Array, block: Uint8Array): Uint8Array {
+export function withExifBlock(jpeg: Uint8Array, block: Uint8Array): Uint8Array<ArrayBuffer> {
   if (!isJpeg(jpeg)) throw new Error('not a JPEG');
   if (block.length > EXIF_BLOCK_MAX) {
     throw new Error(`the EXIF block is ${block.length} bytes, over the ${EXIF_BLOCK_MAX} a segment holds`);
@@ -165,7 +165,7 @@ function overwrite(view: DataView, entry: { type: number; valueOffset: number },
  * the thumbnail cut loose. A block it cannot make sense of comes back
  * unchanged rather than half-written.
  */
-export function retagExifBlock(block: Uint8Array, options: RetagOptions = {}): Uint8Array {
+export function retagExifBlock(block: Uint8Array, options: RetagOptions = {}): Uint8Array<ArrayBuffer> {
   const out = block.slice();
   if (out.length < 8) return out;
   const view = new DataView(out.buffer, out.byteOffset, out.byteLength);

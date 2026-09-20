@@ -60,6 +60,12 @@ export default function ExportPanel({
               picture is never upscaled to reach it.
             </p>
             <p>
+              A picture leaves carrying the ORIGINAL’s EXIF — its position, its body, its lens, the
+              hour it was taken — whatever its pixels were taken from, so a file developed on a proxy
+              still reads like the capture. Only three tags are corrected: the way up, the size, and
+              the thumbnail, which would otherwise show the picture before you developed it.
+            </p>
+            <p>
               <strong>Pixels</strong> decides where a picture from your Winnow takes its pixels:
               <strong> Auto</strong> fetches the full-size original only where the proxy could not fill
               the frame asked for; <strong>Proxies</strong> never fetches; <strong>Originals</strong>{' '}

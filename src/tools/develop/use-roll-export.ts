@@ -15,6 +15,8 @@ import { WORKING_PREVIEW_EDGE, isWorkingPreview } from '../../shared/develop/wor
 import { knownIdentity, mediaOrigin, type MediaOrigin } from '../../shared/projects/media-identity';
 import { deliverFiles } from '../../shared/sources/deliver-files';
 import { uniqueName } from '../../shared/sources/unique-name';
+import { EXIF_SLICE_BYTES } from '../../shared/exif/exif-parser';
+import { exportExifBlock, stampExif } from '../../shared/exif/stamp-exif';
 import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
 import { formatBytes } from '../../shared/lib/format';
 
@@ -162,8 +164,7 @@ export function useRollExport({
               r.export,
             );
             if (summary.from === 'original') {
-              const key = identity?.assetId ?? null;
-              const held = key ? heldOriginal(key) : null;
+              const held = identity?.assetId ? heldOriginal(identity.assetId) : null;
               if (held) {
                 source = held;
               } else {
@@ -171,10 +172,28 @@ export function useRollExport({
                   `Fetching the original ${step}${origin.bytes ? ` · ${formatBytes(origin.bytes)}` : ''}…`,
                 );
                 source = await origin.fetchOriginal();
-                if (key) holdOriginal(key, source);
+                if (identity?.assetId) holdOriginal(identity.assetId, source);
               }
             }
           }
+          // The EXIF comes from the ORIGINAL whatever the pixels came from
+          // (`shared/exif/stamp-exif.ts`): the original itself when the run
+          // has it, else its head alone — a quarter of a megabyte instead of
+          // the whole capture — else what the instance vouched for.
+          const key = identity?.assetId ?? null;
+          const originalFile =
+            source !== file ? source : origin?.fidelity === 'proxy' ? (key ? heldOriginal(key) : null) : file;
+          let head: Uint8Array | null = null;
+          if (originalFile) {
+            head = new Uint8Array(await originalFile.slice(0, EXIF_SLICE_BYTES).arrayBuffer());
+          } else if (origin?.fetchOriginalHead) {
+            setExporting(`Reading the original’s EXIF ${step}…`);
+            head = await origin
+              .fetchOriginalHead(EXIF_SLICE_BYTES)
+              .then((buffer) => new Uint8Array(buffer))
+              .catch(() => null);
+          }
+
           setExporting(`Rendering ${step}…`);
           const out = await renderRollPicture(source, {
             framing: picture.framing,
@@ -187,11 +206,24 @@ export function useRollExport({
             lens: picture.lens ?? null,
             layers: picture.layers ?? null,
           });
+          const delivered = { width: out.width, height: out.height };
+          const exif = exportExifBlock(head, origin?.exif ?? null, delivered);
+          // Said, not hidden: a file that lost its position is worth knowing
+          // about before it is filed away.
+          if (exif.account === 'vouched') {
+            failures.push(
+              `${picture.ref.name} took its EXIF from ${origin?.sourceId ?? 'the source'}’s record — the original was out of reach, so no body or lens`,
+            );
+          } else if (exif.account === 'none') {
+            failures.push(`${picture.ref.name} carries no EXIF — nothing is known about the picture it came from`);
+          }
+          const blob = await stampExif(out.blob, exif, delivered);
           const name = uniqueName(exportName(picture.ref.name), (c) => named.has(c.toLowerCase()));
           named.add(name.toLowerCase());
           rendered.push(
-            new File([out.blob], name, {
+            new File([blob], name, {
               type: 'image/jpeg',
+              // The capture's own instant, never the moment it was rendered.
               lastModified: file.lastModified,
             }),
           );

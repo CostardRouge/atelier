@@ -68,6 +68,13 @@ export interface MediaOrigin {
   bytes?: number | null;
   fetchOriginal?: () => Promise<File>;
   /**
+   * The ORIGINAL's leading bytes — its EXIF, and nothing else. A delivered
+   * picture carries the original's metadata whatever its pixels were taken
+   * from (the maintainer's rule, `exif/stamp-exif.ts`), so the export needs
+   * that block even in Proxies mode, where the file itself is never fetched.
+   */
+  fetchOriginalHead?: (bytes: number) => Promise<ArrayBuffer>;
+  /**
    * What the source knows about the CAPTURE's EXIF — exposure, position, the
    * time it was taken, and a drone's height above take-off.
    *

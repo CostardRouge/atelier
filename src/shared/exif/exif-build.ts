@@ -245,7 +245,7 @@ export interface BuildExifOptions {
  * turn it a second time. The pixel dimensions are the DELIVERED ones, for the
  * same reason. No thumbnail is written — a stale one is worse than none.
  */
-export function buildExifBlock(exif: ExifData, options: BuildExifOptions = {}): Uint8Array {
+export function buildExifBlock(exif: ExifData, options: BuildExifOptions = {}): Uint8Array<ArrayBuffer> {
   const ifd0: Field[] = [
     ascii(IFD0.make, exif.make),
     ascii(IFD0.model, exif.model),
