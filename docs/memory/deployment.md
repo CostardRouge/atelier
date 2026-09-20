@@ -74,3 +74,26 @@ patterns rather than a bare `Bash`, and keep `--max-turns` and
 `timeout-minutes` set: the expensive failure here is a runaway agent spending
 subscription quota, not the Actions minutes (this repository is public, so its
 minutes are free).
+
+**Trap — `--allowedTools` is a bad fence for a shell, and it silently eats the
+deliverable (2026-09-19).** The first audit run reported
+`"subtype": "success", "is_error": false` with `permission_denials_count: 7`
+and opened no issue at all: a long issue body reaches for a heredoc, and
+`$(cat <<'EOF' …)` is command substitution, which a `Bash(gh issue create:*)`
+prefix pattern refuses. **How to apply**: the `permissions:` block is the real
+boundary — a bare `Bash` under `contents: read` + `issues: write` can do
+nothing else — so grant tools broadly there and narrow the TOKEN instead. And
+never let a report depend on one tool call: write it to a file, upload it with
+`actions/upload-artifact` under `if: always()`, and pass it to `gh` with
+`--body-file`.
+
+**Trap — `--max-turns` fails the job even on success.** That run ended at 42
+turns against a cap of 40 and the action raised
+`Claude reported a successful result after 42 turns`, turning a finished audit
+into a red job. Auditing this repository's memory is ~40 turns of reading, so
+the cap is 100 and `timeout-minutes` is the real stop.
+
+**Measured — one audit run costs about $3.79 of model usage** (3m07s of Claude,
+Sonnet, ~42 turns; a Haiku side model appears in `modelUsage` and is normal).
+On a subscription that is quota, not an invoice, but it is the figure to
+multiply before putting this workflow on every repository.
