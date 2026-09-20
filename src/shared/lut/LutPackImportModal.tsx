@@ -14,7 +14,7 @@
  * can read it is step V5 of the plan, and this screen will say so then.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { pickDirectoryTree } from '../sources/file-sources';
 import Button from '../ui/Button';
@@ -23,7 +23,16 @@ import { Icons } from '../ui/icons';
 import useDialogKeys from '../ui/use-dialog-keys';
 import { flattenNodes, prettyName, type LutPackIndex } from './lut-pack';
 import { cubeEntries, importPackFromFolder, type ImportFailure } from './pack-import';
-import { removePack, setPackHidden } from './pack-vault';
+import type { PackHost } from './pack-remote';
+import {
+  adoptRemotePack,
+  keepPackOn,
+  packKeepers,
+  removePack,
+  remotePacksNotHere,
+  setPackHidden,
+} from './pack-vault';
+import { subscribeWinnowConnections } from '../sources/winnow/store';
 import { useLutPacks } from './use-lut-packs';
 
 interface Picked {
@@ -47,6 +56,11 @@ const mb = (bytes: number) => `${(bytes / 1048576).toFixed(1)} MB`;
 
 export default function LutPackImportModal({ onClose, onImported }: LutPackImportModalProps) {
   const packs = useLutPacks();
+  // Not `useSyncExternalStore`: `packKeepers()` builds fresh objects on every
+  // call, which that hook reads as a changed snapshot and re-renders forever.
+  // A subscription that SETS state keeps one array per change.
+  const [hosts, setHosts] = useState<PackHost[]>(() => packKeepers());
+  useEffect(() => subscribeWinnowConnections(() => setHosts(packKeepers())), []);
   const [picked, setPicked] = useState<Picked | null>(null);
   const [name, setName] = useState('');
   const [author, setAuthor] = useState('');
@@ -142,10 +156,18 @@ export default function LutPackImportModal({ onClose, onImported }: LutPackImpor
                 In this browser
               </h3>
               {packs.map((pack) => (
-                <PackRow key={pack.id} pack={pack} />
+                <PackRow key={pack.id} pack={pack} hosts={hosts} />
               ))}
             </section>
           )}
+
+          {/* What an instance holds that this browser does not — the other
+              half of keeping a pack somewhere: a phone that has never seen
+              the pack takes its index here, and its looks follow as pictures
+              ask for them. */}
+          {hosts.map((host) => (
+            <ElsewhereSection key={host.sourceId} host={host} />
+          ))}
 
           {/* The pick, then what was read. */}
           {!picked && !progress && (
@@ -271,9 +293,33 @@ export default function LutPackImportModal({ onClose, onImported }: LutPackImpor
  * a hidden one still renders (`docs/lut-packs.md` §6). It is the answer to a
  * pack whose cameras you do not own: 25 looks of which you shoot four.
  */
-function PackRow({ pack }: { pack: LutPackIndex }) {
+function PackRow({ pack, hosts }: { pack: LutPackIndex; hosts: readonly PackHost[] }) {
   const [open, setOpen] = useState(false);
+  const [push, setPush] = useState<{ done: number; total: number; bytes: number } | null>(null);
+  const [pushError, setPushError] = useState<string | null>(null);
   const hidden = new Set(pack.hidden);
+  const keptOn = pack.sourceId ?? null;
+  // Somewhere to put it: an instance that keeps documents AND files. One
+  // instance is the common case, so the verb names it rather than asking.
+  const target = hosts.find((h) => h.sourceId === keptOn) ?? hosts[0] ?? null;
+
+  const keep = async () => {
+    if (!target) return;
+    setPushError(null);
+    setPush({ done: 0, total: 0, bytes: 0 });
+    try {
+      const result = await keepPackOn(pack.id, target.sourceId, setPush);
+      if (result.missingLocally.length) {
+        setPushError(
+          `${result.missingLocally.length} looks are not in this browser, so they were not sent.`,
+        );
+      }
+    } catch (e) {
+      setPushError((e as Error).message || 'The instance refused it.');
+    } finally {
+      setPush(null);
+    }
+  };
   const toggle = (id: string) => {
     const next = new Set(hidden);
     if (next.has(id)) next.delete(id);
@@ -292,8 +338,28 @@ function PackRow({ pack }: { pack: LutPackIndex }) {
           <span className="block font-mono text-2xs text-muted">
             {pack.looks.length} looks
             {hidden.size > 0 && ` · ${pack.looks.length - visibleCount(pack)} hidden`}
+            {keptOn && ` · kept on ${keptOn}`}
           </span>
         </span>
+        {target && !push && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => void keep()}
+            title={
+              keptOn
+                ? `Send what ${target.sourceId} is missing`
+                : `Keep this pack on ${target.sourceId}, so your other devices can use it`
+            }
+          >
+            {keptOn ? 'Push' : `Keep on ${target.sourceId}`}
+          </Button>
+        )}
+        {push && (
+          <span className="font-mono text-2xs text-muted">
+            {push.total ? `${push.done}/${push.total}` : 'Checking…'}
+          </span>
+        )}
         {pack.tree.length > 0 && (
           <Button size="sm" variant="ghost" onClick={() => setOpen((v) => !v)}>
             {open ? 'Done' : 'What shows…'}
@@ -308,6 +374,8 @@ function PackRow({ pack }: { pack: LutPackIndex }) {
           Forget
         </Button>
       </div>
+
+      {pushError && <p className="m-0 text-xs text-warn">{pushError}</p>}
 
       {open && (
         <ul className="m-0 p-0 list-none flex flex-col gap-1 border-t border-line pt-2">
@@ -348,4 +416,76 @@ function visibleCount(pack: LutPackIndex): number {
   return pack.looks.filter(
     (l) => !hidden.has(l.id) && ![...hidden].some((h) => l.node === h || l.node.startsWith(`${h}/`)),
   ).length;
+}
+
+/**
+ * The packs an instance holds that this browser does not. Adding one copies
+ * its INDEX only — 40 MB of lattices is not something to download because a
+ * list was opened; they follow one at a time, as pictures ask for them.
+ */
+function ElsewhereSection({ host }: { host: PackHost }) {
+  const [there, setThere] = useState<LutPackIndex[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const packs = useLutPacks();
+
+  useEffect(() => {
+    let cancelled = false;
+    setError(null);
+    remotePacksNotHere(host)
+      .then((list) => {
+        if (!cancelled) setThere(list);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError((e as Error).message || 'That instance did not answer.');
+      });
+    return () => {
+      cancelled = true;
+    };
+    // The list is re-asked whenever this browser's packs change: adopting one
+    // must take it off the "elsewhere" list.
+  }, [host, packs]);
+
+  if (error) {
+    return (
+      <p className="m-0 text-xs text-muted">
+        {host.sourceId} — {error}
+      </p>
+    );
+  }
+  if (!there?.length) return null;
+
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className="m-0 font-mono text-2xs tracking-[0.16em] uppercase text-muted">
+        On {host.sourceId}
+      </h3>
+      {there.map((pack) => (
+        <div
+          key={pack.id}
+          className="flex items-center gap-3 px-3 py-2 border border-line rounded-control bg-paper"
+        >
+          <span className="flex-1 min-w-0">
+            <span className="block text-sm font-medium text-ink truncate">
+              {pack.name || 'Pack'}
+              {pack.author && <span className="text-muted"> · {pack.author}</span>}
+            </span>
+            <span className="block font-mono text-2xs text-muted">
+              {pack.looks.length} looks · its looks download as you use them
+            </span>
+          </span>
+          <Button
+            size="sm"
+            disabled={busy === pack.id}
+            onClick={() => {
+              setBusy(pack.id);
+              void adoptRemotePack(pack, host.sourceId).finally(() => setBusy(null));
+            }}
+          >
+            {busy === pack.id ? 'Adding…' : 'Add here'}
+          </Button>
+        </div>
+      ))}
+    </section>
+  );
 }

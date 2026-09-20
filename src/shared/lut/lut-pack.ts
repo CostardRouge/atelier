@@ -68,6 +68,14 @@ export interface LutPackIndex {
   looks: PackLook[];
   /** Node or look ids the author does not want offered — the looks stay stored. */
   hidden: string[];
+  /**
+   * The instance this pack is kept on, so it reaches another device — the
+   * source id, exactly as a trip and a project carry one. Absent means this
+   * browser only. It DOES travel in the document (unlike a trip's, which is
+   * bound-half): a pack's whole purpose is to be the same library everywhere,
+   * and the id is the host that is already answering.
+   */
+  sourceId?: string;
 }
 
 /** What a saved layer carries in place of a lattice. */
@@ -130,6 +138,7 @@ export function migratePackIndex(raw: unknown): LutPackIndex | null {
     tree: Array.isArray(p.tree) ? p.tree.filter(isNodeish).map(readNode) : [],
     looks,
     hidden: Array.isArray(p.hidden) ? p.hidden.filter((h): h is string => typeof h === 'string') : [],
+    ...(typeof p.sourceId === 'string' && p.sourceId ? { sourceId: p.sourceId } : {}),
   };
 }
 
