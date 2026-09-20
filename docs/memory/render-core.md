@@ -143,6 +143,27 @@ drawn three times, and would read a stale or empty texture as a failure.
   fallback to an unprocessed picture is the failure this whole file exists to
   prevent.
 
+**The GPU has an EDGE CAP, and past it the picture is black, not slow
+(2026-09-20, the audit).** A texture and a framebuffer stop at
+`MAX_TEXTURE_SIZE` on one edge — 8192 on SwiftShader and older mobile GPUs,
+16384 on most desktops — and an upload past it is refused with an
+INVALID_VALUE nobody reads: the texture stays incomplete and samples black,
+so a 61-megapixel still (9504 px) delivered on an 8192 GPU was a black JPEG
+with every gate green. The graph now reads the smallest of its texture,
+renderbuffer and viewport limits (`RenderGraph.maxSize`) and says ONCE, in
+the console, when a source or a target is past it; `maxRenderSize()`
+(`graph-grader.ts`) asks it of a 1×1 graph once per page; `render-size.ts`
+is the pure fit (long edge to the cap, never up); and `fitPhotoForRender`
+(`photo-frame.ts`) is what the three full-density still exports — the roll,
+the Studio still, the badge PNG — call before building their grader, drawing
+with the size it hands back. "Grade at source density" therefore means "at
+the source's density or the GPU's cap, whichever is smaller", and the roll
+export SAYS when it was the cap (`RollRendered.gradedAt`, a note in the run's
+summary), because a delivery must never claim pixels it resampled away. The
+gate has a row for it: a picture a thousand pixels past this GPU's cap,
+fitted and graded to a picture. The stage never meets the cap — it works to a
+pixel budget — and a video frame is never past it.
+
 **A graph now OUTLIVES its pass list, and that made a leak possible that could
 not exist before.** A pass's own textures — a layer's cube, a painted mask's
 alpha map — used to be freed by the context dying with every change. So

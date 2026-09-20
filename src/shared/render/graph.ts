@@ -55,6 +55,14 @@ export interface RenderPass {
 export interface RenderGraph {
   /** What the intermediate buffers really are on this machine. */
   readonly precision: RenderPrecision;
+  /**
+   * The longest edge, in pixels, this GPU can take as a source or draw into —
+   * the smaller of its texture, renderbuffer and viewport limits. A picture
+   * past it does not fail loudly: the upload is refused with an error nobody
+   * reads and the texture samples BLACK. `render-size.ts` fits a picture to
+   * it; a caller that hands one over anyway is told once, in the console.
+   */
+  readonly maxSize: number;
   readonly canvas: HTMLCanvasElement | OffscreenCanvas;
   /**
    * Draw `source` through `passes` onto the canvas, which is returned so a
@@ -132,6 +140,18 @@ interface Target {
   height: number;
 }
 
+/** A source's pixel size, for the kinds that say it; null for the rest. */
+function sourceSize(source: TexImageSource): { width: number; height: number } | null {
+  if (typeof HTMLVideoElement !== 'undefined' && source instanceof HTMLVideoElement) {
+    return { width: source.videoWidth, height: source.videoHeight };
+  }
+  if (typeof VideoFrame !== 'undefined' && source instanceof VideoFrame) {
+    return { width: source.displayWidth, height: source.displayHeight };
+  }
+  const { width, height } = source as { width?: unknown; height?: unknown };
+  return typeof width === 'number' && typeof height === 'number' ? { width, height } : null;
+}
+
 /**
  * Build the core over a canvas, or null where WebGL2 is absent — the same
  * degradation `createLutRenderer` chose: a picture drawn un-processed beats a
@@ -156,6 +176,29 @@ export function createRenderGraph(
   const precision: RenderPrecision = canFloat ? 'float16' : 'byte';
   const internalFormat = canFloat ? gl.RGBA16F : gl.RGBA8;
   const texType = canFloat ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE;
+
+  // The cap on ONE edge. The source texture and the ping-pong targets are
+  // textures (MAX_TEXTURE_SIZE), the canvas's drawing buffer a renderbuffer,
+  // and the viewport has its own pair — the smallest of them is the honest
+  // number, and a driver that answers nothing sensible gets a floor every
+  // WebGL2 implementation must reach (2048).
+  const viewport = gl.getParameter(gl.MAX_VIEWPORT_DIMS) as Int32Array | null;
+  const limits = [
+    gl.getParameter(gl.MAX_TEXTURE_SIZE) as number,
+    gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) as number,
+    viewport?.[0],
+    viewport?.[1],
+  ].filter((n): n is number => typeof n === 'number' && Number.isFinite(n) && n > 0);
+  const maxSize = limits.length ? Math.min(...limits) : 2048;
+  let sizeSaid = false;
+  const tooBig = (what: string, width: number, height: number) => {
+    if (sizeSaid) return;
+    sizeSaid = true;
+    console.error(
+      `[render] ${what} is ${width}×${height}, past the ${maxSize} px this GPU can take on one edge; ` +
+        'the picture will be wrong — fit it with render-size.ts first',
+    );
+  };
 
   const quad = gl.createBuffer();
   const vao = gl.createVertexArray();
@@ -230,9 +273,11 @@ export function createRenderGraph(
 
   return {
     precision,
+    maxSize,
     canvas,
 
     resize(width, height) {
+      if (width > maxSize || height > maxSize) tooBig('the render target', width, height);
       if (canvas.width !== width || canvas.height !== height) {
         canvas.width = width;
         canvas.height = height;
@@ -275,6 +320,10 @@ export function createRenderGraph(
       const bitmap = typeof ImageBitmap !== 'undefined' && source instanceof ImageBitmap ? source : null;
       const bitmapSource = bitmap ? 1 : 0;
       if (!bitmap || bitmap !== uploaded) {
+        const size = sourceSize(source);
+        if (size && (size.width > maxSize || size.height > maxSize)) {
+          tooBig('the source', size.width, size.height);
+        }
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
         uploaded = bitmap;

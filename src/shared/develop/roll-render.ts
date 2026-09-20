@@ -26,7 +26,7 @@ import { geometryPasses, hasGeometry } from '../render/picture-geometry';
 import { drawingLayers, type AdjustLayer } from './layer';
 import { layerPasses } from './layer-render';
 import { DEFAULT_FRAMING, type Framing } from '../media/framing';
-import { decodePhoto } from '../media/photo-frame';
+import { decodePhoto, fitPhotoForRender } from '../media/photo-frame';
 import { pictureAspectRatio } from './crop-aspect';
 import { drawDelivered } from './border-paint';
 import type { RollBorder } from './border-layout';
@@ -59,6 +59,13 @@ export interface RollRendered {
   height: number;
   /** The decoded source's own size — what the frame was cut from. */
   source: PictureSize;
+  /**
+   * The density the picture was really graded and cut at: `source`, unless
+   * the GPU could not take it whole (`fitPhotoForRender`), in which case it
+   * is smaller and the caller says so — a delivery must never claim pixels it
+   * resampled away.
+   */
+  gradedAt: PictureSize;
 }
 
 /** The picture's own pixel size, decoded and closed; null when the browser cannot read it. */
@@ -95,19 +102,24 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
     const ar = source.width / source.height;
     const stack = drawingLayers(opts.layers);
     const passes = [...geometryPasses(opts, ar), ...layerPasses(stack, ar)];
-    const grader =
-      opts.lut || hasGeometry(opts) || stack.length > 0
-        ? makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, passes)
-        : null;
+    const needsGpu = Boolean(opts.lut) || hasGeometry(opts) || stack.length > 0;
+    // "Source density" stops at the GPU's own edge cap: a picture past it is
+    // fitted first, and the size it was really graded at is reported.
+    const fit = needsGpu ? await fitPhotoForRender(bitmap) : null;
+    const gradedAt = fit ? { width: fit.width, height: fit.height } : source;
+    const grader = needsGpu && fit
+      ? makeFrameGrader(opts.lut as CubeLut, fit.width, fit.height, 1, passes)
+      : null;
     try {
-      const graded = grader ? grader.render(bitmap) : bitmap;
-      drawDelivered(ctx, graded, source.width, source.height, framing, layout, opts.border);
+      const graded = grader && fit ? grader.render(fit.image) : bitmap;
+      drawDelivered(ctx, graded, gradedAt.width, gradedAt.height, framing, layout, opts.border);
     } finally {
       grader?.dispose();
+      fit?.release();
     }
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', opts.quality));
     if (!blob) throw new Error('The browser could not encode this picture.');
-    return { blob, width: out.w, height: out.h, source };
+    return { blob, width: out.w, height: out.h, source, gradedAt };
   } finally {
     bitmap.close();
   }

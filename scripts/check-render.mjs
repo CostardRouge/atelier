@@ -464,6 +464,33 @@ const out = await page.evaluate(async () => {
     results.swap = { swapped, built, swappedBitmap, again, canSwap: Boolean(reused.setPasses) };
   }
 
+  // --- a picture past the GPU's edge cap: fitted, graded, and not black ----
+  //
+  // The cap is asked of the GPU once; a bitmap one thousand pixels wider is
+  // handed to `fitPhotoForRender`, which must bring it to the cap, and the
+  // fitted copy must then grade to a picture rather than to the black an
+  // oversize upload silently gives.
+  {
+    const { fitPhotoForRender } = await import('/atelier/src/shared/media/photo-frame.ts');
+    const { maxRenderSize } = await import('/atelier/src/shared/render/graph-grader.ts');
+    const cap = maxRenderSize();
+    const wide = document.createElement('canvas');
+    wide.width = cap + 1000; wide.height = 8;
+    const wg = wide.getContext('2d');
+    wg.fillStyle = '#9a9a9a'; wg.fillRect(0, 0, wide.width, 8);
+    const big = await createImageBitmap(wide);
+    const fit = await fitPhotoForRender(big);
+    const grader = makeGraphGrader(cube, fit.width, fit.height, 1, 'tetrahedral');
+    const o = document.createElement('canvas'); o.width = fit.width; o.height = fit.height;
+    const oc = o.getContext('2d', { willReadFrequently: true });
+    oc.drawImage(grader.render(fit.image), 0, 0);
+    const px = oc.getImageData(fit.width >> 1, 4, 1, 1).data;
+    grader.dispose();
+    fit.release();
+    big.close();
+    results.fit = { cap, bigWidth: wide.width, fitWidth: fit.width, resampled: fit.resampled, pixel: [px[0], px[1], px[2]] };
+  }
+
   // --- the cube without OES_texture_float_linear: half-float, never 8-bit --
   //
   // This GPU has the extension, so the fallback would otherwise run nowhere a
@@ -642,6 +669,19 @@ if (!swap.canSwap) {
     bad += 1;
     console.log('  FAIL  the two pass sets draw the same picture, so this proves nothing');
   }
+}
+
+const fit = out.fit;
+{
+  const okCap = Number.isFinite(fit.cap) && fit.cap >= 2048;
+  const okFit = fit.resampled && fit.fitWidth === fit.cap;
+  const okPixel = fit.pixel.some((v) => v > 16);
+  if (!okCap || !okFit || !okPixel) bad += 1;
+  console.log(
+    `\n  ${okCap && okFit && okPixel ? 'ok  ' : 'FAIL'}  this GPU takes ${fit.cap} px on one edge; a ${fit.bigWidth} px picture ` +
+      `is fitted to ${fit.fitWidth}${fit.resampled ? '' : ' (NOT resampled)'} and grades to ${JSON.stringify(fit.pixel)}` +
+      (okPixel ? '' : ' — BLACK'),
+  );
 }
 
 const half = out.halfCube;

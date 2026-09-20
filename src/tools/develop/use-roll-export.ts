@@ -174,6 +174,11 @@ export function useRollExport({
             lens: picture.lens ?? null,
             layers: picture.layers ?? null,
           });
+          if (out.gradedAt.width < out.source.width || out.gradedAt.height < out.source.height) {
+            failures.push(
+              `${picture.ref.name} was graded at ${out.gradedAt.width}×${out.gradedAt.height}, the most this GPU renders on one edge — its ${out.source.width}×${out.source.height} were resampled`,
+            );
+          }
           rendered.push(
             new File([out.blob], exportName(picture.ref.name, picture.aspect), {
               type: 'image/jpeg',
