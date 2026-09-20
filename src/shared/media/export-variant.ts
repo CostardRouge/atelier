@@ -11,6 +11,7 @@
  * when one exists).
  */
 
+import { isSilentTexture, type FilmTexture } from '../film/film-texture';
 import type { Cue } from '../telemetry/srt-parser';
 import { findCue } from '../telemetry/find-cue';
 import type { CubeLut } from '../lib/cube-parser';
@@ -44,6 +45,14 @@ export interface VariantRenderOptions {
   cues: Cue[];
   lut: CubeLut | null;
   intensity: number;
+  /**
+   * The grade's film TEXTURE — grain and halation — drawn by ONE node after
+   * the look. A CLIP takes it: `SOURCE → CUBE → [FILM] → OUTPUT` is the fast
+   * path, the node has no spatial dependency on the edit, and grain on a
+   * moving picture is the point of a film stock
+   * (`docs/film-simulation.md` §10).
+   */
+  film?: FilmTexture | null;
   theme: StyleTheme | null;
   timeShift?: TimeShift | null;
   /** The project's scenes — the intro's window, scrim and solo. */
@@ -181,8 +190,18 @@ export async function exportVariantVideo(
         | null;
       if (!uctx) throw new Error('Could not create a 2D canvas for export.');
 
-      const grade = opts.lut
-        ? makeFrameGrader(opts.lut, codedWidth, codedHeight, opts.intensity)
+      // A texture with no look is still a render: the node is the only thing
+      // that draws it.
+      const grade = opts.lut || !isSilentTexture(opts.film)
+        ? makeFrameGrader(
+            opts.lut as CubeLut,
+            codedWidth,
+            codedHeight,
+            opts.intensity,
+            [],
+            [],
+            opts.film ?? null,
+          )
         : null;
       const framing = opts.framing ?? DEFAULT_FRAMING;
       const origin = opts.trim?.start ?? 0;
@@ -191,7 +210,12 @@ export async function exportVariantVideo(
 
       return {
         draw(videoFrame, tMicros) {
-          const source = grade ? grade.render(videoFrame) : videoFrame;
+          // The SOURCE instant, in the clip's own seconds: the grain field
+          // re-rolls per source frame quantised to `grainFps`, so a 24 fps
+          // stock over 60 fps footage re-rolls every other frame instead of
+          // boiling — and a dropped or DUPLICATED frame (`frame-rate.ts`)
+          // carries the grain of the frame it really is.
+          const source = grade ? grade.render(videoFrame, tMicros / 1_000_000) : videoFrame;
           drawRotatedFrame(uctx, source, codedWidth, codedHeight, rotation, displayW, displayH);
           // Frame the upright picture into the variant's canvas. With no
           // framing given this is the centred cover-crop it has always been —
@@ -237,6 +261,10 @@ export async function exportVariantVideo(
     {
       outputSize: { width: out.w, height: out.h },
       frameRate: variant.frameRate,
+      // A new noise field every frame is nothing a P-frame can predict, so a
+      // grained clip is encoded at the higher bits per pixel — halation is a
+      // blur and costs nothing, hence `grain` and not the whole texture.
+      grained: (opts.film?.grain ?? 0) > 0,
       trim: opts.trim ?? null,
       speed: variant.speed,
       tail,

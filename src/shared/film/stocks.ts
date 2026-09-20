@@ -180,6 +180,15 @@ export const FILM_STOCKS: readonly FilmStock[] = [
 
 const BY_ID: ReadonlyMap<string, FilmStock> = new Map(FILM_STOCKS.map((s) => [s.id, s]));
 
+/**
+ * A stock's own grain and halation — a COPY, since the record is mutable state
+ * the moment a grade holds it and the stock's must not be edited in place.
+ * The default texture (none at all) for a stock this build does not know.
+ */
+export function textureOf(id: string): FilmTexture {
+  return structuredClone(BY_ID.get(id)?.texture ?? DEFAULT_FILM_TEXTURE);
+}
+
 export function filmStock(id: string): FilmStock | null {
   return BY_ID.get(id) ?? null;
 }

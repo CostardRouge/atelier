@@ -7,6 +7,7 @@ import {
   UNGROUPED_LUTS,
 } from './builtin-luts';
 import FilmDials from './FilmDials';
+import FilmTextureDials from './FilmTextureDials';
 import { FAVOURITES_NODE, FILM_PICK, galleryNodes, packPickId, readPackPick } from './gallery-nodes';
 import LutGalleryModal, { type LutPreviewSource } from './LutGalleryModal';
 import { looksUnder, nodeLabelPath, flattenNodes, visibleLooks } from './lut-pack';
@@ -26,6 +27,15 @@ interface GradePanelProps {
   stack: LutStack;
   /** The picture on the stage, if there is one — the gallery's truest preview. */
   previewImage?: LutPreviewSource | null;
+  /**
+   * The height in pixels of the surface the host really draws its preview at.
+   * What decides whether a grain cell can be SEEN here, said as a visible
+   * state rather than a tooltip (`docs/film-simulation.md` §6). A host that
+   * cannot say passes nothing and the panel claims nothing.
+   */
+  previewHeight?: number | null;
+  /** False where the host's preview does not draw the film node at all (the Studio's stage). */
+  previewDraws?: boolean;
 }
 
 /**
@@ -37,7 +47,12 @@ interface GradePanelProps {
  * The stack bakes into a single LUT, so the preview, the stills and every
  * export variant grade through exactly one shader pass.
  */
-export default function GradePanel({ stack, previewImage = null }: GradePanelProps) {
+export default function GradePanel({
+  stack,
+  previewImage = null,
+  previewHeight = null,
+  previewDraws = true,
+}: GradePanelProps) {
   const packs = useLutPacks();
   const favourites = useLutFavourites();
   const [pick, setPick] = useState('');
@@ -273,6 +288,16 @@ export default function GradePanel({ stack, previewImage = null }: GradePanelPro
         ))
       )}
 
+      {/* The TEXTURE, between the stack and the delivery stage — which is
+          where the node draws it: after the cube, before the output. It is
+          the grade's, not a layer's, because it cascades with the rung. */}
+      <FilmTextureDials
+        texture={stack.film}
+        onChange={(next) => stack.setTexture(next)}
+        previewHeight={previewHeight}
+        previewDraws={previewDraws}
+      />
+
       {/* The delivery stage, always last. */}
       <FieldRow label="Output" hint={outputHint}>
         <SelectField
@@ -309,7 +334,8 @@ export default function GradePanel({ stack, previewImage = null }: GradePanelPro
         {stack.layers.length > 1 && `${activeCount} of ${stack.layers.length} looks active. `}
         Looks apply top to bottom and bake into one LUT — the preview, the stills and every
         export grade identically. Above 100% a look extrapolates past what it was authored for.
-        A film stock goes after a conversion LUT, never before it.
+        A film stock goes after a conversion LUT, never before it. Its grain and halation are
+        not in the LUT: they are drawn after it, at the size the frame is delivered at.
       </p>
     </div>
   );

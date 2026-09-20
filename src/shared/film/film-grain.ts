@@ -33,6 +33,37 @@ export function grainWeight(l: number): number {
 /** A noise sample: the luma field and the three per-channel fields, each in [−0.5, 0.5]. */
 export type GrainSample = readonly [luma: number, r: number, g: number, b: number];
 
+/**
+ * The second octave's frequency, and how much of the field it carries.
+ *
+ * ONE tile of 256 cells repeats: at the default cell size a frame's height is
+ * about two and a half tiles, which reads as structure rather than as grain.
+ * A second read of the same tile at an IRRATIONAL multiple of the first
+ * frequency never lines up with it, so the visible period becomes the product
+ * and the repeat is gone. A tuning surface, like `grainWeight`'s shape.
+ */
+export const OCTAVE_SCALE = 2.17;
+export const OCTAVE_WEIGHT = 0.5;
+
+/**
+ * The two octaves as one sample. Normalised by `√(1 + w²)` — the two reads are
+ * independent, so their VARIANCES add, and without the divide a second octave
+ * would be a grain slider that also turns itself up.
+ */
+export function combineOctaves(
+  base: GrainSample,
+  octave: GrainSample,
+  weight = OCTAVE_WEIGHT,
+): GrainSample {
+  const norm = 1 / Math.sqrt(1 + weight * weight);
+  return [
+    (base[0] + weight * octave[0]) * norm,
+    (base[1] + weight * octave[1]) * norm,
+    (base[2] + weight * octave[2]) * norm,
+    (base[3] + weight * octave[3]) * norm,
+  ];
+}
+
 /** Bytes of one texel of `makeGrainNoise` as a sample. */
 export function grainSampleFrom(bytes: ArrayLike<number>, texelIndex: number): GrainSample {
   const o = texelIndex * 4;
@@ -69,22 +100,33 @@ export function applyGrain(
  * point (0..1), tinted and scaled, then SCREENED onto the picture — monotone,
  * never darkening, never clipping past white, and a halo of zero is the
  * identity.
+ *
+ * The halo may be ONE number or three. Three is what the node hands it, since
+ * `extractHighlight` keeps the highlight's colour so a warm one bleeds warm
+ * *before* the tint; one is the same arithmetic with the three equal, and is
+ * what a caller holding only an energy passes.
  */
 export function screenHalation(
   rgb: readonly [number, number, number],
-  halo: number,
+  halo: number | readonly [number, number, number],
   tint: readonly [number, number, number],
   amount: number,
 ): [number, number, number] {
-  const e = Math.min(1, Math.max(0, halo)) * Math.min(1, Math.max(0, amount));
+  const gain = Math.min(1, Math.max(0, amount));
+  const energy = (i: number) =>
+    Math.min(1, Math.max(0, typeof halo === 'number' ? halo : halo[i])) * gain;
   // No bleed is the identity to the last ulp: `1 − (1 − c)` is not `c`, and
   // an untouched pixel must come back untouched (`media-pipeline.md`).
-  if (e === 0) return [rgb[0], rgb[1], rgb[2]];
-  const screen = (c: number, t: number) => {
+  if (energy(0) === 0 && energy(1) === 0 && energy(2) === 0) return [rgb[0], rgb[1], rgb[2]];
+  const screen = (c: number, t: number, e: number) => {
     const h = Math.min(1, Math.max(0, e * t));
     return 1 - (1 - Math.min(1, Math.max(0, c))) * (1 - h);
   };
-  return [screen(rgb[0], tint[0]), screen(rgb[1], tint[1]), screen(rgb[2], tint[2])];
+  return [
+    screen(rgb[0], tint[0], energy(0)),
+    screen(rgb[1], tint[1], energy(1)),
+    screen(rgb[2], tint[2], energy(2)),
+  ];
 }
 
 /**
@@ -100,6 +142,24 @@ export function extractHighlight(
   const span = Math.max(1e-6, 1 - threshold);
   const e = Math.min(1, Math.max(0, (l - threshold) / span));
   return [rgb[0] * e, rgb[1] * e, rgb[2] * e];
+}
+
+/**
+ * The widest kernel the node's blur runs: GLSL ES needs a CONSTANT loop bound
+ * and a constant array size, so the shader is built for this many taps and
+ * skips past the ones it was not given.
+ *
+ * It is not a guess. `halationBuffer` fixes the sigma from the radius alone,
+ * and over the whole of `TEXTURE_RANGES.halationRadius` that sigma tops out at
+ * 12.8 texels (radius 0.2, a 64-texel buffer) — ±3σ of which is exactly 79
+ * taps. A spec pins that, so a widened radius range cannot silently truncate
+ * the blur.
+ */
+export const MAX_HALATION_TAPS = 79;
+
+/** Taps for a sigma: ±3σ, always odd, never past the cap. */
+export function halationTaps(sigma: number): number {
+  return Math.min(MAX_HALATION_TAPS, (2 * Math.ceil(3 * Math.max(1e-6, sigma)) + 1) | 1);
 }
 
 /**

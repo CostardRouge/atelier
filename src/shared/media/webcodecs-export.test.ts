@@ -1,10 +1,25 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  deriveBitrate,
   drawRotatedFrame,
   rotationFromMatrix,
   trimWindow,
   type TrimSample,
 } from './webcodecs-export';
+
+describe('deriveBitrate', () => {
+  it('spends half again as much on a GRAINED clip, and never under the floor', () => {
+    const plain = deriveBitrate(1920, 1080, 30);
+    const grained = deriveBitrate(1920, 1080, 30, true);
+    // Film grain is a new, uncorrelated field every frame: there is nothing
+    // for a P-frame to predict, so the budget tuned for smooth footage turns
+    // the grain the stock asked for into blocking.
+    expect(grained / plain).toBeCloseTo(0.18 / 0.12, 6);
+    expect(deriveBitrate(1920, 1080, 30, false)).toBe(plain);
+    // The floor holds either way — a postage stamp still gets 2 Mbps.
+    expect(deriveBitrate(64, 64, 24, true)).toBe(2_000_000);
+  });
+});
 
 describe('rotationFromMatrix', () => {
   // tkhd matrices are read via atan2(b, a) on the first two entries.

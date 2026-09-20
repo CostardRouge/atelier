@@ -1001,6 +1001,7 @@ export default function PostEditor({
   // the STORED develop even while the sheet is open — the sheet's draft rides
   // `stack.composed`, which only the sheet itself paints from.
   const lutFor = grade.lutFor;
+  const filmFor = grade.filmFor;
   const lut = isCta ? null : lutFor(slide);
   // Each cell's cube: the slide's grade baked with THAT cell's develop, the
   // lead first — the same call the rail and the PNG deck make per cell.
@@ -1051,6 +1052,7 @@ export default function PostEditor({
     block,
     hookLength,
     lutFor,
+    filmFor,
     // The outcome is reported on the Export tab, so that is where to be.
     onStart: () => setTab('export'),
   });
@@ -1442,6 +1444,7 @@ export default function PostEditor({
                 : null
             }
             lut={lut}
+            film={isCta ? null : filmFor(slide)}
             selectedId={selectedId}
             onSelect={selectElement}
             onActivate={activateElement}

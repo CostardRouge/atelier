@@ -37,11 +37,41 @@ export type RenderPrecision = 'float16' | 'byte';
 /** Anything the graph draws from: an 8-bit browser source, or a half-float picture of our own. */
 export type RenderSource = TexImageSource | HalfImage;
 
+/**
+ * What a pass is about to read, handed to `prepare` — everything a pass needs
+ * to render something of its OWN before the graph draws it.
+ */
+export interface PassInput {
+  /** The texture this pass will read as `u_src`: the source, or what the pass before it wrote. */
+  texture: WebGLTexture | null;
+  /** The render size, in pixels. A pass's own buffers may be any size at all. */
+  width: number;
+  height: number;
+  /** The `u_flipY` this pass's own draw will use, so a sub-render reads the picture the same way up. */
+  flipY: number;
+}
+
 export interface RenderPass {
   /** For a message when a pass will not compile. */
   id: string;
   /** The whole fragment shader. It reads `v_uv` and `u_src`, and writes `outColor`. */
   fragment: string;
+  /**
+   * Render something of this pass's OWN, into buffers it owns, before the
+   * graph draws it — the halation halo, which is extracted and blurred at a
+   * SMALL size (`film-texture.ts`, `halationBuffer`) and so cannot be a pass
+   * of the graph: every pass here draws at the render size into one of two
+   * ping-pong targets, by construction.
+   *
+   * The contract, so a sub-render cannot disturb the draw that follows:
+   * - the graph's quad VAO is bound and attribute 0 IS the quad, so a program
+   *   linked with `linkPassProgram` can draw with it and needs no buffer;
+   * - nothing has to be restored — the graph re-binds its program, its
+   *   framebuffer, its viewport, texture unit 0 and all of its own uniforms
+   *   after this returns;
+   * - the graph's own targets are not this pass's to delete.
+   */
+  prepare?: (gl: WebGL2RenderingContext, input: PassInput) => void;
   /**
    * Bind anything beyond `u_src`. Called with the program already in use and
    * texture unit 0 taken by the input; a pass uses unit 1 and up.
@@ -112,6 +142,19 @@ function compileShader(
     return null;
   }
   return shader;
+}
+
+/**
+ * Compile and link a fragment shader against the graph's own vertex shader,
+ * exported so a pass rendering into buffers of its own (`RenderPass.prepare`)
+ * builds its programs through the SAME path — the `bindAttribLocation` trap
+ * below is silent and would have to be re-learnt otherwise.
+ */
+export function linkPassProgram(
+  gl: WebGL2RenderingContext,
+  fragment: string,
+): WebGLProgram | null {
+  return linkProgram(gl, fragment);
 }
 
 function linkProgram(gl: WebGL2RenderingContext, fragment: string): WebGLProgram | null {
@@ -358,16 +401,23 @@ export function createRenderGraph(
         const pass = list[i];
         const program = programFor(pass);
         if (!program) continue;
+
+        const fromTex = slot.from === 'source' ? sourceTex : (targets[slot.from]?.tex ?? null);
+        const flipY = slot.from === 'source' ? bitmapSource : 0;
+
+        // Before anything is bound for this pass's own draw: a pass that
+        // renders into buffers of its own does it here, and the binding below
+        // is what re-establishes the graph's state afterwards.
+        pass.prepare?.(gl, { texture: fromTex, width, height, flipY });
+        gl.bindVertexArray(vao);
+
         gl.useProgram(program);
 
         const uFlip = gl.getUniformLocation(program, 'u_flipY');
-        if (uFlip) gl.uniform1f(uFlip, slot.from === 'source' ? bitmapSource : 0);
+        if (uFlip) gl.uniform1f(uFlip, flipY);
 
         gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(
-          gl.TEXTURE_2D,
-          slot.from === 'source' ? sourceTex : (targets[slot.from]?.tex ?? null),
-        );
+        gl.bindTexture(gl.TEXTURE_2D, fromTex);
         const uSrc = gl.getUniformLocation(program, 'u_src');
         if (uSrc) gl.uniform1i(uSrc, 0);
         const uTexel = gl.getUniformLocation(program, 'u_texel');

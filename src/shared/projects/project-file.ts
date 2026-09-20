@@ -24,6 +24,7 @@ import { DEFAULT_GUIDES } from '../overlay/guides';
 import type { StyleTheme } from '../overlay/title-styles';
 import type { Scene } from '../overlay/scenes';
 import type { OutroCard } from '../overlay/outro-card';
+import { filmTextureOrNull, type FilmTexture } from '../film/film-texture';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
 import type { OutputTransform } from '../lut/transfer';
 import { NO_SHIFT } from '../telemetry/time-format';
@@ -52,6 +53,7 @@ export interface ProjectPortable {
   guides: GuidesState;
   lutStack: SavedLutLayer[];
   outputTransform: OutputTransform;
+  lutFilm: FilmTexture | null;
   theme: StyleTheme | null;
   scenes: Scene[];
   outro: OutroCard | null;
@@ -94,6 +96,7 @@ export function toProjectFile(
     guides: structuredClone(source.guides),
     lutStack: structuredClone(source.lutStack),
     outputTransform: source.outputTransform,
+    lutFilm: structuredClone(source.lutFilm ?? null),
     theme: structuredClone(source.theme),
     scenes: structuredClone(source.scenes ?? []),
     outro: structuredClone(source.outro ?? null),
@@ -177,6 +180,7 @@ export function parseProjectFile(text: string): ParseResult {
       : structuredClone(DEFAULT_GUIDES),
     lutStack: Array.isArray(raw.lutStack) ? (raw.lutStack as SavedLutLayer[]) : [],
     outputTransform: (raw.outputTransform as OutputTransform) ?? 'none',
+    lutFilm: filmTextureOrNull(raw.lutFilm),
     theme: isRecord(raw.theme) ? (raw.theme as unknown as StyleTheme) : null,
     scenes: Array.isArray(raw.scenes) ? (raw.scenes as Scene[]) : [],
     outro: isRecord(raw.outro) ? (raw.outro as unknown as OutroCard) : null,
@@ -211,6 +215,7 @@ export function parseProjectFile(text: string): ParseResult {
       guides: migrated.guides,
       lutStack: migrated.lutStack,
       outputTransform: migrated.outputTransform,
+      lutFilm: migrated.lutFilm,
       theme: migrated.theme,
       scenes: migrated.scenes,
       outro: migrated.outro,
@@ -238,6 +243,7 @@ export function applyProjectFile(
     guides: structuredClone(file.guides),
     lutStack: structuredClone(file.lutStack),
     outputTransform: file.outputTransform,
+    lutFilm: structuredClone(file.lutFilm ?? null),
     theme: structuredClone(file.theme),
     // Scenes were forgotten here when v12 added them, so a file imported as a
     // NEW project silently lost its intro (the editor's own import path never

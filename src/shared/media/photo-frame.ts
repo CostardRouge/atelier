@@ -15,6 +15,7 @@
  * element already hands over display-oriented frames.
  */
 
+import { isSilentTexture, type FilmTexture } from '../film/film-texture';
 import { isRawImage } from '../library/assets';
 import { extractRawPreview } from '../exif/raw-probe';
 import type { Cue } from '../telemetry/srt-parser';
@@ -152,6 +153,13 @@ export interface PhotoRenderOptions {
   cue: Cue | null;
   lut: CubeLut | null;
   intensity: number;
+  /**
+   * The grade's film TEXTURE — grain and halation — drawn by ONE node after
+   * the look, at the density the picture is GRADED at. A grain cell is a
+   * fraction of the frame's height, so the crop and the variant's own
+   * resample land it where the stage showed it (`render-film.md`).
+   */
+  film?: FilmTexture | null;
   theme: StyleTheme | null;
   timeShift?: TimeShift | null;
   /** JPEG quality 0..1. */
@@ -180,9 +188,12 @@ export async function exportPhotoVariant(
   // Grade at the source's own density, then crop: grading the cropped frame
   // would give a different result at every output size. "Own density" stops
   // at what the GPU can take on one edge; past it the picture is fitted first.
-  const fit = opts.lut ? await fitPhotoForRender(bitmap) : null;
-  const grader = opts.lut && fit
-    ? makeFrameGrader(opts.lut, fit.width, fit.height, opts.intensity)
+  // A texture with no look is still a render: the node is the only thing that
+  // draws it.
+  const needsGpu = Boolean(opts.lut) || !isSilentTexture(opts.film);
+  const fit = needsGpu ? await fitPhotoForRender(bitmap) : null;
+  const grader = needsGpu && fit
+    ? makeFrameGrader(opts.lut as CubeLut, fit.width, fit.height, opts.intensity, [], [], opts.film ?? null)
     : null;
   try {
     const source = grader && fit ? grader.render(fit.image) : bitmap;

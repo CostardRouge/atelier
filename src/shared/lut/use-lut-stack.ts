@@ -10,8 +10,9 @@
 import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { DEFAULT_DEVELOP, isDefaultDevelop, type DevelopSettings } from '../develop/develop';
 import type { FilmSettings } from '../film/emulsion';
+import type { FilmTexture } from '../film/film-texture';
 import { isFilmLayer, newFilmLayer, withFilmSettings } from '../film/film-layer';
-import type { FilmStockId } from '../film/stocks';
+import { textureOf, type FilmStockId } from '../film/stocks';
 import type { CubeLut } from '../lib/cube-parser';
 import { CUBE_ACCEPT, pickFile } from '../sources/file-sources';
 import { isPackLayer, writePackRef, PACK_SOURCE, type PackRef } from './lut-pack';
@@ -109,6 +110,19 @@ export interface LutStack {
   /** Replace the correction; `null` is "as shot". */
   setDevelop: (develop: DevelopSettings | null) => void;
   /**
+   * The film TEXTURE this grade carries — grain and halation — or null for
+   * none. NOT baked into `composed`: it is spatial, and it is drawn by one
+   * node of the render graph after the cube (`render-film.md`), so it travels
+   * beside the cube to whoever builds a grader.
+   */
+  film: FilmTexture | null;
+  /**
+   * Replace it. Named apart from `setFilm`, which re-dials a film LAYER's
+   * emulsion: one writes a lattice, the other writes what the node draws over
+   * it, and confusing them would bake grain into a cube.
+   */
+  setTexture: (film: FilmTexture | null) => void;
+  /**
    * Each layer's stored text, keyed by layer id — a film stock's settings, a
    * pack reference (an uploaded look's included) — what `toSaved` writes so a
    * look survives a reload. Exposed for a host that holds the LIVE stack as a
@@ -119,6 +133,7 @@ export interface LutStack {
   restore: (
     saved: readonly SavedLutLayer[],
     output?: OutputTransform,
+    film?: FilmTexture | null,
   ) => Promise<void>;
   /**
    * Put a LIVE stack back, synchronously: the layers exactly as they were,
@@ -126,7 +141,12 @@ export interface LutStack {
    * `restore` re-fetches and re-parses, which is right when a document opens
    * and wrong for a ⌘Z, where the await would land as a second, phantom step.
    */
-  revert: (layers: LutLayer[], output: OutputTransform, customText: Record<string, string>) => void;
+  revert: (
+    layers: LutLayer[],
+    output: OutputTransform,
+    customText: Record<string, string>,
+    film?: FilmTexture | null,
+  ) => void;
   /** The persistable shape of the current stack. */
   toSaved: () => SavedLutLayer[];
 }
@@ -140,6 +160,7 @@ function uid(): string {
 export function useLutStack(): LutStack {
   const [layers, setLayers] = useState<LutLayer[]>([]);
   const [output, setOutput] = useState<OutputTransform>('none');
+  const [film, setTexture] = useState<FilmTexture | null>(null);
   const [develop, setDevelopState] = useState<DevelopSettings>(DEFAULT_DEVELOP);
   const { interpolation, setInterpolation } = useLutInterpolation();
   const [busy, setBusy] = useState(false);
@@ -260,6 +281,11 @@ export function useLutStack(): LutStack {
     const { layer, text } = newFilmLayer(uid(), stockId);
     setCustomText((prev) => ({ ...prev, [layer.id]: text }));
     setLayers((prev) => [...prev, layer]);
+    // A stock brings its own grain and halation — half of what a stock IS, and
+    // the half the cube cannot carry. Only where the grade carries none yet:
+    // a texture the author already dialled is theirs, and a second stock must
+    // not overwrite it.
+    setTexture((prev) => prev ?? textureOf(stockId));
   }, []);
 
   const addPackLook = useCallback(async (ref: PackRef, name?: string) => {
@@ -320,8 +346,13 @@ export function useLutStack(): LutStack {
   const restore = useCallback(async (
     saved: readonly SavedLutLayer[],
     savedOutput: OutputTransform = 'none',
+    savedFilm: FilmTexture | null = null,
   ) => {
     setOutput(savedOutput);
+    // Set before the early return below, and before the await: a grade with no
+    // layers can still carry a texture, and a restore that left the last
+    // document's grain on would be the same fault as one that left its looks.
+    setTexture(savedFilm);
     if (saved.length === 0) {
       // An empty grade is a real one — the picture that wears no look while
       // the trip wears one — so the stack has to EMPTY, not stay on whatever
@@ -342,7 +373,12 @@ export function useLutStack(): LutStack {
   }, []);
 
   const revert = useCallback(
-    (next: LutLayer[], nextOutput: OutputTransform, nextText: Record<string, string>) => {
+    (
+      next: LutLayer[],
+      nextOutput: OutputTransform,
+      nextText: Record<string, string>,
+      nextFilm: FilmTexture | null = null,
+    ) => {
       // The arrays go back BY REFERENCE, never copied: a caller holding a
       // history compares what it gets back against what it put in, and a copy
       // — equal in every value — reads as a fresh edit and costs it the step
@@ -350,6 +386,7 @@ export function useLutStack(): LutStack {
       setLayers(next);
       setOutput(nextOutput);
       setCustomText(nextText);
+      setTexture(nextFilm);
     },
     [],
   );
@@ -392,6 +429,8 @@ export function useLutStack(): LutStack {
     setOutput,
     setInterpolation,
     setDevelop,
+    film,
+    setTexture,
     customText,
     restore,
     revert,

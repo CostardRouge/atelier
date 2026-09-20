@@ -270,10 +270,18 @@ the suite allows 3.
 `check-render.mjs` will compare the node against. No GL, no document field, no
 call site.
 
-**After P4 of `photo-editor.md` — the `FilmNode`**: grain + halation as one
-node, `SavedGrade.film` with its three version bumps, the panel's texture
-section, the badge, the bitrate bump for grained exports (`deriveBitrate`'s
-~0.12 bpp is close to worst-case for an inter-frame codec; ~0.18, measured).
+**F5 — the `FilmNode`.** *Built 2026-09-20*, in four commits: the node itself
+(`shared/render/film-pass.ts`, `RenderPass.prepare` for the halo's own small
+buffers, five rows of `check-render.mjs` against the pure twins); the texture
+on the grade (`SavedGrade.film`, trip v26 / project v16 / roll v3, `gradeKey`
+folding `filmTextureKey`); the switch-over (the seventh argument to
+`makeFrameGrader`, a source instant on `render`, the node LAST in a fixed
+position, `holdGrades` keyed on the whole edit, the clip path in both the
+Studio's and Trips' exports, `deriveBitrate` at ~0.18 bpp for a grained clip);
+and the panel with its badge. What it does NOT reach, and why, is
+`docs/memory/render-film.md` — chiefly the Studio's stage, which drives the
+single-pass renderer frame by frame and would mean building the multi-pass
+machinery twice (§4.5, again).
 
 ## 8. Verification, and the measurement that fixed the lattice
 
@@ -325,6 +333,10 @@ output transform — the rule stays "a floor, not a target".
 
 ## 10. Open, and three requirements handed to `photo-editor.md` P4
 
+**All three are met (2026-09-20).** They are kept here as the record of what
+the node was built to, and `docs/memory/render-film.md` is where it is
+maintained from.
+
 1. **The `FilmNode` must run on the CLIP path.** The brief's "a clip takes the
    cube path" is about masks and geometry, which are still-only; grain on a
    hook video is the point of film, and the node has no spatial dependency on
@@ -339,3 +351,4 @@ output transform — the rule stays "a floor, not a target".
    or the grain slider is inert on a still, the one surface where it is tuned.
 4. Whether the stocks' numbers get a second pass against reference
    photographs once the maintainer has lived with them — a taste pass, his.
+   Still open, and now with the texture to judge beside the colour.

@@ -102,7 +102,16 @@ export default function DevelopSheet({
   const [pixelView, setPixelView] = usePixelView();
   // The loupe too: the modal hosts gain RENDERING, never panels (§4.2), and
   // the file's own pixels under a magnified view are rendering.
-  const picture = useDevelopPicture({ file, videoTimeSeconds, cube: stack.composed, loupe: true, pixelView });
+  const picture = useDevelopPicture({
+    file,
+    videoTimeSeconds,
+    cube: stack.composed,
+    // The grade's texture reaches the sheet too: the modal hosts RENDERING,
+    // never panels (§4.2), and grain is rendering.
+    film: stack.film,
+    loupe: true,
+    pixelView,
+  });
 
   const done = () => onDone(draft.result());
   // While a preset is being named, Enter belongs to that field's own form.

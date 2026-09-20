@@ -134,6 +134,13 @@ export interface ExportOptions {
   mixBed?: boolean;
   /** Told why composed audio did not make it into the file, when it did not. */
   onAudioSkipped?: (reason: string) => void;
+  /**
+   * This export's grade carries film GRAIN, so it is encoded at the higher
+   * bits per pixel `deriveBitrate` keeps for it: a new noise field every frame
+   * is nothing a P-frame can predict, and the default budget turns the grain
+   * into blocking.
+   */
+  grained?: boolean;
 }
 
 /**
@@ -490,9 +497,29 @@ export async function awaitQueue(getSize: () => number, max: number): Promise<vo
   }
 }
 
-/** Derive an encode bitrate from resolution and frame rate (~0.12 bpp·frame). */
-export function deriveBitrate(width: number, height: number, framerate: number): number {
-  return Math.max(2_000_000, Math.round(width * height * framerate * 0.12));
+/**
+ * Bits per pixel per frame. ~0.12 is close to worst case for an inter-frame
+ * codec on ordinary footage, and **grain is the worst case**: film grain is a
+ * new, uncorrelated field every frame by construction, so there is nothing for
+ * a P-frame to predict and the encoder spends its whole budget on noise. At
+ * 0.12 the result is mush — the grain the stock asked for, smeared into
+ * blocking. ~0.18 is what a grained clip measures at.
+ */
+const BPP = 0.12;
+const GRAINED_BPP = 0.18;
+
+/**
+ * Derive an encode bitrate from resolution and frame rate. `grained` is set by
+ * a caller whose grade carries a film texture with GRAIN in it — halation is a
+ * blur and costs nothing.
+ */
+export function deriveBitrate(
+  width: number,
+  height: number,
+  framerate: number,
+  grained = false,
+): number {
+  return Math.max(2_000_000, Math.round(width * height * framerate * (grained ? GRAINED_BPP : BPP)));
 }
 
 /** A throwaway canvas sized to the coded video (Offscreen where available). */
@@ -637,7 +664,7 @@ export async function exportProcessedVideo(
   }
   const copiedAudio = copySource ? keepAudio : null;
 
-  const bitrate = deriveBitrate(outputWidth, outputHeight, framerate);
+  const bitrate = deriveBitrate(outputWidth, outputHeight, framerate, options.grained);
 
   const description = extractDescription(videoSamples[0]);
   if (!description) {

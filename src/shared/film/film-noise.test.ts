@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { grainFrameIndex, grainPhase, makeGrainNoise } from './film-noise';
+import { grainSampleFrom } from './film-grain';
+import { grainFrameIndex, grainPhase, makeGrainNoise, sampleGrainTile } from './film-noise';
 import { NOISE_SIZE } from './film-texture';
 
 describe('makeGrainNoise', () => {
@@ -61,6 +62,48 @@ describe('grainPhase', () => {
   it('a negative or fractional frame reads as its floor at zero', () => {
     expect(grainPhase(-2, 1)).toEqual(grainPhase(0, 1));
     expect(grainPhase(2.9, 1)).toEqual(grainPhase(2, 1));
+  });
+});
+
+describe('sampleGrainTile — the twin of the shader`s bilinear read', () => {
+  const size = 8;
+  const bytes = makeGrainNoise(3, size);
+
+  it('on a texel centre it IS that texel', () => {
+    for (const [ix, iy] of [
+      [0, 0],
+      [3, 5],
+      [size - 1, size - 1],
+    ]) {
+      const got = sampleGrainTile(bytes, (ix + 0.5) / size, (iy + 0.5) / size, size);
+      const want = grainSampleFrom(bytes, iy * size + ix);
+      for (let c = 0; c < 4; c += 1) expect(got[c]).toBeCloseTo(want[c], 12);
+    }
+  });
+
+  it('halfway between two texels it is their mean, and it WRAPS like REPEAT', () => {
+    const left = grainSampleFrom(bytes, 0 * size + 2);
+    const right = grainSampleFrom(bytes, 0 * size + 3);
+    const mid = sampleGrainTile(bytes, 3 / size, 0.5 / size, size);
+    for (let c = 0; c < 4; c += 1) expect(mid[c]).toBeCloseTo((left[c] + right[c]) / 2, 12);
+    // One tile along is the same field, and the left edge blends with the right.
+    const at = sampleGrainTile(bytes, 0.31, 0.62, size);
+    const wrapped = sampleGrainTile(bytes, 1.31, -0.38, size);
+    for (let c = 0; c < 4; c += 1) expect(wrapped[c]).toBeCloseTo(at[c], 12);
+    const edge = sampleGrainTile(bytes, 0, 0.5 / size, size);
+    const first = grainSampleFrom(bytes, 0);
+    const last = grainSampleFrom(bytes, size - 1);
+    for (let c = 0; c < 4; c += 1) expect(edge[c]).toBeCloseTo((first[c] + last[c]) / 2, 12);
+  });
+
+  it('is band-limited: a bilinear read never leaves the range of its four texels', () => {
+    for (let i = 0; i < 500; i += 1) {
+      const got = sampleGrainTile(bytes, Math.random() * 3 - 1, Math.random() * 3 - 1, size);
+      for (const v of got) {
+        expect(v).toBeGreaterThanOrEqual(-0.5);
+        expect(v).toBeLessThanOrEqual(0.5);
+      }
+    }
   });
 });
 

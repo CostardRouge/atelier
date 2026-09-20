@@ -108,6 +108,20 @@ export function normaliseFilmTexture(raw: unknown): FilmTexture {
   };
 }
 
+/**
+ * A stored texture, or null where a document holds none — the ONE reader every
+ * document goes through (`SavedGrade.film`, `ProjectDoc.lutFilm`,
+ * `RollGrade.film`).
+ *
+ * Junk that is an OBJECT still goes through `normaliseFilmTexture`, which
+ * clamps every number: a hand edit or a value from a newer build should land
+ * as a sound texture where it can, the way a layer does. Anything else — and
+ * a document written before the texture existed — is no texture at all.
+ */
+export function filmTextureOrNull(raw: unknown): FilmTexture | null {
+  return isRecord(raw) ? normaliseFilmTexture(raw) : null;
+}
+
 /** A stable identity — what a grade's key and a held grader's key fold in. Canonical order. */
 export function filmTextureKey(t: FilmTexture | null | undefined): string {
   if (!t) return '-';

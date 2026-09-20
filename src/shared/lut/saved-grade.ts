@@ -11,18 +11,33 @@
  * Pure and DOM-free.
  */
 
+import { filmTextureKey, filmTextureOrNull, type FilmTexture } from '../film/film-texture';
 import { OUTPUT_TRANSFORM_OPTIONS, type OutputTransform } from './transfer';
 import type { SavedLutLayer } from './use-lut-stack';
 
 /**
  * A grade exactly as a document stores it — the Studio's `lutStack` +
- * `outputTransform`, and `TripGrade`'s own two fields. Structural on purpose:
+ * `outputTransform`, and `TripGrade`'s own fields. Structural on purpose:
  * this module grades what it is handed and never learns whose document it
  * came from.
  */
 export interface SavedGrade {
   layers: SavedLutLayer[];
   output: OutputTransform;
+  /**
+   * The film TEXTURE — grain and halation — or null for none.
+   *
+   * It lives here, beside the layers, and not on the film LAYER whose stock it
+   * belongs to, because it is not a lattice: it is spatial, it is drawn by one
+   * node of the render graph after the cube (`render-film.md`), and it must
+   * cascade with the rung exactly as a look does — a trip's texture dressing
+   * every piece, a piece departing from it, one picture departing again
+   * (`post-grade.ts`). A texture on a layer could do none of that.
+   *
+   * Optional, so every `{ layers, output }` a caller already builds stays what
+   * it was and an older document reads as no texture.
+   */
+  film?: FilmTexture | null;
 }
 
 /** The `source` of a film layer — `shared/film/film-layer.ts` owns the layer, this module only recognises it. */
@@ -44,6 +59,13 @@ const PACK_SOURCE = 'pack';
  * few dozen numbers that change on every dial move under one id, so the id
  * says nothing about them — left out, two stocks under one id would share a
  * baked cube and a deck would show one picture's film on another.
+ *
+ * **The TEXTURE is folded in too, and it changes nothing about the cube** —
+ * which is exactly why it has to be. Grain and halation are drawn by a node
+ * after the bake, so a key that reads the cube alone calls two pictures the
+ * same and every held grade in the suite serves the pre-film one: on a still,
+ * the one surface where grain is tuned, the slider looks dead
+ * (`docs/photo-editor.md` §11 item 7).
  */
 export function gradeKey(grade: SavedGrade | null): string {
   if (!grade) return '-';
@@ -52,7 +74,7 @@ export function gradeKey(grade: SavedGrade | null): string {
       `${l.id}:${l.source}:${l.intensity}:${l.enabled ? 1 : 0}` +
       (l.source === FILM_SOURCE || l.source === PACK_SOURCE ? `:${l.customText ?? ''}` : ''),
   );
-  return [grade.output, ...layers].join('|');
+  return [grade.output, filmTextureKey(grade.film), ...layers].join('|');
 }
 
 /**
@@ -82,7 +104,11 @@ export function gradeOrNull(value: unknown): SavedGrade | null {
   const output = OUTPUT_TRANSFORM_OPTIONS.some((o) => o.id === raw.output)
     ? (raw.output as OutputTransform)
     : 'none';
-  return { layers: raw.layers.filter(isSavedLayer).map(readLayer), output };
+  return {
+    layers: raw.layers.filter(isSavedLayer).map(readLayer),
+    output,
+    film: filmTextureOrNull((value as { film?: unknown }).film),
+  };
 }
 
 function isSavedLayer(value: unknown): value is Record<string, unknown> {

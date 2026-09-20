@@ -20,6 +20,7 @@
  */
 
 import { mulberry32 } from '../lib/prng';
+import type { GrainSample } from './film-grain';
 import { NOISE_SIZE } from './film-texture';
 
 /**
@@ -52,4 +53,40 @@ export function grainPhase(frameIndex: number, seed: number): [number, number] {
 export function grainFrameIndex(sourceSeconds: number, grainFps: number): number {
   if (grainFps <= 0 || !Number.isFinite(sourceSeconds)) return 0;
   return Math.max(0, Math.floor(sourceSeconds * grainFps));
+}
+
+/**
+ * One bilinear, REPEAT-wrapped read of the tile — the CPU TWIN of the node's
+ * `texture(u_noise, uv)`, and therefore the definition of what the shader is
+ * held to by `scripts/check-render.mjs`.
+ *
+ * The bilinear read is not an implementation detail here, it IS the
+ * band-limiting filter (see the header): a nearest read would put white noise
+ * back at one texel and lose it in the first downscale. Texel centres sit at
+ * `(i + 0.5) / size`, which is why the half-texel comes off before the floor.
+ */
+export function sampleGrainTile(
+  bytes: ArrayLike<number>,
+  u: number,
+  v: number,
+  size = NOISE_SIZE,
+): GrainSample {
+  const x = u * size - 0.5;
+  const y = v * size - 0.5;
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const fx = x - x0;
+  const fy = y - y0;
+  const wrap = (i: number) => ((i % size) + size) % size;
+  const xs = [wrap(x0), wrap(x0 + 1)];
+  const ys = [wrap(y0), wrap(y0 + 1)];
+  const out: [number, number, number, number] = [0, 0, 0, 0];
+  for (let c = 0; c < 4; c += 1) {
+    const at = (ix: number, iy: number) => bytes[(iy * size + ix) * 4 + c] / 255;
+    const top = at(xs[0], ys[0]) * (1 - fx) + at(xs[1], ys[0]) * fx;
+    const bottom = at(xs[0], ys[1]) * (1 - fx) + at(xs[1], ys[1]) * fx;
+    out[c] = top * (1 - fy) + bottom * fy;
+  }
+  // The same channel order `grainSampleFrom` reads: alpha is the luma field.
+  return [out[3] - 0.5, out[0] - 0.5, out[1] - 0.5, out[2] - 0.5];
 }

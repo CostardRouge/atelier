@@ -1,15 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
   GRAIN_GAIN,
+  MAX_HALATION_TAPS,
+  OCTAVE_WEIGHT,
   applyGrain,
   blurSeparable,
+  combineOctaves,
   extractHighlight,
   gaussianKernel,
   grainSampleFrom,
   grainWeight,
+  halationTaps,
   screenHalation,
   type GrainSample,
 } from './film-grain';
+import { TEXTURE_RANGES, halationBuffer, DEFAULT_FILM_TEXTURE } from './film-texture';
 
 describe('grainWeight — the shape, never the values', () => {
   it('vanishes at crushed black and blown white, peaks in the lower midtones', () => {
@@ -85,12 +90,74 @@ describe('applyGrain', () => {
   });
 });
 
+describe('combineOctaves', () => {
+  it('keeps the variance a single octave has, so a second one is not a louder grain', () => {
+    // Two independent draws: the combined field's variance must be the base's.
+    let base = 0;
+    let both = 0;
+    const n = 4000;
+    let seed = 7;
+    const rnd = () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 4294967296 - 0.5;
+    };
+    for (let i = 0; i < n; i += 1) {
+      const a: GrainSample = [rnd(), rnd(), rnd(), rnd()];
+      const b: GrainSample = [rnd(), rnd(), rnd(), rnd()];
+      base += a[0] * a[0];
+      both += combineOctaves(a, b)[0] ** 2;
+    }
+    expect(both / n).toBeCloseTo(base / n, 2);
+  });
+
+  it('is the base alone at weight 0, and carries the octave otherwise', () => {
+    const a: GrainSample = [0.1, 0.2, -0.3, 0.4];
+    const b: GrainSample = [-0.5, 0.5, 0.1, 0];
+    expect(combineOctaves(a, b, 0)).toEqual([0.1, 0.2, -0.3, 0.4]);
+    const mixed = combineOctaves(a, b);
+    const norm = 1 / Math.sqrt(1 + OCTAVE_WEIGHT * OCTAVE_WEIGHT);
+    expect(mixed[0]).toBeCloseTo((0.1 + OCTAVE_WEIGHT * -0.5) * norm, 12);
+  });
+});
+
+describe('halationTaps', () => {
+  it('covers ±3σ, is odd, and the widest radius still fits the shader`s array', () => {
+    expect(halationTaps(1) % 2).toBe(1);
+    expect(halationTaps(2.6)).toBe(2 * Math.ceil(7.8) + 1);
+    // The cap is MEASURED over the whole slider, not assumed: the buffer's
+    // height comes from the radius alone, so the sigma does too.
+    let widest = 0;
+    const { min, max, step } = TEXTURE_RANGES.halationRadius;
+    for (let r = min; r <= max + 1e-9; r += step) {
+      const buffer = halationBuffer(
+        { ...DEFAULT_FILM_TEXTURE, halation: 1, halationRadius: r },
+        1600,
+        1000,
+      );
+      widest = Math.max(widest, halationTaps(buffer!.sigma));
+      expect(buffer!.sigma).toBeLessThanOrEqual(12.8 + 1e-9);
+    }
+    expect(widest).toBe(MAX_HALATION_TAPS);
+  });
+});
+
 describe('screenHalation and extractHighlight', () => {
   const tint: [number, number, number] = [1, 0.45, 0.2];
 
   it('a halo of zero, or an amount of zero, is the identity', () => {
     expect(screenHalation([0.3, 0.5, 0.7], 0, tint, 1)).toEqual([0.3, 0.5, 0.7]);
     expect(screenHalation([0.3, 0.5, 0.7], 1, tint, 0)).toEqual([0.3, 0.5, 0.7]);
+    expect(screenHalation([0.3, 0.5, 0.7], [0, 0, 0], tint, 1)).toEqual([0.3, 0.5, 0.7]);
+  });
+
+  it('takes a halo per channel — what the node hands it — and a scalar is the three equal', () => {
+    const p: [number, number, number] = [0.2, 0.25, 0.3];
+    expect(screenHalation(p, [0.4, 0.4, 0.4], tint, 1)).toEqual(screenHalation(p, 0.4, tint, 1));
+    // A warm halo bleeds warmer than a neutral one of the same energy.
+    const warm = screenHalation(p, [0.6, 0.4, 0.2], tint, 1);
+    const flat = screenHalation(p, [0.4, 0.4, 0.4], tint, 1);
+    expect(warm[0]).toBeGreaterThan(flat[0]);
+    expect(warm[2]).toBeLessThan(flat[2]);
   });
 
   it('screens: never darkens, never passes white, monotone in the halo', () => {
