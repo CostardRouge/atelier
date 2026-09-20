@@ -1,0 +1,105 @@
+name: Memory audit
+
+# Weekly: check what MEMORY.md and docs/memory/ CLAIM against what the code
+# actually does, and open one issue listing what has drifted. It never edits
+# memory and never opens a pull request — the correction is the maintainer's
+# to approve (CLAUDE.md rule 2 says memory is maintained by hand, in the same
+# commit as the work).
+#
+# Sunday 19:00 Paris. Cron is UTC, so this runs an hour earlier in local terms
+# once CET returns. `workflow_dispatch` is what you use to test it: GitHub only
+# offers the button once this file is on the default branch.
+#
+# Note on `schedule`: GitHub attributes a scheduled run to the user who last
+# changed the cron line, and claude-code-action refuses a bot actor. That is
+# fine while a human owns this file — if it ever reads as a bot, the action's
+# `allowed_bots` input is the escape hatch.
+on:
+  schedule:
+    - cron: "0 17 * * 0"
+  workflow_dispatch:
+
+concurrency:
+  group: memory-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    # A runaway agent is the expensive failure mode here: this job spends the
+    # maintainer's Claude subscription quota, not just Actions minutes.
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    steps:
+      # Claude reads CLAUDE.md, MEMORY.md and docs/memory/ off the runner's
+      # disk, exactly as a local session does — without this step it has no
+      # repository to audit.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Audit the memory against the code
+        uses: anthropics/claude-code-action@v1
+        env:
+          # `gh issue create` reads this. The action itself authenticates as
+          # the Claude GitHub App, so no token of ours is involved there.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model claude-sonnet-5
+            --max-turns 40
+            --allowedTools "Read,Grep,Glob,Bash(gh issue list:*),Bash(gh issue create:*)"
+          prompt: |
+            You are auditing this repository's own long-term memory against its
+            code. This run produces a READING, never a diff.
+
+            The repository is checked out in the working directory.
+
+            1. Read CLAUDE.md, MEMORY.md and every file under docs/memory/.
+
+            2. Those files are full of factual claims: a file path, a module or
+               function name, a configuration value, "X is built", "Y does not
+               exist any more", "all N phases shipped", an open item asserting
+               something is still open. CHECK THEM against the repository with
+               Grep, Glob and Read, in THIS run. Do not trust a claim because
+               it is written down — that drift is exactly what this audit
+               exists to find.
+
+            3. Classify each claim you check:
+               - CONFIRMED — still true.
+               - STALE — was true, the code has moved since.
+               - WRONG — contradicted by the repository, or never true.
+               - UNCHECKABLE — needs the maintainer, a deployed service, a
+                 real device, a phone.
+
+            4. Before writing anything, run
+               `gh issue list --search "Memory audit" --state open`.
+               If an open audit issue already covers the same findings, stop
+               and say so rather than opening a duplicate.
+
+            5. If anything is STALE or WRONG, open ONE issue with
+               `gh issue create`, titled "Memory audit <YYYY-MM-DD>". Number
+               the findings and give each an explicit status — that is this
+               repository's house form for an audit. For each finding: the
+               file and the sentence quoted verbatim, what you checked and
+               how, what the repository actually says, and the ONE-LINE
+               correction you propose. Give the CONFIRMED ones as a count,
+               not a list. Include an UNCHECKABLE one only when it is worth
+               the maintainer's attention.
+
+            6. Do NOT edit MEMORY.md, do NOT edit docs/memory/, do NOT commit,
+               and do NOT open a pull request. The correction is the
+               maintainer's to approve.
+
+            7. If nothing is stale or wrong, open no issue at all. Say so in
+               your final message with the counts — a clean week should cost
+               him nothing to read.
+
+            Budget: this is a weekly routine, not an exhaustive audit. Prefer
+            the claims most likely to have drifted — paths, module names, "is
+            built" statements, and open items — over re-reading everything.
