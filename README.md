@@ -50,8 +50,9 @@ Today it ships ten tools, converging into a few editors:
 >
 > A third kind of request exists only once you have connected a **Winnow**
 > instance of your own (see "Sources" under the Studio): media is fetched from
-> it, and a trip can be kept on it, under your account there. Nothing is
-> sent to a server you did not name yourself.
+> it, a trip or a project can be kept on it, and a **LUT pack's looks** are
+> fetched from it the first time a picture asks for one — all under your
+> account there. Nothing is sent to a server you did not name yourself.
 
 Tools that consume the same kinds of files (photos, videos, DJI clips) share a
 single **asset library**: import a folder once and switch tools freely — each
@@ -1118,6 +1119,62 @@ Batch-export graded copies (H.264 via WebCodecs). The built-in LUTs live in
 (apple/dji/sony/classic). See [`public/luts/README.md`](./public/luts/README.md)
 to add your own — just drop a `.cube` in, no code to edit.
 
+### Choosing a look
+
+Every panel that grades — the Studio's Grade tab, a Trips piece, the Develop
+workbench — offers the same two ways in: a native list grouped by family, and
+a **gallery** that shows each look *on a photograph* before you pick it, since
+reading a name off a dropdown tells you nothing about a LUT. Click a tile and
+that is the choice; there is nothing to confirm.
+
+The tiles are baked once, ahead of time, and shipped — so opening the gallery
+fetches and parses no `.cube` at all. Each look is shown on the reference its
+kind asks for: a **conversion look** (D-Log, S-Log3, Apple Log…) on a log
+frame, because a conversion LUT read on an ordinary picture comes out
+over-contrasted and looks broken through no fault of its own; everything else
+on an ordinary photograph. Both references are in `public/reference/`. If you
+would rather judge them on *your* picture, "Preview on the open picture" or
+"Preview on a photo…" puts every look on screen back on a live bake — it is
+offered rather than assumed, because the live path is what costs.
+
+A **★** in a tile's corner builds a Favourites row at the top of the rail, and
+the same shortlist becomes the first group of "Add a look". It is kept in this
+browser, never in a trip or a project file — your shortlist is yours and does
+not travel with a document you share.
+
+### Your own looks — the vault
+
+A `.cube` you bought or made goes into a **vault**: a private library this
+browser keeps in IndexedDB, holding each look's lattice as compact binary
+rather than text.
+
+- **"Upload .cube…"** puts a single look there, under *My looks*.
+- **"Packs…"** in the gallery imports a whole purchased **pack** — pick its
+  folder and Atelier reads the author's own tree (category, camera), cleans
+  the names, lets you rename and hide what you do not shoot, and bakes each
+  look's thumbnail once. The pack appears in the rail under its own name, with
+  the author and where it came from behind an ⓘ.
+
+Two things about this are deliberate, and both are about *keeping the looks
+yours*:
+
+- **A document stores a reference, never a lattice.** A trip, project or roll
+  that uses one of your looks records which look it is — about a hundred bytes
+  — and the lattice stays in the vault. So a `.roadtrip.json` you send someone
+  does not carry the looks you paid for, and a trip does not grow by several
+  megabytes per look. Graded exports are unaffected: the picture you deliver is
+  the whole point of a licence.
+- **Nothing of a pack is ever published.** Its files are not in this
+  repository, not in the deployed site, and not in anything you export. A look
+  is never resampled either — 65³ stays 65³, exactly as its author made it.
+
+If you have connected a Winnow, a pack can be **kept on it** so your other
+devices have it too: the small index goes into your document bucket, the
+lattices into your own file store, and a device downloads a look the first
+time a picture actually asks for it — then never again. A device that does not
+hold a look says so on the layer, in its place, rather than quietly grading
+the picture as if no look had been chosen.
+
 ### Sources — connecting a Winnow
 
 The library's files usually come from a folder on this machine. They can also
@@ -1172,12 +1229,20 @@ project gallery and the project bar; its media folder never travels — only
 the list of clips does, so on another device the project opens and asks you
 to point it at the footage.
 
+A connected Winnow can also **keep your LUT vault** (see "Your own looks"
+under LUT Studio), which is the third thing Atelier writes to a server: a
+pack's index into the same document bucket, its lattices into your own file
+store, keyed by the file's hash so a look is stored once and never
+re-uploaded. A device fetches a look the first time a picture asks for it and
+caches it, which is what lets a phone grade offline afterwards.
+
 Plainly, what this changes about the promise above: Atelier holds no account
 and talks only to a server you named yourself, signed in with that server's own
 session — nothing runs at boot, and no credential is stored here. It **fetches**
 from it; **uploads to it** only on that one button, only what you just
-rendered; and, if you ask it to, **keeps a trip's document** on it, under your
-account there. Your media never leaves machines you own. It works when Atelier
+rendered; and, if you ask it to, **keeps a document** — a trip, a project, a
+LUT pack — on it, under your account there. Your media never leaves machines
+you own, and neither do the looks you paid for. It works when Atelier
 and the Winnow share a site (e.g. `atelier.example` and `winnow.example`) and
 the Winnow lists Atelier's origin in its `CORS_ALLOWED_ORIGINS`; a foreign
 instance would need a credential of its own, which is not built. The timeline

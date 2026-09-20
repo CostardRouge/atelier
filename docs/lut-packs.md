@@ -1,10 +1,11 @@
 # Purchased LUT packs — a private vault, grouped by author
 
-Status: **steps 1–7 BUILT (2026-09-20); 8 open.** The vault, the import, the
-tree picker, the sync and the upload fix are in; step 5 is Winnow's own PR
+Status: **all eight steps BUILT (2026-09-20), plus ★ favourites — this plan is
+finished.** The vault, the import, the tree picker, the sync, the upload fix
+and the pre-baked built-in tiles are in; step 5 is Winnow's own PR
 (`CostardRouge/winnow` #259 — merge and `npm run migrate` before the sync can
-do anything). What is left here: pre-baking the BUILT-INS' thumbnails (8 — a
-pack's are already baked at import). Plan agreed 2026-09-19. Every decision below was
+do anything). One thing still waits on the maintainer and blocks nothing:
+§10's per-file cap and per-user quota. Plan agreed 2026-09-19. Every decision below was
 taken with the maintainer in one conversation; §9 lists the work in commits,
 §10 the only things still waiting on him. A future session resumes from this
 file alone: read it whole, then `MEMORY.md`, then `docs/memory/media-pipeline.md`.
