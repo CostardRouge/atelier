@@ -30,7 +30,7 @@
  * about itself — so a Winnow without a timeline still degrades to a sentence.
  *
  * **This is not the way to reach a Winnow's media.** Browsing by day and by
- * folder, and Road Trip's own day strip, use plain date filters that have
+ * folder, and the Library's Winnow tab, use plain date filters that have
  * been part of Winnow since long before the timeline. They are unaffected by
  * this switch, by design: the two were conflated once, and that is what put
  * a mature tool behind an immature dependency.

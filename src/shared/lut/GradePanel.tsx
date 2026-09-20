@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { readFilmSettings, type FilmSettings } from '../film/emulsion';
 import { isFilmLayer } from '../film/film-layer';
 import { FILM_GROUP_LABEL, FILM_STOCKS, type FilmStockId } from '../film/stocks';
@@ -8,12 +8,13 @@ import {
 } from './builtin-luts';
 import FilmDials from './FilmDials';
 import FilmTextureDials from './FilmTextureDials';
-import { FILM_PICK, packPickId, readPackPick } from './gallery-nodes';
+import { FAVOURITES_NODE, FILM_PICK, galleryNodes, packPickId, readPackPick } from './gallery-nodes';
 import LutGalleryModal, { type LutPreviewSource } from './LutGalleryModal';
 import { looksUnder, nodeLabelPath, flattenNodes, visibleLooks } from './lut-pack';
 import { MAX_LAYER_INTENSITY } from './lut-stack';
 import { OUTPUT_TRANSFORM_OPTIONS } from './transfer';
 import type { LutStack } from './use-lut-stack';
+import { useLutFavourites } from './use-lut-favourites';
 import { useLutPacks } from './use-lut-packs';
 
 import Button from '../ui/Button';
@@ -53,8 +54,18 @@ export default function GradePanel({
   previewDraws = true,
 }: GradePanelProps) {
   const packs = useLutPacks();
+  const favourites = useLutFavourites();
   const [pick, setPick] = useState('');
   const [gallery, setGallery] = useState(false);
+
+  // The starred looks, named — read from the gallery's own node list so a
+  // favourite is spelled here exactly as it is there, whatever family it came
+  // from. Pure and cheap: `galleryNodes` resolves nothing, and no thumbnail
+  // is wanted for a `<select>`.
+  const favouriteOptions = useMemo(() => {
+    const node = galleryNodes(packs, true, {}, favourites).find((n) => n.id === FAVOURITES_NODE);
+    return node?.items ?? [];
+  }, [packs, favourites]);
 
   const pickLook = (id: string) => {
     const packPick = readPackPick(id);
@@ -96,6 +107,19 @@ export default function GradePanel({
           }}
         >
           <option value="">{stack.busy ? 'Loading…' : 'Built-in…'}</option>
+          {/* ★ Favourites first (`docs/lut-packs.md` §6) — the same starred
+              shortlist the gallery's top row draws, from the same list, so
+              the two can never disagree. Left out entirely when nothing is
+              starred: an empty group reads as a broken one. */}
+          {favouriteOptions.length > 0 && (
+            <optgroup label="★ FAVOURITES">
+              {favouriteOptions.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
           {/* The film stocks are generated, not files: they sit beside the
               folder groups rather than in the manifest, which lists files. */}
           <optgroup label={FILM_GROUP_LABEL}>
@@ -159,14 +183,20 @@ export default function GradePanel({
           })}
         </NativeSelect>
         <IconButton
-          label="Browse looks with a live preview"
+          label="Browse every look on a real picture"
           size="sm"
           variant="ghost"
           onClick={() => setGallery(true)}
         >
           {Icons.grid}
         </IconButton>
-        <Button size="sm" onClick={() => void stack.addCustom()} title="Load a .cube file from disk">
+        {/* An upload is kept in this browser's vault and the document stores a
+            reference to it, never the lattice (`docs/lut-packs.md` §3.1). */}
+        <Button
+          size="sm"
+          onClick={() => void stack.addCustom()}
+          title="Load a .cube file from disk — kept in this browser’s vault, never written into the document"
+        >
           .cube…
         </Button>
       </FieldRow>

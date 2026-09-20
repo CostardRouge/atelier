@@ -1,27 +1,33 @@
 /**
- * "Choose a look" — a rail of families on the left, a grid of looks baked
- * live on the right, so picking one means looking at the actual result
+ * "Choose a look" — a rail of families on the left, a grid of looks on a real
+ * photograph on the right, so picking one means looking at the actual result
  * instead of reading a name off a `<select>`. A tile click IS the choice —
  * there is nothing further to confirm, since seeing it first was the point.
+ * The ★ in a tile's corner is the one thing on it that is not the choice:
+ * it builds the Favourites row at the top of the rail (§6).
  *
  * **The rail is what makes a purchased pack affordable** (variant B of
  * `docs/lut-packs.md` §6, the maintainer's choice): only the open node's
  * looks are ever resolved, so a 25-look pack of 65³ lattices — 41 MB — never
- * has to be decoded to draw a screen. A pack look does not even bake: its
- * thumbnail was baked once at import, on the reference its family asks for
- * (`pack-thumbs.ts`). On a phone the rail becomes a row of crumbs.
+ * has to be decoded to draw a screen. On a phone the rail becomes a row of
+ * crumbs.
  *
- * The sample is the truest thing on hand: a picture already open in the host
- * tool when one is passed in, otherwise a photo the author loads right here
- * ("Preview on a photo…"), otherwise a procedural test chart
- * (`lut-preview.ts`) — a sky, a neutral ramp, saturated colour and a skin
- * tone, the handful of things a look actually changes.
+ * **Opening it costs nothing (§7).** Every tile it draws was baked once
+ * already: a pack's at import (`pack-thumbs.ts`), a built-in's and a film
+ * stock's by `scripts/gen-lut-thumbs.mjs` and shipped in `public/lut-thumbs/`
+ * — each look on the reference its family asks for, since a conversion LUT
+ * read on a display-referred picture previews over-contrasted. So the gallery
+ * opens without fetching or parsing a single `.cube`, where it used to fetch
+ * and parse all 37 MB of them on every open to redraw pixels that could not
+ * have changed.
  *
- * Every built-in or film look is resolved (fetched + parsed, or generated)
- * one at a time with a tick between each: a screenful of film stocks is real
- * CPU, ~100 ms apiece (`film-layer.ts`), and baking them as one burst would
- * hold a frame. Thumbnails pop in as they finish rather than all at once,
- * which reads as the grid filling in rather than the modal being slow.
+ * **"On my picture" is still here, as a CHOICE**: the open picture the host
+ * passed in, or a photo the author loads right here. Then — and only then —
+ * every look on screen resolves its lattice and is baked live, one at a time
+ * with a tick between each, because a screenful of film stocks is real CPU
+ * (~100 ms apiece, `film-layer.ts`) and one burst would hold a frame.
+ * Thumbnails pop in as they finish, which reads as the grid filling in rather
+ * than the modal being slow.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -33,6 +39,7 @@ import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
 import { Icons } from '../ui/icons';
 import useDialogKeys from '../ui/use-dialog-keys';
+import { loadBuiltinThumbs } from './builtin-thumbs';
 import { galleryNodes, matchingItems, type GalleryNode } from './gallery-nodes';
 import {
   PREVIEW_SAMPLE_SIZE,
@@ -42,6 +49,7 @@ import {
 } from './lut-preview';
 import LutPackImportModal from './LutPackImportModal';
 import LutThumb from './LutThumb';
+import { useLutFavourites, toggleFavourite } from './use-lut-favourites';
 import { useLutInterpolation } from './use-lut-interpolation';
 import { useLutPacks } from './use-lut-packs';
 
@@ -71,7 +79,11 @@ export interface LutGalleryModalProps {
   allowNone?: boolean;
   /** Include the film stocks section — `GradePanel`'s "Add a look" already offers them. */
   includeFilm?: boolean;
-  /** A picture already open in the host tool — the truest preview. Falls back to a test chart. */
+  /**
+   * A picture already open in the host tool. It is OFFERED — "Preview on the
+   * open picture" — and never taken by default: the shipped tiles cost
+   * nothing, and a live bake costs a lattice per look (§7).
+   */
   previewImage?: LutPreviewSource | null;
   title?: string;
   onPick: (id: string) => void;
@@ -89,10 +101,6 @@ export default function LutGalleryModal({
 }: LutGalleryModalProps) {
   const { interpolation } = useLutInterpolation();
   const packIndexes = useLutPacks();
-  const nodes = useMemo(
-    () => galleryNodes(packIndexes, includeFilm),
-    [packIndexes, includeFilm],
-  );
 
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string>(() => (includeFilm ? 'film' : 'builtin'));
@@ -102,12 +110,40 @@ export default function LutGalleryModal({
   const [imageBusy, setImageBusy] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   const [packsOpen, setPacksOpen] = useState(false);
+  /**
+   * Which picture the looks are shown on. `null` — the default — is the
+   * shipped tiles, each look on the reference its family asks for and nothing
+   * fetched or parsed at all. Anything else is the LIVE bake, which is now an
+   * explicit choice (`docs/lut-packs.md` §7): it is worth a lattice per look
+   * only when the author asked to see them on this picture.
+   */
+  const [liveOn, setLiveOn] = useState<'open' | 'custom' | null>(null);
+
+  // The shipped tiles. `{}` until they answer, and `{}` for good if this build
+  // ships none — in which case every look simply bakes live, as it used to.
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let live = true;
+    void loadBuiltinThumbs().then((t) => {
+      if (live) setThumbs(t);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const effectiveSource = liveOn === 'custom' ? customImage : liveOn === 'open' ? previewImage : null;
+
+  const favourites = useLutFavourites();
+  const nodes = useMemo(
+    () => galleryNodes(packIndexes, includeFilm, effectiveSource ? null : thumbs, favourites),
+    [packIndexes, includeFilm, effectiveSource, thumbs, favourites],
+  );
 
   // A pack forgotten while its node was open, or a first import: the rail
   // must never point at a node that is gone.
   const open = nodes.find((n) => n.id === openId) ?? nodes[0] ?? null;
 
-  const effectiveSource = customImage ?? previewImage;
   const [sample, setSample] = useState<RgbBitmap>(() =>
     effectiveSource ? sampleFromImage(effectiveSource, PREVIEW_SAMPLE_SIZE) : syntheticPreviewSample(),
   );
@@ -178,6 +214,7 @@ export default function LutGalleryModal({
     try {
       setCustomImage(await decodePhoto(file));
       setCustomLabel(file.name);
+      setLiveOn('custom');
     } catch {
       setImageError(`Could not read “${file.name}” as a photo.`);
     } finally {
@@ -209,7 +246,9 @@ export default function LutGalleryModal({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="m-0 font-serif text-2xl">{title}</h2>
-            <p className="m-0 mt-1 text-sm text-muted">Every look, baked live — click one to use it.</p>
+            <p className="m-0 mt-1 text-sm text-muted">
+              Every look, on a real picture — click one to use it.
+            </p>
           </div>
           <div className="flex items-center gap-1">
             {/* Purchased packs live in this browser's vault, not in the
@@ -225,27 +264,45 @@ export default function LutGalleryModal({
         </div>
 
         <div className="flex flex-col gap-2.5 border-y border-line py-3">
+          {/* What the looks are shown ON. The default costs nothing — the
+              tiles were baked once, each look on the reference its family
+              asks for — so putting them on YOUR picture is a choice you make
+              rather than a price you pay for opening the picker
+              (`docs/lut-packs.md` §7). */}
           <div className="flex items-center gap-3 flex-wrap">
-            <span className="w-8 h-8 rounded-control overflow-hidden border border-line shrink-0">
-              <LutThumb bitmap={sample} />
-            </span>
+            {effectiveSource && (
+              <span className="w-8 h-8 rounded-control overflow-hidden border border-line shrink-0">
+                <LutThumb bitmap={sample} />
+              </span>
+            )}
             <span className="text-xs text-muted min-w-0 truncate">
-              Previewing on{' '}
-              {customLabel ? `“${customLabel}”` : previewImage ? 'the open picture' : 'a sample chart'}
+              {liveOn === 'custom' && customLabel
+                ? `Previewing on “${customLabel}”`
+                : liveOn === 'open'
+                  ? 'Previewing on the open picture'
+                  : 'Each look on its own reference frame — log looks on a D-Log M frame, the rest on a photograph'}
             </span>
-            <Button size="sm" variant="ghost" onClick={() => void chooseImage()} disabled={imageBusy}>
-              {imageBusy ? 'Reading…' : 'Preview on a photo…'}
+            {previewImage && liveOn !== 'open' && (
+              <Button size="sm" variant="ghost" onClick={() => setLiveOn('open')}>
+                Preview on the open picture
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                // Already decoded once this session: switching back costs no
+                // second read of the file.
+                if (customImage) setLiveOn('custom');
+                else void chooseImage();
+              }}
+              disabled={imageBusy || liveOn === 'custom'}
+            >
+              {imageBusy ? 'Reading…' : customImage ? `Preview on “${customLabel}”` : 'Preview on a photo…'}
             </Button>
-            {customImage && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  setCustomImage(null);
-                  setCustomLabel(null);
-                }}
-              >
-                Use {previewImage ? 'the open picture' : 'the sample chart'}
+            {liveOn && (
+              <Button size="sm" variant="ghost" onClick={() => setLiveOn(null)}>
+                Use the reference frames
               </Button>
             )}
           </div>
@@ -318,6 +375,7 @@ export default function LutGalleryModal({
                     <Tile
                       id="none"
                       name="No look (original)"
+                      {...(effectiveSource ? {} : thumbs.none ? { thumb: thumbs.none } : {})}
                       bitmap={noneBitmap}
                       selected={selected === 'none'}
                       onPick={onPick}
@@ -376,7 +434,9 @@ export default function LutGalleryModal({
                         bitmap={previews[item.id]}
                         failed={resolved[item.id] === 'error'}
                         selected={selected === item.id}
+                        favourite={favourites.includes(item.id)}
                         onPick={onPick}
+                        onToggleFavourite={toggleFavourite}
                       />
                     ))}
                   </div>
@@ -435,7 +495,17 @@ function RailRow({
   );
 }
 
-/** One look: the whole tile is the pick, exactly like `HookPicturesModal`'s grid. */
+/**
+ * One look: the whole tile is the pick, exactly like `HookPicturesModal`'s
+ * grid — plus a ★ in its corner, which is the one thing on the tile that is
+ * NOT the pick. That is why the tile is a `<div>` holding two buttons rather
+ * than a button with a button inside it, which is invalid HTML and leaves the
+ * star unreachable from a keyboard.
+ *
+ * The star is drawn at every width rather than on hover: a phone has no
+ * hover, and a control you can only find with a pointer is a control half the
+ * devices do not have.
+ */
 function Tile({
   id,
   name,
@@ -443,7 +513,9 @@ function Tile({
   bitmap,
   failed = false,
   selected,
+  favourite = false,
   onPick,
+  onToggleFavourite,
 }: {
   id: string;
   name: string;
@@ -451,30 +523,55 @@ function Tile({
   bitmap?: RgbBitmap | undefined;
   failed?: boolean;
   selected: boolean;
+  favourite?: boolean;
   onPick: (id: string) => void;
+  /** Omitted for "No look (original)", which is the absence of a look, not one. */
+  onToggleFavourite?: (id: string) => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={() => onPick(id)}
-      aria-pressed={selected}
-      title={name}
-      className={`group flex flex-col gap-1 p-1 rounded-control border cursor-pointer bg-paper text-left transition-colors ${
+    <div
+      className={`group relative flex flex-col gap-1 p-1 rounded-control border bg-paper transition-colors ${
         selected ? 'border-accent ring-2 ring-accent/40' : 'border-line hover:border-line-strong'
       }`}
     >
-      <span className="block w-full h-[74px] rounded-[6px] overflow-hidden bg-paper-2 max-[820px]:h-[92px]">
-        {thumb ? (
-          // Baked at import on the reference this look's family asks for —
-          // nothing to decode here, which is what lets a pack be drawn at all.
-          <img src={thumb} alt="" className="w-full h-full object-cover" />
-        ) : failed ? (
-          <span className="grid place-items-center w-full h-full font-mono text-3xs text-danger">failed</span>
-        ) : (
-          <LutThumb bitmap={bitmap} />
-        )}
-      </span>
-      <span className="block text-2xs leading-tight text-ink-soft truncate group-hover:text-ink">{name}</span>
-    </button>
+      <button
+        type="button"
+        onClick={() => onPick(id)}
+        aria-pressed={selected}
+        title={name}
+        className="flex flex-col gap-1 cursor-pointer text-left"
+      >
+        <span className="block w-full h-[74px] rounded-[6px] overflow-hidden bg-paper-2 max-[820px]:h-[92px]">
+          {thumb ? (
+            // Baked once already — at import for a pack, at
+            // `gen-lut-thumbs.mjs` time for a built-in — on the reference this
+            // look's family asks for. Nothing is decoded here, which is what
+            // lets the gallery open without touching a `.cube` at all.
+            <img src={thumb} alt="" className="w-full h-full object-cover" />
+          ) : failed ? (
+            <span className="grid place-items-center w-full h-full font-mono text-3xs text-danger">failed</span>
+          ) : (
+            <LutThumb bitmap={bitmap} />
+          )}
+        </span>
+        <span className="block text-2xs leading-tight text-ink-soft truncate group-hover:text-ink">{name}</span>
+      </button>
+      {onToggleFavourite && (
+        <button
+          type="button"
+          onClick={() => onToggleFavourite(id)}
+          aria-pressed={favourite}
+          aria-label={favourite ? `Remove ${name} from favourites` : `Add ${name} to favourites`}
+          title={favourite ? 'In your favourites' : 'Add to favourites'}
+          className={`absolute top-1.5 right-1.5 grid place-items-center w-6 h-6 rounded-full text-xs leading-none transition-colors ${
+            favourite
+              ? 'bg-accent-wash text-accent-ink'
+              : 'bg-[rgba(20,18,15,0.35)] text-paper opacity-70 hover:opacity-100'
+          }`}
+        >
+          <span aria-hidden="true">{favourite ? '★' : '☆'}</span>
+        </button>
+      )}
+    </div>
   );
 }
