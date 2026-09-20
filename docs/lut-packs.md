@@ -270,7 +270,7 @@ that would be ~150 MB of text parsed to draw a grid. Instead:
 
 | Looks | When the thumbnail is baked | Where it lives |
 |---|---|---|
-| Built-ins (`public/luts/`, Film stocks) | at **build** time, from his reference images | shipped as small images in the build |
+| Built-ins (`public/luts/`, Film stocks) | at **build** time, from the two references in `public/reference/` | shipped as small images in the build |
 | A pack | at **import**, on the Mac, once | in the pack index on Winnow — **never in `public/`** |
 | "On my picture" | live, as today | only when the author explicitly asks |
 
@@ -296,7 +296,19 @@ that would be ~150 MB of text parsed to draw a grid. Instead:
   hash already the file store's key — while the dev path works only on his
   machine, proves nothing about the deployed app, and blurs the one simple
   line of §3, rule 3.
-- **Waiting on him**: the two reference images (§10).
+- **The two references are IN the repo** (2026-09-20), both the maintainer's own
+  pictures, so nothing here waits any more:
+  `public/reference/reference-dlogm.jpg` — a frame at 26 s of a Mini 4 Pro
+  D-Log M clip (10-bit HEVC, 900×1600), water, rock, vegetation, a grey roof
+  as a near-neutral, sand and shadows; and `public/reference/reference-rec709.jpg`
+  — a Mini 4 Pro JPEG (1600×900), a headland with surf, foliage and pale rock.
+  **A look's reference is chosen by its family**: Conversion and One Click read
+  the D-Log M frame, Creative and the built-in creative looks the Rec.709 one.
+  The D-Log M frame was CONFIRMED to be log by applying
+  `public/luts/dji/dji_mini_4_pro_d-log_m-to-rec709.cube` to it and seeing a
+  natural picture come out — the honest test, since D-Log M is a MILD log that
+  does not look as washed out as D-Log, and a drone's JPEG or DNG is never log
+  (D-Log M is a video profile; a DNG's embedded render is display-referred).
 
 ## 8. Already done in this conversation
 
@@ -315,12 +327,12 @@ and resets the select). Carried by this pull request. Memory:
 |---|---|---|---|
 | 1 | Atelier | **Pure pack model**: folder tree → index (ids from paths, name cleaning §5.3, variable depth), 16-bit lattice codec, SHA-256 helper. `shared/lut/lut-pack.ts` + tests | round-trip test (cube → 16-bit → cube, max error < 1/2048), tree fixtures mirroring §2 |
 | 2 | Atelier | **Vault on this device**: IndexedDB store (own database, the studio's hand-rolled pattern), `source: 'pack'` layers in `SavedLutLayer`, `restore-grade` + `gradeKey`, the "not in this vault" state | unit tests; a layer with no vault renders bypassed and says so |
-| 3 | Atelier | **Import a pack**: pick the folder (File System Access) or a .zip; preview the parsed tree, rename, hide; bake thumbnails (needs step 8's reference images or the chart meanwhile) | import `~/Downloads/AUTHENTIC_LUT` in the dev app: 25 looks, tree as §2 |
+| 3 | Atelier | **Import a pack**: pick the folder (File System Access) or a .zip; preview the parsed tree, rename, hide; bake thumbnails from the references in `public/reference/` | import `~/Downloads/AUTHENTIC_LUT` in the dev app: 25 looks, tree as §2 |
 | 4 | Atelier | **Picker variant B** + credits popover + Manage packs + native select groups (§6) | browser check, desktop and phone width |
 | 5 | Winnow | `lutpack` kind + the file store routes + migration + capabilities (§4.4) | Winnow's own tests; curl with a session cookie |
 | 6 | Atelier | **Sync**: push index + files on import, pull the index on connect, fetch a lattice on first use and cache it | Mac imports, iPhone (or a second browser profile) grades offline after one use |
 | 7 | Atelier | **"Upload .cube" goes into the vault** (a one-look personal pack), so no document ever inlines a lattice again (§3.1) | a trip export after an upload holds no `customText` for it |
-| 8 | Atelier | **Pre-baked thumbnails** for built-ins at build + the log/rec709 reference pair; live "on my picture" as an explicit choice | the gallery opens without fetching or parsing any `.cube` |
+| 8 | Atelier | **Pre-baked thumbnails** for built-ins at build, each look read on the reference its family asks for (§7); live "on my picture" as an explicit choice | the gallery opens without fetching or parsing any `.cube` |
 
 Step 8 can move before 3 (it helps the built-ins on its own). Every step
 ends with typecheck + lint + test + build green (CI's four gates) and a
@@ -331,10 +343,7 @@ every request the app makes).
 
 ## 10. Still waiting on the maintainer
 
-1. **The two reference images** for step 8: one LOG frame (a D-Log M rush of
-   his) and one ordinary Rec.709 photograph. They will be committed (they are
-   his own pictures, fine in `public/`).
-2. At step 5, the file store's per-file cap and per-user quota (proposed:
+1. At step 5, the file store's per-file cap and per-user quota (proposed:
    16 MiB / 500 MiB) — only matters if the overlays ever go there.
 
-Everything else is decided.
+Everything else is decided, and the reference images are in (§7).
