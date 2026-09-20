@@ -54,6 +54,42 @@ what is NEXT TO a pixel rather than what a pixel is — written through like
 the lens, reaching the stage, the crop stage, the thumbnail and the export,
 and named in the facts corner.
 
+## The loupe: the file's own pixels under a magnified view (2026-09-20, P11 second commit)
+
+The stage works to a pixel budget, so past its 1:1 a smooth resample invents
+a gradient between preview pixels and "pixels" merely enlarges them — neither
+is what a denoise looks like in the file (F5 of the brief, and what "pixel
+piping" was read as). `useDevelopPicture({ loupe: true })` now decodes the
+picture WHOLE the moment the view crosses the stage's `onePixel` — a JPEG
+through `decodePhoto` + `fitPhotoForRender`, a RAW base through `decodeRaw`
+whole, both capped at what the GPU takes — into a SECOND grader slot with the
+same look, warps, layers and detail (its kernels at the file's density:
+`pixelScale = decoded / file`), and draws the visible window on a canvas in
+VIEWPORT space over the stage's, in device pixels, under the very transform
+the stage canvas sits at (`view.rect` → `setTransform`, then the same
+`drawPictureIn` / `drawImage` the stage paints with). So it lands on the
+stage's picture to the pixel, the wipe and hold-for-before draw the file's
+own untouched pixels on their side, and past the FILE's 1:1 the smooth /
+pixels choice is applied to the loupe's context.
+
+Rules: **one grader slot per surface** (`GraderSlot`, the stage's and the
+loupe's) — a pass holds textures on the context it was first drawn with, and
+a pass shared between two graphs re-uploads on every alternate draw; the
+decode is **released three seconds after the view comes back** and at once
+when the picture changes (a 24-megapixel bitmap is not kept for a look that
+ended); a file with **no more pixels than the stage shows** (a proxy, a small
+JPEG) says so in the pill rather than pretending; a clip gets no loupe. Both
+Develop hosts have it — the workbench and the modal sheet — because it is
+rendering, not a panel (§4.2).
+
+Measured in the pane on a 15-megapixel noisy JPEG (stage 3718 px): twelve
+wheel notches took the view to 4000 %, the pill read `loupe · 5000 px`, the
+loupe canvas covered the viewport (936×614 device pixels) and its centre
+carried a pixel variance of 568 against the stage canvas's 532 — the file's
+own grain, a little rougher than the budgeted preview's. Not measured: a
+phone, where the whole decode is the same cost the still export already
+pays (`MEMORY.md`'s open item on big photographs).
+
 Measured in the pane on a 1600×1200 noisy JPEG with a hard edge: Luminance
 80 cut the flat area's variance from 74 to 18; Amount 100 pushed the edge
 from 59 | 195 to 27 | 209 (and raised the flat area's variance, as sharpening

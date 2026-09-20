@@ -109,6 +109,29 @@ export default function DevelopViewport({
         }}
         aria-label="The picture, corrected"
       />
+      {/* The loupe: the file's own pixels, drawn in VIEWPORT space over the
+          stage while the view is past the stage's 1:1. Sized 0 and drawing
+          nothing when it is not (`use-develop-picture.ts`, «the loupe»). */}
+      <canvas
+        ref={picture.loupe.canvasRef}
+        className="absolute inset-0 w-full h-full pointer-events-none"
+        aria-hidden="true"
+      />
+      {picture.loupe.active && (
+        <span
+          className={`absolute top-2 right-2.5 ${developPillClass} bg-[rgba(251,248,241,0.86)] text-ink-soft`}
+          role="status"
+          title="Past the stage's own pixels the file is decoded whole and drawn at its own density"
+        >
+          {picture.loupe.state === 'decoding'
+            ? 'loupe · decoding…'
+            : picture.loupe.state === 'ready'
+              ? `loupe · ${picture.loupe.longEdge ?? ''} px`
+              : picture.loupe.state === 'same'
+                ? 'loupe · the file has no more'
+                : 'loupe · could not decode'}
+        </span>
+      )}
       {picture.comparing && (
         <div
           data-wipe-handle

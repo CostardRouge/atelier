@@ -491,9 +491,11 @@ is an unsharp mask on the luma applied as one ratio. Noise runs BEFORE the
 cube on the source, sharpen LAST after every warp (`makeFrameGrader` gained a
 `before` list). Kernels are in SOURCE pixels, scaled by the stage — a fair
 preview and not the truth, which is the second commit's reason to exist: the
-**loupe at one source pixel per device pixel**, because F5. `usePictureZoom`
-already reaches one *preview* pixel per device pixel; what is missing is the
-full-resolution decode under it.
+**loupe at one source pixel per device pixel**, because F5 — *BUILT 2026-09-20
+in both Develop hosts*: past the stage's 1:1 the picture is decoded whole
+(capped at the GPU) into a second grader with the same chain and its window
+drawn in viewport space over the stage, released when the view comes back
+(`docs/memory/render-detail.md`, «The loupe»).
 
 **P12 — repair.** Dust detection and removal, healing, clone, as one `Patch[]`
 list and one composite pass.

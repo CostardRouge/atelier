@@ -359,6 +359,8 @@ export default function PictureWorkbench({
     raw: wantsRaw && rawFile ? { file: rawFile, gain: rawGain } : null,
     detail: detailDraft,
     pixelScale: stageWidth && fullWidth ? Math.min(1, stageWidth / fullWidth) : 1,
+    loupe: true,
+    pixelView,
     // The measured exposure is STORED the moment it is known, so the export's
     // decode applies the same number (`raw.md`). Once: a stored gain is never
     // overwritten by a later decode's measurement.
