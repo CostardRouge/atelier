@@ -151,7 +151,13 @@ export default function GradePanel({ stack, previewImage = null }: GradePanelPro
         >
           {Icons.grid}
         </IconButton>
-        <Button size="sm" onClick={() => void stack.addCustom()} title="Load a .cube file from disk">
+        {/* An upload is kept in this browser's vault and the document stores a
+            reference to it, never the lattice (`docs/lut-packs.md` §3.1). */}
+        <Button
+          size="sm"
+          onClick={() => void stack.addCustom()}
+          title="Load a .cube file from disk — kept in this browser’s vault, never written into the document"
+        >
           .cube…
         </Button>
       </FieldRow>

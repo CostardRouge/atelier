@@ -1,11 +1,10 @@
 # Purchased LUT packs — a private vault, grouped by author
 
-Status: **steps 1–6 BUILT (2026-09-20); 7–8 open.** The vault, the import, the
-tree picker and the sync are in; step 5 is Winnow's own PR
+Status: **steps 1–7 BUILT (2026-09-20); 8 open.** The vault, the import, the
+tree picker, the sync and the upload fix are in; step 5 is Winnow's own PR
 (`CostardRouge/winnow` #259 — merge and `npm run migrate` before the sync can
-do anything). What is left here: routing "Upload .cube" through the vault (7)
-and pre-baking the BUILT-INS' thumbnails at build time (8 — a pack's are
-already baked at import). Plan agreed 2026-09-19. Every decision below was
+do anything). What is left here: pre-baking the BUILT-INS' thumbnails (8 — a
+pack's are already baked at import). Plan agreed 2026-09-19. Every decision below was
 taken with the maintainer in one conversation; §9 lists the work in commits,
 §10 the only things still waiting on him. A future session resumes from this
 file alone: read it whole, then `MEMORY.md`, then `docs/memory/media-pipeline.md`.
@@ -336,7 +335,7 @@ and resets the select). Carried by this pull request. Memory:
 | 4 ✅ | Atelier | **Picker variant B** + credits popover + Manage packs + native select groups (§6) | browser check, desktop and phone width |
 | 5 ✅ | Winnow | `lutpack` kind + the file store routes + migration + capabilities (§4.4) | Winnow's own tests; curl with a session cookie |
 | 6 ✅ | Atelier | **Sync**: push index + files on import, pull the index on connect, fetch a lattice on first use and cache it | Mac imports, iPhone (or a second browser profile) grades offline after one use |
-| 7 | Atelier | **"Upload .cube" goes into the vault** (a one-look personal pack), so no document ever inlines a lattice again (§3.1) | a trip export after an upload holds no `customText` for it |
+| 7 ✅ | Atelier | **"Upload .cube" goes into the vault** (a look of one personal pack — see below), so no document ever inlines a lattice again (§3.1) | a trip export after an upload holds no `customText` for it |
 | 8 | Atelier | **Pre-baked thumbnails** for built-ins at build, each look read on the reference its family asks for (§7); live "on my picture" as an explicit choice | the gallery opens without fetching or parsing any `.cube` |
 
 **What steps 1–4 landed** (`shared/lut/`): `lut-pack.ts` (the index, the
@@ -351,7 +350,34 @@ when its look is not in this vault). Driven in a browser against the real
 pack. **Steps 5–6** added Winnow's file bucket (its migration 0044 +
 `lib/appFiles.ts` + `api/apps/[app]/files`, PR #259) and, here,
 `pack-remote.ts` + the vault's fetch-on-first-use, with "Keep on <instance>"
-and "Add here" in the Packs sheet. Not built yet: ★ favourites (§6) — hiding answers "only what I keep",
+and "Add here" in the Packs sheet.
+
+**What step 7 landed, and the two calls it had to make.** `upload-pack.ts`:
+an uploaded `.cube` is hashed, encoded and stored like a purchased one, and
+the layer is an ordinary `source: 'pack'` layer. Driven in a browser — an
+upload on a trip's Grade, then the trip exported: **139 804 bytes before,
+3 499 after**, the layer carrying a 110-byte reference and the file holding no
+`LUT_3D_SIZE` at all.
+
+1. **One personal pack, not one per upload.** The wording above says "a
+   one-look personal pack"; taken literally that mints a pack per upload, and
+   the rail lists one row per pack (§6) — ten uploads would be ten families of
+   one look each. So every upload is a look at the root of one standing pack,
+   `pk_uploads` ("My looks"), deduped on the file's SHA-256. It also makes
+   "Keep on <instance>" one gesture for everything this browser uploaded.
+2. **Which reference an upload previews on is read from its NAME**
+   (`familyForLookName`, pure and tested), because an uploaded cube has no
+   category for `familyFor` to read and §7's log-input trap is real. Log-format
+   and conversion tokens are matched with the separators stripped; everything
+   else gets the Rec.709 frame. A heuristic, said out loud: a wrong guess costs
+   one thumbnail on the wrong picture, never a wrong render.
+
+**Nothing was migrated, and nothing needed to be.** `restore-grade.ts`'s
+`source: 'custom'` branch is now a READ path and stays: a document written
+before today holds an inlined lattice and must keep rendering — verified by
+importing exactly such a trip file. Nothing writes that shape any more.
+
+Not built yet: ★ favourites (§6) — hiding answers "only what I keep",
 and a starred shortlist can come with the sync.
 
 Step 8 can move before 3 (it helps the built-ins on its own). Every step

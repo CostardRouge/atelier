@@ -12,12 +12,13 @@ import { DEFAULT_DEVELOP, isDefaultDevelop, type DevelopSettings } from '../deve
 import type { FilmSettings } from '../film/emulsion';
 import { isFilmLayer, newFilmLayer, withFilmSettings } from '../film/film-layer';
 import type { FilmStockId } from '../film/stocks';
-import { parseCube, type CubeLut } from '../lib/cube-parser';
+import type { CubeLut } from '../lib/cube-parser';
 import { CUBE_ACCEPT, pickFile } from '../sources/file-sources';
 import { isPackLayer, writePackRef, PACK_SOURCE, type PackRef } from './lut-pack';
 import { composeLutStack, identityCube, reorderLayer, type LutLayer } from './lut-stack';
 import { missingLookReason, packLookName, resolvePackLattice } from './pack-vault';
 import { loadBuiltinLut, restoreLayers } from './restore-grade';
+import { uploadLookIntoVault } from './upload-pack';
 import type { OutputTransform } from './transfer';
 import type { Interpolation } from './interpolate';
 import { useLutInterpolation } from './use-lut-interpolation';
@@ -28,8 +29,13 @@ export interface SavedLutLayer {
   source: string;
   name: string;
   /**
-   * Raw `.cube` text for an uploaded look, a film stock's settings as JSON
-   * (`shared/film/film-layer.ts`); null for built-ins.
+   * A film stock's settings as JSON (`shared/film/film-layer.ts`), or a pack
+   * reference — including an UPLOADED look's, since 2026-09-20 (`upload-pack.ts`);
+   * null for built-ins.
+   *
+   * Raw `.cube` text still READS here, and must keep doing so: a document
+   * written before uploads went into the vault holds a whole inlined lattice
+   * (`restore-grade.ts`'s `source: 'custom'` branch). Nothing WRITES it any more.
    */
   customText: string | null;
   intensity: number;
@@ -78,6 +84,11 @@ export interface LutStack {
   busy: boolean;
   error: string | null;
   addBuiltin: (builtinId: string) => Promise<void>;
+  /**
+   * Upload a `.cube` from disk. It lands in the VAULT as a look of the
+   * personal pack and the layer stores a reference — an upload has not
+   * inlined a lattice into the document since 2026-09-20 (`upload-pack.ts`).
+   */
   addCustom: () => Promise<void>;
   /** A film stock as a new layer at the end of the stack — generated, nothing to fetch. */
   addFilm: (stockId: FilmStockId) => void;
@@ -98,9 +109,10 @@ export interface LutStack {
   /** Replace the correction; `null` is "as shot". */
   setDevelop: (develop: DevelopSettings | null) => void;
   /**
-   * The uploaded cubes' own text, keyed by layer id — what `toSaved` writes so
-   * a custom look survives a reload. Exposed for a host that holds the LIVE
-   * stack as a value (an undo history), which has to put this back with it.
+   * Each layer's stored text, keyed by layer id — a film stock's settings, a
+   * pack reference (an uploaded look's included) — what `toSaved` writes so a
+   * look survives a reload. Exposed for a host that holds the LIVE stack as a
+   * value (an undo history), which has to put this back with it.
    */
   customText: Record<string, string>;
   /** Rebuild the stack from a saved document. */
@@ -132,7 +144,8 @@ export function useLutStack(): LutStack {
   const { interpolation, setInterpolation } = useLutInterpolation();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Uploaded cubes keep their source text so a project can restore them.
+  // Film settings and pack references, by layer id, so a project can restore
+  // them. An OLD document's inlined `.cube` text lands here too, on restore.
   const [customText, setCustomText] = useState<Record<string, string>>({});
 
   // Baking walks a lattice, and `setIntensity` maps to a NEW layers array, so
@@ -214,22 +227,32 @@ export function useLutStack(): LutStack {
     }
   }, []);
 
+  /**
+   * An uploaded `.cube` goes into the VAULT and the layer stores a reference
+   * — never the lattice (`upload-pack.ts`, `docs/lut-packs.md` §3.1). That is
+   * what stops an upload riding every export file and every document sync.
+   * The layer that comes out is an ordinary pack layer, so everything
+   * downstream — `toSaved`, `gradeKey`, `restoreLayers`, the missing-look
+   * state — already knows what to do with it.
+   */
   const addCustom = useCallback(async () => {
     const file = await pickFile(CUBE_ACCEPT);
     if (!file) return;
     setError(null);
-    const text = await file.text();
-    const parsed = parseCube(text);
-    if (!parsed) {
-      setError(`${file.name} isn't a supported 3D .cube LUT (1D LUTs aren't).`);
-      return;
+    setBusy(true);
+    try {
+      const { ref, name, lut } = await uploadLookIntoVault(file);
+      const id = uid();
+      setCustomText((prev) => ({ ...prev, [id]: writePackRef(ref) }));
+      setLayers((prev) => [
+        ...prev,
+        { id, source: PACK_SOURCE, name, lut, intensity: 1, enabled: true },
+      ]);
+    } catch (e) {
+      setError((e as Error).message || 'Could not read that .cube file.');
+    } finally {
+      setBusy(false);
     }
-    const id = uid();
-    setCustomText((prev) => ({ ...prev, [id]: text }));
-    setLayers((prev) => [
-      ...prev,
-      { id, source: 'custom', name: file.name, lut: parsed, intensity: 1, enabled: true },
-    ]);
   }, []);
 
   const addFilm = useCallback((stockId: FilmStockId) => {

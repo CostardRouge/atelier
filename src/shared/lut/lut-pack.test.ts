@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildPackIndex,
   familyFor,
+  familyForLookName,
   flattenNodes,
   isHidden,
   lookIn,
@@ -252,5 +253,34 @@ describe('name helpers', () => {
     expect(familyFor('One Click LUT')).toBe('log');
     expect(familyFor('Creative LUT')).toBe('rec709');
     expect(familyFor('Moody')).toBe('rec709');
+  });
+
+  /**
+   * The names are the repo's OWN 28 built-ins (`public/luts/`) and the kind of
+   * thing an upload is called. Getting one wrong costs a thumbnail read on the
+   * wrong reference — §7's log-input trap — so the cases that matter are the
+   * conversion LUTs whose log format is buried inside a longer run, with no
+   * separator to anchor on.
+   */
+  it('familyForLookName reads a look that has no category above it', () => {
+    // Built-ins, verbatim file names.
+    expect(familyForLookName('4_SGamut3CineSLog3_To_Cine+709.cube')).toBe('log');
+    expect(familyForLookName('From_SLog2SGumut_To_LC-709TypeA_.cube')).toBe('log');
+    expect(familyForLookName('Apple-Log-2-Rec709-low-ISO.cube')).toBe('log');
+    expect(familyForLookName('BaseLUT - Apple iPhone - Apple Log to Rec709.cube')).toBe('log');
+    expect(familyForLookName('dji_mini_4_pro_d-log_m-to-rec709.cube')).toBe('log');
+    expect(familyForLookName('dji_mavic_4_pro_d-log_to-rec709_vivid_v1.cube')).toBe('log');
+    // The creative built-ins, which must NOT be read on a log frame.
+    expect(familyForLookName('sepia.cube')).toBe('rec709');
+    expect(familyForLookName('filmic-contrast.cube')).toBe('rec709');
+    expect(familyForLookName('black-and-white.cube')).toBe('rec709');
+    expect(familyForLookName('neutral.cube')).toBe('rec709');
+    expect(familyForLookName('warm.cube')).toBe('rec709');
+    expect(familyForLookName('cool.cube')).toBe('rec709');
+    // An upload, named the way a person names one.
+    expect(familyForLookName('My Teal Grade.cube')).toBe('rec709');
+    expect(familyForLookName('VLog_to_709.cube')).toBe('log');
+    expect(familyForLookName('CONVERSION - N-Log.cube')).toBe('log');
+    expect(familyForLookName('Sunset.cube')).toBe('rec709');
   });
 });
