@@ -33,6 +33,7 @@ import {
 } from '../../shared/sources/winnow/store';
 import PostEditor from './PostEditor';
 import TimelineImportPanel from './TimelineImportPanel';
+import DeduceStagesPanel from './DeduceStagesPanel';
 import TripGallery from './TripGallery';
 import TripOverview from './TripOverview';
 
@@ -86,6 +87,7 @@ export default function RoadTripTool() {
   const [open, setOpen] = useState<TripDoc | null>(null);
   const [storageFailed, setStorageFailed] = useState(false);
   const [importing, setImporting] = useState<Importing | null>(null);
+  const [deducing, setDeducing] = useState<WinnowConnection | null>(null);
   const [spanNote, setSpanNote] = useState<string | null>(null);
   const route = parseRoadtripPath(path);
   const connections = useSyncExternalStore(subscribeWinnowConnections, listWinnowConnections);
@@ -307,6 +309,16 @@ export default function RoadTripTool() {
     [],
   );
 
+  /**
+   * Deduce the legs from an instance's day positions. Unrelated to the
+   * timeline and NOT behind its switch: this reads a date range, the way the
+   * day view and `DayFromWinnow` always have.
+   */
+  const openDeduce = useCallback((sourceId: string) => {
+    const connection = getWinnowConnection(sourceId);
+    if (connection) setDeducing(connection);
+  }, []);
+
   /** A seeded trip is stored and opened like one made by hand. */
   const handleSeeded = useCallback(
     async (doc: TripDoc) => {
@@ -321,6 +333,7 @@ export default function RoadTripTool() {
   const handleApplied = useCallback(
     (doc: TripDoc, spanWidened: boolean) => {
       setImporting(null);
+      setDeducing(null);
       handleChange(doc);
       setSpanNote(
         spanWidened
@@ -347,6 +360,9 @@ export default function RoadTripTool() {
   const completeSources = connections
     .filter((c) => hasTimeline(c.capabilities))
     .map((c) => c.id);
+  // Every connected instance can answer for a day's position: it is a date
+  // filter, not a feature. Nothing is asked until the button is pressed.
+  const deduceSources = connections.map((c) => c.id);
 
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-3">
@@ -414,10 +430,22 @@ export default function RoadTripTool() {
           }
           timelineSources={completeSources}
           onCompleteFrom={(id) => openImport('complete', id)}
+          deduceSources={deduceSources}
+          onDeduceFrom={openDeduce}
         />
       )}
 
       {/* A completion needs its trip loaded; a seed needs nothing open. */}
+      {deducing && open && (
+        <DeduceStagesPanel
+          key={`deduce:${deducing.id}:${open.id}`}
+          connection={deducing}
+          trip={open}
+          onCancel={() => setDeducing(null)}
+          onApply={handleApplied}
+        />
+      )}
+
       {importing && (importing.kind === 'seed' || open) && (
         <TimelineImportPanel
           key={`${importing.kind}:${importing.connection.id}`}
