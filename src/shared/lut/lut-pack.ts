@@ -330,6 +330,58 @@ export function familyFor(categoryName: string): PackFamily {
 }
 
 /**
+ * Log formats and conversion words as they appear INSIDE a look's own name,
+ * once every separator is gone (`Apple-Log-2-Rec709` → `applelog2rec709`).
+ * Matching without word boundaries is deliberate: a pack writes
+ * `SGamut3CineSLog3_To_Cine+709` as one run, so there is no boundary in front
+ * of `slog` to anchor to.
+ */
+const LOG_IN_NAME: readonly string[] = [
+  'dlog',
+  'slog',
+  'nlog',
+  'vlog',
+  'clog',
+  'flog',
+  'ilog',
+  'hlog',
+  'blog',
+  'logc',
+  'applelog',
+  'sgamut',
+  'sgammut',
+  'conversion',
+  'convert',
+  'torec709',
+  '2rec709',
+  'tocine709',
+  'tolc709',
+];
+
+/**
+ * Which reference a look previews on when nothing but its NAME says what it
+ * expects — an uploaded `.cube` (there is no category above it) and a
+ * built-in (its folder is a brand, not a category).
+ *
+ * The stake is `docs/lut-packs.md` §7's log-input trap: a conversion LUT read
+ * on a display-referred picture comes out over-contrasted and over-saturated,
+ * which reads as a broken look rather than as the wrong reference. So a name
+ * that says it converts log footage previews on the D-Log M frame, and
+ * everything else on the Rec.709 one.
+ *
+ * It is a HEURISTIC over a file name and is documented as one: the cost of
+ * being wrong is one thumbnail read on the wrong picture, never a wrong
+ * render — a look's own lattice is untouched either way.
+ */
+export function familyForLookName(name: string): PackFamily {
+  const tight = name.replace(/\.cube$/i, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+  if (LOG_IN_NAME.some((token) => tight.includes(token))) return 'log';
+  // A standalone word, for a name that spells it out: `APPLE_APPLE LOG.cube`.
+  const spaced = name.replace(/\.cube$/i, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+  return / log /.test(` ${spaced} `) ? 'log' : 'rec709';
+}
+
+/**
  * A caution shown on a node: the pack ships DJI looks for **D-Log**, while
  * the maintainer's drones record **D-Log M** — the wrong input curve, which
  * is a thing to say on the node rather than a reason to hide the looks
