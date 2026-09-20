@@ -1,4 +1,5 @@
 import SectionLegend from '../ui/SectionLegend';
+import { Icons } from '../ui/icons';
 import { DEVELOP_RANGES, signed, type DevelopKey, type DevelopRange, type DevelopSettings } from './develop';
 
 const LABELS: Readonly<Record<DevelopKey, string>> = {
@@ -83,14 +84,43 @@ export function RangeSlider({
   printed?: string;
   onChange: (v: number) => void;
 }) {
+  const changed = value !== reset;
   return (
     <div className="flex flex-col gap-1" onDoubleClick={() => onChange(reset)}>
-      <div className="flex items-baseline justify-between">
-        <span className="text-xs text-ink">{label}</span>
-        <span
-          className={`font-mono text-2xs tabular-nums ${value === reset ? 'text-faint' : 'text-ink-soft'}`}
-        >
-          {printed ?? signed(value)}
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="inline-flex items-baseline gap-1.5 min-w-0">
+          {/* Ahead of the label rather than on it: it must read in the same
+              glance as the row above and below, not only once the eye lands
+              here. */}
+          <span
+            aria-hidden="true"
+            className={`inline-block w-1.5 h-1.5 rounded-full bg-accent transition-opacity ${changed ? 'opacity-100' : 'opacity-0'}`}
+          />
+          <span className={`text-xs truncate ${changed ? 'font-semibold text-ink' : 'text-ink'}`}>{label}</span>
+        </span>
+        <span className="inline-flex items-baseline gap-1">
+          <span className={`font-mono text-2xs tabular-nums ${changed ? 'text-ink-soft' : 'text-faint'}`}>
+            {printed ?? signed(value)}
+          </span>
+          {/* Dimmed rather than hover-revealed, so it still works with a
+              finger; the row's own double-click (kept below) is the shortcut
+              for anyone who already reaches for it. */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange(reset);
+            }}
+            aria-label={`Reset ${label}`}
+            title="Reset"
+            className={`relative inline-grid place-items-center w-3.5 h-3.5 rounded-[4px] transition-opacity after:absolute after:-inset-2 after:content-[''] [&>svg]:w-3 [&>svg]:h-3 ${
+              changed
+                ? 'opacity-100 text-accent-ink hover:bg-accent-wash'
+                : 'opacity-30 text-ink-soft hover:opacity-60 hover:bg-paper-2'
+            }`}
+          >
+            {Icons.reset}
+          </button>
         </span>
       </div>
       <input
