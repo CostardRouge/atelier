@@ -165,6 +165,22 @@ full-size decode on his iPhone.
 4. **A RAW never checked in Develop is flagged at export and delivered from
    its render** (full-size embedded preview, else the proxy) — never from
    the RAW with numbers nobody has seen on it.
+
+   **Corrected 2026-09-20, and the decision stands.** "Full-size embedded
+   preview, else the proxy" assumed the embedded render wins. It does not:
+   on the maintainer's own `dji_fly_*.DNG` (body FC8482) the render inside
+   the file is **960 × 540** against an 8064 × 4536 sensor plane — 0.5 of
+   36.6 megapixels — while Winnow's proxy of it is 2048 px. So the rule is
+   the **larger of the two, measured and named**, never assumed: the
+   render's real size is read from a megabyte of the original's head
+   (`rawSizesFrom`, cached for the session in `original-cache.ts`) before a
+   pixel is fetched, the *Delivers* row says both numbers, and the whole RAW
+   is pulled only where its render genuinely has more pixels than the proxy
+   AND the frame needs them. `Auto` therefore never downloads seventy-odd
+   megabytes to deliver half a megapixel. To deliver from the SENSOR, the
+   picture is developed on its RAW (`base: 'raw'`, the material axis) — which
+   is exactly the separation decision 1 exists for. The measurement is PR
+   #145 (`docs/memory/raw.md`).
 5. **Phone: the full-size render yes; the RAW only once a decode has been
    measured on the iPhone.**
 6. **Start with O1 + O2** (know the original, deliver from decodable

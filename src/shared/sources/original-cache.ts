@@ -29,4 +29,30 @@ export function heldOriginalBytes(): number {
 
 export function dropHeldOriginals(): void {
   held.clear();
+  renders.clear();
+}
+
+/**
+ * What the session has LEARNED about an original without holding it: how big
+ * the render inside a RAW is (2026-09-20).
+ *
+ * A browser decodes nothing else of a RAW, and the size is stated in the
+ * file's head — a megabyte, not the seventy-four the capture weighs. It is
+ * cached here beside the originals because it answers the same question and
+ * has the same lifetime: this session, keyed by the source's asset id. What
+ * it is FOR is refusing to guess — `develop-originals.md` decision 4 assumed
+ * a RAW's embedded render is full-size, and on the maintainer's DJI it is
+ * 960 × 540 against a 2048 px proxy.
+ *
+ * `undefined` means "not read yet"; `null` means read and the file said
+ * nothing, which is not the same thing and must not be re-read forever.
+ */
+const renders = new Map<string, { width: number; height: number } | null>();
+
+export function heldRawRender(assetId: string): { width: number; height: number } | null | undefined {
+  return renders.get(assetId);
+}
+
+export function holdRawRender(assetId: string, size: { width: number; height: number } | null): void {
+  renders.set(assetId, size);
 }

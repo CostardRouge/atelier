@@ -16,8 +16,9 @@ import { knownIdentity, mediaOrigin, type MediaOrigin } from '../../shared/proje
 import { deliverFilesTo, pickDeliveryTarget } from '../../shared/sources/deliver-files';
 import { uniqueName } from '../../shared/sources/unique-name';
 import { EXIF_SLICE_BYTES } from '../../shared/exif/exif-parser';
+import { RAW_PROBE_BYTES, rawSizes, rawSizesFrom } from '../../shared/exif/raw-probe';
 import { exportExifBlock, stampExif, type ExifAccount } from '../../shared/exif/stamp-exif';
-import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
+import { heldOriginal, heldRawRender, holdOriginal, holdRawRender } from '../../shared/sources/original-cache';
 import { formatBytes } from '../../shared/lib/format';
 import { isRawDevelop, rawGainOf, withoutBase } from '../../shared/develop/develop';
 import { isRawImage } from '../../shared/library/assets';
@@ -60,9 +61,58 @@ export interface RollExports {
   exportPictures: (ids: readonly string[]) => Promise<void>;
 }
 
-function originalOf(origin: MediaOrigin | null): OriginalInfo | null {
+function originalOf(origin: MediaOrigin | null, render: PictureSize | null = null): OriginalInfo | null {
   if (!origin || origin.fidelity !== 'proxy') return null;
-  return { width: origin.width, height: origin.height, name: origin.name ?? null, bytes: origin.bytes ?? null };
+  return {
+    width: origin.width,
+    height: origin.height,
+    name: origin.name ?? null,
+    bytes: origin.bytes ?? null,
+    render,
+  };
+}
+
+/**
+ * How big the render inside a proxy's RAW original really is, read from that
+ * file's HEAD and remembered for the session.
+ *
+ * The run pulls a head for every proxy anyway — the original's EXIF has to
+ * travel whatever the pixels do — so asking a RAW for a megabyte instead of a
+ * quarter of one is the whole cost of knowing, and knowing is what lets the
+ * delivery take the LARGER of that render and the proxy instead of assuming
+ * (`develop-originals.md` decision 4, corrected). Cached in
+ * `original-cache.ts`, by the source's own asset id, so the *Delivers* row
+ * and the run agree and neither reads the head twice.
+ */
+async function rawRenderOf(
+  origin: MediaOrigin,
+  key: string | null,
+): Promise<{ render: PictureSize | null; head: Uint8Array | null }> {
+  const held = key ? heldOriginal(key) : null;
+  if (held) {
+    const sizes = await rawSizes(held);
+    if (key) holdRawRender(key, sizes.render);
+    return { render: sizes.render, head: null };
+  }
+  if (key) {
+    const known = heldRawRender(key);
+    if (known !== undefined) return { render: known, head: null };
+  }
+  if (!origin.fetchOriginalHead) return { render: null, head: null };
+  try {
+    const buffer = await origin.fetchOriginalHead(RAW_PROBE_BYTES);
+    const render = rawSizesFrom(buffer).render;
+    if (key) holdRawRender(key, render);
+    return { render, head: new Uint8Array(buffer) };
+  } catch {
+    if (key) holdRawRender(key, null);
+    return { render: null, head: null };
+  }
+}
+
+/** True when the file in hand is a proxy whose original is a RAW. */
+function isProxyOverRaw(origin: MediaOrigin | null): boolean {
+  return origin?.fidelity === 'proxy' && !!origin.name && isRawImage(origin.name);
 }
 
 /**
@@ -111,6 +161,23 @@ export function useRollExport({
     };
   }, [openFile]);
 
+  // How big the render inside the open picture's RAW original is. Read once
+  // per picture, from a megabyte of its head — the row must say what the RUN
+  // will really deliver, and the run takes the larger of that render and the
+  // proxy. Only for a proxy over a RAW; nothing else costs a byte.
+  const [rawRender, setRawRender] = useState<{ file: File; size: PictureSize | null } | null>(null);
+  useEffect(() => {
+    const origin = mediaOrigin(openFile);
+    if (!openFile || !origin || !isProxyOverRaw(origin)) return;
+    let alive = true;
+    void rawRenderOf(origin, knownIdentity(openFile)?.assetId ?? null).then(({ render }) => {
+      if (alive) setRawRender({ file: openFile, size: render });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [openFile]);
+
   const open = openId ? (roll.pictures.find((p) => p.id === openId) ?? null) : null;
   let openDelivery: DeliverySummary | null = null;
   if (open && openFile && openSize && openSize.file === openFile) {
@@ -118,7 +185,7 @@ export function useRollExport({
     openDelivery = deliverySummary(
       openSize.size,
       origin?.fidelity === 'proxy',
-      originalOf(origin),
+      originalOf(origin, rawRender?.file === openFile ? rawRender.size : null),
       open.framing,
       pictureAspectRatio(open.aspect, openSize.size.width, openSize.size.height),
       open.border,
@@ -213,11 +280,24 @@ export function useRollExport({
           }
           // Decide from the file's own pixels which pixels to deliver from.
           const size = raw ? null : await measurePicture(file);
+          // A RAW original hands over the RENDER inside it and nothing else,
+          // so its size is read from the head before anything is decided —
+          // that head then pays for the EXIF too. Without this the delivery
+          // would be guessing, and decision 4's guess (the embedded render
+          // wins) is measurably wrong on the maintainer's own DJI.
+          let rawHead: Uint8Array | null = null;
+          let originalRender: PictureSize | null = null;
+          if (size && isProxyOverRaw(origin)) {
+            setExporting(`Reading the RAW’s head ${step}…`);
+            const probed = await rawRenderOf(origin!, identity?.assetId ?? null);
+            originalRender = probed.render;
+            rawHead = probed.head;
+          }
           if (size && origin?.fidelity === 'proxy' && origin.fetchOriginal) {
             const summary = deliverySummary(
               size,
               true,
-              originalOf(origin),
+              originalOf(origin, originalRender),
               picture.framing,
               pictureAspectRatio(picture.aspect, size.width, size.height),
               picture.border,
@@ -244,10 +324,10 @@ export function useRollExport({
           const key = identity?.assetId ?? null;
           const originalFile =
             raw?.file ?? (source !== file ? source : origin?.fidelity === 'proxy' ? (key ? heldOriginal(key) : null) : file);
-          let head: Uint8Array | null = null;
+          let head: Uint8Array | null = rawHead;
           if (originalFile) {
             head = new Uint8Array(await originalFile.slice(0, EXIF_SLICE_BYTES).arrayBuffer());
-          } else if (origin?.fetchOriginalHead) {
+          } else if (!head && origin?.fetchOriginalHead) {
             setExporting(`Reading the original’s EXIF ${step}…`);
             head = await origin
               .fetchOriginalHead(EXIF_SLICE_BYTES)

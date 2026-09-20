@@ -43,6 +43,29 @@ export interface OriginalInfo {
   /** The original's file name, for its extension. */
   name: string | null;
   bytes: number | null;
+  /**
+   * For a RAW: the size of the RENDER inside it — all a browser ever decodes
+   * of one — read from its head (`rawSizesFrom`), never assumed.
+   *
+   * `width`/`height` above are the SENSOR's, which is what the source
+   * recorded and what no delivery here can reach: 8064 × 4536 on the
+   * maintainer's DJI against a 960 × 540 render. Absent means the head has
+   * not been read, and nothing is decided on a guess.
+   */
+  render?: PictureSize | null;
+}
+
+/**
+ * The pixels an original can really hand a delivery. For a RAW that is the
+ * render inside it and nothing else — null until its head says how big that
+ * render is, because "a RAW may carry a full-size render" (F5 of
+ * `docs/develop-originals.md`) turned out to be false for the one camera we
+ * have measured, and a 74 MB fetch for 0.52 megapixels is the mistake this
+ * refusal exists to prevent.
+ */
+export function originalPixels(original: OriginalInfo): PictureSize | null {
+  if (isRawImage(original.name ?? '')) return original.render ?? null;
+  return original.width && original.height ? { width: original.width, height: original.height } : null;
 }
 
 /**
@@ -159,15 +182,27 @@ export interface PixelsChoice {
 /**
  * Which pixels a picture is delivered from. `Auto` fetches the original only
  * where the file in hand would upscale; `Proxies` never; `Originals` whenever
- * there is one the browser decodes. A file that IS the original, or whose
- * original is a RAW (decision 4), has nothing to choose.
+ * there is one the browser decodes. A file that IS the original has nothing
+ * to choose.
+ *
+ * **A RAW original is the case decision 4 got half right** (2026-09-20). It
+ * said a RAW never checked in Develop is delivered "from its render —
+ * full-size embedded preview, else the proxy", which assumes the embedded
+ * render wins. On the maintainer's own DJI it loses, badly: 960 × 540 against
+ * a 2048 px proxy. So the rule here is the LARGER of the two, measured and
+ * named — and where the render's size has not been read, the proxy delivers,
+ * because a proxy is built FROM that render and fetching the file again to
+ * find out would cost tens of megabytes for pixels that may not be there.
  */
 export function choosePixels(
   mode: RollOriginals,
   fileHeadroom: number,
   original: OriginalInfo | null,
+  /** The file in hand, so a RAW's render can be measured against it. */
+  file: PictureSize | null = null,
 ): PixelsChoice {
   if (!original) return { from: 'file', reason: null };
+  if (isRawImage(original.name ?? '')) return chooseAgainstRaw(mode, fileHeadroom, original, file);
   if (!decodableOriginal(original.name)) {
     return {
       from: 'file',
@@ -179,6 +214,41 @@ export function choosePixels(
   return fileHeadroom < 1
     ? { from: 'original', reason: `the proxy would be upscaled ×${(1 / fileHeadroom).toFixed(2)}` }
     : { from: 'file', reason: 'the proxy has the pixels this frame needs' };
+}
+
+function chooseAgainstRaw(
+  mode: RollOriginals,
+  fileHeadroom: number,
+  original: OriginalInfo,
+  file: PictureSize | null,
+): PixelsChoice {
+  const render = originalPixels(original);
+  if (!render) {
+    return {
+      from: 'file',
+      reason:
+        'its original is a RAW: only the render inside it is decodable, and this proxy was built from that render — its size is read from the file’s head at export, and the larger of the two delivers',
+    };
+  }
+  const fileLong = file ? Math.max(file.width, file.height) : 0;
+  const rawLong = Math.max(render.width, render.height);
+  if (rawLong <= fileLong * 1.005) {
+    return {
+      from: 'file',
+      reason: `its original is a RAW whose own render is ${rawLong} px against the proxy’s ${fileLong} — the proxy is what leaves`,
+    };
+  }
+  if (mode === 'proxies') return { from: 'file', reason: 'proxies only' };
+  if (mode === 'auto' && fileHeadroom >= 1) {
+    return {
+      from: 'file',
+      reason: `the proxy has the pixels this frame needs — the ${rawLong} px render inside its RAW would buy nothing here`,
+    };
+  }
+  return {
+    from: 'original',
+    reason: `its original is a RAW, and the ${rawLong} px render inside it is larger than the ${fileLong} px proxy`,
+  };
 }
 
 function labelOf(name: string): string {
@@ -246,19 +316,24 @@ export function deliverySummary(
   border: RollBorder | null,
   settings: Pick<RollExport, 'longEdge' | 'originals'>,
 ): DeliverySummary {
-  const known = fileIsProxy && original && original.width && original.height ? original : null;
-  const best = known ? { width: known.width!, height: known.height! } : file;
+  // What the original could really hand over — for a RAW, the render inside
+  // it, and only once its head has said how big that render is.
+  const known = fileIsProxy && original ? originalPixels(original) : null;
+  const best = known ?? file;
   const asked = deliveredLayout(best, aspectRatio, framing, border, settings.longEdge);
   const bordered = border !== null;
   const fileHeadroom = deliveryHeadroom(file, aspectRatio, framing, asked);
-  const choice = choosePixels(settings.originals, fileHeadroom, fileIsProxy ? original : null);
+  const choice = choosePixels(settings.originals, fileHeadroom, fileIsProxy ? original : null, file);
   if (choice.from === 'original' && known) {
     const headroom = deliveryHeadroom(best, aspectRatio, framing, asked);
+    // A RAW's original is reached only through the render inside it, and the
+    // row says so rather than letting `Original` suggest the sensor.
+    const label = isRawImage(original?.name ?? '') ? 'Original render' : 'Original';
     return {
       from: 'original',
       out: asked.out,
       headroom,
-      line: deliversLine('Original', asked.out, headroom, null, bordered ? Math.max(asked.zone.w, asked.zone.h) : null),
+      line: deliversLine(label, asked.out, headroom, null, bordered ? Math.max(asked.zone.w, asked.zone.h) : null),
       reason: choice.reason,
     };
   }

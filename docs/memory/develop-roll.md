@@ -283,9 +283,30 @@ shared block. Rules a later phase must keep:
   DNG says `Camera render 960 px → 1920 · ×2.00 upscaled · asked 1920` instead
   of `File 8064 px`, which was the one sentence the plan must never say. The
   fidelity half of it is `develop.md`, «A picture says its PIXELS».
-- **A RAW original is never fetched** (`decodableOriginal`: jpg/png/webp/
-  avif/gif/bmp only — no HEIC, no TIFF): decision 4, the render the person
-  developed is what leaves, and the reason is said on the *Delivers* row.
+- **A RAW original is reached only through the render INSIDE it, and only
+  when that render is bigger than the proxy** (2026-09-20, correcting
+  decision 4 — `develop-originals.md` §7.4). `decodableOriginal` still names
+  what a browser reads on its own (jpg/png/webp/avif/gif/bmp — no HEIC, no
+  TIFF), and a RAW now goes down its own branch: `originalPixels` answers
+  with `OriginalInfo.render`, which is null until the file's head has been
+  read, and `choosePixels` refuses to act on a guess while it is. The sizes
+  come from `rawSizesFrom` over a megabyte of the original's head — the read
+  the run was already making for the EXIF, raised from 256 KB — cached for
+  the session in `original-cache.ts` (`heldRawRender`, `undefined` = not read,
+  `null` = read and the file said nothing), and the *Delivers* row reads the
+  SAME cache, so the row and the run can never disagree. The frame is no
+  longer planned against the sensor's pixels either: they can never be
+  delivered here, so `· asked 8064` was a promise nothing could keep. A RAW
+  original that does win is labelled `Original render`, never `Original`.
+  **Why it matters**: a DJI DNG holds a 960 × 540 render — `Auto` fetching
+  74 MB for 0.52 megapixels is the mistake the whole branch exists to stop.
+  The sensor is reached by developing on `base: 'raw'`, never by the export.
+  Measured in the pane on two synthetic DNGs (`testing.md`'s recipe): the
+  960 px one delivered `DJI_0101.jpg 2048×1152` with **zero** full fetches
+  and the row read *"its original is a RAW whose own render is 960 px against
+  the proxy's 2048 — the proxy is what leaves"*; the 6048 px one delivered
+  `DJI_0202.jpg 6048×4032` after ONE fetch, the row reading `Original render
+  6048 px → 6048 · exact`, and Proxies held it at `2048 · exact · asked 6048`.
 - **Each picture renders through its OWN cube** (`stack.composeWith(develop)`),
   decoded whole, graded at source density, then `drawFramed` — the crop stage's
   transform, so the file is the stage. The frame seam of `develop-tool.md` §6
