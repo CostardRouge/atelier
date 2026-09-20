@@ -273,6 +273,33 @@ the ground exactly as shot; the roll stored `points: [[0.5, 0.62]]` with the
 model id and **no pixels**; tapping the same marker again took it back to zero
 points.
 
+## The model is shown a bounded picture, waited for, and cached per point (2026-09-20, the audit)
+
+Three things the first P9 got wrong, none visible on a small test picture:
+
+- **It was shown the stage source whole.** `magic_touch` resamples its input to
+  a few hundred pixels inside, so a 4K bitmap bought nothing and cost an upload
+  and a downscale per tap — and the category mask comes back at the INPUT's
+  size, 12 MB per point at 4K, copied, unioned and cached without bound.
+  `prepareSegmentSource` now makes ONE copy at `SEGMENT_INPUT_LONG_EDGE`
+  (1024, the painted mask's own density, so the two rasters sample alike),
+  kept per source in the hook and released with it. Measured on a 3000×2000
+  disc: the mask is 1024×683 and covers 13.19 % against the 13.09 % drawn.
+- **A point that never answered hung the panel for good** — the promise never
+  settled, "working" stayed up and every later point queued behind it.
+  `segmentPoint` gives up after `SEGMENT_TIMEOUT_MS` (20 s) with a warning and
+  frees a late answer's buffers rather than reading them.
+- **Every tap re-ran every point.** The cache was keyed on the whole request,
+  so a third tap cost three inferences. `useSubjectMasks` caches per POINT
+  (an LRU of `POINT_CACHE_SIZE` = 64, ~50 MB at most) and composes a layer with
+  the pure `unionMasks`, so a tap costs one inference, un-picking costs none,
+  and a layer whose points are all cached is composed without the model.
+
+Still true and still open: `segment()` answers SYNCHRONOUSLY on the GPU
+delegate, so the main thread is blocked for the inference (1.5 s warm on
+SwiftShader, 4.8 s cold with the download). The brief's "in a worker" is not
+built; it needs an `OffscreenCanvas` and the model loaded there.
+
 ## What a layer costs per change is now kept, not paid again (2026-09-20, the audit)
 
 The stage's `graderFor` rebuilt EVERY layer's pass on ANY change to the list —
