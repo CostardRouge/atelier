@@ -606,7 +606,9 @@ catalogue at a hundred thousand pictures (Winnow is that, and already is); and
 4. **The RAW-on-a-phone verdict** (decision 5 of `develop-originals.md` §7)
    still needs his iPhone.
 
-Three requirements P4 inherits from the film simulation
+Three requirements P4 inherited from the film simulation — **all three met on
+2026-09-20**, when the `FilmNode` was built; kept as the record of what it was
+built to, and maintained from `docs/memory/render-film.md`
 (`docs/film-simulation.md` §6 and §10, decided 2026-09-17 — the maintainer
 chose to make grain and halation ONE node of this graph rather than build the
 multi-pass machinery twice; the pure maths is already in `shared/film/`):

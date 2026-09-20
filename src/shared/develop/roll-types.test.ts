@@ -139,7 +139,7 @@ describe('editing the strip', () => {
       ],
     };
     const doc = readRollDoc(raw)!;
-    expect(doc.version).toBe(2);
+    expect(doc.version).toBe(3);
     expect(doc.pictures[0]).toMatchObject({
       aspect: 'original',
       framing: null,
@@ -204,9 +204,14 @@ describe('reading a stored roll', () => {
     expect(readRollGrade({ layers: [{ id: 'l', source: 'builtin:x', intensity: 7 }], output: 'bogus' })).toEqual({
       layers: [{ id: 'l', source: 'builtin:x', name: 'l', customText: null, intensity: 3, enabled: true }],
       output: 'none',
+      film: null,
     });
     expect(readRollGrade({ layers: [{ id: 'l', source: 'builtin:x', intensity: 1.5 }], output: 'none' })?.layers[0].intensity).toBe(1.5);
-    expect(readRollGrade({ layers: [{ nope: 1 }], output: 'rec709-to-srgb' })).toEqual({ layers: [], output: 'rec709-to-srgb' });
+    expect(readRollGrade({ layers: [{ nope: 1 }], output: 'rec709-to-srgb' })).toEqual({ layers: [], output: 'rec709-to-srgb', film: null });
+    // A TEXTURE alone is a look: grain with no LUT is what a stock's texture half is for.
+    const grainy = readRollGrade({ layers: [], output: 'none', film: { grain: 0.5 } });
+    expect(grainy?.film?.grain).toBe(0.5);
+    expect(readRollGrade({ layers: [], output: 'none', film: 'nope' })).toBeNull();
   });
 
   it('reads the export through its limits, and the source size as null', () => {

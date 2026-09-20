@@ -270,7 +270,16 @@ export function DevelopApplySection({
 }
 
 /** The look under the correction: the host's own grade panel, bound to the same stack. */
-export function DevelopLookSection({ stack, header }: { stack: LutStack; header?: ReactNode }) {
+export function DevelopLookSection({
+  stack,
+  header,
+  previewHeight = null,
+}: {
+  stack: LutStack;
+  header?: ReactNode;
+  /** The stage's real height in pixels — what tells the texture section whether its grain can be SEEN. */
+  previewHeight?: number | null;
+}) {
   return (
     <div className="flex flex-col gap-2 pt-3 border-t border-line">
       <span className="flex items-center gap-2">
@@ -282,7 +291,7 @@ export function DevelopLookSection({ stack, header }: { stack: LutStack; header?
         </SectionLegend>
       </span>
       {header}
-      <GradePanel stack={stack} />
+      <GradePanel stack={stack} previewHeight={previewHeight} />
     </div>
   );
 }

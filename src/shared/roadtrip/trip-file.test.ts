@@ -108,7 +108,7 @@ describe('the trip file', () => {
     (file.posts as Record<string, unknown>[]).forEach((p) => delete p.grade);
     const r = parseTripFile(JSON.stringify(file));
     if (!r.ok) throw new Error(r.error);
-    expect(r.file.grade).toEqual({ layers: [], output: 'none' });
+    expect(r.file.grade).toEqual({ layers: [], output: 'none', film: null });
     expect(r.file.posts[0].grade).toBeNull();
   });
 

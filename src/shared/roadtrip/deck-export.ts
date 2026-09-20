@@ -9,6 +9,7 @@
  * ground — because losing a file must never cost the piece.
  */
 
+import type { FilmTexture } from '../film/film-texture';
 import type { CubeLut } from '../lib/cube-parser';
 import type { SavedMediaRef } from '../projects/project-types';
 import {
@@ -47,6 +48,8 @@ export interface RenderDeckOptions {
    * closing card carries no picture, so it is never graded.
    */
   lutFor?: (slide: DeckSlide) => CubeLut | null;
+  /** The film TEXTURE a slide wears — `TripGradeBinding.filmFor`, the twin of `lutFor`. */
+  filmFor?: (slide: DeckSlide) => FilmTexture | null;
   /**
    * The pictures the piece's opener asked for, already decoded. An itinerary
    * shows its stops' photographs at rest, so a deck rendered without them
@@ -115,6 +118,7 @@ export async function renderDeck(
         width: w,
         height: h,
         lut: opts.lutFor?.(slide) ?? null,
+        film: opts.filmFor?.(slide) ?? null,
       });
       if (blob) {
         out.push({

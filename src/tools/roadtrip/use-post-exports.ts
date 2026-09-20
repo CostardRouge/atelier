@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { FilmTexture } from '../../shared/film/film-texture';
 import type { CubeLut } from '../../shared/lib/cube-parser';
 import type { OverlayElement } from '../../shared/overlay/overlay-types';
 import { classifyPart } from '../../shared/library/assets';
@@ -79,6 +80,8 @@ export interface PostExportInputs {
    * own develop (`TripGradeBinding.lutFor`); null leaves that picture as shot.
    */
   lutFor: (slide: DeckSlide) => CubeLut | null;
+  /** The film TEXTURE that slide wears — `TripGradeBinding.filmFor`, the twin of `lutFor`. */
+  filmFor: (slide: DeckSlide) => FilmTexture | null;
   /** Called as an export starts, so the caller can bring the report into view. */
   onStart?: () => void;
 }
@@ -232,6 +235,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         // the preview showed it — the PNG deck goes through the same value.
         framing: post.badge.framing,
         lut: inputs.lutFor(inputs.hookSlide),
+        film: inputs.filmFor(inputs.hookSlide),
         onProgress,
       };
       const blob = hookIsVideo
@@ -319,6 +323,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       block: isHook ? inputs.block : null,
       framing: slide.framing,
       lut: inputs.lutFor(slide),
+      film: inputs.filmFor(slide),
       onProgress,
     };
     // A collage is PAINTED, whatever its cells hold: every cell's picture
@@ -410,6 +415,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
           pictures: inputs.hookPictures,
           exposure: inputs.exposure,
           lutFor: inputs.lutFor,
+          filmFor: inputs.filmFor,
           include: (slide) => wanted.has(slide.position),
           // One job for the whole piece: the stills are its first items.
           onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`, done / items.length),
@@ -530,6 +536,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         pictures: inputs.hookPictures,
         exposure: inputs.exposure,
         lutFor: inputs.lutFor,
+        filmFor: inputs.filmFor,
         onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`, done / total),
       });
       if (!rendered.length) {

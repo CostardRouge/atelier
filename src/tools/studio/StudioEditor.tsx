@@ -551,7 +551,7 @@ export default function StudioEditor({
     if (restoredRef.current) return;
     restoredRef.current = true;
     void lutStack
-      .restore(project.lutStack, project.outputTransform)
+      .restore(project.lutStack, project.outputTransform, project.lutFilm)
       .finally(() => setRestoreDone(true));
     if (project.media.activeId && clips.some((c) => c.id === project.media.activeId)) {
       lib.setActive(project.media.activeId);
@@ -954,6 +954,7 @@ export default function StudioEditor({
       lutLayers: lutStack.layers,
       lutOutput: lutStack.output,
       lutText: lutStack.customText,
+      lutFilm: lutStack.film,
     }),
     [
       elements,
@@ -972,6 +973,7 @@ export default function StudioEditor({
       lutStack.layers,
       lutStack.output,
       lutStack.customText,
+      lutStack.film,
     ],
   );
 
@@ -1002,7 +1004,7 @@ export default function StudioEditor({
       setVariants(step.variants);
       // The live stack, not the saved one: `restore` re-fetches every built-in
       // cube, and the await would land as a second, phantom step.
-      lutStack.revert(step.lutLayers, step.lutOutput, step.lutText);
+      lutStack.revert(step.lutLayers, step.lutOutput, step.lutText, step.lutFilm);
       // The selection is not part of a step, so an element that is no longer
       // on the frame simply cannot stay selected.
       setSelectedElementId((id) => (id && step.elements.some((el) => el.id === id) ? id : null));
@@ -1079,6 +1081,7 @@ export default function StudioEditor({
           guides,
           lutStack: lutStack.toSaved(),
           outputTransform: lutStack.output,
+          lutFilm: lutStack.film,
           theme,
           scenes,
           outro,
@@ -1142,6 +1145,7 @@ export default function StudioEditor({
       guides,
       lutStack: lutStack.toSaved(),
       outputTransform: lutStack.output,
+      lutFilm: lutStack.film,
       theme,
       scenes,
       outro,
@@ -1168,7 +1172,7 @@ export default function StudioEditor({
     setOutro(structuredClone(file.outro ?? null));
     setExportFileName(file.exportPrefs.fileName ?? '');
     setVariants(structuredClone(file.exportPrefs.variants));
-    void lutStack.restore(file.lutStack, file.outputTransform);
+    void lutStack.restore(file.lutStack, file.outputTransform, file.lutFilm);
     // The incoming deck has different ids — whatever was selected is gone.
     setSelectedElementId(null);
     setShowSettings(false);
@@ -1189,6 +1193,7 @@ export default function StudioEditor({
       cue: cues[0] ?? null,
       lut,
       intensity: 1,
+      film: lutStack.film,
       theme,
       timeShift,
     });
@@ -1211,6 +1216,8 @@ export default function StudioEditor({
       cues,
       lut,
       intensity: 1,
+      // A clip takes the film node too: `SOURCE → CUBE → [FILM] → OUTPUT`.
+      film: lutStack.film,
       theme,
       timeShift,
       scenes,
@@ -1638,6 +1645,7 @@ export default function StudioEditor({
                   guides,
                   lutStack: lutStack.toSaved(),
                   outputTransform: lutStack.output,
+                  lutFilm: lutStack.film,
                   theme,
                   scenes,
                   outro,
@@ -2207,7 +2215,7 @@ export default function StudioEditor({
                     onReset={() => setActiveDevelop(null)}
                   />
                   <InspectorSection id="studio.grade" title="Grade">
-                    <GradePanel stack={lutStack} previewImage={photo} />
+                    <GradePanel stack={lutStack} previewImage={photo} previewDraws={false} />
                   </InspectorSection>
                 </>
               )}

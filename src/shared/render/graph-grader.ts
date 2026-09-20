@@ -11,11 +11,13 @@
  * the change of engine can be proved a null result first.
  */
 
+import type { FilmTexture } from '../film/film-texture';
 import type { CubeLut } from '../lib/cube-parser';
 import type { FrameGrader } from '../lut/frame-grader';
 import type { Interpolation } from '../lut/interpolate';
 import { makeExportCanvas } from '../media/webcodecs-export';
 import { makeCubePass } from './cube-pass';
+import { makeFilmPass } from './film-pass';
 import { createRenderGraph, type RenderPass, type RenderPrecision, type RenderSource } from './graph';
 import { isHalfImage } from './half-image';
 
@@ -37,6 +39,12 @@ export interface GraphGrader extends FrameGrader {
    * with it.
    */
   setExtraPasses(passes: readonly RenderPass[], before?: readonly RenderPass[]): void;
+  /**
+   * The film texture, replaced in place — the grain and halation sliders move
+   * on every step of a drag, and rebuilding the grader for each one is a new
+   * WebGL2 context per step (the reason `setExtraPasses` exists).
+   */
+  setFilm(film: FilmTexture | null): void;
 }
 
 let probedMaxSize: number | null = null;
@@ -70,6 +78,7 @@ export function makeGraphGrader(
   height: number,
   intensity = 1,
   interpolation: Interpolation = 'tetrahedral',
+  film: FilmTexture | null = null,
 ): GraphGrader {
   const canvas = makeExportCanvas(width, height);
   const graph = createRenderGraph(canvas);
@@ -88,6 +97,7 @@ export function makeGraphGrader(
         return source;
       },
       setExtraPasses() {},
+      setFilm() {},
       dispose() {},
     };
   }
@@ -95,6 +105,14 @@ export function makeGraphGrader(
   const cube = makeCubePass({ lut, intensity, interpolation });
   let extra: readonly RenderPass[] = [];
   let pre: readonly RenderPass[] = [];
+  /**
+   * The film node. Its position is FIXED and no caller chooses it: last of
+   * all, so `SOURCE → CUBE → [FILM] → OUTPUT` is the fast path a clip takes
+   * (`docs/film-simulation.md` §10) and a still gets its grain after every
+   * warp and every sharpen — grain that a sharpen then amplified, or a
+   * keystone resampled, would be neither grain nor sharp.
+   */
+  let filmPass = film ? makeFilmPass(film, width, height) : null;
 
   return {
     precision: graph.precision,
@@ -105,19 +123,32 @@ export function makeGraphGrader(
       extra = passes;
       pre = before;
     },
-    render(source) {
+    setFilm(next) {
+      if (filmPass) graph.releasePass(filmPass);
+      filmPass = next ? makeFilmPass(next, width, height) : null;
+    },
+    render(source, sourceSeconds) {
+      // The SOURCE instant, not a repaint's: the field re-rolls per source
+      // frame quantised to `grainFps`, so a still repaints identically and a
+      // clip's grain lives at the cadence the stock asks for, not the display's.
+      if (filmPass && sourceSeconds !== undefined) filmPass.setSourceSeconds(sourceSeconds);
       // `FrameGrader` speaks `CanvasImageSource`, which includes
       // `SVGImageElement` — a thing WebGL cannot upload and nothing in the
       // suite ever hands a grader. Narrowed here rather than widening the
       // seam, so the contract every consumer already speaks stays as it is.
-      graph.render(source as RenderSource, [...pre, cube, ...extra]);
+      graph.render(
+        source as RenderSource,
+        filmPass ? [...pre, cube, ...extra, filmPass] : [...pre, cube, ...extra],
+      );
       return canvas;
     },
     dispose() {
       for (const pass of extra) graph.releasePass(pass);
       for (const pass of pre) graph.releasePass(pass);
+      if (filmPass) graph.releasePass(filmPass);
       extra = [];
       pre = [];
+      filmPass = null;
       graph.dispose();
     },
   };

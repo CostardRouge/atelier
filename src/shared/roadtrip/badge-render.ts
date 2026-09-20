@@ -9,6 +9,7 @@
  * difference between the two is the canvas they are handed.
  */
 
+import { isSilentTexture, type FilmTexture } from '../film/film-texture';
 import { isRawImage } from '../library/assets';
 import { extractRawPreview } from '../exif/raw-probe';
 import type { CubeLut } from '../lib/cube-parser';
@@ -559,6 +560,12 @@ export async function badgeToPng(
     width: number;
     height: number;
     lut?: CubeLut | null;
+    /**
+     * The grade's film TEXTURE — grain and halation — drawn by ONE node after
+     * the look, at the density the picture is graded at. A collage's cells
+     * share it: the texture is the STOCK's, and a slide wears one stock.
+     */
+    film?: FilmTexture | null;
     /** A collage's cube per cell (its own develop baked in); absent leaves every cell as shot. */
     collageLuts?: readonly (CubeLut | null)[];
   },
@@ -568,8 +575,11 @@ export async function badgeToPng(
   canvas.height = opts.height;
   // A still past what the GPU takes on one edge is fitted to it first; the
   // copy is released with the grader. A clip's frame is never past it.
+  // A texture with no look is still a render: the node is the only thing
+  // that draws it.
+  const needsGrade = Boolean(opts.lut) || !isSilentTexture(opts.film);
   const fit =
-    !opts.collage && opts.lut && opts.source && opts.source.width > 0 && opts.source.image instanceof ImageBitmap
+    !opts.collage && needsGrade && opts.source && opts.source.width > 0 && opts.source.image instanceof ImageBitmap
       ? await fitPhotoForRender(opts.source.image)
       : null;
   const source: BadgeSource | null | undefined =
@@ -577,14 +587,14 @@ export async function badgeToPng(
       ? { ...opts.source, image: fit.image, width: fit.width, height: fit.height }
       : opts.source;
   const grader =
-    !opts.collage && opts.lut && source && source.width > 0
-      ? makeFrameGrader(opts.lut, source.width, source.height)
+    !opts.collage && needsGrade && source && source.width > 0
+      ? makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, [], [], opts.film ?? null)
       : null;
   // One grader per cell, for this one render, as the single picture's above.
   const cellGraders = (opts.collage?.items ?? []).map((item, i) => {
     const lut = opts.collageLuts?.[i] ?? null;
-    return lut && item.source && item.source.width > 0
-      ? makeFrameGrader(lut, item.source.width, item.source.height)
+    return (lut || !isSilentTexture(opts.film)) && item.source && item.source.width > 0
+      ? makeFrameGrader(lut as CubeLut, item.source.width, item.source.height, 1, [], [], opts.film ?? null)
       : null;
   });
   const collage = opts.collage

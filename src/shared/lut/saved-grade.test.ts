@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_FILM_TEXTURE } from '../film/film-texture';
 import { gradeKey, gradeOrNull, isUploadedLook, type SavedGrade } from './saved-grade';
 import type { SavedLutLayer } from './use-lut-stack';
 
@@ -52,6 +53,21 @@ describe('gradeKey', () => {
     expect(gradeKey({ layers: [], output: 'none' })).not.toBe(key);
   });
 
+  it('separates two grades that differ ONLY in their film texture', () => {
+    // The texture changes nothing about the cube, which is exactly why the key
+    // has to read it: a cache keyed on the cube alone serves the pre-film
+    // picture, and the grain slider looks dead on a still.
+    const base: SavedGrade = { layers: [layer()], output: 'none', film: null };
+    const grainy: SavedGrade = { ...base, film: { ...DEFAULT_FILM_TEXTURE, grain: 0.4 } };
+    expect(gradeKey(grainy)).not.toBe(gradeKey(base));
+    expect(gradeKey({ ...grainy })).toBe(gradeKey(grainy));
+    expect(gradeKey({ ...base, film: { ...DEFAULT_FILM_TEXTURE, grain: 0.41 } })).not.toBe(
+      gradeKey(grainy),
+    );
+    // No texture and an absent one are the same picture, so the same key.
+    expect(gradeKey(base)).toBe(gradeKey({ layers: [layer()], output: 'none' }));
+  });
+
   it('keeps an order change apart, and never reads a custom cube’s text', () => {
     const a = layer({ id: 'a' });
     const b = layer({ id: 'b', source: 'custom', customText: 'TITLE "a"\nLUT_3D_SIZE 2\n' });
@@ -89,11 +105,11 @@ describe('isUploadedLook', () => {
 describe('gradeOrNull', () => {
   it('reads a sound grade back as itself', () => {
     const grade = { layers: [layer()], output: 'rec709-to-srgb' as const };
-    expect(gradeOrNull(JSON.parse(JSON.stringify(grade)))).toEqual(grade);
+    expect(gradeOrNull(JSON.parse(JSON.stringify(grade)))).toEqual({ ...grade, film: null });
   });
 
   it('keeps an EMPTY grade — it is a real departure, not junk', () => {
-    expect(gradeOrNull({ layers: [], output: 'none' })).toEqual({ layers: [], output: 'none' });
+    expect(gradeOrNull({ layers: [], output: 'none' })).toEqual({ layers: [], output: 'none', film: null });
   });
 
   it('is nothing at all for anything that is not a grade', () => {
