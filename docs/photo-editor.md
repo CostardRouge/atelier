@@ -50,7 +50,8 @@ wait for the expensive one.
 - `lut-gl.ts` (406 lines) is **one fragment pass**. The frame uploads as
   `gl.texImage2D(…, gl.RGBA, gl.UNSIGNED_BYTE, source)` — **8-bit in, 8-bit
   out**. The LUT is an `RGBA32F` `sampler3D` (or `RGBA8` where
-  `OES_texture_float_linear` is absent).
+  `OES_texture_float_linear` is absent — since 2026-09-20 `RGBA16F` there,
+  so the cube's headroom above white survives on every GPU).
 - Seven renderers take that one cube and nothing else: the Studio stage, the
   JPEG export, the frame grab, the video export, Road Trip's `renderBadge`, the
   hook clip, and `roll-render.ts`.

@@ -116,8 +116,12 @@ export interface LayerPassOptions {
   aspectRatio?: number;
   interpolation?: Interpolation;
   /**
-   * The alpha map for a mask this module cannot compute — a segmented subject,
-   * resolved and cached by the caller. Ignored for every other kind.
+   * The alpha map, for the two RASTER kinds. A segmented subject's is always
+   * the caller's — this module has no model. A painted mask's is rasterised
+   * here when the caller says nothing (`undefined`); a caller that already
+   * holds the raster for these very strokes (`layer-render.ts`'s cache) hands
+   * it over so an opacity nudge does not walk a million texels again. `null`
+   * is an empty map. Ignored for every other kind.
    */
   raster?: BrushRaster | null;
   /**
@@ -159,13 +163,16 @@ export function makeLayerPass(options: LayerPassOptions): RenderPass | null {
     shaped ? [(shaped.x - 0.5) * span[0], (shaped.y - 0.5) * span[1]] : [0, 0];
   const angle = shaped ? (shaped.angle * Math.PI) / 180 : 0;
   const [cx, cy] = centre();
-  // Rasterised ONCE per pass, not per draw: a pass is rebuilt whenever the
-  // mask changes by value, so this is exactly as often as the strokes move. A
-  // SUBJECT cannot be rasterised here — it takes a model and an await — so its
-  // map is supplied by the caller, which resolves and caches it.
+  // Rasterised ONCE per pass, not per draw — and not at all when the caller
+  // already holds the map for these strokes. A SUBJECT cannot be rasterised
+  // here — it takes a model and an await — so its map is always the caller's.
   const raster =
-    mask?.kind === 'brush' && mask.strokes.length
-      ? rasteriseBrush(mask.strokes, ar)
+    mask?.kind === 'brush'
+      ? options.raster !== undefined
+        ? options.raster
+        : mask.strokes.length
+          ? rasteriseBrush(mask.strokes, ar)
+          : null
       : mask?.kind === 'subject'
         ? (options.raster ?? null)
         : null;

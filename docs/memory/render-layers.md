@@ -272,3 +272,52 @@ the head (one tap, the connected subject) at −3 EV and left both far corners o
 the ground exactly as shot; the roll stored `points: [[0.5, 0.62]]` with the
 model id and **no pixels**; tapping the same marker again took it back to zero
 points.
+
+## The model is shown a bounded picture, waited for, and cached per point (2026-09-20, the audit)
+
+Three things the first P9 got wrong, none visible on a small test picture:
+
+- **It was shown the stage source whole.** `magic_touch` resamples its input to
+  a few hundred pixels inside, so a 4K bitmap bought nothing and cost an upload
+  and a downscale per tap — and the category mask comes back at the INPUT's
+  size, 12 MB per point at 4K, copied, unioned and cached without bound.
+  `prepareSegmentSource` now makes ONE copy at `SEGMENT_INPUT_LONG_EDGE`
+  (1024, the painted mask's own density, so the two rasters sample alike),
+  kept per source in the hook and released with it. Measured on a 3000×2000
+  disc: the mask is 1024×683 and covers 13.19 % against the 13.09 % drawn.
+- **A point that never answered hung the panel for good** — the promise never
+  settled, "working" stayed up and every later point queued behind it.
+  `segmentPoint` gives up after `SEGMENT_TIMEOUT_MS` (20 s) with a warning and
+  frees a late answer's buffers rather than reading them.
+- **Every tap re-ran every point.** The cache was keyed on the whole request,
+  so a third tap cost three inferences. `useSubjectMasks` caches per POINT
+  (an LRU of `POINT_CACHE_SIZE` = 64, ~50 MB at most) and composes a layer with
+  the pure `unionMasks`, so a tap costs one inference, un-picking costs none,
+  and a layer whose points are all cached is composed without the model.
+
+Still true and still open: `segment()` answers SYNCHRONOUSLY on the GPU
+delegate, so the main thread is blocked for the inference (1.5 s warm on
+SwiftShader, 4.8 s cold with the download). The brief's "in a worker" is not
+built; it needs an `OffscreenCanvas` and the model loaded there.
+
+## What a layer costs per change is now kept, not paid again (2026-09-20, the audit)
+
+The stage's `graderFor` rebuilt EVERY layer's pass on ANY change to the list —
+a new opacity on layer 3 re-baked layer 1's cube (a 33³ `composeLutStack`
+walk), re-walked its painted strokes and re-uploaded both. Every slider step
+paid for the whole stack. `makeLayerPassCache` (`develop/layer-render.ts`)
+keeps, per layer id, the cube (reused while `sameDevelop` and the interpolation
+hold), the brush raster (reused while the strokes ARRAY and the aspect are the
+same objects — a stroke rewrites the array, so identity is the honest key) and
+the pass itself (reused while cube, raster, mask, invert, opacity and aspect all
+hold); a layer that leaves the list is forgotten, and Show-the-mask's overlay
+pass is cached the same way, so toggling it no longer bakes. `layerPasses`
+survives for the export, which builds once and disposes. **Rule**: anything
+derived from a layer is keyed on the layer's VALUE (`sameDevelop`, `sameMask`),
+never on the object a React render hands down, which is new every time.
+
+**The raster's hot loop allocates nothing.** `framePoint` returned a tuple per
+texel — a million short-lived objects per `pointermove` on a 1024-wide map —
+so it is written out inline, the row's y once per row. `brushAt` still goes
+through `framePoint`; the loop must keep saying the same thing, which the
+gate's brush row holds it to (0.0008).

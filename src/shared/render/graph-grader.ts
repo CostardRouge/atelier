@@ -21,6 +21,8 @@ import { createRenderGraph, type RenderPass, type RenderPrecision } from './grap
 export interface GraphGrader extends FrameGrader {
   /** What the intermediate buffers really are here — 'byte' where float16 cannot be rendered to. */
   precision: RenderPrecision;
+  /** The longest edge this GPU takes (`RenderGraph.maxSize`); Infinity where there is no GPU. */
+  maxSize: number;
   /**
    * The passes after the look — a warp, a layer, in time a denoise.
    *
@@ -32,6 +34,25 @@ export interface GraphGrader extends FrameGrader {
    * with it.
    */
   setExtraPasses(passes: readonly RenderPass[]): void;
+}
+
+let probedMaxSize: number | null = null;
+
+/**
+ * The longest edge this machine's GPU can render, asked ONCE and kept for the
+ * page: a 1×1 graph is built, read and released. Infinity where there is no
+ * WebGL2, since the pass-through grader then has nothing to fit.
+ *
+ * What a full-density export asks BEFORE decoding what to grade at
+ * (`render-size.ts`): the alternative — a grader built past the cap — is a
+ * black picture that says nothing.
+ */
+export function maxRenderSize(): number {
+  if (probedMaxSize !== null) return probedMaxSize;
+  const graph = createRenderGraph(makeExportCanvas(1, 1));
+  probedMaxSize = graph ? graph.maxSize : Number.POSITIVE_INFINITY;
+  graph?.dispose();
+  return probedMaxSize;
 }
 
 /**
@@ -52,6 +73,7 @@ export function makeGraphGrader(
   if (!graph) {
     return {
       precision: 'byte',
+      maxSize: Number.POSITIVE_INFINITY,
       render: (source) => source,
       setExtraPasses() {},
       dispose() {},
@@ -63,6 +85,7 @@ export function makeGraphGrader(
 
   return {
     precision: graph.precision,
+    maxSize: graph.maxSize,
     setExtraPasses(passes) {
       for (const pass of extra) if (!passes.includes(pass)) graph.releasePass(pass);
       extra = passes;

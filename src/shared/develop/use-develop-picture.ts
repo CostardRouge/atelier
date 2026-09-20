@@ -22,7 +22,7 @@ import {
   type PictureGeometry,
 } from '../render/picture-geometry';
 import { cloneLayers, drawingLayers, sameLayers, type AdjustLayer } from './layer';
-import { layerPasses, maskOverlayPass } from './layer-render';
+import { makeLayerPassCache } from './layer-render';
 
 /** How close to the frame's side the divider's handle may be held, in px. */
 const HANDLE_INSET = 14;
@@ -284,6 +284,11 @@ export function useDevelopPicture({
   // must not cost a pass.
   const stack = useMemo(() => drawingLayers(layers), [layers]);
 
+  // The layer passes, remembered between changes: a cube, a raster and a pass
+  // are kept per layer while the values they were built from stand still, so
+  // an opacity nudge on one layer costs one small pass and nothing else
+  // (`layer-render.ts`). One per hook, like the grader it feeds.
+  const passCache = useRef(makeLayerPassCache());
   const graderRef = useRef<{
     lut: CubeLut | null;
     geometry: PictureGeometry;
@@ -327,19 +332,17 @@ export function useDevelopPicture({
         return cur.grader;
       }
       const ar = s.width / s.height;
+      const cache = passCache.current;
+      const overlayPass = overlayOf ? cache.overlay(overlayOf, ar, rasters?.get(overlayOf.id) ?? null) : null;
       const passes = [
         ...geometryPasses(geometry, ar),
-        ...layerPasses(stack, ar, undefined, rasters),
-        ...(overlayOf
-          ? [maskOverlayPass(overlayOf, ar, rasters?.get(overlayOf.id) ?? null)].flatMap((p) =>
-              p ? [p] : [],
-            )
-          : []),
+        ...cache.passes(stack, ar, rasters),
+        ...(overlayPass ? [overlayPass] : []),
       ];
       // Only the PASSES moved, so swap them rather than rebuilding: the
-      // context, its programs and the uploaded source all survive, which is
-      // what makes a warp or a mask draggable at all. A new LOOK is still a
-      // new grader — the cube is baked, not a pass.
+      // context, its programs and (for a bitmap) the uploaded source all
+      // survive, which is what makes a warp or a mask draggable at all. A new
+      // LOOK is still a new grader — the cube is baked, not a pass.
       if (sized && cur.grader.setPasses) {
         cur.grader.setPasses(passes);
         cur.geometry = cloneGeometry(geometry);

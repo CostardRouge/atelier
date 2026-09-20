@@ -20,6 +20,8 @@ import { extractRawPreview } from '../exif/raw-probe';
 import type { Cue } from '../telemetry/srt-parser';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
+import { maxRenderSize } from '../render/graph-grader';
+import { exceedsRenderSize, fitRenderSize } from '../render/render-size';
 import { drawOverlays } from '../overlay/draw-overlays';
 import { ensureOverlayFonts } from '../overlay/fonts';
 import { settleForStill } from '../overlay/still-frame';
@@ -100,6 +102,50 @@ export async function decodePhotoSource(file: File): Promise<DecodedPhoto> {
   }
 }
 
+/** A picture as the GPU can take it — the bitmap itself, or a copy fitted to its cap. */
+export interface RenderFit {
+  image: ImageBitmap;
+  width: number;
+  height: number;
+  /** True when `image` is a resampled copy rather than the bitmap handed in. */
+  resampled: boolean;
+  /** Closes the copy, if one was made; the caller's own bitmap is never closed here. */
+  release: () => void;
+}
+
+/**
+ * Bring a decoded picture within what the GPU can render on one edge
+ * (`maxRenderSize`, `render-size.ts`): the bitmap itself when it fits, which
+ * is every ordinary photograph on every ordinary GPU, else a high-quality
+ * resample to the cap. A 61-megapixel still on an 8192 GPU is the case: past
+ * the cap the upload is refused silently and the delivery comes out BLACK.
+ * The caller draws with the size handed back, and says so where a picture
+ * left at less than its own density.
+ */
+export async function fitPhotoForRender(bitmap: ImageBitmap): Promise<RenderFit> {
+  const asIs: RenderFit = {
+    image: bitmap,
+    width: bitmap.width,
+    height: bitmap.height,
+    resampled: false,
+    release: () => {},
+  };
+  const cap = maxRenderSize();
+  if (!exceedsRenderSize(bitmap.width, bitmap.height, cap)) return asIs;
+  const { width, height } = fitRenderSize(bitmap.width, bitmap.height, cap);
+  try {
+    const small = await createImageBitmap(bitmap, {
+      resizeWidth: width,
+      resizeHeight: height,
+      resizeQuality: 'high',
+    });
+    return { image: small, width: small.width, height: small.height, resampled: true, release: () => small.close() };
+  } catch {
+    // A browser without resize options: the graph will say what went wrong.
+    return asIs;
+  }
+}
+
 export interface PhotoRenderOptions {
   elements: OverlayElement[];
   /** The single cue the photo's EXIF is worth, or null. */
@@ -132,16 +178,21 @@ export async function exportPhotoVariant(
   if (!ctx) throw new Error('Could not create a 2D canvas for export.');
 
   // Grade at the source's own density, then crop: grading the cropped frame
-  // would give a different result at every output size.
-  const grader = opts.lut
-    ? makeFrameGrader(opts.lut, bitmap.width, bitmap.height, opts.intensity)
+  // would give a different result at every output size. "Own density" stops
+  // at what the GPU can take on one edge; past it the picture is fitted first.
+  const fit = opts.lut ? await fitPhotoForRender(bitmap) : null;
+  const grader = opts.lut && fit
+    ? makeFrameGrader(opts.lut, fit.width, fit.height, opts.intensity)
     : null;
   try {
-    const source = grader ? grader.render(bitmap) : bitmap;
-    const f = fitRect(bitmap.width, bitmap.height, { x: 0, y: 0, w: out.w, h: out.h }, 'cover');
+    const source = grader && fit ? grader.render(fit.image) : bitmap;
+    const sw = fit ? fit.width : bitmap.width;
+    const sh = fit ? fit.height : bitmap.height;
+    const f = fitRect(sw, sh, { x: 0, y: 0, w: out.w, h: out.h }, 'cover');
     ctx.drawImage(source, f.sx, f.sy, f.sw, f.sh, f.dx, f.dy, f.dw, f.dh);
   } finally {
     grader?.dispose();
+    fit?.release();
   }
 
   if (variant.overlays) {

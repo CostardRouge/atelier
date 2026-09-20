@@ -28,6 +28,8 @@
  * Pure and DOM-free.
  */
 
+import { fromLinear, toLinear } from '../lut/transfer';
+
 export interface LensCorrection {
   /**
    * −100..100. The k1 term: below 0 undoes BARREL (a wide lens bulging
@@ -165,7 +167,8 @@ export function chromaScales(l: LensCorrection): { red: number; blue: number } {
 }
 
 /**
- * The brightness a pixel at radius `r` is multiplied by.
+ * The LIGHT a pixel at radius `r` is multiplied by — a gain on the decoded
+ * value, never on the code (`vignetteEncoded`).
  *
  * 1 at the centre always — a correction that lifted the middle would be an
  * exposure slider wearing the wrong name. The midpoint decides how much of the
@@ -180,6 +183,24 @@ export function vignetteGain(r: number, amount: number, midpoint: number): numbe
   // the point it starts.
   const t = span > 0 ? ((r - start) / span) ** 2 : 0;
   return 1 + scaled * t;
+}
+
+/**
+ * What an sRGB-ENCODED value becomes once the gain at radius `r` is applied
+ * to its LIGHT — which is the only place a vignette correction is right.
+ *
+ * A lens loses light at the corner, not code; multiplying the encoded value
+ * instead would be a tone-dependent correction (×1.8 on a dark corner is ×3 on
+ * its light, on a bright one barely ×2), a corner that comes back the wrong
+ * colour on anything but mid grey. Every RAW developer applies it in linear.
+ * This is the function the shader mirrors and `check-render.mjs` holds it to;
+ * `vignetteGain` stays the gain, in light. Clamped at white: an 8-bit readback
+ * is what the gate compares, and the GPU keeps the headroom on its own.
+ */
+export function vignetteEncoded(encoded: number, r: number, amount: number, midpoint: number): number {
+  const gain = vignetteGain(r, amount, midpoint);
+  if (gain === 1) return encoded;
+  return fromLinear(toLinear(encoded, 'srgb') * gain, 'srgb');
 }
 
 /**

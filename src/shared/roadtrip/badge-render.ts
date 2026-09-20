@@ -14,6 +14,7 @@ import { extractRawPreview } from '../exif/raw-probe';
 import type { CubeLut } from '../lib/cube-parser';
 import { drawLayout, type LayoutPicture } from '../media/cell-paint';
 import { DEFAULT_FRAMING, drawFramed, type Framing } from '../media/framing';
+import { fitPhotoForRender } from '../media/photo-frame';
 import type { SavedMediaRef } from '../projects/project-types';
 import {
   collageCellAt,
@@ -108,10 +109,7 @@ export async function loadBadgeSource(
     // frame comes out under twice the cap, which is the point. It can enlarge
     // a picture smaller than the cap; harmless at thumbnail sizes, and a
     // browser that ignores the option simply decodes at full size.
-    const bitmap = await createImageBitmap(
-      file,
-      maxWidth ? { resizeWidth: maxWidth, resizeQuality: 'high' } : undefined,
-    );
+    const bitmap = await createImageBitmap(file, decodeOptions(maxWidth));
     return {
       image: bitmap,
       width: bitmap.width,
@@ -127,10 +125,7 @@ export async function loadBadgeSource(
       try {
         const preview = await extractRawPreview(file);
         if (preview) {
-          const bitmap = await createImageBitmap(
-            preview,
-            maxWidth ? { resizeWidth: maxWidth, resizeQuality: 'high' } : undefined,
-          );
+          const bitmap = await createImageBitmap(preview, decodeOptions(maxWidth));
           return {
             image: bitmap,
             width: bitmap.width,
@@ -146,6 +141,17 @@ export async function loadBadgeSource(
       `The browser cannot decode ${file.name}, and the file carries no render of its own — point this at an exported JPEG instead.`,
     );
   }
+}
+
+/**
+ * How a still is decoded here: UPRIGHT, the way `decodePhoto` and every other
+ * file decode in the suite does it, so a phone portrait sits the same way on
+ * a badge as on the Studio stage; and, for a rail cell, bounded on its width.
+ */
+function decodeOptions(maxWidth?: number): ImageBitmapOptions {
+  return maxWidth
+    ? { imageOrientation: 'from-image', resizeWidth: maxWidth, resizeQuality: 'high' }
+    : { imageOrientation: 'from-image' };
 }
 
 /**
@@ -552,9 +558,19 @@ export async function badgeToPng(
   const canvas = document.createElement('canvas');
   canvas.width = opts.width;
   canvas.height = opts.height;
+  // A still past what the GPU takes on one edge is fitted to it first; the
+  // copy is released with the grader. A clip's frame is never past it.
+  const fit =
+    !opts.collage && opts.lut && opts.source && opts.source.width > 0 && opts.source.image instanceof ImageBitmap
+      ? await fitPhotoForRender(opts.source.image)
+      : null;
+  const source: BadgeSource | null | undefined =
+    fit && opts.source
+      ? { ...opts.source, image: fit.image, width: fit.width, height: fit.height }
+      : opts.source;
   const grader =
-    !opts.collage && opts.lut && opts.source && opts.source.width > 0
-      ? makeFrameGrader(opts.lut, opts.source.width, opts.source.height)
+    !opts.collage && opts.lut && source && source.width > 0
+      ? makeFrameGrader(opts.lut, source.width, source.height)
       : null;
   // One grader per cell, for this one render, as the single picture's above.
   const cellGraders = (opts.collage?.items ?? []).map((item, i) => {
@@ -567,9 +583,10 @@ export async function badgeToPng(
     ? { ...opts.collage, items: opts.collage.items.map((item, i) => ({ ...item, grader: cellGraders[i] })) }
     : opts.collage;
   try {
-    await renderBadge(canvas, { ...opts, grader, collage });
+    await renderBadge(canvas, { ...opts, source, grader, collage });
   } finally {
     grader?.dispose();
+    fit?.release();
     for (const g of cellGraders) g?.dispose();
   }
   return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));

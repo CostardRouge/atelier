@@ -16,8 +16,9 @@
  * what Resolve uses, and it keeps neutrals neutral (see interpolate.ts, which
  * holds the same maths for the CPU bake — the two MUST agree or preview and
  * export diverge). `texelFetch` ignores sampler filter state, so both paths
- * share one texture and the mode is a live uniform switch: no re-upload, and
- * the 8-bit fallback for GPUs without `OES_texture_float_linear` is untouched.
+ * share one texture and the mode is a live uniform switch: no re-upload. The
+ * cube's texels are uploaded by `render/cube-pass.ts`, float or half-float —
+ * one upload for both shaders, as the lookup is one chunk.
  *
  * Kept framework-free (no React, no DOM tree beyond the canvas it's handed) so
  * the GPU logic lives in one testable-by-inspection place; the React glue is in
@@ -27,6 +28,7 @@
 import type { CubeLut } from '../lib/cube-parser';
 import type { Interpolation } from './interpolate';
 import { GLSL_VERSION, LUT_LOOKUP, LUT_UNIFORMS, VERTEX_SRC } from '../render/glsl';
+import { uploadCube } from '../render/cube-pass';
 
 const VERT_SRC = VERTEX_SRC;
 
@@ -185,11 +187,6 @@ export function createLutRenderer(
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
-  // Prefer float precision for the LUT if the GPU can filter it linearly,
-  // otherwise fall back to 8-bit (always filterable). 8-bit is plenty for a
-  // preview; the difference is only visible on extreme grades.
-  const floatLinear = gl.getExtension('OES_texture_float_linear');
-
   let lutTex: WebGLTexture | null = null;
   let lutSize = 0;
   let hasLut = false;
@@ -207,30 +204,12 @@ export function createLutRenderer(
     // texImage3D errors if FLIP_Y is left on from a video upload; clear it.
     gl!.pixelStorei(gl!.UNPACK_FLIP_Y_WEBGL, false);
 
-    const n = lut.size;
-    const texels = n * n * n;
-    // The source is RGB; expand to RGBA (alpha = 1) for predictable alignment.
-    if (floatLinear) {
-      const rgba = new Float32Array(texels * 4);
-      for (let i = 0; i < texels; i++) {
-        rgba[i * 4] = lut.data[i * 3];
-        rgba[i * 4 + 1] = lut.data[i * 3 + 1];
-        rgba[i * 4 + 2] = lut.data[i * 3 + 2];
-        rgba[i * 4 + 3] = 1;
-      }
-      gl!.texImage3D(gl!.TEXTURE_3D, 0, gl!.RGBA32F, n, n, n, 0, gl!.RGBA, gl!.FLOAT, rgba);
-    } else {
-      const rgba = new Uint8Array(texels * 4);
-      for (let i = 0; i < texels; i++) {
-        rgba[i * 4] = Math.round(Math.min(1, Math.max(0, lut.data[i * 3])) * 255);
-        rgba[i * 4 + 1] = Math.round(Math.min(1, Math.max(0, lut.data[i * 3 + 1])) * 255);
-        rgba[i * 4 + 2] = Math.round(Math.min(1, Math.max(0, lut.data[i * 3 + 2])) * 255);
-        rgba[i * 4 + 3] = 255;
-      }
-      gl!.texImage3D(gl!.TEXTURE_3D, 0, gl!.RGBA8, n, n, n, 0, gl!.RGBA, gl!.UNSIGNED_BYTE, rgba);
-    }
+    // The texels themselves are ONE upload shared with the render core's cube
+    // pass: float where the GPU can filter it, half-float elsewhere, never
+    // 8-bit (`cube-pass.ts`).
+    uploadCube(gl!, lut);
 
-    lutSize = n;
+    lutSize = lut.size;
     hasLut = true;
     gl!.useProgram(program);
     gl!.uniform1f(uLutSize, lutSize);

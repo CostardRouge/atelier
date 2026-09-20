@@ -55,6 +55,14 @@ export interface RenderPass {
 export interface RenderGraph {
   /** What the intermediate buffers really are on this machine. */
   readonly precision: RenderPrecision;
+  /**
+   * The longest edge, in pixels, this GPU can take as a source or draw into —
+   * the smaller of its texture, renderbuffer and viewport limits. A picture
+   * past it does not fail loudly: the upload is refused with an error nobody
+   * reads and the texture samples BLACK. `render-size.ts` fits a picture to
+   * it; a caller that hands one over anyway is told once, in the console.
+   */
+  readonly maxSize: number;
   readonly canvas: HTMLCanvasElement | OffscreenCanvas;
   /**
    * Draw `source` through `passes` onto the canvas, which is returned so a
@@ -132,6 +140,18 @@ interface Target {
   height: number;
 }
 
+/** A source's pixel size, for the kinds that say it; null for the rest. */
+function sourceSize(source: TexImageSource): { width: number; height: number } | null {
+  if (typeof HTMLVideoElement !== 'undefined' && source instanceof HTMLVideoElement) {
+    return { width: source.videoWidth, height: source.videoHeight };
+  }
+  if (typeof VideoFrame !== 'undefined' && source instanceof VideoFrame) {
+    return { width: source.displayWidth, height: source.displayHeight };
+  }
+  const { width, height } = source as { width?: unknown; height?: unknown };
+  return typeof width === 'number' && typeof height === 'number' ? { width, height } : null;
+}
+
 /**
  * Build the core over a canvas, or null where WebGL2 is absent — the same
  * degradation `createLutRenderer` chose: a picture drawn un-processed beats a
@@ -157,6 +177,29 @@ export function createRenderGraph(
   const internalFormat = canFloat ? gl.RGBA16F : gl.RGBA8;
   const texType = canFloat ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE;
 
+  // The cap on ONE edge. The source texture and the ping-pong targets are
+  // textures (MAX_TEXTURE_SIZE), the canvas's drawing buffer a renderbuffer,
+  // and the viewport has its own pair — the smallest of them is the honest
+  // number, and a driver that answers nothing sensible gets a floor every
+  // WebGL2 implementation must reach (2048).
+  const viewport = gl.getParameter(gl.MAX_VIEWPORT_DIMS) as Int32Array | null;
+  const limits = [
+    gl.getParameter(gl.MAX_TEXTURE_SIZE) as number,
+    gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) as number,
+    viewport?.[0],
+    viewport?.[1],
+  ].filter((n): n is number => typeof n === 'number' && Number.isFinite(n) && n > 0);
+  const maxSize = limits.length ? Math.min(...limits) : 2048;
+  let sizeSaid = false;
+  const tooBig = (what: string, width: number, height: number) => {
+    if (sizeSaid) return;
+    sizeSaid = true;
+    console.error(
+      `[render] ${what} is ${width}×${height}, past the ${maxSize} px this GPU can take on one edge; ` +
+        'the picture will be wrong — fit it with render-size.ts first',
+    );
+  };
+
   const quad = gl.createBuffer();
   const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
@@ -176,6 +219,21 @@ export function createRenderGraph(
   const programs = new Map<string, WebGLProgram | null>();
   const targets: (Target | null)[] = [null, null];
   let disposed = false;
+  /**
+   * The source the texture on unit 0 currently holds, when that is knowable.
+   *
+   * An `ImageBitmap` is IMMUTABLE — its pixels are fixed at creation — so the
+   * same object rendered twice needs no second upload, and a pass swap (a mask
+   * dragged, a keystone moved) costs the passes alone. Before this every
+   * `render` re-uploaded the whole picture: tens of megabytes per slider step
+   * for a stage-budget still, which `render-core.md` claimed was not happening.
+   * A canvas or a video can change under the same identity, so those are
+   * uploaded every time, as before.
+   */
+  let uploaded: ImageBitmap | null = null;
+  /** Programs whose first draw has been checked for a GL error (dev only). */
+  const checked = new Set<string>();
+  let lostSaid = false;
 
   const targetAt = (index: 0 | 1, width: number, height: number): Target | null => {
     const held = targets[index];
@@ -215,9 +273,11 @@ export function createRenderGraph(
 
   return {
     precision,
+    maxSize,
     canvas,
 
     resize(width, height) {
+      if (width > maxSize || height > maxSize) tooBig('the render target', width, height);
       if (canvas.width !== width || canvas.height !== height) {
         canvas.width = width;
         canvas.height = height;
@@ -231,24 +291,43 @@ export function createRenderGraph(
 
     render(source, passes) {
       if (disposed) return canvas;
+      // A context the browser took back (memory pressure on a phone, a GPU
+      // reset) accepts every call and draws nothing: without this the stage
+      // would go black with no error anywhere. Said once, not per frame.
+      if (gl.isContextLost()) {
+        if (!lostSaid) {
+          lostSaid = true;
+          console.warn('[render] the WebGL context was lost; the picture is drawn unprocessed');
+        }
+        return canvas;
+      }
       const list = passes.length ? passes : [PASSTHROUGH];
       const plan = planPasses(list.length);
       const width = canvas.width;
       const height = canvas.height;
 
-      // The source, uploaded once for the whole chain.
+      // The source, uploaded once for the whole chain — and, for a bitmap,
+      // once for its LIFETIME on this graph.
       gl.bindVertexArray(vao);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, sourceTex);
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-      // IGNORED for an ImageBitmap, whose orientation is fixed at creation —
-      // so a decoded photo arrives in image order while a video or a canvas
-      // arrives flipped, and the vertex shader's `u_flipY` compensates. The
-      // rule `lut-gl.ts` learnt the hard way; an FBO round trip is neutral
-      // under one UV convention, so only the FIRST pass has to care.
-      const bitmapSource =
-        typeof ImageBitmap !== 'undefined' && source instanceof ImageBitmap ? 1 : 0;
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+      // `UNPACK_FLIP_Y_WEBGL` is IGNORED for an ImageBitmap, whose orientation
+      // is fixed at creation — so a decoded photo arrives in image order while
+      // a video or a canvas arrives flipped, and the vertex shader's `u_flipY`
+      // compensates. The rule `lut-gl.ts` learnt the hard way; an FBO round
+      // trip is neutral under one UV convention, so only the FIRST pass has to
+      // care.
+      const bitmap = typeof ImageBitmap !== 'undefined' && source instanceof ImageBitmap ? source : null;
+      const bitmapSource = bitmap ? 1 : 0;
+      if (!bitmap || bitmap !== uploaded) {
+        const size = sourceSize(source);
+        if (size && (size.width > maxSize || size.height > maxSize)) {
+          tooBig('the source', size.width, size.height);
+        }
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+        uploaded = bitmap;
+      }
 
       const needed = targetsNeeded(list.length);
       for (let i = 0; i < needed; i += 1) {
@@ -283,6 +362,20 @@ export function createRenderGraph(
         );
         gl.viewport(0, 0, width, height);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+        // The FIRST draw of each program is checked for a GL error, in
+        // development only. Every trap `render-core.md` records — two sampler
+        // types on one unit, an incomplete texture — is an INVALID_OPERATION
+        // the driver reports here and nowhere else, and each was found by
+        // hand. `getError` stalls the pipeline, so it is never per frame:
+        // once per program, which is when a new pass could have got it wrong.
+        if (import.meta.env.DEV && !checked.has(pass.id)) {
+          checked.add(pass.id);
+          const error = gl.getError();
+          if (error !== gl.NO_ERROR) {
+            console.error(`[render] pass "${pass.id}" left GL error 0x${error.toString(16)} on its first draw`);
+          }
+        }
       }
 
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -292,6 +385,7 @@ export function createRenderGraph(
     dispose() {
       if (disposed) return;
       disposed = true;
+      uploaded = null;
       for (const program of programs.values()) if (program) gl.deleteProgram(program);
       programs.clear();
       for (const target of targets) {
