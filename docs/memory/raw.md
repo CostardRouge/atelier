@@ -80,6 +80,36 @@ exposure.
 **Layers and geometry are unchanged**: they run after the one cube, on the
 displayed picture, RAW or not.
 
+## The calibration a DNG carries, READ (2026-09-20)
+
+`shared/exif/dng-opcodes.ts` (pure, 9 specs) parses `OpcodeList3` out of the
+head `raw-probe.ts` already walks, through the same TIFF reader; the probe
+returns it as `RawProbe.calibration` and `rawCalibration(file)` fetches it
+with a megabyte and no decoder. `describeRaw` now ends with what the file
+really asks for — `gain map 32×32 ×3 · up to 5.93× · warp ×1.049` — instead
+of counting lists.
+
+Rules a later agent must keep:
+
+- **The bytes are BIG-ENDIAN, always**, whatever the TIFF's own byte order.
+  That is the one trap in the format: read little-endian, a gain of 1.0 comes
+  back as a denormal near 1e-40, which is a correction that turns a picture
+  black rather than one that merely looks wrong. A spec pins the byte.
+- **Only list 3 is read.** Lists 1 and 2 act on the MOSAIC, before and during
+  demosaicing — inside LibRaw, where nothing here can reach. Reading them
+  would offer a correction that cannot be applied.
+- **A GainMap with a row or column PITCH above 1 is refused**, not applied: a
+  pitch addresses one CFA plane of a mosaic, and spreading it over every
+  pixel of the demosaiced picture would be a real correction of the wrong
+  thing. `unread` names it rather than dropping it silently.
+- **Sizes are the spec's, and they check out against the real file**: a
+  GainMap's parameters are 76 bytes plus `rows × cols × planes` float32s —
+  76 + 32·32·3·4 = **12 364**, exactly the blob PR #145 measured — and a
+  three-plane WarpRectilinear is 4 + 3·6·8 + 16 = **164**, also exact. If a
+  future reader disagrees with those two numbers it has the layout wrong.
+- **Nothing is invented.** A file with no opcodes yields null and the rungs
+  above `gain` are simply not offered.
+
 ## The tool (2026-09-20, P10 second commit)
 
 `DevelopBaseSection` (`shared/develop/DevelopBase.tsx`, drawn under the

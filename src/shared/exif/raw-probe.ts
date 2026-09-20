@@ -24,6 +24,7 @@
  */
 
 import { num, nums, parseIfd, type Entry } from './exif-parser';
+import { describeOpcodes, parseOpcodeList, type DngOpcodes } from './dng-opcodes';
 
 /** IFDs are front-loaded in a TIFF; this is plenty to walk them and find the previews. */
 export const RAW_PROBE_BYTES = 1024 * 1024;
@@ -37,6 +38,7 @@ const TAG = {
   stripOffsets: 273,
   stripByteCounts: 279,
   subIfds: 330,
+  opcodeList3: 51022,
   jpegOffset: 513,
   jpegLength: 514,
 } as const;
@@ -82,6 +84,13 @@ export interface RawProbe {
   preview: RawPreview | null;
   /** The DNG opcode lists the file carries; a decoder that skips them vignettes. */
   opcodes: number[];
+  /**
+   * What `OpcodeList3` — the list that applies to the DEMOSAICED image, which
+   * is the only one this engine can act on — really asks for, read from the
+   * file (`dng-opcodes.ts`). Null when the file carries none, and then no rung
+   * above `gain` is offered: a correction nobody measured is worse than none.
+   */
+  calibration: DngOpcodes | null;
 }
 
 /** What a compression code means, for a report or a panel. */
@@ -153,6 +162,7 @@ export function probeRaw(buffer: ArrayBuffer): RawProbe | null {
 
     const ifds: RawIfd[] = [];
     const opcodes: number[] = [];
+    let calibration: DngOpcodes | null = null;
     const seen = new Set<number>();
 
     const visit = (offset: number, depth: number): number => {
@@ -161,6 +171,14 @@ export function probeRaw(buffer: ArrayBuffer): RawProbe | null {
       const { entry, map, next } = readIfd(view, 0, offset, little);
       ifds.push(entry);
       for (const tag of OPCODE_TAGS) if (map.has(tag) && !opcodes.includes(tag)) opcodes.push(tag);
+      // Only list 3: lists 1 and 2 act on the MOSAIC, before and during
+      // demosaicing, which happens inside LibRaw where nothing here can
+      // reach. Reading them would offer a correction that cannot be applied.
+      const three = map.get(TAG.opcodeList3);
+      if (three && !calibration) {
+        const read = parseOpcodeList(view, three.valueOffset, three.count);
+        if (read.gainMaps.length || read.warp || read.unread.length) calibration = read;
+      }
       // SubIFDs are where a DNG keeps the sensor plane and its full-size
       // render; reading only IFD0 finds the thumbnail and misses both.
       const subs = nums(view, map.get(TAG.subIfds), little) ?? [];
@@ -175,7 +193,7 @@ export function probeRaw(buffer: ArrayBuffer): RawProbe | null {
       guard += 1;
     }
 
-    return { little, ifds, preview: pickPreview(ifds), opcodes };
+    return { little, ifds, preview: pickPreview(ifds), opcodes, calibration };
   } catch {
     return null;
   }
@@ -236,6 +254,9 @@ export function describeRaw(probe: RawProbe): string {
   if (probe.opcodes.length) {
     parts.push(`${probe.opcodes.length} opcode list${probe.opcodes.length > 1 ? 's' : ''}`);
   }
+  // What list 3 really asks for, once it has been read rather than counted.
+  const asked = describeOpcodes(probe.calibration);
+  if (asked) parts.push(asked);
   return parts.join(' · ');
 }
 
@@ -273,6 +294,21 @@ export function rawSizesFrom(head: ArrayBuffer): RawSizes {
     sensor: sensor?.width && sensor?.height ? { width: sensor.width, height: sensor.height } : null,
     render: preview?.width && preview?.height ? { width: preview.width, height: preview.height } : null,
   };
+}
+
+/**
+ * What the CALIBRATION in a RAW on hand asks for, read from its head alone —
+ * a megabyte, no decoder (`dng-opcodes.ts`). Null for a file that carries
+ * none, which is what decides whether the rungs above `gain` are offered at
+ * all: never a correction nobody measured.
+ */
+export async function rawCalibration(file: Blob): Promise<DngOpcodes | null> {
+  try {
+    const head = await file.slice(0, Math.min(RAW_PROBE_BYTES, file.size)).arrayBuffer();
+    return probeRaw(head)?.calibration ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
