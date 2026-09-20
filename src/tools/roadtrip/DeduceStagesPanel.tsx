@@ -39,7 +39,7 @@ import StageDiffList, {
  * or deduced here.
  *
  * Nothing here goes behind that switch. The deduction asks for positions over
- * a DATE RANGE, like the day view and `DayFromWinnow` — the rule
+ * a DATE RANGE, like the day view and the Library's Winnow tab — the rule
  * `roadtrip.md` states as «never put a media-reaching feature behind this
  * switch».
  *

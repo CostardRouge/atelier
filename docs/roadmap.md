@@ -175,8 +175,8 @@ Winnow with its role, its capabilities, when they were last checked, and buttons
 to re-check, make default, or forget.
 
 **Why.** Two open bullets name the same gap (`MEMORY.md`, 2026-09-06):
-`AssetSidebar` and the Road Trip day strip both read `connections[0]`, so a second
-instance is unreachable from either, and no UI removes a connection. A third,
+every media surface reads `connections[0]` (through `winnow/use-connection.ts`), so a
+second instance is unreachable from any of them, and no UI removes a connection. A third,
 documented trap belongs on the same sheet: **the capabilities sheet is a snapshot
 taken at connect time and nothing refreshes it**, so a feature that shipped on the
 server stays hidden until `reconnect`.

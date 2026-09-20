@@ -24,9 +24,10 @@ export interface ScopeRows {
 const ROW_CAP = 400;
 
 /**
- * The instance's media for a span of days — the one read behind the Library's
- * Winnow tab and the piece editor's day strip, so both ask the same question
- * the same way (`date_from` / `date_to`, never a chapter: `roadtrip.md`).
+ * The instance's media for a span of days — the one read behind every surface
+ * that asks one for a day (the Library's Winnow tab, a Develop roll's day
+ * sheet, a hook's picture chooser), so they ask the same question the same
+ * way (`date_from` / `date_to`, never a chapter: `roadtrip.md`).
  *
  * A change of span, half, connection or `enabled` forgets the last answer
  * before asking again, so a new day never shows the previous day's pictures

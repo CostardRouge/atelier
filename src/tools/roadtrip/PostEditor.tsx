@@ -425,19 +425,6 @@ export default function PostEditor({
   );
   const recovery = libraryRecovery ?? (collage ? collageFetch.recoveryOf(librarySlide.media) : null);
 
-  /**
-   * A picture fetched from the day strip: into the pool, then made active —
-   * from there the ordinary Library ↔ slide machinery records it onto the
-   * slide, so this adds no second path to a piece's picture.
-   */
-  const pickFromSource = useCallback(
-    (files: File[], assetId: string) => {
-      lib.addFiles(files);
-      lib.setActive(assetId);
-    },
-    [lib],
-  );
-
   /** A stored ref's file in the Library, by name, or null when it is not loaded. */
   const resolve = useCallback(
     (ref: { name: string } | null) => {
@@ -1581,7 +1568,6 @@ export default function PostEditor({
               recovery={recovery}
               isVideo={isVideo}
               duration={duration}
-              onPickFromSource={pickFromSource}
               patchBadge={patchBadge}
               patchSlide={patchSlide}
               framing={cellFraming}
