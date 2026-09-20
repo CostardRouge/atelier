@@ -27,8 +27,17 @@ import {
   type TripPost,
   type TripStage,
 } from '../../shared/roadtrip/trip-types';
+import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
+import { readCapture, type CaptureDate } from '../../shared/roadtrip/media-date';
+import { gazetteerOrEmpty } from '../../shared/roadtrip/load-gazetteer';
+import {
+  locatePicture,
+  type LocateProposal,
+  type PictureLocation,
+} from '../../shared/roadtrip/locate-picture';
 import DayHeatmap, { levelOf, type DayMenuItem, type DayStage, type HeatmapLeg } from './DayHeatmap';
 import DayPanel from './DayPanel';
+import LocatePicturePanel from './LocatePicturePanel';
 import StagesPanel from './StagesPanel';
 import TripDetailsModal, { type TripDetails } from './TripDetailsModal';
 import PageBar from '../../shared/ui/PageBar';
@@ -247,23 +256,100 @@ export default function TripOverview({
     [selected, startPieceOn],
   );
 
-  // The same three verbs, offered wherever the shell shows one of this day's
-  // pictures large — the sheet is where "this one is worth a piece" is
-  // actually decided, and it used to be three screens from anything that
-  // could act on it. The heading names the DAY the piece would land on: the
-  // Library's local tab holds pictures from any day, and a piece is keyed by
-  // the day it tells, not by the file it shows.
+  /**
+   * «Situer cette photo» — the second gesture of the itinerary deduction, and
+   * the one a single picture can answer: where was I that day?
+   *
+   * The verb only ASKS. `run` is called in the same tick as the activation, so
+   * the active asset is not readable from its closure (`architecture.md`, the
+   * Develop tool's own note): a counter is bumped and the effect below answers
+   * after the render, from the asset as it then is. What it reads is the
+   * picture's own EXIF — the file's, else the instance's record of it — and
+   * the name comes from the committed city index, never from a lookup going
+   * out (`gazetteer.ts`).
+   */
+  const lib = useAssetLibrary();
+  const [pendingLocate, setPendingLocate] = useState(0);
+  const [locating, setLocating] = useState<{
+    name: string;
+    problem?: string;
+    read: {
+      capture: CaptureDate | null;
+      coords: { lat: number; lon: number } | null;
+      location: PictureLocation;
+    } | null;
+  } | null>(null);
+
+  // Which read is the current one. NOT a teardown flag: this effect is keyed
+  // on the counter and resets it, so its own cleanup fires one render later —
+  // a `cancelled` flag set there cancels the very read it just started, and
+  // the sheet stays on "reading the picture…" for ever. Measured.
+  const locateSeq = useRef(0);
+  useEffect(() => {
+    if (pendingLocate === 0) return;
+    setPendingLocate(0);
+    const seq = ++locateSeq.current;
+    const asset = lib.assets.find((a) => a.id === lib.activeId) ?? null;
+    const file = asset?.parts.image ?? null;
+    if (!file) {
+      setLocating({
+        name: asset?.baseName ?? 'this media',
+        problem:
+          'Only a photograph carries a position of its own — a clip’s flight log is not read here.',
+        read: null,
+      });
+      return;
+    }
+    setLocating({ name: file.name, read: null });
+    void (async () => {
+      // One read of the file's head answers both questions, and the index is
+      // fetched only now — never at boot (`load-gazetteer.ts`).
+      const [capture, cities] = await Promise.all([readCapture(file), gazetteerOrEmpty()]);
+      if (locateSeq.current !== seq) return;
+      setLocating({
+        name: file.name,
+        read: {
+          capture: capture.date,
+          coords: capture.coords,
+          location: locatePicture({
+            trip,
+            date: capture.date?.date ?? null,
+            coords: capture.coords,
+            cities,
+          }),
+        },
+      });
+    })();
+  }, [pendingLocate, lib.assets, lib.activeId, trip]);
+
+  // The verbs offered wherever the shell shows one of this day's pictures
+  // large — the sheet is where "this one is worth a piece" is actually
+  // decided, and it used to be three screens from anything that could act on
+  // it. The heading names the DAY a PIECE would land on: the Library's local
+  // tab holds pictures from any day, and a piece is keyed by the day it tells,
+  // not by the file it shows. Locating is about the picture's OWN day instead,
+  // and the seam carries ONE heading for the whole row — so the heading says
+  // both jobs rather than letting the piece sentence claim the fourth verb,
+  // and the sheet it opens states the day it measured before writing anything.
   const offer = useMemo<MediaActions | null>(
     () =>
       selected
         ? {
-            heading: `Start a piece on ${formatIsoDate(selected)}`,
-            actions: POST_KINDS.map((k) => ({
-              id: k.id,
-              label: k.label,
-              hint: `${k.hint} — from this picture`,
-              run: () => startPiece(k.id),
-            })),
+            heading: `Start a piece on ${formatIsoDate(selected)} · or locate it`,
+            actions: [
+              ...POST_KINDS.map((k) => ({
+                id: k.id,
+                label: k.label,
+                hint: `${k.hint} — from this picture`,
+                run: () => startPiece(k.id),
+              })),
+              {
+                id: 'locate',
+                label: 'Locate it',
+                hint: 'Name where this picture was taken, and offer that place to the leg of its own day',
+                run: () => setPendingLocate((n) => n + 1),
+              },
+            ],
           }
         : null,
     [selected, startPiece],
@@ -409,6 +495,25 @@ export default function TripOverview({
       return days / 7;
     },
     [tripStart, tripEnd],
+  );
+
+  /**
+   * Accept what the picture said. It writes through the stage editors that
+   * already exist (`locate-picture.ts` composes them), so there is no second
+   * way into the document — and the calendar follows to the day that was
+   * measured, with the leg it touched open underneath, because a change you
+   * cannot see is a change nobody can check.
+   */
+  const acceptLocation = useCallback(
+    (proposal: LocateProposal) => {
+      const date = locating?.read?.location.date ?? null;
+      const result = proposal.apply(trip);
+      setStages(result.stages);
+      if (date) onSelectDate(date);
+      setStageId(result.selectedId);
+      setLocating(null);
+    },
+    [locating, trip, setStages, onSelectDate],
   );
 
   // The dates-and-route sheet, the creation modal reopened on this trip.
@@ -584,6 +689,17 @@ export default function TripOverview({
             mutate(trip.posts.filter((p) => p.id !== id));
           }}
           onOpenPost={onOpenPost}
+        />
+      )}
+
+      {locating && (
+        <LocatePicturePanel
+          trip={trip}
+          name={locating.name}
+          read={locating.read}
+          problem={locating.problem}
+          onCancel={() => setLocating(null)}
+          onAccept={acceptLocation}
         />
       )}
 

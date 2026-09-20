@@ -211,6 +211,8 @@ The kind chip (`video+srt`, `video`, `photo`, …) is back to its original full-
 
 **Long action rows follow the two-group shape** documented above for the transport: `[choice + hint]` with `grow shrink basis-[20rem]`, then `[cancel + go]` with `ml-auto`, so the actions never get stranded alone on a line while the hint keeps the one above. Any modal deep enough to scroll pins that row (`sticky bottom-0 -mx-6 px-6 pb-6 bg-surface`, container `px-6 pt-6`) — `ProjectSettingsModal` already did; `NewProjectModal` and `NewTripModal` now do too.
 
+**A modal opened from INSIDE the shell's library sheet needs `z-[60]`** (2026-09-20). Every overlay in the suite is `z-50` — `MediaLightbox`, every tool modal, `BottomSheet`'s panel — so within that level the DOM order decides, and the shell renders after the tool: on a phone the library sheet sat over the sheet a verb had just opened and swallowed its primary button. Only one modal needs this today (Trips' «Situer cette photo», `roadtrip.md`), because every other `MediaAction` navigates away instead of opening a sheet over the one it was pressed from. **How to apply**: raise the sheet, do not try to close the library from a tool — the sheet belongs to the shell and the seam is one-way.
+
 **Verified** in headless Chromium at 390×844, 744×1133, 834×1112 and 1280×900 against a throwaway harness that mounted the modal with `window.fetch` stubbed for the Winnow endpoints (no instance needed, thumbnails deliberately failing); `scrollWidth - clientWidth` was 0 at every width. Rebuild that harness rather than eyeballing this file — it is the only way to see the modal without a connected Winnow.
 
 ## A `1fr` grid track cannot be trusted to carry `aspect-ratio` (rev. 2026-09-07)
