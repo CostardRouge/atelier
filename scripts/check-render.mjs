@@ -788,6 +788,93 @@ const out = await page.evaluate(async () => {
     bitmap.close();
   }
 
+
+  // --- the camera warp: WarpRectilinear against camera-warp.ts -------------
+  //
+  // NOT radial about the frame's centre — the optical centre is the file's —
+  // so it asks WHERE a pixel is, and both source kinds must land it in the
+  // same place. The picture is a grid of hard squares so a warp that moved
+  // nothing, or moved the wrong way, cannot hide in a smooth ramp.
+  {
+    const { createRenderGraph } = await import('/atelier/src/shared/render/graph.ts');
+    const cw = await import('/atelier/src/shared/render/camera-warp.ts');
+    const { makeCameraWarpPass } = await import('/atelier/src/shared/render/camera-warp-pass.ts');
+    const VW = 120, VH = 80;
+    const vc = document.createElement('canvas'); vc.width = VW; vc.height = VH;
+    const vg = vc.getContext('2d');
+    for (let y = 0; y < VH; y++) for (let x = 0; x < VW; x++) {
+      const on = ((x / 10 | 0) + (y / 10 | 0)) % 2 === 0;
+      const r = on ? 220 : 40, g = on ? 60 : 200, b = Math.round(20 + (x / VW) * 200);
+      vg.fillStyle = `rgb(${r},${g},${b})`;
+      vg.fillRect(x, y, 1, 1);
+    }
+    const src = vg.getImageData(0, 0, VW, VH).data;
+    // The DJI's own shape (a magnification, the planes a hair apart), plus an
+    // OFF-CENTRE optical centre and real k1/k2, which is what makes the
+    // normalising radius observable at all.
+    const warp = {
+      planes: [
+        { radial: [1.0495, 0.012, -0.004, 0.001], tangential: [0.0005, -0.0004] },
+        { radial: [1.0493, 0.012, -0.004, 0.001], tangential: [0.0005, -0.0004] },
+        { radial: [1.0491, 0.012, -0.004, 0.001], tangential: [0.0005, -0.0004] },
+      ],
+      centerH: 0.47,
+      centerV: 0.52,
+    };
+    const bitmap = await createImageBitmap(vc);
+    const through = (source) => {
+      const cv = document.createElement('canvas');
+      const graph = createRenderGraph(cv);
+      graph.resize(VW, VH);
+      graph.render(source, [makeCameraWarpPass(warp, VW, VH)]);
+      const o = document.createElement('canvas'); o.width = VW; o.height = VH;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(cv, 0, 0);
+      const d = oc.getImageData(0, 0, VW, VH).data;
+      graph.dispose();
+      return d;
+    };
+    // The pure twin samples the source bilinearly exactly as the GPU does.
+    const pick = (u, v, c) => {
+      const x = u * VW - 0.5, y = v * VH - 0.5;
+      const x0 = Math.floor(x), y0 = Math.floor(y);
+      const fx = x - x0, fy = y - y0;
+      const at = (xx, yy) => {
+        const cx = Math.min(VW - 1, Math.max(0, xx)), cy = Math.min(VH - 1, Math.max(0, yy));
+        return src[(cy * VW + cx) * 4 + c];
+      };
+      return (at(x0, y0) * (1 - fx) + at(x0 + 1, y0) * fx) * (1 - fy) +
+             (at(x0, y0 + 1) * (1 - fx) + at(x0 + 1, y0 + 1) * fx) * fy;
+    };
+    // Well inside, so the pass's own refusal at the edge is not what is measured.
+    const probes = [];
+    for (let y = 10; y < VH - 10; y += 3) for (let x = 10; x < VW - 10; x += 4) probes.push([x, y]);
+    const compare = (gpu) => {
+      let worst = 0;
+      for (const [x, y] of probes) {
+        for (let c = 0; c < 3; c++) {
+          const [u, v] = cw.warpSourceUv(warp, c, (x + 0.5) / VW, (y + 0.5) / VH, VW, VH);
+          worst = Math.max(worst, Math.abs(gpu[(y * VW + x) * 4 + c] - Math.round(pick(u, v, c))));
+        }
+      }
+      return worst;
+    };
+    const warped = through(vc);
+    let moved = 0;
+    for (const [x, y] of probes) moved = Math.max(moved, Math.abs(warped[(y * VW + x) * 4] - src[(y * VW + x) * 4]));
+    results.cameraWarp = {
+      canvas: compare(warped),
+      bitmap: compare(through(bitmap)),
+      moved,
+      identity: makeCameraWarpPass(
+        { planes: [{ radial: [1, 0, 0, 0], tangential: [0, 0] }], centerH: 0.5, centerV: 0.5 },
+        VW,
+        VH,
+      ) === null,
+    };
+    bitmap.close();
+  }
+
   // --- the FilmNode: grain and halation against the pure twins -------------
   //
   // The node is the one place in the graph that renders buffers of its OWN
@@ -1277,6 +1364,17 @@ const gmr = out.gainMap;
     `\n  ${ok ? 'ok  ' : 'FAIL'}  gain map against gain-map.ts: canvas worst ${gmr.canvas}, ImageBitmap worst ` +
       `${gmr.bitmap} code(s) (allowed 2); the x5.93 corner reads ${gmr.lifted} and the x1.00 one ${gmr.untouched}` +
       (gmr.flat ? '' : ' — a FLAT field still built a pass'),
+  );
+}
+
+const cwr = out.cameraWarp;
+{
+  const ok = cwr.canvas <= 3 && cwr.bitmap <= 3 && cwr.moved > 30 && cwr.identity;
+  if (!ok) bad += 1;
+  console.log(
+    `  ${ok ? 'ok  ' : 'FAIL'}  camera warp against camera-warp.ts: canvas worst ${cwr.canvas}, ImageBitmap worst ` +
+      `${cwr.bitmap} code(s) (allowed 3); it moved the picture by ${cwr.moved}` +
+      (cwr.identity ? '' : ' — an IDENTITY warp still built a pass'),
   );
 }
 
