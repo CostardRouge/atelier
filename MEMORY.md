@@ -235,6 +235,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 | `docs/memory/raw.md` | `src/shared/raw/` (libraw-wasm), `DevelopSettings.base` / `rawGain`, the graph's half-float source — which BYTES a picture is developed from |
 | `docs/memory/render-detail.md` | `render/detail.ts`, `detail-pass.ts`, the Detail tab — denoise, defringe, sharpen, any pass reading a NEIGHBOURHOOD |
 | `docs/memory/render-repair.md` | `render/repair.ts`, `repair-pass.ts`, `RollPicture.repair`, the Repair section — heal, clone, dust, anything that COPIES pixels from one place to another |
+| `docs/memory/render-film.md` | `render/film-pass.ts`, `shared/film/film-texture.ts` / `film-noise.ts` / `film-grain.ts` — grain, halation, `RenderPass.prepare`, any spatial effect belonging to a LOOK |
 | `docs/memory/hdr.md` | `src/shared/hdr/` (the gain map, the Ultra HDR container, the display probe), `RollExport.hdr`, any claim about HDR on a still |
 
 Not memory files, but read them before starting new work, or before touching

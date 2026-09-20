@@ -105,6 +105,9 @@ outgrew the ~150-line budget together:
 - `render-geometry.md` — the lens and the keystone, and the `imageUv` rule
   every pass that asks WHERE a pixel is must follow.
 - `render-layers.md` — masks and adjustment layers.
+- `render-film.md` — the FilmNode: grain, halation, and `RenderPass.prepare`,
+  which exists because the halo is blurred in a buffer of the node's OWN size
+  and so cannot be passes of this graph.
 
 ## Passes are SWAPPED, not rebuilt (2026-09-18)
 
