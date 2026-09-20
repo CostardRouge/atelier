@@ -257,3 +257,21 @@ Verified in the pane on a synthetic DNG built around a real canvas JPEG: the
 probe read `4000×3000 · sensor JPEG · preview 640×480 · 1 opcode list`, the
 stage drew the embedded gradient, the chip read `RAW · CAMERA RENDER`, and the
 filmstrip cell showed it.
+
+## Slider reset: a dot, bold and a dimmed ↺ — never hover-only (2026-09-20)
+
+**Decision (maintainer, from an artifact proposal comparing five variants).**
+`RangeSlider` (`DevelopSliders.tsx`) draws a changed field with an accent dot
+ahead of the label, the label in bold, and a small ↺ button (`Icons.reset`)
+that stays visible but dimmed at rest and turns accent-coloured once changed
+— never hover-only, since the workbench is used on phones with no hover. The
+row's own double-click-to-reset (already shipped) is kept alongside it for
+whoever already reaches for it. **Why**: of the five variants drawn (a
+hover-revealed icon, this persistent dimmed icon, a label-only double-click,
+an appearing "Reset" text link, and this combination), only the persistent
+icon and the text link work without a pointer that hovers; the dot+bold pair
+beat italic/a tinted label because it reads fastest scanning a column of
+eleven sliders at a glance. **Verified**: `RangeSlider` mounted directly
+against the real dev server (it takes plain props, so no fixture picture is
+needed) and screenshotted at 4×, to check the glyph is the shared
+`Icons.reset` and not a hand-drawn one.
