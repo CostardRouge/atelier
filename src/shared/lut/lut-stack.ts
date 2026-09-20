@@ -32,7 +32,7 @@
  */
 
 import type { CubeLut } from '../lib/cube-parser';
-import { developStage, isDefaultDevelop, type DevelopSettings } from '../develop/develop';
+import { developStage, isDefaultDevelop, isRawDevelop, type DevelopSettings } from '../develop/develop';
 import { sampleTrilinear, sampleWith, type Interpolation } from './interpolate';
 import { makeTransfer, transformLabel, type OutputTransform } from './transfer';
 
@@ -112,9 +112,17 @@ export function composeLutStack(
   // code against 0.35 at 64³ — both under the quantisation step, and not worth
   // eight times the lattice. A develop's tone curve has the same shape near
   // black, so it takes the same floor.
+  // A RAW develop takes the densest lattice there is: its [0,1] is the
+  // SENSOR's range, so the displayed picture comes from the lower part of it
+  // (a measured gain of ×4 puts white at a quarter) and the same 33 points
+  // that hold a render's curve would hold a RAW's over a fraction of them.
   const size = Math.min(
     MAX_COMPOSED_SIZE,
-    transform || developed ? Math.max(largest, TRANSFORM_MIN_SIZE) : largest,
+    developed && isRawDevelop(develop)
+      ? MAX_COMPOSED_SIZE
+      : transform || developed
+        ? Math.max(largest, TRANSFORM_MIN_SIZE)
+        : largest,
   );
   const last = size - 1;
   const data = new Float32Array(size * size * size * 3);

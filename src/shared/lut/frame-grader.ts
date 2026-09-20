@@ -9,10 +9,17 @@ import type { CubeLut } from '../lib/cube-parser';
 import { getDefaultLutInterpolation } from './lut-gl';
 import { makeGraphGrader } from '../render/graph-grader';
 import type { RenderPass } from '../render/graph';
+import type { HalfImage } from '../render/half-image';
+
+/**
+ * What a grader takes: any picture a canvas can draw, or a half-float picture
+ * of our own (a decoded RAW, `render/half-image.ts`) that only the GPU can.
+ */
+export type GradeSource = CanvasImageSource | HalfImage;
 
 export interface FrameGrader {
   /** Grade `source` through the LUT; returns the GL canvas to draw from. */
-  render(source: CanvasImageSource): CanvasImageSource;
+  render(source: GradeSource): CanvasImageSource;
   dispose(): void;
 }
 

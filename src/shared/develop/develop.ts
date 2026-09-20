@@ -85,10 +85,51 @@ export interface DevelopSettings {
   curves?: ToneCurves | null;
   /** Levels per channel (`curves.ts`), or null for none. The same, coarser. */
   levels?: Levels | null;
+  /**
+   * The MATERIAL the numbers act on (`docs/develop-originals.md` §7, decision
+   * 1): absent or `render`, the 8-bit picture every browser decodes — a JPEG,
+   * a proxy, the render a camera writes inside its RAW; `raw`, the sensor's
+   * own data decoded to linear light (`shared/raw/`). Not a slider: it is a
+   * property of THIS picture, chosen in Develop, never copied by a preset, a
+   * paste or a batch verb (`withoutBase`), and never switched by an export.
+   */
+  base?: 'render' | 'raw' | null;
+  /**
+   * With a `raw` base, the picture's own exposure as MEASURED at decode
+   * (`autoBrightGain`): a linear gain the develop stage applies before the
+   * sliders, so the same number reaches a decode of another size at export.
+   * Stored rather than re-measured, because two decodes measure two numbers
+   * and preview = export is a promise. Absent means 1.
+   */
+  rawGain?: number | null;
 }
 
 /** The NUMERIC fields — a key a panel can draw as a slider. */
-export type DevelopKey = Exclude<keyof DevelopSettings, 'curves' | 'levels'>;
+export type DevelopKey = Exclude<keyof DevelopSettings, 'curves' | 'levels' | 'base' | 'rawGain'>;
+
+/** The gain a RAW develop may carry: 4 stops either way is every exposure a camera meters. */
+export const RAW_GAIN_LIMITS = { min: 1 / 16, max: 16 } as const;
+
+/** This develop acts on the sensor's own data. */
+export function isRawDevelop(d: DevelopSettings | null | undefined): boolean {
+  return d?.base === 'raw';
+}
+
+/** The linear gain a RAW develop applies before its sliders; 1 for a render. */
+export function rawGainOf(d: DevelopSettings | null | undefined): number {
+  if (!isRawDevelop(d)) return 1;
+  const g = d?.rawGain;
+  return typeof g === 'number' && Number.isFinite(g) && g > 0 ? g : 1;
+}
+
+/**
+ * The same numbers on NO particular material — what a preset, the clipboard
+ * and a batch verb carry. A base is a fact about one picture's bytes; copying
+ * it onto a JPEG would apply a RAW's gain to a render, four stops too bright.
+ */
+export function withoutBase(d: DevelopSettings): DevelopSettings {
+  return { ...d, base: null, rawGain: null };
+}
 
 /** The sliders, in the order every panel draws them. */
 export const DEVELOP_KEYS: readonly DevelopKey[] = [
@@ -146,11 +187,23 @@ export const DEFAULT_DEVELOP: Readonly<DevelopSettings> = Object.freeze({
   vibrance: 0,
   curves: null,
   levels: null,
+  base: null,
+  rawGain: null,
 });
 
+/**
+ * Nothing changes the picture. A RAW base is NOT default even with every
+ * slider at 0: the material itself is a change, and its measured gain is
+ * applied before any slider.
+ */
 export function isDefaultDevelop(d: DevelopSettings | null | undefined): boolean {
   if (!d) return true;
-  return DEVELOP_KEYS.every((k) => d[k] === 0) && isDefaultCurves(d.curves) && isDefaultLevels(d.levels);
+  return (
+    !isRawDevelop(d) &&
+    DEVELOP_KEYS.every((k) => d[k] === 0) &&
+    isDefaultCurves(d.curves) &&
+    isDefaultLevels(d.levels)
+  );
 }
 
 /**
@@ -179,7 +232,9 @@ export function sameDevelop(a: DevelopSettings | null | undefined, b: DevelopSet
   return (
     DEVELOP_KEYS.every((k) => x[k] === y[k]) &&
     sameCurves(x.curves, y.curves) &&
-    sameLevels(x.levels, y.levels)
+    sameLevels(x.levels, y.levels) &&
+    isRawDevelop(x) === isRawDevelop(y) &&
+    rawGainOf(x) === rawGainOf(y)
   );
 }
 
@@ -199,6 +254,14 @@ export function normaliseDevelop(raw: unknown): DevelopSettings {
   }
   out.curves = curvesOrNull(normaliseCurves(src.curves));
   out.levels = levelsOrNull(normaliseLevels(src.levels));
+  if (src.base === 'raw') {
+    out.base = 'raw';
+    const g = src.rawGain;
+    out.rawGain =
+      typeof g === 'number' && Number.isFinite(g) && g > 0
+        ? Math.min(RAW_GAIN_LIMITS.max, Math.max(RAW_GAIN_LIMITS.min, g))
+        : null;
+  }
   return out;
 }
 
@@ -455,9 +518,14 @@ export function developStage(
 ): (r: number, g: number, b: number) => [number, number, number] {
   if (isDefaultDevelop(d)) return (r, g, b) => [r, g, b];
   const shapers = makeDevelopShapers(d);
+  // On a RAW the lattice's [0,1] is the SENSOR's range, white at its
+  // saturation, and the measured gain brings the picture to its own
+  // exposure before any slider — which is how a value the sensor kept above
+  // the displayed white is still there for "highlights −100" to reach.
+  const gain = rawGainOf(d);
   return (r, g, b) => {
     const out = developLinear(
-      [toLinear(r, 'srgb'), toLinear(g, 'srgb'), toLinear(b, 'srgb')],
+      [toLinear(r, 'srgb') * gain, toLinear(g, 'srgb') * gain, toLinear(b, 'srgb') * gain],
       d,
       shapers,
     );
@@ -503,6 +571,12 @@ export function signed(n: number, digits = 0): string {
 export function developLines(d: DevelopSettings | null | undefined): string[] {
   if (!d || isDefaultDevelop(d)) return ['As shot'];
   const parts: string[] = [];
+  if (isRawDevelop(d)) {
+    // The material first, with the exposure it was measured at — a fact about
+    // the bytes the sliders below act on.
+    const ev = Math.log2(rawGainOf(d));
+    parts.push(`RAW${ev ? ` ${signed(ev, 1)} EV metered` : ''}`);
+  }
   for (const k of DEVELOP_KEYS) {
     const v = d[k];
     if (!v) continue;

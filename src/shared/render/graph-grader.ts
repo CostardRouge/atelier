@@ -16,7 +16,8 @@ import type { FrameGrader } from '../lut/frame-grader';
 import type { Interpolation } from '../lut/interpolate';
 import { makeExportCanvas } from '../media/webcodecs-export';
 import { makeCubePass } from './cube-pass';
-import { createRenderGraph, type RenderPass, type RenderPrecision } from './graph';
+import { createRenderGraph, type RenderPass, type RenderPrecision, type RenderSource } from './graph';
+import { isHalfImage } from './half-image';
 
 export interface GraphGrader extends FrameGrader {
   /** What the intermediate buffers really are here — 'byte' where float16 cannot be rendered to. */
@@ -74,7 +75,16 @@ export function makeGraphGrader(
     return {
       precision: 'byte',
       maxSize: Number.POSITIVE_INFINITY,
-      render: (source) => source,
+      // A half-float picture has no 2D form to hand back: without WebGL2 a
+      // RAW draws as a blank, said once, rather than as an exception in a
+      // paint loop. The 8-bit decode path stays available to the caller.
+      render: (source) => {
+        if (isHalfImage(source)) {
+          console.warn('[render] no WebGL2: a RAW cannot be drawn without the GPU');
+          return canvas;
+        }
+        return source;
+      },
       setExtraPasses() {},
       dispose() {},
     };
@@ -95,7 +105,7 @@ export function makeGraphGrader(
       // `SVGImageElement` — a thing WebGL cannot upload and nothing in the
       // suite ever hands a grader. Narrowed here rather than widening the
       // seam, so the contract every consumer already speaks stays as it is.
-      graph.render(source as TexImageSource, [cube, ...extra]);
+      graph.render(source as RenderSource, [cube, ...extra]);
       return canvas;
     },
     dispose() {

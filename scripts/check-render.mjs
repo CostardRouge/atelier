@@ -504,6 +504,79 @@ const out = await page.evaluate(async () => {
     results.fit = { cap, bigWidth: wide.width, fitWidth: fit.width, resampled: fit.resampled, pixel: [px[0], px[1], px[2]] };
   }
 
+  // --- a half-float source: a decoded RAW, uploaded as RGB16F ------------
+  //
+  // Three things only a draw can settle: that the typed-array upload lands
+  // the RIGHT WAY UP (it honours the flip flag a bitmap ignores), that an ODD
+  // width survives the 6-byte texel rows (UNPACK_ALIGNMENT), and that the
+  // same picture as a half image and as an 8-bit canvas grade to the same
+  // bytes through the cube.
+  {
+    const { toHalf } = await import('/atelier/src/shared/render/half-image.ts');
+    const { makeGraphGrader } = await import('/atelier/src/shared/render/graph-grader.ts');
+    const HW = 191, HH = 97; // odd on purpose
+    const cvs = document.createElement('canvas'); cvs.width = HW; cvs.height = HH;
+    const hg = cvs.getContext('2d');
+    const rgb = new Float32Array(HW * HH * 3);
+    for (let y = 0; y < HH; y++) for (let x = 0; x < HW; x++) {
+      // A ramp, with a bright block in the TOP-LEFT corner.
+      const block = x < 24 && y < 24;
+      const r = block ? 1 : x / (HW - 1);
+      const g = block ? 1 : y / (HH - 1);
+      const b = block ? 1 : 0.25;
+      rgb.set([r, g, b], (y * HW + x) * 3);
+      hg.fillStyle = `rgb(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)})`;
+      hg.fillRect(x, y, 1, 1);
+    }
+    // The SAME numbers the canvas holds — quantised to 8 bits — so the two
+    // sources differ in nothing but the upload path; a half image fed the
+    // exact floats is MORE precise than the canvas and reads 2 codes off
+    // through a steep curve, which is right and not what this row measures.
+    const halfData = new Uint16Array(rgb.length);
+    for (let i = 0; i < rgb.length; i++) halfData[i] = toHalf(Math.round(rgb[i] * 255) / 255);
+    const halfImg = { kind: 'half', width: HW, height: HH, data: halfData };
+    const readAll = (canvas) => {
+      const o = document.createElement('canvas'); o.width = HW; o.height = HH;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(canvas, 0, 0);
+      return oc.getImageData(0, 0, HW, HH).data;
+    };
+    // Untouched: the half image through no look.
+    const plain = makeGraphGrader(null, HW, HH, 1, 'tetrahedral');
+    const p = readAll(plain.render(halfImg));
+    plain.dispose();
+    const at = (d, x, y) => [d[(y * HW + x) * 4], d[(y * HW + x) * 4 + 1], d[(y * HW + x) * 4 + 2]];
+    // Through the look, both ways.
+    const gHalf = makeGraphGrader(cube, HW, HH, 1, 'tetrahedral');
+    const a = readAll(gHalf.render(halfImg));
+    gHalf.dispose();
+    const gCanvas = makeGraphGrader(cube, HW, HH, 1, 'tetrahedral');
+    const b = readAll(gCanvas.render(cvs));
+    gCanvas.dispose();
+    let worstRamp = 0;
+    for (let y = 0; y < HH; y += 7) for (let x = 0; x < HW; x += 5) {
+      const got = at(p, x, y);
+      const block = x < 24 && y < 24;
+      const want = block ? [255, 255, 255] : [Math.round((x / (HW - 1)) * 255), Math.round((y / (HH - 1)) * 255), Math.round(0.25 * 255)];
+      for (let c = 0; c < 3; c++) worstRamp = Math.max(worstRamp, Math.abs(got[c] - want[c]));
+    }
+    const w = worst(a, b);
+    const wi = Math.floor(w.at / 4);
+    const spread = [0, 0, 0, 0];
+    for (let i = 0; i < a.length; i++) if (i % 4 !== 3) spread[Math.min(3, Math.abs(a[i] - b[i]))]++;
+    const plainCanvas = makeGraphGrader(null, HW, HH, 1, 'tetrahedral');
+    const pc = readAll(plainCanvas.render(cvs));
+    plainCanvas.dispose();
+    const plainDiff = worst(p, pc).worst;
+    results.half = {
+      spread, plainDiff,
+      topLeft: at(p, 4, 4), bottomLeft: at(p, 4, HH - 4), bottomRight: at(p, HW - 4, HH - 4),
+      worstRamp,
+      graded: w.worst,
+      where: { x: wi % HW, y: Math.floor(wi / HW), half: at(a, wi % HW, Math.floor(wi / HW)), canvas: at(b, wi % HW, Math.floor(wi / HW)), plain: at(p, wi % HW, Math.floor(wi / HW)) },
+    };
+  }
+
   // --- the cube without OES_texture_float_linear: half-float, never 8-bit --
   //
   // This GPU has the extension, so the fallback would otherwise run nowhere a
@@ -699,6 +772,25 @@ const fit = out.fit;
     `\n  ${okCap && okFit && okPixel ? 'ok  ' : 'FAIL'}  this GPU takes ${fit.cap} px on one edge; a ${fit.bigWidth} px picture ` +
       `is fitted to ${fit.fitWidth}${fit.resampled ? '' : ' (NOT resampled)'} and grades to ${JSON.stringify(fit.pixel)}` +
       (okPixel ? '' : ' — BLACK'),
+  );
+}
+
+const hs = out.half;
+{
+  const upright = hs.topLeft.every((v) => v > 240) && hs.bottomLeft[0] < 40 && hs.bottomRight[0] > 215;
+  const okRamp = hs.worstRamp <= 1;
+  // Two codes, not one: a half-float a hair UNDER k/255 is written to the
+  // 8-bit canvas as k−1 on this GPU (measured — the untouched pictures already
+  // differ by one code in places), and a steep curve makes that two. An 8-bit
+  // source never meets it, since its values are exactly k/255; a RAW's values
+  // are continuous and meet it everywhere, harmlessly.
+  const okGrade = hs.graded <= 2 && hs.plainDiff <= 1;
+  if (!upright || !okRamp || !okGrade) bad += 1;
+  console.log(
+    `\n  ${upright && okRamp && okGrade ? 'ok  ' : 'FAIL'}  a half-float source (191×97, odd): ` +
+      `${upright ? 'the right way up' : `UPSIDE DOWN or wrong (top-left ${JSON.stringify(hs.topLeft)}, bottom-left ${JSON.stringify(hs.bottomLeft)})`}` +
+      `, ramp within ${hs.worstRamp} code${hs.worstRamp === 1 ? '' : 's'}, graded within ${hs.graded} of the same canvas ` +
+      `(${hs.spread[0]} pixels equal, ${hs.spread[1]} one code off, ${hs.spread[2] + hs.spread[3]} two)`,
   );
 }
 

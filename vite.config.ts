@@ -224,9 +224,10 @@ const BASE = process.env.BASE_PATH ?? `/${REPO}/`;
 export default defineConfig({
   plugins: [react(), tailwindcss(), lutsManifestPlugin(), houseStylePlugin()],
   base: BASE,
-  // ffmpeg.wasm (the HEVC→H.264 transcode fallback) spins up a module worker and
-  // is loaded lazily; don't let dev pre-bundling rewrite its worker URL, and emit
-  // ES-format workers so the production build matches.
-  optimizeDeps: { exclude: ['@ffmpeg/ffmpeg'] },
+  // ffmpeg.wasm (the HEVC→H.264 transcode fallback) and libraw-wasm (the RAW
+  // decoder) each spin up a module worker and are loaded lazily; don't let dev
+  // pre-bundling rewrite their worker URLs, and emit ES-format workers so the
+  // production build matches.
+  optimizeDeps: { exclude: ['@ffmpeg/ffmpeg', 'libraw-wasm'] },
   worker: { format: 'es' },
 });

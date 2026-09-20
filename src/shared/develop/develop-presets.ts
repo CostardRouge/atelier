@@ -7,7 +7,7 @@
  * A preset holds a COPY of numbers: applied, never followed. Pure and DOM-free.
  */
 
-import { cloneDevelop, isDefaultDevelop, type DevelopPreset, type DevelopSettings } from './develop';
+import { cloneDevelop, isDefaultDevelop, withoutBase, type DevelopPreset, type DevelopSettings } from './develop';
 
 /**
  * The list with a preset holding a copy of `settings` under `name`. A name
@@ -24,13 +24,16 @@ export function savePresetIn(
   id: string,
 ): readonly DevelopPreset[] {
   const label = name.trim();
-  if (!settings || isDefaultDevelop(settings) || !label) return list;
+  // A preset is numbers, never a material: the base and its metered gain
+  // belong to the one picture they were measured on.
+  const numbers = settings ? withoutBase(settings) : null;
+  if (!numbers || isDefaultDevelop(numbers) || !label) return list;
   // A name is a name however it is cased: "dusk" replaces "Dusk", in the new spelling.
   const existing = list.findIndex((p) => p.name.trim().toLowerCase() === label.toLowerCase());
   const preset: DevelopPreset = {
     id: existing >= 0 ? list[existing].id : id,
     name: label,
-    settings: cloneDevelop(settings),
+    settings: cloneDevelop(numbers),
   };
   return existing >= 0 ? list.map((p, i) => (i === existing ? preset : p)) : [...list, preset];
 }

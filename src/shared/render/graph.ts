@@ -28,10 +28,14 @@
  */
 
 import { VERTEX_SRC } from './glsl';
+import { isHalfImage, type HalfImage } from './half-image';
 import { planPasses, targetsNeeded, type PassSlot } from './pass-plan';
 
 /** What the intermediate buffers can hold. */
 export type RenderPrecision = 'float16' | 'byte';
+
+/** Anything the graph draws from: an 8-bit browser source, or a half-float picture of our own. */
+export type RenderSource = TexImageSource | HalfImage;
 
 export interface RenderPass {
   /** For a message when a pass will not compile. */
@@ -66,9 +70,11 @@ export interface RenderGraph {
   readonly canvas: HTMLCanvasElement | OffscreenCanvas;
   /**
    * Draw `source` through `passes` onto the canvas, which is returned so a
-   * caller can composite it. An empty list draws the source untouched.
+   * caller can composite it. An empty list draws the source untouched. A
+   * `HalfImage` (a decoded RAW) is uploaded at half-float precision and, like
+   * a bitmap, once per identity.
    */
-  render(source: TexImageSource, passes: readonly RenderPass[]): HTMLCanvasElement | OffscreenCanvas;
+  render(source: RenderSource, passes: readonly RenderPass[]): HTMLCanvasElement | OffscreenCanvas;
   resize(width: number, height: number): void;
   /** Run a pass's own `dispose` against this graph's context. */
   releasePass(pass: RenderPass): void;
@@ -141,7 +147,7 @@ interface Target {
 }
 
 /** A source's pixel size, for the kinds that say it; null for the rest. */
-function sourceSize(source: TexImageSource): { width: number; height: number } | null {
+function sourceSize(source: RenderSource): { width: number; height: number } | null {
   if (typeof HTMLVideoElement !== 'undefined' && source instanceof HTMLVideoElement) {
     return { width: source.videoWidth, height: source.videoHeight };
   }
@@ -230,7 +236,7 @@ export function createRenderGraph(
    * A canvas or a video can change under the same identity, so those are
    * uploaded every time, as before.
    */
-  let uploaded: ImageBitmap | null = null;
+  let uploaded: ImageBitmap | HalfImage | null = null;
   /** Programs whose first draw has been checked for a GL error (dev only). */
   const checked = new Set<string>();
   let lostSaid = false;
@@ -318,15 +324,28 @@ export function createRenderGraph(
       // trip is neutral under one UV convention, so only the FIRST pass has to
       // care.
       const bitmap = typeof ImageBitmap !== 'undefined' && source instanceof ImageBitmap ? source : null;
+      const half = isHalfImage(source) ? source : null;
+      // Both are immutable, so both are keyed by identity and uploaded once.
+      const keyed = bitmap ?? half;
       const bitmapSource = bitmap ? 1 : 0;
-      if (!bitmap || bitmap !== uploaded) {
+      if (!keyed || keyed !== uploaded) {
         const size = sourceSize(source);
         if (size && (size.width > maxSize || size.height > maxSize)) {
           tooBig('the source', size.width, size.height);
         }
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
-        uploaded = bitmap;
+        if (half) {
+          // A typed array HONOURS the flip flag (only a bitmap ignores it), so
+          // a top-row-first picture lands like a canvas does and `u_flipY`
+          // stays 0. Three half-floats per texel are 6 bytes, so an odd width
+          // makes a row that is not a multiple of the default alignment of 4.
+          gl.pixelStorei(gl.UNPACK_ALIGNMENT, 2);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB16F, half.width, half.height, 0, gl.RGB, gl.HALF_FLOAT, half.data);
+          gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+        } else {
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source as TexImageSource);
+        }
+        uploaded = keyed;
       }
 
       const needed = targetsNeeded(list.length);

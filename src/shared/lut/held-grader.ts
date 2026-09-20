@@ -21,7 +21,7 @@
  * must not pay a readback (~3 ms at a 4K frame) for a result it throws away.
  */
 
-import type { FrameGrader, PassGrader } from './frame-grader';
+import type { FrameGrader, GradeSource, PassGrader } from './frame-grader';
 import type { RenderPass } from '../render/graph';
 
 export type RasterSurface = OffscreenCanvas | HTMLCanvasElement;
@@ -47,7 +47,7 @@ export interface HeldGrader extends FrameGrader {
   setPasses?: (passes: readonly RenderPass[]) => void;
 }
 
-function isCanvas(source: CanvasImageSource): source is RasterSurface {
+function isCanvas(source: GradeSource): source is RasterSurface {
   return (
     (typeof OffscreenCanvas !== 'undefined' && source instanceof OffscreenCanvas) ||
     (typeof HTMLCanvasElement !== 'undefined' && source instanceof HTMLCanvasElement)
@@ -91,7 +91,7 @@ export const copyToRaster: CopyPicture = (picture, into) => {
  * disposes the grader it holds.
  */
 export function holdGrades(inner: FrameGrader, copy: CopyPicture = copyToRaster): HeldGrader {
-  let source: CanvasImageSource | null = null;
+  let source: GradeSource | null = null;
   let graded: CanvasImageSource | null = null;
   let held: RasterSurface | null = null;
   let surface: RasterSurface | null = null;

@@ -9,10 +9,14 @@ import {
   developOrNull,
   developStage,
   isDefaultDevelop,
+  isRawDevelop,
   normaliseDevelop,
   normaliseDevelopPresets,
+  RAW_GAIN_LIMITS,
+  rawGainOf,
   sameDevelop,
   signed,
+  withoutBase,
   type DevelopSettings,
 } from './develop';
 import { identityCurve, makeCurve, type Curve, type ToneCurves } from './curves';
@@ -228,9 +232,10 @@ describe('isDefaultDevelop / normaliseDevelop', () => {
     expect(out.vibrance).toBe(0);
     expect(out.tint).toBe(0);
     expect(out.highlights).toBe(0);
-    // The sliders, plus the two SHAPES that are not sliders — a stored develop
-    // carries exactly these and nothing a stranger's file smuggled in.
-    expect(Object.keys(out).sort()).toEqual([...DEVELOP_KEYS, 'curves', 'levels'].sort());
+    // The sliders, the two SHAPES that are not sliders, and the material — a
+    // stored develop carries exactly these and nothing a stranger's file
+    // smuggled in.
+    expect(Object.keys(out).sort()).toEqual([...DEVELOP_KEYS, 'curves', 'levels', 'base', 'rawGain'].sort());
     expect(normaliseDevelop(null)).toEqual(DEFAULT_DEVELOP);
   });
 });
@@ -448,5 +453,46 @@ describe('curves and levels in a develop', () => {
     expect(out.curves?.red).toEqual([{ x: 0.2, y: 0.4 }, { x: 0.9, y: 0.1 }]);
     expect(out.levels?.blue?.gamma).toBe(1.4);
     expect(out.levels?.rgb).toBeNull();
+  });
+});
+
+describe('a RAW base', () => {
+  it('is never default, compares by base and gain, and is stripped by withoutBase', () => {
+    const raw: DevelopSettings = { ...DEFAULT_DEVELOP, base: 'raw', rawGain: 2 };
+    expect(isDefaultDevelop(raw)).toBe(false);
+    expect(isRawDevelop(raw)).toBe(true);
+    expect(rawGainOf(raw)).toBe(2);
+    expect(rawGainOf({ ...DEFAULT_DEVELOP, base: 'raw' })).toBe(1);
+    expect(rawGainOf({ ...DEFAULT_DEVELOP, rawGain: 2 })).toBe(1);
+    expect(sameDevelop(raw, { ...raw })).toBe(true);
+    expect(sameDevelop(raw, { ...raw, rawGain: 2.5 })).toBe(false);
+    expect(sameDevelop(raw, withoutBase(raw))).toBe(false);
+    expect(isDefaultDevelop(withoutBase(raw))).toBe(true);
+    expect(cloneDevelop(raw).base).toBe('raw');
+    expect(cloneDevelop(raw).rawGain).toBe(2);
+  });
+
+  it('reads back safely: only "raw" is a base, the gain is clamped, a render carries none', () => {
+    expect(normaliseDevelop({ base: 'raw', rawGain: 3 }).rawGain).toBe(3);
+    expect(normaliseDevelop({ base: 'raw', rawGain: 1000 }).rawGain).toBe(RAW_GAIN_LIMITS.max);
+    expect(normaliseDevelop({ base: 'raw', rawGain: 'x' }).rawGain).toBeNull();
+    expect(normaliseDevelop({ base: 'proxy', rawGain: 3 }).base).toBeNull();
+    expect(normaliseDevelop({ base: 'proxy', rawGain: 3 }).rawGain).toBeNull();
+    expect(developOrNull({ base: 'raw' })).not.toBeNull();
+  });
+
+  it('applies the measured gain in LINEAR light before the sliders, in the bake stage', () => {
+    const stage = developStage({ ...DEFAULT_DEVELOP, base: 'raw', rawGain: 2 });
+    const [r] = stage(0.5, 0.5, 0.5);
+    expect(r).toBeCloseTo(fromLinear(toLinear(0.5, 'srgb') * 2, 'srgb'), 9);
+    // The same gain and −1 EV: back where it started.
+    const back = developStage({ ...DEFAULT_DEVELOP, base: 'raw', rawGain: 2, exposure: -1 });
+    expect(back(0.5, 0.5, 0.5)[1]).toBeCloseTo(0.5, 9);
+  });
+
+  it('names the material and its metered exposure first', () => {
+    expect(developLines({ ...DEFAULT_DEVELOP, base: 'raw', rawGain: 4 })[0]).toBe('RAW +2.0 EV metered');
+    expect(developLines({ ...DEFAULT_DEVELOP, base: 'raw', rawGain: 1 })[0]).toBe('RAW');
+    expect(developLines({ ...DEFAULT_DEVELOP, base: 'raw', rawGain: 4, exposure: -0.5 })).toEqual(['RAW +2.0 EV metered', '−0.5 EV']);
   });
 });

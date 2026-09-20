@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
-import { isDefaultDevelop, type DevelopSettings } from '../../shared/develop/develop';
+import { DEFAULT_DEVELOP, isDefaultDevelop, isRawDevelop, withoutBase, type DevelopSettings } from '../../shared/develop/develop';
 import { hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from '../../shared/develop/develop-clipboard';
 import type { Keystone } from '../../shared/render/geometry';
 import type { LensCorrection } from '../../shared/render/lens';
@@ -475,12 +475,22 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   }, [openId, visibleSelected, roll.pictures, exportPictures]);
 
   const writeDevelopTo = useCallback(
-    (targets: readonly string[], develop: DevelopSettings | null) =>
+    (targets: readonly string[], develop: DevelopSettings | null) => {
+      // The NUMBERS travel, never the material: a base and its metered gain
+      // are facts about the one picture they were measured on. A target's
+      // own base is kept, so a batch onto a RAW keeps it on the RAW.
+      const numbers = develop ? withoutBase(develop) : null;
+      const value = numbers && !isDefaultDevelop(numbers) ? numbers : null;
       update((r) => ({
         ...r,
-        pictures: r.pictures.map((p) => (targets.includes(p.id) ? { ...p, develop: develop ? { ...develop } : null } : p)),
+        pictures: r.pictures.map((p) => {
+          if (!targets.includes(p.id)) return p;
+          const own = p.develop && isRawDevelop(p.develop) ? { base: p.develop.base, rawGain: p.develop.rawGain } : null;
+          return { ...p, develop: value || own ? { ...(value ?? DEFAULT_DEVELOP), ...(own ?? {}) } : null };
+        }),
         updatedAt: Date.now(),
-      })),
+      }));
+    },
     [update],
   );
   const canPaste = useSyncExternalStore(subscribeDevelopClipboard, hasCopiedDevelop);
@@ -494,7 +504,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           id: 'selection',
           label: `Apply to ${n} selected`,
           hint: 'the pictures marked in the filmstrip, each as its own copy',
-          run: (settings: DevelopSettings) => writeDevelopTo(selectionTargets, isDefaultDevelop(settings) ? null : settings),
+          run: (settings: DevelopSettings) => writeDevelopTo(selectionTargets, settings),
         },
       ];
       if (canPaste) {
@@ -504,7 +514,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           hint: 'the copied numbers, written onto each marked picture',
           run: () => {
             const pasted = pasteDevelop();
-            if (pasted) writeDevelopTo(selectionTargets, isDefaultDevelop(pasted) ? null : pasted);
+            if (pasted) writeDevelopTo(selectionTargets, pasted);
           },
         });
       }
@@ -519,7 +529,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         run: (settings: DevelopSettings) =>
           writeDevelopTo(
             roll.pictures.filter((p) => p.id !== openId).map((p) => p.id),
-            isDefaultDevelop(settings) ? null : settings,
+            settings,
           ),
       },
     ];
