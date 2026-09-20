@@ -1,9 +1,15 @@
 /**
- * "Choose a look" — a grid of every built-in LUT (and, where asked, the film
- * stocks) baked live onto a sample image, so picking one means looking at the
- * actual result instead of reading a name off a `<select>`. A tile click IS
- * the choice — there is nothing further to confirm, since seeing it first was
- * the point.
+ * "Choose a look" — a rail of families on the left, a grid of looks baked
+ * live on the right, so picking one means looking at the actual result
+ * instead of reading a name off a `<select>`. A tile click IS the choice —
+ * there is nothing further to confirm, since seeing it first was the point.
+ *
+ * **The rail is what makes a purchased pack affordable** (variant B of
+ * `docs/lut-packs.md` §6, the maintainer's choice): only the open node's
+ * looks are ever resolved, so a 25-look pack of 65³ lattices — 41 MB — never
+ * has to be decoded to draw a screen. A pack look does not even bake: its
+ * thumbnail was baked once at import, on the reference its family asks for
+ * (`pack-thumbs.ts`). On a phone the rail becomes a row of crumbs.
  *
  * The sample is the truest thing on hand: a picture already open in the host
  * tool when one is passed in, otherwise a photo the author loads right here
@@ -11,7 +17,7 @@
  * (`lut-preview.ts`) — a sky, a neutral ramp, saturated colour and a skin
  * tone, the handful of things a look actually changes.
  *
- * Every look is resolved (fetched + parsed, or — a film stock — generated)
+ * Every built-in or film look is resolved (fetched + parsed, or generated)
  * one at a time with a tick between each: a screenful of film stocks is real
  * CPU, ~100 ms apiece (`film-layer.ts`), and baking them as one burst would
  * hold a frame. Thumbnails pop in as they finish rather than all at once,
@@ -21,74 +27,26 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { CubeLut } from '../lib/cube-parser';
-import { filmCubeFor } from '../film/film-layer';
-import { FILM_GROUP_LABEL, FILM_STOCKS, filmSettingsFor } from '../film/stocks';
 import { decodePhoto } from '../media/photo-frame';
 import { pickFile } from '../sources/file-sources';
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
 import { Icons } from '../ui/icons';
 import useDialogKeys from '../ui/use-dialog-keys';
-import { LUT_GROUPS, UNGROUPED_LUTS } from './builtin-luts';
+import { galleryNodes, matchingItems, type GalleryNode } from './gallery-nodes';
 import {
   PREVIEW_SAMPLE_SIZE,
   bakeLutPreview,
   syntheticPreviewSample,
   type RgbBitmap,
 } from './lut-preview';
+import LutPackImportModal from './LutPackImportModal';
 import LutThumb from './LutThumb';
-import { loadBuiltinLut } from './restore-grade';
 import { useLutInterpolation } from './use-lut-interpolation';
+import { useLutPacks } from './use-lut-packs';
 
 /** Anything the modal can crop a preview sample from. */
 export type LutPreviewSource = ImageBitmap | HTMLCanvasElement | HTMLImageElement;
-
-interface GalleryItem {
-  id: string;
-  name: string;
-  resolve: () => Promise<CubeLut>;
-}
-
-interface GallerySection {
-  /** Section header; '' draws no header (the ungrouped built-ins). */
-  label: string;
-  items: GalleryItem[];
-}
-
-function buildSections(includeFilm: boolean): GallerySection[] {
-  const sections: GallerySection[] = [];
-  if (includeFilm) {
-    sections.push({
-      label: FILM_GROUP_LABEL,
-      items: FILM_STOCKS.map((s) => ({
-        id: `film:${s.id}`,
-        name: s.name,
-        resolve: () => Promise.resolve(filmCubeFor(filmSettingsFor(s.id))),
-      })),
-    });
-  }
-  if (UNGROUPED_LUTS.length) {
-    sections.push({
-      label: '',
-      items: UNGROUPED_LUTS.map((l) => ({
-        id: l.id,
-        name: l.name,
-        resolve: () => loadBuiltinLut(l.id).then((r) => r.lut),
-      })),
-    });
-  }
-  for (const g of LUT_GROUPS) {
-    sections.push({
-      label: g.label,
-      items: g.luts.map((l) => ({
-        id: l.id,
-        name: l.name,
-        resolve: () => loadBuiltinLut(l.id).then((r) => r.lut),
-      })),
-    });
-  }
-  return sections;
-}
 
 /** Crop `source` to a centred square and read it back as a small `RgbBitmap`. */
 function sampleFromImage(source: LutPreviewSource, size: number): RgbBitmap {
@@ -107,7 +65,7 @@ function sampleFromImage(source: LutPreviewSource, size: number): RgbBitmap {
 }
 
 export interface LutGalleryModalProps {
-  /** Highlighted with a ring: a builtin id, `film:<id>`, or 'none'. */
+  /** Highlighted with a ring: a builtin id, `film:<id>`, `pack:<pack>/<look>`, or 'none'. */
   selected?: string;
   /** Draws a "No look (original)" tile first — the single-pick "Look" control wants this. */
   allowNone?: boolean;
@@ -130,13 +88,24 @@ export default function LutGalleryModal({
   onClose,
 }: LutGalleryModalProps) {
   const { interpolation } = useLutInterpolation();
-  const sections = useMemo(() => buildSections(includeFilm), [includeFilm]);
+  const packIndexes = useLutPacks();
+  const nodes = useMemo(
+    () => galleryNodes(packIndexes, includeFilm),
+    [packIndexes, includeFilm],
+  );
 
   const [query, setQuery] = useState('');
+  const [openId, setOpenId] = useState<string>(() => (includeFilm ? 'film' : 'builtin'));
+  const [credits, setCredits] = useState<string | null>(null);
   const [customImage, setCustomImage] = useState<LutPreviewSource | null>(null);
   const [customLabel, setCustomLabel] = useState<string | null>(null);
   const [imageBusy, setImageBusy] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [packsOpen, setPacksOpen] = useState(false);
+
+  // A pack forgotten while its node was open, or a first import: the rail
+  // must never point at a node that is gone.
+  const open = nodes.find((n) => n.id === openId) ?? nodes[0] ?? null;
 
   const effectiveSource = customImage ?? previewImage;
   const [sample, setSample] = useState<RgbBitmap>(() =>
@@ -148,19 +117,34 @@ export default function LutGalleryModal({
     );
   }, [effectiveSource]);
 
+  const shown = useMemo(
+    () =>
+      query.trim()
+        ? matchingItems(nodes, query)
+        : open
+          ? [{ node: open, items: open.items }]
+          : [],
+    [nodes, query, open],
+  );
+  // Only what is on SCREEN is resolved — the rail's whole point, and the
+  // difference between opening a pack's picker and decoding 41 MB.
+  const pending = useMemo(
+    () => shown.flatMap(({ items }) => items).filter((i) => !i.thumb && i.resolve),
+    [shown],
+  );
+
   // Resolved one item at a time; the promise itself is cached by
   // `loadBuiltinLut`/`filmCubeFor`, so a look already loaded elsewhere in the
   // session (or by a previous open of this gallery) comes back instantly.
   const [resolved, setResolved] = useState<Record<string, CubeLut | 'error'>>({});
   useEffect(() => {
     let cancelled = false;
-    setResolved({});
     (async () => {
-      for (const item of sections.flatMap((s) => s.items)) {
+      for (const item of pending) {
         try {
-          const cube = await item.resolve();
+          const cube = await item.resolve!();
           if (cancelled) return;
-          setResolved((prev) => ({ ...prev, [item.id]: cube }));
+          setResolved((prev) => (prev[item.id] ? prev : { ...prev, [item.id]: cube }));
         } catch {
           if (!cancelled) setResolved((prev) => ({ ...prev, [item.id]: 'error' }));
         }
@@ -170,7 +154,7 @@ export default function LutGalleryModal({
     return () => {
       cancelled = true;
     };
-  }, [sections]);
+  }, [pending]);
 
   const previews = useMemo(() => {
     const next: Record<string, RgbBitmap> = {};
@@ -201,14 +185,15 @@ export default function LutGalleryModal({
     }
   };
 
-  useDialogKeys({ onCancel: onClose });
+  useDialogKeys({ onCancel: credits ? () => setCredits(null) : onClose });
 
   const q = query.trim().toLowerCase();
-  const visibleSections = sections
-    .map((s) => ({ ...s, items: q ? s.items.filter((i) => i.name.toLowerCase().includes(q)) : s.items }))
-    .filter((s) => s.items.length > 0);
   const showNone =
     allowNone && (!q || 'no look'.includes(q) || 'original'.includes(q) || 'none'.includes(q));
+
+  if (packsOpen) return <LutPackImportModal onClose={() => setPacksOpen(false)} />;
+
+  const creditsFor = nodes.find((n) => n.id === credits)?.pack ?? null;
 
   return createPortal(
     <div
@@ -226,9 +211,17 @@ export default function LutGalleryModal({
             <h2 className="m-0 font-serif text-2xl">{title}</h2>
             <p className="m-0 mt-1 text-sm text-muted">Every look, baked live — click one to use it.</p>
           </div>
-          <IconButton label="Close" variant="ghost" onClick={onClose}>
-            {Icons.close}
-          </IconButton>
+          <div className="flex items-center gap-1">
+            {/* Purchased packs live in this browser's vault, not in the
+                build, so importing one is a verb of the picker rather than a
+                setting somewhere else (`docs/lut-packs.md` §6). */}
+            <Button size="sm" variant="ghost" onClick={() => setPacksOpen(true)}>
+              Packs…
+            </Button>
+            <IconButton label="Close" variant="ghost" onClick={onClose}>
+              {Icons.close}
+            </IconButton>
+          </div>
         </div>
 
         <div className="flex flex-col gap-2.5 border-y border-line py-3">
@@ -272,40 +265,129 @@ export default function LutGalleryModal({
         </div>
         {imageError && <p className="m-0 -mt-2 text-xs text-danger">{imageError}</p>}
 
-        <div className="flex-1 min-h-0 overflow-auto pr-1 -mr-1">
-          <div className="flex flex-col gap-5">
-            {showNone && (
-              <section className="flex flex-col gap-2">
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-2">
-                  <Tile id="none" name="No look (original)" bitmap={noneBitmap} selected={selected === 'none'} onPick={onPick} />
-                </div>
-              </section>
-            )}
-            {visibleSections.map((section) => (
-              <section key={section.label || '·'} className="flex flex-col gap-2">
-                {section.label && (
-                  <h3 className="m-0 font-mono text-2xs tracking-[0.16em] uppercase text-muted">
-                    {section.label}
-                  </h3>
-                )}
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-2">
-                  {section.items.map((item) => (
+        <div className="flex-1 min-h-0 flex gap-4">
+          {/* The rail: every family, one open at a time. */}
+          <nav
+            className="w-[13.5rem] flex-none overflow-auto pr-1 -mr-1 border-r border-line max-[820px]:hidden"
+            aria-label="Look families"
+          >
+            {nodes.map((node) => (
+              <RailRow
+                key={node.id}
+                node={node}
+                open={!query.trim() && node.id === open?.id}
+                onOpen={() => {
+                  setOpenId(node.id);
+                  setQuery('');
+                }}
+              />
+            ))}
+          </nav>
+
+          <div className="flex-1 min-w-0 overflow-auto pr-1 -mr-1">
+            {/* On a phone the rail is a row of crumbs — the families, then the
+                open branch, in the thumb's reach. */}
+            <div className="hidden max-[820px]:flex gap-1.5 flex-wrap mb-3">
+              {nodes
+                .filter((n) => n.depth === 0 || n.id.startsWith(`${open?.id ?? ''}/`) || open?.id.startsWith(`${n.id}/`))
+                .map((node) => (
+                  <button
+                    key={node.id}
+                    type="button"
+                    onClick={() => {
+                      setOpenId(node.id);
+                      setQuery('');
+                    }}
+                    aria-pressed={node.id === open?.id}
+                    className={`px-2.5 py-1 rounded-full border text-xs ${
+                      node.id === open?.id
+                        ? 'border-accent bg-accent-wash text-accent-ink'
+                        : 'border-line-strong bg-paper text-ink-soft'
+                    }`}
+                  >
+                    {node.depth > 0 && <span className="text-muted">› </span>}
+                    {node.label}
+                  </button>
+                ))}
+            </div>
+
+            <div className="flex flex-col gap-5">
+              {showNone && (
+                <section className="flex flex-col gap-2">
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-2">
                     <Tile
-                      key={item.id}
-                      id={item.id}
-                      name={item.name}
-                      bitmap={previews[item.id]}
-                      failed={resolved[item.id] === 'error'}
-                      selected={selected === item.id}
+                      id="none"
+                      name="No look (original)"
+                      bitmap={noneBitmap}
+                      selected={selected === 'none'}
                       onPick={onPick}
                     />
-                  ))}
-                </div>
-              </section>
-            ))}
-            {visibleSections.length === 0 && !showNone && (
-              <p className="m-0 text-sm text-muted">No look matches “{query}”.</p>
-            )}
+                  </div>
+                </section>
+              )}
+              {shown.map(({ node, items }) => (
+                <section key={node.id} className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="m-0 font-mono text-2xs tracking-[0.16em] uppercase text-muted">
+                      {node.label}
+                    </h3>
+                    {node.pack && (
+                      <IconButton
+                        size="sm"
+                        variant="ghost"
+                        label={`About ${node.label}`}
+                        onClick={() => setCredits(credits === node.id ? null : node.id)}
+                      >
+                        {Icons.info}
+                      </IconButton>
+                    )}
+                    {node.hint && <span className="text-2xs text-warn">{node.hint}</span>}
+                  </div>
+                  {credits === node.id && creditsFor && (
+                    <p className="m-0 px-3 py-2 rounded-control bg-paper-2 border border-line text-xs text-ink-soft">
+                      <span className="font-medium text-ink">{creditsFor.name || 'Pack'}</span>
+                      {creditsFor.author && <> — {creditsFor.author}</>}
+                      {creditsFor.url && (
+                        <>
+                          {' · '}
+                          <a
+                            href={creditsFor.url}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            className="text-accent-ink underline"
+                          >
+                            where it came from
+                          </a>
+                        </>
+                      )}
+                      <br />
+                      <span className="text-muted">
+                        Bought looks, kept in this browser — they never leave it.
+                      </span>
+                    </p>
+                  )}
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-2">
+                    {items.map((item) => (
+                      <Tile
+                        key={item.id}
+                        id={item.id}
+                        name={item.name}
+                        thumb={item.thumb}
+                        bitmap={previews[item.id]}
+                        failed={resolved[item.id] === 'error'}
+                        selected={selected === item.id}
+                        onPick={onPick}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+              {shown.length === 0 && !showNone && (
+                <p className="m-0 text-sm text-muted">
+                  {query.trim() ? `No look matches “${query}”.` : 'Nothing here yet.'}
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -323,10 +405,41 @@ export default function LutGalleryModal({
   );
 }
 
+/** One family in the rail: its name, its depth, how many looks it holds. */
+function RailRow({
+  node,
+  open,
+  onOpen,
+}: {
+  node: GalleryNode;
+  open: boolean;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-current={open}
+      title={node.hint ?? node.label}
+      className={`flex w-full items-center gap-2 text-left px-2 py-1.5 rounded-control text-sm transition-colors ${
+        open ? 'bg-accent-wash text-accent-ink' : 'text-ink-soft hover:bg-paper-2'
+      }`}
+      style={{ paddingLeft: `${0.5 + node.depth * 0.85}rem` }}
+    >
+      <span className={`flex-1 min-w-0 truncate ${node.depth === 0 ? 'font-medium text-ink' : ''}`}>
+        {node.label}
+      </span>
+      {node.hint && <span className="text-warn" aria-hidden="true">•</span>}
+      <span className="font-mono text-2xs text-muted tabular-nums">{node.items.length}</span>
+    </button>
+  );
+}
+
 /** One look: the whole tile is the pick, exactly like `HookPicturesModal`'s grid. */
 function Tile({
   id,
   name,
+  thumb,
   bitmap,
   failed = false,
   selected,
@@ -334,7 +447,8 @@ function Tile({
 }: {
   id: string;
   name: string;
-  bitmap: RgbBitmap | undefined;
+  thumb?: string;
+  bitmap?: RgbBitmap | undefined;
   failed?: boolean;
   selected: boolean;
   onPick: (id: string) => void;
@@ -350,7 +464,11 @@ function Tile({
       }`}
     >
       <span className="block w-full h-[74px] rounded-[6px] overflow-hidden bg-paper-2 max-[820px]:h-[92px]">
-        {failed ? (
+        {thumb ? (
+          // Baked at import on the reference this look's family asks for —
+          // nothing to decode here, which is what lets a pack be drawn at all.
+          <img src={thumb} alt="" className="w-full h-full object-cover" />
+        ) : failed ? (
           <span className="grid place-items-center w-full h-full font-mono text-3xs text-danger">failed</span>
         ) : (
           <LutThumb bitmap={bitmap} />

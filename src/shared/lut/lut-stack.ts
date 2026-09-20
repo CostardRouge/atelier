@@ -57,6 +57,29 @@ export interface LutLayer {
   intensity: number;
   /** Off keeps the layer in the stack but skips it — the A/B of grading. */
   enabled: boolean;
+  /**
+   * Why this layer cannot grade on this device, when it cannot: a purchased
+   * look whose lattice is not in this browser's vault (`pack-vault.ts`). The
+   * layer STAYS — switched on, in its place, named — and is skipped by the
+   * bake, because a look that silently graded as identity, or quietly
+   * vanished from the stack, would read as a working grade that is wrong.
+   * `lut` then holds an identity cube so every reader stays total.
+   */
+  missing?: string;
+}
+
+/** The smallest cube that changes nothing — what a layer that cannot grade holds. */
+export function identityCube(): CubeLut {
+  const data = new Float32Array(2 * 2 * 2 * 3);
+  for (let b = 0; b < 2; b += 1)
+    for (let g = 0; g < 2; g += 1)
+      for (let r = 0; r < 2; r += 1) {
+        const o = (r + g * 2 + b * 4) * 3;
+        data[o] = r;
+        data[o + 1] = g;
+        data[o + 2] = b;
+      }
+  return { size: 2, data, domainMin: [0, 0, 0], domainMax: [1, 1, 1] };
 }
 
 /**
@@ -66,9 +89,9 @@ export interface LutLayer {
  */
 export const sampleLut = sampleTrilinear;
 
-/** The layers that actually affect the image. */
+/** The layers that actually affect the image — a look this device cannot resolve is not one. */
 export function activeLayers(layers: readonly LutLayer[]): LutLayer[] {
-  return layers.filter((l) => l.enabled && l.intensity > 0);
+  return layers.filter((l) => l.enabled && l.intensity > 0 && !l.missing);
 }
 
 /**

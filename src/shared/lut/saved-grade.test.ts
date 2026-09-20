@@ -12,6 +12,34 @@ const layer = (over: Partial<SavedLutLayer> = {}): SavedLutLayer => ({
   ...over,
 });
 
+const packLayer = (over: Partial<SavedLutLayer> = {}): SavedLutLayer =>
+  layer({
+    id: 'p1',
+    source: 'pack',
+    name: 'AUTHENTIC · One Click · DJI · D-Log',
+    customText: '{"pack":"pk_1","look":"one-click/dji/d-log","hash":"aa"}',
+    ...over,
+  });
+
+describe('a purchased pack layer', () => {
+  it('is keyed on its reference, so two looks never share a baked cube', () => {
+    const a = gradeKey({ layers: [packLayer()], output: 'none' });
+    const b = gradeKey({
+      layers: [packLayer({ customText: '{"pack":"pk_1","look":"creative/authentic","hash":"bb"}' })],
+      output: 'none',
+    });
+    expect(a).not.toBe(b);
+    // The same reference twice is the same key — one bake for a deck whose
+    // pictures all wear the pack's look.
+    expect(gradeKey({ layers: [packLayer()], output: 'none' })).toBe(a);
+  });
+
+  it('is not an uploaded look: it carries a reference, never a lattice', () => {
+    expect(isUploadedLook(packLayer())).toBe(false);
+    expect(packLayer().customText!.length).toBeLessThan(200);
+  });
+});
+
 describe('gradeKey', () => {
   it('separates two grades that differ in anything a bake reads', () => {
     const base: SavedGrade = { layers: [layer()], output: 'none' };

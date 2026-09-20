@@ -7,13 +7,14 @@ import {
   UNGROUPED_LUTS,
 } from './builtin-luts';
 import FilmDials from './FilmDials';
+import { FILM_PICK, packPickId, readPackPick } from './gallery-nodes';
 import LutGalleryModal, { type LutPreviewSource } from './LutGalleryModal';
+import { looksUnder, nodeLabelPath, flattenNodes, visibleLooks } from './lut-pack';
 import { MAX_LAYER_INTENSITY } from './lut-stack';
 import { OUTPUT_TRANSFORM_OPTIONS } from './transfer';
 import type { LutStack } from './use-lut-stack';
+import { useLutPacks } from './use-lut-packs';
 
-/** The picker's id for a film stock — no built-in id looks like this. */
-const FILM_PICK = 'film:';
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
 import Segmented from '../ui/Segmented';
@@ -36,12 +37,22 @@ interface GradePanelProps {
  * export variant grade through exactly one shader pass.
  */
 export default function GradePanel({ stack, previewImage = null }: GradePanelProps) {
+  const packs = useLutPacks();
   const [pick, setPick] = useState('');
   const [gallery, setGallery] = useState(false);
 
   const pickLook = (id: string) => {
-    if (id.startsWith(FILM_PICK)) stack.addFilm(id.slice(FILM_PICK.length) as FilmStockId);
-    else void stack.addBuiltin(id);
+    const packPick = readPackPick(id);
+    if (packPick) {
+      // The layer stores the REFERENCE; the vault holds the lattice.
+      const pack = packs.find((p) => p.id === packPick.pack);
+      const look = pack?.looks.find((l) => l.id === packPick.look);
+      void stack.addPackLook({ pack: packPick.pack, look: packPick.look, hash: look?.hash ?? '' });
+    } else if (id.startsWith(FILM_PICK)) {
+      stack.addFilm(id.slice(FILM_PICK.length) as FilmStockId);
+    } else {
+      void stack.addBuiltin(id);
+    }
   };
 
   const activeCount = stack.layers.filter(
@@ -93,6 +104,44 @@ export default function GradePanel({ stack, previewImage = null }: GradePanelPro
               ))}
             </optgroup>
           ))}
+          {/* A pack's own tree, flattened into the group's label: native
+              optgroups do not nest, so author → category → camera is written
+              out (`docs/lut-packs.md` §6). Hidden nodes are left out. */}
+          {packs.flatMap((pack) => {
+            const rootLooks = visibleLooks(pack).filter((l) => !l.node);
+            const branches = flattenNodes(pack.tree)
+              .map(({ node }) => ({
+                node,
+                looks: looksUnder(pack, node.id).filter((l) => l.node === node.id),
+              }))
+              .filter(({ looks }) => looks.length > 0);
+            const packLabel = (pack.name || pack.author || 'Pack').toUpperCase();
+            return [
+              ...(rootLooks.length
+                ? [
+                    <optgroup key={`${pack.id}-root`} label={packLabel}>
+                      {rootLooks.map((l) => (
+                        <option key={l.id} value={packPickId(pack.id, l.id)}>
+                          {l.label}
+                        </option>
+                      ))}
+                    </optgroup>,
+                  ]
+                : []),
+              ...branches.map(({ node, looks }) => (
+                <optgroup
+                  key={`${pack.id}-${node.id}`}
+                  label={[packLabel, ...nodeLabelPath(pack.tree, node.id).map((p) => p.toUpperCase())].join(' · ')}
+                >
+                  {looks.map((l) => (
+                    <option key={l.id} value={packPickId(pack.id, l.id)}>
+                      {l.label}
+                    </option>
+                  ))}
+                </optgroup>
+              )),
+            ];
+          })}
         </NativeSelect>
         <IconButton
           label="Browse looks with a live preview"
@@ -163,18 +212,27 @@ export default function GradePanel({ stack, previewImage = null }: GradePanelPro
                 {Icons.close}
               </IconButton>
             </div>
-            <FieldRow label="Strength">
-              <RangeField
-                label={`${layer.name} strength`}
-                min={0}
-                max={MAX_LAYER_INTENSITY}
-                step={0.05}
-                value={layer.intensity}
-                disabled={!layer.enabled}
-                onChange={(v) => stack.setIntensity(layer.id, v)}
-                format={(v) => `${Math.round(v * 100)}%`}
-              />
-            </FieldRow>
+            {layer.missing ? (
+              /* A purchased look whose lattice this device does not hold: the
+                 layer stays, in its place, and says why rather than grading as
+                 identity (`docs/lut-packs.md` §5.2). */
+              <FieldRow label="Missing">
+                <span className="text-xs text-warn">{layer.missing}</span>
+              </FieldRow>
+            ) : (
+              <FieldRow label="Strength">
+                <RangeField
+                  label={`${layer.name} strength`}
+                  min={0}
+                  max={MAX_LAYER_INTENSITY}
+                  step={0.05}
+                  value={layer.intensity}
+                  disabled={!layer.enabled}
+                  onChange={(v) => stack.setIntensity(layer.id, v)}
+                  format={(v) => `${Math.round(v * 100)}%`}
+                />
+              </FieldRow>
+            )}
             {isFilmLayer(layer) && (
               <FilmLayer
                 text={stack.customText[layer.id]}

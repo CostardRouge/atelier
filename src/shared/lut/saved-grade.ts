@@ -27,6 +27,8 @@ export interface SavedGrade {
 
 /** The `source` of a film layer — `shared/film/film-layer.ts` owns the layer, this module only recognises it. */
 const FILM_SOURCE = 'film';
+/** The `source` of a purchased-pack layer — `lut-pack.ts` owns it, this module recognises it. */
+const PACK_SOURCE = 'pack';
 
 /**
  * A stable key for a stored grade — what makes "these two pictures wear the
@@ -48,7 +50,7 @@ export function gradeKey(grade: SavedGrade | null): string {
   const layers = grade.layers.map(
     (l) =>
       `${l.id}:${l.source}:${l.intensity}:${l.enabled ? 1 : 0}` +
-      (l.source === FILM_SOURCE ? `:${l.customText ?? ''}` : ''),
+      (l.source === FILM_SOURCE || l.source === PACK_SOURCE ? `:${l.customText ?? ''}` : ''),
   );
   return [grade.output, ...layers].join('|');
 }
@@ -57,10 +59,13 @@ export function gradeKey(grade: SavedGrade | null): string {
  * True for a look UPLOADED from a `.cube` — text a house style cannot carry
  * (its whole lattice would be committed) and a file format inlines. A film
  * layer carries text too, but it is settings, not a cube, and it is exactly
- * the kind of look a house style is for.
+ * the kind of look a house style is for. A PACK layer likewise: its text is a
+ * reference — pack, look, hash — a couple of hundred bytes naming something
+ * kept in the vault, never a lattice (`docs/lut-packs.md` §3, rule 1).
  */
 export function isUploadedLook(layer: Pick<SavedLutLayer, 'source' | 'customText'>): boolean {
-  return layer.customText !== null && layer.source !== FILM_SOURCE;
+  if (layer.source === FILM_SOURCE || layer.source === PACK_SOURCE) return false;
+  return layer.customText !== null;
 }
 
 /**

@@ -14,10 +14,13 @@
 
 interface FsFileHandle {
   kind: 'file';
+  /** The file's own name — what `pickDirectoryTree` builds a path out of. */
+  name: string;
   getFile(): Promise<File>;
 }
 interface FsDirHandle {
   kind: 'directory';
+  name: string;
   values(): AsyncIterable<FsFileHandle | FsDirHandle>;
 }
 interface WindowWithFsApi extends Window {
@@ -148,6 +151,60 @@ export async function pickDirectory(): Promise<File[]> {
     }
   }
   return pickViaInput();
+}
+
+/** A folder pick that KEEPS the tree: one entry per file, path relative to the folder. */
+export interface DirectoryTree {
+  /** The folder's own name — what a pack is named after by default. */
+  rootName: string;
+  files: { path: string; file: File }[];
+}
+
+/**
+ * Open a directory and return its files WITH their paths inside it.
+ *
+ * `pickDirectory` flattens, which is right for a media folder — the library
+ * keys on names — and wrong for anything whose folders MEAN something: a LUT
+ * pack's categories and cameras are its tree (`docs/lut-packs.md` §2). The
+ * File System Access walk carries the prefix down itself; the
+ * `webkitdirectory` fallback reads `webkitRelativePath` and drops its first
+ * segment, which is the chosen folder itself.
+ */
+export async function pickDirectoryTree(): Promise<DirectoryTree> {
+  if (supportsDirectoryPicker()) {
+    try {
+      const picker = (window as WindowWithFsApi).showDirectoryPicker;
+      const dir = await picker!();
+      const files: { path: string; file: File }[] = [];
+      await collectTree(dir, '', files);
+      return { rootName: dir.name ?? '', files };
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return { rootName: '', files: [] };
+      }
+      throw err;
+    }
+  }
+  const picked = await pickViaInput();
+  let rootName = '';
+  const files = picked.map((file) => {
+    const parts = (file.webkitRelativePath || file.name).split('/');
+    if (parts.length > 1) rootName ||= parts[0];
+    return { path: parts.length > 1 ? parts.slice(1).join('/') : file.name, file };
+  });
+  return { rootName, files };
+}
+
+async function collectTree(
+  dir: FsDirHandle,
+  prefix: string,
+  out: { path: string; file: File }[],
+): Promise<void> {
+  for await (const entry of dir.values()) {
+    const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.kind === 'file') out.push({ path, file: await entry.getFile() });
+    else await collectTree(entry, path, out);
+  }
 }
 
 /**

@@ -16,7 +16,9 @@
 import { filmLayerFromSaved, isFilmLayer } from '../film/film-layer';
 import { parseCube, type CubeLut } from '../lib/cube-parser';
 import { BUILTIN_LUTS } from './builtin-luts';
-import type { LutLayer } from './lut-stack';
+import { isPackLayer, readPackRef } from './lut-pack';
+import { identityCube, type LutLayer } from './lut-stack';
+import { loadPacks, missingLookReason, packLookName, resolvePackLattice } from './pack-vault';
 import type { SavedLutLayer } from './use-lut-stack';
 
 /**
@@ -60,6 +62,11 @@ export interface RestoredLayers {
  * exists — a built-in this build dropped, an uploaded cube whose text did not
  * survive — simply does not come back, rather than being graded as identity:
  * a missing look must be visible, not silently neutral.
+ *
+ * A PACK look is the one exception, and for the same reason: its bytes live
+ * in the vault rather than in the document, so a device that has not imported
+ * the pack yet is an ordinary state, not a broken grade. It comes back as a
+ * layer carrying `missing` — named, in its place, skipped by the bake.
  */
 export async function restoreLayers(saved: readonly SavedLutLayer[]): Promise<RestoredLayers> {
   const customText: Record<string, string> = {};
@@ -73,6 +80,22 @@ export async function restoreLayers(saved: readonly SavedLutLayer[]): Promise<Re
         if (!layer || !s.customText) continue;
         customText[s.id] = s.customText;
         layers.push(layer);
+      } else if (isPackLayer(s)) {
+        // A purchased look: the document named it, the vault holds its bytes
+        // (`docs/lut-packs.md` §5.2). A reference that resolves to nothing
+        // here still comes back as a LAYER that says why — the one look in
+        // the suite that is kept without a cube.
+        const ref = readPackRef(s.customText);
+        if (!ref || !s.customText) continue;
+        customText[s.id] = s.customText;
+        await loadPacks();
+        const lut = await resolvePackLattice(ref);
+        const name = s.name || packLookName(ref) || 'Pack look';
+        layers.push(
+          lut
+            ? { ...s, name, lut }
+            : { ...s, name, lut: identityCube(), missing: missingLookReason(ref) },
+        );
       } else if (s.source === 'custom') {
         const parsed = s.customText ? parseCube(s.customText) : null;
         if (!parsed || !s.customText) continue;

@@ -1,6 +1,10 @@
 # Purchased LUT packs — a private vault, grouped by author
 
-Status: **agreed plan, nothing built** (2026-09-19). Every decision below was
+Status: **steps 1–4 BUILT (2026-09-20); 5–8 open.** The vault, the import and
+the tree picker work on this device; what is left is the Winnow half (5, 6),
+routing "Upload .cube" through the vault (7) and pre-baking the BUILT-INS'
+thumbnails at build time (8 — a pack's are already baked at import).
+Plan agreed 2026-09-19. Every decision below was
 taken with the maintainer in one conversation; §9 lists the work in commits,
 §10 the only things still waiting on him. A future session resumes from this
 file alone: read it whole, then `MEMORY.md`, then `docs/memory/media-pipeline.md`.
@@ -325,14 +329,26 @@ and resets the select). Carried by this pull request. Memory:
 
 | # | Repo | Delivers | Verified by |
 |---|---|---|---|
-| 1 | Atelier | **Pure pack model**: folder tree → index (ids from paths, name cleaning §5.3, variable depth), 16-bit lattice codec, SHA-256 helper. `shared/lut/lut-pack.ts` + tests | round-trip test (cube → 16-bit → cube, max error < 1/2048), tree fixtures mirroring §2 |
-| 2 | Atelier | **Vault on this device**: IndexedDB store (own database, the studio's hand-rolled pattern), `source: 'pack'` layers in `SavedLutLayer`, `restore-grade` + `gradeKey`, the "not in this vault" state | unit tests; a layer with no vault renders bypassed and says so |
-| 3 | Atelier | **Import a pack**: pick the folder (File System Access) or a .zip; preview the parsed tree, rename, hide; bake thumbnails from the references in `public/reference/` | import `~/Downloads/AUTHENTIC_LUT` in the dev app: 25 looks, tree as §2 |
-| 4 | Atelier | **Picker variant B** + credits popover + Manage packs + native select groups (§6) | browser check, desktop and phone width |
+| 1 ✅ | Atelier | **Pure pack model**: folder tree → index (ids from paths, name cleaning §5.3, variable depth), 16-bit lattice codec, SHA-256 helper. `shared/lut/lut-pack.ts` + tests | round-trip test (cube → 16-bit → cube, max error < 1/2048), tree fixtures mirroring §2 |
+| 2 ✅ | Atelier | **Vault on this device**: IndexedDB store (own database, the studio's hand-rolled pattern), `source: 'pack'` layers in `SavedLutLayer`, `restore-grade` + `gradeKey`, the "not in this vault" state | unit tests; a layer with no vault renders bypassed and says so |
+| 3 ✅ | Atelier | **Import a pack**: pick the folder (File System Access) or a .zip; preview the parsed tree, rename, hide; bake thumbnails from the references in `public/reference/` | import `~/Downloads/AUTHENTIC_LUT` in the dev app: 25 looks, tree as §2 |
+| 4 ✅ | Atelier | **Picker variant B** + credits popover + Manage packs + native select groups (§6) | browser check, desktop and phone width |
 | 5 | Winnow | `lutpack` kind + the file store routes + migration + capabilities (§4.4) | Winnow's own tests; curl with a session cookie |
 | 6 | Atelier | **Sync**: push index + files on import, pull the index on connect, fetch a lattice on first use and cache it | Mac imports, iPhone (or a second browser profile) grades offline after one use |
 | 7 | Atelier | **"Upload .cube" goes into the vault** (a one-look personal pack), so no document ever inlines a lattice again (§3.1) | a trip export after an upload holds no `customText` for it |
 | 8 | Atelier | **Pre-baked thumbnails** for built-ins at build, each look read on the reference its family asks for (§7); live "on my picture" as an explicit choice | the gallery opens without fetching or parsing any `.cube` |
+
+**What steps 1–4 landed** (`shared/lut/`): `lut-pack.ts` (the index, the
+names, the reference a document stores), `pack-codec.ts` (unorm16 over the
+lattice's own range), `pack-store.ts` + `pack-vault.ts` (its own IndexedDB
+database, live state, resolution), `pack-import.ts` + `pack-thumbs.ts` +
+`LutPackImportModal.tsx` (read a folder, bake each look on its family's
+reference, hide what you do not shoot, forget a pack), `gallery-nodes.ts` +
+the rewritten `LutGalleryModal.tsx` (the rail, the credits, one node
+resolved at a time) and `GradePanel.tsx` (pack optgroups, a layer that says
+when its look is not in this vault). Driven in a browser against the real
+pack. Not built yet: ★ favourites (§6) — hiding answers "only what I keep",
+and a starred shortlist can come with the sync.
 
 Step 8 can move before 3 (it helps the built-ins on its own). Every step
 ends with typecheck + lint + test + build green (CI's four gates) and a
