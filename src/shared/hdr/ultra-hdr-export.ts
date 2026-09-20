@@ -155,8 +155,16 @@ export async function encodeUltraHdr(
   darker: HTMLCanvasElement,
   stops: number,
   quality: number,
+  /**
+   * The base's metadata (an EXIF block), applied to the SDR JPEG BEFORE the
+   * container is written: the MPF entry counts the gain map's offset from the
+   * base's own bytes, so a segment added afterwards would move the map out
+   * from under it.
+   */
+  stampBase: ((jpeg: Blob) => Promise<Blob>) | null = null,
 ): Promise<UltraHdrResult> {
-  const sdrJpeg = await toBlob(sdr, quality);
+  const encoded = await toBlob(sdr, quality);
+  const sdrJpeg = stampBase ? await stampBase(encoded) : encoded;
   const sdrLin = readLinear(sdr);
   const hdr = hdrRendition(sdrLin, readLinear(darker), stops);
   const map = encodeGainMap(sdrLin, hdr, { scale: GAIN_MAP_SCALE, maxStops: stops });

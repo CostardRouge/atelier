@@ -13,10 +13,10 @@ import { measurePicture, renderRollPicture } from '../../shared/develop/roll-ren
 import type { RollDoc, RollPicture } from '../../shared/develop/roll-types';
 import { WORKING_PREVIEW_EDGE, isWorkingPreview } from '../../shared/develop/working-preview';
 import { knownIdentity, mediaOrigin, type MediaOrigin } from '../../shared/projects/media-identity';
-import { deliverFiles } from '../../shared/sources/deliver-files';
+import { deliverFilesTo, pickDeliveryTarget } from '../../shared/sources/deliver-files';
 import { uniqueName } from '../../shared/sources/unique-name';
 import { EXIF_SLICE_BYTES } from '../../shared/exif/exif-parser';
-import { exportExifBlock, stampExif } from '../../shared/exif/stamp-exif';
+import { exportExifBlock, stampExif, type ExifAccount } from '../../shared/exif/stamp-exif';
 import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
 import { formatBytes } from '../../shared/lib/format';
 import { isRawDevelop, rawGainOf, withoutBase } from '../../shared/develop/develop';
@@ -135,6 +135,20 @@ export function useRollExport({
     const targets = ids.flatMap((id) => r.pictures.filter((p) => p.id === id));
     if (targets.length === 0) return;
     setNote(null);
+    // The folder FIRST, from the click itself: the picker opens only while
+    // the browser still honours that click, about five seconds, and a roll
+    // takes longer than that to render (`deliver-files.ts`).
+    let target;
+    try {
+      target = await pickDeliveryTarget();
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : 'No folder could be chosen.');
+      return;
+    }
+    if (!target) {
+      setNote('No folder was chosen — nothing was rendered.');
+      return;
+    }
     setExporting('Preparing…');
     const rendered: File[] = [];
     const assetIds: (string | null)[] = [];
@@ -157,8 +171,15 @@ export function useRollExport({
           failures.push(`${picture.ref.name} could not be found — not in the Library, and no connected instance holds it`);
           continue;
         }
+        // A working preview is a 2048 px stand-in, never a deliverable: a
+        // file at that size under the picture's own name would sit in his
+        // Gallery folder beside the original as if it were the picture. Left
+        // out and said, so the folder gets reopened and the run redone.
         if (isWorkingPreview(file)) {
-          failures.push(`${picture.ref.name} left from its working preview, ${WORKING_PREVIEW_EDGE} px at most`);
+          failures.push(
+            `${picture.ref.name} was left out: only its ${WORKING_PREVIEW_EDGE} px working preview is in hand — reopen the roll’s folder and export again`,
+          );
+          continue;
         }
         try {
           setExporting(`Measuring ${step}…`);
@@ -248,6 +269,15 @@ export function useRollExport({
               failures.push(`${picture.ref.name} left as a plain JPEG: HDR needs the RAW base, a render holds nothing above white`);
             }
           }
+          // The EXIF is stamped INSIDE the render (`RollRenderOptions.stamp`),
+          // on the base JPEG before any HDR container is written round it;
+          // its account is kept here for the run's sentence.
+          const stamped: { account: ExifAccount } = { account: 'none' };
+          const stamp = async (jpeg: Blob, delivered: PictureSize) => {
+            const exif = exportExifBlock(head, origin?.exif ?? null, delivered);
+            stamped.account = exif.account;
+            return stampExif(jpeg, exif, delivered);
+          };
           const out = await renderRollPicture(source, {
             framing: picture.framing,
             aspect: picture.aspect,
@@ -262,6 +292,7 @@ export function useRollExport({
             repair: picture.repair ?? null,
             raw,
             hdr,
+            stamp,
           });
           if (hdrRun && out.hdr) {
             if (out.hdr.ultra) {
@@ -277,18 +308,16 @@ export function useRollExport({
               `${picture.ref.name} was graded at ${out.gradedAt.width}×${out.gradedAt.height}, the most this GPU renders on one edge — its ${out.source.width}×${out.source.height} were resampled`,
             );
           }
-          const delivered = { width: out.width, height: out.height };
-          const exif = exportExifBlock(head, origin?.exif ?? null, delivered);
           // Said, not hidden: a file that lost its position is worth knowing
           // about before it is filed away.
-          if (exif.account === 'vouched') {
+          if (stamped.account === 'vouched') {
             failures.push(
               `${picture.ref.name} took its EXIF from ${origin?.sourceId ?? 'the source'}’s record — the original was out of reach, so no body or lens`,
             );
-          } else if (exif.account === 'none') {
+          } else if (stamped.account === 'none') {
             failures.push(`${picture.ref.name} carries no EXIF — nothing is known about the picture it came from`);
           }
-          const blob = await stampExif(out.blob, exif, delivered);
+          const blob = out.blob;
           const name = uniqueName(exportName(picture.ref.name), (c) => named.has(c.toLowerCase()));
           named.add(name.toLowerCase());
           rendered.push(
@@ -309,11 +338,10 @@ export function useRollExport({
         return;
       }
       setExporting('Writing…');
-      const delivery = await deliverFiles(rendered, {
+      const delivery = await deliverFilesTo(target, rendered, {
         replace: r.export.replace,
         onProgress: (done, total) => setExporting(`Writing ${done}/${total}…`),
       });
-      if (delivery.method === 'dismissed') return;
       const errors = delivery.method === 'folder' ? delivery.errors : [];
       const renamed = delivery.method === 'folder' ? delivery.renamed : 0;
       setNote(describeRun(delivery.written, delivery.method, [...failures, ...errors], renamed));

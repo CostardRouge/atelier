@@ -247,6 +247,13 @@ shared block. Rules a later phase must keep:
   `-1`, `-2`, `-3`, case-folded because his volume is) — inside a run, where
   two crops of one picture want one name, and against the folder being written
   into. `aspectFileTag` went out with the tag; `crop-aspect.ts` keeps the rest.
+- **The folder is picked AT THE CLICK, before a pixel is rendered**
+  (2026-09-20): `pickDeliveryTarget()` first, the render second,
+  `deliverFilesTo` last — `frontend.md`'s picker trap, found here as "Export
+  this picture works, Export the roll does nothing". A working preview is
+  never exported (`develop-media.md`), and the EXIF is stamped INSIDE the
+  render, on the base JPEG before any Ultra HDR container is written round it
+  (`RollRenderOptions.stamp`, `hdr.md`).
 - **A write NEVER replaces without being told to** (`RollExport.replace`, off
   by default; `writeItems` takes `replace` with no default so every caller
   says which it means — the Studio's and Trips' say `true`, which is what they
