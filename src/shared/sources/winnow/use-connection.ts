@@ -9,11 +9,11 @@ import {
 /**
  * The connected Winnow the media surfaces talk to, and a client for it.
  *
- * Today that is the FIRST connection — the one limitation `AssetSidebar` and
- * `DayFromWinnow` share and record (`MEMORY.md`, open items): choosing
- * between several instances is one open item for every surface at once, and
- * this hook is where it will be answered once, rather than in each caller.
- * Until then, one place says "the first" instead of three.
+ * Today that is the FIRST connection — the limitation every media surface
+ * shares and records (`MEMORY.md`, open items): choosing between several
+ * instances is one open item for all of them at once, and this hook is where
+ * it will be answered once, rather than in each caller. Until then, one place
+ * says "the first".
  */
 export function useWinnowConnection(): {
   connection: WinnowConnection | null;

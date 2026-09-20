@@ -15,9 +15,10 @@ import type { CollageLead, SlideCollage } from '../../../shared/roadtrip/collage
 import LayoutSection from './LayoutSection';
 import CollageMotionSection from './CollageMotionSection';
 import type { PostBadge, PostSlide, TripPost } from '../../../shared/roadtrip/trip-types';
+import { shortHost } from '../../../shared/sources/source-ledger';
+import { useWinnowConnection } from '../../../shared/sources/winnow/use-connection';
 import type { SlideRecovery } from '../use-slide-library';
 import type { GradeScope, TripGradeBinding } from '../use-trip-grade';
-import DayFromWinnow from '../DayFromWinnow';
 import FrameStrip from '../FrameStrip';
 import Button from '../../../shared/ui/Button';
 import { FieldRow, InspectorSection, RangeField, Readout } from '../../../shared/ui/Inspector';
@@ -58,11 +59,6 @@ interface PictureTabProps {
   isVideo: boolean;
   /** The clip's length in seconds; 0 for a photo or while it loads. */
   duration: number;
-  /**
-   * A picture was taken from the day strip: its files, and the Library id
-   * they build into so it becomes the active asset at once.
-   */
-  onPickFromSource: (files: File[], assetId: string) => void;
   patchBadge: (patch: Partial<PostBadge>) => void;
   patchSlide: (patch: Partial<PostSlide>) => void;
   /** How the open slide's picture sits in the frame, and how to change it. */
@@ -148,8 +144,12 @@ export function GradeScopeChips({ grade }: { grade: TripGradeBinding }) {
 
 /**
  * WHICH picture, what shape it is delivered in, and how it is treated: the
- * file and the frame it opens on, the day's pictures asked of the instance
- * that holds them, the deck's aspect, and the grade.
+ * file and the frame it opens on, the cells of a collage, the deck's aspect,
+ * and the grade. WHERE a picture comes from is the Library's business —
+ * including an instance's own day, which its Winnow tab lists for the span
+ * this editor publishes (`roadtrip.md`, «The day's pictures come from the
+ * instance»); this tab drew a second strip of that same day until 2026-09-20
+ * and no longer does.
  *
  * The grade sits here rather than on a tab of its own because it is the
  * picture that gets treated, not the typography — and because a tab holding
@@ -167,7 +167,6 @@ export default function PictureTab({
   recovery,
   isVideo,
   duration,
-  onPickFromSource,
   patchBadge,
   patchSlide,
   framing,
@@ -192,6 +191,15 @@ export default function PictureTab({
   const isHook = slide.kind === 'hook';
   const isCta = slide.kind === 'cta';
   const { stack, scope } = grade;
+  /**
+   * The connected instance's tab in the Library, named as the Library names
+   * it — the day's pictures are fetched THERE since the strip that used to
+   * draw them here was retired (`roadtrip.md`). Said only when there is one:
+   * a standing paragraph about a tab nobody has reads as a missing feature.
+   * The store, not a request — a folded ⓘ must cost nothing.
+   */
+  const { connection } = useWinnowConnection();
+  const instance = connection ? shortHost(connection.id) : null;
   /** The tag the per-cell sections wear when the inspector is about a later cell. */
   const cellBadge = collage && selectedCell > 0 ? `Cell ${selectedCell + 1}` : undefined;
 
@@ -202,10 +210,20 @@ export default function PictureTab({
         title="Picture"
         info={
           isCta ? undefined : (
-            <p>
-              This slide composes over whatever is ticked in the Library on the left, and
-              picking another one there re-points the slide.
-            </p>
+            <>
+              <p>
+                This slide composes over whatever is ticked in the Library on the left, and
+                picking another one there re-points the slide.
+              </p>
+              {instance && (
+                <p>
+                  Its {instance} tab already lists what that instance holds for this
+                  piece’s own day — the day is the query, so no date is ever picked by
+                  hand. A click there brings one picture across; a drag puts it straight
+                  on a cell.
+                </p>
+              )}
+            </>
           )
         }
       >
@@ -272,17 +290,6 @@ export default function PictureTab({
           </>
         )}
       </InspectorSection>
-
-      {/* The day this piece tells, asked of the instance that holds it — so
-          the date is never picked by hand and one picture crosses at a time. */}
-      {!isCta && (
-        <DayFromWinnow
-          day={post.date}
-          onPicked={onPickFromSource}
-          defaultOpen={!slideFile}
-          busy={recovery?.state === 'fetching'}
-        />
-      )}
 
       {/* Several pictures in the frame. Above the framing because the framing
           and the develop below follow the cell selected here (or on the stage). */}

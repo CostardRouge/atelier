@@ -23,10 +23,10 @@
  * **Why it is shared rather than a helper inside one grid.** It was written
  * inside `WinnowBrowser` and stayed there, so the two grids added later — the
  * Library's Winnow tab (`WinnowScopeGrid`) and the piece editor's day strip
- * (`DayFromWinnow`) — each drew a bare `<img>` and re-paid the whole bug. That
- * is the second lesson `DayFromWinnow` has re-paid from that same file (the
- * first was `aspect-square` on a grid tile, `frontend.md`). Every Winnow
- * thumbnail in the suite comes from here.
+ * (since retired for that tab) — each drew a bare `<img>` and re-paid the
+ * whole bug. That was the second lesson the day strip re-paid from that same
+ * file (the first was `aspect-square` on a grid tile, `frontend.md`). Every
+ * Winnow thumbnail in the suite comes from here.
  *
  * It also owns its own attempt count, where `WinnowBrowser` used to hold a
  * `Map` of them: a failing tile re-rendered the entire grid, 132 times on the
@@ -47,7 +47,7 @@ export interface WinnowThumbProps {
   label: string;
   /**
    * The tile's own box, sizing only — `w-full h-[74px]`, or `w-full h-full`
-   * where the grid pins its rows in pixels itself (`DayFromWinnow`). The
+   * where the grid pins its rows in pixels itself. The
    * picture and the given-up label are drawn in the same box, so a failure
    * never changes the grid's shape. A pixel height somewhere in the chain,
    * never `aspect-*`: these grids are all `auto-fill`/`minmax`, where a ratio

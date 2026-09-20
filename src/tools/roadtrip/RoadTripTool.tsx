@@ -312,7 +312,7 @@ export default function RoadTripTool() {
   /**
    * Deduce the legs from an instance's day positions. Unrelated to the
    * timeline and NOT behind its switch: this reads a date range, the way the
-   * day view and `DayFromWinnow` always have.
+   * day view and the Library's Winnow tab always have.
    */
   const openDeduce = useCallback((sourceId: string) => {
     const connection = getWinnowConnection(sourceId);
