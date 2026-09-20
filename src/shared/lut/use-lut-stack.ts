@@ -14,7 +14,9 @@ import { isFilmLayer, newFilmLayer, withFilmSettings } from '../film/film-layer'
 import type { FilmStockId } from '../film/stocks';
 import { parseCube, type CubeLut } from '../lib/cube-parser';
 import { CUBE_ACCEPT, pickFile } from '../sources/file-sources';
-import { composeLutStack, reorderLayer, type LutLayer } from './lut-stack';
+import { isPackLayer, writePackRef, PACK_SOURCE, type PackRef } from './lut-pack';
+import { composeLutStack, identityCube, reorderLayer, type LutLayer } from './lut-stack';
+import { missingLookReason, packLookName, resolvePackLattice } from './pack-vault';
 import { loadBuiltinLut, restoreLayers } from './restore-grade';
 import type { OutputTransform } from './transfer';
 import type { Interpolation } from './interpolate';
@@ -79,6 +81,12 @@ export interface LutStack {
   addCustom: () => Promise<void>;
   /** A film stock as a new layer at the end of the stack — generated, nothing to fetch. */
   addFilm: (stockId: FilmStockId) => void;
+  /**
+   * A purchased look from the vault (`pack-vault.ts`). The layer stores the
+   * REFERENCE, never the lattice, and is added even when this device does not
+   * hold the bytes — it then says so rather than grading.
+   */
+  addPackLook: (ref: PackRef, name?: string) => Promise<void>;
   /** Re-dial a film layer: its cube is regenerated (cached by settings), its name says where it stands. */
   setFilm: (id: string, settings: FilmSettings) => void;
   remove: (id: string) => void;
@@ -231,6 +239,32 @@ export function useLutStack(): LutStack {
     setLayers((prev) => [...prev, layer]);
   }, []);
 
+  const addPackLook = useCallback(async (ref: PackRef, name?: string) => {
+    setError(null);
+    setBusy(true);
+    try {
+      const lut = await resolvePackLattice(ref);
+      const id = uid();
+      const text = writePackRef(ref);
+      const label = name || packLookName(ref) || 'Pack look';
+      setCustomText((prev) => ({ ...prev, [id]: text }));
+      setLayers((prev) => [
+        ...prev,
+        {
+          id,
+          source: PACK_SOURCE,
+          name: label,
+          lut: lut ?? identityCube(),
+          intensity: 1,
+          enabled: true,
+          ...(lut ? {} : { missing: missingLookReason(ref) }),
+        },
+      ]);
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
   const setFilm = useCallback((id: string, settings: FilmSettings) => {
     setLayers((prev) => {
       const current = prev.find((l) => l.id === id);
@@ -303,7 +337,10 @@ export function useLutStack(): LutStack {
         id: l.id,
         source: l.source,
         name: l.name,
-        customText: l.source === 'custom' || isFilmLayer(l) ? (customText[l.id] ?? null) : null,
+        customText:
+          l.source === 'custom' || isFilmLayer(l) || isPackLayer(l)
+            ? (customText[l.id] ?? null)
+            : null,
         intensity: l.intensity,
         enabled: l.enabled,
       })),
@@ -323,6 +360,7 @@ export function useLutStack(): LutStack {
     addBuiltin,
     addCustom,
     addFilm,
+    addPackLook,
     setFilm,
     remove,
     move,

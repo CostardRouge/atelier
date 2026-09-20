@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   activeLayers,
   composeLutStack,
+  identityCube,
   reorderLayer,
   sampleLut,
   type LutLayer,
@@ -307,6 +308,32 @@ describe('activeLayers', () => {
     const off = layer({ lut: half(), enabled: false });
     const zero = layer({ lut: half(), intensity: 0 });
     expect(activeLayers([on, off, zero])).toEqual([on]);
+  });
+});
+
+describe('a look this device cannot resolve', () => {
+  it('is skipped by the bake although it is switched on', () => {
+    const missing = layer({ lut: half(), missing: 'Not in this browser’s vault.' });
+    expect(activeLayers([missing])).toEqual([]);
+    // Nothing else is active either, so the picture grades through NO cube —
+    // the same as wearing no look, which is what "skipped" has to mean.
+    expect(composeLutStack([missing])).toBeNull();
+  });
+
+  it('does not change what the other layers do', () => {
+    const real = layer({ lut: half() });
+    const missing = layer({ id: 'l2', lut: half(), missing: 'gone' });
+    expect(composeLutStack([real, missing])).toBe(composeLutStack([real]));
+  });
+
+  it('holds an identity cube, so every reader stays total', () => {
+    const cube = identityCube();
+    expect(cube.size).toBe(2);
+    expect(sampleLut(cube, 0.3, 0.6, 0.9)).toEqual([
+      expect.closeTo(0.3, 5),
+      expect.closeTo(0.6, 5),
+      expect.closeTo(0.9, 5),
+    ]);
   });
 });
 

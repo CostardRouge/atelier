@@ -163,18 +163,27 @@ export default function GradePanel({ stack, previewImage = null }: GradePanelPro
                 {Icons.close}
               </IconButton>
             </div>
-            <FieldRow label="Strength">
-              <RangeField
-                label={`${layer.name} strength`}
-                min={0}
-                max={MAX_LAYER_INTENSITY}
-                step={0.05}
-                value={layer.intensity}
-                disabled={!layer.enabled}
-                onChange={(v) => stack.setIntensity(layer.id, v)}
-                format={(v) => `${Math.round(v * 100)}%`}
-              />
-            </FieldRow>
+            {layer.missing ? (
+              /* A purchased look whose lattice this device does not hold: the
+                 layer stays, in its place, and says why rather than grading as
+                 identity (`docs/lut-packs.md` §5.2). */
+              <FieldRow label="Missing">
+                <span className="text-xs text-warn">{layer.missing}</span>
+              </FieldRow>
+            ) : (
+              <FieldRow label="Strength">
+                <RangeField
+                  label={`${layer.name} strength`}
+                  min={0}
+                  max={MAX_LAYER_INTENSITY}
+                  step={0.05}
+                  value={layer.intensity}
+                  disabled={!layer.enabled}
+                  onChange={(v) => stack.setIntensity(layer.id, v)}
+                  format={(v) => `${Math.round(v * 100)}%`}
+                />
+              </FieldRow>
+            )}
             {isFilmLayer(layer) && (
               <FilmLayer
                 text={stack.customText[layer.id]}

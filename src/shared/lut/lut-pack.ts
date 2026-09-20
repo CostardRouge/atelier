@@ -98,6 +98,72 @@ export function readPackRef(text: string | null | undefined): PackRef | null {
   }
 }
 
+/* ----------------------------------------------------------------- stored */
+
+/** Bumped when a stored index needs reading differently; `migratePackIndex` is where that happens. */
+export const PACK_VERSION = 1;
+
+/**
+ * An index read back out of storage — or off a Winnow later — onto the
+ * current shape, or null when it is not an index at all. Defensive for the
+ * same reason `gradeOrNull` is (`saved-grade.ts`): a stored document is
+ * untrusted input, and a half-read pack would offer looks whose bytes are
+ * not there.
+ */
+export function migratePackIndex(raw: unknown): LutPackIndex | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const p = raw as Record<string, unknown>;
+  if (typeof p.id !== 'string' || !p.id) return null;
+  if (!Array.isArray(p.looks)) return null;
+  const looks = p.looks.filter(isLookish).map(readLook);
+  return {
+    id: p.id,
+    name: typeof p.name === 'string' ? p.name : '',
+    author: typeof p.author === 'string' ? p.author : '',
+    ...(typeof p.url === 'string' && p.url ? { url: p.url } : {}),
+    tree: Array.isArray(p.tree) ? p.tree.filter(isNodeish).map(readNode) : [],
+    looks,
+    hidden: Array.isArray(p.hidden) ? p.hidden.filter((h): h is string => typeof h === 'string') : [],
+  };
+}
+
+function isLookish(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const l = value as { id?: unknown; file?: unknown };
+  return typeof l.id === 'string' && !!l.id && typeof l.file === 'string';
+}
+
+function readLook(raw: Record<string, unknown>): PackLook {
+  const lattice = typeof raw.lattice === 'number' && Number.isFinite(raw.lattice) ? raw.lattice : undefined;
+  const bytes = typeof raw.bytes === 'number' && Number.isFinite(raw.bytes) ? raw.bytes : undefined;
+  return {
+    id: String(raw.id),
+    label: typeof raw.label === 'string' && raw.label ? raw.label : String(raw.id),
+    node: typeof raw.node === 'string' ? raw.node : '',
+    file: String(raw.file),
+    family: raw.family === 'log' ? 'log' : 'rec709',
+    ...(lattice ? { lattice } : {}),
+    ...(bytes ? { bytes } : {}),
+    ...(typeof raw.hash === 'string' && raw.hash ? { hash: raw.hash } : {}),
+  };
+}
+
+function isNodeish(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const n = value as { id?: unknown };
+  return typeof n.id === 'string' && !!n.id;
+}
+
+function readNode(raw: Record<string, unknown>): PackNode {
+  const children = Array.isArray(raw.children) ? raw.children.filter(isNodeish).map(readNode) : [];
+  return {
+    id: String(raw.id),
+    label: typeof raw.label === 'string' && raw.label ? raw.label : String(raw.id),
+    ...(typeof raw.hint === 'string' && raw.hint ? { hint: raw.hint } : {}),
+    ...(children.length ? { children } : {}),
+  };
+}
+
 /* ------------------------------------------------------------------ names */
 
 /**
