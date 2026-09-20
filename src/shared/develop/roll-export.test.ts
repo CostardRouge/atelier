@@ -204,4 +204,14 @@ describe('names and sentences', () => {
       'Nothing was written — a.jpg is not in the Library (+1 more)',
     );
   });
+
+  it('says how many were numbered around a file already in the folder', () => {
+    expect(describeRun(3, 'folder', [], 1)).toBe('3 pictures written · 1 numbered, the folder already held that name');
+    expect(describeRun(3, 'folder', [], 2)).toBe(
+      '3 pictures written · 2 numbered, the folder already held those names',
+    );
+    expect(describeRun(2, 'folder', ['b.jpg: no room'], 1)).toBe(
+      '2 pictures written · 1 numbered, the folder already held that name — b.jpg: no room',
+    );
+  });
 });

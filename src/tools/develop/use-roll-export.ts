@@ -206,10 +206,14 @@ export function useRollExport({
         return;
       }
       setExporting('Writing…');
-      const delivery = await deliverFiles(rendered, (done, total) => setExporting(`Writing ${done}/${total}…`));
+      const delivery = await deliverFiles(rendered, {
+        replace: r.export.replace,
+        onProgress: (done, total) => setExporting(`Writing ${done}/${total}…`),
+      });
       if (delivery.method === 'dismissed') return;
       const errors = delivery.method === 'folder' ? delivery.errors : [];
-      setNote(describeRun(delivery.written, delivery.method, [...failures, ...errors]));
+      const renamed = delivery.method === 'folder' ? delivery.renamed : 0;
+      setNote(describeRun(delivery.written, delivery.method, [...failures, ...errors], renamed));
       // Only the files from ONE instance, so a future send-home plan refuses
       // nothing it did not have to.
       const sourceId = sourceIds.size === 1 ? [...sourceIds][0] : null;

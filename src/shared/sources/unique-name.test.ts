@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { dedupeNames, numberedName, splitName, uniqueName, UNIQUE_NAME_LIMIT } from './unique-name';
+import {
+  dedupeNames,
+  numberedName,
+  splitName,
+  uniqueName,
+  uniqueNameAsync,
+  UNIQUE_NAME_LIMIT,
+} from './unique-name';
 
 describe('splitName', () => {
   it('splits on the LAST dot and keeps a leading one in the base', () => {
@@ -31,6 +38,16 @@ describe('uniqueName', () => {
 
   it('gives up rather than looping when everything is taken', () => {
     expect(() => uniqueName('x.jpg', () => true)).toThrow(String(UNIQUE_NAME_LIMIT));
+  });
+});
+
+describe('uniqueNameAsync', () => {
+  it('answers like its sync twin when the question has to be asked of the disk', async () => {
+    const held = new Set(['dji_0101.jpg', 'dji_0101-1.jpg']);
+    const taken = (c: string) => Promise.resolve(held.has(c.toLowerCase()));
+    await expect(uniqueNameAsync('DJI_0101.jpg', taken)).resolves.toBe('DJI_0101-2.jpg');
+    await expect(uniqueNameAsync('other.jpg', taken)).resolves.toBe('other.jpg');
+    await expect(uniqueNameAsync('x.jpg', () => Promise.resolve(true))).rejects.toThrow(String(UNIQUE_NAME_LIMIT));
   });
 });
 

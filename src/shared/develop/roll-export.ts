@@ -296,11 +296,25 @@ export function longEdgeChoiceId(longEdge: number | null): string {
   return LONG_EDGE_CHOICES.find((c) => c.longEdge === longEdge)?.id ?? 'source';
 }
 
-/** The run's outcome in one sentence: what was written, what could not be. */
-export function describeRun(written: number, method: 'folder' | 'download', failures: readonly string[]): string {
+/**
+ * The run's outcome in one sentence: what was written, what was numbered
+ * around a file already there, and what could not be written at all.
+ */
+export function describeRun(
+  written: number,
+  method: 'folder' | 'download',
+  failures: readonly string[],
+  renamed = 0,
+): string {
   const head =
     written === 0
       ? 'Nothing was written'
       : `${written} picture${written === 1 ? '' : 's'} ${method === 'folder' ? 'written' : 'downloaded'}`;
-  return failures.length ? `${head} — ${failures[0]}${failures.length > 1 ? ` (+${failures.length - 1} more)` : ''}` : head;
+  const kept =
+    renamed > 0
+      ? ` · ${renamed} numbered, the folder already held ${renamed === 1 ? 'that name' : 'those names'}`
+      : '';
+  return failures.length
+    ? `${head}${kept} — ${failures[0]}${failures.length > 1 ? ` (+${failures.length - 1} more)` : ''}`
+    : `${head}${kept}`;
 }

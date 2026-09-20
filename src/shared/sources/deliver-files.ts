@@ -11,13 +11,23 @@ import { downloadBlob } from '../media/save';
 import { canWriteToDisk, pickWritableDirectory, writeItems } from './write-files';
 
 export type Delivery =
-  | { method: 'folder'; written: number; errors: string[] }
+  | { method: 'folder'; written: number; renamed: number; errors: string[] }
   | { method: 'download'; written: number }
   | { method: 'dismissed' };
 
+export interface DeliverOptions {
+  /**
+   * Replace a file the chosen folder already holds under that name, or number
+   * the incoming one. Only the folder can honour it: a DOWNLOAD is the
+   * browser's, and it numbers a repeat by itself, whatever this says.
+   */
+  replace: boolean;
+  onProgress?: (done: number, total: number) => void;
+}
+
 export async function deliverFiles(
   files: readonly File[],
-  onProgress?: (done: number, total: number) => void,
+  { replace, onProgress }: DeliverOptions,
 ): Promise<Delivery> {
   if (canWriteToDisk()) {
     let dir: FileSystemDirectoryHandle;
@@ -26,12 +36,16 @@ export async function deliverFiles(
     } catch {
       return { method: 'dismissed' };
     }
-    const res = await writeItems(
-      dir,
-      files.map((f) => ({ name: f.name, file: f })),
-      (done, total) => onProgress?.(done, total),
-    );
-    return { method: 'folder', written: res.written, errors: res.errors.map((e) => `${e.name}: ${e.message}`) };
+    const res = await writeItems(dir, files.map((f) => ({ name: f.name, file: f })), {
+      replace,
+      onProgress: (done, total) => onProgress?.(done, total),
+    });
+    return {
+      method: 'folder',
+      written: res.written,
+      renamed: res.renamed,
+      errors: res.errors.map((e) => `${e.name}: ${e.message}`),
+    };
   }
   for (const [i, f] of files.entries()) {
     downloadBlob(f, f.name);

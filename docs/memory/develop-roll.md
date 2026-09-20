@@ -247,6 +247,16 @@ shared block. Rules a later phase must keep:
   `-1`, `-2`, `-3`, case-folded because his volume is) — inside a run, where
   two crops of one picture want one name, and against the folder being written
   into. `aspectFileTag` went out with the tag; `crop-aspect.ts` keeps the rest.
+- **A write NEVER replaces without being told to** (`RollExport.replace`, off
+  by default; `writeItems` takes `replace` with no default so every caller
+  says which it means — the Studio's and Trips' say `true`, which is what they
+  always did). Off, the folder is asked about each name as its turn comes
+  (`nameTaken` → `uniqueNameAsync`) and a taken one is numbered; the run's
+  sentence says how many were. The probe goes to the real file system, so a
+  case-insensitive volume answers about `DJI_0101.JPG` when asked about
+  `DJI_0101.jpg` — which is the case that matters, since an export named after
+  its picture is exactly what would otherwise land on its own original. A
+  DOWNLOAD cannot honour the choice: the browser numbers a repeat itself.
 - **A RAW original is never fetched** (`decodableOriginal`: jpg/png/webp/
   avif/gif/bmp only — no HEIC, no TIFF): decision 4, the render the person
   developed is what leaves, and the reason is said on the *Delivers* row.

@@ -65,6 +65,24 @@ export function uniqueName(name: string, taken: (candidate: string) => boolean):
 }
 
 /**
+ * `uniqueName` where the question has to be asked of the disk. The loop is
+ * written twice rather than made async everywhere: a run names its files
+ * before it has a folder, and making that path await would spread `async`
+ * through pure code for nothing.
+ */
+export async function uniqueNameAsync(
+  name: string,
+  taken: (candidate: string) => Promise<boolean>,
+): Promise<string> {
+  if (!(await taken(name))) return name;
+  for (let n = 1; n <= UNIQUE_NAME_LIMIT; n += 1) {
+    const candidate = numberedName(name, n);
+    if (!(await taken(candidate))) return candidate;
+  }
+  throw new Error(`there are already ${UNIQUE_NAME_LIMIT} files named like ${name}`);
+}
+
+/**
  * The same names with the repeats numbered, in order — the first keeps the
  * plain name. Case-folded, because the volume this lands on most likely is.
  */
