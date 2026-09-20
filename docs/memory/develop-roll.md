@@ -247,10 +247,22 @@ shared block. Rules a later phase must keep:
   (decision 3): the second export of the same picture pays no fetch, whatever
   mode. Measured in the pane: Auto → 1 fetch, Proxies → 0 and the proxy's
   pixels, Originals → 0 and the held original's pixels.
-- **The finals plan links each file to ITS capture** (`FinalCandidate.assetId`,
-  `FinalsItem.originalAssetId`, one upload per file); a run is offered home
-  only when every picture came from ONE instance, and `plan.originalAssetId`
-  names the run's capture only when all files agree (the Studio's sentence).
+- **Sending a roll home is UNPLUGGED** (2026-09-20, the maintainer's call — a
+  roll delivers to the FILE SYSTEM only). Read in Winnow's own `main` before
+  taking it out: `/api/upload` reads `files` and `paths` alone and IGNORES
+  `original_asset_id` and `chapter_id`; `planDestination` files an upload into
+  `{incomingDir}/{device}/{YYYY}/{YYYY-MM-DD}/{file}`, so it lands in the
+  INCOMING as a new capture and never in a finals (Gallery) root; and
+  `reconcile` pairs an edit only inside a finals root, on the lowercased
+  basename sans extension plus `captured_at`. A canvas-made JPEG carries no
+  EXIF, so it would also file under `unknown/<today>`. His Gallery volume is
+  mounted READ-ONLY on purpose, which is the deeper reason the feature waits.
+  Re-plugging is one element in `ExportPanel` once Winnow can receive a final:
+  `use-roll-export.ts` still records `RollRun` (the files, each one's
+  `assetId`, the one instance) and `SendFinalsPanel` still links each file to
+  ITS capture (`FinalCandidate.assetId`, `FinalsItem.originalAssetId`, one
+  upload per file, a run offered home only when every picture came from ONE
+  instance). The Studio's own send is untouched.
 - `MediaOrigin.name`/`bytes` are what say whether an original is decodable and
   what it weighs — read from Winnow's row at materialise; a file the person
   opened has no origin and nothing to decide.

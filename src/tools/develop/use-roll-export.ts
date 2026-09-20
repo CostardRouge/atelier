@@ -17,7 +17,15 @@ import { deliverFiles } from '../../shared/sources/deliver-files';
 import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
 import { formatBytes } from '../../shared/lib/format';
 
-/** What the last run rendered, kept for one purpose: sending it home. */
+/**
+ * What the last run rendered, and each file's own capture on its instance.
+ *
+ * Recorded, not shown: sending the finals home is unplugged (`ExportPanel`),
+ * because Winnow's upload route files an upload into the incoming as a new
+ * capture instead of into the Gallery, and ignores the `original_asset_id`
+ * that would link it to the picture it was developed from. The bookkeeping
+ * stays so re-plugging it is one element, not a second pass over the loop.
+ */
 export interface RollRun {
   files: File[];
   /** Each file's own capture on its instance, parallel to `files`. */
@@ -195,8 +203,8 @@ export function useRollExport({
       if (delivery.method === 'dismissed') return;
       const errors = delivery.method === 'folder' ? delivery.errors : [];
       setNote(describeRun(delivery.written, delivery.method, [...failures, ...errors]));
-      // Kept for the send-home panel: only the files from ONE instance, so
-      // the plan refuses nothing it did not have to.
+      // Only the files from ONE instance, so a future send-home plan refuses
+      // nothing it did not have to.
       const sourceId = sourceIds.size === 1 ? [...sourceIds][0] : null;
       setLastRun({ files: rendered, assetIds, sourceId });
     } catch (err) {

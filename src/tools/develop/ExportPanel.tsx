@@ -1,11 +1,9 @@
 import { LONG_EDGE_CHOICES, longEdgeChoiceId, type DeliverySummary } from '../../shared/develop/roll-export';
 import { ROLL_EXPORT_LIMITS, type RollExport, type RollOriginals } from '../../shared/develop/roll-types';
-import SendFinalsPanel from '../../shared/sources/winnow/SendFinalsPanel';
 import Button from '../../shared/ui/Button';
 import { FieldRow, InspectorSection, RangeField, SelectField } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
-import type { RollRun } from './use-roll-export';
 
 /** One export verb: what it renders, and how many. */
 export interface ExportVerb {
@@ -24,9 +22,13 @@ const ORIGINALS: readonly { id: RollOriginals; label: string; title: string }[] 
 /**
  * The Develop tool's Export tab: the roll's delivery settings (a long edge,
  * the JPEG quality, which pixels), the *Delivers* line for the picture in
- * hand — the calculator of `docs/develop-originals.md` in one sentence — the
- * verbs, and, after a run whose pictures came from a Winnow, the finals
- * going home through the panel the Studio already uses.
+ * hand — the calculator of `docs/develop-originals.md` in one sentence — and
+ * the verbs.
+ *
+ * A roll delivers to the FILE SYSTEM only. Sending the finals home to the
+ * instance is unplugged on purpose: Winnow's upload route files an upload
+ * into the incoming as a new capture, so nothing would reach the Gallery and
+ * nothing would be linked to the capture it was developed from.
  */
 export default function ExportPanel({
   settings,
@@ -35,7 +37,6 @@ export default function ExportPanel({
   verbs,
   exporting,
   note,
-  lastRun,
 }: {
   settings: RollExport;
   onSettings: (patch: Partial<RollExport>) => void;
@@ -44,7 +45,6 @@ export default function ExportPanel({
   verbs: readonly ExportVerb[];
   exporting: string | null;
   note: string | null;
-  lastRun: RollRun | null;
 }) {
   const { quality } = ROLL_EXPORT_LIMITS;
   return (
@@ -118,7 +118,9 @@ export default function ExportPanel({
         info={
           <p>
             Into a folder you choose, or downloaded one by one where the browser has no folder picker.
-            A picture that is not in the Library is skipped and said.
+            A picture that is not in the Library is skipped and said. Sending the pictures home to your
+            Winnow is not offered: its upload files them into the incoming as new captures rather than
+            into the Gallery, so they would be neither where you keep them nor linked to their original.
           </p>
         }
       >
@@ -142,9 +144,6 @@ export default function ExportPanel({
             </p>
           )}
         </div>
-        {lastRun && lastRun.sourceId && !exporting && (
-          <SendFinalsPanel files={lastRun.files} sourceId={lastRun.sourceId} assetId={null} assetIds={lastRun.assetIds} />
-        )}
       </InspectorSection>
     </>
   );
