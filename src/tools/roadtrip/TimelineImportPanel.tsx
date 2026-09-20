@@ -14,9 +14,14 @@ import {
   type DiffEntry,
   type TimelineImport,
 } from '../../shared/roadtrip/timeline-import';
-import { formatIsoDate, spanLength } from '../../shared/roadtrip/trip-days';
 import { PLACE_ARROW, stageLabel } from '../../shared/roadtrip/trip-places';
-import type { TripDoc, TripStage } from '../../shared/roadtrip/trip-types';
+import type { TripDoc } from '../../shared/roadtrip/trip-types';
+import StageDiffList, {
+  actionableOf,
+  defaultAccepted,
+  spanText,
+  toggle,
+} from './StageDiffList';
 import { applyHouseStyle } from '../../shared/roadtrip/house-style';
 import { bundledHouseStyle } from '../../shared/roadtrip/house-style-bundle';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
@@ -61,20 +66,6 @@ function explain(err: unknown, client: WinnowClient): { text: string; login?: st
   return { text: err instanceof Error ? err.message : String(err) };
 }
 
-/** `5 Nov 2025 → 8 Nov 2025 · 4 days`, or one day. */
-function spanText(start: string, end: string): string {
-  const days = spanLength(start, end);
-  const dates = start === end ? formatIsoDate(start) : `${formatIsoDate(start)} → ${formatIsoDate(end)}`;
-  return days === null ? dates : `${dates} · ${days} day${days === 1 ? '' : 's'}`;
-}
-
-function routeOf(stage: TripStage): string {
-  return (stage.places ?? [])
-    .map((p) => p.name.trim())
-    .filter(Boolean)
-    .join(` ${PLACE_ARROW} `);
-}
-
 /** What a chapter is called before it is a stage — the same rule as the import's. */
 function chapterName(chapter: WinnowChapter): string {
   const title = chapter.title?.trim();
@@ -84,49 +75,6 @@ function chapterName(chapter: WinnowChapter): string {
   return names[0] === names[names.length - 1]
     ? names[0]
     : `${names[0]} ${PLACE_ARROW} ${names[names.length - 1]}`;
-}
-
-/** What accepting one diff entry would do, in a sentence. */
-function describe(entry: DiffEntry): string {
-  const incoming = entry.incoming;
-  const existing = entry.existing;
-  switch (entry.kind) {
-    case 'add':
-      return `Add “${stageLabel(incoming!) || 'an unnamed leg'}” · ${spanText(incoming!.startDate, incoming!.endDate)}`;
-    case 'dropped':
-      return `Drop “${stageLabel(existing!) || 'an unnamed leg'}” · ${spanText(existing!.startDate, existing!.endDate)} — it is no longer in the timeline`;
-    case 'unchanged':
-      return existing!.origin
-        ? `“${stageLabel(existing!)}” · unchanged`
-        : `“${stageLabel(existing!) || 'an unnamed leg'}” matches a leg of the timeline — link it, so the next import finds it`;
-    case 'changed': {
-      const parts: string[] = [];
-      if (entry.changes.includes('name')) {
-        parts.push(`now called “${stageLabel(incoming!) || 'nothing'}”`);
-      }
-      if (entry.changes.includes('span')) {
-        parts.push(`now ${spanText(incoming!.startDate, incoming!.endDate)}`);
-      }
-      if (entry.changes.includes('places')) {
-        parts.push(`route now ${routeOf(incoming!) || 'no place'}`);
-      }
-      return `“${stageLabel(existing!) || 'an unnamed leg'}” · ${parts.join(' · ')}`;
-    }
-  }
-}
-
-/** The default tick: take what the timeline gained or moved, never drop on its own. */
-function defaultAccepted(entries: DiffEntry[]): Set<string> {
-  return new Set(
-    entries
-      .filter(
-        (e) =>
-          e.kind === 'add' ||
-          e.kind === 'changed' ||
-          (e.kind === 'unchanged' && !e.existing?.origin),
-      )
-      .map((e) => e.key),
-  );
 }
 
 /**
@@ -205,14 +153,7 @@ export default function TimelineImportPanel({
     [mode, imported, sourceId],
   );
   const ticked = accepted ?? defaultAccepted(entries);
-  const actionable = entries.filter((e) => !(e.kind === 'unchanged' && e.existing?.origin));
-
-  function toggle(set: ReadonlySet<string>, key: string): Set<string> {
-    const next = new Set(set);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    return next;
-  }
+  const actionable = actionableOf(entries);
 
   function seed() {
     if (!imported) return;
@@ -373,30 +314,11 @@ export default function TimelineImportPanel({
                 Your trip already matches the timeline — {entries.length} leg{entries.length === 1 ? '' : 's'}, nothing to change.
               </p>
             ) : (
-              <ul className="m-0 p-0 list-none flex flex-col border border-line rounded-paper px-3">
-                {entries.map((e) => {
-                  const inert = e.kind === 'unchanged' && !!e.existing?.origin;
-                  return (
-                    <li key={e.key} className={`${row} ${inert ? 'text-muted' : ''}`}>
-                      <input
-                        type="checkbox"
-                        className={check}
-                        checked={!inert && ticked.has(e.key)}
-                        disabled={inert}
-                        onChange={() => setAccepted(toggle(ticked, e.key))}
-                        aria-label={describe(e)}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className={`font-mono text-3xs tracking-[0.1em] uppercase mr-2 ${e.kind === 'dropped' ? problemInk : 'text-muted'}`}>
-                          {e.kind === 'unchanged' && !inert ? 'link' : e.kind}
-                          {e.matchedBy && e.matchedBy !== 'id' && ` · matched by ${e.matchedBy}`}
-                        </span>
-                        {describe(e)}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
+              <StageDiffList
+                entries={entries}
+                ticked={ticked}
+                onToggle={(key) => setAccepted(toggle(ticked, key))}
+              />
             )}
           </>
         )}
