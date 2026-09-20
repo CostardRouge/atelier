@@ -1,11 +1,9 @@
 import { LONG_EDGE_CHOICES, longEdgeChoiceId, type DeliverySummary } from '../../shared/develop/roll-export';
 import { ROLL_EXPORT_LIMITS, type RollExport, type RollOriginals } from '../../shared/develop/roll-types';
-import SendFinalsPanel from '../../shared/sources/winnow/SendFinalsPanel';
 import Button from '../../shared/ui/Button';
-import { FieldRow, InspectorSection, RangeField, SelectField } from '../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, RangeField, SelectField, SwitchRow } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
-import type { RollRun } from './use-roll-export';
 
 /** One export verb: what it renders, and how many. */
 export interface ExportVerb {
@@ -24,9 +22,13 @@ const ORIGINALS: readonly { id: RollOriginals; label: string; title: string }[] 
 /**
  * The Develop tool's Export tab: the roll's delivery settings (a long edge,
  * the JPEG quality, which pixels), the *Delivers* line for the picture in
- * hand — the calculator of `docs/develop-originals.md` in one sentence — the
- * verbs, and, after a run whose pictures came from a Winnow, the finals
- * going home through the panel the Studio already uses.
+ * hand — the calculator of `docs/develop-originals.md` in one sentence — and
+ * the verbs.
+ *
+ * A roll delivers to the FILE SYSTEM only. Sending the finals home to the
+ * instance is unplugged on purpose: Winnow's upload route files an upload
+ * into the incoming as a new capture, so nothing would reach the Gallery and
+ * nothing would be linked to the capture it was developed from.
  */
 export default function ExportPanel({
   settings,
@@ -35,7 +37,6 @@ export default function ExportPanel({
   verbs,
   exporting,
   note,
-  lastRun,
 }: {
   settings: RollExport;
   onSettings: (patch: Partial<RollExport>) => void;
@@ -44,7 +45,6 @@ export default function ExportPanel({
   verbs: readonly ExportVerb[];
   exporting: string | null;
   note: string | null;
-  lastRun: RollRun | null;
 }) {
   const { quality } = ROLL_EXPORT_LIMITS;
   return (
@@ -58,6 +58,12 @@ export default function ExportPanel({
               Each picture is decoded at its own size, developed under the roll’s look, cropped as the
               Crop tab shows it and written as a JPEG. The size is a ceiling on the long edge — a
               picture is never upscaled to reach it.
+            </p>
+            <p>
+              A picture leaves carrying the ORIGINAL’s EXIF — its position, its body, its lens, the
+              hour it was taken — whatever its pixels were taken from, so a file developed on a proxy
+              still reads like the capture. Only three tags are corrected: the way up, the size, and
+              the thumbnail, which would otherwise show the picture before you developed it.
             </p>
             <p>
               <strong>Pixels</strong> decides where a picture from your Winnow takes its pixels:
@@ -116,12 +122,38 @@ export default function ExportPanel({
         id="develop.deliver"
         title="Deliver"
         info={
-          <p>
-            Into a folder you choose, or downloaded one by one where the browser has no folder picker.
-            A picture that is not in the Library is skipped and said.
-          </p>
+          <>
+            <p>
+              Into a folder you choose, or downloaded one by one where the browser has no folder
+              picker. A picture that is not in the Library is skipped and said.
+            </p>
+            <p>
+              A picture leaves under its own name, so the name it wants is often one the folder
+              already holds. <strong>Replace</strong> off writes <code>-1</code>, <code>-2</code>
+              beside what is there and says how many; on, the file of that name is overwritten —
+              and a folder that ignores capitals, as macOS does, reads <code>DJI_0101.jpg</code> and{' '}
+              <code>DJI_0101.JPG</code> as one file. A download never asks: the browser numbers a
+              repeat by itself.
+            </p>
+            <p>
+              Sending the pictures home to your Winnow is not offered: its upload files them into the
+              incoming as new captures rather than into the Gallery, so they would be neither where
+              you keep them nor linked to their original.
+            </p>
+          </>
         }
       >
+        <SwitchRow
+          label="Replace a file of the same name"
+          name="Replace files of the same name"
+          checked={settings.replace}
+          onChange={(replace) => onSettings({ replace })}
+          hint={
+            settings.replace
+              ? 'What the folder holds under that name is overwritten.'
+              : 'A name already in the folder is numbered — DJI_0101-1.jpg.'
+          }
+        />
         <div className="flex flex-col items-start gap-2">
           {verbs.map((verb) => (
             <div key={verb.id} className="flex flex-col items-start gap-0.5">
@@ -142,9 +174,6 @@ export default function ExportPanel({
             </p>
           )}
         </div>
-        {lastRun && lastRun.sourceId && !exporting && (
-          <SendFinalsPanel files={lastRun.files} sourceId={lastRun.sourceId} assetId={null} assetIds={lastRun.assetIds} />
-        )}
       </InspectorSection>
     </>
   );

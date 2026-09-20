@@ -480,6 +480,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       const res = await writeItems(
         dir,
         rendered.map((r) => ({ name: r.name, file: new File([r.blob], r.name) })),
+        { replace: true },
       );
       setNote(
         `${res.written} file${res.written === 1 ? '' : 's'} written` +
@@ -533,6 +534,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         const res = await writeItems(
           dir,
           rendered.map((r) => ({ name: r.name, file: new File([r.blob], r.name) })),
+          { replace: true },
         );
         setNote(
           `${res.written} slide${res.written === 1 ? '' : 's'} written` +

@@ -147,6 +147,7 @@ export async function materialize(
   if (options.fidelity === 'proxy') {
     origin.fetchOriginal = () =>
       client.fetchFile(client.originalUrl(row.id), row.filename, '', lastModified);
+    origin.fetchOriginalHead = (bytes) => client.fetchHead(client.originalUrl(row.id), bytes);
   }
   // A photo's proxy is a WebP re-encode with no EXIF, so carry what Winnow
   // parsed at ingest. Only for stills: a clip's telemetry is its `.srt`, which

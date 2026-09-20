@@ -829,7 +829,6 @@ export default function PictureWorkbench({
               verbs={exportVerbs}
               exporting={exports.exporting}
               note={exports.note}
-              lastRun={exports.lastRun}
             />
           ) : null}
         </div>

@@ -14,7 +14,6 @@
 
 import { isRawImage } from '../library/assets';
 import { DEFAULT_FRAMING, framingTransform, type Framing } from '../media/framing';
-import { aspectFileTag } from './crop-aspect';
 import { borderLayout, scaleLayout, type BorderLayout, type RollBorder } from './border-layout';
 import type { RollExport, RollOriginals } from './roll-types';
 
@@ -267,11 +266,20 @@ export function deliverySummary(
   };
 }
 
-/** `IMG_0421.jpg` + `4:5` → `IMG_0421-developed-4x5.jpg`; never the source's own name. */
-export function exportName(refName: string, aspect: string): string {
+/**
+ * `DJI_0101.JPG` → `DJI_0101.jpg`: EXACTLY the picture's own name, with the
+ * extension a JPEG deserves (2026-09-20, the maintainer's convention — his
+ * Gallery holds the developed file under the capture's name, which is what
+ * pairs his two folders by eye and what Winnow's `reconcile` pairs on).
+ *
+ * Nothing is added — no `-developed`, no shape tag: an added word breaks that
+ * pairing. Two deliveries that then want one name are numbered where they
+ * meet, by `shared/sources/unique-name.ts`: inside a run, and against the
+ * folder being written into.
+ */
+export function exportName(refName: string): string {
   const base = refName.replace(/\.[^.]+$/, '') || 'picture';
-  const tag = aspectFileTag(aspect);
-  return `${base}-developed${tag ? `-${tag}` : ''}.jpg`;
+  return `${base}.jpg`;
 }
 
 /** The choices the Size select offers: the source's own, or a long edge. */
@@ -288,11 +296,25 @@ export function longEdgeChoiceId(longEdge: number | null): string {
   return LONG_EDGE_CHOICES.find((c) => c.longEdge === longEdge)?.id ?? 'source';
 }
 
-/** The run's outcome in one sentence: what was written, what could not be. */
-export function describeRun(written: number, method: 'folder' | 'download', failures: readonly string[]): string {
+/**
+ * The run's outcome in one sentence: what was written, what was numbered
+ * around a file already there, and what could not be written at all.
+ */
+export function describeRun(
+  written: number,
+  method: 'folder' | 'download',
+  failures: readonly string[],
+  renamed = 0,
+): string {
   const head =
     written === 0
       ? 'Nothing was written'
       : `${written} picture${written === 1 ? '' : 's'} ${method === 'folder' ? 'written' : 'downloaded'}`;
-  return failures.length ? `${head} — ${failures[0]}${failures.length > 1 ? ` (+${failures.length - 1} more)` : ''}` : head;
+  const kept =
+    renamed > 0
+      ? ` · ${renamed} numbered, the folder already held ${renamed === 1 ? 'that name' : 'those names'}`
+      : '';
+  return failures.length
+    ? `${head}${kept} — ${failures[0]}${failures.length > 1 ? ` (+${failures.length - 1} more)` : ''}`
+    : `${head}${kept}`;
 }
