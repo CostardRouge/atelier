@@ -28,6 +28,8 @@ import { layerPasses } from './layer-render';
 import { DEFAULT_FRAMING, type Framing } from '../media/framing';
 import { decodePhoto, fitPhotoForRender } from '../media/photo-frame';
 import { decodeRaw } from '../raw/raw-decoder';
+import { isDefaultDetail, type DetailSettings } from '../render/detail';
+import { detailPasses } from '../render/detail-pass';
 import { maxRenderSize } from '../render/graph-grader';
 import { pictureAspectRatio } from './crop-aspect';
 import { drawDelivered } from './border-paint';
@@ -53,6 +55,8 @@ export interface RollRenderOptions {
   lens?: LensCorrection | null;
   /** Adjustment layers, bottom to top, applied after the look — `layer-render.ts`. */
   layers?: readonly AdjustLayer[] | null;
+  /** Denoise, defringe, sharpen — `render/detail.ts`; kernels in the decode's own pixels. */
+  detail?: DetailSettings | null;
   /**
    * Deliver from the SENSOR's data (`DevelopSettings.base: 'raw'`): the RAW
    * to decode and the gain the develop stores, which `lut` already carries.
@@ -107,14 +111,17 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
     // GPU, so the grader is built for either.
     const ar = source.width / source.height;
     const stack = drawingLayers(opts.layers);
-    const passes = [...geometryPasses(opts, ar), ...layerPasses(stack, ar)];
-    const needsGpu = Boolean(opts.lut) || hasGeometry(opts) || stack.length > 0;
+    const needsGpu = Boolean(opts.lut) || hasGeometry(opts) || stack.length > 0 || !isDefaultDetail(opts.detail);
     // "Source density" stops at the GPU's own edge cap: a picture past it is
     // fitted first, and the size it was really graded at is reported.
     const fit = needsGpu ? await fitPhotoForRender(bitmap) : null;
     const gradedAt = fit ? { width: fit.width, height: fit.height } : source;
+    // Kernels are in the SOURCE's pixels: a picture fitted to the GPU's cap
+    // scales them, exactly as the stage does.
+    const { pre, post } = detailPasses(opts.detail, gradedAt.width / source.width);
+    const passes = [...geometryPasses(opts, ar), ...layerPasses(stack, ar), ...post];
     const grader = needsGpu && fit
-      ? makeFrameGrader(opts.lut as CubeLut, fit.width, fit.height, 1, passes)
+      ? makeFrameGrader(opts.lut as CubeLut, fit.width, fit.height, 1, passes, pre)
       : null;
     try {
       const graded = grader && fit ? grader.render(fit.image) : bitmap;
@@ -144,10 +151,12 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
   const source = { width: decoded.width, height: decoded.height };
   const ar = source.width / source.height;
   const stack = drawingLayers(opts.layers);
-  const passes = [...geometryPasses(opts, ar), ...layerPasses(stack, ar)];
+  // The decode may be half the sensor: a kernel stated in sensor pixels scales with it.
+  const { pre, post } = detailPasses(opts.detail, source.width / decoded.sourceWidth);
+  const passes = [...geometryPasses(opts, ar), ...layerPasses(stack, ar), ...post];
   // A RAW is never drawn without the GPU: its half-floats have no 2D form,
   // and its develop is never default (the gain alone is a stage).
-  const grader = makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, passes);
+  const grader = makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, passes, pre);
   try {
     return await deliver(grader.render(decoded.half), source, source, opts);
   } finally {

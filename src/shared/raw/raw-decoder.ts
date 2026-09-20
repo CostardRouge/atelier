@@ -66,6 +66,9 @@ export interface RawDecoded {
   bytes: ImageData;
   width: number;
   height: number;
+  /** The sensor's own size as LibRaw decoded it, before the half-size flag and any box average. */
+  sourceWidth: number;
+  sourceHeight: number;
   /** The measured exposure — what the develop stores as `rawGain`. */
   gain: number;
   /** True when LibRaw decoded at half size (its `-h`). */
@@ -216,6 +219,8 @@ export function decodeRaw(file: File, opts: RawDecodeOptions = {}): Promise<RawD
       bytes: new ImageData(pixels, linear.width, linear.height),
       width: linear.width,
       height: linear.height,
+      sourceWidth: image.width * (halved ? 2 : 1),
+      sourceHeight: image.height * (halved ? 2 : 1),
       gain,
       halved,
       meta,

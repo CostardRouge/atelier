@@ -25,7 +25,9 @@ export interface GraphGrader extends FrameGrader {
   /** The longest edge this GPU takes (`RenderGraph.maxSize`); Infinity where there is no GPU. */
   maxSize: number;
   /**
-   * The passes after the look — a warp, a layer, in time a denoise.
+   * The passes after the look — a warp, a layer, a sharpen — and, second,
+   * the passes BEFORE it, on the source: a denoise, a defringe
+   * (`detail.ts`, «Order»).
    *
    * Swapping them is deliberately CHEAP: the context, its programs and the
    * source texture all survive, so a slider drag that changes a mask or a
@@ -34,7 +36,7 @@ export interface GraphGrader extends FrameGrader {
    * a graph that outlives its pass list no longer takes their textures down
    * with it.
    */
-  setExtraPasses(passes: readonly RenderPass[]): void;
+  setExtraPasses(passes: readonly RenderPass[], before?: readonly RenderPass[]): void;
 }
 
 let probedMaxSize: number | null = null;
@@ -92,25 +94,30 @@ export function makeGraphGrader(
   graph.resize(width, height);
   const cube = makeCubePass({ lut, intensity, interpolation });
   let extra: readonly RenderPass[] = [];
+  let pre: readonly RenderPass[] = [];
 
   return {
     precision: graph.precision,
     maxSize: graph.maxSize,
-    setExtraPasses(passes) {
-      for (const pass of extra) if (!passes.includes(pass)) graph.releasePass(pass);
+    setExtraPasses(passes, before = []) {
+      for (const pass of extra) if (!passes.includes(pass) && !before.includes(pass)) graph.releasePass(pass);
+      for (const pass of pre) if (!passes.includes(pass) && !before.includes(pass)) graph.releasePass(pass);
       extra = passes;
+      pre = before;
     },
     render(source) {
       // `FrameGrader` speaks `CanvasImageSource`, which includes
       // `SVGImageElement` — a thing WebGL cannot upload and nothing in the
       // suite ever hands a grader. Narrowed here rather than widening the
       // seam, so the contract every consumer already speaks stays as it is.
-      graph.render(source as RenderSource, [cube, ...extra]);
+      graph.render(source as RenderSource, [...pre, cube, ...extra]);
       return canvas;
     },
     dispose() {
       for (const pass of extra) graph.releasePass(pass);
+      for (const pass of pre) graph.releasePass(pass);
       extra = [];
+      pre = [];
       graph.dispose();
     },
   };

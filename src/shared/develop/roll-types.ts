@@ -16,6 +16,7 @@
 
 import { keystoneOrNull, type Keystone } from '../render/geometry';
 import { lensOrNull, type LensCorrection } from '../render/lens';
+import { detailOrNull, type DetailSettings } from '../render/detail';
 import { readLayers, type AdjustLayer } from './layer';
 import { developOrNull, type DevelopSettings } from './develop';
 import { isDefaultFraming, normaliseFraming, type Framing } from '../media/framing';
@@ -91,6 +92,12 @@ export interface RollPicture {
    */
   lens?: LensCorrection | null;
   /**
+   * Denoise, defringe and sharpen (`shared/render/detail.ts`), or null for
+   * none. The noise passes run FIRST, on the source before the develop; the
+   * sharpen LAST, after every warp and layer — `detail.ts` states why.
+   */
+  detail?: DetailSettings | null;
+  /**
    * Adjustment layers, BOTTOM to TOP (`shared/develop/layer.ts`). Absent and
    * empty mean the same thing, so nothing is migrated. They apply after the
    * picture's own develop and look, on the picture as it is DISPLAYED — see
@@ -148,6 +155,7 @@ export function createRollPicture(ref: SavedMediaRef, id: string = newRollId()):
     border: null,
     keystone: null,
     lens: null,
+    detail: null,
     layers: [],
   };
 }
@@ -244,6 +252,7 @@ function readPicture(raw: unknown): RollPicture | null {
     // means exactly what it means now — so there is no migration to run.
     keystone: keystoneOrNull(raw.keystone),
     lens: lensOrNull(raw.lens),
+    detail: detailOrNull(raw.detail),
     layers: readLayers(raw.layers),
   };
 }
@@ -335,7 +344,7 @@ export function patchPicture(
   roll: RollDoc,
   id: string,
   patch: Partial<
-    Pick<RollPicture, 'develop' | 'framing' | 'aspect' | 'border' | 'keystone' | 'lens' | 'layers'>
+    Pick<RollPicture, 'develop' | 'framing' | 'aspect' | 'border' | 'keystone' | 'lens' | 'detail' | 'layers'>
   >,
   now: number = Date.now(),
 ): RollDoc {

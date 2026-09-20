@@ -44,7 +44,7 @@ export interface HeldGrader extends FrameGrader {
    * (`PassGrader`) — and forget the held copy, since the picture it holds was
    * made with the old ones. Absent for a grader that cannot.
    */
-  setPasses?: (passes: readonly RenderPass[]) => void;
+  setPasses?: (passes: readonly RenderPass[], before?: readonly RenderPass[]) => void;
 }
 
 function isCanvas(source: GradeSource): source is RasterSurface {
@@ -101,8 +101,8 @@ export function holdGrades(inner: FrameGrader, copy: CopyPicture = copyToRaster)
   return {
     ...(swappable
       ? {
-          setPasses(passes: readonly RenderPass[]) {
-            swappable.call(inner, passes);
+          setPasses(passes: readonly RenderPass[], before: readonly RenderPass[] = []) {
+            swappable.call(inner, passes, before);
             // The held copy was graded through the passes that just left.
             graded = null;
             held = null;

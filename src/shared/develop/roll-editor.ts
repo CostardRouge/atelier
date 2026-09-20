@@ -4,11 +4,12 @@
  * (`tools/develop/RollEditor.tsx`) feeds it plain descriptions.
  */
 
-export type WorkbenchTab = 'develop' | 'layers' | 'crop' | 'export';
+export type WorkbenchTab = 'develop' | 'detail' | 'layers' | 'crop' | 'export';
 
 /** The inspector's tabs, in order — the SAME list drives the desktop strip and the phone's bottom bar. */
 export const WORKBENCH_TABS: readonly { id: WorkbenchTab; label: string }[] = [
   { id: 'develop', label: 'Develop' },
+  { id: 'detail', label: 'Detail' },
   { id: 'layers', label: 'Layers' },
   { id: 'crop', label: 'Crop' },
   { id: 'export', label: 'Export' },

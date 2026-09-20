@@ -577,6 +577,75 @@ const out = await page.evaluate(async () => {
     };
   }
 
+  // --- detail: the four neighbourhood passes against detail.ts -------------
+  //
+  // Each shader is a transcription of a pure function over a small noisy
+  // picture; the GPU's output is compared with the pure output at a grid of
+  // probes. A pass that read the wrong texel, flipped an axis or lost a tap
+  // shows here and nowhere else.
+  {
+    const { createRenderGraph } = await import('/atelier/src/shared/render/graph.ts');
+    const dm = await import('/atelier/src/shared/render/detail.ts');
+    const dp = await import('/atelier/src/shared/render/detail-pass.ts');
+    const DW = 64, DH = 48;
+    // Deterministic noise over a tone edge, a purple fringe on it.
+    let seed = 12345;
+    const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    const purple = dm.fromYcc(0.5, 0.06, 0.06);
+    const rgb = new Float32Array(DW * DH * 3);
+    const dc = document.createElement('canvas'); dc.width = DW; dc.height = DH;
+    const dg = dc.getContext('2d');
+    for (let y = 0; y < DH; y++) for (let x = 0; x < DW; x++) {
+      let base = x < 28 ? 0.25 : x < 31 ? null : 0.75;
+      let px;
+      if (base === null) px = purple;
+      else px = [base + (rnd() - 0.5) * 0.08, base + (rnd() - 0.5) * 0.08, base + (rnd() - 0.5) * 0.08];
+      // Quantise to 8 bits so the canvas and the pure image hold the same numbers.
+      px = px.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255) / 255);
+      rgb.set(px, (y * DW + x) * 3);
+      dg.fillStyle = `rgb(${Math.round(px[0] * 255)},${Math.round(px[1] * 255)},${Math.round(px[2] * 255)})`;
+      dg.fillRect(x, y, 1, 1);
+    }
+    const img = { width: DW, height: DH, data: rgb };
+    const settings = { ...dm.DEFAULT_DETAIL, luminance: 60, colour: 50, defringe: 100, sharpen: 80, sharpenRadius: 1.2 };
+    const terms = dm.detailTerms(settings, 1);
+    const through = (passes) => {
+      const cv = document.createElement('canvas');
+      const graph = createRenderGraph(cv);
+      graph.resize(DW, DH);
+      graph.render(dc, passes);
+      const o = document.createElement('canvas'); o.width = DW; o.height = DH;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(cv, 0, 0);
+      const d = oc.getImageData(0, 0, DW, DH).data;
+      graph.dispose();
+      return d;
+    };
+    const probes = [];
+    for (let y = 3; y < DH - 3; y += 6) for (let x = 3; x < DW - 3; x += 5) probes.push([x, y]);
+    const compare = (gpu, pure) => {
+      let worst = 0;
+      for (const [x, y] of probes) {
+        const want = dm.pixelAt(pure, x, y);
+        for (let c = 0; c < 3; c++) worst = Math.max(worst, Math.abs(gpu[(y * DW + x) * 4 + c] - Math.round(Math.max(0, Math.min(1, want[c])) * 255)));
+      }
+      return worst;
+    };
+    const rows = {};
+    rows.chroma = compare(
+      through([dp.makeChromaBlurPass(terms, 'x'), dp.makeChromaBlurPass(terms, 'y')]),
+      dm.applyDetail(dm.applyDetail(img, (i, x, y) => dm.chromaBlurAt(i, x, y, terms, 'x')), (i, x, y) => dm.chromaBlurAt(i, x, y, terms, 'y')),
+    );
+    rows.denoise = compare(through([dp.makeBilateralPass(terms)]), dm.applyDetail(img, (i, x, y) => dm.bilateralAt(i, x, y, terms)));
+    rows.defringe = compare(through([dp.makeDefringePass(terms)]), dm.applyDetail(img, (i, x, y) => dm.defringeAt(i, x, y, terms)));
+    rows.sharpen = compare(through([dp.makeSharpenPass(terms)]), dm.applyDetail(img, (i, x, y) => dm.sharpenAt(i, x, y, terms)));
+    // And that each did something: the pure output differs from the source.
+    const moved = (pure) => { let m = 0; for (let i = 0; i < rgb.length; i++) m = Math.max(m, Math.abs(pure.data[i] - rgb[i])); return m; };
+    rows.movedDenoise = moved(dm.applyDetail(img, (i, x, y) => dm.bilateralAt(i, x, y, terms)));
+    rows.movedSharpen = moved(dm.applyDetail(img, (i, x, y) => dm.sharpenAt(i, x, y, terms)));
+    results.detail = rows;
+  }
+
   // --- the cube without OES_texture_float_linear: half-float, never 8-bit --
   //
   // This GPU has the extension, so the fallback would otherwise run nowhere a
@@ -792,6 +861,19 @@ const hs = out.half;
       `, ramp within ${hs.worstRamp} code${hs.worstRamp === 1 ? '' : 's'}, graded within ${hs.graded} of the same canvas ` +
       `(${hs.spread[0]} pixels equal, ${hs.spread[1]} one code off, ${hs.spread[2] + hs.spread[3]} two)`,
   );
+}
+
+const det = out.detail;
+console.log('\n  detail, against detail.ts at 96 probes of a noisy edge:');
+for (const name of ['chroma', 'denoise', 'defringe', 'sharpen']) {
+  const worst = det[name];
+  const ok = worst <= 2;
+  if (!ok) bad += 1;
+  console.log(`  ${ok ? 'ok  ' : 'FAIL'}  ${name.padEnd(9)} worst ${worst} code${worst === 1 ? '' : 's'} (allowed 2)`);
+}
+if (det.movedDenoise < 0.01 || det.movedSharpen < 0.01) {
+  bad += 1;
+  console.log('  FAIL  a pass moved nothing, so its row proves nothing');
 }
 
 const half = out.halfCube;

@@ -480,10 +480,20 @@ his to run: a real DJI DNG, ProRAW (lossless and JPEG XL) and ARW through
 this path — the JPEG XL answer (§11) is unchanged — and the heap on his
 iPhone (decision 5 of `develop-originals.md` §7).
 
-**P11 — detail** *(two commits)*. Wavelet chroma + guided-filter luma denoise,
-defringe, sharpen — classic, per §4.3. Plus the **loupe at one source pixel per
-device pixel**, because F5. `usePictureZoom` already reaches one *preview* pixel
-per device pixel; what is missing is the full-resolution decode under it.
+**P11 — detail** *(two commits; the FIRST is BUILT 2026-09-20 — `render/detail.ts`
++ `detail-pass.ts`, `RollPicture.detail`, a fifth *Detail* tab; the rules are
+`docs/memory/render-detail.md`)*. Classic, per §4.3 — but not as written here:
+a separable Gaussian on the chroma alone and a 7×7 bilateral on the luma
+rather than wavelets and a guided filter, because each is one bounded
+fragment kernel with a pure twin the render gate holds it to (chroma within
+1 code, the rest 0). Defringe gates purple chroma on a steep luma edge; sharpen
+is an unsharp mask on the luma applied as one ratio. Noise runs BEFORE the
+cube on the source, sharpen LAST after every warp (`makeFrameGrader` gained a
+`before` list). Kernels are in SOURCE pixels, scaled by the stage — a fair
+preview and not the truth, which is the second commit's reason to exist: the
+**loupe at one source pixel per device pixel**, because F5. `usePictureZoom`
+already reaches one *preview* pixel per device pixel; what is missing is the
+full-resolution decode under it.
 
 **P12 — repair.** Dust detection and removal, healing, clone, as one `Patch[]`
 list and one composite pass.

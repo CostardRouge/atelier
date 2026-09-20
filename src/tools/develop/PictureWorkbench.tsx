@@ -75,6 +75,8 @@ import type { RollExport } from '../../shared/develop/roll-types';
 import CropPanel, { type CropApplyVerb } from './CropPanel';
 import KeystonePanel from './KeystonePanel';
 import LensPanel from './LensPanel';
+import DetailPanel from './DetailPanel';
+import { describeDetail, sameDetail, type DetailSettings } from '../../shared/render/detail';
 import LayersPanel from './LayersPanel';
 import MaskPanel from './MaskPanel';
 import type { BorderApplyVerb } from './BorderSection';
@@ -123,6 +125,7 @@ export default function PictureWorkbench({
   onFraming,
   onKeystone,
   onLens,
+  onDetail,
   onLayers,
   onAspect,
   exportSettings,
@@ -154,6 +157,7 @@ export default function PictureWorkbench({
   onFraming: (framing: Framing | null) => void;
   onKeystone: (keystone: Keystone | null) => void;
   onLens: (lens: LensCorrection | null) => void;
+  onDetail: (detail: DetailSettings | null) => void;
   onLayers: (layers: AdjustLayer[]) => void;
   onAspect: (aspect: string) => void;
   /** The roll's delivery settings, edited on the Export tab. */
@@ -183,6 +187,11 @@ export default function PictureWorkbench({
   // Read once, like the develop and the crop: the workbench is keyed per picture.
   const [keystoneDraft, setKeystoneDraft] = useState<Keystone | null>(entry.keystone ?? null);
   const [lensDraft, setLensDraft] = useState<LensCorrection | null>(entry.lens ?? null);
+  const [detailDraft, setDetailDraft] = useState<DetailSettings | null>(entry.detail ?? null);
+  // The FILE's own width, for the kernels: a RAW's sensor once decoded, else
+  // the measured file; the stage's width follows the decode one render later.
+  const [rawSize, setRawSize] = useState<{ w: number; h: number } | null>(null);
+  const [stageWidth, setStageWidth] = useState(0);
   // The stack is a draft like the rest, so a slider drag is one write-through
   // rather than one document write per step.
   const [layersDraft, setLayersDraft] = useState<AdjustLayer[]>(entry.layers ?? []);
@@ -333,6 +342,7 @@ export default function PictureWorkbench({
     };
   }, [wantsRaw, rawFile, file, rawOffer, origin, tell, patchDraft]);
   const rawGain = draft.draft.rawGain ?? null;
+  const fullWidth = (wantsRaw ? rawSize?.w : null) ?? exports.openSize?.width ?? null;
   const picture = useDevelopPicture({
     file,
     cube: stack.composed,
@@ -347,10 +357,13 @@ export default function PictureWorkbench({
     // by accident would be mistaken for the picture.
     showMaskOf: showMask && selectedLayer ? selectedLayer.id : null,
     raw: wantsRaw && rawFile ? { file: rawFile, gain: rawGain } : null,
+    detail: detailDraft,
+    pixelScale: stageWidth && fullWidth ? Math.min(1, stageWidth / fullWidth) : 1,
     // The measured exposure is STORED the moment it is known, so the export's
     // decode applies the same number (`raw.md`). Once: a stored gain is never
     // overwritten by a later decode's measurement.
     onRawDecoded: (info) => {
+      setRawSize({ w: info.sourceWidth, h: info.sourceHeight });
       if (rawGain === null) {
         patchDraft({ base: 'raw', rawGain: info.gain });
         const ev = Math.log2(info.gain);
@@ -377,8 +390,8 @@ export default function PictureWorkbench({
   // copy changes the stored value without this editor's doing, and a draft that
   // ignored it would keep showing numbers the roll no longer holds — and write
   // them back over the step at the next nudge.
-  const callbacks = useRef({ onDevelop, onFraming, onKeystone, onLens, onLayers, onAspect, onSnapshot, onStep, onTabChange });
-  callbacks.current = { onDevelop, onFraming, onKeystone, onLens, onLayers, onAspect, onSnapshot, onStep, onTabChange };
+  const callbacks = useRef({ onDevelop, onFraming, onKeystone, onLens, onDetail, onLayers, onAspect, onSnapshot, onStep, onTabChange });
+  callbacks.current = { onDevelop, onFraming, onKeystone, onLens, onDetail, onLayers, onAspect, onSnapshot, onStep, onTabChange };
   const { replace } = draft;
   useWriteThrough<DevelopSettings>({
     stored: entry.develop,
@@ -408,6 +421,13 @@ export default function PictureWorkbench({
     onWrite: (value) => callbacks.current.onLens(value),
     onReseed: (value) => setLensDraft(value),
   });
+  useWriteThrough<DetailSettings>({
+    stored: entry.detail ?? null,
+    draft: detailDraft,
+    same: sameDetail,
+    onWrite: (value) => callbacks.current.onDetail(value),
+    onReseed: (value) => setDetailDraft(value),
+  });
   useWriteThrough<AdjustLayer[]>({
     stored: entry.layers?.length ? entry.layers : null,
     draft: layersDraft.length ? layersDraft : null,
@@ -429,6 +449,7 @@ export default function PictureWorkbench({
   const { source, cube, delivered } = picture;
   const aspectRatio = pictureAspectRatio(entry.aspect, source?.width ?? 0, source?.height ?? 0);
   useEffect(() => setRatio(source ? aspectRatio : 0), [source, aspectRatio]);
+  useEffect(() => setStageWidth(source?.width ?? 0), [source]);
   // The Crop tab's zone, measured on the decoded picture and written back as
   // the aspect (to the roll, at once) and the framing (through its draft).
   const crop = useCropZone({
@@ -596,9 +617,10 @@ export default function PictureWorkbench({
     if (!factsOn) return null;
     const lines = developLines(draft.draft);
     if (drawingCount) lines.push(`${drawingCount} layer${drawingCount === 1 ? '' : 's'}`);
+    if (detailDraft) lines.push(describeDetail(detailDraft));
     if (fidelity.note) lines.push(fidelity.note);
     return lines;
-  }, [factsOn, draft.draft, drawingCount, fidelity.note]);
+  }, [factsOn, draft.draft, drawingCount, detailDraft, fidelity.note]);
 
   return (
     <>
@@ -789,6 +811,8 @@ export default function PictureWorkbench({
               <DevelopApplySection verbs={applyTo} draft={draft.draft} onTold={tell} />
               <DevelopLookSection stack={stack} />
             </>
+          ) : tab === 'detail' ? (
+            <DetailPanel value={detailDraft} onChange={setDetailDraft} />
           ) : tab === 'layers' ? (
             <>
               <LayersPanel
