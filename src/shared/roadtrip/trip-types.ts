@@ -28,6 +28,7 @@ import {
 } from '../develop/develop';
 import type { SavedMediaRef } from '../projects/project-types';
 import { DEFAULT_SOURCE_ID } from '../sources/source';
+import type { FilmTexture } from '../film/film-texture';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
 import { gradeOrNull } from '../lut/saved-grade';
 import type { OutputTransform } from '../lut/transfer';
@@ -58,23 +59,26 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 25;
+export const TRIP_DOC_VERSION = 26;
 
 /**
- * A grade, in the Studio's own terms: an ordered stack of LUT layers and the
- * output transform, exactly what `ProjectDoc.lutStack` + `outputTransform`
- * hold. Road Trip grades THROUGH the Studio's engine (`useLutStack` →
- * `makeFrameGrader`), so the stored shape is the Studio's and a custom
- * `.cube` rides as text inside its layer. The interpolation mode is NOT here:
- * it is a render preference of the machine, never of a document.
+ * A grade, in the Studio's own terms: an ordered stack of LUT layers, the
+ * output transform and the film texture, exactly what `ProjectDoc.lutStack` +
+ * `outputTransform` + `lutFilm` hold. Road Trip grades THROUGH the Studio's
+ * engine (`useLutStack` → `makeFrameGrader`), so the stored shape is the
+ * Studio's and a custom `.cube` rides as text inside its layer. The
+ * interpolation mode is NOT here: it is a render preference of the machine,
+ * never of a document.
  */
 export interface TripGrade {
   layers: SavedLutLayer[];
   output: OutputTransform;
+  /** Grain and halation, or null for none — `SavedGrade.film`, cascading with the rung. */
+  film?: FilmTexture | null;
 }
 
 export function emptyGrade(): TripGrade {
-  return { layers: [], output: 'none' };
+  return { layers: [], output: 'none', film: null };
 }
 
 /**
@@ -1264,6 +1268,24 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
         defaults ? { ...defaults, cascade: readCascade(defaults.cascade) } : defaults,
       ]),
     ) as HookDefaultsByKind;
+  }
+
+  if (migrated.version < 26) {
+    // A grade carries a film TEXTURE — grain and halation — on each of its
+    // four rungs. Every stored grade starts with none, so nothing composed
+    // before this existed changes by a code value; a value that IS there (a
+    // document from a newer build, a hand edit) is read through `gradeOrNull`,
+    // which clamps every number of it.
+    migrated.grade = gradeOrNull(migrated.grade) ?? emptyGrade();
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      grade: gradeOrNull(post.grade),
+      badge: { ...post.badge, grade: gradeOrNull(post.badge?.grade) },
+      slides: (post.slides ?? []).map((slide) => ({
+        ...slide,
+        grade: gradeOrNull(slide.grade),
+      })),
+    }));
   }
 
   migrated.version = TRIP_DOC_VERSION;

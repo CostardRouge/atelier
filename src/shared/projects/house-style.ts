@@ -64,6 +64,9 @@ function pickStyle(source: ProjectHouseStyle): ProjectHouseStyle {
     guides: source.guides,
     lutStack: source.lutStack,
     outputTransform: source.outputTransform,
+    // The texture travels with the look: a house style IS the grade a new
+    // project starts from, and a stock without its grain is half a stock.
+    lutFilm: source.lutFilm ?? null,
     theme: source.theme,
     scenes: source.scenes,
     outro: source.outro,

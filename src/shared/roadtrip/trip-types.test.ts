@@ -244,7 +244,7 @@ describe('migrateTripDoc — v21 → v22, every picture may depart', () => {
     doc.posts[0].badge.grade = grade as never;
     (doc.posts[0].slides[0] as { grade?: unknown }).grade = 'a look';
     const migrated = migrateTripDoc(doc);
-    expect(migrated.posts[0].badge.grade).toEqual(grade);
+    expect(migrated.posts[0].badge.grade).toEqual({ ...grade, film: null });
     expect(migrated.posts[0].slides[0].grade).toBeNull();
   });
 });
@@ -893,7 +893,7 @@ describe('migrateTripDoc — v10 → v11, the source', () => {
   it('keeps the grade a v10 document already carries', () => {
     const doc = v10();
     doc.grade = { layers: [], output: 'rec709-to-srgb' };
-    expect(migrateTripDoc(doc).grade).toEqual({ layers: [], output: 'rec709-to-srgb' });
+    expect(migrateTripDoc(doc).grade).toEqual({ layers: [], output: 'rec709-to-srgb', film: null });
   });
 
   it('reaches the current version and is idempotent', () => {
@@ -927,7 +927,7 @@ describe('migrateTripDoc — v9 → v10, the grade', () => {
 
   it('gives the trip an empty grade and every post follows it', () => {
     const doc = migrateTripDoc(v9());
-    expect(doc.grade).toEqual({ layers: [], output: 'none' });
+    expect(doc.grade).toEqual({ layers: [], output: 'none', film: null });
     expect(doc.posts[0].grade).toBeNull();
   });
 
@@ -941,8 +941,8 @@ describe('migrateTripDoc — v9 → v10, the grade', () => {
     };
     doc.posts[0].grade = { layers: [], output: 'none' };
     const migrated = migrateTripDoc(doc);
-    expect(migrated.grade).toEqual(doc.grade);
-    expect(migrated.posts[0].grade).toEqual({ layers: [], output: 'none' });
+    expect(migrated.grade).toEqual({ ...doc.grade, film: null });
+    expect(migrated.posts[0].grade).toEqual({ layers: [], output: 'none', film: null });
   });
 
   it('reaches the current version and is idempotent', () => {

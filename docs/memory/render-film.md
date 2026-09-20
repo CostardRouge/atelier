@@ -106,8 +106,40 @@ forgets to size its render large enough compares four pictures with no grain in
 them and passes on nothing: the gate asserts `fade === 1` where it means to
 measure grain.
 
+## The texture belongs to the GRADE, not to the film layer (2026-09-20)
+
+`SavedGrade.film` — `TripGrade.film` (trip v26), `ProjectDoc.lutFilm` (project
+v16), `RollGrade.film` (roll v3) — and `LutStack.film` / `setTexture` on the
+live stack. **Not on the film layer whose stock it belongs to**, although that
+is where the settings for its COLOUR live: the texture is not a lattice, it is
+drawn by the node after the cube, and it has to cascade with the rung exactly
+as a look does — a trip's texture dressing every piece, a piece departing from
+it, one picture departing again (`post-grade.ts`). A texture on a layer could
+do none of that.
+
+**`gradeKey` folds `filmTextureKey` in, and it changes nothing about the cube
+— which is exactly why it must.** Grain and halation are drawn after the bake,
+so a key that reads the cube alone calls two pictures the same, every held
+grade in the suite serves the pre-film one, and on a still — the one surface
+where grain is tuned — the slider looks dead.
+
+**`setTexture` is named apart from `setFilm`** (which re-dials a film layer's
+emulsion): one writes a lattice, the other writes what the node draws over it,
+and confusing them would bake grain into a cube.
+
+Two "empty" rules that had to change with it: a grade with no layers and no
+transform is still a real look when it carries a TEXTURE (`readRollGrade`,
+`useRollGrade`) — grain over an ungraded picture is precisely what a stock's
+texture half is for — and `restore` writes the texture BEFORE its early return,
+or a document with no layers would leave the last one's grain on.
+
+`filmTextureOrNull` is the ONE reader every document goes through. Junk that is
+an object still goes through `normaliseFilmTexture`, which clamps every number:
+a hand edit or a newer build's value lands sound where it can, the way a layer
+does.
+
 ## What is NOT here yet
 
-`SavedGrade.film`, the three document version bumps, the graders, the panel's
-texture section, the badge and the bitrate bump for grained exports —
+The graders (the node reaching the stage, the exports and the clip path), the
+panel's texture section, the badge and the bitrate bump for grained exports —
 `docs/film-simulation.md` §7's last entry.

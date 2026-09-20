@@ -19,6 +19,7 @@ import type { Scene } from '../overlay/scenes';
 import type { OutroCard } from '../overlay/outro-card';
 import type { PersistedDirectoryHandle } from '../sources/file-sources';
 import { defaultVariants, type ExportVariant } from './export-variants';
+import { filmTextureOrNull, type FilmTexture } from '../film/film-texture';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
 import { NO_SHIFT, type TimeShift } from '../telemetry/time-format';
 import { AUTO_TIME_SCALE, type TimeScaleSetting } from '../telemetry/time-scale';
@@ -27,7 +28,7 @@ import type { SavedTrim } from '../media/trim';
 import { normaliseDevelops, type SavedDevelop } from './media-develop';
 import { DEFAULT_SOURCE_ID } from '../sources/source';
 
-export const PROJECT_DOC_VERSION = 15;
+export const PROJECT_DOC_VERSION = 16;
 
 /**
  * Identity of one media file, enough to re-match it wherever it lives.
@@ -163,6 +164,13 @@ export interface ProjectDoc {
    * authored (see shared/lut/transfer.ts).
    */
   outputTransform: OutputTransform;
+  /**
+   * The film TEXTURE — grain and halation — drawn by one node of the render
+   * graph AFTER the cube, or null for none. Beside the stack rather than on
+   * the film layer, because it is not a lattice (`SavedGrade.film`,
+   * `render-film.md`). Portable: it is authoring intent, like the stack.
+   */
+  lutFilm: FilmTexture | null;
   /** Title-style theme (preset + tweaks), or null for element styles as-is. */
   theme: StyleTheme | null;
   /**
@@ -212,6 +220,7 @@ export function createProjectDoc(
     | 'lut'
     | 'lutStack'
     | 'outputTransform'
+    | 'lutFilm'
     | 'theme'
     | 'scenes'
     | 'outro'
@@ -239,6 +248,7 @@ export function createProjectDoc(
       : { selected: 'none', customName: null, customText: null, intensity: 1 },
     lutStack: template ? structuredClone(template.lutStack) : [],
     outputTransform: template ? template.outputTransform : 'none',
+    lutFilm: template ? structuredClone(template.lutFilm ?? null) : null,
     theme: template ? structuredClone(template.theme) : null,
     scenes: template ? structuredClone(template.scenes ?? []) : [],
     outro: template ? structuredClone(template.outro ?? null) : null,
@@ -374,6 +384,13 @@ export function migrateProjectDoc(doc: ProjectDoc): ProjectDoc {
       ...migrated.media,
       develops: normaliseDevelops(migrated.media?.develops),
     };
+  }
+  if (migrated.version < 16) {
+    // The grade gained a film TEXTURE. No project carried one before v16, so
+    // "none" is exactly what an old document meant and a reopened project
+    // renders identically. Read through the one reader, so a hand edit or a
+    // newer build's value lands clamped rather than as a NaN in a uniform.
+    migrated.lutFilm = filmTextureOrNull(migrated.lutFilm);
   }
   migrated.version = PROJECT_DOC_VERSION;
   return migrated;

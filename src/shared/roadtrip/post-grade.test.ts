@@ -70,7 +70,7 @@ describe('the chain', () => {
 
   it('answers for a trip with no grade at all', () => {
     const t = createTripDoc('a', 'b', '2025-07-01', '2025-07-31');
-    expect(gradeShownBy(t, piece(), HOOK_PICTURE)).toEqual({ layers: [], output: 'none' });
+    expect(gradeShownBy(t, piece(), HOOK_PICTURE)).toEqual({ layers: [], output: 'none', film: null });
   });
 
   it('names the hook and each slide, and the closing card as no picture', () => {

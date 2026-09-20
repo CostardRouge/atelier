@@ -20,6 +20,7 @@ import { detailOrNull, type DetailSettings } from '../render/detail';
 import { readPatches, type Patch } from '../render/repair';
 import { readLayers, type AdjustLayer } from './layer';
 import { developOrNull, type DevelopSettings } from './develop';
+import { filmTextureOrNull, type FilmTexture } from '../film/film-texture';
 import { isDefaultFraming, normaliseFraming, type Framing } from '../media/framing';
 import { type SavedMediaRef } from '../projects/project-types';
 import { isStoredAspect } from './crop-aspect';
@@ -33,13 +34,19 @@ import { DEFAULT_SOURCE_ID } from '../sources/source';
  * Bumped with a migration block in `migrateRollDoc`, never without.
  * v2 (2026-09-19): `RollPicture.border`, and a legacy Whole framing that is
  * exactly a border read as one (`legacyWholeBorder`).
+ * v3 (2026-09-20): `RollGrade.film` — grain and halation. No block of its own:
+ * `migrateRollDoc` re-READS the whole document, so a roll written before the
+ * texture existed lands with `film: null` and one written by a newer build
+ * lands clamped, both through `readRollGrade`.
  */
-export const ROLL_DOC_VERSION = 2;
+export const ROLL_DOC_VERSION = 3;
 
 /** The roll's look, after every picture's develop — Trips' `TripGrade` shape. */
 export interface RollGrade {
   layers: SavedLutLayer[];
   output: OutputTransform;
+  /** Grain and halation, or null for none — `SavedGrade.film`. */
+  film?: FilmTexture | null;
 }
 
 /** Where the export takes its pixels (`docs/develop-originals.md` §7, Auto by default). */
@@ -230,8 +237,11 @@ export function readRollGrade(raw: unknown): RollGrade | null {
   if (!isRecord(raw)) return null;
   const layers = Array.isArray(raw.layers) ? raw.layers.flatMap((l) => readLayer(l) ?? []) : [];
   const output = typeof raw.output === 'string' && OUTPUTS.has(raw.output) ? (raw.output as OutputTransform) : 'none';
-  // A look with nothing in it is no look: stored as null, so "follows none" has one spelling.
-  return layers.length === 0 && output === 'none' ? null : { layers, output };
+  const film = filmTextureOrNull(raw.film);
+  // A look with nothing in it is no look: stored as null, so "follows none"
+  // has one spelling. A TEXTURE alone is a look — grain on an ungraded
+  // picture is exactly what a stock's texture half is for.
+  return layers.length === 0 && output === 'none' && !film ? null : { layers, output, film };
 }
 
 export function readRollExport(raw: unknown): RollExport {

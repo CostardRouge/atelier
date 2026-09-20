@@ -45,7 +45,7 @@ export interface TripGradeBinding {
 
 /** The stored shape, in one field order, so two equal grades stringify equal. */
 function savedOf(stack: LutStack): TripGrade {
-  return { layers: stack.toSaved(), output: stack.output };
+  return { layers: stack.toSaved(), output: stack.output, film: stack.film };
 }
 
 /**
@@ -96,7 +96,7 @@ export function useTripGrade(
     if (agreed.current === sourceKey) return;
     agreed.current = sourceKey;
     restoring.current += 1;
-    void stack.restore(source.layers, source.output).finally(() => {
+    void stack.restore(source.layers, source.output, source.film).finally(() => {
       restoring.current -= 1;
     });
     // `source` is what `sourceKey` stringifies; `stack.restore` is stable.
@@ -115,7 +115,7 @@ export function useTripGrade(
     const next = writeGrade(cur.trip, cur.post, cur.picture, cur.scope, saved);
     if (next.post) cur.onChangePost(next.post);
     else if (next.trip) cur.onChangeTrip(next.trip);
-  }, [stack.layers, stack.output, stack.busy]);
+  }, [stack.layers, stack.output, stack.film, stack.busy]);
 
   const setScope = (next: GradeScope) => {
     if (next === scope) return;

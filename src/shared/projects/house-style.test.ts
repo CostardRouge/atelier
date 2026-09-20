@@ -41,7 +41,7 @@ describe('the Studio house style', () => {
   it('carries the portable look and nothing of the project, its clip or its format', () => {
     const { file } = projectHouseStyleFrom(styledProject());
     expect(Object.keys(file.style).sort()).toEqual(
-      ['elements', 'exportPrefs', 'guides', 'lutStack', 'outputTransform', 'outro', 'scenes', 'theme'].sort(),
+      ['elements', 'exportPrefs', 'guides', 'lutStack', 'lutFilm', 'outputTransform', 'outro', 'scenes', 'theme'].sort(),
     );
     expect(file.style.theme?.presetId).toBe('or-cine');
     expect(file.style.outputTransform).toBe('rec709-to-srgb');
