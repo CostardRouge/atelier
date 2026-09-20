@@ -79,3 +79,47 @@ exposure.
 
 **Layers and geometry are unchanged**: they run after the one cube, on the
 displayed picture, RAW or not.
+
+## The tool (2026-09-20, P10 second commit)
+
+`DevelopBaseSection` (`shared/develop/DevelopBase.tsx`, drawn under the
+histogram of the Develop tab, only where a RAW is REACHABLE: the file itself
+is one, or a proxy's original is — `MediaOrigin.name`) is a Segmented
+*Camera render · RAW* with one status line: what RAW would fetch and weigh,
+"decoding…", or "the sensor's data, metered +x.x EV". The modal hosts (Trips,
+the Studio) never see it — the maintainer's call that they keep the simple
+sheet.
+
+- **`useDevelopPicture` takes a `raw` option** (the file and the stored gain)
+  and decodes through `decodeRaw` at the STAGE budget (half size when it
+  fits, box for the rest, capped at `maxRenderSize`), building a `BadgeSource`
+  whose `image` is the as-shot 8-bit canvas (the wipe's untouched side, the
+  dropper, the stats) and whose `gpu` is the half image every grade renders.
+  The gain is read at decode time and NOT a dependency of the effect: it is
+  measured by the first decode and stored by the host right after, and a
+  re-decode for the number the decode produced would be seconds for nothing.
+- **The gain is stored the moment it is measured** (`onRawDecoded` →
+  `patch({ base: 'raw', rawGain })`), once; a stored gain is never overwritten
+  by a later decode's measurement.
+- **A proxy's RAW original** is `heldOriginal` or fetched once and
+  `holdOriginal`'d (decision 3), the status line saying its weight; a failed
+  fetch puts the base back and says why.
+- **The export** (`use-roll-export.ts`) resolves the RAW the same way and
+  hands `renderRollPicture` a `raw` option: `renderFromRaw` decodes whole, or
+  at half size only when the half still has TWICE the long edge asked for (a
+  crop may keep a fraction), grades the half image through the picture's own
+  cube — the gain is in it — and the same passes, then `deliver`s exactly as a
+  render is. A RAW develop whose RAW is unreachable renders its NUMBERS on the
+  render, base stripped, and the run says so: never the gain on a render,
+  never silently the wrong material.
+- **The draft keeps its material through a paste, a preset and "As shot"**
+  (`setDraft` keeps `base`/`rawGain`; `replace` is the whole record, for an
+  undo's re-seed); `asShot` is about the numbers.
+- **The chip** reads `RAW · 16-bit linear` with the base on, whatever the file
+  in hand is.
+
+Measured in the pane (a 12 MP synthetic DNG dropped on the editor): the
+switch decoded 2000×1500 at half size, metered at its white (a patch above
+saturation clips more than 1 %), −1.5 EV read 160 on the clipped patch, and
+the export decoded the whole 4000×3000 and wrote the same 160 — preview =
+export from two decodes of two sizes, which is what storing the gain buys.

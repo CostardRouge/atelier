@@ -84,6 +84,8 @@ export interface RawDecodeOptions {
   minLongEdge?: number | null;
   /** The gain to draw the 8-bit as-shot bytes with; measured when absent. */
   gain?: number | null;
+  /** The longest edge the GPU takes (`maxRenderSize`); a decode past it is box-averaged down. */
+  maxEdge?: number | null;
 }
 
 let instance: Promise<LibRawLike> | null = null;
@@ -194,7 +196,9 @@ export function decodeRaw(file: File, opts: RawDecodeOptions = {}): Promise<RawD
     }
 
     let linear = linearFromLibRaw(image.data, image.width, image.height);
-    const factor = opts.budgetPixels ? rawBoxFactor(linear.width, linear.height, opts.budgetPixels) : 1;
+    const byBudget = opts.budgetPixels ? rawBoxFactor(linear.width, linear.height, opts.budgetPixels) : 1;
+    const byEdge = opts.maxEdge && Number.isFinite(opts.maxEdge) ? Math.ceil(Math.max(linear.width, linear.height) / opts.maxEdge) : 1;
+    const factor = Math.max(byBudget, byEdge);
     if (factor > 1) linear = boxDownscale(linear, factor);
     const gain = opts.gain ?? autoBrightGain(linear);
     const half = halfImageFromLinear(linear);

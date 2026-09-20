@@ -11,11 +11,17 @@ import { whiteBalanceFor } from '../../shared/develop/auto-develop';
 import DevelopHistogram from '../../shared/develop/DevelopHistogram';
 import DevelopSliders from '../../shared/develop/DevelopSliders';
 import DevelopViewport from '../../shared/develop/DevelopViewport';
-import { DEFAULT_DEVELOP, developLines, isDefaultDevelop, type DevelopSettings } from '../../shared/develop/develop';
+import { DEFAULT_DEVELOP, developLines, isDefaultDevelop, signed, type DevelopSettings } from '../../shared/develop/develop';
 import { copyDevelop, pasteDevelop } from '../../shared/develop/develop-clipboard';
 import { developPillClass } from '../../shared/develop/develop-classes';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { pictureFidelity } from '../../shared/develop/picture-fidelity';
+import { DevelopBaseSection, type RawOffer } from '../../shared/develop/DevelopBase';
+import { canDecodeRaw } from '../../shared/raw/raw-decoder';
+import { isRawImage } from '../../shared/library/assets';
+import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
+import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
+import { formatBytes } from '../../shared/lib/format';
 import { pictureAspectRatio } from '../../shared/develop/crop-aspect';
 import { WORKBENCH_TABS, editorKeyAction, sameDevelop, type WorkbenchTab } from '../../shared/develop/roll-editor';
 import { framedThumbnail } from '../../shared/develop/roll-thumb';
@@ -282,6 +288,51 @@ export default function PictureWorkbench({
         : null,
     [paintId, paintKind],
   );
+  // --- the RAW base ----------------------------------------------------------
+  // Where the sensor's data would come from: the file itself when it is a
+  // RAW, else a proxy's RAW original, fetched once and held for the session
+  // (`original-cache.ts`, decision 3). Nothing is fetched or decoded until the
+  // base says `raw`; back on the render the decode is dropped with the
+  // source, and the held original costs no second fetch.
+  const origin = useMemo(() => (file ? mediaOrigin(file) : null), [file]);
+  const rawOffer: RawOffer | null =
+    file && canDecodeRaw(file) ? 'file' : origin?.name && isRawImage(origin.name) && origin.fetchOriginal ? 'original' : null;
+  const wantsRaw = draft.draft.base === 'raw' && rawOffer !== null;
+  const [rawFile, setRawFile] = useState<File | null>(null);
+  const [rawStatus, setRawStatus] = useState<string | null>(null);
+  const { patch: patchDraft } = draft;
+  useEffect(() => {
+    if (!wantsRaw || rawFile || !file || !rawOffer) return;
+    if (rawOffer === 'file') {
+      setRawFile(file);
+      return;
+    }
+    const key = knownIdentity(file)?.assetId ?? null;
+    const held = key ? heldOriginal(key) : null;
+    if (held) {
+      setRawFile(held);
+      return;
+    }
+    let alive = true;
+    setRawStatus(`fetching the RAW${origin?.bytes ? ` · ${formatBytes(origin.bytes)}` : ''}…`);
+    origin!.fetchOriginal!()
+      .then((fetched) => {
+        if (!alive) return;
+        if (key) holdOriginal(key, fetched);
+        setRawFile(fetched);
+        setRawStatus(null);
+      })
+      .catch((err: unknown) => {
+        if (!alive) return;
+        setRawStatus(null);
+        tell(`the RAW could not be fetched: ${err instanceof Error ? err.message : String(err)}`);
+        patchDraft({ base: null, rawGain: null });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [wantsRaw, rawFile, file, rawOffer, origin, tell, patchDraft]);
+  const rawGain = draft.draft.rawGain ?? null;
   const picture = useDevelopPicture({
     file,
     cube: stack.composed,
@@ -295,8 +346,19 @@ export default function PictureWorkbench({
     // Only while the layer is open AND the box is ticked: a red wash left on
     // by accident would be mistaken for the picture.
     showMaskOf: showMask && selectedLayer ? selectedLayer.id : null,
+    raw: wantsRaw && rawFile ? { file: rawFile, gain: rawGain } : null,
+    // The measured exposure is STORED the moment it is known, so the export's
+    // decode applies the same number (`raw.md`). Once: a stored gain is never
+    // overwritten by a later decode's measurement.
+    onRawDecoded: (info) => {
+      if (rawGain === null) {
+        patchDraft({ base: 'raw', rawGain: info.gain });
+        const ev = Math.log2(info.gain);
+        tell(`RAW · ${info.width}×${info.height}${info.halved ? ' (half size)' : ''} · metered ${ev ? `${signed(ev, 1)} EV` : 'at its white'}`);
+      }
+    },
   });
-  const fidelity = pictureFidelity(file);
+  const fidelity = pictureFidelity(file, draft.draft.base);
   const subject = useSubjectMasks({
     layers: layersDraft,
     // `BadgeSource.image` is typed as `CanvasImageSource`, which admits an
@@ -317,14 +379,16 @@ export default function PictureWorkbench({
   // them back over the step at the next nudge.
   const callbacks = useRef({ onDevelop, onFraming, onKeystone, onLens, onLayers, onAspect, onSnapshot, onStep, onTabChange });
   callbacks.current = { onDevelop, onFraming, onKeystone, onLens, onLayers, onAspect, onSnapshot, onStep, onTabChange };
-  const { setDraft } = draft;
+  const { replace } = draft;
   useWriteThrough<DevelopSettings>({
     stored: entry.develop,
     // Keyed on the numbers themselves: `draft` is a new object every render.
     draft: isDefaultDevelop(draft.draft) ? null : draft.draft,
     same: sameDevelop,
     onWrite: (value) => callbacks.current.onDevelop(value),
-    onReseed: (value) => setDraft(value ?? DEFAULT_DEVELOP),
+    // The WHOLE record, material included: an undo that takes a picture back
+    // off its RAW must put the base back with the numbers.
+    onReseed: (value) => replace(value ?? DEFAULT_DEVELOP),
   });
   // The crop, written through the same way, on its own timer: a drag fires far
   // more often than a slider ever does.
@@ -684,6 +748,23 @@ export default function PictureWorkbench({
           {tab === 'develop' ? (
             <>
               <DevelopHistogram histogram={picture.histogram} />
+              <DevelopBaseSection
+                offer={rawOffer}
+                base={draft.draft.base === 'raw' ? 'raw' : 'render'}
+                onBase={(base) => {
+                  if (base === 'raw') {
+                    patchDraft({ base: 'raw' });
+                    if (!draft.asShot) tell('your numbers now act on the RAW — another starting point');
+                  } else {
+                    patchDraft({ base: null, rawGain: null });
+                  }
+                }}
+                status={wantsRaw && (rawStatus || !picture.source) ? (rawStatus ?? 'decoding the sensor’s data…') : null}
+                gain={draft.draft.base === 'raw' ? rawGain : null}
+                originalName={origin?.name ?? null}
+                originalBytes={origin?.bytes ?? null}
+                numbersSet={!draft.asShot}
+              />
               <DevelopAutoSection
                 stats={picture.stats}
                 onPatch={draft.patch}

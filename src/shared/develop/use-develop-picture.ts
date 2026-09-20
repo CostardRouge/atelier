@@ -6,7 +6,7 @@ import { drawFramed, framePoint, unframePoint, type Framing } from '../media/fra
 import { borderLayout, scaleLayout, type RollBorder } from './border-layout';
 import { drawDelivered, drawPictureIn } from './border-paint';
 import { holdGrades, type HeldGrader } from '../lut/held-grader';
-import { stageFrameSize } from '../overlay/stage-size';
+import { MAX_STAGE_PIXELS, stageFrameSize } from '../overlay/stage-size';
 import { THUMB_LONG_EDGE, THUMB_QUALITY, thumbSize } from '../roadtrip/thumbnail';
 import { boundSource, frameSize, loadBadgeSource, type BadgeSource } from '../roadtrip/badge-render';
 import { usePictureZoom, type PictureZoom } from '../ui/use-picture-zoom';
@@ -23,6 +23,8 @@ import {
 } from '../render/picture-geometry';
 import { cloneLayers, drawingLayers, sameLayers, type AdjustLayer } from './layer';
 import { makeLayerPassCache } from './layer-render';
+import { decodeRaw, type RawMeta } from '../raw/raw-decoder';
+import { maxRenderSize } from '../render/graph-grader';
 
 /** How close to the frame's side the divider's handle may be held, in px. */
 const HANDLE_INSET = 14;
@@ -38,6 +40,15 @@ function wipeClaims(target: EventTarget | null, zoomed: boolean): boolean {
   const el = target as Element | null;
   if (el?.closest?.('button')) return false;
   return !zoomed || Boolean(el?.closest?.('[data-wipe-handle]'));
+}
+
+/** What a RAW decode measured, handed to the host once per decode. */
+export interface RawDecodedInfo {
+  gain: number;
+  width: number;
+  height: number;
+  halved: boolean;
+  meta: RawMeta;
 }
 
 /** The crop a host wants the viewport to show: the aspect box and the framing inside it. */
@@ -163,10 +174,21 @@ export function useDevelopPicture({
   paint = null,
   subjectMasks = null,
   compare = true,
+  raw = null,
+  onRawDecoded,
 }: {
   file: File | null;
   videoTimeSeconds?: number;
   cube: CubeLut | null;
+  /**
+   * Develop from the SENSOR's data instead of `file`'s 8-bit render: the RAW
+   * to decode (`shared/raw/raw-decoder.ts`) and the gain the develop already
+   * stores, or null to measure it. The decode replaces `file`'s as the source;
+   * `file` stays what the picture IS for everything else.
+   */
+  raw?: { file: File; gain: number | null } | null;
+  /** The decode's measurement, once per decode — what the host stores as `rawGain`. */
+  onRawDecoded?: (info: RawDecodedInfo) => void;
   /**
    * The perspective correction, applied on the GPU AFTER the look and BEFORE
    * the crop frames what is left. Unlike the crop it is not a way of LOOKING:
@@ -252,14 +274,39 @@ export function useDevelopPicture({
   const suspended = Boolean(paint) || picking;
   const shownWipe = compare && !suspended ? wipe : 1;
 
+  // Read at decode time, not listed as a dep: the gain is measured by the
+  // first decode and STORED by the host right after, and a re-decode for the
+  // number the decode itself produced would be two seconds for nothing.
+  const rawGainRef = useRef(raw?.gain ?? null);
+  rawGainRef.current = raw?.gain ?? null;
+  const onRawDecodedRef = useRef(onRawDecoded);
+  onRawDecodedRef.current = onRawDecoded;
+  const rawFile = raw?.file ?? null;
+
   useEffect(() => {
     let cancelled = false;
     setSource(null);
     setProblem(null);
     if (!file) return;
     let loaded: BadgeSource | null = null;
-    void loadBadgeSource(file, videoTimeSeconds)
-      .then((s) => boundSource(s))
+    const load: Promise<BadgeSource> = rawFile
+      ? decodeRaw(rawFile, {
+          budgetPixels: MAX_STAGE_PIXELS,
+          gain: rawGainRef.current,
+          maxEdge: maxRenderSize(),
+        }).then((d) => {
+          // The as-shot picture for every 2D draw; the half-floats for the GPU.
+          const canvas = document.createElement('canvas');
+          canvas.width = d.width;
+          canvas.height = d.height;
+          canvas.getContext('2d')?.putImageData(d.bytes, 0, 0);
+          if (!cancelled) {
+            onRawDecodedRef.current?.({ gain: d.gain, width: d.width, height: d.height, halved: d.halved, meta: d.meta });
+          }
+          return { image: canvas, width: d.width, height: d.height, gpu: d.half, release: () => {} };
+        })
+      : loadBadgeSource(file, videoTimeSeconds).then((s) => boundSource(s));
+    void load
       .then((s) => {
         if (cancelled) {
           s.release();
@@ -275,7 +322,7 @@ export function useDevelopPicture({
       cancelled = true;
       loaded?.release();
     };
-  }, [file, videoTimeSeconds]);
+  }, [file, videoTimeSeconds, rawFile]);
 
   // The two warps as one record, memoised by VALUE — every effect below takes
   // it as a dep, and the panels hand down a fresh object per slider step.
@@ -405,7 +452,7 @@ export function useDevelopPicture({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const grader = holding ? null : graderFor(cube, source, geometry, stack, showMaskOf, subjectMasks);
-    const graded = grader ? grader.render(source.image) : source.image;
+    const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
     const layout = delivered1 && framing ? scaleLayout(delivered1, w / delivered1.w) : null;
     if (layout && framing) {
       ctx.clearRect(0, 0, w, h);
@@ -473,7 +520,7 @@ export function useDevelopPicture({
       if (!ctx) return;
       try {
         const grader = graderFor(cube, source, geometry, stack, null, subjectMasks);
-        const graded = grader ? grader.render(source.image) : source.image;
+        const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
         ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
         setHistogram(luminanceHistogram(ctx.getImageData(0, 0, w, h).data));
       } catch {
@@ -631,7 +678,7 @@ export function useDevelopPicture({
     // Never the overlay: this is what LEAVES, and a red wash is a way of
     // looking, like the wipe.
     const grader = graderFor(lut, s, geo, ly, null, rs);
-    return grader ? grader.render(s.image) : s.image;
+    return grader ? grader.render(s.gpu ?? s.image) : s.image;
   }, [graderFor, source, cube, geometry, stack, subjectMasks]);
   const snapshot = useCallback(
     async (longEdge = THUMB_LONG_EDGE): Promise<Blob | null> => {
@@ -645,7 +692,7 @@ export function useDevelopPicture({
       if (!ctx) return null;
       try {
         const grader = graderFor(lut, s, geo, ly, null, rs);
-        const graded = grader ? grader.render(s.image) : s.image;
+        const graded = grader ? grader.render(s.gpu ?? s.image) : s.image;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(graded, 0, 0, s.width, s.height, 0, 0, w, h);
       } catch {

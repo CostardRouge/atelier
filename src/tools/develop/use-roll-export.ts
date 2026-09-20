@@ -16,6 +16,9 @@ import { knownIdentity, mediaOrigin, type MediaOrigin } from '../../shared/proje
 import { deliverFiles } from '../../shared/sources/deliver-files';
 import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
 import { formatBytes } from '../../shared/lib/format';
+import { isRawDevelop, rawGainOf, withoutBase } from '../../shared/develop/develop';
+import { isRawImage } from '../../shared/library/assets';
+import { canDecodeRaw } from '../../shared/raw/raw-decoder';
 
 /** What the last run rendered, kept for one purpose: sending it home. */
 export interface RollRun {
@@ -104,6 +107,14 @@ export function useRollExport({
       open.border,
       roll.export,
     );
+    if (isRawDevelop(open.develop)) {
+      // The row was measured on the render; a RAW develop leaves from the
+      // sensor's data at its own density, and the reason says so.
+      openDelivery = {
+        ...openDelivery,
+        reason: 'developed on its RAW — delivered from the sensor’s data, decoded at its own size',
+      };
+    }
   }
 
   const exportPictures = useCallback(async (ids: readonly string[]) => {
@@ -136,8 +147,29 @@ export function useRollExport({
           const origin = mediaOrigin(file);
           const identity = knownIdentity(file);
           let source = file;
+          // A picture developed on its RAW leaves from the sensor's data: the
+          // file itself when it is the RAW, else the proxy's original, held
+          // for the session like any fetched original (decision 3). Not
+          // reachable, the render leaves instead and the run says so —
+          // never the RAW with numbers nobody has seen on it, and never
+          // silently the wrong material.
+          let raw: { file: File; gain: number } | null = null;
+          if (isRawDevelop(picture.develop)) {
+            let rawFile: File | null = canDecodeRaw(file) ? file : null;
+            if (!rawFile && origin?.name && isRawImage(origin.name) && origin.fetchOriginal) {
+              const key = identity?.assetId ?? null;
+              rawFile = key ? heldOriginal(key) : null;
+              if (!rawFile) {
+                setExporting(`Fetching the RAW ${step}${origin.bytes ? ` · ${formatBytes(origin.bytes)}` : ''}…`);
+                rawFile = await origin.fetchOriginal();
+                if (key) holdOriginal(key, rawFile);
+              }
+            }
+            if (rawFile) raw = { file: rawFile, gain: rawGainOf(picture.develop) };
+            else failures.push(`${picture.ref.name} is developed on its RAW, which is not reachable here — its render left instead`);
+          }
           // Decide from the file's own pixels which pixels to deliver from.
-          const size = await measurePicture(file);
+          const size = raw ? null : await measurePicture(file);
           if (size && origin?.fidelity === 'proxy' && origin.fetchOriginal) {
             const summary = deliverySummary(
               size,
@@ -162,17 +194,21 @@ export function useRollExport({
               }
             }
           }
-          setExporting(`Rendering ${step}…`);
+          setExporting(raw ? `Decoding the RAW ${step}…` : `Rendering ${step}…`);
+          // A RAW develop whose RAW is out of reach renders its numbers on the
+          // render WITHOUT the base: the gain belongs to the sensor's range.
+          const develop = raw ? picture.develop : picture.develop && isRawDevelop(picture.develop) ? withoutBase(picture.develop) : picture.develop;
           const out = await renderRollPicture(source, {
             framing: picture.framing,
             aspect: picture.aspect,
             border: picture.border,
-            lut: cubeFor(picture),
+            lut: cubeFor({ ...picture, develop }),
             longEdge: r.export.longEdge,
             quality: r.export.quality,
             keystone: picture.keystone ?? null,
             lens: picture.lens ?? null,
             layers: picture.layers ?? null,
+            raw,
           });
           if (out.gradedAt.width < out.source.width || out.gradedAt.height < out.source.height) {
             failures.push(

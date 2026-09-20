@@ -447,12 +447,38 @@ reopened picture re-segments), and a faster path than one sequential inference
 per point.
 
 
-**P10 — RAW develop.** O5: `raw-decoder.ts` behind `libraw-wasm`, dynamically
-imported (the MapLibre rule — never in the main bundle), in a worker, opt-in per
-file, decoded to a budget; `DevelopSettings.base: 'render' | 'raw'`;
-`developedAtDecode` and `composedForDeveloped`, which already exist for it. This
-is where white balance stops being an approximation and highlight recovery
-starts recovering something.
+**P10 — RAW develop** *(BOTH commits BUILT 2026-09-20 — the engine, then the
+tool; the rules are `docs/memory/raw.md`)*. O5: `raw-decoder.ts` behind
+`libraw-wasm`, dynamically imported (the MapLibre rule — never in the main
+bundle), in its own worker, opt-in per picture, decoded to a budget;
+`DevelopSettings.base: 'render' | 'raw'`. This is where white balance stops
+being an approximation and highlight recovery starts recovering something.
+
+Four things the build settled against the plan:
+
+- **It works without cross-origin isolation** (measured), so GitHub Pages is
+  not the obstacle it is for a multi-threaded ffmpeg.
+- **The decoder's `gamm` option is ignored** — the output is always dcraw's
+  BT.709 curve — so the wrapper inverts that curve exactly rather than asking
+  for linear.
+- **The develop is NOT applied at decode** (`developedAtDecode` was the
+  plan's word for it): one decode serves every slider, because the cube
+  survives as the develop with the sensor's range as its `[0,1]` and a
+  MEASURED gain (`rawGain`, stored so preview = export) bringing the picture
+  to its own exposure before the sliders. The graph gained a half-float
+  source for it (`render/half-image.ts`, `RGB16F`).
+- **Kelvin stays cut**: the RAW's `AsShotNeutral` is applied by the decoder
+  as the camera's white balance, and temperature/tint remain gains against
+  it. A Kelvin readout needs the colour matrices and is a later refinement.
+
+Verified in headless Chromium on a synthetic 12 MP DNG dropped on the
+Develop tool: the Base section offers RAW, the switch decodes at half size
+in the stage (2000×1500, metered), the chip reads `RAW · 16-bit linear`,
+−1.5 EV brings a clipped patch to 160, and *Export this picture* decodes the
+whole 4000×3000 and writes pixels equal to the stage's to the code. Still
+his to run: a real DJI DNG, ProRAW (lossless and JPEG XL) and ARW through
+this path — the JPEG XL answer (§11) is unchanged — and the heap on his
+iPhone (decision 5 of `develop-originals.md` §7).
 
 **P11 — detail** *(two commits)*. Wavelet chroma + guided-filter luma denoise,
 defringe, sharpen — classic, per §4.3. Plus the **loupe at one source pixel per

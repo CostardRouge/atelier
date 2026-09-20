@@ -27,6 +27,8 @@ import { drawingLayers, type AdjustLayer } from './layer';
 import { layerPasses } from './layer-render';
 import { DEFAULT_FRAMING, type Framing } from '../media/framing';
 import { decodePhoto, fitPhotoForRender } from '../media/photo-frame';
+import { decodeRaw } from '../raw/raw-decoder';
+import { maxRenderSize } from '../render/graph-grader';
 import { pictureAspectRatio } from './crop-aspect';
 import { drawDelivered } from './border-paint';
 import type { RollBorder } from './border-layout';
@@ -51,6 +53,14 @@ export interface RollRenderOptions {
   lens?: LensCorrection | null;
   /** Adjustment layers, bottom to top, applied after the look — `layer-render.ts`. */
   layers?: readonly AdjustLayer[] | null;
+  /**
+   * Deliver from the SENSOR's data (`DevelopSettings.base: 'raw'`): the RAW
+   * to decode and the gain the develop stores, which `lut` already carries.
+   * Decoded whole, or at half size when the half still has twice the long
+   * edge asked for (a crop may keep a fraction of the frame). The file passed
+   * beside it is then only what the picture IS; nothing of it is decoded.
+   */
+  raw?: { file: File; gain: number } | null;
 }
 
 export interface RollRendered {
@@ -86,19 +96,10 @@ export async function measurePicture(file: File): Promise<PictureSize | null> {
 }
 
 export async function renderRollPicture(file: File, opts: RollRenderOptions): Promise<RollRendered> {
+  if (opts.raw) return renderFromRaw(opts.raw, opts);
   const bitmap = await decodePhoto(file);
   try {
     const source = { width: bitmap.width, height: bitmap.height };
-    const ratio = pictureAspectRatio(opts.aspect, source.width, source.height);
-    const framing = opts.framing ?? DEFAULT_FRAMING;
-    const { out, layout } = deliveredLayout(source, ratio, opts.framing, opts.border, opts.longEdge);
-    if (out.w <= 0 || out.h <= 0) throw new Error('This picture has no pixels to deliver.');
-    const canvas = document.createElement('canvas');
-    canvas.width = out.w;
-    canvas.height = out.h;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Could not create a 2D canvas for export.');
-    ctx.imageSmoothingQuality = 'high';
     // The warps run at SOURCE density, with the look, before `drawFramed` cuts
     // the frame — a keystone resampled after the crop would be resampling a
     // resample. Their ORDER is `picture-geometry.ts`'s to state, once, so this
@@ -117,15 +118,62 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
       : null;
     try {
       const graded = grader && fit ? grader.render(fit.image) : bitmap;
-      drawDelivered(ctx, graded, gradedAt.width, gradedAt.height, framing, layout, opts.border);
+      return await deliver(graded, source, gradedAt, opts);
     } finally {
       grader?.dispose();
       fit?.release();
     }
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', opts.quality));
-    if (!blob) throw new Error('The browser could not encode this picture.');
-    return { blob, width: out.w, height: out.h, source, gradedAt };
   } finally {
     bitmap.close();
   }
+}
+
+/**
+ * The RAW path: the sensor's data decoded at the size the delivery needs
+ * and within what the GPU takes, graded through the picture's own cube (its
+ * measured gain and its numbers are IN it) and the same passes, then cut and
+ * bordered exactly as a render is. Decode and delivery agree by construction:
+ * both come from `deliver`.
+ */
+async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRenderOptions): Promise<RollRendered> {
+  const decoded = await decodeRaw(raw.file, {
+    minLongEdge: opts.longEdge ? opts.longEdge * 2 : null,
+    gain: raw.gain,
+    maxEdge: maxRenderSize(),
+  });
+  const source = { width: decoded.width, height: decoded.height };
+  const ar = source.width / source.height;
+  const stack = drawingLayers(opts.layers);
+  const passes = [...geometryPasses(opts, ar), ...layerPasses(stack, ar)];
+  // A RAW is never drawn without the GPU: its half-floats have no 2D form,
+  // and its develop is never default (the gain alone is a stage).
+  const grader = makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, passes);
+  try {
+    return await deliver(grader.render(decoded.half), source, source, opts);
+  } finally {
+    grader.dispose();
+  }
+}
+
+/** Cut, border and encode a graded picture — the one place the file's frame is made. */
+async function deliver(
+  graded: CanvasImageSource,
+  source: PictureSize,
+  gradedAt: PictureSize,
+  opts: RollRenderOptions,
+): Promise<RollRendered> {
+  const ratio = pictureAspectRatio(opts.aspect, source.width, source.height);
+  const framing = opts.framing ?? DEFAULT_FRAMING;
+  const { out, layout } = deliveredLayout(source, ratio, opts.framing, opts.border, opts.longEdge);
+  if (out.w <= 0 || out.h <= 0) throw new Error('This picture has no pixels to deliver.');
+  const canvas = document.createElement('canvas');
+  canvas.width = out.w;
+  canvas.height = out.h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Could not create a 2D canvas for export.');
+  ctx.imageSmoothingQuality = 'high';
+  drawDelivered(ctx, graded, gradedAt.width, gradedAt.height, framing, layout, opts.border);
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', opts.quality));
+  if (!blob) throw new Error('The browser could not encode this picture.');
+  return { blob, width: out.w, height: out.h, source, gradedAt };
 }
