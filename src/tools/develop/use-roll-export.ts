@@ -14,13 +14,24 @@ import type { RollDoc, RollPicture } from '../../shared/develop/roll-types';
 import { WORKING_PREVIEW_EDGE, isWorkingPreview } from '../../shared/develop/working-preview';
 import { knownIdentity, mediaOrigin, type MediaOrigin } from '../../shared/projects/media-identity';
 import { deliverFiles } from '../../shared/sources/deliver-files';
+import { uniqueName } from '../../shared/sources/unique-name';
+import { EXIF_SLICE_BYTES } from '../../shared/exif/exif-parser';
+import { exportExifBlock, stampExif } from '../../shared/exif/stamp-exif';
 import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
 import { formatBytes } from '../../shared/lib/format';
 import { isRawDevelop, rawGainOf, withoutBase } from '../../shared/develop/develop';
 import { isRawImage } from '../../shared/library/assets';
 import { canDecodeRaw } from '../../shared/raw/raw-decoder';
 
-/** What the last run rendered, kept for one purpose: sending it home. */
+/**
+ * What the last run rendered, and each file's own capture on its instance.
+ *
+ * Recorded, not shown: sending the finals home is unplugged (`ExportPanel`),
+ * because Winnow's upload route files an upload into the incoming as a new
+ * capture instead of into the Gallery, and ignores the `original_asset_id`
+ * that would link it to the picture it was developed from. The bookkeeping
+ * stays so re-plugging it is one element, not a second pass over the loop.
+ */
 export interface RollRun {
   files: File[];
   /** Each file's own capture on its instance, parallel to `files`. */
@@ -130,6 +141,10 @@ export function useRollExport({
     const sourceIds = new Set<string>();
     const failures: string[] = [];
     const hdrRun = r.export.hdr ? { asked: 0, ultra: 0, headroom: 0, checked: null as number | null } : null;
+    // A run names each file after its picture, so two crops of ONE picture
+    // want one name: the second is numbered here, before the folder is even
+    // chosen. Case-folded, like the volume it will land on.
+    const named = new Set<string>();
     try {
       for (const [i, picture] of targets.entries()) {
         const step = `${i + 1}/${targets.length}`;
@@ -184,8 +199,7 @@ export function useRollExport({
               r.export,
             );
             if (summary.from === 'original') {
-              const key = identity?.assetId ?? null;
-              const held = key ? heldOriginal(key) : null;
+              const held = identity?.assetId ? heldOriginal(identity.assetId) : null;
               if (held) {
                 source = held;
               } else {
@@ -193,10 +207,29 @@ export function useRollExport({
                   `Fetching the original ${step}${origin.bytes ? ` · ${formatBytes(origin.bytes)}` : ''}…`,
                 );
                 source = await origin.fetchOriginal();
-                if (key) holdOriginal(key, source);
+                if (identity?.assetId) holdOriginal(identity.assetId, source);
               }
             }
           }
+          // The EXIF comes from the ORIGINAL whatever the pixels came from
+          // (`shared/exif/stamp-exif.ts`): the original itself when the run
+          // has it, else its head alone — a quarter of a megabyte instead of
+          // the whole capture — else what the instance vouched for. A RAW
+          // leaving from its own file is that original.
+          const key = identity?.assetId ?? null;
+          const originalFile =
+            raw?.file ?? (source !== file ? source : origin?.fidelity === 'proxy' ? (key ? heldOriginal(key) : null) : file);
+          let head: Uint8Array | null = null;
+          if (originalFile) {
+            head = new Uint8Array(await originalFile.slice(0, EXIF_SLICE_BYTES).arrayBuffer());
+          } else if (origin?.fetchOriginalHead) {
+            setExporting(`Reading the original’s EXIF ${step}…`);
+            head = await origin
+              .fetchOriginalHead(EXIF_SLICE_BYTES)
+              .then((buffer) => new Uint8Array(buffer))
+              .catch(() => null);
+          }
+
           setExporting(raw ? `Decoding the RAW ${step}…` : `Rendering ${step}…`);
           // A RAW develop whose RAW is out of reach renders its numbers on the
           // render WITHOUT the base: the gain belongs to the sensor's range.
@@ -244,9 +277,24 @@ export function useRollExport({
               `${picture.ref.name} was graded at ${out.gradedAt.width}×${out.gradedAt.height}, the most this GPU renders on one edge — its ${out.source.width}×${out.source.height} were resampled`,
             );
           }
+          const delivered = { width: out.width, height: out.height };
+          const exif = exportExifBlock(head, origin?.exif ?? null, delivered);
+          // Said, not hidden: a file that lost its position is worth knowing
+          // about before it is filed away.
+          if (exif.account === 'vouched') {
+            failures.push(
+              `${picture.ref.name} took its EXIF from ${origin?.sourceId ?? 'the source'}’s record — the original was out of reach, so no body or lens`,
+            );
+          } else if (exif.account === 'none') {
+            failures.push(`${picture.ref.name} carries no EXIF — nothing is known about the picture it came from`);
+          }
+          const blob = await stampExif(out.blob, exif, delivered);
+          const name = uniqueName(exportName(picture.ref.name), (c) => named.has(c.toLowerCase()));
+          named.add(name.toLowerCase());
           rendered.push(
-            new File([out.blob], exportName(picture.ref.name, picture.aspect), {
+            new File([blob], name, {
               type: 'image/jpeg',
+              // The capture's own instant, never the moment it was rendered.
               lastModified: file.lastModified,
             }),
           );
@@ -261,12 +309,16 @@ export function useRollExport({
         return;
       }
       setExporting('Writing…');
-      const delivery = await deliverFiles(rendered, (done, total) => setExporting(`Writing ${done}/${total}…`));
+      const delivery = await deliverFiles(rendered, {
+        replace: r.export.replace,
+        onProgress: (done, total) => setExporting(`Writing ${done}/${total}…`),
+      });
       if (delivery.method === 'dismissed') return;
       const errors = delivery.method === 'folder' ? delivery.errors : [];
-      setNote(describeRun(delivery.written, delivery.method, [...failures, ...errors]));
-      // Kept for the send-home panel: only the files from ONE instance, so
-      // the plan refuses nothing it did not have to.
+      const renamed = delivery.method === 'folder' ? delivery.renamed : 0;
+      setNote(describeRun(delivery.written, delivery.method, [...failures, ...errors], renamed));
+      // Only the files from ONE instance, so a future send-home plan refuses
+      // nothing it did not have to.
       const sourceId = sourceIds.size === 1 ? [...sourceIds][0] : null;
       setLastRun({ files: rendered, assetIds, sourceId, hdr: hdrRun });
     } catch (err) {

@@ -1400,7 +1400,7 @@ export default function StudioEditor({
   /** Write one finished file: into the chosen folder, else download it. */
   async function deliver(file: File): Promise<void> {
     if (destDir) {
-      const res = await writeItems(destDir, [{ name: file.name, file }]);
+      const res = await writeItems(destDir, [{ name: file.name, file }], { replace: true });
       if (res.errors.length) throw new Error(res.errors[0].message);
       return;
     }

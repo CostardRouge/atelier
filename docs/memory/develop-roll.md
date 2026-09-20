@@ -236,6 +236,40 @@ shared block. Rules a later phase must keep:
   that is what `Auto` fetches the original for, and the line then says
   `· asked 1920` when the proxy delivered less. With Size = source, Auto
   always turns to a decodable original — its pixels ARE the source size.
+- **An export is named EXACTLY after its picture** (2026-09-20, his own
+  convention): `DJI_0101.JPG` → `DJI_0101.jpg`, no `-developed`, no shape tag.
+  He keeps a source folder and a Gallery folder side by side and pairs them BY
+  NAME — by eye, and the way Winnow's `reconcile` would — so a word added to
+  the name breaks the pairing, which is the whole point of the file. Only the
+  extension changes: a JPEG leaves, whatever the picture was developed from
+  (his call; he will say if another format is ever wanted). Collisions are
+  numbered, never stamped with a date (`shared/sources/unique-name.ts`:
+  `-1`, `-2`, `-3`, case-folded because his volume is) — inside a run, where
+  two crops of one picture want one name, and against the folder being written
+  into. `aspectFileTag` went out with the tag; `crop-aspect.ts` keeps the rest.
+- **A write NEVER replaces without being told to** (`RollExport.replace`, off
+  by default; `writeItems` takes `replace` with no default so every caller
+  says which it means — the Studio's and Trips' say `true`, which is what they
+  always did). Off, the folder is asked about each name as its turn comes
+  (`nameTaken` → `uniqueNameAsync`) and a taken one is numbered; the run's
+  sentence says how many were. The probe goes to the real file system, so a
+  case-insensitive volume answers about `DJI_0101.JPG` when asked about
+  `DJI_0101.jpg` — which is the case that matters, since an export named after
+  its picture is exactly what would otherwise land on its own original. A
+  DOWNLOAD cannot honour the choice: the browser numbers a repeat itself.
+- **A delivered picture carries the ORIGINAL's EXIF, whatever its pixels came
+  from** (2026-09-20, the maintainer's rule: *"il faut que je puisse à la fin
+  exporter… avec les informations du fichier original"*). Where the pixels come
+  from and where the metadata comes from are two questions, and only the first
+  is a trade-off — he develops on a proxy for the speed of it and still needs
+  the file he keeps to read like the capture. The run asks in this order: the
+  original itself when it has it (fetched for the pixels, or held from a
+  previous run), else `MediaOrigin.fetchOriginalHead` — a quarter of a megabyte
+  instead of twenty-odd, and what stops the transfer is CANCELLING the body,
+  since Winnow's download route ignores `Range` —, else what the instance
+  vouched for. The choice and the block are `shared/exif/stamp-exif.ts`; a
+  picture that ends up on the poorest account, or on none, is SAID in the run's
+  sentence rather than filed away silently.
 - **A RAW original is never fetched** (`decodableOriginal`: jpg/png/webp/
   avif/gif/bmp only — no HEIC, no TIFF): decision 4, the render the person
   developed is what leaves, and the reason is said on the *Delivers* row.
@@ -247,10 +281,22 @@ shared block. Rules a later phase must keep:
   (decision 3): the second export of the same picture pays no fetch, whatever
   mode. Measured in the pane: Auto → 1 fetch, Proxies → 0 and the proxy's
   pixels, Originals → 0 and the held original's pixels.
-- **The finals plan links each file to ITS capture** (`FinalCandidate.assetId`,
-  `FinalsItem.originalAssetId`, one upload per file); a run is offered home
-  only when every picture came from ONE instance, and `plan.originalAssetId`
-  names the run's capture only when all files agree (the Studio's sentence).
+- **Sending a roll home is UNPLUGGED** (2026-09-20, the maintainer's call — a
+  roll delivers to the FILE SYSTEM only). Read in Winnow's own `main` before
+  taking it out: `/api/upload` reads `files` and `paths` alone and IGNORES
+  `original_asset_id` and `chapter_id`; `planDestination` files an upload into
+  `{incomingDir}/{device}/{YYYY}/{YYYY-MM-DD}/{file}`, so it lands in the
+  INCOMING as a new capture and never in a finals (Gallery) root; and
+  `reconcile` pairs an edit only inside a finals root, on the lowercased
+  basename sans extension plus `captured_at`. A canvas-made JPEG carries no
+  EXIF, so it would also file under `unknown/<today>`. His Gallery volume is
+  mounted READ-ONLY on purpose, which is the deeper reason the feature waits.
+  Re-plugging is one element in `ExportPanel` once Winnow can receive a final:
+  `use-roll-export.ts` still records `RollRun` (the files, each one's
+  `assetId`, the one instance) and `SendFinalsPanel` still links each file to
+  ITS capture (`FinalCandidate.assetId`, `FinalsItem.originalAssetId`, one
+  upload per file, a run offered home only when every picture came from ONE
+  instance). The Studio's own send is untouched.
 - `MediaOrigin.name`/`bytes` are what say whether an original is decodable and
   what it weighs — read from Winnow's row at materialise; a file the person
   opened has no origin and nothing to decide.
@@ -258,6 +304,20 @@ shared block. Rules a later phase must keep:
   the pane makes a SECOND module instance once HMR has stamped the app's with
   `?t=`; register through the URL `performance.getEntriesByType('resource')`
   lists, or the app never sees the origin.
+
+Verified again in the pane on 2026-09-20 for the export pass (the name, the
+overwrite guard, the EXIF): a camera-like JPEG built in the page (gradient +
+a block from `exif-build.ts`) answered the Library's transient file input
+(patch `HTMLInputElement.prototype.click` for `type === 'file'` — the app has
+no standing file input to set `.files` on), `showDirectoryPicker` returned an
+OPFS directory, and two runs with Replace OFF wrote `DJI_0101.jpg` then
+`DJI_0101-1.jpg` with the sentence *"1 picture written · 1 numbered, the folder
+already held that name"*; a third with Replace ON wrote no third file. Both
+files read back through `parseExif` with the make, model, lens, ISO, shutter,
+aperture, focal length, GPS, altitude and capture time of the original, and
+decoded at 1600×1200 — the splice does not break the JPEG. NOT verifiable
+there: the case-insensitive collision (`DJI_0101.JPG` against `DJI_0101.jpg`),
+because OPFS is case-sensitive while the volume this lands on is not.
 
 Verified in the pane on canvas-made JPEGs with `showDirectoryPicker` stubbed
 and two files registered as proxies through the app's own module: A-land (1:1,

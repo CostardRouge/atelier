@@ -78,16 +78,6 @@ export function pictureAspectRatio(aspect: string, sourceW: number, sourceH: num
   return sourceW > 0 && sourceH > 0 ? sourceW / sourceH : 1;
 }
 
-/**
- * What an aspect adds to an exported file's name: `4:5` → `4x5`, a free zone →
- * `crop` (its ratio would put a second dot in the name, and `-crop` is what
- * the file actually is).
- */
-export function aspectFileTag(aspect: string): string {
-  if (isFreeAspect(aspect)) return 'crop';
-  return aspect === 'original' ? '' : aspect.replace(':', 'x');
-}
-
 /** A ratio said the way a shape is read: `1.50:1`, `1:1.25`, `1:1`. */
 export function describeAspect(ratio: number): string {
   const r = clampFreeAspect(ratio);

@@ -183,11 +183,12 @@ describe('deliverySummary', () => {
 });
 
 describe('names and sentences', () => {
-  it('names the export after the picture, never the source name itself', () => {
-    expect(exportName('IMG_0421.jpg', 'original')).toBe('IMG_0421-developed.jpg');
-    expect(exportName('IMG_0421.webp', '4:5')).toBe('IMG_0421-developed-4x5.jpg');
-    expect(exportName('IMG_0421.jpg', 'free:1.3721')).toBe('IMG_0421-developed-crop.jpg');
-    expect(exportName('.jpg', 'original')).toBe('picture-developed.jpg');
+  it('names the export EXACTLY after the picture — the pairing convention', () => {
+    expect(exportName('DJI_0101.JPG')).toBe('DJI_0101.jpg');
+    // The proxy's own extension never reaches the file: a JPEG leaves.
+    expect(exportName('IMG_0421.webp')).toBe('IMG_0421.jpg');
+    expect(exportName('a.b.tif')).toBe('a.b.jpg');
+    expect(exportName('.jpg')).toBe('picture.jpg');
   });
 
   it('maps a stored long edge to a Size choice and back to source', () => {
@@ -201,6 +202,16 @@ describe('names and sentences', () => {
     expect(describeRun(1, 'download', [])).toBe('1 picture downloaded');
     expect(describeRun(0, 'folder', ['a.jpg is not in the Library', 'b'])).toBe(
       'Nothing was written — a.jpg is not in the Library (+1 more)',
+    );
+  });
+
+  it('says how many were numbered around a file already in the folder', () => {
+    expect(describeRun(3, 'folder', [], 1)).toBe('3 pictures written · 1 numbered, the folder already held that name');
+    expect(describeRun(3, 'folder', [], 2)).toBe(
+      '3 pictures written · 2 numbered, the folder already held those names',
+    );
+    expect(describeRun(2, 'folder', ['b.jpg: no room'], 1)).toBe(
+      '2 pictures written · 1 numbered, the folder already held that name — b.jpg: no room',
     );
   });
 });

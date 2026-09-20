@@ -898,6 +898,47 @@ export class WinnowClient {
     return new File([blob], name, { type, lastModified });
   }
 
+  /**
+   * The first `bytes` at `url`, without paying for the rest — what reading an
+   * original's EXIF costs, against the twenty-odd megabytes the file is.
+   *
+   * A `Range` is asked for politely, but Winnow's own download route streams
+   * the file whole and ignores it. What actually stops the transfer is
+   * CANCELLING the body once enough has arrived, so this works against a
+   * server that honours ranges and one that does not, and is the reason it
+   * reads the stream by hand rather than calling `arrayBuffer()`.
+   */
+  async fetchHead(url: string, bytes: number): Promise<ArrayBuffer> {
+    const res = await this.request(url, { headers: { Range: `bytes=0-${Math.max(0, bytes - 1)}` } });
+    const body = res.body;
+    if (!body) return (await res.arrayBuffer()).slice(0, bytes);
+    const reader = body.getReader();
+    const chunks: Uint8Array[] = [];
+    let held = 0;
+    try {
+      while (held < bytes) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          chunks.push(value);
+          held += value.length;
+        }
+      }
+    } finally {
+      // Cancelling is what closes the connection; without it the server keeps
+      // pushing a file nobody is reading.
+      await reader.cancel().catch(() => undefined);
+    }
+    const out = new Uint8Array(Math.min(held, bytes));
+    let at = 0;
+    for (const chunk of chunks) {
+      if (at >= out.length) break;
+      out.set(chunk.subarray(0, out.length - at), at);
+      at += chunk.length;
+    }
+    return out.buffer;
+  }
+
   // --- the document bucket ------------------------------------------------
   //
   // `GET /api/apps/:app/docs?kind=` lists the caller's OWN rows; a row that

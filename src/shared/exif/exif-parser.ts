@@ -342,8 +342,13 @@ function readTiff(view: DataView, tiffStart: number): ExifData {
   return out;
 }
 
-/** Parse EXIF from the leading bytes of a JPEG or TIFF/RAW file. */
-export function parseExif(buffer: ArrayBuffer): ExifData {
+/**
+ * Parse EXIF from the leading bytes of a JPEG or TIFF/RAW file.
+ *
+ * `ArrayBufferLike`, so a `Uint8Array`'s own `.buffer` goes straight in — a
+ * block written by `exif-build.ts` is read back by this without a cast.
+ */
+export function parseExif(buffer: ArrayBufferLike): ExifData {
   try {
     const view = new DataView(buffer);
     if (view.byteLength < 8) return {};

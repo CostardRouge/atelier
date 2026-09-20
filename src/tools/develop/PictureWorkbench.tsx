@@ -1107,7 +1107,7 @@ export default function PictureWorkbench({
               verbs={exportVerbs}
               exporting={exports.exporting}
               note={exports.note}
-              lastRun={exports.lastRun}
+              hdrRun={exports.lastRun?.hdr ?? null}
             />
           ) : null}
         </div>

@@ -52,6 +52,14 @@ export interface RollExport {
   quality: number;
   originals: RollOriginals;
   /**
+   * Replace a file the chosen folder already holds under the export's name,
+   * or number the incoming one (`DJI_0101-1.jpg`). OFF by default: an export
+   * is named after its picture, so the name it wants is exactly the name a
+   * previous run — or, on a case-insensitive volume, the original itself —
+   * may already be sitting under.
+   */
+  replace: boolean;
+  /**
    * Deliver an Ultra HDR JPEG (`shared/hdr/`): the SDR picture with a gain
    * map inside it, for a picture developed on its RAW — a render holds
    * nothing above white and leaves as a plain JPEG, said in the run.
@@ -65,6 +73,7 @@ export const DEFAULT_ROLL_EXPORT: Readonly<RollExport> = Object.freeze({
   longEdge: null,
   quality: 0.92,
   originals: 'auto',
+  replace: false,
   hdr: false,
   hdrStops: 2,
 });
@@ -235,6 +244,9 @@ export function readRollExport(raw: unknown): RollExport {
     longEdge: edge,
     quality: Math.min(quality.max, Math.max(quality.min, finite(raw.quality, DEFAULT_ROLL_EXPORT.quality))),
     originals: raw.originals === 'proxies' || raw.originals === 'originals' ? raw.originals : 'auto',
+    // Anything but a stored `true` reads as off, so a roll written before the
+    // choice existed keeps what is in its folder.
+    replace: raw.replace === true,
     hdr: raw.hdr === true,
     hdrStops: Math.round(
       Math.min(ROLL_EXPORT_LIMITS.hdrStops.max, Math.max(ROLL_EXPORT_LIMITS.hdrStops.min, finite(raw.hdrStops, DEFAULT_ROLL_EXPORT.hdrStops))),
