@@ -203,7 +203,7 @@ export function useRollExport({
       open.framing,
       pictureAspectRatio(open.aspect, openSize.size.width, openSize.size.height),
       open.border,
-      { longEdge: roll.export.longEdge, originals: proxiesOnly ? 'proxies' : 'auto' },
+      { longEdge: roll.export.longEdge, pixels: proxiesOnly ? 'proxies' : 'auto' },
     );
     const chosen = proxiesOnly
       ? null
@@ -368,7 +368,7 @@ export function useRollExport({
               picture.framing,
               pictureAspectRatio(picture.aspect, size.width, size.height),
               picture.border,
-              { longEdge: r.export.longEdge, originals: onlyProxies ? 'proxies' : 'auto' },
+              { longEdge: r.export.longEdge, pixels: onlyProxies ? 'proxies' : 'auto' },
             );
             if (summary.from === 'original') {
               const held = identity?.assetId ? heldOriginal(identity.assetId) : null;

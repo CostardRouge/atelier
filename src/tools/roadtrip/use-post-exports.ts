@@ -8,7 +8,6 @@ import { contentSlideElements, deckSlides, type DeckSlide } from '../../shared/r
 import { frameSize, loadCollageSources } from '../../shared/roadtrip/badge-render';
 import { DECK_LONG_EDGE, renderDeck } from '../../shared/roadtrip/deck-export';
 import { deliveryFor } from '../../shared/develop/delivery-source';
-import type { RollOriginals } from '../../shared/develop/roll-types';
 import { exportPlan, type PlanItem } from '../../shared/roadtrip/export-plan';
 import {
   clipSpeed,
@@ -84,14 +83,6 @@ export interface PostExportInputs {
   lutFor: (slide: DeckSlide) => CubeLut | null;
   /** The film TEXTURE that slide wears — `TripGradeBinding.filmFor`, the twin of `lutFor`. */
   filmFor: (slide: DeckSlide) => FilmTexture | null;
-  /**
-   * WHICH PIXELS the stills leave from (O2 of `docs/develop-originals.md`):
-   * `auto` fetches a source's original only for a picture whose proxy would
-   * be upscaled into the deck's frame, `proxies` never, `originals` whenever
-   * there is one this browser can read. The clips are untouched — the
-   * Studio's own export already fetches a clip's capture.
-   */
-  originals: RollOriginals;
   /** Called as an export starts, so the caller can bring the report into view. */
   onStart?: () => void;
 }
@@ -180,7 +171,11 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
   const [exporting, setLine] = useState<string | null>(null);
   /**
    * Which pixels each STILL slide leaves from, decided before a frame is
-   * drawn, and a resolver that hands the renderer what was chosen.
+   * drawn, and a resolver that hands the renderer what was chosen: a source's
+   * original only for a picture whose proxy would be upscaled into the deck's
+   * frame (O2 of `docs/develop-originals.md`; the door that could force or
+   * refuse it left with R5 of `docs/capture-renditions.md`). The clips are
+   * untouched — the Studio's own export already fetches a clip's capture.
    *
    * The deck renderer knows nothing about sources — its `resolve` is injected
    * exactly so that it stays testable and free of the library — so the
@@ -193,7 +188,6 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     slides: readonly DeckSlide[],
   ): Promise<(ref: { name: string } | null) => File | null> {
     const base = inputs.resolve;
-    if (inputs.originals === 'proxies') return base;
     const out = frameSize(inputs.aspect, DECK_LONG_EDGE);
     const swap = new Map<File, File>();
     for (const slide of slides) {
@@ -201,9 +195,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       const file = base(slide.media);
       if (!file || swap.has(file) || classifyPart(file.name) === 'video') continue;
       try {
-        const chosen = await deliveryFor(file, slide.framing, out, inputs.originals, (line) =>
-          setExporting(line),
-        );
+        const chosen = await deliveryFor(file, slide.framing, out, (line) => setExporting(line));
         if (chosen.file !== file) swap.set(file, chosen.file);
       } catch {
         // Knowing nothing about a picture is never a reason to drop it: the

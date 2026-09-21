@@ -543,12 +543,17 @@ The shape it was given, which any future network feature should copy: the client
 ## A still leaves from the pixels the frame needs (2026-09-20, O2)
 
 **Decision** (`docs/develop-originals.md` O2, agreed 2026-09-15 and built here
-for the first time). Trips delivered every still from whatever was in the
+for the first time; **revised 2026-09-21, R5 of `docs/capture-renditions.md`**).
+Trips delivered every still from whatever was in the
 Library, which for a Winnow picture is a 2048 px proxy — and the deck's frame
 is 1920 on the long edge, so a landscape proxy cropped to 4:5 is already
-upscaled ×1.25 before a framing zoom touches it. The Export tab now carries
-the same `Auto · Proxies · Originals` the Develop tool has, with its
-*Delivers* row.
+upscaled ×1.25 before a framing zoom touches it. The Export tab carried
+`Auto · Proxies · Originals` for one day; since R5 it carries NO control —
+the original is fetched only where the proxy could not fill the frame, and
+the *Delivers* row says so, naming the original by its file (the fidelity
+chip's own word for it). Which file a picture leaves from is the PICTURE's
+question, answered by its rendition where a tool has the pill; a door that
+forced or refused the original answered it a second time.
 
 Rules a later agent must keep:
 
@@ -568,16 +573,17 @@ Rules a later agent must keep:
   pull an original to fill a box a quarter its size.
 - **A picture that cannot be measured still leaves.** Knowing nothing is not
   a reason to drop a slide that used to render.
-- **It is an export-DOOR choice** — session state beside *Everything as
-  images*, not on the trip: which pixels cross a tunnel today is about this
-  machine and this run, never about the piece. (`imagesOnly` set the
-  precedent; the Studio's `renderFromProxy` is the same shape.)
+- **Nothing about it is on the trip, and nothing about it is a control**:
+  which pixels cross a tunnel is decided per picture by the arithmetic, and a
+  "proxies only" for a slow connection is a Develop-editor switch, not a
+  Trips one (`renditions-build.md`, R5).
 
 Measured in the pane on a 2048×1365 proxy over a 6000×4000 original, a 4:5
-piece: Auto read `Original 4000 px → 1920 · ×2.08 to spare` and its PNG run
-fetched the original once; Proxies read `Proxy 1365 px → 1920 · ×1.41
-upscaled` and fetched nothing. Both wrote `…-01-hook.png` at 1536×1920 — the
-frame is the frame; what changes is where its pixels came from.
+piece: the row read `Original 4000 px → 1920 · ×2.08 to spare` and the PNG run
+fetched the original once; on a frame the proxy filled it fetched nothing.
+Both wrote `…-01-hook.png` at 1536×1920 — the frame is the frame; what changes
+is where its pixels came from. Since R5 the same row reads the file's name in
+place of `Original`.
 
 ## The QR is generated here, and it is verified by decoding (2026-08-24)
 

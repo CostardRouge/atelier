@@ -1053,20 +1053,37 @@ preview above it shows the file exactly as the export will write it, with its
 size. **Apply crop to…** and **Apply borders to…** are separate: one border
 can go on a whole roll whose crops each differ.
 
+**Which file.** A chip above the photograph says what it is developed from
+(`JPEG · 8-bit`, `RAW · camera render · 960 × 540`…) and opens the list of the
+capture's files: the proxy your Winnow made, what the camera delivered — its
+JPEG, or the render written inside a RAW — and the sensor itself, with its
+calibration rungs nested under it (*Gain*, *Gain map*, *Gain map + warp*,
+each an amount of the camera's own calibration read from the DNG, offered
+only where the file carries it). A file that is not here is fetched from its
+instance and held for the session, its weight said before the click; a DNG
+beside a JPEG in a folder is the sensor with no fetch at all. The choice is
+saved on the picture, so another device shows the same one, and the export
+follows it.
+
 **Exporting.** The **Export** tab writes JPEGs — this picture, the marked
 ones, or the whole roll — into a folder you choose (downloaded one by one
 where the browser has no folder picker). Each is decoded at its own size,
 developed under the roll's look and cropped as the stage showed it — a crop
 leaves at the picture's own density, so a small zone makes a small file, never
 one blown up to fill its aspect; the **Size** is a ceiling on the long edge and
-never upscales. For a picture that
-came from your Winnow, **Pixels** decides where its pixels come from: *Auto*
-fetches the full-size original only where the proxy could not fill the frame
-asked for, *Proxies* never fetches, *Originals* always does — and a *Delivers*
-line says, for the picture in hand, exactly what will be written
-(`Proxy 2000 px → 1080 · ×1.85 to spare`, `Original 6048 px → 1920 · ×3.15
-to spare`). A RAW original is never fetched: the render you developed is what
-leaves. Fetched originals are kept for the session only. After a run whose
+never upscales. Each picture leaves from the file you chose above the
+photograph — its RAW when you developed it on the sensor, the camera's own
+JPEG when you picked it, else where it opened, and there the full-size
+original is fetched only where the proxy could not fill the frame asked for.
+The panel says the whole run before a byte moves (`4 pictures · 1 from the
+sensor · 1 from the file chosen · 69 MB to fetch`, one line per picture behind
+*picture by picture*), and a *Delivers* line says, for the picture in hand,
+exactly what will be written (`Proxy 2000 px → 1080 · ×1.85 to spare`,
+`DJI_0101.JPG 6048 px → 1920 · ×3.15 to spare`). One switch, **Proxies only,
+for this run**, delivers everything from what is already here — a RAW base is
+set aside and the run says so — and is never remembered on the roll. A RAW
+original is reached only through the render inside it, measured first. Fetched
+originals are kept for the session only. After a run whose
 pictures came from an instance, **Send N files to …** uploads them home into
 that Winnow's finals, each linked to its own capture — the same panel the
 Studio uses, and the same rule: only what you just rendered, only to the

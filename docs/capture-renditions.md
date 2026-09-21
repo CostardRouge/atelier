@@ -137,7 +137,7 @@ not the RAW — and leaves the pool with its asset (`assetFiles`).
 | where | what it says | scope |
 | --- | --- | --- |
 | `DevelopSettings.base` | proxy / gain / gainMap / gainMapWarp | one picture, STORED |
-| `RollOriginals` (`Auto · Proxies · Originals`) | which pixels leave | one export run, never stored |
+| `RollOriginals` (`Auto · Proxies · Originals`) — retired by R4/R5, see §13.2 | which pixels leave | one export run, never stored |
 | `MediaOrigin.fidelity` + `fetchOriginal` | proxy or capture, and how to get it | one file, in the identity registry |
 
 Three views of *which bytes of this capture am I working from*. Ask C is: make
@@ -652,7 +652,9 @@ load-bearing in Trips and the Studio until the pill reaches them.
 run*, that never touches the document; a picture leaves from its own
 rendition through the same seam the sensor uses (`sensor-source.ts`,
 `deliveredSourceFor`); a picture that chose nothing keeps `Auto`'s
-arithmetic. Trips and the Studio still show the three words until R5.
+arithmetic. **R5 (built the same day)** took the three words off Trips and
+the Studio too: those hosts run `Auto`'s arithmetic with no control, and
+their *Delivers* row names the original by its file, the pill's word.
 
 Two controls become one checkbox, and the panel gains a sentence instead of a
 mode. The three words go from every host — from Develop because the pill

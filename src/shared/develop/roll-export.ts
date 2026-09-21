@@ -5,17 +5,30 @@
  * the original is worth fetching for it, the sentence that says so, and the
  * file's name. Pure and DOM-free; `roll-render.ts` does the drawing.
  *
- * Two axes, kept apart as decided there: the PIXELS (the Library's file — a
- * Winnow proxy or the file itself — against the full-size original) are chosen
- * here per picture; the MATERIAL (an 8-bit render against a RAW) is not chosen
- * at export at all — a RAW original is never fetched, and the picture is
- * delivered from the render the person looked at (decision 4).
+ * Since 2026-09-21 (`docs/capture-renditions.md` §13.2) which file a picture
+ * leaves from is the PICTURE's own choice — its rendition, on the document —
+ * and this module keeps only the arithmetic that was never a preference:
+ * never deliver fewer pixels than a reachable original would give the frame
+ * asked for. That is `Auto`, unnamed, in every host; the one word a door still
+ * says is `proxies` — *Proxies only, for this run*, the Develop editor's
+ * switch, never on a roll. A RAW original is reached only through the render
+ * inside it, measured (decision 4, corrected below).
  */
 
 import { isDrawableImage, isRawImage } from '../library/assets';
 import { DEFAULT_FRAMING, framingTransform, type Framing } from '../media/framing';
 import { borderLayout, scaleLayout, type BorderLayout, type RollBorder } from './border-layout';
-import type { RollExport, RollOriginals } from './roll-types';
+import type { RollExport } from './roll-types';
+
+/**
+ * How a delivery weighs the original against the file in hand: `auto` fetches
+ * it only where the file would upscale into the frame; `proxies` never — the
+ * Develop editor's *Proxies only, for this run*. A third word, `originals`,
+ * forced a fetch from the Trips and Studio doors until 2026-09-21 and was
+ * retired with them: forcing more pixels than the frame needs is what the
+ * picture's rendition is for, not a door.
+ */
+export type PixelsMode = 'auto' | 'proxies';
 
 export interface PictureSize {
   width: number;
@@ -182,10 +195,9 @@ export interface PixelsChoice {
 }
 
 /**
- * Which pixels a picture is delivered from. `Auto` fetches the original only
- * where the file in hand would upscale; `Proxies` never; `Originals` whenever
- * there is one the browser decodes. A file that IS the original has nothing
- * to choose.
+ * Which pixels a picture is delivered from. `auto` fetches the original only
+ * where the file in hand would upscale; `proxies` never. A file that IS the
+ * original has nothing to choose.
  *
  * **A RAW original is the case decision 4 got half right** (2026-09-20). It
  * said a RAW never checked in Develop is delivered "from its render —
@@ -197,7 +209,7 @@ export interface PixelsChoice {
  * find out would cost tens of megabytes for pixels that may not be there.
  */
 export function choosePixels(
-  mode: RollOriginals,
+  mode: PixelsMode,
   fileHeadroom: number,
   original: OriginalInfo | null,
   /** The file in hand, so a RAW's render can be measured against it. */
@@ -212,14 +224,13 @@ export function choosePixels(
     };
   }
   if (mode === 'proxies') return { from: 'file', reason: 'proxies only' };
-  if (mode === 'originals') return { from: 'original', reason: 'originals asked for' };
   return fileHeadroom < 1
     ? { from: 'original', reason: `the proxy would be upscaled ×${(1 / fileHeadroom).toFixed(2)}` }
     : { from: 'file', reason: 'the proxy has the pixels this frame needs' };
 }
 
 function chooseAgainstRaw(
-  mode: RollOriginals,
+  mode: PixelsMode,
   fileHeadroom: number,
   original: OriginalInfo,
   file: PictureSize | null,
@@ -241,7 +252,7 @@ function chooseAgainstRaw(
     };
   }
   if (mode === 'proxies') return { from: 'file', reason: 'proxies only' };
-  if (mode === 'auto' && fileHeadroom >= 1) {
+  if (fileHeadroom >= 1) {
     return {
       from: 'file',
       reason: `the proxy has the pixels this frame needs — the ${rawLong} px render inside its RAW would buy nothing here`,
@@ -258,6 +269,19 @@ function labelOf(name: string): string {
   const dot = name.lastIndexOf('.');
   const ext = dot >= 0 ? name.slice(dot + 1).toUpperCase() : '';
   return ext ? `a ${ext}` : 'a format this browser does not decode';
+}
+
+/**
+ * What the *Delivers* row calls an original it will fetch: the FILE's name,
+ * the same word the fidelity chip's menu uses for that row (2026-09-21, one
+ * vocabulary — `docs/capture-renditions.md` §13.2), and `render` after a
+ * RAW's, since only the render inside it is ever delivered. `Original` is the
+ * fallback for a source that vouched for no name.
+ */
+export function originalLabel(original: OriginalInfo | null): string {
+  const name = original?.name ?? null;
+  if (!name) return 'Original';
+  return isRawImage(name) ? `${name} render` : name;
 }
 
 /**
@@ -309,10 +333,10 @@ export interface DeliverySummary {
  * that cannot fill it is what `Auto` fetches the original for. Without one,
  * the file delivers what it has and the line says what was asked.
  */
-/** What ONE delivery is decided against: the roll's cap, and the door's mode for this picture. */
+/** What ONE delivery is decided against: the roll's cap, and the door's mode for this run. */
 export interface DeliverySettings {
   longEdge: RollExport['longEdge'];
-  originals: RollOriginals;
+  pixels: PixelsMode;
 }
 
 export function deliverySummary(
@@ -331,17 +355,16 @@ export function deliverySummary(
   const asked = deliveredLayout(best, aspectRatio, framing, border, settings.longEdge);
   const bordered = border !== null;
   const fileHeadroom = deliveryHeadroom(file, aspectRatio, framing, asked);
-  const choice = choosePixels(settings.originals, fileHeadroom, fileIsProxy ? original : null, file);
+  const choice = choosePixels(settings.pixels, fileHeadroom, fileIsProxy ? original : null, file);
   if (choice.from === 'original' && known) {
     const headroom = deliveryHeadroom(best, aspectRatio, framing, asked);
     // A RAW's original is reached only through the render inside it, and the
-    // row says so rather than letting `Original` suggest the sensor.
-    const label = isRawImage(original?.name ?? '') ? 'Original render' : 'Original';
+    // row says so rather than letting the file's name suggest the sensor.
     return {
       from: 'original',
       out: asked.out,
       headroom,
-      line: deliversLine(label, asked.out, headroom, null, bordered ? Math.max(asked.zone.w, asked.zone.h) : null),
+      line: deliversLine(originalLabel(original), asked.out, headroom, null, bordered ? Math.max(asked.zone.w, asked.zone.h) : null),
       reason: choice.reason,
     };
   }
@@ -376,6 +399,11 @@ export function deliverySummary(
  * `docs/develop-originals.md`: a landscape proxy cropped to 4:5 at a 1920
  * export is ×1.25 upscaled). Everything else — which pixels, why, and the
  * sentence — is the roll's, shared rather than written a second time.
+ *
+ * These hosts have no mode: `auto` is what they do, unnamed (R5 of
+ * `docs/capture-renditions.md`, 2026-09-21). A door that could force the
+ * original, or refuse it, was one control answering the picture's own
+ * question a second time.
  */
 export function fixedFrameDelivery(
   file: DeliverySource,
@@ -383,15 +411,13 @@ export function fixedFrameDelivery(
   original: OriginalInfo | null,
   framing: Framing | null,
   out: { w: number; h: number },
-  mode: RollOriginals,
 ): DeliverySummary {
   const fileHeadroom = pixelHeadroom(file, framing, out);
-  const choice = choosePixels(mode, fileHeadroom, fileIsProxy ? original : null, file);
+  const choice = choosePixels('auto', fileHeadroom, fileIsProxy ? original : null, file);
   const best = fileIsProxy && original ? originalPixels(original) : null;
   if (choice.from === 'original' && best) {
     const headroom = pixelHeadroom(best, framing, out);
-    const label = isRawImage(original?.name ?? '') ? 'Original render' : 'Original';
-    return { from: 'original', out, headroom, line: deliversLine(label, out, headroom), reason: choice.reason };
+    return { from: 'original', out, headroom, line: deliversLine(originalLabel(original), out, headroom), reason: choice.reason };
   }
   return {
     from: 'file',

@@ -212,7 +212,9 @@ interface RollPicture {
   `rollOutputSize`, `pixelHeadroom`, `choosePixels`, `deliverySummary`, the
   *Delivers* line, names) and `roll-render.ts` (decode whole → grade through
   the picture's own cube → `drawFramed` → JPEG), the Export tab
-  (`ExportPanel`: size, quality, `Auto · Proxies · Originals`, the line, the
+  (`ExportPanel`: size, quality, `Auto · Proxies · Originals` — replaced on
+  2026-09-21 by the picture's rendition and one *Proxies only* switch,
+  `capture-renditions.md` §13.2 —, the line, the
   verbs, the finals), `use-roll-export.ts`; `MediaOrigin.name`/`bytes` (O1),
   originals held for the session (`shared/sources/original-cache.ts`, O2),
   `SendFinalsPanel` moved to `shared/sources/winnow/` with per-file capture
