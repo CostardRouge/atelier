@@ -37,6 +37,7 @@ import { pickFile } from '../../shared/sources/file-sources';
 import { usePublishMediaActions, type MediaActions } from '../../shared/sources/media-scope';
 import { DEFAULT_SOURCE_ID, sourceById, type SourceInfo } from '../../shared/sources/source';
 import { sourceLabel } from '../../shared/sources/document-gallery';
+import AbsentSourceNotes from '../../shared/sources/AbsentSourceNotes';
 import { useDocumentGallery } from '../../shared/sources/use-document-gallery';
 import Button from '../../shared/ui/Button';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
@@ -287,8 +288,19 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
     mirror: mirrorRoll,
     move: moveRoll,
   });
-  const { docs: rolls, documentSources, refresh, groups, nothingAnywhere, allListed, busy, notice, setNotice, createOn } =
-    gallery;
+  const {
+    docs: rolls,
+    documentSources,
+    refresh,
+    groups,
+    absent,
+    nothingAnywhere,
+    allListed,
+    busy,
+    notice,
+    setNotice,
+    createOn,
+  } = gallery;
 
   const selectedPhotos = useMemo(
     () =>
@@ -423,6 +435,8 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
           {notice}
         </p>
       )}
+
+      <AbsentSourceNotes absent={absent} />
 
       {rolls === null ? (
         <LoadingState label="Loading rolls…" />

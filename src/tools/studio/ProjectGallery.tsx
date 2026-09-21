@@ -33,6 +33,7 @@ import {
 import { pickFile } from '../../shared/sources/file-sources';
 import { DEFAULT_SOURCE_ID, sourceById, type SourceInfo } from '../../shared/sources/source';
 import { sourceLabel } from '../../shared/sources/document-gallery';
+import AbsentSourceNotes from '../../shared/sources/AbsentSourceNotes';
 import { useDocumentGallery } from '../../shared/sources/use-document-gallery';
 import { DEFAULT_GUIDES } from '../../shared/overlay/guides';
 import { defaultElementsPreset } from '../../shared/overlay/overlay-types';
@@ -307,6 +308,7 @@ export default function ProjectGallery({
     documentSources,
     refresh,
     groups,
+    absent,
     nothingAnywhere,
     allListed,
     busy,
@@ -501,6 +503,8 @@ export default function ProjectGallery({
           {notice}
         </p>
       )}
+
+      <AbsentSourceNotes absent={absent} />
 
       {projects === null ? (
         <LoadingState label="Loading projects…" />
