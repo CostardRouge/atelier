@@ -337,3 +337,12 @@ commit as the RAW arrived was retired by that commit's cleanup — so the
 release skips whatever `source` currently is, and that one waits its turn.
 Otherwise the next paint draws a bitmap of width 0 and the cube pass logs
 `GL error 0x501` on its first draw.
+
+## A picture is read by its NAME before its type (2026-09-21)
+
+`pictureFidelity` asked `file.type` before anything else, and a JPEG fetched
+from an instance carries NO type (`materialize` hands an original over with
+`''`), so a delivered original on the stage was captioned `clip · 8-bit`. The
+name decides first (`classifyPart`); the type is consulted only where the
+name says nothing. The same trap already bit `loadBadgeSource`, which tests
+the extension beside the type — keep every "is this a clip?" test on both.

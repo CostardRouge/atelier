@@ -15,7 +15,7 @@
  * what moved it out of the piece editor (the `StylePanel` rule).
  */
 
-import { isRawImage } from '../library/assets';
+import { classifyPart, isRawImage } from '../library/assets';
 import { baseRung, type DevelopBase } from './develop';
 import { imageTypeLabel } from '../media/image-meta';
 import { mediaOrigin } from '../projects/media-identity';
@@ -154,7 +154,12 @@ export function pictureFidelity(
       note: `the JPEG your camera wrote inside the RAW, not the sensor data: ${measured}, so highlights above white are already gone from it`,
     };
   }
-  if (!file.type.startsWith('image/')) return { chip: `clip · 8-bit${chipPixels(pixels)}`, note: null };
+  // By NAME before by type: a file fetched from an instance carries an empty
+  // type (`materialize` hands an original over with none), and calling a
+  // JPEG a clip on that account is exactly the sentence this must never say.
+  if (classifyPart(file.name) !== 'image' && !file.type.startsWith('image/')) {
+    return { chip: `clip · 8-bit${chipPixels(pixels)}`, note: null };
+  }
   return {
     chip: `${imageTypeLabel(file.name)} · 8-bit${chipPixels(pixels)}`,
     note: `an 8-bit picture: highlights above white are already gone${sizeClause(pixels)}`,
