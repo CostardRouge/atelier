@@ -13,10 +13,31 @@
  * The before/after wipe is not new either: `setSplit` has been in the shader
  * all along, graded on the LEFT and the original on the right, the way
  * Lightroom and Capture One put it — and the way `LutStudio` already reads.
+ * The wipe is CONTROLLED from the host, because the slider that drives it
+ * belongs beside the picture's name, not on top of the photograph.
  *
  * Without WebGL2 it draws the picture through a 2D context, ungraded, and
  * says so: the same degradation every grading path here takes, because an
  * un-graded preview that admits it beats a blank box.
+ *
+ * ## The picture is shown WHOLE, and that took measuring
+ *
+ * One box holds it: `absolute inset-0; margin: auto; max-width/height: 100%`
+ * plus the picture's own `aspect-ratio`. Measured in Chromium at 16:9, 4:3,
+ * 3:2, portrait and 4:1 — it always fits inside the band and always centres.
+ *
+ * What it replaced was `max-w-full max-h-full` on the canvas in a
+ * `place-items-center` grid, and that **silently ignored the height**: a 4:3
+ * canvas rendered 400×300 in a 232px band and the rest was clipped by
+ * `overflow-hidden`. It looked right only because the reference frame the
+ * scene was first driven on is 16:9, exactly the band's own ratio. `width:
+ * 100%; height: 100%; object-fit: contain` fails the same way — `height:
+ * 100%` does not resolve against the row there either.
+ *
+ * That box being the PICTURE's box is also what keeps the wipe honest: the
+ * divider and the pointer are measured on it, so they agree with the shader,
+ * whose split is in the canvas's own coordinates. Positioned on the band
+ * instead they would drift apart wherever the picture is letterboxed.
  *
  * ## It OWNS its canvas, and that is not a style choice
  *
@@ -40,8 +61,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CubeLut } from '../lib/cube-parser';
-import IconButton from '../ui/IconButton';
-import { Icons } from '../ui/icons';
 import { createLutRenderer, type LutRenderer } from './lut-gl';
 import { sceneFrame, type LutPreviewPicture } from './look-scene';
 import type { Interpolation } from './interpolate';
@@ -52,6 +71,12 @@ export interface LookSceneProps {
   /** The aimed look's lattice, or null for the original (and while it loads). */
   cube: CubeLut | null;
   interpolation: Interpolation;
+  /** The before/after wipe, driven by the host's slider. */
+  compare: boolean;
+  /** Where the divider sits, 0..1 — graded on its left. */
+  splitX: number;
+  /** A drag across the picture moves the divider too. */
+  onSplit: (x: number) => void;
   /** True while the aimed look's lattice is being resolved. */
   busy?: boolean;
   /** Why the aimed look cannot be shown, when it cannot. */
@@ -62,6 +87,9 @@ export default function LookScene({
   source,
   cube,
   interpolation,
+  compare,
+  splitX,
+  onSplit,
   busy = false,
   error = null,
 }: LookSceneProps) {
@@ -69,9 +97,6 @@ export default function LookScene({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<LutRenderer | null>(null);
   const [supported, setSupported] = useState(true);
-  /** Off by default: the answer wanted first is the graded picture. */
-  const [compare, setCompare] = useState(false);
-  const [splitX, setSplitX] = useState(0.5);
 
   const frame = sceneFrame(source.width, source.height);
 
@@ -82,7 +107,7 @@ export default function LookScene({
     if (!box) return;
     const fresh = () => {
       const el = document.createElement('canvas');
-      el.className = 'max-w-full max-h-full block';
+      el.className = 'w-full h-full block';
       box.appendChild(el);
       return el;
     };
@@ -141,68 +166,55 @@ export default function LookScene({
     }
   }, [supported, source.image, frame.w, frame.h]);
 
-  // The divider follows the pointer while comparing, as it does in the LUT
-  // Studio. `pan-y` and never `none`: the modal's body scrolls under this,
-  // and a surface that claims both axes leaves a finger no way out.
+  // The divider follows a drag across the picture, as it does in the LUT
+  // Studio — measured on the picture's own box, so it agrees with the shader.
+  // `pan-y` and never `none`: the modal's body scrolls under this, and a
+  // surface that claims both axes leaves a finger no way out.
   const track = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      if (!compare) return;
+      if (!compare || (e.type === 'pointermove' && e.buttons === 0)) return;
       const box = e.currentTarget.getBoundingClientRect();
       if (!box.width) return;
       const x = (e.clientX - box.left) / box.width;
-      setSplitX(x < 0 ? 0 : x > 1 ? 1 : x);
+      onSplit(x < 0 ? 0 : x > 1 ? 1 : x);
     },
-    [compare],
+    [compare, onSplit],
   );
 
   return (
-    <div className="relative h-full min-h-0 flex-none rounded-control overflow-hidden bg-frame">
-      {/* The canvas is appended here by the effect — React never owns it. */}
+    <div className="relative w-full h-full min-h-0 rounded-control overflow-hidden bg-frame">
+      {/* The picture's own box: fitted by ratio into the band and centred,
+          whatever shape the photograph is. The canvas is appended here by the
+          effect — React never owns it. */}
       <div
         ref={holder}
-        className="w-full h-full grid place-items-center touch-pan-y"
+        className="absolute inset-0 m-auto max-w-full max-h-full touch-pan-y"
+        style={frame.w && frame.h ? { aspectRatio: `${frame.w} / ${frame.h}` } : undefined}
         onPointerMove={track}
         onPointerDown={track}
-      />
-
-      {compare && (
-        <>
-          <span
-            aria-hidden="true"
-            className="absolute inset-y-0 w-0.5 bg-paper/90 pointer-events-none"
-            style={{ left: `${splitX * 100}%` }}
-          />
-          <span className="absolute left-2 bottom-2 px-1.5 py-0.5 rounded-full bg-frame/70 font-mono text-3xs tracking-[0.1em] uppercase text-paper pointer-events-none">
-            Graded
-          </span>
-          <span className="absolute right-2 bottom-2 px-1.5 py-0.5 rounded-full bg-frame/70 font-mono text-3xs tracking-[0.1em] uppercase text-paper pointer-events-none">
-            Original
-          </span>
-        </>
-      )}
-
-      <div className="absolute top-2 right-2 flex items-center gap-1.5">
-        {busy && (
-          <span className="px-2 py-0.5 rounded-full bg-frame/70 font-mono text-3xs text-paper">
-            Reading…
-          </span>
+      >
+        {compare && (
+          <>
+            <span
+              aria-hidden="true"
+              className="absolute inset-y-0 w-0.5 bg-paper/90 pointer-events-none"
+              style={{ left: `${splitX * 100}%` }}
+            />
+            <span className="absolute left-2 bottom-2 px-1.5 py-0.5 rounded-full bg-frame/70 font-mono text-3xs tracking-[0.1em] uppercase text-paper pointer-events-none">
+              Graded
+            </span>
+            <span className="absolute right-2 bottom-2 px-1.5 py-0.5 rounded-full bg-frame/70 font-mono text-3xs tracking-[0.1em] uppercase text-paper pointer-events-none">
+              Original
+            </span>
+          </>
         )}
-        <IconButton
-          label={compare ? 'Stop comparing' : 'Compare with the original'}
-          // `md`, not `sm`: 34px is what every other icon button in the suite
-          // is, and a 28px target over a photograph is a thumb's problem.
-          variant="ghost"
-          aria-pressed={compare}
-          onClick={() => setCompare((v) => !v)}
-          className={
-            compare
-              ? 'bg-accent text-paper border-accent-ink'
-              : 'bg-frame/60 text-paper border-paper/30'
-          }
-        >
-          {Icons.swap}
-        </IconButton>
       </div>
+
+      {busy && (
+        <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-frame/70 font-mono text-3xs text-paper">
+          Reading…
+        </span>
+      )}
 
       {(error || !supported) && (
         <p className="absolute inset-x-2 bottom-2 m-0 px-2 py-1.5 rounded-control bg-frame/80 text-2xs leading-snug text-paper">
