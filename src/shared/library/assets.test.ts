@@ -38,6 +38,13 @@ describe('buildAssets', () => {
     expect(jpegFirst[0].parts.image?.name).toBe('IMG_8801.JPG');
   });
 
+  it('takes a Sony HEIF beside its RAW, the way it takes a JPEG', () => {
+    const assets = buildAssets([f('DSC00123.ARW'), f('DSC00123.HIF')]);
+    expect(assets).toHaveLength(1);
+    expect(assets[0].kind).toBe('photo');
+    expect(assets[0].parts.image?.name).toBe('DSC00123.HIF');
+  });
+
   it('keeps a RAW as the image when it is the only one', () => {
     const assets = buildAssets([f('IMG_8801.RAF')]);
     expect(assets[0].parts.image?.name).toBe('IMG_8801.RAF');

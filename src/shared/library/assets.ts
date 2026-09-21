@@ -40,9 +40,16 @@ export interface Asset {
 type PartKind = 'video' | 'srt' | 'image' | 'other';
 
 const VIDEO_EXTENSIONS = ['mp4', 'mov', 'm4v', 'webm'];
-/** Formats a browser can normally decode and draw. */
+/**
+ * Formats a browser can normally decode and draw — `heic`/`heif`/`hif` being
+ * the honest exception the list has always carried: only WebKit decodes them,
+ * and a source's proxy is what every other browser draws instead. `hif` is
+ * Sony's and Canon's spelling of the same thing (an A7C II shoots `.HIF`
+ * beside its `.ARW`), so leaving it out classified those stills as junk and
+ * dropped them at the library's door.
+ */
 const ENCODED_IMAGE_EXTENSIONS = [
-  'jpg', 'jpeg', 'png', 'heic', 'heif', 'webp', 'tif', 'tiff', 'avif', 'gif',
+  'jpg', 'jpeg', 'png', 'heic', 'heif', 'hif', 'webp', 'tif', 'tiff', 'avif', 'gif',
 ];
 /** Camera RAW — handles are kept even though the browser can't decode them. */
 const RAW_EXTENSIONS = [
