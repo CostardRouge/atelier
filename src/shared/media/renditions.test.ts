@@ -121,6 +121,30 @@ describe('renditionsOf', () => {
     expect(rows[1].role).toBe('sensor');
   });
 
+  it('never offers an export of ours as the camera’s file beside the RAW', () => {
+    // §14.6: his own export, named after the DNG and carrying a copy of its
+    // EXIF, sat in the folder the originals live in.
+    const rows = renditionsOf({
+      open: { name: 'dji_fly_0242_photo.DNG', here: true, render: { width: 960, height: 540 } },
+      others: [
+        { name: 'dji_fly_0242_photo.jpg', here: true, pixels: { width: 7728, height: 3896 }, software: 'Atelier' },
+        { name: 'dji_fly_0242_photo.JPG', here: true, pixels: { width: 8064, height: 4536 }, software: 'v01.00.0800' },
+      ],
+    });
+    expect(rows.map((r) => r.id)).toEqual([
+      'delivered:dji_fly_0242_photo.dng',
+      'delivered:dji_fly_0242_photo.jpg',
+      'sensor:dji_fly_0242_photo.dng',
+    ]);
+    expect(rows[1].pixels).toEqual({ width: 8064, height: 4536 });
+  });
+
+  it('keeps the OPEN file whatever wrote it — it is what the person chose to work on', () => {
+    const rows = renditionsOf({ open: { name: 'DJI_0101.jpg', here: true, software: 'Atelier' } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe('DJI_0101.jpg');
+  });
+
   it('never lists one file twice, whatever a caller passes', () => {
     const rows = renditionsOf({
       open: { name: 'A.ARW', here: true },

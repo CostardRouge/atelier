@@ -821,6 +821,11 @@ exact, but only for files this suite made; **(c)** never group a local sibling
 whose modification time is later than the RAW's by more than a session.
 Recommended: **(b), with (a) as the fallback for files made elsewhere.**
 
+**Built as R1b (2026-09-21): (b) alone.** `shared/exif/software-mark.ts`,
+`retagExifBlock`'s `software` option, and `renditionsOf` dropping a sibling
+whose `software` carries the mark. (a) and (c) are not built — both guess
+about files made elsewhere, and he has not asked for either.
+
 ### 14.7 What this does to the phases
 
 - **R3a is now the best first commit by a distance**: the delivered rung on a

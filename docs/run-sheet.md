@@ -28,7 +28,7 @@ IFDs, an ISO-BMFF's item table, every embedded JPEG by a marker walk,
 
 | | id | task | what it delivers | verified by |
 | --- | --- | --- | --- | --- |
-| ◻ | **R1b** | Our exports say so | `Software: Atelier` written into a COPIED EXIF block too (only the rebuilt paths write it today), and a file marked as ours is excluded from its capture's renditions. Closes §14.6, whose case he confirmed: the `.jpg` beside his DNG was his own export. | specs on the block writer; a delivered file read back |
+| ✅ | **R1b** | Our exports say so | `Software: Atelier` written into a COPIED EXIF block too (in place where the camera's entry holds it, else IFD0 copied to the block's end), and a file marked as ours is excluded from its capture's renditions. Closes §14.6, whose case he confirmed: the `.jpg` beside his DNG was his own export. | specs on the block writer; the stamp read back |
 | ◻ | **R2** | The local half | `AssetParts.raw` — a folder's `.ARW` is kept beside its `.HIF` instead of dropped at the library's door (§2.4), and `renditionsOf` reads it. | `assets.test.ts` |
 | ◻ | **R3a** | The **delivered rung on screen** | The camera's own picture as a row of the pill: a drawable original, or the render inside a RAW. On his Sony this is `raw-probe.ts` over a file already in hand, and the whole ARW workflow stops being proxy-only. Carries the stored field and its migration (roll v2 → v3). | the pane, on a dropped ARW |
 | ◻ | **R3b** | The **sensor rung** from a companion | `rawOffer: 'companion'`, the fetch held for the session, the weight said before the click, `pictureFidelity` naming the file. This is what makes a paired DJI capture developable from its DNG. | the pane, against a stub instance |

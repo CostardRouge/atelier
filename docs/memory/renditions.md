@@ -101,9 +101,8 @@ to hold, and in opposite directions:
   as this suite names an export sat beside his DNG at 7728 × 3896 — neither the
   sensor's aspect nor a scale of it. Basename grouping cannot tell it from a
   camera's own JPEG, and neither can the EXIF, since `stamp-exif.ts` copies the
-  original's block into every export. Recommended: mark our own exports in
-  their `Software` tag and never offer a file carrying it, with an aspect test
-  as the fallback for files made elsewhere.
+  original's block into every export. Built as R1b, below: the `Software`
+  mark, and never the aspect test.
 
 **The measurement is a page, not a guess**: the Rendition Inspector
 (https://claude.ai/artifact/Np2XfVEHxT7n1wrXo6rkU6) walks a TIFF's IFDs and an
@@ -180,9 +179,35 @@ Rules a later phase must keep:
   proxy chosen deliberately when speed matters, possibly at the roll's
   creation. Do not build it early; do not design against it.
 
+## R1b is BUILT: an export of ours says so, and is never a rendition (2026-09-21)
+
+The §14.6 guard, by the `Software` marker — his confirmed case was his own
+export beside his DNG. `shared/exif/software-mark.ts` holds the one word
+(`Atelier`) and the predicate `isAtelierMade`; `stampExif` now writes it on
+EVERY account, the copied block included (`retagExifBlock`'s `software`
+option); and `renditionsOf` drops a file among `others` whose `software`
+carries the mark, keeping the OPEN file whatever wrote it — that one is what
+the person chose to work on. The aspect test and the mtime rule are NOT built:
+they would guess about files made elsewhere, and he chose neither.
+
+- **Writing an ASCII tag into a copied block is in place where the camera's
+  entry can hold it, else IFD0 is COPIED to the end of the block** with the
+  entry added in tag order and the header repointed at the copy. That is
+  correct because every TIFF offset is absolute: the copied entries still point
+  where they did, inline values travel inside their entry, and the old
+  directory becomes dead bytes like the cut-loose thumbnail. Do not shift the
+  block to insert an entry — every pointer in it would have to be rewritten,
+  maker notes included, which is what the copy path exists to avoid. A block
+  that grows past a segment still takes `stampExif`'s rebuild fallback, which
+  writes the mark too.
+- **The caller reads the sibling's EXIF; the module only compares.** A
+  `CaptureFile.software` left undefined is "nobody looked", and the file is
+  then offered — so R2/R3a must read the head of a local sibling (a few KB,
+  `readExifBlock` + `parseExif`) before listing it, or the guard is silent.
+- Two files whose names differ only by case share an id (`delivered:<name
+  lowercased>`), exactly as `findMedia` resolves them; the guard runs BEFORE
+  the id dedupe, so an export named `x.jpg` cannot shadow the camera's `x.JPG`.
+
 Still to build: R2 (`AssetParts.raw` — a local folder's RAW half is still
 dropped at the library's door), R3a/R3b (the rung on screen), R4 (the export),
-R5 (one vocabulary in Trips and the Studio). The derivative guard of
-`docs/capture-renditions.md` §14.6 is deliberately NOT in this module: the
-maintainer has not chosen between the aspect test, the `Software` marker and
-the mtime rule, and guessing would make the module fabricate a fact.
+R5 (one vocabulary in Trips and the Studio).

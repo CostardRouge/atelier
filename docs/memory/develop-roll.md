@@ -283,7 +283,10 @@ shared block. Rules a later phase must keep:
   since Winnow's download route ignores `Range` —, else what the instance
   vouched for. The choice and the block are `shared/exif/stamp-exif.ts`; a
   picture that ends up on the poorest account, or on none, is SAID in the run's
-  sentence rather than filed away silently.
+  sentence rather than filed away silently. Whatever the account, the block
+  says `Software: Atelier` (since 2026-09-21, the copied one included) — the
+  mark that keeps an export sitting beside its original from being offered as
+  the camera's file (`renditions.md`, R1b).
 - **The row NAMES the pixels it measured** (2026-09-20): `sourceLabel` reads
   `Camera render` where the file in hand is a RAW — `MeasuredPicture.viaRawPreview`
   from `measurePicture`, which now decodes through `decodePhotoSource` — so a

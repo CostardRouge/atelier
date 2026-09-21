@@ -19,6 +19,7 @@
  * `docs/capture-renditions.md`; the material ladder it feeds is `raw.md`.
  */
 
+import { isAtelierMade } from '../exif/software-mark';
 import { isDrawableImage, isRawImage } from '../library/assets';
 
 export interface PixelSize {
@@ -69,6 +70,13 @@ export interface CaptureFile {
   sensor?: PixelSize | null;
   /** This file's own pixels, for one a browser draws directly. */
   pixels?: PixelSize | null;
+  /**
+   * The file's own `Software` tag, where its EXIF has been read. A file this
+   * suite WROTE (`exif/software-mark.ts`) is an export that happens to sit
+   * beside the capture — named after it, carrying a copy of its EXIF — and
+   * is never one of its renditions (`docs/capture-renditions.md` §14.6).
+   */
+  software?: string | null;
 }
 
 export interface CaptureInput {
@@ -229,6 +237,9 @@ export function renditionsOf(input: CaptureInput): Rendition[] {
   }
   const seen = new Set(rows.map((r) => r.id));
   for (const other of input.others ?? []) {
+    // An export of ours beside the capture is not the camera's file. The OPEN
+    // file is never dropped: it is what the person chose to work on.
+    if (isAtelierMade(other.software)) continue;
     for (const row of rowsFor(other, canDraw)) {
       if (seen.has(row.id)) continue;
       seen.add(row.id);
