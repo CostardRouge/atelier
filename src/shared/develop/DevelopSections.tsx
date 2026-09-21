@@ -7,6 +7,7 @@
 
 import { useState, useSyncExternalStore, type ReactNode } from 'react';
 import GradePanel from '../lut/GradePanel';
+import type { LutPreviewSource } from '../lut/LutGalleryModal';
 import type { LutStack } from '../lut/use-lut-stack';
 import SectionLegend from '../ui/SectionLegend';
 import { DEFAULT_DEVELOP, describeDevelop, type DevelopSettings } from './develop';
@@ -274,11 +275,20 @@ export function DevelopLookSection({
   stack,
   header,
   previewHeight = null,
+  previewImage = null,
+  previewLabel = null,
 }: {
   stack: LutStack;
   header?: ReactNode;
   /** The stage's real height in pixels — what tells the texture section whether its grain can be SEEN. */
   previewHeight?: number | null;
+  /**
+   * The picture on screen, handed to the look gallery so its SCENE can show
+   * the aimed look on THIS photograph instead of on a reference frame
+   * (`shared/lut/look-scene.ts`). Every host here has it decoded already.
+   */
+  previewImage?: LutPreviewSource | null;
+  previewLabel?: string | null;
 }) {
   return (
     <div className="flex flex-col gap-2 pt-3 border-t border-line">
@@ -291,7 +301,12 @@ export function DevelopLookSection({
         </SectionLegend>
       </span>
       {header}
-      <GradePanel stack={stack} previewHeight={previewHeight} />
+      <GradePanel
+        stack={stack}
+        previewHeight={previewHeight}
+        previewImage={previewImage}
+        previewLabel={previewLabel}
+      />
     </div>
   );
 }

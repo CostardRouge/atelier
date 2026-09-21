@@ -30,7 +30,7 @@
  * than the modal being slow.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { CubeLut } from '../lib/cube-parser';
 import { decodePhoto } from '../media/photo-frame';
@@ -40,7 +40,9 @@ import IconButton from '../ui/IconButton';
 import { Icons } from '../ui/icons';
 import useDialogKeys from '../ui/use-dialog-keys';
 import { loadBuiltinThumbs } from './builtin-thumbs';
-import { galleryNodes, matchingItems, type GalleryNode } from './gallery-nodes';
+import { galleryNodes, matchingItems, type GalleryItem, type GalleryNode } from './gallery-nodes';
+import LookScene from './LookScene';
+import { asPreviewPicture, sceneNote, type LutPreviewPicture } from './look-scene';
 import {
   PREVIEW_SAMPLE_SIZE,
   bakeLutPreview,
@@ -53,11 +55,19 @@ import { useLutFavourites, toggleFavourite } from './use-lut-favourites';
 import { useLutInterpolation } from './use-lut-interpolation';
 import { useLutPacks } from './use-lut-packs';
 
-/** Anything the modal can crop a preview sample from. */
-export type LutPreviewSource = ImageBitmap | HTMLCanvasElement | HTMLImageElement;
+/**
+ * Anything the modal can crop a preview sample from — a bare bitmap or
+ * canvas, or a picture whose size is already measured beside it
+ * (`look-scene.ts`), which is the shape both Develop hosts hold.
+ */
+export type LutPreviewSource =
+  | ImageBitmap
+  | HTMLCanvasElement
+  | HTMLImageElement
+  | LutPreviewPicture;
 
 /** Crop `source` to a centred square and read it back as a small `RgbBitmap`. */
-function sampleFromImage(source: LutPreviewSource, size: number): RgbBitmap {
+function sampleFromImage(source: LutPreviewPicture, size: number): RgbBitmap {
   const sw = source.width;
   const sh = source.height;
   if (!sw || !sh) return syntheticPreviewSample(size);
@@ -67,7 +77,7 @@ function sampleFromImage(source: LutPreviewSource, size: number): RgbBitmap {
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return syntheticPreviewSample(size);
   const side = Math.min(sw, sh);
-  ctx.drawImage(source, (sw - side) / 2, (sh - side) / 2, side, side, 0, 0, size, size);
+  ctx.drawImage(source.image, (sw - side) / 2, (sh - side) / 2, side, side, 0, 0, size, size);
   const { data } = ctx.getImageData(0, 0, size, size);
   return { width: size, height: size, data };
 }
@@ -85,6 +95,15 @@ export interface LutGalleryModalProps {
    * nothing, and a live bake costs a lattice per look (§7).
    */
   previewImage?: LutPreviewSource | null;
+  /** What that picture is called, for the line under the scene. */
+  previewLabel?: string | null;
+  /**
+   * True when the host's picture is LOG footage. Every host that passes a
+   * picture today passes a photograph, which is display-referred — so the
+   * default is the honest one, and a caller that ever hands over a log clip
+   * says so rather than letting the scene caution it wrongly (`look-scene.ts`).
+   */
+  previewIsLog?: boolean;
   title?: string;
   onPick: (id: string) => void;
   onClose: () => void;
@@ -95,6 +114,8 @@ export default function LutGalleryModal({
   allowNone = false,
   includeFilm = false,
   previewImage = null,
+  previewLabel = null,
+  previewIsLog = false,
   title = 'Choose a look',
   onPick,
   onClose,
@@ -119,6 +140,20 @@ export default function LutGalleryModal({
    */
   const [liveOn, setLiveOn] = useState<'open' | 'custom' | null>(null);
 
+  /**
+   * THE SCENE — the aimed look on the host's own picture, above the grid.
+   *
+   * It exists only when a host handed one over, and where it does the gesture
+   * changes: a click AIMS (the scene answers), and the pick is the second
+   * click, the "Use this look" button, or Enter. Without a picture there is
+   * nothing to answer with, so a click stays the choice it has always been —
+   * asking for two where the first shows nothing would be a regression, not a
+   * convention.
+   */
+  const picture = useMemo(() => asPreviewPicture(previewImage), [previewImage]);
+  const scene = !!picture;
+  const [aimed, setAimed] = useState<string | null>(selected ?? null);
+
   // The shipped tiles. `{}` until they answer, and `{}` for good if this build
   // ships none — in which case every look simply bakes live, as it used to.
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
@@ -132,7 +167,8 @@ export default function LutGalleryModal({
     };
   }, []);
 
-  const effectiveSource = liveOn === 'custom' ? customImage : liveOn === 'open' ? previewImage : null;
+  const custom = useMemo(() => asPreviewPicture(customImage), [customImage]);
+  const effectiveSource = liveOn === 'custom' ? custom : liveOn === 'open' ? picture : null;
 
   const favourites = useLutFavourites();
   const nodes = useMemo(
@@ -206,6 +242,65 @@ export default function LutGalleryModal({
     [sample, interpolation],
   );
 
+  /** The aimed look, found across every node — a search result included. */
+  const aimedItem = useMemo<GalleryItem | null>(
+    () => (aimed ? (nodes.flatMap((n) => n.items).find((i) => i.id === aimed) ?? null) : null),
+    [nodes, aimed],
+  );
+
+  // ONE lattice, the aimed one. This is the whole economy of the scene: the
+  // grid keeps its pre-baked tiles and resolves nothing, and the only look
+  // that costs anything is the one being looked at. The promise itself is
+  // cached by `loadBuiltinLut` / `filmCubeFor` / `resolvePackLattice`, so
+  // coming back to a look is free.
+  const [aimedCube, setAimedCube] = useState<CubeLut | null>(null);
+  const [aimedBusy, setAimedBusy] = useState(false);
+  const [aimedError, setAimedError] = useState<string | null>(null);
+  useEffect(() => {
+    setAimedError(null);
+    if (!scene || !aimedItem?.resolve || aimedItem.id === 'none') {
+      setAimedCube(null);
+      setAimedBusy(false);
+      return;
+    }
+    let cancelled = false;
+    setAimedBusy(true);
+    aimedItem
+      .resolve()
+      .then((cube) => {
+        if (!cancelled) setAimedCube(cube);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setAimedCube(null);
+        // A purchased look this device does not hold says why — the vault's
+        // own sentence, not a generic failure (`pack-vault.ts`).
+        setAimedError((e as Error).message || 'That look could not be read here.');
+      })
+      .finally(() => {
+        if (!cancelled) setAimedBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [scene, aimedItem]);
+
+  /** A click on a tile: aim while there is a scene to answer with, else pick. */
+  const touch = useCallback(
+    (id: string) => {
+      if (!scene) {
+        onPick(id);
+        return;
+      }
+      if (id === aimed) onPick(id);
+      else setAimed(id);
+    },
+    [scene, aimed, onPick],
+  );
+  /** What the ring sits on: the aimed look, or the worn one when nothing aims. */
+  const ringed = scene ? aimed : (selected ?? null);
+  const note = aimedItem ? sceneNote(aimedItem.family, previewIsLog) : null;
+
   const chooseImage = async () => {
     setImageError(null);
     const file = await pickFile('image/*');
@@ -222,7 +317,12 @@ export default function LutGalleryModal({
     }
   };
 
-  useDialogKeys({ onCancel: credits ? () => setCredits(null) : onClose });
+  useDialogKeys({
+    onCancel: credits ? () => setCredits(null) : onClose,
+    // Enter takes the aimed look — `dialog-keys.ts` already stands down for a
+    // focused field, so typing in the filter is untouched.
+    onConfirm: scene && aimed && !aimedBusy ? () => onPick(aimed) : null,
+  });
 
   const q = query.trim().toLowerCase();
   const showNone =
@@ -247,7 +347,9 @@ export default function LutGalleryModal({
           <div>
             <h2 className="m-0 font-serif text-2xl">{title}</h2>
             <p className="m-0 mt-1 text-sm text-muted">
-              Every look, on a real picture — click one to use it.
+              {scene
+                ? 'Aim a look to see it on your picture — click it again to use it.'
+                : 'Every look, on a real picture — click one to use it.'}
             </p>
           </div>
           <div className="flex items-center gap-1">
@@ -263,6 +365,52 @@ export default function LutGalleryModal({
           </div>
         </div>
 
+        {picture && (
+          /* The band: your picture with ONE look on it. It takes HEIGHT and
+             not width, which is the whole reason it is here and not in a
+             third column — measured, the modal is 848 px wide inside, the
+             rail takes 216, and a 420 px panel beside them leaves room for
+             one tile per row. */
+          <div className="flex-none flex gap-4 border-t border-line pt-3 max-[820px]:flex-col max-[820px]:gap-2">
+            <div className="w-[25rem] h-[14.5rem] flex-none max-[820px]:w-full max-[820px]:h-[12rem]">
+              <LookScene
+                source={picture}
+                cube={aimedCube}
+                interpolation={interpolation}
+                busy={aimedBusy}
+                error={aimedError}
+              />
+            </div>
+            <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+              <span className="text-base font-medium text-ink truncate">
+                {aimedItem?.name ?? 'Your picture, as it is'}
+              </span>
+              <span className="font-mono text-2xs text-muted">
+                {[previewLabel, aimedItem ? 'the look alone, without your correction' : null]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+              {note && (
+                <p className="m-0 px-2.5 py-1.5 rounded-control bg-warn-wash border border-warn-line text-xs leading-snug text-warn">
+                  {note}
+                </p>
+              )}
+              <div className="mt-auto flex items-center gap-2 flex-wrap">
+                <Button
+                  size="sm"
+                  disabled={!aimed || aimedBusy}
+                  onClick={() => aimed && onPick(aimed)}
+                >
+                  Use this look
+                </Button>
+                <span className="text-2xs leading-snug text-muted">
+                  One lattice read, not the whole family.
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col gap-2.5 border-y border-line py-3">
           {/* What the looks are shown ON. The default costs nothing — the
               tiles were baked once, each look on the reference its family
@@ -277,14 +425,16 @@ export default function LutGalleryModal({
             )}
             <span className="text-xs text-muted min-w-0 truncate">
               {liveOn === 'custom' && customLabel
-                ? `Previewing on “${customLabel}”`
+                ? `Tiles on “${customLabel}”`
                 : liveOn === 'open'
-                  ? 'Previewing on the open picture'
-                  : 'Each look on its own reference frame — log looks on a D-Log M frame, the rest on a photograph'}
+                  ? 'Tiles on the open picture — one lattice per look'
+                  : scene
+                    ? 'Tiles on their reference frames, so two looks stay comparable'
+                    : 'Each look on its own reference frame — log looks on a D-Log M frame, the rest on a photograph'}
             </span>
-            {previewImage && liveOn !== 'open' && (
+            {picture && liveOn !== 'open' && (
               <Button size="sm" variant="ghost" onClick={() => setLiveOn('open')}>
-                Preview on the open picture
+                {scene ? 'Tiles on my picture too' : 'Preview on the open picture'}
               </Button>
             )}
             <Button
@@ -378,7 +528,8 @@ export default function LutGalleryModal({
                       {...(effectiveSource ? {} : thumbs.none ? { thumb: thumbs.none } : {})}
                       bitmap={noneBitmap}
                       selected={selected === 'none'}
-                      onPick={onPick}
+                      aimed={ringed === 'none'}
+                      onPick={touch}
                     />
                   </div>
                 </section>
@@ -434,8 +585,9 @@ export default function LutGalleryModal({
                         bitmap={previews[item.id]}
                         failed={resolved[item.id] === 'error'}
                         selected={selected === item.id}
+                        aimed={ringed === item.id}
                         favourite={favourites.includes(item.id)}
-                        onPick={onPick}
+                        onPick={touch}
                         onToggleFavourite={toggleFavourite}
                       />
                     ))}
@@ -513,6 +665,7 @@ function Tile({
   bitmap,
   failed = false,
   selected,
+  aimed = false,
   favourite = false,
   onPick,
   onToggleFavourite,
@@ -523,6 +676,12 @@ function Tile({
   bitmap?: RgbBitmap | undefined;
   failed?: boolean;
   selected: boolean;
+  /**
+   * The look the SCENE is showing. Where there is no scene the caller sets it
+   * from the selection, so a picker without a picture looks exactly as it
+   * always did.
+   */
+  aimed?: boolean;
   favourite?: boolean;
   onPick: (id: string) => void;
   /** Omitted for "No look (original)", which is the absence of a look, not one. */
@@ -531,7 +690,11 @@ function Tile({
   return (
     <div
       className={`group relative flex flex-col gap-1 p-1 rounded-control border bg-paper transition-colors ${
-        selected ? 'border-accent ring-2 ring-accent/40' : 'border-line hover:border-line-strong'
+        aimed
+          ? 'border-accent ring-2 ring-accent/40'
+          : selected
+            ? 'border-accent'
+            : 'border-line hover:border-line-strong'
       }`}
     >
       <button
