@@ -38,11 +38,20 @@ describe('buildAssets', () => {
     expect(jpegFirst[0].parts.image?.name).toBe('IMG_8801.JPG');
   });
 
-  it('takes a Sony HEIF beside its RAW, the way it takes a JPEG', () => {
+  it('shows the RAW of a Sony pair, since only WebKit draws the HEIF beside it', () => {
     const assets = buildAssets([f('DSC00123.ARW'), f('DSC00123.HIF')]);
     expect(assets).toHaveLength(1);
     expect(assets[0].kind).toBe('photo');
-    expect(assets[0].parts.image?.name).toBe('DSC00123.HIF');
+    expect(assets[0].parts.image?.name).toBe('DSC00123.ARW');
+    // And the other way round in the listing, which must decide nothing.
+    expect(buildAssets([f('DSC00123.HIF'), f('DSC00123.ARW')])[0].parts.image?.name).toBe('DSC00123.ARW');
+  });
+
+  it('takes a lone HEIF as a photo all the same', () => {
+    const assets = buildAssets([f('DSC00124.HIF')]);
+    expect(assets).toHaveLength(1);
+    expect(assets[0].kind).toBe('photo');
+    expect(assets[0].parts.image?.name).toBe('DSC00124.HIF');
   });
 
   it('keeps a RAW as the image when it is the only one', () => {

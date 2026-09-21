@@ -57,6 +57,18 @@ const RAW_EXTENSIONS = [
 ];
 const IMAGE_EXTENSIONS = [...ENCODED_IMAGE_EXTENSIONS, ...RAW_EXTENSIONS];
 
+/**
+ * The narrower list inside `ENCODED_IMAGE_EXTENSIONS`: what a browser really
+ * draws ON ITS OWN, in every browser. HEIF (`.heic`/`.heif`/`.hif`) and TIFF
+ * are pictures WebKit alone decodes, so they are recognised as images and
+ * never counted on to DRAW one.
+ *
+ * `bmp` is here and not above on purpose: nobody shoots one, but an original
+ * may be one, and this list is also what says an export can deliver from a
+ * file rather than from the render (`roll-export.ts`).
+ */
+const DRAWABLE_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif', 'bmp'];
+
 /** Split a filename into `{ base, ext }`; ext is lowercased, no leading dot. */
 function splitName(name: string): { base: string; ext: string } {
   const dot = name.lastIndexOf('.');
@@ -76,6 +88,26 @@ export function fileBaseName(name: string): string {
  */
 export function isRawImage(name: string): boolean {
   return RAW_EXTENSIONS.includes(splitName(name).ext);
+}
+
+/** True where any browser draws this file without a decoder of our own. */
+export function isDrawableImage(name: string): boolean {
+  return DRAWABLE_IMAGE_EXTENSIONS.includes(splitName(name).ext);
+}
+
+/**
+ * Which file of one capture fills the image slot, when several could.
+ *
+ * Not "the one that is not a RAW": a Sony shoots `.ARW` + `.HIF`, and the HEIF
+ * is the half MOST browsers cannot draw at all, while the RAW draws through
+ * the render its camera wrote inside it (`exif/raw-probe.ts`). Ranking rather
+ * than yielding is also what makes the answer independent of the order the
+ * directory listed the two files in.
+ */
+function imageRank(name: string): number {
+  if (isDrawableImage(name)) return 2;
+  if (isRawImage(name)) return 1;
+  return 0;
 }
 
 /** Classify a file by extension into the part slot it fills. */
@@ -133,13 +165,14 @@ export function buildAssets(files: File[]): Asset[] {
     if (part === 'video' && !group.parts.video) group.parts.video = file;
     else if (part === 'srt' && !group.parts.srt) group.parts.srt = file;
     else if (part === 'image') {
-      // First to claim the slot wins — except that a RAW yields to its own
-      // sidecar JPEG. A `IMG_8801.RAF` + `IMG_8801.JPG` pair is one photo, and
-      // the half the browser can actually decode is the one every tool wants
-      // to show, grade and export; which of the two the directory listed first
-      // must not decide that.
+      // First to claim the slot wins among equals — but a file the browser can
+      // really DRAW always outranks one it cannot. A `IMG_8801.RAF` +
+      // `IMG_8801.JPG` pair is one photo and the JPEG is the half every tool
+      // wants to show, grade and export; a `DSC00123.ARW` + `DSC00123.HIF`
+      // pair is one photo too, and there the RAW is the better half, since
+      // only WebKit draws a HEIF while the RAW draws through its own render.
       const current = group.parts.image;
-      if (!current || (isRawImage(current.name) && !isRawImage(name))) {
+      if (!current || imageRank(name) > imageRank(current.name)) {
         group.parts.image = file;
       }
     }
