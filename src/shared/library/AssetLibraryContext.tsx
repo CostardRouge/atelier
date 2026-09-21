@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { buildAssets, fileIdentity, type Asset } from './assets';
+import { assetFiles, buildAssets, fileIdentity, type Asset } from './assets';
 import { loadClipMeta } from '../media/video-metadata';
 import { imageTypeLabel, loadImageMeta } from '../media/image-meta';
 import { transcodeStore } from '../media/transcode-store';
@@ -227,11 +227,9 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
     (id: string) => {
       const asset = assetsRef.current.find((a) => a.id === id);
       if (!asset) return;
-      const drop = new Set(
-        [asset.parts.video, asset.parts.srt, asset.parts.image]
-          .filter((p): p is File => Boolean(p))
-          .map(fileIdentity),
-      );
+      // The siblings leave with it, or the RAW half of a pair would come back
+      // as a photo of its own on the next build.
+      const drop = new Set(assetFiles(asset.parts).map(fileIdentity));
       dropMeta([id]);
       setFiles((prev) => prev.filter((f) => !drop.has(fileIdentity(f))));
       setSelection((sel) => {
@@ -249,9 +247,7 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
     (file: File) => {
       const target = fileIdentity(file);
       const owner = assetsRef.current.find((a) =>
-        [a.parts.video, a.parts.srt, a.parts.image].some(
-          (p) => p && fileIdentity(p) === target,
-        ),
+        assetFiles(a.parts).some((p) => fileIdentity(p) === target),
       );
       if (owner) dropMeta([owner.id]); // the asset's cover may now be wrong
       setFiles((prev) => prev.filter((f) => fileIdentity(f) !== target));

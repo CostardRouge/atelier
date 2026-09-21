@@ -128,8 +128,9 @@ and the slot went to "whichever half is not a RAW", which on a Sony pair is the
 half most browsers cannot draw. The slot now goes by rank — drawable beats a
 RAW beats a HEIF or TIFF.
 
-**What is still true: locally, the RAW half of a pair is not kept anywhere.**
-Ask B has a local half, and it is `AssetParts.raw`.
+**Built as R2 (2026-09-21)**: the half that loses the slot is kept in
+`AssetParts.siblings` — a list, since on a Sony pair the loser is the HIF and
+not the RAW — and leaves the pool with its asset (`assetFiles`).
 
 ### 2.5 The same question is asked in three vocabularies
 
@@ -264,9 +265,9 @@ its own file carries (`rungsFor`, unchanged).
   been receiving all along. No UI, no fetch. *Verifies*: unit tests over the
   four shapes of row (unpaired, `raw_jpeg` with the RAW as companion,
   `live_photo`, a companion whose ext is not a RAW).
-- **R2 — the local half.** `AssetParts.raw`, filled by `buildAssets` from the
-  sibling it drops today; `renditionsOf` reads it for a folder capture. *Verifies*:
-  the pair tests in `assets.test.ts`.
+- **R2 — the local half.** `AssetParts.siblings` (built 2026-09-21), filled by
+  `buildAssets` from the files it dropped before; `renditionsOf` reads them as
+  `others` for a folder capture. *Verifies*: the pair tests in `assets.test.ts`.
 - **R3 — the rung.** `MediaOrigin.sensor`, `materialize` filling it,
   `rawOffer: 'sensor'`, the fetch and its status line, `pictureFidelity` naming
   the file. **This is the commit that makes his Sony and drone pairs

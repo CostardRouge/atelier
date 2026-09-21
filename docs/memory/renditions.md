@@ -208,6 +208,17 @@ they would guess about files made elsewhere, and he chose neither.
   lowercased>`), exactly as `findMedia` resolves them; the guard runs BEFORE
   the id dedupe, so an export named `x.jpg` cannot shadow the camera's `x.JPG`.
 
-Still to build: R2 (`AssetParts.raw` — a local folder's RAW half is still
-dropped at the library's door), R3a/R3b (the rung on screen), R4 (the export),
-R5 (one vocabulary in Trips and the Studio).
+## R2 is BUILT: a folder keeps every file of a capture (2026-09-21)
+
+`AssetParts.siblings` — a LIST, not the `raw` field the brief first named,
+because the file that loses the slot is not always the RAW: on a Sony pair the
+ARW wins it and the HIF loses, and on a browser that draws HEIF (`canDraw`
+injected) the HIF is a rendition worth listing. Filled by `buildAssets` in
+listing order; the rule and the trap (`assetFiles`, and why `remove` must use
+it) are in `architecture.md`. `renditionsOf` takes them as `others` —
+`CaptureFile.software` still has to be READ by the caller from each
+sibling's head before that (R1b above), and `photoFiles` in `roll-media.ts`
+keeps handing a roll the `image` alone, so R3a is what makes a roll see them.
+
+Still to build: R3a/R3b (the rung on screen), R4 (the export), R5 (one
+vocabulary in Trips and the Studio).
