@@ -645,7 +645,14 @@ segmented control but as the automatic behaviour: never deliver fewer pixels
 than a reachable rendition would give. Invisible in Develop (the pill decides),
 load-bearing in Trips and the Studio until the pill reaches them.
 
-#### Recommended: B + C + D
+#### Recommended: B + C + D — DECIDED 2026-09-21 (*"ok garde la case à cocher"*), built as R4
+
+`RollExport.originals` is off the roll (v4); the Develop panel says the run
+(`shared/develop/run-plan.ts`) and keeps one switch, *Proxies only, for this
+run*, that never touches the document; a picture leaves from its own
+rendition through the same seam the sensor uses (`sensor-source.ts`,
+`deliveredSourceFor`); a picture that chose nothing keeps `Auto`'s
+arithmetic. Trips and the Studio still show the three words until R5.
 
 Two controls become one checkbox, and the panel gains a sentence instead of a
 mode. The three words go from every host — from Develop because the pill

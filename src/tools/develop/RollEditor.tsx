@@ -475,7 +475,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // --- the still export (D9): each picture through its own cube --------------
   const { composeWith } = stack;
   const lutFor = useCallback((p: RollPicture) => composeWith(p.develop), [composeWith]);
-  const exports = useRollExport({ roll, files, fileFor, openId, lutFor, siblingsOf: siblingsFor });
+  // "Proxies only, for this run": the editor's, reset with it, never written
+  // to the roll — which pixels is otherwise each picture's own choice.
+  const [proxiesOnly, setProxiesOnly] = useState(false);
+  const exports = useRollExport({ roll, files, fileFor, openId, lutFor, siblingsOf: siblingsFor, proxiesOnly });
   const { exportPictures } = exports;
   const exportVerbs = useMemo<ExportVerb[]>(() => {
     if (!openId) return [];
@@ -767,6 +770,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               siblings={openSiblings}
               exportSettings={roll.export}
               onExportSettings={handleExportSettings}
+              proxiesOnly={proxiesOnly}
+              onProxiesOnly={setProxiesOnly}
               exports={exports}
               exportVerbs={exportVerbs}
               onSnapshot={(blob) => handleSnapshot(open.id, blob)}

@@ -24,7 +24,7 @@ function sample(): RollDoc {
       output: 'rec709-to-srgb',
       film: { ...DEFAULT_FILM_TEXTURE, grain: 0.35, halation: 0.2 },
     },
-    export: { longEdge: 2048, quality: 0.85, originals: 'originals', replace: true, hdr: true, hdrStops: 3 },
+    export: { longEdge: 2048, quality: 0.85, replace: true, hdr: true, hdrStops: 3 },
   };
 }
 

@@ -34,7 +34,7 @@ import { DevelopBaseMenu } from '../../shared/develop/DevelopBase';
 import { captureInput, type SiblingFacts } from '../../shared/develop/capture-files';
 import { isProxyOverRaw, rawRenderFrom, rawRenderOf } from '../../shared/develop/delivery-source';
 import { measurePicture, type MeasuredPicture } from '../../shared/develop/roll-render';
-import { fetchSensorFile, sensorSourceFor } from '../../shared/develop/sensor-source';
+import { fetchSourceFile, sensorSourceFor } from '../../shared/develop/sensor-source';
 import { openingRendition, renditionById, renditionsOf, type PixelSize, type Rendition } from '../../shared/media/renditions';
 import { fileIdentity, isRawImage } from '../../shared/library/assets';
 import { rawSizes } from '../../shared/exif/raw-probe';
@@ -169,6 +169,8 @@ export default function PictureWorkbench({
   siblings = NO_FILES,
   exportSettings,
   onExportSettings,
+  proxiesOnly,
+  onProxiesOnly,
   exports,
   exportVerbs,
   onSnapshot,
@@ -207,6 +209,9 @@ export default function PictureWorkbench({
   /** The roll's delivery settings, edited on the Export tab. */
   exportSettings: RollExport;
   onExportSettings: (patch: Partial<RollExport>) => void;
+  /** *Proxies only, for this run* — the editor's, never the roll's. */
+  proxiesOnly: boolean;
+  onProxiesOnly: (on: boolean) => void;
   /** The roll's still export — its state and what the open picture delivers. */
   exports: RollExports;
   exportVerbs: readonly ExportVerb[];
@@ -436,7 +441,7 @@ export default function PictureWorkbench({
     }
     let alive = true;
     setRawStatus(`fetching ${source.name}${source.bytes ? ` · ${formatBytes(source.bytes)}` : ''}…`);
-    fetchSensorFile(source)
+    fetchSourceFile(source)
       .then((fetched) => {
         if (!alive) return;
         setRawFile(fetched);
@@ -1386,6 +1391,9 @@ export default function PictureWorkbench({
               settings={exportSettings}
               onSettings={onExportSettings}
               delivery={exports.openDelivery}
+              plan={exports.plan}
+              proxiesOnly={proxiesOnly}
+              onProxiesOnly={onProxiesOnly}
               verbs={exportVerbs}
               exporting={exports.exporting}
               note={exports.note}

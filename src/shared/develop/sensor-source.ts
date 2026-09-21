@@ -81,8 +81,57 @@ export function sensorSourceFor(
   return null;
 }
 
-/** The RAW's bytes: what is held, else fetched once and held for the session. */
-export async function fetchSensorFile(source: SensorSource): Promise<File> {
+/**
+ * The DELIVERED file a stored rendition names (`RollPicture.rendition`,
+ * `delivered:<name>`), found the same way the sensor is: the file itself, a
+ * folder sibling, the proxy's original, the capture's companion — by NAME,
+ * since two files of one capture never share one. Null for `proxy`, for
+ * nothing stored, and for a name this capture no longer offers, in which
+ * case the picture leaves from where it opens.
+ */
+export function deliveredSourceFor(
+  rendition: string | null | undefined,
+  file: File,
+  origin: MediaOrigin | null,
+  siblings: readonly File[] = [],
+  assetId: string | null = null,
+): SensorSource | null {
+  if (!rendition || !rendition.startsWith('delivered:')) return null;
+  const wanted = rendition.slice('delivered:'.length).toLowerCase();
+  const isNamed = (name: string) => name.toLowerCase() === wanted;
+  if (isNamed(file.name) && origin?.fidelity !== 'proxy') {
+    return { reach: 'file', name: file.name, bytes: file.size, key: null, held: file, fetch: null };
+  }
+  const sibling = siblings.find((s) => isNamed(s.name));
+  if (sibling) {
+    return { reach: 'sibling', name: sibling.name, bytes: sibling.size, key: null, held: sibling, fetch: null };
+  }
+  if (origin?.fidelity === 'proxy' && origin.name && isNamed(origin.name) && origin.fetchOriginal) {
+    return {
+      reach: 'original',
+      name: origin.name,
+      bytes: origin.bytes ?? null,
+      key: assetId,
+      held: assetId ? heldOriginal(assetId) : null,
+      fetch: origin.fetchOriginal,
+    };
+  }
+  const companion = origin?.companion;
+  if (companion && isNamed(companion.name)) {
+    return {
+      reach: 'companion',
+      name: companion.name,
+      bytes: companion.bytes,
+      key: companion.assetId,
+      held: heldOriginal(companion.assetId),
+      fetch: companion.fetchFile,
+    };
+  }
+  return null;
+}
+
+/** A source's bytes: what is held, else fetched once and held for the session. */
+export async function fetchSourceFile(source: SensorSource): Promise<File> {
   if (source.held) return source.held;
   const held = source.key ? heldOriginal(source.key) : null;
   if (held) return held;

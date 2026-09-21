@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MediaOrigin } from '../projects/media-identity';
 import { dropHeldOriginals, heldOriginal } from '../sources/original-cache';
-import { fetchSensorFile, sensorSourceFor } from './sensor-source';
+import { deliveredSourceFor, fetchSourceFile, sensorSourceFor } from './sensor-source';
 
 function file(name: string, bytes = 100): File {
   return new File([new Uint8Array(bytes)], name);
@@ -58,26 +58,51 @@ describe('sensorSourceFor', () => {
   });
 });
 
-describe('fetchSensorFile', () => {
+describe('deliveredSourceFor', () => {
+  it('answers nothing for the proxy, for no choice, and for a name the capture no longer offers', () => {
+    const f = file('DJI_0101.webp');
+    expect(deliveredSourceFor('proxy', f, proxyOver('DJI_0101.JPG'))).toBeNull();
+    expect(deliveredSourceFor(null, f, proxyOver('DJI_0101.JPG'))).toBeNull();
+    expect(deliveredSourceFor('delivered:gone.jpg', f, proxyOver('DJI_0101.JPG'))).toBeNull();
+  });
+
+  it('finds the proxy’s original, the companion and a folder sibling by NAME, case aside', () => {
+    const f = file('DJI_0101.webp');
+    const origin = proxyOver('DJI_0101.JPG', { companion: companion('DJI_0101.DNG') });
+    expect(deliveredSourceFor('delivered:dji_0101.jpg', f, origin, [], 'winnow.example/12')).toMatchObject({ reach: 'original', name: 'DJI_0101.JPG', key: 'winnow.example/12' });
+    expect(deliveredSourceFor('delivered:dji_0101.dng', f, origin)).toMatchObject({ reach: 'companion', name: 'DJI_0101.DNG', key: 'winnow.example/99' });
+    const dng = file('DJI_0101.DNG');
+    expect(deliveredSourceFor('delivered:dji_0101.dng', file('DJI_0101.JPG'), null, [dng])).toMatchObject({ reach: 'sibling', held: dng });
+  });
+
+  it('is the file itself when the name is its own — and not when that file is a proxy of the same name', () => {
+    const jpg = file('DJI_0101.JPG');
+    expect(deliveredSourceFor('delivered:dji_0101.jpg', jpg, null)).toMatchObject({ reach: 'file', held: jpg });
+    const looksAlike = file('DJI_0101.JPG');
+    expect(deliveredSourceFor('delivered:dji_0101.jpg', looksAlike, proxyOver('DJI_0101.JPG'), [], 'k')?.reach).toBe('original');
+  });
+});
+
+describe('fetchSourceFile', () => {
   it('fetches once and holds the RAW for the session under its key', async () => {
     dropHeldOriginals();
     let fetched = 0;
     const origin = proxyOver('DSC08463.HIF', {
       companion: { ...companion('DSC08463.ARW'), fetchFile: () => (fetched += 1, Promise.resolve(file('DSC08463.ARW', 35))) },
     });
-    const first = await fetchSensorFile(sensorSourceFor(file('DSC08463.webp'), origin)!);
+    const first = await fetchSourceFile(sensorSourceFor(file('DSC08463.webp'), origin)!);
     expect(first.name).toBe('DSC08463.ARW');
     expect(heldOriginal('winnow.example/99')).toBe(first);
     // Asked again, the source sees it held and fetches nothing.
     const again = sensorSourceFor(file('DSC08463.webp'), origin)!;
     expect(again.held).toBe(first);
-    expect(await fetchSensorFile(again)).toBe(first);
+    expect(await fetchSourceFile(again)).toBe(first);
     expect(fetched).toBe(1);
     dropHeldOriginals();
   });
 
   it('hands back a RAW in hand without touching the cache', async () => {
     const raw = file('X.DNG');
-    expect(await fetchSensorFile(sensorSourceFor(raw, null)!)).toBe(raw);
+    expect(await fetchSourceFile(sensorSourceFor(raw, null)!)).toBe(raw);
   });
 });

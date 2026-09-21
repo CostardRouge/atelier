@@ -21,7 +21,8 @@ Legend — ✅ built · ◻ to do · ⛔ blocked · ⏸ deliberately unscheduled
 | ✅ | **R1b** — our exports say `Software: Atelier`, the copied block included, and are never a rendition | `d8e0e9a` |
 | ✅ | **R2** — a folder keeps every image file of a capture (`AssetParts.siblings`) | `5380091` |
 | ✅ | **R3a** — the chip's menu is the capture's files; the choice stored per picture | `14a32f1` |
-| ✅ | **R3b** — the sensor from a Winnow companion, one seam for the stage and the export | this commit |
+| ✅ | **R3b** — the sensor from a Winnow companion, one seam for the stage and the export | `5d41c3e` |
+| ✅ | **R4** — the export follows the picture's rendition; the three words leave the roll | this commit |
 
 Also built and not a commit: the **Rendition Inspector**
 (https://claude.ai/artifact/Np2XfVEHxT7n1wrXo6rkU6), which reads a TIFF's
@@ -36,7 +37,7 @@ IFDs, an ISO-BMFF's item table, every embedded JPEG by a marker walk,
 | ✅ | **R2** | The local half | `AssetParts.siblings` — a folder's `.DNG` is kept beside its `.JPG`, its `.HIF` beside its `.ARW`, instead of dropped at the library's door (§2.4); the asset's files leave the pool together. | `assets.test.ts` |
 | ✅ | **R3a** | The **delivered rung on screen** | The chip's menu is the capture's files: the proxy, what the camera delivered (a drawable original fetched onto the stage and held; the render inside a RAW), the sensor with its rungs nested under it. Stored per picture (`RollPicture.rendition`, no version bump). A folder's DNG beside a JPEG is the sensor in hand. **Not yet**: the export following a stored rendition (R4), a Winnow companion (R3b). | headless Chromium: a JPEG + DNG + export-of-ours drop lists JPG · DNG render · DNG → Gain, and leaves our export out |
 | ✅ | **R3b** | The **sensor rung** from a companion | `sensor-source.ts` — one seam for the workbench AND the export (`file · sibling · original · companion`), the fetch held under the RAW's own asset id, the weight and the render's size said before the click. This is what makes a paired DJI or Sony capture developable from its RAW off a Winnow. | headless Chromium against a stub instance: the companion's head is read, the RAW fetched on Gain and held; the JPEG original fetched onto the stage |
-| ⛔ | **R4** | The export follows | Each picture delivered from its own rendition; `RollExport.originals` comes OFF the document and the three words come off every panel, replaced by one *Proxies only, this run* checkbox and a read-only summary (§13.2 B + C + D). Also carries §13.3's warning. **Waiting on his pick between the variants.** | the pane, two runs |
+| ✅ | **R4** | The export follows | Each picture delivered from its own rendition (`deliveredSourceFor`, one seam with the sensor's); `RollExport.originals` OFF the document (roll v4) and the three words off the Develop panel, replaced by *Proxies only, for this run* (never on the roll) and a read-only run summary with a line per picture (`run-plan.ts`). `Auto`'s arithmetic survives, unnamed, for a picture that chose nothing. §13.3's warning was already built (`793d162`). Trips and the Studio keep their three words until R5. | headless Chromium against the stub instance: the plan says the chosen JPEG, the run writes it at its own pixels with no request to the instance, "proxies only" flips the sentence |
 | ◻ | **R5** | One vocabulary everywhere | Trips' Export tab and the Studio's stills read the list through `useDeliveryRow`; the words match the pill's. | the pane |
 | ◻ | **R6** | The lightbox switcher | The shell's media preview offers the capture's other files (his B7), as VIEW STATE only — it writes nothing (§13.4). The `Develop` verb under the picture hands the rendition being viewed to the tool it opens. | the pane |
 | ◻ | **R9** | Bound the session cache | An LRU ceiling on `original-cache.ts` — it has none today, and a forty-picture roll at 74 MB each is an ended tab (his D16). | a spec on the eviction |
@@ -57,7 +58,7 @@ IFDs, an ISO-BMFF's item table, every embedded JPEG by a marker walk,
 
 | | question | blocks |
 | --- | --- | --- |
-| ⛔ | **§13.2 — reframed**: the export door COLLAPSES into the pill. Variants A–D there; recommended **B + C + D** — the three words go from every host, one *Proxies only, this run* checkbox replaces them, the panel gains a read-only summary, and `Auto`'s arithmetic survives unnamed where there is no pill. Waiting on his pick. | R4 |
+| ✅ | **§13.2 — decided** (*"ok garde la case à cocher"*): the export door collapses into the pill, ONE *Proxies only, for this run* checkbox stays, the panel says the run, and `Auto`'s arithmetic survives unnamed. Built as R4 for Develop; Trips and the Studio follow in R5. | — |
 | ✅ | **§13.3 — decided**: warn when writing into the folder the pictures came from, and offer a suffix (the one exception to the exact name). Only on the File System Access path — a download is the browser's and the OS's to name. | folded into R4 |
 | ✅ | **§13.4b — deferred on purpose**: no roll-wide default. The per-picture verb and the filmstrip batch only, for performance and for the measuring. His stated direction: RAW by default one day, the proxy chosen deliberately for speed, possibly at the roll's creation. | R3b is unblocked |
 | ✅ | **§13.4 — decided**: the lightbox writes NOTHING. Looking is looking; the `Develop` verb under the picture carries the rendition being viewed into the tool it opens. | R6 is unblocked |

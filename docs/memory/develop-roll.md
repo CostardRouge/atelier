@@ -293,9 +293,11 @@ shared block. Rules a later phase must keep:
   measures — while `shownFile` is the rendition drawn (a fetched original, a
   folder sibling): it is what `useDevelopPicture`, the chip and the kernels'
   `fullWidth` read. A new consumer of the bytes on screen takes `shownFile`;
-  one that needs the picture's identity takes `file`. The export still
-  delivers from `file` under `Auto · Proxies · Originals` — a stored
-  rendition does not reach it until R4.
+  one that needs the picture's identity takes `file`. Since R4 the export
+  follows the same answer (`renditions.md`, «R4 is BUILT»): a stored
+  delivered rendition is fetched through `deliveredSourceFor`, the three
+  words are gone from the roll and the panel, and *Proxies only, for this
+  run* is the editor's switch, never the document's.
 - **The row NAMES the pixels it measured** (2026-09-20): `sourceLabel` reads
   `Camera render` where the file in hand is a RAW — `MeasuredPicture.viaRawPreview`
   from `measurePicture`, which now decodes through `decodePhotoSource` — so a

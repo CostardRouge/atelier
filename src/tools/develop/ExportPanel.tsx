@@ -1,8 +1,8 @@
 import { LONG_EDGE_CHOICES, longEdgeChoiceId, type DeliverySummary } from '../../shared/develop/roll-export';
-import { ROLL_EXPORT_LIMITS, type RollExport, type RollOriginals } from '../../shared/develop/roll-types';
+import { ROLL_EXPORT_LIMITS, type RollExport } from '../../shared/develop/roll-types';
+import type { RunPlan } from '../../shared/develop/run-plan';
 import Button from '../../shared/ui/Button';
 import { FieldRow, InspectorSection, RangeField, SelectField, SwitchRow } from '../../shared/ui/Inspector';
-import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
 import { hdrSupport } from '../../shared/hdr/hdr-display';
 import type { RollRun } from './use-roll-export';
@@ -33,17 +33,16 @@ export interface ExportVerb {
   run: () => void;
 }
 
-const ORIGINALS: readonly { id: RollOriginals; label: string; title: string }[] = [
-  { id: 'auto', label: 'Auto', title: 'An original is fetched only where the proxy could not fill the frame' },
-  { id: 'proxies', label: 'Proxies', title: 'Deliver from the pictures in the Library, never fetching an original' },
-  { id: 'originals', label: 'Originals', title: 'Fetch the full-size original of every picture that has one this browser decodes' },
-];
-
 /**
  * The Develop tool's Export tab: the roll's delivery settings (a long edge,
- * the JPEG quality, which pixels), the *Delivers* line for the picture in
- * hand — the calculator of `docs/develop-originals.md` in one sentence — and
- * the verbs.
+ * the JPEG quality), what the RUN will deliver picture by picture, the
+ * *This picture* line for the one in hand — the calculator of
+ * `docs/develop-originals.md` in one sentence — and the verbs.
+ *
+ * Which PIXELS a picture leaves from is no longer asked here (2026-09-21,
+ * `docs/capture-renditions.md` §13.2): the picture's own rendition, chosen
+ * above the photograph, answers, and the one thing the door still says is
+ * *proxies only, for this run* — which never touches the roll.
  *
  * A roll delivers to the FILE SYSTEM only. Sending the finals home to the
  * instance is unplugged on purpose: Winnow's upload route files an upload
@@ -54,6 +53,9 @@ export default function ExportPanel({
   settings,
   onSettings,
   delivery,
+  plan,
+  proxiesOnly,
+  onProxiesOnly,
   verbs,
   exporting,
   note,
@@ -63,6 +65,11 @@ export default function ExportPanel({
   onSettings: (patch: Partial<RollExport>) => void;
   /** What the open picture will deliver, or null until it is measured. */
   delivery: DeliverySummary | null;
+  /** What the whole run will deliver, and the bytes it costs. */
+  plan: RunPlan;
+  /** *Proxies only, for this run* — a run-time choice, never on the roll. */
+  proxiesOnly: boolean;
+  onProxiesOnly: (on: boolean) => void;
   verbs: readonly ExportVerb[];
   exporting: string | null;
   note: string | null;
@@ -89,11 +96,13 @@ export default function ExportPanel({
               the thumbnail, which would otherwise show the picture before you developed it.
             </p>
             <p>
-              <strong>Pixels</strong> decides where a picture from your Winnow takes its pixels:
-              <strong> Auto</strong> fetches the full-size original only where the proxy could not fill
-              the frame asked for; <strong>Proxies</strong> never fetches; <strong>Originals</strong>{' '}
-              always does, for every original this browser decodes. Fetched originals are kept for
-              this session only.
+              Which pixels a picture leaves from is the picture’s own answer, chosen above the
+              photograph: its RAW when it is developed on the sensor, the file it was set to, else
+              where it opens — and a proxy’s full-size original is still fetched where the proxy
+              could not fill the frame asked for. <strong>Delivers</strong> says what that means for
+              the run before anything is fetched; <strong>Proxies only</strong> makes every picture
+              leave from what is in hand, for this run alone — a RAW base is set aside and said.
+              Fetched files are kept for this session only.
             </p>
             <p>
               A picture developed on its <strong>RAW</strong> leaves from the sensor’s data, and the
@@ -133,19 +142,38 @@ export default function ExportPanel({
             format={(v) => `${Math.round(v * 100)} %`}
           />
         </FieldRow>
-        <FieldRow label="Pixels">
-          <Segmented
-            fill
-            size="sm"
-            label="Pixels"
-            value={settings.originals}
-            onChange={(originals) => onSettings({ originals })}
-            options={ORIGINALS}
-            className="flex-1 min-w-0"
-          />
+        <FieldRow label="Delivers" align="start">
+          {/* The run's sentence, and every picture's line behind it — read-only:
+              editable here it would be the choice above the photograph a second time. */}
+          <div className="flex flex-col gap-1 min-w-0 pt-1">
+            <span className="font-mono text-sm tabular-nums leading-snug text-ink">{plan.summary}</span>
+            {plan.pictures.length > 0 && (
+              <details className="min-w-0">
+                <summary className="cursor-pointer font-mono text-3xs text-faint select-none">picture by picture</summary>
+                <ul className="m-0 mt-1 p-0 list-none flex flex-col gap-0.5">
+                  {plan.pictures.map((p) => (
+                    <li key={p.id} className="font-mono text-3xs text-ink-soft leading-relaxed break-words">
+                      {p.line}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </div>
         </FieldRow>
+        <SwitchRow
+          label="Proxies only, for this run"
+          name="Proxies only for this run"
+          checked={proxiesOnly}
+          onChange={onProxiesOnly}
+          hint={
+            proxiesOnly
+              ? 'Every picture leaves from what is in hand; a RAW base is set aside and the run says so. The roll is untouched.'
+              : 'Writes nothing on the roll — for a run on a slow connection, or from a phone.'
+          }
+        />
         <FieldRow
-          label="Delivers"
+          label="This picture"
           align="start"
           hint={delivery?.reason ?? (delivery ? undefined : 'measured once the picture is in the Library')}
         >

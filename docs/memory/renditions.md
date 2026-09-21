@@ -237,5 +237,43 @@ carries an EMPTY type (`materialize` hands it over with none) and
 delivered file changed in the same commit as the RAW arrived (`develop.md`,
 «A replaced source is released one commit later»).
 
-Still to build: R4 (the export following a stored rendition — waiting on
-§13.2's Q1), R5 (one vocabulary in Trips and the Studio), R6 (the lightbox).
+## R4 is BUILT: the export follows the picture, the door keeps one switch (2026-09-21)
+
+His pick on §13.2: *"ok garde la case à cocher"* — B + C + D. What that is
+in code, and the rules it fixes:
+
+- **`RollExport.originals` is gone (roll v4, no block: the reader stops
+  reading the key).** `RollOriginals` survives as the TYPE of an export-door
+  mode for hosts with no pill — Trips and the Studio, until R5 — and
+  `deliverySummary` takes a `DeliverySettings` (`longEdge` + the mode for
+  THIS picture) instead of the roll's export.
+- **Which pixels is the picture's, in this order**: on the sensor → its RAW
+  (`sensorSourceFor`); a stored `delivered:<name>` → that file
+  (`deliveredSourceFor`, the same four reaches by NAME, held under its own
+  asset id — the stage's fetch is the export's fetch); else where it opens,
+  where `Auto`'s arithmetic still fetches a proxy's original for a frame the
+  proxy cannot fill. A picture set to its proxy is stored as null (the
+  opening row), so "chose the proxy" and "chose nothing" are one case and
+  both keep `Auto` — deliberate: nobody chose fewer pixels.
+- **"Proxies only, for this run" is the EDITOR's state, reset with it, never
+  on the roll**: every picture leaves from what is in hand, a RAW base is
+  stripped (`withoutBase`) and SAID in the run's sentence, and the plan says
+  how many bases it sets aside. It is the one thing the door still says.
+- **The panel says the RUN before a byte moves** (`shared/develop/run-plan.ts`,
+  pure): one sentence — `4 pictures · 1 from the sensor · 1 from the file
+  chosen · 1 from the proxy · 1 not in hand · 69 MB to fetch · up to 8 MB more
+  where a frame asks` — and a line per picture behind a `<details>`. READ-ONLY
+  on purpose: editable it would be the choice above the photograph a second
+  time. The bytes come from the session cache, so the plan subscribes to it
+  (`subscribeHeld` / `heldVersion` in `original-cache.ts`, through
+  `useSyncExternalStore`) — a `useMemo` on the roll alone went stale the
+  moment the stage fetched a file and kept saying "to fetch".
+- Driven against the stub instance: choosing the JPEG above the photograph
+  makes the plan say `1 from the file chosen`, the run writes `DJI_0101.jpg`
+  at the JPEG's 800 × 450 (the proxy is 640 × 360) with NO request to the
+  instance (held from the stage), and the switch flips the sentence to
+  `1 from the proxy · proxies only`.
+
+Still to build: R5 (one vocabulary in Trips and the Studio — the three words
+leave them for `Auto`'s arithmetic alone), R6 (the lightbox), R9 (a ceiling
+on the session cache).

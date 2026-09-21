@@ -40,8 +40,12 @@ import { DEFAULT_SOURCE_ID } from '../sources/source';
  * lands clamped, both through `readRollGrade`.
  * `RollPicture.rendition` (2026-09-21) needed no bump: absent reads as null,
  * which means exactly what it means now — the picture opens where it opens.
+ * v4 (2026-09-21): `RollExport.originals` is GONE — which pixels a picture
+ * leaves from is the picture's own rendition (`docs/capture-renditions.md`
+ * §13.2), and "proxies only, this run" is a run-time choice that never
+ * touches the document. No block: the reader simply stops reading the key.
  */
-export const ROLL_DOC_VERSION = 3;
+export const ROLL_DOC_VERSION = 4;
 
 /** The roll's look, after every picture's develop — Trips' `TripGrade` shape. */
 export interface RollGrade {
@@ -51,7 +55,12 @@ export interface RollGrade {
   film?: FilmTexture | null;
 }
 
-/** Where the export takes its pixels (`docs/develop-originals.md` §7, Auto by default). */
+/**
+ * Where an export-DOOR takes its pixels (`docs/develop-originals.md` §7, Auto
+ * by default) — Trips' Export tab and the Studio's stills, hosts with no
+ * pill. NEVER on a roll since v4: a roll's picture names its own rendition,
+ * and a run says "proxies only" without writing it anywhere.
+ */
 export type RollOriginals = 'auto' | 'proxies' | 'originals';
 
 export interface RollExport {
@@ -59,7 +68,6 @@ export interface RollExport {
   longEdge: number | null;
   /** JPEG quality, 0.5..1. */
   quality: number;
-  originals: RollOriginals;
   /**
    * Replace a file the chosen folder already holds under the export's name,
    * or number the incoming one (`DJI_0101-1.jpg`). OFF by default: an export
@@ -81,7 +89,6 @@ export interface RollExport {
 export const DEFAULT_ROLL_EXPORT: Readonly<RollExport> = Object.freeze({
   longEdge: null,
   quality: 0.92,
-  originals: 'auto',
   replace: false,
   hdr: false,
   hdrStops: 2,
@@ -267,7 +274,7 @@ export function readRollExport(raw: unknown): RollExport {
   return {
     longEdge: edge,
     quality: Math.min(quality.max, Math.max(quality.min, finite(raw.quality, DEFAULT_ROLL_EXPORT.quality))),
-    originals: raw.originals === 'proxies' || raw.originals === 'originals' ? raw.originals : 'auto',
+    // `originals`, written by v1–v3, is left behind on purpose (v4).
     // Anything but a stored `true` reads as off, so a roll written before the
     // choice existed keeps what is in its folder.
     replace: raw.replace === true,
