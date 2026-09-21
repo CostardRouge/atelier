@@ -1223,6 +1223,22 @@ time a picture actually asks for it — then never again. A device that does not
 hold a look says so on the layer, in its place, rather than quietly grading
 the picture as if no look had been chosen.
 
+**What it all weighs, and dropping what you will never use.** A pack of 65³
+looks is about 1.6 MB apiece — forty-odd megabytes for twenty-five, most of
+them for cameras you may not own. So "Packs…" says what every row costs: the
+vault's total, each pack's, each category's and each look's, measured in this
+browser and worked out for the instance the pack is kept on. Beside that,
+there are two different verbs and the difference matters:
+
+- **unticking** a category or a look puts it away. It leaves the pickers, its
+  bytes stay, and a grade already wearing it still renders.
+- **forgetting** a look (the bin at the end of its row) gives the bytes back,
+  here and on the instance. A grade wearing it then says the look is gone,
+  the way it does for a look this device never had; importing the folder again
+  brings it back. A look whose lattice another look also uses is dropped from
+  the pack without freeing anything, and the screen says so rather than
+  claiming a megabyte came back.
+
 ### Sources — connecting a Winnow
 
 The library's files usually come from a folder on this machine. They can also
