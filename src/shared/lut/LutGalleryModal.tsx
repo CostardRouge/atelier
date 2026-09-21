@@ -47,7 +47,7 @@
  * for it — because every explaining line was a row of looks not shown.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { CubeLut } from '../lib/cube-parser';
 import { decodePhoto } from '../media/photo-frame';
@@ -402,14 +402,37 @@ export default function LutGalleryModal({
       : []),
   ];
 
-  /** The families as one line of crumbs: every root, then the open branch. */
+  /**
+   * The families as one line of crumbs: every root, the open node's
+   * ancestors, its SIBLINGS and its children. The siblings are what make a
+   * phone's rail usable — DJI → Classic is one tap, not back to Built-in and
+   * down again — and the open node itself is in the list, which the first
+   * version of this filter forgot (its branch was drawn without it, so the
+   * strip read "Built-in" alone while DJI's looks were on screen).
+   */
+  const parentOf = (id: string) => id.slice(0, Math.max(0, id.lastIndexOf('/')));
   const crumbs = nodes.filter(
-    (n) => n.depth === 0 || n.id.startsWith(`${open?.id ?? ''}/`) || open?.id.startsWith(`${n.id}/`),
+    (n) =>
+      n.depth === 0 ||
+      (open &&
+        (n.id === open.id ||
+          parentOf(n.id) === parentOf(open.id) ||
+          parentOf(n.id) === open.id ||
+          open.id.startsWith(`${n.id}/`))),
   );
   const openNode = (node: GalleryNode) => {
     setOpenId(node.id);
     setQuery('');
   };
+  // The strip swipes, so the open crumb is brought into view when the open
+  // node changes — never on every render, which would fight a swipe in
+  // progress. `nearest` moves nothing when it is already on screen.
+  const crumbStrip = useRef<HTMLElement>(null);
+  useEffect(() => {
+    crumbStrip.current
+      ?.querySelector<HTMLElement>('[aria-pressed="true"]')
+      ?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' });
+  }, [open?.id]);
 
   const filterField = (
     <input
@@ -631,6 +654,7 @@ export default function LutGalleryModal({
              scroller so the way to another family is never scrolled away.
              34px tall: a finger's target, the height of the field above. */
           <nav
+            ref={crumbStrip}
             className="flex-none flex gap-1.5 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-3 px-3"
             aria-label="Look families"
           >
@@ -674,7 +698,10 @@ export default function LutGalleryModal({
 
           <div className="flex-1 min-w-0 overflow-auto overscroll-contain pr-1 -mr-1">
             <div className="flex flex-col gap-5">
-              {showNone && (
+              {/* On a phone the "No look" tile joins the open family's grid
+                  rather than sitting alone on a row of its own: a row is a
+                  third of the looks on screen there. */}
+              {showNone && !(compact && shown.length > 0) && (
                 <section className="flex flex-col gap-2">
                   <div className="grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-2">
                     <Tile
@@ -736,6 +763,17 @@ export default function LutGalleryModal({
                     </p>
                   )}
                   <div className="grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-2">
+                    {showNone && compact && node.id === shown[0]?.node.id && (
+                      <Tile
+                        id="none"
+                        name="No look (original)"
+                        {...(effectiveSource ? {} : thumbs.none ? { thumb: thumbs.none } : {})}
+                        bitmap={noneBitmap}
+                        selected={selected === 'none'}
+                        aimed={ringed === 'none'}
+                        onPick={touch}
+                      />
+                    )}
                     {items.map((item) => (
                       <Tile
                         key={item.id}
