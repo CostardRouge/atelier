@@ -588,24 +588,69 @@ The second is better and depends on that brief. **Until it exists, the first
 is the safe default** — a stored choice must never silently spend 52 MB of a
 phone's data.
 
-### 13.2 What E20 costs, and the one word still needed
+### 13.2 The door COLLAPSES into the pill (reframed 2026-09-21)
 
-"The Export tab's choice is final" is clear for PIXELS. For MATERIAL it has a
-consequence worth saying out loud: a picture developed on its sensor carries a
-`rawGain` measured on the sensor's own range, and applying those numbers to an
-8-bit proxy gives a visibly different picture — which is why the export has
-never crossed that line downward (`raw.md`). Three ways to honour E20:
+The question was which of three meanings `Proxies` takes over a picture
+developed from its sensor. The maintainer's answer was better than the
+question: *"le choix de la source de pixels sera fait dans chaque média […]
+donc on pense qu'on peut le retirer de l'export final"*.
 
-1. **`Proxies` strips the base** and the run says so — the behaviour that
-   already exists for an unreachable RAW. Honest, and the file will not match
-   the stage.
-2. **`Proxies` is not offered** for a picture developed on its sensor, with a
-   line saying why.
-3. **`Proxies` means "the proxy where the material allows"** — i.e. it governs
-   the delivered rungs and leaves a sensor develop alone.
+**He is right, and the reason is structural.** `develop-originals.md` §7
+decision 1 split the question in two — MATERIAL per picture, PIXELS at the
+export door — and that was correct **while they were two questions**: a base
+rung said which bits, `Auto · Proxies · Originals` said which pixels. A
+RENDITION names both at once: a file has its bits AND its frame. So the two
+axes are now one, the door and the pill answer the same question, and §13.2 was
+hard only because a duplicated control has no good answer.
 
-Recommended: **3**, with **1** as the explicit escape when he asks for it. One
-word from him closes this.
+**What the door still does that the pill does not**, and what must survive it:
+
+- **"Not now, not on this connection."** The rendition is on the DOCUMENT
+  (A3), the tunnel is about this machine. A roll stored on his desktop as
+  `ARW` and exported from a phone must have one way to say *proxies, this
+  once* — and changing the pill instead would write that haste into the
+  document.
+- **`Auto`'s arithmetic, which was never a preference.** It fetches a bigger
+  rendition only where the proxy could not fill the frame asked for — the
+  measured case being a landscape proxy cropped to 4:5, upscaled ×1.25 at
+  1920. In a host WITH a pill that job is the person's; in Trips and the
+  Studio, which by his own A5 have no pill, nothing else does it.
+
+#### The variants
+
+**A — nothing at the door.** Each picture is delivered from its own rendition;
+the panel says what that means for the run. Purest, and it leaves no way to
+say "not now" but the batch verb, which writes the document.
+
+**B — nothing, plus ONE checkbox: *Proxies only, this run*.** Off by default,
+never touches the document, and it is the ASSUMED override he described: a
+picture developed from its sensor is delivered from its proxy with the base
+STRIPPED and the run saying so in as many words. One control instead of three,
+and it cannot be mistaken for a material choice.
+
+**C — the export lists every picture and its source.** His own idea. As an
+EDITABLE list it is the duplication again, one edit in two places. As a
+READ-ONLY summary it is just the *Delivers* row grown to the whole run, and it
+costs nothing: `6 photos · 2 depuis leur ARW (69 Mo à charger) · 4 depuis les
+proxies`, one line per picture behind an ⓘ.
+
+**D — keep `Auto` alone, wherever there is no pill.** Not as a word on a
+segmented control but as the automatic behaviour: never deliver fewer pixels
+than a reachable rendition would give. Invisible in Develop (the pill decides),
+load-bearing in Trips and the Studio until the pill reaches them.
+
+#### Recommended: B + C + D
+
+Two controls become one checkbox, and the panel gains a sentence instead of a
+mode. The three words go from every host — from Develop because the pill
+answers, from Trips and the Studio because `Auto` was the only one of the three
+doing real work there and it does not need a name. `RollExport.originals` comes
+off the document (roll v2 → v3, the migration R3a already carries).
+
+**The one capability this removes**: forcing ORIGINALS from a host that has no
+pill. Today Trips can say "originals" on a piece; after, it delivers what the
+rendition says and `Auto` stops an upscale, and forcing more waits for the pill
+to reach Trips. Worth naming, since it is the only thing lost.
 
 ### 13.3 Exporting into the folder the originals live in (E22)
 
@@ -633,13 +678,38 @@ already make: `FileSystemHandle.isSameEntry` against the handle the roll
 remembers for its local pictures (`develop-media.md`) — no path, no string
 match, and it answers false for a folder that merely looks alike.
 
-### 13.4 Where the switcher lives (A5 × B7)
+### 13.4 Where the switcher lives — DECIDED 2026-09-21
 
-A5 says Develop first; B7 asks for the switch in the media preview modal,
-which is the shell's lightbox — every tool, not one. They are compatible if the
-lightbox switch is READ-ONLY (look at the other file) while only Develop can
-WRITE the choice. If it should write there too, the stored field has to be
-reachable from outside a roll, which is a different design.
+**The lightbox writes nothing.** *"Pour moi la visionneuse n'écrit aucun
+choix, c'est juste de la visualisation […] juste de la curiosité de la part de
+l'user."* Looking at a capture's other file is looking; closing the lightbox
+leaves the document exactly as it was.
+
+**The verb is what carries it.** The sheet already draws a tool's
+`MediaActions` under a picture looked at large, `Develop` among them
+(`develop-roll.md`, D10). Pressing it while the ARW is on screen opens the
+develop ON that rendition — an explicit gesture, an explicit intent. So the
+choice is not lost, it is only never made by accident.
+
+**How to apply**: the lightbox's switcher is view state, dropped on close; the
+`MediaAction` reads the rendition being viewed and hands it to the tool it
+opens. Nothing else in the shell learns about renditions.
+
+### 13.4b The roll-wide default — DEFERRED on purpose, with its direction
+
+He declined to answer now, and said where it is heading, which is worth more
+than the answer: *"à terme il faudra absolument que l'on bosse sur le fichier
+RAW, et le proxy serait plutôt le choix à sélectionner explicitement quand on
+veut gagner du temps. Ce choix pourrait même être dans la modale de création du
+rouleau. Mais pour l'instant je préfère que l'utilisateur choisisse
+explicitement sur chacun des RAW."*
+
+So: **R3b ships the per-picture verb and the filmstrip batch, and no roll
+setting**, for performance and for the measuring. The eventual shape — RAW by
+default, the proxy chosen deliberately for speed, possibly at the roll's
+creation — is his to add when the measurements say it is affordable. Do not
+build it early, and do not design against it: the batch verb and a future
+default go down the same path.
 
 ### 13.5 Small and unanswered (before the measurement; §14 answers three)
 

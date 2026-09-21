@@ -152,6 +152,34 @@ Rules a later phase must keep:
   no request: the primary's row already carries the companion's id, name and
   weight.
 
+## Three decisions of 2026-09-21, and why the export door is dying
+
+- **The export DOOR collapses into the pill.** `develop-originals.md` §7
+  decision 1 split the question in two — material per picture, pixels at the
+  door — and that was right **while they were two questions**. A RENDITION
+  names both at once (a file has its bits and its frame), so the two axes are
+  one, and `Auto · Proxies · Originals` now answers the same question the pill
+  does. The maintainer saw it first: *"le choix de la source de pixels sera
+  fait dans chaque média, donc on peut le retirer de l'export final"*. Two
+  things must survive it — a way to say **"proxies, this once"** without
+  writing haste into the document, and `Auto`'s ARITHMETIC (never deliver
+  fewer pixels than a reachable rendition would give), which was never a
+  preference and is load-bearing exactly where there is no pill. The variants
+  and the recommendation are `docs/capture-renditions.md` §13.2; the one
+  capability the change removes is forcing ORIGINALS from a host without a
+  pill.
+- **The lightbox writes NOTHING** — *"c'est juste de la visualisation […]
+  juste de la curiosité de la part de l'user"*. Its switcher is view state,
+  dropped on close. What carries the choice is the VERB: the `MediaAction`
+  sheet already draws `Develop` under a picture looked at large, and pressing
+  it while the ARW is on screen opens the develop on that rendition. An
+  explicit gesture, an explicit intent — and no document changed by looking.
+- **No roll-wide default, deliberately** (§13.4b). The per-picture verb and the
+  filmstrip batch only, for performance and for the measuring. His stated
+  direction, which is worth more than the answer: RAW by default one day, the
+  proxy chosen deliberately when speed matters, possibly at the roll's
+  creation. Do not build it early; do not design against it.
+
 Still to build: R2 (`AssetParts.raw` — a local folder's RAW half is still
 dropped at the library's door), R3a/R3b (the rung on screen), R4 (the export),
 R5 (one vocabulary in Trips and the Studio). The derivative guard of
