@@ -229,6 +229,15 @@ export function fetchRemoteLattice(host: PackHost, blob: string): Promise<Uint8A
  * Forget a pack there: its index, then the lattices no other pack names.
  * `keptElsewhere` holds BLOBS, for the same reason: it is the file store's
  * vocabulary, and a look's `hash` names nothing on the instance.
+ *
+ * **The INDEX goes first, and that is the exact mirror of `pushPack`'s
+ * order.** A push writes bytes then the index, because an index published
+ * before its bytes offers looks that answer 404. A delete writes the index
+ * then the bytes, for the same reason read backwards: an index that still
+ * names a look whose lattice is gone offers a 404 on every picture, while an
+ * index that has dropped a look whose bytes linger merely wastes space — and
+ * the next forget of that pack reclaims it, since `freedBlobs` reads the
+ * indexes and no surviving look names those bytes.
  */
 export async function deleteRemotePack(
   host: PackHost,
@@ -240,4 +249,23 @@ export async function deleteRemotePack(
     if (keptElsewhere.has(blob)) continue;
     await host.client.deleteAppFile(DOCS_APP, blob);
   }
+}
+
+/**
+ * Forget SOME of a pack's looks there: the index WITHOUT them, then the
+ * lattices no look that survives still names — the same order, for the same
+ * reason as above.
+ *
+ * `next` is the pack as it will now stand (`withoutLooks`) and `blobs` the
+ * ones the caller has established are free (`freedBlobs`). Neither is worked
+ * out here: the index published there must be the very one this browser saves,
+ * or the two copies of the pack start disagreeing about what it holds.
+ */
+export async function deleteRemoteLooks(
+  host: PackHost,
+  next: LutPackIndex,
+  blobs: readonly string[],
+): Promise<void> {
+  await putPackDoc(host, next);
+  for (const blob of new Set(blobs)) await host.client.deleteAppFile(DOCS_APP, blob);
 }

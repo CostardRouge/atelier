@@ -23,12 +23,15 @@ import type { CubeLut } from '../lib/cube-parser';
 import {
   lookIn,
   lookLabel,
+  withoutLooks,
   type LutPackIndex,
   type PackLook,
   type PackRef,
 } from './lut-pack';
 import { decodeLattice } from './pack-codec';
 import {
+  deleteRemoteLooks,
+  deleteRemotePack,
   fetchRemoteLattice,
   fetchRemotePacks,
   packHost,
@@ -39,12 +42,21 @@ import {
   type PushProgress,
 } from './pack-remote';
 import {
+  deleteStoredLattices,
   deleteStoredPack,
   getStoredLattice,
   listStoredPacks,
   putStoredLattice,
   putStoredPack,
+  storedLatticeSizes,
 } from './pack-store';
+import {
+  blobBytes,
+  freedBlobs,
+  freedHashes,
+  hashBytes,
+  type ForgetResult,
+} from './pack-weight';
 
 let packs: LutPackIndex[] = [];
 let loaded = false;
@@ -98,12 +110,89 @@ export async function savePack(index: LutPackIndex): Promise<boolean> {
   return ok;
 }
 
-/** Forget a pack and its lattices. A grade that wore one of its looks then says so. */
-export async function removePack(packId: string): Promise<void> {
+/**
+ * Forget a whole pack: its index and its lattices, here and on the instance
+ * it is kept on. A grade that wore one of its looks then says so
+ * (`missingLookReason`) rather than grading flat.
+ */
+export function removePack(packId: string): Promise<ForgetResult> {
+  return forget(packId, null);
+}
+
+/**
+ * Forget ONE look — the maintainer's own case: a pack whose Sony and film
+ * cameras he does not own, 1.6 MB apiece, hidden and still costing.
+ *
+ * Hiding is the other verb and stays (`setPackHidden`): it puts a look away
+ * and keeps its bytes. This one is the reverse and is the only one of the two
+ * a document can notice.
+ */
+export function forgetLook(packId: string, lookId: string): Promise<ForgetResult> {
+  return forget(packId, [lookId]);
+}
+
+/**
+ * `lookIds === null` means the whole pack.
+ *
+ * **A pack kept on an instance is forgotten THERE or not at all.** §4.2 of
+ * the plan is explicit that the instance is the truth and this vault is its
+ * cache, so a forget that could not reach it would not be a forget: the next
+ * device to adopt the pack would bring the look straight back, and the bytes
+ * there would never be reclaimed by anyone. So an unreachable instance
+ * refuses the gesture and says which one, and nothing changes. A pack kept
+ * only in this browser has no such question to answer.
+ *
+ * The remote side runs FIRST and the local write follows: a failure there
+ * leaves both copies as they were, where the reverse order would leave this
+ * browser holding a pack the instance still offers in full.
+ */
+async function forget(packId: string, lookIds: readonly string[] | null): Promise<ForgetResult> {
+  await loadPacks();
   const pack = packs.find((p) => p.id === packId);
-  await deleteStoredPack(packId);
-  for (const look of pack?.looks ?? []) if (look.hash) lattices.delete(look.hash);
-  emit(packs.filter((p) => p.id !== packId));
+  if (!pack) throw new Error('That pack is not in this browser.');
+  const whole = lookIds === null;
+  const doomed = whole ? pack.looks.map((l) => l.id) : lookIds;
+  const keptOn = pack.sourceId ?? null;
+  const host = keptOn ? packHost(keptOn) : null;
+  if (keptOn && !host) {
+    throw new Error(
+      `This pack is kept on ${keptOn}. Connect it, so ${
+        whole ? 'the pack' : 'the look'
+      } is forgotten there too and its bytes come back.`,
+    );
+  }
+
+  const sizes = await storedLatticeSizes();
+  const here = freedHashes(packs, packId, doomed);
+  const there = host ? freedBlobs(packs, packId, doomed, host.sourceId) : { free: [], shared: [] };
+  const next = whole ? null : withoutLooks(pack, doomed);
+  // Weighed BEFORE anything is written: both figures are read off the indexes
+  // as they stand, and the write is about to take the very looks they are
+  // read from out of them.
+  const result: ForgetResult = {
+    here: hashBytes(here.free, sizes),
+    instance: host ? blobBytes(there.free, packs) : 0,
+    keptOn,
+    shared: here.shared.length,
+  };
+
+  if (host) {
+    if (next) await deleteRemoteLooks(host, next, there.free);
+    else await deleteRemotePack(host, pack, new Set(there.shared));
+  }
+
+  if (next) {
+    await savePack(next);
+  } else {
+    await deleteStoredPack(packId);
+    emit(packs.filter((p) => p.id !== packId));
+  }
+  await deleteStoredLattices(here.free);
+  // The decode cache is keyed on the hash, so a look whose bytes are gone
+  // must lose its promise or the rest of the session keeps grading with it.
+  for (const hash of here.free) lattices.delete(hash);
+
+  return result;
 }
 
 /** Store one look's encoded lattice — the import's write, per look. */
@@ -251,6 +340,16 @@ export async function adoptRemotePack(index: LutPackIndex, sourceId: string): Pr
 export function missingLookReason(ref: PackRef): string {
   const pack = packOf(ref);
   if (!pack) return 'This look comes from a pack this browser does not hold.';
+  // The pack is here and this look is NOT in it: it was forgotten, or its
+  // author republished the pack without it. The same STATE as any other
+  // missing look — the layer stays, named and skipped by the bake — and a
+  // different sentence, because "not here yet" would be a lie about
+  // something deliberately dropped.
+  if (!lookIn(pack, ref.look)) {
+    return `That look is no longer in ${
+      pack.name || pack.author || 'this pack'
+    } — forgotten, or gone from the pack.`;
+  }
   if (pack.sourceId && !packHost(pack.sourceId)) {
     return `Kept on ${pack.sourceId} — connect it to grade with this look.`;
   }

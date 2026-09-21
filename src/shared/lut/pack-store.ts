@@ -102,15 +102,37 @@ export async function putStoredPack(index: LutPackIndex): Promise<boolean> {
   }
 }
 
-/** Forget a pack AND the lattices it brought in — nothing keeps a look alive alone. */
+/**
+ * Forget a pack's INDEX. Its lattices are a separate call
+ * (`deleteStoredLattices`), and that split is a correction, not a
+ * convenience.
+ *
+ * This used to delete every lattice whose record named this pack, which
+ * cannot be right: a lattice is keyed on its hash, so `putStoredLattice`
+ * overwrites `packId` with whichever pack stored it LAST. Two packs shipping
+ * the same `.cube` therefore leave one record naming one of them, and
+ * forgetting that one took bytes the other still needed while forgetting the
+ * other freed nothing. Which hashes are free is a question about every index
+ * at once, so the vault asks it (`pack-weight.ts`'s `freedHashes`) and this
+ * store stops guessing.
+ */
 export async function deleteStoredPack(packId: string): Promise<void> {
   try {
     await withStore(PACKS, 'readwrite', (s) => s.delete(packId));
-    const all = await withStore(LATTICES, 'readonly', (s) => s.getAll() as IDBRequest<LatticeRecord[]>);
-    const mine = all.filter((r) => r.packId === packId).map((r) => r.id);
-    for (const id of mine) await withStore(LATTICES, 'readwrite', (s) => s.delete(id));
   } catch {
     /* already gone or storage unusable */
+  }
+}
+
+/** Free these lattices — the hashes the caller has established nothing else names. */
+export async function deleteStoredLattices(hashes: readonly string[]): Promise<void> {
+  for (const hash of hashes) {
+    if (!hash) continue;
+    try {
+      await withStore(LATTICES, 'readwrite', (s) => s.delete(hash));
+    } catch {
+      /* already gone or storage unusable */
+    }
   }
 }
 
@@ -161,12 +183,46 @@ export async function storedLatticeHashes(): Promise<Set<string>> {
   }
 }
 
-/** What the vault weighs on this device, in bytes — said before it is emptied. */
-export async function storedLatticeBytes(): Promise<number> {
+/**
+ * What each stored lattice weighs, by hash — the MEASURED half of
+ * `pack-weight.ts`, and the reason the screen can say what the vault costs
+ * without trusting an index that records `.cube` sizes instead.
+ *
+ * Walked with a CURSOR, deliberately: `getAll()` over the maintainer's own
+ * pack would materialise 41 MB of `ArrayBuffer`s at once to read 25 numbers,
+ * while a cursor deserialises one record at a time and lets each go — a peak
+ * of one lattice rather than of the whole vault. (Cheaper still would be an
+ * index over a stored size field, walked with `openKeyCursor`, which reads no
+ * body at all; that needs a schema bump and a backfill of every existing
+ * record, and is the next step if this ever shows on a phone.)
+ *
+ * An empty map on a storage failure, like every other reader here: a weight
+ * nobody can measure is reported as unknown, never as zero bytes stored.
+ */
+export async function storedLatticeSizes(): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
   try {
-    const all = await withStore(LATTICES, 'readonly', (s) => s.getAll() as IDBRequest<LatticeRecord[]>);
-    return all.reduce((sum, r) => sum + r.bytes.byteLength, 0);
+    const db = await openDb();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const req = db.transaction(LATTICES, 'readonly').objectStore(LATTICES).openCursor();
+        req.onsuccess = () => {
+          const cursor = req.result;
+          if (!cursor) {
+            resolve();
+            return;
+          }
+          const row = cursor.value as LatticeRecord | undefined;
+          if (row?.id && row.bytes) out.set(row.id, row.bytes.byteLength);
+          cursor.continue();
+        };
+        req.onerror = () => reject(req.error ?? new Error('IndexedDB cursor failed'));
+      });
+    } finally {
+      db.close();
+    }
   } catch {
-    return 0;
+    /* storage unusable — an empty map, which reads as "cannot say" */
   }
+  return out;
 }
