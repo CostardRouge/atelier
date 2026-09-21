@@ -776,7 +776,11 @@ export class WinnowClient {
     }
     // 304 is an answer, not a failure: "what you hold is still current".
     if (!res.ok && res.status !== 304) {
-      throw new WinnowError('protocol', `${url} answered ${res.status}.`, res.status);
+      throw new WinnowError(
+        'protocol',
+        `${url} answered ${res.status}${await refusalReason(res)}.`,
+        res.status,
+      );
     }
     return res;
   }
@@ -1268,6 +1272,33 @@ export interface AppFileRow {
 }
 
 /** What a 412 carries: `{ error, etag, updated_at }` — read leniently. */
+/**
+ * The instance's own words for a refusal, as ` — <reason>`, or nothing.
+ *
+ * Winnow answers a refusal `{ "error": "…" }`, and that sentence is usually
+ * the whole diagnosis: a pack push refused every look with *the body does not
+ * hash to that id*, while the panel said only "answered 400" and the reason
+ * had to be dug out of the network tab. A status is not a cause.
+ *
+ * Deliberately narrow: JSON only, so a proxy's HTML error page or a stack
+ * trace never reaches a sentence in the UI, and clamped — the body is a
+ * remote's text, and it is being pasted into a message a person reads.
+ */
+async function refusalReason(res: Response): Promise<string> {
+  try {
+    const text = (await res.text()).trim();
+    if (!text.startsWith('{')) return '';
+    const raw = JSON.parse(text) as { error?: unknown; message?: unknown };
+    const said = typeof raw.error === 'string' ? raw.error : raw.message;
+    if (typeof said !== 'string' || !said.trim()) return '';
+    const one = said.trim().replace(/\s+/g, ' ');
+    return ` — ${one.length > 160 ? `${one.slice(0, 159)}…` : one}`;
+  } catch {
+    // No body, not JSON, or a body already read: the status stands alone.
+    return '';
+  }
+}
+
 async function conflictInfo(res: Response): Promise<ConflictInfo | null> {
   try {
     const raw = (await res.json()) as { etag?: unknown; updated_at?: unknown };
