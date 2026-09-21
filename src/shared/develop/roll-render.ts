@@ -27,7 +27,7 @@ import { geometryPasses, hasGeometry } from '../render/picture-geometry';
 import { drawingLayers, type AdjustLayer } from './layer';
 import { layerPasses } from './layer-render';
 import { DEFAULT_FRAMING, type Framing } from '../media/framing';
-import { decodePhoto, fitPhotoForRender } from '../media/photo-frame';
+import { decodePhoto, decodePhotoSource, fitPhotoForRender } from '../media/photo-frame';
 import { decodeRaw } from '../raw/raw-decoder';
 import { isDefaultDetail, type DetailSettings } from '../render/detail';
 import { detailPasses } from '../render/detail-pass';
@@ -38,6 +38,9 @@ import { pictureAspectRatio } from './crop-aspect';
 import { drawDelivered } from './border-paint';
 import type { RollBorder } from './border-layout';
 import { deliveredLayout, type PictureSize } from './roll-export';
+import { makeGainMapPass } from '../render/gain-map-pass';
+import type { GainField } from '../render/gain-map';
+import type { CameraWarp } from '../render/camera-warp';
 import { encodeUltraHdr, type UltraHdrResult } from '../hdr/ultra-hdr-export';
 
 export interface RollRenderOptions {
@@ -81,6 +84,14 @@ export interface RollRenderOptions {
    */
   raw?: { file: File; gain: number } | null;
   /**
+   * The camera's own calibration to apply to that RAW (`raw/calibration.ts`),
+   * at the rung the picture stands on — or the top one the file can reach,
+   * which is what an export climbs to. Read only on the RAW path: a render or
+   * a proxy has already had it applied by the camera, and applying it twice
+   * would lift the corners into white.
+   */
+  calibration?: { gain: GainField | null; warp: CameraWarp | null } | null;
+  /**
    * Deliver an Ultra HDR JPEG: `lut` is the picture's cube developed `stops`
    * DARKER — the same numbers with the exposure lowered — which is where the
    * sensor's highlights above the SDR white are still readable
@@ -115,16 +126,33 @@ export interface RollRendered {
   gradedAt: PictureSize;
 }
 
+/** A measured picture: the pixels, and whether they are a RAW's own render. */
+export interface MeasuredPicture extends PictureSize {
+  /**
+   * True when what was measured is the JPEG the camera wrote inside a RAW
+   * rather than the file's own pixels — `decodePhotoSource`'s fallback, which
+   * is the ONLY thing a browser can draw of a DNG. A delivery plan that says
+   * `File 8064 px` over a 960 px render would be lying about the one number
+   * the plan is for.
+   */
+  viaRawPreview: boolean;
+}
+
 /**
  * The picture's own pixel size, decoded and closed; null when the browser
  * cannot read it. Decoded UPRIGHT, exactly as `renderRollPicture` will decode
  * it: the delivery plan is drawn from this size, and a portrait measured
  * sideways would plan a crop the render then cuts from the other axis.
+ *
+ * Through `decodePhotoSource`, so a RAW is measured at all (2026-09-20): a
+ * plain `createImageBitmap` refuses a DNG, which left the *Delivers* row
+ * saying `—` for every RAW on a disk while the run happily delivered its
+ * embedded render.
  */
-export async function measurePicture(file: File): Promise<PictureSize | null> {
+export async function measurePicture(file: File): Promise<MeasuredPicture | null> {
   try {
-    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-    const size = { width: bitmap.width, height: bitmap.height };
+    const { bitmap, viaRawPreview } = await decodePhotoSource(file);
+    const size = { width: bitmap.width, height: bitmap.height, viaRawPreview };
     bitmap.close();
     return size;
   } catch {
@@ -203,8 +231,11 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
   // The decode may be half the sensor: a kernel stated in sensor pixels scales with it.
   const { pre: detailPre, post } = detailPasses(opts.detail, source.width / decoded.sourceWidth);
   const repairPass = makeRepairPass(opts.repair, ar);
-  const pre = [...(repairPass ? [repairPass] : []), ...detailPre];
-  const passes = [...geometryPasses(opts, ar), ...layerPasses(stack, ar), ...post];
+  // The camera's shading FIRST of all, ahead of the repair and the denoise —
+  // `render-gain-map.md`'s order, the same one the stage runs.
+  const gainPass = makeGainMapPass(opts.calibration?.gain);
+  const pre = [...(gainPass ? [gainPass] : []), ...(repairPass ? [repairPass] : []), ...detailPre];
+  const passes = [...geometryPasses(withCalibration(opts), ar), ...layerPasses(stack, ar), ...post];
   // A RAW is never drawn without the GPU: its half-floats have no 2D form,
   // and its develop is never default (the gain alone is a stage).
   const grader = makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, passes, pre, opts.film ?? null);
@@ -223,15 +254,25 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
   }
 }
 
+/**
+ * The geometry with the camera's own warp in it. One place, so the HDR
+ * rendition cannot be warped differently from the base it is measured
+ * against — which would put its gain map a few pixels out at the corners.
+ */
+function withCalibration(opts: RollRenderOptions) {
+  return { ...opts, cameraWarp: opts.calibration?.warp ?? null };
+}
+
 /** The passes after the cube, built anew for a second grader. */
 function freshPasses(opts: RollRenderOptions, ar: number, stack: readonly AdjustLayer[], scale: number) {
-  return [...geometryPasses(opts, ar), ...layerPasses(stack, ar), ...detailPasses(opts.detail, scale).post];
+  return [...geometryPasses(withCalibration(opts), ar), ...layerPasses(stack, ar), ...detailPasses(opts.detail, scale).post];
 }
 
 /** The passes before the cube, built anew for a second grader. */
 function freshPre(opts: RollRenderOptions, ar: number, patches: readonly Patch[], scale: number) {
   const repairPass = makeRepairPass(patches, ar);
-  return [...(repairPass ? [repairPass] : []), ...detailPasses(opts.detail, scale).pre];
+  const gainPass = makeGainMapPass(opts.calibration?.gain);
+  return [...(gainPass ? [gainPass] : []), ...(repairPass ? [repairPass] : []), ...detailPasses(opts.detail, scale).pre];
 }
 
 /** A grader's canvas copied to a 2D canvas, so a second render cannot replace it. */

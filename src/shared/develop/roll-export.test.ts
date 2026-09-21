@@ -8,6 +8,7 @@ import {
   deliveredLayout,
   deliverySummary,
   describeRun,
+  fixedFrameDelivery,
   exportName,
   longEdgeChoiceId,
   pixelHeadroom,
@@ -72,10 +73,34 @@ describe('choosePixels', () => {
     expect(choosePixels('originals', 0.5, null)).toEqual({ from: 'file', reason: null });
   });
 
-  it('never fetches a RAW original — the render the person looked at is delivered (decision 4)', () => {
+  it('refuses a RAW whose render has not been measured — never on the assumption it is full-size', () => {
     const raw = { ...original, name: 'DJI_0421.DNG' };
-    expect(choosePixels('originals', 0.5, raw).from).toBe('file');
-    expect(choosePixels('originals', 0.5, raw).reason).toMatch(/RAW/);
+    for (const mode of ['auto', 'proxies', 'originals'] as const) {
+      expect(choosePixels(mode, 0.5, raw, proxy).from).toBe('file');
+    }
+    expect(choosePixels('originals', 0.5, raw, proxy).reason).toMatch(/read from the file’s head at export/);
+  });
+
+  it('takes the proxy over a SMALLER embedded render — the DJI, measured', () => {
+    // 960 × 540 inside the file, 2048 px of proxy: fetching 74 MB would
+    // deliver 0.52 megapixels.
+    const raw = { ...original, name: 'DJI_0421.DNG', render: { width: 960, height: 540 } };
+    expect(choosePixels('originals', 0.5, raw, proxy).from).toBe('file');
+    expect(choosePixels('originals', 0.5, raw, proxy).reason).toBe(
+      'its original is a RAW whose own render is 960 px against the proxy’s 2048 — the proxy is what leaves',
+    );
+  });
+
+  it('takes a LARGER embedded render, and only where the frame needs it', () => {
+    const raw = { ...original, name: 'DJI_0421.DNG', render: { width: 6048, height: 4032 } };
+    // Auto: the proxy fills this frame, so the bigger render buys nothing.
+    expect(choosePixels('auto', 1.2, raw, proxy).from).toBe('file');
+    expect(choosePixels('auto', 1.2, raw, proxy).reason).toMatch(/would buy nothing here/);
+    // Auto, upscaling: worth the fetch, and it says both numbers.
+    expect(choosePixels('auto', 0.8, raw, proxy).from).toBe('original');
+    expect(choosePixels('auto', 0.8, raw, proxy).reason).toMatch(/6048 px render inside it is larger than the 2048 px proxy/);
+    expect(choosePixels('originals', 2.0, raw, proxy).from).toBe('original');
+    expect(choosePixels('proxies', 0.5, raw, proxy).from).toBe('file');
   });
 
   it('Auto fetches the original only where the proxy would upscale', () => {
@@ -172,13 +197,71 @@ describe('deliverySummary', () => {
     expect(s.line).toBe('File 2048 px → 2355 · exact');
   });
 
-  it('delivers from the render when the original is a RAW, and says why', () => {
+  it('delivers from the proxy when the original is a RAW nobody has measured, and says why', () => {
     const s = deliverySummary(proxy, true, { ...original, name: 'DJI_0421.DNG' }, null, 4 / 5, null, {
       ...settings,
       originals: 'originals',
     });
     expect(s.from).toBe('file');
     expect(s.reason).toMatch(/RAW/);
+    // The frame is NOT planned against the sensor: those pixels can never be
+    // delivered here, so "asked 8064" would be a promise nothing can keep.
+    expect(s.line).toBe('Proxy 1536 px → 1536 · exact');
+  });
+
+  it('calls a RAW original what it is — the render inside it, never the sensor', () => {
+    const s = deliverySummary(
+      proxy,
+      true,
+      { ...original, name: 'DJI_0421.DNG', render: { width: 6048, height: 4032 } },
+      null,
+      4 / 5,
+      null,
+      { ...settings, originals: 'originals' },
+    );
+    expect(s.from).toBe('original');
+    expect(s.line).toMatch(/^Original render /);
+  });
+});
+
+describe('fixedFrameDelivery — Trips and the Studio, whose frame is the frame', () => {
+  const deck = { w: 1536, h: 1920 };
+
+  it('says the proxy is upscaled into the deck, and Auto fetches for it (F3, measured)', () => {
+    const s = fixedFrameDelivery(proxy, true, original, null, deck, 'auto');
+    expect(s.from).toBe('original');
+    expect(s.reason).toMatch(/×1\.25/);
+    // The frame is written whatever happens — it is a frame, not a cap.
+    expect(s.out).toEqual(deck);
+    expect(s.headroom).toBeCloseTo(3.15, 2);
+    expect(s.line).toMatch(/^Original \d+ px → 1920 · ×3\.15 to spare$/);
+  });
+
+  it('holds the proxy where the frame fits it, and wherever Proxies is asked', () => {
+    const small = { w: 1229, h: 1536 };
+    expect(fixedFrameDelivery(proxy, true, original, null, small, 'auto').from).toBe('file');
+    const held = fixedFrameDelivery(proxy, true, original, null, deck, 'proxies');
+    expect(held.from).toBe('file');
+    expect(held.line).toBe('Proxy 1536 px → 1920 · ×1.25 upscaled');
+  });
+
+  it('never fetches a RAW whose render is smaller than the proxy', () => {
+    const raw = { ...original, name: 'DJI_0421.DNG', render: { width: 960, height: 540 } };
+    const s = fixedFrameDelivery(proxy, true, raw, null, deck, 'originals');
+    expect(s.from).toBe('file');
+    expect(s.reason).toMatch(/960 px against the proxy’s 2048/);
+  });
+
+  it('calls a file that IS the original by its own name', () => {
+    const s = fixedFrameDelivery(original, false, null, null, deck, 'auto');
+    expect(s.from).toBe('file');
+    expect(s.line).toMatch(/^File /);
+    expect(s.reason).toBeNull();
+  });
+
+  it('says a RAW render is a RAW render, wherever it is measured', () => {
+    const s = fixedFrameDelivery({ width: 960, height: 540, viaRawPreview: true }, false, null, null, deck, 'auto');
+    expect(s.line).toMatch(/^Camera render /);
   });
 });
 

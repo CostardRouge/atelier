@@ -19,7 +19,6 @@ import { normaliseCellPlace } from '../../shared/media/media-layout';
 import DevelopSheet from '../../shared/develop/DevelopSheet';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import type { DevelopSettings } from '../../shared/develop/develop';
-import { pictureFidelity } from '../../shared/develop/picture-fidelity';
 import { normaliseFraming, type Framing } from '../../shared/media/framing';
 import { badgeContent, type BadgePiece } from '../../shared/roadtrip/day-badge';
 import {
@@ -84,6 +83,10 @@ import PiecePicker from './panels/PiecePicker';
 import { useCollageRefetch } from './use-collage-refetch';
 import { useDeckTransport } from './use-deck-transport';
 import { usePostExports } from './use-post-exports';
+import { DECK_LONG_EDGE } from '../../shared/roadtrip/deck-export';
+import { frameSize } from '../../shared/roadtrip/badge-render';
+import { useDeliveryRow } from '../../shared/develop/use-delivery-row';
+import type { RollOriginals } from '../../shared/develop/roll-types';
 import useRailThumbs from './use-rail-thumbs';
 import { useExposureLine } from './use-exposure-line';
 import { pickable, useSlideLibrary } from './use-slide-library';
@@ -1029,10 +1032,28 @@ export default function PostEditor({
     exposure,
   });
 
+  // WHICH PIXELS the stills leave from (O2 of `docs/develop-originals.md`).
+  // An export-door choice, like `imagesOnly` beside it and the Studio's
+  // "render from the proxy": it is about this machine's tunnel and this run,
+  // never about the piece, so it is session state and not on the trip.
+  const [originals, setOriginals] = useState<RollOriginals>('auto');
+  // What the OPEN picture would deliver into the deck's own 1920 frame —
+  // measured only while the Export tab is up, because measuring means
+  // decoding and a 48-megapixel decode is not worth a sentence on every
+  // slide stepped past. A collage says nothing: each cell is drawn into a
+  // fraction of the frame, so the whole frame's answer would be wrong for it.
+  const delivery = useDeliveryRow(
+    tab === 'export' && !collage ? cellFile : null,
+    cellFraming,
+    frameSize(aspect, DECK_LONG_EDGE),
+    originals,
+  );
+
   const exports = usePostExports({
     trip,
     post,
     aspect,
+    originals,
     slideCount: slides.length,
     hookSlide: slides[0],
     // A still is taken SETTLED, never at the transport's time: a PNG caught
@@ -1614,6 +1635,9 @@ export default function PostEditor({
               onExportPiece={(imagesOnly) => void exports.exportPiece(imagesOnly)}
               onExportDeck={() => void exports.exportDeck()}
               onExportHookClip={() => void exports.exportHookClip()}
+              originals={originals}
+              onOriginals={setOriginals}
+              delivery={delivery}
               onChangePost={onChangePost}
               grade={grade.hookGrade}
               gradeScope={grade.hookScope}
@@ -1629,8 +1653,6 @@ export default function PostEditor({
         file={cellFile}
         videoTimeSeconds={cellIndex === 0 ? slide.videoTimeSeconds : 0}
         title={cellFile?.name ?? 'this slide'}
-        fidelity={pictureFidelity(cellFile).chip}
-        note={pictureFidelity(cellFile).note}
         emptyText="This slide has no picture yet — tick one in the Library."
         stack={grade.stack}
         value={cellDevelop}

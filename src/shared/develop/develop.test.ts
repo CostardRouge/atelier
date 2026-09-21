@@ -18,6 +18,10 @@ import {
   signed,
   withoutBase,
   type DevelopSettings,
+  normaliseBase,
+  DEVELOP_BASES,
+  baseRung,
+  developBase,
 } from './develop';
 import { identityCurve, makeCurve, type Curve, type ToneCurves } from './curves';
 import { fromLinear, toLinear } from '../lut/transfer';
@@ -458,41 +462,77 @@ describe('curves and levels in a develop', () => {
 
 describe('a RAW base', () => {
   it('is never default, compares by base and gain, and is stripped by withoutBase', () => {
-    const raw: DevelopSettings = { ...DEFAULT_DEVELOP, base: 'raw', rawGain: 2 };
+    const raw: DevelopSettings = { ...DEFAULT_DEVELOP, base: 'gain', rawGain: 2 };
     expect(isDefaultDevelop(raw)).toBe(false);
     expect(isRawDevelop(raw)).toBe(true);
     expect(rawGainOf(raw)).toBe(2);
-    expect(rawGainOf({ ...DEFAULT_DEVELOP, base: 'raw' })).toBe(1);
+    expect(rawGainOf({ ...DEFAULT_DEVELOP, base: 'gain' })).toBe(1);
     expect(rawGainOf({ ...DEFAULT_DEVELOP, rawGain: 2 })).toBe(1);
     expect(sameDevelop(raw, { ...raw })).toBe(true);
     expect(sameDevelop(raw, { ...raw, rawGain: 2.5 })).toBe(false);
     expect(sameDevelop(raw, withoutBase(raw))).toBe(false);
     expect(isDefaultDevelop(withoutBase(raw))).toBe(true);
-    expect(cloneDevelop(raw).base).toBe('raw');
+    expect(cloneDevelop(raw).base).toBe('gain');
     expect(cloneDevelop(raw).rawGain).toBe(2);
   });
 
-  it('reads back safely: only "raw" is a base, the gain is clamped, a render carries none', () => {
-    expect(normaliseDevelop({ base: 'raw', rawGain: 3 }).rawGain).toBe(3);
-    expect(normaliseDevelop({ base: 'raw', rawGain: 1000 }).rawGain).toBe(RAW_GAIN_LIMITS.max);
-    expect(normaliseDevelop({ base: 'raw', rawGain: 'x' }).rawGain).toBeNull();
+  it('reads yesterday’s two values as today’s four — no stored document changes meaning', () => {
+    // `render` WAS the proxy, and the proxy is the absence of a base.
+    expect(normaliseBase('render')).toBeNull();
+    expect(normaliseDevelop({ base: 'render', rawGain: 3 }).base).toBeNull();
+    // `raw` WAS the sensor with its measured gain and nothing else — `gain`.
+    expect(normaliseBase('raw')).toBe('gain');
+    expect(normaliseDevelop({ base: 'raw', rawGain: 3 })).toMatchObject({ base: 'gain', rawGain: 3 });
+    // The two new rungs read as themselves; anything else is no base at all.
+    expect(normaliseBase('gainMap')).toBe('gainMap');
+    expect(normaliseBase('gainMapWarp')).toBe('gainMapWarp');
+    expect(normaliseBase('sensor')).toBeNull();
+    expect(normaliseBase(7)).toBeNull();
+  });
+
+  it('is a LADDER: every rung above the proxy is the sensor, and each contains the one below', () => {
+    expect(DEVELOP_BASES).toEqual(['proxy', 'gain', 'gainMap', 'gainMapWarp']);
+    expect(baseRung(null)).toBe(0);
+    expect(baseRung('proxy')).toBe(0);
+    expect(baseRung('gainMapWarp')).toBe(3);
+    for (const base of ['gain', 'gainMap', 'gainMapWarp'] as const) {
+      expect(isRawDevelop({ ...DEFAULT_DEVELOP, base })).toBe(true);
+      expect(isDefaultDevelop({ ...DEFAULT_DEVELOP, base })).toBe(false);
+      // The base travels nowhere, whatever the rung (`raw.md`).
+      expect(withoutBase({ ...DEFAULT_DEVELOP, base, rawGain: 2 }).base).toBeNull();
+    }
+    expect(isRawDevelop({ ...DEFAULT_DEVELOP, base: 'proxy' })).toBe(false);
+    expect(developBase({ ...DEFAULT_DEVELOP, base: 'proxy' })).toBe('proxy');
+    expect(developBase(null)).toBe('proxy');
+  });
+
+  it('says which rung a picture stands on, so two RAWs cannot read alike', () => {
+    expect(developLines({ ...DEFAULT_DEVELOP, base: 'gain', rawGain: 4 })[0]).toBe('RAW +2.0 EV metered');
+    expect(developLines({ ...DEFAULT_DEVELOP, base: 'gainMap', rawGain: 4 })[0]).toBe('RAW + gain map +2.0 EV metered');
+    expect(developLines({ ...DEFAULT_DEVELOP, base: 'gainMapWarp', rawGain: 1 })[0]).toBe('RAW + gain map + warp');
+  });
+
+  it('reads back safely: only a real rung is a base, the gain is clamped, a proxy carries none', () => {
+    expect(normaliseDevelop({ base: 'gain', rawGain: 3 }).rawGain).toBe(3);
+    expect(normaliseDevelop({ base: 'gain', rawGain: 1000 }).rawGain).toBe(RAW_GAIN_LIMITS.max);
+    expect(normaliseDevelop({ base: 'gain', rawGain: 'x' }).rawGain).toBeNull();
     expect(normaliseDevelop({ base: 'proxy', rawGain: 3 }).base).toBeNull();
     expect(normaliseDevelop({ base: 'proxy', rawGain: 3 }).rawGain).toBeNull();
-    expect(developOrNull({ base: 'raw' })).not.toBeNull();
+    expect(developOrNull({ base: 'gain' })).not.toBeNull();
   });
 
   it('applies the measured gain in LINEAR light before the sliders, in the bake stage', () => {
-    const stage = developStage({ ...DEFAULT_DEVELOP, base: 'raw', rawGain: 2 });
+    const stage = developStage({ ...DEFAULT_DEVELOP, base: 'gain', rawGain: 2 });
     const [r] = stage(0.5, 0.5, 0.5);
     expect(r).toBeCloseTo(fromLinear(toLinear(0.5, 'srgb') * 2, 'srgb'), 9);
     // The same gain and −1 EV: back where it started.
-    const back = developStage({ ...DEFAULT_DEVELOP, base: 'raw', rawGain: 2, exposure: -1 });
+    const back = developStage({ ...DEFAULT_DEVELOP, base: 'gain', rawGain: 2, exposure: -1 });
     expect(back(0.5, 0.5, 0.5)[1]).toBeCloseTo(0.5, 9);
   });
 
   it('names the material and its metered exposure first', () => {
-    expect(developLines({ ...DEFAULT_DEVELOP, base: 'raw', rawGain: 4 })[0]).toBe('RAW +2.0 EV metered');
-    expect(developLines({ ...DEFAULT_DEVELOP, base: 'raw', rawGain: 1 })[0]).toBe('RAW');
-    expect(developLines({ ...DEFAULT_DEVELOP, base: 'raw', rawGain: 4, exposure: -0.5 })).toEqual(['RAW +2.0 EV metered', '−0.5 EV']);
+    expect(developLines({ ...DEFAULT_DEVELOP, base: 'gain', rawGain: 4 })[0]).toBe('RAW +2.0 EV metered');
+    expect(developLines({ ...DEFAULT_DEVELOP, base: 'gain', rawGain: 1 })[0]).toBe('RAW');
+    expect(developLines({ ...DEFAULT_DEVELOP, base: 'gain', rawGain: 4, exposure: -0.5 })).toEqual(['RAW +2.0 EV metered', '−0.5 EV']);
   });
 });

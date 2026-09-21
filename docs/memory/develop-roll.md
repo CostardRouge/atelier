@@ -277,9 +277,55 @@ shared block. Rules a later phase must keep:
   vouched for. The choice and the block are `shared/exif/stamp-exif.ts`; a
   picture that ends up on the poorest account, or on none, is SAID in the run's
   sentence rather than filed away silently.
-- **A RAW original is never fetched** (`decodableOriginal`: jpg/png/webp/
-  avif/gif/bmp only — no HEIC, no TIFF): decision 4, the render the person
-  developed is what leaves, and the reason is said on the *Delivers* row.
+- **The row NAMES the pixels it measured** (2026-09-20): `sourceLabel` reads
+  `Camera render` where the file in hand is a RAW — `MeasuredPicture.viaRawPreview`
+  from `measurePicture`, which now decodes through `decodePhotoSource` — so a
+  DNG says `Camera render 960 px → 1920 · ×2.00 upscaled · asked 1920` instead
+  of `File 8064 px`, which was the one sentence the plan must never say. The
+  fidelity half of it is `develop.md`, «A picture says its PIXELS».
+- **A RAW original is reached only through the render INSIDE it, and only
+  when that render is bigger than the proxy** (2026-09-20, correcting
+  decision 4 — `develop-originals.md` §7.4). `decodableOriginal` still names
+  what a browser reads on its own (jpg/png/webp/avif/gif/bmp — no HEIC, no
+  TIFF), and a RAW now goes down its own branch: `originalPixels` answers
+  with `OriginalInfo.render`, which is null until the file's head has been
+  read, and `choosePixels` refuses to act on a guess while it is. The sizes
+  come from `rawSizesFrom` over a megabyte of the original's head — the read
+  the run was already making for the EXIF, raised from 256 KB — cached for
+  the session in `original-cache.ts` (`heldRawRender`, `undefined` = not read,
+  `null` = read and the file said nothing), and the *Delivers* row reads the
+  SAME cache, so the row and the run can never disagree. The frame is no
+  longer planned against the sensor's pixels either: they can never be
+  delivered here, so `· asked 8064` was a promise nothing could keep. A RAW
+  original that does win is labelled `Original render`, never `Original`.
+  **Why it matters**: a DJI DNG holds a 960 × 540 render — `Auto` fetching
+  74 MB for 0.52 megapixels is the mistake the whole branch exists to stop.
+  The sensor is reached by developing on `base: 'raw'`, never by the export.
+  Measured in the pane on two synthetic DNGs (`testing.md`'s recipe): the
+  960 px one delivered `DJI_0101.jpg 2048×1152` with **zero** full fetches
+  and the row read *"its original is a RAW whose own render is 960 px against
+  the proxy's 2048 — the proxy is what leaves"*; the 6048 px one delivered
+  `DJI_0202.jpg 6048×4032` after ONE fetch, the row reading `Original render
+  6048 px → 6048 · exact`, and Proxies held it at `2048 · exact · asked 6048`. Driven at **390 px** too, where the row lives in the
+  docked drawer: `Camera render 960 px → 960 · exact`, no horizontal
+  overflow, and *Export this picture* wrote `DJI_0101.jpg 960×540` — the
+  picker-first order (`pickDeliveryTarget` → render → `deliverFilesTo`) is
+  what makes that work at any width, and it is unchanged.
+- **The export climbs the RAW ladder to the top rung the FILE can give, and
+  never crosses `proxy` → `gain`** (2026-09-20, the maintainer's "always max"
+  with the one boundary it does not override). Within the RAW rungs there is
+  no reason to deliver less calibration than the body was measured for — it
+  is two GPU passes — so the run reads `topRung(cal)` and renders through
+  `calibrationAt` at it. Crossing from the proxy to the sensor, by contrast,
+  is refused exactly as it always was (`develop-originals.md` §7.4,
+  `raw.md`): numbers nobody has seen on the sensor's data are never applied to
+  it at the door, and a RAW never checked in Develop still leaves from its
+  render with the run saying so. Because the PREVIEW already carries the
+  calibration from `gain map` up, the climb changes the file only for a
+  picture left standing on `gain` — and that is the one case the *Delivers*
+  row names: *"developed on its RAW at Gain — the export climbs to Gain map +
+  warp, the calibration its own file carries, so the file will differ from the
+  stage"*. Measured in the pane.
 - **Each picture renders through its OWN cube** (`stack.composeWith(develop)`),
   decoded whole, graded at source density, then `drawFramed` — the crop stage's
   transform, so the file is the stage. The frame seam of `develop-tool.md` §6

@@ -86,14 +86,28 @@ export interface DevelopSettings {
   /** Levels per channel (`curves.ts`), or null for none. The same, coarser. */
   levels?: Levels | null;
   /**
-   * The MATERIAL the numbers act on (`docs/develop-originals.md` §7, decision
-   * 1): absent or `render`, the 8-bit picture every browser decodes — a JPEG,
-   * a proxy, the render a camera writes inside its RAW; `raw`, the sensor's
-   * own data decoded to linear light (`shared/raw/`). Not a slider: it is a
-   * property of THIS picture, chosen in Develop, never copied by a preset, a
-   * paste or a batch verb (`withoutBase`), and never switched by an export.
+   * The MATERIAL the numbers act on, as a LADDER of four rungs — each a real
+   * and nameable amount of the camera's own calibration (2026-09-20,
+   * `docs/develop-originals.md` §7 decision 1, `raw.md`):
+   *
+   * - absent / `proxy` — the 8-bit picture every browser decodes: a JPEG, a
+   *   source's proxy, the render a camera wrote inside its RAW;
+   * - `gain` — the sensor's own data decoded to linear light (`shared/raw/`),
+   *   with the measured `rawGain` below;
+   * - `gainMap` — and the DNG's GainMap applied, the shading the body was
+   *   calibrated for (`render/gain-map.ts`);
+   * - `gainMapWarp` — and its WarpRectilinear (`render/camera-warp.ts`).
+   *
+   * The top two are offered only where the FILE carries those opcodes: a
+   * correction nobody measured is worse than none.
+   *
+   * Not a slider: a property of THIS picture, chosen in Develop, never copied
+   * by a preset, a paste or a batch verb (`withoutBase`), and never switched
+   * DOWN by an export. Stored only for the RAW rungs — `proxy` IS the
+   * absence, which is what keeps "empty means as shot" true and what made the
+   * `render` → `proxy` migration cost nothing.
    */
-  base?: 'render' | 'raw' | null;
+  base?: DevelopBase | null;
   /**
    * With a `raw` base, the picture's own exposure as MEASURED at decode
    * (`autoBrightGain`): a linear gain the develop stage applies before the
@@ -107,12 +121,54 @@ export interface DevelopSettings {
 /** The NUMERIC fields — a key a panel can draw as a slider. */
 export type DevelopKey = Exclude<keyof DevelopSettings, 'curves' | 'levels' | 'base' | 'rawGain'>;
 
+/**
+ * The rungs of the material ladder, lowest first. `proxy` is never stored —
+ * it is the absence of a base — so the three above it are what a document
+ * ever holds.
+ */
+export type DevelopBase = 'proxy' | 'gain' | 'gainMap' | 'gainMapWarp';
+
+/** The ladder in order, so a caller can climb or compare without a switch. */
+export const DEVELOP_BASES: readonly DevelopBase[] = ['proxy', 'gain', 'gainMap', 'gainMapWarp'];
+
+/** How far up the ladder a base sits; 0 for the proxy and for none at all. */
+export function baseRung(base: DevelopBase | null | undefined): number {
+  const i = base ? DEVELOP_BASES.indexOf(base) : 0;
+  return i < 0 ? 0 : i;
+}
+
+/** What a rung is called on screen, and what it ADDS to the one below. */
+export const BASE_LABELS: Readonly<Record<DevelopBase, string>> = Object.freeze({
+  proxy: 'Proxy',
+  gain: 'Gain',
+  gainMap: 'Gain map',
+  gainMapWarp: 'Gain map + warp',
+});
+
+/**
+ * Yesterday's two values, read as today's four. `render` was the proxy and
+ * `raw` was the sensor with its measured gain and nothing else — which is
+ * exactly what `gain` means, so no stored document changes meaning.
+ */
+export function normaliseBase(raw: unknown): DevelopBase | null {
+  if (raw === 'raw') return 'gain';
+  if (raw === 'render') return null;
+  return typeof raw === 'string' && (DEVELOP_BASES as readonly string[]).includes(raw) && raw !== 'proxy'
+    ? (raw as DevelopBase)
+    : null;
+}
+
 /** The gain a RAW develop may carry: 4 stops either way is every exposure a camera meters. */
 export const RAW_GAIN_LIMITS = { min: 1 / 16, max: 16 } as const;
 
-/** This develop acts on the sensor's own data. */
+/** This develop acts on the sensor's own data — any rung above the proxy. */
 export function isRawDevelop(d: DevelopSettings | null | undefined): boolean {
-  return d?.base === 'raw';
+  return baseRung(d?.base) > 0;
+}
+
+/** Which rung this develop stands on. */
+export function developBase(d: DevelopSettings | null | undefined): DevelopBase {
+  return d?.base && baseRung(d.base) > 0 ? d.base : 'proxy';
 }
 
 /** The linear gain a RAW develop applies before its sliders; 1 for a render. */
@@ -254,8 +310,9 @@ export function normaliseDevelop(raw: unknown): DevelopSettings {
   }
   out.curves = curvesOrNull(normaliseCurves(src.curves));
   out.levels = levelsOrNull(normaliseLevels(src.levels));
-  if (src.base === 'raw') {
-    out.base = 'raw';
+  const base = normaliseBase(src.base);
+  if (base) {
+    out.base = base;
     const g = src.rawGain;
     out.rawGain =
       typeof g === 'number' && Number.isFinite(g) && g > 0
@@ -575,7 +632,12 @@ export function developLines(d: DevelopSettings | null | undefined): string[] {
     // The material first, with the exposure it was measured at — a fact about
     // the bytes the sliders below act on.
     const ev = Math.log2(rawGainOf(d));
-    parts.push(`RAW${ev ? ` ${signed(ev, 1)} EV metered` : ''}`);
+    // The rung too, where it is above the bare sensor: "RAW" alone would let
+    // a picture with 2.5 stops of shading taken out of its corners read the
+    // same as one without — the corner stack says what was applied.
+    const rung = developBase(d);
+    const adds = rung === 'gainMapWarp' ? ' + gain map + warp' : rung === 'gainMap' ? ' + gain map' : '';
+    parts.push(`RAW${adds}${ev ? ` ${signed(ev, 1)} EV metered` : ''}`);
   }
   for (const k of DEVELOP_KEYS) {
     const v = d[k];

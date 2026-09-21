@@ -103,7 +103,6 @@ import GradePanel from '../../shared/lut/GradePanel';
 import DevelopSheet from '../../shared/develop/DevelopSheet';
 import DevelopSection from '../../shared/develop/DevelopSection';
 import type { DevelopSettings } from '../../shared/develop/develop';
-import { pictureFidelity } from '../../shared/develop/picture-fidelity';
 import { restoreDevelop, writeDevelop, type SavedDevelop } from '../../shared/projects/media-develop';
 import type { StyleTheme } from '../../shared/overlay/title-styles';
 import StylePanel from '../../shared/overlay/StylePanel';
@@ -138,6 +137,9 @@ import { useLearnedGesture } from '../../shared/ui/use-learned-gesture';
 import { Icons } from '../../shared/ui/icons';
 import { useSurface } from '../../shared/ui/use-surface';
 import { FieldRow, InspectorSection, Readout, SelectField, ToggleField } from '../../shared/ui/Inspector';
+import { deliveryFor } from '../../shared/develop/delivery-source';
+import { useDeliveryRow } from '../../shared/develop/use-delivery-row';
+import type { RollOriginals } from '../../shared/develop/roll-types';
 import IconButton from '../../shared/ui/IconButton';
 import Segmented from '../../shared/ui/Segmented';
 
@@ -148,6 +150,12 @@ import Segmented from '../../shared/ui/Segmented';
  * same day is the point.
  */
 const STUDIO_KINDS = ['video+telemetry', 'video', 'photo'] as const;
+
+const STILL_PIXELS: readonly { id: RollOriginals; label: string; title: string }[] = [
+  { id: 'auto', label: 'Auto', title: 'An original is fetched only where the proxy could not fill the frame' },
+  { id: 'proxies', label: 'Proxies', title: 'Deliver from the picture in the Library, never fetching an original' },
+  { id: 'originals', label: 'Originals', title: 'Fetch the full-size original whenever this browser decodes one' },
+];
 
 type PanelTab = 'overlay' | 'style' | 'grade' | 'info' | 'export';
 
@@ -519,6 +527,21 @@ export default function StudioEditor({
       : null;
   /** True when the export will go and get the capture first. */
   const willFetchOriginal = !!proxyWithOriginal && !renderFromProxy;
+  // A PHOTO's own source. Until now `origin` was read off the clip alone and
+  // the note said "photos never take this path — a photo's original is often
+  // a RAW no browser decodes". O2 of `docs/develop-originals.md` reverses
+  // that for the originals a browser DOES decode, and `delivery-source.ts`
+  // keeps the RAW rule: a RAW is reached only through the render inside it,
+  // measured, never on the assumption that it is full-size.
+  const photoOrigin = mediaOrigin(activeImage);
+  const photoProxy =
+    photoOrigin?.fidelity === 'proxy' && typeof photoOrigin.fetchOriginal === 'function' ? photoOrigin : null;
+  /**
+   * WHICH PIXELS a still leaves from. An export-door choice like
+   * `renderFromProxy` beside it: it is about this machine's tunnel and this
+   * run, not about the project, so it never reaches the document.
+   */
+  const [photoPixels, setPhotoPixels] = useState<RollOriginals>('auto');
   // Where the finals of the active media would go home to — a clip or a
   // still, whichever is open — and the identity the source vouched for it.
   const finalsMedia = activeVideo ?? activeImage ?? null;
@@ -1299,7 +1322,27 @@ export default function StudioEditor({
     // decode it directly, where the HEVC original would fail.
     let source = activeTranscode.transcoded ?? activeVideo;
     const base = exportFileName.trim() || active.baseName;
+    // A still delivered from its source's ORIGINAL, when the door asks for it
+    // and the frame is worth it (O2 of `docs/develop-originals.md`). Decoded
+    // here and closed with the run: the stage keeps its own bitmap, and a
+    // full-size original is tens of megabytes of it.
+    let still = photo;
+    let fetchedStill: ImageBitmap | null = null;
     try {
+      if (photo && activeImage && photoProxy && stillFrame) {
+        const chosen = await deliveryFor(activeImage, null, stillFrame, photoPixels);
+        if (chosen.file !== activeImage) {
+          setFetchingOriginal(true);
+          try {
+            fetchedStill = await decodePhoto(chosen.file);
+            still = fetchedStill;
+            srcWidth = fetchedStill.width;
+            srcHeight = fetchedStill.height;
+          } finally {
+            setFetchingOriginal(false);
+          }
+        }
+      }
       // Editing happened on the source's proxy; delivering should not. Fetch
       // the capture once, before the first variant, and encode every variant
       // from it — at ITS dimensions, which is what makes a 1080 variant
@@ -1331,8 +1374,8 @@ export default function StudioEditor({
         const onProgress = (p: { phase: string; ratio: number | null }) => {
           if (p.phase === 'encoding' && p.ratio != null) setExportRatio(p.ratio);
         };
-        const blob = photo
-          ? await renderStillVariant(photo, variant)
+        const blob = still
+          ? await renderStillVariant(still, variant)
           : await renderClipVariant(source, variant, srcWidth, srcHeight, onProgress, controller);
         const name = variantFileName(base, variant, isPhoto ? 'photo' : 'video');
         const file = new File([blob], name, { type: blob.type });
@@ -1359,6 +1402,7 @@ export default function StudioEditor({
         setExportError((err as Error).message || 'Export failed');
       }
     } finally {
+      fetchedStill?.close();
       setExporting(false);
       setExportStep(null);
       setLiveExport(null);
@@ -1458,8 +1502,37 @@ export default function StudioEditor({
   // What the EXPORT will encode, which is a different file when it fetches the
   // capture first. Only the variant maths uses this: a variant measured
   // against the proxy would promise 1080 from a file it is not going to use.
-  const exportW = willFetchOriginal ? (proxyWithOriginal?.width ?? srcW) : srcW;
-  const exportH = willFetchOriginal ? (proxyWithOriginal?.height ?? srcH) : srcH;
+  // A still's own best source: its original's pixels unless the door says
+  // Proxies. The variant maths reads this, so a variant never promises a
+  // frame the file it will really encode cannot give.
+  const bestStillW = photoProxy && photoPixels !== 'proxies' ? (photoProxy.width ?? srcW) : srcW;
+  const bestStillH = photoProxy && photoPixels !== 'proxies' ? (photoProxy.height ?? srcH) : srcH;
+  const exportW = isPhoto ? bestStillW : willFetchOriginal ? (proxyWithOriginal?.width ?? srcW) : srcW;
+  const exportH = isPhoto ? bestStillH : willFetchOriginal ? (proxyWithOriginal?.height ?? srcH) : srcH;
+  /**
+   * The biggest frame the variants will write, from that best source — the
+   * frame the *Delivers* row asks its question against. A Studio variant
+   * never upscales (`variantOutputSize` caps at the source's short side), so
+   * the question is the roll's: can the file in hand fill the frame the
+   * ORIGINAL could give?
+   */
+  const stillFrame = useMemo(() => {
+    if (!isPhoto || !bestStillW || !bestStillH) return null;
+    let best: { w: number; h: number } | null = null;
+    for (const v of variants) {
+      const o = variantOutputSize(v, bestStillW, bestStillH);
+      if (!best || o.w * o.h > best.w * best.h) best = o;
+    }
+    return best;
+  }, [isPhoto, bestStillW, bestStillH, variants]);
+  // Measured only while the Export tab is up: measuring decodes, and a
+  // 48-megapixel decode is not worth a sentence nobody is looking at.
+  const stillDelivery = useDeliveryRow(
+    isPhoto && tab === 'export' ? activeImage : null,
+    null,
+    stillFrame,
+    photoPixels,
+  );
   const activeRes = srcW && srcH ? `${srcW}×${srcH}` : null;
   // The stage draws at source resolution, so the guides' notion of "this
   // frame" is the media's own aspect — undefined until the probe lands.
@@ -1598,8 +1671,6 @@ export default function StudioEditor({
           file={activeFile}
           videoTimeSeconds={developAt}
           title={activeFile.name}
-          fidelity={pictureFidelity(activeFile).chip}
-          note={pictureFidelity(activeFile).note}
           stack={lutStack}
           value={activeDevelop}
           onDone={(next) => {
@@ -2276,6 +2347,35 @@ export default function StudioEditor({
                         <Readout muted>Downloads</Readout>
                       )}
                     </FieldRow>
+                    {photoProxy && (
+                      <>
+                        <FieldRow
+                          label="Pixels"
+                          hint={`You are editing on ${photoProxy.sourceId}’s proxy. Auto fetches the full-size original only where the proxy could not fill the frame your variants ask for; Proxies never fetches; Originals always does, for every original this browser decodes. A RAW is reached only through the render inside it, measured first — develop it on its RAW for the sensor itself. Fetched originals are kept for this session only.`}
+                        >
+                          <Segmented
+                            fill
+                            size="sm"
+                            label="Pixels"
+                            value={photoPixels}
+                            onChange={setPhotoPixels}
+                            options={STILL_PIXELS}
+                            className="flex-1 min-w-0"
+                          />
+                        </FieldRow>
+                        <FieldRow
+                          label="Delivers"
+                          align="start"
+                          hint={stillDelivery?.reason ?? (stillDelivery ? undefined : 'measured once the picture is decoded')}
+                        >
+                          <span
+                            className={`font-mono text-sm tabular-nums leading-snug pt-1 ${stillDelivery ? 'text-ink' : 'text-muted'}`}
+                          >
+                            {stillDelivery ? stillDelivery.line : '—'}
+                          </span>
+                        </FieldRow>
+                      </>
+                    )}
                     {proxyWithOriginal && (
                       <FieldRow
                         label="From proxy"

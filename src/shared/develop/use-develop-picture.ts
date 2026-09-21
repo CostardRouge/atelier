@@ -32,6 +32,9 @@ import { isDefaultDetail, sameDetail, type DetailSettings } from '../render/deta
 import { detailPasses } from '../render/detail-pass';
 import { samePatches, type Patch } from '../render/repair';
 import { makeRepairPass } from '../render/repair-pass';
+import { makeGainMapPass } from '../render/gain-map-pass';
+import type { GainField } from '../render/gain-map';
+import type { CameraWarp } from '../render/camera-warp';
 import { maxRenderSize } from '../render/graph-grader';
 
 /** How close to the frame's side the divider's handle may be held, in px. */
@@ -60,6 +63,8 @@ interface GraderRecord {
   rasters: ReadonlyMap<string, BrushRaster> | null;
   detail: DetailSettings | null;
   repair: Patch[];
+  /** The camera's shading grid — compared by IDENTITY: it is read once per file. */
+  gain: GainField | null;
   film: FilmTexture | null;
   scale: number;
   w: number;
@@ -95,6 +100,8 @@ function graderFrom(
   scale: number,
   repair: readonly Patch[] | null = null,
   film: FilmTexture | null = null,
+  /** The camera's own shading grid, read from the file and never edited. */
+  gain: GainField | null = null,
 ): HeldGrader | null {
     const cur = slot.current;
     // Geometry or a layer with NO look still needs the GPU: both are passes,
@@ -105,6 +112,7 @@ function graderFrom(
     const needsGpu =
       Boolean(lut) ||
       hasGeometry(geometry) ||
+      Boolean(gain) ||
       stack.length > 0 ||
       Boolean(overlayOf?.mask) ||
       !isDefaultDetail(detail) ||
@@ -129,6 +137,7 @@ function graderFrom(
       sameLayers(cur.layers, stack) &&
       sameDetail(cur.detail, detail) &&
       samePatches(cur.repair, patches) &&
+      cur.gain === gain &&
       cur.scale === scale &&
       filmTextureKey(cur.film) === filmTextureKey(film)
     ) {
@@ -144,7 +153,12 @@ function graderFrom(
     // repaired picture.
     const { pre: detailPre, post } = detailPasses(detail, scale);
     const repairPass = makeRepairPass(patches, ar);
-    const pre = [...(repairPass ? [repairPass] : []), ...detailPre];
+    // The camera's own shading goes FIRST of all, ahead of the repair: a
+    // copied pixel is then copied from data the lens has been taken out of,
+    // and a develop is measured on a picture that is not 2.5 stops down in
+    // the corners (`render-gain-map.md`).
+    const gainPass = makeGainMapPass(gain);
+    const pre = [...(gainPass ? [gainPass] : []), ...(repairPass ? [repairPass] : []), ...detailPre];
     const passes = [
       ...geometryPasses(geometry, ar),
       ...cache.passes(stack, ar, rasters),
@@ -170,6 +184,7 @@ function graderFrom(
       cur.rasters = rasters;
       cur.detail = detail ? { ...detail } : null;
       cur.repair = patches.map((p) => ({ ...p }));
+      cur.gain = gain;
       cur.scale = scale;
       return cur.grader;
     }
@@ -188,6 +203,7 @@ function graderFrom(
       rasters,
       detail: detail ? { ...detail } : null,
       repair: patches.map((p) => ({ ...p })),
+      gain,
       film,
       scale,
       w: s.width,
@@ -356,6 +372,7 @@ export function useDevelopPicture({
   detail = null,
   pixelScale = 1,
   loupe = false,
+  calibration = null,
   pixelView = 'smooth',
   repair = null,
   film = null,
@@ -410,6 +427,14 @@ export function useDevelopPicture({
    * holds that order for every renderer at once.
    */
   lens?: LensCorrection | null;
+  /**
+   * The CAMERA's own calibration at the rung this picture stands on
+   * (`raw/calibration.ts`): the shading grid, drawn FIRST on the decoded
+   * sensor data, and the rectilinear warp, drawn before the lens. Both are
+   * read out of the file and neither is ever edited, so they arrive together
+   * and leave together.
+   */
+  calibration?: { gain: GainField | null; warp: CameraWarp | null } | null;
   /**
    * Adjustment layers, bottom to top. They run AFTER the one cube — a local
    * correction is set on the picture as it is displayed, not in the log space
@@ -536,7 +561,10 @@ export function useDevelopPicture({
 
   // The two warps as one record, memoised by VALUE — every effect below takes
   // it as a dep, and the panels hand down a fresh object per slider step.
-  const geometry = useMemo<PictureGeometry>(() => ({ lens, keystone }), [lens, keystone]);
+  const geometry = useMemo<PictureGeometry>(
+    () => ({ cameraWarp: calibration?.warp ?? null, lens, keystone }),
+    [calibration, lens, keystone],
+  );
   // Only the layers that DRAW: a parked one must not rebuild the grader, and
   // must not cost a pass.
   const stack = useMemo(() => drawingLayers(layers), [layers]);
@@ -558,8 +586,9 @@ export function useDevelopPicture({
       scale: number,
       patches: readonly Patch[] | null,
       texture: FilmTexture | null,
+      gain: GainField | null,
     ): HeldGrader | null =>
-      graderFrom(stageSlot.current, lut, s, geometry, stack, overlay, rasters, detail, scale, patches, texture),
+      graderFrom(stageSlot.current, lut, s, geometry, stack, overlay, rasters, detail, scale, patches, texture, gain),
     [],
   );
   useEffect(
@@ -596,7 +625,7 @@ export function useDevelopPicture({
     }
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const grader = holding ? null : graderFor(cube, source, geometry, stack, showMaskOf, subjectMasks, detail, pixelScale, repair, film);
+    const grader = holding ? null : graderFor(cube, source, geometry, stack, showMaskOf, subjectMasks, detail, pixelScale, repair, film, calibration?.gain ?? null);
     const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
     const layout = delivered1 && framing ? scaleLayout(delivered1, w / delivered1.w) : null;
     if (layout && framing) {
@@ -671,7 +700,7 @@ export function useDevelopPicture({
       const ctx = sample.getContext('2d', { willReadFrequently: true });
       if (!ctx) return;
       try {
-        const grader = graderFor(cube, source, geometry, stack, null, subjectMasks, detail, pixelScale, repair, film);
+        const grader = graderFor(cube, source, geometry, stack, null, subjectMasks, detail, pixelScale, repair, film, calibration?.gain ?? null);
         const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
         ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
         setHistogram(luminanceHistogram(ctx.getImageData(0, 0, w, h).data));
@@ -822,19 +851,20 @@ export function useDevelopPicture({
   // callback that never changed left the crop stage showing a warp-less
   // picture until the cube or the crop moved. Fresh values through the ref,
   // a new function when what it would draw changes — both, not either.
-  const latest = useRef({ source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film });
-  latest.current = { source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film };
+  const gainField = calibration?.gain ?? null;
+  const latest = useRef({ source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gain: gainField });
+  latest.current = { source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gain: gainField };
   const delivered = useCallback((): CanvasImageSource | null => {
-    const { source: s, cube: lut, geometry: geo, stack: ly, subjectMasks: rs, detail: dt, pixelScale: sc, repair: rp, film: fx } = latest.current;
+    const { source: s, cube: lut, geometry: geo, stack: ly, subjectMasks: rs, detail: dt, pixelScale: sc, repair: rp, film: fx, gain: gn } = latest.current;
     if (!s || s.width <= 0 || s.height <= 0) return null;
     // Never the overlay: this is what LEAVES, and a red wash is a way of
     // looking, like the wipe.
-    const grader = graderFor(lut, s, geo, ly, null, rs, dt, sc, rp, fx);
+    const grader = graderFor(lut, s, geo, ly, null, rs, dt, sc, rp, fx, gn);
     return grader ? grader.render(s.gpu ?? s.image) : s.image;
-  }, [graderFor, source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film]);
+  }, [graderFor, source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, calibration]);
   const snapshot = useCallback(
     async (longEdge = THUMB_LONG_EDGE): Promise<Blob | null> => {
-      const { source: s, cube: lut, geometry: geo, stack: ly, subjectMasks: rs, detail: dt, pixelScale: sc, repair: rp, film: fx } = latest.current;
+      const { source: s, cube: lut, geometry: geo, stack: ly, subjectMasks: rs, detail: dt, pixelScale: sc, repair: rp, film: fx, gain: gn } = latest.current;
       if (!s || s.width <= 0 || s.height <= 0) return null;
       const { w, h } = thumbSize(s.width, s.height, longEdge);
       const out = document.createElement('canvas');
@@ -843,7 +873,7 @@ export function useDevelopPicture({
       const ctx = out.getContext('2d');
       if (!ctx) return null;
       try {
-        const grader = graderFor(lut, s, geo, ly, null, rs, dt, sc, rp, fx);
+        const grader = graderFor(lut, s, geo, ly, null, rs, dt, sc, rp, fx, gn);
         const graded = grader ? grader.render(s.gpu ?? s.image) : s.image;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(graded, 0, 0, s.width, s.height, 0, 0, w, h);
