@@ -530,4 +530,7 @@ forbids the very thing the cancel is for. The design, the five phases and the
 five open questions are `docs/progress-feedback.md`; the honest-value rule
 applies to a bar as much as to a badge — a percentage nobody measured is a
 fabrication, so an unknown length SWEEPS, and a Cancel is drawn only where the
-work can really stop.
+work can really stop. **Built the same day, T1 → T5** — the registry, the
+pill, the edge and every wiring decision are `tasks.md`; the one rule for a
+panel's own bar is there too: beside the verb it stays, repeating the pill it
+goes.

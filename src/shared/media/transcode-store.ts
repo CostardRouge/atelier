@@ -15,6 +15,8 @@
  */
 
 import { fileIdentity } from '../library/assets';
+import { knownIdentity } from '../projects/media-identity';
+import { startTask } from '../tasks/tasks';
 import { transcodeToH264 } from './transcode';
 
 export type TranscodeStatus = 'idle' | 'running' | 'done' | 'error';
@@ -89,12 +91,23 @@ export function createTranscodeStore(transcode: TranscodeFn): TranscodeStore {
     const controller = new AbortController();
     controllers.set(key, controller);
     write(key, { status: 'running', ratio: null, file: null, error: null });
+    // The run as a TASK (`tasks.md`, T5): named after the clip, on the
+    // media's edge, its Cancel the store's own — so the pill and the stage
+    // say it wherever the person is, and the control beside the button only
+    // repeats the number.
+    const task = startTask({
+      label: `Transcoding ${file.name} to H.264`,
+      scope: knownIdentity(file)?.assetId ?? key,
+      progress: null,
+      cancel: () => cancel(file),
+    });
 
     transcode(
       file,
       (ratio) => {
         const e = entries.get(key);
         if (e?.status === 'running') write(key, { ...e, ratio });
+        task.update({ progress: ratio, detail: ratio === null ? null : `${Math.round(ratio * 100)} %` });
       },
       controller.signal,
     )
@@ -111,6 +124,7 @@ export function createTranscodeStore(transcode: TranscodeFn): TranscodeStore {
       })
       .finally(() => {
         controllers.delete(key);
+        task.done();
       });
   };
 

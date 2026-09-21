@@ -138,7 +138,7 @@ export function startTask(init: Omit<Task, 'id' | 'startedAt'>): TaskHandle;
 - **T5** — retire the one-off surfaces: Trips' Export fill stays (it is good),
   the others become the pill.
 
-## 4. The questions
+## 4. The questions — all five answered by building (T1–T5, 2026-09-21)
 
 1. **Modal or pill?** He offered both. The pill + popover is recommended,
    because his own reason for wanting a cancel is to go on doing something
@@ -152,8 +152,10 @@ export function startTask(init: Omit<Task, 'id' | 'startedAt'>): TaskHandle;
    written`.
 3. **Where does the pill live on a phone?** The shell's bottom bar has no room
    for a seventh cell; the edge hairline may be the only surface there.
+   **Built**: the masthead, the one row every screen keeps — the dot alone
+   on a compact shell, the word on anything wider.
 4. **Does a task survive a route change?** A roll export while the person walks
    to the gallery. Recommended: yes — the registry is module state, and that is
-   the difference between a pill and a panel.
+   the difference between a pill and a panel. **Built as recommended.**
 5. **Is there a ceiling on concurrent tasks**, or does the popover just list
-   them?
+   them? **Built**: no ceiling; the popover lists them, oldest first.

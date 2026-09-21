@@ -140,4 +140,33 @@ already took a signal (`frontend.md`), so T4 is the two loops that did not.
   with the fetch beside it, its Cancel ends the request and the run, one
   file is written and the note says so.
 
-Not wired yet: T5 the one-off surfaces.
+## T5 — the one-off surfaces (2026-09-21)
+
+The rule that came out of it: **a surface beside the VERB stays, a surface
+that only repeats the pill goes.** Trips' Export word becoming its own fill,
+the Studio's inline export bar with its Cancel, the Develop panel's
+`Rendering 2/8…` on its button — each is the button saying what it is doing,
+next to where it was pressed, and the brief keeps the first of them by name.
+What went, and what became a task:
+
+- The Develop workbench's `fetching X · 52 MB…` prose under the chip and
+  beside the name (`rawStatus`, `deliveredStatus`) — gone; the pill and the
+  stage's edge said it twice over since T2. Only a FAILURE is still said
+  there (`tell`), and the chip's own `decoding the sensor’s data…` stays,
+  since that is the chip's honest state, not a progress line.
+- `TranscodeControl`'s `<progress>` element — gone; the transcode is a task
+  registered by `transcode-store` itself (`Transcoding <clip> to H.264`,
+  the ratio, a Cancel that is the store's own, scoped to the media), and the
+  control keeps the number and its Cancel beside the button.
+- `LutPackImportModal`'s bar — gone; the import is a task (`Importing
+  <pack>`, `3 of 25`) with NO Cancel, because the vault is written look by
+  look and stopping half-way would leave a pack the index does not describe.
+  The modal keeps its line and the file's name.
+- Not touched, deliberately: the Studio's export block (its bar and Cancel
+  sit by the button; the fetch line there now says the same thing the pill
+  does, once each), the Develop export panel's line, Trips' fill.
+
+Five questions of the brief, answered by building: pill not modal (1); a
+cancelled fetch holds nothing and a cancelled export keeps what it rendered
+(2); the masthead at every width, the dot alone on a phone (3); module state,
+so a task survives a route change (4); no ceiling, the popover lists them (5).

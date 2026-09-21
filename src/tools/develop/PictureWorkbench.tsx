@@ -42,7 +42,6 @@ import { fileIdentity, isRawImage } from '../../shared/library/assets';
 import { rawSizes } from '../../shared/exif/raw-probe';
 import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
 import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
-import { formatBytes } from '../../shared/lib/format';
 import { pictureAspectRatio } from '../../shared/develop/crop-aspect';
 import { WORKBENCH_TABS, editorKeyAction, sameDevelop, type WorkbenchTab } from '../../shared/develop/roll-editor';
 import { framedThumbnail } from '../../shared/develop/roll-thumb';
@@ -435,7 +434,6 @@ export default function PictureWorkbench({
   const sensorName = sensor?.name ?? null;
   const wantsRaw = baseRung(draft.draft.base) > 0 && sensor !== null;
   const [rawFile, setRawFile] = useState<File | null>(null);
-  const [rawStatus, setRawStatus] = useState<string | null>(null);
   const { patch: patchDraft } = draft;
   const sensorRef = useRef(sensor);
   sensorRef.current = sensor;
@@ -447,16 +445,15 @@ export default function PictureWorkbench({
       return;
     }
     let alive = true;
-    setRawStatus(`fetching ${source.name}${source.bytes ? ` · ${formatBytes(source.bytes)}` : ''}…`);
+    // The fetch is a task: the pill and the stage's edge say it (T2), so no
+    // prose of its own here — only what went wrong, below.
     fetchSourceFile(source, taskScopeRef.current)
       .then((fetched) => {
         if (!alive) return;
         setRawFile(fetched);
-        setRawStatus(null);
       })
       .catch((err: unknown) => {
         if (!alive) return;
-        setRawStatus(null);
         tell(`${source.name} could not be fetched: ${err instanceof Error ? err.message : String(err)}`);
         patchDraft({ base: null, rawGain: null });
       });
@@ -591,7 +588,6 @@ export default function PictureWorkbench({
   // original), else fetched once and held for the session. Keyed on the id
   // alone, so a list rebuilt around it never restarts a fetch in flight.
   const [deliveredFile, setDeliveredFile] = useState<{ id: string; file: File } | null>(null);
-  const [deliveredStatus, setDeliveredStatus] = useState<string | null>(null);
   const deliver = useRef({ wanted, siblings, origin, tell, onRendition });
   deliver.current = { wanted, siblings, origin, tell, onRendition };
   useEffect(() => {
@@ -609,17 +605,16 @@ export default function PictureWorkbench({
     const fetch = from?.companion && isNamed(from.companion.name) ? from.companion.fetchFile : (from?.fetchOriginal ?? null);
     if (!fetch) return;
     let alive = true;
-    setDeliveredStatus(`fetching ${row.name}${row.bytes ? ` · ${formatBytes(row.bytes)}` : ''}…`);
+    // A task of its own — the pill and the edge say it — and only a failure
+    // is said here.
     trackedFetch({ label: `Fetching ${row.name}`, scope: taskScopeRef.current, bytes: row.bytes }, (opts) => fetch(opts))
       .then((fetched) => {
         if (!alive) return;
         if (row.assetId) holdOriginal(row.assetId, fetched);
         setDeliveredFile({ id: row.id, file: fetched });
-        setDeliveredStatus(null);
       })
       .catch((err: unknown) => {
         if (!alive) return;
-        setDeliveredStatus(null);
         deliver.current.tell(`${row.name} could not be fetched: ${err instanceof Error ? err.message : String(err)}`);
         deliver.current.onRendition(null);
       });
@@ -1037,7 +1032,6 @@ export default function PictureWorkbench({
           <span className="flex-1 min-w-0 truncate font-mono text-xs text-ink-soft" title={entry.ref.name}>
             {entry.ref.name}
             {told && <span className="text-accent-ink" role="status"> · {told}</span>}
-            {!told && deliveredStatus && <span role="status"> · {deliveredStatus}</span>}
           </span>
           {/* The chip IS the list of the capture's files (2026-09-21): it
               already says what the picture is, so what it could be hangs off
@@ -1070,11 +1064,7 @@ export default function PictureWorkbench({
                     tell('your numbers now act on the RAW — another starting point');
                   }
                 }}
-                status={
-                  wantsRaw
-                    ? (rawStatus ?? picture.problem ?? (!picture.source ? 'decoding the sensor’s data…' : null))
-                    : deliveredStatus
-                }
+                status={wantsRaw ? (picture.problem ?? (!picture.source ? 'decoding the sensor’s data…' : null)) : null}
                 gain={wantsRaw ? rawGain : null}
                 calibration={calibration?.summary ?? null}
               />

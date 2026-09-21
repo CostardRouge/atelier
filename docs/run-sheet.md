@@ -29,7 +29,8 @@ Legend — ✅ built · ◻ to do · ⛔ blocked · ⏸ deliberately unscheduled
 | ✅ | **T1** — the task registry, the edge and the pill | `ab37bf4` |
 | ✅ | **T2** — every fetch is a task: bytes, a cancel, the edge on the stage and the sheet | `c9debc5` |
 | ✅ | **T3** — the RAW decode and the loupe are tasks; a cancel drops the decoder's turn | `2bab74b` |
-| ✅ | **T4** — the exports are tasks; a cancel keeps what was rendered | this commit |
+| ✅ | **T4** — the exports are tasks; a cancel keeps what was rendered | `4bf9f21` |
+| ✅ | **T5** — the one-off surfaces: what repeats the pill goes, what sits by the verb stays | this commit |
 
 Also built and not a commit: the **Rendition Inspector**
 (https://claude.ai/artifact/Np2XfVEHxT7n1wrXo6rkU6), which reads a TIFF's
@@ -59,7 +60,7 @@ IFDs, an ISO-BMFF's item table, every embedded JPEG by a marker walk,
 | ✅ | **T2** | The fetches | `trackedFetch` (`shared/tasks/tracked.ts`) over every thunk that brings a file across — `FetchOptions` (`signal`, `onProgress`) on `MediaOrigin.fetchOriginal`, a companion's `fetchFile`, `SensorSource.fetch`, the client's `fetchFile` (chunked when asked) — started in `materialize`, `fetchSourceFile`, `deliveryFor`, `useCaptureView`, the roll export and the Studio's capture fetch. Determinate against `content-length` or the row's weight, cancellable, a cancelled fetch an `AbortError` naming the task. The Develop stage and both lightboxes draw the edge; a lightbox carries its own cancel (the masthead is behind it). |
 | ✅ | **T3** | The RAW decode and the loupe | `decodeRaw` registers `Opening <file>` (a sweep) with a Cancel that drops the worker's TURN, never the worker — the signal checked before the file is read and when the plane comes back; `quiet` for a caller that is a task already. The stage passes its scope and takes the picture back to its render on a cancel (`onRawAborted`); the loupe's decode is `Looking closer at <file>`, cancellable, with a `cancelled` state of its own. A render's decode says `Opening <file>` with no Cancel. |
 | ✅ | **T4** | The exports | Smaller than written — the encoder loop already took a signal. The roll's run is one task (a picture at a time, then the writes) whose Cancel stops between two pictures, ends the fetch or RAW decode in flight, and KEEPS what rendered (`Cancelled after 1 of 2 — 1 picture written`); Trips' three exports are tasks on the piece's edge, `renderDeck` stops between two slides; the Studio's export registers a task beside its own bar. |
-| ◻ | **T5** | Retire the one-off surfaces | Trips' Export fill stays; the rest become the pill. |
+| ✅ | **T5** | Retire the one-off surfaces | The rule: a surface beside the VERB stays (Trips' fill, the Studio's inline bar, the Develop panel's line on its button), one that only repeats the pill goes. Gone: the workbench's `fetching …` prose, `TranscodeControl`'s bar, the pack import modal's bar. Became tasks: the transcode (a Cancel that is the store's own), the pack import (no Cancel — half a vault is worse than a wait). |
 
 ## Waiting on the maintainer
 
@@ -69,4 +70,4 @@ IFDs, an ISO-BMFF's item table, every embedded JPEG by a marker walk,
 | ✅ | **§13.3 — decided**: warn when writing into the folder the pictures came from, and offer a suffix (the one exception to the exact name). Only on the File System Access path — a download is the browser's and the OS's to name. | folded into R4 |
 | ✅ | **§13.4b — deferred on purpose**: no roll-wide default. The per-picture verb and the filmstrip batch only, for performance and for the measuring. His stated direction: RAW by default one day, the proxy chosen deliberately for speed, possibly at the roll's creation. | R3b is unblocked |
 | ✅ | **§13.4 — decided**: the lightbox writes NOTHING. Looking is looking; the `Develop` verb under the picture carries the rendition being viewed into the tool it opens. | R6 is unblocked |
-| ◻ | `progress-feedback.md` §4 — modal or pill (*recommended: pill*), what a cancelled export leaves behind, where the pill lives on a phone. | T1 |
+| ✅ | `progress-feedback.md` §4 — **answered by building** (T1–T5): pill not modal; a cancelled export keeps what it rendered; the masthead at every width; module state survives a route; no ceiling. | — |
