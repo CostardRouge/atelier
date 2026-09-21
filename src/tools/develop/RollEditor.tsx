@@ -20,7 +20,6 @@ import {
 } from '../../shared/develop/roll-editor';
 import {
   availabilityText,
-  photoFiles,
   pictureDay,
   splitByRoll,
   summarizeAvailability,
@@ -43,7 +42,8 @@ import {
   type RollPicture,
 } from '../../shared/develop/roll-types';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
-import { hashedMediaRefs } from '../../shared/projects/media-identity';
+import { fileBaseName } from '../../shared/library/assets';
+import { hashedMediaRefs, mediaOrigin } from '../../shared/projects/media-identity';
 import type { SavedMediaRef } from '../../shared/projects/project-types';
 import { dropDirectoryHandles, filesFromDataTransfer } from '../../shared/sources/file-sources';
 import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
@@ -165,6 +165,14 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // remembers and the files dropped on it (F4) — the same name-then-hash match.
   const folders = useRollFolders(roll.id);
   const localPhotos = useMemo(() => [...libraryPhotos, ...folders.photos], [libraryPhotos, folders.photos]);
+  // The capture files BESIDE the local photographs — a JPEG's DNG, an ARW's
+  // HIF (`AssetParts.siblings`, R2): the workbench offers them as the open
+  // picture's other renditions, found by base name. A LOCAL picture's only:
+  // a file an instance handed over has its own companion (`MediaOrigin`).
+  const localSiblings = useMemo(
+    () => [...lib.assets.flatMap((a) => (a.kind === 'photo' ? (a.parts.siblings ?? []) : [])), ...folders.siblings],
+    [lib.assets, folders.siblings],
+  );
   const media = useRollMedia({ pictures: roll.pictures, openId, localPhotos });
   const { retryFailed, remoteThumb } = media;
   // A local picture whose file is away is developed from its working preview
@@ -186,6 +194,12 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     async (p: RollPicture) => (await mediaFileFor(p)) ?? previewFiles.get(p.id) ?? null,
     [mediaFileFor, previewFiles],
   );
+  const openFile = openId ? (files.get(openId) ?? null) : null;
+  const openSiblings = useMemo(() => {
+    if (!openFile || mediaOrigin(openFile)) return [];
+    const base = fileBaseName(openFile.name).toLowerCase();
+    return localSiblings.filter((s) => fileBaseName(s.name).toLowerCase() === base);
+  }, [openFile, localSiblings]);
   const localCount = roll.pictures.filter((p) => !p.ref.assetId).length;
   const reach = summarizeAvailability(
     roll.pictures.map((p) => p.id),
@@ -385,11 +399,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     // Both started INSIDE the event: a DataTransfer is emptied once it returns.
     const handles = dropDirectoryHandles(e.dataTransfer);
     const listed = filesFromDataTransfer(e.dataTransfer);
-    void Promise.all([listed, handles]).then(([dropped, folderHandles]) => {
-      const photos = photoFiles(dropped);
-      folders.accept(photos, folderHandles);
-      return takeLocal(photos);
-    });
+    void Promise.all([listed, handles]).then(([dropped, folderHandles]) => takeLocal(folders.accept(dropped, folderHandles)));
   };
 
   function remove(picture: RollPicture) {
@@ -443,6 +453,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   );
   const handleAspect = useCallback(
     (id: string, aspect: string) => update((r) => patchPicture(r, id, { aspect })),
+    [update],
+  );
+  const handleRendition = useCallback(
+    (id: string, rendition: string | null) => update((r) => patchPicture(r, id, { rendition })),
     [update],
   );
   const handleBorder = useCallback(
@@ -745,6 +759,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onRepair={(repair) => handleRepair(open.id, repair)}
               onLayers={(layers) => handleLayers(open.id, layers)}
               onAspect={(aspect) => handleAspect(open.id, aspect)}
+              onRendition={(rendition) => handleRendition(open.id, rendition)}
+              siblings={openSiblings}
               exportSettings={roll.export}
               onExportSettings={handleExportSettings}
               exports={exports}

@@ -233,6 +233,19 @@ describe('reading a stored roll', () => {
     expect(readRollExport({ replace: 'yes' }).replace).toBe(false);
   });
 
+  it('reads the rendition a picture is developed from, and nothing as null', () => {
+    const doc = readRollDoc({
+      id: 'r',
+      pictures: [
+        { id: 'p1', ref: ref('a.jpg'), rendition: 'delivered:dji_0101.jpg' },
+        { id: 'p2', ref: ref('b.jpg'), rendition: '' },
+        { id: 'p3', ref: ref('c.jpg') },
+      ],
+    })!;
+    expect(doc.pictures.map((p) => p.rendition)).toEqual(['delivered:dji_0101.jpg', null, null]);
+    expect(patchPicture(doc, 'p3', { rendition: 'proxy' }).pictures[2].rendition).toBe('proxy');
+  });
+
   it('migrates a stored roll onto the current shape without changing what it holds', () => {
     const doc = patchPicture(roll(['a', 'b']), 'p1', { develop: { ...DEFAULT_DEVELOP, blacks: -8 } }, 3000);
     expect(migrateRollDoc(doc)).toEqual(doc);

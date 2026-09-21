@@ -38,6 +38,8 @@ import { DEFAULT_SOURCE_ID } from '../sources/source';
  * `migrateRollDoc` re-READS the whole document, so a roll written before the
  * texture existed lands with `film: null` and one written by a newer build
  * lands clamped, both through `readRollGrade`.
+ * `RollPicture.rendition` (2026-09-21) needed no bump: absent reads as null,
+ * which means exactly what it means now — the picture opens where it opens.
  */
 export const ROLL_DOC_VERSION = 3;
 
@@ -105,6 +107,17 @@ export interface RollPicture {
   aspect: RollAspect;
   /** Null is no border: the file is exactly the crop (`border-layout.ts`, v2). */
   border: RollBorder | null;
+  /**
+   * WHICH FILE of the capture this picture is developed from, below the
+   * sensor: a rendition id (`media/renditions.ts` — `proxy`, or
+   * `delivered:<file name>`), stored so a phone shows the same picture
+   * without re-picking (`docs/capture-renditions.md` §12, A3). Null is where
+   * the picture OPENS — its proxy where there is one, else the file itself —
+   * and an id the capture no longer offers falls back to that. The material
+   * rung above it is `develop.base`; a preset, a paste or a batch verb never
+   * carries either.
+   */
+  rendition?: string | null;
   /**
    * The perspective correction (`shared/render/geometry.ts`), or null for
    * none. It is applied BEFORE the crop frames the result: a keystone takes
@@ -187,6 +200,7 @@ export function createRollPicture(ref: SavedMediaRef, id: string = newRollId()):
     framing: null,
     aspect: 'original',
     border: null,
+    rendition: null,
     keystone: null,
     lens: null,
     detail: null,
@@ -293,6 +307,7 @@ function readPicture(raw: unknown): RollPicture | null {
     framing,
     aspect,
     border,
+    rendition: typeof raw.rendition === 'string' && raw.rendition ? raw.rendition : null,
     // Absent on every roll written before the warp existed, and `null` there
     // means exactly what it means now — so there is no migration to run.
     keystone: keystoneOrNull(raw.keystone),
@@ -390,7 +405,10 @@ export function patchPicture(
   roll: RollDoc,
   id: string,
   patch: Partial<
-    Pick<RollPicture, 'develop' | 'framing' | 'aspect' | 'border' | 'keystone' | 'lens' | 'detail' | 'repair' | 'layers'>
+    Pick<
+      RollPicture,
+      'develop' | 'framing' | 'aspect' | 'border' | 'rendition' | 'keystone' | 'lens' | 'detail' | 'repair' | 'layers'
+    >
   >,
   now: number = Date.now(),
 ): RollDoc {

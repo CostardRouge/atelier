@@ -287,6 +287,15 @@ shared block. Rules a later phase must keep:
   says `Software: Atelier` (since 2026-09-21, the copied one included) — the
   mark that keeps an export sitting beside its original from being offered as
   the camera's file (`renditions.md`, R1b).
+- **The workbench holds TWO files since 2026-09-21: the picture's, and the one
+  on the stage** (`renditions.md`, «R3a is BUILT»). `file` stays what the
+  picture IS — its identity, its origin, its EXIF, what the export hook
+  measures — while `shownFile` is the rendition drawn (a fetched original, a
+  folder sibling): it is what `useDevelopPicture`, the chip and the kernels'
+  `fullWidth` read. A new consumer of the bytes on screen takes `shownFile`;
+  one that needs the picture's identity takes `file`. The export still
+  delivers from `file` under `Auto · Proxies · Originals` — a stored
+  rendition does not reach it until R4.
 - **The row NAMES the pixels it measured** (2026-09-20): `sourceLabel` reads
   `Camera render` where the file in hand is a RAW — `MeasuredPicture.viaRawPreview`
   from `measurePicture`, which now decodes through `decodePhotoSource` — so a
