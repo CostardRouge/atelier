@@ -143,7 +143,7 @@ function ProjectCard({
           if (busy === null) onOpen();
         }
       }}
-      className={`group relative flex flex-col bg-surface border rounded-paper-lg shadow-paper-soft cursor-pointer transition-[transform,box-shadow,border-color] duration-300 ease-paper hover:-translate-y-1 hover:shadow-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+      className={`group relative flex flex-col bg-surface border rounded-paper-lg shadow-paper-soft cursor-pointer transition-[box-shadow,border-color] duration-300 ease-paper hover:shadow-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
         isOpen ? 'border-accent' : 'border-line hover:border-line-strong'
       } ${remoteOnly ? 'opacity-75' : ''} ${busy !== null ? 'cursor-default' : ''}`}
     >

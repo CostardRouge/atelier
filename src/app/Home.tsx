@@ -87,7 +87,7 @@ export default function Home() {
 }
 
 const door =
-  'group relative flex flex-col gap-3 p-5 border border-line rounded-paper-lg bg-surface no-underline text-inherit shadow-paper-soft transition-[border-color,transform,box-shadow] duration-[250ms] ease-paper hover:border-line-strong hover:-translate-y-[3px] hover:shadow-paper';
+  'group relative flex flex-col gap-3 p-5 border border-line rounded-paper-lg bg-surface no-underline text-inherit shadow-paper-soft transition-[border-color,box-shadow] duration-[250ms] ease-paper hover:border-line-strong hover:shadow-paper';
 
 function DoorHead({ tool, resume }: { tool: Tool; resume: string | null }) {
   return (

@@ -100,7 +100,7 @@ export default function VideoCard({
 
   return (
     <div
-      className="flex flex-col overflow-hidden bg-surface border border-line rounded-paper-lg shadow-paper-soft transition-[transform,box-shadow,border-color] duration-300 ease-paper hover:-translate-y-1 hover:shadow-paper hover:border-line-strong"
+      className="flex flex-col overflow-hidden bg-surface border border-line rounded-paper-lg shadow-paper-soft transition-[box-shadow,border-color] duration-300 ease-paper hover:shadow-paper hover:border-line-strong"
       ref={ref}
     >
       <div className="relative bg-frame leading-[0]">
@@ -153,7 +153,7 @@ export default function VideoCard({
           <div className="w-full aspect-video flex flex-col items-center justify-center gap-[0.85rem] bg-paper-2 text-muted text-xs text-center p-4 font-mono leading-[1.5]">
             <span>No video for this telemetry yet.</span>
             <button
-              className="px-[0.9rem] py-2 border border-accent rounded-paper bg-accent-wash text-accent-ink cursor-pointer font-semibold text-sm transition-[background-color,transform] duration-200 ease-paper hover:bg-accent hover:text-white hover:-translate-y-px"
+              className="px-[0.9rem] py-2 border border-accent rounded-paper bg-accent-wash text-accent-ink cursor-pointer font-semibold text-sm transition-[background-color,color] duration-200 ease-paper hover:bg-accent hover:text-white"
               onClick={() => handleAdd('video')}
             >
               Add video
