@@ -12,7 +12,7 @@
  * delivered from the render the person looked at (decision 4).
  */
 
-import { isRawImage } from '../library/assets';
+import { isDrawableImage, isRawImage } from '../library/assets';
 import { DEFAULT_FRAMING, framingTransform, type Framing } from '../media/framing';
 import { borderLayout, scaleLayout, type BorderLayout, type RollBorder } from './border-layout';
 import type { RollExport, RollOriginals } from './roll-types';
@@ -162,13 +162,15 @@ export function pixelHeadroom(src: PictureSize, framing: Framing | null, out: { 
   return t.scale > 0 ? 1 / t.scale : 0;
 }
 
-/** The formats the browser decodes on its own; a RAW, HEIC or TIFF original is delivered from its render. */
-const DECODABLE = new Set(['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif', 'bmp']);
-
+/**
+ * The formats the browser decodes on its own; a RAW, HEIF or TIFF original is
+ * delivered from its render. The list is `assets.ts`'s — the same one that
+ * says which half of a RAW + JPEG pair is shown, since it is the same
+ * question asked twice.
+ */
 export function decodableOriginal(name: string | null): boolean {
   if (!name || isRawImage(name)) return false;
-  const dot = name.lastIndexOf('.');
-  return dot >= 0 && DECODABLE.has(name.slice(dot + 1).toLowerCase());
+  return isDrawableImage(name);
 }
 
 export type PixelsFrom = 'file' | 'original';

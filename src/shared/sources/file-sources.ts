@@ -271,7 +271,8 @@ export async function pickFiles(): Promise<File[]> {
     input.accept = [
       'video/*,.mp4,.mov,.m4v,.webm',
       '.srt,text/plain',
-      'image/*,.jpg,.jpeg,.png,.heic,.heif,.webp,.tif,.tiff,.avif,.gif',
+      // `.hif` is Sony's and Canon's HEIF; the dialog greys it out without it.
+      'image/*,.jpg,.jpeg,.png,.heic,.heif,.hif,.webp,.tif,.tiff,.avif,.gif',
       // RAW: handles are kept even where the browser has no decoder, and the
       // OS dialog would grey them out without this.
       '.raf,.arw,.cr2,.cr3,.nef,.dng,.orf,.rw2,.raw,.srw,.pef',

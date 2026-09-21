@@ -76,7 +76,8 @@ export default function CropPanel({
               keys nudge it once the stage has been touched (Shift for ten).
             </p>
             <p>
-              <strong>Free</strong> is any shape, Shift holding the one you have. A named format holds
+              <strong>Free</strong> is any shape, Shift holding the one you have — and where a picture
+              nobody has cropped yet opens, so the first drag needs no click first. A named format holds
               its shape from the opposite corner; <strong>X</strong> or the turn button swaps portrait
               and landscape.
             </p>
