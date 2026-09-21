@@ -8,7 +8,7 @@
 import type { UseTranscode } from './use-transcode';
 
 const buttonClass =
-  'inline-flex items-center gap-2 px-[0.9rem] py-[0.45rem] border border-accent rounded-full bg-accent-wash text-accent-ink cursor-pointer font-semibold text-xs transition-[background-color,transform] duration-200 ease-paper hover:bg-accent hover:text-white hover:-translate-y-px';
+  'inline-flex items-center gap-2 px-[0.9rem] py-[0.45rem] border border-accent rounded-full bg-accent-wash text-accent-ink cursor-pointer font-semibold text-xs transition-[background-color,color] duration-200 ease-paper hover:bg-accent hover:text-white';
 
 export default function TranscodeControl({
   state,
