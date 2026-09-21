@@ -182,9 +182,14 @@ export function resolvePackLattice(ref: PackRef): Promise<CubeLut | null> {
 async function fetchAndKeep(ref: PackRef, hash: string): Promise<Uint8Array | null> {
   const pack = packOf(ref);
   const host = pack?.sourceId ? packHost(pack.sourceId) : null;
-  if (!pack || !host) return null;
+  // The instance knows the bytes by their OWN hash (`PackLook.blob`), not by
+  // the `.cube`'s. It is written into the index by the push, so a look whose
+  // blob is blank is one this pack has never had pushed — nothing to ask for,
+  // and asking under the wrong id would 404 on every picture.
+  const blob = pack?.looks.find((l) => l.hash === hash)?.blob;
+  if (!pack || !host || !blob) return null;
   try {
-    const bytes = await fetchRemoteLattice(host, hash);
+    const bytes = await fetchRemoteLattice(host, blob);
     if (!bytes) return null;
     // Cached on the way through: the phone downloads a look once, then
     // grades with it offline (`docs/lut-packs.md` §4.2 — the cache is a
@@ -219,7 +224,10 @@ export async function keepPackOn(
   if (!pack) throw new Error('That pack is not in this browser.');
   if (!host) throw new Error('That instance cannot keep a pack — reconnect it and try again.');
   const result = await pushPack({ ...host }, pack, (hash) => getStoredLattice(hash), onProgress);
-  await savePack({ ...pack, sourceId });
+  // The index the push WROTE, not the one it was given: it carries each look's
+  // blob, which is what this device reads back to fetch a look it has evicted
+  // and what the next push reads to know there is nothing to send.
+  await savePack({ ...result.index, sourceId });
   return result;
 }
 

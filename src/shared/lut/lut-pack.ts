@@ -46,8 +46,23 @@ export interface PackLook {
   lattice?: number;
   /** Bytes of the source `.cube`. */
   bytes?: number;
-  /** SHA-256 of the source file, lowercase hex — the vault's and file store's key. */
+  /** SHA-256 of the source file, lowercase hex — the vault's key and a reference's identity. */
   hash?: string;
+  /**
+   * SHA-256 of the ENCODED lattice (`pack-codec.ts`), lowercase hex — the file
+   * store's key, which is a different number from `hash`.
+   *
+   * The instance's bucket is content-addressed on the bytes it is GIVEN: its
+   * `PUT` hashes the body and refuses the pair when it does not equal the path
+   * (`docs/lut-packs.md` §4.4). What travels is the 16-bit lattice, not the
+   * `.cube` text `hash` is taken from, so keying the upload on `hash` made
+   * every push answer *400 — the body does not hash to that id*.
+   *
+   * Measured from the bytes as they are sent (`pushPack`) and written into the
+   * index that is pushed beside them, so another device knows what to ask for;
+   * absent on a look this browser has never pushed.
+   */
+  blob?: string;
   /**
    * The look baked onto its family's reference at import, as a data URL
    * (`pack-thumbs.ts`): ~4 KB, so the picker draws 25 purchased looks without
@@ -160,6 +175,7 @@ function readLook(raw: Record<string, unknown>): PackLook {
     ...(lattice ? { lattice } : {}),
     ...(bytes ? { bytes } : {}),
     ...(typeof raw.hash === 'string' && raw.hash ? { hash: raw.hash } : {}),
+    ...(typeof raw.blob === 'string' && raw.blob ? { blob: raw.blob } : {}),
     // A data URL and nothing else: a stored index is untrusted input, and an
     // arbitrary string here would go straight into an <img src>.
     ...(typeof raw.thumb === 'string' && raw.thumb.startsWith('data:image/')

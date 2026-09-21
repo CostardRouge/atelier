@@ -6,10 +6,13 @@
  *
  * - the pack's INDEX — names, the tree, what is hidden, the thumbnails — is a
  *   `lutpack` DOCUMENT, small and versioned like a trip;
- * - each LATTICE is a FILE, keyed by the SHA-256 of the `.cube` it came from.
+ * - each LATTICE is a FILE, keyed by the SHA-256 of **the encoded lattice
+ *   itself** — `PackLook.blob`, not `PackLook.hash`, which is the `.cube`
+ *   text's. The instance hashes the body it is given and refuses a path that
+ *   does not match, so the key can only ever be the bytes that travel.
  *   Content-addressed, so pushing a pack twice writes nothing the second time,
- *   two packs shipping the same look share one blob, and a device asks which
- *   hashes are already there before sending 40 MB.
+ *   two looks holding the same lattice share one blob, and a device asks which
+ *   blobs are already there before sending 40 MB.
  *
  * What is deliberately NOT here: a sync engine. A pack is pushed when the
  * author asks (`keepPackOn`), pulled when the author asks (`fetchRemotePacks`
@@ -23,6 +26,7 @@
 import { DOCS_APP, WinnowClient, WinnowError, hasFileBucket } from '../sources/winnow/client';
 import { getWinnowConnection, listWinnowConnections } from '../sources/winnow/store';
 import { migratePackIndex, type LutPackIndex } from './lut-pack';
+import { sha256Hex } from './pack-codec';
 
 /** The document kind Winnow lists a pack index by. */
 export const PACK_KIND = 'lutpack';
@@ -79,12 +83,18 @@ export interface PushProgress {
 }
 
 export interface PushPackResult {
-  /** Lattices the instance already held, by hash. */
+  /** Lattices the instance already held, by blob. */
   reused: number;
   sent: number;
   bytes: number;
   /** Looks whose bytes this device does not hold, so nothing could be sent. */
   missingLocally: string[];
+  /**
+   * The index AS PUSHED — the same pack with each sent look's `blob` filled
+   * in. The caller saves it, so the next push knows what the instance calls
+   * those bytes without reading 40 MB back out of the vault to hash it again.
+   */
+  index: LutPackIndex;
 }
 
 /**
@@ -94,7 +104,13 @@ export interface PushPackResult {
  * pack exists; publishing it before the bytes would offer looks that answer
  * 404 for as long as the upload lasts — or forever, if it is interrupted.
  * The reverse leaves blobs nobody points at, which the next push recognises
- * by hash and skips.
+ * by blob and skips.
+ *
+ * `latticeFor` is asked by the look's `hash`, because that is what the local
+ * vault is keyed on. What comes back is hashed AGAIN, and that second number
+ * is the id it is stored under there: the two are different — the first is of
+ * the `.cube` text, the second of the 16-bit lattice — and only the second one
+ * the instance will accept.
  */
 export async function pushPack(
   host: PackHost,
@@ -104,7 +120,16 @@ export async function pushPack(
 ): Promise<PushPackResult> {
   const hashes = [...new Set(index.looks.map((l) => l.hash).filter((h): h is string => !!h))];
   const there = new Set((await host.client.listAppFiles(DOCS_APP)).files.map((f) => f.id));
-  const wanted = hashes.filter((h) => !there.has(h));
+
+  // What the index already says the instance calls a look's bytes, kept only
+  // where the instance really holds it. A look pushed by an older build — or
+  // by this one before it reached the upload — carries nothing, and is read
+  // and hashed below rather than assumed.
+  const blobs = new Map<string, string>();
+  for (const look of index.looks) {
+    if (look.hash && look.blob && there.has(look.blob)) blobs.set(look.hash, look.blob);
+  }
+  const wanted = hashes.filter((h) => !blobs.has(h));
 
   const missingLocally: string[] = [];
   let sent = 0;
@@ -119,16 +144,39 @@ export async function pushPack(
       missingLocally.push(hash);
       continue;
     }
-    await host.client.putAppFile(DOCS_APP, hash, lattice, LATTICE_TYPE, host.maxFileBytes);
+    // MEASURED from the bytes that are about to travel, never carried over
+    // from the look: the instance hashes the body and refuses a path that
+    // disagrees, so a guessed id is a 400 and not a mislabelled file.
+    const blob = await sha256Hex(lattice);
+    blobs.set(hash, blob);
+    // Another look of this pack encodes to the same lattice, or the instance
+    // held it under its true id all along: nothing to write.
+    if (there.has(blob)) continue;
+    await host.client.putAppFile(DOCS_APP, blob, lattice, LATTICE_TYPE, host.maxFileBytes);
+    there.add(blob);
     sent += 1;
     bytes += lattice.byteLength;
   }
   onProgress?.({ done: sent, total: wanted.length, bytes });
 
   // The index carries no bytes — only names, the tree and the thumbnails —
-  // and it is written last, when everything it names is there.
-  await putPackDoc(host, index);
-  return { reused: hashes.length - wanted.length, sent, bytes, missingLocally };
+  // and it is written last, when everything it names is there. It goes out
+  // carrying the blobs, which is what another device reads to fetch them.
+  const pushed: LutPackIndex = {
+    ...index,
+    looks: index.looks.map((look) => {
+      const blob = look.hash ? blobs.get(look.hash) : undefined;
+      return blob && blob !== look.blob ? { ...look, blob } : look;
+    }),
+  };
+  await putPackDoc(host, pushed);
+  return {
+    reused: hashes.length - sent - missingLocally.length,
+    sent,
+    bytes,
+    missingLocally,
+    index: pushed,
+  };
 }
 
 /**
@@ -168,20 +216,28 @@ export async function fetchRemotePacks(host: PackHost): Promise<LutPackIndex[]> 
     .filter((index): index is LutPackIndex => index !== null);
 }
 
-/** One lattice from the instance, or null when it does not hold that hash. */
-export function fetchRemoteLattice(host: PackHost, hash: string): Promise<Uint8Array | null> {
-  return host.client.getAppFile(DOCS_APP, hash);
+/**
+ * One lattice from the instance, or null when it does not hold that blob —
+ * the look's `blob`, the id the bytes are stored under there, never its
+ * `hash`, which names the `.cube` they were encoded from.
+ */
+export function fetchRemoteLattice(host: PackHost, blob: string): Promise<Uint8Array | null> {
+  return host.client.getAppFile(DOCS_APP, blob);
 }
 
-/** Forget a pack there: its index, then the lattices no other pack names. */
+/**
+ * Forget a pack there: its index, then the lattices no other pack names.
+ * `keptElsewhere` holds BLOBS, for the same reason: it is the file store's
+ * vocabulary, and a look's `hash` names nothing on the instance.
+ */
 export async function deleteRemotePack(
   host: PackHost,
   index: LutPackIndex,
   keptElsewhere: ReadonlySet<string>,
 ): Promise<void> {
   await host.client.deleteDoc(DOCS_APP, index.id, await currentEtag(host, index.id));
-  for (const hash of new Set(index.looks.map((l) => l.hash).filter((h): h is string => !!h))) {
-    if (keptElsewhere.has(hash)) continue;
-    await host.client.deleteAppFile(DOCS_APP, hash);
+  for (const blob of new Set(index.looks.map((l) => l.blob).filter((b): b is string => !!b))) {
+    if (keptElsewhere.has(blob)) continue;
+    await host.client.deleteAppFile(DOCS_APP, blob);
   }
 }
