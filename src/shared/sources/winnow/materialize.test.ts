@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { WinnowClient, type WinnowAssetRow } from './client';
-import { captureMtime, identityFor, materialize, plannedFiles, rowMediaRef } from './materialize';
+import {
+  captureMtime,
+  companionOf,
+  identityFor,
+  materialize,
+  plannedFiles,
+  rowMediaRef,
+} from './materialize';
 import {
   hashedMediaRef,
   knownIdentity,
@@ -209,3 +216,53 @@ describe('rowMediaRef', () => {
   });
 });
 
+
+describe('companionOf', () => {
+  const client = new WinnowClient({ baseUrl: BASE, auth: { mode: 'cookie' } });
+  const paired = (over: Partial<WinnowAssetRow> = {}) =>
+    row({
+      filename: 'DSC08463.HIF',
+      media_type: 'photo',
+      ext: 'hif',
+      sidecars: [],
+      group_kind: 'raw_jpeg',
+      companion_id: 99,
+      companion_ext: 'arw',
+      companion_media_type: 'photo',
+      companion_filename: 'DSC08463.ARW',
+      companion_file_size: 34_600_000,
+      companion_width: 7040,
+      companion_height: 4688,
+      ...over,
+    });
+
+  it('reads the capture’s other file off the row, with no second request', () => {
+    const c = companionOf(client, 'winnow.example', paired(), 0);
+    expect(c).toMatchObject({
+      assetId: 'winnow.example/99',
+      name: 'DSC08463.ARW',
+      bytes: 34_600_000,
+      width: 7040,
+      height: 4688,
+    });
+  });
+
+  it('refuses a Live Photo’s companion — a .mov is motion, never material', () => {
+    expect(companionOf(client, 'winnow.example', paired({ group_kind: 'live_photo' }), 0)).toBeNull();
+    expect(
+      companionOf(client, 'winnow.example', paired({ group_kind: null, companion_media_type: 'video' }), 0),
+    ).toBeNull();
+  });
+
+  it('answers null for an unpaired row, and for one an older instance half-describes', () => {
+    expect(companionOf(client, 'winnow.example', row({ media_type: 'photo' }), 0)).toBeNull();
+    expect(companionOf(client, 'winnow.example', paired({ companion_filename: null }), 0)).toBeNull();
+    expect(companionOf(client, 'winnow.example', paired({ companion_id: null }), 0)).toBeNull();
+  });
+
+  it('rides on the origin of a materialised proxy', async () => {
+    const c = clientServing({ '/api/assets/42/proxy': 10 });
+    const [file] = await materialize(c, 'winnow.example', paired(), { fidelity: 'proxy' });
+    expect(mediaOrigin(file)?.companion?.name).toBe('DSC08463.ARW');
+  });
+});

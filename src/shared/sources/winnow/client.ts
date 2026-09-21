@@ -86,6 +86,28 @@ export interface WinnowAssetRow {
   /** True when a DJI `.srt` flight log rides with this clip. */
   has_telemetry: boolean;
   sidecars: WinnowSidecar[];
+  /**
+   * THE CAPTURE'S OTHER FILE, when Winnow paired two into one logical media —
+   * `raw_jpeg` (Sony `.ARW` + `.HIF`, DJI `.DNG` + `.JPG`) or `live_photo` (a
+   * still + its `.mov`). Its migration 0013/0014 and `lib/pairing.ts`.
+   *
+   * **These have been on the wire all along** — `GRID_SELECT` sends them on
+   * every row of `/api/assets` and `/api/assets/{id}`, and nothing here strips
+   * an undeclared key — so reading a capture's RAW costs no change on that
+   * side. Two things to keep in mind: the listing asks for `collapse=1`, which
+   * Winnow reads as `group_role IS DISTINCT FROM 'companion'`, so the
+   * companion is in NO list and is reached by `originalUrl(companion_id)` or
+   * by the single-asset route; and **a companion is not always a RAW** — check
+   * `group_kind`, or the extension, before calling one the sensor's file.
+   */
+  group_kind?: 'raw_jpeg' | 'live_photo' | null;
+  companion_id?: number | null;
+  companion_ext?: string | null;
+  companion_media_type?: 'photo' | 'video' | null;
+  companion_filename?: string | null;
+  companion_file_size?: number | null;
+  companion_width?: number | null;
+  companion_height?: number | null;
 }
 
 export interface WinnowSidecar {
