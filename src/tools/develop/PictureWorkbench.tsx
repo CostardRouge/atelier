@@ -675,6 +675,13 @@ export default function PictureWorkbench({
     // The measured exposure is STORED the moment it is known, so the export's
     // decode applies the same number (`raw.md`). Once: a stored gain is never
     // overwritten by a later decode's measurement.
+    taskScope,
+    // Cancelled from the pill: back on the render, and said — a base whose
+    // data never arrived is not a base.
+    onRawAborted: () => {
+      patchDraft({ base: null, rawGain: null });
+      tell('Opening the RAW was cancelled — back on the render');
+    },
     onRawDecoded: (info) => {
       setRawSize({ w: info.sourceWidth, h: info.sourceHeight });
       if (rawGain === null) {

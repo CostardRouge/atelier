@@ -80,5 +80,31 @@ export goes on while he walks to the gallery, and the pill still says so).
   job.finally(...)` on a rejected promise is an unhandled rejection of its
   own — forget the flight with `then(f, f)`.
 
-Not wired yet: T3 the RAW decode and the loupe, T4 the exports, T5 the
-one-off surfaces.
+## T3 — the RAW decode and the loupe (2026-09-21)
+
+- **`decodeRaw` is a task of its own** — `Opening DSC00123.ARW`, a sweep,
+  since nothing measures a demosaic — registered the moment it is asked,
+  which includes its wait in the decoder's chain. Its Cancel aborts a
+  `signal` checked twice: before the file is read (a decode still queued
+  costs nothing and the worker is never touched) and when the worker hands
+  the plane back (the linearisation is not spent on a result nobody wants).
+  **The worker's TURN is dropped, never the worker** — a cancel costs the
+  next decode nothing, and `disposeRawDecoder` stays for a decoder that
+  refused. `quiet: true` for a caller that is a task already; `scope` for
+  the stage's edge. A cancelled decode rejects with an `AbortError` naming
+  it.
+- **The stage's decode passes its scope and a controller**
+  (`useDevelopPicture({ taskScope, onRawAborted })`): cancelled from the
+  pill, the hook says nothing on the stage and calls `onRawAborted`, and the
+  workbench takes the picture BACK TO ITS RENDER (`base: null`) and says so —
+  a base whose data never arrived is not a base. Stepping away from a picture
+  mid-decode aborts the same way and tells nobody: nothing was asked. A
+  render's own decode (`loadBadgeSource`) registers `Opening <file>` with no
+  Cancel — the browser's `createImageBitmap` cannot be stopped — so a big
+  JPEG at least says what it is doing past 400 ms.
+- **The loupe's decode is `Looking closer at <file>`** with a Cancel: a RAW's
+  drops the decoder's turn (quiet, under the loupe's own task), a render's
+  lets the browser finish and throws the bitmap away. The loupe's pill says
+  `loupe · cancelled`, a state of its own beside `failed`.
+
+Not wired yet: T4 the exports, T5 the one-off surfaces.

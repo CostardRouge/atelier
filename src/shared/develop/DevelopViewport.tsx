@@ -163,7 +163,9 @@ export default function DevelopViewport({
               ? `loupe · ${picture.loupe.longEdge ?? ''} px`
               : picture.loupe.state === 'same'
                 ? 'loupe · the file has no more'
-                : 'loupe · could not decode'}
+                : picture.loupe.state === 'cancelled'
+                  ? 'loupe · cancelled'
+                  : 'loupe · could not decode'}
         </span>
       )}
       {picture.comparing && (
