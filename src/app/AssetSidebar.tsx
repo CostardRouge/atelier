@@ -832,6 +832,7 @@ export default function AssetSidebar({
           files={captureView.files}
           viewing={captureView.viewing}
           onViewing={captureView.setViewing}
+          taskScope={viewedAsset?.id ?? null}
           footer={
             <>
               <div className="flex items-center gap-3 flex-wrap">

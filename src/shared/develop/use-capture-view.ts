@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { extractRawPreview } from '../exif/raw-probe';
 import { formatBytes } from '../lib/format';
 import type { Rendition } from '../media/renditions';
+import type { FetchFile } from '../sources/fetch-options';
 import { heldOriginal, holdOriginal } from '../sources/original-cache';
+import { trackedFetch } from '../tasks/tracked';
 import type { LightboxFile } from '../ui/MediaLightbox';
 import { viewFacts, viewLabel, viewableRenditions, viewedRendition } from './capture-view';
 import type { MediaView } from '../sources/media-scope';
@@ -20,7 +22,7 @@ export interface CaptureViewSources {
   /** A file already in hand for a row: the open file, a folder's sibling. Null when it must be fetched. */
   fileFor: (row: Rendition) => File | null;
   /** Bring a row's bytes in from its instance. Held under the row's asset id once it lands. */
-  fetchFor: (row: Rendition) => (() => Promise<File>) | null;
+  fetchFor: (row: Rendition) => FetchFile | null;
 }
 
 export interface CaptureView {
@@ -80,7 +82,9 @@ export function useCaptureView(sources: CaptureViewSources): CaptureView {
       if (!file) {
         const fetch = latest.current.fetchFor(row);
         if (!fetch) throw new Error(`${row.name} is not reachable from here`);
-        file = await fetch();
+        // A task named after the file, on this capture's edge, cancellable
+        // from the pill (`tasks/tracked.ts`).
+        file = await trackedFetch({ label: `Fetching ${row.name}`, scope: key, bytes: row.bytes }, (opts) => fetch(opts));
         if (row.assetId) holdOriginal(row.assetId, file);
       }
       const blob = row.reach === 'embedded' ? await extractRawPreview(file) : file;
@@ -91,9 +95,12 @@ export function useCaptureView(sources: CaptureViewSources): CaptureView {
       return url;
     })();
     inflight.current.set(slot, job);
-    void job.finally(() => inflight.current.delete(slot));
+    // The caller handles the outcome; this only forgets the flight — a
+    // `finally` on its own would surface the rejection a second time.
+    const forget = () => inflight.current.delete(slot);
+    void job.then(forget, forget);
     return job;
-  }, []);
+  }, [key]);
 
   const files = useMemo<LightboxFile[]>(() => {
     if (!key) return [];

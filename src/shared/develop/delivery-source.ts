@@ -33,6 +33,7 @@ import {
 import { RAW_PROBE_BYTES, rawSizes, rawSizesFrom } from '../exif/raw-probe';
 import { fixedFrameDelivery, type DeliverySummary, type OriginalInfo, type PictureSize } from './roll-export';
 import { measurePicture } from './roll-render';
+import { trackedFetch } from '../tasks/tracked';
 
 export function originalOf(origin: MediaOrigin | null, render: PictureSize | null = null): OriginalInfo | null {
   if (!origin || origin.fidelity !== 'proxy') return null;
@@ -134,7 +135,13 @@ export async function deliveryFor(
   if (held) return { file: held, summary, fetched: false };
   try {
     onProgress?.('Fetching the original…');
-    const fetched = await origin.fetchOriginal();
+    // A task of its own — named, on the picture's edge, cancellable
+    // (`tasks/tracked.ts`); a cancel costs the extra pixels like any failure.
+    const fetchOriginal = origin.fetchOriginal;
+    const fetched = await trackedFetch(
+      { label: `Fetching ${origin.name ?? 'the original'}`, scope: key, bytes: origin.bytes ?? null },
+      (opts) => fetchOriginal(opts),
+    );
     if (key) holdOriginal(key, fetched);
     return { file: fetched, summary, fetched: true };
   } catch {

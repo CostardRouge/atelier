@@ -34,6 +34,7 @@ import {
   type RawCalibration,
 } from '../../shared/raw/calibration';
 import { deliveredSourceFor, fetchSourceFile, sensorSourceFor } from '../../shared/develop/sensor-source';
+import { trackedFetch } from '../../shared/tasks/tracked';
 import { planRun, type PictureFacts, type RunPlan } from '../../shared/develop/run-plan';
 
 /**
@@ -311,7 +312,7 @@ export function useRollExport({
               let rawFile: File | null = null;
               if (sensor) {
                 if (!sensor.held) setExporting(`Fetching ${sensor.name} ${step}${sensor.bytes ? ` · ${formatBytes(sensor.bytes)}` : ''}…`);
-                rawFile = await fetchSourceFile(sensor).catch(() => null);
+                rawFile = await fetchSourceFile(sensor, identity?.assetId ?? null).catch(() => null);
               }
               if (rawFile) raw = { file: rawFile, gain: rawGainOf(picture.develop) };
               else failures.push(`${picture.ref.name} is developed on its RAW, which is not reachable here — its render left instead`);
@@ -325,7 +326,7 @@ export function useRollExport({
           if (chosen) {
             if (!chosen.held) setExporting(`Fetching ${chosen.name} ${step}${chosen.bytes ? ` · ${formatBytes(chosen.bytes)}` : ''}…`);
             try {
-              source = await fetchSourceFile(chosen);
+              source = await fetchSourceFile(chosen, identity?.assetId ?? null);
             } catch {
               failures.push(`${picture.ref.name}: ${chosen.name} could not be fetched — what is in hand left instead`);
             }
@@ -378,7 +379,11 @@ export function useRollExport({
                 setExporting(
                   `Fetching the original ${step}${origin.bytes ? ` · ${formatBytes(origin.bytes)}` : ''}…`,
                 );
-                source = await origin.fetchOriginal();
+                const fetchOriginal = origin.fetchOriginal;
+                source = await trackedFetch(
+                  { label: `Fetching ${origin.name ?? 'the original'}`, scope: identity?.assetId ?? null, bytes: origin.bytes ?? null },
+                  (opts) => fetchOriginal(opts),
+                );
                 if (identity?.assetId) holdOriginal(identity.assetId, source);
               }
             }

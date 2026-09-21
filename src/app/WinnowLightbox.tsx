@@ -178,7 +178,7 @@ export default function WinnowLightbox({
       if (!row || !r.assetId) return null;
       const id = Number(r.assetId.slice(r.assetId.lastIndexOf('/') + 1));
       if (!Number.isFinite(id)) return null;
-      return () => client.fetchFile(client.originalUrl(id), r.name, '', captureMtime(row));
+      return (opts) => client.fetchFile(client.originalUrl(id), r.name, '', captureMtime(row), opts);
     },
   });
 
@@ -211,6 +211,7 @@ export default function WinnowLightbox({
       files={captureView.files}
       viewing={captureView.viewing}
       onViewing={captureView.setViewing}
+      taskScope={row ? `${connection.id}/${row.id}` : null}
       // Enter does the one thing the sheet offers — and nothing at all once
       // the picture is already in the library.
       onConfirm={row && !have && !busy ? () => void picker.pick(row) : null}

@@ -1,6 +1,7 @@
 import { describeDevelop, type DevelopSettings } from './develop';
 import { developPillClass } from './develop-classes';
 import { imageRenderingFor, type PixelView } from '../ui/use-pixel-view';
+import TaskEdge from '../ui/TaskEdge';
 import type { DevelopPicture } from './use-develop-picture';
 
 /**
@@ -37,8 +38,15 @@ export default function DevelopViewport({
   onUnmark,
   rings = null,
   onUnring,
+  scope = null,
 }: {
   picture: DevelopPicture;
+  /**
+   * The media whose TASKS this stage draws on its bottom edge (`TaskEdge`,
+   * `tasks.md`): a RAW being fetched for it, its original on its way. The
+   * host names it — a picture's asset id, else its file identity.
+   */
+  scope?: string | null;
   /**
    * The picture's repair patches, drawn as rings that follow the zoom and the
    * pan: the destination solid, its source dashed, joined by a hair. Placed
@@ -189,6 +197,9 @@ export default function DevelopViewport({
       {hasFile && !source && !problem && (
         <span className="absolute inset-0 grid place-items-center font-mono text-2xs text-muted">decoding…</span>
       )}
+      {/* The passive surface: a hairline along the bottom for whatever is
+          happening to THIS picture — the words and the Cancel are the pill's. */}
+      {scope && <TaskEdge scope={scope} className="z-10" />}
       {picking && (
         <span
           className={`absolute top-2 left-2.5 ${developPillClass} bg-[rgba(251,248,241,0.92)] text-accent-ink border-accent`}

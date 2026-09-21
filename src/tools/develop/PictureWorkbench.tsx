@@ -36,6 +36,7 @@ import { useSiblingFacts } from '../../shared/develop/use-sibling-facts';
 import { isProxyOverRaw, rawRenderFrom, rawRenderOf } from '../../shared/develop/delivery-source';
 import { measurePicture, type MeasuredPicture } from '../../shared/develop/roll-render';
 import { fetchSourceFile, sensorSourceFor } from '../../shared/develop/sensor-source';
+import { trackedFetch } from '../../shared/tasks/tracked';
 import { openingRendition, renditionById, renditionsOf, type PixelSize, type Rendition } from '../../shared/media/renditions';
 import { fileIdentity, isRawImage } from '../../shared/library/assets';
 import { rawSizes } from '../../shared/exif/raw-probe';
@@ -423,6 +424,12 @@ export default function PictureWorkbench({
   // sets state, and the next render sees it in hand.
   const origin = useMemo(() => (file ? mediaOrigin(file) : null), [file]);
   const assetKey = file ? (knownIdentity(file)?.assetId ?? null) : null;
+  // What this stage's tasks are scoped to (`TaskEdge`): the capture's asset
+  // id where a source vouched for one — the same key every fetch of its
+  // files uses — else the file's own identity.
+  const taskScope = file ? (assetKey ?? fileIdentity(file)) : null;
+  const taskScopeRef = useRef(taskScope);
+  taskScopeRef.current = taskScope;
   const sensor = file ? sensorSourceFor(file, origin, siblings, assetKey) : null;
   const sensorHeld = sensor?.held ?? null;
   const sensorName = sensor?.name ?? null;
@@ -441,7 +448,7 @@ export default function PictureWorkbench({
     }
     let alive = true;
     setRawStatus(`fetching ${source.name}${source.bytes ? ` · ${formatBytes(source.bytes)}` : ''}…`);
-    fetchSourceFile(source)
+    fetchSourceFile(source, taskScopeRef.current)
       .then((fetched) => {
         if (!alive) return;
         setRawFile(fetched);
@@ -603,7 +610,7 @@ export default function PictureWorkbench({
     if (!fetch) return;
     let alive = true;
     setDeliveredStatus(`fetching ${row.name}${row.bytes ? ` · ${formatBytes(row.bytes)}` : ''}…`);
-    fetch()
+    trackedFetch({ label: `Fetching ${row.name}`, scope: taskScopeRef.current, bytes: row.bytes }, (opts) => fetch(opts))
       .then((fetched) => {
         if (!alive) return;
         if (row.assetId) holdOriginal(row.assetId, fetched);
@@ -1145,6 +1152,7 @@ export default function PictureWorkbench({
           picture={picture}
           hasFile={Boolean(file)}
           emptyText={emptyText}
+          scope={taskScope}
           pixelView={pixelView}
           facts={facts}
           marks={subjectMarks}

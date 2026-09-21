@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import useDialogKeys from './use-dialog-keys';
 import StageZoomControl from './StageZoomControl';
+import TaskEdge from './TaskEdge';
+import { cancelTask } from '../tasks/tasks';
+import { useTasks } from '../tasks/use-tasks';
 import { DECK_GAP, DECK_SETTLE_MS, useMediaViewer, type MediaViewer } from './use-media-viewer';
 
 /**
@@ -105,6 +108,12 @@ interface MediaLightboxProps {
   /** Which of them is on screen — null for the first. Owned by the caller, so a verb can read it. */
   viewing?: string | null;
   onViewing?: (id: string | null) => void;
+  /**
+   * The open capture's TASK scope (`tasks.md`): a fetch its chips started
+   * draws on the deck's edge with a cancel beside the chips — the masthead's
+   * pill is behind this sheet, so the sheet must carry its own.
+   */
+  taskScope?: string | null;
   /** What the sheet is, for a screen reader: "…, from winnow.example". */
   from: string;
   /** The row under the deck — the one thing each caller does differently. */
@@ -168,8 +177,11 @@ export default function MediaLightbox({
   files,
   viewing = null,
   onViewing,
+  taskScope = null,
 }: MediaLightboxProps) {
   const item = items[index] ?? null;
+  const running = useTasks(taskScope);
+  const cancellable = running.find((t) => t.cancel) ?? null;
 
   // The file of the capture on screen: the one asked for, else the first —
   // which is the item itself unless the item cannot be drawn as it is (a
@@ -351,7 +363,17 @@ export default function MediaLightbox({
                 <button
                   key={f.id}
                   type="button"
-                  onClick={() => onViewing?.(at === 0 ? null : f.id)}
+                  onClick={() => {
+                    // A chip clicked again after a failure (a cancelled fetch)
+                    // is asked again: the failure is what a retry clears.
+                    setFailed((cur) => {
+                      if (!cur.has(f.id)) return cur;
+                      const next = new Map(cur);
+                      next.delete(f.id);
+                      return next;
+                    });
+                    onViewing?.(at === 0 ? null : f.id);
+                  }}
                   disabled={!!f.unavailable}
                   aria-pressed={on}
                   title={f.unavailable ?? f.facts}
@@ -370,6 +392,16 @@ export default function MediaLightbox({
               <span className="text-2xs text-muted min-w-0 truncate" title={shownFile.facts}>
                 {failed.get(shownFile.id) ?? shownFile.facts}
               </span>
+            )}
+            {cancellable && (
+              <button
+                type="button"
+                onClick={() => cancelTask(cancellable.id)}
+                className="p-0 border-0 bg-transparent font-mono text-2xs text-accent-ink underline underline-offset-[3px] cursor-pointer shrink-0"
+                title={`Stop: ${cancellable.label}`}
+              >
+                cancel
+              </button>
             )}
           </div>
         )}
@@ -451,6 +483,9 @@ export default function MediaLightbox({
                 <div className="h-full w-1/4 bg-accent animate-deck-load" />
               </div>
             )}
+            {/* The capture's own tasks — a chip's fetch — on the deck's bottom
+                edge, the bytes moving where the picture will appear. */}
+            {taskScope && <TaskEdge scope={taskScope} className="z-10" />}
           </div>
           {/* Outside the viewport, never inside it: that element answers every
               pointer event itself, in the capture phase. A single media draws

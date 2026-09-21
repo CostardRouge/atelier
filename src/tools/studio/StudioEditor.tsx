@@ -49,6 +49,7 @@ import GuidesControl from '../../shared/overlay/GuidesControl';
 import { exportOverlayVideoViaSeek } from '../../shared/overlay/export-overlay-seek';
 import { exportVariantVideo, outroTail } from '../../shared/media/export-variant';
 import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
+import { trackedFetch } from '../../shared/tasks/tracked';
 import SendFinalsPanel from '../../shared/sources/winnow/SendFinalsPanel';
 import { readEffectiveExif } from '../../shared/exif/read-exif';
 import { downloadBlob } from '../../shared/media/save';
@@ -1343,7 +1344,17 @@ export default function StudioEditor({
       if (proxyWithOriginal?.fetchOriginal && !renderFromProxy) {
         setFetchingOriginal(true);
         try {
-          source = await proxyWithOriginal.fetchOriginal();
+          // A task of its own — the capture's name and weight, on its edge,
+          // cancellable from the pill — beside the export's own Cancel.
+          const fetchOriginal = proxyWithOriginal.fetchOriginal;
+          source = await trackedFetch(
+            {
+              label: `Fetching ${proxyWithOriginal.name ?? 'the capture'}`,
+              scope: activeVideo ? (knownIdentity(activeVideo)?.assetId ?? null) : null,
+              bytes: proxyWithOriginal.bytes ?? null,
+            },
+            (opts) => fetchOriginal({ ...opts, signal: controller.signal }),
+          );
           srcWidth = proxyWithOriginal.width ?? srcWidth;
           srcHeight = proxyWithOriginal.height ?? srcHeight;
         } finally {

@@ -37,6 +37,8 @@ import {
   type MediaOrigin,
 } from '../../projects/media-identity';
 import type { SavedMediaRef } from '../../projects/project-types';
+import { trackedFetch } from '../../tasks/tracked';
+import type { FetchOptions } from '../fetch-options';
 import type { WinnowAssetRow, WinnowClient } from './client';
 import { exifFromRow } from './exif-from-row';
 
@@ -46,6 +48,11 @@ export interface MaterializeOptions {
   fidelity: Fidelity;
   /** Called after each file lands, for a progress line. */
   onFile?: (file: File, index: number, total: number) => void;
+  /**
+   * No task of its own: the caller is already one (a roll export naming the
+   * picture), and a task inside a task would say the same thing twice.
+   */
+  quiet?: boolean;
 }
 
 /** `DJI_0001.MP4` → `DJI_0001`. */
@@ -156,7 +163,7 @@ export function companionOf(
     bytes: row.companion_file_size ?? null,
     width: row.companion_width ?? null,
     height: row.companion_height ?? null,
-    fetchFile: () => client.fetchFile(client.originalUrl(id), name, '', lastModified),
+    fetchFile: (opts) => client.fetchFile(client.originalUrl(id), name, '', lastModified, opts),
     fetchHead: (bytes) => client.fetchHead(client.originalUrl(id), bytes),
   };
 }
@@ -182,8 +189,7 @@ export async function materialize(
     bytes: row.file_size,
   };
   if (options.fidelity === 'proxy') {
-    origin.fetchOriginal = () =>
-      client.fetchFile(client.originalUrl(row.id), row.filename, '', lastModified);
+    origin.fetchOriginal = (opts) => client.fetchFile(client.originalUrl(row.id), row.filename, '', lastModified, opts);
     origin.fetchOriginalHead = (bytes) => client.fetchHead(client.originalUrl(row.id), bytes);
   }
   const companion = companionOf(client, sourceId, row, lastModified);
@@ -196,13 +202,32 @@ export async function materialize(
     if (exif) origin.exif = exif;
   }
   const files: File[] = [];
-  for (const [i, item] of plan.entries()) {
-    const file = await client.fetchFile(item.url, item.name, item.type, lastModified);
-    // The clip and its log share one identity: they are one asset in Winnow
-    // as in the library, and the hash is the clip's.
-    registerMediaIdentity(file, i === 0 ? { ...identity, origin } : identity);
-    files.push(file);
-    options.onFile?.(file, i + 1, plan.length);
-  }
-  return files;
+  // One TASK for the whole asset (T2 of `docs/progress-feedback.md`): named
+  // after the capture, scoped to its asset id so a stage showing that
+  // picture can draw the bar on its edge, cancellable by aborting the
+  // request in flight. The proxy's weight is unknown until the server says
+  // it; the original's is the row's.
+  const bring = async (opts: FetchOptions = {}) => {
+    for (const [i, item] of plan.entries()) {
+      const file = await client.fetchFile(item.url, item.name, item.type, lastModified, {
+        signal: opts.signal,
+        onProgress: i === 0 ? opts.onProgress : undefined,
+      });
+      // The clip and its log share one identity: they are one asset in Winnow
+      // as in the library, and the hash is the clip's.
+      registerMediaIdentity(file, i === 0 ? { ...identity, origin } : identity);
+      files.push(file);
+      options.onFile?.(file, i + 1, plan.length);
+    }
+    return files;
+  };
+  if (options.quiet) return bring();
+  return trackedFetch(
+    {
+      label: `Fetching ${row.filename}${options.fidelity === 'proxy' ? '’s proxy' : ''}`,
+      scope: identity.assetId ?? null,
+      bytes: options.fidelity === 'original' ? row.file_size : null,
+    },
+    bring,
+  );
 }

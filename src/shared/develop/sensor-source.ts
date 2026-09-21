@@ -21,7 +21,9 @@
 
 import { isRawImage } from '../library/assets';
 import type { MediaOrigin } from '../projects/media-identity';
+import type { FetchFile } from '../sources/fetch-options';
 import { heldOriginal, holdOriginal } from '../sources/original-cache';
+import { trackedFetch } from '../tasks/tracked';
 
 export type SensorReach = 'file' | 'sibling' | 'original' | 'companion';
 
@@ -35,7 +37,7 @@ export interface SensorSource {
   /** The RAW when it is in hand already — the file, a sibling, or a held fetch. */
   held: File | null;
   /** How to get it when it is not; null where nothing can. */
-  fetch: (() => Promise<File>) | null;
+  fetch: FetchFile | null;
 }
 
 /**
@@ -130,13 +132,18 @@ export function deliveredSourceFor(
   return null;
 }
 
-/** A source's bytes: what is held, else fetched once and held for the session. */
-export async function fetchSourceFile(source: SensorSource): Promise<File> {
+/**
+ * A source's bytes: what is held, else fetched once — as a TASK named after
+ * the file, on the picture's edge (`scope`), cancellable — and held for the
+ * session. A cancelled fetch rejects with an `AbortError` (`fetch-options.ts`).
+ */
+export async function fetchSourceFile(source: SensorSource, scope: string | null = null): Promise<File> {
   if (source.held) return source.held;
   const held = source.key ? heldOriginal(source.key) : null;
   if (held) return held;
-  if (!source.fetch) throw new Error(`${source.name} is not reachable from here`);
-  const fetched = await source.fetch();
+  const fetch = source.fetch;
+  if (!fetch) throw new Error(`${source.name} is not reachable from here`);
+  const fetched = await trackedFetch({ label: `Fetching ${source.name}`, scope, bytes: source.bytes }, (opts) => fetch(opts));
   if (source.key) holdOriginal(source.key, fetched);
   return fetched;
 }
