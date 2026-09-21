@@ -206,6 +206,42 @@ saturation clips more than 1 %), −1.5 EV read 160 on the clipped patch, and
 the export decoded the whole 4000×3000 and wrote the same 160 — preview =
 export from two decodes of two sizes, which is what storing the gain buys.
 
+## The ladder is format-blind; REACHING the RAW is not (2026-09-21)
+
+Established while evaluating the maintainer's ask — *"ce système de rungs est
+fait pour le DNG; est-ce qu'on pourrait l'avoir pour mes ARW, et en général
+sur tout type d'asset?"*. The brief is `docs/capture-renditions.md`; what a
+later agent must not re-derive:
+
+- **Nothing in the ladder is DNG-specific except `dng-opcodes.ts`.**
+  `probeRaw` walks any TIFF-based RAW, `canDecodeRaw` IS `isRawImage`, and
+  `librawSettings` names no format — so `proxy` and `gain` already work on an
+  ARW, NEF or CR2 dropped into Develop. `rungsFor` offers `gainMap` /
+  `gainMapWarp` only where `OpcodeList3` (a DNG tag) is there, so another
+  format simply shows two rungs. **That is the P6 rule working, not a gap.**
+  Unmeasured, and only his own files can settle it: whether LibRaw decodes his
+  A7C II's ARW, and how big the render inside one is.
+- **What IS hard-wired is `rawOffer`** (`PictureWorkbench`): the file in hand
+  is a RAW, or the proxy's OWN original is one. A capture whose RAW is a
+  SEPARATE FILE — Sony `.ARW` + `.HIF`, DJI `.DNG` + `.JPG` — is the third
+  case, and there is none. So those captures develop from an 8-bit proxy with
+  no rung above it, which is the whole of the maintainer's report.
+- **Winnow already pairs them and already tells us** (read in its own repo,
+  2026-09-21): `asset_groups` kind `raw_jpeg` since its migration 0013, the
+  direct file `primary` and the RAW `companion`, paired at scan time by
+  `lib/pairing.ts`; `GRID_SELECT` sends `companion_id/ext/filename/file_size/
+  width/height` + `group_kind` on EVERY row of `/api/assets` and
+  `/api/assets/{id}`. Atelier receives all of it and drops it —
+  `WinnowAssetRow` does not declare the fields, and nothing strips them. **Ask
+  B costs no Winnow change.** Two traps: the listing sends `collapse=1`, which
+  Winnow reads as `group_role IS DISTINCT FROM 'companion'`, so the RAW is in
+  no list and must be reached by `originalUrl(companion_id)` or the
+  single-asset route; and `kind 'live_photo'` puts a `.MOV` in the same
+  companion fields, so a reader that does not check the ext would offer a
+  movie as the sensor's data.
+- **A local folder has the same gap**: `buildAssets` keeps ONE image per base
+  name, so the RAW half of a pair is dropped at the door (`architecture.md`).
+
 ## What a DJI DNG actually holds (measured 2026-09-20, body FC8482)
 
 Two files off the maintainer's own drone (DJI Fly, `dji_fly_*_photo.DNG`,
