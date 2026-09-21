@@ -1,10 +1,14 @@
 # Every file of one capture — the material ladder beyond the DNG
 
-**Status (2026-09-21).** §2 is FACT, read in this repository and in
+**Status (2026-09-21).** §2 and §10 are FACT, read in this repository and in
 `CostardRouge/winnow` at its current `main`, with the file each claim comes
-from named. §3 onwards is a PROPOSAL: nothing here has been agreed. It refines
-`develop-originals.md` §7 (the two axes) and `photo-editor.md` P10 (the RAW
-develop) rather than replacing either; the decisions those record still hold.
+from named. §3–§8 are a PROPOSAL. **§9 records what the maintainer decided the
+same day** — companions yes, the proxy as the performance rendition, and the
+pill widened to the camera's own JPEG or HEIF — which makes §4–§6 the shape to
+build and leaves §11's thirty questions as what a complete plan still needs.
+It refines `develop-originals.md` §7 (the two axes) and `photo-editor.md` P10
+(the RAW develop) rather than replacing either; the decisions those record
+still hold.
 
 Read it before touching `MediaOrigin`, `materialize.ts`, `PictureWorkbench`'s
 `rawOffer`, `DevelopSettings.base`, or anything that decides WHICH FILE of a
@@ -275,6 +279,18 @@ its own file carries (`rungsFor`, unchanged).
 R1–R3 is the useful slice: after it, a paired capture develops from its sensor.
 R4–R5 make the file that leaves match, and make the words one set.
 
+**What §9 adds to that list.** The camera's own delivered file becomes a row of
+the pill, which splits R3 in two and adds one phase:
+
+- **R3a — the delivered rung where the browser already draws it**: the JPEG
+  beside a DNG, and any drawable original. It is `fetchOriginal` on the stage
+  rather than at the export door, so it is the cheapest row of the whole pill
+  and it is what makes "je veux juste le JPEG" true on the drone.
+- **R3b — the sensor rung** (the companion RAW), as R3 above.
+- **R7 — HEIF**, whichever of §11.C11 the measurement chooses. It is the only
+  part that could add a dependency, and it is deliberately last: everything
+  else ships without it, and a `.HIF` is drawn from the proxy until it lands.
+
 ---
 
 ## 7. Weighed and declined
@@ -320,16 +336,190 @@ R4–R5 make the file that leaves match, and make the words one set.
 
 ---
 
-## 9. The decisions to take
+## 9. The decisions taken (2026-09-21)
 
-1. **Does a paired capture offer its RAW at all?** (The whole proposal. If
-   yes, R1–R3.)
-2. **Roles or formats?** `proxy | delivered | sensor` as §4.1, or keep saying
-   "proxy / original / RAW" and accept a branch per source.
-3. **Where the rung is offered**: the fidelity chip's menu only (the Develop
-   tool, as today — the modal hosts keep the simple sheet), or also in Trips
-   and the Studio.
-4. **R2 at all**: does a local folder's RAW half need keeping, or is the
-   instance the only place this matters in practice?
-5. **§8.4**: is Sony's undocumented calibration worth a measurement pass, or
-   does an ARW stop at `gain` for good?
+The maintainer answered the first two of the five questions this section
+opened with, and widened the third. In his words:
+
+> Oui, on va bien se servir des compagnons. Le proxy, c'est vraiment pour la
+> performance et le côté pratique — au moins voir la miniature, la preview, le
+> contenu. Ensuite on laisse l'utilisateur afficher le fichier RAW, comme on
+> le fait déjà pour les opcodes DJI. […] Même dans cette pilule il faut aussi
+> proposer le JPEG et le HIF : il y a des cas où je ne veux pas me servir du
+> proxy et je ne veux pas non plus aller sur un fichier brut, je veux juste
+> aller sur le fichier JPEG ou juste sur le fichier HIF.
+
+1. **A paired capture offers its RAW.** Decided. R1–R3.
+2. **The proxy is a PERFORMANCE rendition, and nothing else** — the thumbnail,
+   the preview, the content. It is where a picture opens and never where it is
+   trapped.
+3. **The pill offers the camera's own delivered file too** — the JPEG, the
+   HIF. This is the widening: the menu is not proxy-or-sensor, it is every
+   file the capture has, and the calibration rungs live under the sensor one.
+4. **The engine must UNDERSTAND what it is holding** — the container, the
+   codec, and what this browser can do with each — rather than branch per
+   camera. `.ARW` + `.HIF`, `.DNG` + `.JPG`, a lone `.DNG`, a lone `.HIF`:
+   one mechanism, four answers.
+
+Two of the original five remain open (R2's local half, §8.4's Sony
+calibration) and are folded into §11 below.
+
+### 9.1 What that makes the pill
+
+Not a ladder but a **list of files, with the calibration rungs nested under
+the sensor one**. For his two bodies:
+
+```
+DSC00123 (A7C II)                    DJI_0001 (drone)
+  Proxy      WebP  2048   · 0.4 MB     Proxy      WebP  2048   · 0.4 MB
+  HIF        HEIF  8640   ·  12 MB     JPEG       JPEG  8064   ·   9 MB
+  ARW → Gain RAW   8640   ·  52 MB     DNG → Gain            RAW 8064 · 74 MB
+                                           → + gain map
+                                           → + gain map & warp
+```
+
+Three of those five kinds of row exist today. The JPEG row is `fetchOriginal`
+— already built, already measured, already decodable. The HIF row is the one
+that costs something, because most browsers do not decode HEIF at all (§11.C).
+
+## 10. Two facts read in Winnow that shape the HEIF answer
+
+- **Winnow makes exactly two derivatives per photo** (`lib/derivatives.ts`): a
+  `thumb` and a `proxy`, both WebP, both capped by `config.proxySize`. **There
+  is no full-size derivative**, so "give me the HIF's pixels" cannot be
+  answered by an existing route.
+- **But a camera HEIF usually carries a full-size JPEG inside it.** Winnow's
+  own `extract.ts` says so in as many words — *"A full-size embedded preview
+  is ideal: instant, no pixel decode at all (Sony .hif and most camera HEIFs
+  ship one)"* — and pulls it with exiftool's `JpgFromRaw` / `PreviewImage` /
+  `ThumbnailImage`, exactly the trick `raw-probe.ts` plays on a RAW.
+
+So the HEIF question may not need a decoder at all: it may need an ISO-BMFF
+walk to the same embedded JPEG. That is a measurement on one of his `.HIF`
+files, not a judgement (§11.G).
+
+## 11. The questions a complete plan needs answered
+
+Grouped, with a recommendation on each so they can be answered by exception.
+
+### A — the control and its vocabulary
+
+1. **One flat list or two levels?** `Proxy · JPEG · HIF · RAW (gain) · RAW
+   (+gain map) · RAW (+warp)` in one menu, or the files first with the
+   calibration rungs nested under the sensor one.
+   *Recommended*: **flat, with the RAW's rungs grouped under a separator** —
+   the `OverflowMenu` already draws that, and a picture is one question.
+2. **What the rows say: the role or the file?** "Camera render / Sensor", or
+   `JPEG · 8064 px · 9 MB`.
+   *Recommended*: **the file, with its pixels and its weight** — he asked for
+   "le fichier JPEG", and a person choosing bytes wants to see the bytes. The
+   role stays internal.
+3. **Is the choice STORED on the document, or a fact about this machine?**
+   Today `base` is stored (material) while `Auto · Proxies · Originals` is an
+   export-door choice. "From the JPEG rather than the proxy" is the same
+   material at more pixels, which argues for the door; but a person who picked
+   the JPEG expects it again tomorrow, which argues for the document.
+   *Recommended*: **stored**, one field replacing `base`, because preview =
+   export must hold and because the alternative silently reverts his choice.
+4. **Does it batch?** "Open these 30 from their RAW" over a filmstrip
+   selection.
+   *Recommended*: **yes for the FILE, never for the numbers** — the role is
+   resolved per picture and each `rawGain` is measured on its own picture;
+   the clipboard and the presets keep carrying nothing (`withoutBase`).
+5. **Develop only, or Trips and the Studio too?**
+   *Recommended*: **Develop only** at first (the modal hosts keep the simple
+   sheet, today's rule), with the *Delivers* row naming the file everywhere.
+
+### B — detection: what a capture has, and what this browser can do with it
+
+6. **How many files per capture?** Winnow pairs exactly two; a folder can hold
+   `.DNG` + `.JPG` + `.HIF`.
+   *Recommended*: the list takes N, ranked; the sources fill what they know.
+7. **Does a local folder keep every sibling, or only the RAW?**
+   *Recommended*: `AssetParts.raw` plus a `siblings` list — the cost is a
+   field, and it is what makes a card-only workflow work.
+8. **Static list of drawable formats, or a runtime probe?** Safari decodes
+   HEIF, Chromium does not; a static list lies to one of them.
+   *Recommended*: **probe once per session** (`ImageDecoder.isTypeSupported`,
+   else a real decode of the file with a stated fallback).
+9. **Live Photo companions** (`kind 'live_photo'`, a `.MOV`): ignored as
+   material — but ever offered as "the motion"?
+   *Recommended*: out of scope, recorded.
+10. **Do clips get the same pill?** The Studio already has "render from the
+    proxy" for a rush.
+    *Recommended*: same vocabulary, later phase (R5+), no second control.
+
+### C — HEIF, the one real expense
+
+11. **How is a `.HIF` opened where the browser does not decode it?** Four ways:
+    (a) `libheif.wasm` by dynamic import (~2 MB, the exact twin of
+    `libraw-wasm`); (b) read the full-size JPEG embedded in the HEIF ourselves
+    (ISO-BMFF walk + the Exif item — §10); (c) ask Winnow for a full-size
+    derivative it does not make today; (d) offer the HIF only where the
+    browser decodes it.
+    *Recommended*: **(d) + (b)** — (b) is the trick `raw-probe.ts` already
+    plays and costs no megabyte; (a) only if (b) fails on his files; (c) makes
+    Winnow pay for a browser's gap.
+12. **If (b): what happens when a HEIF embeds no preview, or a small one?**
+    *Recommended*: say it, fall back to the proxy, offer (a) as a later phase.
+13. **If (c) ever: a stored third derivative, or rendered on demand?**
+14. **16-bit TIFF originals: in the list or out?**
+    *Recommended*: out — nothing in the house writes one.
+
+### D — cost, cache and memory
+
+15. **Fetched only on a click, with the weight on the click** — confirm.
+16. **Several renditions held per picture** (proxy + a 9 MB JPEG + a 74 MB
+    DNG): does `original-cache.ts` need a byte ceiling and an eviction?
+    *Recommended*: **yes, an LRU with a stated ceiling** — a forty-picture
+    roll at 74 MB is an ended tab, and today's cache has no bound.
+17. **Prefetch the chosen rendition for the filmstrip's neighbours**, as the
+    proxies are prefetched?
+    *Recommended*: no.
+18. **On reload, with a stored choice (A3)**: reopen on the proxy and fetch on
+    demand, or fetch at once?
+    *Recommended*: **open on the proxy**, the pill saying `ARW · not loaded`,
+    one click to bring it back. The proxy is the performance rendition; that
+    is what it is for.
+
+### E — the export
+
+19. **Do `Auto · Proxies · Originals` survive, or does the pixels axis fold
+    into the renditions list?**
+    *Recommended*: they survive; `Auto` becomes "the best drawable rendition
+    this frame needs".
+20. **If a picture is developed from the HIF, does `Proxies` still deliver
+    from the proxy?**
+    *Recommended*: **no — the chosen material wins**. `Proxies` chooses pixels
+    at equal material, it never steps down a material a person chose.
+21. **Whose EXIF does the delivered file carry, when a capture has two
+    originals?**
+    *Recommended*: **the primary's** (the JPEG/HIF) — it is what Winnow pairs
+    on and what his Gallery folder is matched by.
+22. **The name**: `DJI_0101.jpg` whether developed from the DNG or the JPG —
+    so two deliveries of one capture from two materials collide and are
+    numbered `-1`. Acceptable, or does the material belong in the name?
+    *Recommended*: keep the name; the collision rule already exists.
+
+### F — what the screen says
+
+23. **How many facts before the chip is a paragraph?** Today: bits, rungs,
+    pixels. Adding the file name and the weight makes five.
+    *Recommended*: chip = `RAW · 16-bit · gain map · 8640 × 5760`; the file
+    name goes in the menu row and in the `I` fact stack.
+24. **A rendition that cannot be reached** (offline, unpaired, undecodable):
+    does the stored choice fall, or stand and wait?
+    *Recommended*: **stand, fall back to the best reachable, and say so** —
+    today's rule for an unreachable rung, extended.
+
+### G — what only his own files can answer (before deciding C and A3)
+
+25. Does `libraw-wasm` decode an A7C II `.ARW`, and what does it cost?
+26. How big is the render embedded in an ARW? (Decides whether a lone ARW
+    looks sharp on the proxy rung.)
+27. **Does his `.HIF` embed a full-size JPEG** (§10, the whole of C11b), and
+    what does it weigh?
+28. Does the Chromium in his desktop app decode HEIC at all? (One line.)
+29. Is the DJI `.JPG` beside the DNG full size (8064 px)? — decides whether
+    "just the JPEG" is worth a row on that body.
+30. The phone budget: a 52 MB fetch plus a 33 MP decode on his iPhone.

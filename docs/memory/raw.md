@@ -242,6 +242,25 @@ later agent must not re-derive:
 - **A local folder has the same gap**: `buildAssets` keeps ONE image per base
   name, so the RAW half of a pair is dropped at the door (`architecture.md`).
 
+**Decided the same day (the maintainer), and it widens the thing**: companions
+yes; **the proxy is a PERFORMANCE rendition and nothing else** — the
+thumbnail, the preview, where a picture opens and never where it is trapped;
+and **the pill must also offer the camera's own delivered file**, the JPEG or
+the HIF — *"il y a des cas où je ne veux pas me servir du proxy et je ne veux
+pas non plus aller sur un fichier brut, je veux juste aller sur le fichier
+JPEG ou juste sur le fichier HIF"*. So it is not a ladder but a LIST OF FILES
+with the calibration rungs nested under the sensor one, and the engine must
+understand the container and the codec rather than branch per camera. The
+cheapest row of that list is the delivered one: it is `fetchOriginal` moved
+from the export door onto the stage. The dearest is HEIF — and the measurement
+that decides its cost is whether his `.HIF` embeds a full-size JPEG, because
+**Winnow's own `extract.ts` says most camera HEIFs do** (*"Sony .hif and most
+camera HEIFs ship one"*, pulled with exiftool's `PreviewImage`), which would
+make it the `raw-probe.ts` trick over an ISO-BMFF walk instead of a 2 MB
+`libheif.wasm`. Winnow makes only two derivatives, `thumb` and `proxy`, both
+WebP — there is no full-size one to ask for. The thirty questions a complete
+plan needs are `docs/capture-renditions.md` §11.
+
 ## What a DJI DNG actually holds (measured 2026-09-20, body FC8482)
 
 Two files off the maintainer's own drone (DJI Fly, `dji_fly_*_photo.DNG`,
