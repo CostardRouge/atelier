@@ -153,6 +153,14 @@ export default function LutGalleryModal({
   const picture = useMemo(() => asPreviewPicture(previewImage), [previewImage]);
   const scene = !!picture;
   const [aimed, setAimed] = useState<string | null>(selected ?? null);
+  /**
+   * The before/after wipe. It lives HERE rather than in `LookScene` because
+   * the slider that drives it belongs in the column beside the picture — a
+   * control over a photograph is a control in the way of what it is for — and
+   * the drag across the picture writes the same number.
+   */
+  const [compare, setCompare] = useState(false);
+  const [splitX, setSplitX] = useState(0.5);
 
   // The shipped tiles. `{}` until they answer, and `{}` for good if this build
   // ships none — in which case every look simply bakes live, as it used to.
@@ -342,7 +350,9 @@ export default function LutGalleryModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-[56rem] h-[min(88dvh,50rem)] flex flex-col gap-4 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6 pb-5 min-h-0 max-[820px]:max-w-none max-[820px]:h-[var(--app-h,100dvh)] max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:px-4 max-[820px]:pt-[max(1rem,env(safe-area-inset-top))] max-[820px]:pb-[max(1rem,env(safe-area-inset-bottom))]">
+      {/* Wider and taller than it was (56rem / 50rem): the scene wants the
+          room, the grid gains columns with it, and the rail is unchanged. */}
+      <div className="w-full max-w-[76rem] h-[min(92dvh,54rem)] flex flex-col gap-4 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6 pb-5 min-h-0 max-[820px]:max-w-none max-[820px]:h-[var(--app-h,100dvh)] max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:px-4 max-[820px]:pt-[max(1rem,env(safe-area-inset-top))] max-[820px]:pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="m-0 font-serif text-2xl">{title}</h2>
@@ -372,16 +382,27 @@ export default function LutGalleryModal({
              rail takes 216, and a 420 px panel beside them leaves room for
              one tile per row. */
           <div className="flex-none flex gap-4 border-t border-line pt-3 max-[820px]:flex-col max-[820px]:gap-2">
-            <div className="w-[25rem] h-[14.5rem] flex-none max-[820px]:w-full max-[820px]:h-[12rem]">
+            {/* The picture takes the room and is shown WHOLE inside it, its
+                surround the dark of a light table. */}
+            {/* HEIGHT is what gives the picture presence: the band is wide
+                enough for a 16:9 frame long before it is tall enough for a
+                4:3 one, so growing it downwards is what fills the room. */}
+            <div className="flex-1 min-w-0 h-[21rem] max-[820px]:flex-none max-[820px]:w-full max-[820px]:h-[12rem]">
               <LookScene
                 source={picture}
                 cube={aimedCube}
                 interpolation={interpolation}
+                compare={compare}
+                splitX={splitX}
+                onSplit={(x) => {
+                  setCompare(true);
+                  setSplitX(x);
+                }}
                 busy={aimedBusy}
                 error={aimedError}
               />
             </div>
-            <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+            <div className="w-[21rem] flex-none flex flex-col gap-1.5 max-[820px]:w-full">
               <span className="text-base font-medium text-ink truncate">
                 {aimedItem?.name ?? 'Your picture, as it is'}
               </span>
@@ -390,6 +411,43 @@ export default function LutGalleryModal({
                   .filter(Boolean)
                   .join(' · ')}
               </span>
+              {/* The comparison slider: what the picture is worth against the
+                  original, said with a control you can put anywhere rather
+                  than a gesture you have to discover. Moving it turns the
+                  wipe ON — a slider that does nothing until a switch is found
+                  is a dead control. */}
+              {/* A DIV, not a label: a `<label>` around both made the
+                  button's accessible name the slider's VALUE ("50") — the
+                  browser takes a labelled control's name from the label's
+                  whole text, and a screen reader then announces the switch as
+                  a number. The slider names itself with `aria-label`. */}
+              <div className="flex items-center gap-2.5 mt-1 text-xs text-ink-soft">
+                <button
+                  type="button"
+                  onClick={() => setCompare((v) => !v)}
+                  aria-pressed={compare}
+                  title={compare ? 'Show the graded picture whole' : 'Wipe it against the original'}
+                  className={`flex-none px-2 py-1 rounded-control border font-mono text-2xs tracking-[0.08em] uppercase cursor-pointer transition-colors ${
+                    compare
+                      ? 'border-accent bg-accent-wash text-accent-ink'
+                      : 'border-line-strong bg-paper text-muted hover:text-ink'
+                  }`}
+                >
+                  Compare
+                </button>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={Math.round(splitX * 100)}
+                  onChange={(e) => {
+                    setCompare(true);
+                    setSplitX(Number(e.target.value) / 100);
+                  }}
+                  aria-label="Where the before/after divider sits"
+                  className="flex-1 min-w-0 accent-accent"
+                />
+              </div>
               {note && (
                 <p className="m-0 px-2.5 py-1.5 rounded-control bg-warn-wash border border-warn-line text-xs leading-snug text-warn">
                   {note}
