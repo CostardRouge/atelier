@@ -27,6 +27,10 @@ interface GradePanelProps {
   stack: LutStack;
   /** The picture on the stage, if there is one — the gallery's truest preview. */
   previewImage?: LutPreviewSource | null;
+  /** What that picture is called, for the line under the gallery's scene. */
+  previewLabel?: string | null;
+  /** True only for LOG footage — a photograph is display-referred. */
+  previewIsLog?: boolean;
   /**
    * The height in pixels of the surface the host really draws its preview at.
    * What decides whether a grain cell can be SEEN here, said as a visible
@@ -50,6 +54,8 @@ interface GradePanelProps {
 export default function GradePanel({
   stack,
   previewImage = null,
+  previewLabel = null,
+  previewIsLog = false,
   previewHeight = null,
   previewDraws = true,
 }: GradePanelProps) {
@@ -205,6 +211,8 @@ export default function GradePanel({
         <LutGalleryModal
           includeFilm
           previewImage={previewImage}
+          previewLabel={previewLabel}
+          previewIsLog={previewIsLog}
           onPick={(id) => {
             pickLook(id);
             setGallery(false);

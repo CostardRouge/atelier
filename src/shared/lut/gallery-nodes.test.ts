@@ -65,11 +65,25 @@ describe('the gallery rail', () => {
     expect(nodes.some((n) => n.id === FAVOURITES_NODE)).toBe(false);
   });
 
-  it('carries the baked thumbnail and resolves nothing, by default', () => {
+  it('carries the baked thumbnail, and a resolve the GRID will not call', () => {
     const nodes = galleryNodes([WITH_THUMBS], false);
     const item = nodes.flatMap((n) => n.items).find((i) => i.id === packPickId('pk_1', dji().id))!;
     expect(item.thumb).toBe(`data:image/webp;base64,${dji().id}`);
-    expect(item.resolve).toBeUndefined();
+    // The tile draws the baked thumbnail and decodes nothing — the rule that
+    // makes a 25-look pack of 65³ lattices affordable, and what the modal
+    // enforces by resolving only items with no thumb. The `resolve` is here
+    // for the ONE look the scene aims at, whose lattice nothing else fetches.
+    expect(typeof item.resolve).toBe('function');
+  });
+
+  it('gives every item the family its tile was baked on', () => {
+    const nodes = galleryNodes([WITH_THUMBS], true);
+    const items = nodes.filter((n) => !n.aggregate).flatMap((n) => n.items);
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((i) => i.family === 'log' || i.family === 'rec709')).toBe(true);
+    // A film stock is a response to a photograph, never a conversion.
+    const film = items.find((i) => i.id.startsWith('film:'));
+    expect(film?.family).toBe('rec709');
   });
 
   it('drops every thumbnail and resolves instead when asked to bake live', () => {

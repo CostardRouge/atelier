@@ -20,7 +20,15 @@ import { filmCubeFor } from '../film/film-layer';
 import { FILM_GROUP_LABEL, FILM_STOCKS, filmSettingsFor } from '../film/stocks';
 import type { CubeLut } from '../lib/cube-parser';
 import { LUT_GROUPS, UNGROUPED_LUTS } from './builtin-luts';
-import { flattenNodes, looksUnder, visibleLooks, type LutPackIndex, type PackLook } from './lut-pack';
+import {
+  familyForLookName,
+  flattenNodes,
+  looksUnder,
+  visibleLooks,
+  type LutPackIndex,
+  type PackFamily,
+  type PackLook,
+} from './lut-pack';
 import { missingLookReason, resolvePackLattice } from './pack-vault';
 import { loadBuiltinLut } from './restore-grade';
 
@@ -41,6 +49,17 @@ export interface GalleryItem {
   thumb?: string;
   /** The cube, fetched or generated — used when there is no tile, and for the live bake. */
   resolve?: () => Promise<CubeLut>;
+  /**
+   * Which reference this look expects to be read ON — a pack look's own
+   * `family`, and for everything else the same `familyForLookName` reading of
+   * the name that `scripts/gen-lut-thumbs.mjs` bakes the tiles by, so the two
+   * cannot disagree about which frame a look belongs on.
+   *
+   * The SCENE is what needs it (`look-scene.ts`): a conversion drawn on the
+   * author's own photograph is over-contrasted, and that is worth saying
+   * rather than leaving them to read it as a broken look.
+   */
+  family: PackFamily;
 }
 
 /** One row of the rail. */
@@ -105,6 +124,8 @@ export function galleryNodes(
     list.map((l) => ({
       id: l.id,
       name: l.name,
+      // The generator's own reading of the same name, deliberately.
+      family: familyForLookName(l.name),
       ...baked(l.id),
       resolve: () => loadBuiltinLut(l.id).then((r) => r.lut),
     }));
@@ -117,6 +138,9 @@ export function galleryNodes(
       items: FILM_STOCKS.map((s) => ({
         id: `${FILM_PICK}${s.id}`,
         name: s.name,
+        // An emulsion is a response to a display-referred picture, never a
+        // conversion: it is judged on the photograph.
+        family: 'rec709' as PackFamily,
         ...baked(`${FILM_PICK}${s.id}`),
         resolve: () => Promise.resolve(filmCubeFor(filmSettingsFor(s.id))),
       })),
@@ -207,10 +231,15 @@ export function galleryNodes(
  */
 function packItem(pack: LutPackIndex, look: PackLook, usePreBaked: boolean): GalleryItem {
   const id = packPickId(pack.id, look.id);
-  if (usePreBaked && look.thumb) return { id, name: look.label, thumb: look.thumb };
+  // `resolve` is carried EVEN when a tile is already baked: the grid still
+  // reads the tile and resolves nothing (the rule that makes a 25-look pack
+  // affordable), but the scene has to be able to grade the ONE look that is
+  // aimed, whose lattice nothing else would fetch.
   return {
     id,
     name: look.label,
+    family: look.family,
+    ...(usePreBaked && look.thumb ? { thumb: look.thumb } : {}),
     resolve: async () => {
       const lut = await resolvePackLattice({ pack: pack.id, look: look.id, hash: look.hash ?? '' });
       if (!lut) throw new Error(missingLookReason({ pack: pack.id, look: look.id, hash: '' }));
