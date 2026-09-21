@@ -1,10 +1,8 @@
 import { useEffect, useState, type ComponentType } from 'react';
-import { developPath, rollRef } from '../shared/develop/develop-route';
 import { getRollThumbs, listRolls } from '../shared/develop/roll-store';
 import { rollProgress } from '../shared/develop/roll-types';
 import { listProjects } from '../shared/projects/project-store';
 import { listTrips } from '../shared/roadtrip/trip-store';
-import { roadtripPath } from '../shared/roadtrip/trip-route';
 import { tripCoverage } from '../shared/roadtrip/trip-coverage';
 import { formatIsoDate } from '../shared/roadtrip/trip-days';
 import { useObjectUrl } from '../shared/media/use-object-url';
@@ -17,11 +15,14 @@ import { TOOLS, type Tool } from './tools';
  *
  * Nine equal cards told a story of nine equal tools, while the suite is
  * converging on its editors (`studio.md`) — the Studio, Trips and Develop.
- * Each editor is a door, carrying the document this browser worked on last so
- * the page is a point of resumption rather than a menu; the pages kept until
- * the Studio absorbs them are a compact list under the name the tool menu
- * gives them, "Instruments". A door is looked up by tool id (`DOORS`), so a
- * new editor is an entry there, never another branch.
+ * Each editor is a door: it SHOWS the document this browser worked on last —
+ * its preview, its name, how far it got — and OPENS that editor's gallery,
+ * where the choice is made. It used to open the document itself, and the
+ * maintainer had it back (`frontend.md`): a resume destination is right only
+ * when you came back for the same thing. The pages kept until the Studio
+ * absorbs them are a compact list under the name the tool menu gives them,
+ * "Instruments". A door is looked up by tool id (`DOORS`), so a new editor is
+ * an entry there, never another branch.
  */
 export default function Home() {
   const editors = TOOLS.filter((t) => t.group === 'editor');
@@ -89,21 +90,26 @@ export default function Home() {
 const door =
   'group relative flex flex-col gap-3 p-5 border border-line rounded-paper-lg bg-surface no-underline text-inherit shadow-paper-soft transition-[border-color,box-shadow] duration-[250ms] ease-paper hover:border-line-strong hover:shadow-paper';
 
-function DoorHead({ tool, resume }: { tool: Tool; resume: string | null }) {
+/**
+ * `last` is what is waiting behind the door, never where the click goes: the
+ * verb is Open at every state, or the card would promise a document it does
+ * not open.
+ */
+function DoorHead({ tool, last }: { tool: Tool; last: string | null }) {
   return (
     <>
       <div className="flex items-baseline gap-3">
         <h2 className="m-0 font-serif font-normal text-3xl leading-none tracking-[-0.01em]">
           {tool.label}
         </h2>
-        {resume && <span className="min-w-0 truncate text-xs text-muted">{resume}</span>}
+        {last && <span className="min-w-0 truncate text-xs text-muted">{last}</span>}
       </div>
       {tool.blurb && <p className="m-0 text-ink-soft text-sm leading-[1.55]">{tool.blurb}</p>}
       <span
         className="inline-flex items-center gap-[0.35rem] text-xs font-semibold text-accent-ink"
         aria-hidden="true"
       >
-        {resume ? 'Resume' : 'Open'}
+        Open
         <span className="inline-flex transition-transform duration-[250ms] ease-paper group-hover:translate-x-[3px]">
           {Icons.forward}
         </span>
@@ -114,21 +120,20 @@ function DoorHead({ tool, resume }: { tool: Tool; resume: string | null }) {
 
 /** The Studio's door: the project this browser touched last, with its preview. */
 function StudioDoor({ tool }: { tool: Tool }) {
-  const [last, setLast] = useState<{ id: string; name: string; updatedAt: number; thumbnail: Blob | null } | null>(null);
+  const [last, setLast] = useState<{ name: string; updatedAt: number; thumbnail: Blob | null } | null>(null);
   useEffect(() => {
     let alive = true;
     void listProjects().then((all) => {
       const p = all[0];
-      if (alive && p) setLast({ id: p.id, name: p.name, updatedAt: p.updatedAt, thumbnail: p.thumbnail });
+      if (alive && p) setLast({ name: p.name, updatedAt: p.updatedAt, thumbnail: p.thumbnail });
     });
     return () => {
       alive = false;
     };
   }, []);
   const thumb = useObjectUrl(last?.thumbnail ?? null);
-  const href = last ? `#/studio/open/${encodeURIComponent(last.id)}` : `#${tool.path}`;
   return (
-    <a href={href} className={door}>
+    <a href={`#${tool.path}`} className={door}>
       <div className="h-24 rounded-[10px] overflow-hidden bg-paper-2">
         {thumb ? (
           <img src={thumb} alt="" className="block w-full h-full object-cover" />
@@ -136,7 +141,7 @@ function StudioDoor({ tool }: { tool: Tool }) {
           <div className="w-full h-full grid place-items-center text-faint text-2xl">{Icons.video}</div>
         )}
       </div>
-      <DoorHead tool={tool} resume={last ? `${last.name} · ${when(last.updatedAt)}` : null} />
+      <DoorHead tool={tool} last={last ? `${last.name} · ${when(last.updatedAt)}` : null} />
     </a>
   );
 }
@@ -144,7 +149,6 @@ function StudioDoor({ tool }: { tool: Tool }) {
 /** The Trips' door: the trip touched last, its days as a strip. */
 function TripsDoor({ tool }: { tool: Tool }) {
   const [last, setLast] = useState<{
-    id: string;
     name: string;
     told: number;
     total: number;
@@ -164,15 +168,14 @@ function TripsDoor({ tool }: { tool: Tool }) {
         const slice = coverage.days.slice(i, i + size);
         cells.push(slice.some((d) => d.posts.length > 0) ? 1 : 0);
       }
-      setLast({ id: t.id, name: t.name, told: coverage.toldDays, total: coverage.totalDays, cells, start: t.startDate });
+      setLast({ name: t.name, told: coverage.toldDays, total: coverage.totalDays, cells, start: t.startDate });
     });
     return () => {
       alive = false;
     };
   }, []);
-  const href = last ? `#${roadtripPath(last.id)}` : `#${tool.path}`;
   return (
-    <a href={href} className={door}>
+    <a href={`#${tool.path}`} className={door}>
       <div className="h-24 rounded-[10px] bg-paper-2 p-3 flex items-end gap-px">
         {last ? (
           last.cells.map((on, i) => (
@@ -187,7 +190,7 @@ function TripsDoor({ tool }: { tool: Tool }) {
       </div>
       <DoorHead
         tool={tool}
-        resume={last ? `${last.name} · ${last.told}/${last.total} days told · from ${formatIsoDate(last.start)}` : null}
+        last={last ? `${last.name} · ${last.told}/${last.total} days told · from ${formatIsoDate(last.start)}` : null}
       />
     </a>
   );
@@ -195,9 +198,7 @@ function TripsDoor({ tool }: { tool: Tool }) {
 
 /** The Develop door: the roll touched last, its first pictures as a strip. */
 function DevelopDoor({ tool }: { tool: Tool }) {
-  const [last, setLast] = useState<{ ref: string; name: string; developed: number; total: number; thumbs: Blob[] } | null>(
-    null,
-  );
+  const [last, setLast] = useState<{ name: string; developed: number; total: number; thumbs: Blob[] } | null>(null);
   useEffect(() => {
     let alive = true;
     void listRolls().then(async (all) => {
@@ -206,15 +207,14 @@ function DevelopDoor({ tool }: { tool: Tool }) {
       const ids = r.pictures.slice(0, 5).map((p) => p.id);
       const map = await getRollThumbs(ids);
       const { developed, total } = rollProgress(r);
-      if (alive) setLast({ ref: rollRef(r), name: r.name, developed, total, thumbs: ids.flatMap((id) => map.get(id) ?? []) });
+      if (alive) setLast({ name: r.name, developed, total, thumbs: ids.flatMap((id) => map.get(id) ?? []) });
     });
     return () => {
       alive = false;
     };
   }, []);
-  const href = last ? `#${developPath(last.ref)}` : `#${tool.path}`;
   return (
-    <a href={href} className={door}>
+    <a href={`#${tool.path}`} className={door}>
       <div className="h-24 rounded-[10px] overflow-hidden bg-paper-2 flex gap-px">
         {last && last.thumbs.length > 0 ? (
           last.thumbs.map((blob, i) => <DoorThumb key={i} blob={blob} />)
@@ -224,7 +224,7 @@ function DevelopDoor({ tool }: { tool: Tool }) {
       </div>
       <DoorHead
         tool={tool}
-        resume={
+        last={
           last
             ? `${last.name} · ${last.total === 0 ? 'no pictures yet' : `${last.developed} of ${last.total} developed`}`
             : null
@@ -247,7 +247,7 @@ function DoorThumb({ blob }: { blob: Blob }) {
 function PlainDoor({ tool }: { tool: Tool }) {
   return (
     <a href={`#${tool.path}`} className={door}>
-      <DoorHead tool={tool} resume={null} />
+      <DoorHead tool={tool} last={null} />
     </a>
   );
 }
