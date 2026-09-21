@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { WinnowAssetRow, WinnowClient } from '../shared/sources/winnow/client';
 import type { WinnowConnection } from '../shared/sources/winnow/store';
 import type { InstancePicker } from '../shared/sources/winnow/use-pick';
@@ -105,6 +105,8 @@ export default function WinnowLightbox({
     [body, neighbours, connection.id],
   );
 
+  const healUrl = useCallback((url: string) => client.heal(url), [client]);
+
   // Sitting on an edge card, which side; and an edge landed on in its own
   // direction before its day was known, to be followed once it is.
   const [onEdge, setOnEdge] = useState<Side | null>(null);
@@ -171,6 +173,10 @@ export default function WinnowLightbox({
       onIndex={onDeckIndex}
       onClose={onClose}
       from={`from ${connection.id}`}
+      // These are the instance's own URLs, so a cache entry stored without the
+      // CORS headers is a picture that will not draw until it is replaced
+      // (`winnow/cache-heal.ts`).
+      heal={healUrl}
       // Enter does the one thing the sheet offers — and nothing at all once
       // the picture is already in the library.
       onConfirm={row && !have && !busy ? () => void picker.pick(row) : null}

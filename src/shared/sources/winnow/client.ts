@@ -28,6 +28,7 @@
  * unit-testable without a network.
  */
 
+import { healCachedUrl } from './cache-heal';
 import { TIMELINE_SYNC_ENABLED } from './features';
 
 export type WinnowAuth =
@@ -665,15 +666,34 @@ export class WinnowClient {
    * The same thumbnail, asked for again after a failed load.
    *
    * A tile that fails once stays black forever: an `<img>` has no retry, and
-   * the browser will happily reuse a failed entry. Attempt 0 is the plain URL
-   * so the ordinary case is fully cacheable (Winnow serves these `immutable`
-   * for a year); only a RETRY carries a discriminator, which both defeats a
-   * poisoned cache entry and makes the request genuinely new.
+   * the browser will happily reuse a failed entry. Three attempts, and they
+   * are not the same question twice:
+   *
+   * - **0 — the plain URL**, so the ordinary case is fully cacheable (Winnow
+   *   serves these `immutable` for a year).
+   * - **1 — the plain URL again**, asked for only once `heal` has REPLACED
+   *   the cache entry. That is the common failure (`cache-heal.ts`) and the
+   *   only cure that also fixes the next page load.
+   * - **2 and past it — a discriminated URL**, for a request that was merely
+   *   shed under load: a genuinely new request, which a cache cannot answer.
    */
   thumbRetryUrl(id: number, attempt: number): string {
-    return attempt <= 0
+    return attempt <= 1
       ? this.thumbUrl(id)
       : this.url(`/api/assets/${id}/thumb`, { retry: attempt });
+  }
+
+  /**
+   * Ask for `url` again past this browser's cache, replacing what it holds.
+   *
+   * The answer to a cross-origin entry cached without its CORS headers, which
+   * no reload cures and which fails before the request ever leaves the machine
+   * — the whole story is in `cache-heal.ts`. True when the entry now holds
+   * something worth asking for again. Used by anything that reads one of these
+   * URLs OUTSIDE this client: an `<img>` tile, the lightbox's own picture.
+   */
+  heal(url: string): Promise<boolean> {
+    return healCachedUrl(url, () => this.fetchImpl(url, { ...this.init(), cache: 'reload' }));
   }
 
   /** Where to send someone who is not signed in — Winnow's own login page. */
@@ -709,17 +729,33 @@ export class WinnowClient {
     };
   }
 
+  /** What a thrown fetch is reported as, once there is nothing left to try. */
+  private unreachable(pastTheCache: boolean): WinnowError {
+    const asked = pastTheCache ? ', even asked again past this browser’s cache' : '';
+    return new WinnowError(
+      'unreachable',
+      `${this.config.baseUrl} did not answer${asked} (offline, wrong address, or this origin is not allowed there).`,
+    );
+  }
+
   private async request(url: string, extra?: RequestInit): Promise<Response> {
     let res: Response;
     try {
       res = await this.fetchImpl(url, this.init(extra));
     } catch {
-      // A TypeError here is what a CORS refusal, a DNS miss or being offline
-      // all look like from inside the page — the browser hides which.
-      throw new WinnowError(
-        'unreachable',
-        `${this.config.baseUrl} did not answer (offline, wrong address, or this origin is not allowed there).`,
-      );
+      // A TypeError here is what a CORS refusal, a DNS miss, being offline and
+      // a cache entry this origin is not allowed to read all look like from
+      // inside the page — the browser hides which. The last one is the common
+      // one and the only one that never heals on its own (`cache-heal.ts`), so
+      // a READ is asked again with `cache: 'reload'`, which both bypasses the
+      // entry and replaces it. A WRITE is never replayed: it may have landed.
+      const method = (extra?.method ?? 'GET').toUpperCase();
+      if (method !== 'GET' && method !== 'HEAD') throw this.unreachable(false);
+      try {
+        res = await this.fetchImpl(url, { ...this.init(extra), cache: 'reload' });
+      } catch {
+        throw this.unreachable(true);
+      }
     }
     if (res.status === 401) {
       throw new WinnowError('unauthenticated', 'Not signed in to this Winnow.', 401);

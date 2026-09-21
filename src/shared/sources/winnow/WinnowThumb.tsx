@@ -13,12 +13,17 @@
  * which is exactly the shape of a cache poisoned on one device.
  *
  * An `<img>` has no answer to any of that: it fires `error` once and gives up.
- * So the tile retries with a widening delay (the failures are load-shaped, and
- * hammering makes them worse) and then says plainly that the picture would not
- * come. **Attempt 0 uses the plain URL** so the ordinary path stays as
- * cacheable as Winnow means it to be; only a retry carries the `?retry=N`
- * discriminator, which is both a genuinely new request and the thing that
- * defeats a poisoned entry.
+ * So the tile retries, and the FIRST retry is not a second helping of the same
+ * question. Since 2026-09-21 the poisoned entry is diagnosed (`cache-heal.ts`:
+ * the answer was stored without its CORS headers, because Winnow's own pages
+ * ask for the same URL with no `Origin` and the derivative routes carry no
+ * `Vary: Origin`), so the tile HEALS it — one `cache: 'reload'` request that
+ * replaces what the cache holds — and then asks for the plain URL again. That
+ * fixes the next page load too, where the old `?retry=N` route-around left the
+ * bad entry in place and paid the failure again every time. `?retry=N` stays
+ * as the later attempts, for a request that was merely shed under load: a
+ * genuinely new URL is the only thing that helps there, and the delay widens
+ * because hammering a shedding server makes it worse.
  *
  * **Why it is shared rather than a helper inside one grid.** It was written
  * inside `WinnowBrowser` and stayed there, so the two grids added later — the
@@ -60,12 +65,16 @@ export interface WinnowThumbProps {
 export default function WinnowThumb({ client, id, label, box, alt = '' }: WinnowThumbProps) {
   const [attempt, setAttempt] = useState(0);
   const timer = useRef<number | null>(null);
+  // A heal is awaited, not timed, so the timer cannot speak for it.
+  const alive = useRef(true);
 
   // A new picture starts fresh, and a retry still pending for the old one is
   // dropped — on unmount too, so a grid closed mid-retry leaves nothing armed.
   useEffect(() => {
+    alive.current = true;
     setAttempt(0);
     return () => {
+      alive.current = false;
       if (timer.current !== null) window.clearTimeout(timer.current);
       timer.current = null;
     };
@@ -95,8 +104,19 @@ export default function WinnowThumb({ client, id, label, box, alt = '' }: Winnow
       decoding="async"
       className={`block object-cover ${box}`}
       onError={() => {
-        const next = attempt + 1;
         if (timer.current !== null) window.clearTimeout(timer.current);
+        timer.current = null;
+        if (attempt === 0) {
+          // The first failure is nearly always the cache entry, not the
+          // network: replace it and ask for the same URL. When the instance
+          // does not answer at all, there is nothing to ask the plain URL for
+          // — go straight to a discriminated request.
+          void client.heal(client.thumbUrl(id)).then((healed) => {
+            if (alive.current) setAttempt(healed ? 1 : 2);
+          });
+          return;
+        }
+        const next = attempt + 1;
         timer.current = window.setTimeout(() => setAttempt(next), next * 400);
       }}
     />
