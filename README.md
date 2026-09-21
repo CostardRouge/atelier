@@ -1093,7 +1093,10 @@ instance it came from, never automatically.
 Library's preview sheet, or a day on your Winnow — a **Develop** button adds
 it to the open roll and opens it there (a picture already on the roll is
 opened, never added twice); from the rolls gallery the same button starts a
-new roll from it.
+new roll from it. That sheet also shows the capture's other files as chips —
+*Proxy*, the camera's JPEG, the render inside its DNG or ARW — fetched only
+when you click one and kept for the session; looking writes nothing, and
+pressing **Develop** while one is on screen opens the roll on that file.
 
 **Keeping it.** A roll saves as you go — with the same undo and redo as the
 Studio and Trips, over the whole roll — and one kept on a Winnow saves there

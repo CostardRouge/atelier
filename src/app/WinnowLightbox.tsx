@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import type { WinnowAssetRow, WinnowClient } from '../shared/sources/winnow/client';
 import type { WinnowConnection } from '../shared/sources/winnow/store';
 import type { InstancePicker } from '../shared/sources/winnow/use-pick';
@@ -14,6 +14,11 @@ import { exposureSummary } from '../shared/exif/exif-summary';
 import MediaLightbox, { type LightboxItem } from '../shared/ui/MediaLightbox';
 import MediaActionRow from '../shared/ui/MediaActionRow';
 import { useMediaActions, type MediaAction } from '../shared/sources/media-scope';
+import { rowCaptureInput } from '../shared/develop/capture-view';
+import { useCaptureView } from '../shared/develop/use-capture-view';
+import { renditionsOf, type Rendition } from '../shared/media/renditions';
+import { heldOriginal, heldVersion, subscribeHeld } from '../shared/sources/original-cache';
+import { captureMtime } from '../shared/sources/winnow/materialize';
 
 interface WinnowLightboxProps {
   connection: WinnowConnection;
@@ -153,16 +158,42 @@ export default function WinnowLightbox({
   const have = row ? inLibrary.get(`${connection.id}/${row.id}`) : undefined;
   const busy = picker.fetching !== null;
 
+  // The capture's files behind the row on screen — the proxy it shows, the
+  // primary's own file, the companion Winnow paired with it — as chips (R6 of
+  // `docs/capture-renditions.md`). A chip fetches on its click and holds the
+  // file for the session; the `held` subscription is what turns its arrow
+  // off once it has. View state only: nothing here writes a document.
+  const held = useSyncExternalStore(subscribeHeld, heldVersion);
+  const viewRows = useMemo<Rendition[]>(
+    () => (row && row.media_type === 'photo' ? renditionsOf(rowCaptureInput(row, connection.id, (id) => heldOriginal(id) !== null)) : []),
+    // `held` is the cache's version: the rows must be rebuilt when a fetch lands.
+    [row, connection.id, held],
+  );
+  const captureView = useCaptureView({
+    key: row ? `${connection.id}/${row.id}` : null,
+    rows: viewRows,
+    openSrc: row ? client.proxyUrl(row.id) : null,
+    fileFor: () => null,
+    fetchFor: (r) => {
+      if (!row || !r.assetId) return null;
+      const id = Number(r.assetId.slice(r.assetId.lastIndexOf('/') + 1));
+      if (!Number.isFinite(id)) return null;
+      return () => client.fetchFile(client.originalUrl(id), r.name, '', captureMtime(row));
+    },
+  });
+
   // What the active tool can start from this picture. The fetch comes first
   // and the verb runs only if it landed: a piece made from a picture that
   // never arrived would open on a placeholder, which is the one thing the
-  // thumbnail rule (`roadtrip.md`) says must not be composed over.
+  // thumbnail rule (`roadtrip.md`) says must not be composed over. The verb
+  // is handed the file of the capture that was on screen.
   const offer = useMediaActions();
   const start = async (action: MediaAction) => {
     if (!row) return;
+    const view = captureView.view;
     const assetId = await picker.pick(row);
     if (!assetId) return; // the sheet stays open on the problem the picker set
-    action.run();
+    action.run(view);
     onClose();
   };
 
@@ -177,6 +208,9 @@ export default function WinnowLightbox({
       // CORS headers is a picture that will not draw until it is replaced
       // (`winnow/cache-heal.ts`).
       heal={healUrl}
+      files={captureView.files}
+      viewing={captureView.viewing}
+      onViewing={captureView.setViewing}
       // Enter does the one thing the sheet offers — and nothing at all once
       // the picture is already in the library.
       onConfirm={row && !have && !busy ? () => void picker.pick(row) : null}

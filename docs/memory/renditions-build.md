@@ -181,4 +181,46 @@ row is the only thing left to read. Rules:
   upscaled ×5.33`, with no fetch of the original for the row. The Studio's
   panel was not driven (same seam, same shape, the control removed).
 
-Still to build: R6 (the lightbox), R9 (a ceiling on the session cache).
+## R6 is BUILT: the lightbox switches between a capture's files and writes nothing (2026-09-21)
+
+His §13.4: *"la visionneuse n'écrit aucun choix, c'est juste de la
+visualisation"*. Chips under the facts — `Proxy · DJI_0202.JPG · DJI_0202.DNG`
+— switch which FILE of the capture the middle slot draws, in both sheets
+(the Library's over a pool asset, `WinnowLightbox` over an instance's row
+before it is fetched). Rules:
+
+- **View state only, dropped with the sheet.** `useCaptureView`
+  (`shared/develop/use-capture-view.ts`) owns the choice and the object URLs;
+  `MediaLightbox` takes `files` / `viewing` / `onViewing` and never learns
+  where the bytes come from. No document is touched by looking.
+- **The VERB carries it.** `MediaAction.run(view?)` now takes a `MediaView`
+  (`{ rendition }`, as a roll stores it — null for the opening row, through
+  `viewedRendition`), and `RollEditor`'s `Develop` writes it on the picture it
+  adds or finds, setting a RAW base aside exactly as the chip does. Driven:
+  the DNG viewed in the Library → the roll's picture carries
+  `delivered:dji_0101.dng` and the stage says `RAW · camera render`; the JPG
+  viewed over a stub row → `delivered:dji_0202.jpg`, the stage says
+  `JPEG · 8-bit · 800 × 450` with NO request, since the sheet's fetch was
+  held under the asset id (`holdOriginal`) — the same cache the workbench and
+  the export read. Trips' verbs ignore the view; a piece has no rendition.
+- **One vocabulary**: `viewLabel` is the fidelity chip's word (`Proxy`, else
+  the file's name); the sensor rows are left out, since a viewer draws files
+  and a chip that could only say "open Develop" disappoints. A RAW is never
+  handed to an `<img>`: `extractRawPreview` slices the render out, which is
+  also what a LONE RAW in the Library now shows instead of "no browser
+  decodes this here". A chip that will fetch wears `↓` until it has.
+- **An instance's row is a capture too** (`rowCaptureInput`, pure, tested):
+  the proxy it shows, the primary's file, the `raw_jpeg` companion — ids by
+  name, so they match what `materialize` gives the workbench after the pick.
+  No head is read before a click: the RAW's render stays unmeasured until
+  looked at.
+- **`useSiblingFacts`** is the one reader of a folder's siblings' heads
+  (software mark, a RAW's two sizes), shared by the workbench and the sheet.
+- Found on the way, fixed apart from the seam: `DevelopTool`'s loader
+  re-read the store when the route's REFERENCE changed spelling — a link by
+  the bare id, then the slugged path `onOpenPicture` writes — and handed
+  back the copy the 800 ms debounced save had not written yet, so the picture
+  just added vanished from the screen while the store held it. The same roll
+  under another reference is not a reload (`rollFromRef(route.ref, [open])`).
+
+Still to build: R9 (a ceiling on the session cache).

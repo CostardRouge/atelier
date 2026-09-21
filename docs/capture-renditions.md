@@ -693,7 +693,7 @@ already make: `FileSystemHandle.isSameEntry` against the handle the roll
 remembers for its local pictures (`develop-media.md`) — no path, no string
 match, and it answers false for a folder that merely looks alike.
 
-### 13.4 Where the switcher lives — DECIDED 2026-09-21
+### 13.4 Where the switcher lives — DECIDED 2026-09-21, BUILT the same day (R6)
 
 **The lightbox writes nothing.** *"Pour moi la visionneuse n'écrit aucun
 choix, c'est juste de la visualisation […] juste de la curiosité de la part de

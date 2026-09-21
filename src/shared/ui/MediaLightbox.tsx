@@ -56,12 +56,55 @@ export interface LightboxItem {
   uncounted?: boolean;
 }
 
+/**
+ * One FILE of the capture the open item is (R6 of
+ * `docs/capture-renditions.md`): the proxy, the camera's own JPEG, the render
+ * inside its RAW. Chips under the facts switch between them — view state
+ * only, dropped with the sheet, writing nothing anywhere. The words are the
+ * fidelity chip's (`develop/capture-view.ts`), so a person reads one
+ * vocabulary from the sheet to the workbench.
+ */
+export interface LightboxFile {
+  /** The rendition's id (`media/renditions.ts`), what a verb carries away. */
+  id: string;
+  /** The chip's word: `Proxy`, else the file's name. */
+  label: string;
+  /** What it is, its pixels, its weight. */
+  facts: string;
+  /** The URL to draw, once the bytes are in hand. */
+  src: string | null;
+  natural?: { width: number; height: number } | null;
+  /** Why it cannot be shown here, or null. */
+  unavailable?: string | null;
+  /** Bring the bytes in — fetched, or sliced out of a RAW — and resolve with the URL to draw. */
+  load?: () => Promise<string>;
+  /** True when choosing it will fetch from an instance — said on the chip before the click. */
+  fetches?: boolean;
+}
+
+/** What the middle slot draws in place of its item while another file of the capture is viewed. */
+interface SlotOverride {
+  src: string | null;
+  natural: { width: number; height: number } | null;
+  unavailable: string | null;
+  /** The bytes are on their way: keep the bar up rather than saying "nothing to show". */
+  pending: boolean;
+}
+
 interface MediaLightboxProps {
   items: readonly LightboxItem[];
   /** Which one is open, an index into `items`. */
   index: number;
   onIndex: (index: number) => void;
   onClose: () => void;
+  /**
+   * The capture's files behind the OPEN item, first the one the item already
+   * draws. Absent or shorter than two draws no chips at all.
+   */
+  files?: readonly LightboxFile[];
+  /** Which of them is on screen — null for the first. Owned by the caller, so a verb can read it. */
+  viewing?: string | null;
+  onViewing?: (id: string | null) => void;
   /** What the sheet is, for a screen reader: "…, from winnow.example". */
   from: string;
   /** The row under the deck — the one thing each caller does differently. */
@@ -122,8 +165,50 @@ export default function MediaLightbox({
   footer,
   onConfirm,
   heal,
+  files,
+  viewing = null,
+  onViewing,
 }: MediaLightboxProps) {
   const item = items[index] ?? null;
+
+  // The file of the capture on screen: the one asked for, else the first —
+  // which is the item itself unless the item cannot be drawn as it is (a
+  // lone RAW, whose first file is the render inside it, brought in below).
+  const shownFile = files && files.length ? (files.find((f) => f.id === viewing) ?? files[0]) : null;
+  const [loading, setLoading] = useState<string | null>(null);
+  const [failed, setFailed] = useState<ReadonlyMap<string, string>>(() => new Map());
+  useEffect(() => setFailed((cur) => (cur.size ? new Map() : cur)), [item?.id]);
+  const shownId = shownFile?.id ?? null;
+  const shownSrc = shownFile?.src ?? null;
+  const shownLoad = shownFile?.load;
+  const shownBlocked = shownFile?.unavailable ?? null;
+  useEffect(() => {
+    if (!shownId || shownSrc || shownBlocked || !shownLoad || failed.has(shownId)) return;
+    let alive = true;
+    setLoading(shownId);
+    shownLoad().then(
+      () => {
+        if (alive) setLoading(null);
+      },
+      (err: unknown) => {
+        if (!alive) return;
+        setLoading(null);
+        setFailed((cur) => new Map(cur).set(shownId, err instanceof Error ? err.message : String(err)));
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, [shownId, shownSrc, shownBlocked, shownLoad, failed]);
+  const override: SlotOverride | null =
+    shownFile && item && shownFile.src !== item.src
+      ? {
+          src: shownFile.src,
+          natural: shownFile.natural ?? item.natural,
+          unavailable: shownFile.unavailable ?? failed.get(shownFile.id) ?? null,
+          pending: loading === shownFile.id,
+        }
+      : null;
 
   // The caller usually knows the size already (an instance's row, the
   // library's measured meta), so the pan limits are right before a single
@@ -132,7 +217,7 @@ export default function MediaLightbox({
     count: items.length,
     index,
     onIndex,
-    natural: item?.natural ?? null,
+    natural: override?.natural ?? item?.natural ?? null,
   });
 
   useEffect(() => {
@@ -255,6 +340,39 @@ export default function MediaLightbox({
         <p className="m-0 font-mono text-2xs text-muted truncate" title={named.facts}>
           {named.facts}
         </p>
+        {/* The capture's files, as chips. A look here writes nothing: the
+            choice lives in the caller's state for as long as the sheet is on
+            this picture, and the verb under it is what carries it anywhere. */}
+        {files && files.length > 1 && shownAt === index && (
+          <div className="flex items-center gap-1.5 flex-wrap -mt-1 min-w-0" role="group" aria-label="The capture’s files">
+            {files.map((f, at) => {
+              const on = f.id === shownFile?.id;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => onViewing?.(at === 0 ? null : f.id)}
+                  disabled={!!f.unavailable}
+                  aria-pressed={on}
+                  title={f.unavailable ?? f.facts}
+                  className={`font-mono text-3xs tracking-[0.1em] uppercase px-2.5 py-1 rounded-full border transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                    on
+                      ? 'bg-ink text-paper border-ink'
+                      : 'bg-paper text-ink-soft border-line hover:border-line-strong hover:text-accent'
+                  }`}
+                >
+                  {f.label}
+                  {loading === f.id ? '…' : f.fetches && !on ? ' ↓' : ''}
+                </button>
+              );
+            })}
+            {shownFile && (
+              <span className="text-2xs text-muted min-w-0 truncate" title={shownFile.facts}>
+                {failed.get(shownFile.id) ?? shownFile.facts}
+              </span>
+            )}
+          </div>
+        )}
         {exposureLine && (
           <p
             className={`m-0 -mt-2 min-h-[1lh] font-mono text-2xs text-faint truncate ${
@@ -315,6 +433,7 @@ export default function MediaLightbox({
                     viewer={viewer}
                     onReady={setReady}
                     heal={heal}
+                    override={slot === 0 ? override : null}
                   />
                 </div>
               ))}
@@ -372,6 +491,7 @@ function DeckSlide({
   viewer,
   onReady,
   heal,
+  override = null,
 }: {
   item: LightboxItem;
   active: boolean;
@@ -379,13 +499,19 @@ function DeckSlide({
   /** Only the middle slot reports, and it reports whenever it becomes it. */
   onReady: (ready: boolean) => void;
   heal?: (url: string) => Promise<boolean>;
+  /** Another file of the same capture, drawn in this slot instead of the item's own. */
+  override?: SlotOverride | null;
 }) {
   const [loaded, setLoaded] = useState(false);
+  // What this slot draws: the item, or the capture's other file over it.
+  const src = override ? override.src : item.src;
+  const unavailable = override ? override.unavailable : item.unavailable;
+  const pending = override?.pending ?? false;
   // The full rendition and the still underneath are two URLs and two entries:
   // the grid has usually healed the still already, the proxy nothing has.
-  const full = useHealingSrc(item.src, heal);
+  const full = useHealingSrc(src, heal);
   const still = useHealingSrc(item.still, heal);
-  useEffect(() => setLoaded(false), [item.id, item.src]);
+  useEffect(() => setLoaded(false), [item.id, src]);
   // A clip that leaves the middle stops, and lets go of its stream: removing
   // `src` alone keeps the download going, `load()` is what ends it.
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -397,8 +523,8 @@ function DeckSlide({
     setLoaded(false);
   }, [active]);
   useEffect(() => {
-    if (active) onReady(loaded || !item.src);
-  }, [active, loaded, item.src, onReady]);
+    if (active) onReady(loaded || (!src && !pending));
+  }, [active, loaded, src, pending, onReady]);
 
   const framed = {
     transform: active ? viewer.transform : undefined,
@@ -409,10 +535,10 @@ function DeckSlide({
   const fill = 'absolute inset-0 w-full h-full object-contain block';
   const cors = item.credentialed ? 'use-credentials' : undefined;
 
-  if (item.unavailable || (!item.src && !item.still)) {
+  if (unavailable || (!src && !item.still && !pending)) {
     return (
       <span className="absolute inset-0 grid place-items-center px-6 text-center font-mono text-2xs text-muted">
-        {item.unavailable ?? 'nothing to show'}
+        {unavailable ?? 'nothing to show'}
       </span>
     );
   }
@@ -435,7 +561,7 @@ function DeckSlide({
     />
   ) : null;
 
-  if (item.kind === 'video' && item.src) {
+  if (item.kind === 'video' && src) {
     return (
       <>
         {under}
@@ -446,7 +572,7 @@ function DeckSlide({
         <video
           ref={videoRef}
           key={`${item.id}:${full.round}`}
-          src={active ? item.src : undefined}
+          src={active ? src : undefined}
           poster={item.still ?? undefined}
           crossOrigin={cors}
           onError={full.onError}
@@ -475,10 +601,10 @@ function DeckSlide({
   return (
     <>
       {under}
-      {item.src && (
+      {src && (
         <img
-          key={`${item.id}:${full.round}`}
-          src={item.src}
+          key={`${item.id}:${src}:${full.round}`}
+          src={src}
           alt={item.title}
           crossOrigin={cors}
           draggable={false}

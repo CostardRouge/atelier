@@ -31,14 +31,14 @@ import { developPillClass } from '../../shared/develop/develop-classes';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { pictureFidelity } from '../../shared/develop/picture-fidelity';
 import { DevelopBaseMenu } from '../../shared/develop/DevelopBase';
-import { captureInput, type SiblingFacts } from '../../shared/develop/capture-files';
+import { captureInput } from '../../shared/develop/capture-files';
+import { useSiblingFacts } from '../../shared/develop/use-sibling-facts';
 import { isProxyOverRaw, rawRenderFrom, rawRenderOf } from '../../shared/develop/delivery-source';
 import { measurePicture, type MeasuredPicture } from '../../shared/develop/roll-render';
 import { fetchSourceFile, sensorSourceFor } from '../../shared/develop/sensor-source';
 import { openingRendition, renditionById, renditionsOf, type PixelSize, type Rendition } from '../../shared/media/renditions';
 import { fileIdentity, isRawImage } from '../../shared/library/assets';
 import { rawSizes } from '../../shared/exif/raw-probe';
-import { EXIF_SLICE_BYTES, parseExif } from '../../shared/exif/exif-parser';
 import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
 import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
 import { formatBytes } from '../../shared/lib/format';
@@ -510,32 +510,7 @@ export default function PictureWorkbench({
   // A sibling is listed only once its head is read: whether it is an export
   // of ours (`software-mark.ts`, never offered as the camera's file), and the
   // sizes a RAW states.
-  const [siblingFacts, setSiblingFacts] = useState<ReadonlyMap<string, SiblingFacts>>(new Map());
-  useEffect(() => {
-    if (!siblings.length) return;
-    let alive = true;
-    void (async () => {
-      const read = new Map<string, SiblingFacts>();
-      for (const sibling of siblings) {
-        try {
-          const head = await sibling.slice(0, EXIF_SLICE_BYTES).arrayBuffer();
-          const facts: SiblingFacts = { software: parseExif(head).software ?? null };
-          if (isRawImage(sibling.name)) {
-            const sizes = await rawSizes(sibling);
-            facts.render = sizes.render;
-            facts.sensor = sizes.sensor;
-          }
-          read.set(fileIdentity(sibling), facts);
-        } catch {
-          // A sibling that cannot be read is not offered.
-        }
-      }
-      if (alive) setSiblingFacts(read);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [siblings]);
+  const siblingFacts = useSiblingFacts(siblings);
   // What the session knows of the proxy's original and of the capture's
   // companion: whether each is held, and — for a RAW — how big the render
   // inside it is, read from its head once (`original-cache.ts`). `undefined`

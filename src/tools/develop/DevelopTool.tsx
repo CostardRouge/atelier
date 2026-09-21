@@ -68,6 +68,14 @@ export default function DevelopTool() {
   useEffect(() => {
     if (!mine || !route.ref) return;
     if (loadedRef.current === route.ref && open) return;
+    // The same roll under another spelling of its reference — a link by its
+    // bare id, then the slugged path a step writes — is not a reload: reading
+    // the store here would hand back the copy the debounced save has not
+    // written yet, and the picture just added would vanish from the screen.
+    if (open && rollFromRef(route.ref, [open])) {
+      loadedRef.current = route.ref;
+      return;
+    }
     loadedRef.current = route.ref;
     void listRolls().then((rolls) => {
       const found = rollFromRef(route.ref!, rolls);
