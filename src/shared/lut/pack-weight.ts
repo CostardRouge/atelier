@@ -37,6 +37,13 @@
  * weigh twice, and the vault total is not the sum of the pack totals when two
  * packs share a look.
  *
+ * ## And so: what a forget gives back
+ *
+ * The same counting answers the other half of the ask — dropping a look must
+ * free its bytes here and on the instance, and must leave alone a lattice
+ * another look still names (`freedHashes` / `freedBlobs`). It lives beside
+ * the weighing because it IS the weighing, asked the other way round.
+ *
  * Pure and DOM-free: indexes and a map of measured sizes in, numbers out.
  */
 
@@ -193,6 +200,131 @@ function weigh(packs: readonly LutPackIndex[], sizes: LatticeSizes): Weight {
     }
   }
   return out;
+}
+
+/* ------------------------------------------------------- what a forget frees */
+
+/** What dropping some looks gives back, and what it must leave alone. */
+export interface Freed {
+  /** Keys no surviving look names: these bytes can go. */
+  free: string[];
+  /** Keys another look still names: kept, and worth saying so. */
+  shared: string[];
+}
+
+/**
+ * The lattice hashes forgetting these looks would free in THIS BROWSER'S
+ * vault — the ones no surviving look of any pack still names.
+ *
+ * This is the rule the whole feature turns on: both stores are
+ * content-addressed, so two packs shipping the same `.cube` share one stored
+ * copy, and dropping a look from one of them must not take the other's bytes
+ * with it. Deducing ownership from a record's own `packId` cannot answer it —
+ * a `put` keyed on the hash overwrites that field with whichever pack stored
+ * it last — so the question is asked of the INDEXES, here, where every pack
+ * can be seen at once.
+ */
+export function freedHashes(
+  packs: readonly LutPackIndex[],
+  packId: string,
+  lookIds: readonly string[],
+): Freed {
+  return freed(packs, packId, lookIds, (l) => l.hash, () => true);
+}
+
+/**
+ * The same question in the FILE STORE's vocabulary: the blobs forgetting
+ * these looks would free on one instance.
+ *
+ * Two differences from the vault's, both load-bearing. The key is `blob`, the
+ * encoded lattice's hash, because a look's `hash` names nothing on an
+ * instance (`lut-pack.ts`). And only the packs kept on THAT instance can
+ * still be naming those bytes — a file store is per instance and per user, so
+ * a pack kept somewhere else, or nowhere, has no say over them.
+ */
+export function freedBlobs(
+  packs: readonly LutPackIndex[],
+  packId: string,
+  lookIds: readonly string[],
+  sourceId: string,
+): Freed {
+  return freed(packs, packId, lookIds, (l) => l.blob, (p) => p.sourceId === sourceId);
+}
+
+function freed(
+  packs: readonly LutPackIndex[],
+  packId: string,
+  lookIds: readonly string[],
+  key: (look: PackLook) => string | undefined,
+  counts: (pack: LutPackIndex) => boolean,
+): Freed {
+  const doomed = new Set(lookIds);
+  const survivors = new Set<string>();
+  const wanted = new Set<string>();
+  for (const pack of packs) {
+    if (!counts(pack)) continue;
+    for (const look of pack.looks) {
+      const k = key(look);
+      if (!k) continue;
+      if (pack.id === packId && doomed.has(look.id)) wanted.add(k);
+      else survivors.add(k);
+    }
+  }
+  const out: Freed = { free: [], shared: [] };
+  for (const k of wanted) (survivors.has(k) ? out.shared : out.free).push(k);
+  return out;
+}
+
+/** What a forget gave back, in the words the sheet prints. */
+export interface ForgetResult {
+  /** Bytes reclaimed in this browser's vault. */
+  here: number;
+  /** Bytes reclaimed on the instance, and which one it was. */
+  instance: number;
+  keptOn: string | null;
+  /** Lattices a surviving look still names, so they stayed. */
+  shared: number;
+}
+
+/**
+ * That result as one sentence — the report, after the fact, of the same two
+ * numbers the question quoted before it.
+ *
+ * It is a sentence and not a list of figures because of the case in the
+ * middle: a look whose lattice another look holds frees NOTHING, and
+ * "0 KB back here · 1 kept" is a worse way of saying so than saying so.
+ */
+export function forgotten(result: ForgetResult): string {
+  if (result.here <= 0) {
+    return result.shared > 0
+      ? 'no bytes came back: another look holds the same lattice.'
+      : 'it held no bytes here.';
+  }
+  const there =
+    result.instance > 0 && result.keptOn ? ` and ${formatBytes(result.instance)} on ${result.keptOn}` : '';
+  return `${formatBytes(result.here)} back here${there}.`;
+}
+
+/** What a set of lattice hashes weighs here — the bytes a forget gives back. */
+export function hashBytes(hashes: readonly string[], sizes: LatticeSizes): number {
+  return hashes.reduce((sum, hash) => sum + (sizes.get(hash) ?? 0), 0);
+}
+
+/**
+ * What a set of blobs weighs on an instance, derived from the grid sizes the
+ * indexes record — the same arithmetic as everywhere else here, since the
+ * instance is never asked how big its own files are.
+ */
+export function blobBytes(blobs: readonly string[], packs: readonly LutPackIndex[]): number {
+  const size = new Map<string, number>();
+  for (const pack of packs) {
+    for (const look of pack.looks) {
+      if (look.blob && look.lattice && !size.has(look.blob)) {
+        size.set(look.blob, encodedBytes(look.lattice));
+      }
+    }
+  }
+  return blobs.reduce((sum, blob) => sum + (size.get(blob) ?? 0), 0);
 }
 
 /**

@@ -366,7 +366,7 @@ and resets the select). Carried by this pull request. Memory:
 | 6 ✅ | Atelier | **Sync**: push index + files on import, pull the index on connect, fetch a lattice on first use and cache it | Mac imports, iPhone (or a second browser profile) grades offline after one use |
 | 7 ✅ | Atelier | **"Upload .cube" goes into the vault** (a look of one personal pack — see below), so no document ever inlines a lattice again (§3.1) | a trip export after an upload holds no `customText` for it |
 | 8 ✅ | Atelier | **Pre-baked thumbnails** for built-ins, each look read on the reference its family asks for (§7); live "on my picture" as an explicit choice | the gallery opens without fetching or parsing any `.cube` |
-| 9 | Atelier | **Say what the vault weighs, and forget ONE look** — per look, per pack and per vault, here and on the instance; a look forgotten on both, its bytes freed only where nothing else names them | unit specs on the arithmetic; the real pack imported in a browser, a look forgotten, the weight dropping, a document wearing it saying so |
+| 9 ✅ | Atelier | **Say what the vault weighs, and forget ONE look** — per look, per pack and per vault, here and on the instance; a look forgotten on both, its bytes freed only where nothing else names them | unit specs on the arithmetic; the real pack imported in a browser, a look forgotten, the weight dropping, a document wearing it saying so |
 
 **What steps 1–4 landed** (`shared/lut/`): `lut-pack.ts` (the index, the
 names, the reference a document stores), `pack-codec.ts` (unorm16 over the
@@ -406,6 +406,26 @@ upload on a trip's Grade, then the trip exported: **139 804 bytes before,
 `source: 'custom'` branch is now a READ path and stays: a document written
 before today holds an inlined lattice and must keep rendering — verified by
 importing exactly such a trip file. Nothing writes that shape any more.
+
+**What step 9 landed, and the correction it had to make.** The maintainer asked
+for *"de la visibilité sur le poids de ce que l'on stocke"* after importing a
+whole pack of looks for cameras he does not own. `pack-weight.ts` (pure)
+weighs per look, per pack and per vault — **here** measured off the stored
+buffers, **on the instance** derived from the index's own grid size, distinct
+keys only — and the Packs sheet lists the LOOKS as well as the categories,
+each with its weight and a verb that forgets it (`forgetLook`, the index and
+the bytes, here and on the instance). Decisions and traps:
+`docs/memory/media-pipeline.md`.
+
+Three things were found not to be as this plan and the ask assumed. **The
+pack-level Forget had never deleted anything on the instance**:
+`deleteRemotePack` existed and only the tests called it, so forgetting a pack
+left its 41 MB there for good — wired here. **The vault freed lattices by a
+record's `packId`**, which is overwritten by whichever pack stored a shared
+lattice last, so it could take bytes another pack still needed; the free/shared
+question now reads every index (`freedHashes`). And **`bytes` on a look is the
+`.cube` text's size, not the lattice's** — four times too big for this, which
+is why the arithmetic derives from `lattice` instead.
 
 **★ favourites (§6) are built (2026-09-20)**, the last piece of the picker:
 `use-lut-favourites.ts` holds the starred pick ids in `localStorage` — a

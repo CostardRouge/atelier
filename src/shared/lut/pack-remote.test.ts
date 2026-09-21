@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { WinnowError, type WinnowClient } from '../sources/winnow/client';
-import { buildPackIndex, type LutPackIndex } from './lut-pack';
+import { buildPackIndex, withoutLooks, type LutPackIndex } from './lut-pack';
 import { sha256Hex } from './pack-codec';
-import { PACK_KIND, deleteRemotePack, fetchRemotePacks, pushPack, type PackHost } from './pack-remote';
+import {
+  PACK_KIND,
+  deleteRemoteLooks,
+  deleteRemotePack,
+  fetchRemotePacks,
+  pushPack,
+  type PackHost,
+} from './pack-remote';
 
 /**
  * A stand-in for the instance: it records the order of what it was asked to
@@ -214,5 +221,46 @@ describe('deleteRemotePack', () => {
     expect(files.has(await blobOf('aa'))).toBe(false);
     // Another pack still names it: the bytes stay.
     expect(files.has(await blobOf('bb'))).toBe(true);
+  });
+
+  it('takes the index FIRST — the exact mirror of a push', async () => {
+    const { host, calls } = fakeHost();
+    const { index } = await pushPack(host, pack(['aa']), lattices(['aa']));
+    calls.length = 0;
+    await deleteRemotePack(host, index, new Set());
+    // An index that still named a gone lattice would 404 on every picture;
+    // one that has dropped a look whose bytes linger only wastes space.
+    expect(calls.indexOf('del-doc:pk_1')).toBeLessThan(
+      calls.indexOf(`del-file:${await blobOf('aa')}`),
+    );
+  });
+});
+
+describe('deleteRemoteLooks', () => {
+  it('writes the index without the look, then frees its lattice', async () => {
+    const { host, files, docs, calls } = fakeHost();
+    const { index } = await pushPack(host, pack(['aa', 'bb']), lattices(['aa', 'bb']));
+    const kept = index.looks[1];
+    const next = withoutLooks(index, [index.looks[0].id]);
+    calls.length = 0;
+    await deleteRemoteLooks(host, next, [await blobOf('aa')]);
+
+    // The pack is still there, one look lighter, and the surviving look's
+    // bytes are untouched.
+    expect((docs.get('pk_1') as LutPackIndex).looks.map((l) => l.id)).toEqual([kept.id]);
+    expect(files.has(await blobOf('aa'))).toBe(false);
+    expect(files.has(await blobOf('bb'))).toBe(true);
+    expect(calls.indexOf('put-doc:pk_1')).toBeLessThan(
+      calls.indexOf(`del-file:${await blobOf('aa')}`),
+    );
+  });
+
+  it('frees nothing the caller did not name', async () => {
+    const { host, files } = fakeHost();
+    const { index } = await pushPack(host, pack(['aa', 'bb']), lattices(['aa', 'bb']));
+    // A look dropped whose lattice another look shares: the index changes and
+    // no byte moves.
+    await deleteRemoteLooks(host, withoutLooks(index, [index.looks[0].id]), []);
+    expect(files.size).toBe(2);
   });
 });

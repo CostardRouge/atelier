@@ -15,6 +15,7 @@ import {
   slug,
   stripNodePrefix,
   visibleLooks,
+  withoutLooks,
   writePackRef,
   type PackFileEntry,
   type PackLook,
@@ -197,6 +198,61 @@ describe('hiding', () => {
     const index = { ...authentic(), hidden: ['one-click'] };
     expect(visibleLooks(index).some((l) => l.node.startsWith('one-click'))).toBe(false);
     expect(looksUnder(index, 'conversion')).toHaveLength(8);
+  });
+});
+
+describe('withoutLooks', () => {
+  it('drops the look and leaves the rest of the pack alone', () => {
+    const next = withoutLooks(authentic(), ['one-click/dji/d-log']);
+    expect(next.looks).toHaveLength(24);
+    expect(lookIn(next, 'one-click/dji/d-log')).toBeNull();
+    expect(lookIn(next, 'conversion/dji/d-log')).not.toBeNull();
+  });
+
+  it('prunes a category left holding nothing', () => {
+    const index = authentic();
+    const creative = index.looks.filter((l) => l.node === 'creative').map((l) => l.id);
+    expect(creative).toHaveLength(1);
+    const next = withoutLooks(index, creative);
+    expect(next.tree.map((n) => n.label)).toEqual(['Conversion', 'One Click']);
+  });
+
+  it('keeps a node whose CHILD still has looks', () => {
+    const index = authentic();
+    // Every DJI look under One Click goes; the category keeps its other cameras.
+    const dji = index.looks.filter((l) => l.node === 'one-click/dji').map((l) => l.id);
+    const next = withoutLooks(index, dji);
+    const oneClick = next.tree.find((n) => n.id === 'one-click');
+    expect(oneClick).toBeDefined();
+    expect(oneClick?.children?.map((n) => n.id)).not.toContain('one-click/dji');
+    expect(oneClick?.children?.length).toBeGreaterThan(0);
+  });
+
+  it('drops a hidden entry that no longer names anything', () => {
+    const index = { ...authentic(), hidden: ['creative', 'one-click/sony/s-log2'] };
+    const creative = index.looks.filter((l) => l.node === 'creative').map((l) => l.id);
+    const next = withoutLooks(index, [...creative, 'one-click/sony/s-log2']);
+    expect(next.hidden).toEqual([]);
+  });
+
+  it('keeps the hidden entries that still do', () => {
+    const index = { ...authentic(), hidden: ['conversion/canon'] };
+    const next = withoutLooks(index, ['creative/authentic']);
+    expect(next.hidden).toEqual(['conversion/canon']);
+  });
+
+  it('is pure — the index it was given is untouched', () => {
+    const index = authentic();
+    withoutLooks(index, index.looks.map((l) => l.id));
+    expect(index.looks).toHaveLength(25);
+    expect(index.tree).toHaveLength(3);
+  });
+
+  it('empties a pack asked for all of its looks', () => {
+    const index = authentic();
+    const next = withoutLooks(index, index.looks.map((l) => l.id));
+    expect(next.looks).toEqual([]);
+    expect(next.tree).toEqual([]);
   });
 });
 

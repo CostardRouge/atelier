@@ -30,6 +30,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { pickDirectoryTree } from '../sources/file-sources';
 import Button from '../ui/Button';
+import ConfirmDialog from '../ui/ConfirmDialog';
 import IconButton from '../ui/IconButton';
 import { Icons } from '../ui/icons';
 import InfoDot from '../ui/InfoDot';
@@ -40,6 +41,7 @@ import type { PackHost } from './pack-remote';
 import { storedLatticeSizes } from './pack-store';
 import {
   adoptRemotePack,
+  forgetLook,
   keepPackOn,
   packKeepers,
   removePack,
@@ -47,7 +49,10 @@ import {
   setPackHidden,
 } from './pack-vault';
 import {
+  forgotten,
   formatBytes,
+  freedHashes,
+  hashBytes,
   instanceWeights,
   lookWeight,
   lookWeightLabel,
@@ -187,7 +192,17 @@ export default function LutPackImportModal({ onClose, onImported }: LutPackImpor
 
         <div className="flex-1 min-h-0 overflow-auto -mr-1 pr-1 flex flex-col gap-4">
           {/* What this browser already holds, and what it costs. */}
-          {packs.length > 0 && <VaultSection packs={packs} hosts={hosts} sizes={sizes} />}
+          {packs.length > 0 && (
+            <VaultSection
+              packs={packs}
+              hosts={hosts}
+              sizes={sizes}
+              // The import's own report is about a vault that has since
+              // changed: "5 looks · 421 KB written" sitting under a total
+              // that now reads 211 KB is one of the two contradicting itself.
+              onForgotten={() => setDone(null)}
+            />
+          )}
 
           {/* What an instance holds that this browser does not — the other
               half of keeping a pack somewhere: a phone that has never seen
@@ -327,10 +342,12 @@ function VaultSection({
   packs,
   hosts,
   sizes,
+  onForgotten,
 }: {
   packs: readonly LutPackIndex[];
   hosts: readonly PackHost[];
   sizes: LatticeSizes;
+  onForgotten: () => void;
 }) {
   const total = vaultWeight(packs, sizes);
   const instances = instanceWeights(packs, sizes);
@@ -348,7 +365,13 @@ function VaultSection({
         </span>
       </div>
       {packs.map((pack) => (
-        <PackRow key={pack.id} pack={pack} hosts={hosts} sizes={sizes} />
+        <PackRow
+          key={pack.id}
+          pack={pack}
+          hosts={hosts}
+          sizes={sizes}
+          onForgotten={onForgotten}
+        />
       ))}
     </section>
   );
@@ -368,14 +391,21 @@ function PackRow({
   pack,
   hosts,
   sizes,
+  onForgotten,
 }: {
   pack: LutPackIndex;
   hosts: readonly PackHost[];
   sizes: LatticeSizes;
+  onForgotten: () => void;
 }) {
+  const packs = useLutPacks();
   const [open, setOpen] = useState(false);
   const [push, setPush] = useState<{ done: number; total: number; bytes: number } | null>(null);
   const [pushError, setPushError] = useState<string | null>(null);
+  /** The pack itself, or one of its looks, waiting on the question. */
+  const [asking, setAsking] = useState<PackLook | 'pack' | null>(null);
+  const [forgetting, setForgetting] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
   const hidden = new Set(pack.hidden);
   const keptOn = pack.sourceId ?? null;
   // Somewhere to put it: an instance that keeps documents AND files. One
@@ -397,6 +427,30 @@ function PackRow({
       setPushError((e as Error).message || 'The instance refused it.');
     } finally {
       setPush(null);
+    }
+  };
+
+  /** What the question quotes, and what the answer reports: measured, not promised. */
+  const doomed = asking === 'pack' ? pack.looks.map((l) => l.id) : asking ? [asking.id] : [];
+  const wouldFree = hashBytes(freedHashes(packs, pack.id, doomed).free, sizes);
+
+  const runForget = async () => {
+    if (!asking) return;
+    const look = asking === 'pack' ? null : asking;
+    setPushError(null);
+    setNote(null);
+    setForgetting(true);
+    try {
+      const result = look ? await forgetLook(pack.id, look.id) : await removePack(pack.id);
+      // A pack that is gone has no row left to print this in; a look does.
+      if (look) setNote(`Forgot “${look.label}” — ${forgotten(result)}`);
+      onForgotten();
+      setAsking(null);
+    } catch (e) {
+      setPushError((e as Error).message || 'That could not be forgotten.');
+      setAsking(null);
+    } finally {
+      setForgetting(false);
     }
   };
   const toggle = (id: string) => {
@@ -455,14 +509,19 @@ function PackRow({
         <Button
           size="sm"
           variant="ghost"
-          onClick={() => void removePack(pack.id)}
-          title="Forget this pack and its looks on this device"
+          onClick={() => setAsking('pack')}
+          title={
+            keptOn
+              ? `Forget this pack and its looks, here and on ${keptOn}`
+              : 'Forget this pack and its looks on this device'
+          }
         >
           Forget
         </Button>
       </div>
 
       {pushError && <p className="m-0 text-xs text-warn">{pushError}</p>}
+      {note && <p className="m-0 text-xs text-ok">{note}</p>}
 
       {open && (
         <div className="flex flex-col gap-2 border-t border-line pt-2">
@@ -516,11 +575,58 @@ function PackRow({
                   sizes={sizes}
                   hidden={hidden.has(entry.look.id)}
                   onToggle={() => toggle(entry.look.id)}
+                  onForget={() => setAsking(entry.look)}
                 />
               ),
             )}
           </ul>
         </div>
+      )}
+
+      {asking && (
+        <ConfirmDialog
+          title={
+            asking === 'pack'
+              ? `Forget “${pack.name || 'this pack'}”?`
+              : `Forget “${asking.label}”?`
+          }
+          confirmLabel="Forget"
+          danger
+          busy={forgetting}
+          onConfirm={() => void runForget()}
+          onCancel={() => setAsking(null)}
+        >
+          <p>
+            {/* The number is MEASURED off the vault, not promised: a look whose
+                lattice another look of another pack also ships frees nothing,
+                and saying "1.6 MB" there would be a small lie about the one
+                thing this gesture is for. */}
+            {wouldFree > 0
+              ? `${formatBytes(wouldFree)} come back${keptOn ? `, here and on ${keptOn}` : ''}.`
+              : 'No bytes come back: another look still holds the same lattice.'}
+          </p>
+          <p>
+            {asking === 'pack'
+              ? `Its ${pack.looks.length} looks leave the pickers.`
+              : 'It leaves the pickers.'}{' '}
+            {/* And what a document that wears it will do — which follows from
+                the line above rather than from the gesture: a grade names a
+                lattice by its hash, so one whose bytes another look keeps here
+                goes on rendering, and only bytes that really left make a
+                document say the look is gone. */}
+            {wouldFree > 0
+              ? `A grade already wearing ${
+                  asking === 'pack' ? 'one of them' : 'it'
+                } will say the look is gone instead of rendering flat.`
+              : 'A grade already wearing it keeps rendering, from the lattice the other look holds.'}{' '}
+            Importing the folder again brings {asking === 'pack' ? 'them' : 'it'} back.
+          </p>
+          {asking !== 'pack' && (
+            <p>
+              To keep the bytes and only put the look away, cancel and untick it instead.
+            </p>
+          )}
+        </ConfirmDialog>
       )}
     </div>
   );
@@ -541,6 +647,7 @@ function LookRow({
   sizes,
   hidden,
   onToggle,
+  onForget,
 }: {
   pack: LutPackIndex;
   look: PackLook;
@@ -548,6 +655,7 @@ function LookRow({
   sizes: LatticeSizes;
   hidden: boolean;
   onToggle: () => void;
+  onForget: () => void;
 }) {
   const id = `pack-look-${pack.id}-${look.id}`;
   const weight = lookWeight(pack, look, sizes);
@@ -575,6 +683,15 @@ function LookRow({
           {lookWeightLabel(weight)}
         </span>
       </label>
+      <IconButton
+        label={`Forget “${look.label}”`}
+        size="sm"
+        variant="ghost"
+        className="flex-none"
+        onClick={onForget}
+      >
+        {Icons.trash}
+      </IconButton>
     </li>
   );
 }

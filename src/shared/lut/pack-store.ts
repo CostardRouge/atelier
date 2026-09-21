@@ -102,15 +102,37 @@ export async function putStoredPack(index: LutPackIndex): Promise<boolean> {
   }
 }
 
-/** Forget a pack AND the lattices it brought in — nothing keeps a look alive alone. */
+/**
+ * Forget a pack's INDEX. Its lattices are a separate call
+ * (`deleteStoredLattices`), and that split is a correction, not a
+ * convenience.
+ *
+ * This used to delete every lattice whose record named this pack, which
+ * cannot be right: a lattice is keyed on its hash, so `putStoredLattice`
+ * overwrites `packId` with whichever pack stored it LAST. Two packs shipping
+ * the same `.cube` therefore leave one record naming one of them, and
+ * forgetting that one took bytes the other still needed while forgetting the
+ * other freed nothing. Which hashes are free is a question about every index
+ * at once, so the vault asks it (`pack-weight.ts`'s `freedHashes`) and this
+ * store stops guessing.
+ */
 export async function deleteStoredPack(packId: string): Promise<void> {
   try {
     await withStore(PACKS, 'readwrite', (s) => s.delete(packId));
-    const all = await withStore(LATTICES, 'readonly', (s) => s.getAll() as IDBRequest<LatticeRecord[]>);
-    const mine = all.filter((r) => r.packId === packId).map((r) => r.id);
-    for (const id of mine) await withStore(LATTICES, 'readwrite', (s) => s.delete(id));
   } catch {
     /* already gone or storage unusable */
+  }
+}
+
+/** Free these lattices — the hashes the caller has established nothing else names. */
+export async function deleteStoredLattices(hashes: readonly string[]): Promise<void> {
+  for (const hash of hashes) {
+    if (!hash) continue;
+    try {
+      await withStore(LATTICES, 'readwrite', (s) => s.delete(hash));
+    } catch {
+      /* already gone or storage unusable */
+    }
   }
 }
 

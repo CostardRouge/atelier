@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { LutPackIndex, PackLook } from './lut-pack';
 import { encodedBytes } from './pack-codec';
 import {
+  blobBytes,
+  forgotten,
   formatBytes,
+  freedBlobs,
+  freedHashes,
+  hashBytes,
   instanceWeights,
   lookBytes,
   lookWeight,
@@ -189,6 +194,134 @@ describe('instanceWeights', () => {
       ['a.example', SIXTY_FIVE],
       ['b.example', THIRTY_THREE],
     ]);
+  });
+});
+
+describe('freedHashes', () => {
+  const two = () => [
+    pack({
+      id: 'p1',
+      looks: [
+        look({ id: 'a', hash: 'h1' }),
+        look({ id: 'b', hash: 'h2' }),
+        look({ id: 'c', hash: 'h2' }),
+      ],
+    }),
+    pack({ id: 'p2', looks: [look({ id: 'x', hash: 'h1' })] }),
+  ];
+
+  it('frees a hash nothing else names', () => {
+    const packs = [pack({ id: 'p1', looks: [look({ id: 'a', hash: 'h1' })] })];
+    expect(freedHashes(packs, 'p1', ['a'])).toEqual({ free: ['h1'], shared: [] });
+  });
+
+  it('keeps a lattice ANOTHER PACK names — the rule the feature turns on', () => {
+    expect(freedHashes(two(), 'p1', ['a'])).toEqual({ free: [], shared: ['h1'] });
+  });
+
+  it('keeps a lattice another look of the SAME pack names', () => {
+    expect(freedHashes(two(), 'p1', ['b'])).toEqual({ free: [], shared: ['h2'] });
+  });
+
+  it('frees it once both looks naming it go', () => {
+    expect(freedHashes(two(), 'p1', ['b', 'c'])).toEqual({ free: ['h2'], shared: [] });
+  });
+
+  it('frees everything the whole pack alone names', () => {
+    const freed = freedHashes(two(), 'p1', ['a', 'b', 'c']);
+    expect(freed.free).toEqual(['h2']);
+    expect(freed.shared).toEqual(['h1']);
+  });
+
+  it('answers nothing for a look with no hash at all', () => {
+    const packs = [pack({ id: 'p1', looks: [look({ id: 'a' })] })];
+    expect(freedHashes(packs, 'p1', ['a'])).toEqual({ free: [], shared: [] });
+  });
+});
+
+describe('freedBlobs', () => {
+  it('speaks in blobs, never in source hashes', () => {
+    const packs = [
+      pack({
+        id: 'p1',
+        sourceId: 'a.example',
+        looks: [look({ id: 'a', hash: 'h1', blob: 'b1' })],
+      }),
+    ];
+    expect(freedBlobs(packs, 'p1', ['a'], 'a.example')).toEqual({ free: ['b1'], shared: [] });
+  });
+
+  it('only the packs kept on THAT instance have a say over its files', () => {
+    const packs = [
+      pack({ id: 'p1', sourceId: 'a.example', looks: [look({ id: 'a', hash: 'h1', blob: 'b1' })] }),
+      // Same lattice, kept somewhere else: it is another file store, so it
+      // cannot hold this instance's copy alive.
+      pack({ id: 'p2', sourceId: 'b.example', looks: [look({ id: 'x', hash: 'h1', blob: 'b1' })] }),
+    ];
+    expect(freedBlobs(packs, 'p1', ['a'], 'a.example')).toEqual({ free: ['b1'], shared: [] });
+    // Kept on the SAME instance, and the bytes stay.
+    const together = packs.map((p) => ({ ...p, sourceId: 'a.example' }));
+    expect(freedBlobs(together, 'p1', ['a'], 'a.example')).toEqual({ free: [], shared: ['b1'] });
+  });
+
+  it('asks for nothing when the look was never pushed', () => {
+    const packs = [
+      pack({ id: 'p1', sourceId: 'a.example', looks: [look({ id: 'a', hash: 'h1' })] }),
+    ];
+    expect(freedBlobs(packs, 'p1', ['a'], 'a.example')).toEqual({ free: [], shared: [] });
+  });
+});
+
+describe('what a forget gives back', () => {
+  it('weighs the freed hashes off the MEASURED sizes', () => {
+    const sizes = new Map([
+      ['h1', SIXTY_FIVE],
+      ['h2', THIRTY_THREE],
+    ]);
+    expect(hashBytes(['h1', 'h2'], sizes)).toBe(SIXTY_FIVE + THIRTY_THREE);
+    // A hash this device does not hold gives nothing back here, which is the
+    // truth rather than a zero to hide.
+    expect(hashBytes(['h3'], sizes)).toBe(0);
+  });
+
+  it('weighs the freed blobs off the grid sizes the indexes record', () => {
+    const packs = [
+      pack({
+        id: 'p1',
+        sourceId: 'a.example',
+        looks: [
+          look({ id: 'a', hash: 'h1', blob: 'b1', lattice: 65 }),
+          look({ id: 'b', hash: 'h2', blob: 'b2' }),
+        ],
+      }),
+    ];
+    expect(blobBytes(['b1'], packs)).toBe(SIXTY_FIVE);
+    // No grid recorded: nothing is invented for it.
+    expect(blobBytes(['b2'], packs)).toBe(0);
+    expect(blobBytes(['nope'], packs)).toBe(0);
+  });
+});
+
+describe('forgotten', () => {
+  it('reports both figures when both gave something back', () => {
+    expect(
+      forgotten({ here: SIXTY_FIVE, instance: SIXTY_FIVE, keptOn: 'winnow.example', shared: 0 }),
+    ).toBe('1.6 MB back here and 1.6 MB on winnow.example.');
+  });
+
+  it('names only this device for a local-only pack', () => {
+    expect(forgotten({ here: THIRTY_THREE, instance: 0, keptOn: null, shared: 0 })).toBe(
+      '211 KB back here.',
+    );
+  });
+
+  it('says WHY nothing came back rather than printing a zero', () => {
+    expect(forgotten({ here: 0, instance: 0, keptOn: null, shared: 1 })).toBe(
+      'no bytes came back: another look holds the same lattice.',
+    );
+    expect(forgotten({ here: 0, instance: 0, keptOn: null, shared: 0 })).toBe(
+      'it held no bytes here.',
+    );
   });
 });
 

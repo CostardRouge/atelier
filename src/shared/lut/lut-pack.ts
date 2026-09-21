@@ -597,6 +597,48 @@ export function looksUnder(index: LutPackIndex, nodeId: string): PackLook[] {
   );
 }
 
+/**
+ * The pack without those looks — what forgetting one writes back.
+ *
+ * Three things go with the look, and each of them reads as a bug if it stays:
+ * a category left holding nothing would show in the picker's rail as a folder
+ * whose looks vanished; a `hidden` entry naming a look that no longer exists
+ * would accumulate forever in a list nobody can see to clean; and a node kept
+ * only because a CHILD of it still has looks must survive, which is why the
+ * test is the branch and not the node's own looks.
+ *
+ * Pure: it returns a new index and touches nothing. Freeing the bytes those
+ * looks named is a separate question with its own answer (`pack-weight.ts`'s
+ * `freedHashes`), because the bytes may be another look's too.
+ */
+export function withoutLooks(index: LutPackIndex, lookIds: readonly string[]): LutPackIndex {
+  const doomed = new Set(lookIds);
+  const looks = index.looks.filter((l) => !doomed.has(l.id));
+  const holds = (nodeId: string) =>
+    looks.some((l) => l.node === nodeId || l.node.startsWith(`${nodeId}/`));
+  const prune = (nodes: readonly PackNode[]): PackNode[] =>
+    nodes
+      .filter((n) => holds(n.id))
+      .map((n) => {
+        const children = prune(n.children ?? []);
+        return {
+          id: n.id,
+          label: n.label,
+          ...(n.hint ? { hint: n.hint } : {}),
+          ...(children.length ? { children } : {}),
+        };
+      });
+  const tree = prune(index.tree);
+  const nodeIds = new Set(flattenNodes(tree).map(({ node }) => node.id));
+  const lookIdSet = new Set(looks.map((l) => l.id));
+  return {
+    ...index,
+    tree,
+    looks,
+    hidden: index.hidden.filter((h) => nodeIds.has(h) || lookIdSet.has(h)),
+  };
+}
+
 /** A row of a pack listed in full: one of its nodes, or one of its looks. */
 export type PackEntry =
   | { kind: 'node'; node: PackNode; depth: number }
