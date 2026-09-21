@@ -32,10 +32,10 @@ import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { pictureFidelity } from '../../shared/develop/picture-fidelity';
 import { DevelopBaseMenu } from '../../shared/develop/DevelopBase';
 import { captureInput, type SiblingFacts } from '../../shared/develop/capture-files';
-import { isProxyOverRaw, rawRenderOf } from '../../shared/develop/delivery-source';
+import { isProxyOverRaw, rawRenderFrom, rawRenderOf } from '../../shared/develop/delivery-source';
 import { measurePicture, type MeasuredPicture } from '../../shared/develop/roll-render';
+import { fetchSensorFile, sensorSourceFor } from '../../shared/develop/sensor-source';
 import { openingRendition, renditionById, renditionsOf, type PixelSize, type Rendition } from '../../shared/media/renditions';
-import { canDecodeRaw } from '../../shared/raw/raw-decoder';
 import { fileIdentity, isRawImage } from '../../shared/library/assets';
 import { rawSizes } from '../../shared/exif/raw-probe';
 import { EXIF_SLICE_BYTES, parseExif } from '../../shared/exif/exif-parser';
@@ -122,9 +122,6 @@ import type { RollExports } from './use-roll-export';
 
 /** How long the picture rests before its filmstrip cell is redrawn. */
 const SNAPSHOT_DELAY_MS = 700;
-
-/** Where the sensor's data would come from: the file in hand, a RAW beside it in its folder, or a proxy's original. */
-type RawOffer = 'file' | 'sibling' | 'original';
 
 const NO_FILES: readonly File[] = [];
 
@@ -411,71 +408,58 @@ export default function PictureWorkbench({
   );
   const paint = repairPaint ?? layerPaint;
   // --- the RAW base ----------------------------------------------------------
-  // Where the sensor's data would come from: the file itself when it is a
-  // RAW, else a proxy's RAW original, fetched once and held for the session
-  // (`original-cache.ts`, decision 3). Nothing is fetched or decoded until the
-  // base says `raw`; back on the render the decode is dropped with the
-  // source, and the held original costs no second fetch.
+  // Where the sensor's data would come from — the file itself, a RAW beside
+  // it in its folder, a proxy's own original, or the capture's COMPANION on
+  // its instance — is `sensor-source.ts`'s one answer, shared with the
+  // export. Nothing is fetched or decoded until the base climbs above the
+  // proxy; back on the render the decode is dropped with the source, and a
+  // fetched RAW is held for the session (`original-cache.ts`, decision 3).
+  // Computed per render, since `held` reads that cache: a fetch that lands
+  // sets state, and the next render sees it in hand.
   const origin = useMemo(() => (file ? mediaOrigin(file) : null), [file]);
   const assetKey = file ? (knownIdentity(file)?.assetId ?? null) : null;
-  // A RAW a folder listed beside the picture (R2) is the sensor in hand, no
-  // fetch — the local half of what a Winnow's companion is.
-  const rawSibling = useMemo(() => siblings.find((s) => canDecodeRaw(s)) ?? null, [siblings]);
-  const rawOffer: RawOffer | null =
-    file && canDecodeRaw(file)
-      ? 'file'
-      : rawSibling
-        ? 'sibling'
-        : origin?.name && isRawImage(origin.name) && origin.fetchOriginal
-          ? 'original'
-          : null;
-  const wantsRaw = baseRung(draft.draft.base) > 0 && rawOffer !== null;
+  const sensor = file ? sensorSourceFor(file, origin, siblings, assetKey) : null;
+  const sensorHeld = sensor?.held ?? null;
+  const sensorName = sensor?.name ?? null;
+  const wantsRaw = baseRung(draft.draft.base) > 0 && sensor !== null;
   const [rawFile, setRawFile] = useState<File | null>(null);
   const [rawStatus, setRawStatus] = useState<string | null>(null);
   const { patch: patchDraft } = draft;
+  const sensorRef = useRef(sensor);
+  sensorRef.current = sensor;
   useEffect(() => {
-    if (!wantsRaw || rawFile || !file || !rawOffer) return;
-    if (rawOffer === 'file') {
-      setRawFile(file);
-      return;
-    }
-    if (rawOffer === 'sibling') {
-      setRawFile(rawSibling);
-      return;
-    }
-    const key = knownIdentity(file)?.assetId ?? null;
-    const held = key ? heldOriginal(key) : null;
-    if (held) {
-      setRawFile(held);
+    const source = sensorRef.current;
+    if (!wantsRaw || rawFile || !source) return;
+    if (source.held) {
+      setRawFile(source.held);
       return;
     }
     let alive = true;
-    setRawStatus(`fetching the RAW${origin?.bytes ? ` · ${formatBytes(origin.bytes)}` : ''}…`);
-    origin!.fetchOriginal!()
+    setRawStatus(`fetching ${source.name}${source.bytes ? ` · ${formatBytes(source.bytes)}` : ''}…`);
+    fetchSensorFile(source)
       .then((fetched) => {
         if (!alive) return;
-        if (key) holdOriginal(key, fetched);
         setRawFile(fetched);
         setRawStatus(null);
       })
       .catch((err: unknown) => {
         if (!alive) return;
         setRawStatus(null);
-        tell(`the RAW could not be fetched: ${err instanceof Error ? err.message : String(err)}`);
+        tell(`${source.name} could not be fetched: ${err instanceof Error ? err.message : String(err)}`);
         patchDraft({ base: null, rawGain: null });
       });
     return () => {
       alive = false;
     };
-  }, [wantsRaw, rawFile, file, rawOffer, rawSibling, origin, tell, patchDraft]);
+  }, [wantsRaw, rawFile, sensorHeld, sensorName, tell, patchDraft]);
   const rawGain = draft.draft.rawGain ?? null;
-  // The calibration the FILE carries, read from a megabyte of its head once
-  // the RAW itself is in hand — it is what decides whether the two top rungs
-  // are offered at all, and what the passes apply at them.
+  // The calibration the RAW carries, read from a megabyte of its head as soon
+  // as it is in hand — it is what decides whether the two top rungs are
+  // offered at all, and what the passes apply at them.
   const [calibration, setCalibration] = useState<RawCalibration | null>(null);
   useEffect(() => {
     setCalibration(null);
-    const source = rawFile ?? (file && canDecodeRaw(file) ? file : null);
+    const source = rawFile ?? sensorHeld;
     if (!source) return;
     let alive = true;
     void readRawCalibration(source).then((cal) => {
@@ -484,7 +468,7 @@ export default function PictureWorkbench({
     return () => {
       alive = false;
     };
-  }, [rawFile, file]);
+  }, [rawFile, sensorHeld]);
   const rungs = rungsFor(calibration);
   // A rung the file cannot reach is never left standing: a picture developed
   // on `gainMapWarp` and then opened from a file whose opcodes are gone falls
@@ -547,10 +531,14 @@ export default function PictureWorkbench({
       alive = false;
     };
   }, [siblings]);
-  // What the session knows of the proxy's original: whether it is held, and —
-  // for a RAW — how big the render inside it is, read from its head once
-  // (`original-cache.ts`). `undefined` is "not read yet".
-  const [originalHeld, setOriginalHeld] = useState(() => (assetKey ? heldOriginal(assetKey) !== null : false));
+  // What the session knows of the proxy's original and of the capture's
+  // companion: whether each is held, and — for a RAW — how big the render
+  // inside it is, read from its head once (`original-cache.ts`). `undefined`
+  // is "not read yet". Held-ness is read per render: a fetch that lands sets
+  // state, so the rows say `here` on the next one.
+  const originalHeld = assetKey ? heldOriginal(assetKey) !== null : false;
+  const companion = origin?.companion ?? null;
+  const companionHeld = companion ? heldOriginal(companion.assetId) !== null : false;
   const [originalRender, setOriginalRender] = useState<PixelSize | null | undefined>(undefined);
   useEffect(() => {
     setOriginalRender(undefined);
@@ -563,6 +551,18 @@ export default function PictureWorkbench({
       alive = false;
     };
   }, [origin, assetKey]);
+  const [companionRender, setCompanionRender] = useState<PixelSize | null | undefined>(undefined);
+  useEffect(() => {
+    setCompanionRender(undefined);
+    if (!companion || !isRawImage(companion.name)) return;
+    let alive = true;
+    void rawRenderFrom(companion.fetchHead, companion.assetId).then(({ render }) => {
+      if (alive) setCompanionRender(render);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [companion]);
   const rows = useMemo<Rendition[]>(() => {
     if (!file) return [];
     return renditionsOf(
@@ -572,13 +572,27 @@ export default function PictureWorkbench({
         measured: exports.openSize,
         sensor: sensorSize,
         original: { assetId: assetKey, held: originalHeld, render: originalRender },
+        companion: companion ? { held: companionHeld, render: companionRender } : undefined,
         siblings: siblings.flatMap((s) => {
           const facts = siblingFacts.get(fileIdentity(s));
           return facts ? [{ file: s, facts }] : [];
         }),
       }),
     );
-  }, [file, origin, exports.openSize, sensorSize, assetKey, originalHeld, originalRender, siblings, siblingFacts]);
+  }, [
+    file,
+    origin,
+    exports.openSize,
+    sensorSize,
+    assetKey,
+    originalHeld,
+    originalRender,
+    companion,
+    companionHeld,
+    companionRender,
+    siblings,
+    siblingFacts,
+  ]);
   const opening = openingRendition(rows);
   const chosen = renditionById(rows, entry.rendition);
   // The row on screen below the sensor: the stored choice where the capture
@@ -596,21 +610,23 @@ export default function PictureWorkbench({
   useEffect(() => {
     const { wanted: row, siblings: beside, origin: from } = deliver.current;
     if (!row || row.id !== wantedId || !file) return;
-    const named = (f: File | null): f is File => !!f && f.name.toLowerCase() === row.name.toLowerCase();
-    const inHand = beside.find(named) ?? (assetKey ? heldOriginal(assetKey) : null);
+    const isNamed = (name: string) => name.toLowerCase() === row.name.toLowerCase();
+    const named = (f: File | null): f is File => !!f && isNamed(f.name);
+    const inHand = beside.find(named) ?? (row.assetId ? heldOriginal(row.assetId) : null);
     if (named(inHand)) {
       setDeliveredFile({ id: row.id, file: inHand });
       return;
     }
-    if (!from?.fetchOriginal) return;
+    // The row's own fetch: the capture's companion by its name, else the
+    // proxy's original — each held under the row's own asset id.
+    const fetch = from?.companion && isNamed(from.companion.name) ? from.companion.fetchFile : (from?.fetchOriginal ?? null);
+    if (!fetch) return;
     let alive = true;
     setDeliveredStatus(`fetching ${row.name}${row.bytes ? ` · ${formatBytes(row.bytes)}` : ''}…`);
-    from
-      .fetchOriginal()
+    fetch()
       .then((fetched) => {
         if (!alive) return;
-        if (assetKey) holdOriginal(assetKey, fetched);
-        setOriginalHeld(true);
+        if (row.assetId) holdOriginal(row.assetId, fetched);
         setDeliveredFile({ id: row.id, file: fetched });
         setDeliveredStatus(null);
       })
@@ -623,7 +639,7 @@ export default function PictureWorkbench({
     return () => {
       alive = false;
     };
-  }, [wantedId, file, assetKey]);
+  }, [wantedId, file]);
   const shownFile = wanted && deliveredFile?.id === wanted.id ? deliveredFile.file : file;
   // The open file is measured by the export hook; a delivered file on the
   // stage is measured here, once, for the chip and the kernels.
@@ -1042,7 +1058,7 @@ export default function PictureWorkbench({
                 rows={rows}
                 current={current}
                 base={wantsRaw ? rung : 'proxy'}
-                rungs={rawOffer ? rungs : []}
+                rungs={sensor ? rungs : []}
                 onRendition={(id) => {
                   // A file below the sensor: the base comes off with it, and
                   // the opening row is stored as nothing, one spelling.
@@ -1062,9 +1078,7 @@ export default function PictureWorkbench({
                 }}
                 status={
                   wantsRaw
-                    ? rawStatus || !picture.source
-                      ? (rawStatus ?? 'decoding the sensor’s data…')
-                      : null
+                    ? (rawStatus ?? picture.problem ?? (!picture.source ? 'decoding the sensor’s data…' : null))
                     : deliveredStatus
                 }
                 gain={wantsRaw ? rawGain : null}

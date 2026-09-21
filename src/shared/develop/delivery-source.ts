@@ -62,6 +62,18 @@ export async function rawRenderOf(
   origin: MediaOrigin,
   key: string | null,
 ): Promise<{ render: PictureSize | null; head: Uint8Array | null }> {
+  return rawRenderFrom(origin.fetchOriginalHead ?? null, key);
+}
+
+/**
+ * The same, for ANY RAW the session can reach by a head fetch — a capture's
+ * companion (`MediaOrigin.companion.fetchHead`) as much as a proxy's own
+ * original. `key` is the asset id the answer is remembered under.
+ */
+export async function rawRenderFrom(
+  fetchHead: ((bytes: number) => Promise<ArrayBuffer>) | null,
+  key: string | null,
+): Promise<{ render: PictureSize | null; head: Uint8Array | null }> {
   const held = key ? heldOriginal(key) : null;
   if (held) {
     const sizes = await rawSizes(held);
@@ -72,9 +84,9 @@ export async function rawRenderOf(
     const known = heldRawRender(key);
     if (known !== undefined) return { render: known, head: null };
   }
-  if (!origin.fetchOriginalHead) return { render: null, head: null };
+  if (!fetchHead) return { render: null, head: null };
   try {
-    const buffer = await origin.fetchOriginalHead(RAW_PROBE_BYTES);
+    const buffer = await fetchHead(RAW_PROBE_BYTES);
     const render = rawSizesFrom(buffer).render;
     if (key) holdRawRender(key, render);
     return { render, head: new Uint8Array(buffer) };

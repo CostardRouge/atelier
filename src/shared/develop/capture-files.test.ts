@@ -83,6 +83,42 @@ describe('captureInput', () => {
     expect(after[1]).toMatchObject({ here: true, pixels: { width: 960, height: 540 } });
   });
 
+  it('lists the companion behind a Sony HIF: the ARW’s render and sensor, under its own asset id', () => {
+    const origin: MediaOrigin = {
+      ...proxyOver('DSC08463.HIF', 7008, 4672, 12.6e6),
+      companion: {
+        assetId: 'winnow.example/99',
+        name: 'DSC08463.ARW',
+        bytes: 34.6e6,
+        width: 7040,
+        height: 4688,
+        fetchFile: () => Promise.reject(new Error('not in a test')),
+        fetchHead: () => Promise.reject(new Error('not in a test')),
+      },
+    };
+    const chrome = (name: string) => /\.(jpe?g|png|webp)$/i.test(name);
+    const rows = renditionsOf(
+      captureInput({
+        file: file('DSC08463.webp'),
+        origin,
+        measured: { width: 2048, height: 1365 },
+        sensor: null,
+        original: { assetId: 'winnow.example/12', held: false },
+        companion: { held: false, render: { width: 7008, height: 4672 } },
+        canDraw: chrome,
+      }),
+    );
+    // The HIF row is pruned: this browser cannot draw it and the ARW's render is the same picture.
+    expect(rows.map((r) => r.id)).toEqual(['proxy', 'delivered:dsc08463.arw', 'sensor:dsc08463.arw']);
+    expect(rows[1]).toMatchObject({ reach: 'embedded', here: false, assetId: 'winnow.example/99', pixels: { width: 7008, height: 4672 } });
+    expect(rows[2]).toMatchObject({ bytes: 34.6e6, pixels: { width: 7040, height: 4688 } });
+    // Nothing of the companion is listed before the caller says what it knows of it.
+    expect(renditionsOf(captureInput({ file: file('DSC08463.webp'), origin, measured: null, sensor: null, canDraw: chrome })).map((r) => r.id)).toEqual([
+      'proxy',
+      'delivered:dsc08463.hif',
+    ]);
+  });
+
   it('adds a folder’s siblings — the DNG beside a JPEG — and leaves an export of ours out', () => {
     const rows = renditionsOf(
       captureInput({

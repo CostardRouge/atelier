@@ -45,6 +45,13 @@ export interface CaptureFacts {
     /** `undefined` is "not read yet", `null` is "read, and it carries none". */
     render?: PixelSize | null;
   };
+  /**
+   * The capture's other file on its instance (`MediaOrigin.companion`): held
+   * already? and, for a RAW, its render's size once its head was read
+   * (`undefined` not yet, `null` none). The name, weight and sensor plane
+   * come from the origin itself.
+   */
+  companion?: { held: boolean; render?: PixelSize | null };
   /** The capture's other files a folder listed beside `file`, once their heads were read. */
   siblings?: readonly { file: File; facts: SiblingFacts }[];
   canDraw?: (name: string) => boolean;
@@ -88,6 +95,19 @@ export function captureInput(facts: CaptureFacts): CaptureInput {
       ...(raw
         ? { render: facts.original?.render, sensor: size(origin.width, origin.height) }
         : { pixels: size(origin.width, origin.height) }),
+    });
+  }
+  const companion = origin?.companion;
+  if (companion && facts.companion) {
+    const raw = isRawImage(companion.name);
+    others.push({
+      name: companion.name,
+      bytes: companion.bytes,
+      here: facts.companion.held,
+      assetId: companion.assetId,
+      ...(raw
+        ? { render: facts.companion.render, sensor: size(companion.width, companion.height) }
+        : { pixels: size(companion.width, companion.height) }),
     });
   }
   for (const { file: sibling, facts: known } of facts.siblings ?? []) {

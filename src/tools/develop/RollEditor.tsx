@@ -195,11 +195,15 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [mediaFileFor, previewFiles],
   );
   const openFile = openId ? (files.get(openId) ?? null) : null;
-  const openSiblings = useMemo(() => {
-    if (!openFile || mediaOrigin(openFile)) return [];
-    const base = fileBaseName(openFile.name).toLowerCase();
-    return localSiblings.filter((s) => fileBaseName(s.name).toLowerCase() === base);
-  }, [openFile, localSiblings]);
+  const siblingsFor = useCallback(
+    (file: File): readonly File[] => {
+      if (mediaOrigin(file)) return [];
+      const base = fileBaseName(file.name).toLowerCase();
+      return localSiblings.filter((s) => fileBaseName(s.name).toLowerCase() === base);
+    },
+    [localSiblings],
+  );
+  const openSiblings = useMemo(() => (openFile ? siblingsFor(openFile) : []), [openFile, siblingsFor]);
   const localCount = roll.pictures.filter((p) => !p.ref.assetId).length;
   const reach = summarizeAvailability(
     roll.pictures.map((p) => p.id),
@@ -471,7 +475,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // --- the still export (D9): each picture through its own cube --------------
   const { composeWith } = stack;
   const lutFor = useCallback((p: RollPicture) => composeWith(p.develop), [composeWith]);
-  const exports = useRollExport({ roll, files, fileFor, openId, lutFor });
+  const exports = useRollExport({ roll, files, fileFor, openId, lutFor, siblingsOf: siblingsFor });
   const { exportPictures } = exports;
   const exportVerbs = useMemo<ExportVerb[]>(() => {
     if (!openId) return [];

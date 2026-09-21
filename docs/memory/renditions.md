@@ -200,5 +200,42 @@ headless Chromium on a JPEG + DNG + export-of-ours drop (`docs/run-sheet.md`).
   Until R4, a picture shown from its JPEG is still exported under `Auto ·
   Proxies · Originals` — same numbers, possibly different pixels.
 
-Still to build: R3b (the sensor from a Winnow companion), R4 (the export),
-R5 (one vocabulary in Trips and the Studio), R6 (the lightbox).
+## R3b is BUILT: the sensor from a Winnow companion, through ONE seam (2026-09-21)
+
+`shared/develop/sensor-source.ts` is the one answer to "where does the
+sensor's data come from" — `file` · `sibling` · `original` · `companion`, in
+that order — and BOTH the workbench and the export call it (`sensorSourceFor`
++ `fetchSensorFile`), so a picture developed on a companion's RAW leaves the
+export from that RAW. Rules a later phase must keep:
+
+- **A fetched RAW is held under ITS OWN asset id** — the companion's, never
+  the picture's — so the delivered row's `here`, the sensor row's hint and
+  the export's `heldOriginal` all agree. `fetchSensorFile` holds; nothing
+  else calls `holdOriginal` for a RAW.
+- **The companion's render size is read from its HEAD before any click**
+  (`rawRenderFrom(companion.fetchHead, companion.assetId)`, a megabyte with a
+  `Range` the instance ignores and a cancelled body), so the row says its
+  pixels, and `null` — read, none — is remembered like an original's.
+- **The delivered fetch routes by NAME**: a row named like the companion
+  fetches the companion; else the proxy's original. Two files of one capture
+  never share a name.
+- **The export takes the same seam WITH the siblings** (`siblingsOf`, from
+  `RollEditor`): without it a picture developed on a folder's DNG beside its
+  JPEG would leave from the render "not reachable here" — the workbench and
+  the export must be handed the same files or they disagree.
+- Driven against a STUB instance (`testing.md`'s recipe): the row with
+  `raw_jpeg` companion fields lists `proxy · JPG · DNG render · DNG → Gain`
+  with the companion's weight; choosing the JPG fetches `/download` of the
+  primary and the chip says `JPEG · 8-bit`; choosing Gain reads the
+  companion's head (`bytes=0-1048575`), then fetches it whole, holds both,
+  and LibRaw honestly refuses the fake sensor plane — said on the row.
+
+Two bugs found by that run, fixed apart from the seam: a fetched original
+carries an EMPTY type (`materialize` hands it over with none) and
+`pictureFidelity` called it a `clip` — it now reads the NAME before the type
+(`develop.md`); and the stage released a bitmap it was still drawing when the
+delivered file changed in the same commit as the RAW arrived (`develop.md`,
+«A replaced source is released one commit later»).
+
+Still to build: R4 (the export following a stored rendition — waiting on
+§13.2's Q1), R5 (one vocabulary in Trips and the Studio), R6 (the lightbox).

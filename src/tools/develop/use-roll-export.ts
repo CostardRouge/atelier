@@ -33,8 +33,7 @@ import {
   topRung,
   type RawCalibration,
 } from '../../shared/raw/calibration';
-import { isRawImage } from '../../shared/library/assets';
-import { canDecodeRaw } from '../../shared/raw/raw-decoder';
+import { fetchSensorFile, sensorSourceFor } from '../../shared/develop/sensor-source';
 
 /**
  * What the last run rendered, and each file's own capture on its instance.
@@ -91,6 +90,7 @@ export function useRollExport({
   fileFor,
   openId,
   lutFor,
+  siblingsOf,
 }: {
   roll: RollDoc;
   files: ReadonlyMap<string, File>;
@@ -98,12 +98,14 @@ export function useRollExport({
   fileFor: (picture: RollPicture) => Promise<File | null>;
   openId: string | null;
   lutFor: (picture: RollPicture) => CubeLut | null;
+  /** The capture files a folder listed beside a local picture (`AssetParts.siblings`) — where its RAW may be. */
+  siblingsOf?: (file: File) => readonly File[];
 }): RollExports {
   const [exporting, setExporting] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [lastRun, setLastRun] = useState<RollRun | null>(null);
-  const latest = useRef({ roll, files, fileFor, lutFor });
-  latest.current = { roll, files, fileFor, lutFor };
+  const latest = useRef({ roll, files, fileFor, lutFor, siblingsOf });
+  latest.current = { roll, files, fileFor, lutFor, siblingsOf };
 
   // --- the open picture's own size, measured once per file, for the Delivers line
   const [openSize, setOpenSize] = useState<{ file: File; size: MeasuredPicture } | null>(null);
@@ -142,8 +144,7 @@ export function useRollExport({
   const [rawCal, setRawCal] = useState<{ file: File; cal: RawCalibration | null } | null>(null);
   useEffect(() => {
     if (!openFile) return;
-    const held = knownIdentity(openFile)?.assetId ?? null;
-    const source = canDecodeRaw(openFile) ? openFile : held ? heldOriginal(held) : null;
+    const source = sensorSourceFor(openFile, mediaOrigin(openFile), siblingsOf?.(openFile) ?? [], knownIdentity(openFile)?.assetId ?? null)?.held ?? null;
     if (!source) return;
     let alive = true;
     void readRawCalibration(source).then((cal) => {
@@ -152,7 +153,7 @@ export function useRollExport({
     return () => {
       alive = false;
     };
-  }, [openFile]);
+  }, [openFile, siblingsOf]);
 
   const open = openId ? (roll.pictures.find((p) => p.id === openId) ?? null) : null;
   let openDelivery: DeliverySummary | null = null;
@@ -249,15 +250,13 @@ export function useRollExport({
           // silently the wrong material.
           let raw: { file: File; gain: number } | null = null;
           if (isRawDevelop(picture.develop)) {
-            let rawFile: File | null = canDecodeRaw(file) ? file : null;
-            if (!rawFile && origin?.name && isRawImage(origin.name) && origin.fetchOriginal) {
-              const key = identity?.assetId ?? null;
-              rawFile = key ? heldOriginal(key) : null;
-              if (!rawFile) {
-                setExporting(`Fetching the RAW ${step}${origin.bytes ? ` · ${formatBytes(origin.bytes)}` : ''}…`);
-                rawFile = await origin.fetchOriginal();
-                if (key) holdOriginal(key, rawFile);
-              }
+            // The one answer the stage gave (`sensor-source.ts`): the file, a
+            // folder sibling, the proxy's original or the capture's companion.
+            const sensor = sensorSourceFor(file, origin, latest.current.siblingsOf?.(file) ?? [], identity?.assetId ?? null);
+            let rawFile: File | null = null;
+            if (sensor) {
+              if (!sensor.held) setExporting(`Fetching ${sensor.name} ${step}${sensor.bytes ? ` · ${formatBytes(sensor.bytes)}` : ''}…`);
+              rawFile = await fetchSensorFile(sensor).catch(() => null);
             }
             if (rawFile) raw = { file: rawFile, gain: rawGainOf(picture.develop) };
             else failures.push(`${picture.ref.name} is developed on its RAW, which is not reachable here — its render left instead`);

@@ -20,7 +20,8 @@ Legend — ✅ built · ◻ to do · ⛔ blocked · ⏸ deliberately unscheduled
 | ✅ | **R1** — the vocabulary: `renditions.ts`, the companion fields, `MediaOrigin.companion` | `3e5bbc4` |
 | ✅ | **R1b** — our exports say `Software: Atelier`, the copied block included, and are never a rendition | `d8e0e9a` |
 | ✅ | **R2** — a folder keeps every image file of a capture (`AssetParts.siblings`) | `5380091` |
-| ✅ | **R3a** — the chip's menu is the capture's files; the choice stored per picture | this commit |
+| ✅ | **R3a** — the chip's menu is the capture's files; the choice stored per picture | `14a32f1` |
+| ✅ | **R3b** — the sensor from a Winnow companion, one seam for the stage and the export | this commit |
 
 Also built and not a commit: the **Rendition Inspector**
 (https://claude.ai/artifact/Np2XfVEHxT7n1wrXo6rkU6), which reads a TIFF's
@@ -34,7 +35,7 @@ IFDs, an ISO-BMFF's item table, every embedded JPEG by a marker walk,
 | ✅ | **R1b** | Our exports say so | `Software: Atelier` written into a COPIED EXIF block too (in place where the camera's entry holds it, else IFD0 copied to the block's end), and a file marked as ours is excluded from its capture's renditions. Closes §14.6, whose case he confirmed: the `.jpg` beside his DNG was his own export. | specs on the block writer; the stamp read back |
 | ✅ | **R2** | The local half | `AssetParts.siblings` — a folder's `.DNG` is kept beside its `.JPG`, its `.HIF` beside its `.ARW`, instead of dropped at the library's door (§2.4); the asset's files leave the pool together. | `assets.test.ts` |
 | ✅ | **R3a** | The **delivered rung on screen** | The chip's menu is the capture's files: the proxy, what the camera delivered (a drawable original fetched onto the stage and held; the render inside a RAW), the sensor with its rungs nested under it. Stored per picture (`RollPicture.rendition`, no version bump). A folder's DNG beside a JPEG is the sensor in hand. **Not yet**: the export following a stored rendition (R4), a Winnow companion (R3b). | headless Chromium: a JPEG + DNG + export-of-ours drop lists JPG · DNG render · DNG → Gain, and leaves our export out |
-| ◻ | **R3b** | The **sensor rung** from a companion | `rawOffer: 'companion'`, the fetch held for the session, the weight said before the click, `pictureFidelity` naming the file. This is what makes a paired DJI capture developable from its DNG. | the pane, against a stub instance |
+| ✅ | **R3b** | The **sensor rung** from a companion | `sensor-source.ts` — one seam for the workbench AND the export (`file · sibling · original · companion`), the fetch held under the RAW's own asset id, the weight and the render's size said before the click. This is what makes a paired DJI or Sony capture developable from its RAW off a Winnow. | headless Chromium against a stub instance: the companion's head is read, the RAW fetched on Gain and held; the JPEG original fetched onto the stage |
 | ⛔ | **R4** | The export follows | Each picture delivered from its own rendition; `RollExport.originals` comes OFF the document and the three words come off every panel, replaced by one *Proxies only, this run* checkbox and a read-only summary (§13.2 B + C + D). Also carries §13.3's warning. **Waiting on his pick between the variants.** | the pane, two runs |
 | ◻ | **R5** | One vocabulary everywhere | Trips' Export tab and the Studio's stills read the list through `useDeliveryRow`; the words match the pill's. | the pane |
 | ◻ | **R6** | The lightbox switcher | The shell's media preview offers the capture's other files (his B7), as VIEW STATE only — it writes nothing (§13.4). The `Develop` verb under the picture hands the rendition being viewed to the tool it opens. | the pane |

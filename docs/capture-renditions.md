@@ -294,7 +294,9 @@ the pill, which splits R3 in two and adds one phase:
   2026-09-21** (`renditions.md`, «R3a is BUILT»): `DevelopBaseMenu` lists the
   rows, `RollPicture.rendition` stores the pick, `capture-files.ts` builds
   the input from what the workbench holds.
-- **R3b — the sensor rung** (the companion RAW), as R3 above.
+- **R3b — the sensor rung** (the companion RAW), as R3 above. **Built
+  2026-09-21** (`renditions.md`, «R3b is BUILT»): `sensor-source.ts`, one
+  seam for the workbench and the export, driven against a stub instance.
 - **R7 — HEIF**, whichever of §11.C11 the measurement chooses. It is the only
   part that could add a dependency, and it is deliberately last: everything
   else ships without it, and a `.HIF` is drawn from the proxy until it lands.
