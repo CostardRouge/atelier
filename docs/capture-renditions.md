@@ -482,7 +482,9 @@ Grouped, with a recommendation on each so they can be answered by exception.
 16. **Several renditions held per picture** (proxy + a 9 MB JPEG + a 74 MB
     DNG): does `original-cache.ts` need a byte ceiling and an eviction?
     *Recommended*: **yes, an LRU with a stated ceiling** — a forty-picture
-    roll at 74 MB is an ended tab, and today's cache has no bound.
+    roll at 74 MB is an ended tab, and today's cache has no bound. **Built
+    as R9 (2026-09-21)**: a quarter of the device's memory, 256 MiB – 1 GiB,
+    least recently used first, the file used last never (`held-budget.ts`).
 17. **Prefetch the chosen rendition for the filmstrip's neighbours**, as the
     proxies are prefetched?
     *Recommended*: no.

@@ -223,4 +223,28 @@ before it is fetched). Rules:
   just added vanished from the screen while the store held it. The same roll
   under another reference is not a reload (`rollFromRef(route.ref, [open])`).
 
-Still to build: R9 (a ceiling on the session cache).
+## R9 is BUILT: the session cache has a ceiling (2026-09-21)
+
+His D16. `original-cache.ts` held every fetched original until the tab died;
+a forty-picture roll developed from its DNGs is forty times 74 MB. Rules:
+
+- **A byte ceiling sized from the device, never a count**: a quarter of
+  `navigator.deviceMemory` (Chrome's coarse GiB figure) clamped to
+  256 MiB – 1 GiB, 512 MiB where the browser says nothing (`held-budget.ts`,
+  pure, tested). A quarter because the stage, a decoder and an export eat
+  from the same memory.
+- **Least recently USED goes first, and a read is a use** — the stage, the
+  plan and the export all READ a held file, and the one they read is the one
+  to keep. **The file used last is never evicted**, even alone over the
+  ceiling: it is the one being worked on, and letting it go would fetch it
+  on every read.
+- **Eviction drops the cache's reference only.** A component holding the
+  `File` keeps it (a RAW on the stage stays decoded); what changes is that
+  the next reader fetches again, and the run plan says "to fetch" for it —
+  which is honest, since the `held` subscription (`heldVersion`) fires.
+- The render sizes (`heldRawRender`) are never evicted: numbers weigh nothing.
+- `overrideHeldCeiling(bytes | null)` exists for a spec and a diagnostic,
+  nothing else; the Export panel SAYS the device's ceiling in its sentence.
+
+The renditions plan is complete: R1 → R6 and R9; R7 (HEIF) and R6′ (Sony's
+calibration) stay unscheduled by decision (`docs/run-sheet.md`).

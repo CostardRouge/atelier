@@ -1083,7 +1083,10 @@ exactly what will be written (`Proxy 2000 px → 1080 · ×1.85 to spare`,
 for this run**, delivers everything from what is already here — a RAW base is
 set aside and the run says so — and is never remembered on the roll. A RAW
 original is reached only through the render inside it, measured first. Fetched
-originals are kept for the session only. After a run whose
+originals are kept for the session only, up to a ceiling sized from your
+device (a quarter of its memory, between 256 MB and 1 GB); past it the ones you
+used least recently are let go and fetched again when a picture needs them.
+After a run whose
 pictures came from an instance, **Send N files to …** uploads them home into
 that Winnow's finals, each linked to its own capture — the same panel the
 Studio uses, and the same rule: only what you just rendered, only to the
