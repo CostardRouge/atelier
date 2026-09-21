@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Asset } from '../../shared/library/assets';
 import type { SavedMediaRef } from '../../shared/projects/project-types';
 import { findMedia, hashedMediaRef } from '../../shared/projects/media-identity';
 import type { DeckSlide } from '../../shared/roadtrip/deck';
 import { WinnowError } from '../../shared/sources/winnow/client';
+import { restoreClaim, syncMove } from './library-sync';
 import {
   isResolvable,
   refetchMedia,
@@ -71,8 +72,13 @@ export function recoveryGone(ref: SavedMediaRef, sourceId: string): SlideRecover
  * When the Library has nothing and the slide's ref names a CONNECTED Winnow,
  * the picture is fetched back rather than reported missing: a reload empties
  * the pool, and re-picking the day on the calendar was the whole friction.
- * It is still one request per slide, made only when that slide is opened —
+ * It is still one request per picture, made only when that slide is opened —
  * never at boot, never for an instance this browser has not been given.
+ *
+ * Which of the two moves is `library-sync.ts`, and the rule it states is what
+ * makes UNDO work here: the slide takes the tick only when the AUTHOR moved
+ * the tick; a picture that changed under it (an undo, a cleared cell) re-points
+ * the Library instead of being written back.
  */
 export function useSlideLibrary(
   slide: DeckSlide,
@@ -95,7 +101,23 @@ export function useSlideLibrary(
   const isCta = slide.kind === 'cta';
   const restoredFor = useRef<string | null>(null);
   const slideKey = slide.slideId ?? slide.kind;
+  /** The slide AND the picture it names: a picture that changes is restored again. */
+  const claim = restoreClaim(slideKey, slide.media);
+  /**
+   * The tick as the record-back last acted on it. Seeded with what is ticked on
+   * the first render, so opening a piece over another picture is not a pick.
+   */
+  const seenActive = useRef<File | null>(activeFile);
   const [recovery, setRecovery] = useState<SlideRecovery | null>(null);
+  // The claim is a ref (it must be taken synchronously, before an await, or a
+  // second pass fetches the same bytes twice) and the counter is its render
+  // mirror, so the record-back below is woken by a restore that settles — the
+  // same pattern as `use-collage-refetch.ts`.
+  const [settled, setSettled] = useState(0);
+  const settle = useCallback((key: string | null) => {
+    restoredFor.current = key;
+    setSettled((n) => n + 1);
+  }, []);
   // Read inside the effect without making it a dependency: `addFiles` is a
   // fresh callback on some renders, and re-running the restore would re-fetch.
   const addFilesRef = useRef(addFiles);
@@ -105,9 +127,9 @@ export function useSlideLibrary(
   const elsewhereNow = fetchedElsewhere?.current ?? null;
 
   useEffect(() => {
-    if (restoredFor.current === slideKey) return;
+    if (restoredFor.current === claim) return;
     if (isCta || !slide.media) {
-      restoredFor.current = slideKey;
+      settle(claim);
       setRecovery(null);
       return;
     }
@@ -127,7 +149,7 @@ export function useSlideLibrary(
       if (id) {
         setActive(id);
         setRecovery(null);
-        restoredFor.current = slideKey;
+        settle(claim);
         return;
       }
       const elsewhere = elsewhereRef.current?.(want) ?? null;
@@ -135,7 +157,7 @@ export function useSlideLibrary(
         // While fetching: not claimed — the pool changing when those bytes
         // land re-runs this, and the picture is activated then. Once failed:
         // claimed, so ticking another picture still re-points the slide.
-        if (elsewhere === 'failed') restoredFor.current = slideKey;
+        if (elsewhere === 'failed') settle(claim);
         setRecovery(null);
         return;
       }
@@ -143,12 +165,12 @@ export function useSlideLibrary(
       const add = addFilesRef.current;
       if (!sourceId || !add) {
         setRecovery(null);
-        restoredFor.current = slideKey;
+        settle(claim);
         return;
       }
-      // Claim the slide before the await: a second pass while the bytes are
+      // Claim the picture before the await: a second pass while the bytes are
       // in flight would fetch them twice.
-      restoredFor.current = slideKey;
+      settle(claim);
       setRecovery({ state: 'fetching', sourceId });
       try {
         const files = await refetchMedia(want);
@@ -157,7 +179,7 @@ export function useSlideLibrary(
           add(files);
           // The Library rebuilds from the new files; the effect below picks
           // the slide's picture up as the active one on the next pass.
-          restoredFor.current = null;
+          settle(null);
           setRecovery(null);
         } else {
           setRecovery(recoveryGone(want, sourceId));
@@ -170,11 +192,25 @@ export function useSlideLibrary(
     return () => {
       cancelled = true;
     };
-  }, [slideKey, slide.media, isCta, assets, setActive, elsewhereNow]);
+  }, [claim, slide.media, isCta, assets, setActive, elsewhereNow, settle]);
 
   useEffect(() => {
-    if (restoredFor.current !== slideKey || !activeFile || isCta) return;
-    if (slide.media?.name.toLowerCase() === activeFile.name.toLowerCase()) return;
+    if (isCta) return;
+    const move = syncMove({
+      settled: restoredFor.current === claim,
+      // The tick MOVED — the author picked a picture. Anything else that puts
+      // the two out of step is the document moving, and the restore above is
+      // what answers it.
+      tickMoved: seenActive.current !== activeFile,
+      slideName: slide.media?.name ?? null,
+      activeName: activeFile?.name ?? null,
+    });
+    // A pass that stood down because the restore is still in flight has not
+    // acted on the tick, so what it saw is not what the next pass compares
+    // against: the pick made while a picture was being fetched back is still
+    // a pick once that fetch lands.
+    if (move !== 'restore') seenActive.current = activeFile;
+    if (move !== 'record' || !activeFile) return;
     let cancelled = false;
     void hashedMediaRef(activeFile).then((ref) => {
       if (!cancelled) setSlideMedia(ref);
@@ -182,7 +218,7 @@ export function useSlideLibrary(
     return () => {
       cancelled = true;
     };
-  }, [activeFile, slideKey, slide.media, isCta, setSlideMedia]);
+  }, [activeFile, claim, settled, slide.media, isCta, setSlideMedia]);
 
   return recovery;
 }
