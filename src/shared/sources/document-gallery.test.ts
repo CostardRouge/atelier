@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupDocuments, sourceLabel, type RemoteList } from './document-gallery';
+import { absentSources, groupDocuments, sourceLabel, type RemoteList } from './document-gallery';
 
 type Doc = { id: string; sourceId: string };
 const doc = (id: string, sourceId = 'local'): Doc => ({ id, sourceId });
@@ -40,5 +40,38 @@ describe('groupDocuments', () => {
   it('names this browser in words', () => {
     expect(sourceLabel('local')).toBe('this browser');
     expect(sourceLabel('unknown.host')).toBe('unknown.host');
+  });
+});
+
+describe('absentSources — a connected instance that draws no group', () => {
+  const connections = [{ id: 'winnow.example' }, { id: 'other.example' }];
+
+  it('says nothing while the stale sheet is still being re-asked', () => {
+    // The group may be about to appear: a sentence here would flash and lie.
+    expect(absentSources(connections, ['winnow.example'], 'roll', {})).toEqual([
+      { sourceId: 'other.example', text: null },
+    ]);
+  });
+
+  it('names the instance once the sheet has been re-read and still lacks the kind', () => {
+    const [absent] = absentSources(connections, ['winnow.example'], 'roll', {
+      'other.example': { state: 'read' },
+    });
+    expect(absent.sourceId).toBe('other.example');
+    expect(absent.text).toContain('does not keep rolls');
+    // The point of the sentence: it rules out this device's own staleness.
+    expect(absent.text).toContain('asked again just now');
+  });
+
+  it('says it could not be asked rather than what it keeps, when the probe was refused', () => {
+    const [absent] = absentSources(connections, [], 'trip', {
+      'winnow.example': { state: 'refused', problem: 'Not signed in.' },
+      'other.example': { state: 'read' },
+    });
+    expect(absent.text).toBe('winnow.example could not be asked what it keeps: Not signed in.');
+  });
+
+  it('is empty when every connected instance keeps the kind', () => {
+    expect(absentSources(connections, ['winnow.example', 'other.example'], 'project', {})).toEqual([]);
   });
 });

@@ -22,6 +22,7 @@ import {
 import { pickFile } from '../../shared/sources/file-sources';
 import { DEFAULT_SOURCE_ID, sourceById, type SourceInfo } from '../../shared/sources/source';
 import { sourceLabel } from '../../shared/sources/document-gallery';
+import AbsentSourceNotes from '../../shared/sources/AbsentSourceNotes';
 import { useDocumentGallery } from '../../shared/sources/use-document-gallery';
 import { downloadBlob } from '../../shared/media/save';
 import {
@@ -818,6 +819,7 @@ export default function TripGallery({
     documentSources,
     refresh,
     groups,
+    absent,
     nothingAnywhere,
     allListed,
     busy,
@@ -1024,6 +1026,8 @@ export default function TripGallery({
           {notice}
         </p>
       )}
+
+      <AbsentSourceNotes absent={absent} />
 
       {trips === null ? (
         <LoadingState label="Loading trips…" />
