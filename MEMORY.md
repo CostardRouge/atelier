@@ -359,6 +359,11 @@ anything about media sources or document storage:
   `rawOffer`, or anything that decides which file of a capture is opened.**
   It refines `develop-originals.md` §7 and P10 of `photo-editor.md`; it
   revises neither's decisions.
+- **`docs/run-sheet.md`** — one line per commit across the renditions and
+  progress plans (2026-09-21): what is built, what is next, what is blocked and
+  which four questions are the maintainer's. An INDEX, not a plan — the
+  reasoning stays in the two briefs. Read it to find the next piece of work;
+  keep it current or delete it.
 - **`docs/progress-feedback.md`** — the proposal (2026-09-21) for saying that
   something is taking time, across the whole suite: one task registry
   (`shared/tasks/`), two surfaces (a hairline on a media's edge, a pill with a
