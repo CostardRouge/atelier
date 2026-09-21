@@ -728,6 +728,8 @@ A list you sweep through should not make you aim at a 38px thumbnail or a small 
 **Measured**: a miniature badge stayed burnt into the corner of the stage. `renderBadge` read `canvas.width/height`, awaited the fonts, and drew — while a newer render had resized the canvas in between. The stale call painted at the OLD scale over the new frame. The trigger was `BadgeStage`'s decode effect painting an empty frame into a canvas it never sized (300×150, the element default), but any caller could have caused it.
 
 **How to apply**: the font wait is now the FIRST thing `renderBadge` does; everything after it is synchronous, so two overlapping renders each draw a complete, self-consistent frame and the last one simply wins. The general rule: in an async paint, read the surface's dimensions AFTER the last await, never before.
+
+**Its twin, on the PICTURE rather than the surface (2026-09-21): a replaced source is let go LATE.** `BadgeStage` closed the old bitmap where the next one is decoded, while a paint already in flight still held it — so the render threw `the image source is detached` out of `drawFramed` and lost the rest of that frame. It only looked harmless because the paint after it redrew the stage. `releaseLater` (2 s, the shorter twin of `use-hook-pictures.ts`'s 4 s, which already described this as "the stage's own rule") covers the lead source, the collage cells and both unmounts; a source the decode itself abandoned is still closed at once, since no paint ever saw it. It became reproducible the day undo started putting a previous picture back — two throws per step.
 ## The grid's hover card, the panel's own scroll, the day's thumbnails (2026-08-24)
 
 Three asks from the same session, one theme — the tool has to be readable at a glance.

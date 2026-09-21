@@ -84,6 +84,28 @@ export interface StagePlayback {
  */
 export const HOOK_ID = 'hook';
 
+/**
+ * How long a REPLACED source is kept before its bitmap is closed.
+ *
+ * A paint already in flight still holds it — `renderBadge` awaits the fonts
+ * and the grade before it draws anything — so closing it where the next one is
+ * decoded leaves that paint drawing a detached `ImageBitmap`, which throws out
+ * of `drawFramed` and takes the rest of the frame with it. Measured the moment
+ * undo started putting a previous picture back (`library-sync.ts`): two throws
+ * per step, on a stage that only looked right because the paint after them
+ * redrew it.
+ *
+ * It is the rule `use-hook-pictures.ts` already states as "the stage's own",
+ * and shorter than its 4 s because these sources are bounded to the stage's
+ * pixel budget and never feed an export.
+ */
+const RELEASE_AFTER_MS = 2000;
+
+/** Let go of a replaced source once no paint can still be holding it. */
+function releaseLater(source: { release: () => void } | null | undefined): void {
+  if (source) window.setTimeout(() => source.release(), RELEASE_AFTER_MS);
+}
+
 /** Whether a point in the canvas's own pixels is inside a reported rect. */
 function inRect(rect: FrameRect | null | undefined, px: number, py: number): boolean {
   if (!rect) return false;
@@ -290,7 +312,7 @@ export default function BadgeStage({
   // hook frame stutter and flash "decoding…" the whole way across.
   useEffect(() => {
     let cancelled = false;
-    sourceRef.current?.release();
+    releaseLater(sourceRef.current);
     sourceRef.current = null;
     setError(null);
 
@@ -357,7 +379,7 @@ export default function BadgeStage({
       if (i > 0 && f && previousFiles[i] === f && previous[i]) next[i] = previous[i];
     });
     previous.forEach((src, i) => {
-      if (src && next[i] !== src) src.release();
+      if (src && next[i] !== src) releaseLater(src);
     });
     cellSourcesRef.current = next;
     previousFilesRef.current = files.slice();
@@ -397,7 +419,8 @@ export default function BadgeStage({
   const previousFilesRef = useRef<readonly (File | null)[]>([]);
   useEffect(
     () => () => {
-      for (const src of cellSourcesRef.current) src?.release();
+      // Late here too: a paint started on the last commit outlives the unmount.
+      for (const src of cellSourcesRef.current) releaseLater(src);
       cellSourcesRef.current = [];
     },
     [],
@@ -810,7 +833,7 @@ export default function BadgeStage({
     selectedCell,
   ]);
 
-  useEffect(() => () => sourceRef.current?.release(), []);
+  useEffect(() => () => releaseLater(sourceRef.current), []);
 
   // --- pointing at the badge -------------------------------------------------
   const [hovering, setHovering] = useState(false);
