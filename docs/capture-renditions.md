@@ -7,7 +7,9 @@ same day** — companions yes, the proxy as the performance rendition, and the
 pill widened to the camera's own JPEG or HEIF — which makes §4–§6 the shape to
 build. **§12 is his answer to all thirty of §11's questions**, and **§13 is
 what is still missing**: five things, of which one (§13.2) needs a single word
-from him before R4 can be written.
+from him before R4 can be written. **§14 is FACT again** — his own ARW, HIF,
+DNG and JPG read in the pane — and it kills the HEIF prerequisite, promotes
+R3a, and finds a trap nothing had foreseen (§14.6).
 It refines `develop-originals.md` §7 (the two axes) and `photo-editor.md` P10
 (the RAW develop) rather than replacing either; the decisions those record
 still hold.
@@ -627,7 +629,7 @@ lightbox switch is READ-ONLY (look at the other file) while only Develop can
 WRITE the choice. If it should write there too, the stored field has to be
 reachable from outside a roll, which is a different design.
 
-### 13.5 Small and unanswered
+### 13.5 Small and unanswered (before the measurement; §14 answers three)
 
 - **A TIFF row** (C14): no camera here writes one; the answer is no row until
   one does.
@@ -639,3 +641,112 @@ reachable from outside a roll, which is a different design.
 - **The field's name and its migration**: `DevelopSettings.base` becomes
   something that names a file, and roll v2 → v3 (`photo-editor.md`'s edit-stack
   migration wanted that number too — one of them has to move).
+
+## 14. Measured on his own files (2026-09-21)
+
+Read by the Rendition Inspector in the desktop app's browser pane. **This is
+fact**, and it settles the HEIF question and reshapes §6.
+
+### 14.1 The browser
+
+Chrome 152 (Electron 44, the Claude desktop app) decodes **JPEG, PNG, WebP and
+AVIF** through `ImageDecoder`, and **refuses HEIC, HEIF and TIFF**. So the
+probe of §11.B8 is not a formality: on the machine he works on, a `.HIF` cannot
+be drawn at all.
+
+### 14.2 Sony A7C II — `DSC08463.ARW`, 34.6 MB
+
+| | |
+| --- | --- |
+| sensor plane | **7040 × 4688**, 14-bit, Sony compression 32767 (lossless-compressed) |
+| embedded render | **7008 × 4672 JPEG, 2.7 MB** — full size, 99.5 % of the sensor's long edge |
+| `OpcodeList3` | **none** |
+
+**The ARW opens at full resolution in Develop today**, with no decoder and no
+dependency: `raw-probe.ts` finds that render and `extractRawPreview` slices it
+out. That is the exact opposite of the DJI case, and it is why "the ladder is
+format-blind" was worth establishing before building anything.
+
+No opcodes, so **two rungs — `proxy` · `gain`** — which is the answer §11.C
+predicted and not a gap. Sony's lens calibration, if it is anywhere, is in
+MakerNotes no spec names (§8.4); the file states none in DNG's units.
+
+### 14.3 Sony A7C II — `DSC07666.HIF`, 12.6 MB — **C11b is dead**
+
+| item | type | pixels | bytes |
+| --- | --- | --- | --- |
+| 7 (primary) | `grid` | 7008 × 4672 | 8 B |
+| 1–6 | `hvc1` | 3520 × 1600 each | 1.7–2.4 MB |
+| 8 | `hvc1` | 1616 × 1080 | 228 KB |
+| 9 | `hvc1` | 320 × 212 | 16 KB |
+| 10 | `jpeg` | **160 × 120** | 8 KB |
+| 11 / 12 | `Exif` / `mime` | — | 92 KB / 56 KB |
+
+The picture is a **grid of six HEVC tiles**, and the only JPEG inside the file
+is a **160 × 120 thumbnail**. So the trick §10 hoped for — slice the full-size
+JPEG out of the HEIF the way `raw-probe.ts` slices one out of a RAW — **does
+not work on this body**. Winnow's own note (*"Sony .hif and most camera HEIFs
+ship one"*) is true of enough cameras to be worth the code path there; it is
+false of his. Its own fallback is what runs: a full libheif decode, server-side,
+where libheif exists.
+
+**So the HIF can be reached only by shipping a decoder** (C11a) or by Winnow
+serving a full-size derivative it does not make today (C11c).
+
+### 14.4 …and that makes the HIF row REDUNDANT on his kit
+
+Both files are 7008 × 4672. The ARW's embedded render is that picture, drawable
+with nothing, out of a file he already has. The HIF's only real edge is
+**quality**: 12.6 MB of HEVC against 2.7 MB of JPEG for 32.7 megapixels — about
+3 bits per pixel against 0.66 — and weight through a tunnel.
+
+**Recommendation, revised.** Do not ship a HEIF decoder for v1, and do not list
+a `.HIF` as an unavailable row where its own capture already offers a drawable
+full-size rendition. State it where it is the only delivered file, say the
+browser cannot draw it, and let the ARW answer. `libheif.wasm` becomes what it
+should have been all along: a quality choice, taken later, on a measurement of
+what those extra bits are worth on a photograph — not a prerequisite.
+
+### 14.5 DJI — the earlier measurement holds
+
+`dji_fly_…_photo.DNG`, 70.6 MB: sensor **8064 × 4536** uncompressed 16-bit,
+embedded render **960 × 540**, GainMap 32 × 32 × 3 asking **0.997–6.030×**
+(**2.59 stops** at the corner), WarpRectilinear `k0 = 0.9530` with the green
+plane's `k1..k3` at zero. Four rungs, and the pair of bodies now spans the whole
+range the design has to hold: **one camera writes no usable render and all the
+calibration; the other writes a perfect render and no calibration.**
+
+### 14.6 The trap in the same drop: a derivative is not a rendition
+
+`dji_fly_…_photo.jpg` sat beside `dji_fly_…_photo.DNG` — same base name, so the
+inspector grouped them as one capture. It is **7728 × 3896**, against the DNG's
+8064 × 4536: neither the sensor's aspect (1.98 : 1 against 1.78 : 1) nor a
+scale of it, and named exactly the way this suite names an export
+(`develop-roll.md` — the extension lowercased, no word added). It is almost
+certainly **his own export, written into the folder the originals live in** —
+which is §13.3 happening in the wild.
+
+**The rule that follows**: basename grouping alone cannot tell a camera's own
+delivered file from a derivative you wrote beside it, and the EXIF cannot
+either, because `stamp-exif.ts` deliberately copies the original's block into
+the export. Offering that JPEG as "the camera's render" would be a fabrication
+of exactly the kind this repo's rules exist to stop. Three ways out, and the
+choice is his: **(a)** a delivered rendition must share the sensor's aspect
+within a tolerance — cheap, catches this case, misses an uncropped re-export;
+**(b)** an export writes a marker into its own EXIF (a `Software` tag saying
+Atelier) and a file carrying it is never offered as a rendition — honest and
+exact, but only for files this suite made; **(c)** never group a local sibling
+whose modification time is later than the RAW's by more than a session.
+Recommended: **(b), with (a) as the fallback for files made elsewhere.**
+
+### 14.7 What this does to the phases
+
+- **R3a is now the best first commit by a distance**: the delivered rung on a
+  Sony is `raw-probe.ts` over a file already in hand, and the whole Sony
+  workflow stops being proxy-only for the cost of one row.
+- **R7 (HEIF) leaves the plan** as a prerequisite and becomes an optional
+  quality pass, unscheduled.
+- **The `viaEmbeddedRender` distinction becomes structural, not cosmetic**: a
+  RAW yields TWO rows — its camera render (drawable now) and its sensor — and
+  the pixel counts of those two rows differ by 8.4× on one body and by 0.5 % on
+  the other. A design that treats a RAW as one row cannot say that.

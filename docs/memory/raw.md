@@ -272,6 +272,39 @@ applied to an 8-bit proxy is a visibly different picture (§13.2); and the
 reaches past Develop. A local folder's siblings are scanned and shown as a
 tuple, like Winnow's pair. What is still missing is §13, five items.
 
+**MEASURED on his own files, 2026-09-21** (`docs/capture-renditions.md` §14,
+which carries the tables). The two bodies span the whole range the design has
+to hold, and in opposite directions:
+
+- **Sony A7C II `.ARW`** — sensor 7040 × 4688, 14-bit, Sony compression 32767;
+  **embedded render 7008 × 4672, a full-size JPEG of 2.7 MB**; **no
+  `OpcodeList3`**. So an ARW opens at full resolution in Develop TODAY, through
+  `raw-probe.ts` and no decoder — the exact opposite of the DJI — and offers two
+  rungs, `proxy` · `gain`, which is the correct answer and not a gap.
+- **Sony `.HIF`** — the picture is a **grid of six HEVC tiles** (7008 × 4672),
+  its previews are `hvc1`, and **the only JPEG inside is 160 × 120**. So
+  slicing a full-size JPEG out of a HEIF — the trick that would have made the
+  HEIF row free — **does not work on this body**, whatever Winnow's
+  `extract.ts` says about cameras in general. And Chrome 152 in his desktop app
+  **refuses `image/heic`, `image/heif` and `image/tiff`** (`ImageDecoder`), so
+  the file cannot be drawn there at all.
+- **Therefore the HIF row is REDUNDANT on his kit**: the ARW's own render is
+  the same 7008 × 4672 picture, drawable with nothing. The HIF's only edge is
+  quality — ~3 bits per pixel against the embedded JPEG's 0.66. **`libheif.wasm`
+  is a later quality choice, never a prerequisite**, and a `.HIF` is not listed
+  as an unavailable row where its own capture already offers a drawable
+  full-size rendition.
+- **A RAW therefore yields TWO rows, not one** — its camera render and its
+  sensor — and those differ by 8.4× on the DJI and by 0.5 % on the Sony. A
+  model that treats a RAW as one rendition cannot say that.
+- **A derivative you wrote is not a rendition** (§14.6): a `.jpg` named exactly
+  as this suite names an export sat beside his DNG at 7728 × 3896 — neither the
+  sensor's aspect nor a scale of it. Basename grouping cannot tell it from a
+  camera's own JPEG, and neither can the EXIF, since `stamp-exif.ts` copies the
+  original's block into every export. Recommended: mark our own exports in
+  their `Software` tag and never offer a file carrying it, with an aspect test
+  as the fallback for files made elsewhere.
+
 **The measurement is a page, not a guess**: the Rendition Inspector
 (https://claude.ai/artifact/Np2XfVEHxT7n1wrXo6rkU6) walks a TIFF's IFDs and an
 ISO-BMFF's item table, finds every embedded JPEG by a MARKER WALK rather than
