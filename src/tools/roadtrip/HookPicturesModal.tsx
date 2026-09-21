@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { classifyPart, fileIdentity, isRawImage, type Asset } from '../../shared/library/assets';
@@ -661,6 +661,9 @@ function Look({
       })),
     [pool, client, urls, thumbFor],
   );
+  // Only the instance's URLs can be answered from a cache entry this origin is
+  // not allowed to read (`winnow/cache-heal.ts`); a `blob:` never can.
+  const healUrl = useCallback((url: string) => client?.heal(url) ?? Promise.resolve(false), [client]);
   return (
     <MediaLightbox
       items={items}
@@ -668,6 +671,7 @@ function Look({
       onIndex={onIndex}
       onClose={onClose}
       from={from}
+      heal={healUrl}
       onConfirm={onToggle}
       footer={
         <Button variant={on ? 'default' : 'primary'} size="sm" onClick={onToggle}>

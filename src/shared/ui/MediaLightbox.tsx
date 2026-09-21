@@ -68,6 +68,39 @@ interface MediaLightboxProps {
   footer?: ReactNode;
   /** What Enter does, when the caller has one obvious action. */
   onConfirm?: (() => void) | null;
+  /**
+   * Ask the browser for one of these URLs again, past its cache, after it
+   * would not load — and say whether the entry now holds something worth
+   * drawing. Only a caller whose URLs are fetched over the network passes
+   * one: an instance's proxies can be answered from a cache entry this origin
+   * is not allowed to read, which no reload cures (`winnow/cache-heal.ts`).
+   * A `blob:` off a local file never needs it.
+   */
+  heal?: (url: string) => Promise<boolean>;
+}
+
+/**
+ * A media URL that is asked for once more, past the cache, if it will not
+ * load — and then left alone. One heal per URL per slot: past that the picture
+ * is genuinely not coming, and the still underneath is what the sheet shows.
+ */
+function useHealingSrc(url: string | null, heal?: (url: string) => Promise<boolean>) {
+  const [round, setRound] = useState(0);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    setRound(0);
+    return () => {
+      alive.current = false;
+    };
+  }, [url]);
+  const onError = () => {
+    if (!url || !heal || round > 0) return;
+    void heal(url).then((healed) => {
+      if (healed && alive.current) setRound(1);
+    });
+  };
+  return { round, onError };
 }
 
 /**
@@ -88,6 +121,7 @@ export default function MediaLightbox({
   from,
   footer,
   onConfirm,
+  heal,
 }: MediaLightboxProps) {
   const item = items[index] ?? null;
 
@@ -280,6 +314,7 @@ export default function MediaLightbox({
                     active={slot === 0}
                     viewer={viewer}
                     onReady={setReady}
+                    heal={heal}
                   />
                 </div>
               ))}
@@ -336,14 +371,20 @@ function DeckSlide({
   active,
   viewer,
   onReady,
+  heal,
 }: {
   item: LightboxItem;
   active: boolean;
   viewer: MediaViewer;
   /** Only the middle slot reports, and it reports whenever it becomes it. */
   onReady: (ready: boolean) => void;
+  heal?: (url: string) => Promise<boolean>;
 }) {
   const [loaded, setLoaded] = useState(false);
+  // The full rendition and the still underneath are two URLs and two entries:
+  // the grid has usually healed the still already, the proxy nothing has.
+  const full = useHealingSrc(item.src, heal);
+  const still = useHealingSrc(item.still, heal);
   useEffect(() => setLoaded(false), [item.id, item.src]);
   // A clip that leaves the middle stops, and lets go of its stream: removing
   // `src` alone keeps the download going, `load()` is what ends it.
@@ -380,11 +421,15 @@ function DeckSlide({
   // the layer above, and a screen reader should hear about it once.
   const under = item.still ? (
     <img
+      // A new element per round, or the browser may ignore the same `src`
+      // being set again on the one that just failed.
+      key={`still:${still.round}`}
       src={item.still}
       alt=""
       aria-hidden="true"
       crossOrigin={cors}
       draggable={false}
+      onError={still.onError}
       style={framed}
       className={fill}
     />
@@ -400,10 +445,11 @@ function DeckSlide({
             sweep aimed at a node that left the DOM goes nowhere. */}
         <video
           ref={videoRef}
-          key={item.id}
+          key={`${item.id}:${full.round}`}
           src={active ? item.src : undefined}
           poster={item.still ?? undefined}
           crossOrigin={cors}
+          onError={full.onError}
           controls={active}
           // Metadata only: opening a day should not stream every clip.
           preload="metadata"
@@ -431,12 +477,13 @@ function DeckSlide({
       {under}
       {item.src && (
         <img
-          key={item.id}
+          key={`${item.id}:${full.round}`}
           src={item.src}
           alt={item.title}
           crossOrigin={cors}
           draggable={false}
           style={framed}
+          onError={full.onError}
           onLoad={(e) => {
             setLoaded(true);
             if (active) {
