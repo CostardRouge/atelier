@@ -25,7 +25,8 @@ Legend — ✅ built · ◻ to do · ⛔ blocked · ⏸ deliberately unscheduled
 | ✅ | **R4** — the export follows the picture's rendition; the three words leave the roll | `f7b4dce` |
 | ✅ | **R5** — the three words leave Trips and the Studio; the *Delivers* row names the file | `dfe5e89` |
 | ✅ | **R6** — the lightbox switches between the capture's files; `Develop` carries the one viewed | `c618485` |
-| ✅ | **R9** — a ceiling on the session cache, least recently used first | this commit |
+| ✅ | **R9** — a ceiling on the session cache, least recently used first | `838f24a` |
+| ✅ | **T1** — the task registry, the edge and the pill | this commit |
 
 Also built and not a commit: the **Rendition Inspector**
 (https://claude.ai/artifact/Np2XfVEHxT7n1wrXo6rkU6), which reads a TIFF's
@@ -51,7 +52,7 @@ IFDs, an ISO-BMFF's item table, every embedded JPEG by a marker walk,
 
 | | id | task | what it delivers |
 | --- | --- | --- | --- |
-| ◻ | **T1** | The registry and its two surfaces | `shared/tasks/` (pure, tested), `TaskEdge` (a hairline on a media's edge — a fill when the length is known, a sweep when it is not) and `TaskPill` (the `SyncPill` family, naming the operation, carrying the Cancel). Nothing wired. |
+| ✅ | **T1** | The registry and its two surfaces | `shared/tasks/` (module state + `useTasks`, tested: start/update/done, scope, cancel, the 400 ms rule, the whole's progress null the moment one part is unmeasured), `TaskEdge` (a hairline on a media's edge — a fill when the length is known, a sweep when it is not) and `TaskPill` in the masthead at every width (dot + word, the list with a bar and a Cancel in a popover). Driven in headless Chromium at 1400 and 390 px. Nothing wired yet. |
 | ◻ | **T2** | The fetches | `delivery-source.ts`, `original-cache.ts`, `resolve-media.ts`, the Winnow client. They already count their bytes, so determinate for free, and `AbortController` makes them the one thing cancellable today with no rework. |
 | ◻ | **T3** | The RAW decode and the loupe | Indeterminate, cancel dropping the worker's turn rather than the worker. This is what makes a stored `ARW` choice safe to honour on a phone (§13.1). |
 | ◻ | **T4** | The exports | Determinate per frame or per picture. **The real work**: a cancel has to reach inside the encoder loop, and nothing in the suite takes an `AbortSignal` today. |

@@ -1,10 +1,12 @@
 # Saying that something is taking time
 
 **Status (2026-09-21).** §1 is the maintainer's ask, in his words. §2 is FACT,
-read in this repository. §3 onwards is a PROPOSAL: nothing here has been
-agreed. It came out of `capture-renditions.md` — a 52 MB fetch and a 4.4 s
-decode are what made him ask — but it is deliberately written for the whole
-suite, not for RAW.
+read in this repository — **corrected the same day, see its last paragraph**:
+the video exports DO take an `AbortSignal` already. §3 onwards was a proposal;
+the maintainer said *"finish the whole thing, T1 to T5"* and the phases are
+being built in order (`docs/run-sheet.md` says which). It came out of
+`capture-renditions.md` — a 52 MB fetch and a 4.4 s decode are what made him
+ask — but it is deliberately written for the whole suite, not for RAW.
 
 ---
 
@@ -51,9 +53,18 @@ already report progress through an `onProgress`-shaped callback —
 So nothing needs inventing at the source. What is missing is **one place that
 knows what is running**, and two ways of drawing it.
 
-**Nothing is cancellable today.** No export, decode, fetch or transcode takes
-an `AbortSignal`; a run that has started, finishes. That is the real work in
-this brief — the drawing is the easy half.
+**What is cancellable today — corrected 2026-09-21.** The first reading of this
+section said nothing was; that was wrong for the VIDEO exports. `render-video.ts`,
+`webcodecs-export.ts`, `export-variant.ts`, `hook-video-export.ts`,
+`export-overlay*.ts` and `transcode.ts` all take a `signal?: AbortSignal` and
+check it between frames, and the Studio's Export tab already draws a Cancel
+over it (`StudioEditor`'s `exportAbort`). What takes NO signal: every fetch
+(`WinnowClient.request`, so `fetchFile`, `fetchHead`, `materialize`,
+`refetchMedia`, the originals and companions), the RAW decode
+(`raw-decoder.ts`), the Develop roll's export loop (`use-roll-export.ts`),
+the deck's PNG run (`deck-export.ts`) and Trips' `use-post-exports` (which
+never passes the signal the pipeline would take), and the pack import. So the
+real work of T4 is the roll and the deck, not the encoder loop.
 
 ## 3. The proposal
 

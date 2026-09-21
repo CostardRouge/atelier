@@ -512,9 +512,14 @@ progress through an `onProgress`-shaped callback — `media/export-variant.ts`,
 `tools/develop/use-roll-export.ts` — and each is drawn its own way: Trips'
 Export word becomes its own fill, `SyncPill` says a dot and a word, Develop's
 `tell()` writes prose under the stage, three panels draw their own bar.
-**`shared/ui/` holds no progress element at all**, and **nothing in the suite
-is cancellable**: no export, decode, fetch or transcode takes an
-`AbortSignal`, so a run that started, finishes.
+**`shared/ui/` held no progress element at all** (until T1, `tasks.md`), and
+the first reading — "nothing in the suite is cancellable" — was WRONG for the
+video exports: `export-variant.ts`, `webcodecs-export.ts`, `render-video.ts`,
+`hook-video-export.ts`, `export-overlay*.ts` and `transcode.ts` take a
+`signal?: AbortSignal` and check it between frames, and the Studio draws a
+Cancel over it. What takes none: every fetch through `WinnowClient.request`,
+the RAW decode, the roll's export loop, the deck's PNG run, Trips' exports
+(which never pass the signal), the pack import.
 
 **The maintainer's ask (2026-09-21)**, out of the RAW work but deliberately
 suite-wide: a hairline on a MEDIA's edge — a fill when the length is known, a

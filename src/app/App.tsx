@@ -7,6 +7,7 @@ import { REPO_URL } from './site';
 import { HOME_PATH, toolForPath } from './tools';
 import ToolSwitcher from './ToolSwitcher';
 import SourcePill from './SourcePill';
+import TaskPill from '../shared/ui/TaskPill';
 import { useHashRoute } from './use-hash-route';
 import BottomSheet from '../shared/ui/BottomSheet';
 import SectionRail from '../shared/ui/SectionRail';
@@ -237,6 +238,9 @@ export default function App() {
           {/* The most visible corner of a tool screen used to carry the
               tool's tagline ("Unified editor"). It says an action or a state
               now: where the documents live, and the way to `#/sources`. */}
+          {/* What is running, at every width — the masthead is the one row
+              every screen keeps. Nothing to say, nothing drawn. */}
+          <TaskPill compact={compact} />
           {tool && !compact && <SourcePill />}
           <ThemeToggle />
           <a
