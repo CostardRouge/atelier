@@ -28,6 +28,23 @@
  * (~100 ms apiece, `film-layer.ts`) and one burst would hold a frame.
  * Thumbnails pop in as they finish, which reads as the grid filling in rather
  * than the modal being slow.
+ *
+ * ## On a phone the GRID is what the screen is for
+ *
+ * At 390×844 the desktop arrangement stacked — a two-line title, the scene
+ * with its name, its file line, its slider and its button, the three-row
+ * "tiles on…" band, the crumbs, then the footer's sentence — left ONE row of
+ * tiles visible, and the maintainer's report was exactly that: *"we barely
+ * see the look we want to pick"*. So the compact shell (`useIsCompact`) is a
+ * different arrangement of the same parts rather than the same one squeezed:
+ * a one-row header; the scene at a fixed share of the measured app height
+ * with only the aimed look's name and the Compare pill under it (the wipe is
+ * the drag across the picture); the filter beside a ⋯ menu holding the
+ * "tiles on…" choices; the family crumbs pinned OUTSIDE the scroller as one
+ * swipeable line; and the "Use this look" verb in a footer of its own, in the
+ * thumb's reach, where the sentence about lattices used to be. Everything
+ * that only explains is gone from that width — the sheet has an ⓘ elsewhere
+ * for it — because every explaining line was a row of looks not shown.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -38,7 +55,9 @@ import { pickFile } from '../sources/file-sources';
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
 import { Icons } from '../ui/icons';
+import OverflowMenu, { type OverflowItem } from '../ui/OverflowMenu';
 import useDialogKeys from '../ui/use-dialog-keys';
+import { useIsCompact } from '../ui/use-layout-mode';
 import { loadBuiltinThumbs } from './builtin-thumbs';
 import { galleryNodes, matchingItems, type GalleryItem, type GalleryNode } from './gallery-nodes';
 import LookScene from './LookScene';
@@ -122,6 +141,7 @@ export default function LutGalleryModal({
 }: LutGalleryModalProps) {
   const { interpolation } = useLutInterpolation();
   const packIndexes = useLutPacks();
+  const compact = useIsCompact();
 
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string>(() => (includeFilm ? 'film' : 'builtin'));
@@ -340,6 +360,82 @@ export default function LutGalleryModal({
 
   const creditsFor = nodes.find((n) => n.id === credits)?.pack ?? null;
 
+  /**
+   * What the looks are shown ON. The default costs nothing — the tiles were
+   * baked once, each look on the reference its family asks for — so putting
+   * them on YOUR picture is a choice you make rather than a price you pay for
+   * opening the picker (`docs/lut-packs.md` §7). One sentence says the state,
+   * and the same three verbs change it, drawn as buttons where there is a row
+   * for them and as a ⋯ menu on a phone.
+   */
+  const sourceLine =
+    liveOn === 'custom' && customLabel
+      ? `Tiles on “${customLabel}”`
+      : liveOn === 'open'
+        ? 'Tiles on the open picture — one lattice per look'
+        : scene
+          ? 'Tiles on their reference frames, so two looks stay comparable'
+          : 'Each look on its own reference frame — log looks on a D-Log M frame, the rest on a photograph';
+  const sourceVerbs: OverflowItem[] = [
+    ...(picture && liveOn !== 'open'
+      ? [
+          {
+            id: 'open',
+            label: scene ? 'Tiles on my picture too' : 'Preview on the open picture',
+            onSelect: () => setLiveOn('open'),
+          },
+        ]
+      : []),
+    {
+      id: 'custom',
+      label: imageBusy ? 'Reading…' : customImage ? `Preview on “${customLabel}”` : 'Preview on a photo…',
+      onSelect: () => {
+        // Already decoded once this session: switching back costs no second
+        // read of the file.
+        if (customImage) setLiveOn('custom');
+        else void chooseImage();
+      },
+      disabled: imageBusy || liveOn === 'custom',
+    },
+    ...(liveOn
+      ? [{ id: 'reference', label: 'Use the reference frames', onSelect: () => setLiveOn(null) }]
+      : []),
+  ];
+
+  /** The families as one line of crumbs: every root, then the open branch. */
+  const crumbs = nodes.filter(
+    (n) => n.depth === 0 || n.id.startsWith(`${open?.id ?? ''}/`) || open?.id.startsWith(`${n.id}/`),
+  );
+  const openNode = (node: GalleryNode) => {
+    setOpenId(node.id);
+    setQuery('');
+  };
+
+  const filterField = (
+    <input
+      type="search"
+      value={query}
+      onChange={(e) => setQuery(e.target.value)}
+      placeholder="Filter looks…"
+      aria-label="Filter looks"
+      // 16px on a phone, or iOS zooms the page on focus and never zooms back.
+      className={`w-full font-sans h-[2.125rem] px-3 border border-line-strong rounded-control bg-paper text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 ${
+        compact ? 'text-base' : 'text-sm'
+      }`}
+    />
+  );
+
+  const useThisLook = (
+    <Button
+      size={compact ? 'md' : 'sm'}
+      variant={compact ? 'primary' : 'default'}
+      disabled={!aimed || aimedBusy}
+      onClick={() => aimed && onPick(aimed)}
+    >
+      Use this look
+    </Button>
+  );
+
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[rgba(20,18,15,0.45)] backdrop-blur-[2px] max-[820px]:p-0"
@@ -351,18 +447,28 @@ export default function LutGalleryModal({
       }}
     >
       {/* Wider and taller than it was (56rem / 50rem): the scene wants the
-          room, the grid gains columns with it, and the rail is unchanged. */}
-      <div className="w-full max-w-[76rem] h-[min(92dvh,54rem)] flex flex-col gap-4 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6 pb-5 min-h-0 max-[820px]:max-w-none max-[820px]:h-[var(--app-h,100dvh)] max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:px-4 max-[820px]:pt-[max(1rem,env(safe-area-inset-top))] max-[820px]:pb-[max(1rem,env(safe-area-inset-bottom))]">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="m-0 font-serif text-2xl">{title}</h2>
-            <p className="m-0 mt-1 text-sm text-muted">
-              {scene
-                ? 'Aim a look to see it on your picture — click it again to use it.'
-                : 'Every look, on a real picture — click one to use it.'}
-            </p>
+          room, the grid gains columns with it, and the rail is unchanged. On
+          a phone it is the whole MEASURED screen (`--app-h`, `frontend.md`),
+          with tighter gaps: every 8px between bands is 8px of grid. */}
+      <div
+        className={
+          compact
+            ? 'w-full h-[var(--app-h,100dvh)] flex flex-col gap-2.5 bg-surface min-h-0 px-3 pt-[max(0.625rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]'
+            : 'w-full max-w-[76rem] h-[min(92dvh,54rem)] flex flex-col gap-4 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6 pb-5 min-h-0'
+        }
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className={`m-0 font-serif truncate ${compact ? 'text-lg' : 'text-2xl'}`}>{title}</h2>
+            {!compact && (
+              <p className="m-0 mt-1 text-sm text-muted">
+                {scene
+                  ? 'Aim a look to see it on your picture — click it again to use it.'
+                  : 'Every look, on a real picture — click one to use it.'}
+              </p>
+            )}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             {/* Purchased packs live in this browser's vault, not in the
                 build, so importing one is a verb of the picker rather than a
                 setting somewhere else (`docs/lut-packs.md` §6). */}
@@ -381,13 +487,27 @@ export default function LutGalleryModal({
              third column — measured, the modal is 848 px wide inside, the
              rail takes 216, and a 420 px panel beside them leaves room for
              one tile per row. */
-          <div className="flex-none flex gap-4 border-t border-line pt-3 max-[820px]:flex-col max-[820px]:gap-2">
+          <div
+            className={
+              compact
+                ? 'flex-none flex flex-col gap-1.5'
+                : 'flex-none flex gap-4 border-t border-line pt-3'
+            }
+          >
             {/* The picture takes the room and is shown WHOLE inside it, its
                 surround the dark of a light table. */}
             {/* HEIGHT is what gives the picture presence: the band is wide
                 enough for a 16:9 frame long before it is tall enough for a
-                4:3 one, so growing it downwards is what fills the room. */}
-            <div className="flex-1 min-w-0 h-[21rem] max-[820px]:flex-none max-[820px]:w-full max-[820px]:h-[12rem]">
+                4:3 one, so growing it downwards is what fills the room. On a
+                phone it is a SHARE of the measured screen — a quarter — so a
+                taller phone gets a taller scene and the grid keeps its rows. */}
+            <div
+              className={
+                compact
+                  ? 'flex-none w-full h-[calc(var(--app-h,100dvh)*0.25)] min-h-[8rem]'
+                  : 'flex-1 min-w-0 h-[21rem]'
+              }
+            >
               <LookScene
                 source={picture}
                 cube={aimedCube}
@@ -402,180 +522,157 @@ export default function LutGalleryModal({
                 error={aimedError}
               />
             </div>
-            <div className="w-[21rem] flex-none flex flex-col gap-1.5 max-[820px]:w-full">
-              <span className="text-base font-medium text-ink truncate">
-                {aimedItem?.name ?? 'Your picture, as it is'}
-              </span>
-              <span className="font-mono text-2xs text-muted">
-                {[previewLabel, aimedItem ? 'the look alone, without your correction' : null]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </span>
-              {/* The comparison slider: what the picture is worth against the
-                  original, said with a control you can put anywhere rather
-                  than a gesture you have to discover. Moving it turns the
-                  wipe ON — a slider that does nothing until a switch is found
-                  is a dead control. */}
-              {/* A DIV, not a label: a `<label>` around both made the
-                  button's accessible name the slider's VALUE ("50") — the
-                  browser takes a labelled control's name from the label's
-                  whole text, and a screen reader then announces the switch as
-                  a number. The slider names itself with `aria-label`. */}
-              <div className="flex items-center gap-2.5 mt-1 text-xs text-ink-soft">
-                <button
-                  type="button"
-                  onClick={() => setCompare((v) => !v)}
-                  aria-pressed={compare}
-                  title={compare ? 'Show the graded picture whole' : 'Wipe it against the original'}
-                  className={`flex-none px-2 py-1 rounded-control border font-mono text-2xs tracking-[0.08em] uppercase cursor-pointer transition-colors ${
-                    compare
-                      ? 'border-accent bg-accent-wash text-accent-ink'
-                      : 'border-line-strong bg-paper text-muted hover:text-ink'
-                  }`}
-                >
-                  Compare
-                </button>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={Math.round(splitX * 100)}
-                  onChange={(e) => {
-                    setCompare(true);
-                    setSplitX(Number(e.target.value) / 100);
-                  }}
-                  aria-label="Where the before/after divider sits"
-                  className="flex-1 min-w-0 accent-accent"
-                />
-              </div>
-              {note && (
-                <p className="m-0 px-2.5 py-1.5 rounded-control bg-warn-wash border border-warn-line text-xs leading-snug text-warn">
-                  {note}
-                </p>
-              )}
-              <div className="mt-auto flex items-center gap-2 flex-wrap">
-                <Button
-                  size="sm"
-                  disabled={!aimed || aimedBusy}
-                  onClick={() => aimed && onPick(aimed)}
-                >
-                  Use this look
-                </Button>
-                <span className="text-2xs leading-snug text-muted">
-                  One lattice read, not the whole family.
+            {compact ? (
+              /* One row under the picture: what is on it, and the wipe. The
+                 slider is not here — the drag across the picture writes the
+                 same number, and a finger is already on the picture. */
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="flex-1 min-w-0 text-sm font-medium text-ink truncate">
+                  {aimedItem?.name ?? 'Your picture, as it is'}
                 </span>
+                {note && (
+                  <span className="shrink-0 w-2 h-2 rounded-full bg-warn" title={note} aria-label={note} />
+                )}
+                <CompareToggle compare={compare} onToggle={() => setCompare((v) => !v)} />
               </div>
-            </div>
+            ) : (
+              <div className="w-[21rem] flex-none flex flex-col gap-1.5">
+                <span className="text-base font-medium text-ink truncate">
+                  {aimedItem?.name ?? 'Your picture, as it is'}
+                </span>
+                <span className="font-mono text-2xs text-muted">
+                  {[previewLabel, aimedItem ? 'the look alone, without your correction' : null]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+                {/* The comparison slider: what the picture is worth against the
+                    original, said with a control you can put anywhere rather
+                    than a gesture you have to discover. Moving it turns the
+                    wipe ON — a slider that does nothing until a switch is found
+                    is a dead control. */}
+                {/* A DIV, not a label: a `<label>` around both made the
+                    button's accessible name the slider's VALUE ("50") — the
+                    browser takes a labelled control's name from the label's
+                    whole text, and a screen reader then announces the switch as
+                    a number. The slider names itself with `aria-label`. */}
+                <div className="flex items-center gap-2.5 mt-1 text-xs text-ink-soft">
+                  <CompareToggle compare={compare} onToggle={() => setCompare((v) => !v)} />
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={Math.round(splitX * 100)}
+                    onChange={(e) => {
+                      setCompare(true);
+                      setSplitX(Number(e.target.value) / 100);
+                    }}
+                    aria-label="Where the before/after divider sits"
+                    className="flex-1 min-w-0 accent-accent"
+                  />
+                </div>
+                {note && (
+                  <p className="m-0 px-2.5 py-1.5 rounded-control bg-warn-wash border border-warn-line text-xs leading-snug text-warn">
+                    {note}
+                  </p>
+                )}
+                <div className="mt-auto flex items-center gap-2 flex-wrap">
+                  {useThisLook}
+                  <span className="text-2xs leading-snug text-muted">
+                    One lattice read, not the whole family.
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        <div className="flex flex-col gap-2.5 border-y border-line py-3">
-          {/* What the looks are shown ON. The default costs nothing — the
-              tiles were baked once, each look on the reference its family
-              asks for — so putting them on YOUR picture is a choice you make
-              rather than a price you pay for opening the picker
-              (`docs/lut-packs.md` §7). */}
-          <div className="flex items-center gap-3 flex-wrap">
+        {compact ? (
+          /* The filter, and the "tiles on…" choices behind one ⋯: on a phone
+             the sentence and its three buttons were three rows over the grid
+             for a preference set once. The sample thumbnail says which
+             picture the tiles are on, when it is not the reference. */
+          <div className="flex-none flex items-center gap-2">
             {effectiveSource && (
-              <span className="w-8 h-8 rounded-control overflow-hidden border border-line shrink-0">
+              <span className="w-8 h-8 rounded-control overflow-hidden border border-line shrink-0" title={sourceLine}>
                 <LutThumb bitmap={sample} />
               </span>
             )}
-            <span className="text-xs text-muted min-w-0 truncate">
-              {liveOn === 'custom' && customLabel
-                ? `Tiles on “${customLabel}”`
-                : liveOn === 'open'
-                  ? 'Tiles on the open picture — one lattice per look'
-                  : scene
-                    ? 'Tiles on their reference frames, so two looks stay comparable'
-                    : 'Each look on its own reference frame — log looks on a D-Log M frame, the rest on a photograph'}
-            </span>
-            {picture && liveOn !== 'open' && (
-              <Button size="sm" variant="ghost" onClick={() => setLiveOn('open')}>
-                {scene ? 'Tiles on my picture too' : 'Preview on the open picture'}
-              </Button>
-            )}
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                // Already decoded once this session: switching back costs no
-                // second read of the file.
-                if (customImage) setLiveOn('custom');
-                else void chooseImage();
-              }}
-              disabled={imageBusy || liveOn === 'custom'}
-            >
-              {imageBusy ? 'Reading…' : customImage ? `Preview on “${customLabel}”` : 'Preview on a photo…'}
-            </Button>
-            {liveOn && (
-              <Button size="sm" variant="ghost" onClick={() => setLiveOn(null)}>
-                Use the reference frames
-              </Button>
-            )}
+            <div className="flex-1 min-w-0">{filterField}</div>
+            <OverflowMenu label="What the tiles are shown on" items={sourceVerbs} size="md" />
           </div>
-          {/* Its own row, always full-width — sharing a flex-wrap row with the
-              buttons above left it squeezed to a fixed `w-40` on a phone, since
-              a plain `w-*` utility and a `max-[…]:w-full` one can land in
-              either order in the generated stylesheet and the LAST one wins,
-              not the more specific one. */}
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter looks…"
-            aria-label="Filter looks"
-            className="w-full font-sans text-sm h-[2.125rem] px-3 border border-line-strong rounded-control bg-paper text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 max-[820px]:text-base"
-          />
-        </div>
+        ) : (
+          <div className="flex flex-col gap-2.5 border-y border-line py-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              {effectiveSource && (
+                <span className="w-8 h-8 rounded-control overflow-hidden border border-line shrink-0">
+                  <LutThumb bitmap={sample} />
+                </span>
+              )}
+              <span className="text-xs text-muted min-w-0 truncate">{sourceLine}</span>
+              {sourceVerbs.map((verb) => (
+                <Button key={verb.id} size="sm" variant="ghost" onClick={verb.onSelect} disabled={verb.disabled}>
+                  {verb.label}
+                </Button>
+              ))}
+            </div>
+            {/* Its own row, always full-width — sharing a flex-wrap row with
+                the buttons above left it squeezed to a fixed `w-40` on a
+                phone, since a plain `w-*` utility and a `max-[…]:w-full` one
+                can land in either order in the generated stylesheet and the
+                LAST one wins, not the more specific one. */}
+            {filterField}
+          </div>
+        )}
         {imageError && <p className="m-0 -mt-2 text-xs text-danger">{imageError}</p>}
 
-        <div className="flex-1 min-h-0 flex gap-4">
-          {/* The rail: every family, one open at a time. */}
+        {compact && (
+          /* The rail as ONE line of crumbs — the families, then the open
+             branch — that swipes sideways and never wraps, pinned above the
+             scroller so the way to another family is never scrolled away.
+             34px tall: a finger's target, the height of the field above. */
           <nav
-            className="w-[13.5rem] flex-none overflow-auto pr-1 -mr-1 border-r border-line max-[820px]:hidden"
+            className="flex-none flex gap-1.5 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-3 px-3"
             aria-label="Look families"
           >
-            {nodes.map((node) => (
-              <RailRow
+            {crumbs.map((node) => (
+              <button
                 key={node.id}
-                node={node}
-                open={!query.trim() && node.id === open?.id}
-                onOpen={() => {
-                  setOpenId(node.id);
-                  setQuery('');
-                }}
-              />
+                type="button"
+                onClick={() => openNode(node)}
+                aria-pressed={node.id === open?.id}
+                className={`shrink-0 h-[2.125rem] px-3 rounded-full border text-sm whitespace-nowrap ${
+                  node.id === open?.id
+                    ? 'border-accent bg-accent-wash text-accent-ink'
+                    : 'border-line-strong bg-paper text-ink-soft'
+                }`}
+              >
+                {node.depth > 0 && <span className="text-muted">› </span>}
+                {node.label}
+                <span className="ml-1.5 font-mono text-2xs text-muted tabular-nums">{node.items.length}</span>
+              </button>
             ))}
           </nav>
+        )}
 
-          <div className="flex-1 min-w-0 overflow-auto pr-1 -mr-1">
-            {/* On a phone the rail is a row of crumbs — the families, then the
-                open branch, in the thumb's reach. */}
-            <div className="hidden max-[820px]:flex gap-1.5 flex-wrap mb-3">
-              {nodes
-                .filter((n) => n.depth === 0 || n.id.startsWith(`${open?.id ?? ''}/`) || open?.id.startsWith(`${n.id}/`))
-                .map((node) => (
-                  <button
-                    key={node.id}
-                    type="button"
-                    onClick={() => {
-                      setOpenId(node.id);
-                      setQuery('');
-                    }}
-                    aria-pressed={node.id === open?.id}
-                    className={`px-2.5 py-1 rounded-full border text-xs ${
-                      node.id === open?.id
-                        ? 'border-accent bg-accent-wash text-accent-ink'
-                        : 'border-line-strong bg-paper text-ink-soft'
-                    }`}
-                  >
-                    {node.depth > 0 && <span className="text-muted">› </span>}
-                    {node.label}
-                  </button>
-                ))}
-            </div>
+        <div className={compact ? 'flex-1 min-h-0 flex' : 'flex-1 min-h-0 flex gap-4'}>
+          {/* The rail: every family, one open at a time. */}
+          {!compact && (
+            <nav
+              className="w-[13.5rem] flex-none overflow-auto pr-1 -mr-1 border-r border-line"
+              aria-label="Look families"
+            >
+              {nodes.map((node) => (
+                <RailRow
+                  key={node.id}
+                  node={node}
+                  open={!query.trim() && node.id === open?.id}
+                  onOpen={() => openNode(node)}
+                />
+              ))}
+            </nav>
+          )}
 
+          <div className="flex-1 min-w-0 overflow-auto overscroll-contain pr-1 -mr-1">
             <div className="flex flex-col gap-5">
               {showNone && (
                 <section className="flex flex-col gap-2">
@@ -594,6 +691,10 @@ export default function LutGalleryModal({
               )}
               {shown.map(({ node, items }) => (
                 <section key={node.id} className="flex flex-col gap-2">
+                  {/* On a phone the open crumb already names the family, so
+                      the heading is drawn only where it carries something
+                      else — a search result's family, a pack's ⓘ, a hint. */}
+                  {(!compact || q || node.pack || node.hint) && (
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="m-0 font-mono text-2xs tracking-[0.16em] uppercase text-muted">
                       {node.label}
@@ -610,6 +711,7 @@ export default function LutGalleryModal({
                     )}
                     {node.hint && <span className="text-2xs text-warn">{node.hint}</span>}
                   </div>
+                  )}
                   {credits === node.id && creditsFor && (
                     <p className="m-0 px-3 py-2 rounded-control bg-paper-2 border border-line text-xs text-ink-soft">
                       <span className="font-medium text-ink">{creditsFor.name || 'Pack'}</span>
@@ -661,17 +763,50 @@ export default function LutGalleryModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-t border-line pt-4">
-          <p className="m-0 text-xs text-muted">
-            Baked from the same lattice the export uses — what you see here is what you get.
-          </p>
-          <Button variant="ghost" onClick={onClose}>
-            Close
-          </Button>
-        </div>
+        {compact ? (
+          /* The verb, in the thumb's reach — only where there is a scene to
+             aim in. Without one a tap IS the pick, the ✕ is in the header,
+             and a footer would be a band of nothing over the grid. */
+          scene && (
+            <div className="flex-none flex items-center gap-3 border-t border-line pt-2.5">
+              <span className="flex-1 min-w-0 text-xs text-muted truncate">
+                {aimedItem ? aimedItem.name : 'Tap a look to see it on your picture.'}
+              </span>
+              {useThisLook}
+            </div>
+          )
+        ) : (
+          <div className="flex items-center justify-between gap-3 border-t border-line pt-4">
+            <p className="m-0 text-xs text-muted">
+              Baked from the same lattice the export uses — what you see here is what you get.
+            </p>
+            <Button variant="ghost" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        )}
       </div>
     </div>,
     document.body,
+  );
+}
+
+/** The wipe as a switch: what it IS, not what pressing it does. */
+function CompareToggle({ compare, onToggle }: { compare: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={compare}
+      title={compare ? 'Show the graded picture whole' : 'Wipe it against the original'}
+      className={`flex-none h-7 px-2 rounded-control border font-mono text-2xs tracking-[0.08em] uppercase cursor-pointer transition-colors ${
+        compare
+          ? 'border-accent bg-accent-wash text-accent-ink'
+          : 'border-line-strong bg-paper text-muted hover:text-ink'
+      }`}
+    >
+      Compare
+    </button>
   );
 }
 
@@ -784,7 +919,8 @@ function Tile({
           aria-pressed={favourite}
           aria-label={favourite ? `Remove ${name} from favourites` : `Add ${name} to favourites`}
           title={favourite ? 'In your favourites' : 'Add to favourites'}
-          className={`absolute top-1.5 right-1.5 grid place-items-center w-6 h-6 rounded-full text-xs leading-none transition-colors ${
+          // 28px: a finger's target on a tile, where 24 read as decoration.
+          className={`absolute top-1.5 right-1.5 grid place-items-center w-7 h-7 rounded-full text-sm leading-none transition-colors ${
             favourite
               ? 'bg-accent-wash text-accent-ink'
               : 'bg-[rgba(20,18,15,0.35)] text-paper opacity-70 hover:opacity-100'
