@@ -48,6 +48,11 @@ Today it ships ten tools, converging into a few editors:
 >   and coordinates back. Every place can be typed by hand instead, so the
 >   feature is a convenience and never a requirement.
 >
+> Naming a place from *coordinates* is deliberately **not** one of them: the
+> city index Trips names a deduced leg from ships with the app (see "Working
+> the itinerary out"), so the position of your photographs is never sent
+> anywhere for a name.
+>
 > A third kind of request exists only once you have connected a **Winnow**
 > instance of your own (see "Sources" under the Studio): media is fetched from
 > it, a trip or a project can be kept on it, and a **LUT pack's looks** are
@@ -484,7 +489,9 @@ where it is named and dressed. The same three verbs also sit under a picture
 you are looking at large, in the Library's preview sheet — the moment "this one
 is worth a piece" is actually decided — and starting one there brings the
 picture across (fetching it from a connected Winnow if that is where it lives)
-and composes the new piece over it. Any row in that list opens its piece — the whole
+and composes the new piece over it. A fourth verb sits beside them, **Locate
+it**, which reads where that photograph was taken and offers the place to the
+leg of its own day (see *Working the itinerary out*, below). Any row in that list opens its piece — the whole
 row, not just the thumbnail — and a piece can be **duplicated** on the spot,
 carrying its look and its slides but neither its publication nor its Studio
 link. **Where you are is in the URL**: `#/roadtrip/australia-d1060760/2025-07-09`
@@ -570,6 +577,47 @@ type. The trip's two ends can be set from the New trip dialog, where **From**
 and **To** replace the old free-text destination; fill them and the trip starts
 with one stage covering its whole span, so a badge can name a place from day
 one. Leave them empty and no stage is created at all.
+
+**Working the itinerary out, instead of typing it.** Drawing a three-month
+trip's legs by hand is some three hundred gestures, most of them archaeology
+about where you were on a given day — so the legs can be *deduced* instead,
+and a picture can place a single day.
+
+**Deduce** (in the stages header, for any connected Winnow) asks the instance
+for **one position per day** over the trip's span — a few kilobytes for a
+hundred days; no photograph is fetched and nothing is read from your media. A
+leg is then a run of consecutive days whose position stays inside a radius of
+the run so far, and you say what that means: the radius of one halt, how many
+days make a halt rather than a stop on the way, whether a shorter run is listed
+on its own (marked, and left unticked) or folded into the halt it was on the
+way to, whether a day the instance has no position for is **covered** by the
+leg around it — nothing is invented there, a leg is a span — and, off by
+default and marked wherever it shows, whether the days of a move are guessed
+between two places. Moving any of those never asks the instance again. What
+comes back is a list of proposals, one tick each, in the same shape a re-run
+later would produce: nothing is written until you accept it, and no piece is
+ever created.
+
+**Locate it**, under a photograph you are looking at large, is the same
+question asked of one picture: it reads the position and the day out of the
+file's own EXIF (or, for a picture fetched from a Winnow, the metadata that
+instance recorded at ingest), says what it measured, and offers **one** edit —
+name the leg of that day, add the place to a leg that already has a route, or
+start a leg there when none covers it. A picture dated outside the trip, one
+with no position, and one whose position is the `0, 0` a camera writes with no
+fix are each said plainly rather than quietly used.
+
+Both name a place from a **city index that ships with the app** — GeoNames'
+`cities1000` (135 000 towns), built into `public/geo/cities.json` and fetched
+from this site the first time a name is needed, never at start-up. So naming a
+leg is **not** a third network exception: the alternative, reverse-geocoding,
+would send the coordinates of your photographs to someone else's server for a
+name, which is a far larger claim on your data than the place search's typed
+words. Nothing near enough in the index means the leg arrives with its dates
+and no place, rather than a made-up one. *The GeoNames data is used under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the attribution is
+carried inside the generated file, and `scripts/gen-gazetteer.mjs` rebuilds
+it.*
 
 **The temporal line.** Under the place, in the badge's quietest type, a line
 can say how long ago the picture was taken — **beside** the trip's name, never
