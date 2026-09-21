@@ -107,4 +107,37 @@ export goes on while he walks to the gallery, and the pill still says so).
   lets the browser finish and throws the bitmap away. The loupe's pill says
   `loupe · cancelled`, a state of its own beside `failed`.
 
-Not wired yet: T4 the exports, T5 the one-off surfaces.
+## T4 — the exports (2026-09-21)
+
+The brief's "the real work" was smaller than written: the video pipeline
+already took a signal (`frontend.md`), so T4 is the two loops that did not.
+
+- **The Develop roll's run is ONE task** (`use-roll-export.ts`): `Exporting
+  N pictures`, a picture at a time on its bar (`i / N`, the detail naming
+  it), then `Writing the pictures` with the files written. Its Cancel stops
+  BETWEEN two pictures and is handed down as an outer signal to every fetch
+  in the run (`fetchSourceFile(source, scope, signal)`, `trackedFetch`'s
+  `signal`) and to the RAW decode (`RollRenderOptions.signal` →
+  `decodeRaw({ signal, quiet })`), so a 74 MB fetch in flight ends with it.
+  **A cancelled run keeps what it rendered** (his question 2, answered by
+  building): the pictures already rendered are written, and the note says
+  `Cancelled after 1 of 2 — 1 picture written`; a fetch the cancel ended is
+  never listed as a failure. A run cancelled before anything rendered says
+  `Export cancelled — nothing was written`.
+- **Trips' three exports are tasks** (`use-post-exports.ts`): `Exporting the
+  piece`, `Exporting the slides`, `Encoding the hook`, scoped to
+  `piece:<post.id>` so `BadgeStage` draws them on its edge; the header's own
+  fill stays and the task mirrors its line and ratio. `renderDeck` takes a
+  `signal` and stops between two slides, handing back what it made; the
+  piece export passes the signal into the clip encodes and writes what
+  rendered, saying `cancelled after N of M`.
+- **The Studio's export registers a task beside its own bar and Cancel**
+  (`Exporting <name>`, a variant at a time), scoped to the media, so the
+  pill says the same wherever the person walks; nothing about its panel
+  changed.
+- Driven against the stub instance: a two-picture roll whose second JPEG is
+  slow — the pill reads `Exporting 2 pictures · 50 % · 2/2 · DJI_0103.JPG`
+  with the fetch beside it, its Cancel ends the request and the run, one
+  file is written and the note says so.
+
+Not wired yet: T5 the one-off surfaces.

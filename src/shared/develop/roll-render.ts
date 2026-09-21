@@ -44,6 +44,8 @@ import type { CameraWarp } from '../render/camera-warp';
 import { encodeUltraHdr, type UltraHdrResult } from '../hdr/ultra-hdr-export';
 
 export interface RollRenderOptions {
+  /** The run's cancel: a RAW's decode drops its turn on it (the render is one draw and never looks). */
+  signal?: AbortSignal;
   framing: Framing | null;
   aspect: string;
   /** The canvas round the crop (`border-layout.ts`), or null for the crop alone. */
@@ -224,6 +226,10 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
     minLongEdge: opts.longEdge ? opts.longEdge * 2 : null,
     gain: raw.gain,
     maxEdge: maxRenderSize(),
+    // Under the run's own task, which names the picture; the run's cancel
+    // drops this decode's turn.
+    signal: opts.signal,
+    quiet: true,
   });
   const source = { width: decoded.width, height: decoded.height };
   const ar = source.width / source.height;

@@ -146,7 +146,10 @@ export function startTask(init: Omit<Task, 'id' | 'startedAt'>): TaskHandle;
    an operation that must not be interrupted by an edit to the same document.
 2. **Does a cancelled task leave anything behind?** A half-written folder of
    exports, a partly fetched original. Recommended: a fetch leaves nothing, an
-   export keeps the files already written and says how many.
+   export keeps the files already written and says how many. **Built as
+   recommended (T4)**: a cancelled fetch holds nothing, a cancelled export
+   writes what it rendered and says `Cancelled after 1 of 2 — 1 picture
+   written`.
 3. **Where does the pill live on a phone?** The shell's bottom bar has no room
    for a seventh cell; the edge hairline may be the only surface there.
 4. **Does a task survive a route change?** A roll export while the person walks

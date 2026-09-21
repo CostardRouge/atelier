@@ -10,6 +10,8 @@ export interface TrackedFetchInit {
   scope?: string | null;
   /** The whole, where the caller already knows it (a row's `file_size`) — the bar is determinate from the first byte. */
   bytes?: number | null;
+  /** An outer cancel — an export's — that ends this fetch too. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -22,6 +24,8 @@ export interface TrackedFetchInit {
  */
 export async function trackedFetch<T>(init: TrackedFetchInit, run: (opts: FetchOptions) => Promise<T>): Promise<T> {
   const controller = new AbortController();
+  if (init.signal?.aborted) controller.abort();
+  else init.signal?.addEventListener('abort', () => controller.abort(), { once: true });
   const known = init.bytes && init.bytes > 0 ? init.bytes : null;
   const handle = startTask({
     label: init.label,

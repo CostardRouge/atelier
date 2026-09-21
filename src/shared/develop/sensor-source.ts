@@ -137,13 +137,13 @@ export function deliveredSourceFor(
  * the file, on the picture's edge (`scope`), cancellable — and held for the
  * session. A cancelled fetch rejects with an `AbortError` (`fetch-options.ts`).
  */
-export async function fetchSourceFile(source: SensorSource, scope: string | null = null): Promise<File> {
+export async function fetchSourceFile(source: SensorSource, scope: string | null = null, signal?: AbortSignal): Promise<File> {
   if (source.held) return source.held;
   const held = source.key ? heldOriginal(source.key) : null;
   if (held) return held;
   const fetch = source.fetch;
   if (!fetch) throw new Error(`${source.name} is not reachable from here`);
-  const fetched = await trackedFetch({ label: `Fetching ${source.name}`, scope, bytes: source.bytes }, (opts) => fetch(opts));
+  const fetched = await trackedFetch({ label: `Fetching ${source.name}`, scope, bytes: source.bytes, signal }, (opts) => fetch(opts));
   if (source.key) holdOriginal(source.key, fetched);
   return fetched;
 }

@@ -50,6 +50,8 @@ import { exportOverlayVideoViaSeek } from '../../shared/overlay/export-overlay-s
 import { exportVariantVideo, outroTail } from '../../shared/media/export-variant';
 import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
 import { trackedFetch } from '../../shared/tasks/tracked';
+import { fileIdentity } from '../../shared/library/assets';
+import { startTask } from '../../shared/tasks/tasks';
 import SendFinalsPanel from '../../shared/sources/winnow/SendFinalsPanel';
 import { readEffectiveExif } from '../../shared/exif/read-exif';
 import { downloadBlob } from '../../shared/media/save';
@@ -1315,6 +1317,15 @@ export default function StudioEditor({
     // decode it directly, where the HEVC original would fail.
     let source = activeTranscode.transcoded ?? activeVideo;
     const base = exportFileName.trim() || active.baseName;
+    // The run as a TASK too (`tasks.md`, T4): the panel's own bar and Cancel
+    // stay, and the masthead's pill says the same wherever the person walks.
+    const exportTask = startTask({
+      label: `Exporting ${base}`,
+      scope: finalsMedia ? (knownIdentity(finalsMedia)?.assetId ?? fileIdentity(finalsMedia)) : null,
+      progress: 0,
+      detail: `${variants.length} variant${variants.length === 1 ? '' : 's'}`,
+      cancel: () => controller.abort(),
+    });
     // A still delivered from its source's ORIGINAL when the frame is worth it
     // (O2 of `docs/develop-originals.md`). Decoded here and closed with the
     // run: the stage keeps its own bitmap, and a full-size original is tens
@@ -1370,12 +1381,16 @@ export default function StudioEditor({
         const variant = variants[i];
         setExportStep({ index: i + 1, total: variants.length });
         setExportRatio(0);
+        exportTask.update({ progress: i / variants.length, detail: `${i + 1} of ${variants.length} · ${variant.id}` });
         // Time the whole variant, delivery included: writing a 400 MB file to
         // a folder is part of what the user waited for.
         const startedAt = Date.now();
         setLiveExport({ id: variant.id, startedAt });
         const onProgress = (p: { phase: string; ratio: number | null }) => {
-          if (p.phase === 'encoding' && p.ratio != null) setExportRatio(p.ratio);
+          if (p.phase === 'encoding' && p.ratio != null) {
+            setExportRatio(p.ratio);
+            exportTask.update({ progress: (i + p.ratio) / variants.length });
+          }
         };
         const blob = still
           ? await renderStillVariant(still, variant)
@@ -1405,6 +1420,7 @@ export default function StudioEditor({
         setExportError((err as Error).message || 'Export failed');
       }
     } finally {
+      exportTask.done();
       fetchedStill?.close();
       setExporting(false);
       setExportStep(null);

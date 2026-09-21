@@ -1427,6 +1427,7 @@ export default function PostEditor({
           >
           <BadgeStage
             file={slideFile}
+            taskScope={`piece:${post.id}`}
             videoTimeSeconds={isClipSlide ? playhead : slide.videoTimeSeconds}
             playback={
               isClipSlide
