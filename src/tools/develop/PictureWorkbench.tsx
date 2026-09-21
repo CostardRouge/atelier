@@ -27,7 +27,7 @@ import {
   type RawCalibration,
 } from '../../shared/raw/calibration';
 import { copyDevelop, pasteDevelop } from '../../shared/develop/develop-clipboard';
-import { developPillClass } from '../../shared/develop/develop-classes';
+import { developPillClass, developTouchPillClass } from '../../shared/develop/develop-classes';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { pictureFidelity } from '../../shared/develop/picture-fidelity';
 import { DevelopBaseMenu } from '../../shared/develop/DevelopBase';
@@ -1040,16 +1040,23 @@ export default function PictureWorkbench({
     return lines;
   }, [factsOn, draft.draft, drawingCount, detailDraft, repairDraft, fidelity.note]);
 
+  const toolbarPill = compact ? developTouchPillClass : developPillClass;
+
   return (
     <>
       <div className={compact ? 'flex-1 min-h-0 flex flex-col gap-2' : 'col-start-1 row-start-1 min-w-0 min-h-0 flex flex-col gap-2'}>
-        {/* One row whatever the width: the name gives way first, the verbs never wrap. */}
-        <div className="flex-none flex items-center gap-2 min-w-0">
+        {/* One row above a phone: the name gives way first, the verbs never
+            wrap. On a phone the name gave way ENTIRELY ("D…" at 390px), so
+            the verbs take a line of their own under it — `contents` at every
+            other width keeps the desktop row the one flex line it was — and
+            the button pills grow to a finger's height (`developTouchPillClass`). */}
+        <div className="flex-none flex flex-wrap items-center gap-x-2 gap-y-1.5 min-w-0">
           <span className="flex-1 min-w-0 truncate font-mono text-xs text-ink-soft" title={entry.ref.name}>
             {entry.ref.name}
             {told && <span className="text-accent-ink" role="status"> · {told}</span>}
             {!told && deliveredStatus && <span role="status"> · {deliveredStatus}</span>}
           </span>
+          <div className={compact ? 'basis-full flex items-center gap-2 min-w-0' : 'contents'}>
           {/* The chip IS the list of the capture's files (2026-09-21): it
               already says what the picture is, so what it could be hangs off
               the same word, above the photograph. Below 880px of tool width
@@ -1095,6 +1102,7 @@ export default function PictureWorkbench({
           {!cropping && (
             <DevelopClipboardActions draft={draft.draft} asShot={draft.asShot} onReplace={draft.setDraft} onTold={tell} />
           )}
+          {compact && <span className="flex-1" />}
           {/* The pill is drawn at EVERY width, phone included — the lightbox
               hides it under 820px on the argument that the pinch is the gesture
               there, and a stage that answers a pinch best-effort (the browser
@@ -1112,7 +1120,7 @@ export default function PictureWorkbench({
                 {picture.view.magnifying && (
                   <button
                     type="button"
-                    className={`${developPillClass} flex-none cursor-pointer hover:border-accent`}
+                    className={`${toolbarPill} flex-none cursor-pointer hover:border-accent`}
                     onClick={() => setPixelView(pixelView === 'pixels' ? 'smooth' : 'pixels')}
                     title={
                       pixelView === 'pixels'
@@ -1133,7 +1141,7 @@ export default function PictureWorkbench({
           {source && !cropping && (
             <button
               type="button"
-              className={`${developPillClass} flex-none cursor-pointer hover:border-accent ${
+              className={`${toolbarPill} flex-none cursor-pointer hover:border-accent ${
                 compareOn ? '' : 'text-faint'
               }`}
               onClick={() => setCompareOn(!compareOn)}
@@ -1158,13 +1166,14 @@ export default function PictureWorkbench({
               GESTURES it lists are exactly the ones a finger has to discover. */}
           <button
             type="button"
-            className={`${developPillClass} flex-none cursor-pointer hover:border-accent`}
+            className={`${toolbarPill} flex-none cursor-pointer hover:border-accent`}
             onClick={() => setHelpOpen(true)}
             title="Keys and gestures (H)"
             aria-label="Keys and gestures"
           >
             ?
           </button>
+          </div>
         </div>
         <DevelopViewport
           picture={picture}

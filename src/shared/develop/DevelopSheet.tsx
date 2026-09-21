@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import type { LutStack } from '../lut/use-lut-stack';
 import StageZoomControl from '../ui/StageZoomControl';
 import useDialogKeys from '../ui/use-dialog-keys';
+import { useIsCompact } from '../ui/use-layout-mode';
 import { usePixelView } from '../ui/use-pixel-view';
 import type { DevelopSettings } from './develop';
 import { developButtonClass, developLegendClass, developPillClass } from './develop-classes';
@@ -115,6 +116,7 @@ export default function DevelopSheet({
   const [told, tell] = useTold();
   const [naming, setNaming] = useState(false);
   const [pixelView, setPixelView] = usePixelView();
+  const compact = useIsCompact();
   // The loupe too: the modal hosts gain RENDERING, never panels (§4.2), and
   // the file's own pixels under a magnified view are rendering.
   const picture = useDevelopPicture({
@@ -143,26 +145,33 @@ export default function DevelopSheet({
       }}
     >
       <div className="w-full max-w-[64rem] h-[min(90dvh,54rem)] flex flex-col gap-3 bg-surface border border-line rounded-paper-lg shadow-paper p-4 overflow-hidden max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:p-3 max-[820px]:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        {/* Header: what, what it is, the clipboard, the zoom, close. */}
-        <div className="flex-none flex items-center gap-2.5 min-w-0">
-          <h2 className="m-0 font-serif text-lg min-w-0 truncate" title={title}>
+        {/* Header: what, what it is, the clipboard, the zoom, close. On a
+            phone the row WRAPS into two — the name with Close, then the chip
+            and the verbs — because one row of five things left the name as
+            "D…" at 390px: the verbs never wrap and the name gave way first.
+            The wrapper is `contents` at every other width, so the desktop
+            row is the one flex line it always was. */}
+        <div className="flex-none flex flex-wrap items-center gap-x-2.5 gap-y-1.5 min-w-0">
+          <h2 className="m-0 font-serif text-lg flex-1 min-w-0 truncate" title={title}>
             Develop · {title}
           </h2>
-          {chip && <span className={developPillClass}>{chip}</span>}
-          <span className="flex-1" />
-          <DevelopClipboardActions draft={draft.draft} asShot={draft.asShot} onReplace={draft.setDraft} onTold={tell} />
+          <div className={compact ? 'basis-full order-last flex items-center gap-2.5 min-w-0' : 'contents'}>
+            {chip && <span className={developPillClass}>{chip}</span>}
+            <span className="flex-1" />
+            <DevelopClipboardActions draft={draft.draft} asShot={draft.asShot} onReplace={draft.setDraft} onTold={tell} />
+          </div>
           {/* In the header, never over the picture (the lightbox's rule); under
               820px there is none — the pinch is the gesture there. */}
-          {picture.source && (
-            <StageZoomControl zoom={picture.view.zoom} hint="wheel, or pinch" className="flex-none max-[820px]:hidden" />
+          {picture.source && !compact && (
+            <StageZoomControl zoom={picture.view.zoom} hint="wheel, or pinch" className="flex-none" />
           )}
           {/* Only where it means anything: below 1:1 the browser is downscaling
               and `pixelated` is simply worse. The preference is the machine's,
               shared with the Develop tool (`use-pixel-view.ts`). */}
-          {picture.source && picture.view.magnifying && (
+          {picture.source && picture.view.magnifying && !compact && (
             <button
               type="button"
-              className={`${developPillClass} flex-none cursor-pointer hover:border-accent max-[820px]:hidden`}
+              className={`${developPillClass} flex-none cursor-pointer hover:border-accent`}
               onClick={() => setPixelView(pixelView === 'pixels' ? 'smooth' : 'pixels')}
               title={
                 pixelView === 'pixels'
