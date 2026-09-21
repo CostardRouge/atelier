@@ -26,6 +26,14 @@ import type { HookPicture } from './hooks/hook-variant';
 import { slideRender } from './slide-render';
 import type { TripDoc, TripPost } from './trip-types';
 
+/**
+ * The long edge every still of a deck is written at. One number, exported,
+ * because the *Delivers* row has to ask its question against the very frame
+ * the renderer will write (`develop-originals.md` O2) — a row measured
+ * against a different size is a row that lies.
+ */
+export const DECK_LONG_EDGE = 1920;
+
 export interface RenderedSlide {
   name: string;
   blob: Blob;

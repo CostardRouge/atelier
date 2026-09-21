@@ -353,12 +353,12 @@ describe('reorderLayer', () => {
 
 describe('a RAW develop in the bake', () => {
   it('takes the densest lattice and applies the metered gain before the sliders', () => {
-    const cube = composeLutStack([], 'none', 'tetrahedral', { ...DEFAULT_DEVELOP, base: 'raw', rawGain: 2 });
+    const cube = composeLutStack([], 'none', 'tetrahedral', { ...DEFAULT_DEVELOP, base: 'gain', rawGain: 2 });
     expect(cube).not.toBeNull();
     expect(cube!.size).toBe(64);
     // The lattice point at encoded 1/3 of the way (index 21 of 64 → 21/63):
     // the same answer as the stage, gain and all.
-    const stage = developStage({ ...DEFAULT_DEVELOP, base: 'raw', rawGain: 2 });
+    const stage = developStage({ ...DEFAULT_DEVELOP, base: 'gain', rawGain: 2 });
     const i = 21;
     const v = i / 63;
     const o = (i + i * 64 + i * 64 * 64) * 3;

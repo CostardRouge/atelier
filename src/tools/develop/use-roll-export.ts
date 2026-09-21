@@ -6,20 +6,33 @@ import {
   describeRun,
   exportName,
   type DeliverySummary,
-  type OriginalInfo,
   type PictureSize,
 } from '../../shared/develop/roll-export';
-import { measurePicture, renderRollPicture } from '../../shared/develop/roll-render';
+import { measurePicture, renderRollPicture, type MeasuredPicture } from '../../shared/develop/roll-render';
 import type { RollDoc, RollPicture } from '../../shared/develop/roll-types';
 import { WORKING_PREVIEW_EDGE, isWorkingPreview } from '../../shared/develop/working-preview';
-import { knownIdentity, mediaOrigin, type MediaOrigin } from '../../shared/projects/media-identity';
+import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
+import { isProxyOverRaw, originalOf, rawRenderOf } from '../../shared/develop/delivery-source';
 import { deliverFilesTo, pickDeliveryTarget } from '../../shared/sources/deliver-files';
 import { uniqueName } from '../../shared/sources/unique-name';
 import { EXIF_SLICE_BYTES } from '../../shared/exif/exif-parser';
 import { exportExifBlock, stampExif, type ExifAccount } from '../../shared/exif/stamp-exif';
 import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
 import { formatBytes } from '../../shared/lib/format';
-import { isRawDevelop, rawGainOf, withoutBase } from '../../shared/develop/develop';
+import {
+  BASE_LABELS,
+  baseRung,
+  developBase,
+  isRawDevelop,
+  rawGainOf,
+  withoutBase,
+} from '../../shared/develop/develop';
+import {
+  calibrationAt,
+  readRawCalibration,
+  topRung,
+  type RawCalibration,
+} from '../../shared/raw/calibration';
 import { isRawImage } from '../../shared/library/assets';
 import { canDecodeRaw } from '../../shared/raw/raw-decoder';
 
@@ -50,15 +63,14 @@ export interface RollExports {
   lastRun: RollRun | null;
   /** What the OPEN picture will deliver, or null until its size is known. */
   openDelivery: DeliverySummary | null;
-  /** The open picture's FILE size in pixels, once measured — the crop's tag reads it. */
-  openSize: PictureSize | null;
+  /**
+   * The open picture's FILE size in pixels, once measured — the crop's tag
+   * reads it, and so does the fidelity chip, which says whether those pixels
+   * are the file's own or the render inside a RAW.
+   */
+  openSize: MeasuredPicture | null;
   /** Render the pictures named and hand them over. */
   exportPictures: (ids: readonly string[]) => Promise<void>;
-}
-
-function originalOf(origin: MediaOrigin | null): OriginalInfo | null {
-  if (!origin || origin.fidelity !== 'proxy') return null;
-  return { width: origin.width, height: origin.height, name: origin.name ?? null, bytes: origin.bytes ?? null };
 }
 
 /**
@@ -94,13 +106,48 @@ export function useRollExport({
   latest.current = { roll, files, fileFor, lutFor };
 
   // --- the open picture's own size, measured once per file, for the Delivers line
-  const [openSize, setOpenSize] = useState<{ file: File; size: PictureSize } | null>(null);
+  const [openSize, setOpenSize] = useState<{ file: File; size: MeasuredPicture } | null>(null);
   const openFile = openId ? (files.get(openId) ?? null) : null;
   useEffect(() => {
     if (!openFile) return;
     let alive = true;
     void measurePicture(openFile).then((size) => {
       if (alive && size) setOpenSize({ file: openFile, size });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [openFile]);
+
+  // How big the render inside the open picture's RAW original is. Read once
+  // per picture, from a megabyte of its head — the row must say what the RUN
+  // will really deliver, and the run takes the larger of that render and the
+  // proxy. Only for a proxy over a RAW; nothing else costs a byte.
+  const [rawRender, setRawRender] = useState<{ file: File; size: PictureSize | null } | null>(null);
+  useEffect(() => {
+    const origin = mediaOrigin(openFile);
+    if (!openFile || !origin || !isProxyOverRaw(origin)) return;
+    let alive = true;
+    void rawRenderOf(origin, knownIdentity(openFile)?.assetId ?? null).then(({ render }) => {
+      if (alive) setRawRender({ file: openFile, size: render });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [openFile]);
+
+  // What the OPEN picture's own file is calibrated for — from the RAW in
+  // hand: the file itself, or an original already held. Nothing is fetched
+  // for a sentence; without it the row simply says less.
+  const [rawCal, setRawCal] = useState<{ file: File; cal: RawCalibration | null } | null>(null);
+  useEffect(() => {
+    if (!openFile) return;
+    const held = knownIdentity(openFile)?.assetId ?? null;
+    const source = canDecodeRaw(openFile) ? openFile : held ? heldOriginal(held) : null;
+    if (!source) return;
+    let alive = true;
+    void readRawCalibration(source).then((cal) => {
+      if (alive) setRawCal({ file: openFile, cal });
     });
     return () => {
       alive = false;
@@ -114,7 +161,7 @@ export function useRollExport({
     openDelivery = deliverySummary(
       openSize.size,
       origin?.fidelity === 'proxy',
-      originalOf(origin),
+      originalOf(origin, rawRender?.file === openFile ? rawRender.size : null),
       open.framing,
       pictureAspectRatio(open.aspect, openSize.size.width, openSize.size.height),
       open.border,
@@ -122,10 +169,18 @@ export function useRollExport({
     );
     if (isRawDevelop(open.develop)) {
       // The row was measured on the render; a RAW develop leaves from the
-      // sensor's data at its own density, and the reason says so.
+      // sensor's data at its own density, and the reason says so — including
+      // the one way the file can differ from the stage: the export climbs to
+      // the top rung the file carries, and a picture left standing on `gain`
+      // will deliver a calibration the preview did not show.
+      const at = developBase(open.develop);
+      const top = rawCal?.file === openFile ? topRung(rawCal.cal) : at;
       openDelivery = {
         ...openDelivery,
-        reason: 'developed on its RAW — delivered from the sensor’s data, decoded at its own size',
+        reason:
+          baseRung(top) > baseRung(at)
+            ? `developed on its RAW at ${BASE_LABELS[at]} — the export climbs to ${BASE_LABELS[top]}, the calibration its own file carries, so the file will differ from the stage`
+            : `developed on its RAW at ${BASE_LABELS[at]} — delivered from the sensor’s data, decoded at its own size`,
       };
     }
   }
@@ -207,13 +262,37 @@ export function useRollExport({
             if (rawFile) raw = { file: rawFile, gain: rawGainOf(picture.develop) };
             else failures.push(`${picture.ref.name} is developed on its RAW, which is not reachable here — its render left instead`);
           }
+          // WITHIN the RAW rungs, the export climbs to the top one the file
+          // can give: the calibration is the body's own, it is two GPU passes,
+          // and there is no reason to deliver less of it than exists. It
+          // never crosses proxy → gain, which is decision 4 and the rule
+          // `raw.md` states twice: numbers nobody has seen on the sensor's
+          // data are never applied to it by an export.
+          let calibration = null as ReturnType<typeof calibrationAt> | null;
+          if (raw) {
+            const cal = await readRawCalibration(raw.file);
+            calibration = calibrationAt(topRung(cal), cal);
+          }
           // Decide from the file's own pixels which pixels to deliver from.
           const size = raw ? null : await measurePicture(file);
+          // A RAW original hands over the RENDER inside it and nothing else,
+          // so its size is read from the head before anything is decided —
+          // that head then pays for the EXIF too. Without this the delivery
+          // would be guessing, and decision 4's guess (the embedded render
+          // wins) is measurably wrong on the maintainer's own DJI.
+          let rawHead: Uint8Array | null = null;
+          let originalRender: PictureSize | null = null;
+          if (size && isProxyOverRaw(origin)) {
+            setExporting(`Reading the RAW’s head ${step}…`);
+            const probed = await rawRenderOf(origin!, identity?.assetId ?? null);
+            originalRender = probed.render;
+            rawHead = probed.head;
+          }
           if (size && origin?.fidelity === 'proxy' && origin.fetchOriginal) {
             const summary = deliverySummary(
               size,
               true,
-              originalOf(origin),
+              originalOf(origin, originalRender),
               picture.framing,
               pictureAspectRatio(picture.aspect, size.width, size.height),
               picture.border,
@@ -240,10 +319,10 @@ export function useRollExport({
           const key = identity?.assetId ?? null;
           const originalFile =
             raw?.file ?? (source !== file ? source : origin?.fidelity === 'proxy' ? (key ? heldOriginal(key) : null) : file);
-          let head: Uint8Array | null = null;
+          let head: Uint8Array | null = rawHead;
           if (originalFile) {
             head = new Uint8Array(await originalFile.slice(0, EXIF_SLICE_BYTES).arrayBuffer());
-          } else if (origin?.fetchOriginalHead) {
+          } else if (!head && origin?.fetchOriginalHead) {
             setExporting(`Reading the original’s EXIF ${step}…`);
             head = await origin
               .fetchOriginalHead(EXIF_SLICE_BYTES)
@@ -295,6 +374,7 @@ export function useRollExport({
             // which the write-through keeps level with the stack.
             film: r.grade?.film ?? null,
             raw,
+            calibration,
             hdr,
             stamp,
           });

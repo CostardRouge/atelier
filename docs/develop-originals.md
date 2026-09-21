@@ -1,12 +1,17 @@
 # Develop on the original — proxy, full-size render, RAW
 
-**Status (2026-09-15, rev. 2026-09-16): DECIDED — the maintainer accepted all
+**Status (2026-09-15, rev. 2026-09-20): DECIDED — the maintainer accepted all
 six recommendations of §7 the same day (*"je suis ok pour les
-recommandations"*). O1 + O2 are BUILT in the Develop tool (D9 of
+recommandations"*). O1 + O2 are BUILT: first in the Develop tool (D9 of
 `develop-tool.md`: `MediaOrigin.name`/`bytes`, `pixelHeadroom`, the *Delivers*
 line, `Auto · Proxies · Originals`, originals held for the session in
-`shared/sources/original-cache.ts`) — not yet in Trips' Export tab or for
-Studio stills, which still deliver from the proxy. O5 and O6 are BUILT in
+`shared/sources/original-cache.ts`), and since 2026-09-20 in **Trips' Export
+tab and for Studio stills** too, over one shared seam — `fixedFrameDelivery`
+for a host whose output frame is a frame rather than a cap,
+`shared/develop/delivery-source.ts` to decide and fetch, `useDeliveryRow` to
+say it. That is also what reverses the Studio's "photos never take this path"
+note. **Decision 4 is corrected** in place, below: the embedded render does
+not always win. O5 and O6 are BUILT in
 the Develop tool on 2026-09-20 (P10 of `photo-editor.md`, rules in
 `docs/memory/raw.md`): the Base section, `DevelopSettings.base` with its
 measured `rawGain`, the decode in the stage at the pixel budget and at
@@ -118,12 +123,16 @@ except finals on request (P7); no second exporter.
   extension and byte size; pure `pixelHeadroom(source, framing, output)` with
   tests beside it (F3's cases); the *Delivers* row and the export plan's line.
   Nothing fetched.
-- **O2 — deliver from the full-size render.** `Auto · Proxies · Originals` in
-  Trips' Export tab and for Studio stills, for originals the browser decodes
-  (JPEG, PNG, WebP, AVIF); reverses the Studio's "photos never take this path"
-  note for those; originals held for the session. Verified: a 4:5 PNG from a
-  ×1.6-zoomed landscape comes out at the original's sharpness, and one develop
-  gives the same colour on a flat patch of proxy and original.
+- **O2 — deliver from the full-size render.** BUILT. `Auto · Proxies ·
+  Originals` in Trips' Export tab and for Studio stills, for originals the
+  browser decodes (JPEG, PNG, WebP, AVIF); reverses the Studio's "photos
+  never take this path" note for those; originals held for the session.
+  Verified in a browser on a 2048 proxy over a 6000 px original: Trips read
+  `Original 4000 px → 1920 · ×2.08 to spare` under Auto against `Proxy 1365 px
+  → 1920 · ×1.41 upscaled` under Proxies, and fetched once and never
+  respectively; the Studio wrote 6000×4000 under Auto and 2048×1366 under
+  Proxies. A collage slide is left out on purpose — a cell fills a fraction of
+  the frame, so the whole frame's question would over-fetch for it.
 - **O3 — look at the original in Develop.** The chip's popover; the full-size
   render loaded at the stage budget, so the zoom ceiling (`pixelCeiling`)
   rises with it.
@@ -165,6 +174,22 @@ full-size decode on his iPhone.
 4. **A RAW never checked in Develop is flagged at export and delivered from
    its render** (full-size embedded preview, else the proxy) — never from
    the RAW with numbers nobody has seen on it.
+
+   **Corrected 2026-09-20, and the decision stands.** "Full-size embedded
+   preview, else the proxy" assumed the embedded render wins. It does not:
+   on the maintainer's own `dji_fly_*.DNG` (body FC8482) the render inside
+   the file is **960 × 540** against an 8064 × 4536 sensor plane — 0.5 of
+   36.6 megapixels — while Winnow's proxy of it is 2048 px. So the rule is
+   the **larger of the two, measured and named**, never assumed: the
+   render's real size is read from a megabyte of the original's head
+   (`rawSizesFrom`, cached for the session in `original-cache.ts`) before a
+   pixel is fetched, the *Delivers* row says both numbers, and the whole RAW
+   is pulled only where its render genuinely has more pixels than the proxy
+   AND the frame needs them. `Auto` therefore never downloads seventy-odd
+   megabytes to deliver half a megapixel. To deliver from the SENSOR, the
+   picture is developed on its RAW (`base: 'raw'`, the material axis) — which
+   is exactly the separation decision 1 exists for. The measurement is PR
+   #145 (`docs/memory/raw.md`).
 5. **Phone: the full-size render yes; the RAW only once a decode has been
    measured on the iPhone.**
 6. **Start with O1 + O2** (know the original, deliver from decodable

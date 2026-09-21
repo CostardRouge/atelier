@@ -194,6 +194,50 @@ describe('probeRaw', () => {
   });
 });
 
+describe('the calibration, read through the probe', () => {
+  it('reads OpcodeList3 out of a DNG head and says what it asks for', () => {
+    // A minimal TIFF whose IFD0 carries tag 51022 (OpcodeList3) with one
+    // GainMap: 1 plane, a 2x2 grid whose corner asks for 5.93x.
+    const gains = [5.93, 1, 1, 1];
+    const params = new ArrayBuffer(76 + gains.length * 4);
+    const pv = new DataView(params);
+    [0, 0, 4536, 8064, 0, 3, 1, 1, 2, 2].forEach((n, i) => pv.setUint32(i * 4, n, false));
+    pv.setFloat64(40, 1, false);
+    pv.setFloat64(48, 1, false);
+    pv.setFloat64(56, 0, false);
+    pv.setFloat64(64, 0, false);
+    pv.setUint32(72, 1, false);
+    gains.forEach((g, i) => pv.setFloat32(76 + i * 4, g, false));
+
+    const list = new ArrayBuffer(4 + 16 + params.byteLength);
+    const lv = new DataView(list);
+    lv.setUint32(0, 1, false);
+    lv.setUint32(4, 9, false);
+    lv.setUint32(16, params.byteLength, false);
+    new Uint8Array(list).set(new Uint8Array(params), 20);
+
+    const OP_AT = 256;
+    const buf = new ArrayBuffer(OP_AT + list.byteLength);
+    const v = new DataView(buf);
+    v.setUint16(0, 0x4949, false);
+    v.setUint16(2, 42, true);
+    v.setUint32(4, 8, true);
+    v.setUint16(8, 1, true); // one entry
+    v.setUint16(10, 51022, true);
+    v.setUint16(12, 7, true); // UNDEFINED
+    v.setUint32(14, list.byteLength, true);
+    v.setUint32(18, OP_AT, true);
+    v.setUint32(22, 0, true);
+    new Uint8Array(buf).set(new Uint8Array(list), OP_AT);
+
+    const probe = probeRaw(buf);
+    expect(probe?.opcodes).toEqual([51022]);
+    expect(probe?.calibration?.gainMaps).toHaveLength(1);
+    expect(probe?.calibration?.gainMaps[0].gains[0]).toBeCloseTo(5.93, 2);
+    expect(describeRaw(probe!)).toContain('gain map 2×2 ×1 · up to 5.93×');
+  });
+});
+
 describe('describeCompression and describeRaw', () => {
   it('names the codes that decide the decoder question', () => {
     expect(describeCompression(52546)).toBe('JPEG XL');

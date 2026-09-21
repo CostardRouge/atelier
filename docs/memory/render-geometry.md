@@ -204,6 +204,16 @@ A COLOUR pass never notices any of this, and a RADIAL one does not either: a y
 mirror leaves every distance from the centre unchanged, which is why the lens
 is correct without converting and why its own gate row could be trusted.
 
+**The camera's own warp is the exception that proves it** (2026-09-20,
+`camera-warp.ts`): a DNG's `WarpRectilinear` is radial about the OPTICAL
+centre, which the file states and which need not be the frame's — so it asks
+where a pixel is after all, converts with `imageUv`, and its gate row runs
+from both source kinds with the centre deliberately off at (0.47, 0.52). The
+order is now camera warp → lens → keystone, and the argument for the new
+first place is the old one a step further back: the warp is the correction
+the FILE states for the body that shot it, and the sliders are taste applied
+to what it leaves. Calibration, then judgement.
+
 **Every geometry row of `check-render.mjs` now runs from BOTH source kinds**,
 plus a passthrough row from each — if an untouched marker did not come back
 where it was drawn, the harness itself would be upside down and every row above
