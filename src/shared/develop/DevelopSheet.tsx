@@ -236,7 +236,12 @@ export default function DevelopSheet({
               onNaming={setNaming}
             />
             {applyTo && <DevelopApplySection verbs={applyTo} draft={draft.draft} onTold={tell} />}
-            <DevelopLookSection stack={stack} header={lookHeader} />
+            <DevelopLookSection
+              stack={stack}
+              header={lookHeader}
+              previewImage={picture.source}
+              previewLabel={title}
+            />
           </div>
         </div>
 

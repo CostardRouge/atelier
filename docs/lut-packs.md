@@ -4,7 +4,10 @@ Status: **all eight steps BUILT (2026-09-20), plus ★ favourites — this plan 
 finished.** The vault, the import, the tree picker, the sync, the upload fix
 and the pre-baked built-in tiles are in; step 5 is Winnow's own PR
 (`CostardRouge/winnow` #259 — merge and `npm run migrate` before the sync can
-do anything). One thing still waits on the maintainer and blocks nothing:
+do anything). **2026-09-21: the first push against the REAL instance was
+refused — 400, "the body does not hash to that id" — and the key it uploads
+under was corrected (§4.3, "TWO hashes, not one"). The sync had only ever
+been driven against a stub, which verified neither side of that rule.** One thing still waits on the maintainer and blocks nothing:
 §10's per-file cap and per-user quota. Plan agreed 2026-09-19. Every decision below was
 taken with the maintainer in one conversation; §9 lists the work in commits,
 §10 the only things still waiting on him. A future session resumes from this
@@ -111,7 +114,7 @@ storage, the bucket and local". The measurement turned option 1 into 1 + 2:
 | Where | What | Why |
 |---|---|---|
 | **Winnow document bucket**, new kind `lutpack` | the pack INDEX: author, name, link, the tree, each look's label/node/size/hash, **its baked thumbnail(s)**, the hidden list | small JSON; reuses etag / `If-Match` / 412 / "your rows only, others 404" that trips already rely on |
-| **Winnow file store** (NEW route) | each look's lattice, 16-bit binary, **keyed by SHA-256 of the source file**, immutable | none of the 25 looks fits the bucket's `MAX_DOC_BYTES` (1 MiB): 1.65 MB binary, 2.2 MB as base64. Any size; immutable by hash = cache forever, free dedupe; the Overlays could live there later |
+| **Winnow file store** (NEW route) | each look's lattice, 16-bit binary, **keyed by SHA-256 of that lattice** (`PackLook.blob` — corrected 2026-09-21, see below), immutable | none of the 25 looks fits the bucket's `MAX_DOC_BYTES` (1 MiB): 1.65 MB binary, 2.2 MB as base64. Any size; immutable by hash = cache forever, free dedupe; the Overlays could live there later |
 | **Local cache**, IndexedDB on each device | each lattice fetched on first use | the phone grades offline; nothing is recomputed |
 
 ### 4.1 Why not the alternatives
@@ -151,6 +154,17 @@ without it cannot grade offline. Record it as its own decision when built.
   the same name would lie). Never MD5 (WebCrypto has none).
 - Re-importing the same files recognises them by hash: nothing is uploaded or
   re-baked twice.
+- **TWO hashes, not one (corrected 2026-09-21).** That source hash is the
+  VAULT's key and a stored reference's identity. It is **not** the file
+  store's: that bucket is content-addressed on the bytes it is GIVEN — its
+  `PUT` hashes the body and refuses a path that disagrees (§4.4) — and what
+  travels is the encoded lattice, not the `.cube` text. So a look also carries
+  `blob`, the SHA-256 of its encoded lattice, measured by `pushPack` from the
+  very bytes it sends and written into the index pushed beside them. As first
+  built, the upload used the source hash and the deployed instance answered
+  **400 — "the body does not hash to that id"** on every look: the plan said
+  one thing in this table and the opposite in §4.4, and the stub the sync was
+  driven against verified neither. It does now.
 
 ### 4.4 Winnow's side (a PR in `~/Documents/GitHub/winnow`, `CostardRouge/winnow`)
 
@@ -197,7 +211,8 @@ without it cannot grade offline. Record it as its own decision when built.
       "node": "one-click/dji",
       "file": "One Click LUT/DJI/AUTHENTIC_LUT_D-LOG.cube",
       "size": 65,
-      "hash": "sha256:…",                    // = the file store key
+      "hash": "sha256:…",                    // the SOURCE .cube — the vault's key
+      "blob": "sha256:…",                    // the ENCODED lattice — the file store's key
       "thumbs": { "log": "<small webp, base64>", "rec709": "<…>" } },
     …
   ],
@@ -351,6 +366,7 @@ and resets the select). Carried by this pull request. Memory:
 | 6 ✅ | Atelier | **Sync**: push index + files on import, pull the index on connect, fetch a lattice on first use and cache it | Mac imports, iPhone (or a second browser profile) grades offline after one use |
 | 7 ✅ | Atelier | **"Upload .cube" goes into the vault** (a look of one personal pack — see below), so no document ever inlines a lattice again (§3.1) | a trip export after an upload holds no `customText` for it |
 | 8 ✅ | Atelier | **Pre-baked thumbnails** for built-ins, each look read on the reference its family asks for (§7); live "on my picture" as an explicit choice | the gallery opens without fetching or parsing any `.cube` |
+| 9 ✅ | Atelier | **Say what the vault weighs, and forget ONE look** — per look, per pack and per vault, here and on the instance; a look forgotten on both, its bytes freed only where nothing else names them | unit specs on the arithmetic; the real pack imported in a browser, a look forgotten, the weight dropping, a document wearing it saying so |
 
 **What steps 1–4 landed** (`shared/lut/`): `lut-pack.ts` (the index, the
 names, the reference a document stores), `pack-codec.ts` (unorm16 over the
@@ -391,6 +407,26 @@ upload on a trip's Grade, then the trip exported: **139 804 bytes before,
 before today holds an inlined lattice and must keep rendering — verified by
 importing exactly such a trip file. Nothing writes that shape any more.
 
+**What step 9 landed, and the correction it had to make.** The maintainer asked
+for *"de la visibilité sur le poids de ce que l'on stocke"* after importing a
+whole pack of looks for cameras he does not own. `pack-weight.ts` (pure)
+weighs per look, per pack and per vault — **here** measured off the stored
+buffers, **on the instance** derived from the index's own grid size, distinct
+keys only — and the Packs sheet lists the LOOKS as well as the categories,
+each with its weight and a verb that forgets it (`forgetLook`, the index and
+the bytes, here and on the instance). Decisions and traps:
+`docs/memory/media-pipeline.md`.
+
+Three things were found not to be as this plan and the ask assumed. **The
+pack-level Forget had never deleted anything on the instance**:
+`deleteRemotePack` existed and only the tests called it, so forgetting a pack
+left its 41 MB there for good — wired here. **The vault freed lattices by a
+record's `packId`**, which is overwritten by whichever pack stored a shared
+lattice last, so it could take bytes another pack still needed; the free/shared
+question now reads every index (`freedHashes`). And **`bytes` on a look is the
+`.cube` text's size, not the lattice's** — four times too big for this, which
+is why the arithmetic derives from `lattice` instead.
+
 **★ favourites (§6) are built (2026-09-20)**, the last piece of the picker:
 `use-lut-favourites.ts` holds the starred pick ids in `localStorage` — a
 working preference, never on a document, and never on a pack index, since a
@@ -411,6 +447,19 @@ every request the app makes).
 ## 10. Still waiting on the maintainer
 
 1. At step 5, the file store's per-file cap and per-user quota (proposed:
-   16 MiB / 500 MiB) — only matters if the overlays ever go there.
+   16 MiB / 500 MiB) — only matters if the overlays ever go there. **Not what
+   refused the first real push**, whatever the 400 looked like: a 65³ lattice
+   is 1.65 MB encoded, and a body over the cap is refused by the client before
+   it leaves the browser, with its own sentence (`putAppFile`). The cap has
+   never been reached.
 
 Everything else is decided, and the reference images are in (§7).
+
+**What step 9 does about that cap: nothing, and that is the decision.** He
+accepted the numbers and said unlimited would suit him too — *"le cap n'est
+pas le sujet"* — so the sheet REPORTS and never forbids: no client-side wall
+stops an import, and the only enforcement that exists is the one that already
+existed (`putAppFile` refusing a body over the instance's own declared cap,
+before it leaves the browser). Quota enforcement on Winnow's side and a usage
+figure from it remain unbuilt and unneeded for this: the pack index carries
+the grid size, which is all the arithmetic takes.

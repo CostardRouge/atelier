@@ -2300,7 +2300,12 @@ export default function StudioEditor({
                     onReset={() => setActiveDevelop(null)}
                   />
                   <InspectorSection id="studio.grade" title="Grade">
-                    <GradePanel stack={lutStack} previewImage={photo} previewDraws={false} />
+                    <GradePanel
+                      stack={lutStack}
+                      previewImage={photo}
+                      previewLabel={activeImage?.name ?? null}
+                      previewDraws={false}
+                    />
                   </InspectorSection>
                 </>
               )}

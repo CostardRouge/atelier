@@ -1236,7 +1236,14 @@ export default function PictureWorkbench({
                 onTold={tell}
               />
               <DevelopApplySection verbs={applyTo} draft={draft.draft} onTold={tell} />
-              <DevelopLookSection stack={stack} previewHeight={picture.canvasSize?.h ?? null} />
+              <DevelopLookSection
+                stack={stack}
+                previewHeight={picture.canvasSize?.h ?? null}
+                // The decoded picture already on the stage: the look gallery's
+                // scene grades THIS photograph rather than a reference frame.
+                previewImage={picture.source}
+                previewLabel={entry.ref.name}
+              />
             </>
           ) : tab === 'detail' ? (
             <>

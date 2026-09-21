@@ -366,6 +366,41 @@ describe('WinnowClient requests', () => {
       .rejects.toMatchObject({ kind: 'protocol', status: 500 });
   });
 
+  it('carries the instance’s own reason into the message, clamped', async () => {
+    // What a pack push actually got, and what the panel could not show until
+    // this: the status alone sent the maintainer to the network tab.
+    const refused = new Response(JSON.stringify({ error: 'the body does not hash to that id' }), {
+      status: 400,
+      headers: { 'content-type': 'application/json' },
+    });
+    const err = await client(async () => refused)
+      .capabilities()
+      .catch((e: unknown) => e as WinnowError);
+    expect((err as WinnowError).message).toContain('the body does not hash to that id');
+    expect((err as WinnowError).status).toBe(400);
+
+    // A proxy's HTML page, a bare body and a blank reason say nothing: the
+    // status stands alone rather than dragging markup into a sentence.
+    const quiet = async (body: string, type = 'text/html') =>
+      (
+        (await client(async () => new Response(body, { status: 502, headers: { 'content-type': type } }))
+          .capabilities()
+          .catch((e: unknown) => e)) as WinnowError
+      ).message;
+    expect(await quiet('<html>Bad gateway</html>')).toBe(`${BASE}/api/capabilities answered 502.`);
+    expect(await quiet('')).toBe(`${BASE}/api/capabilities answered 502.`);
+    expect(await quiet('{"error":"  "}', 'application/json')).toBe(
+      `${BASE}/api/capabilities answered 502.`,
+    );
+
+    const long = await client(
+      async () => new Response(JSON.stringify({ error: 'x'.repeat(400) }), { status: 400 }),
+    )
+      .capabilities()
+      .catch((e: unknown) => e as WinnowError);
+    expect((long as WinnowError).message.length).toBeLessThan(260);
+  });
+
   it('maps a thrown fetch (CORS refusal, offline, bad host) to unreachable', async () => {
     const c = client(async () => {
       throw new TypeError('Failed to fetch');

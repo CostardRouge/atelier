@@ -1195,8 +1195,23 @@ to add your own — just drop a `.cube` in, no code to edit.
 Every panel that grades — the Studio's Grade tab, a Trips piece, the Develop
 workbench — offers the same two ways in: a native list grouped by family, and
 a **gallery** that shows each look *on a photograph* before you pick it, since
-reading a name off a dropdown tells you nothing about a LUT. Click a tile and
-that is the choice; there is nothing to confirm.
+reading a name off a dropdown tells you nothing about a LUT.
+
+**Where the tool has your picture open, the gallery shows it.** A band across
+the top draws the look you are aiming at on *that* photograph, with a compare
+toggle that wipes it against the original — graded on the left, the way
+Lightroom and Capture One put it. So the gesture there is aim, then take: the
+first click moves the band, and the look is yours on the second click, on
+"Use this look", or on Enter. Where no picture is open there is nothing to aim
+at and a click is the choice, as it always was.
+
+It costs one lattice — the look under your eye — and that is the point: the
+grid keeps its cheap pre-baked tiles, which is also what makes two looks
+comparable, since every tile is the same subject. The band shows the look
+*alone*, without the correction you have set on the picture. And it says the
+one thing only your own photograph can reveal: aim a conversion look at a
+picture that is not log footage and it tells you so, rather than leaving you
+to read the over-contrast as a broken look.
 
 The tiles are baked once, ahead of time, and shipped — so opening the gallery
 fetches and parses no `.cube` at all. Each look is shown on the reference its
@@ -1204,9 +1219,10 @@ kind asks for: a **conversion look** (D-Log, S-Log3, Apple Log…) on a log
 frame, because a conversion LUT read on an ordinary picture comes out
 over-contrasted and looks broken through no fault of its own; everything else
 on an ordinary photograph. Both references are in `public/reference/`. If you
-would rather judge them on *your* picture, "Preview on the open picture" or
-"Preview on a photo…" puts every look on screen back on a live bake — it is
-offered rather than assumed, because the live path is what costs.
+want *every tile* on your own picture too — not just the band above them —
+"Tiles on my picture too" or "Preview on a photo…" puts them all on a live
+bake. That one is offered rather than assumed, because it reads a lattice per
+look and the band already answers the usual question for one.
 
 A **★** in a tile's corner builds a Favourites row at the top of the rail, and
 the same shortlist becomes the first group of "Add a look". It is kept in this
@@ -1245,6 +1261,22 @@ lattices into your own file store, and a device downloads a look the first
 time a picture actually asks for it — then never again. A device that does not
 hold a look says so on the layer, in its place, rather than quietly grading
 the picture as if no look had been chosen.
+
+**What it all weighs, and dropping what you will never use.** A pack of 65³
+looks is about 1.6 MB apiece — forty-odd megabytes for twenty-five, most of
+them for cameras you may not own. So "Packs…" says what every row costs: the
+vault's total, each pack's, each category's and each look's, measured in this
+browser and worked out for the instance the pack is kept on. Beside that,
+there are two different verbs and the difference matters:
+
+- **unticking** a category or a look puts it away. It leaves the pickers, its
+  bytes stay, and a grade already wearing it still renders.
+- **forgetting** a look (the bin at the end of its row) gives the bytes back,
+  here and on the instance. A grade wearing it then says the look is gone,
+  the way it does for a look this device never had; importing the folder again
+  brings it back. A look whose lattice another look also uses is dropped from
+  the pack without freeing anything, and the screen says so rather than
+  claiming a megabyte came back.
 
 ### Sources — connecting a Winnow
 
