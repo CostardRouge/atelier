@@ -5,7 +5,9 @@
 from named. §3–§8 are a PROPOSAL. **§9 records what the maintainer decided the
 same day** — companions yes, the proxy as the performance rendition, and the
 pill widened to the camera's own JPEG or HEIF — which makes §4–§6 the shape to
-build and leaves §11's thirty questions as what a complete plan still needs.
+build. **§12 is his answer to all thirty of §11's questions**, and **§13 is
+what is still missing**: five things, of which one (§13.2) needs a single word
+from him before R4 can be written.
 It refines `develop-originals.md` §7 (the two axes) and `photo-editor.md` P10
 (the RAW develop) rather than replacing either; the decisions those record
 still hold.
@@ -523,3 +525,117 @@ Grouped, with a recommendation on each so they can be answered by exception.
 29. Is the DJI `.JPG` beside the DNG full size (8064 px)? — decides whether
     "just the JPEG" is worth a row on that body.
 30. The phone budget: a 52 MB fetch plus a 33 MP decode on his iPhone.
+
+**26–29 are answered by dropping the files into the Rendition Inspector**
+(2026-09-21): https://claude.ai/artifact/Np2XfVEHxT7n1wrXo6rkU6 — a page that
+walks a TIFF's IFDs and an ISO-BMFF's item table, finds every embedded JPEG by
+a marker walk rather than by a vendor tag, decodes the biggest ones, reads
+`OpcodeList3` big-endian and says which rungs the file can honestly offer, and
+probes what the browser decodes. Everything is read in the tab; nothing is
+uploaded. 25 and 30 need the app itself, not the page.
+
+## 12. His answers (2026-09-21)
+
+Answered by exception against §11's recommendations. What is not restated took
+the recommendation.
+
+| # | his answer | consequence |
+| --- | --- | --- |
+| A1 | flat list, for now | as recommended |
+| A2 | the file, its weight | as recommended |
+| A3 | **stored on the document** — *"comme ça sur mobile je peux voir la même chose sans avoir à reselect"* | the stored value must be device-independent: it names the ROLE and the file's identity, never a path or a held blob. And it collides with §11.D18 — see §13.1 |
+| A4 | *"qu'est-ce qui se batche ?"* | the RENDITION over a filmstrip selection: "open these 30 from their RAW". Answered, still to decide |
+| A5 | Develop first | as recommended — but B7 widens it, see §13.4 |
+| B6 | the list shows the variants that exist: `proxy · hif · arw` | exactly §9.1 |
+| B7 | **yes, scan the local folder for siblings and show a tuple like Winnow** — and the media preview modal gets a way to switch between the files / "raw layers" | the lightbox is shell-level, so this reaches past Develop |
+| B8 | probe; and decode HEIF with a library if it comes to that | as recommended, with C11a kept open |
+| B9 | later, maybe in Trips | recorded |
+| B10 | yes, the same design for clips | a clip's list is proxy · original; there is no sensor rung |
+| C11 | open to libheif — **and a person can always pick the JPEG row instead** | that sentence is the reason the phasing works: HEIF is last, and nothing waits on it |
+| C12 | say it, fall back to the proxy | as recommended |
+| C13 | rendered on demand, cached well (browser cache, IndexedDB) | for the day Winnow serves a full-size |
+| C14 | *"why not? where does it come from?"* | from an ORIGINAL's extension, never from a RAW — a `.tif` capture. No camera in the house writes one, so no row; see §13.5 |
+| D15 | download on click, weight shown in advance | as recommended |
+| D16 | best judgement | a bounded LRU on `original-cache.ts` — it has no ceiling today |
+| D17 | no prefetch | as recommended |
+| D18 | *"maybe an explicit «load raw data» button, or we assume the loading"* | undecided — §13.1 resolves it with the progress work |
+| E19 | yes, the three modes survive | as recommended |
+| E20 | **no — the Export tab's choice is the final value at export** | reverses the recommendation, and it has a consequence: §13.2 |
+| E21 | the primary's EXIF | as recommended |
+| E22 | keep the name — **but he sometimes exports into the folder the originals are in, so there is an overwrite risk** | the guard already exists; §13.3 |
+| F23 | *"tu veux dire que le nom de l'option est trop long ?"* | no — the CHIP above the photograph, which accumulates facts until it is a sentence. Recommendation stands: four facts on the chip, the file name in the menu row and the `I` stack |
+| F24 | if it fails, warn and change nothing | as recommended |
+| G25–G30 | analyse it in an artifact | built — §11's note |
+| G29 | the DJI JPEG is 8064 × 4536 — **but it varies by drone, never hardcode it** | the list is read from the file, never from a table of bodies |
+
+## 13. What is still missing
+
+### 13.1 A stored choice, a phone, and a 52 MB fetch (A3 × D18)
+
+A3 says the choice rides the document so a phone shows the same thing. D18
+leaves open what happens when that phone opens the picture: the stored choice
+says ARW, the file is 52 MB, and nothing is in memory. The two honest shapes:
+
+- **an explicit row action** — the pill's row reads `ARW · not loaded`, a tap
+  loads it. Predictable, one more gesture on every reopen.
+- **load on open, visibly and cancellably** — which is exactly the progress
+  work of `progress-feedback.md`: a hairline on the media's edge while it
+  comes, a cancel that falls back to the proxy.
+
+The second is better and depends on that brief. **Until it exists, the first
+is the safe default** — a stored choice must never silently spend 52 MB of a
+phone's data.
+
+### 13.2 What E20 costs, and the one word still needed
+
+"The Export tab's choice is final" is clear for PIXELS. For MATERIAL it has a
+consequence worth saying out loud: a picture developed on its sensor carries a
+`rawGain` measured on the sensor's own range, and applying those numbers to an
+8-bit proxy gives a visibly different picture — which is why the export has
+never crossed that line downward (`raw.md`). Three ways to honour E20:
+
+1. **`Proxies` strips the base** and the run says so — the behaviour that
+   already exists for an unreachable RAW. Honest, and the file will not match
+   the stage.
+2. **`Proxies` is not offered** for a picture developed on its sensor, with a
+   line saying why.
+3. **`Proxies` means "the proxy where the material allows"** — i.e. it governs
+   the delivered rungs and leaves a sensor develop alone.
+
+Recommended: **3**, with **1** as the explicit escape when he asks for it. One
+word from him closes this.
+
+### 13.3 Exporting into the folder the originals live in (E22)
+
+The guard exists and was measured (`develop-roll.md`): `RollExport.replace` is
+off by default, the folder is asked about each name as its turn comes, the
+probe reaches the real file system so a case-insensitive volume answers about
+`DJI_0101.JPG` when asked about `DJI_0101.jpg`, and a taken name is numbered.
+So **an original is never overwritten unless Replace is ticked**.
+
+What renditions add: two deliveries of ONE capture from two materials now want
+one name, and the second becomes `-1`. Open: should the export **warn when the
+folder it is writing into is the one the source files came from**? Cheap (the
+roll knows its folder handle), and it is the only case where ticking Replace is
+destructive rather than merely idempotent.
+
+### 13.4 Where the switcher lives (A5 × B7)
+
+A5 says Develop first; B7 asks for the switch in the media preview modal,
+which is the shell's lightbox — every tool, not one. They are compatible if the
+lightbox switch is READ-ONLY (look at the other file) while only Develop can
+WRITE the choice. If it should write there too, the stored field has to be
+reachable from outside a roll, which is a different design.
+
+### 13.5 Small and unanswered
+
+- **A TIFF row** (C14): no camera here writes one; the answer is no row until
+  one does.
+- **A roll-wide default** — "develop everything from the RAW where there is
+  one" as a roll setting, rather than a verb run over a selection.
+- **A capture with no proxy at all** (a local folder, no instance): the list is
+  `HIF · ARW` and the stage opens on… the biggest drawable rendition. Needs
+  saying, since every pixel budget in the suite assumes a proxy-sized opening.
+- **The field's name and its migration**: `DevelopSettings.base` becomes
+  something that names a file, and roll v2 → v3 (`photo-editor.md`'s edit-stack
+  migration wanted that number too — one of them has to move).

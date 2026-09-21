@@ -258,8 +258,27 @@ that decides its cost is whether his `.HIF` embeds a full-size JPEG, because
 camera HEIFs ship one"*, pulled with exiftool's `PreviewImage`), which would
 make it the `raw-probe.ts` trick over an ISO-BMFF walk instead of a 2 MB
 `libheif.wasm`. Winnow makes only two derivatives, `thumb` and `proxy`, both
-WebP — there is no full-size one to ask for. The thirty questions a complete
-plan needs are `docs/capture-renditions.md` §11.
+WebP — there is no full-size one to ask for.
+
+**He answered all thirty questions the same day** (`docs/capture-renditions.md`
+§12). The three that change the design: the choice is **stored on the
+document**, so a phone shows the same picture without re-picking — which means
+it names a ROLE and a file identity, never a path, and which needs the progress
+work before a stored `ARW` may spend 52 MB on a phone unasked; the **Export
+tab's value is final at export**, reversing the "material wins" recommendation
+and needing one more word from him, because a `rawGain` measured on the sensor
+applied to an 8-bit proxy is a visibly different picture (§13.2); and the
+**media preview modal — the shell's lightbox — gets the switcher too**, which
+reaches past Develop. A local folder's siblings are scanned and shown as a
+tuple, like Winnow's pair. What is still missing is §13, five items.
+
+**The measurement is a page, not a guess**: the Rendition Inspector
+(https://claude.ai/artifact/Np2XfVEHxT7n1wrXo6rkU6) walks a TIFF's IFDs and an
+ISO-BMFF's item table, finds every embedded JPEG by a MARKER WALK rather than
+by a vendor tag — which is what lets it answer for a HEIF whose preview no spec
+names — decodes the biggest, reads `OpcodeList3` big-endian and says which
+rungs a file can honestly offer, and probes the browser's own decoders. Drop
+his ARW, HIF and DNG + JPG into it before writing R3 or choosing a HEIF path.
 
 ## What a DJI DNG actually holds (measured 2026-09-20, body FC8482)
 

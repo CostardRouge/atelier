@@ -502,3 +502,27 @@ Reported: on a phone, the trip overview's LOUPE frame (`LoupeBrush.tsx`, drawn o
 ## 2026-09-16 — A transformed ancestor turns `position: fixed` into card-relative: a sheet opened from a card is PORTALLED
 
 Seen on the Develop gallery: ⋯ → Move… drew `ConfirmDialog`'s `fixed inset-0` overlay inside the card's box, and it jumped as the card's `hover:-translate-y-1` came and went, so Move and Cancel dodged the pointer. Any `transform` (also `filter`, `backdrop-filter`, `perspective`, `will-change: transform`) makes an element the containing block of its `fixed` descendants. The Studio's project cards had the same bug, and Trips' card was spared only because it lifts with a shadow, not a transform. **Fix**: `ConfirmDialog` renders through `createPortal(…, document.body)`. React events still bubble through the COMPONENT tree, so its `onClick` `stopPropagation` is still what keeps a click in the dialog from opening the card, and the card's `closest('[role="alertdialog"]')` guard still matches a portalled target. An anchored popover (`OverflowMenu`, `absolute` under its button) is meant to move with its card and stays in place. **How to apply**: a full-screen overlay that can be rendered inside a card, a tile or anything that animates with a transform goes through a portal; do not remove the card's hover lift to work around it. Verified in the Browser pane on the Develop (Move…, Delete… confirmed on a throwaway roll), Studio (Delete… → Keep) and Trips (Delete this trip… → Keep) galleries: the overlay's parent is `<body>`, it covers the viewport (1024×768), the sheet is centred at (512, 384), and a real click on its button acted without opening the card.
+
+## 2026-09-21 — Progress is plumbed everywhere and drawn nowhere
+
+**Fact, read before proposing anything.** A dozen modules already report
+progress through an `onProgress`-shaped callback — `media/export-variant.ts`,
+`webcodecs-export.ts`, `transcode.ts`, `roadtrip/deck-export.ts`,
+`hook-video-export.ts`, `lut/pack-import.ts`, `develop/delivery-source.ts`,
+`tools/develop/use-roll-export.ts` — and each is drawn its own way: Trips'
+Export word becomes its own fill, `SyncPill` says a dot and a word, Develop's
+`tell()` writes prose under the stage, three panels draw their own bar.
+**`shared/ui/` holds no progress element at all**, and **nothing in the suite
+is cancellable**: no export, decode, fetch or transcode takes an
+`AbortSignal`, so a run that started, finishes.
+
+**The maintainer's ask (2026-09-21)**, out of the RAW work but deliberately
+suite-wide: a hairline on a MEDIA's edge — a fill when the length is known, a
+sweep when it is not — as the passive surface, plus something naming the
+operation with a Cancel *"si l'utilisateur veut faire autre chose"*. That last
+clause is the argument against a modal and for the `SyncPill` family: a modal
+forbids the very thing the cancel is for. The design, the five phases and the
+five open questions are `docs/progress-feedback.md`; the honest-value rule
+applies to a bar as much as to a badge — a percentage nobody measured is a
+fabrication, so an unknown length SWEEPS, and a Cancel is drawn only where the
+work can really stop.
