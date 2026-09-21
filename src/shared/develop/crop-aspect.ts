@@ -85,6 +85,32 @@ export function describeAspect(ratio: number): string {
   return r > 1 ? `${r.toFixed(2)}:1` : `1:${(1 / r).toFixed(2)}`;
 }
 
+/** The format chip on screen: Free, Original, or one of the preset ids. */
+export type CropChip = 'free' | 'original' | string;
+
+/**
+ * Which chip a picture OPENS on.
+ *
+ * An untouched picture opens on **Free** (2026-09-21, the maintainer's ask):
+ * the Crop tab is reached in order to draw a shape, and opening on the
+ * picture's own ratio meant every crop began with a click that undid the
+ * default. Free is the one chip that holds the zone to nothing, so it is the
+ * one that costs no gesture.
+ *
+ * It changes no stored value: Free only says what the next gesture MAY do, so
+ * a picture opened on it and left alone still stores `'original'` with an
+ * untouched framing, and `rollProgress` still counts it as uncropped.
+ *
+ * A picture that was already cropped opens on the chip its stored crop names
+ * — a locked ratio comes back locked, `'original'` included.
+ */
+export function openingCropChip(aspect: string, untouched: boolean): CropChip {
+  if (untouched) return 'free';
+  if (aspect === 'original') return 'original';
+  if (isFreeAspect(aspect)) return 'free';
+  return PRESET_IDS.has(aspect) ? aspect : 'free';
+}
+
 export type CropHandle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 
 /** Clockwise from the top left — the order the stage draws them in. */

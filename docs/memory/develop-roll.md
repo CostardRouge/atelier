@@ -522,6 +522,20 @@ moved that edge exactly 60 px, the left edge and the height untouched (read
 back by hover-scanning the stage's cursor zones); under Original the same drag
 kept 1.5:1 about the centre. Not driven: a real phone, a real multi-touch.
 
+**An untouched picture opens on Free** (2026-09-21, the maintainer: *"quand je
+vais dans crop, j'aimerais que par défaut l'option soit réglée sur free, comme
+ça je ne perds pas de temps à faire un clic"*). `openingCropChip`
+(`crop-aspect.ts`, pure, tested) is the one reader: untouched — `'original'`
+with a default framing — opens on Free; anything else opens on the chip its
+STORED crop names, so a locked ratio comes back locked and `'original'` is
+still `'original'` where it was deliberately chosen. `reset` lands on Free for
+the same reason: it leaves the picture untouched. **It writes nothing** —
+`setChip('free')` has no ratio to fit — so a picture opened on Free and left
+alone still stores `'original'` with an untouched framing, and `rollProgress`
+still counts it as uncropped. The rule is worth keeping wherever a default
+chip is added: a default that DIRTIES a document is a different thing from a
+default that only says what the next gesture may do.
+
 ## A picture may be delivered on a BORDER (2026-09-19, roll v2)
 
 **Decision (maintainer, over a second prototype).** Coloured bars or margins

@@ -7,6 +7,7 @@ import {
   freeAspectRatio,
   isFreeAspect,
   isStoredAspect,
+  openingCropChip,
   pictureAspectRatio,
 } from './crop-aspect';
 
@@ -73,5 +74,21 @@ describe('describeAspect', () => {
     expect(describeAspect(1.5)).toBe('1.50:1');
     expect(describeAspect(0.8)).toBe('1:1.25');
     expect(describeAspect(1.001)).toBe('1:1');
+  });
+});
+
+describe('openingCropChip', () => {
+  it('opens an untouched picture on Free, whatever its own shape', () => {
+    expect(openingCropChip('original', true)).toBe('free');
+  });
+
+  it('opens a cropped picture on the chip its stored crop names', () => {
+    expect(openingCropChip('original', false)).toBe('original');
+    expect(openingCropChip('4:5', false)).toBe('4:5');
+    expect(openingCropChip('free:1.5', false)).toBe('free');
+  });
+
+  it('falls back to Free for an aspect no preset answers', () => {
+    expect(openingCropChip('made-up', false)).toBe('free');
   });
 });
