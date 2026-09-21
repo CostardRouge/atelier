@@ -264,6 +264,13 @@ shared block. Rules a later phase must keep:
   `DJI_0101.jpg` — which is the case that matters, since an export named after
   its picture is exactly what would otherwise land on its own original. A
   DOWNLOAD cannot honour the choice: the browser numbers a repeat itself.
+  **And the run SAYS it when the folder it was given is the one the pictures
+  came from** (2026-09-21, his call), offering a suffix — the one exception to
+  the exact name above, never the default. Only where a directory HANDLE was
+  picked: a download has no folder to compare, and the browser and the OS name
+  it. The comparison is `FileSystemHandle.isSameEntry` against the handle the
+  roll already remembers for its local pictures (`develop-media.md`), never a
+  path or a name, so a folder that merely looks alike answers false.
 - **A delivered picture carries the ORIGINAL's EXIF, whatever its pixels came
   from** (2026-09-20, the maintainer's rule: *"il faut que je puisse à la fin
   exporter… avec les informations du fichier original"*). Where the pixels come

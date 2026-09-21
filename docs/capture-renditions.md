@@ -616,10 +616,22 @@ probe reaches the real file system so a case-insensitive volume answers about
 So **an original is never overwritten unless Replace is ticked**.
 
 What renditions add: two deliveries of ONE capture from two materials now want
-one name, and the second becomes `-1`. Open: should the export **warn when the
-folder it is writing into is the one the source files came from**? Cheap (the
-roll knows its folder handle), and it is the only case where ticking Replace is
-destructive rather than merely idempotent.
+one name, and the second becomes `-1`.
+
+**DECIDED 2026-09-21 (the maintainer): warn, and offer a suffix.** When the
+folder being written into is the one the pictures came from, the export says so
+before it runs and offers to add a suffix — his one exception to "named
+EXACTLY after its picture" (`develop-roll.md`), which stays the default. It is
+the only case where ticking Replace is destructive rather than idempotent.
+
+**And it exists only on the File System Access path** — his own point, and it
+is right: a plain download hands the file to the browser, which names and
+de-duplicates it with the OS, so there is no folder to compare and nothing to
+ask. The warning is drawn where `pickDeliveryTarget` returned a directory
+handle, and nowhere else. The comparison itself is one call the roll can
+already make: `FileSystemHandle.isSameEntry` against the handle the roll
+remembers for its local pictures (`develop-media.md`) — no path, no string
+match, and it answers false for a folder that merely looks alike.
 
 ### 13.4 Where the switcher lives (A5 × B7)
 

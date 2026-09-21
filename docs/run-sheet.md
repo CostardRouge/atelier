@@ -54,7 +54,7 @@ IFDs, an ISO-BMFF's item table, every embedded JPEG by a marker walk,
 | | question | blocks |
 | --- | --- | --- |
 | ⛔ | **§13.2** — `Proxies` over a picture developed from its sensor: (1) strip the base and say so, (2) do not offer it, (3) it governs only the delivered rungs. *Recommended: 3.* | R4 |
-| ◻ | Should the export **warn when it is writing into the folder the sources came from**? (§13.3 — the only case where Replace is destructive rather than idempotent.) | a line in R4 |
+| ✅ | **§13.3 — decided**: warn when writing into the folder the pictures came from, and offer a suffix (the one exception to the exact name). Only on the File System Access path — a download is the browser's and the OS's to name. | folded into R4 |
 | ◻ | A **roll-wide default** — "develop everything from the RAW where there is one" as a setting, rather than a verb over a selection? | R3b's shape |
 | ◻ | May the **lightbox WRITE** the stored choice, or only look? | R6's scope |
 | ◻ | `progress-feedback.md` §4 — modal or pill (*recommended: pill*), what a cancelled export leaves behind, where the pill lives on a phone. | T1 |
