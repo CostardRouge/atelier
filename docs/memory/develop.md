@@ -320,3 +320,20 @@ eleven sliders at a glance. **Verified**: `RangeSlider` mounted directly
 against the real dev server (it takes plain props, so no fixture picture is
 needed) and screenshotted at 4×, to check the glyph is the shared
 `Icons.reset` and not a hand-drawn one.
+
+## A replaced source is released one commit later (2026-09-21)
+
+`useDevelopPicture` used to release the previous `BadgeSource` in the decode
+effect's own cleanup. That is one commit too early whenever another paint
+input moves WITH the file — the stage's scale when the delivered file changes
+under it (R3a) — because the paint effect then runs once more, in the same
+commit, with the state's still-old source and draws a closed bitmap:
+`InvalidStateError: The image source is detached`, and the tool's boundary.
+The rule the Studio already keeps (`studio.md`) now holds here: a replaced
+source is RETIRED and released when `source` next changes, or on unmount.
+One subtlety measured against a stub instance: the source the state now holds
+can itself be on the retired list — a proxy whose decode landed in the same
+commit as the RAW arrived was retired by that commit's cleanup — so the
+release skips whatever `source` currently is, and that one waits its turn.
+Otherwise the next paint draws a bitmap of width 0 and the cube pass logs
+`GL error 0x501` on its first draw.
