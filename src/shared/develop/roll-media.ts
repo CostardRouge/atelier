@@ -172,6 +172,16 @@ export function photoFiles(files: readonly File[]): File[] {
 }
 
 /**
+ * The capture files BESIDE those photographs — the DNG beside a JPEG, the
+ * HIF beside an ARW — that lost the image slot (`AssetParts.siblings`). A
+ * roll never lists them; the workbench offers them as the picture's other
+ * renditions (`media/renditions.ts`), found again by base name.
+ */
+export function captureSiblings(files: readonly File[]): File[] {
+  return buildAssets([...files]).flatMap((a) => (a.kind === 'photo' ? (a.parts.siblings ?? []) : []));
+}
+
+/**
  * What a set of incoming refs means for a roll: how many are pictures it
  * already holds (found again), and which are new — each once, in order.
  */

@@ -517,6 +517,12 @@ export function useDevelopPicture({
   const onRawDecodedRef = useRef(onRawDecoded);
   onRawDecodedRef.current = onRawDecoded;
   const rawFile = raw?.file ?? null;
+  // A source that was REPLACED is released one commit later, never in the
+  // decode effect's own cleanup: the paint effect below runs in that same
+  // commit whenever another of its inputs moved with the file — the stage's
+  // scale, say, when the delivered file changes under it — and it would draw
+  // a bitmap already closed (`studio.md`, «released one commit after»).
+  const retired = useRef<BadgeSource[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -555,9 +561,27 @@ export function useDevelopPicture({
       });
     return () => {
       cancelled = true;
-      loaded?.release();
+      if (loaded) retired.current.push(loaded);
     };
   }, [file, videoTimeSeconds, rawFile]);
+  useEffect(() => {
+    const stale = retired.current;
+    if (!stale.length) return;
+    // The CURRENT source can be on the list: a decode that landed in the same
+    // commit as the next change of `file` (the proxy arriving as the RAW does)
+    // was retired by that change's cleanup while it is what the state now
+    // holds. It waits for the next change, or for the unmount.
+    retired.current = stale.filter((s) => s === source);
+    for (const s of stale) if (s !== source) s.release();
+  }, [source]);
+  // On unmount nothing re-renders: what is still retired goes with the hook.
+  useEffect(
+    () => () => {
+      for (const s of retired.current) s.release();
+      retired.current = [];
+    },
+    [],
+  );
 
   // The two warps as one record, memoised by VALUE — every effect below takes
   // it as a dep, and the panels hand down a fresh object per slider step.

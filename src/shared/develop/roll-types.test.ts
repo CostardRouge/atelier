@@ -139,7 +139,7 @@ describe('editing the strip', () => {
       ],
     };
     const doc = readRollDoc(raw)!;
-    expect(doc.version).toBe(3);
+    expect(doc.version).toBe(ROLL_DOC_VERSION);
     expect(doc.pictures[0]).toMatchObject({
       aspect: 'original',
       framing: null,
@@ -194,7 +194,8 @@ describe('reading a stored roll', () => {
     expect(doc.pictures[1].develop?.exposure).toBe(1);
     expect(doc.pictures[1].framing?.scale).toBe(2);
     expect(doc.grade).toBeNull();
-    expect(doc.export).toEqual({ longEdge: 16384, quality: 1, originals: 'auto', replace: false, hdr: false, hdrStops: 2 });
+    // `originals`, written by v1–v3, is left behind: which pixels is the picture's own (v4).
+    expect(doc.export).toEqual({ longEdge: 16384, quality: 1, replace: false, hdr: false, hdrStops: 2 });
     expect(doc.sourceId).toBe('winnow.example');
     expect('future' in doc).toBe(false);
   });
@@ -218,7 +219,6 @@ describe('reading a stored roll', () => {
     expect(readRollExport({ longEdge: 1920.4, quality: 0.8, originals: 'proxies', replace: true })).toEqual({
       longEdge: 1920,
       quality: 0.8,
-      originals: 'proxies',
       replace: true,
       hdr: false,
       hdrStops: 2,
@@ -231,6 +231,19 @@ describe('reading a stored roll', () => {
     // A roll written before the choice existed keeps what is in its folder.
     expect(readRollExport({ quality: 0.9 }).replace).toBe(false);
     expect(readRollExport({ replace: 'yes' }).replace).toBe(false);
+  });
+
+  it('reads the rendition a picture is developed from, and nothing as null', () => {
+    const doc = readRollDoc({
+      id: 'r',
+      pictures: [
+        { id: 'p1', ref: ref('a.jpg'), rendition: 'delivered:dji_0101.jpg' },
+        { id: 'p2', ref: ref('b.jpg'), rendition: '' },
+        { id: 'p3', ref: ref('c.jpg') },
+      ],
+    })!;
+    expect(doc.pictures.map((p) => p.rendition)).toEqual(['delivered:dji_0101.jpg', null, null]);
+    expect(patchPicture(doc, 'p3', { rendition: 'proxy' }).pictures[2].rendition).toBe('proxy');
   });
 
   it('migrates a stored roll onto the current shape without changing what it holds', () => {

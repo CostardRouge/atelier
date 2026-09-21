@@ -86,6 +86,31 @@ export interface MediaOrigin {
    * over wherever it has any.
    */
   exif?: ExifData;
+  /**
+   * The capture's OTHER file, where the source paired two into one media — a
+   * Sony `.ARW` beside its `.HIF`, a DJI `.DNG` beside its `.JPG`
+   * (`docs/capture-renditions.md`).
+   *
+   * It is what makes the sensor's data reachable at all for those captures:
+   * the file in hand is the primary's proxy, the primary's own original is a
+   * HEIF or a JPEG, and the RAW is a different asset entirely. Absent where
+   * the source pairs nothing, and — the trap — **never assume it is a RAW**: a
+   * Live Photo's companion is a `.mov`.
+   */
+  companion?: CaptureCompanion;
+}
+
+/** The other half of a paired capture, and how to get it. */
+export interface CaptureCompanion {
+  /** `<host>/<id>`, so it is held and re-found exactly like any other asset. */
+  assetId: string;
+  name: string;
+  bytes: number | null;
+  width: number | null;
+  height: number | null;
+  fetchFile: () => Promise<File>;
+  /** Its leading bytes — the head a RAW probe reads, without pulling 35 MB. */
+  fetchHead: (bytes: number) => Promise<ArrayBuffer>;
 }
 const known = new Map<string, KnownIdentity>();
 

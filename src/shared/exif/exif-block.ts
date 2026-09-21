@@ -9,7 +9,7 @@
  * whole file) or that has none (a WebP proxy, where the source's own answer is
  * all there is).
  *
- * Three tags are corrected on the way, and only three:
+ * Four tags are corrected on the way, and only four:
  *
  * - **Orientation**, set to 1 — the delivered picture is already the way up it
  *   was looked at, and a viewer honouring the original's tag would turn it a
@@ -20,11 +20,19 @@
  *   shows the picture BEFORE the development, and a file that previews as its
  *   own undeveloped self reads as a broken export. Its bytes stay in the block
  *   — unreferenced, and a block was under 64 KB before this, so it stays so.
+ * - **Software**, set to what wrote the file — the one mark that tells an
+ *   export from the camera's own file once the rest of the block is a copy
+ *   (`software-mark.ts`). Written over the camera's entry where that entry can
+ *   hold it; where it cannot, or where there is none, IFD0 is COPIED to the
+ *   end of the block with the entry added and the header repointed at the
+ *   copy. Every value an entry points at stays where it was, offsets being
+ *   absolute, so nothing else in the block moves — the old directory becomes
+ *   dead bytes, exactly like a cut-loose thumbnail.
  *
  * Pure and DOM-free, `Uint8Array` in and out.
  */
 
-import { num, parseIfd } from './exif-parser';
+import { num, parseIfd, type Entry } from './exif-parser';
 
 /** `Exif\0\0` — the six bytes an `APP1` segment opens with when it holds EXIF. */
 const EXIF_ID = [0x45, 0x78, 0x69, 0x66, 0x00, 0x00];
@@ -144,12 +152,16 @@ export interface RetagOptions {
   /** The delivered picture's own size; left alone when not given. */
   pixelWidth?: number;
   pixelHeight?: number;
+  /** What wrote the delivered file — its `Software`; left alone when not given. */
+  software?: string;
 }
 
 const ORIENTATION = 0x0112;
+const SOFTWARE = 0x0131;
 const EXIF_POINTER = 0x8769;
 const PIXEL_WIDTH = 0xa002;
 const PIXEL_HEIGHT = 0xa003;
+const ASCII = 2;
 
 /** Write `value` over an entry's own inline slot, when its type can hold it. */
 function overwrite(view: DataView, entry: { type: number; valueOffset: number }, value: number, little: boolean): void {
@@ -160,10 +172,82 @@ function overwrite(view: DataView, entry: { type: number; valueOffset: number },
   }
 }
 
+/** `text` as the bytes an ASCII entry holds: 7-bit, NUL-terminated. */
+function asciiBytes(text: string): Uint8Array {
+  const out = new Uint8Array(text.length + 1);
+  for (let i = 0; i < text.length; i += 1) out[i] = text.charCodeAt(i) & 0x7f;
+  return out;
+}
+
 /**
- * A COPY of `block` with the orientation reset, the dimensions corrected and
- * the thumbnail cut loose. A block it cannot make sense of comes back
- * unchanged rather than half-written.
+ * Write `text` over an ASCII entry's own bytes, NUL-padded to the entry's
+ * count, when the entry is an ASCII one wide enough to hold it. False when it
+ * is not — the caller then has to add an entry instead.
+ */
+function overwriteAscii(out: Uint8Array, entry: Entry | undefined, text: string): boolean {
+  if (!entry || entry.type !== ASCII) return false;
+  const bytes = asciiBytes(text);
+  if (entry.count < bytes.length || entry.valueOffset + entry.count > out.length) return false;
+  out.fill(0, entry.valueOffset, entry.valueOffset + entry.count);
+  out.set(bytes, entry.valueOffset);
+  return true;
+}
+
+/**
+ * The block with IFD0 COPIED to its end, one ASCII entry replaced or added
+ * (kept in tag order, as the format asks), no IFD1, and the header pointed at
+ * the copy. Entries are copied byte for byte, so an inline value stays inline
+ * and a pointed one still points where it did. A directory that runs past the
+ * block is left alone.
+ */
+function withIfd0Ascii(block: Uint8Array<ArrayBuffer>, little: boolean, tag: number, text: string): Uint8Array<ArrayBuffer> {
+  const view = new DataView(block.buffer, block.byteOffset, block.byteLength);
+  const ifd0At = view.getUint32(4, little);
+  const count = view.getUint16(ifd0At, little);
+  if (ifd0At + 2 + count * 12 > block.length) return block;
+
+  const kept: number[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const at = ifd0At + 2 + i * 12;
+    if (view.getUint16(at, little) !== tag) kept.push(at);
+  }
+  const bytes = asciiBytes(text);
+  const inline = bytes.length <= 4;
+  // Word-aligned, as TIFF asks of every offset.
+  const dirAt = block.length + (block.length & 1);
+  const valueAt = dirAt + 2 + (kept.length + 1) * 12 + 4;
+  const out = new Uint8Array(valueAt + (inline ? 0 : bytes.length));
+  out.set(block);
+  const o = new DataView(out.buffer);
+  o.setUint32(4, dirAt, little);
+  o.setUint16(dirAt, kept.length + 1, little);
+
+  let at = dirAt + 2;
+  let placed = false;
+  const place = () => {
+    o.setUint16(at, tag, little);
+    o.setUint16(at + 2, ASCII, little);
+    o.setUint32(at + 4, bytes.length, little);
+    if (inline) out.set(bytes, at + 8);
+    else o.setUint32(at + 8, valueAt, little);
+    at += 12;
+    placed = true;
+  };
+  for (const src of kept) {
+    if (!placed && view.getUint16(src, little) > tag) place();
+    out.set(block.subarray(src, src + 12), at);
+    at += 12;
+  }
+  if (!placed) place();
+  o.setUint32(at, 0, little);
+  if (!inline) out.set(bytes, valueAt);
+  return out;
+}
+
+/**
+ * A COPY of `block` with the orientation reset, the dimensions corrected, the
+ * thumbnail cut loose and the software named. A block it cannot make sense
+ * of comes back unchanged rather than half-written.
  */
 export function retagExifBlock(block: Uint8Array, options: RetagOptions = {}): Uint8Array<ArrayBuffer> {
   const out = block.slice();
@@ -195,5 +279,9 @@ export function retagExifBlock(block: Uint8Array, options: RetagOptions = {}): U
   const count = view.getUint16(ifd0At, little);
   const nextAt = ifd0At + 2 + count * 12;
   if (nextAt + 4 <= out.length) view.setUint32(nextAt, 0, little);
+
+  if (options.software !== undefined && !overwriteAscii(out, ifd0.get(SOFTWARE), options.software)) {
+    return withIfd0Ascii(out, little, SOFTWARE, options.software);
+  }
   return out;
 }

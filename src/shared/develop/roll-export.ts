@@ -309,6 +309,12 @@ export interface DeliverySummary {
  * that cannot fill it is what `Auto` fetches the original for. Without one,
  * the file delivers what it has and the line says what was asked.
  */
+/** What ONE delivery is decided against: the roll's cap, and the door's mode for this picture. */
+export interface DeliverySettings {
+  longEdge: RollExport['longEdge'];
+  originals: RollOriginals;
+}
+
 export function deliverySummary(
   file: DeliverySource,
   fileIsProxy: boolean,
@@ -316,7 +322,7 @@ export function deliverySummary(
   framing: Framing | null,
   aspectRatio: number,
   border: RollBorder | null,
-  settings: Pick<RollExport, 'longEdge' | 'originals'>,
+  settings: DeliverySettings,
 ): DeliverySummary {
   // What the original could really hand over — for a RAW, the render inside
   // it, and only once its head has said how big that render is.

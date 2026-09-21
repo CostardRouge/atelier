@@ -264,6 +264,13 @@ shared block. Rules a later phase must keep:
   `DJI_0101.jpg` — which is the case that matters, since an export named after
   its picture is exactly what would otherwise land on its own original. A
   DOWNLOAD cannot honour the choice: the browser numbers a repeat itself.
+  **And the run SAYS it when the folder it was given is the one the pictures
+  came from** (2026-09-21, his call), offering a suffix — the one exception to
+  the exact name above, never the default. Only where a directory HANDLE was
+  picked: a download has no folder to compare, and the browser and the OS name
+  it. The comparison is `FileSystemHandle.isSameEntry` against the handle the
+  roll already remembers for its local pictures (`develop-media.md`), never a
+  path or a name, so a folder that merely looks alike answers false.
 - **A delivered picture carries the ORIGINAL's EXIF, whatever its pixels came
   from** (2026-09-20, the maintainer's rule: *"il faut que je puisse à la fin
   exporter… avec les informations du fichier original"*). Where the pixels come
@@ -276,7 +283,21 @@ shared block. Rules a later phase must keep:
   since Winnow's download route ignores `Range` —, else what the instance
   vouched for. The choice and the block are `shared/exif/stamp-exif.ts`; a
   picture that ends up on the poorest account, or on none, is SAID in the run's
-  sentence rather than filed away silently.
+  sentence rather than filed away silently. Whatever the account, the block
+  says `Software: Atelier` (since 2026-09-21, the copied one included) — the
+  mark that keeps an export sitting beside its original from being offered as
+  the camera's file (`renditions.md`, R1b).
+- **The workbench holds TWO files since 2026-09-21: the picture's, and the one
+  on the stage** (`renditions.md`, «R3a is BUILT»). `file` stays what the
+  picture IS — its identity, its origin, its EXIF, what the export hook
+  measures — while `shownFile` is the rendition drawn (a fetched original, a
+  folder sibling): it is what `useDevelopPicture`, the chip and the kernels'
+  `fullWidth` read. A new consumer of the bytes on screen takes `shownFile`;
+  one that needs the picture's identity takes `file`. Since R4 the export
+  follows the same answer (`renditions.md`, «R4 is BUILT»): a stored
+  delivered rendition is fetched through `deliveredSourceFor`, the three
+  words are gone from the roll and the panel, and *Proxies only, for this
+  run* is the editor's switch, never the document's.
 - **The row NAMES the pixels it measured** (2026-09-20): `sourceLabel` reads
   `Camera render` where the file in hand is a RAW — `MeasuredPicture.viaRawPreview`
   from `measurePicture`, which now decodes through `decodePhotoSource` — so a

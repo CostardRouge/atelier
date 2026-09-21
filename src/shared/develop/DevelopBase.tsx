@@ -1,11 +1,9 @@
-import OverflowMenu from '../ui/OverflowMenu';
+import OverflowMenu, { type OverflowItem } from '../ui/OverflowMenu';
 import { formatBytes } from '../lib/format';
+import { renditionFacts, type Rendition } from '../media/renditions';
 import { BASE_LABELS, baseRung, signed, type DevelopBase } from './develop';
 
 export type { DevelopBase } from './develop';
-
-/** Where the sensor's data would come from: the file in hand is a RAW, or a proxy's original is one. */
-export type RawOffer = 'file' | 'original';
 
 /**
  * What each rung ADDS to the one below — the whole point of a ladder, and the
@@ -18,66 +16,138 @@ export const BASE_ADDS: Readonly<Record<DevelopBase, string>> = Object.freeze({
   gainMapWarp: 'and the rectilinear warp beside it: the magnification and the lateral colour fringe the same file states.',
 });
 
+/** What a delivered row IS, in the words under its name. */
+function describeDelivered(row: Rendition): string {
+  if (row.blocked) return row.blocked;
+  const fetched = row.here ? '' : ' — fetched from its instance and held for this session';
+  if (row.reach === 'embedded') return `the 8-bit render your camera wrote inside the RAW${fetched}`;
+  return `the file itself, 8-bit, drawn as it is${fetched}`;
+}
+
 /**
- * THE MATERIAL LADDER, under the fidelity chip.
+ * THE CAPTURE'S FILES, under the fidelity chip (2026-09-21, replacing the
+ * four-rung ladder of 2026-09-20 — `docs/capture-renditions.md` §9.1).
  *
- * Four rungs, each a real and nameable amount of the camera's own
- * calibration: the proxy, the sensor with its measured gain, the gain map,
- * the gain map and the warp. The two top rungs appear only where the FILE
- * carries those opcodes (`raw/calibration.ts`) — a correction nobody measured
- * is worse than none, which is the rule P6 shipped with no lens profiles for.
+ * One list: the source's proxy where there is one, then what the camera
+ * delivered — a JPEG, a HEIF, the render inside a RAW — then the sensor,
+ * with the calibration rungs (`raw/calibration.ts`) nested under it, since
+ * they are amounts of the SENSOR's own calibration and mean nothing on a
+ * render. A row this browser cannot draw is listed blocked and says why; a
+ * row not in hand says what fetching it costs before it is pressed.
  *
- * It hangs off the chip rather than sitting in the inspector (2026-09-20, the
- * maintainer's placement): the chip already says what the picture IS, so what
- * it could be belongs on the same word, above the photograph, where it is
- * read at the moment the question comes up.
+ * It hangs off the chip rather than sitting in the inspector (the
+ * maintainer's placement): the chip already says what the picture IS, so
+ * what it could be belongs on the same word, above the photograph, where it
+ * is read at the moment the question comes up.
  */
 export function DevelopBaseMenu({
   chip,
-  offer,
+  rows,
+  current,
   base,
   rungs,
+  onRendition,
   onBase,
   status,
   gain,
-  originalName,
-  originalBytes,
   calibration,
   className = '',
 }: {
   /** The fidelity chip's own words — this is that chip, made pressable. */
   chip: string;
-  offer: RawOffer | null;
+  /** Every rendition of the capture, in the order `renditionsOf` gives them. */
+  rows: readonly Rendition[];
+  /** The rendition on screen, when the develop is below the sensor. */
+  current: string | null;
+  /** The rung the develop stands on; `proxy` while a rendition is on screen. */
   base: DevelopBase;
-  /** Which rungs this file can honestly offer, lowest first. */
+  /** Which rungs the RAW can honestly offer, lowest first (`rungsFor`). */
   rungs: readonly DevelopBase[];
+  onRendition: (id: string) => void;
   onBase: (base: DevelopBase) => void;
-  /** What is happening to get the RAW on screen — fetching, decoding — or null. */
+  /** What is happening to get the chosen bytes on screen — fetching, decoding — or null. */
   status: string | null;
-  /** The metered exposure once decoded, as `rawGain`; null before. */
+  /** The metered exposure once the sensor is decoded, as `rawGain`; null before. */
   gain: number | null;
-  /** For an `original` offer: what would be fetched, and how heavy. */
-  originalName?: string | null;
-  originalBytes?: number | null;
-  /** What the file's own calibration asks for, once read; null when it carries none. */
+  /** What the RAW's own calibration asks for, once read; null when it carries none. */
   calibration?: string | null;
   className?: string;
 }) {
+  const onSensor = baseRung(base) > 0;
   const ev = gain ? Math.log2(gain) : 0;
-  const hint = (rung: DevelopBase): string => {
-    if (rung === base) {
-      if (rung === 'proxy') return BASE_ADDS.proxy;
-      return gain
-        ? `metered ${ev ? `${signed(ev, 1)} EV` : 'at its white'}`
-        : (status ?? 'decoding the sensor’s data…');
+  const sensor = rows.find((r) => r.role === 'sensor') ?? null;
+
+  const item = (id: string, marked: boolean, title: string, facts: string, hint: string, onSelect: () => void, disabled = false): OverflowItem => ({
+    id,
+    title: hint,
+    disabled,
+    onSelect,
+    label: (
+      <span className="flex flex-col items-start gap-0.5 text-left">
+        <span className="font-mono text-xs">
+          {marked ? '· ' : '  '}
+          {title}
+          {facts && <span className="text-faint"> · {facts}</span>}
+        </span>
+        <span className="font-mono text-3xs text-faint leading-relaxed max-w-[22rem] whitespace-normal">{hint}</span>
+      </span>
+    ),
+  });
+
+  const items: OverflowItem[] = rows
+    .filter((r) => r.role !== 'sensor')
+    .map((row) => {
+      const marked = !onSensor && row.id === current;
+      const hint = marked && status ? status : row.role === 'proxy' ? BASE_ADDS.proxy : describeDelivered(row);
+      return item(
+        row.id,
+        marked,
+        row.role === 'proxy' ? 'Proxy' : row.name,
+        renditionFacts(row, formatBytes),
+        hint,
+        () => onRendition(row.id),
+        Boolean(row.blocked),
+      );
+    });
+
+  if (sensor) {
+    for (const rung of rungs) {
+      if (rung === 'proxy') continue;
+      const marked = onSensor && rung === base;
+      let hint: string;
+      if (marked) {
+        hint = gain ? `metered ${ev ? `${signed(ev, 1)} EV` : 'at its white'}` : (status ?? 'decoding the sensor’s data…');
+      } else if (rung === 'gain' && !onSensor && !sensor.here) {
+        hint = `opens ${sensor.name} from its instance${sensor.bytes ? ` · ${formatBytes(sensor.bytes)}` : ''}, held for this session`;
+      } else {
+        hint = BASE_ADDS[rung];
+      }
+      items.push(
+        item(
+          rung,
+          marked,
+          rung === 'gain' ? `${sensor.name} → ${BASE_LABELS.gain}` : `→ ${BASE_LABELS[rung]}`,
+          rung === 'gain' ? renditionFacts(sensor, formatBytes) : '',
+          hint,
+          () => onBase(rung),
+        ),
+      );
     }
-    if (rung === 'gain' && baseRung(base) === 0) {
-      return offer === 'original'
-        ? `opens ${originalName ?? 'the original'} from its instance${originalBytes ? ` · ${formatBytes(originalBytes)}` : ''}, held for this session`
-        : BASE_ADDS.gain;
-    }
-    return BASE_ADDS[rung];
-  };
+  }
+
+  // What the FILE asks for, said once at the foot: the numbers a person can
+  // check against the picture, rather than a promise.
+  if (calibration) {
+    items.push({
+      id: 'calibration',
+      disabled: true,
+      onSelect: () => {},
+      label: (
+        <span className="font-mono text-3xs text-faint whitespace-normal max-w-[22rem]">this file asks for {calibration}</span>
+      ),
+    });
+  }
+
   return (
     <OverflowMenu
       label="What this picture is developed from"
@@ -85,41 +155,8 @@ export function DevelopBaseMenu({
       size="sm"
       align="end"
       trigger={{ text: chip, variant: 'ghost' }}
-      disabled={!offer}
-      items={[
-        ...rungs.map((rung) => ({
-          id: rung,
-          title: BASE_ADDS[rung],
-          onSelect: () => onBase(rung),
-          label: (
-            <span className="flex flex-col items-start gap-0.5 text-left">
-              <span className="font-mono text-xs">
-                {rung === base ? '· ' : '  '}
-                {BASE_LABELS[rung]}
-              </span>
-              <span className="font-mono text-3xs text-faint leading-relaxed max-w-[22rem] whitespace-normal">
-                {hint(rung)}
-              </span>
-            </span>
-          ),
-        })),
-        // What the FILE asks for, said once at the foot: the numbers a person
-        // can check against the picture, rather than a promise.
-        ...(calibration
-          ? [
-              {
-                id: 'calibration',
-                disabled: true,
-                onSelect: () => {},
-                label: (
-                  <span className="font-mono text-3xs text-faint whitespace-normal max-w-[22rem]">
-                    this file asks for {calibration}
-                  </span>
-                ),
-              },
-            ]
-          : []),
-      ]}
+      disabled={items.filter((i) => !i.disabled).length <= 1}
+      items={items}
     />
   );
 }

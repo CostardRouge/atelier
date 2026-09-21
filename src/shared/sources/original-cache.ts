@@ -12,12 +12,35 @@
 
 const held = new Map<string, File>();
 
+// What the session holds changes under a component that planned from it —
+// the stage fetches a file, the export's plan still says "to fetch". A
+// version and a subscription let `useSyncExternalStore` follow it.
+let version = 0;
+const listeners = new Set<() => void>();
+function changed(): void {
+  version += 1;
+  for (const fn of listeners) fn();
+}
+
 export function heldOriginal(assetId: string): File | null {
   return held.get(assetId) ?? null;
 }
 
 export function holdOriginal(assetId: string, file: File): void {
   held.set(assetId, file);
+  changed();
+}
+
+/** Bumped whenever something is held or dropped — for `useSyncExternalStore`. */
+export function heldVersion(): number {
+  return version;
+}
+
+export function subscribeHeld(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
 }
 
 /** How many bytes the session is holding — for a line that says so. */
@@ -30,6 +53,7 @@ export function heldOriginalBytes(): number {
 export function dropHeldOriginals(): void {
   held.clear();
   renders.clear();
+  changed();
 }
 
 /**

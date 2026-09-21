@@ -59,6 +59,16 @@ describe('exportExifBlock', () => {
     expect(read.pixelHeight).toBe(1440);
   });
 
+  it('marks every account as ours, the copied block included', () => {
+    // The copied block is the one that had no mark: it was the camera's.
+    const copied = exportExifBlock(cameraJpeg({ ...capture, software: 'v01.00.0800' }), null, delivered);
+    expect(copied.account).toBe('block');
+    expect(parseExif(copied.block!.buffer).software).toBe('Atelier');
+    expect(parseExif(exportExifBlock(cameraJpeg(capture), null, delivered).block!.buffer).software).toBe('Atelier');
+    expect(parseExif(exportExifBlock(dngHead(capture), null, delivered).block!.buffer).software).toBe('Atelier');
+    expect(parseExif(exportExifBlock(null, vouched, delivered).block!.buffer).software).toBe('Atelier');
+  });
+
   it('rebuilds from a RAW’s fields, whose block is the whole file', () => {
     const chosen = exportExifBlock(dngHead(capture), vouched, delivered);
     expect(chosen.account).toBe('fields');

@@ -24,6 +24,15 @@ export interface AssetParts {
   video?: File;
   srt?: File;
   image?: File;
+  /**
+   * The capture's OTHER image files — the ones that did not take the `image`
+   * slot: the `.DNG` beside a DJI's `.JPG`, the `.HIF` beside a Sony's `.ARW`.
+   * Kept, since 2026-09-21, because they are the capture's renditions
+   * (`media/renditions.ts`) and a folder is the only place a card-only
+   * workflow can find them. In listing order; a tool that wants ONE picture
+   * keeps reading `image` and never these.
+   */
+  siblings?: File[];
 }
 
 export interface Asset {
@@ -128,12 +137,13 @@ function kindOf(parts: AssetParts): AssetKind {
   return 'other';
 }
 
+/** Every file of an asset, the siblings included — what leaves when it does. */
+export function assetFiles(parts: AssetParts): File[] {
+  return [parts.video, parts.srt, parts.image, ...(parts.siblings ?? [])].filter((f): f is File => !!f);
+}
+
 function sizeOf(parts: AssetParts): number {
-  return (
-    (parts.video?.size ?? 0) +
-    (parts.srt?.size ?? 0) +
-    (parts.image?.size ?? 0)
-  );
+  return assetFiles(parts).reduce((n, f) => n + f.size, 0);
 }
 
 /**
@@ -141,7 +151,8 @@ function sizeOf(parts: AssetParts): number {
  *
  * - Recognised videos, SRTs and images fill an asset's parts; anything else
  *   (`.LRF` proxies, `.THM`, hidden dotfiles) is ignored.
- * - First file to claim a slot wins, so the result is deterministic.
+ * - First file to claim a slot wins, so the result is deterministic. An image
+ *   that loses the slot is kept in `siblings` rather than dropped.
  * - Sorted by base name for stable ordering.
  */
 export function buildAssets(files: File[]): Asset[] {
@@ -172,8 +183,13 @@ export function buildAssets(files: File[]): Asset[] {
       // pair is one photo too, and there the RAW is the better half, since
       // only WebKit draws a HEIF while the RAW draws through its own render.
       const current = group.parts.image;
-      if (!current || imageRank(name) > imageRank(current.name)) {
+      if (!current) {
         group.parts.image = file;
+      } else if (imageRank(name) > imageRank(current.name)) {
+        group.parts.image = file;
+        (group.parts.siblings ??= []).push(current);
+      } else {
+        (group.parts.siblings ??= []).push(file);
       }
     }
   }

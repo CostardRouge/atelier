@@ -5,7 +5,11 @@
 from named. §3–§8 are a PROPOSAL. **§9 records what the maintainer decided the
 same day** — companions yes, the proxy as the performance rendition, and the
 pill widened to the camera's own JPEG or HEIF — which makes §4–§6 the shape to
-build and leaves §11's thirty questions as what a complete plan still needs.
+build. **§12 is his answer to all thirty of §11's questions**, and **§13 is
+what is still missing**: five things, of which one (§13.2) needs a single word
+from him before R4 can be written. **§14 is FACT again** — his own ARW, HIF,
+DNG and JPG read in the pane — and it kills the HEIF prerequisite, promotes
+R3a, and finds a trap nothing had foreseen (§14.6).
 It refines `develop-originals.md` §7 (the two axes) and `photo-editor.md` P10
 (the RAW develop) rather than replacing either; the decisions those record
 still hold.
@@ -124,8 +128,9 @@ and the slot went to "whichever half is not a RAW", which on a Sony pair is the
 half most browsers cannot draw. The slot now goes by rank — drawable beats a
 RAW beats a HEIF or TIFF.
 
-**What is still true: locally, the RAW half of a pair is not kept anywhere.**
-Ask B has a local half, and it is `AssetParts.raw`.
+**Built as R2 (2026-09-21)**: the half that loses the slot is kept in
+`AssetParts.siblings` — a list, since on a Sony pair the loser is the HIF and
+not the RAW — and leaves the pool with its asset (`assetFiles`).
 
 ### 2.5 The same question is asked in three vocabularies
 
@@ -260,9 +265,9 @@ its own file carries (`rungsFor`, unchanged).
   been receiving all along. No UI, no fetch. *Verifies*: unit tests over the
   four shapes of row (unpaired, `raw_jpeg` with the RAW as companion,
   `live_photo`, a companion whose ext is not a RAW).
-- **R2 — the local half.** `AssetParts.raw`, filled by `buildAssets` from the
-  sibling it drops today; `renditionsOf` reads it for a folder capture. *Verifies*:
-  the pair tests in `assets.test.ts`.
+- **R2 — the local half.** `AssetParts.siblings` (built 2026-09-21), filled by
+  `buildAssets` from the files it dropped before; `renditionsOf` reads them as
+  `others` for a folder capture. *Verifies*: the pair tests in `assets.test.ts`.
 - **R3 — the rung.** `MediaOrigin.sensor`, `materialize` filling it,
   `rawOffer: 'sensor'`, the fetch and its status line, `pictureFidelity` naming
   the file. **This is the commit that makes his Sony and drone pairs
@@ -285,8 +290,13 @@ the pill, which splits R3 in two and adds one phase:
 - **R3a — the delivered rung where the browser already draws it**: the JPEG
   beside a DNG, and any drawable original. It is `fetchOriginal` on the stage
   rather than at the export door, so it is the cheapest row of the whole pill
-  and it is what makes "je veux juste le JPEG" true on the drone.
-- **R3b — the sensor rung** (the companion RAW), as R3 above.
+  and it is what makes "je veux juste le JPEG" true on the drone. **Built
+  2026-09-21** (`renditions.md`, «R3a is BUILT»): `DevelopBaseMenu` lists the
+  rows, `RollPicture.rendition` stores the pick, `capture-files.ts` builds
+  the input from what the workbench holds.
+- **R3b — the sensor rung** (the companion RAW), as R3 above. **Built
+  2026-09-21** (`renditions.md`, «R3b is BUILT»): `sensor-source.ts`, one
+  seam for the workbench and the export, driven against a stub instance.
 - **R7 — HEIF**, whichever of §11.C11 the measurement chooses. It is the only
   part that could add a dependency, and it is deliberately last: everything
   else ships without it, and a `.HIF` is drawn from the proxy until it lands.
@@ -523,3 +533,320 @@ Grouped, with a recommendation on each so they can be answered by exception.
 29. Is the DJI `.JPG` beside the DNG full size (8064 px)? — decides whether
     "just the JPEG" is worth a row on that body.
 30. The phone budget: a 52 MB fetch plus a 33 MP decode on his iPhone.
+
+**26–29 are answered by dropping the files into the Rendition Inspector**
+(2026-09-21): https://claude.ai/artifact/Np2XfVEHxT7n1wrXo6rkU6 — a page that
+walks a TIFF's IFDs and an ISO-BMFF's item table, finds every embedded JPEG by
+a marker walk rather than by a vendor tag, decodes the biggest ones, reads
+`OpcodeList3` big-endian and says which rungs the file can honestly offer, and
+probes what the browser decodes. Everything is read in the tab; nothing is
+uploaded. 25 and 30 need the app itself, not the page.
+
+## 12. His answers (2026-09-21)
+
+Answered by exception against §11's recommendations. What is not restated took
+the recommendation.
+
+| # | his answer | consequence |
+| --- | --- | --- |
+| A1 | flat list, for now | as recommended |
+| A2 | the file, its weight | as recommended |
+| A3 | **stored on the document** — *"comme ça sur mobile je peux voir la même chose sans avoir à reselect"* | the stored value must be device-independent: it names the ROLE and the file's identity, never a path or a held blob. And it collides with §11.D18 — see §13.1 |
+| A4 | *"qu'est-ce qui se batche ?"* | the RENDITION over a filmstrip selection: "open these 30 from their RAW". Answered, still to decide |
+| A5 | Develop first | as recommended — but B7 widens it, see §13.4 |
+| B6 | the list shows the variants that exist: `proxy · hif · arw` | exactly §9.1 |
+| B7 | **yes, scan the local folder for siblings and show a tuple like Winnow** — and the media preview modal gets a way to switch between the files / "raw layers" | the lightbox is shell-level, so this reaches past Develop |
+| B8 | probe; and decode HEIF with a library if it comes to that | as recommended, with C11a kept open |
+| B9 | later, maybe in Trips | recorded |
+| B10 | yes, the same design for clips | a clip's list is proxy · original; there is no sensor rung |
+| C11 | open to libheif — **and a person can always pick the JPEG row instead** | that sentence is the reason the phasing works: HEIF is last, and nothing waits on it |
+| C12 | say it, fall back to the proxy | as recommended |
+| C13 | rendered on demand, cached well (browser cache, IndexedDB) | for the day Winnow serves a full-size |
+| C14 | *"why not? where does it come from?"* | from an ORIGINAL's extension, never from a RAW — a `.tif` capture. No camera in the house writes one, so no row; see §13.5 |
+| D15 | download on click, weight shown in advance | as recommended |
+| D16 | best judgement | a bounded LRU on `original-cache.ts` — it has no ceiling today |
+| D17 | no prefetch | as recommended |
+| D18 | *"maybe an explicit «load raw data» button, or we assume the loading"* | undecided — §13.1 resolves it with the progress work |
+| E19 | yes, the three modes survive | as recommended |
+| E20 | **no — the Export tab's choice is the final value at export** | reverses the recommendation, and it has a consequence: §13.2 |
+| E21 | the primary's EXIF | as recommended |
+| E22 | keep the name — **but he sometimes exports into the folder the originals are in, so there is an overwrite risk** | the guard already exists; §13.3 |
+| F23 | *"tu veux dire que le nom de l'option est trop long ?"* | no — the CHIP above the photograph, which accumulates facts until it is a sentence. Recommendation stands: four facts on the chip, the file name in the menu row and the `I` stack |
+| F24 | if it fails, warn and change nothing | as recommended |
+| G25–G30 | analyse it in an artifact | built — §11's note |
+| G29 | the DJI JPEG is 8064 × 4536 — **but it varies by drone, never hardcode it** | the list is read from the file, never from a table of bodies |
+
+## 13. What is still missing
+
+### 13.1 A stored choice, a phone, and a 52 MB fetch (A3 × D18)
+
+A3 says the choice rides the document so a phone shows the same thing. D18
+leaves open what happens when that phone opens the picture: the stored choice
+says ARW, the file is 52 MB, and nothing is in memory. The two honest shapes:
+
+- **an explicit row action** — the pill's row reads `ARW · not loaded`, a tap
+  loads it. Predictable, one more gesture on every reopen.
+- **load on open, visibly and cancellably** — which is exactly the progress
+  work of `progress-feedback.md`: a hairline on the media's edge while it
+  comes, a cancel that falls back to the proxy.
+
+The second is better and depends on that brief. **Until it exists, the first
+is the safe default** — a stored choice must never silently spend 52 MB of a
+phone's data.
+
+### 13.2 The door COLLAPSES into the pill (reframed 2026-09-21)
+
+The question was which of three meanings `Proxies` takes over a picture
+developed from its sensor. The maintainer's answer was better than the
+question: *"le choix de la source de pixels sera fait dans chaque média […]
+donc on pense qu'on peut le retirer de l'export final"*.
+
+**He is right, and the reason is structural.** `develop-originals.md` §7
+decision 1 split the question in two — MATERIAL per picture, PIXELS at the
+export door — and that was correct **while they were two questions**: a base
+rung said which bits, `Auto · Proxies · Originals` said which pixels. A
+RENDITION names both at once: a file has its bits AND its frame. So the two
+axes are now one, the door and the pill answer the same question, and §13.2 was
+hard only because a duplicated control has no good answer.
+
+**What the door still does that the pill does not**, and what must survive it:
+
+- **"Not now, not on this connection."** The rendition is on the DOCUMENT
+  (A3), the tunnel is about this machine. A roll stored on his desktop as
+  `ARW` and exported from a phone must have one way to say *proxies, this
+  once* — and changing the pill instead would write that haste into the
+  document.
+- **`Auto`'s arithmetic, which was never a preference.** It fetches a bigger
+  rendition only where the proxy could not fill the frame asked for — the
+  measured case being a landscape proxy cropped to 4:5, upscaled ×1.25 at
+  1920. In a host WITH a pill that job is the person's; in Trips and the
+  Studio, which by his own A5 have no pill, nothing else does it.
+
+#### The variants
+
+**A — nothing at the door.** Each picture is delivered from its own rendition;
+the panel says what that means for the run. Purest, and it leaves no way to
+say "not now" but the batch verb, which writes the document.
+
+**B — nothing, plus ONE checkbox: *Proxies only, this run*.** Off by default,
+never touches the document, and it is the ASSUMED override he described: a
+picture developed from its sensor is delivered from its proxy with the base
+STRIPPED and the run saying so in as many words. One control instead of three,
+and it cannot be mistaken for a material choice.
+
+**C — the export lists every picture and its source.** His own idea. As an
+EDITABLE list it is the duplication again, one edit in two places. As a
+READ-ONLY summary it is just the *Delivers* row grown to the whole run, and it
+costs nothing: `6 photos · 2 depuis leur ARW (69 Mo à charger) · 4 depuis les
+proxies`, one line per picture behind an ⓘ.
+
+**D — keep `Auto` alone, wherever there is no pill.** Not as a word on a
+segmented control but as the automatic behaviour: never deliver fewer pixels
+than a reachable rendition would give. Invisible in Develop (the pill decides),
+load-bearing in Trips and the Studio until the pill reaches them.
+
+#### Recommended: B + C + D — DECIDED 2026-09-21 (*"ok garde la case à cocher"*), built as R4
+
+`RollExport.originals` is off the roll (v4); the Develop panel says the run
+(`shared/develop/run-plan.ts`) and keeps one switch, *Proxies only, for this
+run*, that never touches the document; a picture leaves from its own
+rendition through the same seam the sensor uses (`sensor-source.ts`,
+`deliveredSourceFor`); a picture that chose nothing keeps `Auto`'s
+arithmetic. Trips and the Studio still show the three words until R5.
+
+Two controls become one checkbox, and the panel gains a sentence instead of a
+mode. The three words go from every host — from Develop because the pill
+answers, from Trips and the Studio because `Auto` was the only one of the three
+doing real work there and it does not need a name. `RollExport.originals` comes
+off the document (roll v2 → v3, the migration R3a already carries).
+
+**The one capability this removes**: forcing ORIGINALS from a host that has no
+pill. Today Trips can say "originals" on a piece; after, it delivers what the
+rendition says and `Auto` stops an upscale, and forcing more waits for the pill
+to reach Trips. Worth naming, since it is the only thing lost.
+
+### 13.3 Exporting into the folder the originals live in (E22)
+
+The guard exists and was measured (`develop-roll.md`): `RollExport.replace` is
+off by default, the folder is asked about each name as its turn comes, the
+probe reaches the real file system so a case-insensitive volume answers about
+`DJI_0101.JPG` when asked about `DJI_0101.jpg`, and a taken name is numbered.
+So **an original is never overwritten unless Replace is ticked**.
+
+What renditions add: two deliveries of ONE capture from two materials now want
+one name, and the second becomes `-1`.
+
+**DECIDED 2026-09-21 (the maintainer): warn, and offer a suffix.** When the
+folder being written into is the one the pictures came from, the export says so
+before it runs and offers to add a suffix — his one exception to "named
+EXACTLY after its picture" (`develop-roll.md`), which stays the default. It is
+the only case where ticking Replace is destructive rather than idempotent.
+
+**And it exists only on the File System Access path** — his own point, and it
+is right: a plain download hands the file to the browser, which names and
+de-duplicates it with the OS, so there is no folder to compare and nothing to
+ask. The warning is drawn where `pickDeliveryTarget` returned a directory
+handle, and nowhere else. The comparison itself is one call the roll can
+already make: `FileSystemHandle.isSameEntry` against the handle the roll
+remembers for its local pictures (`develop-media.md`) — no path, no string
+match, and it answers false for a folder that merely looks alike.
+
+### 13.4 Where the switcher lives — DECIDED 2026-09-21
+
+**The lightbox writes nothing.** *"Pour moi la visionneuse n'écrit aucun
+choix, c'est juste de la visualisation […] juste de la curiosité de la part de
+l'user."* Looking at a capture's other file is looking; closing the lightbox
+leaves the document exactly as it was.
+
+**The verb is what carries it.** The sheet already draws a tool's
+`MediaActions` under a picture looked at large, `Develop` among them
+(`develop-roll.md`, D10). Pressing it while the ARW is on screen opens the
+develop ON that rendition — an explicit gesture, an explicit intent. So the
+choice is not lost, it is only never made by accident.
+
+**How to apply**: the lightbox's switcher is view state, dropped on close; the
+`MediaAction` reads the rendition being viewed and hands it to the tool it
+opens. Nothing else in the shell learns about renditions.
+
+### 13.4b The roll-wide default — DEFERRED on purpose, with its direction
+
+He declined to answer now, and said where it is heading, which is worth more
+than the answer: *"à terme il faudra absolument que l'on bosse sur le fichier
+RAW, et le proxy serait plutôt le choix à sélectionner explicitement quand on
+veut gagner du temps. Ce choix pourrait même être dans la modale de création du
+rouleau. Mais pour l'instant je préfère que l'utilisateur choisisse
+explicitement sur chacun des RAW."*
+
+So: **R3b ships the per-picture verb and the filmstrip batch, and no roll
+setting**, for performance and for the measuring. The eventual shape — RAW by
+default, the proxy chosen deliberately for speed, possibly at the roll's
+creation — is his to add when the measurements say it is affordable. Do not
+build it early, and do not design against it: the batch verb and a future
+default go down the same path.
+
+### 13.5 Small and unanswered (before the measurement; §14 answers three)
+
+- **A TIFF row** (C14): no camera here writes one; the answer is no row until
+  one does.
+- **A roll-wide default** — "develop everything from the RAW where there is
+  one" as a roll setting, rather than a verb run over a selection.
+- **A capture with no proxy at all** (a local folder, no instance): the list is
+  `HIF · ARW` and the stage opens on… the biggest drawable rendition. Needs
+  saying, since every pixel budget in the suite assumes a proxy-sized opening.
+- **The field's name and its migration**: `DevelopSettings.base` becomes
+  something that names a file, and roll v2 → v3 (`photo-editor.md`'s edit-stack
+  migration wanted that number too — one of them has to move).
+
+## 14. Measured on his own files (2026-09-21)
+
+Read by the Rendition Inspector in the desktop app's browser pane. **This is
+fact**, and it settles the HEIF question and reshapes §6.
+
+### 14.1 The browser
+
+Chrome 152 (Electron 44, the Claude desktop app) decodes **JPEG, PNG, WebP and
+AVIF** through `ImageDecoder`, and **refuses HEIC, HEIF and TIFF**. So the
+probe of §11.B8 is not a formality: on the machine he works on, a `.HIF` cannot
+be drawn at all.
+
+### 14.2 Sony A7C II — `DSC08463.ARW`, 34.6 MB
+
+| | |
+| --- | --- |
+| sensor plane | **7040 × 4688**, 14-bit, Sony compression 32767 (lossless-compressed) |
+| embedded render | **7008 × 4672 JPEG, 2.7 MB** — full size, 99.5 % of the sensor's long edge |
+| `OpcodeList3` | **none** |
+
+**The ARW opens at full resolution in Develop today**, with no decoder and no
+dependency: `raw-probe.ts` finds that render and `extractRawPreview` slices it
+out. That is the exact opposite of the DJI case, and it is why "the ladder is
+format-blind" was worth establishing before building anything.
+
+No opcodes, so **two rungs — `proxy` · `gain`** — which is the answer §11.C
+predicted and not a gap. Sony's lens calibration, if it is anywhere, is in
+MakerNotes no spec names (§8.4); the file states none in DNG's units.
+
+### 14.3 Sony A7C II — `DSC07666.HIF`, 12.6 MB — **C11b is dead**
+
+| item | type | pixels | bytes |
+| --- | --- | --- | --- |
+| 7 (primary) | `grid` | 7008 × 4672 | 8 B |
+| 1–6 | `hvc1` | 3520 × 1600 each | 1.7–2.4 MB |
+| 8 | `hvc1` | 1616 × 1080 | 228 KB |
+| 9 | `hvc1` | 320 × 212 | 16 KB |
+| 10 | `jpeg` | **160 × 120** | 8 KB |
+| 11 / 12 | `Exif` / `mime` | — | 92 KB / 56 KB |
+
+The picture is a **grid of six HEVC tiles**, and the only JPEG inside the file
+is a **160 × 120 thumbnail**. So the trick §10 hoped for — slice the full-size
+JPEG out of the HEIF the way `raw-probe.ts` slices one out of a RAW — **does
+not work on this body**. Winnow's own note (*"Sony .hif and most camera HEIFs
+ship one"*) is true of enough cameras to be worth the code path there; it is
+false of his. Its own fallback is what runs: a full libheif decode, server-side,
+where libheif exists.
+
+**So the HIF can be reached only by shipping a decoder** (C11a) or by Winnow
+serving a full-size derivative it does not make today (C11c).
+
+### 14.4 …and that makes the HIF row REDUNDANT on his kit
+
+Both files are 7008 × 4672. The ARW's embedded render is that picture, drawable
+with nothing, out of a file he already has. The HIF's only real edge is
+**quality**: 12.6 MB of HEVC against 2.7 MB of JPEG for 32.7 megapixels — about
+3 bits per pixel against 0.66 — and weight through a tunnel.
+
+**Recommendation, revised.** Do not ship a HEIF decoder for v1, and do not list
+a `.HIF` as an unavailable row where its own capture already offers a drawable
+full-size rendition. State it where it is the only delivered file, say the
+browser cannot draw it, and let the ARW answer. `libheif.wasm` becomes what it
+should have been all along: a quality choice, taken later, on a measurement of
+what those extra bits are worth on a photograph — not a prerequisite.
+
+### 14.5 DJI — the earlier measurement holds
+
+`dji_fly_…_photo.DNG`, 70.6 MB: sensor **8064 × 4536** uncompressed 16-bit,
+embedded render **960 × 540**, GainMap 32 × 32 × 3 asking **0.997–6.030×**
+(**2.59 stops** at the corner), WarpRectilinear `k0 = 0.9530` with the green
+plane's `k1..k3` at zero. Four rungs, and the pair of bodies now spans the whole
+range the design has to hold: **one camera writes no usable render and all the
+calibration; the other writes a perfect render and no calibration.**
+
+### 14.6 The trap in the same drop: a derivative is not a rendition
+
+`dji_fly_…_photo.jpg` sat beside `dji_fly_…_photo.DNG` — same base name, so the
+inspector grouped them as one capture. It is **7728 × 3896**, against the DNG's
+8064 × 4536: neither the sensor's aspect (1.98 : 1 against 1.78 : 1) nor a
+scale of it, and named exactly the way this suite names an export
+(`develop-roll.md` — the extension lowercased, no word added). It is almost
+certainly **his own export, written into the folder the originals live in** —
+which is §13.3 happening in the wild.
+
+**The rule that follows**: basename grouping alone cannot tell a camera's own
+delivered file from a derivative you wrote beside it, and the EXIF cannot
+either, because `stamp-exif.ts` deliberately copies the original's block into
+the export. Offering that JPEG as "the camera's render" would be a fabrication
+of exactly the kind this repo's rules exist to stop. Three ways out, and the
+choice is his: **(a)** a delivered rendition must share the sensor's aspect
+within a tolerance — cheap, catches this case, misses an uncropped re-export;
+**(b)** an export writes a marker into its own EXIF (a `Software` tag saying
+Atelier) and a file carrying it is never offered as a rendition — honest and
+exact, but only for files this suite made; **(c)** never group a local sibling
+whose modification time is later than the RAW's by more than a session.
+Recommended: **(b), with (a) as the fallback for files made elsewhere.**
+
+**Built as R1b (2026-09-21): (b) alone.** `shared/exif/software-mark.ts`,
+`retagExifBlock`'s `software` option, and `renditionsOf` dropping a sibling
+whose `software` carries the mark. (a) and (c) are not built — both guess
+about files made elsewhere, and he has not asked for either.
+
+### 14.7 What this does to the phases
+
+- **R3a is now the best first commit by a distance**: the delivered rung on a
+  Sony is `raw-probe.ts` over a file already in hand, and the whole Sony
+  workflow stops being proxy-only for the cost of one row.
+- **R7 (HEIF) leaves the plan** as a prerequisite and becomes an optional
+  quality pass, unscheduled.
+- **The `viaEmbeddedRender` distinction becomes structural, not cosmetic**: a
+  RAW yields TWO rows — its camera render (drawable now) and its sensor — and
+  the pixel counts of those two rows differ by 8.4× on one body and by 0.5 % on
+  the other. A design that treats a RAW as one row cannot say that.

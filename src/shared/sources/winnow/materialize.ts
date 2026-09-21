@@ -32,6 +32,7 @@
 
 import {
   registerMediaIdentity,
+  type CaptureCompanion,
   type KnownIdentity,
   type MediaOrigin,
 } from '../../projects/media-identity';
@@ -124,6 +125,42 @@ export function rowMediaRef(sourceId: string, row: WinnowAssetRow): SavedMediaRe
   };
 }
 
+/**
+ * The capture's other file, when this row is half of a paired media.
+ *
+ * Everything it needs is already on the row Winnow sent (`WinnowAssetRow`'s
+ * companion fields), so this costs no request: the id is enough to fetch the
+ * bytes or just their head, and the name and weight are what a panel says
+ * before anyone clicks.
+ *
+ * **Only `raw_jpeg`.** A `live_photo` companion is a `.mov` — motion, not
+ * material — and handing it back here would let a caller offer a movie as the
+ * sensor's data. Checked on the KIND rather than the extension, because that
+ * is the field Winnow actually decides with; the extension is checked too, so
+ * a row whose kind is missing from an older instance still cannot mislead.
+ */
+export function companionOf(
+  client: WinnowClient,
+  sourceId: string,
+  row: WinnowAssetRow,
+  lastModified: number,
+): CaptureCompanion | null {
+  const id = row.companion_id;
+  const name = row.companion_filename;
+  if (!id || !name) return null;
+  if (row.group_kind && row.group_kind !== 'raw_jpeg') return null;
+  if (row.companion_media_type && row.companion_media_type !== 'photo') return null;
+  return {
+    assetId: `${sourceId}/${id}`,
+    name,
+    bytes: row.companion_file_size ?? null,
+    width: row.companion_width ?? null,
+    height: row.companion_height ?? null,
+    fetchFile: () => client.fetchFile(client.originalUrl(id), name, '', lastModified),
+    fetchHead: (bytes) => client.fetchHead(client.originalUrl(id), bytes),
+  };
+}
+
 export async function materialize(
   client: WinnowClient,
   sourceId: string,
@@ -149,6 +186,8 @@ export async function materialize(
       client.fetchFile(client.originalUrl(row.id), row.filename, '', lastModified);
     origin.fetchOriginalHead = (bytes) => client.fetchHead(client.originalUrl(row.id), bytes);
   }
+  const companion = companionOf(client, sourceId, row, lastModified);
+  if (companion) origin.companion = companion;
   // A photo's proxy is a WebP re-encode with no EXIF, so carry what Winnow
   // parsed at ingest. Only for stills: a clip's telemetry is its `.srt`, which
   // travels as a real file and says far more than a row ever could.

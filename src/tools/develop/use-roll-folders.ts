@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { photoFiles } from '../../shared/develop/roll-media';
+import { captureSiblings, photoFiles } from '../../shared/develop/roll-media';
 import { getRollFolders, putRollFolders, type RollFolder } from '../../shared/develop/roll-store';
 import { fileIdentity } from '../../shared/library/assets';
 import {
@@ -11,14 +11,16 @@ import {
 export interface RollFolders {
   /** The photographs read from the roll's folders and drops, this session. */
   photos: readonly File[];
+  /** The capture files beside them that lost the image slot — a RAW's JPEG, a HIF's ARW (`captureSiblings`). */
+  siblings: readonly File[];
   /** Remembered folders this browser must be asked again for — one click. */
   waiting: readonly RollFolder[];
   /** Ask for the waiting folders and read them. Must run inside a click. */
   reopen: () => Promise<void>;
   /** Pick a folder: remembered where the browser allows, read either way. Null when dismissed. */
   pickFolder: () => Promise<File[] | null>;
-  /** Photographs dropped on the roll, and the folders among the drop to remember. */
-  accept: (photos: readonly File[], handles: readonly PersistedDirectoryHandle[]) => void;
+  /** Everything dropped on the roll — sorted into photographs and their siblings here — and the folders among the drop to remember. */
+  accept: (dropped: readonly File[], handles: readonly PersistedDirectoryHandle[]) => File[];
 }
 
 type HandleWithEntry = PersistedDirectoryHandle & {
@@ -56,23 +58,29 @@ export function useRollFolders(rollId: string): RollFolders {
   foldersRef.current = folders;
   const [waiting, setWaiting] = useState<RollFolder[]>([]);
   const [photos, setPhotos] = useState<readonly File[]>([]);
+  const [siblings, setSiblings] = useState<readonly File[]>([]);
 
-  const addPhotos = useCallback((incoming: readonly File[]) => {
-    if (incoming.length === 0) return;
-    setPhotos((cur) => {
-      const seen = new Set(cur.map(fileIdentity));
-      const fresh = incoming.filter((f) => !seen.has(fileIdentity(f)));
-      return fresh.length ? [...cur, ...fresh] : cur;
-    });
+  const merge = (cur: readonly File[], incoming: readonly File[]): readonly File[] => {
+    const seen = new Set(cur.map(fileIdentity));
+    const fresh = incoming.filter((f) => !seen.has(fileIdentity(f)));
+    return fresh.length ? [...cur, ...fresh] : cur;
+  };
+  /** A listing sorted the way the Library sorts one: the photographs, and the capture files beside them. */
+  const addFiles = useCallback((listed: readonly File[]) => {
+    const found = photoFiles(listed);
+    if (found.length) setPhotos((cur) => merge(cur, found));
+    const beside = captureSiblings(listed);
+    if (beside.length) setSiblings((cur) => merge(cur, beside));
+    return found;
   }, []);
 
   const read = useCallback(
     async (folder: RollFolder) => {
       const files = await filesFromDirectoryHandle(folder.handle);
-      if (files) addPhotos(photoFiles(files));
+      if (files) addFiles(files);
       return files !== null;
     },
-    [addPhotos],
+    [addFiles],
   );
 
   // What this roll remembers: read now what the browser still allows.
@@ -131,18 +139,16 @@ export function useRollFolders(rollId: string): RollFolders {
     const picked = await pickDirectoryWithHandle();
     if (!picked.handle && picked.files.length === 0) return null;
     if (picked.handle) await remember(picked.handle);
-    const found = photoFiles(picked.files);
-    addPhotos(found);
-    return found;
-  }, [remember, addPhotos]);
+    return addFiles(picked.files);
+  }, [remember, addFiles]);
 
   const accept = useCallback(
     (dropped: readonly File[], handles: readonly PersistedDirectoryHandle[]) => {
-      addPhotos(dropped);
       for (const handle of handles) void remember(handle);
+      return addFiles(dropped);
     },
-    [addPhotos, remember],
+    [addFiles, remember],
   );
 
-  return { photos, waiting, reopen, pickFolder, accept };
+  return { photos, siblings, waiting, reopen, pickFolder, accept };
 }
