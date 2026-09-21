@@ -4,6 +4,7 @@ import {
   familyFor,
   familyForLookName,
   flattenNodes,
+  flattenPack,
   isHidden,
   lookIn,
   lookLabel,
@@ -16,6 +17,7 @@ import {
   visibleLooks,
   writePackRef,
   type PackFileEntry,
+  type PackLook,
 } from './lut-pack';
 
 /**
@@ -195,6 +197,40 @@ describe('hiding', () => {
     const index = { ...authentic(), hidden: ['one-click'] };
     expect(visibleLooks(index).some((l) => l.node.startsWith('one-click'))).toBe(false);
     expect(looksUnder(index, 'conversion')).toHaveLength(8);
+  });
+});
+
+describe('flattenPack', () => {
+  it('lists every node AND every look, each under its own node', () => {
+    const index = authentic();
+    const rows = flattenPack(index);
+    expect(rows.filter((r) => r.kind === 'look')).toHaveLength(25);
+    expect(rows.filter((r) => r.kind === 'node')).toHaveLength(flattenNodes(index.tree).length);
+    // A camera's look sits one level under the camera, which sits under its
+    // category: what the sheet indents by.
+    const dji = rows.findIndex((r) => r.kind === 'node' && r.node.id === 'one-click/dji');
+    expect(rows[dji + 1]).toMatchObject({ kind: 'look', depth: 2 });
+    expect((rows[dji + 1] as { look: PackLook }).look.id).toBe('one-click/dji/d-log');
+  });
+
+  it('puts the looks at the pack root first — an uploads pack has no tree at all', () => {
+    const uploads = buildPackIndex([{ path: 'My Teal Grade.cube' }], { id: 'pk_uploads' });
+    expect(uploads.tree).toHaveLength(0);
+    expect(flattenPack(uploads)).toEqual([
+      { kind: 'look', depth: 0, look: uploads.looks[0] },
+    ]);
+  });
+
+  it('keeps a hidden look, because forgetting one is a different gesture', () => {
+    const index = { ...authentic(), hidden: ['one-click'] };
+    expect(flattenPack(index).filter((r) => r.kind === 'look')).toHaveLength(25);
+  });
+
+  it('still reaches a look whose node is not in the tree', () => {
+    const index = authentic();
+    const orphan: PackLook = { ...index.looks[0], id: 'orphan', node: 'gone/missing' };
+    const rows = flattenPack({ ...index, looks: [...index.looks, orphan] });
+    expect(rows.filter((r) => r.kind === 'look' && r.look.id === 'orphan')).toHaveLength(1);
   });
 });
 

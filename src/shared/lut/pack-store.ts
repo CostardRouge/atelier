@@ -161,12 +161,46 @@ export async function storedLatticeHashes(): Promise<Set<string>> {
   }
 }
 
-/** What the vault weighs on this device, in bytes — said before it is emptied. */
-export async function storedLatticeBytes(): Promise<number> {
+/**
+ * What each stored lattice weighs, by hash — the MEASURED half of
+ * `pack-weight.ts`, and the reason the screen can say what the vault costs
+ * without trusting an index that records `.cube` sizes instead.
+ *
+ * Walked with a CURSOR, deliberately: `getAll()` over the maintainer's own
+ * pack would materialise 41 MB of `ArrayBuffer`s at once to read 25 numbers,
+ * while a cursor deserialises one record at a time and lets each go — a peak
+ * of one lattice rather than of the whole vault. (Cheaper still would be an
+ * index over a stored size field, walked with `openKeyCursor`, which reads no
+ * body at all; that needs a schema bump and a backfill of every existing
+ * record, and is the next step if this ever shows on a phone.)
+ *
+ * An empty map on a storage failure, like every other reader here: a weight
+ * nobody can measure is reported as unknown, never as zero bytes stored.
+ */
+export async function storedLatticeSizes(): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
   try {
-    const all = await withStore(LATTICES, 'readonly', (s) => s.getAll() as IDBRequest<LatticeRecord[]>);
-    return all.reduce((sum, r) => sum + r.bytes.byteLength, 0);
+    const db = await openDb();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const req = db.transaction(LATTICES, 'readonly').objectStore(LATTICES).openCursor();
+        req.onsuccess = () => {
+          const cursor = req.result;
+          if (!cursor) {
+            resolve();
+            return;
+          }
+          const row = cursor.value as LatticeRecord | undefined;
+          if (row?.id && row.bytes) out.set(row.id, row.bytes.byteLength);
+          cursor.continue();
+        };
+        req.onerror = () => reject(req.error ?? new Error('IndexedDB cursor failed'));
+      });
+    } finally {
+      db.close();
+    }
   } catch {
-    return 0;
+    /* storage unusable — an empty map, which reads as "cannot say" */
   }
+  return out;
 }

@@ -366,6 +366,7 @@ and resets the select). Carried by this pull request. Memory:
 | 6 ✅ | Atelier | **Sync**: push index + files on import, pull the index on connect, fetch a lattice on first use and cache it | Mac imports, iPhone (or a second browser profile) grades offline after one use |
 | 7 ✅ | Atelier | **"Upload .cube" goes into the vault** (a look of one personal pack — see below), so no document ever inlines a lattice again (§3.1) | a trip export after an upload holds no `customText` for it |
 | 8 ✅ | Atelier | **Pre-baked thumbnails** for built-ins, each look read on the reference its family asks for (§7); live "on my picture" as an explicit choice | the gallery opens without fetching or parsing any `.cube` |
+| 9 | Atelier | **Say what the vault weighs, and forget ONE look** — per look, per pack and per vault, here and on the instance; a look forgotten on both, its bytes freed only where nothing else names them | unit specs on the arithmetic; the real pack imported in a browser, a look forgotten, the weight dropping, a document wearing it saying so |
 
 **What steps 1–4 landed** (`shared/lut/`): `lut-pack.ts` (the index, the
 names, the reference a document stores), `pack-codec.ts` (unorm16 over the
@@ -433,3 +434,12 @@ every request the app makes).
    never been reached.
 
 Everything else is decided, and the reference images are in (§7).
+
+**What step 9 does about that cap: nothing, and that is the decision.** He
+accepted the numbers and said unlimited would suit him too — *"le cap n'est
+pas le sujet"* — so the sheet REPORTS and never forbids: no client-side wall
+stops an import, and the only enforcement that exists is the one that already
+existed (`putAppFile` refusing a body over the instance's own declared cap,
+before it leaves the browser). Quota enforcement on Winnow's side and a usage
+figure from it remain unbuilt and unneeded for this: the pack index carries
+the grid size, which is all the arithmetic takes.

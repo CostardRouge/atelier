@@ -596,3 +596,40 @@ export function looksUnder(index: LutPackIndex, nodeId: string): PackLook[] {
     (l) => l.node === nodeId || l.node.startsWith(`${nodeId}/`),
   );
 }
+
+/** A row of a pack listed in full: one of its nodes, or one of its looks. */
+export type PackEntry =
+  | { kind: 'node'; node: PackNode; depth: number }
+  | { kind: 'look'; look: PackLook; depth: number };
+
+/**
+ * Every node AND every look of a pack, flattened in the order a manager lists
+ * them: the looks at the pack's root first, then each node followed by its
+ * own looks one level in.
+ *
+ * `flattenNodes` is the rail's view — categories alone, because a rail picks
+ * a family and a grid draws its looks. This is the other one, for the screen
+ * that must name a single look to weigh it or forget it. Hidden looks are
+ * INCLUDED: putting a look away and reclaiming its bytes are different
+ * gestures (`docs/lut-packs.md` §6), and a manager that could not show a
+ * hidden look could never offer to forget one.
+ *
+ * A look whose `node` names nothing in the tree is listed at the root rather
+ * than dropped: an index is stored input, and a look that exists must be
+ * reachable by the screen that can delete it.
+ */
+export function flattenPack(index: LutPackIndex): PackEntry[] {
+  const out: PackEntry[] = [];
+  const listed = new Set<string>();
+  const take = (look: PackLook, depth: number) => {
+    listed.add(look.id);
+    out.push({ kind: 'look', look, depth });
+  };
+  for (const look of index.looks) if (!look.node) take(look, 0);
+  for (const { node, depth } of flattenNodes(index.tree)) {
+    out.push({ kind: 'node', node, depth });
+    for (const look of index.looks) if (look.node === node.id) take(look, depth + 1);
+  }
+  for (const look of index.looks) if (!listed.has(look.id)) take(look, 0);
+  return out;
+}
