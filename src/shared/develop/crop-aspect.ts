@@ -112,6 +112,3 @@ export function openingCropChip(aspect: string, untouched: boolean): CropChip {
 }
 
 export type CropHandle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
-
-/** Clockwise from the top left — the order the stage draws them in. */
-export const CROP_HANDLES: readonly CropHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
