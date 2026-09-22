@@ -20,7 +20,7 @@ import { DEFAULT_DEVELOP } from '../develop/develop';
 import { DEFAULT_CAR, defaultCarSpec } from './car-spec';
 
 const trip = (): TripDoc => {
-  const doc = createTripDoc('Australie', 'Australia', '2025-07-01', '2025-07-10');
+  const doc = createTripDoc('Australie', '2025-07-01', '2025-07-10');
   const post = createTripPost('reel', '2025-07-03', 'Sunset over the gorge');
   return {
     ...doc,
@@ -45,7 +45,6 @@ describe('the trip file', () => {
   it('round-trips a trip through text', () => {
     const file = roundTrip(trip());
     expect(file.name).toBe('Australie');
-    expect(file.destination).toBe('Australia');
     expect(file.startDate).toBe('2025-07-01');
     expect(file.endDate).toBe('2025-07-10');
     expect(file.posts).toHaveLength(1);
@@ -222,9 +221,22 @@ describe('parseTripFile — every rejection says something actionable', () => {
     const r = parseTripFile(JSON.stringify(file));
     expect(r.ok).toBe(true);
     if (r.ok) {
-      const fresh = createTripDoc('x', 'y', '2025-07-01', '2025-07-10');
+      const fresh = createTripDoc('x', '2025-07-01', '2025-07-10');
       expect(r.file.badgeWords).toEqual(fresh.badgeWords);
       expect(r.file.cta).toEqual(fresh.cta);
+    }
+  });
+
+  it('drops the destination a file written before v27 carries', () => {
+    // The route is the legs' business now. An older backup still parses, and
+    // the line it used to hold is simply not read back — the legs it carries
+    // are what says where the trip went.
+    const file = { ...toTripFile(trip()), version: 26, destination: 'Perth \u2192 Cairns' };
+    const r = parseTripFile(JSON.stringify(file));
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect('destination' in r.file).toBe(false);
+      expect('destination' in tripDocFromFile(r.file)).toBe(false);
     }
   });
 

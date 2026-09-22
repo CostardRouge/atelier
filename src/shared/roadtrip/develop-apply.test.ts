@@ -49,7 +49,7 @@ describe('applyDevelopToPost', () => {
 
 describe('applyDevelopToDay', () => {
   it('reaches the other pieces of the same day and nothing else', () => {
-    const trip = createTripDoc('T', 'D', '2025-07-01', '2025-07-10');
+    const trip = createTripDoc('T', '2025-07-01', '2025-07-10');
     const me = piece();
     const sameDay = piece();
     const otherDay = piece('2025-07-04');

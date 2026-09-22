@@ -138,11 +138,11 @@ describe('tripRouteLabel', () => {
   const dates = ['2025-11-02', '2026-02-14'] as const;
 
   it('is empty for a trip with no stage', () => {
-    expect(tripRouteLabel(createTripDoc('Australie', '', ...dates))).toBe('');
+    expect(tripRouteLabel(createTripDoc('Australie', ...dates))).toBe('');
   });
 
   it('runs from the first place of the first stage to the last of the last', () => {
-    const trip = createTripDoc('Australie', '', ...dates);
+    const trip = createTripDoc('Australie', ...dates);
     trip.stages = [
       createTripStage('', '', '2025-11-02', '2025-11-20', [
         createTripPlace('Perth'),
@@ -157,7 +157,7 @@ describe('tripRouteLabel', () => {
   });
 
   it('steps over a stage that names nothing rather than losing an end', () => {
-    const trip = createTripDoc('Australie', '', ...dates);
+    const trip = createTripDoc('Australie', ...dates);
     trip.stages = [
       createTripStage('', '', '2025-11-02', '2025-11-20', [createTripPlace('Perth')]),
       createTripStage('Driving', '', '2025-11-21', '2025-12-01', []),

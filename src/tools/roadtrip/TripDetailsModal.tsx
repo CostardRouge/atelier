@@ -1,16 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import PlaceSearchField from '../../shared/map/PlaceSearchField';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
-import { PLACE_ARROW, tripRouteEnds } from '../../shared/roadtrip/trip-places';
 import { hasImpact, spanImpact } from '../../shared/roadtrip/trip-edit';
 import { formatIsoDate, spanLength, todayIso } from '../../shared/roadtrip/trip-days';
 import {
-  createTripPlace,
   defaultTripCover,
   spanProblem,
   type TripCover,
   type TripDoc,
-  type TripPlace,
 } from '../../shared/roadtrip/trip-types';
 import { prunePins } from '../../shared/roadtrip/trip-cover';
 import CoverPanel from './CoverPanel';
@@ -20,13 +16,8 @@ import { DateField } from '../../shared/ui/DateField';
 
 export interface TripDetails {
   name: string;
-  destination: string;
   startDate: string;
   endDate: string;
-  /** Where the trip set out from — an empty name means it names none. */
-  from: TripPlace;
-  /** Where it ended. */
-  to: TripPlace;
   /** Where the trip is kept — this browser, or a connected instance. */
   sourceId: string;
   /** How the trip shows itself in the gallery. Editing only. */
@@ -69,20 +60,19 @@ const input =
  * counts from ("day 27 / 310"), so the length is echoed back live — a
  * mistyped year is invisible as a date and obvious as "3 862 days".
  *
- * The old free-text "Destination" ("Australia — Perth to Cairns") is two fields
- * now, From and To, because a route typed as one string is a route nothing can
- * read. They cost no height — one row, like the dates below them — and they
- * seed the trip's first stage, so a badge can name a place from day one instead
- * of waiting for someone to open the stages panel. Left empty they seed
- * nothing, and the trip behaves exactly as trips did before places existed.
+ * It asks for the dates and nothing else. It used to ask for the route too —
+ * a From and a To that seeded one leg over the whole trip — and that is gone
+ * (2026-09-22, the maintainer): a trip's places belong to its legs, which are
+ * drawn on the calendar once the trip exists, and a leg spanning 345 days is
+ * not a head start on that work. A form must not ask what the tool is about
+ * to ask again, better.
  *
- * The SAME sheet edits those four facts afterwards (`trip`), rather than a
- * second screen asking the same questions in a different order: a mistyped
- * year, a trip that turned out to run three days longer, or a route entered
- * before the drive was done are all ordinary, and none of them was reachable
- * once the trip existed. What editing adds is the consequences, said before
- * they happen — shrinking a span trims the legs it still covers, drops the
- * ones it no longer reaches, and can leave a piece outside the calendar.
+ * The SAME sheet edits the span afterwards (`trip`), rather than a second
+ * screen asking the same question in a different order: a mistyped year or a
+ * trip that turned out to run three days longer are ordinary, and neither was
+ * reachable once the trip existed. What editing adds is the consequences, said
+ * before they happen — shrinking a span trims the legs it still covers, drops
+ * the ones it no longer reaches, and can leave a piece outside the calendar.
  * Nothing about a piece is ever touched (`trip-edit.ts`).
  *
  * What editing deliberately does NOT show: the name (renamed in place on the
@@ -99,19 +89,11 @@ export default function TripDetailsModal({
   onSeedFrom,
 }: TripDetailsModalProps) {
   const editing = trip !== undefined;
-  // The ends the trip already names, as the ROUTE derives them — a trip
-  // naming one place is its own start and end, so the "To" field starts empty
-  // rather than repeating it (`setTripRoute` then adds a place of its own).
-  const ends = useMemo(() => (trip ? tripRouteEnds(trip) : null), [trip]);
 
   const [name, setName] = useState(trip?.name ?? '');
   const [cover, setCover] = useState<TripCover>(() => trip?.cover ?? defaultTripCover());
   const [sourceId, setSourceId] = useState(() =>
     sources.some((s) => s.id === DEFAULT_SOURCE_ID) ? DEFAULT_SOURCE_ID : (sources[0]?.id ?? DEFAULT_SOURCE_ID),
-  );
-  const [from, setFrom] = useState<TripPlace>(() => ends?.from ?? createTripPlace());
-  const [to, setTo] = useState<TripPlace>(() =>
-    ends?.to && ends.to.id !== ends.from?.id ? ends.to : createTripPlace(),
   );
   const [startDate, setStartDate] = useState(trip?.startDate ?? '');
   const [endDate, setEndDate] = useState(() => trip?.endDate ?? todayIso());
@@ -141,22 +123,12 @@ export default function TripDetailsModal({
     return hasImpact(next) ? next : null;
   }, [trip, problem, startDate, endDate]);
 
-  // The prose subtitle the overview header shows. Composed from the two ends —
-  // exactly the snapshot the free-text field used to hold.
-  const destination = useMemo(
-    () => [from.name.trim(), to.name.trim()].filter(Boolean).join(` ${PLACE_ARROW} `),
-    [from.name, to.name],
-  );
-
   function submit() {
     if (!canSubmit) return;
     onSubmit({
       name,
-      destination,
       startDate,
       endDate,
-      from,
-      to,
       sourceId,
       cover: trip ? prunePins(trip, cover) : cover,
     });
@@ -171,24 +143,23 @@ export default function TripDetailsModal({
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[rgba(20,18,15,0.45)] backdrop-blur-[2px]"
       role="dialog"
       aria-modal="true"
-      aria-label={editing ? 'Trip dates and route' : 'New trip'}
+      aria-label={editing ? 'Trip dates' : 'New trip'}
       onPointerDown={(e) => {
         if (e.target === e.currentTarget) onCancel();
       }}
     >
       <div className="w-full max-w-[34rem] max-h-[90dvh] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6">
         <div>
-          <h2 className="m-0 font-serif text-2xl">
-            {editing ? 'Dates and route' : 'New trip'}
-          </h2>
+          <h2 className="m-0 font-serif text-2xl">{editing ? 'Trip dates' : 'New trip'}</h2>
           <p className="m-0 mt-1 text-sm text-muted">
-            {editing ? 'Dates, route — all of it stays editable.' : 'All of it stays editable.'}{' '}
+            All of it stays editable.{' '}
             <InfoDot about="the dates">
               <p>
                 The dates are what every badge counts from — &ldquo;day 27&rdquo;, &ldquo;515 days
                 ago&rdquo; are measured off them.
               </p>
               {editing && <p>Legs follow them; pieces are never moved.</p>}
+              <p>Where the trip went is its legs&rsquo; business, on the calendar.</p>
             </InfoDot>
           </p>
         </div>
@@ -230,57 +201,6 @@ export default function TripDetailsModal({
               Short — it is what a badge says over the picture.
             </span>
           </label>
-        )}
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className={field}>
-            <span className={legend}>From</span>
-            <PlaceSearchField
-              value={from.name}
-              onChange={(next) => setFrom((place) => ({ ...place, name: next }))}
-              onPick={(result) =>
-                setFrom((place) => ({
-                  ...place,
-                  name: result.name,
-                  region: result.region,
-                  coords: { lat: result.lat, lon: result.lon },
-                }))
-              }
-              placeholder="Perth"
-              label="Left from"
-              inputClassName={input}
-            />
-          </div>
-          <div className={field}>
-            <span className={legend}>To</span>
-            <PlaceSearchField
-              value={to.name}
-              onChange={(next) => setTo((place) => ({ ...place, name: next }))}
-              onPick={(result) =>
-                setTo((place) => ({
-                  ...place,
-                  name: result.name,
-                  region: result.region,
-                  coords: { lat: result.lat, lon: result.lon },
-                }))
-              }
-              placeholder="Cairns"
-              label="Ended at"
-              inputClassName={input}
-            />
-          </div>
-        </div>
-
-        {editing && (
-          <p className="m-0 -mt-2 text-2xs text-faint">
-            The two ends of the trip{' '}
-            <InfoDot about="the route">
-              <p>
-                They are the first and last places of its legs — editing one here edits
-                it there, and the legs themselves are on the ruler under the calendar.
-              </p>
-            </InfoDot>
-          </p>
         )}
 
         {/* One date per line on a phone: at 16px (the size that stops iOS

@@ -29,7 +29,7 @@ const picture = {
 
 /** A trip with a look worth keeping, and a journey that must not travel with it. */
 function styledTrip(): TripDoc {
-  const doc = createTripDoc('Australie', 'Australia', '2025-07-01', '2025-07-10');
+  const doc = createTripDoc('Australie', '2025-07-01', '2025-07-10');
   const reel = hookDefaultsFrom({
     ...defaultPostBadge('reel'),
     shades: [createShade({ strength: 0.4 }), createShade({ direction: 'top' })],
@@ -157,13 +157,13 @@ describe('the house style', () => {
     const rest: Partial<typeof file.style> = { ...file.style };
     delete rest.car;
     const style = readHouseStyle({ ...file, style: rest });
-    expect(style?.car).toEqual(createTripDoc('', '', '2000-01-01', '2000-01-01').car);
+    expect(style?.car).toEqual(createTripDoc('', '2000-01-01', '2000-01-01').car);
     expect(style?.badgeWords).toEqual(FRENCH_BADGE_WORDS);
   });
 
   it('dresses a new trip, and only its look', () => {
     const style = houseStyleFrom(styledTrip()).file.style;
-    const doc = createTripDoc('Islande', 'Iceland', '2026-06-01', '2026-06-12');
+    const doc = createTripDoc('Islande', '2026-06-01', '2026-06-12');
     const dressed = applyHouseStyle(doc, style);
     expect(dressed).toMatchObject({ id: doc.id, name: 'Islande', startDate: '2026-06-01' });
     expect(dressed.theme?.presetId).toBe('or-cine');

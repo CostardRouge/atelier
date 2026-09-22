@@ -9,7 +9,7 @@ import { DEFAULT_BADGE_LAYOUT } from '../badge-layout';
 
 /** A ten-day trip with pieces on days 2, 5 (twice, one published) and 8. */
 function fixture(): { trip: TripDoc; hero: TripPost } {
-  const trip = createTripDoc('Australia', '', '2025-03-01', '2025-03-10');
+  const trip = createTripDoc('Australia', '2025-03-01', '2025-03-10');
   const on = (date: string, published = false): TripPost => ({
     ...createTripPost('reel', date, ''),
     publishedAt: published ? 1 : null,

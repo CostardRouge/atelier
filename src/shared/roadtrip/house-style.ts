@@ -146,7 +146,7 @@ export function readHouseStyle(raw: unknown): TripHouseStyle | null {
   if (!isRecord(stored)) return null;
   if (typeof version !== 'number' || !Number.isInteger(version)) return null;
   if (version < 1 || version > TRIP_DOC_VERSION) return null;
-  const blank = createTripDoc('', '', '2000-01-01', '2000-01-01');
+  const blank = createTripDoc('', '2000-01-01', '2000-01-01');
   // `in`, not `??`: a stored `theme: null` is a choice, not a missing block.
   const given = Object.fromEntries(
     Object.entries(pickStyle(blank)).map(([key, fallback]) => [

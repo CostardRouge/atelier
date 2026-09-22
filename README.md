@@ -454,8 +454,8 @@ happened, is another. Trips is about the second one. Its route is still
 `#/roadtrip` — the name on screen changed, every link ever made still
 resolves.
 
-**A trip is its two dates.** Give a trip a name, a destination and the days you
-left and came back, and everything else derives from that: day 27 of 310 is a
+**A trip is its two dates.** Give a trip a name and the days you left and came
+back, and everything else derives from that: day 27 of 310 is a
 subtraction, not something you record. Dates are handled as plain calendar days
 (`YYYY-MM-DD`) and every subtraction runs in UTC, so a trip planned in one
 timezone and reviewed in another never disagrees about which day a photo
@@ -605,10 +605,9 @@ place), or use the **optional place search**, which sends the words you type to
 OpenStreetMap's Nominatim and fills in the name, the region and the position.
 That search is **off until you turn it on**, it says exactly what it will send
 before it sends anything, and it fires on Enter or the button — never as you
-type. The trip's two ends can be set from the New trip dialog, where **From**
-and **To** replace the old free-text destination; fill them and the trip starts
-with one stage covering its whole span, so a badge can name a place from day
-one. Leave them empty and no stage is created at all.
+type. Places are only ever typed on a leg: the New trip dialog asks for the
+name and the two dates and nothing else, so a trip starts with no leg at all
+and a day outside every leg names no place rather than claiming one.
 
 **Working the itinerary out, instead of typing it.** Drawing a three-month
 trip's legs by hand is some three hundred gestures, most of them archaeology

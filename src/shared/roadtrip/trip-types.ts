@@ -59,7 +59,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 26;
+export const TRIP_DOC_VERSION = 27;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers, the
@@ -573,8 +573,6 @@ export interface TripDoc {
   id: string;
   /** What the trip is called on a badge ("Australie"). */
   name: string;
-  /** Where it happened, for the overview header. */
-  destination: string;
   startDate: IsoDate;
   endDate: IsoDate;
   stages: TripStage[];
@@ -645,24 +643,21 @@ export interface TripDoc {
 }
 
 /**
- * `places` seeds ONE stage covering the whole trip — where it set out from and
- * where it ended, which is what the creation modal asks for. It is left unnamed
- * on purpose, so its label derives to "Perth → Cairns" and stays honest if the
- * author later edits either end.
- *
- * Empty (the default, and what an import passes) seeds nothing: a trip whose
- * author skipped those fields keeps today's behaviour exactly, with no stage
- * covering any day and the badge counters falling back as they always have.
+ * A trip starts with NO leg at all — the state an import and a timeline seed
+ * have always landed in, and the one every new trip lands in since 2026-09-22.
+ * Creation used to take a From and a To and seed one stage covering the whole
+ * span from them; the maintainer retired that, because a place belongs to a
+ * leg and the legs are drawn on the calendar once the trip exists. A day
+ * outside every leg names no place and says so (`day-badge.ts`), rather than
+ * being told it spent 345 days on one.
  *
  * `sourceId` is where the document will LIVE; only `local` exists today, and a
  * remote document store (bridge phase 3) will hand its own id in here.
  */
 export function createTripDoc(
   name: string,
-  destination: string,
   startDate: IsoDate,
   endDate: IsoDate,
-  places: TripPlace[] = [],
   sourceId: string = DEFAULT_SOURCE_ID,
 ): TripDoc {
   const now = Date.now();
@@ -670,12 +665,9 @@ export function createTripDoc(
     version: TRIP_DOC_VERSION,
     id: crypto.randomUUID(),
     name: name.trim(),
-    destination: destination.trim(),
     startDate,
     endDate,
-    stages: places.length
-      ? [createTripStage('', '', startDate, endDate, places)]
-      : [],
+    stages: [],
     sourceId,
     posts: [],
     badgeWords: { ...DEFAULT_BADGE_WORDS },
@@ -1286,6 +1278,14 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
         grade: gradeOrNull(slide.grade),
       })),
     }));
+  }
+
+  if (migrated.version < 27) {
+    // `destination` is gone: the prose subtitle is DERIVED from the legs
+    // (`tripRouteLabel`) rather than kept as a second copy of where the trip
+    // went. Deleted rather than left lying in the record — a stored key no
+    // type names is what a later reader mistakes for a fact.
+    delete (migrated as { destination?: string }).destination;
   }
 
   migrated.version = TRIP_DOC_VERSION;

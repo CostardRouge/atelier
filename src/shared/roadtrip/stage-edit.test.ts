@@ -14,7 +14,7 @@ const stage = (start: string, end: string, name = ''): TripStage =>
   createTripStage(name, '', start, end);
 
 const trip = (stages: TripStage[] = []): TripDoc => ({
-  ...createTripDoc('Test', '', '2025-03-01', '2025-03-20'),
+  ...createTripDoc('Test', '2025-03-01', '2025-03-20'),
   stages,
 });
 
