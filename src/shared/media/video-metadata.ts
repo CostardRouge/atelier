@@ -148,7 +148,16 @@ export async function probeContainer(
   file: File,
   capBytes = 48 * 1024 * 1024,
 ): Promise<ContainerInfo> {
-  const { createFile, MP4BoxBuffer } = await import('mp4box');
+  // Best-effort holds for the import too: a chunk that fails to load (a
+  // deploy under an open tab, a flaky link) is "no information", never a
+  // rejection the three callers were not written to catch.
+  let mp4box: typeof import('mp4box');
+  try {
+    mp4box = await import('mp4box');
+  } catch {
+    return {};
+  }
+  const { createFile, MP4BoxBuffer } = mp4box;
   return new Promise((resolve) => {
     const mp4 = createFile();
     let done = false;
@@ -173,12 +182,17 @@ export async function probeContainer(
     const CHUNK = 1024 * 1024;
     let offset = 0;
     const pump = async () => {
-      while (!done && offset < file.size && offset < capBytes) {
-        const end = Math.min(offset + CHUNK, file.size);
-        const buffer = await file.slice(offset, end).arrayBuffer();
-        if (done) break;
-        mp4.appendBuffer(MP4BoxBuffer.fromArrayBuffer(buffer, offset));
-        offset = end;
+      try {
+        while (!done && offset < file.size && offset < capBytes) {
+          const end = Math.min(offset + CHUNK, file.size);
+          const buffer = await file.slice(offset, end).arrayBuffer();
+          if (done) break;
+          mp4.appendBuffer(MP4BoxBuffer.fromArrayBuffer(buffer, offset));
+          offset = end;
+        }
+      } catch {
+        // A file that changed on disk since it was listed, or a read the
+        // browser refused: without this the promise never settled at all.
       }
       finish({});
     };

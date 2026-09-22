@@ -12,19 +12,21 @@ import './index.css';
 // open across a deploy then asks for a chunk that no longer exists the first
 // time it opens another tool. Vite reports that as `vite:preloadError`; the
 // documented cure is a reload, which picks up the new `index.html` and its
-// chunk names. Once per session only, so a genuinely unreachable file shows
-// the tool's error panel instead of reloading in a loop.
+// chunk names. At most once every thirty seconds, so a genuinely unreachable
+// file shows the tool's error panel instead of reloading in a loop — while a
+// tab that lives through several deploys recovers from each of them.
 window.addEventListener('vite:preloadError', (event) => {
-  const RELOADED = 'atelier.preload-reloaded';
-  let already = false;
+  const KEY = 'atelier.preload-reloaded';
+  const RETRY_AFTER_MS = 30_000;
+  const now = Date.now();
   try {
-    already = sessionStorage.getItem(RELOADED) === '1';
-    if (!already) sessionStorage.setItem(RELOADED, '1');
+    const last = Number(sessionStorage.getItem(KEY) ?? 0);
+    if (now - last < RETRY_AFTER_MS) return;
+    sessionStorage.setItem(KEY, String(now));
   } catch {
     // Storage refused (private mode): fall through to the error panel.
-    already = true;
+    return;
   }
-  if (already) return;
   event.preventDefault();
   location.reload();
 });

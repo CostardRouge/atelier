@@ -16,18 +16,31 @@ import type { AssetKind } from '../shared/library/assets';
  *
  * The shell draws the wait (`App.tsx`, a `Suspense` around the tool) and
  * `main.tsx` handles the one failure this creates: a chunk name that no
- * longer exists after a deploy.
+ * longer exists after a deploy. Each loader is also the tool's `preload`,
+ * so a menu can fetch the chunk on hover, before the click.
  */
-const CompareTool = lazy(() => import('../tools/compare/CompareTool'));
-const ComposerTool = lazy(() => import('../tools/composer/ComposerTool'));
-const DevelopTool = lazy(() => import('../tools/develop/DevelopTool'));
-const ExifTool = lazy(() => import('../tools/exif/ExifTool'));
-const LutStudio = lazy(() => import('../tools/lut/LutStudio'));
-const MapTool = lazy(() => import('../tools/map/MapTool'));
-const OverlayStudio = lazy(() => import('../tools/overlay/OverlayStudio'));
-const RoadTripTool = lazy(() => import('../tools/roadtrip/RoadTripTool'));
-const StudioTool = lazy(() => import('../tools/studio/StudioTool'));
-const TelemetryTool = lazy(() => import('../tools/telemetry/TelemetryTool'));
+const LOAD = {
+  compare: () => import('../tools/compare/CompareTool'),
+  composer: () => import('../tools/composer/ComposerTool'),
+  develop: () => import('../tools/develop/DevelopTool'),
+  exif: () => import('../tools/exif/ExifTool'),
+  lut: () => import('../tools/lut/LutStudio'),
+  map: () => import('../tools/map/MapTool'),
+  overlay: () => import('../tools/overlay/OverlayStudio'),
+  roadtrip: () => import('../tools/roadtrip/RoadTripTool'),
+  studio: () => import('../tools/studio/StudioTool'),
+  telemetry: () => import('../tools/telemetry/TelemetryTool'),
+};
+const CompareTool = lazy(LOAD.compare);
+const ComposerTool = lazy(LOAD.composer);
+const DevelopTool = lazy(LOAD.develop);
+const ExifTool = lazy(LOAD.exif);
+const LutStudio = lazy(LOAD.lut);
+const MapTool = lazy(LOAD.map);
+const OverlayStudio = lazy(LOAD.overlay);
+const RoadTripTool = lazy(LOAD.roadtrip);
+const StudioTool = lazy(LOAD.studio);
+const TelemetryTool = lazy(LOAD.telemetry);
 
 /**
  * The tool registry — the single source of truth for the suite. The masthead
@@ -55,6 +68,12 @@ export interface Tool {
   /** The tool's root component. */
   Component: ComponentType;
   /**
+   * Fetch the tool's chunk ahead of a click (the switcher does it on hover
+   * and focus), so the route's `Suspense` fallback is rarely seen. The same
+   * loader `Component` was made from, so it resolves to the same module.
+   */
+  preload: () => Promise<unknown>;
+  /**
    * Asset kinds this tool consumes. Every tool reads from the global asset
    * library: the shell shows the library sidebar and the tool takes its
    * selection from there, filtered to these kinds.
@@ -72,6 +91,7 @@ export const TOOLS: Tool[] = [
     blurb:
       'One place to edit a clip or a photo: overlay telemetry and text, grade through a LUT, and export the result — the editor the whole suite is converging on.',
     Component: StudioTool,
+    preload: LOAD.studio,
     accepts: ['video+telemetry', 'video', 'photo'],
   },
   {
@@ -83,6 +103,7 @@ export const TOOLS: Tool[] = [
     blurb:
       'Give a trip its dates and every photo knows which day it belongs to — a grid of the whole journey shows what you have told and what you never have.',
     Component: RoadTripTool,
+    preload: LOAD.roadtrip,
     accepts: ['photo', 'video+telemetry', 'video'],
   },
   {
@@ -94,6 +115,7 @@ export const TOOLS: Tool[] = [
     blurb:
       'Gather the photographs you mean to develop into a roll — from a folder or a day on your Winnow — and give each its own light and colour, under one look for the roll.',
     Component: DevelopTool,
+    preload: LOAD.develop,
     accepts: ['photo'],
   },
   {
@@ -105,6 +127,7 @@ export const TOOLS: Tool[] = [
     blurb:
       'Play any DJI clip with its flight log in sync — altitude, GPS, ISO and shutter move with the frame.',
     Component: TelemetryTool,
+    preload: LOAD.telemetry,
     accepts: ['video+telemetry', 'telemetry', 'video'],
   },
   {
@@ -116,6 +139,7 @@ export const TOOLS: Tool[] = [
     blurb:
       'Place altitude, GPS and exposure readouts anywhere on your DJI clip, then export an MP4 with the telemetry burned in.',
     Component: OverlayStudio,
+    preload: LOAD.overlay,
     accepts: ['video+telemetry'],
   },
   {
@@ -127,6 +151,7 @@ export const TOOLS: Tool[] = [
     blurb:
       'Trace a DJI clip’s GPS path on a map and scrub the video to walk the aircraft along it. Draws offline; the map background is opt-in.',
     Component: MapTool,
+    preload: LOAD.map,
     accepts: ['video+telemetry', 'telemetry'],
   },
   {
@@ -138,6 +163,7 @@ export const TOOLS: Tool[] = [
     blurb:
       'Compose a DJI clip with its flight map and a draggable telemetry readout into one frame — pick the aspect, layout and a LUT, and preview the assembly.',
     Component: ComposerTool,
+    preload: LOAD.composer,
     accepts: ['video+telemetry'],
   },
   {
@@ -149,6 +175,7 @@ export const TOOLS: Tool[] = [
     blurb:
       'Inspect any photo’s metadata — camera, lens, the full exposure triplet and GPS location — read straight from the file, even RAW.',
     Component: ExifTool,
+    preload: LOAD.exif,
     accepts: ['photo'],
   },
   {
@@ -160,6 +187,7 @@ export const TOOLS: Tool[] = [
     blurb:
       'Lay any two photos or clips side by side under a draggable divider — two grades, two takes, before and after — with synced playback for clips.',
     Component: CompareTool,
+    preload: LOAD.compare,
     accepts: ['photo', 'video'],
   },
   {
@@ -171,6 +199,7 @@ export const TOOLS: Tool[] = [
     blurb:
       'Preview .cube LUTs on your footage with a before/after wipe, then batch-export the graded clips.',
     Component: LutStudio,
+    preload: LOAD.lut,
     accepts: ['video'],
   },
 ];

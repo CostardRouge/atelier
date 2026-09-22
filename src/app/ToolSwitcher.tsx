@@ -149,6 +149,8 @@ export default function ToolSwitcher({ tool }: { tool: Tool }) {
                   role="menuitem"
                   aria-current={active ? 'page' : undefined}
                   onClick={close}
+                  onPointerEnter={() => void t.preload()}
+                  onFocus={() => void t.preload()}
                   className={`flex items-center gap-2 px-3 py-2 rounded-[8px] no-underline text-sm text-ink transition-colors ${
                     active ? 'bg-paper-2 font-semibold' : 'hover:bg-paper-2/60'
                   }`}
@@ -185,7 +187,11 @@ export default function ToolSwitcher({ tool }: { tool: Tool }) {
   );
 }
 
-/** An editor's row: the name, and one line of what it is for. */
+/**
+ * An editor's row: the name, and one line of what it is for. Hovering or
+ * focusing it fetches the tool's chunk, so the click lands on a tool that
+ * is already here rather than on the route's "Opening…" fallback.
+ */
 function ToolRow({ tool, active, onPick }: { tool: Tool; active: boolean; onPick: () => void }) {
   return (
     <a
@@ -193,6 +199,8 @@ function ToolRow({ tool, active, onPick }: { tool: Tool; active: boolean; onPick
       role="menuitem"
       aria-current={active ? 'page' : undefined}
       onClick={onPick}
+      onPointerEnter={() => void tool.preload()}
+      onFocus={() => void tool.preload()}
       className={`flex items-center gap-3 px-3 py-2 rounded-[10px] no-underline transition-colors ${
         active ? 'bg-accent-wash' : 'hover:bg-paper-2/60'
       }`}
