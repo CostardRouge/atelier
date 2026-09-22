@@ -638,8 +638,6 @@ export default function TripOverview({
       const next = applyTripDetails(trip, {
         startDate: details.startDate,
         endDate: details.endDate,
-        from: details.from,
-        to: details.to,
       });
       onChange({ ...next, cover: details.cover, updatedAt: Date.now() });
       // The open day may no longer be in the trip: the route says where you
@@ -960,7 +958,7 @@ export default function TripOverview({
           <button
             type="button"
             onClick={() => setEditingDetails(true)}
-            title="Change the trip's dates and route"
+            title="Change the trip's dates"
             className="self-start p-0 border-0 bg-transparent text-xs text-muted text-left cursor-pointer hover:text-accent-ink hover:underline underline-offset-[3px]"
           >
             {trip.destination && <>{trip.destination} · </>}

@@ -28,7 +28,7 @@ function remote(fetchImpl: FetchLike, maxBytes: number | null = null): RemoteSou
   };
 }
 
-const trip = () => createTripDoc('Australie', 'Australia', '2025-07-01', '2025-07-10', [], HOST);
+const trip = () => createTripDoc('Australie', 'Australia', '2025-07-01', '2025-07-10', HOST);
 
 describe('the wire shape', () => {
   it('sends everything but where the trip is kept', () => {

@@ -248,7 +248,6 @@ export function tripDocFromFile(
     file.destination,
     file.startDate,
     file.endDate,
-    [],
     sourceId,
   );
   return {

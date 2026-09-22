@@ -308,7 +308,6 @@ export function tripFromTimeline(
     imported.destination,
     imported.span.startDate,
     imported.span.endDate,
-    [],
     sourceId,
   );
   return { ...doc, stages: structuredClone(imported.stages) };

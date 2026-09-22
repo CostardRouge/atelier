@@ -801,34 +801,14 @@ describe('duplicateTripPost', () => {
   });
 });
 
-describe('createTripDoc — the route the modal asks for', () => {
+describe('createTripDoc — the legs a new trip starts with', () => {
   const dates = ['2025-11-02', '2026-02-14'] as const;
 
-  it('seeds NOTHING when both fields were left empty', () => {
-    // A trip whose author skipped them must behave exactly as it did before
-    // places existed: no stage covers any day, and the counters fall back.
+  it('starts with NONE', () => {
+    // Creation used to take a From and a To and seed one leg over the whole
+    // span from them; a place belongs to a leg now, and the legs are drawn on
+    // the calendar. A day outside every leg names no place and says so.
     expect(createTripDoc('Australie', 'Australia', ...dates).stages).toEqual([]);
-  });
-
-  it('seeds one stage covering the whole trip from the two ends', () => {
-    const trip = createTripDoc('Australie', '', ...dates, [
-      createTripPlace('Perth'),
-      createTripPlace('Cairns'),
-    ]);
-    expect(trip.stages).toHaveLength(1);
-    expect(trip.stages[0].startDate).toBe(dates[0]);
-    expect(trip.stages[0].endDate).toBe(dates[1]);
-    expect(trip.stages[0].places.map((p) => p.name)).toEqual(['Perth', 'Cairns']);
-  });
-
-  it('leaves that stage unnamed, so its label derives and stays honest', () => {
-    const trip = createTripDoc('Australie', '', ...dates, [createTripPlace('Perth')]);
-    expect(trip.stages[0].name).toBe('');
-  });
-
-  it('accepts one end alone', () => {
-    const trip = createTripDoc('Australie', '', ...dates, [createTripPlace('Perth')]);
-    expect(trip.stages[0].places.map((p) => p.name)).toEqual(['Perth']);
   });
 });
 
@@ -909,7 +889,7 @@ describe('createTripDoc — the source it belongs to', () => {
   });
 
   it('takes the source it is created in', () => {
-    const doc = createTripDoc('A', 'B', '2025-03-01', '2025-03-10', [], 'winnow.example');
+    const doc = createTripDoc('A', 'B', '2025-03-01', '2025-03-10', 'winnow.example');
     expect(doc.sourceId).toBe('winnow.example');
   });
 });

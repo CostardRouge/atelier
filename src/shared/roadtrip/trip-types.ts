@@ -645,14 +645,13 @@ export interface TripDoc {
 }
 
 /**
- * `places` seeds ONE stage covering the whole trip — where it set out from and
- * where it ended, which is what the creation modal asks for. It is left unnamed
- * on purpose, so its label derives to "Perth → Cairns" and stays honest if the
- * author later edits either end.
- *
- * Empty (the default, and what an import passes) seeds nothing: a trip whose
- * author skipped those fields keeps today's behaviour exactly, with no stage
- * covering any day and the badge counters falling back as they always have.
+ * A trip starts with NO leg at all — the state an import and a timeline seed
+ * have always landed in, and the one every new trip lands in since 2026-09-22.
+ * Creation used to take a From and a To and seed one stage covering the whole
+ * span from them; the maintainer retired that, because a place belongs to a
+ * leg and the legs are drawn on the calendar once the trip exists. A day
+ * outside every leg names no place and says so (`day-badge.ts`), rather than
+ * being told it spent 345 days on one.
  *
  * `sourceId` is where the document will LIVE; only `local` exists today, and a
  * remote document store (bridge phase 3) will hand its own id in here.
@@ -662,7 +661,6 @@ export function createTripDoc(
   destination: string,
   startDate: IsoDate,
   endDate: IsoDate,
-  places: TripPlace[] = [],
   sourceId: string = DEFAULT_SOURCE_ID,
 ): TripDoc {
   const now = Date.now();
@@ -673,9 +671,7 @@ export function createTripDoc(
     destination: destination.trim(),
     startDate,
     endDate,
-    stages: places.length
-      ? [createTripStage('', '', startDate, endDate, places)]
-      : [],
+    stages: [],
     sourceId,
     posts: [],
     badgeWords: { ...DEFAULT_BADGE_WORDS },

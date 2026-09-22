@@ -854,20 +854,10 @@ export default function TripGallery({
 
   async function handleCreate(choices: TripDetails) {
     setNotice(null);
-    // The two ends, with the empty ones dropped: filled they seed one leg over
-    // the whole trip, empty they seed nothing at all — see `createTripDoc`.
-    const places = [choices.from, choices.to].filter((p) => p.name.trim().length > 0);
     // A new trip wears the house style when one is committed; a backup or an
     // existing trip never does (`house-style.ts`).
     const doc = applyHouseStyle(
-      createTripDoc(
-        choices.name,
-        choices.destination,
-        choices.startDate,
-        choices.endDate,
-        places,
-        choices.sourceId,
-      ),
+      createTripDoc(choices.name, '', choices.startDate, choices.endDate, choices.sourceId),
       bundledHouseStyle(),
     );
     setCreating(false);
