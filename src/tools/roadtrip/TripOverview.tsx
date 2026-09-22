@@ -48,6 +48,8 @@ import Button from '../../shared/ui/Button';
 import ShortDayStrip from './ShortDayStrip';
 import { defaultLoupe, loupeContaining, moveLoupe, type Loupe } from '../../shared/roadtrip/loupe';
 import LoupeBrush from './LoupeBrush';
+import MonthCalendar from './MonthCalendar';
+import IconButton from '../../shared/ui/IconButton';
 
 interface TripOverviewProps {
   trip: TripDoc;
@@ -81,7 +83,17 @@ interface TripOverviewProps {
  * same rule the badge's text overrides follow, and a nameless trip is a row of
  * nothing in the gallery.
  */
-function TripTitle({ name, onRename }: { name: string; onRename: (name: string) => void }) {
+function TripTitle({
+  name,
+  onRename,
+  size = 'lg',
+}: {
+  name: string;
+  onRename: (name: string) => void;
+  /** `md` is the size that sits in the bar on a phone; `lg` the heading of a wide screen. */
+  size?: 'lg' | 'md';
+}) {
+  const face = size === 'lg' ? 'text-2xl' : 'text-xl';
   const [draft, setDraft] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const editing = draft !== null;
@@ -115,7 +127,7 @@ function TripTitle({ name, onRename }: { name: string; onRename: (name: string) 
         /* Exactly the pills' height, or the row centres a taller field
            against them and pushes the back button down — the whole point of
            the bar is that it does not move. */
-        className="w-full min-w-0 max-w-[28rem] font-serif text-2xl leading-tight px-1.5 py-0.5 border border-line-strong rounded-control bg-paper text-ink focus:outline-none focus:border-accent"
+        className={`w-full min-w-0 max-w-[28rem] font-serif ${face} leading-tight px-1.5 py-0.5 border border-line-strong rounded-control bg-paper text-ink focus:outline-none focus:border-accent`}
       />
     );
   }
@@ -126,7 +138,7 @@ function TripTitle({ name, onRename }: { name: string; onRename: (name: string) 
         type="button"
         onClick={() => setDraft(name)}
         title="Rename the trip"
-        className="w-full p-0 border-0 bg-transparent font-serif text-2xl leading-tight text-ink text-left truncate cursor-text hover:text-accent-ink"
+        className={`w-full p-0 border-0 bg-transparent font-serif ${face} leading-tight text-ink text-left truncate cursor-text hover:text-accent-ink`}
       >
         {name}
       </button>
@@ -538,6 +550,140 @@ export default function TripOverview({
     [trip, onChange, onSelectDate, selected],
   );
 
+  const stagesPanel = (
+    <StagesPanel
+      trip={trip}
+      span={short || compact ? undefined : { startDate: loupe.start, endDate: loupe.end }}
+      onPanSpan={panLoupe}
+      rungAt={rungAt}
+      selectedId={selectedStageId}
+      cursorDate={selected}
+      onSelect={setStageId}
+      onOpenStage={openStage}
+      onScrub={selectDate}
+      onChange={setStages}
+      timelineSources={timelineSources}
+      onCompleteFrom={onCompleteFrom}
+      deduceSources={deduceSources}
+      onDeduceFrom={onDeduceFrom}
+    />
+  );
+
+  const dayPanel = selected && (
+    <DayPanel
+      trip={trip}
+      date={selected}
+      cell={selectedCell}
+      onStartPost={startPiece}
+      onAddPost={(post) => mutate([...trip.posts, post])}
+      onUpdatePost={(post) => mutate(trip.posts.map((p) => (p.id === post.id ? post : p)))}
+      onDeletePost={(id) => {
+        void deleteThumbs([id]);
+        mutate(trip.posts.filter((p) => p.id !== id));
+      }}
+      onOpenPost={onOpenPost}
+    />
+  );
+
+  const sheets = (
+    <>
+      {locating && (
+        <LocatePicturePanel
+          trip={trip}
+          name={locating.name}
+          read={locating.read}
+          problem={locating.problem}
+          onCancel={() => setLocating(null)}
+          onAccept={acceptLocation}
+        />
+      )}
+
+      {editingDetails && (
+        <TripDetailsModal
+          trip={trip}
+          onCancel={() => setEditingDetails(false)}
+          onSubmit={saveDetails}
+        />
+      )}
+    </>
+  );
+
+  if (compact) {
+    // A phone: the calendar is the ONE day surface and takes the column
+    // (`docs/roadtrip-overview-mobile.md` §8). The heading that costs ~110px
+    // on a wide screen — a serif title, a subtitle, three figures — is one
+    // pill-high bar and one mono line here, because the 624px the shell
+    // leaves are spent on the month, not on the summary.
+    return (
+      <section className="flex flex-col flex-1 min-h-0 overflow-hidden" aria-label={`${trip.name} overview`}>
+        <PageBar
+          back={{ label: 'Trips', onClick: onShowTrips, iconOnly: true }}
+          trailing={
+            <>
+              {headerExtra}
+              <span
+                className="inline-flex items-baseline gap-0.5 px-2 py-1 rounded-control bg-paper-2 font-mono text-xs tabular-nums text-ink-soft whitespace-nowrap"
+                title="Days told, of the trip's days"
+              >
+                {coverage.toldDays}
+                <span className="text-muted">/{coverage.totalDays}</span>
+              </span>
+              <IconButton
+                onClick={() => setEditingDetails(true)}
+                label="The trip's dates, route and cover"
+              >
+                {Icons.settings}
+              </IconButton>
+            </>
+          }
+        >
+          <span className="min-w-0 flex-1">
+            <TripTitle name={trip.name} onRename={rename} size="md" />
+          </span>
+        </PageBar>
+
+        {/* The figures as one line: what a wide screen says in three numerals
+            beside the name. The silence keeps its verb — it goes there. */}
+        <p className="m-0 mt-1.5 mb-1 font-mono text-2xs text-muted truncate">
+          {coverage.publishedPosts} published
+          {drafted > 0 && ` · ${drafted} drafted`}
+          {coverage.longestGap && (
+            <>
+              {' · '}
+              <button
+                type="button"
+                onClick={() => selectDate(coverage.longestGap!.start)}
+                title={`${formatIsoDate(coverage.longestGap.start)} → ${formatIsoDate(coverage.longestGap.end)} — go there`}
+                className="p-0 border-0 bg-transparent font-mono text-2xs text-accent-ink underline underline-offset-2 decoration-accent/60 cursor-pointer"
+              >
+                {coverage.longestGap.length} days of silence at most
+              </button>
+            </>
+          )}
+        </p>
+
+        <MonthCalendar
+          trip={trip}
+          days={coverage.days}
+          selected={selected}
+          onSelect={selectDate}
+          stageOf={(date) => dayStages.get(date) ?? null}
+          menuFor={menuFor}
+          onOpenLeg={openLegById}
+          selectedLegId={selectedStageId}
+          tail={
+            <div className="flex flex-col gap-4 pt-3">
+              {stagesPanel}
+              {dayPanel}
+            </div>
+          }
+        />
+
+        {sheets}
+      </section>
+    );
+  }
+
   return (
     <section
       className={pageScroll}
@@ -568,11 +714,7 @@ export default function TripOverview({
           and the dates (click to edit them), and the three figures the tool
           exists for. The five-count strip and the "longest stretch" sentence
           it replaces were the top third of the screen before the calendar. */}
-      <div
-        className={`flex items-end gap-x-6 gap-y-2 min-w-0 pb-2 ${
-          compact ? 'flex-wrap' : ''
-        }`}
-      >
+      <div className="flex items-end gap-x-6 gap-y-2 min-w-0 pb-2">
         <div className="min-w-0 flex-1 flex flex-col gap-1">
           <TripTitle name={trip.name} onRename={rename} />
           <button
@@ -595,7 +737,7 @@ export default function TripOverview({
             )}
           </button>
         </div>
-        <div className={`flex items-end gap-6 ${compact ? 'w-full justify-between gap-3' : ''}`}>
+        <div className="flex items-end gap-6">
           <Figure
             value={
               <>
@@ -657,59 +799,11 @@ export default function TripOverview({
         )}
       </section>
 
-      <StagesPanel
-        trip={trip}
-        span={short ? undefined : { startDate: loupe.start, endDate: loupe.end }}
-        onPanSpan={panLoupe}
-        rungAt={rungAt}
-        selectedId={selectedStageId}
-        cursorDate={selected}
-        onSelect={setStageId}
-        onOpenStage={openStage}
-        onScrub={selectDate}
-        onChange={setStages}
-        timelineSources={timelineSources}
-        onCompleteFrom={onCompleteFrom}
-        deduceSources={deduceSources}
-        onDeduceFrom={onDeduceFrom}
-      />
+      {stagesPanel}
 
-      {selected && (
-        <DayPanel
-          trip={trip}
-          date={selected}
-          cell={selectedCell}
-          onStartPost={startPiece}
-          onAddPost={(post) => mutate([...trip.posts, post])}
-          onUpdatePost={(post) =>
-            mutate(trip.posts.map((p) => (p.id === post.id ? post : p)))
-          }
-          onDeletePost={(id) => {
-            void deleteThumbs([id]);
-            mutate(trip.posts.filter((p) => p.id !== id));
-          }}
-          onOpenPost={onOpenPost}
-        />
-      )}
+      {dayPanel}
 
-      {locating && (
-        <LocatePicturePanel
-          trip={trip}
-          name={locating.name}
-          read={locating.read}
-          problem={locating.problem}
-          onCancel={() => setLocating(null)}
-          onAccept={acceptLocation}
-        />
-      )}
-
-      {editingDetails && (
-        <TripDetailsModal
-          trip={trip}
-          onCancel={() => setEditingDetails(false)}
-          onSubmit={saveDetails}
-        />
-      )}
+      {sheets}
     </section>
   );
 }
