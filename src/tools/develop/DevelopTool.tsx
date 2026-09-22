@@ -77,11 +77,21 @@ export default function DevelopTool() {
       return;
     }
     loadedRef.current = route.ref;
+    const ref = route.ref;
+    let alive = true;
     void listRolls().then((rolls) => {
-      const found = rollFromRef(route.ref!, rolls);
+      // Two links opened back to back resolve in any order: only the one
+      // the route still names may open, or the earlier answer landed last,
+      // opened the wrong roll, and the guard above then kept the right one
+      // from ever loading.
+      if (!alive || loadedRef.current !== ref) return;
+      const found = rollFromRef(ref, rolls);
       if (found) setOpen(found);
       else navigate(DEVELOP_HOME);
     });
+    return () => {
+      alive = false;
+    };
   }, [mine, route.ref, open]);
 
   // --- the local save machine ---------------------------------------------

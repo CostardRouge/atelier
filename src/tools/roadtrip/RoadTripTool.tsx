@@ -148,11 +148,21 @@ export default function RoadTripTool() {
     if (!mine || !route.ref) return;
     if (loadedRef.current === route.ref && open) return;
     loadedRef.current = route.ref;
+    const ref = route.ref;
+    let alive = true;
     void listTrips().then((trips) => {
-      const found = tripFromRef(route.ref!, trips);
+      // Two links opened back to back resolve in any order: only the one
+      // the route still names may open, or the earlier answer landed last,
+      // opened the wrong trip, and the guard above then kept the right one
+      // from ever loading.
+      if (!alive || loadedRef.current !== ref) return;
+      const found = tripFromRef(ref, trips);
       if (found) setOpen(found);
       else navigate(HOME_ROUTE); // a link to a trip this browser no longer has
     });
+    return () => {
+      alive = false;
+    };
   }, [mine, route.ref, open]);
 
   // --- the local save machine ---------------------------------------------
