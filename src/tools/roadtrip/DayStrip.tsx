@@ -43,18 +43,22 @@ export default function DayStrip({ date, cell, stage, thumbs, onOpen }: DayStrip
 
   return (
     <div
-      className="flex-none flex items-stretch border-t border-line-strong bg-surface shadow-[0_-10px_22px_-20px_rgba(43,33,18,0.55)]"
+      // The sheet, folded: the same edge-to-edge shape, top corners and border
+      // as the `BottomSheet` it pulls up into, so what opens is what was
+      // there closed. It runs past the shell's gutters on purpose — a strip
+      // stopping 8px short of the screen on either side reads as cut.
+      className="relative flex-none flex items-stretch border border-b-0 border-line-strong rounded-t-paper-lg bg-surface shadow-[0_-10px_22px_-20px_rgba(43,33,18,0.55)]"
       aria-label={`${when}, the open day`}
     >
+      {/* The grab hint, centred like the sheet's own handle. */}
+      <span className="absolute top-1.5 left-1/2 -translate-x-1/2 w-7 h-[3px] rounded-full bg-line-strong" aria-hidden="true" />
       <button
         type="button"
         onClick={onOpen}
         aria-label={`Open ${when} — ${posts.length ? `${posts.length} piece${posts.length === 1 ? '' : 's'}` : 'nothing told yet'}`}
-        className="flex-1 min-w-0 flex items-center gap-2.5 px-3 pt-1.5 pb-2 border-0 bg-transparent text-left cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink"
+        className="flex-1 min-w-0 flex items-center gap-2.5 px-4 pt-3.5 pb-2 border-0 bg-transparent text-left cursor-pointer rounded-t-paper-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink"
       >
         <span className="flex-1 min-w-0">
-          {/* The grab hint: the strip pulls up into the sheet. */}
-          <span className="block w-7 h-[3px] mb-1 rounded-full bg-line-strong" aria-hidden="true" />
           <span className="block text-sm font-semibold leading-tight truncate">
             {when}
             <span className="font-normal text-muted"> · day {cell?.dayNumber ?? '—'}</span>
@@ -103,7 +107,7 @@ export default function DayStrip({ date, cell, stage, thumbs, onOpen }: DayStrip
       </button>
 
       {posts.length === 0 && (
-        <span className="flex-none flex items-center pr-3">
+        <span className="flex-none flex items-center pr-4 pt-2">
           <button
             type="button"
             onClick={onOpen}

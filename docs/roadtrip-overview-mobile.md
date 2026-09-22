@@ -80,7 +80,10 @@ should see is the window a phone already scrolls to. Deriving it from the
 scroller removes `LoupeBrush`, its 350 ms hold, `useFlingPan` on the ruler and
 `panWeeks` from the phone, and answers *«cette zone devrait être scrollable de
 manière native»* literally. `loupe.ts` survives for the wide screen, where the
-brush works and was chosen.
+brush works and was chosen. *Amended after his first hands-on (R4, the same
+day): the frame is read at the pixel — one map column is one calendar week
+row — and it IS dragged, a press anywhere on the band carrying it; what the
+map never became is a target for a day.*
 
 **3.3 — A day cell has a floor, and the box scrolls past it.** On a `compact`
 shell the cell is a constant **28 px** (today's `MAX_FIT_CELL`, made the floor

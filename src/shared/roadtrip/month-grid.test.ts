@@ -4,10 +4,16 @@ import {
   MIN_MONTH_CELL,
   MONTH_GAP,
   blockSpan,
+  isShortTrip,
   monthBlocks,
+  tripBlocks,
+  weekBlock,
   monthCell,
   monthWidth,
+  scrollForWeek,
   visibleBlock,
+  visibleWeekSpan,
+  weekIndexOf,
   weekRuns,
   weekStart,
 } from './month-grid';
@@ -124,6 +130,116 @@ describe('visibleBlock', () => {
     expect(visibleBlock(tops, 0, 600)).toBe(0);
     expect(visibleBlock(tops, 300, 600)).toBe(3);
     expect(visibleBlock(tops, 900, 600)).toBe(6);
+  });
+});
+
+describe('a short trip is one block of weeks', () => {
+  it('is short up to 31 days, and not past', () => {
+    expect(isShortTrip('2026-05-07', '2026-05-10')).toBe(true);
+    expect(isShortTrip('2026-05-01', '2026-05-31')).toBe(true);
+    expect(isShortTrip('2026-05-01', '2026-06-01')).toBe(false);
+    expect(isShortTrip('2026-05-10', '2026-05-07')).toBe(false);
+  });
+
+  it('draws the trip\'s weeks with a week either side, Monday first, no padding', () => {
+    // 7 May 2026 is a Thursday; 10 May a Sunday. Its week is 4–10 May.
+    const [block] = weekBlock('2026-05-07', '2026-05-10');
+    expect(block.key).toBe('weeks');
+    expect(block.label).toBe('May 2026');
+    expect(block.weeks).toHaveLength(3);
+    expect(block.weeks[0].cells).toEqual(['2026-04-27', '2026-04-28', '2026-04-29', '2026-04-30', '2026-05-01', '2026-05-02', '2026-05-03']);
+    expect(block.weeks[2].cells[6]).toBe('2026-05-17');
+    expect(block.tripDays).toEqual(['2026-05-07', '2026-05-08', '2026-05-09', '2026-05-10']);
+    for (const week of block.weeks) expect(week.cells).toHaveLength(7);
+  });
+
+  it('marks a month beginning inside the block, never the header\'s own', () => {
+    const [block] = weekBlock('2026-05-07', '2026-05-10');
+    // 1 May sits in the margin week, but May is the header: no mark.
+    expect(block.marks).toEqual([]);
+    // A trip across the turn of a month: June is marked on the row holding the 1st.
+    const [across] = weekBlock('2026-05-25', '2026-06-07');
+    expect(across.label).toBe('May 2026');
+    expect(across.marks).toEqual([{ week: 2, col: 0, label: 'June' }]);
+    // Across a year: the mark carries the year.
+    const [newYear] = weekBlock('2025-12-29', '2026-01-04');
+    expect(newYear.marks).toEqual([{ week: 1, col: 3, label: 'January 2026' }]);
+  });
+
+  it('tripBlocks picks the shape on the length, and month blocks carry no marks', () => {
+    expect(tripBlocks('2026-05-07', '2026-05-10').map((b) => b.key)).toEqual(['weeks']);
+    const months = tripBlocks('2025-03-03', '2026-02-10');
+    expect(months).toHaveLength(12);
+    expect(months.every((b) => b.marks.length === 0)).toBe(true);
+    expect(weekBlock('2026-05-10', '2026-05-07')).toEqual([]);
+  });
+});
+
+describe('weekIndexOf', () => {
+  it('counts calendar weeks from the week the trip starts in', () => {
+    expect(weekIndexOf('2025-03-03', '2025-03-03')).toBe(0);
+    expect(weekIndexOf('2025-03-09', '2025-03-03')).toBe(0); // the Sunday of the same week
+    expect(weekIndexOf('2025-03-10', '2025-03-03')).toBe(1);
+    // A trip starting mid-week: its Monday is the origin, so a later Monday is a whole number of weeks on.
+    expect(weekIndexOf('2025-03-10', '2025-03-06')).toBe(1);
+    expect(weekIndexOf('2025-03-05', '2025-03-06')).toBe(0);
+    expect(weekIndexOf('nope', '2025-03-06')).toBe(null);
+  });
+});
+
+describe('visibleWeekSpan', () => {
+  // Four rows of 60px, week 0..3, then a straddling week 3 drawn again in the next block.
+  const rows = [
+    { top: 0, height: 60, week: 0 },
+    { top: 60, height: 60, week: 1 },
+    { top: 120, height: 60, week: 2 },
+    { top: 180, height: 60, week: 3 },
+    { top: 300, height: 60, week: 3 },
+    { top: 360, height: 60, week: 4 },
+  ];
+
+  it('frames the weeks on screen, whole rows at rest', () => {
+    expect(visibleWeekSpan(rows, 0, 120)).toEqual({ from: 0, to: 2 });
+  });
+
+  it('moves by the pixel: a row half under the top edge counts half', () => {
+    expect(visibleWeekSpan(rows, 30, 120)).toEqual({ from: 0.5, to: 2.5 });
+    expect(visibleWeekSpan(rows, 45, 120)).toEqual({ from: 0.75, to: 2.75 });
+  });
+
+  it('a straddling week drawn twice still reads as one span', () => {
+    // 180..300: the first week-3 row whole, the gap, the second week-3 row starting.
+    expect(visibleWeekSpan(rows, 180, 150)).toEqual({ from: 3, to: 3.5 });
+  });
+
+  it('keeps the last week framed past the end, and is null with no rows', () => {
+    expect(visibleWeekSpan(rows, 1000, 120)).toEqual({ from: 5, to: 5 });
+    expect(visibleWeekSpan([], 0, 120)).toBe(null);
+  });
+});
+
+describe('scrollForWeek', () => {
+  const rows = [
+    { top: 0, height: 60, week: 0 },
+    { top: 60, height: 60, week: 1 },
+    { top: 200, height: 60, week: 1 },
+    { top: 260, height: 60, week: 2 },
+  ];
+
+  it('is the inverse of the span: a fractional week lands inside its row', () => {
+    expect(scrollForWeek(rows, 0)).toBe(0);
+    expect(scrollForWeek(rows, 0.5)).toBe(30);
+    expect(scrollForWeek(rows, 2.25)).toBe(275);
+  });
+
+  it('a week drawn twice answers with its first row', () => {
+    expect(scrollForWeek(rows, 1)).toBe(60);
+  });
+
+  it('clamps off either end, and is null with no rows', () => {
+    expect(scrollForWeek(rows, -3)).toBe(0);
+    expect(scrollForWeek(rows, 9)).toBe(320);
+    expect(scrollForWeek([], 1)).toBe(null);
   });
 });
 

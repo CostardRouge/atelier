@@ -184,10 +184,43 @@ html[data-surface='darkroom'] {
   }
 }
 
+/* …and leaving: the same trajectory backwards, a little quicker — a sheet that
+   was DISMISSED goes where the finger sent it, and a dismissal that cuts to
+   nothing (the panel unmounted the moment it closed) read as a broken
+   animation on the maintainer's phone. `forwards` keeps the panel at the
+   bottom edge until React removes it on `animationend`. */
+@keyframes sheet-fall {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes sheet-scrim-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
 /* A sheet that slides is a sheet that is simply THERE for anyone who asked not
-   to be moved — the panel still works, it just stops travelling. */
+   to be moved — the panel still works, it just stops travelling. The fall
+   keeps a frame of duration so `animationend` still fires and the sheet still
+   unmounts. */
 @media (prefers-reduced-motion: reduce) {
   @keyframes sheet-rise {
+    from {
+      transform: none;
+    }
+    to {
+      transform: none;
+    }
+  }
+  @keyframes sheet-fall {
     from {
       transform: none;
     }

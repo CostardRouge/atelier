@@ -10,15 +10,20 @@ import {
 } from 'react';
 import {
   MONTH_GAP,
-  monthBlocks,
   monthCell,
   monthWidth,
+  scrollForWeek,
+  tripBlocks,
   visibleBlock,
+  visibleWeekSpan,
+  weekIndexOf,
   weekRuns,
   type MonthBlock,
+  type WeekRow,
+  type WeekSpan,
 } from '../../shared/roadtrip/month-grid';
 import { stageTint } from '../../shared/roadtrip/stage-ruler';
-import { formatIsoDate, isWithin, todayIso, type IsoDate } from '../../shared/roadtrip/trip-days';
+import { daysBetween, formatIsoDate, isWithin, todayIso, type IsoDate } from '../../shared/roadtrip/trip-days';
 import { stageAt, type DayCell } from '../../shared/roadtrip/trip-coverage';
 import { stageLabel } from '../../shared/roadtrip/trip-places';
 import type { TripDoc, TripStage } from '../../shared/roadtrip/trip-types';
@@ -79,6 +84,14 @@ interface MonthCalendarProps {
    * — so it scrolls away with them rather than eating the calendar's height.
    */
   tail?: ReactNode;
+  /**
+   * The side room, in pixels, paid INSIDE the scroller and under the map —
+   * never by the box around them. A gutter outside a scroll container is
+   * paper the content is clipped against (`frontend.md`): a selected cell on
+   * the Monday column lost its outline to it. In here it scrolls with the
+   * weeks and an outline at the edge has somewhere to draw.
+   */
+  gutter?: number;
 }
 
 /** What a cell shows of a day in the pictures view. */
@@ -133,18 +146,25 @@ export default function MonthCalendar({
   columns = 1,
   between,
   tail,
+  gutter = 0,
 }: MonthCalendarProps) {
-  const blocks = useMemo(() => monthBlocks(trip.startDate, trip.endDate), [trip.startDate, trip.endDate]);
+  // A SHORT trip (≤ 31 days) is one block of its weeks, a week either side,
+  // and no map: a year map of one column and a whole month drawn for four
+  // days told the maintainer nothing. Longer, the months.
+  const blocks = useMemo(() => tripBlocks(trip.startDate, trip.endDate), [trip.startDate, trip.endDate]);
+  const short = blocks.length === 1 && blocks[0].key === 'weeks';
   const byDate = useMemo(() => new Map(days.map((d) => [d.date, d])), [days]);
   const today = useMemo(() => todayIso(), []);
   const [hovered, setHovered] = useState<Hovered | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
 
   // The cell FITS the column: a seventh of what the gutters leave — the
-  // block's share of the row when several blocks sit side by side.
-  const [boxRef, width] = useElementWidth<HTMLDivElement>();
+  // block's share of the row when several blocks sit side by side. The box
+  // is measured with its own side room, which the blocks do not get.
+  const [boxRef, boxWidth] = useElementWidth<HTMLDivElement>();
+  const width = Math.max(0, boxWidth - 2 * gutter);
   const fit = width > 0 ? Math.floor((width + COLUMN_GAP) / (monthWidth(FIT_CELL) + COLUMN_GAP)) : 1;
-  const cols = Math.max(1, Math.min(Math.floor(columns), fit));
+  const cols = short ? 1 : Math.max(1, Math.min(Math.floor(columns), fit));
   const perBlock = cols > 1 ? Math.floor((width - (cols - 1) * COLUMN_GAP) / cols) : width;
   const cell = monthCell(perBlock);
   const cellH = Math.round(cell * 0.9);
@@ -167,17 +187,33 @@ export default function MonthCalendar({
     [trip, adjust],
   );
 
-  // The block on screen, read from the scroll — what the map frames.
+  // What is on screen, read from the scroll: the BLOCK under the upper third
+  // (the pictures window, the wide screen's ruler) and the WEEKS at the
+  // pixel — the map's frame, which glides with the thumb because one of its
+  // columns is one of these rows (`weekIndexOf`).
   const scroller = useRef<HTMLDivElement | null>(null);
   const blockEls = useRef<(HTMLDivElement | null)[]>([]);
   const [visible, setVisible] = useState(0);
+  const [span, setSpan] = useState<WeekSpan | null>(null);
+  const weekRows = useCallback((el: HTMLElement): WeekRow[] =>
+    Array.from(el.querySelectorAll<HTMLElement>('[data-week]'), (row) => ({
+      top: row.offsetTop,
+      height: row.offsetHeight,
+      week: Number(row.dataset.week),
+    })), []);
   const readVisible = useCallback(() => {
     const el = scroller.current;
     if (!el) return;
     const tops = blockEls.current.map((b) => b?.offsetTop ?? 0);
     const next = visibleBlock(tops, el.scrollTop, el.clientHeight);
     if (next >= 0) setVisible((v) => (v === next ? v : next));
-  }, []);
+    const weeks = visibleWeekSpan(weekRows(el), el.scrollTop, el.clientHeight);
+    setSpan((s) => (s && weeks && s.from === weeks.from && s.to === weeks.to ? s : weeks));
+  }, [weekRows]);
+  // A new width re-flows every row: the frame must be re-read, not only on scroll.
+  useEffect(() => {
+    readVisible();
+  }, [cell, cols, blocks, readVisible]);
 
   useEffect(() => {
     const block = blocks[visible];
@@ -190,6 +226,15 @@ export default function MonthCalendar({
     if (!el || !block) return;
     el.scrollTo({ top: block.offsetTop, behavior });
   }, []);
+
+  // The map's drag: put a (fractional) week at the top edge, following the
+  // finger frame by frame — so no smoothing, which would lag it.
+  const scrollToWeek = useCallback((week: number) => {
+    const el = scroller.current;
+    if (!el) return;
+    const top = scrollForWeek(weekRows(el), week);
+    if (top !== null) el.scrollTo({ top, behavior: 'auto' });
+  }, [weekRows]);
 
   // The route says where you are: open on the selected day's month, without
   // an animation, and follow a day chosen from elsewhere (the silence figure,
@@ -229,14 +274,19 @@ export default function MonthCalendar({
 
   return (
     <div className="flex flex-col flex-1 min-h-0" aria-label="The journey, month by month">
-      <YearMap
-        startDate={trip.startDate}
-        endDate={trip.endDate}
-        days={days}
-        blocks={blocks}
-        visible={visible}
-        onJump={(i) => jumpTo(i)}
-      />
+      {!short && (
+        <div style={gutter ? { paddingInline: gutter } : undefined}>
+          <YearMap
+            startDate={trip.startDate}
+            endDate={trip.endDate}
+            days={days}
+            blocks={blocks}
+            span={span}
+            onJump={(i) => jumpTo(i)}
+            onScrub={scrollToWeek}
+          />
+        </div>
+      )}
 
       {between}
 
@@ -251,7 +301,10 @@ export default function MonthCalendar({
         className={`relative flex-1 min-h-0 overflow-y-auto overscroll-y-contain pb-4 ${
           cols > 1 ? 'flex flex-wrap content-start' : ''
         }`}
-        style={cols > 1 ? { columnGap: COLUMN_GAP, rowGap: 12 } : undefined}
+        style={{
+          paddingInline: gutter || undefined,
+          ...(cols > 1 ? { columnGap: COLUMN_GAP, rowGap: 12 } : null),
+        }}
       >
         {blocks.map((block, i) => (
           <MonthBlockView
@@ -276,6 +329,7 @@ export default function MonthCalendar({
             onSelect={onSelect}
             onOpenLeg={onOpenLeg}
             onHover={adjust ? () => undefined : setHovered}
+            centred={cols === 1}
             onMenu={(date, cellData, x, y) => {
               const items = menuFor?.(date) ?? [];
               if (!items.length) return false;
@@ -314,6 +368,13 @@ interface MonthBlockViewProps {
   onHover: (h: Hovered | null) => void;
   /** Returns whether a menu was opened. */
   onMenu: (date: IsoDate, cell: DayCell, x: number, y: number) => boolean;
+  /**
+   * Centred in the scroller: one block to a row is capped at a 56px cell
+   * (416px), and a compact window wider than that — a tablet, a narrow
+   * desktop window — otherwise leaves it stuck to the left with paper on
+   * the right. Blocks in a grid sit where the grid puts them.
+   */
+  centred: boolean;
 }
 
 
@@ -337,6 +398,7 @@ const MonthBlockView = forwardRef<HTMLDivElement, MonthBlockViewProps>(function 
     onOpenLeg,
     onHover,
     onMenu,
+    centred,
   },
   ref,
 ) {
@@ -346,9 +408,15 @@ const MonthBlockView = forwardRef<HTMLDivElement, MonthBlockViewProps>(function 
   const inTrip = (date: IsoDate) => isWithin(trip.startDate, trip.endDate, date);
 
   return (
-    <div ref={ref} id={`month-${block.key}`} style={{ width }}>
-      {/* The month's name stays while its weeks scroll under it. */}
-      <div className="sticky top-0 z-10 flex items-baseline gap-2 h-7 bg-paper">
+    <div ref={ref} id={`month-${block.key}`} className={centred ? 'mx-auto' : undefined} style={{ width }}>
+      {/* The month's name stays while its weeks scroll under it — on paper
+          that is TRANSLUCENT and blurred, never a flat of the paper token:
+          the page's ground is the paper plus two radial gradients
+          (index.css), so a flat drawn on it was visibly lighter than its
+          surroundings wherever the gradient darkens, a rectangle in the
+          maintainer's screenshot. Blurred, the band takes the tone of
+          whatever is under it, weeks included. */}
+      <div className="sticky top-0 z-10 flex items-baseline gap-2 h-7 bg-paper/85 backdrop-blur-sm">
         <span className="font-serif text-lg leading-none">{block.label}</span>
         {block.tripDays.length > 0 && (
           <span className="font-mono text-2xs text-muted">
@@ -378,8 +446,19 @@ const MonthBlockView = forwardRef<HTMLDivElement, MonthBlockViewProps>(function 
             if (date === adjust.stage.endDate) grips.push({ edge: 'end', col });
           });
         }
+        // The row's week, counted from the trip's first: the map's column for it.
+        const firstDay = week.cells.find((d) => d !== null) ?? null;
+        const weekIndex = firstDay ? weekIndexOf(firstDay, trip.startDate) : null;
+        const mark = block.marks.find((m) => m.week === w) ?? null;
         return (
-          <div key={w} className="relative mb-1.5">
+          <div key={w} className="relative mb-1.5" data-week={weekIndex ?? undefined}>
+            {/* A short trip's block runs across a month's edge: the row
+                holding its 1st says which month begins here. */}
+            {mark && (
+              <div className="font-serif text-base leading-none text-ink-soft pt-1 pb-1.5" aria-hidden="true">
+                {mark.label}
+              </div>
+            )}
             <div className="flex" style={{ gap: MONTH_GAP }} role="row">
               {week.cells.map((date, col) => {
                 if (!date) {
@@ -471,7 +550,15 @@ const MonthBlockView = forwardRef<HTMLDivElement, MonthBlockViewProps>(function 
                 const last = week.cells[run.to] as IsoDate;
                 const startsHere = first === stage.startDate;
                 const endsHere = last === stage.endDate;
-                const named = startsHere || (run.from === 0 && w === 0);
+                // Named where the leg begins and where it enters a new
+                // month — but only where the name has room: a run of one
+                // or two cells is a stub, and a stub reads better blank
+                // than as three letters and an ellipsis (the title keeps
+                // it). A leg starting on a weekend is named on the row
+                // after instead, where its ribbon first has the width.
+                const sinceStart = daysBetween(stage.startDate, first);
+                const carried = run.from === 0 && sinceStart !== null && sinceStart > 0 && sinceStart <= 2;
+                const named = run.to - run.from >= 2 && (startsHere || carried || (run.from === 0 && w === 0));
                 const tint = stageTint(index);
                 const on = stage.id === selectedLegId;
                 return (
@@ -485,13 +572,18 @@ const MonthBlockView = forwardRef<HTMLDivElement, MonthBlockViewProps>(function 
                     className={`absolute top-0 box-border px-1.5 border-0 text-left text-3xs leading-[12px] truncate cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ink ${
                       on ? 'text-ink font-semibold' : 'text-ink-soft'
                     }`}
+                    // One flat tint and one rule for its shape: rounded at
+                    // the leg's two real ends, square where the WEEK cuts
+                    // it — so a ribbon continuing on the next row reads as
+                    // a continuation and a whole leg reads as a pill. The
+                    // darker cap that marked a start was the maintainer's
+                    // "radical" cut: it drew a head on every leg.
                     style={{
                       left: run.from * step,
                       width: (run.to - run.from + 1) * cell + (run.to - run.from) * MONTH_GAP,
                       height: RIBBON,
-                      borderRadius: `${startsHere ? 6 : 2}px ${endsHere ? 6 : 2}px ${endsHere ? 6 : 2}px ${startsHere ? 6 : 2}px`,
+                      borderRadius: `${startsHere ? 6 : 0}px ${endsHere ? 6 : 0}px ${endsHere ? 6 : 0}px ${startsHere ? 6 : 0}px`,
                       background: `color-mix(in oklch, ${tint} ${on ? 55 : 30}%, var(--color-paper))`,
-                      boxShadow: startsHere ? `inset 3px 0 0 ${tint}` : undefined,
                     }}
                   >
                     {named ? stageLabel(stage) || 'Unnamed stage' : ''}

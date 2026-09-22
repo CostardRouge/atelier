@@ -521,6 +521,8 @@ export default function TripOverview({
   const onVisible = useCallback((block: MonthBlock) => setVisibleKey(block.key), []);
   const windowPosts = useMemo(() => {
     if (view !== 'pictures' || !visibleKey) return [];
+    // A short trip is one block of weeks: its window is the whole trip (31 days at most).
+    if (visibleKey === 'weeks') return trip.posts;
     const [y, m] = visibleKey.split('-').map(Number);
     const ordinal = y * 12 + (m - 1);
     return trip.posts.filter((p) => {
@@ -532,7 +534,8 @@ export default function TripOverview({
   // The days the ruler details on a wide screen: the month on screen and its
   // two neighbours, clamped to the trip — the loupe, read from the scroll.
   const spanOnScreen = useMemo(() => {
-    if (!visibleKey) return undefined;
+    // No month key (a short trip's one block of weeks): the ruler details the whole trip.
+    if (!visibleKey || visibleKey === 'weeks') return undefined;
     const [y, m] = visibleKey.split('-').map(Number);
     const start = toIsoDate(Date.UTC(y, m - 2, 1));
     const end = toIsoDate(Date.UTC(y, m + 1, 0));
@@ -726,7 +729,11 @@ export default function TripOverview({
     // pill-high bar and one mono line here, because the 624px the shell
     // leaves are spent on the month, not on the summary.
     return (
-      <section className="flex flex-col flex-1 min-h-0 overflow-hidden" aria-label={`${trip.name} overview`}>
+      // Past the shell's gutters (`px-2`): the calendar pays its own room
+      // INSIDE its scroller and the strip runs edge to edge like the sheet it
+      // pulls up into — a gutter outside a scroll box only clips.
+      <section className="flex flex-col flex-1 min-h-0 overflow-hidden -mx-2" aria-label={`${trip.name} overview`}>
+        <div className="px-2">
         <PageBar
           back={{ label: 'Trips', onClick: onShowTrips, iconOnly: true }}
           trailing={
@@ -796,14 +803,16 @@ export default function TripOverview({
                 title={`${formatIsoDate(coverage.longestGap.start)} → ${formatIsoDate(coverage.longestGap.end)} — go there`}
                 className="p-0 border-0 bg-transparent font-mono text-2xs text-accent-ink underline underline-offset-2 decoration-accent/60 cursor-pointer"
               >
-                {coverage.longestGap.length} days of silence at most
+                {coverage.longestGap.length} day{coverage.longestGap.length === 1 ? '' : 's'} of silence at most
               </button>
             </>
           )}
         </p>
         )}
+        </div>
 
         <MonthCalendar
+          gutter={8}
           trip={shownTrip}
           days={coverage.days}
           selected={selected}
@@ -993,7 +1002,7 @@ export default function TripOverview({
           {coverage.longestGap && (
             <Figure
               value={coverage.longestGap.length}
-              label="days of silence at most"
+              label={`day${coverage.longestGap.length === 1 ? '' : 's'} of silence at most`}
               tone="accent"
               title={`${formatIsoDate(coverage.longestGap.start)} → ${formatIsoDate(coverage.longestGap.end)} — go there`}
               onClick={() => selectDate(coverage.longestGap!.start)}
@@ -1011,6 +1020,7 @@ export default function TripOverview({
       <div className="flex-1 min-h-0 flex gap-5">
         <div className="flex-1 min-w-0 flex flex-col min-h-0">
           <MonthCalendar
+            gutter={4}
             trip={trip}
             days={coverage.days}
             selected={selected}

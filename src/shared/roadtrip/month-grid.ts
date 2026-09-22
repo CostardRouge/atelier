@@ -44,7 +44,7 @@ export interface MonthWeek {
 }
 
 export interface MonthBlock {
-  /** `YYYY-MM`, the block's stable key and its anchor id. */
+  /** `YYYY-MM`, the block's stable key and its anchor id — `weeks` for a short trip's one block. */
   key: string;
   year: number;
   /** 0 = January. */
@@ -55,6 +55,88 @@ export interface MonthBlock {
   weeks: readonly MonthWeek[];
   /** The days of this month that belong to the trip, in order. */
   tripDays: readonly IsoDate[];
+  /**
+   * Where another month begins INSIDE the block — a short trip's one block
+   * of weeks runs across a month's edge, and the row holding its 1st says
+   * so. Empty on a month block, whose header is the whole answer.
+   */
+  marks: readonly MonthMark[];
+}
+
+/** A month beginning inside a block: the row and column of its first day. */
+export interface MonthMark {
+  week: number;
+  col: number;
+  label: string;
+}
+
+/**
+ * Up to this many days a trip is SHORT: drawn as its own weeks with a week's
+ * margin either side and no year map, because a map of one column and a
+ * whole month for four days told the maintainer nothing (Normandie, 4 days).
+ * The threshold is the old day strip's, kept: a longer trip gets the months.
+ */
+export const SHORT_TRIP_DAYS = 31;
+
+/** How many whole weeks are drawn before and after a short trip, to situate it. */
+export const SHORT_TRIP_MARGIN_WEEKS = 1;
+
+export function isShortTrip(start: IsoDate, end: IsoDate): boolean {
+  const a = parseIsoDate(start);
+  const b = parseIsoDate(end);
+  if (a === null || b === null || b < a) return false;
+  return Math.round((b - a) / 86400000) + 1 <= SHORT_TRIP_DAYS;
+}
+
+/**
+ * A short trip as ONE block: the weeks it touches, `margin` whole weeks
+ * before and after, Monday-first, no padding — the row holding a month's
+ * first day carries a mark for it unless it is the header's own month.
+ * The header names the month the trip STARTS in (with its year), whatever
+ * the margin week before belongs to. Empty for a bad or reversed span.
+ */
+export function weekBlock(start: IsoDate, end: IsoDate, margin = SHORT_TRIP_MARGIN_WEEKS): MonthBlock[] {
+  const a = parseIsoDate(start);
+  const b = parseIsoDate(end);
+  if (a === null || b === null || b < a) return [];
+  const firstMonday = weekStart(start);
+  const lastMonday = weekStart(end);
+  if (firstMonday === null || lastMonday === null) return [];
+  const from = addDays(firstMonday, -7 * margin);
+  const to = addDays(lastMonday, 7 * margin + 6);
+  if (from === null || to === null) return [];
+  const days = enumerateDays(from, to);
+  const weeks: MonthWeek[] = [];
+  for (let i = 0; i < days.length; i += 7) weeks.push({ cells: days.slice(i, i + 7) });
+  const startDay = new Date(a);
+  const year = startDay.getUTCFullYear();
+  const month = startDay.getUTCMonth();
+  const marks: MonthMark[] = [];
+  weeks.forEach((week, w) => {
+    week.cells.forEach((date, col) => {
+      if (!date || date.slice(8, 10) !== '01') return;
+      const m = Number(date.slice(5, 7)) - 1;
+      const y = Number(date.slice(0, 4));
+      if (m === month && y === year) return;
+      marks.push({ week: w, col, label: y === year ? MONTH_NAMES[m] : `${MONTH_NAMES[m]} ${y}` });
+    });
+  });
+  return [
+    {
+      key: 'weeks',
+      year,
+      month,
+      label: `${MONTH_NAMES[month]} ${year}`,
+      weeks,
+      tripDays: days.filter((d) => d >= start && d <= end),
+      marks,
+    },
+  ];
+}
+
+/** The blocks a trip is drawn as: its weeks when short, its months otherwise. */
+export function tripBlocks(start: IsoDate, end: IsoDate): MonthBlock[] {
+  return isShortTrip(start, end) ? weekBlock(start, end) : monthBlocks(start, end);
 }
 
 /**
@@ -95,6 +177,7 @@ export function monthBlocks(start: IsoDate, end: IsoDate): MonthBlock[] {
       label: withYear ? `${MONTH_NAMES[month]} ${year}` : MONTH_NAMES[month],
       weeks,
       tripDays,
+      marks: [],
     });
     month += 1;
     if (month === 12) {
@@ -198,4 +281,77 @@ export function blockSpan(block: MonthBlock): { start: IsoDate; end: IsoDate } |
 export function weekStart(date: IsoDate): IsoDate | null {
   const wd = weekdayIndex(date);
   return wd === null ? null : addDays(date, -wd);
+}
+
+/**
+ * A calendar week's index from the trip's first week: 0 for the week the
+ * trip starts in, 1 for the next. It is the year map's COLUMN for that week
+ * (`heatmapWeeks` lays the map out Monday-first from the same origin), so a
+ * calendar row and a map column meet on this one number. Null for a bad date.
+ */
+export function weekIndexOf(date: IsoDate, tripStart: IsoDate): number | null {
+  const monday = weekStart(date);
+  const origin = weekStart(tripStart);
+  if (monday === null || origin === null) return null;
+  const days = Math.round((Date.parse(monday) - Date.parse(origin)) / 86400000);
+  return Math.floor(days / 7);
+}
+
+/** A week row as the calendar's scroller holds it: where it sits, how tall, which week. */
+export interface WeekRow {
+  top: number;
+  height: number;
+  /** Its `weekIndexOf`. A week straddling two months is two rows with the same index. */
+  week: number;
+}
+
+/** A window of weeks, in FRACTIONAL weeks: `from` inclusive, `to` exclusive. */
+export interface WeekSpan {
+  from: number;
+  to: number;
+}
+
+/**
+ * The weeks on screen for a scroller at `scrollTop` showing `viewport`
+ * pixels — the year map's frame, read from the scroll at the PIXEL: the
+ * first row cut by the top edge contributes the fraction of it that is
+ * hidden, the last row cut by the bottom edge the fraction that shows, so the
+ * frame glides with the thumb instead of jumping a month at a time (the
+ * maintainer's ask after the first hands-on). Null with no rows.
+ */
+export function visibleWeekSpan(rows: readonly WeekRow[], scrollTop: number, viewport: number): WeekSpan | null {
+  if (!rows.length) return null;
+  const bottom = scrollTop + viewport;
+  let first: WeekRow | null = null;
+  let last: WeekRow | null = null;
+  for (const row of rows) {
+    if (row.top + row.height <= scrollTop) continue;
+    if (row.top >= bottom) break;
+    if (!first) first = row;
+    last = row;
+  }
+  if (!first || !last) {
+    // Scrolled past every row (a tail below the blocks): the last week stays framed.
+    const end = rows[rows.length - 1];
+    return { from: end.week + 1, to: end.week + 1 };
+  }
+  const part = (row: WeekRow, y: number) => (row.height > 0 ? Math.min(1, Math.max(0, (y - row.top) / row.height)) : 0);
+  return { from: first.week + part(first, scrollTop), to: last.week + part(last, bottom) };
+}
+
+/**
+ * The inverse: the `scrollTop` that puts fractional `week` at the top edge —
+ * what a drag on the year map's frame asks for. A week that is two rows
+ * (straddling a month) answers with its first; a week off either end clamps
+ * to the nearest row. Null with no rows.
+ */
+export function scrollForWeek(rows: readonly WeekRow[], week: number): number | null {
+  if (!rows.length) return null;
+  const whole = Math.floor(week);
+  const frac = week - whole;
+  const row = rows.find((r) => r.week === whole);
+  if (row) return row.top + frac * row.height;
+  if (whole < rows[0].week) return rows[0].top;
+  const end = rows[rows.length - 1];
+  return end.top + end.height;
 }
