@@ -210,6 +210,18 @@ the long edge, pruned on delete (`roadtrip.md`). Nothing new is stored and
 nothing is fetched: **the pictures are already there**, and they are what makes
 a day readable at a glance.
 
+**A tap on a day SELECTS it; it never opens the sheet.** The calendar is what
+you sweep — a full-screen sheet on every cell would cover the thing being swept
+and cost a dismissal per day. So the tap moves the ink outline and the strip
+below re-reads; the strip is what opens the sheet. Two rules follow from it, and
+they are what keep the extra tap from costing anything: the strip is a
+**preview, and it never scrolls** (three thumbnails at most, then `+2` — the
+list is the sheet's job); and on a day **nothing came out of**, it carries the
+verb instead, `+ Raconter`, because that is the tool's commonest gesture and
+making it cost a sheet would be the wrong economy. Rejected, and on a precedent:
+a second tap on the already-open cell to open the sheet — the deck band weighed
+exactly that in September and it was judged undiscoverable.
+
 - **The strip** (68 px, above the bar, always): the date and the day number, the
   leg with its tint dot, and the day's pieces as small thumbnails at their own
   frame — a 9:16 reel narrow, a 4:5 carousel wider (`DayPanel`'s existing rule:
@@ -251,13 +263,23 @@ better on a phone than it has ever been on a desktop.**
 
 ### 8.4 The month in *pellicule*
 
-One toggle in the month header swaps the rung ramp for the hook thumbnails: a
-told day draws its own picture cropped into the 46 × 42 cell, published on a
-solid border, a draft dashed, a count in the corner when the day holds several;
-an untold day stays bare paper with its number. It answers *"voir ce qui est
-sorti"* at the scale of a month, which no list can, and it costs no new
-storage. The ramp stays the default — it is the view that answers the tool's
-own question, which is about holes.
+A complementary VIEW of the same calendar: same cells, same targets, same leg
+ribbon, same strip — only the cell's fill changes. A told day draws its own hook
+thumbnail cropped into the 46 × 42 cell, published on a solid border, a draft
+dashed, a count in the corner when the day holds several; an untold day stays
+bare paper with its number. It answers *"voir ce qui est sorti"* at the scale of
+a month, which no list can, and it costs no new storage.
+
+**The toggle is ONE control, in the trip bar, and it is a browser preference.**
+Drawn per month header it would be the same switch three times on one screen,
+and a view belongs to the trip, not to a block of it. Its home is therefore the
+fixed row at the top, as a two-cell `Segmented` beside the counter, remembered
+in `localStorage` — exactly the precedent the trip gallery's Cards / Bands set,
+which is the same kind of decision (`roadtrip.md`). The ramp stays the default:
+the tool's founding question is which days were never told, and bare paper is
+the clearest possible *nothing*. Worth measuring on his own trip before that is
+final — at 46 px a picture against bare paper may read holes BETTER than five
+pale rungs do.
 
 ### 8.5 On a wide screen
 
@@ -274,10 +296,13 @@ sizes, one day panel at two placements.
 1. Does the **Étapes** sheet also need a "deduce / import from the timeline"
    entry, or do those stay on the wide screen only (they are two buttons in
    `StagesPanel`'s header today)?
-2. The day strip shows up to three thumbnails plus a count — is three right,
-   or should a day with five pieces scroll its strip?
-3. `pellicule` as a `localStorage` preference (like the gallery's Cards /
-   Bands) or per trip? A preference is the suite's precedent.
+2. Should `pellicule` be the DEFAULT rather than the ramp? §8.4 keeps the ramp
+   on the tool's founding question, but the argument cuts the other way at
+   46 px and only his own trip can settle it.
+3. Does the strip's `+ Raconter` open the sheet at its verbs, or fire the
+   trip's last-used kind straight away? The second is one tap to a new piece
+   and follows «a trip remembers the look it gives a new piece of each kind»,
+   but it makes a tap create a document.
 4. What the **Voyage** cell holds exactly: `TripDetailsModal`'s dates, route
    and cover, plus the words and the closing card — or does that stay the
    piece-reached `TripSettingsModal`?
