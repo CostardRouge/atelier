@@ -172,19 +172,20 @@ export function monthWidth(cell: number): number {
 /**
  * Which block is "the one on screen" for a scroller at `scrollTop` showing
  * `viewport` pixels: the block covering the viewport's upper third, which is
- * where the eye rests while a list scrolls, and the last one whose top is
- * above it. `tops` are the blocks' offsets in the scroller, ascending. -1 with
- * no blocks.
+ * where the eye rests while a list scrolls — the nearest top above it, and,
+ * where several blocks share that top (a row of a wide screen's grid), the
+ * FIRST of them: the row is read from its left. `tops` are the blocks'
+ * offsets in the scroller, non-decreasing. -1 with no blocks.
  */
 export function visibleBlock(tops: readonly number[], scrollTop: number, viewport: number): number {
   if (!tops.length) return -1;
   const eye = scrollTop + viewport / 3;
-  let at = 0;
-  for (let i = 0; i < tops.length; i++) {
-    if (tops[i] <= eye) at = i;
+  let best = tops[0];
+  for (const top of tops) {
+    if (top <= eye) best = top;
     else break;
   }
-  return at;
+  return tops.indexOf(best);
 }
 
 /** The first and last trip day of a block, or null for a block the trip only frames. */

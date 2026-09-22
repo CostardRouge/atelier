@@ -1,9 +1,13 @@
 # The trip overview on a phone — measured, and three directions
 
-**Status: a proposal, not a set of decisions.** §1–§2 are traced to files and
-measured; §3 onwards is design and waits on the maintainer. §7 lists what is
-his to choose. Read it before touching `DayHeatmap.tsx`, `ShortDayStrip.tsx`,
-`LoupeBrush.tsx`, `StageRuler.tsx`, `day-grid.ts` or `loupe.ts`.
+**Status: chosen (B) and BUILT on 2026-09-22, C1 → C7** — the pure month grid,
+the calendar on the compact shell, the strip and the day sheet, the Stages and
+Trip cells on the shell's bar, Adjust on the calendar, the pictures view, and
+the wide screen as the B6 board. §1–§2 are the measurements it answered; §8 is
+what was built; §9 what is still his. The decisions each commit fixed, and
+the traps, are in `docs/memory/roadtrip.md` («Built so far»). Read it before
+touching `MonthCalendar.tsx`, `YearMap.tsx`, `DayStrip.tsx`, `LegsSheet.tsx`,
+`StageRuler.tsx` or `month-grid.ts`.
 
 The interactive boards carrying the three directions (the phone at 390 × 844,
 scrollable, with the Australia trip's 345 days as sample data):
@@ -283,13 +287,18 @@ pale rungs do.
 
 ### 8.5 On a wide screen
 
-Same document, same blocks: the month blocks go **three to a row** at a 35 px
-cell (the whole year in four rows, scrolling), and what is a sheet on a phone
-becomes the **right column** — the day with its pieces above, the open leg's
-editor below. The year map and the **leg ruler stay at the top**: his September
-ruling holds, and *Ajuster* becomes a second way in rather than a replacement.
-Nothing here is a second screen to maintain: one month component at two cell
-sizes, one day panel at two placements.
+Same document, same blocks: the month blocks go **side by side** — as many as
+the width allows at a 34 px cell, two at 1280 beside the library's rail, three
+at 1440 — and what is a sheet on a phone becomes the **right column** above
+1180 px: the day with its pieces above, the open leg's editor below. The year
+map stays above and the **leg ruler between them**, detailing the month on
+screen and its two neighbours (~9 px a day, better than the dragged loupe's
+6.4, which is why the brush could go): the loupe is the scroll here too. The
+ruler's drag-and-drop is kept, and *Adjust* is not offered where it is. One
+month component at two cell sizes, one day panel at two placements. This
+supersedes two September rulings — the dragged loupe, and «the open day stays
+under the calendar» — by the maintainer's approval of the B6 board; the
+weekday heatmap is not dropped, it is the map.
 
 ## 9. Still open after §8
 

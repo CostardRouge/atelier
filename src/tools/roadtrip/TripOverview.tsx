@@ -2,14 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { deleteThumbs } from '../../shared/roadtrip/trip-store';
 import { applyTripDetails } from '../../shared/roadtrip/trip-edit';
 import { dayStageActions, nearerEdge, resizeStage } from '../../shared/roadtrip/stage-edit';
-import { rulerBars, stageTint } from '../../shared/roadtrip/stage-ruler';
+import { stageTint } from '../../shared/roadtrip/stage-ruler';
 import {
   addDays,
   daysBetween,
   enumerateDays,
   formatIsoDate,
-  isShortTrip,
   isWithin,
+  toIsoDate,
   type IsoDate,
 } from '../../shared/roadtrip/trip-days';
 import { stageAt, stageDayNumber, tripCoverage } from '../../shared/roadtrip/trip-coverage';
@@ -36,19 +36,15 @@ import {
   type LocateProposal,
   type PictureLocation,
 } from '../../shared/roadtrip/locate-picture';
-import DayHeatmap, { levelOf, type DayMenuItem, type DayStage, type HeatmapLeg } from './DayHeatmap';
+import { levelOf, type DayMenuItem, type DayStage } from './DayHeatmap';
 import DayPanel from './DayPanel';
 import LocatePicturePanel from './LocatePicturePanel';
-import StagesPanel from './StagesPanel';
+import StagesPanel, { StageCard } from './StagesPanel';
 import TripDetailsModal, { type TripDetails } from './TripDetailsModal';
 import PageBar from '../../shared/ui/PageBar';
-import { pageScroll } from '../../shared/ui/page-scroll';
-import { useIsCompact } from '../../shared/ui/use-layout-mode';
+import { useAtLeast, useIsCompact } from '../../shared/ui/use-layout-mode';
 import { Icons } from '../../shared/ui/icons';
 import Button from '../../shared/ui/Button';
-import ShortDayStrip from './ShortDayStrip';
-import { defaultLoupe, loupeContaining, moveLoupe, type Loupe } from '../../shared/roadtrip/loupe';
-import LoupeBrush from './LoupeBrush';
 import MonthCalendar, { type AdjustLeg, type DayPicture } from './MonthCalendar';
 import Segmented from '../../shared/ui/Segmented';
 import type { MonthBlock } from '../../shared/roadtrip/month-grid';
@@ -218,6 +214,7 @@ export default function TripOverview({
   onDeduceFrom,
 }: TripOverviewProps) {
   const compact = useIsCompact();
+  const expanded = useAtLeast('expanded');
   const coverage = useMemo(() => tripCoverage(trip), [trip]);
   // The day lives in the route, so coming back from a piece lands on the day
   // you were working on rather than on the first day of a 300-day trip.
@@ -436,21 +433,6 @@ export default function TripOverview({
     return map;
   }, [trip]);
 
-  // The legs under the heatmap, on its own week axis — the same bars the
-  // ruler draws, so the two say the same thing about a stage's days.
-  const legs = useMemo<HeatmapLeg[]>(
-    () =>
-      rulerBars(trip).map((bar) => ({
-        id: bar.stage.id,
-        label: stageLabel(bar.stage) || `Stage ${bar.index + 1}`,
-        tint: stageTint(bar.index),
-        from: bar.from,
-        length: bar.length,
-        lane: bar.lane,
-        selected: bar.stage.id === selectedStageId,
-      })),
-    [trip, selectedStageId],
-  );
   const openLegById = useCallback(
     (id: string) => {
       const stage = trip.stages.find((s) => s.id === id);
@@ -486,40 +468,6 @@ export default function TripOverview({
   const drafted = coverage.posts - coverage.publishedPosts;
   const rungOf = useMemo(() => new Map(coverage.days.map((d) => [d.date, levelOf(d)])), [coverage.days]);
   const rungAt = useCallback((date: IsoDate) => rungOf.get(date) ?? 0, [rungOf]);
-  const short = isShortTrip(coverage.totalDays);
-
-  // The loupe: the window of a long trip the ruler details (`loupe.ts`). It
-  // opens around the open day, follows the open day when a click leaves it,
-  // and is dragged on the heatmap. Not stored: where you are looking is not
-  // part of the trip.
-  const [loupe, setLoupe] = useState<Loupe>(() => defaultLoupe(trip, selected));
-  const { startDate: tripStart, endDate: tripEnd } = trip;
-  useEffect(() => {
-    setLoupe((l) => loupeContaining({ startDate: tripStart, endDate: tripEnd }, l, selected ?? tripStart));
-    // Keyed on the DATES and the open day, never on the document: a leg
-    // dragged in a window scrolled away from the open day changes the trip,
-    // and re-running here yanked the window back to that day mid-edit.
-  }, [tripStart, tripEnd, selected]);
-  // The window as the RULER's gesture needs it: a swipe asks for weeks and is
-  // told how many it really got, so a throw stops at the end of the trip
-  // instead of gliding on against nothing. The mirror is what lets several
-  // asks inside one frame compose — `setLoupe`'s own state arrives a render
-  // later, and a glide does not wait for renders.
-  const loupeRef = useRef(loupe);
-  loupeRef.current = loupe;
-  const panLoupe = useCallback(
-    (weeks: number) => {
-      const from = loupeRef.current;
-      const next = moveLoupe({ startDate: tripStart, endDate: tripEnd }, from, weeks * 7);
-      const days = daysBetween(from.start, next.start) ?? 0;
-      if (days === 0) return 0;
-      loupeRef.current = next;
-      setLoupe(next);
-      return days / 7;
-    },
-    [tripStart, tripEnd],
-  );
-
   /**
    * Accept what the picture said. It writes through the stage editors that
    * already exist (`locate-picture.ts` composes them), so there is no second
@@ -581,6 +529,18 @@ export default function TripOverview({
     });
   }, [view, visibleKey, trip.posts]);
   const windowThumbs = useDayThumbs(windowPosts);
+  // The days the ruler details on a wide screen: the month on screen and its
+  // two neighbours, clamped to the trip — the loupe, read from the scroll.
+  const spanOnScreen = useMemo(() => {
+    if (!visibleKey) return undefined;
+    const [y, m] = visibleKey.split('-').map(Number);
+    const start = toIsoDate(Date.UTC(y, m - 2, 1));
+    const end = toIsoDate(Date.UTC(y, m + 1, 0));
+    return {
+      startDate: start < trip.startDate ? trip.startDate : start,
+      endDate: end > trip.endDate ? trip.endDate : end,
+    };
+  }, [visibleKey, trip.startDate, trip.endDate]);
   const pictures = useMemo(() => {
     if (view !== 'pictures') return undefined;
     const out = new Map<IsoDate, DayPicture>();
@@ -695,8 +655,8 @@ export default function TripOverview({
   const stagesPanel = (
     <StagesPanel
       trip={trip}
-      span={short || compact ? undefined : { startDate: loupe.start, endDate: loupe.end }}
-      onPanSpan={panLoupe}
+      span={spanOnScreen}
+      hideCard={expanded}
       rungAt={rungAt}
       selectedId={selectedStageId}
       cursorDate={selected}
@@ -938,21 +898,48 @@ export default function TripOverview({
     );
   }
 
+  // The open leg's card, where a wide screen puts it: beside the calendar
+  // above 1180px, under the ruler below that (StagesPanel draws it there).
+  const openLeg = selectedStageId ? trip.stages.find((st) => st.id === selectedStageId) ?? null : null;
+  const stageCard = openLeg && (
+    <StageCard
+      key={openLeg.id}
+      trip={trip}
+      stage={openLeg}
+      index={trip.stages.indexOf(openLeg)}
+      onChange={(next) => setStages(trip.stages.map((st) => (st.id === next.id ? next : st)))}
+      onDelete={() => {
+        setStages(trip.stages.filter((st) => st.id !== openLeg.id));
+        setStageId(null);
+      }}
+      onClose={() => setStageId(null)}
+    />
+  );
+
   return (
     <section
-      className={pageScroll}
+      className="flex flex-col flex-1 min-h-0 overflow-hidden -mx-1 px-1"
       aria-label={`${trip.name} overview`}
     >
       {/* The trip's NAME sits in the bar, right after the way back — the same
           shape the Studio's project name has, so a document of either tool is
           found in the same place. What does not fit that one-pill line is the
-          route and the dates, which keep a line of their own below: they are
-          what was clipping on a 390px screen, not the name. */}
+          route and the dates, which keep a line of their own below. */}
       <PageBar
         back={{ label: 'Trips', onClick: onShowTrips }}
         trailing={
           <>
             {headerExtra}
+            <Segmented
+              size="sm"
+              label="How the days are drawn"
+              value={view}
+              onChange={chooseView}
+              options={[
+                { id: 'rungs', label: 'Rungs', icon: Icons.grid, title: 'Each day as its rung: nothing, drafted, published once, twice, more' },
+                { id: 'pictures', label: 'Pictures', icon: Icons.image, title: 'Each told day as the hook of its piece' },
+              ]}
+            />
             <Button
               onClick={() => setEditingDetails(true)}
               icon={Icons.settings}
@@ -966,9 +953,8 @@ export default function TripOverview({
 
       {/* The heading IS the summary: the name (click to rename), the route
           and the dates (click to edit them), and the three figures the tool
-          exists for. The five-count strip and the "longest stretch" sentence
-          it replaces were the top third of the screen before the calendar. */}
-      <div className="flex items-end gap-x-6 gap-y-2 min-w-0 pb-2">
+          exists for. */}
+      <div className="flex-none flex items-end gap-x-6 gap-y-2 min-w-0 pb-2">
         <div className="min-w-0 flex-1 flex flex-col gap-1">
           <TripTitle name={trip.name} onRename={rename} />
           <button
@@ -1017,45 +1003,39 @@ export default function TripOverview({
         </div>
       </div>
 
-      {/* A month or less is a STRIP — every day a cell of real width, the
-          legs right under it on the same axis, no zoom. Longer, the weekday
-          heatmap: the only thing that shows a year at a glance. */}
-      <section className="flex flex-col gap-2" aria-label="The journey, day by day">
-        {short ? (
-          <ShortDayStrip
+      {/* The same blocks as the phone, three to a row above 1180px and two
+          below, the year map above them and the ruler between — which now
+          details the months the calendar shows, the loupe read from the
+          scroll rather than dragged. The day and the open leg are a column
+          beside the calendar where there is room for one, under it where
+          there is not. */}
+      <div className="flex-1 min-h-0 flex gap-5">
+        <div className="flex-1 min-w-0 flex flex-col min-h-0">
+          <MonthCalendar
+            trip={trip}
             days={coverage.days}
             selected={selected}
             onSelect={selectDate}
             stageOf={(date) => dayStages.get(date) ?? null}
             menuFor={menuFor}
-          />
-        ) : (
-          <DayHeatmap
-            startDate={trip.startDate}
-            endDate={trip.endDate}
-            days={coverage.days}
-            selected={selected}
-            onSelect={selectDate}
-            stageOf={(date) => dayStages.get(date) ?? null}
-            menuFor={menuFor}
-            legs={legs}
             onOpenLeg={openLegById}
-            overlay={(geometry) => (
-              <LoupeBrush
-                trip={trip}
-                loupe={loupe}
-                onChange={setLoupe}
-                geometry={geometry}
-                extraHeight={legs.length > 0 ? 8 + legs.reduce((n, l) => Math.max(n, l.lane + 1), 0) * 21 - 3 : 0}
-              />
-            )}
+            selectedLegId={selectedStageId}
+            pictures={pictures}
+            onVisible={onVisible}
+            columns={expanded ? 3 : 2}
+            between={<div className="flex-none pb-3">{stagesPanel}</div>}
+            tail={!expanded ? <div className="pt-4">{dayPanel}</div> : undefined}
           />
+        </div>
+        {expanded && (
+          <aside className="flex-none w-[22rem] min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-4 pb-4" aria-label="The open day and the open leg">
+            {dayPanel}
+            {stageCard && (
+              <div className="bg-surface border border-line rounded-paper-lg px-5 pb-5 pt-3">{stageCard}</div>
+            )}
+          </aside>
         )}
-      </section>
-
-      {stagesPanel}
-
-      {dayPanel}
+      </div>
 
       {sheets}
     </section>

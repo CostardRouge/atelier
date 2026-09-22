@@ -66,6 +66,15 @@ interface MonthCalendarProps {
   /** The month on screen changed — what the pictures view reads its window from. */
   onVisible?: (block: MonthBlock) => void;
   /**
+   * At most this many blocks side by side, wrapping — a wide screen's layout.
+   * How many really sit in a row is what the width allows at a cell a mouse
+   * can still aim at (`FIT_CELL`): two at 1280px beside the library's rail,
+   * three at 1440. One is the phone's stack.
+   */
+  columns?: number;
+  /** Drawn between the map and the scroller — the wide screen's stage ruler. */
+  between?: ReactNode;
+  /**
    * Something drawn INSIDE the scroller after the blocks — a hint, a spacer
    * — so it scrolls away with them rather than eating the calendar's height.
    */
@@ -92,6 +101,10 @@ const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'] as const;
 const RIBBON = 12;
 /** The grip on an adjusted leg's end: a finger's target, over the cell's foot. */
 const GRIP = 28;
+/** Between two blocks drawn side by side. */
+const COLUMN_GAP = 24;
+/** The narrowest cell a row of blocks may be packed down to. */
+const FIT_CELL = 34;
 
 /**
  * The trip as a stack of calendar months, the phone's own calendar — one
@@ -117,6 +130,8 @@ export default function MonthCalendar({
   adjust,
   pictures,
   onVisible,
+  columns = 1,
+  between,
   tail,
 }: MonthCalendarProps) {
   const blocks = useMemo(() => monthBlocks(trip.startDate, trip.endDate), [trip.startDate, trip.endDate]);
@@ -125,9 +140,13 @@ export default function MonthCalendar({
   const [hovered, setHovered] = useState<Hovered | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
 
-  // The cell FITS the column: a seventh of what the gutters leave.
+  // The cell FITS the column: a seventh of what the gutters leave — the
+  // block's share of the row when several blocks sit side by side.
   const [boxRef, width] = useElementWidth<HTMLDivElement>();
-  const cell = monthCell(width);
+  const fit = width > 0 ? Math.floor((width + COLUMN_GAP) / (monthWidth(FIT_CELL) + COLUMN_GAP)) : 1;
+  const cols = Math.max(1, Math.min(Math.floor(columns), fit));
+  const perBlock = cols > 1 ? Math.floor((width - (cols - 1) * COLUMN_GAP) / cols) : width;
+  const cell = monthCell(perBlock);
   const cellH = Math.round(cell * 0.9);
   const step = cell + MONTH_GAP;
   const blockWidth = monthWidth(cell);
@@ -219,6 +238,8 @@ export default function MonthCalendar({
         onJump={(i) => jumpTo(i)}
       />
 
+      {between}
+
       <div
         ref={(node) => {
           scroller.current = node;
@@ -227,7 +248,10 @@ export default function MonthCalendar({
         onScroll={readVisible}
         // `relative`, so a block's `offsetTop` is measured from THIS box and a
         // jump lands on the block's own top rather than that far past it.
-        className="relative flex-1 min-h-0 overflow-y-auto overscroll-y-contain pb-4"
+        className={`relative flex-1 min-h-0 overflow-y-auto overscroll-y-contain pb-4 ${
+          cols > 1 ? 'flex flex-wrap content-start' : ''
+        }`}
+        style={cols > 1 ? { columnGap: COLUMN_GAP, rowGap: 12 } : undefined}
       >
         {blocks.map((block, i) => (
           <MonthBlockView

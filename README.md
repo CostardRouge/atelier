@@ -466,13 +466,17 @@ same sheet that asked for them, which says before saving what a shorter span
 does to the legs it no longer covers (trimmed, or removed when they fall
 outside it entirely). Pieces are never moved and never deleted.
 
-**The grid is the point.** `#/roadtrip` lists the trips as **cards with their
-cover** or, one toggle away, as **bands** — the trip you were on first with a
-Resume button, then one progress row per trip. A trip opens on every day of
-it. Up to a month, that is a **strip**: each day a cell of real width, the
-legs drawn right under it. Longer, it is a contribution-style grid, one column
-per week, Monday at the top, fitted to the width of the window so a year
-reads at a glance, with the legs drawn as a lane under the weeks they cover.
+**The calendar is the point.** `#/roadtrip` lists the trips as **cards with
+their cover** or, one toggle away, as **bands** — the trip you were on first
+with a Resume button, then one progress row per trip. A trip opens on every
+day of it, as a **calendar of months**: one block per calendar month the trip
+touches, seven columns Monday to Sunday, the blocks side by side where the
+window is wide enough (three to a row above 1180px, two below, one on a phone)
+and a day never narrower than a pointer can aim at. Above the blocks the
+whole trip stays in view as a **map** — a contribution-style heatmap, one
+column per week, fitted to the width — read and jumped from (one click per
+month) and never aimed at; the frame on it is where you have scrolled to.
+Under each week a **ribbon** says which leg you were on.
 Its job is the **holes**: with thousands of photos and a year's distance,
 what you cannot answer from memory is which days you have never told. Empty
 cells are drawn like any other, five intensity rungs separate "nothing here"
@@ -536,32 +540,33 @@ preview follows the drag, and the arrows nudge frame by frame.
 a badge name a place, say "3 days in Kalbarri", or count which day of a stop a
 picture is — and an optional marker sets the place off from the rest.
 
-They live on a **ruler under the grid** — a video editor's timeline scaled to
-days. On a long trip the ruler details the **loupe**: a window you drag over
-the grid (its grip on top slides it, its two edges widen it), so the legs of
-two months at a time get the width a finger can grab, while the grid above
-keeps the whole year in view. Each leg is a bar: drag either edge to change when it began or ended,
+They live on a **ruler between the map and the months** — a video editor's
+timeline scaled to days. It details the **months on screen**: the one you
+have scrolled to and its two neighbours, so the legs of a quarter at a time
+get the width a pointer can grab (about nine pixels a day on a year-long
+trip) while the map above keeps the whole year in view — scroll the calendar
+and the ruler follows. Each leg is a bar: drag either edge to change when it began or ended,
 drag its middle to slide it whole, and every move snaps to a day while a pin
 follows the pointer saying the date it would land on and how long the leg
 would then be. A run of days no leg covers offers a `+` that adds one over
 exactly that run; legs that overlap on a travel day stack in a second row
-rather than hiding one another. The grid and the ruler are the same calendar
-seen twice: each day's cell wears a stripe in its leg's tint, the day you have
+rather than hiding one another. The months and the ruler are the same calendar
+seen twice: each week wears its leg's ribbon in the leg's tint, the day you have
 open is a **playhead** — click anywhere on the track to go to that day, or
 move it with the arrow keys — and **right-clicking a day** offers the edits
 that make sense there, worded with the leg they would touch: start a stage
 here (inside a leg, that cuts it in two), end "Perth → Kalbarri" here, extend
-it to here. Clicking a bar opens that leg's fields beneath the ruler and goes
-to the day it began; clicking a day a leg covers opens that leg. Nothing is
-drag-only — a focused edge, bar or playhead moves with the arrow keys.
+it to here. Clicking a bar opens that leg's fields — in a column beside the
+calendar above 1180px, with the open day, and beneath the ruler below — and
+goes to the day it began; clicking a day a leg covers opens that leg. Nothing
+is drag-only — a focused edge, bar or playhead moves with the arrow keys.
 
-**On a phone the overview is a calendar of months, not a grid.** Below 820px
-the fitted grid gave a year-long trip a 6px cell — seven times too small for a
-finger — so the axis turns: one block per month, seven columns Monday to
-Sunday, the page scrolling, and a day is a seventh of the width, ~47px, with
-nothing to invent. The year stays in view as a **map** above it, read and
-jumped from (one tap per month) and never aimed at; the frame on it is where
-you have scrolled to. Under each week a **ribbon** says which leg you were on.
+**On a phone the same calendar is the whole screen.** Below 820px the grid
+this replaced gave a year-long trip a 6px cell — seven times too small for a
+finger — so the months stack one to a row, the column scrolling, and a day is
+a seventh of the width, ~47px, with nothing to invent; the map above is one
+tap per month. The ruler does not fit a phone and leaves it entirely (its job
+is done on the calendar itself, below).
 A tap on a day **selects** it and never opens anything: the **strip** above
 the bottom bar re-reads — the date, the leg, and the day's pieces as their own
 hook thumbnails, three at most, then `+N`; on a day nothing came out of, the
@@ -578,8 +583,9 @@ calendar itself: **Adjust on the calendar** fades every other day, puts a
 calendar as the keyboard's twin; Done writes it, Cancel drops it. A toggle in
 the bar swaps the rungs for **pictures**: each told day draws the hook of its
 piece in its cell, with a count when it holds several. The choice is
-remembered by the browser. Above 820px nothing of this applies — the grid,
-the loupe and the ruler stay exactly as described.
+remembered by the browser, and the same toggle sits in the wide screen's bar.
+Above 820px the strip, the sheets and Adjust do not apply: the day and the
+leg are panels on the screen, and the ruler is what edits a leg.
 
 A stage lists **the places it went through, in the order you lived them**,
 as a row of chips joined by the badge's own arrow. The first is where the leg

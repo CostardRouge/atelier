@@ -118,6 +118,13 @@ describe('visibleBlock', () => {
     expect(visibleBlock(tops, 5000, 600)).toBe(3);
     expect(visibleBlock([], 0, 600)).toBe(-1);
   });
+
+  it('answers the FIRST block of a row when several share a top — a wide screen reads a row from its left', () => {
+    const tops = [0, 0, 0, 400, 400, 400, 800, 800, 800];
+    expect(visibleBlock(tops, 0, 600)).toBe(0);
+    expect(visibleBlock(tops, 300, 600)).toBe(3);
+    expect(visibleBlock(tops, 900, 600)).toBe(6);
+  });
 });
 
 describe('blockSpan and weekStart', () => {

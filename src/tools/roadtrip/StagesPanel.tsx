@@ -22,6 +22,8 @@ interface StagesPanelProps {
   span?: { startDate: IsoDate; endDate: IsoDate };
   /** Move that window by whole weeks — a sideways scroll over the ruler. */
   onPanSpan?: (weeks: number) => void;
+  /** The open leg's card is drawn elsewhere (a wide screen's right column). */
+  hideCard?: boolean;
   /** The grid's rung for a day (0..4), drawn as a strip on the ruler. */
   rungAt?: (date: IsoDate) => number;
   /** The leg open in the editor below the ruler; null shows the ruler alone. */
@@ -185,6 +187,7 @@ export default function StagesPanel({
   trip,
   span,
   onPanSpan,
+  hideCard = false,
   rungAt,
   selectedId,
   cursorDate,
@@ -232,7 +235,7 @@ export default function StagesPanel({
           <SectionLegend
             label={
               span
-                ? `Loupe · ${formatIsoDate(span.startDate)} → ${formatIsoDate(span.endDate)} · ${spanLength(span.startDate, span.endDate)} days`
+                ? `On screen · ${formatIsoDate(span.startDate)} → ${formatIsoDate(span.endDate)} · ${spanLength(span.startDate, span.endDate)} days`
                 : `Stages · ${trip.stages.length} leg${trip.stages.length === 1 ? '' : 's'}`
             }
           >
@@ -247,7 +250,7 @@ export default function StagesPanel({
             <p>
               On the track: tap a leg to edit it and go to its first day · tap anywhere
               else to open that day · hold a leg, or either of its edges, then drag to
-              move its dates{span ? ' · swipe the track sideways to move the loupe' : ''}.
+              move its dates{span ? ' · the track follows the months the calendar shows' : ''}.
               <span className="max-[600px]:hidden">
                 {' '}
                 Right-click a day on the calendar to start or end a stage there.
@@ -281,11 +284,6 @@ export default function StagesPanel({
               Deduce
             </Button>
           ))}
-        {span && (
-          <span className="font-mono text-3xs text-faint whitespace-nowrap max-[900px]:hidden">
-            drag the window above, or hold inside it · swipe the ruler sideways to move it
-          </span>
-        )}
         <Button variant="primary" onClick={add} icon={Icons.plus}>
           Stage
         </Button>
@@ -329,7 +327,7 @@ export default function StagesPanel({
             Tap a leg to edit it and go to its first day · tap anywhere else on
             the track to open that day · hold a leg, or either of its edges,
             then drag to move its dates
-            {span ? ' · swipe the track sideways to move the loupe' : ''}
+            {span ? ' · the track follows the months the calendar shows' : ''}
             {/* A gesture a phone does not have, hidden where there is none —
                 the calendar's own hint above does the same. */}
             <span className="max-[600px]:hidden">
@@ -339,7 +337,7 @@ export default function StagesPanel({
         )
       )}
 
-      {selected && (
+      {selected && !hideCard && (
         <StageCard
           key={selected.id}
           trip={trip}
