@@ -96,7 +96,7 @@ ${glsl.LUT_LOOKUP}
 void main() {
   vec4 src = texture(u_video, v_uv);
   vec3 graded = gradeThroughLut(src.rgb);
-  vec3 rgb = (u_split && v_uv.x > u_splitX) ? src.rgb : graded;
+  vec3 rgb = (u_split && v_uv.x < u_splitX) ? src.rgb : graded;
   outColor = vec4(rgb, src.a);
 }`;
 

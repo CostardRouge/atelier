@@ -41,15 +41,16 @@ out vec4 outColor;
 
 uniform sampler2D u_video;
 uniform bool u_split;    // before/after wipe active
-uniform float u_splitX;  // wipe position in [0,1]; left of it shows the grade
+uniform float u_splitX;  // wipe position in [0,1]; left of it shows the original
 ${LUT_UNIFORMS}
 ${LUT_LOOKUP}
 
 void main() {
   vec4 src = texture(u_video, v_uv);
   vec3 graded = gradeThroughLut(src.rgb);
-  // In split mode, reveal the original to the right of the divider.
-  vec3 rgb = (u_split && v_uv.x > u_splitX) ? src.rgb : graded;
+  // In split mode, reveal the original to the LEFT of the divider: the picture
+  // reads before → after, left to right, everywhere in the suite.
+  vec3 rgb = (u_split && v_uv.x < u_splitX) ? src.rgb : graded;
   outColor = vec4(rgb, src.a);
 }`;
 
@@ -87,7 +88,7 @@ export function setDefaultLutInterpolation(mode: Interpolation): void {
 export interface LutRenderer {
   /** Replace the active LUT, or pass null to render the video ungraded. */
   setLut(lut: CubeLut | null): void;
-  /** Enable a before/after wipe; `x` (0..1) is the divider, graded on its left. */
+  /** Enable a before/after wipe; `x` (0..1) is the divider, original on its left. */
   setSplit(active: boolean, x: number): void;
   /** LUT strength: 0 = original, 1 = full LUT, up to 3 = over-applied. */
   setIntensity(value: number): void;
