@@ -25,6 +25,14 @@ interface PictureZoomOptions {
   /** Anything that changes when another picture is shown: the view goes back to the fit. */
   resetKey?: unknown;
   /**
+   * How far the view may go, default `INSPECT_MAX_ZOOM` — 4000 %, which is a
+   * DEVELOP's ceiling: there the file itself can be decoded whole under the
+   * view (the loupe), so magnifying keeps paying. A surface that only ever
+   * shows a bounded PREVIEW raster says a smaller number, because past a few
+   * times its own pixels there is nothing more in it to find.
+   */
+  ceiling?: number;
+  /**
    * A single pointer the caller keeps for itself (the develop sheet's wipe):
    * the hook neither pans nor captures it. A second finger landing still
    * makes a pinch of the two, and `onTakeover` tells the caller to let go.
@@ -85,7 +93,13 @@ const PAN_SLOP = 3;
  * native and not passive — React's wheel handler is passive, so the page
  * would zoom instead.
  */
-export function usePictureZoom({ natural, resetKey, claim, onTakeover }: PictureZoomOptions): PictureZoom {
+export function usePictureZoom({
+  natural,
+  resetKey,
+  ceiling = INSPECT_MAX_ZOOM,
+  claim,
+  onTakeover,
+}: PictureZoomOptions): PictureZoom {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState<Box>({ width: 0, height: 0 });
   const [view, setView] = useState<View>(FITTED);
@@ -99,7 +113,9 @@ export function usePictureZoom({ natural, resetKey, claim, onTakeover }: Picture
   // at — 4000 % is Lightroom's, and `onePixel` is what tells the viewport when
   // it has crossed into magnifying preview pixels.
   const onePixel = onePixelZoom(natural, content, dpr);
-  const max = Math.max(onePixel, INSPECT_MAX_ZOOM);
+  // The landmark is always reachable, whatever the ceiling: a picture whose
+  // own pixels sit past it would otherwise be un-inspectable at 1:1.
+  const max = Math.max(onePixel, ceiling);
 
   // Read by the native listeners, which are bound once.
   const live = useRef({ view, viewport, content, max, claim, onTakeover });

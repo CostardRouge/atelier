@@ -58,19 +58,54 @@
  *
  * Rule for anything else here that creates a grader per mount: own the
  * canvas, or inherit both bugs.
+ *
+ * ## It is looked INTO, like a lightbox and unlike a preview
+ *
+ * A look is judged on skin, on a sky's gradient, on what a conversion does to
+ * a shadow — none of which a picture fitted into a band a few hundred pixels
+ * tall can show. So the scene takes `usePictureZoom`, the develop sheet's own
+ * gestures (wheel, ⌘/ctrl-wheel or a trackpad pinch, two fingers, a drag that
+ * pans once zoomed), and is the one media surface in the suite besides those
+ * two that carries the ± pill (`StageZoomControl`, whose "never over a
+ * preview" rule is about the framing stages: there the pill fought the
+ * picture's own drag, here there is no framing gesture to fight).
+ *
+ * The ceiling is the lightbox's 8×, not a develop's 4000 %: what is on screen
+ * is a 720p raster (`SCENE_PIXELS`), and magnifying a preview pixel says
+ * nothing about a look.
+ *
+ * The wipe keeps the develop sheet's grammar rather than inventing a second
+ * one: at the fitted size a press anywhere places the divider; once zoomed a
+ * drag pans and only the divider's own handle still wipes.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CubeLut } from '../lib/cube-parser';
+import StageZoomControl from '../ui/StageZoomControl';
+import { MAX_VIEW_ZOOM } from '../ui/pan-zoom';
+import { usePictureZoom } from '../ui/use-picture-zoom';
 import { createLutRenderer, type LutRenderer } from './lut-gl';
 import { sceneFrame, type LutPreviewPicture } from './look-scene';
 import type { Interpolation } from './interpolate';
+
+/** Whether a press on the picture places the divider rather than panning. */
+function wipeClaims(target: EventTarget | null, zoomed: boolean): boolean {
+  const el = target as Element | null;
+  if (el?.closest?.('button')) return false;
+  return !zoomed || Boolean(el?.closest?.('[data-wipe-handle]'));
+}
 
 export interface LookSceneProps {
   /** The host's picture — what the look is judged on. */
   source: LutPreviewPicture;
   /** The aimed look's lattice, or null for the original (and while it loads). */
   cube: CubeLut | null;
+  /**
+   * How strongly it is applied — `mix(original, graded, intensity)`, the same
+   * number a stack layer carries, and the one the pick hands to the host. 1 is
+   * the look as authored.
+   */
+  intensity?: number;
   interpolation: Interpolation;
   /** The before/after wipe, driven by the host's slider. */
   compare: boolean;
@@ -87,6 +122,7 @@ export interface LookSceneProps {
 export default function LookScene({
   source,
   cube,
+  intensity = 1,
   interpolation,
   compare,
   splitX,
@@ -101,6 +137,27 @@ export default function LookScene({
 
   const frame = sceneFrame(source.width, source.height);
 
+  // What the view is of: the canvas the renderer draws, not the file — the
+  // scene works to a pixel budget and `object-contain` fits exactly this.
+  const natural = useMemo(
+    () => (frame.w && frame.h ? { width: frame.w, height: frame.h } : null),
+    [frame.w, frame.h],
+  );
+  const wiping = useRef(false);
+  const live = useRef({ compare, zoomed: false });
+  const view = usePictureZoom({
+    natural,
+    resetKey: source.image,
+    ceiling: MAX_VIEW_ZOOM,
+    // The wipe and the pan are the same pointer: the hook lets go of exactly
+    // the presses the divider answers, and takes the rest.
+    claim: (e) => live.current.compare && wipeClaims(e.target, live.current.zoomed),
+    onTakeover: () => {
+      wiping.current = false;
+    },
+  });
+  live.current = { compare, zoomed: view.zoomed };
+
   // One renderer per mount, on a canvas of its own (see the note above).
   // Every look afterwards is a uniform change, never a second context.
   useEffect(() => {
@@ -108,7 +165,12 @@ export default function LookScene({
     if (!box) return;
     const fresh = () => {
       const el = document.createElement('canvas');
-      el.className = 'w-full h-full block';
+      // `absolute inset-0` is what makes `object-contain` mean anything: a
+      // height of 100% resolves against a definite box there, and the picture
+      // is then fitted and centred inside it exactly where `containedSize`
+      // says it is — which is what lets the zoom, the divider and the shader
+      // agree (`pan-zoom.ts`).
+      el.className = 'absolute inset-0 w-full h-full object-contain block';
       box.appendChild(el);
       return el;
     };
@@ -140,7 +202,7 @@ export default function LookScene({
     void supported;
     renderer.resize(frame.w, frame.h);
     renderer.setLut(cube);
-    renderer.setIntensity(1);
+    renderer.setIntensity(intensity);
     renderer.setInterpolation(interpolation);
     renderer.setSplit(compare, splitX);
     try {
@@ -150,7 +212,16 @@ export default function LookScene({
       // open. Painting one throws, and the scene simply stops updating rather
       // than taking the modal down with it.
     }
-  }, [source.image, cube, interpolation, compare, splitX, frame.w, frame.h, supported]);
+  }, [source.image, cube, intensity, interpolation, compare, splitX, frame.w, frame.h, supported]);
+
+  // The view, written onto a canvas React does not own. A finger is followed
+  // as it moves; a button press is animated.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.style.transform = view.transform;
+    canvas.style.transition = view.settling ? 'transform 220ms var(--ease-paper)' : '';
+  }, [view.transform, view.settling, supported]);
 
   // No WebGL2: the picture, ungraded, through a 2D context.
   useEffect(() => {
@@ -167,49 +238,120 @@ export default function LookScene({
     }
   }, [supported, source.image, frame.w, frame.h]);
 
-  // The divider follows a drag across the picture, as it does in the LUT
-  // Studio — measured on the picture's own box, so it agrees with the shader.
-  // `pan-y` and never `none`: the modal's body scrolls under this, and a
-  // surface that claims both axes leaves a finger no way out.
-  const track = useCallback(
+  // The divider follows a drag across the picture — through the view's own
+  // arithmetic, so it lands where the shader puts it at any zoom and pan.
+  const wipeFrom = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      if (!compare || (e.type === 'pointermove' && e.buttons === 0)) return;
-      const box = e.currentTarget.getBoundingClientRect();
-      if (!box.width) return;
-      const x = (e.clientX - box.left) / box.width;
+      const x = view.fractionAt(e.clientX, e.clientY).x;
       onSplit(x < 0 ? 0 : x > 1 ? 1 : x);
     },
-    [compare, onSplit],
+    [view.fractionAt, onSplit],
+  );
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!compare || !wipeClaims(e.target, view.zoomed)) return;
+      wiping.current = true;
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* not a live pointer */
+      }
+      wipeFrom(e);
+    },
+    [compare, view.zoomed, wipeFrom],
   );
 
+  // Where the picture really sits in the band, so the divider and the two
+  // words sit on the PICTURE rather than on the light table around it.
+  const { rect } = view;
+
   return (
-    <div className="relative w-full h-full min-h-0 rounded-control overflow-hidden bg-frame">
-      {/* The picture's own box: fitted by ratio into the band and centred,
-          whatever shape the photograph is. The canvas is appended here by the
-          effect — React never owns it. */}
-      <div
-        ref={holder}
-        className="absolute inset-0 m-auto max-w-full max-h-full touch-pan-y"
-        style={frame.w && frame.h ? { aspectRatio: `${frame.w} / ${frame.h}` } : undefined}
-        onPointerMove={track}
-        onPointerDown={track}
-      >
-        {compare && (
-          <>
-            <span
-              aria-hidden="true"
-              className="absolute inset-y-0 w-0.5 bg-paper/90 pointer-events-none"
-              style={{ left: `${splitX * 100}%` }}
-            />
-            <span className="absolute left-2 bottom-2 px-1.5 py-0.5 rounded-full bg-frame/70 font-mono text-3xs tracking-[0.1em] uppercase text-paper pointer-events-none">
-              Original
-            </span>
-            <span className="absolute right-2 bottom-2 px-1.5 py-0.5 rounded-full bg-frame/70 font-mono text-3xs tracking-[0.1em] uppercase text-paper pointer-events-none">
-              Graded
-            </span>
-          </>
-        )}
-      </div>
+    <div
+      ref={view.viewportRef}
+      // `touch-none`, unlike every drag surface inside a scroll box: this band
+      // is `flex-none` in the modal's column and the grid below it is the
+      // scroller, so nothing here is taking a scroll away — and a pinch needs
+      // both axes.
+      className={`relative w-full h-full min-h-0 rounded-control overflow-hidden bg-frame touch-none select-none ${
+        view.zoomed
+          ? view.panning
+            ? 'cursor-grabbing'
+            : 'cursor-grab'
+          : compare
+            ? 'cursor-col-resize'
+            : 'cursor-default'
+      }`}
+      onPointerDown={onPointerDown}
+      onPointerMove={(e) => {
+        if (wiping.current) wipeFrom(e);
+      }}
+      onPointerUp={() => {
+        wiping.current = false;
+      }}
+      onPointerCancel={() => {
+        wiping.current = false;
+      }}
+    >
+      {/* The canvas is appended here by the effect — React never owns it. It
+          fills this box and is fitted inside it by `object-contain`. */}
+      <div ref={holder} className="absolute inset-0" />
+
+      {compare && (
+        <>
+          {/* A grab strip, not a hairline: once zoomed this is the only thing
+              that still wipes instead of panning, so it has to be reachable
+              with a finger. */}
+          <div
+            data-wipe-handle
+            className="absolute w-7 -ml-3.5 cursor-col-resize group"
+            style={{
+              left: rect.x + splitX * rect.width,
+              top: Math.max(0, rect.y),
+              height: Math.max(0, Math.min(view.viewport.height, rect.y + rect.height) - Math.max(0, rect.y)),
+            }}
+            title="Drag to compare with the original"
+            aria-hidden="true"
+          >
+            <span className="absolute inset-y-0 left-1/2 w-0.5 -ml-px bg-paper/90 pointer-events-none" />
+            {view.zoomed && (
+              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 grid place-items-center w-6 h-6 rounded-full bg-[rgba(251,248,241,0.92)] border border-line-strong text-ink-soft shadow-paper group-hover:border-accent group-hover:text-accent-ink pointer-events-none">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 7l-5 5 5 5M15 7l5 5-5 5" />
+                </svg>
+              </span>
+            )}
+          </div>
+          {/* The two words name the picture's own halves, so they are drawn
+              only while both are on screen: panned into a corner at 4×, a
+              "Graded" pinned to the band would be naming whatever happens to
+              be under it. */}
+          {!view.zoomed && (
+            <>
+              <span
+                className="absolute px-1.5 py-0.5 rounded-full bg-frame/70 font-mono text-3xs tracking-[0.1em] uppercase text-paper pointer-events-none"
+                style={{ left: rect.x + 8, top: rect.y + rect.height - 26 }}
+              >
+                Original
+              </span>
+              <span
+                className="absolute px-1.5 py-0.5 rounded-full bg-frame/70 font-mono text-3xs tracking-[0.1em] uppercase text-paper pointer-events-none"
+                style={{ left: rect.x + rect.width - 8, top: rect.y + rect.height - 26, transform: 'translateX(-100%)' }}
+              >
+                Graded
+              </span>
+            </>
+          )}
+        </>
+      )}
+
+      {/* The way back from a zoom, drawn at every width and at rest too: a
+          trackpad pinch and a wheel are not on every device, and a control
+          that appears only once you are lost is not a way out. */}
+      <StageZoomControl
+        zoom={view.zoom}
+        hint="wheel, or pinch"
+        className="absolute top-2 left-2 shadow-paper"
+      />
 
       {busy && (
         <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-frame/70 font-mono text-3xs text-paper">

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildExifBlock, toDegreesMinutesSeconds, toRational } from './exif-build';
+import { buildExifBlock, buildOrientationBlock, toDegreesMinutesSeconds, toRational } from './exif-build';
 import { parseExif, type ExifData } from './exif-parser';
+import { readExifBlock, withExifBlock } from './exif-block';
 
 /** What the builder wrote, read back by the reader that has always been here. */
 function roundTrip(exif: ExifData, options?: Parameters<typeof buildExifBlock>[1]): ExifData {
@@ -113,5 +114,38 @@ describe('buildExifBlock', () => {
 
   it('stays a sane size — a block is one APP1 segment, never a file', () => {
     expect(buildExifBlock(full).length).toBeLessThan(1024);
+  });
+});
+
+describe('buildOrientationBlock — the one block that does NOT say 1', () => {
+  /** A JPEG with no metadata at all, the shape `exif-block.test.ts` uses. */
+  const bareJpeg = () =>
+    new Uint8Array([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x04, 0x00, 0x00, 0xff, 0xda, 0x00, 0x02, 0x01, 0x02, 0xff, 0xd9]);
+
+  it('is a whole TIFF stream in twenty-six bytes', () => {
+    const block = buildOrientationBlock(6);
+    expect(block.length).toBe(26);
+    expect([...block.subarray(0, 8)]).toEqual([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00]);
+    // One entry: tag 0x0112, SHORT, count 1, the value inline; then no next IFD.
+    expect([...block.subarray(8, 10)]).toEqual([0x01, 0x00]);
+    expect([...block.subarray(10, 22)]).toEqual([0x12, 0x01, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00]);
+    expect([...block.subarray(22)]).toEqual([0, 0, 0, 0]);
+  });
+
+  it('reads back as the orientation and nothing else', () => {
+    const read = parseExif(buildOrientationBlock(8).buffer);
+    expect(read.orientation).toBe(8);
+    expect(read.make).toBeUndefined();
+    expect(read.dateTimeOriginal).toBeUndefined();
+    expect(read.gps).toBeUndefined();
+  });
+
+  it('survives the splice into a JPEG, which is the whole point of it', () => {
+    const jpeg = withExifBlock(bareJpeg(), buildOrientationBlock(6));
+    const block = readExifBlock(jpeg);
+    expect(block).not.toBeNull();
+    expect(parseExif(block!.buffer).orientation).toBe(6);
+    // The segment is the block plus `Exif\0\0`, its length and the marker.
+    expect(jpeg.length).toBe(bareJpeg().length + 26 + 6 + 2 + 2);
   });
 });

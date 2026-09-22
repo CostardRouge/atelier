@@ -244,6 +244,10 @@ export interface BuildExifOptions {
  * way up it was looked at, so carrying the original's orientation over would
  * turn it a second time. The pixel dimensions are the DELIVERED ones, for the
  * same reason. No thumbnail is written — a stale one is worse than none.
+ *
+ * The one picture that needs the opposite is a RAW's embedded render, which
+ * nobody has turned yet: `buildOrientationBlock` below, and never a relaxation
+ * of the rule here.
  */
 export function buildExifBlock(exif: ExifData, options: BuildExifOptions = {}): Uint8Array<ArrayBuffer> {
   const ifd0: Field[] = [
@@ -321,4 +325,34 @@ export function buildExifBlock(exif: ExifData, options: BuildExifOptions = {}): 
   if (hasGps) writeIfd(view, bytes, gpsOffset, gpsIfd, dataStart, data);
   bytes.set(data, dataStart);
   return bytes.slice(0, dataStart + data.length);
+}
+
+/**
+ * A block holding ONE tag: the orientation, and nothing else.
+ *
+ * Twenty-six bytes — `II`, 42, IFD0 at 8, one SHORT entry whose value is
+ * inline, no next IFD — meant to be spliced into a JPEG by `withExifBlock`, so
+ * that a decoder asked for `imageOrientation: 'from-image'` finally has
+ * something to read.
+ *
+ * **Why this exists beside `buildExifBlock`, which writes 1 and only 1.** The
+ * two builders answer opposite questions, and both answers are right. An
+ * EXPORT is delivered the way up it was looked at, so its block says 1 or a
+ * viewer would turn it a second time. A RAW's embedded render, sliced out of
+ * the middle of its TIFF (`raw-probe.ts`), was never turned by anyone: the
+ * camera's orientation sits in the container's IFD0, outside the slice, so the
+ * bytes handed to the decoder have to be told (`media-pipeline.md`).
+ */
+export function buildOrientationBlock(orientation: number): Uint8Array<ArrayBuffer> {
+  const field: Field = { tag: IFD0.orientation, type: SHORT, values: [Math.round(orientation)] };
+  const ifd0Offset = 8;
+  const bytes = new Uint8Array(ifd0Offset + ifdSize(1));
+  const view = new DataView(bytes.buffer);
+  view.setUint16(0, 0x4949, true);
+  view.setUint16(2, 42, true);
+  view.setUint32(4, ifd0Offset, true);
+  // A SHORT's two bytes fit an entry's own slot, so nothing is appended and
+  // the data area stays empty — `dataStart` is past the end and never read.
+  writeIfd(view, bytes, ifd0Offset, [field], bytes.length, []);
+  return bytes;
 }
