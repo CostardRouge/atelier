@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
+import { useAssetLibrary, useAssetMeta } from '../../shared/library/AssetLibraryContext';
 import { useObjectUrl } from '../../shared/media/use-object-url';
 import { useVideoTransport } from '../../shared/media/use-video-transport';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
@@ -296,7 +296,7 @@ export default function OverlayStudio() {
     setExportDone(false);
     const controller = new AbortController();
     exportAbort.current = controller;
-    const meta = lib.meta.get(activeClip.id);
+    const meta = lib.getMeta(activeClip.id);
     // Prefer the transcoded H.264 (if one was made for preview): WebCodecs can
     // decode it directly, where the HEVC original would fall back or fail.
     const transcoded = activeTranscode.transcoded;
@@ -336,7 +336,7 @@ export default function OverlayStudio() {
 
   // --- derived ------------------------------------------------------------
 
-  const activeMeta = activeId ? lib.meta.get(activeId) : undefined;
+  const activeMeta = useAssetMeta(activeId);
   const activeRes =
     activeMeta?.width && activeMeta?.height
       ? `${activeMeta.width}×${activeMeta.height}`

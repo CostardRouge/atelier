@@ -16,7 +16,7 @@ import TranscodeControl from '../../shared/media/TranscodeControl';
 import { useLutPreview } from './use-lut-preview';
 import { useLutSelection } from '../../shared/lut/use-lut-selection';
 import LutPicker from '../../shared/lut/LutPicker';
-import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
+import { useAssetLibrary, useAssetMeta } from '../../shared/library/AssetLibraryContext';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
 import { Icons } from '../../shared/ui/icons';
 
@@ -315,7 +315,7 @@ export default function LutStudio() {
     }
   }
 
-  const activeMeta = activeId ? lib.meta.get(activeId) : undefined;
+  const activeMeta = useAssetMeta(activeId);
   const activeRes =
     activeMeta?.width && activeMeta?.height
       ? `${activeMeta.width}×${activeMeta.height}`

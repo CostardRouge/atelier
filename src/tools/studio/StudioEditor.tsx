@@ -5,7 +5,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
+import { useAssetLibrary, useAssetMeta } from '../../shared/library/AssetLibraryContext';
 import { useActiveAsset } from '../../shared/library/use-active-asset';
 import { useObjectUrl } from '../../shared/media/use-object-url';
 import {
@@ -1331,7 +1331,7 @@ export default function StudioEditor({
   async function handleExport() {
     if (!active || exporting || variants.length === 0) return;
     if (!activeVideo && !photo) return;
-    const meta = lib.meta.get(active.id);
+    const meta = lib.getMeta(active.id);
     let srcWidth = photo?.width ?? meta?.width ?? videoRef.current?.videoWidth ?? 0;
     let srcHeight = photo?.height ?? meta?.height ?? videoRef.current?.videoHeight ?? 0;
     if (!srcWidth || !srcHeight) {
@@ -1554,7 +1554,7 @@ export default function StudioEditor({
 
   // --- derived ------------------------------------------------------------
 
-  const activeMeta = activeId ? lib.meta.get(activeId) : undefined;
+  const activeMeta = useAssetMeta(activeId);
   // A decoded still knows its own size exactly (and upright); the library's
   // metadata is the fallback, and the only source for a RAW nothing can decode.
   // What is ON THE STAGE — a remote source's proxy, when that is what was

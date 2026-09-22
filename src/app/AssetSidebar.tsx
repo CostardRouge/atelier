@@ -15,10 +15,7 @@ import { useMediaActions, useMediaScope } from '../shared/sources/media-scope';
 import { overrideTo, viewedSpan, type DayOverride } from '../shared/sources/scope-override';
 import MediaActionRow from '../shared/ui/MediaActionRow';
 import { shortHost } from '../shared/sources/source-ledger';
-import {
-  useAssetLibrary,
-  type MediaMeta,
-} from '../shared/library/AssetLibraryContext';
+import { useAssetLibrary, type MediaMeta, useAssetMeta, useAssetMetaVersion } from '../shared/library/AssetLibraryContext';
 import { isRawImage, type Asset, type AssetKind } from '../shared/library/assets';
 import type { AssetDragItem } from '../shared/library/asset-drag';
 import { useAssetDragSource } from '../shared/library/use-asset-drag';
@@ -331,9 +328,13 @@ export default function AssetSidebar({
     return files;
   }, [viewable, viewing]);
   const viewUrls = useObjectUrls(viewWindow);
+  // Only while the deck is open: subscribed at rest, the whole list
+  // re-rendered once per cover that landed.
+  const metaVersion = useAssetMetaVersion(viewing !== null);
   const viewItems = useMemo(
-    () => viewable.map((a) => lightboxItem(a, lib.meta.get(a.id), viewUrls.get(a.id) ?? null)),
-    [viewable, lib.meta, viewUrls],
+    () => viewable.map((a) => lightboxItem(a, lib.getMeta(a.id), viewUrls.get(a.id) ?? null)),
+    // The covers land one by one; the version is what says the deck's facts moved.
+    [viewable, lib.getMeta, metaVersion, viewUrls],
   );
   /**
    * How the pictures in the deck were taken: the head of the file for a
@@ -401,7 +402,7 @@ export default function AssetSidebar({
   const viewedImage = viewedAsset?.parts.image ?? null;
   const viewedSiblings = useMemo(() => viewedAsset?.parts.siblings ?? NO_FILES, [viewedAsset]);
   const siblingFacts = useSiblingFacts(viewedSiblings);
-  const viewedMeta = viewedAsset ? lib.meta.get(viewedAsset.id) : undefined;
+  const viewedMeta = useAssetMeta(viewedAsset?.id);
   // The session cache's version: a chip that fetched must read as in hand.
   const held = useSyncExternalStore(subscribeHeld, heldVersion);
   const viewRows = useMemo<Rendition[]>(() => {
@@ -977,7 +978,6 @@ export default function AssetSidebar({
                 <AssetTile
                   key={a.id}
                   asset={a}
-                  meta={lib.meta.get(a.id)}
                   active={lib.activeId === a.id}
                   usable={assetUsableBy(accepts, a)}
                   onEnsure={() => lib.ensureMeta(a.id)}
@@ -989,7 +989,6 @@ export default function AssetSidebar({
                 <AssetRow
                   key={a.id}
                   asset={a}
-                  meta={lib.meta.get(a.id)}
                   selected={lib.selection.has(a.id)}
                   active={lib.activeId === a.id}
                   usable={assetUsableBy(accepts, a)}
@@ -1202,7 +1201,6 @@ const LIFTED = 'opacity-40 outline-dashed outline-[1.5px] outline-offset-[-1.5px
 
 interface AssetRowProps {
   asset: Asset;
-  meta: MediaMeta | undefined;
   selected: boolean;
   active: boolean;
   usable: boolean;
@@ -1216,7 +1214,6 @@ interface AssetRowProps {
 
 function AssetRow({
   asset,
-  meta,
   selected,
   active,
   usable,
@@ -1226,6 +1223,9 @@ function AssetRow({
   onPreview,
   onRemove,
 }: AssetRowProps) {
+  // The row reads its own cover, so the one whose cover lands is the one
+  // that re-renders — not the list, and not the tool beside it.
+  const meta = useAssetMeta(asset.id);
   // Build the cover lazily — only when the row scrolls into view, so a library
   // of thousands of files doesn't decode them all up front.
   const [ref, inView] = useInViewport<HTMLDivElement>();
@@ -1351,7 +1351,6 @@ function AssetRow({
  */
 function AssetTile({
   asset,
-  meta,
   active,
   usable,
   onEnsure,
@@ -1360,7 +1359,6 @@ function AssetTile({
   className,
 }: {
   asset: Asset;
-  meta: MediaMeta | undefined;
   active: boolean;
   usable: boolean;
   onEnsure: () => void;
@@ -1368,6 +1366,7 @@ function AssetTile({
   onPreview: (() => void) | null;
   className: string;
 }) {
+  const meta = useAssetMeta(asset.id);
   // The cover is built only when the tile scrolls into view, like a row's —
   // a pool of thousands must not decode itself to be listed.
   const [ref, inView] = useInViewport<HTMLDivElement>();
