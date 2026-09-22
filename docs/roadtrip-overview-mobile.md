@@ -160,3 +160,124 @@ Nothing here is built. Recommended if only one thing is built: **B**, because
 the target size stops being a number someone has to choose, the leg editing
 gets better rather than worse, and a short trip and a year stop being two
 screens.
+
+**He chose B on 2026-09-22** (*«l'option B est très sympa»*), and asked for the
+two things it did not yet answer: editing a leg, and seeing the pieces already
+published on a day. §8 is that design.
+
+## 8. B in full — the day, the legs, and the room there really is
+
+### 8.1 The vertical budget is 624 px, not 844
+
+His own point, and it is the constraint the rest is designed against. An
+iPhone 14 Pro is 852 pt tall; in Safari the address bar and the tab bar take
+about 120, leaving **~730**. The app does not guess this: `app-height.ts`
+publishes `--app-h` as the larger of `innerHeight` and the visual viewport, and
+every full-screen box reads it — so the browser's own bars are already out of
+the budget.
+
+What is left is then spent on furniture that is not negotiable:
+
+| | |
+| --- | --- |
+| The shell's masthead — `App.tsx:218`, `h-12` | 48 + 1 |
+| The shell's bottom bar — `SectionRail` (44 min + `pt-1` + `pb` + border) | 57 |
+| **What the overview actually gets** | **624** |
+
+**The bottom bar is already drawn on the overview.** `showRail = compact &&
+!!tool` (`App.tsx:175`) has no condition on the screen, and `SectionRail`'s own
+comment says so in as many words — *"the bar is drawn even for a tool that
+publishes no sections at all"*, on the trip overview and inside an editor
+alike. Today it holds one cell, `Library`. The 57 px are paid whatever we do,
+so the design SPENDS them: Trips publishes **Étapes** and **Voyage** beside the
+library, and the ⚙ leaves the top bar. That is a control removed, not added.
+
+The 624 are then spent: the trip bar **44** (against ~110 today for a serif
+`<h1>`, a subtitle line and three figures — on a phone they become one row:
+back, the name, `112/345`), the year map **58**, the day strip **68**, and
+**455 for the calendar**. A month block asks 414 (header 28 + weekday row 14 +
+five or six weeks of 62), so it fits with the next month's head showing, which
+is what makes it obvious the thing scrolls.
+
+Launched from the home screen the browser's 120 px come back and ~26 go to
+`safe-area-inset-bottom`: **+95 px net**, one more week of calendar, already
+paid for in code.
+
+### 8.2 The day: a strip that is always there, a sheet when you pull it
+
+Each piece already keeps a JPEG of its hook in the `thumbs` store, at 640 px on
+the long edge, pruned on delete (`roadtrip.md`). Nothing new is stored and
+nothing is fetched: **the pictures are already there**, and they are what makes
+a day readable at a glance.
+
+- **The strip** (68 px, above the bar, always): the date and the day number, the
+  leg with its tint dot, and the day's pieces as small thumbnails at their own
+  frame — a 9:16 reel narrow, a 4:5 carousel wider (`DayPanel`'s existing rule:
+  what the picture is for is recognising the SHAPE) — published ones on a solid
+  accent border, drafts on a dashed line, plus the count. The whole strip is one
+  target; the thumbnails say, they do not take the tap.
+- **The sheet** (pulled up, ~470 px): the day in full. The leg in one row with
+  a *Modifier ›* that goes straight to §8.3 — the day is where the question
+  "which leg was I on" is actually asked. Then *Sorti ce jour-là*: the existing
+  `DayPanel` rows (thumbnail, kind pill in the accent when published, title,
+  `publié le 12 mars` / `brouillon`, `⋯`). Then the three *Raconter ce jour*
+  verbs. Then, last, what the instance holds for that date — the Library's
+  Winnow tab already answers it (`media-scope`), so the row only opens it.
+
+Order matters and it is the tool's own: what came out first, what to make
+second.
+
+### 8.3 The legs: a list in a sheet, and the calendar as the date picker
+
+The **Étapes** cell opens the twelve legs as rows (tint dot, name, dates, days,
+and the leg's own coverage as a small barcode). The one you open carries its
+fields — name, region, the two dates, its places as chips — and the ruler's
+gap `+` becomes a row of the list (*"4 jours sans étape · + couvrir"*).
+
+The new gesture is **Ajuster sur le calendrier**, and it is what replaces the
+ruler on a phone:
+
+- the sheet drops, a band names the leg and its span with *Annuler* / *Terminé*;
+- every day outside the leg fades to 34 %, the leg's ribbon goes solid;
+- its first and last day carry a **28 px round grip**, dragged along the cells —
+  **one day = one cell = 46 px**, against 6,4 px on today's ruler;
+- a long press on any day offers *commencer ici* / *finir ici*;
+- and because nothing in this suite is drag-only, the two edges also have a
+  visible **stepper** under the calendar (`‹ 3 août ›`), which is the keyboard
+  twin the ruler's arrow keys are today.
+
+This is the point where B stops being a compromise: **editing a leg becomes
+better on a phone than it has ever been on a desktop.**
+
+### 8.4 The month in *pellicule*
+
+One toggle in the month header swaps the rung ramp for the hook thumbnails: a
+told day draws its own picture cropped into the 46 × 42 cell, published on a
+solid border, a draft dashed, a count in the corner when the day holds several;
+an untold day stays bare paper with its number. It answers *"voir ce qui est
+sorti"* at the scale of a month, which no list can, and it costs no new
+storage. The ramp stays the default — it is the view that answers the tool's
+own question, which is about holes.
+
+### 8.5 On a wide screen
+
+Same document, same blocks: the month blocks go **three to a row** at a 35 px
+cell (the whole year in four rows, scrolling), and what is a sheet on a phone
+becomes the **right column** — the day with its pieces above, the open leg's
+editor below. The year map and the **leg ruler stay at the top**: his September
+ruling holds, and *Ajuster* becomes a second way in rather than a replacement.
+Nothing here is a second screen to maintain: one month component at two cell
+sizes, one day panel at two placements.
+
+## 9. Still open after §8
+
+1. Does the **Étapes** sheet also need a "deduce / import from the timeline"
+   entry, or do those stay on the wide screen only (they are two buttons in
+   `StagesPanel`'s header today)?
+2. The day strip shows up to three thumbnails plus a count — is three right,
+   or should a day with five pieces scroll its strip?
+3. `pellicule` as a `localStorage` preference (like the gallery's Cards /
+   Bands) or per trip? A preference is the suite's precedent.
+4. What the **Voyage** cell holds exactly: `TripDetailsModal`'s dates, route
+   and cover, plus the words and the closing card — or does that stay the
+   piece-reached `TripSettingsModal`?
