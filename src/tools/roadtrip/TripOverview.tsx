@@ -50,6 +50,9 @@ import { defaultLoupe, loupeContaining, moveLoupe, type Loupe } from '../../shar
 import LoupeBrush from './LoupeBrush';
 import MonthCalendar from './MonthCalendar';
 import IconButton from '../../shared/ui/IconButton';
+import BottomSheet from '../../shared/ui/BottomSheet';
+import DayStrip from './DayStrip';
+import useDayThumbs from './use-day-thumbs';
 
 interface TripOverviewProps {
   trip: TripDoc;
@@ -530,6 +533,10 @@ export default function TripOverview({
 
   // The dates-and-route sheet, the creation modal reopened on this trip.
   const [editingDetails, setEditingDetails] = useState(false);
+  // The phone's day sheet: pulled up from the strip, never by a tap on a cell.
+  const [dayOpen, setDayOpen] = useState(false);
+  // Read once here so the strip and the sheet draw the same pictures.
+  const dayThumbs = useDayThumbs(selectedCell?.posts ?? []);
   const saveDetails = useCallback(
     (details: TripDetails) => {
       setEditingDetails(false);
@@ -574,6 +581,16 @@ export default function TripOverview({
       trip={trip}
       date={selected}
       cell={selectedCell}
+      thumbs={dayThumbs}
+      variant={compact ? 'sheet' : 'card'}
+      onEditLeg={
+        compact
+          ? (id) => {
+              setDayOpen(false);
+              openLegById(id);
+            }
+          : undefined
+      }
       onStartPost={startPiece}
       onAddPost={(post) => mutate([...trip.posts, post])}
       onUpdatePost={(post) => mutate(trip.posts.map((p) => (p.id === post.id ? post : p)))}
@@ -671,13 +688,30 @@ export default function TripOverview({
           menuFor={menuFor}
           onOpenLeg={openLegById}
           selectedLegId={selectedStageId}
-          tail={
-            <div className="flex flex-col gap-4 pt-3">
-              {stagesPanel}
-              {dayPanel}
-            </div>
-          }
+          tail={<div className="pt-3">{stagesPanel}</div>}
         />
+
+        {selected && (
+          <DayStrip
+            date={selected}
+            cell={selectedCell}
+            stage={dayStages.get(selected) ?? null}
+            thumbs={dayThumbs}
+            onOpen={() => setDayOpen(true)}
+          />
+        )}
+
+        {dayOpen && selected && (
+          <BottomSheet
+            open
+            onClose={() => setDayOpen(false)}
+            title={`Day ${selectedCell?.dayNumber ?? '—'} / ${coverage.totalDays}`}
+            hint={formatIsoDate(selected)}
+            snaps={[0.62, 0.92]}
+          >
+            <div className="px-4 pt-2 pb-4">{dayPanel}</div>
+          </BottomSheet>
+        )}
 
         {sheets}
       </section>
