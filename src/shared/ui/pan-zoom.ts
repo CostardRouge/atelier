@@ -67,11 +67,21 @@ export function stepViewZoom(scale: number, direction: 1 | -1, max: number = MAX
 }
 
 /**
- * A wheel notch as a multiplier — exponential, so the gesture feels the same
- * at every scale, on the same 400-unit divisor the stages use.
+ * The one wheel curve of the suite: a notch of `deltaY` multiplies the scale
+ * by `exp(-deltaY / 400)` — exponential, so the gesture feels the same at
+ * every scale, and one divisor, so a view and a framing zoom at the same
+ * speed under the same hand. Every surface reads it from here: the same
+ * constant was once spelled out in four files (`zoom-gestures.ts`).
  */
+export const WHEEL_ZOOM_DIVISOR = 400;
+
+export function wheelZoomFactor(deltaY: number): number {
+  return Number.isFinite(deltaY) ? Math.exp(-deltaY / WHEEL_ZOOM_DIVISOR) : 1;
+}
+
+/** A wheel notch applied to a view scale, held under the ceiling. */
 export function zoomByWheelDelta(scale: number, deltaY: number, max: number = MAX_VIEW_ZOOM): number {
-  return clampViewZoom(scale * Math.exp(-deltaY / 400), max);
+  return clampViewZoom(scale * wheelZoomFactor(deltaY), max);
 }
 
 /** A pinch's finger-distance ratio applied to the scale it started from. */
