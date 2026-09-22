@@ -575,3 +575,15 @@ work can really stop. **Built the same day, T1 → T5** — the registry, the
 pill, the edge and every wiring decision are `tasks.md`; the one rule for a
 panel's own bar is there too: beside the verb it stays, repeating the pill it
 goes.
+
+**A toolbar never INSERTS a control (2026-09-22).** The Develop stage bar drew
+its `smooth ↔ pixels` pill only past 1:1, so crossing that zoom pushed every
+verb after it sideways — and a second press of `+` landed on the pill that had
+just appeared under the pointer. The rule: a control whose existence depends on
+state belongs inside something of FIXED width — a menu hanging off a label that
+is already there — never in the flow between two buttons a hand is aiming at.
+`OverflowMenu` gained `trigger.bare` for it (`className` is then the whole
+recipe, so none of `Button`'s font, height, padding or `shrink-0` fights the
+caller's), and `StageZoomControl` takes optional `items` that turn its
+percentage into that menu. The same prop is what lets a file NAME carry a menu
+(`develop-roll.md`, B2).

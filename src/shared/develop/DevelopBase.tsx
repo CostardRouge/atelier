@@ -35,12 +35,16 @@ function describeDelivered(row: Rendition): string {
  * render. A row this browser cannot draw is listed blocked and says why; a
  * row not in hand says what fetching it costs before it is pressed.
  *
- * It hangs off the chip rather than sitting in the inspector (the
- * maintainer's placement): the chip already says what the picture IS, so
- * what it could be belongs on the same word, above the photograph, where it
- * is read at the moment the question comes up.
+ * It hangs off the NAME of the file (2026-09-22, variant B2 of the stage-bar
+ * study): the name and the chip answer the same question — which bytes are on
+ * screen — so they are one control, at the left of the bar, and the menu
+ * lists the capture's other files under the one that is open. It costs no
+ * pill of its own, which is what lets it be drawn at every width: as a
+ * separate chip it was hidden under 880px, and a phone could not reach the
+ * rendition at all.
  */
 export function DevelopBaseMenu({
+  name,
   chip,
   rows,
   current,
@@ -53,8 +57,10 @@ export function DevelopBaseMenu({
   calibration,
   className = '',
 }: {
-  /** The fidelity chip's own words — this is that chip, made pressable. */
-  chip: string;
+  /** The open file's name — the trigger's first words, truncated before the chip. */
+  name: string;
+  /** The fidelity chip's own words, as the name's suffix; null before anything is measured. */
+  chip: string | null;
   /** Every rendition of the capture, in the order `renditionsOf` gives them. */
   rows: readonly Rendition[];
   /** The rendition on screen, when the develop is below the sensor. */
@@ -148,14 +154,46 @@ export function DevelopBaseMenu({
     });
   }
 
+  const words = (
+    <>
+      <span className="min-w-0 truncate font-mono text-xs text-ink-soft group-hover:text-accent-ink">{name}</span>
+      {chip && (
+        <span className="min-w-0 truncate font-mono text-3xs tracking-[0.12em] uppercase text-faint group-hover:text-accent-ink">
+          {chip}
+        </span>
+      )}
+    </>
+  );
+
+  // Nothing to choose — one file, no rung: the name stays TEXT. A chevron over
+  // a menu that cannot change anything is an invitation to a dead end.
+  if (items.filter((i) => !i.disabled).length <= 1) {
+    return (
+      <span className={`min-w-0 flex items-baseline gap-2 ${className}`} title={name}>
+        {words}
+      </span>
+    );
+  }
+
   return (
     <OverflowMenu
       label="What this picture is developed from"
-      className={className}
+      className={`min-w-0 ${className}`}
       size="sm"
-      align="end"
-      trigger={{ text: chip, variant: 'ghost' }}
-      disabled={items.filter((i) => !i.disabled).length <= 1}
+      align="start"
+      trigger={{
+        bare: true,
+        title: name,
+        className: 'group min-w-0 flex items-baseline gap-2 p-0 border-0 bg-transparent text-left cursor-pointer',
+        text: (
+          <>
+            {words}
+            <span className="flex-none font-mono text-3xs text-faint group-hover:text-accent-ink" aria-hidden="true">
+              ▾
+            </span>
+          </>
+        ),
+      }}
       items={items}
     />
   );

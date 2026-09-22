@@ -735,3 +735,64 @@ its left — so **no split is 0, not 1**. Every reader of it flipped with the
 meaning (`shownWipe`, the stage paint, the loupe's paint, the divider line, the
 pill), and a `wipe < 1` left anywhere would draw a split nobody asked for on a
 picture at rest.
+
+## 2026-09-22 — The stage bar: four controls, and nothing inserted
+
+**The maintainer, looking at the row above the photograph: *"elles ne sont pas
+toutes uniformes… la pilule de changement de proxy n'a pas du tout les mêmes
+codes visuels que les autres… les boutons copy, paste, as shot prennent de la
+place… peut-être qu'il serait temps d'appeler cette option reset de manière
+explicite… le bouton compare, je pense qu'il peut être plus discret, on pourrait
+reprendre l'exemple qui est fait dans le studio… lorsque l'on clique sur plus,
+automatiquement, si on reclique une deuxième fois sans changer de position de la
+souris, on se retrouve sur le bouton pixel"*.** Seven controls in four visual
+codes. Variants were drawn for each fault on one canvas
+(https://claude.ai/artifact/PsWGj7UBtDpz9EGNjz6DUz) and he picked **A1 · B2 ·
+C1 · D1**; what each buys is below, and what it costs is the line after it.
+
+**The NAME is the menu of the capture's files (B2).** The file name and the
+fidelity chip answered the same question — which bytes are on screen — so they
+are ONE control at the left of the bar: `DJI_0202.DNG` in mono, the chip as its
+faint uppercase suffix, a `▾` at the end, and `DevelopBaseMenu`'s own list of
+renditions under it. It costs no pill, and that is what pays for the real win:
+the chip used to be `@max-[880px]:hidden`, so a phone could not reach the
+rendition at all. **How to apply**: `name` is a prop of `DevelopBaseMenu` now,
+and when there is nothing to choose (one row, no rung) it renders the same two
+spans as TEXT — a chevron over a menu that cannot change anything is an
+invitation to a dead end.
+
+**Copy · Paste · Reset behind one ⋯ (A1).** Three underlined links were the
+bar's third visual code and ≈ 150px of it. `DevelopActionsMenu`
+(`shared/develop/`) has the room to say **Reset to as shot** in full — which is
+the whole of his "appeler cette option reset de manière explicite" — and to show
+the two shortcuts that EXIST (⌘C, ⌘V). Reset carries none: inventing an ⌥R on a
+card would be a key nobody can press. The modal keeps `DevelopClipboardActions`:
+a sheet has room and no stage bar. The trigger is `md` on a phone, `sm` above.
+
+**The compare is `A/B` (C1)**, the Studio's own word and its exact recipe
+(`border-accent bg-accent-wash text-accent-ink` on, plain and muted off). Three
+states still, and the suspended one — a mask tool holding the pointer — is a
+DASHED border rather than a third word. **The trap it walked into**: the pill's
+colour cannot be layered over `developPillClass`, which carries `text-muted`;
+two utilities of one property resolve by Tailwind's order, not the class
+list's, so the A/B pill spells its own shape (`abPill`) and takes its colour at
+the call site.
+
+**Nothing is INSERTED in the bar any more (D1).** The `smooth ↔ pixels` button
+was rendered only past 1:1, so crossing 100 % pushed every verb after it
+sideways and a second press of `+` landed on `pixels` — his report, exactly.
+The mode now hangs off the percentage, which was already a button ("back to the
+fitted size", now the menu's first rung): `StageZoomControl` takes optional
+`items`, and with them the label becomes an `OverflowMenu` trigger of ONE
+width. `ZoomControls` gained an optional `zoomTo` for the `100 %` rung.
+**The one thing D1 costs, and he chose it**: the mode's state is only visible
+inside the menu — D2 (the mode as a `· px` suffix in the pill) was offered
+beside it and not taken.
+
+Driven headless on a dropped JPEG and on a JPEG + DNG capture: `+` stays at the
+same x to the pixel while the zoom crosses 100 % (three measurements, 0 px),
+the menu's four rungs mark the live one and `Pixels as pixels` really sets
+`image-rendering: pixelated`, the name is a menu for the pair and TEXT for the
+lone JPEG, the ⋯ items enable exactly when Copy/Paste/Reset can act and say
+`· copied` / `· reset`, A/B goes accent → plain → dashed under Pick grey, and
+at 390px the bar holds two lines with no horizontal overflow.

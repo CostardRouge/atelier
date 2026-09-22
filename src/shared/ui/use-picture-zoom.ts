@@ -332,6 +332,9 @@ export function usePictureZoom({
       zoomIn: () => byButton(stepViewZoom(live.current.view.scale, 1, live.current.max)),
       zoomOut: () => byButton(stepViewZoom(live.current.view.scale, -1, live.current.max)),
       reset: () => byButton(MIN_VIEW_ZOOM),
+      // A rung a menu names — 1:1 above all, which is a LANDMARK here and not
+      // a step the ladder ever lands on. `zoomAbout` clamps it to the ceiling.
+      zoomTo: (scale: number) => byButton(scale),
     },
     fractionAt,
     rect: pictureRect(view, viewport, content),
