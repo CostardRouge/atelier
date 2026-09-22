@@ -45,6 +45,25 @@
  * thumb's reach, where the sentence about lattices used to be. Everything
  * that only explains is gone from that width — the sheet has an ⓘ elsewhere
  * for it — because every explaining line was a row of looks not shown.
+ *
+ * ## The STRENGTH is part of the choice, not a setting found afterwards
+ *
+ * A look at 100 % and the same look at 40 % are different pictures, and the
+ * question "which look" cannot be answered without the second number — which
+ * is why the scene carries a strength slider and why the pick hands it to the
+ * host (`onPick(id, intensity)`), where it becomes the new layer's own. The
+ * grid follows it wherever it is baking LIVE; the shipped reference tiles do
+ * not, and their line already says they are the looks as authored.
+ *
+ * ## On desktop the modal is as tall as the screen allows
+ *
+ * It used to be `min(92dvh, 54rem)`, and the cap was the whole of the
+ * maintainer's report: on a 1440-tall screen the header, the scene, the "tiles
+ * on…" band and the footer left barely two rows of looks under them. The
+ * height is now the MEASURED screen (`--app-h`, `frontend.md`) less the
+ * backdrop's gutter, with no rem ceiling, and the scene takes a SHARE of it
+ * rather than a fixed 21rem — so every pixel a taller screen brings is a pixel
+ * of grid.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -68,6 +87,7 @@ import {
   syntheticPreviewSample,
   type RgbBitmap,
 } from './lut-preview';
+import { MAX_LAYER_INTENSITY } from './lut-stack';
 import LutPackImportModal from './LutPackImportModal';
 import LutThumb from './LutThumb';
 import { useLutFavourites, toggleFavourite } from './use-lut-favourites';
@@ -123,8 +143,18 @@ export interface LutGalleryModalProps {
    * says so rather than letting the scene caution it wrongly (`look-scene.ts`).
    */
   previewIsLog?: boolean;
+  /**
+   * What the strength slider starts at. A host that already has a look on the
+   * picture passes its own (the single-pick "Look" control); one that ADDS a
+   * layer leaves it at 1, since that is what the new layer would carry.
+   */
+  intensity?: number;
   title?: string;
-  onPick: (id: string) => void;
+  /**
+   * The look, and how strongly the author judged it — the second number is
+   * the scene's slider, and a host that has nowhere to put it may ignore it.
+   */
+  onPick: (id: string, intensity: number) => void;
   onClose: () => void;
 }
 
@@ -135,6 +165,7 @@ export default function LutGalleryModal({
   previewImage = null,
   previewLabel = null,
   previewIsLog = false,
+  intensity = 1,
   title = 'Choose a look',
   onPick,
   onClose,
@@ -181,6 +212,12 @@ export default function LutGalleryModal({
    */
   const [compare, setCompare] = useState(false);
   const [splitX, setSplitX] = useState(0.5);
+  /**
+   * How strongly the aimed look is applied, and what the pick carries out.
+   * Seeded from the host and kept across aims on purpose: judging three looks
+   * at 60 % is one decision, not three.
+   */
+  const [strength, setStrength] = useState(intensity);
 
   // The shipped tiles. `{}` until they answer, and `{}` for good if this build
   // ships none — in which case every look simply bakes live, as it used to.
@@ -256,14 +293,22 @@ export default function LutGalleryModal({
     };
   }, [pending]);
 
+  /**
+   * A tile baked HERE follows the strength — it is on the author's own
+   * picture, at the number they are judging at, and showing it at 100 %
+   * beside a scene at 40 % would be two answers to one question. A shipped
+   * reference tile cannot follow it and does not pretend to: it was baked
+   * once, as the look was authored, and the line above the grid says so.
+   */
+  const tileStrength = effectiveSource ? strength : 1;
   const previews = useMemo(() => {
     const next: Record<string, RgbBitmap> = {};
     for (const [id, cube] of Object.entries(resolved)) {
       if (cube === 'error') continue;
-      next[id] = bakeLutPreview(sample, cube, 1, interpolation);
+      next[id] = bakeLutPreview(sample, cube, tileStrength, interpolation);
     }
     return next;
-  }, [resolved, sample, interpolation]);
+  }, [resolved, sample, tileStrength, interpolation]);
 
   const noneBitmap = useMemo(
     () => bakeLutPreview(sample, null, 1, interpolation),
@@ -317,13 +362,14 @@ export default function LutGalleryModal({
   const touch = useCallback(
     (id: string) => {
       if (!scene) {
-        onPick(id);
+        // No scene, no strength slider — the look leaves as it was authored.
+        onPick(id, 1);
         return;
       }
-      if (id === aimed) onPick(id);
+      if (id === aimed) onPick(id, strength);
       else setAimed(id);
     },
-    [scene, aimed, onPick],
+    [scene, aimed, strength, onPick],
   );
   /** What the ring sits on: the aimed look, or the worn one when nothing aims. */
   const ringed = scene ? aimed : (selected ?? null);
@@ -349,7 +395,7 @@ export default function LutGalleryModal({
     onCancel: credits ? () => setCredits(null) : onClose,
     // Enter takes the aimed look — `dialog-keys.ts` already stands down for a
     // focused field, so typing in the filter is untouched.
-    onConfirm: scene && aimed && !aimedBusy ? () => onPick(aimed) : null,
+    onConfirm: scene && aimed && !aimedBusy ? () => onPick(aimed, strength) : null,
   });
 
   const q = query.trim().toLowerCase();
@@ -453,10 +499,38 @@ export default function LutGalleryModal({
       size={compact ? 'md' : 'sm'}
       variant={compact ? 'primary' : 'default'}
       disabled={!aimed || aimedBusy}
-      onClick={() => aimed && onPick(aimed)}
+      onClick={() => aimed && onPick(aimed, strength)}
     >
       Use this look
     </Button>
+  );
+
+  /**
+   * The strength, beside the picture it is judged on. Dead without a look —
+   * shown disabled rather than hidden, so the row does not appear and
+   * disappear under the pointer as looks are aimed at.
+   */
+  const noLook = !aimedItem || aimedItem.id === 'none';
+  const strengthSlider = (
+    <>
+      <input
+        type="range"
+        min={0}
+        max={MAX_LAYER_INTENSITY}
+        step={0.05}
+        value={strength}
+        disabled={noLook}
+        onChange={(e) => setStrength(Number(e.target.value))}
+        // The one gesture that says "as authored" without hunting for 100.
+        onDoubleClick={() => setStrength(1)}
+        aria-label="How strongly the look is applied"
+        title="How strongly the look is applied (double-click for 100%)"
+        className="flex-1 min-w-0 accent-accent disabled:opacity-40"
+      />
+      <span className="font-mono text-2xs tabular-nums text-muted min-w-[3.4ch] text-right">
+        {Math.round(strength * 100)}%
+      </span>
+    </>
   );
 
   return createPortal(
@@ -469,15 +543,17 @@ export default function LutGalleryModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* Wider and taller than it was (56rem / 50rem): the scene wants the
-          room, the grid gains columns with it, and the rail is unchanged. On
-          a phone it is the whole MEASURED screen (`--app-h`, `frontend.md`),
-          with tighter gaps: every 8px between bands is 8px of grid. */}
+      {/* Wider than it was (56rem), and on desktop as tall as the screen
+          allows: the MEASURED height (`--app-h`) less the backdrop's 1rem
+          gutter top and bottom, with no rem cap — a 54rem ceiling on a tall
+          screen is a screenful of paper where rows of looks should be. On a
+          phone it is the whole screen already, with tighter gaps: every 8px
+          between bands is 8px of grid. */}
       <div
         className={
           compact
             ? 'w-full h-[var(--app-h,100dvh)] flex flex-col gap-2.5 bg-surface min-h-0 px-3 pt-[max(0.625rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]'
-            : 'w-full max-w-[76rem] h-[min(92dvh,54rem)] flex flex-col gap-4 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6 pb-5 min-h-0'
+            : 'w-full max-w-[76rem] h-[calc(var(--app-h,100dvh)-2rem)] flex flex-col gap-4 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6 pb-5 min-h-0'
         }
       >
         <div className="flex items-center justify-between gap-3">
@@ -521,19 +597,23 @@ export default function LutGalleryModal({
                 surround the dark of a light table. */}
             {/* HEIGHT is what gives the picture presence: the band is wide
                 enough for a 16:9 frame long before it is tall enough for a
-                4:3 one, so growing it downwards is what fills the room. On a
-                phone it is a SHARE of the measured screen — a quarter — so a
-                taller phone gets a taller scene and the grid keeps its rows. */}
+                4:3 one, so growing it downwards is what fills the room. It is
+                a SHARE of the measured screen at BOTH widths — a quarter on a
+                phone, 28 % on desktop between a 13rem floor and a 21rem
+                ceiling — so a taller screen gives the scene a little and the
+                grid the rest, rather than the scene taking a fixed 21rem out
+                of a short laptop's. */}
             <div
               className={
                 compact
                   ? 'flex-none w-full h-[calc(var(--app-h,100dvh)*0.25)] min-h-[8rem]'
-                  : 'flex-1 min-w-0 h-[21rem]'
+                  : 'flex-1 min-w-0 h-[clamp(13rem,calc(var(--app-h,100dvh)*0.28),21rem)]'
               }
             >
               <LookScene
                 source={picture}
                 cube={aimedCube}
+                intensity={strength}
                 interpolation={interpolation}
                 compare={compare}
                 splitX={splitX}
@@ -546,13 +626,19 @@ export default function LutGalleryModal({
               />
             </div>
             {compact ? (
-              /* One row under the picture: what is on it, and the wipe. The
-                 slider is not here — the drag across the picture writes the
-                 same number, and a finger is already on the picture. */
+              /* ONE row under the picture, and it is the strength: the wipe's
+                 own slider is not here (the drag across the picture writes
+                 that number, and a finger is already on the picture), and the
+                 aimed look's NAME is in the footer, which is drawn at this
+                 width anyway. A second row here would be a row of looks. */
               <div className="flex items-center gap-2 min-w-0">
-                <span className="flex-1 min-w-0 text-sm font-medium text-ink truncate">
-                  {aimedItem?.name ?? 'Your picture, as it is'}
-                </span>
+                {noLook ? (
+                  <span className="flex-1 min-w-0 text-sm font-medium text-ink truncate">
+                    {aimedItem?.name ?? 'Your picture, as it is'}
+                  </span>
+                ) : (
+                  strengthSlider
+                )}
                 {note && (
                   <span className="shrink-0 w-2 h-2 rounded-full bg-warn" title={note} aria-label={note} />
                 )}
@@ -593,6 +679,15 @@ export default function LutGalleryModal({
                     className="flex-1 min-w-0 accent-accent"
                   />
                 </div>
+                {/* The strength, right under the wipe: the two questions a
+                    look raises on your own picture are "how much of it" and
+                    "against what", and they belong side by side. */}
+                <div className="flex items-center gap-2.5 text-xs text-ink-soft">
+                  <span className="font-mono text-2xs tracking-[0.12em] uppercase text-muted select-none">
+                    Strength
+                  </span>
+                  {strengthSlider}
+                </div>
                 {note && (
                   <p className="m-0 px-2.5 py-1.5 rounded-control bg-warn-wash border border-warn-line text-xs leading-snug text-warn">
                     {note}
@@ -601,7 +696,7 @@ export default function LutGalleryModal({
                 <div className="mt-auto flex items-center gap-2 flex-wrap">
                   {useThisLook}
                   <span className="text-2xs leading-snug text-muted">
-                    One lattice read, not the whole family.
+                    One lattice read — and the strength goes with your pick.
                   </span>
                 </div>
               </div>
@@ -624,26 +719,24 @@ export default function LutGalleryModal({
             <OverflowMenu label="What the tiles are shown on" items={sourceVerbs} size="md" />
           </div>
         ) : (
-          <div className="flex flex-col gap-2.5 border-y border-line py-3">
-            <div className="flex items-center gap-3 flex-wrap">
-              {effectiveSource && (
-                <span className="w-8 h-8 rounded-control overflow-hidden border border-line shrink-0">
-                  <LutThumb bitmap={sample} />
-                </span>
-              )}
-              <span className="text-xs text-muted min-w-0 truncate">{sourceLine}</span>
-              {sourceVerbs.map((verb) => (
-                <Button key={verb.id} size="sm" variant="ghost" onClick={verb.onSelect} disabled={verb.disabled}>
-                  {verb.label}
-                </Button>
-              ))}
-            </div>
-            {/* Its own row, always full-width — sharing a flex-wrap row with
-                the buttons above left it squeezed to a fixed `w-40` on a
-                phone, since a plain `w-*` utility and a `max-[…]:w-full` one
-                can land in either order in the generated stylesheet and the
-                LAST one wins, not the more specific one. */}
-            {filterField}
+          /* ONE row, and it wraps: the sentence, the three verbs and the
+             filter. It was two rows — the filter always full-width below —
+             because sharing them squeezed the field to a fixed `w-40` on a
+             phone; that width has its own branch now, and a second row over
+             the grid on a laptop is a third of a row of looks. */
+          <div className="flex items-center gap-3 flex-wrap border-y border-line py-3">
+            {effectiveSource && (
+              <span className="w-8 h-8 rounded-control overflow-hidden border border-line shrink-0">
+                <LutThumb bitmap={sample} />
+              </span>
+            )}
+            <span className="text-xs text-muted min-w-0 truncate">{sourceLine}</span>
+            {sourceVerbs.map((verb) => (
+              <Button key={verb.id} size="sm" variant="ghost" onClick={verb.onSelect} disabled={verb.disabled}>
+                {verb.label}
+              </Button>
+            ))}
+            <div className="flex-1 min-w-[12rem] max-w-[22rem] ml-auto">{filterField}</div>
           </div>
         )}
         {imageError && <p className="m-0 -mt-2 text-xs text-danger">{imageError}</p>}
@@ -808,7 +901,11 @@ export default function LutGalleryModal({
           scene && (
             <div className="flex-none flex items-center gap-3 border-t border-line pt-2.5">
               <span className="flex-1 min-w-0 text-xs text-muted truncate">
-                {aimedItem ? aimedItem.name : 'Tap a look to see it on your picture.'}
+                {aimedItem
+                  ? noLook || strength === 1
+                    ? aimedItem.name
+                    : `${aimedItem.name} · ${Math.round(strength * 100)}%`
+                  : 'Tap a look to see it on your picture.'}
               </span>
               {useThisLook}
             </div>

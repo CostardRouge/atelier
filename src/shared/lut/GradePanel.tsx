@@ -73,17 +73,27 @@ export default function GradePanel({
     return node?.items ?? [];
   }, [packs, favourites]);
 
-  const pickLook = (id: string) => {
+  /**
+   * `intensity` is what the gallery's scene was judged at — the layer is born
+   * wearing it, rather than at 100 % with the author sent to find the strength
+   * slider again. The `<select>` beside it says nothing about strength, so it
+   * takes the default.
+   */
+  const pickLook = (id: string, intensity = 1) => {
     const packPick = readPackPick(id);
     if (packPick) {
       // The layer stores the REFERENCE; the vault holds the lattice.
       const pack = packs.find((p) => p.id === packPick.pack);
       const look = pack?.looks.find((l) => l.id === packPick.look);
-      void stack.addPackLook({ pack: packPick.pack, look: packPick.look, hash: look?.hash ?? '' });
+      void stack.addPackLook(
+        { pack: packPick.pack, look: packPick.look, hash: look?.hash ?? '' },
+        undefined,
+        intensity,
+      );
     } else if (id.startsWith(FILM_PICK)) {
-      stack.addFilm(id.slice(FILM_PICK.length) as FilmStockId);
+      stack.addFilm(id.slice(FILM_PICK.length) as FilmStockId, intensity);
     } else {
-      void stack.addBuiltin(id);
+      void stack.addBuiltin(id, intensity);
     }
   };
 
@@ -213,8 +223,8 @@ export default function GradePanel({
           previewImage={previewImage}
           previewLabel={previewLabel}
           previewIsLog={previewIsLog}
-          onPick={(id) => {
-            pickLook(id);
+          onPick={(id, intensity) => {
+            pickLook(id, intensity);
             setGallery(false);
           }}
           onClose={() => setGallery(false)}
