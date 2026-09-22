@@ -747,8 +747,9 @@ reprendre l'exemple qui est fait dans le studio… lorsque l'on clique sur plus,
 automatiquement, si on reclique une deuxième fois sans changer de position de la
 souris, on se retrouve sur le bouton pixel"*.** Seven controls in four visual
 codes. Variants were drawn for each fault on one canvas
-(https://claude.ai/artifact/PsWGj7UBtDpz9EGNjz6DUz) and he picked **A1 · B2 ·
-C1 · D1**; what each buys is below, and what it costs is the line after it.
+(https://claude.ai/artifact/PsWGj7UBtDpz9EGNjz6DUz) and he picked **A2 · B2 ·
+C1 · D1**, with E2's one block of verbs; what each buys is below, and what it
+costs is the line after it.
 
 **The NAME is the menu of the capture's files (B2).** The file name and the
 fidelity chip answered the same question — which bytes are on screen — so they
@@ -761,22 +762,32 @@ and when there is nothing to choose (one row, no rung) it renders the same two
 spans as TEXT — a chevron over a menu that cannot change anything is an
 invitation to a dead end.
 
-**Copy · Paste · Reset behind one ⋯ (A1).** Three underlined links were the
-bar's third visual code and ≈ 150px of it. `DevelopActionsMenu`
-(`shared/develop/`) has the room to say **Reset to as shot** in full — which is
-the whole of his "appeler cette option reset de manière explicite" — and to show
-the two shortcuts that EXIST (⌘C, ⌘V). Reset carries none: inventing an ⌥R on a
-card would be a key nobody can press. The modal keeps `DevelopClipboardActions`:
-a sheet has room and no stage bar. The trigger is `md` on a phone, `sm` above.
+**Copy · Paste · Reset as one WELL of glyphs (A2), and the stage's own two
+verbs join them in it (E2).** Three underlined links were the bar's third
+visual code and ≈ 150px of it. A menu was drawn beside this one and NOT taken:
+every verb stays at one click, which is what a photographer pasting the same
+light down a filmstrip actually does. `DevelopActionsGroup`
+(`shared/develop/`) draws the three `IconButton`s, and `children` — past a
+hairline — are the HOST's: the Develop bar puts its `A/B` and its `?` there, so
+the row ends with ONE block instead of five loose pills. **How to apply**:
+Reset is a GHOST button, set apart from two benign verbs because it throws work
+away, and it greys with `asShot` so the block also says whether there is
+anything to undo; the full sentence, `Reset to as shot` included, lives in each
+tooltip, which is the whole of his "appeler cette option reset de manière
+explicite"; `clipboard={false}` keeps the well for the host's verbs alone on a
+stage with no develop to copy (the crop). The modal keeps
+`DevelopClipboardActions`: a sheet has room and no stage bar. `Icons` gained
+`copy` and `paste` — the suite had neither.
 
-**The compare is `A/B` (C1)**, the Studio's own word and its exact recipe
-(`border-accent bg-accent-wash text-accent-ink` on, plain and muted off). Three
-states still, and the suspended one — a mask tool holding the pointer — is a
-DASHED border rather than a third word. **The trap it walked into**: the pill's
-colour cannot be layered over `developPillClass`, which carries `text-muted`;
-two utilities of one property resolve by Tailwind's order, not the class
-list's, so the A/B pill spells its own shape (`abPill`) and takes its colour at
-the call site.
+**The compare is `A/B` (C1)**, the Studio's own word and its exact colours
+(`border-accent bg-accent-wash text-accent-ink` on, plain and muted off), at
+`IconButton`'s height inside the well. Three states still, and the suspended one
+— a mask tool holding the pointer — is a DASHED border rather than a third word.
+**The trap it walked into**: neither it nor the `?` can be `IconButton` plus an
+override, and neither could ride `developPillClass` (which carries `text-muted`)
+— two utilities of one property resolve by Tailwind's order, not the class
+list's. Both spell their own shape at `IconButton`'s exact height, so the well
+still reads as one family, and take their colour at the call site.
 
 **Nothing is INSERTED in the bar any more (D1).** The `smooth ↔ pixels` button
 was rendered only past 1:1, so crossing 100 % pushed every verb after it
@@ -793,9 +804,9 @@ Driven headless on a dropped JPEG and on a JPEG + DNG capture: `+` stays at the
 same x to the pixel while the zoom crosses 100 % (three measurements, 0 px),
 the menu's four rungs mark the live one and `Pixels as pixels` really sets
 `image-rendering: pixelated`, the name is a menu for the pair and TEXT for the
-lone JPEG, the ⋯ items enable exactly when Copy/Paste/Reset can act and say
-`· copied` / `· reset`, A/B goes accent → plain → dashed under Pick grey, and
-at 390px the bar holds two lines with no horizontal overflow.
+lone JPEG, the well's five verbs are all 28px and enable exactly when they can
+act (`· copied` / `· reset`), A/B goes accent → plain → dashed under Pick grey,
+and at 390px the bar holds two lines with no horizontal overflow.
 
 ## 2026-09-22 — The corner says what the CAMERA did too
 

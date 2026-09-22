@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  DevelopActionsMenu,
+  DevelopActionsGroup,
   DevelopApplySection,
   DevelopLookSection,
   DevelopPresetsSection,
@@ -27,7 +27,6 @@ import {
   type RawCalibration,
 } from '../../shared/raw/calibration';
 import { copyDevelop, pasteDevelop } from '../../shared/develop/develop-clipboard';
-import { developPillClass, developTouchPillClass } from '../../shared/develop/develop-classes';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { pictureFidelity } from '../../shared/develop/picture-fidelity';
 import { DevelopBaseMenu } from '../../shared/develop/DevelopBase';
@@ -1039,18 +1038,25 @@ export default function PictureWorkbench({
   const shotExif = useEffectiveExif(shownFile);
   const shotLine = useMemo(() => (factsOn ? captureLine(shotExif) || null : null), [factsOn, shotExif]);
 
-  const toolbarPill = compact ? developTouchPillClass : developPillClass;
   /**
-   * The A/B pill's own recipe — its SHAPE here, its colour at the call site.
-   * Not `toolbarPill` plus an override: `developPillClass` carries `text-muted`
-   * and `border-line-strong`, and two utilities of one property are resolved by
-   * Tailwind's order and not by the class list's (`frontend.md`, the same trap
-   * `developTouchPillClass` exists for). The geometry and the colours are the
-   * Studio's A/B, to the character.
+   * The two verbs the HOST puts in the well beside the clipboard glyphs: their
+   * SHAPE here, their colour at the call site.
+   *
+   * Written out rather than composed from `IconButton`: both carry a state the
+   * button has no variant for (the A/B's on / off / suspended) and a glyph that
+   * is TEXT, and a `Button` recipe plus an override is not the same thing — two
+   * utilities of one property are resolved by Tailwind's order, not by the class
+   * list's (`frontend.md`). The height is `IconButton`'s to the pixel, so the
+   * well reads as one family, and the colours are the Studio's A/B.
    */
+  const verbHeight = compact ? 'h-[2.125rem]' : 'h-7';
   const abPill =
-    `${compact ? 'h-8 px-3' : 'h-[1.4rem] px-2'} flex-none inline-flex items-center rounded-full border ` +
-    'font-mono text-3xs tracking-[0.12em] uppercase whitespace-nowrap cursor-pointer transition-colors';
+    `${verbHeight} px-2 flex-none inline-flex items-center justify-center rounded-control border ` +
+    'font-mono text-2xs tracking-[0.06em] whitespace-nowrap cursor-pointer transition-colors';
+  /** The `?`, square like the glyphs it sits beside rather than a pill of its own. */
+  const helpVerb =
+    `${verbHeight} ${compact ? 'w-[2.125rem]' : 'w-7'} flex-none inline-flex items-center justify-center ` +
+    'rounded-control border font-mono text-xs cursor-pointer transition-colors';
   /** The wipe is suspended, and the pill says so rather than claiming to be on. */
   const abHeld = compareOn && (picture.painting || picture.picking);
 
@@ -1107,7 +1113,7 @@ export default function PictureWorkbench({
             wrap. On a phone the name gave way ENTIRELY ("D…" at 390px), so
             the verbs take a line of their own under it — `contents` at every
             other width keeps the desktop row the one flex line it was — and
-            the button pills grow to a finger's height (`developTouchPillClass`). */}
+            every verb grows to a finger's height (`md` rather than `sm`). */}
         <div className="flex-none flex flex-wrap items-center gap-x-2 gap-y-1.5 min-w-0">
           {/* The NAME is the list of the capture's files (2026-09-22): the two
               answered the same question — which bytes are on screen — so they
@@ -1151,19 +1157,6 @@ export default function PictureWorkbench({
             )}
           </div>
           <div className={compact ? 'basis-full flex items-center gap-2 min-w-0' : 'contents'}>
-          {/* Copy · Paste · Reset, behind one ⋯: three underlined links took a
-              sixth of a row that is read above a photograph all day, and a
-              menu has the room to say `Reset to as shot` in full. */}
-          {!cropping && (
-            <DevelopActionsMenu
-              className="flex-none"
-              size={compact ? 'md' : 'sm'}
-              draft={draft.draft}
-              asShot={draft.asShot}
-              onReplace={draft.setDraft}
-              onTold={tell}
-            />
-          )}
           {compact && <span className="flex-1" />}
           {/* The pill is drawn at EVERY width, phone included — the lightbox
               hides it under 820px on the argument that the pinch is the gesture
@@ -1188,47 +1181,62 @@ export default function PictureWorkbench({
                 items={zoomItems}
               />
             ))}
-          {/* The split, as a switch, and it says `A/B` — the Studio's own word
-              for the same gesture (2026-09-22): a whole word for a binary
-              state cost three times the room, and one wipe control across the
-              suite is one thing to learn rather than two. While a mask tool
-              holds the pointer the hook has suspended it anyway, and the pill
-              draws that rather than lying about a divider nobody can see. */}
-          {source && !cropping && (
+          {/* ONE well of verbs ends the row (variant E2): the three clipboard
+              glyphs, then — past a hairline — the two that are about this
+              stage. Loose pills read as five unrelated things; a block reads as
+              "what you can do here", and the row has one edge instead of five.
+
+              The split still says `A/B`, the Studio's own word for the same
+              gesture: one wipe control across the suite is one thing to learn.
+              While a mask tool holds the pointer the hook has suspended it
+              anyway, and the button draws that (dashed, faint) rather than
+              lying about a divider nobody can see. */}
+          <DevelopActionsGroup
+            className="flex-none"
+            size={compact ? 'md' : 'sm'}
+            clipboard={!cropping}
+            draft={draft.draft}
+            asShot={draft.asShot}
+            onReplace={draft.setDraft}
+            onTold={tell}
+          >
+            {source && !cropping && (
+              <button
+                type="button"
+                className={`${abPill} ${
+                  abHeld
+                    ? 'border-line-strong border-dashed bg-paper-2 text-faint'
+                    : compareOn
+                      ? 'border-accent bg-accent-wash text-accent-ink'
+                      : 'border-line-strong bg-surface text-muted hover:border-accent hover:text-accent-ink'
+                }`}
+                onClick={() => setCompareOn(!compareOn)}
+                aria-pressed={compareOn}
+                title={
+                  abHeld
+                    ? 'Before / after — suspended while a mask tool has the pointer; the divider comes back where it was'
+                    : compareOn
+                      ? 'Before / after — the divider is on, and a drag across the picture places it'
+                      : 'Before / after — off: the whole picture is shown corrected'
+                }
+              >
+                A/B
+              </button>
+            )}
+            {/* The legend that used to run along the bottom of the editor, as a
+                verb. Drawn at every width: on a phone there are no keys, but the
+                GESTURES it lists are exactly the ones a finger has to
+                discover. */}
             <button
               type="button"
-              className={`${abPill} ${
-                abHeld
-                  ? 'border-line-strong border-dashed bg-paper-2 text-faint'
-                  : compareOn
-                    ? 'border-accent bg-accent-wash text-accent-ink'
-                    : 'border-line-strong bg-paper text-muted hover:border-accent hover:text-accent-ink'
-              }`}
-              onClick={() => setCompareOn(!compareOn)}
-              aria-pressed={compareOn}
-              title={
-                abHeld
-                  ? 'Before / after — suspended while a mask tool has the pointer; the divider comes back where it was'
-                  : compareOn
-                    ? 'Before / after — the divider is on, and a drag across the picture places it'
-                    : 'Before / after — off: the whole picture is shown corrected'
-              }
+              className={`${helpVerb} border-transparent bg-transparent text-muted hover:text-accent-ink`}
+              onClick={() => setHelpOpen(true)}
+              title="Keys and gestures (H)"
+              aria-label="Keys and gestures"
             >
-              A/B
+              ?
             </button>
-          )}
-          {/* The legend that used to run along the bottom of the editor, as a
-              verb. Drawn at every width: on a phone there are no keys, but the
-              GESTURES it lists are exactly the ones a finger has to discover. */}
-          <button
-            type="button"
-            className={`${toolbarPill} flex-none cursor-pointer hover:border-accent`}
-            onClick={() => setHelpOpen(true)}
-            title="Keys and gestures (H)"
-            aria-label="Keys and gestures"
-          >
-            ?
-          </button>
+          </DevelopActionsGroup>
           </div>
         </div>
         <DevelopViewport
