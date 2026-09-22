@@ -52,8 +52,24 @@ interface OverflowMenuProps {
    * A worded trigger instead of the ⋯ — for a menu that is a screen's VERB
    * ("Add ▾") rather than a card's secondary actions. `label` still names it
    * for a screen reader.
+   *
+   * `bare` is for a trigger that is the screen's OWN text rather than a
+   * control of its own: the file name above a photograph, the percentage
+   * inside a zoom pill. `className` is then the WHOLE recipe — none of
+   * `Button`'s font, height, padding or `shrink-0` is in the way, and the
+   * caller writes its own chevron into `text`. Not the same thing as a
+   * `Button` with overrides: two utilities of one property are resolved by
+   * Tailwind's order, not by the class list's (`frontend.md`).
    */
-  trigger?: { text: ReactNode; icon?: ReactNode; variant?: ButtonVariant };
+  trigger?: {
+    text: ReactNode;
+    icon?: ReactNode;
+    variant?: ButtonVariant;
+    bare?: boolean;
+    className?: string;
+    /** The tooltip, for a bare trigger whose text is truncated. */
+    title?: string;
+  };
   /**
    * The glyph on the icon-only trigger (ignored once `trigger` is set) —
    * `Icons.more` by default, for a menu that IS a rail's own verb rather
@@ -163,20 +179,39 @@ export default function OverflowMenu({
   return (
     <div ref={rootRef} className={`relative inline-flex ${className}`}>
       {trigger ? (
-        <Button
-          variant={trigger.variant ?? 'default'}
-          icon={trigger.icon}
-          trailing={Icons.down}
-          aria-label={label}
-          aria-expanded={open}
-          aria-haspopup="menu"
-          onClick={(e) => {
-            e.stopPropagation();
-            setOpen((o) => !o);
-          }}
-        >
-          {trigger.text}
-        </Button>
+        trigger.bare ? (
+          <button
+            type="button"
+            className={trigger.className}
+            title={trigger.title}
+            aria-label={label}
+            aria-expanded={open}
+            aria-haspopup="menu"
+            disabled={disabled}
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen((o) => !o);
+            }}
+          >
+            {trigger.text}
+          </button>
+        ) : (
+          <Button
+            variant={trigger.variant ?? 'default'}
+            icon={trigger.icon}
+            trailing={Icons.down}
+            aria-label={label}
+            aria-expanded={open}
+            aria-haspopup="menu"
+            disabled={disabled}
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen((o) => !o);
+            }}
+          >
+            {trigger.text}
+          </Button>
+        )
       ) : (
         <IconButton
           size={size}

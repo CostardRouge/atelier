@@ -1,3 +1,4 @@
+import OverflowMenu, { type OverflowItem } from './OverflowMenu';
 import type { ZoomControls } from './stage-zoom';
 
 /**
@@ -15,15 +16,27 @@ import type { ZoomControls } from './stage-zoom';
  * `hint` is the gesture the surface really offers: a zone that wants the wheel
  * for something else zooms on a modifier only, the lightbox on a bare wheel
  * too.
+ *
+ * `items` turns that percentage into a MENU (2026-09-22, variant D1 of the
+ * stage-bar study), for a surface with more to say about how it draws than
+ * `+` and `−` can carry — the Develop stage's smooth ↔ pixels. Whatever it
+ * holds, the pill keeps ONE width and `+` and `−` keep their place: the thing
+ * this replaces was a second button INSERTED past 1:1, which slid the whole
+ * bar sideways and put `pixels` under a finger that had pressed `+` twice.
+ * The fitted size is then the menu's own first rung, so nothing is lost.
  */
 export default function StageZoomControl({
   zoom,
   hint = '⌘/ctrl + wheel, or pinch',
   className = '',
+  items,
+  menuLabel = 'Zoom, and how the picture is drawn',
 }: {
   zoom: ZoomControls;
   hint?: string;
   className?: string;
+  items?: readonly OverflowItem[];
+  menuLabel?: string;
 }) {
   const button =
     'w-6 h-6 grid place-items-center rounded-full border border-line-strong bg-paper text-ink ' +
@@ -45,16 +58,38 @@ export default function StageZoomControl({
       >
         −
       </button>
-      <button
-        type="button"
-        onClick={zoom.reset}
-        disabled={zoom.scale === 1}
-        title="Back to the fitted size"
-        aria-label={`Zoom: ${zoom.label}. Back to the fitted size`}
-        className="min-w-[3.1rem] px-1 font-mono text-2xs tracking-[0.06em] text-muted cursor-pointer bg-transparent border-0 hover:text-accent-ink disabled:cursor-default disabled:hover:text-muted"
-      >
-        {zoom.label}
-      </button>
+      {items && items.length > 0 ? (
+        <OverflowMenu
+          label={`${menuLabel} — ${zoom.label}`}
+          items={items}
+          align="start"
+          trigger={{
+            bare: true,
+            className:
+              'min-w-[3.9rem] px-1 inline-flex items-center justify-center gap-1 font-mono text-2xs ' +
+              'tracking-[0.06em] text-muted cursor-pointer bg-transparent border-0 hover:text-accent-ink',
+            text: (
+              <>
+                {zoom.label}
+                <span className="text-faint" aria-hidden="true">
+                  ▾
+                </span>
+              </>
+            ),
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={zoom.reset}
+          disabled={zoom.scale === 1}
+          title="Back to the fitted size"
+          aria-label={`Zoom: ${zoom.label}. Back to the fitted size`}
+          className="min-w-[3.1rem] px-1 font-mono text-2xs tracking-[0.06em] text-muted cursor-pointer bg-transparent border-0 hover:text-accent-ink disabled:cursor-default disabled:hover:text-muted"
+        >
+          {zoom.label}
+        </button>
+      )}
       <button
         type="button"
         className={button}

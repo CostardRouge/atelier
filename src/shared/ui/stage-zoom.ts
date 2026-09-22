@@ -202,6 +202,12 @@ export interface ZoomControls {
   zoomIn: () => void;
   zoomOut: () => void;
   reset: () => void;
+  /**
+   * Straight to a scale, for a rung a menu names (`100 %`). Optional: a zone
+   * whose pill is only `− label +` never needs one, and a caller that asks
+   * for a rung the surface cannot offer simply leaves it out.
+   */
+  zoomTo?: (scale: number) => void;
 }
 
 /** "100%" — what the control shows between its two buttons. */

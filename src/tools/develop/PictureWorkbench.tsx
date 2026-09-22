@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  DevelopActionsMenu,
   DevelopApplySection,
-  DevelopClipboardActions,
   DevelopLookSection,
   DevelopPresetsSection,
 } from '../../shared/develop/DevelopSections';
@@ -86,6 +86,7 @@ import { DEFAULT_FRAMING, isDefaultFraming, sameFraming, type Framing } from '..
 import { describeKeyTarget, targetOwnsTyping } from '../../shared/media/transport-keys';
 import PanelHost from '../../shared/ui/PanelHost';
 import Segmented from '../../shared/ui/Segmented';
+import type { OverflowItem } from '../../shared/ui/OverflowMenu';
 import StageZoomControl from '../../shared/ui/StageZoomControl';
 import { usePixelView } from '../../shared/ui/use-pixel-view';
 import { useLocalFlag } from '../../shared/ui/use-local-flag';
@@ -1025,6 +1026,65 @@ export default function PictureWorkbench({
   }, [factsOn, draft.draft, drawingCount, detailDraft, repairDraft, fidelity.note]);
 
   const toolbarPill = compact ? developTouchPillClass : developPillClass;
+  /**
+   * The A/B pill's own recipe — its SHAPE here, its colour at the call site.
+   * Not `toolbarPill` plus an override: `developPillClass` carries `text-muted`
+   * and `border-line-strong`, and two utilities of one property are resolved by
+   * Tailwind's order and not by the class list's (`frontend.md`, the same trap
+   * `developTouchPillClass` exists for). The geometry and the colours are the
+   * Studio's A/B, to the character.
+   */
+  const abPill =
+    `${compact ? 'h-8 px-3' : 'h-[1.4rem] px-2'} flex-none inline-flex items-center rounded-full border ` +
+    'font-mono text-3xs tracking-[0.12em] uppercase whitespace-nowrap cursor-pointer transition-colors';
+  /** The wipe is suspended, and the pill says so rather than claiming to be on. */
+  const abHeld = compareOn && (picture.painting || picture.picking);
+
+  /**
+   * What hangs off the zoom's percentage: the two rungs a menu can name, then
+   * how a magnified pixel is DRAWN. Both readings are true at every scale, but
+   * the mode only changes the picture past 1:1 — so each says where it applies
+   * instead of the control vanishing below it, which is what used to move the
+   * bar under the pointer.
+   */
+  const zoomRow = (marked: boolean, title: string, hint: string) => (
+    <span className="flex flex-col items-start gap-0.5 text-left">
+      <span className="font-mono text-xs">
+        {marked ? '· ' : '  '}
+        {title}
+      </span>
+      <span className="font-mono text-3xs text-faint leading-relaxed max-w-[18rem] whitespace-normal">{hint}</span>
+    </span>
+  );
+  const atOnePixel = Math.abs(picture.view.zoom.scale - picture.view.onePixel) < 0.005;
+  const zoomItems: OverflowItem[] = [
+    {
+      id: 'fit',
+      label: zoomRow(!picture.view.zoomed, 'Fit', 'the whole picture, in the room it has'),
+      disabled: !picture.view.zoomed,
+      onSelect: () => picture.view.zoom.reset(),
+    },
+    {
+      id: 'one-pixel',
+      label: zoomRow(atOnePixel, '100 %', 'one of the picture’s pixels per pixel of this screen'),
+      disabled: atOnePixel || !picture.view.zoom.zoomTo,
+      onSelect: () => picture.view.zoom.zoomTo?.(picture.view.onePixel),
+    },
+    {
+      id: 'smooth',
+      label: zoomRow(
+        pixelView === 'smooth',
+        'Smooth',
+        'past 100 %, the gradients between pixels are the browser’s, not the picture’s',
+      ),
+      onSelect: () => setPixelView('smooth'),
+    },
+    {
+      id: 'pixels',
+      label: zoomRow(pixelView === 'pixels', 'Pixels as pixels', 'past 100 %, nothing is invented between them'),
+      onSelect: () => setPixelView('pixels'),
+    },
+  ];
 
   return (
     <>
@@ -1035,51 +1095,60 @@ export default function PictureWorkbench({
             other width keeps the desktop row the one flex line it was — and
             the button pills grow to a finger's height (`developTouchPillClass`). */}
         <div className="flex-none flex flex-wrap items-center gap-x-2 gap-y-1.5 min-w-0">
-          <span className="flex-1 min-w-0 truncate font-mono text-xs text-ink-soft" title={entry.ref.name}>
-            {entry.ref.name}
-            {told && <span className="text-accent-ink" role="status"> · {told}</span>}
-          </span>
+          {/* The NAME is the list of the capture's files (2026-09-22): the two
+              answered the same question — which bytes are on screen — so they
+              are one control, and the rendition stops costing a pill. Which is
+              what lets it be drawn at every width: as a chip of its own it was
+              hidden under 880px, and a phone could not reach it at all. */}
+          <div className="flex-1 min-w-0 flex items-baseline gap-2">
+            <DevelopBaseMenu
+              className="min-w-0"
+              name={entry.ref.name}
+              chip={fidelity.chip}
+              rows={rows}
+              current={current}
+              base={wantsRaw ? rung : 'proxy'}
+              rungs={sensor ? rungs : []}
+              onRendition={(id) => {
+                // A file below the sensor: the base comes off with it, and
+                // the opening row is stored as nothing, one spelling.
+                if (baseRung(draft.draft.base) > 0) patchDraft({ base: null, rawGain: null });
+                onRendition(id === opening?.id ? null : id);
+              }}
+              onBase={(next) => {
+                if (next === 'proxy') {
+                  patchDraft({ base: null, rawGain: null });
+                  return;
+                }
+                const climbing = baseRung(draft.draft.base) === 0;
+                patchDraft({ base: next });
+                if (climbing && !draft.asShot) {
+                  tell('your numbers now act on the RAW — another starting point');
+                }
+              }}
+              status={wantsRaw ? (picture.problem ?? (!picture.source ? 'decoding the sensor’s data…' : null)) : null}
+              gain={wantsRaw ? rawGain : null}
+              calibration={calibration?.summary ?? null}
+            />
+            {told && (
+              <span className="flex-none font-mono text-xs text-accent-ink" role="status">
+                · {told}
+              </span>
+            )}
+          </div>
           <div className={compact ? 'basis-full flex items-center gap-2 min-w-0' : 'contents'}>
-          {/* The chip IS the list of the capture's files (2026-09-21): it
-              already says what the picture is, so what it could be hangs off
-              the same word, above the photograph. Below 880px of tool width
-              there is no room for it, exactly as before — the Develop tab's
-              sections are where a narrow screen goes. */}
-          {fidelity.chip &&
-            (rows.length > 0 ? (
-              <DevelopBaseMenu
-                className="flex-none @max-[880px]:hidden"
-                chip={fidelity.chip}
-                rows={rows}
-                current={current}
-                base={wantsRaw ? rung : 'proxy'}
-                rungs={sensor ? rungs : []}
-                onRendition={(id) => {
-                  // A file below the sensor: the base comes off with it, and
-                  // the opening row is stored as nothing, one spelling.
-                  if (baseRung(draft.draft.base) > 0) patchDraft({ base: null, rawGain: null });
-                  onRendition(id === opening?.id ? null : id);
-                }}
-                onBase={(next) => {
-                  if (next === 'proxy') {
-                    patchDraft({ base: null, rawGain: null });
-                    return;
-                  }
-                  const climbing = baseRung(draft.draft.base) === 0;
-                  patchDraft({ base: next });
-                  if (climbing && !draft.asShot) {
-                    tell('your numbers now act on the RAW — another starting point');
-                  }
-                }}
-                status={wantsRaw ? (picture.problem ?? (!picture.source ? 'decoding the sensor’s data…' : null)) : null}
-                gain={wantsRaw ? rawGain : null}
-                calibration={calibration?.summary ?? null}
-              />
-            ) : (
-              <span className={`${developPillClass} flex-none @max-[880px]:hidden`}>{fidelity.chip}</span>
-            ))}
+          {/* Copy · Paste · Reset, behind one ⋯: three underlined links took a
+              sixth of a row that is read above a photograph all day, and a
+              menu has the room to say `Reset to as shot` in full. */}
           {!cropping && (
-            <DevelopClipboardActions draft={draft.draft} asShot={draft.asShot} onReplace={draft.setDraft} onTold={tell} />
+            <DevelopActionsMenu
+              className="flex-none"
+              size={compact ? 'md' : 'sm'}
+              draft={draft.draft}
+              asShot={draft.asShot}
+              onReplace={draft.setDraft}
+              onTold={tell}
+            />
           )}
           {compact && <span className="flex-1" />}
           {/* The pill is drawn at EVERY width, phone included — the lightbox
@@ -1092,52 +1161,46 @@ export default function PictureWorkbench({
             (cropping ? (
               <StageZoomControl zoom={cropZoom} hint="look closer: pinch or the wheel — the crop stays" className="flex-none" />
             ) : (
-              <>
-                <StageZoomControl zoom={picture.view.zoom} hint="wheel, pinch, or Z" className="flex-none" />
-                {/* Only where it means anything: below 1:1 the browser is
-                    downscaling and `pixelated` is simply worse. */}
-                {picture.view.magnifying && (
-                  <button
-                    type="button"
-                    className={`${toolbarPill} flex-none cursor-pointer hover:border-accent`}
-                    onClick={() => setPixelView(pixelView === 'pixels' ? 'smooth' : 'pixels')}
-                    title={
-                      pixelView === 'pixels'
-                        ? 'Pixels as pixels — past 100 % nothing is invented between them'
-                        : 'Smoothed — past 100 % the gradients between pixels are the browser\u2019s, not the picture\u2019s'
-                    }
-                  >
-                    {pixelView === 'pixels' ? 'pixels' : 'smooth'}
-                  </button>
-                )}
-              </>
+              // How the picture is DRAWN hangs off the percentage, which was
+              // already the "back to the fit" button (that rung is now the
+              // menu's first). The mode used to be a pill INSERTED past 1:1,
+              // and inserting it slid every verb after it sideways — so a
+              // second press of `+` landed on `pixels`, which is the fault
+              // reported. Nothing is inserted now; the pill has one width.
+              <StageZoomControl
+                zoom={picture.view.zoom}
+                hint="wheel, pinch, or Z"
+                className="flex-none"
+                items={zoomItems}
+              />
             ))}
-          {/* The split, as a switch. It says what it IS rather than what
-              pressing it does, like every other pill in this bar; while a mask
-              tool holds the pointer the hook has suspended it anyway, and the
-              pill says that too rather than lying about a divider nobody can
-              see. */}
+          {/* The split, as a switch, and it says `A/B` — the Studio's own word
+              for the same gesture (2026-09-22): a whole word for a binary
+              state cost three times the room, and one wipe control across the
+              suite is one thing to learn rather than two. While a mask tool
+              holds the pointer the hook has suspended it anyway, and the pill
+              draws that rather than lying about a divider nobody can see. */}
           {source && !cropping && (
             <button
               type="button"
-              className={`${toolbarPill} flex-none cursor-pointer hover:border-accent ${
-                compareOn ? '' : 'text-faint'
+              className={`${abPill} ${
+                abHeld
+                  ? 'border-line-strong border-dashed bg-paper-2 text-faint'
+                  : compareOn
+                    ? 'border-accent bg-accent-wash text-accent-ink'
+                    : 'border-line-strong bg-paper text-muted hover:border-accent hover:text-accent-ink'
               }`}
               onClick={() => setCompareOn(!compareOn)}
               aria-pressed={compareOn}
               title={
-                compareOn
-                  ? 'The before/after divider is on — a drag across the picture places it'
-                  : 'The before/after divider is off — the whole picture is shown corrected'
+                abHeld
+                  ? 'Before / after — suspended while a mask tool has the pointer; the divider comes back where it was'
+                  : compareOn
+                    ? 'Before / after — the divider is on, and a drag across the picture places it'
+                    : 'Before / after — off: the whole picture is shown corrected'
               }
             >
-              {!compareOn
-                ? 'compare off'
-                : picture.painting || picture.picking
-                  ? // Said out loud rather than drawn as a live divider that a
-                    // tap would move: this is the state the maintainer reported.
-                    'compare · held'
-                  : 'compare'}
+              A/B
             </button>
           )}
           {/* The legend that used to run along the bottom of the editor, as a

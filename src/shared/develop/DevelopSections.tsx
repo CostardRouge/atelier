@@ -9,11 +9,92 @@ import { useState, useSyncExternalStore, type ReactNode } from 'react';
 import GradePanel from '../lut/GradePanel';
 import type { LutPreviewSource } from '../lut/LutGalleryModal';
 import type { LutStack } from '../lut/use-lut-stack';
+import type { ButtonSize } from '../ui/Button';
+import OverflowMenu from '../ui/OverflowMenu';
 import SectionLegend from '../ui/SectionLegend';
 import { DEFAULT_DEVELOP, describeDevelop, type DevelopSettings } from './develop';
 import { developButtonClass, developLinkClass } from './develop-classes';
 import { copyDevelop, hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from './develop-clipboard';
 import type { DevelopApplyVerb, DevelopPresets, DevelopPresetsPlace } from './develop-host';
+
+/**
+ * The same three verbs behind ONE ⋯, for a host whose room is the picture's:
+ * the Develop tool's stage bar (2026-09-22, variant A1 of the stage-bar
+ * study). Three underlined links took ≈ 150px of a row that is read above a
+ * photograph all day, and «As shot» never said that it RESETS — a menu has
+ * the room to say `Reset to as shot` in full, and to show the two shortcuts
+ * that already exist (`roll-editor.ts`: ⌘/Ctrl C and V). The modal keeps the
+ * links: a sheet has room, and no stage bar.
+ *
+ * Reset is last and carries no shortcut of its own — inventing one on a card
+ * would be a key nobody can press.
+ */
+export function DevelopActionsMenu({
+  draft,
+  asShot,
+  onReplace,
+  onTold,
+  className = '',
+  size = 'sm',
+}: {
+  draft: DevelopSettings;
+  asShot: boolean;
+  onReplace: (next: DevelopSettings) => void;
+  onTold: (message: string) => void;
+  className?: string;
+  /** `md` on a phone: 28px is a caption's height, not a finger's target. */
+  size?: ButtonSize;
+}) {
+  const canPaste = useSyncExternalStore(subscribeDevelopClipboard, hasCopiedDevelop);
+  const row = (what: string, keys?: string) => (
+    <span className="flex w-full items-baseline justify-between gap-6">
+      {what}
+      {keys && <span className="font-mono text-2xs text-faint">{keys}</span>}
+    </span>
+  );
+  return (
+    <OverflowMenu
+      label="What to do with these numbers"
+      className={className}
+      size={size}
+      align="end"
+      items={[
+        {
+          id: 'copy',
+          label: row('Copy', '⌘C'),
+          disabled: asShot,
+          title: asShot ? 'Nothing to copy — this picture is as shot' : 'Keep these numbers for the next picture, in this session',
+          onSelect: () => {
+            copyDevelop(draft);
+            onTold('copied');
+          },
+        },
+        {
+          id: 'paste',
+          label: row('Paste onto this picture', '⌘V'),
+          disabled: !canPaste,
+          title: canPaste ? 'Replace these numbers with the copied ones' : 'Nothing copied yet',
+          onSelect: () => {
+            const pasted = pasteDevelop();
+            if (!pasted) return;
+            onReplace(pasted);
+            onTold('pasted');
+          },
+        },
+        {
+          id: 'reset',
+          label: row('Reset to as shot'),
+          disabled: asShot,
+          title: 'Throw these numbers away — the picture as the camera wrote it',
+          onSelect: () => {
+            onReplace({ ...DEFAULT_DEVELOP });
+            onTold('reset');
+          },
+        },
+      ]}
+    />
+  );
+}
 
 /**
  * Copy · Paste · As shot. The clipboard is module state, so the same
