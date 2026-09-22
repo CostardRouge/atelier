@@ -32,8 +32,8 @@ import {
 } from '../sources/original-cache';
 import { RAW_PROBE_BYTES, rawSizes, rawSizesFrom } from '../exif/raw-probe';
 import { fixedFrameDelivery, type DeliverySummary, type OriginalInfo, type PictureSize } from './roll-export';
-import type { RollOriginals } from './roll-types';
 import { measurePicture } from './roll-render';
+import { trackedFetch } from '../tasks/tracked';
 
 export function originalOf(origin: MediaOrigin | null, render: PictureSize | null = null): OriginalInfo | null {
   if (!origin || origin.fidelity !== 'proxy') return null;
@@ -114,12 +114,14 @@ export interface DeliverySource {
  * A file the source never vouched for, or one whose measurement fails, comes
  * back exactly as it went in with a null summary: knowing nothing is not a
  * reason to refuse a delivery that used to work.
+ *
+ * There is no mode to pass: a fixed-frame host fetches the original only
+ * where the file in hand would upscale, and nothing else (R5, 2026-09-21).
  */
 export async function deliveryFor(
   file: File,
   framing: Framing | null,
   out: { w: number; h: number },
-  mode: RollOriginals,
   onProgress?: (line: string) => void,
 ): Promise<DeliverySource> {
   const origin = mediaOrigin(file);
@@ -127,13 +129,19 @@ export async function deliveryFor(
   if (!size) return { file, summary: null, fetched: false };
   const key = knownIdentity(file)?.assetId ?? null;
   const render = origin && isProxyOverRaw(origin) ? (await rawRenderOf(origin, key)).render : null;
-  const summary = fixedFrameDelivery(size, origin?.fidelity === 'proxy', originalOf(origin, render), framing, out, mode);
+  const summary = fixedFrameDelivery(size, origin?.fidelity === 'proxy', originalOf(origin, render), framing, out);
   if (summary.from !== 'original' || !origin?.fetchOriginal) return { file, summary, fetched: false };
   const held = key ? heldOriginal(key) : null;
   if (held) return { file: held, summary, fetched: false };
   try {
     onProgress?.('Fetching the original…');
-    const fetched = await origin.fetchOriginal();
+    // A task of its own — named, on the picture's edge, cancellable
+    // (`tasks/tracked.ts`); a cancel costs the extra pixels like any failure.
+    const fetchOriginal = origin.fetchOriginal;
+    const fetched = await trackedFetch(
+      { label: `Fetching ${origin.name ?? 'the original'}`, scope: key, bytes: origin.bytes ?? null },
+      (opts) => fetchOriginal(opts),
+    );
     if (key) holdOriginal(key, fetched);
     return { file: fetched, summary, fetched: true };
   } catch {

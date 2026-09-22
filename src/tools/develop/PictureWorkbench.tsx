@@ -31,17 +31,17 @@ import { developPillClass } from '../../shared/develop/develop-classes';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { pictureFidelity } from '../../shared/develop/picture-fidelity';
 import { DevelopBaseMenu } from '../../shared/develop/DevelopBase';
-import { captureInput, type SiblingFacts } from '../../shared/develop/capture-files';
+import { captureInput } from '../../shared/develop/capture-files';
+import { useSiblingFacts } from '../../shared/develop/use-sibling-facts';
 import { isProxyOverRaw, rawRenderFrom, rawRenderOf } from '../../shared/develop/delivery-source';
 import { measurePicture, type MeasuredPicture } from '../../shared/develop/roll-render';
 import { fetchSourceFile, sensorSourceFor } from '../../shared/develop/sensor-source';
+import { trackedFetch } from '../../shared/tasks/tracked';
 import { openingRendition, renditionById, renditionsOf, type PixelSize, type Rendition } from '../../shared/media/renditions';
 import { fileIdentity, isRawImage } from '../../shared/library/assets';
 import { rawSizes } from '../../shared/exif/raw-probe';
-import { EXIF_SLICE_BYTES, parseExif } from '../../shared/exif/exif-parser';
 import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
 import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
-import { formatBytes } from '../../shared/lib/format';
 import { pictureAspectRatio } from '../../shared/develop/crop-aspect';
 import { WORKBENCH_TABS, editorKeyAction, sameDevelop, type WorkbenchTab } from '../../shared/develop/roll-editor';
 import { framedThumbnail } from '../../shared/develop/roll-thumb';
@@ -423,12 +423,17 @@ export default function PictureWorkbench({
   // sets state, and the next render sees it in hand.
   const origin = useMemo(() => (file ? mediaOrigin(file) : null), [file]);
   const assetKey = file ? (knownIdentity(file)?.assetId ?? null) : null;
+  // What this stage's tasks are scoped to (`TaskEdge`): the capture's asset
+  // id where a source vouched for one — the same key every fetch of its
+  // files uses — else the file's own identity.
+  const taskScope = file ? (assetKey ?? fileIdentity(file)) : null;
+  const taskScopeRef = useRef(taskScope);
+  taskScopeRef.current = taskScope;
   const sensor = file ? sensorSourceFor(file, origin, siblings, assetKey) : null;
   const sensorHeld = sensor?.held ?? null;
   const sensorName = sensor?.name ?? null;
   const wantsRaw = baseRung(draft.draft.base) > 0 && sensor !== null;
   const [rawFile, setRawFile] = useState<File | null>(null);
-  const [rawStatus, setRawStatus] = useState<string | null>(null);
   const { patch: patchDraft } = draft;
   const sensorRef = useRef(sensor);
   sensorRef.current = sensor;
@@ -440,16 +445,15 @@ export default function PictureWorkbench({
       return;
     }
     let alive = true;
-    setRawStatus(`fetching ${source.name}${source.bytes ? ` · ${formatBytes(source.bytes)}` : ''}…`);
-    fetchSourceFile(source)
+    // The fetch is a task: the pill and the stage's edge say it (T2), so no
+    // prose of its own here — only what went wrong, below.
+    fetchSourceFile(source, taskScopeRef.current)
       .then((fetched) => {
         if (!alive) return;
         setRawFile(fetched);
-        setRawStatus(null);
       })
       .catch((err: unknown) => {
         if (!alive) return;
-        setRawStatus(null);
         tell(`${source.name} could not be fetched: ${err instanceof Error ? err.message : String(err)}`);
         patchDraft({ base: null, rawGain: null });
       });
@@ -510,32 +514,7 @@ export default function PictureWorkbench({
   // A sibling is listed only once its head is read: whether it is an export
   // of ours (`software-mark.ts`, never offered as the camera's file), and the
   // sizes a RAW states.
-  const [siblingFacts, setSiblingFacts] = useState<ReadonlyMap<string, SiblingFacts>>(new Map());
-  useEffect(() => {
-    if (!siblings.length) return;
-    let alive = true;
-    void (async () => {
-      const read = new Map<string, SiblingFacts>();
-      for (const sibling of siblings) {
-        try {
-          const head = await sibling.slice(0, EXIF_SLICE_BYTES).arrayBuffer();
-          const facts: SiblingFacts = { software: parseExif(head).software ?? null };
-          if (isRawImage(sibling.name)) {
-            const sizes = await rawSizes(sibling);
-            facts.render = sizes.render;
-            facts.sensor = sizes.sensor;
-          }
-          read.set(fileIdentity(sibling), facts);
-        } catch {
-          // A sibling that cannot be read is not offered.
-        }
-      }
-      if (alive) setSiblingFacts(read);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [siblings]);
+  const siblingFacts = useSiblingFacts(siblings);
   // What the session knows of the proxy's original and of the capture's
   // companion: whether each is held, and — for a RAW — how big the render
   // inside it is, read from its head once (`original-cache.ts`). `undefined`
@@ -609,7 +588,6 @@ export default function PictureWorkbench({
   // original), else fetched once and held for the session. Keyed on the id
   // alone, so a list rebuilt around it never restarts a fetch in flight.
   const [deliveredFile, setDeliveredFile] = useState<{ id: string; file: File } | null>(null);
-  const [deliveredStatus, setDeliveredStatus] = useState<string | null>(null);
   const deliver = useRef({ wanted, siblings, origin, tell, onRendition });
   deliver.current = { wanted, siblings, origin, tell, onRendition };
   useEffect(() => {
@@ -627,17 +605,16 @@ export default function PictureWorkbench({
     const fetch = from?.companion && isNamed(from.companion.name) ? from.companion.fetchFile : (from?.fetchOriginal ?? null);
     if (!fetch) return;
     let alive = true;
-    setDeliveredStatus(`fetching ${row.name}${row.bytes ? ` · ${formatBytes(row.bytes)}` : ''}…`);
-    fetch()
+    // A task of its own — the pill and the edge say it — and only a failure
+    // is said here.
+    trackedFetch({ label: `Fetching ${row.name}`, scope: taskScopeRef.current, bytes: row.bytes }, (opts) => fetch(opts))
       .then((fetched) => {
         if (!alive) return;
         if (row.assetId) holdOriginal(row.assetId, fetched);
         setDeliveredFile({ id: row.id, file: fetched });
-        setDeliveredStatus(null);
       })
       .catch((err: unknown) => {
         if (!alive) return;
-        setDeliveredStatus(null);
         deliver.current.tell(`${row.name} could not be fetched: ${err instanceof Error ? err.message : String(err)}`);
         deliver.current.onRendition(null);
       });
@@ -693,6 +670,13 @@ export default function PictureWorkbench({
     // The measured exposure is STORED the moment it is known, so the export's
     // decode applies the same number (`raw.md`). Once: a stored gain is never
     // overwritten by a later decode's measurement.
+    taskScope,
+    // Cancelled from the pill: back on the render, and said — a base whose
+    // data never arrived is not a base.
+    onRawAborted: () => {
+      patchDraft({ base: null, rawGain: null });
+      tell('Opening the RAW was cancelled — back on the render');
+    },
     onRawDecoded: (info) => {
       setRawSize({ w: info.sourceWidth, h: info.sourceHeight });
       if (rawGain === null) {
@@ -1048,7 +1032,6 @@ export default function PictureWorkbench({
           <span className="flex-1 min-w-0 truncate font-mono text-xs text-ink-soft" title={entry.ref.name}>
             {entry.ref.name}
             {told && <span className="text-accent-ink" role="status"> · {told}</span>}
-            {!told && deliveredStatus && <span role="status"> · {deliveredStatus}</span>}
           </span>
           {/* The chip IS the list of the capture's files (2026-09-21): it
               already says what the picture is, so what it could be hangs off
@@ -1081,11 +1064,7 @@ export default function PictureWorkbench({
                     tell('your numbers now act on the RAW — another starting point');
                   }
                 }}
-                status={
-                  wantsRaw
-                    ? (rawStatus ?? picture.problem ?? (!picture.source ? 'decoding the sensor’s data…' : null))
-                    : deliveredStatus
-                }
+                status={wantsRaw ? (picture.problem ?? (!picture.source ? 'decoding the sensor’s data…' : null)) : null}
                 gain={wantsRaw ? rawGain : null}
                 calibration={calibration?.summary ?? null}
               />
@@ -1170,6 +1149,7 @@ export default function PictureWorkbench({
           picture={picture}
           hasFile={Boolean(file)}
           emptyText={emptyText}
+          scope={taskScope}
           pixelView={pixelView}
           facts={facts}
           marks={subjectMarks}

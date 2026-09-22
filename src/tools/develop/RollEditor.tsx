@@ -47,7 +47,7 @@ import { hashedMediaRefs, mediaOrigin } from '../../shared/projects/media-identi
 import type { SavedMediaRef } from '../../shared/projects/project-types';
 import { dropDirectoryHandles, filesFromDataTransfer } from '../../shared/sources/file-sources';
 import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
-import { usePublishMediaActions, type MediaActions } from '../../shared/sources/media-scope';
+import { usePublishMediaActions, type MediaActions, type MediaView } from '../../shared/sources/media-scope';
 import Button from '../../shared/ui/Button';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 import EmptyState from '../../shared/ui/EmptyState';
@@ -284,7 +284,13 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // the same tick as the activation, so a closure would read the previous
   // active asset. The verb only asks; the effect below answers once the
   // render has caught up, from the active asset as it then is.
+  //
+  // It is also handed WHICH FILE of the capture the sheet was showing (R6 of
+  // `docs/capture-renditions.md`): the lightbox writes nothing, so pressing
+  // Develop over the camera's JPEG is the one gesture that puts that choice
+  // on the picture — the same field the chip above the photograph writes.
   const [pendingAdd, setPendingAdd] = useState(0);
+  const pendingView = useRef<MediaView | null>(null);
   const activeFile = useMemo(() => {
     const a = lib.assets.find((x) => x.id === lib.activeId);
     return a?.kind === 'photo' && a.parts.image ? a.parts.image : null;
@@ -292,6 +298,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   useEffect(() => {
     if (pendingAdd === 0) return;
     setPendingAdd(0);
+    const view = pendingView.current;
+    pendingView.current = null;
     if (!activeFile) {
       setNotice('only a photograph can be developed');
       return;
@@ -301,7 +309,18 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       // Never added twice: a picture already on the roll is opened instead.
       update((r) => addPictures(r, [ref]));
       const found = latest.current.pictures.find((p) => sameMediaRef(p.ref, ref));
-      if (found) onOpenPicture(found.id);
+      if (!found) return;
+      // The rendition looked at, on the picture — and a RAW base set aside
+      // where it stood, exactly as choosing a file under the chip does.
+      if (view) {
+        update((r) => {
+          const p = r.pictures.find((x) => x.id === found.id);
+          if (!p || p.rendition === view.rendition) return r;
+          const develop = p.develop && isRawDevelop(p.develop) ? withoutBase(p.develop) : p.develop;
+          return patchPicture(r, found.id, { rendition: view.rendition, develop });
+        });
+      }
+      onOpenPicture(found.id);
     })();
   }, [pendingAdd, activeFile, update, onOpenPicture]);
   const offer = useMemo<MediaActions>(
@@ -311,8 +330,11 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         {
           id: 'develop',
           label: 'Develop',
-          hint: 'add this picture to the roll and open it — one already on the roll is opened, never added twice',
-          run: () => setPendingAdd((n) => n + 1),
+          hint: 'add this picture to the roll and open it on the file you are looking at — one already on the roll is opened, never added twice',
+          run: (view) => {
+            pendingView.current = view ?? null;
+            setPendingAdd((n) => n + 1);
+          },
         },
       ],
     }),

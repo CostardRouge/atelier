@@ -55,14 +55,6 @@ export interface RollGrade {
   film?: FilmTexture | null;
 }
 
-/**
- * Where an export-DOOR takes its pixels (`docs/develop-originals.md` §7, Auto
- * by default) — Trips' Export tab and the Studio's stills, hosts with no
- * pill. NEVER on a roll since v4: a roll's picture names its own rendition,
- * and a run says "proxies only" without writing it anywhere.
- */
-export type RollOriginals = 'auto' | 'proxies' | 'originals';
-
 export interface RollExport {
   /** The delivered long edge in pixels, or null for the source's own size. */
   longEdge: number | null;

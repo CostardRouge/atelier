@@ -137,7 +137,7 @@ not the RAW — and leaves the pool with its asset (`assetFiles`).
 | where | what it says | scope |
 | --- | --- | --- |
 | `DevelopSettings.base` | proxy / gain / gainMap / gainMapWarp | one picture, STORED |
-| `RollOriginals` (`Auto · Proxies · Originals`) | which pixels leave | one export run, never stored |
+| `RollOriginals` (`Auto · Proxies · Originals`) — retired by R4/R5, see §13.2 | which pixels leave | one export run, never stored |
 | `MediaOrigin.fidelity` + `fetchOriginal` | proxy or capture, and how to get it | one file, in the identity registry |
 
 Three views of *which bytes of this capture am I working from*. Ask C is: make
@@ -482,7 +482,9 @@ Grouped, with a recommendation on each so they can be answered by exception.
 16. **Several renditions held per picture** (proxy + a 9 MB JPEG + a 74 MB
     DNG): does `original-cache.ts` need a byte ceiling and an eviction?
     *Recommended*: **yes, an LRU with a stated ceiling** — a forty-picture
-    roll at 74 MB is an ended tab, and today's cache has no bound.
+    roll at 74 MB is an ended tab, and today's cache has no bound. **Built
+    as R9 (2026-09-21)**: a quarter of the device's memory, 256 MiB – 1 GiB,
+    least recently used first, the file used last never (`held-budget.ts`).
 17. **Prefetch the chosen rendition for the filmstrip's neighbours**, as the
     proxies are prefetched?
     *Recommended*: no.
@@ -652,7 +654,9 @@ load-bearing in Trips and the Studio until the pill reaches them.
 run*, that never touches the document; a picture leaves from its own
 rendition through the same seam the sensor uses (`sensor-source.ts`,
 `deliveredSourceFor`); a picture that chose nothing keeps `Auto`'s
-arithmetic. Trips and the Studio still show the three words until R5.
+arithmetic. **R5 (built the same day)** took the three words off Trips and
+the Studio too: those hosts run `Auto`'s arithmetic with no control, and
+their *Delivers* row names the original by its file, the pill's word.
 
 Two controls become one checkbox, and the panel gains a sentence instead of a
 mode. The three words go from every host — from Develop because the pill
@@ -691,7 +695,7 @@ already make: `FileSystemHandle.isSameEntry` against the handle the roll
 remembers for its local pictures (`develop-media.md`) — no path, no string
 match, and it answers false for a folder that merely looks alike.
 
-### 13.4 Where the switcher lives — DECIDED 2026-09-21
+### 13.4 Where the switcher lives — DECIDED 2026-09-21, BUILT the same day (R6)
 
 **The lightbox writes nothing.** *"Pour moi la visionneuse n'écrit aucun
 choix, c'est juste de la visualisation […] juste de la curiosité de la part de

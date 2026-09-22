@@ -5,6 +5,8 @@ import Button from '../../shared/ui/Button';
 import { FieldRow, InspectorSection, RangeField, SelectField, SwitchRow } from '../../shared/ui/Inspector';
 import { Icons } from '../../shared/ui/icons';
 import { hdrSupport } from '../../shared/hdr/hdr-display';
+import { formatBytes } from '../../shared/lib/format';
+import { heldCeilingBytes } from '../../shared/sources/original-cache';
 import type { RollRun } from './use-roll-export';
 
 const HDR_STOPS: readonly { id: string; label: string }[] = [
@@ -102,7 +104,9 @@ export default function ExportPanel({
               could not fill the frame asked for. <strong>Delivers</strong> says what that means for
               the run before anything is fetched; <strong>Proxies only</strong> makes every picture
               leave from what is in hand, for this run alone — a RAW base is set aside and said.
-              Fetched files are kept for this session only.
+              Fetched files are kept for this session only, up to {formatBytes(heldCeilingBytes())} on
+              this device; past that the ones least recently used are let go and fetched again when
+              a picture needs them.
             </p>
             <p>
               A picture developed on its <strong>RAW</strong> leaves from the sensor’s data, and the

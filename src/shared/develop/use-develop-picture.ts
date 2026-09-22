@@ -28,6 +28,8 @@ import type { BrushRaster } from '../render/brush-raster';
 import { decodePhoto, fitPhotoForRender } from '../media/photo-frame';
 import type { PixelView } from '../ui/use-pixel-view';
 import { decodeRaw, type RawMeta } from '../raw/raw-decoder';
+import { isAbortError } from '../sources/fetch-options';
+import { startTask } from '../tasks/tasks';
 import { isDefaultDetail, sameDetail, type DetailSettings } from '../render/detail';
 import { detailPasses } from '../render/detail-pass';
 import { samePatches, type Patch } from '../render/repair';
@@ -325,7 +327,7 @@ export interface DevelopPicture {
     canvasRef: RefObject<HTMLCanvasElement>;
     /** The view is magnified past the stage and the loupe is on. */
     active: boolean;
-    state: 'idle' | 'decoding' | 'ready' | 'same' | 'failed';
+    state: 'idle' | 'decoding' | 'ready' | 'same' | 'failed' | 'cancelled';
     /** The decoded file's long edge, once known. */
     longEdge: number | null;
   };
@@ -369,6 +371,8 @@ export function useDevelopPicture({
   compare = true,
   raw = null,
   onRawDecoded,
+  onRawAborted,
+  taskScope = null,
   detail = null,
   pixelScale = 1,
   loupe = false,
@@ -380,6 +384,17 @@ export function useDevelopPicture({
   file: File | null;
   videoTimeSeconds?: number;
   cube: CubeLut | null;
+  /**
+   * What this picture's TASKS are scoped to (`tasks.md`): the decode of its
+   * RAW and the loupe's decode of the file register under it, so the stage's
+   * edge and the masthead's pill say "Opening DSC00123.ARW" with a Cancel.
+   */
+  taskScope?: string | null;
+  /**
+   * The RAW's decode was CANCELLED from the pill — the host takes the picture
+   * back to its render, since a base whose data never arrived is not a base.
+   */
+  onRawAborted?: () => void;
   /**
    * Develop from the SENSOR's data instead of `file`'s 8-bit render: the RAW
    * to decode (`shared/raw/raw-decoder.ts`) and the gain the develop already
@@ -516,6 +531,10 @@ export function useDevelopPicture({
   rawGainRef.current = raw?.gain ?? null;
   const onRawDecodedRef = useRef(onRawDecoded);
   onRawDecodedRef.current = onRawDecoded;
+  const onRawAbortedRef = useRef(onRawAborted);
+  onRawAbortedRef.current = onRawAborted;
+  const taskScopeRef = useRef(taskScope);
+  taskScopeRef.current = taskScope;
   const rawFile = raw?.file ?? null;
   // A source that was REPLACED is released one commit later, never in the
   // decode effect's own cleanup: the paint effect below runs in that same
@@ -530,11 +549,20 @@ export function useDevelopPicture({
     setProblem(null);
     if (!file) return;
     let loaded: BadgeSource | null = null;
+    // The decode is a TASK on this picture's edge. A RAW's can be cancelled —
+    // the decoder drops its turn — and the host is told; a render's decode is
+    // the browser's own and only says that it is happening.
+    const controller = new AbortController();
+    const opening = rawFile
+      ? null
+      : startTask({ label: `Opening ${file.name}`, scope: taskScopeRef.current, detail: null });
     const load: Promise<BadgeSource> = rawFile
       ? decodeRaw(rawFile, {
           budgetPixels: MAX_STAGE_PIXELS,
           gain: rawGainRef.current,
           maxEdge: maxRenderSize(),
+          signal: controller.signal,
+          scope: taskScopeRef.current,
         }).then((d) => {
           // The as-shot picture for every 2D draw; the half-floats for the GPU.
           const canvas = document.createElement('canvas');
@@ -557,10 +585,21 @@ export function useDevelopPicture({
         setSource(s);
       })
       .catch((e: unknown) => {
-        if (!cancelled) setProblem(e instanceof Error ? e.message : String(e));
-      });
+        if (cancelled) return;
+        if (isAbortError(e)) {
+          // Nothing to say on the stage: the host takes the picture back to
+          // its render and says so where it says things.
+          onRawAbortedRef.current?.();
+          return;
+        }
+        setProblem(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => opening?.done());
     return () => {
       cancelled = true;
+      // A picture stepped away from while its RAW decodes: the turn is
+      // dropped like a cancel, and nobody is told — nothing was asked.
+      controller.abort();
       if (loaded) retired.current.push(loaded);
     };
   }, [file, videoTimeSeconds, rawFile]);
@@ -936,7 +975,7 @@ export function useDevelopPicture({
   const loupeSlot = useRef<GraderSlot>({ cache: makeLayerPassCache(), current: null });
   const loupeCanvasRef = useRef<HTMLCanvasElement>(null);
   const [full, setFull] = useState<{ source: BadgeSource; file: File; rawFile: File | null; fileWidth: number } | null>(null);
-  const [loupeState, setLoupeState] = useState<'idle' | 'decoding' | 'ready' | 'same' | 'failed'>('idle');
+  const [loupeState, setLoupeState] = useState<'idle' | 'decoding' | 'ready' | 'same' | 'failed' | 'cancelled'>('idle');
   const isClip = Boolean(file && (file.type.startsWith('video/') || /\.(mp4|mov|m4v|webm)$/i.test(file.name)));
   const loupeWanted = loupe && Boolean(source) && view.magnifying && !isClip;
   const sourceRef = useRef(source);
@@ -946,8 +985,18 @@ export function useDevelopPicture({
     if (full && full.file === file && full.rawFile === rawFile) return;
     let cancelled = false;
     setLoupeState('decoding');
+    // A task of its own — the file decoded whole is the dearest thing the
+    // stage ever does — with a Cancel: a RAW's drops the decoder's turn, a
+    // render's lets the browser finish and throws the bitmap away.
+    const controller = new AbortController();
+    const looking = startTask({
+      label: `Looking closer at ${file.name}`,
+      scope: taskScopeRef.current,
+      detail: 'the file at its own density',
+      cancel: () => controller.abort(),
+    });
     const load: Promise<{ source: BadgeSource; fileWidth: number }> = rawFile
-      ? decodeRaw(rawFile, { gain: rawGainRef.current, maxEdge: maxRenderSize() }).then((d) => {
+      ? decodeRaw(rawFile, { gain: rawGainRef.current, maxEdge: maxRenderSize(), signal: controller.signal, quiet: true }).then((d) => {
           const canvas = document.createElement('canvas');
           canvas.width = d.width;
           canvas.height = d.height;
@@ -972,8 +1021,9 @@ export function useDevelopPicture({
         });
     void load
       .then(({ source: s, fileWidth }) => {
-        if (cancelled) {
+        if (cancelled || controller.signal.aborted) {
           s.release();
+          if (!cancelled) setLoupeState('cancelled');
           return;
         }
         setFull((prev) => {
@@ -983,11 +1033,13 @@ export function useDevelopPicture({
         const stage = sourceRef.current;
         setLoupeState(stage && s.width <= stage.width ? 'same' : 'ready');
       })
-      .catch(() => {
-        if (!cancelled) setLoupeState('failed');
-      });
+      .catch((e: unknown) => {
+        if (!cancelled) setLoupeState(isAbortError(e) ? 'cancelled' : 'failed');
+      })
+      .finally(() => looking.done());
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [loupeWanted, file, rawFile, full]);
   // Released a moment after the view comes back under 1:1, and at once when

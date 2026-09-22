@@ -32,6 +32,7 @@
 
 import { probeRaw, RAW_PROBE_BYTES, sensorIfd } from '../exif/raw-probe';
 import { isRawImage } from '../library/assets';
+import { startTask } from '../tasks/tasks';
 import type { HalfImage } from '../render/half-image';
 import {
   autoBrightGain,
@@ -89,6 +90,18 @@ export interface RawDecodeOptions {
   gain?: number | null;
   /** The longest edge the GPU takes (`maxRenderSize`); a decode past it is box-averaged down. */
   maxEdge?: number | null;
+  /**
+   * Stop wanting the result (T3 of `docs/progress-feedback.md`). The decode
+   * is a TASK — "Opening DSC00123.ARW", a sweep, since nothing measures a
+   * demosaic — and its Cancel aborts this: the worker's turn is dropped,
+   * never the worker, so a cancel costs nothing to the next decode. Checked
+   * before the file is read and again when the worker hands the plane back.
+   */
+  signal?: AbortSignal;
+  /** The media the task belongs to, for its edge. */
+  scope?: string | null;
+  /** No task of its own — the caller is one already (an export naming the picture). */
+  quiet?: boolean;
 }
 
 let instance: Promise<LibRawLike> | null = null;
@@ -163,7 +176,19 @@ const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFi
  * decoder's own sentence when the file is not one it reads.
  */
 export function decodeRaw(file: File, opts: RawDecodeOptions = {}): Promise<RawDecoded> {
+  const controller = new AbortController();
+  const outer = opts.signal;
+  if (outer?.aborted) controller.abort();
+  else outer?.addEventListener('abort', () => controller.abort(), { once: true });
+  const signal = controller.signal;
+  const cancelled = () => new DOMException(`Opening ${file.name} was cancelled`, 'AbortError');
+  const task = opts.quiet
+    ? null
+    : startTask({ label: `Opening ${file.name}`, scope: opts.scope ?? null, detail: 'the sensor’s data', cancel: () => controller.abort() });
   const run = async (): Promise<RawDecoded> => {
+    // Cancelled while waiting its turn: nothing is read, the worker is not
+    // touched, and the next decode in the chain goes straight on.
+    if (signal.aborted) throw cancelled();
     // The file's own size, read from its IFDs without the decoder, decides
     // whether a half-size decode fits — LibRaw cannot be asked after `open`.
     let probedW: number | null = null;
@@ -197,6 +222,9 @@ export function decodeRaw(file: File, opts: RawDecodeOptions = {}): Promise<RawD
     if (!image || !(image.data instanceof Uint16Array) || image.colors !== 3) {
       throw new Error(`LibRaw returned no 16-bit RGB picture for ${file.name}.`);
     }
+    // The worker has handed the plane back; a cancel that came meanwhile
+    // drops it here rather than spending the linearisation on it.
+    if (signal.aborted) throw cancelled();
 
     let linear = linearFromLibRaw(image.data, image.width, image.height);
     const byBudget = opts.budgetPixels ? rawBoxFactor(linear.width, linear.height, opts.budgetPixels) : 1;
@@ -231,5 +259,6 @@ export function decodeRaw(file: File, opts: RawDecodeOptions = {}): Promise<RawD
     () => {},
     () => {},
   );
+  if (task) void next.then(task.done, task.done);
   return next;
 }

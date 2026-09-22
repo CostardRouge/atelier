@@ -76,6 +76,12 @@ export interface RenderDeckOptions {
    */
   include?: (slide: DeckSlide) => boolean;
   onProgress?: (done: number, total: number) => void;
+  /**
+   * Stop between two slides (T4 of `docs/progress-feedback.md`): what has
+   * rendered is handed back, so a cancelled run keeps what it made and the
+   * caller says how many. Never inside a slide — a PNG is one draw.
+   */
+  signal?: AbortSignal;
 }
 
 /**
@@ -94,6 +100,7 @@ export async function renderDeck(
   const out: RenderedSlide[] = [];
 
   for (const slide of slides) {
+    if (opts.signal?.aborted) break;
     let source: BadgeSource | null = null;
     let cells: CollageSources | null = null;
     try {

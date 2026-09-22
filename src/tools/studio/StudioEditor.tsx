@@ -49,6 +49,9 @@ import GuidesControl from '../../shared/overlay/GuidesControl';
 import { exportOverlayVideoViaSeek } from '../../shared/overlay/export-overlay-seek';
 import { exportVariantVideo, outroTail } from '../../shared/media/export-variant';
 import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
+import { trackedFetch } from '../../shared/tasks/tracked';
+import { fileIdentity } from '../../shared/library/assets';
+import { startTask } from '../../shared/tasks/tasks';
 import SendFinalsPanel from '../../shared/sources/winnow/SendFinalsPanel';
 import { readEffectiveExif } from '../../shared/exif/read-exif';
 import { downloadBlob } from '../../shared/media/save';
@@ -139,7 +142,6 @@ import { useSurface } from '../../shared/ui/use-surface';
 import { FieldRow, InspectorSection, Readout, SelectField, ToggleField } from '../../shared/ui/Inspector';
 import { deliveryFor } from '../../shared/develop/delivery-source';
 import { useDeliveryRow } from '../../shared/develop/use-delivery-row';
-import type { RollOriginals } from '../../shared/develop/roll-types';
 import IconButton from '../../shared/ui/IconButton';
 import Segmented from '../../shared/ui/Segmented';
 
@@ -150,12 +152,6 @@ import Segmented from '../../shared/ui/Segmented';
  * same day is the point.
  */
 const STUDIO_KINDS = ['video+telemetry', 'video', 'photo'] as const;
-
-const STILL_PIXELS: readonly { id: RollOriginals; label: string; title: string }[] = [
-  { id: 'auto', label: 'Auto', title: 'An original is fetched only where the proxy could not fill the frame' },
-  { id: 'proxies', label: 'Proxies', title: 'Deliver from the picture in the Library, never fetching an original' },
-  { id: 'originals', label: 'Originals', title: 'Fetch the full-size original whenever this browser decodes one' },
-];
 
 type PanelTab = 'overlay' | 'style' | 'grade' | 'info' | 'export';
 
@@ -534,14 +530,13 @@ export default function StudioEditor({
   // keeps the RAW rule: a RAW is reached only through the render inside it,
   // measured, never on the assumption that it is full-size.
   const photoOrigin = mediaOrigin(activeImage);
+  // Which pixels a still leaves from is not a choice here since R5 of
+  // `docs/capture-renditions.md` (2026-09-21): its original is fetched only
+  // where the proxy could not fill the frame the variants ask for, and the
+  // *Delivers* row says so. A clip keeps `renderFromProxy` — its proxy is
+  // always the wrong thing to deliver, a still's often is not.
   const photoProxy =
     photoOrigin?.fidelity === 'proxy' && typeof photoOrigin.fetchOriginal === 'function' ? photoOrigin : null;
-  /**
-   * WHICH PIXELS a still leaves from. An export-door choice like
-   * `renderFromProxy` beside it: it is about this machine's tunnel and this
-   * run, not about the project, so it never reaches the document.
-   */
-  const [photoPixels, setPhotoPixels] = useState<RollOriginals>('auto');
   // Where the finals of the active media would go home to — a clip or a
   // still, whichever is open — and the identity the source vouched for it.
   const finalsMedia = activeVideo ?? activeImage ?? null;
@@ -1322,15 +1317,24 @@ export default function StudioEditor({
     // decode it directly, where the HEVC original would fail.
     let source = activeTranscode.transcoded ?? activeVideo;
     const base = exportFileName.trim() || active.baseName;
-    // A still delivered from its source's ORIGINAL, when the door asks for it
-    // and the frame is worth it (O2 of `docs/develop-originals.md`). Decoded
-    // here and closed with the run: the stage keeps its own bitmap, and a
-    // full-size original is tens of megabytes of it.
+    // The run as a TASK too (`tasks.md`, T4): the panel's own bar and Cancel
+    // stay, and the masthead's pill says the same wherever the person walks.
+    const exportTask = startTask({
+      label: `Exporting ${base}`,
+      scope: finalsMedia ? (knownIdentity(finalsMedia)?.assetId ?? fileIdentity(finalsMedia)) : null,
+      progress: 0,
+      detail: `${variants.length} variant${variants.length === 1 ? '' : 's'}`,
+      cancel: () => controller.abort(),
+    });
+    // A still delivered from its source's ORIGINAL when the frame is worth it
+    // (O2 of `docs/develop-originals.md`). Decoded here and closed with the
+    // run: the stage keeps its own bitmap, and a full-size original is tens
+    // of megabytes of it.
     let still = photo;
     let fetchedStill: ImageBitmap | null = null;
     try {
       if (photo && activeImage && photoProxy && stillFrame) {
-        const chosen = await deliveryFor(activeImage, null, stillFrame, photoPixels);
+        const chosen = await deliveryFor(activeImage, null, stillFrame);
         if (chosen.file !== activeImage) {
           setFetchingOriginal(true);
           try {
@@ -1351,7 +1355,17 @@ export default function StudioEditor({
       if (proxyWithOriginal?.fetchOriginal && !renderFromProxy) {
         setFetchingOriginal(true);
         try {
-          source = await proxyWithOriginal.fetchOriginal();
+          // A task of its own — the capture's name and weight, on its edge,
+          // cancellable from the pill — beside the export's own Cancel.
+          const fetchOriginal = proxyWithOriginal.fetchOriginal;
+          source = await trackedFetch(
+            {
+              label: `Fetching ${proxyWithOriginal.name ?? 'the capture'}`,
+              scope: activeVideo ? (knownIdentity(activeVideo)?.assetId ?? null) : null,
+              bytes: proxyWithOriginal.bytes ?? null,
+            },
+            (opts) => fetchOriginal({ ...opts, signal: controller.signal }),
+          );
           srcWidth = proxyWithOriginal.width ?? srcWidth;
           srcHeight = proxyWithOriginal.height ?? srcHeight;
         } finally {
@@ -1367,12 +1381,16 @@ export default function StudioEditor({
         const variant = variants[i];
         setExportStep({ index: i + 1, total: variants.length });
         setExportRatio(0);
+        exportTask.update({ progress: i / variants.length, detail: `${i + 1} of ${variants.length} · ${variant.id}` });
         // Time the whole variant, delivery included: writing a 400 MB file to
         // a folder is part of what the user waited for.
         const startedAt = Date.now();
         setLiveExport({ id: variant.id, startedAt });
         const onProgress = (p: { phase: string; ratio: number | null }) => {
-          if (p.phase === 'encoding' && p.ratio != null) setExportRatio(p.ratio);
+          if (p.phase === 'encoding' && p.ratio != null) {
+            setExportRatio(p.ratio);
+            exportTask.update({ progress: (i + p.ratio) / variants.length });
+          }
         };
         const blob = still
           ? await renderStillVariant(still, variant)
@@ -1402,6 +1420,7 @@ export default function StudioEditor({
         setExportError((err as Error).message || 'Export failed');
       }
     } finally {
+      exportTask.done();
       fetchedStill?.close();
       setExporting(false);
       setExportStep(null);
@@ -1502,11 +1521,11 @@ export default function StudioEditor({
   // What the EXPORT will encode, which is a different file when it fetches the
   // capture first. Only the variant maths uses this: a variant measured
   // against the proxy would promise 1080 from a file it is not going to use.
-  // A still's own best source: its original's pixels unless the door says
-  // Proxies. The variant maths reads this, so a variant never promises a
-  // frame the file it will really encode cannot give.
-  const bestStillW = photoProxy && photoPixels !== 'proxies' ? (photoProxy.width ?? srcW) : srcW;
-  const bestStillH = photoProxy && photoPixels !== 'proxies' ? (photoProxy.height ?? srcH) : srcH;
+  // A still's own best source: its original's pixels where it has one. The
+  // variant maths reads this, so a variant never promises a frame the file
+  // it will really encode cannot give.
+  const bestStillW = photoProxy ? (photoProxy.width ?? srcW) : srcW;
+  const bestStillH = photoProxy ? (photoProxy.height ?? srcH) : srcH;
   const exportW = isPhoto ? bestStillW : willFetchOriginal ? (proxyWithOriginal?.width ?? srcW) : srcW;
   const exportH = isPhoto ? bestStillH : willFetchOriginal ? (proxyWithOriginal?.height ?? srcH) : srcH;
   /**
@@ -1527,12 +1546,7 @@ export default function StudioEditor({
   }, [isPhoto, bestStillW, bestStillH, variants]);
   // Measured only while the Export tab is up: measuring decodes, and a
   // 48-megapixel decode is not worth a sentence nobody is looking at.
-  const stillDelivery = useDeliveryRow(
-    isPhoto && tab === 'export' ? activeImage : null,
-    null,
-    stillFrame,
-    photoPixels,
-  );
+  const stillDelivery = useDeliveryRow(isPhoto && tab === 'export' ? activeImage : null, null, stillFrame);
   const activeRes = srcW && srcH ? `${srcW}×${srcH}` : null;
   // The stage draws at source resolution, so the guides' notion of "this
   // frame" is the media's own aspect — undefined until the probe lands.
@@ -2353,33 +2367,17 @@ export default function StudioEditor({
                       )}
                     </FieldRow>
                     {photoProxy && (
-                      <>
-                        <FieldRow
-                          label="Pixels"
-                          hint={`You are editing on ${photoProxy.sourceId}’s proxy. Auto fetches the full-size original only where the proxy could not fill the frame your variants ask for; Proxies never fetches; Originals always does, for every original this browser decodes. A RAW is reached only through the render inside it, measured first — develop it on its RAW for the sensor itself. Fetched originals are kept for this session only.`}
+                      <FieldRow
+                        label="Delivers"
+                        align="start"
+                        hint={`${stillDelivery?.reason ? `${stillDelivery.reason}. ` : stillDelivery ? '' : 'Measured once the picture is decoded. '}You are editing on ${photoProxy.sourceId}’s proxy: the full-size original is fetched only where the proxy could not fill the frame your variants ask for, and kept for this session. A RAW is reached only through the render inside it, measured first — develop it on its RAW for the sensor itself.`}
+                      >
+                        <span
+                          className={`font-mono text-sm tabular-nums leading-snug pt-1 ${stillDelivery ? 'text-ink' : 'text-muted'}`}
                         >
-                          <Segmented
-                            fill
-                            size="sm"
-                            label="Pixels"
-                            value={photoPixels}
-                            onChange={setPhotoPixels}
-                            options={STILL_PIXELS}
-                            className="flex-1 min-w-0"
-                          />
-                        </FieldRow>
-                        <FieldRow
-                          label="Delivers"
-                          align="start"
-                          hint={stillDelivery?.reason ?? (stillDelivery ? undefined : 'measured once the picture is decoded')}
-                        >
-                          <span
-                            className={`font-mono text-sm tabular-nums leading-snug pt-1 ${stillDelivery ? 'text-ink' : 'text-muted'}`}
-                          >
-                            {stillDelivery ? stillDelivery.line : '—'}
-                          </span>
-                        </FieldRow>
-                      </>
+                          {stillDelivery ? stillDelivery.line : '—'}
+                        </span>
+                      </FieldRow>
                     )}
                     {proxyWithOriginal && (
                       <FieldRow

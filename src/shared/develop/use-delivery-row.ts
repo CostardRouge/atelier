@@ -21,13 +21,11 @@ import { knownIdentity, mediaOrigin } from '../projects/media-identity';
 import { isProxyOverRaw, originalOf, rawRenderOf } from './delivery-source';
 import { fixedFrameDelivery, type DeliverySummary, type PictureSize } from './roll-export';
 import { measurePicture } from './roll-render';
-import type { RollOriginals } from './roll-types';
 
 export function useDeliveryRow(
   file: File | null,
   framing: Framing | null,
   out: { w: number; h: number } | null,
-  mode: RollOriginals,
 ): DeliverySummary | null {
   const [read, setRead] = useState<{
     file: File;
@@ -64,6 +62,5 @@ export function useDeliveryRow(
     originalOf(origin, read.render),
     framing,
     out,
-    mode,
   );
 }

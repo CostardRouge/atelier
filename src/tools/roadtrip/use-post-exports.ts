@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { FilmTexture } from '../../shared/film/film-texture';
 import type { CubeLut } from '../../shared/lib/cube-parser';
 import type { OverlayElement } from '../../shared/overlay/overlay-types';
@@ -8,7 +8,6 @@ import { contentSlideElements, deckSlides, type DeckSlide } from '../../shared/r
 import { frameSize, loadCollageSources } from '../../shared/roadtrip/badge-render';
 import { DECK_LONG_EDGE, renderDeck } from '../../shared/roadtrip/deck-export';
 import { deliveryFor } from '../../shared/develop/delivery-source';
-import type { RollOriginals } from '../../shared/develop/roll-types';
 import { exportPlan, type PlanItem } from '../../shared/roadtrip/export-plan';
 import {
   clipSpeed,
@@ -32,6 +31,8 @@ import type { TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
 import { deliverFilesTo, pickDeliveryTarget, type DeliveryTarget } from '../../shared/sources/deliver-files';
 import type { HookPicture, ResolvedHook } from '../../shared/roadtrip/hooks/hook-variant';
 import type { ElementsAt } from '../../shared/roadtrip/hooks/hook-elements';
+import { startTask, type TaskHandle } from '../../shared/tasks/tasks';
+import { isAbortError } from '../../shared/sources/fetch-options';
 
 export interface PostExportInputs {
   trip: TripDoc;
@@ -84,14 +85,6 @@ export interface PostExportInputs {
   lutFor: (slide: DeckSlide) => CubeLut | null;
   /** The film TEXTURE that slide wears — `TripGradeBinding.filmFor`, the twin of `lutFor`. */
   filmFor: (slide: DeckSlide) => FilmTexture | null;
-  /**
-   * WHICH PIXELS the stills leave from (O2 of `docs/develop-originals.md`):
-   * `auto` fetches a source's original only for a picture whose proxy would
-   * be upscaled into the deck's frame, `proxies` never, `originals` whenever
-   * there is one this browser can read. The clips are untouched — the
-   * Studio's own export already fetches a clip's capture.
-   */
-  originals: RollOriginals;
   /** Called as an export starts, so the caller can bring the report into view. */
   onStart?: () => void;
 }
@@ -180,7 +173,11 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
   const [exporting, setLine] = useState<string | null>(null);
   /**
    * Which pixels each STILL slide leaves from, decided before a frame is
-   * drawn, and a resolver that hands the renderer what was chosen.
+   * drawn, and a resolver that hands the renderer what was chosen: a source's
+   * original only for a picture whose proxy would be upscaled into the deck's
+   * frame (O2 of `docs/develop-originals.md`; the door that could force or
+   * refuse it left with R5 of `docs/capture-renditions.md`). The clips are
+   * untouched — the Studio's own export already fetches a clip's capture.
    *
    * The deck renderer knows nothing about sources — its `resolve` is injected
    * exactly so that it stays testable and free of the library — so the
@@ -193,7 +190,6 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     slides: readonly DeckSlide[],
   ): Promise<(ref: { name: string } | null) => File | null> {
     const base = inputs.resolve;
-    if (inputs.originals === 'proxies') return base;
     const out = frameSize(inputs.aspect, DECK_LONG_EDGE);
     const swap = new Map<File, File>();
     for (const slide of slides) {
@@ -201,9 +197,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       const file = base(slide.media);
       if (!file || swap.has(file) || classifyPart(file.name) === 'video') continue;
       try {
-        const chosen = await deliveryFor(file, slide.framing, out, inputs.originals, (line) =>
-          setExporting(line),
-        );
+        const chosen = await deliveryFor(file, slide.framing, out, (line) => setExporting(line));
         if (chosen.file !== file) swap.set(file, chosen.file);
       } catch {
         // Knowing nothing about a picture is never a reason to drop it: the
@@ -218,11 +212,26 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
   }
 
   const [progress, setProgress] = useState<number | null>(null);
+  // The run as a TASK (`tasks.md`, T4): what the header's fill says, the
+  // masthead's pill says too — and the pill carries the Cancel, which stops
+  // between two slides or two frames and keeps what was made.
+  const task = useRef<{ handle: TaskHandle; controller: AbortController } | null>(null);
+  const beginTask = (label: string) => {
+    const controller = new AbortController();
+    const handle = startTask({ label, scope: `piece:${inputs.post.id}`, progress: 0, cancel: () => controller.abort() });
+    task.current = { handle, controller };
+    return controller.signal;
+  };
+  const endTask = () => {
+    task.current?.handle.done();
+    task.current = null;
+  };
   // The line and its measure always change together, so a stale ratio can
   // never sit beside a new sentence.
   const setExporting = (line: string | null, ratio: number | null = null) => {
     setLine(line);
     setProgress(ratio);
+    if (line !== null) task.current?.handle.update({ progress: ratio, detail: line });
   };
   const [note, setNote] = useState<string | null>(null);
   const [undecodable, setUndecodable] = useState<File | null>(null);
@@ -257,6 +266,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     }
     setNote(null);
     setUndecodable(null);
+    const signal = beginTask('Encoding the hook');
     setExporting('Encoding…', 0);
     let audioSkipped: string | null = null;
     const onProgress = (p: ExportProgress) =>
@@ -286,6 +296,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         lut: inputs.lutFor(inputs.hookSlide),
         film: inputs.filmFor(inputs.hookSlide),
         onProgress,
+        signal,
       };
       const blob = hookIsVideo
         ? await exportHookVideo({
@@ -337,10 +348,11 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       setNote(audioSkipped ? `${name} downloaded — ${audioSkipped}` : `${name} downloaded`);
     } catch (err) {
       const failure = explainFailure(err, 'The clip could not be encoded.');
-      setNote(failure.note);
+      setNote(isAbortError(err) ? 'Encoding cancelled — nothing was written.' : failure.note);
       if (failure.undecodable) setUndecodable(hookFile);
     } finally {
       setExporting(null);
+      endTask();
     }
   }
 
@@ -357,12 +369,14 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     item: PlanItem,
     onProgress: (p: ExportProgress) => void,
     onAudioSkipped?: (reason: string) => void,
+    signal?: AbortSignal,
   ): Promise<Blob> {
     const { post, trip, aspect } = inputs;
     const { slide } = item;
     const isHook = slide.kind === 'hook';
     const variant = hookVariant(post.badge.aspectId, 1080, slide.speed);
     const shared = {
+      signal,
       variant,
       elements: isHook ? inputs.hookElements : contentSlideElements(slide.caption, aspect),
       hook: isHook ? inputs.hook : null,
@@ -447,6 +461,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
 
     const items = plan.items.filter((i) => i.blocker === null);
     const rendered: { name: string; blob: Blob }[] = [];
+    const signal = beginTask('Exporting the piece');
     setExporting('Rendering…');
     try {
       // The stills go through the deck renderer in one pass, so a carousel of
@@ -457,6 +472,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         setExporting('Choosing the pixels…');
         const resolve = await pixelsForStills(stills.map((i) => i.slide));
         const out = await renderDeck({
+          signal,
           trip: inputs.trip,
           post: inputs.post,
           aspect: inputs.aspect,
@@ -480,6 +496,8 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       const failures: string[] = [];
       const clips = items.filter((i) => i.medium === 'video');
       for (const [i, item] of clips.entries()) {
+        // Cancelled between two clips: what rendered is still written below.
+        if (signal.aborted) break;
         try {
           const blob = await renderSlideVideo(
             item,
@@ -493,9 +511,11 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
             // Not a failure — the file is delivered — but a departure from what
             // was composed, reported with the delivery like one.
             (reason) => failures.push(`${item.name}: ${reason}`),
+            signal,
           );
           rendered.push({ name: item.name, blob });
         } catch (err) {
+          if (isAbortError(err)) break;
           const failure = explainFailure(err, `${item.name} could not be encoded.`);
           if (failure.note) failures.push(failure.note);
           // The first clip this browser cannot decode gets the transcode
@@ -507,16 +527,22 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       }
 
       if (!rendered.length) {
-        setNote(failures[0] ?? 'Nothing could be rendered — check the pictures are loaded.');
+        setNote(signal.aborted ? 'Export cancelled — nothing was written.' : (failures[0] ?? 'Nothing could be rendered — check the pictures are loaded.'));
         return;
       }
+      // A cancelled run keeps what it made and says so (his question 2).
       setExporting('Writing…');
       const short = plan.items.length - rendered.length;
-      await deliver(target, rendered, short, [...plan.blockers, ...failures]);
+      await deliver(target, rendered, short, [
+        ...(signal.aborted ? [`cancelled after ${rendered.length} of ${items.length}`] : []),
+        ...plan.blockers,
+        ...failures,
+      ]);
     } catch (err) {
       setNote(explainFailure(err, 'The piece could not be exported.').note);
     } finally {
       setExporting(null);
+      endTask();
     }
   }
 
@@ -575,11 +601,13 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     setNote(null);
     const target = await askTarget();
     if (!target) return;
+    const signal = beginTask('Exporting the slides');
     setExporting('Choosing the pixels…');
     try {
       const resolve = await pixelsForStills(deckSlides(inputs.trip, inputs.post));
       setExporting('Rendering…');
       const rendered = await renderDeck({
+        signal,
         trip: inputs.trip,
         post: inputs.post,
         aspect: inputs.aspect,
@@ -593,7 +621,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`, done / total),
       });
       if (!rendered.length) {
-        setNote('Nothing could be rendered — check the pictures are loaded.');
+        setNote(signal.aborted ? 'Export cancelled — nothing was written.' : 'Nothing could be rendered — check the pictures are loaded.');
         return;
       }
       const short = inputs.slideCount - rendered.length;
@@ -605,13 +633,14 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       );
       setNote(
         `${res.written} slide${res.written === 1 ? '' : 's'} ${res.method === 'folder' ? 'written' : 'downloaded'}` +
-          (short ? ` · ${short} could not be rendered` : '') +
+          (signal.aborted ? ` · cancelled after ${rendered.length} of ${inputs.slideCount}` : short ? ` · ${short} could not be rendered` : '') +
           (res.method === 'folder' && res.errors.length ? ` · ${res.errors.length} failed to write` : ''),
       );
     } catch (err) {
       setNote(explainFailure(err, 'The slides could not be exported.').note);
     } finally {
       setExporting(null);
+      endTask();
     }
   }
 

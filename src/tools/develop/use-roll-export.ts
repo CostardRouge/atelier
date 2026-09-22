@@ -34,6 +34,8 @@ import {
   type RawCalibration,
 } from '../../shared/raw/calibration';
 import { deliveredSourceFor, fetchSourceFile, sensorSourceFor } from '../../shared/develop/sensor-source';
+import { trackedFetch } from '../../shared/tasks/tracked';
+import { startTask } from '../../shared/tasks/tasks';
 import { planRun, type PictureFacts, type RunPlan } from '../../shared/develop/run-plan';
 
 /**
@@ -203,7 +205,7 @@ export function useRollExport({
       open.framing,
       pictureAspectRatio(open.aspect, openSize.size.width, openSize.size.height),
       open.border,
-      { longEdge: roll.export.longEdge, originals: proxiesOnly ? 'proxies' : 'auto' },
+      { longEdge: roll.export.longEdge, pixels: proxiesOnly ? 'proxies' : 'auto' },
     );
     const chosen = proxiesOnly
       ? null
@@ -257,6 +259,15 @@ export function useRollExport({
       return;
     }
     setExporting('Preparing…');
+    // The run as a TASK (`tasks.md`, T4): one per run, a picture at a time on
+    // its bar, a Cancel that stops BETWEEN two pictures — and ends a fetch or
+    // a RAW decode in flight — and keeps what was rendered (his question 2).
+    const controller = new AbortController();
+    const task = startTask({
+      label: targets.length === 1 ? `Exporting ${targets[0].ref.name}` : `Exporting ${targets.length} pictures`,
+      progress: 0,
+      cancel: () => controller.abort(),
+    });
     const rendered: File[] = [];
     const assetIds: (string | null)[] = [];
     const sourceIds = new Set<string>();
@@ -268,7 +279,9 @@ export function useRollExport({
     const named = new Set<string>();
     try {
       for (const [i, picture] of targets.entries()) {
+        if (controller.signal.aborted) break;
         const step = `${i + 1}/${targets.length}`;
+        task.update({ progress: i / targets.length, detail: `${step} · ${picture.ref.name}` });
         let file = f.get(picture.id) ?? null;
         if (!file) {
           setExporting(`Fetching ${step}…`);
@@ -311,8 +324,9 @@ export function useRollExport({
               let rawFile: File | null = null;
               if (sensor) {
                 if (!sensor.held) setExporting(`Fetching ${sensor.name} ${step}${sensor.bytes ? ` · ${formatBytes(sensor.bytes)}` : ''}…`);
-                rawFile = await fetchSourceFile(sensor).catch(() => null);
+                rawFile = await fetchSourceFile(sensor, identity?.assetId ?? null, controller.signal).catch(() => null);
               }
+              if (controller.signal.aborted) break;
               if (rawFile) raw = { file: rawFile, gain: rawGainOf(picture.develop) };
               else failures.push(`${picture.ref.name} is developed on its RAW, which is not reachable here — its render left instead`);
             }
@@ -325,8 +339,10 @@ export function useRollExport({
           if (chosen) {
             if (!chosen.held) setExporting(`Fetching ${chosen.name} ${step}${chosen.bytes ? ` · ${formatBytes(chosen.bytes)}` : ''}…`);
             try {
-              source = await fetchSourceFile(chosen);
+              source = await fetchSourceFile(chosen, identity?.assetId ?? null, controller.signal);
             } catch {
+              // The run's own cancel ended this fetch: not a failure to list.
+              if (controller.signal.aborted) break;
               failures.push(`${picture.ref.name}: ${chosen.name} could not be fetched — what is in hand left instead`);
             }
           }
@@ -368,7 +384,7 @@ export function useRollExport({
               picture.framing,
               pictureAspectRatio(picture.aspect, size.width, size.height),
               picture.border,
-              { longEdge: r.export.longEdge, originals: onlyProxies ? 'proxies' : 'auto' },
+              { longEdge: r.export.longEdge, pixels: onlyProxies ? 'proxies' : 'auto' },
             );
             if (summary.from === 'original') {
               const held = identity?.assetId ? heldOriginal(identity.assetId) : null;
@@ -378,7 +394,11 @@ export function useRollExport({
                 setExporting(
                   `Fetching the original ${step}${origin.bytes ? ` · ${formatBytes(origin.bytes)}` : ''}…`,
                 );
-                source = await origin.fetchOriginal();
+                const fetchOriginal = origin.fetchOriginal;
+                source = await trackedFetch(
+                  { label: `Fetching ${origin.name ?? 'the original'}`, scope: identity?.assetId ?? null, bytes: origin.bytes ?? null, signal: controller.signal },
+                  (opts) => fetchOriginal(opts),
+                );
                 if (identity?.assetId) holdOriginal(identity.assetId, source);
               }
             }
@@ -430,6 +450,7 @@ export function useRollExport({
             return stampExif(jpeg, exif, delivered);
           };
           const out = await renderRollPicture(source, {
+            signal: controller.signal,
             framing: picture.framing,
             aspect: picture.aspect,
             border: picture.border,
@@ -486,21 +507,32 @@ export function useRollExport({
           assetIds.push(identity?.assetId ?? null);
           if (origin) sourceIds.add(origin.sourceId);
         } catch (err) {
+          // Cancelled mid-picture: that picture is not a failure to list.
+          if (controller.signal.aborted) break;
           failures.push(`${picture.ref.name}: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
+      const cancelled = controller.signal.aborted;
       if (rendered.length === 0) {
-        setNote(failures[0] ?? 'Nothing could be rendered.');
+        setNote(cancelled ? 'Export cancelled — nothing was written.' : (failures[0] ?? 'Nothing could be rendered.'));
         return;
       }
+      // A cancelled run keeps what it rendered: written, and said as such.
       setExporting('Writing…');
+      task.update({ label: 'Writing the pictures', progress: 0, detail: null });
       const delivery = await deliverFilesTo(target, rendered, {
         replace: r.export.replace,
-        onProgress: (done, total) => setExporting(`Writing ${done}/${total}…`),
+        onProgress: (done, total) => {
+          setExporting(`Writing ${done}/${total}…`);
+          task.update({ progress: done / total, detail: `${done} of ${total}` });
+        },
       });
       const errors = delivery.method === 'folder' ? delivery.errors : [];
       const renamed = delivery.method === 'folder' ? delivery.renamed : 0;
-      setNote(describeRun(delivery.written, delivery.method, [...failures, ...errors], renamed));
+      setNote(
+        (cancelled ? `Cancelled after ${rendered.length} of ${targets.length} — ` : '') +
+          describeRun(delivery.written, delivery.method, [...failures, ...errors], renamed),
+      );
       // Only the files from ONE instance, so a future send-home plan refuses
       // nothing it did not have to.
       const sourceId = sourceIds.size === 1 ? [...sourceIds][0] : null;
@@ -508,6 +540,7 @@ export function useRollExport({
     } catch (err) {
       setNote(err instanceof Error ? err.message : 'The pictures could not be exported.');
     } finally {
+      task.done();
       setExporting(null);
     }
   }, []);

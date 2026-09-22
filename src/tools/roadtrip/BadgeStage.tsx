@@ -49,6 +49,7 @@ import type { FrameRect, ResolvedHook } from '../../shared/roadtrip/hooks/hook-v
 import { TRIM_EPSILON, type TrimRange } from '../../shared/media/trim';
 import { clampPlaybackRate } from '../../shared/media/use-video-transport';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
+import TaskEdge from '../../shared/ui/TaskEdge';
 
 /**
  * Playing the open clip on the stage. The stage owns the `<video>` behind the
@@ -114,6 +115,8 @@ function inRect(rect: FrameRect | null | undefined, px: number, py: number): boo
 
 interface BadgeStageProps {
   file: File | null;
+  /** What this stage's TASKS are scoped to — the piece — for the hairline on its bottom edge (`tasks.md`). */
+  taskScope?: string | null;
   /**
    * Frame of a clip to sit on — the playhead, in source seconds; ignored for
    * photos. While `playback.playing` the element advances on its own and this
@@ -256,6 +259,7 @@ interface BadgeStageProps {
  */
 export default function BadgeStage({
   file,
+  taskScope = null,
   videoTimeSeconds,
   playback = null,
   aspect,
@@ -1319,6 +1323,8 @@ export default function BadgeStage({
               : 'border-line-strong'
           }`}
         >
+          {/* The piece's tasks — an export running — as a hairline on the stage's bottom edge. */}
+          {taskScope && <TaskEdge scope={taskScope} className="z-20" />}
           <canvas
             ref={canvasRef}
             onPointerDown={onPointerDown}

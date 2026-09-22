@@ -29,6 +29,7 @@
  */
 
 import { healCachedUrl } from './cache-heal';
+import { isAbortError, type FetchOptions } from '../fetch-options';
 import { TIMELINE_SYNC_ENABLED } from './features';
 
 export type WinnowAuth =
@@ -764,7 +765,10 @@ export class WinnowClient {
     let res: Response;
     try {
       res = await this.fetchImpl(url, this.init(extra));
-    } catch {
+    } catch (err) {
+      // A cancelled request is the person's own doing, never a reason to ask
+      // again (`tasks/tracked.ts`).
+      if (isAbortError(err)) throw err;
       // A TypeError here is what a CORS refusal, a DNS miss, being offline and
       // a cache entry this origin is not allowed to read all look like from
       // inside the page — the browser hides which. The last one is the common
@@ -1052,10 +1056,32 @@ export class WinnowClient {
    * streaming preview (see `materialize.ts` for why that is the honest phase-1
    * shape).
    */
-  async fetchFile(url: string, name: string, type: string, lastModified: number): Promise<File> {
-    const res = await this.request(url);
-    const blob = await res.blob();
-    return new File([blob], name, { type, lastModified });
+  async fetchFile(url: string, name: string, type: string, lastModified: number, opts: FetchOptions = {}): Promise<File> {
+    const res = await this.request(url, opts.signal ? { signal: opts.signal } : undefined);
+    // With a progress callback the body is read chunk by chunk so a bar can
+    // move with it; the whole is the server's `content-length` where the
+    // instance exposes it (Winnow does), else null and the caller's own
+    // knowledge of the weight stands in. Without one, the browser reads it.
+    if (!opts.onProgress || !res.body) {
+      const blob = await res.blob();
+      return new File([blob], name, { type, lastModified });
+    }
+    const length = Number(res.headers.get('content-length'));
+    const total = Number.isFinite(length) && length > 0 ? length : null;
+    const reader = res.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let done = 0;
+    opts.onProgress(0, total);
+    for (;;) {
+      const { done: ended, value } = await reader.read();
+      if (ended) break;
+      if (value) {
+        chunks.push(value);
+        done += value.length;
+        opts.onProgress(done, total);
+      }
+    }
+    return new File(chunks as BlobPart[], name, { type, lastModified });
   }
 
   /**

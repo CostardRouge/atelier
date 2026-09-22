@@ -86,7 +86,6 @@ import { usePostExports } from './use-post-exports';
 import { DECK_LONG_EDGE } from '../../shared/roadtrip/deck-export';
 import { frameSize } from '../../shared/roadtrip/badge-render';
 import { useDeliveryRow } from '../../shared/develop/use-delivery-row';
-import type { RollOriginals } from '../../shared/develop/roll-types';
 import useRailThumbs from './use-rail-thumbs';
 import { useExposureLine } from './use-exposure-line';
 import { pickable, useSlideLibrary } from './use-slide-library';
@@ -1032,28 +1031,23 @@ export default function PostEditor({
     exposure,
   });
 
-  // WHICH PIXELS the stills leave from (O2 of `docs/develop-originals.md`).
-  // An export-door choice, like `imagesOnly` beside it and the Studio's
-  // "render from the proxy": it is about this machine's tunnel and this run,
-  // never about the piece, so it is session state and not on the trip.
-  const [originals, setOriginals] = useState<RollOriginals>('auto');
   // What the OPEN picture would deliver into the deck's own 1920 frame —
   // measured only while the Export tab is up, because measuring means
   // decoding and a 48-megapixel decode is not worth a sentence on every
   // slide stepped past. A collage says nothing: each cell is drawn into a
   // fraction of the frame, so the whole frame's answer would be wrong for it.
+  // There is no choice beside it any more (R5, `docs/capture-renditions.md`
+  // §13.2): a still takes its original only where the proxy would upscale.
   const delivery = useDeliveryRow(
     tab === 'export' && !collage ? cellFile : null,
     cellFraming,
     frameSize(aspect, DECK_LONG_EDGE),
-    originals,
   );
 
   const exports = usePostExports({
     trip,
     post,
     aspect,
-    originals,
     slideCount: slides.length,
     hookSlide: slides[0],
     // A still is taken SETTLED, never at the transport's time: a PNG caught
@@ -1433,6 +1427,7 @@ export default function PostEditor({
           >
           <BadgeStage
             file={slideFile}
+            taskScope={`piece:${post.id}`}
             videoTimeSeconds={isClipSlide ? playhead : slide.videoTimeSeconds}
             playback={
               isClipSlide
@@ -1635,8 +1630,6 @@ export default function PostEditor({
               onExportPiece={(imagesOnly) => void exports.exportPiece(imagesOnly)}
               onExportDeck={() => void exports.exportDeck()}
               onExportHookClip={() => void exports.exportHookClip()}
-              originals={originals}
-              onOriginals={setOriginals}
               delivery={delivery}
               onChangePost={onChangePost}
               grade={grade.hookGrade}

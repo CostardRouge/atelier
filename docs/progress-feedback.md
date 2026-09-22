@@ -1,10 +1,12 @@
 # Saying that something is taking time
 
 **Status (2026-09-21).** §1 is the maintainer's ask, in his words. §2 is FACT,
-read in this repository. §3 onwards is a PROPOSAL: nothing here has been
-agreed. It came out of `capture-renditions.md` — a 52 MB fetch and a 4.4 s
-decode are what made him ask — but it is deliberately written for the whole
-suite, not for RAW.
+read in this repository — **corrected the same day, see its last paragraph**:
+the video exports DO take an `AbortSignal` already. §3 onwards was a proposal;
+the maintainer said *"finish the whole thing, T1 to T5"* and the phases are
+being built in order (`docs/run-sheet.md` says which). It came out of
+`capture-renditions.md` — a 52 MB fetch and a 4.4 s decode are what made him
+ask — but it is deliberately written for the whole suite, not for RAW.
 
 ---
 
@@ -51,9 +53,18 @@ already report progress through an `onProgress`-shaped callback —
 So nothing needs inventing at the source. What is missing is **one place that
 knows what is running**, and two ways of drawing it.
 
-**Nothing is cancellable today.** No export, decode, fetch or transcode takes
-an `AbortSignal`; a run that has started, finishes. That is the real work in
-this brief — the drawing is the easy half.
+**What is cancellable today — corrected 2026-09-21.** The first reading of this
+section said nothing was; that was wrong for the VIDEO exports. `render-video.ts`,
+`webcodecs-export.ts`, `export-variant.ts`, `hook-video-export.ts`,
+`export-overlay*.ts` and `transcode.ts` all take a `signal?: AbortSignal` and
+check it between frames, and the Studio's Export tab already draws a Cancel
+over it (`StudioEditor`'s `exportAbort`). What takes NO signal: every fetch
+(`WinnowClient.request`, so `fetchFile`, `fetchHead`, `materialize`,
+`refetchMedia`, the originals and companions), the RAW decode
+(`raw-decoder.ts`), the Develop roll's export loop (`use-roll-export.ts`),
+the deck's PNG run (`deck-export.ts`) and Trips' `use-post-exports` (which
+never passes the signal the pipeline would take), and the pack import. So the
+real work of T4 is the roll and the deck, not the encoder loop.
 
 ## 3. The proposal
 
@@ -127,7 +138,7 @@ export function startTask(init: Omit<Task, 'id' | 'startedAt'>): TaskHandle;
 - **T5** — retire the one-off surfaces: Trips' Export fill stays (it is good),
   the others become the pill.
 
-## 4. The questions
+## 4. The questions — all five answered by building (T1–T5, 2026-09-21)
 
 1. **Modal or pill?** He offered both. The pill + popover is recommended,
    because his own reason for wanting a cancel is to go on doing something
@@ -135,11 +146,16 @@ export function startTask(init: Omit<Task, 'id' | 'startedAt'>): TaskHandle;
    an operation that must not be interrupted by an edit to the same document.
 2. **Does a cancelled task leave anything behind?** A half-written folder of
    exports, a partly fetched original. Recommended: a fetch leaves nothing, an
-   export keeps the files already written and says how many.
+   export keeps the files already written and says how many. **Built as
+   recommended (T4)**: a cancelled fetch holds nothing, a cancelled export
+   writes what it rendered and says `Cancelled after 1 of 2 — 1 picture
+   written`.
 3. **Where does the pill live on a phone?** The shell's bottom bar has no room
    for a seventh cell; the edge hairline may be the only surface there.
+   **Built**: the masthead, the one row every screen keeps — the dot alone
+   on a compact shell, the word on anything wider.
 4. **Does a task survive a route change?** A roll export while the person walks
    to the gallery. Recommended: yes — the registry is module state, and that is
-   the difference between a pill and a panel.
+   the difference between a pill and a panel. **Built as recommended.**
 5. **Is there a ceiling on concurrent tasks**, or does the popover just list
-   them?
+   them? **Built**: no ceiling; the popover lists them, oldest first.

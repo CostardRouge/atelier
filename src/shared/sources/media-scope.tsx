@@ -80,6 +80,17 @@ export interface MediaScope {
  * picture reaches the new piece by the one path that already existed (the
  * Library's active asset), not by a second one.
  */
+/**
+ * What the sheet was SHOWING when a verb was pressed (R6 of
+ * `docs/capture-renditions.md`): the capture's rendition on screen, as a roll
+ * stores it — `delivered:<name>`, or null for the one the picture opens on.
+ * The lightbox writes nothing itself; the verb is what carries a look at the
+ * camera's JPEG or the render inside the ARW into the tool it opens.
+ */
+export interface MediaView {
+  rendition: string | null;
+}
+
 export interface MediaAction {
   /** The publisher's own key — 'reel', 'carousel'. */
   id: string;
@@ -87,7 +98,8 @@ export interface MediaAction {
   label: string;
   /** What it makes, one line, on the button's title. */
   hint?: string;
-  run: () => void;
+  /** Called with the media already active; `view` says which of its files was on screen. */
+  run: (view?: MediaView) => void;
 }
 
 export interface MediaActions {

@@ -37,6 +37,7 @@ import InfoDot from '../ui/InfoDot';
 import useDialogKeys from '../ui/use-dialog-keys';
 import { flattenPack, prettyName, type LutPackIndex, type PackLook } from './lut-pack';
 import { cubeEntries, importPackFromFolder, type ImportFailure } from './pack-import';
+import { startTask } from '../tasks/tasks';
 import type { PackHost } from './pack-remote';
 import { storedLatticeSizes } from './pack-store';
 import {
@@ -137,13 +138,21 @@ export default function LutPackImportModal({ onClose, onImported }: LutPackImpor
     if (!picked) return;
     setError(null);
     setProgress({ done: 0, total: picked.files.length, file: '' });
+    // The import as a TASK (`tasks.md`, T5): the modal keeps its line, the
+    // pill draws the bar. No Cancel — the vault is written look by look and
+    // stopping half-way would leave a pack the index does not describe.
+    const packName = name.trim() || prettyName(picked.rootName || 'Pack');
+    const task = startTask({ label: `Importing ${packName}`, progress: 0, detail: `${picked.files.length} looks` });
     try {
       const result = await importPackFromFolder(picked.files, {
         id: uid(),
-        name: name.trim() || prettyName(picked.rootName || 'Pack'),
+        name: packName,
         author: author.trim(),
         url: url.trim() || undefined,
-        onProgress: setProgress,
+        onProgress: (p) => {
+          setProgress(p);
+          task.update({ progress: p.done / Math.max(1, p.total), detail: `${Math.min(p.done + 1, p.total)} of ${p.total}` });
+        },
       });
       setFailed(result.failed);
       setDone({ looks: result.index.looks.length, stored: result.stored, reused: result.reused });
@@ -152,6 +161,7 @@ export default function LutPackImportModal({ onClose, onImported }: LutPackImpor
     } catch (e) {
       setError((e as Error).message || 'The import stopped.');
     } finally {
+      task.done();
       setProgress(null);
     }
   }, [picked, name, author, url, onImported]);
@@ -274,15 +284,10 @@ export default function LutPackImportModal({ onClose, onImported }: LutPackImpor
 
           {progress && (
             <section className="flex flex-col gap-2">
+              {/* The line stays; the bar is the masthead's (T5, `tasks.md`). */}
               <p className="m-0 text-sm text-ink">
-                Reading {progress.done + 1} of {progress.total}…
+                Reading {Math.min(progress.done + 1, progress.total)} of {progress.total}…
               </p>
-              <div className="h-1.5 rounded-full bg-paper-2 overflow-hidden">
-                <div
-                  className="h-full bg-accent transition-[width] duration-150"
-                  style={{ width: `${(progress.done / Math.max(1, progress.total)) * 100}%` }}
-                />
-              </div>
               <p className="m-0 font-mono text-2xs text-muted truncate">{progress.file}</p>
             </section>
           )}

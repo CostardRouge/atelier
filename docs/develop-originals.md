@@ -11,7 +11,10 @@ for a host whose output frame is a frame rather than a cap,
 `shared/develop/delivery-source.ts` to decide and fetch, `useDeliveryRow` to
 say it. That is also what reverses the Studio's "photos never take this path"
 note. **Decision 4 is corrected** in place, below: the embedded render does
-not always win. O5 and O6 are BUILT in
+not always win. **Since 2026-09-21 the three words are gone from every host**
+(`capture-renditions.md` §13.2, R4 + R5): a picture's rendition answers the
+question in Develop, `Auto`'s arithmetic runs unnamed in Trips and the Studio,
+and the only word a door still says is Develop's *Proxies only, for this run*. O5 and O6 are BUILT in
 the Develop tool on 2026-09-20 (P10 of `photo-editor.md`, rules in
 `docs/memory/raw.md`): the Base section, `DevelopSettings.base` with its
 measured `rawGain`, the decode in the stage at the pixel budget and at

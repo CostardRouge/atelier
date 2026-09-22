@@ -15,6 +15,7 @@
  */
 
 import type { ExifData } from '../exif/exif-parser';
+import type { FetchFile } from '../sources/fetch-options';
 import { partialHash } from '../lib/partial-hash';
 import { fileIdentity } from '../library/assets';
 import { savedMediaRef, type SavedMediaRef } from './project-types';
@@ -66,7 +67,8 @@ export interface MediaOrigin {
    */
   name?: string;
   bytes?: number | null;
-  fetchOriginal?: () => Promise<File>;
+  /** Takes a signal and a progress callback (`fetch-options.ts`), so a task can say and stop it. */
+  fetchOriginal?: FetchFile;
   /**
    * The ORIGINAL's leading bytes — its EXIF, and nothing else. A delivered
    * picture carries the original's metadata whatever its pixels were taken
@@ -108,7 +110,7 @@ export interface CaptureCompanion {
   bytes: number | null;
   width: number | null;
   height: number | null;
-  fetchFile: () => Promise<File>;
+  fetchFile: FetchFile;
   /** Its leading bytes — the head a RAW probe reads, without pulling 35 MB. */
   fetchHead: (bytes: number) => Promise<ArrayBuffer>;
 }

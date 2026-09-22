@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { WinnowError, type WinnowAssetRow, type WinnowClient } from './client';
 import { materialize } from './materialize';
+import { isAbortError } from '../fetch-options';
 import { fileBaseName } from '../../library/assets';
 import type { RowsProblem } from './use-scope-rows';
 
@@ -59,6 +60,8 @@ export function usePickFromInstance(
         onPicked(files, assetId);
         return assetId;
       } catch (err) {
+        // Cancelled from the pill: the person's own doing, nothing to report.
+        if (isAbortError(err)) return null;
         setProblem(
           err instanceof WinnowError && err.kind === 'unauthenticated'
             ? { text: `Not signed in to ${connectionId}.`, login: client.loginUrl() }
