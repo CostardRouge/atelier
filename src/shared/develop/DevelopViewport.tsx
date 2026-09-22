@@ -176,7 +176,7 @@ export default function DevelopViewport({
           title="Drag to compare with the picture as shot"
           aria-hidden="true"
         >
-          {wipe < 1 && (
+          {wipe > 0 && (
             <span className="absolute inset-y-0 left-1/2 w-[1.5px] -ml-[0.75px] bg-[rgba(251,248,241,0.9)] pointer-events-none" />
           )}
           <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 grid place-items-center w-6 h-6 rounded-full bg-[rgba(251,248,241,0.92)] border border-line-strong text-ink-soft shadow-paper group-hover:border-accent group-hover:text-accent-ink pointer-events-none">
@@ -320,7 +320,7 @@ export default function DevelopViewport({
       {source && cube && !picking && (
         <>
           <span className={`absolute top-2 left-2.5 ${developPillClass} bg-[rgba(251,248,241,0.86)] text-ink-soft`}>
-            {holding ? 'before' : wipe < 1 ? 'after · before' : 'after'}
+            {holding ? 'before' : wipe > 0 ? 'before · after' : 'after'}
           </span>
           <button
             type="button"

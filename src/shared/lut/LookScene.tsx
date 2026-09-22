@@ -11,8 +11,9 @@
  * leaving its slot to the garbage collector.
  *
  * The before/after wipe is not new either: `setSplit` has been in the shader
- * all along, graded on the LEFT and the original on the right, the way
- * Lightroom and Capture One put it — and the way `LutStudio` already reads.
+ * all along — the original on the LEFT and the grade on the right, so the
+ * picture reads before → after the way Lightroom and Capture One put it, and
+ * the way every other compare in the suite reads.
  * The wipe is CONTROLLED from the host, because the slider that drives it
  * belongs beside the picture's name, not on top of the photograph.
  *
@@ -73,7 +74,7 @@ export interface LookSceneProps {
   interpolation: Interpolation;
   /** The before/after wipe, driven by the host's slider. */
   compare: boolean;
-  /** Where the divider sits, 0..1 — graded on its left. */
+  /** Where the divider sits, 0..1 — the original on its left, the grade right. */
   splitX: number;
   /** A drag across the picture moves the divider too. */
   onSplit: (x: number) => void;
@@ -201,10 +202,10 @@ export default function LookScene({
               style={{ left: `${splitX * 100}%` }}
             />
             <span className="absolute left-2 bottom-2 px-1.5 py-0.5 rounded-full bg-frame/70 font-mono text-3xs tracking-[0.1em] uppercase text-paper pointer-events-none">
-              Graded
+              Original
             </span>
             <span className="absolute right-2 bottom-2 px-1.5 py-0.5 rounded-full bg-frame/70 font-mono text-3xs tracking-[0.1em] uppercase text-paper pointer-events-none">
-              Original
+              Graded
             </span>
           </>
         )}

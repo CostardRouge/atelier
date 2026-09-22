@@ -1199,11 +1199,11 @@ reading a name off a dropdown tells you nothing about a LUT.
 
 **Where the tool has your picture open, the gallery shows it.** A band across
 the top draws the look you are aiming at on *that* photograph, with a compare
-toggle that wipes it against the original — graded on the left, the way
-Lightroom and Capture One put it. So the gesture there is aim, then take: the
-first click moves the band, and the look is yours on the second click, on
-"Use this look", or on Enter. Where no picture is open there is nothing to aim
-at and a click is the choice, as it always was.
+toggle that wipes it against the original — before on the left, after on the
+right, the way Lightroom and Capture One put it. So the gesture there is aim,
+then take: the first click moves the band, and the look is yours on the second
+click, on "Use this look", or on Enter. Where no picture is open there is
+nothing to aim at and a click is the choice, as it always was.
 
 It costs one lattice — the look under your eye — and that is the point: the
 grid keeps its cheap pre-baked tiles, which is also what makes two looks

@@ -672,7 +672,7 @@ visibly did nothing. **(2) A tap that missed the frame fell through to the wipe
 and threw the divider.** Both are cured by SUSPENDING the compare whenever a
 mask tool holds the pointer — the rule the grey dropper already followed by
 taking the pointer whole. `useDevelopPicture` now derives `suspended` from
-`paint || picking`: `comparing` goes false, the shown wipe goes to 1 (the whole
+`paint || picking`: `comparing` goes false, the shown wipe goes to 0 (the whole
 picture delivered), the divider is not drawn and a drag places nothing. The
 stored wipe is REMEMBERED, so the line is back where it was the moment the tool
 is put down. Beside it, a plain switch the host owns — `compare`, a browser
@@ -710,3 +710,28 @@ the divider returns to 0.45 where it was; Pick arms the `copy` cursor and holds
 the compare, a tap draws its marker at the tapped pixel, a second adds, clicking
 a marker takes it off, putting the tool down brings the divider back; the eye
 hides and shows.
+
+## 2026-09-22 — The compare reads BEFORE → AFTER, left to right
+
+**The maintainer: *"lets invert the compare after/before — I prefer
+before/after, it will be more coherent with other places"*.** The shader's
+split had put the GRADE on the left since the LUT tool's first version
+(`lut-gl.ts`), and everything that drives it inherited that: the LUT Studio's
+wipe, the look gallery's scene, the Develop stage's own 2D wipe. The Studio's
+overlay stage had always done the opposite — the original on the left, the
+composite on the right (`use-overlay-stage.ts`) — so the suite disagreed with
+itself, and the LUT side also disagreed with Lightroom and Capture One, which
+the code claimed to be copying.
+
+**One direction now, everywhere: the picture AS SHOT on the left of the
+divider, the corrected one on its right.** How to apply: `u_splitX` is the
+divider's position and the original is drawn where `v_uv.x < u_splitX`; a label
+beside the divider says `Original` left, `Graded` right; the Develop stage's
+pill says `before · after`.
+
+**The consequence to watch in `useDevelopPicture`**: `wipe` is no longer "the
+share painted graded" but the DIVIDER's position, with the as-shot picture to
+its left — so **no split is 0, not 1**. Every reader of it flipped with the
+meaning (`shownWipe`, the stage paint, the loupe's paint, the divider line, the
+pill), and a `wipe < 1` left anywhere would draw a split nobody asked for on a
+picture at rest.

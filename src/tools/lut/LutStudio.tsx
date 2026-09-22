@@ -61,7 +61,8 @@ export default function LutStudio() {
   } = useLutSelection();
   const [bypass, setBypass] = useState(false);
   // Before/after wipe: a divider that follows the cursor over the preview,
-  // grade on the left, original on the right (like Lightroom / Capture One).
+  // original on the left, grade on the right (like Lightroom / Capture One,
+  // and like every other compare in the suite — it reads before → after).
   const [compareOn, setCompareOn] = useState(false);
 
   // Transport state, mirrored from the offscreen video element.
@@ -353,7 +354,7 @@ export default function LutStudio() {
                 onClick={toggleCompare}
                 disabled={!lut}
                 aria-pressed={compareOn}
-                title="Drag a divider across the preview: grade on the left, original on the right"
+                title="Drag a divider across the preview: original on the left, grade on the right"
               >
                 <svg
                   className="w-[1.05rem] h-[1.05rem] flex-none"
@@ -476,11 +477,14 @@ export default function LutStudio() {
                 aria-hidden="true"
               >
                 <span className="absolute top-1/2 left-1/2 w-[34px] h-[34px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/95 bg-black/[0.32] shadow-[0_1px_6px_rgba(0,0,0,0.45)] before:content-[''] before:absolute before:top-1/2 before:left-2 before:w-1.5 before:h-1.5 before:border-t-2 before:border-r-2 before:border-white/95 before:-translate-y-1/2 before:-rotate-[135deg] after:content-[''] after:absolute after:top-1/2 after:right-2 after:w-1.5 after:h-1.5 after:border-t-2 after:border-r-2 after:border-white/95 after:-translate-y-1/2 after:rotate-45" />
+                {/* The labels hang off the divider itself: `right-*` puts one
+                    on its LEFT side — the original — and `left-*` the grade on
+                    its right. */}
                 <span className="absolute top-2.5 right-2.5 font-mono text-2xs tracking-[0.08em] uppercase text-white bg-black/55 px-[0.4rem] py-[0.18rem] rounded-[5px] whitespace-nowrap">
-                  Graded
+                  Original
                 </span>
                 <span className="absolute top-2.5 left-2.5 font-mono text-2xs tracking-[0.08em] uppercase text-white bg-black/55 px-[0.4rem] py-[0.18rem] rounded-[5px] whitespace-nowrap">
-                  Original
+                  Graded
                 </span>
               </div>
             )}

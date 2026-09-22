@@ -252,7 +252,10 @@ export interface DevelopPicture {
   /** The cube it is painted through: develop → look → output. */
   cube: CubeLut | null;
   view: PictureZoom;
-  /** Share of the picture, from the left, painted graded; 1 = no split. */
+  /**
+   * Share of the picture, from the left, painted AS SHOT — the "before" side;
+   * 0 = no split, the whole picture corrected.
+   */
   wipe: number;
   holding: boolean;
   setHolding: (on: boolean) => void;
@@ -497,7 +500,7 @@ export function useDevelopPicture({
    * where it is only in the way.
    *
    * Turning it off does not FORGET where the divider was — it stops splitting
-   * (`shownWipe` goes to 1, the whole picture delivered) and puts the line
+   * (`shownWipe` goes to 0, the whole picture delivered) and puts the line
    * back exactly where it was when it comes on again.
    */
   compare?: boolean;
@@ -505,7 +508,10 @@ export function useDevelopPicture({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [source, setSource] = useState<BadgeSource | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
-  const [wipe, setWipe] = useState(1);
+  // Where the divider sits, 0..1 from the left; the picture is AS SHOT on its
+  // left and corrected on its right, so it reads before → after. 0 is no split
+  // at all — the divider at the far left leaves the whole picture corrected.
+  const [wipe, setWipe] = useState(0);
   const [holding, setHolding] = useState(false);
   const [picking, setPickingState] = useState(false);
   /**
@@ -522,7 +528,7 @@ export function useDevelopPicture({
    * was the moment the tool is put down.
    */
   const suspended = Boolean(paint) || picking;
-  const shownWipe = compare && !suspended ? wipe : 1;
+  const shownWipe = compare && !suspended ? wipe : 0;
 
   // Read at decode time, not listed as a dep: the gain is measured by the
   // first decode and STORED by the host right after, and a re-decode for the
@@ -697,21 +703,22 @@ export function useDevelopPicture({
     } else {
       ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
     }
-    // The wipe: the untouched picture to the RIGHT of the divider, the way the
-    // shader's own split works — graded on the left. The divider itself is
-    // drawn over the canvas, in the page, so it stays a hairline at any zoom.
-    if (grader && shownWipe < 1) {
+    // The wipe: the untouched picture to the LEFT of the divider, the way the
+    // shader's own split works — before on the left, after on the right. The
+    // divider itself is drawn over the canvas, in the page, so it stays a
+    // hairline at any zoom.
+    if (grader && shownWipe > 0) {
       const x = Math.round(shownWipe * w);
       if (layout && framing) {
         ctx.save();
         ctx.beginPath();
-        ctx.rect(x, 0, w - x, h);
+        ctx.rect(0, 0, x, h);
         ctx.clip();
         drawPictureIn(ctx, source.image, source.width, source.height, framing, layout);
         ctx.restore();
       } else {
         const sx = Math.round(shownWipe * source.width);
-        ctx.drawImage(source.image, sx, 0, source.width - sx, source.height, x, 0, w - x, h);
+        ctx.drawImage(source.image, 0, 0, sx, source.height, 0, 0, x, h);
       }
     }
   }, [
@@ -1119,11 +1126,11 @@ export function useDevelopPicture({
       else ctx.drawImage(img, 0, 0, f.width, f.height, 0, 0, w, h);
     };
     draw(graded);
-    if (grader && shownWipe < 1) {
+    if (grader && shownWipe > 0) {
       const x = Math.round(shownWipe * w);
       ctx.save();
       ctx.beginPath();
-      ctx.rect(x, 0, w - x, h);
+      ctx.rect(0, 0, x, h);
       ctx.clip();
       draw(f.image);
       ctx.restore();
