@@ -329,6 +329,7 @@ export default function MonthCalendar({
             onSelect={onSelect}
             onOpenLeg={onOpenLeg}
             onHover={adjust ? () => undefined : setHovered}
+            centred={cols === 1}
             onMenu={(date, cellData, x, y) => {
               const items = menuFor?.(date) ?? [];
               if (!items.length) return false;
@@ -367,6 +368,13 @@ interface MonthBlockViewProps {
   onHover: (h: Hovered | null) => void;
   /** Returns whether a menu was opened. */
   onMenu: (date: IsoDate, cell: DayCell, x: number, y: number) => boolean;
+  /**
+   * Centred in the scroller: one block to a row is capped at a 56px cell
+   * (416px), and a compact window wider than that — a tablet, a narrow
+   * desktop window — otherwise leaves it stuck to the left with paper on
+   * the right. Blocks in a grid sit where the grid puts them.
+   */
+  centred: boolean;
 }
 
 
@@ -390,6 +398,7 @@ const MonthBlockView = forwardRef<HTMLDivElement, MonthBlockViewProps>(function 
     onOpenLeg,
     onHover,
     onMenu,
+    centred,
   },
   ref,
 ) {
@@ -399,9 +408,15 @@ const MonthBlockView = forwardRef<HTMLDivElement, MonthBlockViewProps>(function 
   const inTrip = (date: IsoDate) => isWithin(trip.startDate, trip.endDate, date);
 
   return (
-    <div ref={ref} id={`month-${block.key}`} style={{ width }}>
-      {/* The month's name stays while its weeks scroll under it. */}
-      <div className="sticky top-0 z-10 flex items-baseline gap-2 h-7 bg-paper">
+    <div ref={ref} id={`month-${block.key}`} className={centred ? 'mx-auto' : undefined} style={{ width }}>
+      {/* The month's name stays while its weeks scroll under it — on paper
+          that is TRANSLUCENT and blurred, never a flat of the paper token:
+          the page's ground is the paper plus two radial gradients
+          (index.css), so a flat drawn on it was visibly lighter than its
+          surroundings wherever the gradient darkens, a rectangle in the
+          maintainer's screenshot. Blurred, the band takes the tone of
+          whatever is under it, weeks included. */}
+      <div className="sticky top-0 z-10 flex items-baseline gap-2 h-7 bg-paper/85 backdrop-blur-sm">
         <span className="font-serif text-lg leading-none">{block.label}</span>
         {block.tripDays.length > 0 && (
           <span className="font-mono text-2xs text-muted">
