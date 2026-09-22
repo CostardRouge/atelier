@@ -257,8 +257,8 @@ function TripActions({
     { kind: 'delete' } | { kind: 'move'; to: SourceInfo } | null
   >(null);
 
-  // The cover chooser keeps its own chip on the cover too, because a picker
-  // only a menu offers is a picker nobody finds (entry in `roadtrip.md`).
+  // The ⋯ menu is the ONLY home of the cover chooser on a card: the chip that
+  // used to sit on the cover kept swallowing the click meant for the trip.
   const items: OverflowItem[] = [
     { id: 'open', label: isOpen ? 'Resume' : remoteOnly ? 'Open here' : 'Open', onSelect: onOpen },
     { id: 'cover', label: 'Choose a cover…', onSelect: onChooseCover },
@@ -619,7 +619,7 @@ function TripCard({
           if (busy === null) onOpen();
         }
       }}
-      className={`group relative flex flex-col bg-surface border rounded-paper-lg shadow-paper-soft transition-[box-shadow,border-color] duration-300 ease-paper hover:shadow-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+      className={`relative flex flex-col bg-surface border rounded-paper-lg shadow-paper-soft transition-[box-shadow,border-color] duration-300 ease-paper hover:shadow-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
         busy === null ? 'cursor-pointer' : ''
       } ${isOpen ? 'border-accent' : 'border-line hover:border-line-strong'} ${
         remoteOnly ? 'opacity-75' : ''
@@ -640,20 +640,11 @@ function TripCard({
             not here yet
           </span>
         )}
-        {/* The cover offers its own verb. It lived only in the overflow menu,
-            where nothing said a cover was a choice at all — a picker you have
-            to already know about is a picker nobody finds. The menu keeps the
-            item as the keyboard and touch path. */}
-        {trip.cover.layout !== 'none' && busy === null && (
-          <button
-            type="button"
-            onClick={onChooseCover}
-            className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-control border border-line bg-[rgba(251,248,241,0.94)] text-ink text-xs font-medium cursor-pointer opacity-0 transition-opacity duration-200 ease-paper group-hover:opacity-100 focus-visible:opacity-100 hover:border-accent hover:text-accent-ink"
-          >
-            <span className="inline-flex text-sm">{Icons.image}</span>
-            Cover
-          </button>
-        )}
+        {/* No `Cover` chip on the picture: the cover zone IS the card's click
+            target, and a verb sitting on it caught the press meant for the
+            trip — reaching for the card and landing in the cover chooser. The
+            ⋯ menu carries the verb at every layout, which is also what keeps a
+            `none` cover from being a one-way door. */}
       </div>
 
       <div className={`flex flex-col ${compact ? 'gap-2 p-3.5' : 'gap-2.5 p-4'}`}>
