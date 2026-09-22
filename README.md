@@ -555,6 +555,32 @@ it to here. Clicking a bar opens that leg's fields beneath the ruler and goes
 to the day it began; clicking a day a leg covers opens that leg. Nothing is
 drag-only — a focused edge, bar or playhead moves with the arrow keys.
 
+**On a phone the overview is a calendar of months, not a grid.** Below 820px
+the fitted grid gave a year-long trip a 6px cell — seven times too small for a
+finger — so the axis turns: one block per month, seven columns Monday to
+Sunday, the page scrolling, and a day is a seventh of the width, ~47px, with
+nothing to invent. The year stays in view as a **map** above it, read and
+jumped from (one tap per month) and never aimed at; the frame on it is where
+you have scrolled to. Under each week a **ribbon** says which leg you were on.
+A tap on a day **selects** it and never opens anything: the **strip** above
+the bottom bar re-reads — the date, the leg, and the day's pieces as their own
+hook thumbnails, three at most, then `+N`; on a day nothing came out of, the
+strip carries **+ Tell it** instead. The strip pulls up into the **day sheet**:
+what was told, each row's actions behind one `⋯`, the leg in one row with
+*Edit ›*, and the three verbs. The bottom bar the shell draws on every tool
+screen carries the overview's own cells beside the library: **Stages** — the
+legs as a list, each with its coverage as a small barcode, the open one
+unfolding its fields, and the uncovered runs as rows with `+ cover` — and
+**Trip**, the dates-and-route sheet. A leg's dates are dragged on the
+calendar itself: **Adjust on the calendar** fades every other day, puts a
+28px grip on each end, and one cell is one day — 47px against the ruler's
+6 — with a tap moving the nearer edge and a stepper per edge under the
+calendar as the keyboard's twin; Done writes it, Cancel drops it. A toggle in
+the bar swaps the rungs for **pictures**: each told day draws the hook of its
+piece in its cell, with a count when it holds several. The choice is
+remembered by the browser. Above 820px nothing of this applies — the grid,
+the loupe and the ruler stay exactly as described.
+
 A stage lists **the places it went through, in the order you lived them**,
 as a row of chips joined by the badge's own arrow. The first is where the leg
 began and the last is where it ended, so a start and an end are the list
