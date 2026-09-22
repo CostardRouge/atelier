@@ -1050,9 +1050,43 @@ export default function StudioEditor({
   // touching the media. Failures flip the badge to "storage-error" — editing
   // continues in memory.
   const docRef = useRef(project);
+  // The shell can change the document WITHOUT remounting the editor — the
+  // media folder re-pointed, missing files forgotten — and every save below
+  // spreads from this ref. It must follow the prop, or the next autosave
+  // writes the old folder handle back over the one just picked.
+  useEffect(() => {
+    docRef.current = project;
+  }, [project]);
   const durationRef = useRef<number>(project.durationSeconds ?? 0);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const firstRun = useRef(true);
+  /** The save the timer is waiting to run, and whether one is owed. */
+  const pendingSave = useRef<(() => Promise<void>) | null>(null);
+  const saveOwed = useRef(false);
+
+  // **A save that is owed is written before the editor goes**, and when the
+  // tab is hidden or the page unloads. The debounce below restarts on every
+  // edit through its cleanup — and that same cleanup used to run on unmount,
+  // cancelling the pending save with nothing to write it: "Projects", a tool
+  // switch or a remount lost the last 800 ms of edits every time.
+  useEffect(() => {
+    const flush = () => {
+      if (!saveOwed.current) return;
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+      void pendingSave.current?.();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', flush);
+      flush();
+    };
+  }, []);
 
   useEffect(() => {
     if (duration > 0) durationRef.current = duration;
@@ -1080,50 +1114,57 @@ export default function StudioEditor({
     }
     setSaveState('unsaved');
     if (saveTimer.current) clearTimeout(saveTimer.current);
+    const save = async () => {
+      saveOwed.current = false;
+      setSaveState('saving');
+      // Hashing is memoised per file, so only the first save of a folder
+      // pays for it; every later autosave is a cache hit.
+      const mediaFiles = await hashedMediaRefs(
+        clips.flatMap((c) =>
+          [c.parts.video, c.parts.srt, c.parts.image].filter((f): f is File => !!f),
+        ),
+      );
+      const doc: ProjectDoc = {
+        ...docRef.current,
+        name: projectName.trim() || docRef.current.name,
+        updatedAt: Date.now(),
+        settings: { ...docRef.current.settings, aspectId, timeShift, timeScale },
+        elements,
+        guides,
+        lutStack: lutStack.toSaved(),
+        outputTransform: lutStack.output,
+        lutFilm: lutStack.film,
+        theme,
+        scenes,
+        outro,
+        exportPrefs: {
+          fileName: exportFileName.trim() || null,
+          variants,
+        },
+        media: {
+          ...docRef.current.media,
+          files: mediaFiles.length ? mediaFiles : docRef.current.media.files,
+          activeId,
+          trims,
+          develops,
+        },
+        thumbnail: await bakeThumbnail(),
+        durationSeconds: durationRef.current || docRef.current.durationSeconds,
+      };
+      docRef.current = doc;
+      const ok = await putProject(doc);
+      onDocSaved(doc);
+      setSaveState(ok ? 'saved' : 'storage-error');
+    };
+    pendingSave.current = save;
+    saveOwed.current = true;
     saveTimer.current = setTimeout(() => {
-      void (async () => {
-        setSaveState('saving');
-        // Hashing is memoised per file, so only the first save of a folder
-        // pays for it; every later autosave is a cache hit.
-        const mediaFiles = await hashedMediaRefs(
-          clips.flatMap((c) =>
-            [c.parts.video, c.parts.srt, c.parts.image].filter((f): f is File => !!f),
-          ),
-        );
-        const doc: ProjectDoc = {
-          ...docRef.current,
-          name: projectName.trim() || docRef.current.name,
-          updatedAt: Date.now(),
-          settings: { ...docRef.current.settings, aspectId, timeShift, timeScale },
-          elements,
-          guides,
-          lutStack: lutStack.toSaved(),
-          outputTransform: lutStack.output,
-          lutFilm: lutStack.film,
-          theme,
-          scenes,
-          outro,
-          exportPrefs: {
-            fileName: exportFileName.trim() || null,
-            variants,
-          },
-          media: {
-            ...docRef.current.media,
-            files: mediaFiles.length ? mediaFiles : docRef.current.media.files,
-            activeId,
-            trims,
-            develops,
-          },
-          thumbnail: await bakeThumbnail(),
-          durationSeconds: durationRef.current || docRef.current.durationSeconds,
-        };
-        docRef.current = doc;
-        const ok = await putProject(doc);
-        onDocSaved(doc);
-        setSaveState(ok ? 'saved' : 'storage-error');
-      })();
+      saveTimer.current = null;
+      void save();
     }, 800);
     return () => {
+      // Restarting the debounce only: what is owed is written by the
+      // unmount flush above, never dropped here.
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
     // Autosave is driven by the edited state, not by callback identities.
@@ -1144,6 +1185,10 @@ export default function StudioEditor({
     develops,
     lutStack.layers,
     lutStack.output,
+    // The texture is written (`lutFilm`) and undone like the layers, so it
+    // is a trigger like them: a grain or halation change alone used to wait
+    // for some other edit before it reached the store.
+    lutStack.film,
     clips,
   ]);
 
