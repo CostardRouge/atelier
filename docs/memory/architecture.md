@@ -48,7 +48,7 @@ Read before touching the shell (`src/app/`), the tool registry, the shared asset
 
 ## A tool crash must not blank the app (2026-08-20)
 
-**Decision.** `ErrorBoundary` wraps the active tool and resets on route change. **Why**: one tool's exception used to take the whole suite down. **How to apply**: errors are logged to the console only — nothing is reported anywhere, by design (see `local-first.md`).
+**Decision.** `ErrorBoundary` wraps the active tool and resets on route change. **Why**: one tool's exception used to take the whole suite down. **How to apply**: errors are logged to the console only — nothing is reported anywhere, by design (see `local-first.md`). **The shell itself is OUTSIDE every boundary** (2026-09-22): `main.tsx`, the four providers and `App.tsx`'s own hooks run before any boundary mounts, so anything that can throw there — a `localStorage` read in a `useState` initialiser was one, and a browser with site data blocked throws on the first access — is a blank page, not a panel. A preference the shell reads at boot goes through `useLocalFlag` or a try/catch; every other storage site in the suite was already guarded.
 
 ## The source seam: documents carry a `sourceId` from day one (2026-08-31)
 
