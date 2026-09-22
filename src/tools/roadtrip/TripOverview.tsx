@@ -49,10 +49,11 @@ import ShortDayStrip from './ShortDayStrip';
 import { defaultLoupe, loupeContaining, moveLoupe, type Loupe } from '../../shared/roadtrip/loupe';
 import LoupeBrush from './LoupeBrush';
 import MonthCalendar from './MonthCalendar';
-import IconButton from '../../shared/ui/IconButton';
 import BottomSheet from '../../shared/ui/BottomSheet';
 import DayStrip from './DayStrip';
 import useDayThumbs from './use-day-thumbs';
+import LegsSheet from './LegsSheet';
+import { usePublishSectionBar } from '../../shared/ui/section-rail';
 
 interface TripOverviewProps {
   trip: TripDoc;
@@ -537,6 +538,34 @@ export default function TripOverview({
   const [dayOpen, setDayOpen] = useState(false);
   // Read once here so the strip and the sheet draw the same pictures.
   const dayThumbs = useDayThumbs(selectedCell?.posts ?? []);
+  // The phone's legs sheet — the ruler's job, as a list.
+  const [legsOpen, setLegsOpen] = useState(false);
+
+  // The overview's own cells on the shell's bottom bar, which the shell draws
+  // on every compact tool screen anyway (`SectionRail`): the legs and the trip
+  // are sheets, so the two verbs the wide screen keeps in its header and its
+  // stages panel cost a phone no height at all. Marked only while their
+  // sheet is UP, the rule the piece editor's bar follows.
+  usePublishSectionBar(
+    useMemo(
+      () =>
+        compact
+          ? {
+              sections: [
+                { id: 'legs', label: 'Stages' },
+                { id: 'trip', label: 'Trip' },
+              ],
+              active: legsOpen ? 'legs' : editingDetails ? 'trip' : null,
+              label: 'Trip overview',
+              onSelect: (id: string) => {
+                if (id === 'legs') setLegsOpen(true);
+                else setEditingDetails(true);
+              },
+            }
+          : null,
+      [compact, legsOpen, editingDetails],
+    ),
+  );
   const saveDetails = useCallback(
     (details: TripDetails) => {
       setEditingDetails(false);
@@ -587,7 +616,8 @@ export default function TripOverview({
         compact
           ? (id) => {
               setDayOpen(false);
-              openLegById(id);
+              setStageId(id);
+              setLegsOpen(true);
             }
           : undefined
       }
@@ -645,12 +675,6 @@ export default function TripOverview({
                 {coverage.toldDays}
                 <span className="text-muted">/{coverage.totalDays}</span>
               </span>
-              <IconButton
-                onClick={() => setEditingDetails(true)}
-                label="The trip's dates, route and cover"
-              >
-                {Icons.settings}
-              </IconButton>
             </>
           }
         >
@@ -686,9 +710,11 @@ export default function TripOverview({
           onSelect={selectDate}
           stageOf={(date) => dayStages.get(date) ?? null}
           menuFor={menuFor}
-          onOpenLeg={openLegById}
+          onOpenLeg={(id) => {
+            setStageId(id);
+            setLegsOpen(true);
+          }}
           selectedLegId={selectedStageId}
-          tail={<div className="pt-3">{stagesPanel}</div>}
         />
 
         {selected && (
@@ -710,6 +736,28 @@ export default function TripOverview({
             snaps={[0.62, 0.92]}
           >
             <div className="px-4 pt-2 pb-4">{dayPanel}</div>
+          </BottomSheet>
+        )}
+
+        {legsOpen && (
+          <BottomSheet
+            open
+            onClose={() => setLegsOpen(false)}
+            title="Stages"
+            hint={`${trip.stages.length} leg${trip.stages.length === 1 ? '' : 's'}`}
+            snaps={[0.72, 0.92]}
+          >
+            <LegsSheet
+              trip={trip}
+              rungAt={rungAt}
+              selectedId={selectedStageId}
+              onSelect={setStageId}
+              onChange={setStages}
+              timelineSources={timelineSources}
+              onCompleteFrom={onCompleteFrom}
+              deduceSources={deduceSources}
+              onDeduceFrom={onDeduceFrom}
+            />
           </BottomSheet>
         )}
 

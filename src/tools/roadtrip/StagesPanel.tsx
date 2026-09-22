@@ -51,7 +51,7 @@ const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 const inputClass =
   'font-sans text-sm px-2.5 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent';
 
-function StageCard({
+export function StageCard({
   trip,
   stage,
   index,
