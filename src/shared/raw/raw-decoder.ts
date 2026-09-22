@@ -132,7 +132,17 @@ export function canDecodeRaw(file: File | null | undefined): boolean {
   return Boolean(file && isRawImage(file.name));
 }
 
-/** LibRaw's settings for LINEAR output: camera white balance, no auto-bright, sRGB primaries. */
+/**
+ * LibRaw's settings for LINEAR output: camera white balance, no auto-bright,
+ * sRGB primaries.
+ *
+ * **`userFlip` is deliberately absent.** LibRaw's own default is `-1`, "use
+ * the file's flip", so `dcraw_process` turns the picture the way the camera
+ * was held and transposes the dimensions with it — which is why the sensor
+ * path has always come back upright while the embedded render did not
+ * (`media-pipeline.md`, and `exif/raw-probe.ts` for the other half). Setting
+ * it here would break the pair.
+ */
 export function librawSettings(halfSize: boolean): Record<string, unknown> {
   return {
     outputBps: 16,

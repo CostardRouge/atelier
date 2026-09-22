@@ -287,6 +287,13 @@ Rules a later agent must keep:
 - **The file's own pixels come free**: `MediaOrigin.width/height` behind a
   proxy, `rawSizes()` (a megabyte of the head, no decoder) for a RAW's sensor
   plane. `rawSizesFrom` is its pure twin, for a head already fetched.
+- **`rawSizes()` reports the pixels as they are SHOWN** (2026-09-22): both
+  sizes are transposed where the capture was held on its side, so the chip and
+  the *sensor* rendition row stop printing transposes of each other for one
+  photograph, and the delivery headroom is measured on the right axis.
+  `RawIfd.width/height`, `sensorIfd()` and `describeRaw()` stay the file's own
+  UNROTATED statement — the two views are deliberate, do not unify them
+  (`media-pipeline.md`, `raw.md`).
 - **The sheet says it, not its hosts.** `DevelopSheet` computes the fidelity
   from the file it was given; Trips and the Studio passed two strings each and
   now pass none, so the three Develop screens cannot drift apart. The props

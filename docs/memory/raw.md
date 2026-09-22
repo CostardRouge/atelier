@@ -35,6 +35,17 @@ headroom a develop reads), quality 3, half size when it fits. Measured on a
 synthetic 12-megapixel DNG: 2.2 s to open (parse + unpack), 0.6 s to
 demosaic at half size, 1.6 s whole; ~500 MB of heap for the run.
 
+**`userFlip` is deliberately ABSENT from those settings (2026-09-22).** LibRaw's
+own default is `-1`, "use the file's flip", so `dcraw_process` turns the
+picture the way the camera was held and transposes the output dimensions with
+it. That is the whole reason the sensor path has always come back upright —
+not our code, a good default. Its twin does not: a RAW's embedded render is
+sliced out of the container and leaves the camera's Orientation behind, so it
+had to be GIVEN the tag (`media-pipeline.md`, «A RAW's embedded render is
+turned by a block we SPLICE into it»). The two halves are a PAIR: setting
+`userFlip` here would turn the sensor rung back on its side while the proxy
+rung stands up, which is the same defect with the signs swapped.
+
 **One instance, one decode at a time**, serialised on a promise chain as
 ffmpeg's runs are, and rebuilt after a refusal (its heap may be mid-file).
 
