@@ -40,6 +40,8 @@ import { trackedFetch } from '../../shared/tasks/tracked';
 import { openingRendition, renditionById, renditionsOf, type PixelSize, type Rendition } from '../../shared/media/renditions';
 import { fileIdentity, isRawImage } from '../../shared/library/assets';
 import { rawSizes } from '../../shared/exif/raw-probe';
+import { captureLine } from '../../shared/exif/exif-summary';
+import { useEffectiveExif } from '../../shared/exif/use-effective-exif';
 import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
 import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
 import { pictureAspectRatio } from '../../shared/develop/crop-aspect';
@@ -1026,6 +1028,20 @@ export default function PictureWorkbench({
     return lines;
   }, [factsOn, draft.draft, drawingCount, detailDraft, repairDraft, fidelity.note]);
 
+  /**
+   * What the CAMERA did, drawn above those facts under the same key — the
+   * aperture, the shutter, the ISO and the compensation, from the head of the
+   * file ON SCREEN. The rendition is what makes that read honest: switch the
+   * picture to its DNG and these are the DNG's own numbers; leave it on a
+   * Winnow proxy, whose re-encode carries no metadata at all, and the line is
+   * the instance's vouched record (`exif/read-exif.ts` merges the two).
+   *
+   * Absent for a picture that says nothing, and the stack then starts where
+   * it always did.
+   */
+  const shotExif = useEffectiveExif(shownFile);
+  const shotLine = useMemo(() => (factsOn ? captureLine(shotExif) || null : null), [factsOn, shotExif]);
+
   const toolbarPill = compact ? developTouchPillClass : developPillClass;
   /**
    * The A/B pill's own recipe — its SHAPE here, its colour at the call site.
@@ -1225,6 +1241,7 @@ export default function PictureWorkbench({
           scope={taskScope}
           pixelView={pixelView}
           facts={facts}
+          shot={shotLine}
           marks={subjectMarks}
           // Shown whenever the subject layer is open — a picked point is a fact
           // about the layer, not about the tool — but removable only while Pick

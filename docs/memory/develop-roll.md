@@ -796,3 +796,42 @@ the menu's four rungs mark the live one and `Pixels as pixels` really sets
 lone JPEG, the ⋯ items enable exactly when Copy/Paste/Reset can act and say
 `· copied` / `· reset`, A/B goes accent → plain → dashed under Pick grey, and
 at 390px the bar holds two lines with no horizontal overflow.
+
+## 2026-09-22 — The corner says what the CAMERA did too
+
+**The maintainer: *"dans les info overlay (i kb shortcut) ca sera bien
+d'afficher les info exif: shutter, f/, iso, ev etc"*, then, shown six
+placements, *"option a"*.** The stack toggled by `I` said only what this
+session had done — `developLines`, the layers, the patches, the fidelity note —
+while the two lightboxes had been drawing `exposureSummary` all along. Develop
+was the one editor that never read a photograph's own numbers.
+
+**One stack, the capture on TOP, marked.** `DevelopViewport` gained a `shot`
+prop drawn above `facts`, behind a hairline that only exists when both families
+are present, with the accent down its left edge. The mark is the whole point:
+everything under the rule is a draft that changes on every drag, the line above
+it is the file's own and can never be edited — two authorships in one box is
+readable exactly as long as one of them is marked. Same key, same chip, no
+second corner (`after` and `◐ hold` already hold the other three).
+
+**A shorter line than the lightbox's** — `captureLine` in `exif-summary.ts`,
+`ƒ/1.7 · 1/240 · ISO 100 · +0.3 EV`, where `exposureSummary` leads with the body
+and the lens: the stage names the file in its bar, and every character is a
+pixel of the photograph. It is also the one place the COMPENSATION is printed,
+since that is what says the camera was argued with before the sliders were; a
+bias of zero says nothing, a default being no decision. Absent fields stay
+absent — the rule `exposureSummary` already held.
+
+**Which file's EXIF: the one ON SCREEN** (`shownFile`, the picture's rendition).
+Switch to the DNG and the numbers are the DNG's; stay on a Winnow proxy, whose
+re-encode carries no metadata at all, and `readEffectiveExif` merges the
+instance's vouched record under it. Nothing is stored on the roll: a read costs
+the head of one file and is always true.
+
+The hook moved to `shared/exif/use-effective-exif.ts` at its second consumer
+(it was Road Trip's `use-exposure-line.ts`), and split: `useEffectiveExif`
+returns the merged `ExifData`, `useExposureLine` stays the badge's line over it.
+
+Not driven in a browser: the pure half (`captureLine`) is unit-tested and the
+four CI gates are green, but the corner itself was not seen over a real
+photograph — it needs a file drop this container cannot perform.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cameraName, exposureSummary } from './exif-summary';
+import { cameraName, captureLine, exposureSummary } from './exif-summary';
 
 describe('cameraName', () => {
   it('does not repeat a maker the model already carries', () => {
@@ -55,5 +55,38 @@ describe('exposureSummary', () => {
   it('says a long exposure in seconds and a short one as a fraction', () => {
     expect(exposureSummary({ exposureTime: 2.5 })).toBe('2.5s');
     expect(exposureSummary({ exposureTime: 1 / 240 })).toBe('1/240');
+  });
+});
+
+describe('captureLine', () => {
+  it('is the four facts a photographer reads at speed', () => {
+    expect(
+      captureLine({
+        make: 'DJI',
+        model: 'FC8482',
+        focalLength: 6.7,
+        fNumber: 1.7,
+        exposureTime: 1 / 240,
+        iso: 100,
+        exposureBias: 0.33,
+      }),
+    ).toBe('ƒ/1.7 · 1/240 · ISO 100 · +0.3 EV');
+  });
+
+  it('leaves out what the file does not say, and never draws a dash', () => {
+    expect(captureLine({ iso: 400 })).toBe('ISO 400');
+    expect(captureLine({ exposureTime: 2 })).toBe('2s');
+    expect(captureLine({})).toBe('');
+    expect(captureLine(null)).toBe('');
+  });
+
+  it('says nothing about a compensation of zero — a default is not a decision', () => {
+    expect(captureLine({ fNumber: 2.8, exposureBias: 0 })).toBe('ƒ/2.8');
+    expect(captureLine({ fNumber: 2.8, exposureBias: 0.01 })).toBe('ƒ/2.8');
+    expect(captureLine({ fNumber: 2.8, exposureBias: -1 })).toBe('ƒ/2.8 · −1 EV');
+  });
+
+  it('carries no body and no lens — the stage names the file already', () => {
+    expect(captureLine({ make: 'SONY', model: 'ILCE-7CM2', lensModel: 'FE 35mm F1.8' })).toBe('');
   });
 });

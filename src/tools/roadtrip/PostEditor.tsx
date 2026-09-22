@@ -87,7 +87,7 @@ import { DECK_LONG_EDGE } from '../../shared/roadtrip/deck-export';
 import { frameSize } from '../../shared/roadtrip/badge-render';
 import { useDeliveryRow } from '../../shared/develop/use-delivery-row';
 import useRailThumbs from './use-rail-thumbs';
-import { useExposureLine } from './use-exposure-line';
+import { useExposureLine } from '../../shared/exif/use-effective-exif';
 import { pickable, useSlideLibrary } from './use-slide-library';
 import { useTripGrade } from './use-trip-grade';
 import PageBar from '../../shared/ui/PageBar';
