@@ -835,3 +835,28 @@ returns the merged `ExifData`, `useExposureLine` stays the badge's line over it.
 Not driven in a browser: the pure half (`captureLine`) is unit-tested and the
 four CI gates are green, but the corner itself was not seen over a real
 photograph — it needs a file drop this container cannot perform.
+
+## 2026-09-23 — The tabs answer to their own initials, and the first one is Adjust
+
+**The maintainer: *"why r is the kb shortcut for crop? lets have it to be C"*,
+*"lets rename develop tab to adjust"*, then the whole set — `E` export, `L`
+layers, `D` detail, `A` adjust, `C` crop.** `R` and `D` were the only two tabs
+with keys and neither named itself: `R` was reached for because `C` was
+believed taken by copy, and `D` opened a tab called Develop *inside the Develop
+tool* — a word that told you nothing about which of the five you were on.
+
+**A tab's key is its initial, with no exception, or the set is not learnable.**
+`TAB_KEYS` in `roll-editor.ts` maps the five letters onto `WorkbenchTab`, and
+`editorKeyAction` returns `{ tab }` rather than a fifth and sixth string in its
+union — one object case in the workbench's switch covers every tab, so a sixth
+tab is one line in the map and nothing at the call site.
+
+**`C` was never taken.** The chord branch is read FIRST (`metaKey || ctrlKey`
+returns before the bare letters), so ⌘C is still copy-the-develop and a bare
+`C` opens the crop; that ordering is what makes initials possible at all, and
+it is asserted in the test rather than left to be re-discovered.
+
+**The tab is `adjust` in the code, not only on screen.** Renaming the label and
+keeping the id `develop` would have left the mismatch that caused the ask; the
+id is internal state (`RollEditor`'s `useState`, the section bar it publishes)
+and appears in no route or document, so it cost nothing.

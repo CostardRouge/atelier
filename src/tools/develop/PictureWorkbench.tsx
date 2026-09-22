@@ -896,6 +896,11 @@ export default function PictureWorkbench({
       });
       if (!action) return;
       const { draft: d, picture: pic, tell: say, crop: c, tab: open } = keyState.current;
+      if (typeof action === 'object') {
+        e.preventDefault();
+        callbacks.current.onTabChange(action.tab);
+        return;
+      }
       switch (action) {
         case 'previous':
         case 'next':
@@ -929,14 +934,6 @@ export default function PictureWorkbench({
           say('pasted');
           return;
         }
-        case 'crop':
-          e.preventDefault();
-          callbacks.current.onTabChange('crop');
-          return;
-        case 'develop':
-          e.preventDefault();
-          callbacks.current.onTabChange('develop');
-          return;
         case 'help':
           e.preventDefault();
           // The same key closes it: a sheet opened by a letter that then does
@@ -987,7 +984,7 @@ export default function PictureWorkbench({
       reset: () => setCropView(CROP_VIEW_FIT),
     };
   }, [cropView, setCropView]);
-  const tabLabel = WORKBENCH_TABS.find((t) => t.id === tab)?.label ?? 'Develop';
+  const tabLabel = WORKBENCH_TABS.find((t) => t.id === tab)?.label ?? 'Adjust';
 
   /**
    * The points the author picked for the OPEN subject layer, drawn on the
@@ -1301,7 +1298,7 @@ export default function PictureWorkbench({
           <Segmented fill size="sm" label="Inspector" value={tab} onChange={onTabChange} options={WORKBENCH_TABS} className="flex-none" />
         )}
         <div className={compact ? 'flex flex-col gap-4' : 'flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain flex flex-col gap-4 -mr-3 pr-3'}>
-          {tab === 'develop' ? (
+          {tab === 'adjust' ? (
             <>
               <DevelopHistogram histogram={picture.histogram} />
               <DevelopAutoSection
