@@ -10,7 +10,8 @@ import GradePanel from '../lut/GradePanel';
 import type { LutPreviewSource } from '../lut/LutGalleryModal';
 import type { LutStack } from '../lut/use-lut-stack';
 import type { ButtonSize } from '../ui/Button';
-import OverflowMenu from '../ui/OverflowMenu';
+import IconButton from '../ui/IconButton';
+import { Icons } from '../ui/icons';
 import SectionLegend from '../ui/SectionLegend';
 import { DEFAULT_DEVELOP, describeDevelop, type DevelopSettings } from './develop';
 import { developButtonClass, developLinkClass } from './develop-classes';
@@ -18,24 +19,35 @@ import { copyDevelop, hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard 
 import type { DevelopApplyVerb, DevelopPresets, DevelopPresetsPlace } from './develop-host';
 
 /**
- * The same three verbs behind ONE ⋯, for a host whose room is the picture's:
- * the Develop tool's stage bar (2026-09-22, variant A1 of the stage-bar
- * study). Three underlined links took ≈ 150px of a row that is read above a
- * photograph all day, and «As shot» never said that it RESETS — a menu has
- * the room to say `Reset to as shot` in full, and to show the two shortcuts
- * that already exist (`roll-editor.ts`: ⌘/Ctrl C and V). The modal keeps the
- * links: a sheet has room, and no stage bar.
+ * The same three verbs as ONE GROUP of glyphs, for a host whose room is the
+ * picture's: the Develop tool's stage bar (2026-09-22, variant A2 of the
+ * stage-bar study). Three underlined links took ≈ 150px of a row that is read
+ * above a photograph all day, and «As shot» never said that it RESETS. A well
+ * of three icon buttons keeps every verb at ONE click — which a menu would have
+ * cost — and gives them one family; each carries the full sentence as its
+ * tooltip, and `Reset` is the one that says what it does in words there.
  *
- * Reset is last and carries no shortcut of its own — inventing one on a card
- * would be a key nobody can press.
+ * Reset sits apart as a GHOST button: two benign verbs and one that throws
+ * work away should not read as three of a kind. It greys out when the picture
+ * is already as shot, so the group also says whether there is anything to undo.
+ *
+ * `children` are the HOST's own verbs, drawn in the same well past a hairline
+ * (variant E2): the Develop bar puts its A/B and its `?` there, so the row ends
+ * with ONE block of verbs instead of three loose pills. They stay the host's
+ * because they are about its stage — a modal has neither.
+ *
+ * The modal keeps the links (`DevelopClipboardActions`): a sheet has room, and
+ * no stage bar.
  */
-export function DevelopActionsMenu({
+export function DevelopActionsGroup({
   draft,
   asShot,
   onReplace,
   onTold,
   className = '',
   size = 'sm',
+  clipboard = true,
+  children,
 }: {
   draft: DevelopSettings;
   asShot: boolean;
@@ -44,55 +56,62 @@ export function DevelopActionsMenu({
   className?: string;
   /** `md` on a phone: 28px is a caption's height, not a finger's target. */
   size?: ButtonSize;
+  /** The three verbs themselves — a stage with no develop to copy (the crop) keeps the well for `children` alone. */
+  clipboard?: boolean;
+  /** The host's own verbs, past a hairline. */
+  children?: ReactNode;
 }) {
   const canPaste = useSyncExternalStore(subscribeDevelopClipboard, hasCopiedDevelop);
-  const row = (what: string, keys?: string) => (
-    <span className="flex w-full items-baseline justify-between gap-6">
-      {what}
-      {keys && <span className="font-mono text-2xs text-faint">{keys}</span>}
-    </span>
-  );
   return (
-    <OverflowMenu
-      label="What to do with these numbers"
-      className={className}
-      size={size}
-      align="end"
-      items={[
-        {
-          id: 'copy',
-          label: row('Copy', '⌘C'),
-          disabled: asShot,
-          title: asShot ? 'Nothing to copy — this picture is as shot' : 'Keep these numbers for the next picture, in this session',
-          onSelect: () => {
-            copyDevelop(draft);
-            onTold('copied');
-          },
-        },
-        {
-          id: 'paste',
-          label: row('Paste onto this picture', '⌘V'),
-          disabled: !canPaste,
-          title: canPaste ? 'Replace these numbers with the copied ones' : 'Nothing copied yet',
-          onSelect: () => {
-            const pasted = pasteDevelop();
-            if (!pasted) return;
-            onReplace(pasted);
-            onTold('pasted');
-          },
-        },
-        {
-          id: 'reset',
-          label: row('Reset to as shot'),
-          disabled: asShot,
-          title: 'Throw these numbers away — the picture as the camera wrote it',
-          onSelect: () => {
-            onReplace({ ...DEFAULT_DEVELOP });
-            onTold('reset');
-          },
-        },
-      ]}
-    />
+    <div
+      className={`inline-flex items-center gap-0.5 p-0.5 rounded-control border border-line bg-paper-2 ${className}`}
+    >
+      {clipboard && (
+        <>
+      <IconButton
+        label="Copy this develop"
+        title={asShot ? 'Nothing to copy — this picture is as shot' : 'Copy ⌘C — keep these numbers for the next picture, in this session'}
+        size={size}
+        disabled={asShot}
+        onClick={() => {
+          copyDevelop(draft);
+          onTold('copied');
+        }}
+      >
+        {Icons.copy}
+      </IconButton>
+      <IconButton
+        label="Paste a develop onto this picture"
+        title={canPaste ? 'Paste ⌘V — replace these numbers with the copied ones' : 'Nothing copied yet'}
+        size={size}
+        disabled={!canPaste}
+        onClick={() => {
+          const pasted = pasteDevelop();
+          if (!pasted) return;
+          onReplace(pasted);
+          onTold('pasted');
+        }}
+      >
+        {Icons.paste}
+      </IconButton>
+      <IconButton
+        label="Reset to as shot"
+        title="Reset to as shot — throw these numbers away"
+        variant="ghost"
+        size={size}
+        disabled={asShot}
+        onClick={() => {
+          onReplace({ ...DEFAULT_DEVELOP });
+          onTold('reset');
+        }}
+      >
+        {Icons.reset}
+      </IconButton>
+        </>
+      )}
+      {clipboard && children && <span className="flex-none w-px h-[1.1rem] mx-1 bg-line-strong" />}
+      {children}
+    </div>
   );
 }
 

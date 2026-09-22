@@ -94,6 +94,21 @@ export const Icons = {
   import: icon(<path d="M12 15V4m0 0L8 8m4-4 4 4M5 20h14" />),
   trash: icon(<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />),
   reset: icon(<path d="M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5" />),
+  // The pair every clipboard draws: one sheet laid over another, and a sheet
+  // going into a tray. They are only ever read side by side, so the second is
+  // the first turned over rather than a different object.
+  copy: icon(
+    <>
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15V5a2 2 0 0 1 2-2h8" />
+    </>,
+  ),
+  paste: icon(
+    <>
+      <path d="M9 4h6v3H9z" />
+      <path d="M7 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1" />
+    </>,
+  ),
   // A step back and a step forward: the same arc, mirrored, so the pair reads
   // as one control rather than two unrelated arrows.
   undo: icon(<path d="M8 5 4 9l4 4M4 9h11a5 5 0 0 1 0 10h-4" />),
