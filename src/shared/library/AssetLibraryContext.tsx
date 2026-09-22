@@ -12,8 +12,20 @@ import { assetFiles, buildAssets, fileIdentity, type Asset } from './assets';
 import { loadClipMeta } from '../media/video-metadata';
 import { imageTypeLabel, loadImageMeta } from '../media/image-meta';
 import { transcodeStore } from '../media/transcode-store';
+import { makeDecodeQueue } from '../lib/decode-queue';
 import { probeSrtTiming } from '../telemetry/srt-probe';
 import type { TimeScaleReading } from '../telemetry/time-scale';
+
+/**
+ * How many covers decode at once. Every row that scrolled into view used to
+ * start its own decode the same instant, and a fast scroll over a folder of
+ * two hundred stills ran them all together — each holding a bitmap and, for
+ * a clip, a `<video>` element, for up to four seconds. Three keeps the list
+ * filling at the speed a scroll reveals it; the queue is newest first, so the
+ * rows on screen are drawn before the ones already scrolled past.
+ */
+const COVER_SLOTS = 3;
+const covers = makeDecodeQueue(COVER_SLOTS);
 
 /**
  * The global asset library — a thin, app-wide store of `File` handles plus a
@@ -203,7 +215,8 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
       const { video, image, srt } = asset.parts;
       commitMeta(id, { status: 'pending', isVideo: !!video });
       if (video) {
-        loadClipMeta(video)
+        covers
+          .enqueue(() => loadClipMeta(video))
           .then((r) =>
             patchMeta(id, {
               status: 'ready',
@@ -221,7 +234,8 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
           probeSrtTiming(srt).then((timing) => patchMeta(id, { timing }));
         }
       } else if (image) {
-        loadImageMeta(image)
+        covers
+          .enqueue(() => loadImageMeta(image))
           .then((r) =>
             patchMeta(id, {
               status: 'ready',
