@@ -367,10 +367,15 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   }, [canvasRef, readFrame, ensureGrader]);
 
   // The render loop. rAF (not rVFC) so paused edits repaint too; it skips the
-  // 4K composite when idle and clean.
+  // 4K composite when idle and clean — and, while playing, when the video has
+  // not advanced since the last paint: a 24 or 30 fps clip on a 60 Hz screen
+  // (120 on a phone) used to composite the whole frame two to five times per
+  // real frame, each pass uploading it to the GPU for the look and reading
+  // it back, for a picture identical to the one already on the canvas.
   useEffect(() => {
     const video = videoRef.current;
     needsRedraw.current = true;
+    let painted = -1;
 
     let raf = 0;
     const loop = () => {
@@ -378,8 +383,12 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       // A still is never "playing": it repaints on an edit and stays put,
       // which is what keeps a 45-megapixel canvas off the rAF treadmill.
       const playing = !stillRef.current && !!v && !v.paused && !v.ended;
-      if (playing || needsRedraw.current) {
-        if (drawFrame()) needsRedraw.current = false;
+      const at = v ? v.currentTime : -1;
+      if ((playing && at !== painted) || needsRedraw.current) {
+        if (drawFrame()) {
+          needsRedraw.current = false;
+          painted = at;
+        }
       }
       raf = requestAnimationFrame(loop);
     };
