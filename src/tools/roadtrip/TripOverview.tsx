@@ -433,6 +433,16 @@ export default function TripOverview({
     return map;
   }, [trip]);
 
+  // Stable while the legs are: the calendar's month blocks are memoised on
+  // it, and an inline arrow handed them a new identity whenever this screen
+  // re-rendered — on every month scrolled past, through `onVisible`.
+  const stageOf = useCallback((date: IsoDate) => dayStages.get(date) ?? null, [dayStages]);
+  /** The phone's way into a leg: mark it and raise the sheet. */
+  const openLegSheet = useCallback((id: string) => {
+    setStageId(id);
+    setLegsOpen(true);
+  }, []);
+
   const openLegById = useCallback(
     (id: string) => {
       const stage = trip.stages.find((s) => s.id === id);
@@ -820,12 +830,9 @@ export default function TripOverview({
           adjust={adjust}
           pictures={pictures}
           onVisible={onVisible}
-          stageOf={(date) => dayStages.get(date) ?? null}
+          stageOf={stageOf}
           menuFor={menuFor}
-          onOpenLeg={(id) => {
-            setStageId(id);
-            setLegsOpen(true);
-          }}
+          onOpenLeg={openLegSheet}
           selectedLegId={selectedStageId}
         />
 
@@ -1025,7 +1032,7 @@ export default function TripOverview({
             days={coverage.days}
             selected={selected}
             onSelect={selectDate}
-            stageOf={(date) => dayStages.get(date) ?? null}
+            stageOf={stageOf}
             menuFor={menuFor}
             onOpenLeg={openLegById}
             selectedLegId={selectedStageId}

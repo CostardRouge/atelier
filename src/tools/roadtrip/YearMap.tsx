@@ -108,6 +108,31 @@ export default function YearMap({ startDate, endDate, days, blocks, span, onJump
     if (p.dragging && e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   };
 
+  // The band's 350-odd cells, built once per trip and cell size: the frame
+  // over them moves on every scroll frame, and the cells never do.
+  const grid = useMemo(
+    () => (
+      <div className="flex" style={{ gap: GAP }} aria-hidden="true">
+        {weeks.map((week, w) => (
+          <div key={w} className="flex flex-col" style={{ gap: GAP }}>
+            {week.map((date, row) => (
+              <span
+                key={row}
+                style={{
+                  width: cell,
+                  height: cell,
+                  borderRadius: 1,
+                  background: date ? LEVELS[levels.get(date) ?? 0] : 'transparent',
+                }}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    ),
+    [weeks, levels, cell],
+  );
+
   return (
     <div ref={boxRef} className="relative py-1.5" aria-label="The whole trip">
       <div
@@ -118,23 +143,7 @@ export default function YearMap({ startDate, endDate, days, blocks, span, onJump
         onPointerUp={onPointerEnd}
         onPointerCancel={onPointerEnd}
       >
-        <div className="flex" style={{ gap: GAP }} aria-hidden="true">
-          {weeks.map((week, w) => (
-            <div key={w} className="flex flex-col" style={{ gap: GAP }}>
-              {week.map((date, row) => (
-                <span
-                  key={row}
-                  style={{
-                    width: cell,
-                    height: cell,
-                    borderRadius: 1,
-                    background: date ? LEVELS[levels.get(date) ?? 0] : 'transparent',
-                  }}
-                />
-              ))}
-            </div>
-          ))}
-        </div>
+        {grid}
         {frame && (
           <>
             {/* Paper over what the calendar is NOT showing, the frame around what it is. */}

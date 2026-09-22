@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -111,6 +112,8 @@ export interface AdjustLeg {
 }
 
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'] as const;
+/** The hover callback while a leg is adjusted: nothing, and the SAME nothing every render. */
+const NO_HOVER = () => undefined;
 const RIBBON = 12;
 /** The grip on an adjusted leg's end: a finger's target, over the cell's foot. */
 const GRIP = 28;
@@ -210,6 +213,40 @@ export default function MonthCalendar({
     const weeks = visibleWeekSpan(weekRows(el), el.scrollTop, el.clientHeight);
     setSpan((s) => (s && weeks && s.from === weeks.from && s.to === weeks.to ? s : weeks));
   }, [weekRows]);
+  // The scroll fires more often than the screen paints: one read per frame
+  // is all the map's frame can use, and each read measures sixty rows.
+  const readQueued = useRef(0);
+  const onScroll = useCallback(() => {
+    if (readQueued.current) return;
+    readQueued.current = requestAnimationFrame(() => {
+      readQueued.current = 0;
+      readVisible();
+    });
+  }, [readVisible]);
+  useEffect(() => () => cancelAnimationFrame(readQueued.current), []);
+  // What a right-click on a day opens. Stable while `menuFor` is, so the
+  // memoised blocks below keep their props across a hover or a scroll.
+  const onMenu = useCallback(
+    (date: IsoDate, cellData: DayCell, x: number, y: number): boolean => {
+      const items = menuFor?.(date) ?? [];
+      if (!items.length) return false;
+      setHovered(null);
+      setMenu({ cell: cellData, items, x, y });
+      return true;
+    },
+    [menuFor],
+  );
+  // One ref callback per block, made once per list of blocks: a fresh
+  // closure per render would re-attach every block's ref on every scroll.
+  const blockRefs = useMemo(
+    () =>
+      blocks.map(
+        (_, i) => (node: HTMLDivElement | null) => {
+          blockEls.current[i] = node;
+        },
+      ),
+    [blocks],
+  );
   // A new width re-flows every row: the frame must be re-read, not only on scroll.
   useEffect(() => {
     readVisible();
@@ -295,7 +332,7 @@ export default function MonthCalendar({
           scroller.current = node;
           (boxRef as MutableRefObject<HTMLDivElement | null>).current = node;
         }}
-        onScroll={readVisible}
+        onScroll={onScroll}
         // `relative`, so a block's `offsetTop` is measured from THIS box and a
         // jump lands on the block's own top rather than that far past it.
         className={`relative flex-1 min-h-0 overflow-y-auto overscroll-y-contain pb-4 ${
@@ -309,9 +346,7 @@ export default function MonthCalendar({
         {blocks.map((block, i) => (
           <MonthBlockView
             key={block.key}
-            ref={(node) => {
-              blockEls.current[i] = node;
-            }}
+            ref={blockRefs[i]}
             block={block}
             trip={trip}
             byDate={byDate}
@@ -328,15 +363,9 @@ export default function MonthCalendar({
             stageOf={stageOf}
             onSelect={onSelect}
             onOpenLeg={onOpenLeg}
-            onHover={adjust ? () => undefined : setHovered}
+            onHover={adjust ? NO_HOVER : setHovered}
             centred={cols === 1}
-            onMenu={(date, cellData, x, y) => {
-              const items = menuFor?.(date) ?? [];
-              if (!items.length) return false;
-              setHovered(null);
-              setMenu({ cell: cellData, items, x, y });
-              return true;
-            }}
+            onMenu={onMenu}
           />
         ))}
         {tail}
@@ -378,7 +407,15 @@ interface MonthBlockViewProps {
 }
 
 
-const MonthBlockView = forwardRef<HTMLDivElement, MonthBlockViewProps>(function MonthBlockView(
+/**
+ * MEMOISED: the calendar re-renders on every scroll frame (the map's frame is
+ * its `span` state) and on every hovered cell, and a 345-day trip is twelve
+ * of these blocks — 420 day buttons and their ribbons, each cell asking its
+ * leg. Redrawn on every scroll pixel, that measured 28 ms of script per step.
+ * Every prop the calendar hands down is stable across those renders, so a
+ * block redraws only when its own month, the trip or the selection changed.
+ */
+const MonthBlockView = memo(forwardRef<HTMLDivElement, MonthBlockViewProps>(function MonthBlockView(
   {
     block,
     trip,
@@ -629,4 +666,4 @@ const MonthBlockView = forwardRef<HTMLDivElement, MonthBlockViewProps>(function 
       })}
     </div>
   );
-});
+}));
