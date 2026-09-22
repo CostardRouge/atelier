@@ -151,7 +151,7 @@ export default function LookScene({
     ceiling: MAX_VIEW_ZOOM,
     // The wipe and the pan are the same pointer: the hook lets go of exactly
     // the presses the divider answers, and takes the rest.
-    claim: (e) => live.current.compare && wipeClaims(e.target, live.current.zoomed),
+    claim: (target) => live.current.compare && wipeClaims(target, live.current.zoomed),
     onTakeover: () => {
       wiping.current = false;
     },

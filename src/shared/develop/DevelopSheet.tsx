@@ -1,9 +1,10 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { LutStack } from '../lut/use-lut-stack';
 import StageZoomControl from '../ui/StageZoomControl';
 import useDialogKeys from '../ui/use-dialog-keys';
 import { useIsCompact } from '../ui/use-layout-mode';
 import { usePixelView } from '../ui/use-pixel-view';
+import { describeZoomKey, zoomKeyAction } from '../ui/zoom-keys';
 import type { DevelopSettings } from './develop';
 import { developButtonClass, developLegendClass, developPillClass } from './develop-classes';
 import type { DevelopApplyVerb, DevelopPresets } from './develop-host';
@@ -133,6 +134,24 @@ export default function DevelopSheet({
   const done = () => onDone(draft.result());
   // While a preset is being named, Enter belongs to that field's own form.
   useDialogKeys({ onCancel, onConfirm: naming ? null : done });
+  // `Z` and the arrows over the picture, the grammar every Looking surface
+  // shares (`zoom-keys.ts`); the workbench maps the same `Z` through
+  // `roll-editor.ts` and gives its arrows to the roll.
+  const keys = useRef({ view: picture.view });
+  keys.current = { view: picture.view };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const v = keys.current.view;
+      const action = zoomKeyAction(describeZoomKey(e), v.zoomed);
+      if (!action) return;
+      e.preventDefault();
+      if (action.kind === 'pan') v.pan(action.dx, action.dy);
+      else if (v.zoomed) v.zoom.reset();
+      else v.zoom.zoomIn();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   return (
     <div
@@ -163,7 +182,7 @@ export default function DevelopSheet({
           {/* In the header, never over the picture (the lightbox's rule); under
               820px there is none — the pinch is the gesture there. */}
           {picture.source && !compact && (
-            <StageZoomControl zoom={picture.view.zoom} hint="wheel, or pinch" className="flex-none" />
+            <StageZoomControl zoom={picture.view.zoom} hint="wheel, pinch, or Z" className="flex-none" />
           )}
           {/* Only where it means anything: below 1:1 the browser is downscaling
               and `pixelated` is simply worse. The preference is the machine's,
