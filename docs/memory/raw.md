@@ -150,7 +150,15 @@ Rules a later agent must keep:
   to the top rung that IS there, rather than claiming a correction it cannot
   apply.
 - **Each rung contains the one below**, so `calibrationAt` is a comparison and
-  not a switch, and climbing can never lose what was already applied.
+  not a switch, and climbing can never lose what was already applied. **It
+  also builds a fresh `{ gain, warp }` per call** (2026-09-22): the workbench
+  memoises it on `[rung, calibration]`, and `use-develop-picture.ts` keys
+  every effect on the two FIELDS, never the wrapper. Before that, a RAW on the
+  gain-map rung re-rendered, re-graded and read the GPU back at frame rate for
+  as long as it was open — the histogram effect took the wrapper's identity
+  as a dep and SETS state, which is a loop by construction. The rule it
+  taught: an effect that sets state must never take a dep the host rebuilds
+  per render; key it on the values inside.
 - **The base still travels nowhere.** `withoutBase` strips all four; a preset,
   a paste and a batch verb keep each target's own.
 - **The calibration is read once per file and held for the session**

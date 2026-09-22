@@ -486,7 +486,11 @@ export default function PictureWorkbench({
   // on `gainMapWarp` and then opened from a file whose opcodes are gone falls
   // back to what IS there, rather than claiming a correction it cannot apply.
   const rung = rungs.includes(developBase(draft.draft)) ? developBase(draft.draft) : rungs[rungs.length - 1];
-  const applied = calibrationAt(rung, calibration);
+  // Memoised: `calibrationAt` builds a fresh record per call, and the hook
+  // below took the record's identity as a dep of an effect that sets state —
+  // a RAW on the gain-map rung re-rendered, re-graded and read the GPU back
+  // at frame rate for as long as it was open.
+  const applied = useMemo(() => calibrationAt(rung, calibration), [rung, calibration]);
   // The sensor's own pixels, read from the RAW's head alone (a megabyte, no
   // decoder): what the render on screen is measured against. A proxy's
   // original needs no read at all — its source already said.
