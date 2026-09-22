@@ -34,7 +34,7 @@ const CITIES = [KALBARRI, PERTH];
 const AT_KALBARRI = { lat: -27.7098, lon: 114.1662 };
 
 const trip = (stages: TripStage[] = []): TripDoc => ({
-  ...createTripDoc('Australia', '', '2025-11-01', '2025-11-30'),
+  ...createTripDoc('Australia', '2025-11-01', '2025-11-30'),
   stages,
 });
 

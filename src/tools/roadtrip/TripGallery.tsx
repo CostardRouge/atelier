@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
+import { tripRouteLabel } from '../../shared/roadtrip/trip-places';
 import { tripCoverage, type TripCoverage } from '../../shared/roadtrip/trip-coverage';
 import {
   coverTiles,
@@ -390,6 +391,7 @@ function TripRow({
   onChooseCover: () => void;
 }) {
   const coverage = tripCoverage(trip);
+  const route = tripRouteLabel(trip);
   return (
     <div
       role="button"
@@ -416,7 +418,7 @@ function TripRow({
         </span>
         <span className="font-mono text-2xs text-muted tabular-nums truncate">
           {formatIsoDate(trip.startDate)} → {formatIsoDate(trip.endDate)}
-          {trip.destination && <span className="font-sans"> · {trip.destination}</span>}
+          {route && <span className="font-sans"> · {route}</span>}
         </span>
       </div>
       <div className="min-w-0 flex flex-col gap-1.5">
@@ -593,6 +595,7 @@ function TripCard({
 }) {
   const compact = useIsCompact();
   const coverage = tripCoverage(trip);
+  const route = tripRouteLabel(trip);
   const total = coverage.totalDays;
   const pct = total > 0 ? Math.round((coverage.toldDays / total) * 100) : 0;
   const tiles = coverTiles(trip, coverage, hasThumb);
@@ -682,16 +685,18 @@ function TripCard({
           )}
         </div>
 
-        {/* The span and the destination on one line; an empty destination is
-            not drawn — a field with nothing in it is not a fact. */}
+        {/* The span and the route on one line. The route is DERIVED from the
+            legs (`tripRouteLabel`) rather than stored, so it follows them; a
+            trip with no leg draws none — a field with nothing in it is not a
+            fact. */}
         <p className={`m-0 text-muted truncate ${compact ? 'text-2xs' : 'text-xs'}`}>
           <span className="font-mono tabular-nums">
             {formatIsoDate(trip.startDate)} → {formatIsoDate(trip.endDate)}
           </span>
-          {trip.destination && (
+          {route && (
             <>
               <span className="text-faint"> · </span>
-              {trip.destination}
+              {route}
             </>
           )}
         </p>
@@ -857,7 +862,7 @@ export default function TripGallery({
     // A new trip wears the house style when one is committed; a backup or an
     // existing trip never does (`house-style.ts`).
     const doc = applyHouseStyle(
-      createTripDoc(choices.name, '', choices.startDate, choices.endDate, choices.sourceId),
+      createTripDoc(choices.name, choices.startDate, choices.endDate, choices.sourceId),
       bundledHouseStyle(),
     );
     setCreating(false);

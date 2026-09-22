@@ -83,7 +83,6 @@ export function toTripFile(trip: TripDoc, exportedAt: number = Date.now()): Trip
     version: TRIP_DOC_VERSION,
     exportedAt: new Date(exportedAt).toISOString(),
     name: trip.name,
-    destination: trip.destination,
     startDate: trip.startDate,
     endDate: trip.endDate,
     stages: structuredClone(trip.stages),
@@ -175,12 +174,9 @@ export function parseTripFile(text: string): ParseResult {
   // the file, so an older file lands on the current shape exactly as an older
   // stored trip does — and anything a past version did not write is filled by
   // the same defaults `createTripDoc` uses.
-  const base = createTripDoc(
-    typeof raw.name === 'string' ? raw.name : '',
-    typeof raw.destination === 'string' ? raw.destination : '',
-    startDate,
-    endDate,
-  );
+  // A file written before v27 carries a `destination`; it is not read — the
+  // subtitle derives from the legs the file does carry.
+  const base = createTripDoc(typeof raw.name === 'string' ? raw.name : '', startDate, endDate);
   const migrated = migrateTripDoc({
     ...base,
     version,
@@ -212,7 +208,6 @@ export function parseTripFile(text: string): ParseResult {
       version: TRIP_DOC_VERSION,
       exportedAt: typeof raw.exportedAt === 'string' ? raw.exportedAt : '',
       name: migrated.name,
-      destination: migrated.destination,
       startDate: migrated.startDate,
       endDate: migrated.endDate,
       stages: migrated.stages,
@@ -243,13 +238,7 @@ export function tripDocFromFile(
   now: number = Date.now(),
   sourceId?: string,
 ): TripDoc {
-  const doc = createTripDoc(
-    file.name,
-    file.destination,
-    file.startDate,
-    file.endDate,
-    sourceId,
-  );
+  const doc = createTripDoc(file.name, file.startDate, file.endDate, sourceId);
   return {
     ...doc,
     createdAt: now,

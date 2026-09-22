@@ -13,7 +13,7 @@ import {
   type IsoDate,
 } from '../../shared/roadtrip/trip-days';
 import { stageAt, stageDayNumber, tripCoverage } from '../../shared/roadtrip/trip-coverage';
-import { stageLabel } from '../../shared/roadtrip/trip-places';
+import { stageLabel, tripRouteLabel } from '../../shared/roadtrip/trip-places';
 import {
   usePublishMediaActions,
   usePublishMediaScope,
@@ -961,7 +961,8 @@ export default function TripOverview({
             title="Change the trip's dates"
             className="self-start p-0 border-0 bg-transparent text-xs text-muted text-left cursor-pointer hover:text-accent-ink hover:underline underline-offset-[3px]"
           >
-            {trip.destination && <>{trip.destination} · </>}
+            {/* Derived from the legs, never stored: the line follows them. */}
+            {tripRouteLabel(trip) && <>{tripRouteLabel(trip)} · </>}
             <span className="font-mono tabular-nums">
               {formatIsoDate(trip.startDate)} → {formatIsoDate(trip.endDate)}
             </span>

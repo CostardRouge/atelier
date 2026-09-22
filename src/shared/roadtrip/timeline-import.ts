@@ -111,7 +111,12 @@ export interface TimelineImport {
   span: { startDate: IsoDate; endDate: IsoDate } | null;
   /** Runs of days inside the span that belong to no leg — said, never hidden. */
   uncovered: Gap[];
-  /** "Perth → Cairns", composed exactly as the New trip modal composes it. */
+  /**
+   * "Perth → Cairns", derived from the stages above — the seed panel's own
+   * preview of the route it is about to create. It is NOT written onto the
+   * trip: since v27 nothing stores a route, and every surface derives it with
+   * `tripRouteLabel` from the legs.
+   */
   destination: string;
   warnings: ImportWarning[];
 }
@@ -303,13 +308,7 @@ export function tripFromTimeline(
   sourceId?: string,
 ): TripDoc | null {
   if (!imported.span) return null;
-  const doc = createTripDoc(
-    name,
-    imported.destination,
-    imported.span.startDate,
-    imported.span.endDate,
-    sourceId,
-  );
+  const doc = createTripDoc(name, imported.span.startDate, imported.span.endDate, sourceId);
   return { ...doc, stages: structuredClone(imported.stages) };
 }
 

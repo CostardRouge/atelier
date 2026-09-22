@@ -59,7 +59,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 26;
+export const TRIP_DOC_VERSION = 27;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers, the
@@ -573,8 +573,6 @@ export interface TripDoc {
   id: string;
   /** What the trip is called on a badge ("Australie"). */
   name: string;
-  /** Where it happened, for the overview header. */
-  destination: string;
   startDate: IsoDate;
   endDate: IsoDate;
   stages: TripStage[];
@@ -658,7 +656,6 @@ export interface TripDoc {
  */
 export function createTripDoc(
   name: string,
-  destination: string,
   startDate: IsoDate,
   endDate: IsoDate,
   sourceId: string = DEFAULT_SOURCE_ID,
@@ -668,7 +665,6 @@ export function createTripDoc(
     version: TRIP_DOC_VERSION,
     id: crypto.randomUUID(),
     name: name.trim(),
-    destination: destination.trim(),
     startDate,
     endDate,
     stages: [],
@@ -1282,6 +1278,14 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
         grade: gradeOrNull(slide.grade),
       })),
     }));
+  }
+
+  if (migrated.version < 27) {
+    // `destination` is gone: the prose subtitle is DERIVED from the legs
+    // (`tripRouteLabel`) rather than kept as a second copy of where the trip
+    // went. Deleted rather than left lying in the record — a stored key no
+    // type names is what a later reader mistakes for a fact.
+    delete (migrated as { destination?: string }).destination;
   }
 
   migrated.version = TRIP_DOC_VERSION;

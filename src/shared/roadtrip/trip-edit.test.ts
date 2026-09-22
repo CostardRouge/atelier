@@ -11,7 +11,7 @@ import {
 
 /** A trip over the whole of November, optionally with one leg naming `places`. */
 function trip(places: TripPlace[] = []): TripDoc {
-  const doc = createTripDoc('Australie', '', '2025-11-02', '2025-11-30');
+  const doc = createTripDoc('Australie', '2025-11-02', '2025-11-30');
   if (places.length) {
     doc.stages = [createTripStage('', '', '2025-11-02', '2025-11-30', places)];
   }
