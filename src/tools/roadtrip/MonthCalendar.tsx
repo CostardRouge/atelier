@@ -13,9 +13,14 @@ import {
   monthBlocks,
   monthCell,
   monthWidth,
+  scrollForWeek,
   visibleBlock,
+  visibleWeekSpan,
+  weekIndexOf,
   weekRuns,
   type MonthBlock,
+  type WeekRow,
+  type WeekSpan,
 } from '../../shared/roadtrip/month-grid';
 import { stageTint } from '../../shared/roadtrip/stage-ruler';
 import { daysBetween, formatIsoDate, isWithin, todayIso, type IsoDate } from '../../shared/roadtrip/trip-days';
@@ -178,17 +183,33 @@ export default function MonthCalendar({
     [trip, adjust],
   );
 
-  // The block on screen, read from the scroll — what the map frames.
+  // What is on screen, read from the scroll: the BLOCK under the upper third
+  // (the pictures window, the wide screen's ruler) and the WEEKS at the
+  // pixel — the map's frame, which glides with the thumb because one of its
+  // columns is one of these rows (`weekIndexOf`).
   const scroller = useRef<HTMLDivElement | null>(null);
   const blockEls = useRef<(HTMLDivElement | null)[]>([]);
   const [visible, setVisible] = useState(0);
+  const [span, setSpan] = useState<WeekSpan | null>(null);
+  const weekRows = useCallback((el: HTMLElement): WeekRow[] =>
+    Array.from(el.querySelectorAll<HTMLElement>('[data-week]'), (row) => ({
+      top: row.offsetTop,
+      height: row.offsetHeight,
+      week: Number(row.dataset.week),
+    })), []);
   const readVisible = useCallback(() => {
     const el = scroller.current;
     if (!el) return;
     const tops = blockEls.current.map((b) => b?.offsetTop ?? 0);
     const next = visibleBlock(tops, el.scrollTop, el.clientHeight);
     if (next >= 0) setVisible((v) => (v === next ? v : next));
-  }, []);
+    const weeks = visibleWeekSpan(weekRows(el), el.scrollTop, el.clientHeight);
+    setSpan((s) => (s && weeks && s.from === weeks.from && s.to === weeks.to ? s : weeks));
+  }, [weekRows]);
+  // A new width re-flows every row: the frame must be re-read, not only on scroll.
+  useEffect(() => {
+    readVisible();
+  }, [cell, cols, blocks, readVisible]);
 
   useEffect(() => {
     const block = blocks[visible];
@@ -201,6 +222,15 @@ export default function MonthCalendar({
     if (!el || !block) return;
     el.scrollTo({ top: block.offsetTop, behavior });
   }, []);
+
+  // The map's drag: put a (fractional) week at the top edge, following the
+  // finger frame by frame — so no smoothing, which would lag it.
+  const scrollToWeek = useCallback((week: number) => {
+    const el = scroller.current;
+    if (!el) return;
+    const top = scrollForWeek(weekRows(el), week);
+    if (top !== null) el.scrollTo({ top, behavior: 'auto' });
+  }, [weekRows]);
 
   // The route says where you are: open on the selected day's month, without
   // an animation, and follow a day chosen from elsewhere (the silence figure,
@@ -246,8 +276,9 @@ export default function MonthCalendar({
           endDate={trip.endDate}
           days={days}
           blocks={blocks}
-          visible={visible}
+          span={span}
           onJump={(i) => jumpTo(i)}
+          onScrub={scrollToWeek}
         />
       </div>
 
@@ -394,8 +425,11 @@ const MonthBlockView = forwardRef<HTMLDivElement, MonthBlockViewProps>(function 
             if (date === adjust.stage.endDate) grips.push({ edge: 'end', col });
           });
         }
+        // The row's week, counted from the trip's first: the map's column for it.
+        const firstDay = week.cells.find((d) => d !== null) ?? null;
+        const weekIndex = firstDay ? weekIndexOf(firstDay, trip.startDate) : null;
         return (
-          <div key={w} className="relative mb-1.5">
+          <div key={w} className="relative mb-1.5" data-week={weekIndex ?? undefined}>
             <div className="flex" style={{ gap: MONTH_GAP }} role="row">
               {week.cells.map((date, col) => {
                 if (!date) {

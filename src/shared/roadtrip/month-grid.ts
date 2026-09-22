@@ -199,3 +199,76 @@ export function weekStart(date: IsoDate): IsoDate | null {
   const wd = weekdayIndex(date);
   return wd === null ? null : addDays(date, -wd);
 }
+
+/**
+ * A calendar week's index from the trip's first week: 0 for the week the
+ * trip starts in, 1 for the next. It is the year map's COLUMN for that week
+ * (`heatmapWeeks` lays the map out Monday-first from the same origin), so a
+ * calendar row and a map column meet on this one number. Null for a bad date.
+ */
+export function weekIndexOf(date: IsoDate, tripStart: IsoDate): number | null {
+  const monday = weekStart(date);
+  const origin = weekStart(tripStart);
+  if (monday === null || origin === null) return null;
+  const days = Math.round((Date.parse(monday) - Date.parse(origin)) / 86400000);
+  return Math.floor(days / 7);
+}
+
+/** A week row as the calendar's scroller holds it: where it sits, how tall, which week. */
+export interface WeekRow {
+  top: number;
+  height: number;
+  /** Its `weekIndexOf`. A week straddling two months is two rows with the same index. */
+  week: number;
+}
+
+/** A window of weeks, in FRACTIONAL weeks: `from` inclusive, `to` exclusive. */
+export interface WeekSpan {
+  from: number;
+  to: number;
+}
+
+/**
+ * The weeks on screen for a scroller at `scrollTop` showing `viewport`
+ * pixels — the year map's frame, read from the scroll at the PIXEL: the
+ * first row cut by the top edge contributes the fraction of it that is
+ * hidden, the last row cut by the bottom edge the fraction that shows, so the
+ * frame glides with the thumb instead of jumping a month at a time (the
+ * maintainer's ask after the first hands-on). Null with no rows.
+ */
+export function visibleWeekSpan(rows: readonly WeekRow[], scrollTop: number, viewport: number): WeekSpan | null {
+  if (!rows.length) return null;
+  const bottom = scrollTop + viewport;
+  let first: WeekRow | null = null;
+  let last: WeekRow | null = null;
+  for (const row of rows) {
+    if (row.top + row.height <= scrollTop) continue;
+    if (row.top >= bottom) break;
+    if (!first) first = row;
+    last = row;
+  }
+  if (!first || !last) {
+    // Scrolled past every row (a tail below the blocks): the last week stays framed.
+    const end = rows[rows.length - 1];
+    return { from: end.week + 1, to: end.week + 1 };
+  }
+  const part = (row: WeekRow, y: number) => (row.height > 0 ? Math.min(1, Math.max(0, (y - row.top) / row.height)) : 0);
+  return { from: first.week + part(first, scrollTop), to: last.week + part(last, bottom) };
+}
+
+/**
+ * The inverse: the `scrollTop` that puts fractional `week` at the top edge —
+ * what a drag on the year map's frame asks for. A week that is two rows
+ * (straddling a month) answers with its first; a week off either end clamps
+ * to the nearest row. Null with no rows.
+ */
+export function scrollForWeek(rows: readonly WeekRow[], week: number): number | null {
+  if (!rows.length) return null;
+  const whole = Math.floor(week);
+  const frac = week - whole;
+  const row = rows.find((r) => r.week === whole);
+  if (row) return row.top + frac * row.height;
+  if (whole < rows[0].week) return rows[0].top;
+  const end = rows[rows.length - 1];
+  return end.top + end.height;
+}

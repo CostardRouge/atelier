@@ -7,7 +7,10 @@ import {
   monthBlocks,
   monthCell,
   monthWidth,
+  scrollForWeek,
   visibleBlock,
+  visibleWeekSpan,
+  weekIndexOf,
   weekRuns,
   weekStart,
 } from './month-grid';
@@ -124,6 +127,74 @@ describe('visibleBlock', () => {
     expect(visibleBlock(tops, 0, 600)).toBe(0);
     expect(visibleBlock(tops, 300, 600)).toBe(3);
     expect(visibleBlock(tops, 900, 600)).toBe(6);
+  });
+});
+
+describe('weekIndexOf', () => {
+  it('counts calendar weeks from the week the trip starts in', () => {
+    expect(weekIndexOf('2025-03-03', '2025-03-03')).toBe(0);
+    expect(weekIndexOf('2025-03-09', '2025-03-03')).toBe(0); // the Sunday of the same week
+    expect(weekIndexOf('2025-03-10', '2025-03-03')).toBe(1);
+    // A trip starting mid-week: its Monday is the origin, so a later Monday is a whole number of weeks on.
+    expect(weekIndexOf('2025-03-10', '2025-03-06')).toBe(1);
+    expect(weekIndexOf('2025-03-05', '2025-03-06')).toBe(0);
+    expect(weekIndexOf('nope', '2025-03-06')).toBe(null);
+  });
+});
+
+describe('visibleWeekSpan', () => {
+  // Four rows of 60px, week 0..3, then a straddling week 3 drawn again in the next block.
+  const rows = [
+    { top: 0, height: 60, week: 0 },
+    { top: 60, height: 60, week: 1 },
+    { top: 120, height: 60, week: 2 },
+    { top: 180, height: 60, week: 3 },
+    { top: 300, height: 60, week: 3 },
+    { top: 360, height: 60, week: 4 },
+  ];
+
+  it('frames the weeks on screen, whole rows at rest', () => {
+    expect(visibleWeekSpan(rows, 0, 120)).toEqual({ from: 0, to: 2 });
+  });
+
+  it('moves by the pixel: a row half under the top edge counts half', () => {
+    expect(visibleWeekSpan(rows, 30, 120)).toEqual({ from: 0.5, to: 2.5 });
+    expect(visibleWeekSpan(rows, 45, 120)).toEqual({ from: 0.75, to: 2.75 });
+  });
+
+  it('a straddling week drawn twice still reads as one span', () => {
+    // 180..300: the first week-3 row whole, the gap, the second week-3 row starting.
+    expect(visibleWeekSpan(rows, 180, 150)).toEqual({ from: 3, to: 3.5 });
+  });
+
+  it('keeps the last week framed past the end, and is null with no rows', () => {
+    expect(visibleWeekSpan(rows, 1000, 120)).toEqual({ from: 5, to: 5 });
+    expect(visibleWeekSpan([], 0, 120)).toBe(null);
+  });
+});
+
+describe('scrollForWeek', () => {
+  const rows = [
+    { top: 0, height: 60, week: 0 },
+    { top: 60, height: 60, week: 1 },
+    { top: 200, height: 60, week: 1 },
+    { top: 260, height: 60, week: 2 },
+  ];
+
+  it('is the inverse of the span: a fractional week lands inside its row', () => {
+    expect(scrollForWeek(rows, 0)).toBe(0);
+    expect(scrollForWeek(rows, 0.5)).toBe(30);
+    expect(scrollForWeek(rows, 2.25)).toBe(275);
+  });
+
+  it('a week drawn twice answers with its first row', () => {
+    expect(scrollForWeek(rows, 1)).toBe(60);
+  });
+
+  it('clamps off either end, and is null with no rows', () => {
+    expect(scrollForWeek(rows, -3)).toBe(0);
+    expect(scrollForWeek(rows, 9)).toBe(320);
+    expect(scrollForWeek([], 1)).toBe(null);
   });
 });
 
