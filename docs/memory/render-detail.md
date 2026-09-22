@@ -80,7 +80,16 @@ when the picture changes (a 24-megapixel bitmap is not kept for a look that
 ended); a file with **no more pixels than the stage shows** (a proxy, a small
 JPEG) says so in the pill rather than pretending; a clip gets no loupe. Both
 Develop hosts have it — the workbench and the modal sheet — because it is
-rendering, not a panel (§4.2).
+rendering, not a panel (§4.2). Three faults found by audit and fixed on
+2026-09-22, worth not re-deriving: **a closed `ImageBitmap` reports width 0**,
+so `fileWidth` must be read BEFORE `bitmap.close()` or the kernel scale
+divides by zero and `detailTerms` clamps every kernel to the stage's strength;
+the loupe's grader takes the **same gain grid** as the stage's (`gainField`),
+or a RAW on the gain-map rung shows corrected shading on the stage and raw
+shading under the loupe; and the picture-change effect **disposes the loupe's
+grader** with the decode, because the three-second release timer returns
+early once the state is back to idle and the WebGL2 context lived on until
+unmount.
 
 Measured in the pane on a 15-megapixel noisy JPEG (stage 3718 px): twelve
 wheel notches took the view to 4000 %, the pill read `loupe · 5000 px`, the

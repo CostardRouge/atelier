@@ -1025,6 +1025,10 @@ export function useDevelopPicture({
         })
       : decodePhoto(file).then(async (bitmap) => {
           const fit = await fitPhotoForRender(bitmap);
+          // Read BEFORE the close: a closed bitmap reports 0, and the kernel
+          // scale below then divided by it, so a picture the GPU had to shrink
+          // was denoised and sharpened at the stage's strength, not its own.
+          const fileWidth = bitmap.width;
           if (fit.resampled) bitmap.close();
           return {
             source: {
@@ -1033,7 +1037,7 @@ export function useDevelopPicture({
               height: fit.height,
               release: () => (fit.resampled ? fit.release() : bitmap.close()),
             },
-            fileWidth: bitmap.width,
+            fileWidth,
           };
         });
     void load
@@ -1084,11 +1088,15 @@ export function useDevelopPicture({
     [],
   );
   useEffect(() => {
-    // The decode belongs to one file: a step to the next picture drops it.
+    // The decode belongs to one file: a step to the next picture drops it —
+    // and the full-density grader built over it, whose WebGL2 context the
+    // release timer above never reaches once the state is back to idle.
     setFull((prev) => {
       prev?.source.release();
       return null;
     });
+    loupeSlot.current.current?.grader.dispose();
+    loupeSlot.current.current = null;
     setLoupeState('idle');
   }, [file, rawFile]);
   const loupeActive = loupeWanted && loupeState !== 'idle';
@@ -1123,7 +1131,7 @@ export function useDevelopPicture({
     const f = full.source;
     const grader = holding
       ? null
-      : graderFrom(loupeSlot.current, cube, f, geometry, stack, null, subjectMasks, detail, f.width / full.fileWidth, repair, film);
+      : graderFrom(loupeSlot.current, cube, f, geometry, stack, null, subjectMasks, detail, f.width / full.fileWidth, repair, film, gainField);
     const graded = grader ? grader.render(f.gpu ?? f.image) : f.image;
     // The stage canvas (w×h) sits at `rect` in the viewport: the same picture
     // is drawn from the file's pixels under that very transform, in device
@@ -1160,6 +1168,7 @@ export function useDevelopPicture({
     detail,
     repair,
     film,
+    gainField,
     holding,
     shownWipe,
     pixelView,
