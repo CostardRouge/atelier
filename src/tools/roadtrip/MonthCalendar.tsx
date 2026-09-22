@@ -18,7 +18,7 @@ import {
   type MonthBlock,
 } from '../../shared/roadtrip/month-grid';
 import { stageTint } from '../../shared/roadtrip/stage-ruler';
-import { formatIsoDate, isWithin, todayIso, type IsoDate } from '../../shared/roadtrip/trip-days';
+import { daysBetween, formatIsoDate, isWithin, todayIso, type IsoDate } from '../../shared/roadtrip/trip-days';
 import { stageAt, type DayCell } from '../../shared/roadtrip/trip-coverage';
 import { stageLabel } from '../../shared/roadtrip/trip-places';
 import type { TripDoc, TripStage } from '../../shared/roadtrip/trip-types';
@@ -487,7 +487,15 @@ const MonthBlockView = forwardRef<HTMLDivElement, MonthBlockViewProps>(function 
                 const last = week.cells[run.to] as IsoDate;
                 const startsHere = first === stage.startDate;
                 const endsHere = last === stage.endDate;
-                const named = startsHere || (run.from === 0 && w === 0);
+                // Named where the leg begins and where it enters a new
+                // month — but only where the name has room: a run of one
+                // or two cells is a stub, and a stub reads better blank
+                // than as three letters and an ellipsis (the title keeps
+                // it). A leg starting on a weekend is named on the row
+                // after instead, where its ribbon first has the width.
+                const sinceStart = daysBetween(stage.startDate, first);
+                const carried = run.from === 0 && sinceStart !== null && sinceStart > 0 && sinceStart <= 2;
+                const named = run.to - run.from >= 2 && (startsHere || carried || (run.from === 0 && w === 0));
                 const tint = stageTint(index);
                 const on = stage.id === selectedLegId;
                 return (
@@ -501,13 +509,18 @@ const MonthBlockView = forwardRef<HTMLDivElement, MonthBlockViewProps>(function 
                     className={`absolute top-0 box-border px-1.5 border-0 text-left text-3xs leading-[12px] truncate cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ink ${
                       on ? 'text-ink font-semibold' : 'text-ink-soft'
                     }`}
+                    // One flat tint and one rule for its shape: rounded at
+                    // the leg's two real ends, square where the WEEK cuts
+                    // it — so a ribbon continuing on the next row reads as
+                    // a continuation and a whole leg reads as a pill. The
+                    // darker cap that marked a start was the maintainer's
+                    // "radical" cut: it drew a head on every leg.
                     style={{
                       left: run.from * step,
                       width: (run.to - run.from + 1) * cell + (run.to - run.from) * MONTH_GAP,
                       height: RIBBON,
-                      borderRadius: `${startsHere ? 6 : 2}px ${endsHere ? 6 : 2}px ${endsHere ? 6 : 2}px ${startsHere ? 6 : 2}px`,
+                      borderRadius: `${startsHere ? 6 : 0}px ${endsHere ? 6 : 0}px ${endsHere ? 6 : 0}px ${startsHere ? 6 : 0}px`,
                       background: `color-mix(in oklch, ${tint} ${on ? 55 : 30}%, var(--color-paper))`,
-                      boxShadow: startsHere ? `inset 3px 0 0 ${tint}` : undefined,
                     }}
                   >
                     {named ? stageLabel(stage) || 'Unnamed stage' : ''}
