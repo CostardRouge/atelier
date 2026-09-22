@@ -85,7 +85,7 @@ import {
   type ExportVariant,
   type VariantResolution,
 } from '../../shared/projects/export-variants';
-import { ensureOverlayFonts } from '../../shared/overlay/fonts';
+import { ensureFontFaces, overlayFontFaces } from '../../shared/overlay/fonts';
 import { settleForStill } from '../../shared/overlay/still-frame';
 import { createOutroCard, type OutroCard } from '../../shared/overlay/outro-card';
 import OutroPanel from './OutroPanel';
@@ -721,16 +721,20 @@ export default function StudioEditor({
   const trimmed = isTrimmed(range, duration);
 
   // Load the brand fonts any element uses, then force a repaint so canvas text
-  // measures and renders correctly.
+  // measures and renders correctly. Keyed on the FACES in use, not on the
+  // elements: keyed on the elements it ran on every drag step and keystroke,
+  // and `document.fonts.ready` always resolves, so every edit rendered the
+  // editor a second time for fonts that had not changed.
+  const fontFaces = useMemo(() => overlayFontFaces(elements, theme).join('|'), [elements, theme]);
   useEffect(() => {
     let cancelled = false;
-    ensureOverlayFonts(elements, theme).then(() => {
+    ensureFontFaces(fontFaces ? fontFaces.split('|') : []).then(() => {
       if (!cancelled) setFontTick((t) => t + 1);
     });
     return () => {
       cancelled = true;
     };
-  }, [elements, theme]);
+  }, [fontFaces]);
 
   // --- element editing ----------------------------------------------------
 

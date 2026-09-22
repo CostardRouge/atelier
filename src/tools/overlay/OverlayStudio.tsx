@@ -14,7 +14,7 @@ import { findCue } from '../../shared/telemetry/find-cue';
 import ElementList from '../../shared/overlay/ElementList';
 import ElementPanel from '../../shared/overlay/ElementPanel';
 import { exportOverlay } from '../../shared/overlay/export-overlay';
-import { ensureOverlayFonts } from '../../shared/overlay/fonts';
+import { ensureFontFaces, overlayFontFaces } from '../../shared/overlay/fonts';
 import {
   createFrameCornersElement,
   createHeadingArrowElement,
@@ -188,9 +188,11 @@ export default function OverlayStudio() {
 
   // Load the brand fonts any element uses, then force a repaint so canvas text
   // measures and renders correctly.
+  // Keyed on the faces in use, not the elements — see the Studio's twin.
+  const fontFaces = useMemo(() => overlayFontFaces(elements).join('|'), [elements]);
   useEffect(() => {
     let cancelled = false;
-    ensureOverlayFonts(elements).then(() => {
+    ensureFontFaces(fontFaces ? fontFaces.split('|') : []).then(() => {
       if (!cancelled) setFontTick((t) => t + 1);
     });
     return () => {
