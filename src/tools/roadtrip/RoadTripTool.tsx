@@ -192,18 +192,26 @@ export default function RoadTripTool() {
     onDiscardPending: () => {
       pending.current = null;
     },
-    onReplace: (doc) => {
-      setOpen(doc);
-      // The instance's copy replacing the mirror is not an edit: undoing back
-      // onto what it replaced would push the losing version straight back up.
-      historyRef.current?.reset(doc);
-    },
+    onReplace: (doc) => replaceOpen(doc),
     onDeleted: () => {
       setOpen(null);
       navigate(HOME_ROUTE);
     },
   });
   const { edited, resume, clear } = sync;
+
+  /**
+   * The document replaced UNDER the tool — by the pill's verbs, or by a
+   * resume that found the instance's copy newer than a clean mirror. Not an
+   * edit: undoing back onto what it replaced would push the losing version
+   * straight back up, so the history starts again from it, and a write the
+   * debounce still holds is dropped rather than landing over it.
+   */
+  function replaceOpen(doc: TripDoc) {
+    pending.current = null;
+    setOpen(doc);
+    historyRef.current?.reset(doc);
+  }
 
   const flush = useCallback(async () => {
     const doc = pending.current;
@@ -270,12 +278,19 @@ export default function RoadTripTool() {
     if (resumedFor.current === open.id) return;
     resumedFor.current = open.id;
     void resume(open).then((r) => {
-      if (r?.replaced) setOpen(r.doc);
+      // Through the same path as "take theirs": `setOpen` alone left the
+      // mirror on the undo stack, and one ⌘Z pushed it over the newer copy.
+      if (r?.replaced) replaceOpen(r.doc);
     });
   }, [open, resume, clear]);
 
   const handleOpen = useCallback((doc: TripDoc) => {
-    setOpen(doc);
+    // The gallery lists what the store held when it MOUNTED, and the trip
+    // that is open may carry edits the 800 ms debounce had not written yet:
+    // taking the listed copy back put the screen a step behind, and the next
+    // edit wrote that older trip over the newer one. The copy in memory is
+    // kept unless the store's is genuinely newer (moved between sources).
+    setOpen((cur) => (cur && cur.id === doc.id && cur.updatedAt >= doc.updatedAt ? cur : doc));
     loadedRef.current = tripRef(doc);
     navigate(roadtripPath(tripRef(doc)));
   }, []);
