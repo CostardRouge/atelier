@@ -199,7 +199,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 
 - UI foundations copy **Winnow's recipes** (one `.btn`, Tailwind's named sizes, in-repo SVG `Icons` at stroke 1.7, shared empty/loading/confirm) — the maintainer wants the two projects to look alike; the tool switcher stays a **dropdown**, never segments, because the tool list will keep growing — `frontend.md`.
 
-- A session that changes code reports this project's state to `PROJETS.md`, at the root of the private `second-brain` repo: the register is that file, never Claude's memory and never `git log` — CLAUDE.md rule 3.
+- A session that changes code reports this project's state to its fiche, `projets/atelier/README.md`, in the private `second-brain` repo: the register is that folder and `PROJETS.md` there is generated from it, never Claude's memory and never `git log` — CLAUDE.md rule 3.
 
 ## Open items (dated; remove when done)
 
