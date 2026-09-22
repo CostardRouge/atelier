@@ -728,7 +728,11 @@ export default function TripOverview({
     // pill-high bar and one mono line here, because the 624px the shell
     // leaves are spent on the month, not on the summary.
     return (
-      <section className="flex flex-col flex-1 min-h-0 overflow-hidden" aria-label={`${trip.name} overview`}>
+      // Past the shell's gutters (`px-2`): the calendar pays its own room
+      // INSIDE its scroller and the strip runs edge to edge like the sheet it
+      // pulls up into — a gutter outside a scroll box only clips.
+      <section className="flex flex-col flex-1 min-h-0 overflow-hidden -mx-2" aria-label={`${trip.name} overview`}>
+        <div className="px-2">
         <PageBar
           back={{ label: 'Trips', onClick: onShowTrips, iconOnly: true }}
           trailing={
@@ -804,8 +808,10 @@ export default function TripOverview({
           )}
         </p>
         )}
+        </div>
 
         <MonthCalendar
+          gutter={8}
           trip={shownTrip}
           days={coverage.days}
           selected={selected}
@@ -1012,6 +1018,7 @@ export default function TripOverview({
       <div className="flex-1 min-h-0 flex gap-5">
         <div className="flex-1 min-w-0 flex flex-col min-h-0">
           <MonthCalendar
+            gutter={4}
             trip={trip}
             days={coverage.days}
             selected={selected}

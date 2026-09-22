@@ -79,6 +79,14 @@ interface MonthCalendarProps {
    * — so it scrolls away with them rather than eating the calendar's height.
    */
   tail?: ReactNode;
+  /**
+   * The side room, in pixels, paid INSIDE the scroller and under the map —
+   * never by the box around them. A gutter outside a scroll container is
+   * paper the content is clipped against (`frontend.md`): a selected cell on
+   * the Monday column lost its outline to it. In here it scrolls with the
+   * weeks and an outline at the edge has somewhere to draw.
+   */
+  gutter?: number;
 }
 
 /** What a cell shows of a day in the pictures view. */
@@ -133,6 +141,7 @@ export default function MonthCalendar({
   columns = 1,
   between,
   tail,
+  gutter = 0,
 }: MonthCalendarProps) {
   const blocks = useMemo(() => monthBlocks(trip.startDate, trip.endDate), [trip.startDate, trip.endDate]);
   const byDate = useMemo(() => new Map(days.map((d) => [d.date, d])), [days]);
@@ -141,8 +150,10 @@ export default function MonthCalendar({
   const [menu, setMenu] = useState<Menu | null>(null);
 
   // The cell FITS the column: a seventh of what the gutters leave — the
-  // block's share of the row when several blocks sit side by side.
-  const [boxRef, width] = useElementWidth<HTMLDivElement>();
+  // block's share of the row when several blocks sit side by side. The box
+  // is measured with its own side room, which the blocks do not get.
+  const [boxRef, boxWidth] = useElementWidth<HTMLDivElement>();
+  const width = Math.max(0, boxWidth - 2 * gutter);
   const fit = width > 0 ? Math.floor((width + COLUMN_GAP) / (monthWidth(FIT_CELL) + COLUMN_GAP)) : 1;
   const cols = Math.max(1, Math.min(Math.floor(columns), fit));
   const perBlock = cols > 1 ? Math.floor((width - (cols - 1) * COLUMN_GAP) / cols) : width;
@@ -229,14 +240,16 @@ export default function MonthCalendar({
 
   return (
     <div className="flex flex-col flex-1 min-h-0" aria-label="The journey, month by month">
-      <YearMap
-        startDate={trip.startDate}
-        endDate={trip.endDate}
-        days={days}
-        blocks={blocks}
-        visible={visible}
-        onJump={(i) => jumpTo(i)}
-      />
+      <div style={gutter ? { paddingInline: gutter } : undefined}>
+        <YearMap
+          startDate={trip.startDate}
+          endDate={trip.endDate}
+          days={days}
+          blocks={blocks}
+          visible={visible}
+          onJump={(i) => jumpTo(i)}
+        />
+      </div>
 
       {between}
 
@@ -251,7 +264,10 @@ export default function MonthCalendar({
         className={`relative flex-1 min-h-0 overflow-y-auto overscroll-y-contain pb-4 ${
           cols > 1 ? 'flex flex-wrap content-start' : ''
         }`}
-        style={cols > 1 ? { columnGap: COLUMN_GAP, rowGap: 12 } : undefined}
+        style={{
+          paddingInline: gutter || undefined,
+          ...(cols > 1 ? { columnGap: COLUMN_GAP, rowGap: 12 } : null),
+        }}
       >
         {blocks.map((block, i) => (
           <MonthBlockView
