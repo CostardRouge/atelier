@@ -871,3 +871,7 @@ it is asserted in the test rather than left to be re-discovered.
 keeping the id `develop` would have left the mismatch that caused the ask; the
 id is internal state (`RollEditor`'s `useState`, the section bar it publishes)
 and appears in no route or document, so it cost nothing.
+
+## Two per-render costs from the 2026-09-22 audit (2026-09-22)
+
+**Decision.** `PictureWorkbench` memoises the crop zone's `src` (`{ width, height }` of the decoded source) on the source, and `RollEditor` indexes a folder's siblings by lowercased base name once per sibling list. **Why**: a fresh `src` object per render recomputed the crop zone and the view, and both canvases under them repainted — a rotated, high-quality draw at device pixels — on every render of the workbench, which renders on every slider tick and pointer move; and the export plan asked every picture's siblings on every roll change, each answer a filter over the whole folder, rows × folder per edit. **How to apply**: a hook that takes an OBJECT argument memoises on the values inside, never on a literal built in the call; a lookup a plan runs per row is a `Map` built once per list.

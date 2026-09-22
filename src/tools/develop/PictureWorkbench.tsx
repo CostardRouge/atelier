@@ -860,8 +860,12 @@ export default function PictureWorkbench({
   }, []);
   // The Crop tab's zone, measured on the decoded picture and written back as
   // the aspect (to the roll, at once) and the framing (through its draft).
+  // Memoised on the source: a fresh `{ width, height }` per render recomputed
+  // the zone and the view, and both canvases under them repainted — a
+  // rotated, high-quality draw at device pixels — on every render.
+  const cropSrc = useMemo(() => (source ? { width: source.width, height: source.height } : null), [source]);
   const crop = useCropZone({
-    src: source ? { width: source.width, height: source.height } : null,
+    src: cropSrc,
     aspect: entry.aspect,
     framing: framingDraft,
     onAspect: (aspect) => callbacks.current.onAspect(aspect),
