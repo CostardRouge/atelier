@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useLutStack, type LutStack } from '../../shared/lut/use-lut-stack';
 import type { RollDoc, RollGrade } from '../../shared/develop/roll-types';
 
@@ -19,8 +19,11 @@ import type { RollDoc, RollGrade } from '../../shared/develop/roll-types';
  */
 export function useRollGrade(roll: RollDoc, update: (change: (roll: RollDoc) => RollDoc) => void): LutStack {
   const stack = useLutStack();
-  const source: RollGrade = roll.grade ?? { layers: [], output: 'none', film: null };
-  const sourceKey = JSON.stringify(source);
+  // Memoised on the grade's identity: the editor renders on every slider
+  // tick, and a stored grade is stringified once per render otherwise — with
+  // a legacy upload's whole `.cube` inlined in it, once a tick was the drag.
+  const source = useMemo<RollGrade>(() => roll.grade ?? { layers: [], output: 'none', film: null }, [roll.grade]);
+  const sourceKey = useMemo(() => JSON.stringify(source), [source]);
   const agreed = useRef<string | null>(null);
 
   useEffect(() => {
