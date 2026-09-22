@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './app/App';
+import ErrorBoundary from './app/ErrorBoundary';
 import { AssetLibraryProvider } from './shared/library/AssetLibraryContext';
 import { MediaScopeProvider } from './shared/sources/media-scope';
 import { SectionBarProvider } from './shared/ui/section-rail';
@@ -31,16 +32,22 @@ window.addEventListener('vite:preloadError', (event) => {
   location.reload();
 });
 
+// A boundary around EVERYTHING, and not only around the tool and the
+// library inside `App`: the masthead, the bottom bar, the providers and the
+// shell's own hooks all render outside those two, and a throw in any of them
+// was a blank page. This one offers the same panel — try again, reload.
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <LayoutModeProvider>
-      <AssetLibraryProvider>
-        <MediaScopeProvider>
-          <SectionBarProvider>
-            <App />
-          </SectionBarProvider>
-        </MediaScopeProvider>
-      </AssetLibraryProvider>
-    </LayoutModeProvider>
+    <ErrorBoundary resetKey="root">
+      <LayoutModeProvider>
+        <AssetLibraryProvider>
+          <MediaScopeProvider>
+            <SectionBarProvider>
+              <App />
+            </SectionBarProvider>
+          </MediaScopeProvider>
+        </AssetLibraryProvider>
+      </LayoutModeProvider>
+    </ErrorBoundary>
   </StrictMode>,
 );
