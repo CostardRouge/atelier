@@ -8,7 +8,7 @@
  * can sit at the end (probing it fully would mean reading the whole file).
  */
 
-import { createFile, MP4BoxBuffer, type Movie } from 'mp4box';
+import type { Movie } from 'mp4box';
 
 export interface ClipMeta {
   width: number;
@@ -138,11 +138,17 @@ export interface ContainerInfo {
  * Probe the container for codec and frame rate, feeding mp4box in chunks and
  * stopping as soon as the `moov` is parsed or `capBytes` is read. Best-effort:
  * resolves `{}` if the header isn't reachable within the cap.
+ *
+ * mp4box is imported here, on first use, rather than at the top of the module:
+ * this file is reached from the asset library (every page loads it) while the
+ * parser — 176 kB minified — is only ever needed once a clip is ACTIVE in a
+ * tool. A static import put it in the entry chunk of the home page.
  */
-export function probeContainer(
+export async function probeContainer(
   file: File,
   capBytes = 48 * 1024 * 1024,
 ): Promise<ContainerInfo> {
+  const { createFile, MP4BoxBuffer } = await import('mp4box');
   return new Promise((resolve) => {
     const mp4 = createFile();
     let done = false;

@@ -1,15 +1,33 @@
-import type { ComponentType } from 'react';
+import { lazy, type ComponentType } from 'react';
 import type { AssetKind } from '../shared/library/assets';
-import CompareTool from '../tools/compare/CompareTool';
-import ComposerTool from '../tools/composer/ComposerTool';
-import DevelopTool from '../tools/develop/DevelopTool';
-import ExifTool from '../tools/exif/ExifTool';
-import LutStudio from '../tools/lut/LutStudio';
-import MapTool from '../tools/map/MapTool';
-import OverlayStudio from '../tools/overlay/OverlayStudio';
-import RoadTripTool from '../tools/roadtrip/RoadTripTool';
-import StudioTool from '../tools/studio/StudioTool';
-import TelemetryTool from '../tools/telemetry/TelemetryTool';
+
+/**
+ * Every tool is its own chunk, loaded the first time its route is opened.
+ *
+ * The registry used to import all ten components statically, so the whole
+ * suite — the Develop workbench, the Trips editor, the Studio, the render
+ * graph and everything they reach — travelled in ONE 1.9 MB script that the
+ * home page and every instrument paid for before painting a thing. A
+ * `lazy()` per tool lets Rollup cut the bundle at the one seam the suite
+ * already has: nothing under `src/tools/<a>/` imports `src/tools/<b>/`, and
+ * nothing in the shell imports a tool except this file. Shared modules that
+ * two tools both reach are hoisted into common chunks by the bundler, so a
+ * second tool on the same visit downloads only what it alone needs.
+ *
+ * The shell draws the wait (`App.tsx`, a `Suspense` around the tool) and
+ * `main.tsx` handles the one failure this creates: a chunk name that no
+ * longer exists after a deploy.
+ */
+const CompareTool = lazy(() => import('../tools/compare/CompareTool'));
+const ComposerTool = lazy(() => import('../tools/composer/ComposerTool'));
+const DevelopTool = lazy(() => import('../tools/develop/DevelopTool'));
+const ExifTool = lazy(() => import('../tools/exif/ExifTool'));
+const LutStudio = lazy(() => import('../tools/lut/LutStudio'));
+const MapTool = lazy(() => import('../tools/map/MapTool'));
+const OverlayStudio = lazy(() => import('../tools/overlay/OverlayStudio'));
+const RoadTripTool = lazy(() => import('../tools/roadtrip/RoadTripTool'));
+const StudioTool = lazy(() => import('../tools/studio/StudioTool'));
+const TelemetryTool = lazy(() => import('../tools/telemetry/TelemetryTool'));
 
 /**
  * The tool registry — the single source of truth for the suite. The masthead

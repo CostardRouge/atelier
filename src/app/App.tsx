@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import AssetSidebar from './AssetSidebar';
+import LoadingState from '../shared/ui/LoadingState';
 import SourcesScreen from './SourcesScreen';
 import ErrorBoundary from './ErrorBoundary';
 import Home from './Home';
@@ -57,12 +58,22 @@ export default function App() {
   // The active view, guarded so a single tool's crash shows a recoverable
   // panel instead of blanking the suite. Keyed by route, so navigating to
   // another tool clears a prior error and mounts the next one fresh.
+  //
+  // A tool is a chunk of its own (`tools.tsx`), so its first opening waits on
+  // a download: the `Suspense` draws that wait in the tool's own frame, and a
+  // chunk that fails to load lands in the same boundary as a crash would.
   const activeContent = (
     <ErrorBoundary resetKey={path}>
       {sourcesPath ? (
         <SourcesScreen query={path.slice(sourcesPath.length + 1)} />
       ) : (
-        <Active />
+        <Suspense
+          fallback={
+            tool ? <LoadingState label={`Opening ${tool.label}…`} className="flex-1" /> : null
+          }
+        >
+          <Active />
+        </Suspense>
       )}
     </ErrorBoundary>
   );
