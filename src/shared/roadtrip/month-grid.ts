@@ -44,7 +44,7 @@ export interface MonthWeek {
 }
 
 export interface MonthBlock {
-  /** `YYYY-MM`, the block's stable key and its anchor id. */
+  /** `YYYY-MM`, the block's stable key and its anchor id — `weeks` for a short trip's one block. */
   key: string;
   year: number;
   /** 0 = January. */
@@ -55,6 +55,88 @@ export interface MonthBlock {
   weeks: readonly MonthWeek[];
   /** The days of this month that belong to the trip, in order. */
   tripDays: readonly IsoDate[];
+  /**
+   * Where another month begins INSIDE the block — a short trip's one block
+   * of weeks runs across a month's edge, and the row holding its 1st says
+   * so. Empty on a month block, whose header is the whole answer.
+   */
+  marks: readonly MonthMark[];
+}
+
+/** A month beginning inside a block: the row and column of its first day. */
+export interface MonthMark {
+  week: number;
+  col: number;
+  label: string;
+}
+
+/**
+ * Up to this many days a trip is SHORT: drawn as its own weeks with a week's
+ * margin either side and no year map, because a map of one column and a
+ * whole month for four days told the maintainer nothing (Normandie, 4 days).
+ * The threshold is the old day strip's, kept: a longer trip gets the months.
+ */
+export const SHORT_TRIP_DAYS = 31;
+
+/** How many whole weeks are drawn before and after a short trip, to situate it. */
+export const SHORT_TRIP_MARGIN_WEEKS = 1;
+
+export function isShortTrip(start: IsoDate, end: IsoDate): boolean {
+  const a = parseIsoDate(start);
+  const b = parseIsoDate(end);
+  if (a === null || b === null || b < a) return false;
+  return Math.round((b - a) / 86400000) + 1 <= SHORT_TRIP_DAYS;
+}
+
+/**
+ * A short trip as ONE block: the weeks it touches, `margin` whole weeks
+ * before and after, Monday-first, no padding — the row holding a month's
+ * first day carries a mark for it unless it is the header's own month.
+ * The header names the month the trip STARTS in (with its year), whatever
+ * the margin week before belongs to. Empty for a bad or reversed span.
+ */
+export function weekBlock(start: IsoDate, end: IsoDate, margin = SHORT_TRIP_MARGIN_WEEKS): MonthBlock[] {
+  const a = parseIsoDate(start);
+  const b = parseIsoDate(end);
+  if (a === null || b === null || b < a) return [];
+  const firstMonday = weekStart(start);
+  const lastMonday = weekStart(end);
+  if (firstMonday === null || lastMonday === null) return [];
+  const from = addDays(firstMonday, -7 * margin);
+  const to = addDays(lastMonday, 7 * margin + 6);
+  if (from === null || to === null) return [];
+  const days = enumerateDays(from, to);
+  const weeks: MonthWeek[] = [];
+  for (let i = 0; i < days.length; i += 7) weeks.push({ cells: days.slice(i, i + 7) });
+  const startDay = new Date(a);
+  const year = startDay.getUTCFullYear();
+  const month = startDay.getUTCMonth();
+  const marks: MonthMark[] = [];
+  weeks.forEach((week, w) => {
+    week.cells.forEach((date, col) => {
+      if (!date || date.slice(8, 10) !== '01') return;
+      const m = Number(date.slice(5, 7)) - 1;
+      const y = Number(date.slice(0, 4));
+      if (m === month && y === year) return;
+      marks.push({ week: w, col, label: y === year ? MONTH_NAMES[m] : `${MONTH_NAMES[m]} ${y}` });
+    });
+  });
+  return [
+    {
+      key: 'weeks',
+      year,
+      month,
+      label: `${MONTH_NAMES[month]} ${year}`,
+      weeks,
+      tripDays: days.filter((d) => d >= start && d <= end),
+      marks,
+    },
+  ];
+}
+
+/** The blocks a trip is drawn as: its weeks when short, its months otherwise. */
+export function tripBlocks(start: IsoDate, end: IsoDate): MonthBlock[] {
+  return isShortTrip(start, end) ? weekBlock(start, end) : monthBlocks(start, end);
 }
 
 /**
@@ -95,6 +177,7 @@ export function monthBlocks(start: IsoDate, end: IsoDate): MonthBlock[] {
       label: withYear ? `${MONTH_NAMES[month]} ${year}` : MONTH_NAMES[month],
       weeks,
       tripDays,
+      marks: [],
     });
     month += 1;
     if (month === 12) {

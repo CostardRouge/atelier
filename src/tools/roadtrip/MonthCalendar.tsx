@@ -10,10 +10,10 @@ import {
 } from 'react';
 import {
   MONTH_GAP,
-  monthBlocks,
   monthCell,
   monthWidth,
   scrollForWeek,
+  tripBlocks,
   visibleBlock,
   visibleWeekSpan,
   weekIndexOf,
@@ -148,7 +148,11 @@ export default function MonthCalendar({
   tail,
   gutter = 0,
 }: MonthCalendarProps) {
-  const blocks = useMemo(() => monthBlocks(trip.startDate, trip.endDate), [trip.startDate, trip.endDate]);
+  // A SHORT trip (≤ 31 days) is one block of its weeks, a week either side,
+  // and no map: a year map of one column and a whole month drawn for four
+  // days told the maintainer nothing. Longer, the months.
+  const blocks = useMemo(() => tripBlocks(trip.startDate, trip.endDate), [trip.startDate, trip.endDate]);
+  const short = blocks.length === 1 && blocks[0].key === 'weeks';
   const byDate = useMemo(() => new Map(days.map((d) => [d.date, d])), [days]);
   const today = useMemo(() => todayIso(), []);
   const [hovered, setHovered] = useState<Hovered | null>(null);
@@ -160,7 +164,7 @@ export default function MonthCalendar({
   const [boxRef, boxWidth] = useElementWidth<HTMLDivElement>();
   const width = Math.max(0, boxWidth - 2 * gutter);
   const fit = width > 0 ? Math.floor((width + COLUMN_GAP) / (monthWidth(FIT_CELL) + COLUMN_GAP)) : 1;
-  const cols = Math.max(1, Math.min(Math.floor(columns), fit));
+  const cols = short ? 1 : Math.max(1, Math.min(Math.floor(columns), fit));
   const perBlock = cols > 1 ? Math.floor((width - (cols - 1) * COLUMN_GAP) / cols) : width;
   const cell = monthCell(perBlock);
   const cellH = Math.round(cell * 0.9);
@@ -270,17 +274,19 @@ export default function MonthCalendar({
 
   return (
     <div className="flex flex-col flex-1 min-h-0" aria-label="The journey, month by month">
-      <div style={gutter ? { paddingInline: gutter } : undefined}>
-        <YearMap
-          startDate={trip.startDate}
-          endDate={trip.endDate}
-          days={days}
-          blocks={blocks}
-          span={span}
-          onJump={(i) => jumpTo(i)}
-          onScrub={scrollToWeek}
-        />
-      </div>
+      {!short && (
+        <div style={gutter ? { paddingInline: gutter } : undefined}>
+          <YearMap
+            startDate={trip.startDate}
+            endDate={trip.endDate}
+            days={days}
+            blocks={blocks}
+            span={span}
+            onJump={(i) => jumpTo(i)}
+            onScrub={scrollToWeek}
+          />
+        </div>
+      )}
 
       {between}
 
@@ -428,8 +434,16 @@ const MonthBlockView = forwardRef<HTMLDivElement, MonthBlockViewProps>(function 
         // The row's week, counted from the trip's first: the map's column for it.
         const firstDay = week.cells.find((d) => d !== null) ?? null;
         const weekIndex = firstDay ? weekIndexOf(firstDay, trip.startDate) : null;
+        const mark = block.marks.find((m) => m.week === w) ?? null;
         return (
           <div key={w} className="relative mb-1.5" data-week={weekIndex ?? undefined}>
+            {/* A short trip's block runs across a month's edge: the row
+                holding its 1st says which month begins here. */}
+            {mark && (
+              <div className="font-serif text-base leading-none text-ink-soft pt-1 pb-1.5" aria-hidden="true">
+                {mark.label}
+              </div>
+            )}
             <div className="flex" style={{ gap: MONTH_GAP }} role="row">
               {week.cells.map((date, col) => {
                 if (!date) {

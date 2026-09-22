@@ -476,7 +476,9 @@ and a day never narrower than a pointer can aim at. Above the blocks the
 whole trip stays in view as a **map** — a contribution-style heatmap, one
 column per week, fitted to the width — read and jumped from (one click per
 month) and never aimed at; the frame on it is where you have scrolled to.
-Under each week a **ribbon** says which leg you were on.
+Under each week a **ribbon** says which leg you were on. A trip of a month or
+less skips all that: it is drawn as its own weeks with one week either side to
+situate it, and no map — four days do not need a year.
 Its job is the **holes**: with thousands of photos and a year's distance,
 what you cannot answer from memory is which days you have never told. Empty
 cells are drawn like any other, five intensity rungs separate "nothing here"

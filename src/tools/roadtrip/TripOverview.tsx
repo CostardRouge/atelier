@@ -521,6 +521,8 @@ export default function TripOverview({
   const onVisible = useCallback((block: MonthBlock) => setVisibleKey(block.key), []);
   const windowPosts = useMemo(() => {
     if (view !== 'pictures' || !visibleKey) return [];
+    // A short trip is one block of weeks: its window is the whole trip (31 days at most).
+    if (visibleKey === 'weeks') return trip.posts;
     const [y, m] = visibleKey.split('-').map(Number);
     const ordinal = y * 12 + (m - 1);
     return trip.posts.filter((p) => {
@@ -532,7 +534,8 @@ export default function TripOverview({
   // The days the ruler details on a wide screen: the month on screen and its
   // two neighbours, clamped to the trip — the loupe, read from the scroll.
   const spanOnScreen = useMemo(() => {
-    if (!visibleKey) return undefined;
+    // No month key (a short trip's one block of weeks): the ruler details the whole trip.
+    if (!visibleKey || visibleKey === 'weeks') return undefined;
     const [y, m] = visibleKey.split('-').map(Number);
     const start = toIsoDate(Date.UTC(y, m - 2, 1));
     const end = toIsoDate(Date.UTC(y, m + 1, 0));

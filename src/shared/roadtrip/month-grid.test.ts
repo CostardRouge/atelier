@@ -4,7 +4,10 @@ import {
   MIN_MONTH_CELL,
   MONTH_GAP,
   blockSpan,
+  isShortTrip,
   monthBlocks,
+  tripBlocks,
+  weekBlock,
   monthCell,
   monthWidth,
   scrollForWeek,
@@ -127,6 +130,48 @@ describe('visibleBlock', () => {
     expect(visibleBlock(tops, 0, 600)).toBe(0);
     expect(visibleBlock(tops, 300, 600)).toBe(3);
     expect(visibleBlock(tops, 900, 600)).toBe(6);
+  });
+});
+
+describe('a short trip is one block of weeks', () => {
+  it('is short up to 31 days, and not past', () => {
+    expect(isShortTrip('2026-05-07', '2026-05-10')).toBe(true);
+    expect(isShortTrip('2026-05-01', '2026-05-31')).toBe(true);
+    expect(isShortTrip('2026-05-01', '2026-06-01')).toBe(false);
+    expect(isShortTrip('2026-05-10', '2026-05-07')).toBe(false);
+  });
+
+  it('draws the trip\'s weeks with a week either side, Monday first, no padding', () => {
+    // 7 May 2026 is a Thursday; 10 May a Sunday. Its week is 4–10 May.
+    const [block] = weekBlock('2026-05-07', '2026-05-10');
+    expect(block.key).toBe('weeks');
+    expect(block.label).toBe('May 2026');
+    expect(block.weeks).toHaveLength(3);
+    expect(block.weeks[0].cells).toEqual(['2026-04-27', '2026-04-28', '2026-04-29', '2026-04-30', '2026-05-01', '2026-05-02', '2026-05-03']);
+    expect(block.weeks[2].cells[6]).toBe('2026-05-17');
+    expect(block.tripDays).toEqual(['2026-05-07', '2026-05-08', '2026-05-09', '2026-05-10']);
+    for (const week of block.weeks) expect(week.cells).toHaveLength(7);
+  });
+
+  it('marks a month beginning inside the block, never the header\'s own', () => {
+    const [block] = weekBlock('2026-05-07', '2026-05-10');
+    // 1 May sits in the margin week, but May is the header: no mark.
+    expect(block.marks).toEqual([]);
+    // A trip across the turn of a month: June is marked on the row holding the 1st.
+    const [across] = weekBlock('2026-05-25', '2026-06-07');
+    expect(across.label).toBe('May 2026');
+    expect(across.marks).toEqual([{ week: 2, col: 0, label: 'June' }]);
+    // Across a year: the mark carries the year.
+    const [newYear] = weekBlock('2025-12-29', '2026-01-04');
+    expect(newYear.marks).toEqual([{ week: 1, col: 3, label: 'January 2026' }]);
+  });
+
+  it('tripBlocks picks the shape on the length, and month blocks carry no marks', () => {
+    expect(tripBlocks('2026-05-07', '2026-05-10').map((b) => b.key)).toEqual(['weeks']);
+    const months = tripBlocks('2025-03-03', '2026-02-10');
+    expect(months).toHaveLength(12);
+    expect(months.every((b) => b.marks.length === 0)).toBe(true);
+    expect(weekBlock('2026-05-10', '2026-05-07')).toEqual([]);
   });
 });
 
