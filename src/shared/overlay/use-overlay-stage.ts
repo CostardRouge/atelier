@@ -171,13 +171,41 @@ export function useOverlayStage(params: StageParams): StageHandlers {
         : document.createElement('canvas');
     const renderer = createLutRenderer(canvas);
     if (!renderer) return null;
+    // A renderer built after a lost context gets the look at once — the
+    // look effect below only runs when the look CHANGES.
+    const look = lookRef.current;
+    if (look.lut) {
+      renderer.setLut(look.lut);
+      renderer.setIntensity(look.intensity);
+      if (look.interpolation) renderer.setInterpolation(look.interpolation);
+    }
     graderRef.current = { renderer, canvas };
+    // A context the browser takes back — iOS drops WebGL contexts when the
+    // app is backgrounded, a desktop under GPU pressure does too — leaves a
+    // renderer that draws nothing. The next frame rebuilds it from scratch
+    // instead of a graded preview that stays blank until the editor is
+    // remounted.
+    canvas.addEventListener('webglcontextlost', (event) => {
+      event.preventDefault();
+      if (graderRef.current?.canvas !== canvas) return;
+      graderRef.current.renderer.dispose();
+      graderRef.current = null;
+      graderTried.current = false;
+      needsRedraw.current = true;
+    });
     return graderRef.current;
   }, []);
+  /** The look last asked for, so a renderer rebuilt after a lost context wears it. */
+  const lookRef = useRef<{
+    lut: typeof params.lut;
+    intensity: number;
+    interpolation: typeof params.interpolation;
+  }>({ lut: null, intensity: 1, interpolation: undefined });
 
   // Upload the LUT / intensity / lookup when they change (not per frame), and
   // repaint. The lookup is a live uniform switch: no texture re-upload.
   useEffect(() => {
+    lookRef.current = { lut: params.lut, intensity: params.intensity, interpolation: params.interpolation };
     if (params.lut) {
       const r = ensureGrader()?.renderer;
       r?.setLut(params.lut);
