@@ -103,7 +103,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const { connection } = useWinnowConnection();
   // Which inspector tab is open — kept here, not in the workbench, so it
   // survives stepping to another picture (the workbench remounts per picture).
-  const [tab, setTab] = useState<WorkbenchTab>('develop');
+  const [tab, setTab] = useState<WorkbenchTab>('adjust');
 
   const latest = useRef(roll);
   latest.current = roll;

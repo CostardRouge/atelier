@@ -962,7 +962,7 @@ export function useDevelopPicture({
   const view = usePictureZoom({
     natural,
     resetKey: source,
-    claim: (e) => wipeClaims(e.target, zoomedRef.current),
+    claim: (target) => wipeClaims(target, zoomedRef.current),
     onTakeover: () => {
       dragging.current = null;
     },

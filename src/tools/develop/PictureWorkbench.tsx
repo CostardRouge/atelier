@@ -40,6 +40,8 @@ import { trackedFetch } from '../../shared/tasks/tracked';
 import { openingRendition, renditionById, renditionsOf, type PixelSize, type Rendition } from '../../shared/media/renditions';
 import { fileIdentity, isRawImage } from '../../shared/library/assets';
 import { rawSizes } from '../../shared/exif/raw-probe';
+import { captureLine } from '../../shared/exif/exif-summary';
+import { useEffectiveExif } from '../../shared/exif/use-effective-exif';
 import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
 import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
 import { pictureAspectRatio } from '../../shared/develop/crop-aspect';
@@ -118,7 +120,8 @@ import type { BorderApplyVerb } from './BorderSection';
 import type { RollBorder } from '../../shared/develop/border-layout';
 import ExportPanel, { type ExportVerb } from './ExportPanel';
 import CropStage from './CropStage';
-import { CROP_VIEW_FIT, CROP_VIEW_MAX, useCropZone } from './use-crop-zone';
+import { useCropZone } from './use-crop-zone';
+import { CROP_VIEW_FIT, CROP_VIEW_MAX } from './crop-view';
 import type { RollExports } from './use-roll-export';
 
 /** How long the picture rests before its filmstrip cell is redrawn. */
@@ -893,6 +896,11 @@ export default function PictureWorkbench({
       });
       if (!action) return;
       const { draft: d, picture: pic, tell: say, crop: c, tab: open } = keyState.current;
+      if (typeof action === 'object') {
+        e.preventDefault();
+        callbacks.current.onTabChange(action.tab);
+        return;
+      }
       switch (action) {
         case 'previous':
         case 'next':
@@ -926,14 +934,6 @@ export default function PictureWorkbench({
           say('pasted');
           return;
         }
-        case 'crop':
-          e.preventDefault();
-          callbacks.current.onTabChange('crop');
-          return;
-        case 'develop':
-          e.preventDefault();
-          callbacks.current.onTabChange('develop');
-          return;
         case 'help':
           e.preventDefault();
           // The same key closes it: a sheet opened by a letter that then does
@@ -984,7 +984,7 @@ export default function PictureWorkbench({
       reset: () => setCropView(CROP_VIEW_FIT),
     };
   }, [cropView, setCropView]);
-  const tabLabel = WORKBENCH_TABS.find((t) => t.id === tab)?.label ?? 'Develop';
+  const tabLabel = WORKBENCH_TABS.find((t) => t.id === tab)?.label ?? 'Adjust';
 
   /**
    * The points the author picked for the OPEN subject layer, drawn on the
@@ -1024,6 +1024,20 @@ export default function PictureWorkbench({
     if (fidelity.note) lines.push(fidelity.note);
     return lines;
   }, [factsOn, draft.draft, drawingCount, detailDraft, repairDraft, fidelity.note]);
+
+  /**
+   * What the CAMERA did, drawn above those facts under the same key — the
+   * aperture, the shutter, the ISO and the compensation, from the head of the
+   * file ON SCREEN. The rendition is what makes that read honest: switch the
+   * picture to its DNG and these are the DNG's own numbers; leave it on a
+   * Winnow proxy, whose re-encode carries no metadata at all, and the line is
+   * the instance's vouched record (`exif/read-exif.ts` merges the two).
+   *
+   * Absent for a picture that says nothing, and the stack then starts where
+   * it always did.
+   */
+  const shotExif = useEffectiveExif(shownFile);
+  const shotLine = useMemo(() => (factsOn ? captureLine(shotExif) || null : null), [factsOn, shotExif]);
 
   const toolbarPill = compact ? developTouchPillClass : developPillClass;
   /**
@@ -1159,7 +1173,7 @@ export default function PictureWorkbench({
               FRAMING's own zoom, which is what the picture is cropped by. */}
           {source &&
             (cropping ? (
-              <StageZoomControl zoom={cropZoom} hint="look closer: pinch or the wheel — the crop stays" className="flex-none" />
+              <StageZoomControl zoom={cropZoom} hint="look closer: pinch, the wheel or Z — the crop stays" className="flex-none" />
             ) : (
               // How the picture is DRAWN hangs off the percentage, which was
               // already the "back to the fit" button (that rung is now the
@@ -1224,6 +1238,7 @@ export default function PictureWorkbench({
           scope={taskScope}
           pixelView={pixelView}
           facts={facts}
+          shot={shotLine}
           marks={subjectMarks}
           // Shown whenever the subject layer is open — a picked point is a fact
           // about the layer, not about the tool — but removable only while Pick
@@ -1283,7 +1298,7 @@ export default function PictureWorkbench({
           <Segmented fill size="sm" label="Inspector" value={tab} onChange={onTabChange} options={WORKBENCH_TABS} className="flex-none" />
         )}
         <div className={compact ? 'flex flex-col gap-4' : 'flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain flex flex-col gap-4 -mr-3 pr-3'}>
-          {tab === 'develop' ? (
+          {tab === 'adjust' ? (
             <>
               <DevelopHistogram histogram={picture.histogram} />
               <DevelopAutoSection

@@ -5,6 +5,7 @@ import TaskEdge from './TaskEdge';
 import { cancelTask } from '../tasks/tasks';
 import { useTasks } from '../tasks/use-tasks';
 import { DECK_GAP, DECK_SETTLE_MS, useMediaViewer, type MediaViewer } from './use-media-viewer';
+import { describeZoomKey, zoomKeyAction } from './zoom-keys';
 
 /**
  * One media to look at, whatever holds it.
@@ -232,10 +233,22 @@ export default function MediaLightbox({
     natural: override?.natural ?? item?.natural ?? null,
   });
 
+  // The keys the grammar gives every Looking surface (`zoom-keys.ts`): `Z`
+  // toggles the view, the arrows pan it once zoomed — and at the fit, where a
+  // pan means nothing, the arrows keep paging the deck.
+  const keys = useRef({ viewer });
+  keys.current = { viewer };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') viewer.pageBy(-1);
-      else if (e.key === 'ArrowRight') viewer.pageBy(1);
+      const v = keys.current.viewer;
+      const action = zoomKeyAction(describeZoomKey(e), v.zoomed);
+      if (action?.kind === 'toggle') {
+        if (v.zoomed) v.zoom.reset();
+        else v.zoom.zoomIn();
+      } else if (action?.kind === 'pan') {
+        v.pan(action.dx, action.dy);
+      } else if (!v.zoomed && e.key === 'ArrowLeft') v.pageBy(-1);
+      else if (!v.zoomed && e.key === 'ArrowRight') v.pageBy(1);
       else return;
       e.preventDefault();
     };
@@ -247,7 +260,7 @@ export default function MediaLightbox({
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = bodyOverflow;
     };
-  }, [viewer.pageBy]);
+  }, []);
 
   // Whether the media in the middle slot has its full bytes. Reported by that
   // slot rather than tracked here: a picture that already loaded as a
@@ -333,7 +346,7 @@ export default function MediaLightbox({
               pinch is the gesture there, as the swipe is for the pager. */}
           <StageZoomControl
             zoom={viewer.zoom}
-            hint="wheel, or pinch"
+            hint="wheel, pinch, or Z"
             className="flex-none max-[820px]:hidden"
           />
           <button

@@ -6,9 +6,9 @@ import { holdGrades, type HeldGrader } from '../../shared/lut/held-grader';
 import { stageFrameSize } from '../../shared/overlay/stage-size';
 import {
   DEFAULT_FRAMING,
-  MAX_FRAMING_SCALE,
   canPan,
   panBy,
+  zoomFramingAbout,
   type Framing,
 } from '../../shared/media/framing';
 import { cellAt, type CellRect } from '../../shared/media/media-layout';
@@ -49,6 +49,7 @@ import type { FrameRect, ResolvedHook } from '../../shared/roadtrip/hooks/hook-v
 import { TRIM_EPSILON, type TrimRange } from '../../shared/media/trim';
 import { clampPlaybackRate } from '../../shared/media/use-video-transport';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
+import { useZoomGestures } from '../../shared/ui/use-zoom-gestures';
 import TaskEdge from '../../shared/ui/TaskEdge';
 
 /**
@@ -856,50 +857,6 @@ export default function BadgeStage({
     return c.cells[i - 1]?.framing ?? DEFAULT_FRAMING;
   }, []);
 
-  /**
-   * Zooming the picture INSIDE its frame with the wheel. Attached natively and
-   * NOT passively: React's own wheel handler is passive, so `preventDefault`
-   * there is ignored and the page scrolls away under the picture you are
-   * trying to frame.
-   *
-   * A ctrl/⌘-wheel — which is also what a trackpad pinch sends — frames the
-   * picture too. The stage has no view zoom to hand it to: the preview simply
-   * fills the room it is given, so every zoom gesture over it means the one
-   * thing the document remembers.
-   */
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !onFraming) return;
-    const onWheel = (e: WheelEvent) => {
-      const c = collageRef.current;
-      if (c && onCellFramingRef.current) {
-        const rect = canvas.getBoundingClientRect();
-        const px = (e.clientX - rect.left) * (canvas.width / rect.width);
-        const py = (e.clientY - rect.top) * (canvas.height / rect.height);
-        const i = cellAt(cellRectsRef.current, px, py);
-        if (i < 0) return;
-        const src = i === 0 ? sourceRef.current : cellSourcesRef.current[i];
-        if (!src) return;
-        e.preventDefault();
-        const cf = cellFramingAt(i);
-        const scale = Math.min(MAX_FRAMING_SCALE, Math.max(1, cf.scale * Math.exp(-e.deltaY / 400)));
-        if (scale !== cf.scale) onCellFramingRef.current(i, { ...cf, scale });
-        return;
-      }
-      const source = sourceRef.current;
-      if (!source) return;
-      e.preventDefault();
-      const f = framingRef.current ?? DEFAULT_FRAMING;
-      const scale = Math.min(
-        MAX_FRAMING_SCALE,
-        Math.max(1, f.scale * Math.exp(-e.deltaY / 400)),
-      );
-      if (scale === f.scale) return;
-      onFramingRef.current?.({ ...f, scale });
-    };
-    canvas.addEventListener('wheel', onWheel, { passive: false });
-    return () => canvas.removeEventListener('wheel', onWheel);
-  }, [onFraming, cellFramingAt]);
   // Where a press landed, in CSS pixels, and on what — so a release can tell
   // a tap from a drag.
   const press = useRef<{ id: string; x: number; y: number } | null>(null);
@@ -954,9 +911,145 @@ export default function BadgeStage({
     };
   }, []);
 
+  /** A swap is under way: the cursor says so. */
+  const [swapping, setSwapping] = useState(false);
+
+  /**
+   * Zooming and moving the picture INSIDE its frame — the *Placing* half of
+   * the suite's one zoom grammar (`shared/ui/zoom-gestures.ts`). The wheel,
+   * a trackpad pinch (a ⌘-wheel) and two fingers all mean the one thing the
+   * document remembers, the framing: there is no view zoom to hand them to,
+   * the preview simply fills the room it is given. A zoom keeps the point
+   * under the pointer or the fingers' centre still (`zoomFramingAbout`), so
+   * what is aimed at stays aimed at; a sideways wheel and a pinch's drift
+   * pan while the framing has slack. Per CELL on a collage: the cell under
+   * the hand is the one reframed, at its own size, as the drag already does.
+   *
+   * Heard on the BOX the canvas fills, natively and non-passively (React's
+   * wheel handler is passive), with the browser's own pinch refused there.
+   * A single pointer is never the machine's here — the badge's own handlers
+   * below read it — but its second finger is: the machine tells them to let
+   * go (`onTakeover`) and they stand down while two fingers are on.
+   */
+  const pinching = useRef(false);
+  /** A client point as canvas px, with the canvas's current mapping. */
+  const canvasPoint = useCallback((clientX: number, clientY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    const k = canvas.width / rect.width;
+    return { canvas, k, px: (clientX - rect.left) * k, py: (clientY - rect.top) * k };
+  }, []);
+  /**
+   * The framing as THIS hand last wrote it, for the moment the document lags
+   * behind: a pinch pans then zooms in the same event, and a wheel burst
+   * lands several notches before React renders once. Each of those would
+   * otherwise read the framing the document still shows and overwrite the
+   * write before it — measured as a pinch whose drift was lost. Held only
+   * briefly, so an undo or another surface's write is not shadowed for long.
+   */
+  const written = useRef<{ i: number; framing: Framing; t: number } | null>(null);
+  /**
+   * The cell under a canvas point, its picture and its framing — cell 0 the
+   * whole frame when there is no collage. Null where nothing can be reframed.
+   */
+  const reframableAt = useCallback(
+    (px: number, py: number) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return null;
+      const framingOf = (i: number, stored: Framing) => {
+        const w = written.current;
+        return w && w.i === i && performance.now() - w.t < 300 ? w.framing : stored;
+      };
+      const writer = (i: number, write: (f: Framing) => void) => (f: Framing) => {
+        written.current = { i, framing: f, t: performance.now() };
+        write(f);
+      };
+      const c = collageRef.current;
+      if (c && onCellFramingRef.current) {
+        const i = cellAt(cellRectsRef.current, px, py);
+        if (i < 0) return null;
+        const src = i === 0 ? sourceRef.current : cellSourcesRef.current[i];
+        const rect = cellRectsRef.current[i];
+        if (!src || !rect) return null;
+        return {
+          i,
+          src,
+          rect,
+          framing: framingOf(i, cellFramingAt(i)),
+          write: writer(i, (f) => onCellFramingRef.current?.(i, f)),
+        };
+      }
+      const src = sourceRef.current;
+      if (!src || !onFramingRef.current) return null;
+      return {
+        i: 0,
+        src,
+        rect: { x: 0, y: 0, w: canvas.width, h: canvas.height, rotation: 0 },
+        framing: framingOf(0, framingRef.current ?? DEFAULT_FRAMING),
+        write: writer(0, (f) => onFramingRef.current?.(f)),
+      };
+    },
+    [cellFramingAt],
+  );
+  useZoomGestures({
+    ref: boxRef,
+    enabled: Boolean(onFraming),
+    target: {
+      scaleAt: (at) => {
+        const p = canvasPoint(at.x, at.y);
+        return (p && reframableAt(p.px, p.py)?.framing.scale) ?? 1;
+      },
+      zoomTo: (scale, anchor) => {
+        const p = canvasPoint(anchor.x, anchor.y);
+        const cell = p && reframableAt(p.px, p.py);
+        if (!cell) return;
+        // The anchor in the cell's own frame: a print may be turned.
+        const a = (-cell.rect.rotation * Math.PI) / 180;
+        const dx = p.px - (cell.rect.x + cell.rect.w / 2);
+        const dy = p.py - (cell.rect.y + cell.rect.h / 2);
+        const local = {
+          x: dx * Math.cos(a) - dy * Math.sin(a) + cell.rect.w / 2,
+          y: dx * Math.sin(a) + dy * Math.cos(a) + cell.rect.h / 2,
+        };
+        const next = zoomFramingAbout(cell.framing, scale, local, cell.src.width, cell.src.height, cell.rect.w, cell.rect.h);
+        if (next.scale !== cell.framing.scale || next.x !== cell.framing.x || next.y !== cell.framing.y) cell.write(next);
+      },
+      panBy: (dx, dy, at) => {
+        const p = canvasPoint(at.x, at.y);
+        const cell = p && reframableAt(p.px, p.py);
+        if (!cell) return;
+        // Client px → canvas px → the cell's own axes, as the drag does.
+        const a = (-cell.rect.rotation * Math.PI) / 180;
+        const mx = dx * p.k;
+        const my = dy * p.k;
+        const lx = mx * Math.cos(a) - my * Math.sin(a);
+        const ly = mx * Math.sin(a) + my * Math.cos(a);
+        cell.write(panBy(cell.framing, cell.src.width, cell.src.height, cell.rect.w, cell.rect.h, lx, ly));
+      },
+      drag: () => null,
+      onTakeover: () => {
+        // The second finger: whatever the first began — a picture pan, a
+        // cell's hold-to-swap, an element's move — stops where it is.
+        const d = drag.current;
+        if (d?.kind === 'cell') {
+          window.clearTimeout(d.timer);
+          setSwapping(false);
+        }
+        drag.current = null;
+        press.current = null;
+      },
+      onPinch: (on) => {
+        pinching.current = on;
+      },
+    },
+  });
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (!onSelect || e.button !== 0) return;
+      // Two fingers are the machine's pinch; the one left after it starts nothing.
+      if (pinching.current) return;
       const pt = toPixels(e);
       if (!pt) return;
       // Cancelling the pointerdown cancels the mousedown behind it, whose
@@ -1032,9 +1125,6 @@ export default function BadgeStage({
     },
     [onSelect, blockAnchor, onMoveBlock, hookRectNow, onMoveHook, onFraming, toPixels, onSelectCell, onSwapCells],
   );
-  /** A swap is under way: the cursor says so. */
-  const [swapping, setSwapping] = useState(false);
-
   const onPointerMove = useCallback(
     (e: React.PointerEvent) => {
       const canvas = canvasRef.current;

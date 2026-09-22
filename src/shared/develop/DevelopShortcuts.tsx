@@ -40,14 +40,14 @@ const GROUPS: readonly Group[] = [
       { keys: 'drag', what: 'at the fit, wipe between before and after' },
       { keys: 'the divider’s handle', what: 'wipe at any zoom' },
       { keys: 'the A/B pill', what: 'the divider on or off — a mask tool suspends it on its own' },
-      { keys: 'I', what: 'the facts, over the picture' },
+      { keys: 'I', what: 'the facts — the exposure as shot, then this develop — over the picture' },
     ],
   },
   {
     title: 'Working',
     rows: [
-      { keys: 'D', what: 'the Develop tab' },
-      { keys: 'R', what: 'the Crop tab' },
+      { keys: 'A · D · L · C · E', what: 'the tabs, each by its own initial — Adjust, Detail, Layers, Crop, Export' },
+      { keys: 'X', what: 'on the Crop tab, the zone’s portrait ↔ landscape' },
       { keys: '⌘/Ctrl C · V', what: 'copy this develop, paste it onto another — and the ⋯ above the picture' },
       { keys: '⌘/Ctrl Z', what: 'undo — and ⇧ to put it back' },
       { keys: 'tap', what: 'with Pick on, add a point to the subject — the + cursor' },

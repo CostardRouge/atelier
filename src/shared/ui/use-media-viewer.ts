@@ -25,6 +25,12 @@
  * - Two fingers pinch to zoom AND pan by their centre, which is why the
  *   viewport must be `touch-none`: there is no native scrolling to inherit.
  *
+ * The pointers — pinch, drag, the finger left after a pinch — are read by the
+ * suite's one gesture machine (`use-zoom-gestures.ts`); this hook only says
+ * what a drag means here (a pan when zoomed, a swipe when not). The WHEEL
+ * stays this hook's own: its paging, the sweep that commits mid-stream and
+ * the momentum it then swallows were paid for one fix at a time.
+ *
  * Deliberately NOT here: a swipe that continues out of a zoomed picture once
  * it hits an edge. iOS does it; it costs a per-axis "how far past the edge did
  * this drag push" state machine, and paging is one pinch away.
@@ -43,14 +49,13 @@ import {
   sweepRestarts,
   swipeCommit,
   zoomAbout,
-  zoomByPinchRatio,
   zoomByWheelDelta,
   type Box,
   type Point,
   type View,
 } from './pan-zoom';
-import { blockNativeZoom } from './native-gestures';
 import type { ZoomControls } from './stage-zoom';
+import { useZoomGestures } from './use-zoom-gestures';
 
 /** Paper between two slots, so the neighbour arrives as a separate sheet. */
 export const DECK_GAP = 24;
@@ -123,6 +128,8 @@ export interface MediaViewer {
    * the same and none of them can leave the deck mid-drag.
    */
   pageBy: (direction: -1 | 1) => void;
+  /** Move a zoomed view by a pixel delta — the arrows' way in once zoomed (`zoom-keys.ts`). */
+  pan: (dx: number, dy: number) => void;
   /** The media's own pixel size, once it has loaded and can say. */
   onMeasured: (natural: Box) => void;
 }
@@ -377,163 +384,62 @@ export function useMediaViewer({
     };
   }, [dragTo, land, page, panBy, settleBack, slotTravel, zoomTo]);
 
-  // Pointers: one drag pans or swipes, two fingers pinch.
-  useEffect(() => {
-    const el = viewportRef.current;
-    if (!el) return;
-    const touches = new Map<number, Point>();
-    let pinch: { spread: number; scale: number } | null = null;
-    let drag:
-      | {
-          id: number;
-          startX: number;
-          startY: number;
-          lastX: number;
-          lastY: number;
-          lastAt: number;
-          speed: number;
-          mode: 'idle' | 'pan' | 'swipe';
+  // Pointers: one drag pans or swipes, two fingers pinch — the shared machine
+  // reads them, in the capture phase so nothing inside a slot can hide a
+  // finger from the deck. The wheel is deliberately left to the listener above.
+  useZoomGestures({
+    ref: viewportRef,
+    capture: true,
+    wheel: 'none',
+    slop: DRAG_SLOP,
+    target: {
+      scaleAt: () => viewRef.current.scale,
+      zoomTo: (scale, anchor) => zoomTo(scale, anchorOf(anchor.x, anchor.y)),
+      panBy: (dx, dy) => panBy(dx, dy),
+      onGesture: () => {
+        if (busy.current) land();
+        setViewSettling(false);
+      },
+      drag: (start) => {
+        // A clip's own controls own the bottom of it: a drag across the
+        // scrubber is a seek, not a swipe.
+        const clip = (start.pointer?.target as Element | null)?.closest?.('video');
+        if (clip) {
+          const box = clip.getBoundingClientRect();
+          if (start.y > box.bottom - VIDEO_CONTROLS_STRIP) return null;
         }
-      | null = null;
-
-    const centre = (): Point => {
-      const pts = [...touches.values()];
-      return {
-        x: pts.reduce((s, p) => s + p.x, 0) / pts.length,
-        y: pts.reduce((s, p) => s + p.y, 0) / pts.length,
-      };
-    };
-    const spread = () => {
-      const [a, b] = [...touches.values()];
-      return Math.hypot(a.x - b.x, a.y - b.y);
-    };
-    const dropDrag = () => {
-      drag = null;
-      setDragging(false);
-    };
-
-    const onDown = (e: PointerEvent) => {
-      if (busy.current) land();
-      setViewSettling(false);
-      if (e.pointerType === 'touch') {
-        touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
-        if (touches.size === 2) {
-          // The first finger was dragging; two of them are a pinch instead,
-          // and whatever it had moved stays where it left it.
-          pinch = { spread: spread(), scale: viewRef.current.scale };
-          if (drag?.mode === 'swipe') settleBack();
-          dropDrag();
-          return;
-        }
-        if (touches.size > 2) return;
-      } else if (e.button !== 0) return;
-      // A clip's own controls own the bottom of it: a drag across the
-      // scrubber is a seek, not a swipe.
-      const clip = (e.target as Element | null)?.closest?.('video');
-      if (clip) {
-        const box = clip.getBoundingClientRect();
-        if (e.clientY > box.bottom - VIDEO_CONTROLS_STRIP) return;
-      }
-      if (pinch) return;
-      drag = {
-        id: e.pointerId,
-        startX: e.clientX,
-        startY: e.clientY,
-        lastX: e.clientX,
-        lastY: e.clientY,
-        lastAt: e.timeStamp,
-        speed: 0,
-        mode: 'idle',
-      };
-      setDragging(true);
-      // Capture so a mouse that leaves the frame mid-drag still reports; a
-      // pointer the browser no longer knows about (a synthetic one) throws
-      // rather than answering, and a drag works without it either way.
-      if (e.pointerType !== 'touch') {
-        try {
-          el.setPointerCapture(e.pointerId);
-        } catch {
-          /* not a live pointer */
-        }
-      }
-    };
-
-    const onMove = (e: PointerEvent) => {
-      if (e.pointerType === 'touch' && touches.has(e.pointerId)) {
-        const before = touches.size === 2 ? centre() : null;
-        touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
-        if (touches.size === 2 && pinch && before) {
-          e.preventDefault();
-          const after = centre();
-          // Pan on the raw movement of the fingers' centre first, so the
-          // zoom's own correction is measured from an offset already updated.
-          panBy(after.x - before.x, after.y - before.y);
-          if (pinch.spread > 0) {
-            zoomTo(
-              zoomByPinchRatio(pinch.scale, spread() / pinch.spread),
-              anchorOf(after.x, after.y),
-            );
-          }
-          return;
-        }
-      }
-      if (!drag || e.pointerId !== drag.id || busy.current) return;
-      const dx = e.clientX - drag.lastX;
-      const dy = e.clientY - drag.lastY;
-      const total = e.clientX - drag.startX;
-      if (drag.mode === 'idle') {
-        if (Math.abs(total) < DRAG_SLOP && Math.abs(e.clientY - drag.startY) < DRAG_SLOP) {
-          drag.lastX = e.clientX;
-          drag.lastY = e.clientY;
-          return;
-        }
-        // Zoomed in there is somewhere to go, so the drag goes there;
-        // fitted there is not, so it means the deck.
-        drag.mode = viewRef.current.scale > MIN_VIEW_ZOOM ? 'pan' : 'swipe';
-      }
-      const dt = e.timeStamp - drag.lastAt;
-      if (dt > 0) drag.speed = dx / dt;
-      drag.lastX = e.clientX;
-      drag.lastY = e.clientY;
-      drag.lastAt = e.timeStamp;
-      e.preventDefault();
-      if (drag.mode === 'pan') panBy(dx, dy);
-      else dragTo(total);
-    };
-
-    const onUp = (e: PointerEvent) => {
-      if (e.pointerType === 'touch') {
-        touches.delete(e.pointerId);
-        if (touches.size < 2) pinch = null;
-      }
-      if (!drag || e.pointerId !== drag.id) return;
-      const mode = drag.mode;
-      const total = e.clientX - drag.startX;
-      const speed = drag.speed;
-      dropDrag();
-      if (mode !== 'swipe' || busy.current) return;
-      const dir = swipeCommit(total, slotTravel(), speed);
-      if (dir && countRef.current > 1) page(dir);
-      else settleBack();
-    };
-
-    // WebKit's own pinch zooms the whole app and CANCELS every pointer below,
-    // which is what "the pinch does nothing" is on an iPhone — `touch-action`
-    // cannot reach it (`native-gestures.ts`).
-    const unblock = blockNativeZoom(el);
-    // Capture, so nothing inside the slot can hide a finger from the deck.
-    el.addEventListener('pointerdown', onDown, true);
-    el.addEventListener('pointermove', onMove, true);
-    el.addEventListener('pointerup', onUp, true);
-    el.addEventListener('pointercancel', onUp, true);
-    return () => {
-      unblock();
-      el.removeEventListener('pointerdown', onDown, true);
-      el.removeEventListener('pointermove', onMove, true);
-      el.removeEventListener('pointerup', onUp, true);
-      el.removeEventListener('pointercancel', onUp, true);
-    };
-  }, [dragTo, land, page, panBy, settleBack, slotTravel, zoomTo]);
+        // The finger left after a pinch takes the pan over; fitted, there is
+        // nothing for it to take.
+        if (start.handoff && viewRef.current.scale <= MIN_VIEW_ZOOM) return null;
+        setDragging(true);
+        let mode: 'pan' | 'swipe' | null = null;
+        return {
+          move: (m) => {
+            if (busy.current) return;
+            // Zoomed in there is somewhere to go, so the drag goes there;
+            // fitted there is not, so it means the deck. Decided once, at the
+            // first real step.
+            if (!mode) mode = viewRef.current.scale > MIN_VIEW_ZOOM ? 'pan' : 'swipe';
+            if (mode === 'pan') panBy(m.dx, m.dy);
+            else dragTo(m.totalX);
+          },
+          end: (e) => {
+            setDragging(false);
+            if (mode !== 'swipe') return;
+            // A second finger landing mid-swipe: whatever it moved settles back.
+            if (e.cancelled) {
+              settleBack();
+              return;
+            }
+            if (busy.current) return;
+            const dir = swipeCommit(e.totalX, slotTravel(), e.speedX);
+            if (dir && countRef.current > 1) page(dir);
+            else settleBack();
+          },
+        };
+      },
+    },
+  });
 
   // A second press while a page is still sliding lands the first, so no press
   // is lost to an offset that was already where the second one sends it.
@@ -584,6 +490,7 @@ export function useMediaViewer({
     heading,
     slots,
     pageBy,
+    pan: panBy,
     onMeasured: setMeasured,
   };
 }
