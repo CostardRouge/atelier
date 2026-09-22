@@ -547,7 +547,7 @@ function ResumeBand({
             <>
               {' · '}
               <span className="text-accent-ink">
-                {gap.length} days of silence since {formatIsoDate(gap.start)}
+                {gap.length} day{gap.length === 1 ? '' : 's'} of silence since {formatIsoDate(gap.start)}
               </span>
             </>
           )}

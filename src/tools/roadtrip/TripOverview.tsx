@@ -805,7 +805,7 @@ export default function TripOverview({
                 title={`${formatIsoDate(coverage.longestGap.start)} → ${formatIsoDate(coverage.longestGap.end)} — go there`}
                 className="p-0 border-0 bg-transparent font-mono text-2xs text-accent-ink underline underline-offset-2 decoration-accent/60 cursor-pointer"
               >
-                {coverage.longestGap.length} days of silence at most
+                {coverage.longestGap.length} day{coverage.longestGap.length === 1 ? '' : 's'} of silence at most
               </button>
             </>
           )}
@@ -1003,7 +1003,7 @@ export default function TripOverview({
           {coverage.longestGap && (
             <Figure
               value={coverage.longestGap.length}
-              label="days of silence at most"
+              label={`day${coverage.longestGap.length === 1 ? '' : 's'} of silence at most`}
               tone="accent"
               title={`${formatIsoDate(coverage.longestGap.start)} → ${formatIsoDate(coverage.longestGap.end)} — go there`}
               onClick={() => selectDate(coverage.longestGap!.start)}
