@@ -1435,8 +1435,15 @@ export default function StudioEditor({
         // a folder is part of what the user waited for.
         const startedAt = Date.now();
         setLiveExport({ id: variant.id, startedAt });
+        // The exporter reports once per decoded frame, and each report used
+        // to re-render this whole editor and notify every task subscriber —
+        // on the same thread that is decoding and encoding. Half a percent
+        // is finer than any bar draws.
+        let reported = -1;
         const onProgress = (p: { phase: string; ratio: number | null }) => {
           if (p.phase === 'encoding' && p.ratio != null) {
+            if (p.ratio < 1 && p.ratio - reported < 0.005) return;
+            reported = p.ratio;
             setExportRatio(p.ratio);
             exportTask.update({ progress: (i + p.ratio) / variants.length });
           }
