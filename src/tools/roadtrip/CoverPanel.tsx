@@ -78,10 +78,20 @@ export default function CoverPanel({ trip, value, onChange }: CoverPanelProps) {
     };
   }, [trip.posts]);
 
+  /**
+   * The pictures the previews draw, resolved to the WIDEST layout and never to
+   * the selected one. Asking for `COVER_TILES[layout]` made the answer depend
+   * on the question: with Cover picked, one tile came back and the Mosaic
+   * preview beside it lost its two side pictures — so the layout you were
+   * being asked to compare drew as an emptier thing than it is. Every preview
+   * reads the same three tiles and takes what it needs; the first one is the
+   * same either way (pins lead, then the busiest days), so Cover still shows
+   * exactly the picture it would use.
+   */
   const preview = useMemo(() => {
     const doc = { ...trip, cover: value };
-    return coverTiles(doc, tripCoverage(doc), (id) => urls.has(id), COVER_TILES[layout] || 3);
-  }, [trip, value, urls, layout]);
+    return coverTiles(doc, tripCoverage(doc), (id) => urls.has(id), COVER_TILES.mosaic);
+  }, [trip, value, urls]);
 
   /** Every piece that has a picture, in the order the trip was lived. */
   const choices = useMemo(
