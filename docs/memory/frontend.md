@@ -312,6 +312,8 @@ The rule is **the larger of `window.innerHeight` and `visualViewport.height`, an
 
 **Decision, and it reverses the first half of this entry.** A view zoom over a MEDIA PREVIEW is out, in both editor stages, on the maintainer's call: the pill was wanted for Road Trip's day heatmap and its stage ruler, and over a preview it fought the gestures the picture itself answers — a trackpad pinch had to be taken away from the badge stage's own framing zoom to feed it. **A preview fits the room it is given, and that is all**: the Studio centres its canvas under `max-w-full max-h-full` (a canvas is a replaced element, so that is the whole arithmetic), Road Trip measures the largest aspect-fitting box in its wrapper. Do not put a `StageZoomControl` over a picture again; looking closer at ONE picture is the lightbox's job (entry below).
 
+**The exception, named rather than left to be re-derived (2026-09-22): a surface whose ONLY gesture is looking.** The look gallery's scene (`LookScene.tsx`) carries `usePictureZoom` and the ± pill over the photograph, and that does not reopen the decision above: what the pill cost on the two editor stages was the picture's own FRAMING gestures, and a scene has none — it is an inspection surface, like the lightbox and the develop viewport, which both drive it already. The test for the next one is that question, never the surface's size: *does this picture answer a gesture of its own?* If it does, the pill takes it away. The scene's ceiling is `usePictureZoom`'s new `ceiling` option at the lightbox's 8×, not a develop's 4000 %: what is on screen there is a 720p raster (`SCENE_PIXELS`), and magnifying a preview pixel says nothing about a look. It keeps the develop sheet's wipe grammar too — at the fit a press anywhere places the divider, zoomed only the `[data-wipe-handle]` strip does — through the same `claim`/`onTakeover` pair, because a second grammar for the same two gestures is how they stop being learnable.
+
 **The primitive stays, for the zones it was really for**: `shared/ui/stage-zoom.ts` + `use-stage-zoom.ts` + `StageZoomControl.tsx`, consumed by the trip overview's day grid and stage ruler (`roadtrip.md`), with the pill also driving the lightbox. The scale is applied as **layout size** — a zone multiplies its own unit — never a CSS `transform`: a transformed element still measures unscaled, so the scroll box would not know it had anything to scroll. Panning is then native scrolling, and every pointer handler keeps working untouched, because the zones map pointers through `getBoundingClientRect()`.
 
 **Range: 25% to 1600%**, a quarter of the fit up to sixteen times it, in ×1.25 steps that land exactly on 100% when they cross it. The zone's own floor is what really stops a zoom-out (the ruler will not draw a day under 6px, the grid a cell under 4).
@@ -345,6 +347,30 @@ The rule is **the larger of `window.innerHeight` and `visualViewport.height`, an
 - **Bind native listeners from the REF callback, never from an effect beside it** (2026-09-16, and it cost an hour of "the element is right, the listeners are there, nothing answers"). A hook that attached in a `ref` callback and detached in a `useEffect` cleanup works in production and is DEAD in dev: StrictMode runs the simulated remount, the cleanup pulls every listener off the node, and React never calls the ref again because the node did not change. A ref callback is called with `null` on the real unmount, so attach and detach both belong there and the pairing cannot come apart.
 
 **What it costs, and it is the right trade.** `useStageZoom`'s two-finger pinch and native panning are mutually exclusive: once the browser owns a gesture it cancels the pointers, so on a zone that lets it pan the pinch is best-effort and `StageZoomControl`'s +/− is the way in that always answers — which is now the case on both zones that zoom. No CI gate can see any of this — `touch-action` is a string in a class list and the failure is a gesture that does nothing — so check it with real touch events, not with a mouse.
+
+## A modal that LISTS things is sized by the screen, never by a rem cap (2026-09-22)
+
+**Reported**: on the maintainer's desktop the "Choose a look" modal showed
+*"barely 2 rows of looks"*. The cause was a `h-[min(92dvh,54rem)]` card: past a
+864px screen the modal stopped growing while the header, the scene, the "tiles
+on…" band and the footer kept their heights, so every pixel a taller screen
+brought went to the backdrop. **Measured in Chromium with the grid's own
+scroller**: at a 1300px window the cap left 238px of grid (one whole row of
+looks) against 642px (four) once the card reads
+`calc(var(--app-h,100dvh) - 2rem)` — the measured screen less the backdrop's
+own gutter (`app-height.ts`, and never `dvh` for the same reason as everything
+else here). At 900px the same change is worth 40px, which is the honest size of
+it there.
+
+**A rem cap on a modal's height is a design intention about LINE LENGTH, and a
+grid has none** — it is the width that must stay capped (`max-w-[76rem]` is
+untouched). Two rules came with it: a band above a scroller takes a SHARE of
+the screen rather than a fixed height, so a short laptop is not starved to keep
+a tall one comfortable (the scene is
+`clamp(13rem, calc(var(--app-h) * 0.28), 21rem)`, where it was a flat 21rem);
+and a row that only explains costs a third of a row of looks, which is why the
+filter field went back onto the "tiles on…" row it had been split off for a
+phone — that width has its own branch now.
 
 ## A phone gets a SHEET or a DRAWER, and a picture being judged gets the drawer (2026-09-16)
 

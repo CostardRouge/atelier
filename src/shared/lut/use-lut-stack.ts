@@ -16,7 +16,13 @@ import { textureOf, type FilmStockId } from '../film/stocks';
 import type { CubeLut } from '../lib/cube-parser';
 import { CUBE_ACCEPT, pickFile } from '../sources/file-sources';
 import { isPackLayer, writePackRef, PACK_SOURCE, type PackRef } from './lut-pack';
-import { composeLutStack, identityCube, reorderLayer, type LutLayer } from './lut-stack';
+import {
+  MAX_LAYER_INTENSITY,
+  composeLutStack,
+  identityCube,
+  reorderLayer,
+  type LutLayer,
+} from './lut-stack';
 import { missingLookReason, packLookName, resolvePackLattice } from './pack-vault';
 import { loadBuiltinLut, restoreLayers } from './restore-grade';
 import { uploadLookIntoVault } from './upload-pack';
@@ -84,7 +90,12 @@ export interface LutStack {
   /** True while a built-in is being fetched. */
   busy: boolean;
   error: string | null;
-  addBuiltin: (builtinId: string) => Promise<void>;
+  /**
+   * A built-in look as a new layer. `intensity` is how strongly it lands —
+   * the gallery's scene passes what the author judged it at, everything else
+   * takes the authored 1.
+   */
+  addBuiltin: (builtinId: string, intensity?: number) => Promise<void>;
   /**
    * Upload a `.cube` from disk. It lands in the VAULT as a look of the
    * personal pack and the layer stores a reference — an upload has not
@@ -92,13 +103,13 @@ export interface LutStack {
    */
   addCustom: () => Promise<void>;
   /** A film stock as a new layer at the end of the stack — generated, nothing to fetch. */
-  addFilm: (stockId: FilmStockId) => void;
+  addFilm: (stockId: FilmStockId, intensity?: number) => void;
   /**
    * A purchased look from the vault (`pack-vault.ts`). The layer stores the
    * REFERENCE, never the lattice, and is added even when this device does not
    * hold the bytes — it then says so rather than grading.
    */
-  addPackLook: (ref: PackRef, name?: string) => Promise<void>;
+  addPackLook: (ref: PackRef, name?: string, intensity?: number) => Promise<void>;
   /** Re-dial a film layer: its cube is regenerated (cached by settings), its name says where it stands. */
   setFilm: (id: string, settings: FilmSettings) => void;
   remove: (id: string) => void;
@@ -149,6 +160,17 @@ export interface LutStack {
   ) => void;
   /** The persistable shape of the current stack. */
   toSaved: () => SavedLutLayer[];
+}
+
+/**
+ * A strength a caller asked for, held inside what a layer may carry. Every
+ * `add*` takes one, and the number comes from a slider a host owns — which is
+ * exactly the kind of number that reaches a document, so it is clamped where
+ * the layer is made rather than trusted per caller.
+ */
+function layerIntensity(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(MAX_LAYER_INTENSITY, Math.max(0, value));
 }
 
 function uid(): string {
@@ -225,7 +247,7 @@ export function useLutStack(): LutStack {
     setDevelopState(next ?? DEFAULT_DEVELOP);
   }, []);
 
-  const addBuiltin = useCallback(async (builtinId: string) => {
+  const addBuiltin = useCallback(async (builtinId: string, intensity = 1) => {
     setError(null);
     setBusy(true);
     try {
@@ -237,7 +259,7 @@ export function useLutStack(): LutStack {
           source: `builtin:${builtinId}`,
           name,
           lut,
-          intensity: 1,
+          intensity: layerIntensity(intensity),
           enabled: true,
         },
       ]);
@@ -276,11 +298,11 @@ export function useLutStack(): LutStack {
     }
   }, []);
 
-  const addFilm = useCallback((stockId: FilmStockId) => {
+  const addFilm = useCallback((stockId: FilmStockId, intensity = 1) => {
     setError(null);
     const { layer, text } = newFilmLayer(uid(), stockId);
     setCustomText((prev) => ({ ...prev, [layer.id]: text }));
-    setLayers((prev) => [...prev, layer]);
+    setLayers((prev) => [...prev, { ...layer, intensity: layerIntensity(intensity) }]);
     // A stock brings its own grain and halation — half of what a stock IS, and
     // the half the cube cannot carry. Only where the grade carries none yet:
     // a texture the author already dialled is theirs, and a second stock must
@@ -288,7 +310,7 @@ export function useLutStack(): LutStack {
     setTexture((prev) => prev ?? textureOf(stockId));
   }, []);
 
-  const addPackLook = useCallback(async (ref: PackRef, name?: string) => {
+  const addPackLook = useCallback(async (ref: PackRef, name?: string, intensity = 1) => {
     setError(null);
     setBusy(true);
     try {
@@ -304,7 +326,7 @@ export function useLutStack(): LutStack {
           source: PACK_SOURCE,
           name: label,
           lut: lut ?? identityCube(),
-          intensity: 1,
+          intensity: layerIntensity(intensity),
           enabled: true,
           ...(lut ? {} : { missing: missingLookReason(ref) }),
         },

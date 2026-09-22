@@ -151,8 +151,12 @@ export default function LutPicker({
           previewImage={previewImage}
           previewLabel={previewLabel}
           previewIsLog={previewIsLog}
-          onPick={(id) => {
+          intensity={intensity}
+          onPick={(id, strength) => {
             onSelect(id);
+            // The gallery's slider IS this one: the author judged the look at
+            // that strength, so it is the tool's from the moment they pick.
+            onIntensityChange(strength);
             setGallery(false);
           }}
           onClose={() => setGallery(false)}
