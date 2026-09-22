@@ -4,6 +4,7 @@ import type { CubeLut } from '../../shared/lib/cube-parser';
 import type { OverlayElement } from '../../shared/overlay/overlay-types';
 import { classifyPart } from '../../shared/library/assets';
 import { loadClipMeta } from '../../shared/media/video-metadata';
+import { downloadBlob } from '../../shared/media/save';
 import { contentSlideElements, deckSlides, type DeckSlide } from '../../shared/roadtrip/deck';
 import { frameSize, loadCollageSources } from '../../shared/roadtrip/badge-render';
 import { DECK_LONG_EDGE, renderDeck } from '../../shared/roadtrip/deck-export';
@@ -114,15 +115,6 @@ export interface PostExports {
   exportPiece: (imagesOnly?: boolean) => Promise<void>;
   exportDeck: () => Promise<void>;
   exportHookClip: () => Promise<void>;
-}
-
-function download(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 /**
@@ -342,7 +334,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
               },
             });
       const name = hookVideoName(trip.name, post.title.trim() || `day-${post.date}`, variant);
-      download(blob, name);
+      downloadBlob(blob, name);
       // A clip that went out without the ticks it was composed with says so
       // with the delivery, rather than being discovered on a phone later.
       setNote(audioSkipped ? `${name} downloaded — ${audioSkipped}` : `${name} downloaded`);

@@ -507,6 +507,13 @@ export default function PostEditor({
   );
 
   const cta = useMemo(() => ctaLayout(trip.cta, aspect), [trip.cta, aspect]);
+  // The closing card's code, memoised: it is a paint dependency of the
+  // stage, and a fresh object per render repainted the card on every
+  // unrelated re-render — sixty a second while the deck played.
+  const ctaQr = useMemo(
+    () => (isCta && cta.qr ? { ...cta.qr, dark: trip.cta.ink, light: trip.cta.background } : null),
+    [isCta, cta.qr, trip.cta.ink, trip.cta.background],
+  );
 
   const hookElements = useMemo(
     () =>
@@ -1454,11 +1461,7 @@ export default function PostEditor({
             hook={isHook ? hook : null}
             elementsAt={isHook ? hookElementsAt : null}
             background={isCta ? trip.cta.background : undefined}
-            qr={
-              isCta && cta.qr
-                ? { ...cta.qr, dark: trip.cta.ink, light: trip.cta.background }
-                : null
-            }
+            qr={ctaQr}
             lut={lut}
             film={isCta ? null : filmFor(slide)}
             selectedId={selectedId}

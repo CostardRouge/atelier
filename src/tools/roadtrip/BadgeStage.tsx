@@ -747,12 +747,22 @@ export default function BadgeStage({
   }, [aspect]);
 
   // Paint. Runs on every change of anything drawn, including after a decode.
+  // Each paint takes a number; a paint the next one overtook while it waited
+  // for the fonts draws nothing and captures nothing (`live`, and the check
+  // below), so the thumbnail and the hit boxes are always the latest frame's.
+  const paintSeq = useRef(0);
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const seq = ++paintSeq.current;
     const { w, h } = frameSize(aspect, longEdge);
-    canvas.width = w;
-    canvas.height = h;
+    // Only when it changed: assigning a canvas's size clears it and
+    // reallocates its backing store — 1600 px on the long edge, sixty
+    // times a second while the deck played — even to the same value.
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
     const grader = graderFor(sourceRef.current);
     if (grader && gradedSeqRef.current !== frameSeq) {
       grader.invalidate();
@@ -781,6 +791,7 @@ export default function BadgeStage({
       cellRectsRef.current = [];
     }
     const opts: RenderBadgeOptions = {
+      live: () => seq === paintSeq.current,
       source: sourceRef.current,
       elements,
       theme,
@@ -797,6 +808,7 @@ export default function BadgeStage({
       ghostId: selectedId,
     };
     void renderBadge(canvas, opts).then(() => {
+      if (seq !== paintSeq.current) return;
       // The thumbnail is taken from the paint alone — the outline lives on
       // the other canvas, so the order here is not what keeps it out.
       onRenderedRef.current?.(canvas);

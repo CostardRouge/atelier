@@ -251,6 +251,12 @@ export { drawQr, type QrDraw };
 
 export interface RenderBadgeOptions {
   source: BadgeSource | null;
+  /**
+   * Asked after the fonts are waited for: a paint that a newer one overtook
+   * while it waited returns without drawing, or its complete frame lands OVER
+   * the newer one and the stage shows a stale picture until the next paint.
+   */
+  live?: () => boolean;
   elements: OverlayElement[];
   theme: StyleTheme | null;
   /**
@@ -517,6 +523,7 @@ export async function renderBadge(
   // the whole paint in one synchronous block also makes two overlapping
   // renders idempotent: each draws a complete, self-consistent frame.
   await ensureOverlayFonts(opts.elements, opts.theme);
+  if (opts.live && !opts.live()) return;
   const { width: w, height: h } = canvas;
 
   ctx.clearRect(0, 0, w, h);

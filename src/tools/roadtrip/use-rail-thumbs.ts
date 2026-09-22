@@ -187,6 +187,11 @@ export default function useRailThumbs({
             // Only the hook's cell reads them; signing every cell with them
             // would redraw a whole carousel each time one picture lands.
             slide.kind === 'hook' ? picturesId(pictures) : 0,
+            // The opener's OWN settings and the trip's car: a folded hook
+            // serialises to four scalars (its paint is a closure), so an
+            // Itinerary stop moved or a Virée colour changed left the
+            // signature — and the thumbnail — as they were.
+            slide.kind === 'hook' ? [post.badge.hook, trip.car] : 0,
           ]),
         };
       }),
