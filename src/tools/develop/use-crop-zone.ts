@@ -16,6 +16,7 @@ import {
 } from '../../shared/develop/crop-rect';
 import { isDefaultFraming, sameFraming, wrapDegrees, type Framing } from '../../shared/media/framing';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
+import { CROP_VIEW_FIT, clampCropView, type CropView, type StageBox } from './crop-view';
 
 export type { CropChip } from '../../shared/develop/crop-aspect';
 
@@ -58,21 +59,15 @@ export interface CropZoneApi {
   intent: MutableRefObject<CropZone | null>;
   /**
    * How closely the STAGE looks at the picture — inspection only, never the
-   * zone: a pinch or the wheel on the crop stage moves this, and the crop is
-   * exactly what it was. `x`/`y` pan the view in CSS px.
+   * zone: a pinch, the wheel, the pill or `Z` move this, and the crop is
+   * exactly what it was. Every write is clamped to the stage the stage
+   * reports (`crop-view.ts`), so what is stored is what is drawn.
    */
   view: CropView;
   setView: (view: CropView | ((v: CropView) => CropView)) => void;
+  /** The stage's measured size, which the view is held inside; null while unmeasured. */
+  setStageBox: (box: StageBox | null) => void;
 }
-
-export interface CropView {
-  zoom: number;
-  x: number;
-  y: number;
-}
-
-export const CROP_VIEW_FIT: CropView = { zoom: 1, x: 0, y: 0 };
-export const CROP_VIEW_MAX = 8;
 
 /** How long the dense grid stays after the angle last moved. */
 const ROTATING_MS = 700;
@@ -121,7 +116,23 @@ export function useCropZone({
   const written = useRef<{ aspect: string; framing: Framing } | null>(null);
   const [rotating, setRotating] = useState(false);
   const [levelling, setLevelling] = useState(false);
-  const [view, setView] = useState<CropView>(CROP_VIEW_FIT);
+  const [rawView, setRawView] = useState<CropView>(CROP_VIEW_FIT);
+  const [stageBox, setStageBox] = useState<StageBox | null>(null);
+  // Held inside the stage on every write AND whenever the stage, the picture
+  // or its quarter turn changes under a zoomed view.
+  const view = useMemo(
+    () => clampCropView(rawView, stageBox, src, framing.rotation),
+    [rawView, stageBox, src, framing.rotation],
+  );
+  const bounds = useRef({ stageBox, src, rotation: framing.rotation });
+  bounds.current = { stageBox, src, rotation: framing.rotation };
+  const setView = useCallback((next: CropView | ((v: CropView) => CropView)) => {
+    setRawView((v) => {
+      const b = bounds.current;
+      const held = clampCropView(v, b.stageBox, b.src, b.rotation);
+      return clampCropView(typeof next === 'function' ? next(held) : next, b.stageBox, b.src, b.rotation);
+    });
+  }, []);
   const rotatingTimer = useRef(0);
   useEffect(() => () => window.clearTimeout(rotatingTimer.current), []);
 
@@ -317,5 +328,6 @@ export function useCropZone({
     intent,
     view,
     setView,
+    setStageBox,
   };
 }

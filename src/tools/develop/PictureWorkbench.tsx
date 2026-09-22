@@ -118,7 +118,8 @@ import type { BorderApplyVerb } from './BorderSection';
 import type { RollBorder } from '../../shared/develop/border-layout';
 import ExportPanel, { type ExportVerb } from './ExportPanel';
 import CropStage from './CropStage';
-import { CROP_VIEW_FIT, CROP_VIEW_MAX, useCropZone } from './use-crop-zone';
+import { useCropZone } from './use-crop-zone';
+import { CROP_VIEW_FIT, CROP_VIEW_MAX } from './crop-view';
 import type { RollExports } from './use-roll-export';
 
 /** How long the picture rests before its filmstrip cell is redrawn. */
@@ -1159,7 +1160,7 @@ export default function PictureWorkbench({
               FRAMING's own zoom, which is what the picture is cropped by. */}
           {source &&
             (cropping ? (
-              <StageZoomControl zoom={cropZoom} hint="look closer: pinch or the wheel — the crop stays" className="flex-none" />
+              <StageZoomControl zoom={cropZoom} hint="look closer: pinch, the wheel or Z — the crop stays" className="flex-none" />
             ) : (
               // How the picture is DRAWN hangs off the percentage, which was
               // already the "back to the fit" button (that rung is now the

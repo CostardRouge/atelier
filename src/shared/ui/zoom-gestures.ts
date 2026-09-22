@@ -121,6 +121,8 @@ export interface ZoomTarget {
   drag?(start: DragStart): 'pan' | DragHandler | null;
   /** A second finger turned the surface's own gesture into a pinch: let go. */
   onTakeover?(): void;
+  /** Two fingers are on the surface (true), or the last of them lifted (false). */
+  onPinch?(active: boolean): void;
   /** A gesture began — a press or a wheel notch (a button's easing stops). */
   onGesture?(): void;
   /** The machine started or ended dragging a pointer it was given. */
@@ -208,6 +210,7 @@ export class ZoomGestureMachine {
         this.endDrag(true);
         this.pinch = { spread: this.spread(), scale: this.target.scaleAt(this.centre()) };
         this.target.onTakeover?.();
+        this.target.onPinch?.(true);
         return;
       }
       if (this.touches.size > 2) return;
@@ -277,6 +280,7 @@ export class ZoomGestureMachine {
       this.touches.delete(p.id);
       if (this.pinch && this.touches.size < 2) {
         this.pinch = null;
+        this.target.onPinch?.(false);
         // One finger of the pinch lifted, the other still down: it takes the
         // pan over rather than being inert until lifted and put back. Zoomed
         // in, that second half is most of the gesture.

@@ -50,6 +50,7 @@ export function useZoomGestures({ ref, target, capture = false, active, wheel, s
         panBy: (dx, dy, at, by) => live.current.panBy(dx, dy, at, by),
         drag: (s) => live.current.drag?.(s) ?? null,
         onTakeover: () => live.current.onTakeover?.(),
+        onPinch: (on) => live.current.onPinch?.(on),
         onGesture: () => live.current.onGesture?.(),
         onDragging: (on) => live.current.onDragging?.(on),
         capture: (id) => {
