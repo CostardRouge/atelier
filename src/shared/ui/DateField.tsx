@@ -76,8 +76,10 @@ export function DateField({
             }
           }}
           // Invisible, on top, the whole field: the click, the focus ring's
-          // target and the accessibility tree are the real input's.
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full"
+          // target and the accessibility tree are the real input's. It is
+          // also what iOS measures before zooming the page on focus, so it
+          // wears 16px under 820px on its own — the dress keeps its size.
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer max-[820px]:text-base [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full"
         />
       </span>
       {trailing}
