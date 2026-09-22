@@ -335,10 +335,12 @@ export function panBy(
 
   const unit = Math.max(dstW, dstH);
   if (unit <= 0) return framing;
+  // `|| 0` only to spell −0 as 0: a framing at rest should read as the
+  // default it is, and a −0 in a document is a question nobody should get.
   return {
     ...framing,
-    x: clamp(t.offsetX + dx, -t.slackX, t.slackX) / unit,
-    y: clamp(t.offsetY + dy, -t.slackY, t.slackY) / unit,
+    x: clamp(t.offsetX + dx, -t.slackX, t.slackX) / unit || 0,
+    y: clamp(t.offsetY + dy, -t.slackY, t.slackY) / unit || 0,
   };
 }
 
@@ -358,6 +360,42 @@ export function reclampFraming(
   const unit = Math.max(dstW, dstH);
   if (unit <= 0) return framing;
   return { ...framing, x: t.offsetX / unit, y: t.offsetY / unit };
+}
+
+/**
+ * The framing at `scale` with the picture under `anchor` — a point of the
+ * FRAME, in its pixels from the top-left corner — kept still: the wheel's
+ * pointer, a pinch's live centre. Zooming the badge stage used to touch
+ * `scale` alone, so every notch grew the picture about the frame's centre and
+ * the thing pointed at slid away; this is the *Placing* half of the suite's
+ * one zoom grammar (`shared/ui/zoom-gestures.ts`), where the *Looking* half is
+ * `pan-zoom.ts`'s `zoomAbout`.
+ *
+ * Built on the two functions this module already trusts rather than on a
+ * third derivation: the source point under the anchor (`unframePoint`), where
+ * it would land once rescaled with the pan untouched (`framePoint`), and the
+ * frame-axis delta that puts it back, through `panBy` — which converts into
+ * the axes the fit stores its pan in and clamps, so the result never opens a
+ * gap under `cover` and never lets the picture leave the frame under
+ * `contain`. Where the clamp binds (a picture that barely covers) the point
+ * cannot be held and the pan stops at the edge, which is the same rule the
+ * viewer has below its fit point.
+ */
+export function zoomFramingAbout(
+  framing: Framing,
+  scale: number,
+  anchor: { x: number; y: number },
+  srcW: number,
+  srcH: number,
+  dstW: number,
+  dstH: number,
+): Framing {
+  const next = scaleFramingBy(scale, 1);
+  if (srcW <= 0 || srcH <= 0 || dstW <= 0 || dstH <= 0) return { ...framing, scale: next };
+  const [sx, sy] = unframePoint(anchor.x, anchor.y, srcW, srcH, dstW, dstH, framing);
+  const rescaled = { ...framing, scale: next };
+  const [px, py] = framePoint(sx, sy, srcW, srcH, dstW, dstH, rescaled);
+  return panBy(rescaled, srcW, srcH, dstW, dstH, anchor.x - px, anchor.y - py);
 }
 
 /** A 2D context, structurally — so this module needs no canvas to be tested. */

@@ -16,6 +16,8 @@ export interface UseZoomGesturesOptions extends ZoomGestureOptions {
   capture?: boolean;
   /** Re-bind when this changes — for an element that is mounted conditionally. */
   active?: unknown;
+  /** False binds nothing at all: a stage with nothing to zoom leaves the wheel to the page. */
+  enabled?: boolean;
 }
 
 /**
@@ -34,13 +36,21 @@ export interface UseZoomGesturesOptions extends ZoomGestureOptions {
  * would otherwise magnify the app and cancel the very pointers the machine is
  * reading, and it must never be taken from the document.
  */
-export function useZoomGestures({ ref, target, capture = false, active, wheel, slop }: UseZoomGesturesOptions): void {
+export function useZoomGestures({
+  ref,
+  target,
+  capture = false,
+  active,
+  enabled = true,
+  wheel,
+  slop,
+}: UseZoomGesturesOptions): void {
   const live = useRef(target);
   live.current = target;
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el || !enabled) return;
     // The target the machine holds forwards to whatever the surface last
     // rendered, so the machine itself lives as long as the element.
     const machine = new ZoomGestureMachine(
@@ -108,5 +118,5 @@ export function useZoomGestures({ ref, target, capture = false, active, wheel, s
       el.removeEventListener('pointerup', onUp, capture);
       el.removeEventListener('pointercancel', onCancel, capture);
     };
-  }, [ref, capture, active, wheel, slop]);
+  }, [ref, capture, active, enabled, wheel, slop]);
 }

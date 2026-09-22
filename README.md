@@ -729,7 +729,8 @@ server's own page.
 
 **The picture is framed where you want it.** A 3:2 photograph in a 9:16 frame
 loses its sides, and the subject is rarely in the middle: drag the picture on
-the stage to move it, the wheel (or a trackpad pinch) to zoom, and a slider or
+the stage to move it, the wheel, a trackpad pinch or two fingers to zoom it
+about the point you aim at, and a slider or
 a quarter-turn button to rotate — straightening a horizon included — and two
 buttons to **flip** it horizontally or vertically, which mirror what the frame
 shows whatever the rotation. The badge keeps first claim on a press, so grab
@@ -744,7 +745,8 @@ the same transform. Each picture of a carousel is framed on its own.
 offers grids, stacks, bentos, insets and scattered prints; the slide's own
 picture is always the first cell, and the others are filled from the Library,
 which follows whichever cell is selected. Click a cell on the stage to select
-it, drag to reframe the picture inside it, use the wheel to zoom it, and hold
+it, drag to reframe the picture inside it, the wheel or a pinch to zoom it about
+the point under your hand, and hold
 (or Alt-drag) onto another cell to swap the two. A picture can also be
 **dragged straight onto a cell** — grab any row of the Library, or a tile of
 the Winnow tab (it is fetched as it lands). As soon as a drag starts the stage
