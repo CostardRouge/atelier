@@ -16,6 +16,8 @@ interface LegsSheetProps {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onChange: (stages: TripStage[]) => void;
+  /** Adjust this leg's dates on the calendar (the sheet closes behind it). */
+  onAdjust?: (id: string) => void;
   /** Connected Winnows whose timeline can complete the stages. */
   timelineSources?: readonly string[];
   onCompleteFrom?: (sourceId: string) => void;
@@ -42,6 +44,7 @@ export default function LegsSheet({
   selectedId,
   onSelect,
   onChange,
+  onAdjust,
   timelineSources = [],
   onCompleteFrom,
   deduceSources = [],
@@ -164,6 +167,7 @@ export default function LegsSheet({
                       onSelect(null);
                     }}
                     onClose={() => onSelect(null)}
+                    onAdjust={onAdjust ? () => onAdjust(stage.id) : undefined}
                   />
                 </div>
               )}

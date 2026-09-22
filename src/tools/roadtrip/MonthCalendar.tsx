@@ -50,14 +50,29 @@ interface MonthCalendarProps {
   /** The leg drawn open, its ribbon raised. */
   selectedLegId?: string | null;
   /**
+   * A leg being ADJUSTED on the calendar: only its ribbon is drawn, every day
+   * outside it fades, and its two ends carry a grip that is dragged over the
+   * cells — one cell, one day. The phone's replacement for the ruler's drag
+   * (`docs/roadtrip-overview-mobile.md` §8.3).
+   */
+  adjust?: AdjustLeg;
+  /**
    * Something drawn INSIDE the scroller after the blocks — a hint, a spacer
    * — so it scrolls away with them rather than eating the calendar's height.
    */
   tail?: ReactNode;
 }
 
+export interface AdjustLeg {
+  stage: TripStage;
+  /** An edge was moved to a day — by a grip, or by a tap on the day. */
+  onEdge: (edge: 'start' | 'end', date: IsoDate) => void;
+}
+
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'] as const;
 const RIBBON = 12;
+/** The grip on an adjusted leg's end: a finger's target, over the cell's foot. */
+const GRIP = 28;
 
 /**
  * The trip as a stack of calendar months, the phone's own calendar — one
@@ -80,6 +95,7 @@ export default function MonthCalendar({
   menuFor,
   onOpenLeg,
   selectedLegId = null,
+  adjust,
   tail,
 }: MonthCalendarProps) {
   const blocks = useMemo(() => monthBlocks(trip.startDate, trip.endDate), [trip.startDate, trip.endDate]);
@@ -99,11 +115,16 @@ export default function MonthCalendar({
   const legOf = useCallback(
     (date: IsoDate): { stage: TripStage; index: number } | null => {
       if (!isWithin(trip.startDate, trip.endDate, date)) return null;
+      if (adjust) {
+        // Only the leg being adjusted is drawn, at its draft dates.
+        if (!isWithin(adjust.stage.startDate, adjust.stage.endDate, date)) return null;
+        return { stage: adjust.stage, index: Math.max(0, trip.stages.findIndex((s) => s.id === adjust.stage.id)) };
+      }
       const stage = stageAt(trip, date);
       if (!stage) return null;
       return { stage, index: trip.stages.indexOf(stage) };
     },
-    [trip],
+    [trip, adjust],
   );
 
   // The block on screen, read from the scroll — what the map frames.
@@ -147,6 +168,18 @@ export default function MonthCalendar({
     if (r.top < box.top || r.bottom > box.bottom) jumpTo(index);
   }, [selected, blocks, jumpTo, readVisible]);
 
+  // Entering the adjust mode brings the leg on screen: its grips are what
+  // the mode is for, and a leg picked from the sheet is usually months away
+  // from where the calendar was left.
+  const adjustId = adjust?.stage.id ?? null;
+  const adjustStart = adjust?.stage.startDate ?? null;
+  useEffect(() => {
+    if (!adjustId || !adjustStart) return;
+    const index = blocks.findIndex((b) => b.tripDays.includes(adjustStart));
+    if (index >= 0) jumpTo(index);
+    // Keyed on the leg's id alone — a drag that moves its start must not scroll.
+  }, [adjustId, blocks, jumpTo]);
+
   if (!blocks.length) return null;
 
   return (
@@ -166,7 +199,9 @@ export default function MonthCalendar({
           (boxRef as MutableRefObject<HTMLDivElement | null>).current = node;
         }}
         onScroll={readVisible}
-        className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain pb-4"
+        // `relative`, so a block's `offsetTop` is measured from THIS box and a
+        // jump lands on the block's own top rather than that far past it.
+        className="relative flex-1 min-h-0 overflow-y-auto overscroll-y-contain pb-4"
       >
         {blocks.map((block, i) => (
           <MonthBlockView
@@ -185,10 +220,11 @@ export default function MonthCalendar({
             width={blockWidth}
             legOf={legOf}
             selectedLegId={selectedLegId}
+            adjust={adjust}
             stageOf={stageOf}
             onSelect={onSelect}
             onOpenLeg={onOpenLeg}
-            onHover={setHovered}
+            onHover={adjust ? () => undefined : setHovered}
             onMenu={(date, cellData, x, y) => {
               const items = menuFor?.(date) ?? [];
               if (!items.length) return false;
@@ -219,6 +255,7 @@ interface MonthBlockViewProps {
   width: number;
   legOf: (date: IsoDate) => { stage: TripStage; index: number } | null;
   selectedLegId: string | null;
+  adjust?: AdjustLeg;
   stageOf?: (date: IsoDate) => DayStage | null;
   onSelect: (date: IsoDate) => void;
   onOpenLeg?: (id: string) => void;
@@ -241,6 +278,7 @@ const MonthBlockView = forwardRef<HTMLDivElement, MonthBlockViewProps>(function 
     width,
     legOf,
     selectedLegId,
+    adjust,
     stageOf,
     onSelect,
     onOpenLeg,
@@ -249,6 +287,8 @@ const MonthBlockView = forwardRef<HTMLDivElement, MonthBlockViewProps>(function 
   },
   ref,
 ) {
+  const inAdjusted = (date: IsoDate) =>
+    !adjust || isWithin(adjust.stage.startDate, adjust.stage.endDate, date);
   const told = block.tripDays.filter((d) => (byDate.get(d)?.posts.length ?? 0) > 0).length;
   const inTrip = (date: IsoDate) => isWithin(trip.startDate, trip.endDate, date);
 
@@ -278,8 +318,15 @@ const MonthBlockView = forwardRef<HTMLDivElement, MonthBlockViewProps>(function 
           (date) => legOf(date),
           (a, b) => a.stage.id === b.stage.id,
         );
+        const grips: { edge: 'start' | 'end'; col: number }[] = [];
+        if (adjust) {
+          week.cells.forEach((date, col) => {
+            if (date === adjust.stage.startDate) grips.push({ edge: 'start', col });
+            if (date === adjust.stage.endDate) grips.push({ edge: 'end', col });
+          });
+        }
         return (
-          <div key={w} className="mb-1.5">
+          <div key={w} className="relative mb-1.5">
             <div className="flex" style={{ gap: MONTH_GAP }} role="row">
               {week.cells.map((date, col) => {
                 if (!date) {
@@ -333,8 +380,9 @@ const MonthBlockView = forwardRef<HTMLDivElement, MonthBlockViewProps>(function 
                       width: cell,
                       height: cellH,
                       background: LEVELS[level],
-                      outline: isSelected ? '2px solid var(--color-ink)' : undefined,
-                      outlineOffset: isSelected ? 1 : undefined,
+                      opacity: inAdjusted(date) ? undefined : 0.34,
+                      outline: isSelected && !adjust ? '2px solid var(--color-ink)' : undefined,
+                      outlineOffset: isSelected && !adjust ? 1 : undefined,
                       boxShadow: isToday && !isSelected ? 'inset 0 0 0 2px var(--color-muted)' : undefined,
                     }}
                   >
@@ -381,6 +429,39 @@ const MonthBlockView = forwardRef<HTMLDivElement, MonthBlockViewProps>(function 
                 );
               })}
             </div>
+
+            {/* The adjusted leg's ends: a grip each, dragged over the cells.
+                It is the one surface here that WRITES sideways, so it alone
+                takes the pointer (`touch-none`); the day under the finger is
+                read from the cell it is over, so the drag crosses weeks. */}
+            {grips.map((g) => (
+              <button
+                key={g.edge}
+                type="button"
+                aria-label={`${g.edge === 'start' ? 'Arrival' : 'Departure'}, ${formatIsoDate(g.edge === 'start' ? adjust!.stage.startDate : adjust!.stage.endDate)} — drag over the days, or use the steppers below`}
+                onPointerDown={(e) => {
+                  if (!e.isPrimary) return;
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                  if (e.pointerType === 'touch') navigator.vibrate?.(8);
+                }}
+                onPointerMove={(e) => {
+                  if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+                  const under = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('[data-date]');
+                  const date = under?.dataset.date;
+                  if (date) adjust!.onEdge(g.edge, date);
+                }}
+                onPointerUp={(e) => {
+                  if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+                }}
+                className="absolute z-20 p-0 box-border rounded-full border-[3px] border-ink bg-paper shadow-[0_2px_6px_rgba(43,33,18,0.35)] cursor-ew-resize touch-none focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                style={{
+                  width: GRIP,
+                  height: GRIP,
+                  left: g.col * step + cell / 2 - GRIP / 2,
+                  top: cellH - GRIP / 2 + 4,
+                }}
+              />
+            ))}
           </div>
         );
       })}

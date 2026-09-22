@@ -43,6 +43,21 @@ export function resizeStage(
 }
 
 /**
+ * Which edge of a stage a pointed-at day is nearer to — what a tap moves
+ * while a leg is being adjusted on the calendar. Inside the leg the nearer
+ * edge moves; outside it the edge on that side does, whatever the distance,
+ * because pointing past the end can only mean "end there". A tie goes to the
+ * end: extending a stay is the commoner edit.
+ */
+export function nearerEdge(stage: Pick<TripStage, 'startDate' | 'endDate'>, date: IsoDate): 'start' | 'end' {
+  if (date < stage.startDate) return 'start';
+  if (date > stage.endDate) return 'end';
+  const toStart = daysBetween(stage.startDate, date) ?? 0;
+  const toEnd = daysBetween(date, stage.endDate) ?? 0;
+  return toStart < toEnd ? 'start' : 'end';
+}
+
+/**
  * Slide a whole stage by `days`, keeping its length. The slide is reduced so
  * the leg stays inside the trip — a leg already against the trip's end does
  * not move at all.

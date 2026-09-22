@@ -58,6 +58,7 @@ export function StageCard({
   onChange,
   onDelete,
   onClose,
+  onAdjust,
 }: {
   trip: TripDoc;
   stage: TripStage;
@@ -65,6 +66,12 @@ export function StageCard({
   onChange: (stage: TripStage) => void;
   onDelete: () => void;
   onClose: () => void;
+  /**
+   * Adjust the dates on the calendar itself — the phone's replacement for
+   * the ruler's drag, offered by the legs sheet and never by the wide
+   * screen, which has the ruler.
+   */
+  onAdjust?: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
   const problem = stageProblem(trip, stage);
@@ -151,6 +158,11 @@ export function StageCard({
                 .filter(Boolean)
                 .join(' · '))}
       </p>
+      {onAdjust && (
+        <Button variant="primary" onClick={onAdjust} icon={Icons.swap} className="self-stretch justify-center">
+          Adjust on the calendar
+        </Button>
+      )}
       <PlacesEditor stage={stage} onChange={(places) => onChange({ ...stage, places })} />
     </div>
   );

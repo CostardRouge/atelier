@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { deleteThumbs } from '../../shared/roadtrip/trip-store';
 import { applyTripDetails } from '../../shared/roadtrip/trip-edit';
-import { dayStageActions } from '../../shared/roadtrip/stage-edit';
+import { dayStageActions, nearerEdge, resizeStage } from '../../shared/roadtrip/stage-edit';
 import { rulerBars, stageTint } from '../../shared/roadtrip/stage-ruler';
 import {
+  addDays,
   daysBetween,
   enumerateDays,
   formatIsoDate,
@@ -48,8 +49,9 @@ import Button from '../../shared/ui/Button';
 import ShortDayStrip from './ShortDayStrip';
 import { defaultLoupe, loupeContaining, moveLoupe, type Loupe } from '../../shared/roadtrip/loupe';
 import LoupeBrush from './LoupeBrush';
-import MonthCalendar from './MonthCalendar';
+import MonthCalendar, { type AdjustLeg } from './MonthCalendar';
 import BottomSheet from '../../shared/ui/BottomSheet';
+import IconButton from '../../shared/ui/IconButton';
 import DayStrip from './DayStrip';
 import useDayThumbs from './use-day-thumbs';
 import LegsSheet from './LegsSheet';
@@ -541,6 +543,56 @@ export default function TripOverview({
   // The phone's legs sheet — the ruler's job, as a list.
   const [legsOpen, setLegsOpen] = useState(false);
 
+  // A leg being adjusted ON the calendar: a draft of its dates, written to
+  // the trip on Done and dropped on Cancel — the garage's rule for a modal
+  // edit. While it lasts the calendar draws only this leg, a tap on a day
+  // moves the nearer edge there, and the two grips move an edge a cell at a
+  // time (`docs/roadtrip-overview-mobile.md` §8.3).
+  const [adjusting, setAdjusting] = useState<{ id: string; draft: TripStage } | null>(null);
+  const startAdjust = useCallback(
+    (id: string) => {
+      const stage = trip.stages.find((s) => s.id === id);
+      if (!stage) return;
+      setLegsOpen(false);
+      setDayOpen(false);
+      setStageId(id);
+      setAdjusting({ id, draft: stage });
+    },
+    [trip.stages],
+  );
+  const moveEdge = useCallback(
+    (edge: 'start' | 'end', date: IsoDate) =>
+      setAdjusting((a) => (a ? { ...a, draft: resizeStage(trip, a.draft, edge, date) } : a)),
+    [trip],
+  );
+  const finishAdjust = useCallback(
+    (keep: boolean) => {
+      // Read from the closure, never inside the updater: writing the trip
+      // from there is a setState on the tool while this component renders.
+      if (adjusting && keep) setStages(trip.stages.map((s) => (s.id === adjusting.id ? adjusting.draft : s)));
+      setAdjusting(null);
+    },
+    [adjusting, trip.stages, setStages],
+  );
+  useEffect(() => {
+    if (!adjusting) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') finishAdjust(false);
+      if (e.key === 'Enter' && !(e.target instanceof HTMLInputElement)) finishAdjust(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [adjusting, finishAdjust]);
+  const adjust = useMemo<AdjustLeg | undefined>(
+    () => (adjusting ? { stage: adjusting.draft, onEdge: moveEdge } : undefined),
+    [adjusting, moveEdge],
+  );
+  // The calendar draws the DRAFT where the trip holds the stage.
+  const shownTrip = useMemo(
+    () => (adjusting ? { ...trip, stages: trip.stages.map((s) => (s.id === adjusting.id ? adjusting.draft : s)) } : trip),
+    [trip, adjusting],
+  );
+
   // The overview's own cells on the shell's bottom bar, which the shell draws
   // on every compact tool screen anyway (`SectionRail`): the legs and the trip
   // are sheets, so the two verbs the wide screen keeps in its header and its
@@ -555,7 +607,7 @@ export default function TripOverview({
                 { id: 'legs', label: 'Stages' },
                 { id: 'trip', label: 'Trip' },
               ],
-              active: legsOpen ? 'legs' : editingDetails ? 'trip' : null,
+              active: adjusting ? null : legsOpen ? 'legs' : editingDetails ? 'trip' : null,
               label: 'Trip overview',
               onSelect: (id: string) => {
                 if (id === 'legs') setLegsOpen(true);
@@ -563,7 +615,7 @@ export default function TripOverview({
               },
             }
           : null,
-      [compact, legsOpen, editingDetails],
+      [compact, legsOpen, editingDetails, adjusting],
     ),
   );
   const saveDetails = useCallback(
@@ -683,8 +735,33 @@ export default function TripOverview({
           </span>
         </PageBar>
 
-        {/* The figures as one line: what a wide screen says in three numerals
-            beside the name. The silence keeps its verb — it goes there. */}
+        {adjusting ? (
+          /* The band of the mode, in place of the figures: which leg, its
+             draft span, and the two ways out. Nothing else is on screen
+             about anything else. */
+          <div className="flex items-center gap-2 mt-1.5 mb-1 px-2.5 py-1.5 rounded-control border border-accent/40 bg-accent-wash">
+            <span
+              className="flex-none w-2.5 h-2.5 rounded-full"
+              style={{ background: stageTint(trip.stages.findIndex((s) => s.id === adjusting.id)) }}
+              aria-hidden="true"
+            />
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-semibold leading-tight truncate">
+                {stageLabel(adjusting.draft) || 'Unnamed stage'}
+              </span>
+              <span className="block font-mono text-2xs text-accent-ink truncate">
+                {formatIsoDate(adjusting.draft.startDate)} → {formatIsoDate(adjusting.draft.endDate)} ·{' '}
+                {(daysBetween(adjusting.draft.startDate, adjusting.draft.endDate) ?? 0) + 1} d
+              </span>
+            </span>
+            <Button size="sm" onClick={() => finishAdjust(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" variant="primary" onClick={() => finishAdjust(true)}>
+              Done
+            </Button>
+          </div>
+        ) : (
         <p className="m-0 mt-1.5 mb-1 font-mono text-2xs text-muted truncate">
           {coverage.publishedPosts} published
           {drafted > 0 && ` · ${drafted} drafted`}
@@ -702,12 +779,14 @@ export default function TripOverview({
             </>
           )}
         </p>
+        )}
 
         <MonthCalendar
-          trip={trip}
+          trip={shownTrip}
           days={coverage.days}
           selected={selected}
-          onSelect={selectDate}
+          onSelect={adjusting ? (date) => moveEdge(nearerEdge(adjusting.draft, date), date) : selectDate}
+          adjust={adjust}
           stageOf={(date) => dayStages.get(date) ?? null}
           menuFor={menuFor}
           onOpenLeg={(id) => {
@@ -717,7 +796,33 @@ export default function TripOverview({
           selectedLegId={selectedStageId}
         />
 
-        {selected && (
+        {adjusting ? (
+          /* The keyboard twin of the grips, visible: nothing in this suite
+             is drag-only. One day per press, a week with Shift. */
+          <div className="flex-none flex gap-2 px-3 py-2 border-t border-line-strong bg-surface">
+            {(['start', 'end'] as const).map((edge) => {
+              const value = edge === 'start' ? adjusting.draft.startDate : adjusting.draft.endDate;
+              const step = (days: number) => {
+                const next = addDays(value, days);
+                if (next) moveEdge(edge, next);
+              };
+              return (
+                <div key={edge} className="flex-1 min-w-0 flex items-center gap-1">
+                  <span className="flex-none font-mono text-3xs tracking-[0.08em] uppercase text-muted">
+                    {edge === 'start' ? 'Arrived' : 'Left'}
+                  </span>
+                  <IconButton size="sm" label={`${edge === 'start' ? 'Arrival' : 'Departure'} a day earlier`} onClick={(e) => step(e.shiftKey ? -7 : -1)}>
+                    {Icons.back}
+                  </IconButton>
+                  <span className="flex-1 text-center font-mono text-2xs tabular-nums truncate">{formatIsoDate(value)}</span>
+                  <IconButton size="sm" label={`${edge === 'start' ? 'Arrival' : 'Departure'} a day later`} onClick={(e) => step(e.shiftKey ? 7 : 1)}>
+                    {Icons.forward}
+                  </IconButton>
+                </div>
+              );
+            })}
+          </div>
+        ) : selected && (
           <DayStrip
             date={selected}
             cell={selectedCell}
@@ -753,6 +858,7 @@ export default function TripOverview({
               selectedId={selectedStageId}
               onSelect={setStageId}
               onChange={setStages}
+              onAdjust={startAdjust}
               timelineSources={timelineSources}
               onCompleteFrom={onCompleteFrom}
               deduceSources={deduceSources}
