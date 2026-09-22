@@ -468,3 +468,20 @@ html[data-surface='darkroom'] {
     border-radius: 999px;
   }
 }
+
+/*
+  A field under 16px is zoomed into by iOS the moment it takes focus, and the
+  page never zooms back (`frontend.md`, «Touch sizing»). The rule used to be
+  written per field as `max-[820px]:text-base`, and every sheet that forgot
+  it — the Library's filter, a leg's name, a place, the deck's speed — zoomed
+  the phone. Once, here, for every text field on a coarse pointer at the
+  phone breakpoint; a field already at 16px or more is left as it is. Outside
+  any layer on purpose: an unlayered rule outranks the utilities.
+*/
+@media (max-width: 820px) and (pointer: coarse) {
+  input:not([type='range'], [type='checkbox'], [type='radio'], [type='file'], [type='color']),
+  select,
+  textarea {
+    font-size: max(1rem, 1em);
+  }
+}

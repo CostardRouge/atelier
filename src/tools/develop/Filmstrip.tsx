@@ -161,10 +161,14 @@ function Cell({
           </span>
         )}
       </button>
+      {/* Hover reveals it where a pointer can hover; a touch screen shows it
+          always, a size larger. It used to be `max-[820px]:hidden`, which
+          took the roll's only way to drop a picture off the phone — and on
+          a touch tablet above that width it was invisible yet tappable. */}
       <button
         type="button"
         onClick={onRemove}
-        className="absolute -top-1 -right-1 w-5 h-5 grid place-items-center rounded-full border border-line-strong bg-surface font-mono text-2xs leading-none text-muted cursor-pointer opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-danger max-[820px]:hidden"
+        className="absolute -top-1 -right-1 w-5 h-5 grid place-items-center rounded-full border border-line-strong bg-surface font-mono text-2xs leading-none text-muted cursor-pointer opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-danger pointer-coarse:opacity-100 pointer-coarse:w-7 pointer-coarse:h-7 pointer-coarse:text-sm"
         aria-label={`Take ${picture.ref.name} off the roll`}
         title="Take it off the roll — the file stays where it is"
       >
