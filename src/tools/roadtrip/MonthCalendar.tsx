@@ -57,10 +57,29 @@ interface MonthCalendarProps {
    */
   adjust?: AdjustLeg;
   /**
+   * The PICTURES view: a told day draws its own hook thumbnail in its cell
+   * instead of its rung. Absent, the ramp is drawn. Keyed by date; a told day
+   * with no entry (its hook not read yet, or never painted) keeps its rung —
+   * the honest fallback, never a blank tile.
+   */
+  pictures?: ReadonlyMap<IsoDate, DayPicture>;
+  /** The month on screen changed — what the pictures view reads its window from. */
+  onVisible?: (block: MonthBlock) => void;
+  /**
    * Something drawn INSIDE the scroller after the blocks — a hint, a spacer
    * — so it scrolls away with them rather than eating the calendar's height.
    */
   tail?: ReactNode;
+}
+
+/** What a cell shows of a day in the pictures view. */
+export interface DayPicture {
+  /** The hook of the day's first piece (a published one first), as an object URL. */
+  url: string;
+  /** How many pieces the day holds. */
+  count: number;
+  /** Whether any of them went out. */
+  published: boolean;
 }
 
 export interface AdjustLeg {
@@ -96,6 +115,8 @@ export default function MonthCalendar({
   onOpenLeg,
   selectedLegId = null,
   adjust,
+  pictures,
+  onVisible,
   tail,
 }: MonthCalendarProps) {
   const blocks = useMemo(() => monthBlocks(trip.startDate, trip.endDate), [trip.startDate, trip.endDate]);
@@ -138,6 +159,11 @@ export default function MonthCalendar({
     const next = visibleBlock(tops, el.scrollTop, el.clientHeight);
     if (next >= 0) setVisible((v) => (v === next ? v : next));
   }, []);
+
+  useEffect(() => {
+    const block = blocks[visible];
+    if (block) onVisible?.(block);
+  }, [visible, blocks, onVisible]);
 
   const jumpTo = useCallback((index: number, behavior: ScrollBehavior = 'smooth') => {
     const el = scroller.current;
@@ -221,6 +247,7 @@ export default function MonthCalendar({
             legOf={legOf}
             selectedLegId={selectedLegId}
             adjust={adjust}
+            pictures={pictures}
             stageOf={stageOf}
             onSelect={onSelect}
             onOpenLeg={onOpenLeg}
@@ -256,6 +283,7 @@ interface MonthBlockViewProps {
   legOf: (date: IsoDate) => { stage: TripStage; index: number } | null;
   selectedLegId: string | null;
   adjust?: AdjustLeg;
+  pictures?: ReadonlyMap<IsoDate, DayPicture>;
   stageOf?: (date: IsoDate) => DayStage | null;
   onSelect: (date: IsoDate) => void;
   onOpenLeg?: (id: string) => void;
@@ -279,6 +307,7 @@ const MonthBlockView = forwardRef<HTMLDivElement, MonthBlockViewProps>(function 
     legOf,
     selectedLegId,
     adjust,
+    pictures,
     stageOf,
     onSelect,
     onOpenLeg,
@@ -348,6 +377,7 @@ const MonthBlockView = forwardRef<HTMLDivElement, MonthBlockViewProps>(function 
                   );
                 }
                 const level = levelOf(data);
+                const picture = pictures?.get(date) ?? null;
                 const isSelected = date === selected;
                 const isToday = date === today;
                 const stage = stageOf?.(date) ?? null;
@@ -373,20 +403,36 @@ const MonthBlockView = forwardRef<HTMLDivElement, MonthBlockViewProps>(function 
                     onBlur={() => onHover(null)}
                     aria-label={cellTitle(data, stage)}
                     aria-selected={isSelected}
-                    className={`p-0 border-0 rounded-[8px] font-mono text-xs tabular-nums cursor-pointer transition-[box-shadow] duration-150 ease-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-ink ${
-                      level >= 3 ? 'text-paper' : level === 0 ? 'text-muted' : 'text-ink-soft'
+                    className={`relative p-0 box-border rounded-[8px] font-mono text-xs tabular-nums cursor-pointer overflow-hidden transition-[box-shadow] duration-150 ease-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-ink ${
+                      picture
+                        ? `border ${picture.published ? 'border-accent-ink' : 'border-dashed border-line-strong'} text-paper`
+                        : `border-0 ${level >= 3 ? 'text-paper' : level === 0 ? 'text-muted' : 'text-ink-soft'}`
                     }`}
                     style={{
                       width: cell,
                       height: cellH,
-                      background: LEVELS[level],
+                      background: picture ? `url(${picture.url}) center / cover no-repeat` : LEVELS[level],
                       opacity: inAdjusted(date) ? undefined : 0.34,
                       outline: isSelected && !adjust ? '2px solid var(--color-ink)' : undefined,
                       outlineOffset: isSelected && !adjust ? 1 : undefined,
                       boxShadow: isToday && !isSelected ? 'inset 0 0 0 2px var(--color-muted)' : undefined,
                     }}
                   >
-                    {Number(date.slice(8, 10))}
+                    {picture ? (
+                      <>
+                        {/* The number on a dark strip along the foot, so it reads on any picture. */}
+                        <span className="absolute inset-x-0 bottom-0 py-px bg-frame/55 text-2xs leading-none text-center">
+                          {Number(date.slice(8, 10))}
+                        </span>
+                        {picture.count > 1 && (
+                          <span className="absolute top-0.5 right-0.5 min-w-[14px] h-[14px] px-1 rounded-full bg-frame/75 text-3xs leading-[14px] text-center">
+                            {picture.count}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      Number(date.slice(8, 10))
+                    )}
                   </button>
                 );
               })}

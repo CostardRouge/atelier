@@ -49,7 +49,9 @@ import Button from '../../shared/ui/Button';
 import ShortDayStrip from './ShortDayStrip';
 import { defaultLoupe, loupeContaining, moveLoupe, type Loupe } from '../../shared/roadtrip/loupe';
 import LoupeBrush from './LoupeBrush';
-import MonthCalendar, { type AdjustLeg } from './MonthCalendar';
+import MonthCalendar, { type AdjustLeg, type DayPicture } from './MonthCalendar';
+import Segmented from '../../shared/ui/Segmented';
+import type { MonthBlock } from '../../shared/roadtrip/month-grid';
 import BottomSheet from '../../shared/ui/BottomSheet';
 import IconButton from '../../shared/ui/IconButton';
 import DayStrip from './DayStrip';
@@ -75,6 +77,9 @@ interface TripOverviewProps {
   deduceSources?: string[];
   onDeduceFrom?: (sourceId: string) => void;
 }
+
+type CalendarView = 'rungs' | 'pictures';
+const VIEW_KEY = 'atelier.roadtrip.calendar.view';
 
 /**
  * The trip's name, renamed in place.
@@ -543,6 +548,55 @@ export default function TripOverview({
   // The phone's legs sheet — the ruler's job, as a list.
   const [legsOpen, setLegsOpen] = useState(false);
 
+  // Rungs or pictures: ONE toggle, in the bar, remembered by the browser —
+  // the gallery's Cards / Bands rule, since it is the same kind of decision.
+  // A view is the trip's, never a month's, so it is never drawn per block.
+  const [view, setView] = useState<CalendarView>(() => {
+    try {
+      return localStorage.getItem(VIEW_KEY) === 'pictures' ? 'pictures' : 'rungs';
+    } catch {
+      return 'rungs';
+    }
+  });
+  const chooseView = (next: CalendarView) => {
+    setView(next);
+    try {
+      localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      /* private mode */
+    }
+  };
+  // The pictures view reads the hooks of the month on screen and its two
+  // neighbours, never the whole trip's: a year of pieces is a year of JPEGs
+  // in memory for cells that are not on screen.
+  const [visibleKey, setVisibleKey] = useState<string | null>(null);
+  const onVisible = useCallback((block: MonthBlock) => setVisibleKey(block.key), []);
+  const windowPosts = useMemo(() => {
+    if (view !== 'pictures' || !visibleKey) return [];
+    const [y, m] = visibleKey.split('-').map(Number);
+    const ordinal = y * 12 + (m - 1);
+    return trip.posts.filter((p) => {
+      const o = Number(p.date.slice(0, 4)) * 12 + (Number(p.date.slice(5, 7)) - 1);
+      return Math.abs(o - ordinal) <= 1;
+    });
+  }, [view, visibleKey, trip.posts]);
+  const windowThumbs = useDayThumbs(windowPosts);
+  const pictures = useMemo(() => {
+    if (view !== 'pictures') return undefined;
+    const out = new Map<IsoDate, DayPicture>();
+    for (const day of coverage.days) {
+      if (!day.posts.length) continue;
+      // A published piece first, then the first with a hook at all.
+      const pick =
+        day.posts.find((p) => p.publishedAt !== null && windowThumbs.has(p.id)) ??
+        day.posts.find((p) => windowThumbs.has(p.id));
+      const url = pick ? windowThumbs.get(pick.id) : undefined;
+      if (!url) continue;
+      out.set(day.date, { url, count: day.posts.length, published: day.published > 0 });
+    }
+    return out;
+  }, [view, coverage.days, windowThumbs]);
+
   // A leg being adjusted ON the calendar: a draft of its dates, written to
   // the trip on Done and dropped on Cancel — the garage's rule for a modal
   // edit. While it lasts the calendar draws only this leg, a tap on a day
@@ -727,6 +781,16 @@ export default function TripOverview({
                 {coverage.toldDays}
                 <span className="text-muted">/{coverage.totalDays}</span>
               </span>
+              <Segmented
+                size="sm"
+                label="How the days are drawn"
+                value={view}
+                onChange={chooseView}
+                options={[
+                  { id: 'rungs', label: <span className="sr-only">Rungs</span>, icon: Icons.grid, title: 'Each day as its rung: nothing, drafted, published once, twice, more' },
+                  { id: 'pictures', label: <span className="sr-only">Pictures</span>, icon: Icons.image, title: 'Each told day as the hook of its piece' },
+                ]}
+              />
             </>
           }
         >
@@ -787,6 +851,8 @@ export default function TripOverview({
           selected={selected}
           onSelect={adjusting ? (date) => moveEdge(nearerEdge(adjusting.draft, date), date) : selectDate}
           adjust={adjust}
+          pictures={pictures}
+          onVisible={onVisible}
           stageOf={(date) => dayStages.get(date) ?? null}
           menuFor={menuFor}
           onOpenLeg={(id) => {
