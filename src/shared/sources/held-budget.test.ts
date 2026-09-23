@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_HELD_CEILING, heldCeiling, toEvict } from './held-budget';
+import { CONSTRAINED_HELD_CEILING, DEFAULT_HELD_CEILING, heldCeiling, toEvict } from './held-budget';
 
 const MIB = 1024 * 1024;
 
@@ -42,5 +42,14 @@ describe('toEvict', () => {
   it('counts a read as a use', () => {
     // `a` was fetched first but read most recently, so `b` is the one to go.
     expect(toEvict([e('a', 74, 5), e('b', 74, 2)], 100 * MIB)).toEqual(['b']);
+  });
+});
+
+describe('a constrained device', () => {
+  it('takes its own flat ceiling, whatever the browser says about its memory', () => {
+    expect(heldCeiling(null, 'constrained')).toBe(CONSTRAINED_HELD_CEILING);
+    expect(heldCeiling(8, 'constrained')).toBe(CONSTRAINED_HELD_CEILING);
+    expect(CONSTRAINED_HELD_CEILING).toBe(192 * 1024 * 1024);
+    expect(heldCeiling(8, 'roomy')).toBe(1024 * 1024 * 1024);
   });
 });

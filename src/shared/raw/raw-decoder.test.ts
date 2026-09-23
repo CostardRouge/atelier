@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { clearTasks, listTasks } from '../tasks/tasks';
-import { canDecodeRaw, decodeRaw, librawSettings, wantsHalfSize } from './raw-decoder';
+import { canDecodeRaw, decodeCacheKey, decodeRaw, decodedRawBytes, dropDecodedRaws, librawSettings, wantsHalfSize } from './raw-decoder';
 
 afterEach(() => clearTasks());
 
@@ -54,6 +54,17 @@ describe('wantsHalfSize', () => {
     expect(wantsHalfSize(8064, 6048, {})).toBe(false);
     expect(wantsHalfSize(null, null, { budgetPixels: 1 })).toBe(false);
   });
+
+  it('halves a picture the edge cap would box-average anyway, and never under the long edge asked for', () => {
+    // A phone's export ceiling: the whole 6000 px would be boxed to 3000, so
+    // LibRaw's own half is asked for instead — a third of the time, a quarter
+    // of the worker's heap.
+    expect(wantsHalfSize(6000, 4000, { maxEdge: 4096 })).toBe(true);
+    expect(wantsHalfSize(4000, 3000, { maxEdge: 4096 })).toBe(false);
+    // Asked for 3500 px at least: the half (3000) falls short, so whole.
+    expect(wantsHalfSize(6000, 4000, { maxEdge: 4096, minLongEdge: 3500 })).toBe(false);
+    expect(wantsHalfSize(6000, 4000, { maxEdge: Number.POSITIVE_INFINITY })).toBe(false);
+  });
 });
 
 describe('the decoder’s settings and its gate', () => {
@@ -68,5 +79,27 @@ describe('the decoder’s settings and its gate', () => {
     expect(canDecodeRaw(new File([], 'IMG_1.ARW'))).toBe(true);
     expect(canDecodeRaw(new File([], 'IMG_1.jpg'))).toBe(false);
     expect(canDecodeRaw(null)).toBe(false);
+  });
+});
+
+describe('what a decode is held under, and what is held', () => {
+  it('keys a decode by the file and everything that sizes it — never the gain', () => {
+    const file = new File([new Uint8Array(8)], 'DJI_0101.DNG', { lastModified: 1700000000000 });
+    const key = decodeCacheKey(file, { budgetPixels: 8_294_400, maxEdge: 2560, gain: 2.5 });
+    expect(key).toBe('DJI_0101.DNG:8:1700000000000|budget=8294400|min=|edge=2560');
+    expect(decodeCacheKey(file, { budgetPixels: 8_294_400, maxEdge: 2560, gain: 1 })).toBe(key);
+    expect(decodeCacheKey(file, { maxEdge: 4096 })).not.toBe(key);
+  });
+
+  it('holds nothing until a decode lands, and can be told to forget', () => {
+    expect(decodedRawBytes()).toBe(0);
+    dropDecodedRaws();
+    expect(decodedRawBytes()).toBe(0);
+  });
+
+  it('a held decode asked for under an aborted signal is still a cancel', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(decodeRaw(new File([], 'X.DNG'), { signal: controller.signal, hold: true, quiet: true })).rejects.toMatchObject({ name: 'AbortError' });
   });
 });

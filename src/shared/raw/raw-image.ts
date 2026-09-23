@@ -17,11 +17,32 @@
  * "highlights −100" reaches into everything the sensor kept above the
  * displayed white.
  *
+ * **Memory is the shape of this module (2026-09-23).** The first version
+ * turned the whole 16-bit decode into a full-size Float32 picture, then
+ * box-averaged that, then encoded that into another Float32 picture, then
+ * packed it: for a DJI DNG at LibRaw's half size that is 110 + 27 + 27 MB of
+ * transient arrays on top of the 55 MB decode, and an iPhone killed the tab
+ * for it. Every step is a pure function of ONE 16-bit code, or of a box of
+ * them, so nothing full-size has to exist in between:
+ *
+ * - **Box-averaged** (`boxLinearRows`): the target-size linear picture is
+ *   written straight from the 16-bit codes through the BT.709 table, a band
+ *   of rows at a time — the decoder yields to the main thread between bands
+ *   and can be cancelled between them.
+ * - **Whole** (`halfTableFromLibRaw`, `byteTableFromLibRaw`): a 16-bit code
+ *   maps to exactly one half-float and, for a given gain, exactly one byte,
+ *   so a 65536-entry table each is the whole conversion and no float picture
+ *   exists at all.
+ *
+ * Both paths produce, bit for bit, what `boxDownscale(linearFromLibRaw(…))`
+ * followed by `halfImageFromLinear` and `bytesFromLinear` produce — the
+ * specs pin it — so preview = export still holds and no stored gain moved.
+ *
  * Pure and DOM-free; every function here is exercised by a spec.
  */
 
 import { fromLinear } from '../lut/transfer';
-import { packHalfImage, type HalfImage } from '../render/half-image';
+import { toHalf, type HalfImage } from '../render/half-image';
 
 /** The three floats per pixel a RAW becomes before it is packed. */
 export interface LinearRgb {
@@ -53,14 +74,25 @@ export function linearToBt709(linear: number): number {
 }
 
 /**
- * LibRaw's 16-bit output → linear light. Through a 65536-entry table, since
- * a 48-megapixel decode is 144 million codes and a `pow` per code is seconds.
+ * The decoder's curve inverted over every 16-bit code — 256 KB, built per
+ * decode. The ONE table both decode paths read: a code's linear value is
+ * this entry, whether it is copied out whole or summed into a box.
  */
-export function linearFromLibRaw(rgb16: Uint16Array, width: number, height: number): LinearRgb {
-  const n = width * height * 3;
-  if (rgb16.length < n) throw new Error(`a ${width}×${height} decode needs ${n} samples, got ${rgb16.length}`);
+export function bt709Table(): Float32Array {
   const table = new Float32Array(65536);
   for (let i = 0; i < 65536; i += 1) table[i] = bt709ToLinear(i / 65535);
+  return table;
+}
+
+/**
+ * LibRaw's 16-bit output → linear light, whole. Through the table, since a
+ * 48-megapixel decode is 144 million codes and a `pow` per code is seconds.
+ * A full-size Float32 picture: the decoder no longer builds one, but the
+ * spec that pins the fused paths is defined against this.
+ */
+export function linearFromLibRaw(rgb16: Uint16Array, width: number, height: number, table: Float32Array = bt709Table()): LinearRgb {
+  const n = width * height * 3;
+  if (rgb16.length < n) throw new Error(`a ${width}×${height} decode needs ${n} samples, got ${rgb16.length}`);
   const data = new Float32Array(n);
   for (let i = 0; i < n; i += 1) data[i] = table[rgb16[i]];
   return { width, height, data };
@@ -70,6 +102,28 @@ export function linearFromLibRaw(rgb16: Uint16Array, width: number, height: numb
 export const AUTO_BRIGHT_CLIP = 0.01;
 /** The gain is never below 1 (the sensor's white is white) nor above this — 4 stops. */
 export const MAX_AUTO_GAIN = 16;
+
+/** The gain that puts `white` at 1: bounded, rounded to three decimals. */
+function gainForWhite(white: number): number {
+  const gain = Math.min(MAX_AUTO_GAIN, Math.max(1, 1 / white));
+  return Math.round(gain * 1000) / 1000;
+}
+
+/** The white the brightest `clip` share of `hist` sits above — the bin's UPPER edge. */
+function whiteFromHistogram(hist: Uint32Array, bins: number, counted: number, clip: number): number {
+  if (!counted) return 1;
+  // Walk down from white until `clip` of the pixels are above.
+  let above = 0;
+  let bin = bins;
+  while (bin > 0 && above + hist[bin] <= counted * clip) {
+    above += hist[bin];
+    bin -= 1;
+  }
+  // The bin's UPPER edge: a white a hair too bright clips a hair less.
+  return Math.min(1, (bin + 1) / bins);
+}
+
+const GAIN_BINS = 4096;
 
 /**
  * The gain that puts the brightest `clip` share of the picture at white: the
@@ -82,28 +136,45 @@ export const MAX_AUTO_GAIN = 16;
 export function autoBrightGain(picture: LinearRgb, clip = AUTO_BRIGHT_CLIP, stride = 4): number {
   const { data, width, height } = picture;
   const pixels = width * height;
-  const bins = 4096;
-  const hist = new Uint32Array(bins + 1);
+  const hist = new Uint32Array(GAIN_BINS + 1);
   let counted = 0;
   for (let p = 0; p < pixels; p += stride) {
     const i = p * 3;
     const m = Math.max(data[i], data[i + 1], data[i + 2]);
-    const bin = m >= 1 ? bins : Math.max(0, Math.floor(m * bins));
+    const bin = m >= 1 ? GAIN_BINS : Math.max(0, Math.floor(m * GAIN_BINS));
     hist[bin] += 1;
     counted += 1;
   }
   if (!counted) return 1;
-  // Walk down from white until `clip` of the pixels are above.
-  let above = 0;
-  let bin = bins;
-  while (bin > 0 && above + hist[bin] <= counted * clip) {
-    above += hist[bin];
-    bin -= 1;
+  return gainForWhite(whiteFromHistogram(hist, GAIN_BINS, counted, clip));
+}
+
+/**
+ * The same measurement straight off the 16-bit decode, through the table —
+ * the whole-picture path, where no linear picture exists to measure. Equal
+ * to `autoBrightGain(linearFromLibRaw(rgb16, …))` sample for sample: the
+ * table holds the very float32 the linear picture would.
+ */
+export function autoBrightGainFromLibRaw(
+  rgb16: Uint16Array,
+  width: number,
+  height: number,
+  table: Float32Array,
+  clip = AUTO_BRIGHT_CLIP,
+  stride = 4,
+): number {
+  const pixels = width * height;
+  const hist = new Uint32Array(GAIN_BINS + 1);
+  let counted = 0;
+  for (let p = 0; p < pixels; p += stride) {
+    const i = p * 3;
+    const m = Math.max(table[rgb16[i]], table[rgb16[i + 1]], table[rgb16[i + 2]]);
+    const bin = m >= 1 ? GAIN_BINS : Math.max(0, Math.floor(m * GAIN_BINS));
+    hist[bin] += 1;
+    counted += 1;
   }
-  // The bin's UPPER edge: a white a hair too bright clips a hair less.
-  const white = Math.min(1, (bin + 1) / bins);
-  const gain = Math.min(MAX_AUTO_GAIN, Math.max(1, 1 / white));
-  return Math.round(gain * 1000) / 1000;
+  if (!counted) return 1;
+  return gainForWhite(whiteFromHistogram(hist, GAIN_BINS, counted, clip));
 }
 
 /**
@@ -151,47 +222,148 @@ export function boxDownscale(picture: LinearRgb, factor: number): LinearRgb {
   return { width: w, height: h, data: out };
 }
 
+/** The size `boxLinearRows` writes for a decode of `width`×`height` at `factor`. */
+export function boxedSize(width: number, height: number, factor: number): { width: number; height: number } {
+  return { width: Math.floor(width / factor), height: Math.floor(height / factor) };
+}
+
+/**
+ * Rows `[y0, y1)` of the box-averaged linear picture, written into `out`
+ * (sized by `boxedSize`) straight from the 16-bit codes through `table` —
+ * the fused twin of `boxDownscale(linearFromLibRaw(…))`, summing the same
+ * float32 values in the same order, so the two agree to the bit. A band at a
+ * time is what lets the decoder yield between rows and stop on a cancel with
+ * nothing full-size ever allocated.
+ */
+export function boxLinearRows(
+  rgb16: Uint16Array,
+  srcWidth: number,
+  factor: number,
+  table: Float32Array,
+  out: Float32Array,
+  outWidth: number,
+  y0: number,
+  y1: number,
+): void {
+  const inv = 1 / (factor * factor);
+  for (let y = y0; y < y1; y += 1) {
+    for (let x = 0; x < outWidth; x += 1) {
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      for (let dy = 0; dy < factor; dy += 1) {
+        let i = ((y * factor + dy) * srcWidth + x * factor) * 3;
+        for (let dx = 0; dx < factor; dx += 1) {
+          r += table[rgb16[i]];
+          g += table[rgb16[i + 1]];
+          b += table[rgb16[i + 2]];
+          i += 3;
+        }
+      }
+      const o = (y * outWidth + x) * 3;
+      out[o] = r * inv;
+      out[o + 1] = g * inv;
+      out[o + 2] = b * inv;
+    }
+  }
+}
+
+const ENCODE_STEPS = 4096;
+
+/**
+ * The sRGB encode over the 0..1 range at 12 bits, exact enough (the
+ * half-float itself holds ~11 bits) and 30× faster than the curve per sample.
+ */
+function srgbEncodeTable(): Float32Array {
+  const table = new Float32Array(ENCODE_STEPS + 1);
+  for (let i = 0; i <= ENCODE_STEPS; i += 1) table[i] = fromLinear(i / ENCODE_STEPS, 'srgb');
+  return table;
+}
+
+/** ONE linear sample sRGB-encoded as the GPU picture has it: the table inside 0..1, the exact curve past white. */
+function encodeLinearSample(v: number, table: Float32Array): number {
+  if (v <= 0) return 0;
+  if (v >= 1) return v === 1 ? 1 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
+  const t = v * ENCODE_STEPS;
+  const k = Math.floor(t);
+  const f = t - k;
+  return table[k] + (table[k + 1] - table[k]) * f;
+}
+
 /**
  * Linear light → the GPU's source: sRGB-encoded half-floats, sensor white at
  * 1.0 — no gain applied here, the develop stage applies it, so one texture
  * serves every setting of the sliders. Above 1 (a decoder that did not clip)
  * the encode continues past white; the develop stage's headroom rule reads it.
+ * Each sample is encoded and packed in one step: no encoded Float32 picture
+ * sits between the two.
  */
 export function halfImageFromLinear(picture: LinearRgb): HalfImage {
   const { data } = picture;
-  const encoded = new Float32Array(data.length);
-  // A table over the 0..1 range at 12 bits, exact enough (the half-float
-  // itself holds ~11 bits) and 30× faster than the curve per sample; values
-  // past 1 take the slow, exact path.
-  const steps = 4096;
-  const table = new Float32Array(steps + 1);
-  for (let i = 0; i <= steps; i += 1) table[i] = fromLinear(i / steps, 'srgb');
-  for (let i = 0; i < data.length; i += 1) {
-    const v = data[i];
-    if (v <= 0) encoded[i] = 0;
-    else if (v >= 1) encoded[i] = v === 1 ? 1 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
-    else {
-      const t = v * steps;
-      const k = Math.floor(t);
-      const f = t - k;
-      encoded[i] = table[k] + (table[k + 1] - table[k]) * f;
-    }
-  }
-  return packHalfImage(encoded, picture.width, picture.height);
+  const table = srgbEncodeTable();
+  const out = new Uint16Array(data.length);
+  for (let i = 0; i < data.length; i += 1) out[i] = toHalf(encodeLinearSample(data[i], table));
+  return { kind: 'half', width: picture.width, height: picture.height, data: out };
+}
+
+/**
+ * Every 16-bit code's half-float — what `halfImageFromLinear` would make of
+ * `linearFromLibRaw`'s value for it — so a whole decode is packed by one
+ * lookup per sample and no float picture is ever built. 128 KB.
+ */
+export function halfTableFromLibRaw(table: Float32Array): Uint16Array {
+  const encode = srgbEncodeTable();
+  const out = new Uint16Array(65536);
+  for (let i = 0; i < 65536; i += 1) out[i] = toHalf(encodeLinearSample(table[i], encode));
+  return out;
+}
+
+/** Samples `[from, to)` of a whole decode, packed through `halfTable` into `out`. */
+export function packHalfSamples(rgb16: Uint16Array, halfTable: Uint16Array, out: Uint16Array, from: number, to: number): void {
+  for (let i = from; i < to; i += 1) out[i] = halfTable[rgb16[i]];
 }
 
 /** The 8-bit picture of the decode AS SHOT — with its measured gain, clipped at white — for a 2D canvas. */
 export function bytesFromLinear(picture: LinearRgb, gain: number): Uint8ClampedArray<ArrayBuffer> {
   const { data, width, height } = picture;
   const out = new Uint8ClampedArray(new ArrayBuffer(width * height * 4));
-  const steps = 4096;
-  const table = new Uint8ClampedArray(steps + 1);
-  for (let i = 0; i <= steps; i += 1) table[i] = Math.round(fromLinear(i / steps, 'srgb') * 255);
+  const table = srgbByteTable();
   for (let p = 0, i = 0, o = 0; p < width * height; p += 1, i += 3, o += 4) {
-    out[o] = table[Math.min(steps, Math.max(0, Math.round(data[i] * gain * steps)))];
-    out[o + 1] = table[Math.min(steps, Math.max(0, Math.round(data[i + 1] * gain * steps)))];
-    out[o + 2] = table[Math.min(steps, Math.max(0, Math.round(data[i + 2] * gain * steps)))];
+    out[o] = table[byteStep(data[i], gain)];
+    out[o + 1] = table[byteStep(data[i + 1], gain)];
+    out[o + 2] = table[byteStep(data[i + 2], gain)];
     out[o + 3] = 255;
   }
   return out;
+}
+
+function srgbByteTable(): Uint8ClampedArray {
+  const table = new Uint8ClampedArray(ENCODE_STEPS + 1);
+  for (let i = 0; i <= ENCODE_STEPS; i += 1) table[i] = Math.round(fromLinear(i / ENCODE_STEPS, 'srgb') * 255);
+  return table;
+}
+
+function byteStep(linear: number, gain: number): number {
+  return Math.min(ENCODE_STEPS, Math.max(0, Math.round(linear * gain * ENCODE_STEPS)));
+}
+
+/**
+ * Every 16-bit code's as-shot byte at `gain` — `bytesFromLinear`'s value for
+ * `linearFromLibRaw`'s value for it — for the whole-decode path. 64 KB.
+ */
+export function byteTableFromLibRaw(table: Float32Array, gain: number): Uint8ClampedArray {
+  const bytes = srgbByteTable();
+  const out = new Uint8ClampedArray(65536);
+  for (let i = 0; i < 65536; i += 1) out[i] = bytes[byteStep(table[i], gain)];
+  return out;
+}
+
+/** Pixels `[from, to)` of a whole decode as RGBA bytes through `byteTable`, into `out`. */
+export function packBytePixels(rgb16: Uint16Array, byteTable: Uint8ClampedArray, out: Uint8ClampedArray, from: number, to: number): void {
+  for (let p = from, i = from * 3, o = from * 4; p < to; p += 1, i += 3, o += 4) {
+    out[o] = byteTable[rgb16[i]];
+    out[o + 1] = byteTable[rgb16[i + 1]];
+    out[o + 2] = byteTable[rgb16[i + 2]];
+    out[o + 3] = 255;
+  }
 }

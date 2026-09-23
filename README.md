@@ -1108,7 +1108,14 @@ only where the file carries it). A file that is not here is fetched from its
 instance and held for the session, its weight said before the click; a DNG
 beside a JPEG in a folder is the sensor with no fetch at all. The choice is
 saved on the picture, so another device shows the same one, and the export
-follows it.
+follows it. **On a phone or a tablet** the sensor is decoded to what the
+device can hold — 2560 px on the stage, 4096 px in an export, and the export
+says when a picture left under its sensor's pixels — the decoder is let go
+between pictures, and a picture you come back to is not decoded twice; the
+loupe, which decodes the file whole on a computer, says *as close as this
+device goes* instead. A browser cannot ask a phone how much memory a tab may
+take, so the rule is coarse: iPhone, iPad and Android count as phones, and
+`localStorage['atelier.device']` (`constrained` or `roomy`) overrides it.
 
 **Exporting.** The **Export** tab writes JPEGs — this picture, the marked
 ones, or the whole roll — into a folder you choose (downloaded one by one
@@ -1129,8 +1136,9 @@ for this run**, delivers everything from what is already here — a RAW base is
 set aside and the run says so — and is never remembered on the roll. A RAW
 original is reached only through the render inside it, measured first. Fetched
 originals are kept for the session only, up to a ceiling sized from your
-device (a quarter of its memory, between 256 MB and 1 GB); past it the ones you
-used least recently are let go and fetched again when a picture needs them.
+device (a quarter of its memory, between 256 MB and 1 GB; 192 MB on a phone
+or a tablet); past it the ones you used least recently are let go and fetched
+again when a picture needs them.
 After a run whose
 pictures came from an instance, **Send N files to …** uploads them home into
 that Winnow's finals, each linked to its own capture — the same panel the
