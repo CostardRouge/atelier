@@ -143,6 +143,30 @@ export function pictureRect(view: View, viewport: Box, content: Box): Box & Poin
   };
 }
 
+/** A part of the picture, as shares of its width and height: `x0 ≤ x1`, `y0 ≤ y1`, all in [0, 1]. */
+export interface PictureWindow {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/**
+ * The part of the picture the viewport shows — the picture's placement
+ * (`pictureRect`) cut by the viewport's own box, as shares of the picture. At
+ * the fit it is the whole picture; zoomed, what is on screen and nothing else.
+ */
+export function visibleWindow(rect: Box & Point, viewport: Box): PictureWindow {
+  if (!(rect.width > 0) || !(rect.height > 0)) return { x0: 0, y0: 0, x1: 1, y1: 1 };
+  const share = (v: number, from: number, size: number) => Math.min(1, Math.max(0, (v - from) / size));
+  return {
+    x0: share(0, rect.x, rect.width),
+    y0: share(0, rect.y, rect.height),
+    x1: share(viewport.width, rect.x, rect.width),
+    y1: share(viewport.height, rect.y, rect.height),
+  };
+}
+
 /**
  * What `object-contain` really draws: the picture's own size, fitted into the
  * box without cropping it. The pan limits are measured off THIS, never off the

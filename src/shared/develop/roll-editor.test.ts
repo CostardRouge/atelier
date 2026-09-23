@@ -104,6 +104,15 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'h', shiftKey: true }))).toBeNull();
   });
 
+  it('crops to the view on ⇧C, and a bare C still opens the crop', () => {
+    expect(editorKeyAction(press({ key: 'C', shiftKey: true }))).toBe('crop-view');
+    expect(editorKeyAction(press({ key: 'c', shiftKey: true }))).toBe('crop-view');
+    expect(editorKeyAction(press({ key: 'C', shiftKey: true, repeat: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'C', shiftKey: true, metaKey: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'C', shiftKey: true, targetTypes: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'c' }))).toEqual({ tab: 'crop' });
+  });
+
   it('opens each tab on its own initial', () => {
     expect(editorKeyAction(press({ key: 'a' }))).toEqual({ tab: 'adjust' });
     expect(editorKeyAction(press({ key: 'A' }))).toEqual({ tab: 'adjust' });

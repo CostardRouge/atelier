@@ -63,6 +63,12 @@ export interface PictureZoom {
   fractionAt: (clientX: number, clientY: number) => Point;
   /** Move a zoomed view by a pixel delta — the arrows' way in (`zoom-keys.ts`). */
   pan: (dx: number, dy: number) => void;
+  /**
+   * Back to the fit AT ONCE, never animated — for when what the picture IS
+   * changed under the view (a crop made from it), so there is no journey to
+   * show: the new picture at the fit is what was on screen.
+   */
+  fit: () => void;
   /** Where the picture sits in the viewport, in its pixels. */
   rect: Box & Point;
   /** The viewport's measured size. */
@@ -213,6 +219,10 @@ export function usePictureZoom({
     },
     fractionAt,
     pan: panBy,
+    fit: () => {
+      setSettling(false);
+      setView(FITTED);
+    },
     rect: pictureRect(view, viewport, content),
     viewport,
   };

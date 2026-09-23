@@ -116,7 +116,9 @@ import type { RepairRing } from '../../shared/develop/DevelopViewport';
 import LayersPanel from './LayersPanel';
 import MaskPanel from './MaskPanel';
 import type { BorderApplyVerb } from './BorderSection';
-import type { RollBorder } from '../../shared/develop/border-layout';
+import { borderLayout, type RollBorder } from '../../shared/develop/border-layout';
+import { zoneFromView } from '../../shared/develop/crop-rect';
+import { visibleWindow } from '../../shared/ui/pan-zoom';
 import ExportPanel, { type ExportVerb } from './ExportPanel';
 import CropStage from './CropStage';
 import { useCropZone } from './use-crop-zone';
@@ -956,6 +958,12 @@ export default function PictureWorkbench({
           e.preventDefault();
           c.swap();
           return;
+        case 'crop-view':
+          // Only where the stage offers it — zoomed, off the Crop tab.
+          if (!cropToViewRef.current) return;
+          e.preventDefault();
+          cropToViewRef.current();
+          return;
       }
     };
     const onUp = (e: KeyboardEvent) => {
@@ -970,6 +978,34 @@ export default function PictureWorkbench({
   }, []);
 
   const cropping = tab === 'crop';
+
+  // --- crop to the view --------------------------------------------------------
+  // Zoomed in on the Adjust stage, what is on screen is often the crop being
+  // looked for — and finding it again on the Crop tab took several trips (the
+  // maintainer, 2026-09-23, after iOS Photos' own Crop button). So a zoomed
+  // stage offers it: the visible part of the delivered canvas read back into
+  // the crop's zone (`zoneFromView`), written like a drawn zone, the view back
+  // at the fit where the new picture is exactly what was on screen. Never on a
+  // legacy Whole framing, whose canvas is not its zone.
+  const viewCrop =
+    source && !cropping && picture.view.zoomed && crop.src && crop.zone && framingDraft.fit !== 'contain'
+      ? zoneFromView(
+          crop.zone,
+          borderLayout(crop.zone.w, crop.zone.h, border),
+          visibleWindow(picture.view.rect, picture.view.viewport),
+          framingDraft.rotation,
+          crop.src,
+        )
+      : null;
+  const cropToView = viewCrop
+    ? () => {
+        crop.cropTo(viewCrop.zone);
+        picture.view.fit();
+        tell(viewCrop.clamped ? 'cropped to the view · as close as a crop may go' : 'cropped to the view · C to adjust');
+      }
+    : null;
+  const cropToViewRef = useRef(cropToView);
+  cropToViewRef.current = cropToView;
   // The crop stage's pill: the VIEW's zoom (inspection), never the crop's —
   // the zone's size is the crop. Drawn at every width, the pinch's twin
   // (`frontend.md`: a pinch the browser can take away needs a way in that
@@ -1111,6 +1147,12 @@ export default function PictureWorkbench({
       id: 'pixels',
       label: zoomRow(pixelView === 'pixels', 'Pixels as pixels', 'past 100 %, nothing is invented between them'),
       onSelect: () => setPixelView('pixels'),
+    },
+    {
+      id: 'crop-view',
+      label: zoomRow(false, 'Crop to this view', 'what the screen shows becomes the crop · ⇧C'),
+      disabled: !cropToView,
+      onSelect: () => cropToView?.(),
     },
   ];
 
@@ -1264,6 +1306,7 @@ export default function PictureWorkbench({
           // picture — and come off only while Repair is armed.
           rings={rings}
           onUnring={repairActive ? unring : undefined}
+          onCropToView={cropToView ?? undefined}
           className={cropping ? 'hidden' : 'flex-1'}
           onPick={(linear) => {
             const { temperature, tint, clamped } = whiteBalanceFor(linear);

@@ -12,6 +12,7 @@ import {
   pictureFraction,
   pictureRect,
   pixelCeiling,
+  visibleWindow,
   rubberBand,
   stepViewZoom,
   swipeCommit,
@@ -268,5 +269,21 @@ describe('pictureFraction / pictureRect', () => {
     // The quarter-way point of the picture, read back from where the rect puts it.
     const px = rect.x + 0.25 * rect.width - viewport.width / 2;
     expect(pictureFraction(view, { x: px, y: 0 }, content).x).toBeCloseTo(0.25);
+  });
+});
+
+describe('visibleWindow', () => {
+  it('is the whole picture at the fit', () => {
+    expect(visibleWindow({ x: 100, y: 0, width: 600, height: 600 }, viewport)).toEqual({ x0: 0, y0: 0, x1: 1, y1: 1 });
+  });
+
+  it('is what the viewport cuts out of a zoomed picture', () => {
+    // 2× on a 600 px picture, panned 150 px left: the picture spans −350..850.
+    const rect = pictureRect({ scale: 2, x: -150, y: 0 }, viewport, { width: 600, height: 600 });
+    const win = visibleWindow(rect, viewport);
+    expect(win.x0).toBeCloseTo(350 / 1200, 9);
+    expect(win.x1).toBeCloseTo(1150 / 1200, 9);
+    expect(win.y0).toBeCloseTo(300 / 1200, 9);
+    expect(win.y1).toBeCloseTo(900 / 1200, 9);
   });
 });

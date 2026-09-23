@@ -48,6 +48,7 @@ const GROUPS: readonly Group[] = [
     rows: [
       { keys: 'A · D · L · C · E', what: 'the tabs, each by its own initial — Adjust, Detail, Layers, Crop, Export' },
       { keys: 'X', what: 'on the Crop tab, the zone’s portrait ↔ landscape' },
+      { keys: '⇧C · the crop pill', what: 'zoomed in, make what the screen shows the crop — the view goes back to the fit' },
       { keys: '⌘/Ctrl C · V', what: 'copy this develop, paste it onto another — and the three verbs above the picture' },
       { keys: '⌘/Ctrl Z', what: 'undo — and ⇧ to put it back' },
       { keys: 'tap', what: 'with Pick on, add a point to the subject — the + cursor' },

@@ -113,6 +113,7 @@ export type EditorKeyAction =
   | 'paste'
   | { tab: WorkbenchTab }
   | 'swap'
+  | 'crop-view'
   | 'help'
   | 'facts'
   | null;
@@ -134,7 +135,8 @@ const TAB_KEYS: Readonly<Record<string, WorkbenchTab>> = {
  * What a key press means in the editor, or null when it belongs to someone
  * else. ←/→ move along the strip, `\` holds "before" (its release is the
  * caller's), `Z` goes closer or back to the fit, a tab's own initial opens it
- * (`TAB_KEYS`, answered as `{ tab }`), `X` swaps the crop's orientation, `H`
+ * (`TAB_KEYS`, answered as `{ tab }`), `X` swaps the crop's orientation, ⇧C
+ * crops to the zoomed view (the caller decides whether there is one), `H`
  * (or `?`) the shortcuts and `I` the facts over the picture, ⌘/Ctrl-C and -V
  * copy and paste the develop — the chord is read first, so ⌘C stays copy while
  * a bare `C` opens the crop. A field or a slider keeps every key it could use;
@@ -154,6 +156,9 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   // `?` is the one key reached WITH shift on most layouts, so it is read
   // before the blanket refusal below: a help key nobody can press is not one.
   if (press.key === '?') return press.repeat ? null : 'help';
+  // ⇧C crops to what a zoomed view shows: the crop's own letter, shifted,
+  // because it MAKES a crop without opening the tab. The only other shift chord.
+  if (press.shiftKey && (press.key === 'C' || press.key === 'c')) return press.repeat ? null : 'crop-view';
   if (press.shiftKey) return null;
   if (press.key === 'ArrowLeft') return 'previous';
   if (press.key === 'ArrowRight') return 'next';
