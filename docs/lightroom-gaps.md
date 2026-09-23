@@ -222,7 +222,11 @@ wanted); and the state is set from BOTH the Export tab's table and a badge on
 each filmstrip cell. **A table row is clickable in full** (48 px), never its
 checkbox alone — his words: a box is too small a target, on a phone above all.
 
-**Proposed, awaiting him** (his idea, drawn in the lab): an **ignored** state.
+**E1–E3 BUILT 2026-09-23** after his "OK pour tout" — the four-state field and
+its keys, the Export tab's table, the filmstrip badges (`develop-roll.md`,
+«Which pictures LEAVE is one field on the picture»). M1–M4 and E4 are next.
+
+**Proposed then, accepted as drawn** (his idea, drawn in the lab): an **ignored** state.
 Recommended as the FOURTH value of the one delivery field —
 `auto · yes · no · ignore` — never a second flag beside it, so no combination
 can contradict another: an ignored picture never leaves, and un-ignoring puts

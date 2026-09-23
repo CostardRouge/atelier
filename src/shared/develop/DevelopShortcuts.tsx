@@ -54,6 +54,10 @@ const GROUPS: readonly Group[] = [
       { keys: 'tap', what: 'with Pick on, add a point to the subject — the + cursor' },
       { keys: 'tap a marker', what: 'take that point off again — it shows −' },
       { keys: '⇧ / ⌘-click', what: 'choose pictures along the filmstrip' },
+      { keys: 'P', what: 'send this picture ↔ hold it back — edited pictures leave unless you say otherwise' },
+      { keys: 'U', what: 'back to the roll’s rule: it leaves if it is edited' },
+      { keys: 'M', what: 'ignore this picture ↔ bring it back — never exported, stepped over by ← / →' },
+      { keys: 'a cell’s badge', what: 'click to send ↔ hold · right-click or hold a finger to ignore' },
     ],
   },
   {
