@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { useActiveAsset } from '../../shared/library/use-active-asset';
-import type { AssetKind } from '../../shared/library/assets';
+import { classifyPart, type AssetKind } from '../../shared/library/assets';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import type { SavedMediaRef } from '../../shared/projects/project-types';
 import { hashedMediaRef } from '../../shared/projects/media-identity';
@@ -10,6 +10,7 @@ import {
   collageCellAt,
   collageCellCount,
   collageSettleSeconds,
+  resolveCollage,
   swapCollageCells,
   withCollageCell,
   type CollageLead,
@@ -19,7 +20,33 @@ import { normaliseCellPlace } from '../../shared/media/media-layout';
 import DevelopSheet from '../../shared/develop/DevelopSheet';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import type { DevelopSettings } from '../../shared/develop/develop';
-import { normaliseFraming, type Framing } from '../../shared/media/framing';
+import { flipFraming, normaliseFraming, type Framing } from '../../shared/media/framing';
+import {
+  MOTION_PRESETS,
+  applyPreset,
+  arrivalMarks,
+  deepestFraming,
+  framingWindow,
+  motionOffset,
+  tourFrames,
+  tourMotion,
+  tourOf,
+  flipMotion,
+  framingAtNeedle,
+  framingAtProgress,
+  hasMotion,
+  keySeconds,
+  motionProgress,
+  needleTarget,
+  placeAtNeedle,
+  presetProblem,
+  removeAtNeedle,
+  snapShare,
+  type FramingMotion,
+  type MotionPreset,
+  type PictureBox,
+  type TourPlan,
+} from '../../shared/media/framing-motion';
 import { badgeContent, type BadgePiece } from '../../shared/roadtrip/day-badge';
 import {
   applyDevelopToDay,
@@ -55,7 +82,7 @@ import {
   screenSecondsOf,
 } from '../../shared/roadtrip/hook-video';
 import { badgeSettleSeconds } from '../../shared/roadtrip/badge-layout';
-import { loopsOpenSlide, screenLength, type LoopScope } from '../../shared/roadtrip/deck-strip';
+import { loopsOpenSlide, screenLength, slideMotionMarks, type LoopScope } from '../../shared/roadtrip/deck-strip';
 import { MIN_HOOK_SECONDS } from '../../shared/roadtrip/hook-video';
 import { setEnd, setStart, TRIM_EPSILON, type TrimRange } from '../../shared/media/trim';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
@@ -79,6 +106,7 @@ import ContentTab from './panels/ContentTab';
 import ExportTab from './panels/ExportTab';
 import LookTab from './panels/LookTab';
 import PictureTab, { GradeScopeChips } from './panels/PictureTab';
+import type { NeedleJump } from './panels/PanZoomSection';
 import PiecePicker from './panels/PiecePicker';
 import { useCollageRefetch } from './use-collage-refetch';
 import { useDeckTransport } from './use-deck-transport';
@@ -148,6 +176,12 @@ interface LoadedSource {
 
 /** Shortest cut `I` / `O` may leave — the floor `clipSlice` keeps. */
 const MIN_CUT = MIN_HOOK_SECONDS / 4;
+/**
+ * How far into a slide the needle is set to show its FIRST frame. At the
+ * slide's very first moment the stage shows the composition — the rest —
+ * so a jump lands a hair after it, well inside the snap of a key at 0.
+ */
+const NEEDLE_NUDGE_SECONDS = 0.04;
 
 /**
  * Composing one post's hook: the picture, the badge over it, and the PNG that
@@ -269,8 +303,8 @@ export default function PostEditor({
     setCellBaseline(activeFileRef.current);
   }, []);
   const lead: CollageLead = useMemo(
-    () => ({ media: slide.media, framing: slide.framing, develop: slide.develop }),
-    [slide.media, slide.framing, slide.develop],
+    () => ({ media: slide.media, framing: slide.framing, develop: slide.develop, motion: slide.motion }),
+    [slide.media, slide.framing, slide.develop, slide.motion],
   );
   const cell = collage ? collageCellAt(lead, collage, cellIndex) : null;
 
@@ -285,6 +319,7 @@ export default function PostEditor({
         media: next.lead.media,
         framing: next.lead.framing,
         develop: next.lead.develop,
+        motion: next.lead.motion,
         collage: next.collage,
       };
       if (slide.kind === 'hook') {
@@ -312,6 +347,7 @@ export default function PostEditor({
             media: patch.media !== undefined ? patch.media : lead.media,
             framing: patch.framing ?? lead.framing,
             develop: patch.develop !== undefined ? patch.develop : lead.develop,
+            motion: patch.motion !== undefined ? patch.motion : lead.motion,
           },
           collage: null,
         });
@@ -621,37 +657,9 @@ export default function PostEditor({
     [post, onChangePost],
   );
 
-  /**
-   * Where the OPEN slide's picture sits. The hook's lives on the badge beside
-   * its frame choice, a carousel picture's on the slide — the same split
-   * `videoTimeSeconds` already makes, because both are about one photograph
-   * rather than about the piece.
-   */
-  const setFraming = useCallback(
-    (framing: Framing) => {
-      if (slide.kind === 'hook') {
-        onChangePost({ ...post, badge: { ...post.badge, framing } });
-      } else if (slide.slideId) {
-        onChangePost({
-          ...post,
-          slides: post.slides.map((s) =>
-            s.id === slide.slideId ? { ...s, framing } : s,
-          ),
-        });
-      }
-    },
-    [slide, post, onChangePost],
-  );
-  /** The SELECTED cell's framing — the slide's own when it is cell 0. */
+  /** The SELECTED cell's framing — the slide's own when it is cell 0 — and how it moves. */
   const cellFraming = normaliseFraming(cell ? cell.framing : slide.framing);
-  const setCellFraming = useCallback(
-    (i: number, framing: Framing) => patchCell(i, { framing }),
-    [patchCell],
-  );
-  const setSelectedCellFraming = useCallback(
-    (framing: Framing) => patchCell(cellIndex, { framing }),
-    [patchCell, cellIndex],
-  );
+  const cellMotion = cell ? cell.motion : slide.motion;
 
   const patchSlide = (patch: Partial<PostSlide>) => {
     if (!slide.slideId) return;
@@ -883,6 +891,179 @@ export default function PostEditor({
         ? Math.max(settle, hook.seconds, collageSettle)
         : deck.local;
 
+  // ——— The picture's pan and zoom, edited AT THE NEEDLE (`framing-motion.ts`).
+  // It moves on the band's own time. Paused on the slide's first moment the
+  // stage shows the COMPOSITION, so the picture rests there exactly as the
+  // badge settles — which is also what the hook's thumbnail is taken from, and
+  // what a gesture there writes: the framing itself. Anywhere inside the slide
+  // the stage shows the frame the needle is on, and the same gesture writes it.
+  const slideSeconds = lengths[slideIndex] ?? 0;
+  const openerSeconds = isHook ? hook.seconds : 0;
+  const pictureNeedle = useCallback(
+    (motion: FramingMotion | null) => ({
+      u:
+        !hasMotion(motion) || composedView
+          ? 1
+          : motionProgress(motion, deck.local, slideSeconds, openerSeconds),
+      snap: snapShare(motion, slideSeconds, openerSeconds),
+    }),
+    [composedView, deck.local, slideSeconds, openerSeconds],
+  );
+  /** A picture's framing as the stage shows it at the needle. */
+  const shownFraming = useCallback(
+    (framing: Framing, motion: FramingMotion | null): Framing => {
+      if (!hasMotion(motion)) return framing;
+      const { u, snap } = pictureNeedle(motion);
+      // Playing, every instant is drawn; held, a frame the needle is on is
+      // drawn as itself, so a gesture starts from exactly what it will write.
+      return stagePlaying ? framingAtProgress(framing, motion, u) : framingAtNeedle(framing, motion, u, snap);
+    },
+    [pictureNeedle, stagePlaying],
+  );
+  const stageFraming = useMemo(
+    () => shownFraming(slide.framing, slide.motion),
+    [shownFraming, slide.framing, slide.motion],
+  );
+  const stageCollage = useMemo(
+    () =>
+      collage && collage.cells.some((c) => hasMotion(c.motion))
+        ? {
+            ...collage,
+            cells: collage.cells.map((c) =>
+              hasMotion(c.motion) ? { ...c, framing: shownFraming(c.framing, c.motion) } : c,
+            ),
+          }
+        : collage,
+    [collage, shownFraming],
+  );
+  /** A gesture on a moving slide stops it: the frame it writes is the one the needle is on. */
+  const holdTheNeedle = useCallback(() => {
+    if (deck.playing) deck.setPlaying(false);
+    setClipPlaying(false);
+  }, [deck]);
+  /**
+   * Write cell `i`'s framing (0 = the slide's own) as a gesture or a control
+   * left it — at the needle when the picture moves, as it always was when it
+   * holds still. One writer for the stage's drag, wheel and pinch and for the
+   * Picture tab's rows, so the two cannot place a frame differently.
+   */
+  const placeFraming = useCallback(
+    (i: number, next: Framing) => {
+      const cur = collage ? collageCellAt(lead, collage, i) : lead;
+      if (!hasMotion(cur.motion)) {
+        patchCell(i, { framing: next });
+        return;
+      }
+      holdTheNeedle();
+      const { u, snap } = pictureNeedle(cur.motion);
+      const placed = placeAtNeedle(normaliseFraming(cur.framing), cur.motion, u, next, snap);
+      patchCell(i, { framing: placed.framing, motion: placed.motion });
+    },
+    [collage, lead, patchCell, holdTheNeedle, pictureNeedle],
+  );
+  /** Mirror cell `i` — its rest AND every frame of its move, whatever the needle says. */
+  const flipPicture = useCallback(
+    (i: number, axis: 'x' | 'y') => {
+      const cur = collage ? collageCellAt(lead, collage, i) : lead;
+      patchCell(i, { framing: flipFraming(normaliseFraming(cur.framing), axis), motion: flipMotion(cur.motion, axis) });
+    },
+    [collage, lead, patchCell],
+  );
+  const setCellMotion = useCallback(
+    (motion: FramingMotion | null) => patchCell(cellIndex, { motion }),
+    [patchCell, cellIndex],
+  );
+  // What the needle is on for the SELECTED picture, said as the author reads it.
+  const cellNeedle = pictureNeedle(cellMotion);
+  const cellTarget = hasMotion(cellMotion) && !composedView ? needleTarget(cellMotion, cellNeedle.u, cellNeedle.snap) : null;
+  const placing = !hasMotion(cellMotion)
+    ? ''
+    : composedView
+      ? 'The composition — where the picture rests'
+      : !cellTarget || cellTarget.kind === 'rest'
+        ? 'The rest — where the move ends'
+        : cellTarget.kind === 'key'
+          ? cellTarget.start
+            ? 'The first frame'
+            : `The frame at ${keySeconds(cellMotion, cellMotion.keys[cellTarget.index].at, slideSeconds, openerSeconds).toFixed(1)} s`
+          : `A new frame at ${deck.local.toFixed(1)} s`;
+  // Each picture's decoded shape, as the stage reports it — keyed by the slide
+  // so a slide just opened never measures a pan against the last one's.
+  const [pictureSizes, setPictureSizes] = useState<{
+    key: string;
+    sizes: readonly ({ width: number; height: number } | null)[];
+  }>({ key: '', sizes: [] });
+  const onPictureSizes = useCallback(
+    (sizes: readonly ({ width: number; height: number } | null)[]) => setPictureSizes({ key: slideKey, sizes }),
+    [slideKey],
+  );
+  /** The selected picture in its frame (or its cell), for a preset to measure a pan's room. */
+  const presetBox = useMemo((): PictureBox | null => {
+    const src = pictureSizes.key === slideKey ? pictureSizes.sizes[cellIndex] : null;
+    if (!src) return null;
+    const w = 1080;
+    const h = Math.round(1080 / aspect);
+    if (!collage) return { srcW: src.width, srcH: src.height, dstW: w, dstH: h };
+    const rect = resolveCollage(collage, w, h)[cellIndex];
+    return rect ? { srcW: src.width, srcH: src.height, dstW: rect.w, dstH: rect.h } : null;
+  }, [pictureSizes, slideKey, cellIndex, collage, aspect]);
+  const presets = useMemo(
+    () => MOTION_PRESETS.map((id) => ({ id, problem: presetProblem(id, cellFraming, presetBox) })),
+    [cellFraming, presetBox],
+  );
+  /** Write a one-tap move over the selected picture — two frames the needle then refines. */
+  const writePreset = useCallback(
+    (preset: MotionPreset) => {
+      const out = applyPreset(preset, cellFraming, cellMotion, presetBox);
+      if (!out) return;
+      holdTheNeedle();
+      patchCell(cellIndex, { framing: out.framing, motion: out.motion });
+    },
+    [cellFraming, cellMotion, presetBox, holdTheNeedle, patchCell, cellIndex],
+  );
+  // The TOUR over the selected picture: read out of its frames every render,
+  // since a tour is only a way of writing them (`framing-motion.ts`).
+  const tourSpan = slideSeconds - (hasMotion(cellMotion) ? motionOffset(cellMotion, slideSeconds, openerSeconds) : 0);
+  const tour = useMemo(() => {
+    if (!presetBox) return null;
+    const plan = tourOf(cellFraming, cellMotion, presetBox, tourSpan);
+    return {
+      plan,
+      windows: tourFrames(cellFraming, cellMotion).map((f) => framingWindow(f, presetBox)),
+    };
+  }, [cellFraming, cellMotion, presetBox, tourSpan]);
+  const writeTour = useCallback(
+    (plan: TourPlan) => {
+      const out = tourMotion(cellFraming, cellMotion, plan, presetBox, tourSpan);
+      if (!out) return;
+      holdTheNeedle();
+      patchCell(cellIndex, { framing: out.framing, motion: out.motion });
+    },
+    [cellFraming, cellMotion, presetBox, tourSpan, holdTheNeedle, patchCell, cellIndex],
+  );
+  /** Move the needle between the selected picture's frames. */
+  const jumpNeedle = useCallback(
+    (to: NeedleJump) => {
+      if (!hasMotion(cellMotion)) return;
+      holdTheNeedle();
+      // Arrivals only: the end of a pause is the same frame again.
+      const marks = arrivalMarks(cellFraming, cellMotion, slideSeconds, openerSeconds);
+      const here = deck.local;
+      const at =
+        to === 'first'
+          ? marks[0]
+          : to === 'rest'
+            ? slideSeconds
+            : to === 'prev'
+              ? ([...marks].reverse().find((m) => m < here - 0.02) ?? marks[0])
+              : (marks.find((m) => m > here + 0.02) ?? slideSeconds);
+      // A hair into the slide, never ON its first moment: there the stage
+      // shows the composition, and the needle would not be on the frame asked for.
+      deck.goTo(slideIndex, Math.min(slideSeconds, Math.max(NEEDLE_NUDGE_SECONDS, at)));
+    },
+    [cellFraming, cellMotion, holdTheNeedle, slideSeconds, openerSeconds, deck, slideIndex],
+  );
+
   // The opener's ticks, heard while whichever transport is actually driving
   // the badge plays — a clip's own, or the photo transport above — off until
   // asked for. `badgeTime` already reads whichever clock applies.
@@ -1049,7 +1230,8 @@ export default function PostEditor({
   // §13.2): a still takes its original only where the proxy would upscale.
   const delivery = useDeliveryRow(
     tab === 'export' && !collage ? cellFile : null,
-    cellFraming,
+    // A picture that moves needs the pixels of its closest frame.
+    deepestFraming(cellFraming, cellMotion),
     frameSize(aspect, DECK_LONG_EDGE),
   );
 
@@ -1277,6 +1459,11 @@ export default function PostEditor({
           : null
       }
       compact={compact}
+      // Where each slide's pictures have frames placed — a moving slide is
+      // read on the band at a glance, the way a clip's frames are.
+      marksFor={(i) =>
+        slides[i] ? slideMotionMarks(slides[i], lengths[i] ?? 0, slides[i].kind === 'hook' ? hook.seconds : 0) : []
+      }
     />
   );
 
@@ -1506,22 +1693,25 @@ export default function PostEditor({
             // pointed at there.
             hookRectFor={isHook ? hookRectFor : null}
             onMoveHook={isHook && hookVariant?.moveBy ? moveHook : undefined}
-            framing={slide.framing}
+            // Each picture as it stands at the needle: the stage draws what it is
+            // given, and its gestures start from — and write — that frame.
+            framing={stageFraming}
             // The closing card carries no photograph, so there is nothing to
             // reframe there and a drag must not pretend otherwise.
-            onFraming={isCta ? undefined : setFraming}
-            collage={collage}
+            onFraming={isCta ? undefined : (f) => placeFraming(0, f)}
+            collage={stageCollage}
             collageFiles={cellFiles}
             collageLuts={collageLuts}
             collageSeconds={slide.seconds}
             selectedCell={cellIndex}
             onSelectCell={setSelectedCell}
-            onCellFraming={setCellFraming}
+            onCellFraming={placeFraming}
             onMoveCell={moveCell}
             onSwapCells={swapCells}
             onDropAsset={isCta ? undefined : dropAsset}
             cellLabels={cellLabels}
             onSourceLoaded={onSourceLoaded}
+            onPictureSizes={onPictureSizes}
             onRendered={captureThumb}
             onFit={setFitWidth}
           />
@@ -1623,8 +1813,37 @@ export default function PostEditor({
               duration={duration}
               patchBadge={patchBadge}
               patchSlide={patchSlide}
-              framing={cellFraming}
-              onFraming={setSelectedCellFraming}
+              framing={shownFraming(cellFraming, cellMotion)}
+              onFraming={(f) => placeFraming(cellIndex, f)}
+              onFlip={(axis) => flipPicture(cellIndex, axis)}
+              panZoom={
+                isCta
+                  ? null
+                  : {
+                      motion: cellMotion,
+                      framing: cellFraming,
+                      placing,
+                      canRemove: cellTarget?.kind === 'key',
+                      openerSeconds,
+                      onMotion: setCellMotion,
+                      onRemove: () => setCellMotion(removeAtNeedle(cellMotion, cellNeedle.u, cellNeedle.snap)),
+                      onJump: jumpNeedle,
+                      presets,
+                      onPreset: writePreset,
+                      tour:
+                        tour && presetBox
+                          ? {
+                              file: cellFile,
+                              isVideo: Boolean(cellFile && classifyPart(cellFile.name) === 'video'),
+                              videoSeconds: cellIndex === 0 ? slide.videoTimeSeconds : 0,
+                              aspect: presetBox.srcW / presetBox.srcH,
+                              plan: tour.plan,
+                              windows: tour.windows,
+                              onPlan: writeTour,
+                            }
+                          : null,
+                    }
+              }
               grade={grade}
               linkedToProject={post.projectId !== null}
               develop={cellDevelop}

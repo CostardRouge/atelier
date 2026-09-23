@@ -41,12 +41,19 @@ import { transformAt, type AnimStep } from '../overlay/animation';
 import { normaliseStagger, staggerDelays, staggerRanks, staggerSettle, type Stagger } from '../overlay/stagger';
 import type { CellMotion } from '../media/cell-paint';
 import { readAnimStep } from './badge-layout';
+import { hasMotion, readMotion, type FramingMotion } from '../media/framing-motion';
 
 /** One cell after the first: a picture, how it sits, how it is corrected. */
 export interface CollageCell {
   media: SavedMediaRef | null;
   framing: Framing;
   develop: DevelopSettings | null;
+  /**
+   * How this cell's picture MOVES inside its mask over the slide, or null to
+   * hold still — per picture, like the framing it animates
+   * (`shared/media/framing-motion.ts`).
+   */
+  motion: FramingMotion | null;
   /** Where the author moved this print, on a free layout; the template's place otherwise. */
   place: CellPlace;
 }
@@ -134,6 +141,17 @@ export function collageAnimates(collage: SlideCollage | null | undefined): boole
 }
 
 /**
+ * True when a DRAWN cell's picture moves inside its mask — the lead's motion
+ * lives on the slide and is asked about there. A kept cell past the template
+ * draws nothing, so its motion makes nothing move.
+ */
+export function collageCellsMove(collage: SlideCollage | null | undefined): boolean {
+  if (!collage) return false;
+  const drawn = Math.max(0, collageCellCount(collage) - 1);
+  return collage.cells.slice(0, drawn).some((cell) => hasMotion(cell.motion));
+}
+
+/**
  * Every drawn cell's motion at `t` seconds into the slide, or null for a
  * collage that does not move. `seconds` is the slide's screen time — what an
  * exit is laid against; without one, cells that entered stay.
@@ -188,6 +206,7 @@ export function createCollageCell(media: SavedMediaRef | null = null): CollageCe
     media,
     framing: normaliseFraming(undefined),
     develop: null,
+    motion: null,
     place: { ...DEFAULT_CELL_PLACE },
   };
 }
@@ -250,6 +269,7 @@ export function readCollage(v: unknown): SlideCollage | null {
         media: mediaRefOrNull(raw.media),
         framing: normaliseFraming(raw.framing),
         develop: developOrNull(raw.develop),
+        motion: readMotion(raw.motion),
         place: normaliseCellPlace(raw.place),
       };
     }),
@@ -278,10 +298,13 @@ export interface CollageLead {
   media: SavedMediaRef | null;
   framing: Framing;
   develop: DevelopSettings | null;
+  motion: FramingMotion | null;
 }
 
 export function collageCellAt(lead: CollageLead, collage: SlideCollage, i: number): CollageCell {
-  if (i === 0) return { media: lead.media, framing: lead.framing, develop: lead.develop, place: collage.place };
+  if (i === 0) {
+    return { media: lead.media, framing: lead.framing, develop: lead.develop, motion: lead.motion, place: collage.place };
+  }
   return collage.cells[i - 1] ?? createCollageCell();
 }
 
@@ -339,7 +362,10 @@ export function retemplateCollage(collage: SlideCollage, template: string): Slid
   return { ...collage, template, cells };
 }
 
-/** Swap two cells' pictures, framings and develops — never their places, which belong to the slot. */
+/**
+ * Swap two cells' pictures with everything that is about the picture — its
+ * framing, its develop, its motion — never their places, which belong to the slot.
+ */
 export function swapCollageCells(
   lead: CollageLead,
   collage: SlideCollage,
@@ -355,11 +381,12 @@ export function swapCollageCells(
     media: from.media,
     framing: from.framing,
     develop: from.develop,
+    motion: from.motion,
   });
   all[a] = swap(B, A);
   all[b] = swap(A, B);
   return {
-    lead: { media: all[0].media, framing: all[0].framing, develop: all[0].develop },
+    lead: { media: all[0].media, framing: all[0].framing, develop: all[0].develop, motion: all[0].motion },
     collage: { ...collage, cells: all.slice(1) },
   };
 }
@@ -377,6 +404,7 @@ export function withCollageCell(
         media: patch.media !== undefined ? patch.media : lead.media,
         framing: patch.framing ?? lead.framing,
         develop: patch.develop !== undefined ? patch.develop : lead.develop,
+        motion: patch.motion !== undefined ? patch.motion : lead.motion,
       },
       collage: patch.place ? { ...collage, place: patch.place } : collage,
     };
