@@ -8,7 +8,7 @@ import {
   type SegmentSource,
   type SegmenterState,
 } from '../segment/segmenter';
-import { drawingLayers, type AdjustLayer } from './layer';
+import { subjectRequests, type AdjustLayer } from './layer';
 
 /**
  * The alpha map for every SUBJECT layer on the open picture, resolved by the
@@ -95,12 +95,7 @@ export function useSubjectMasks({
 
   // The requests, as a string, so the effect below runs when they really change
   // and not when a slider moves.
-  const wanted = drawingLayers(layers)
-    .filter((l) => l.mask?.kind === 'subject' && l.mask.points.length > 0)
-    .map((l) => {
-      const mask = l.mask as { points: readonly Point[]; model: string };
-      return { id: l.id, model: mask.model, points: mask.points };
-    });
+  const wanted = subjectRequests(layers);
   const signature = wanted
     .map((w) => `${w.id}=${w.points.map((p) => pointKey(pictureKey, w.model, p)).join(';')}`)
     .join('|');

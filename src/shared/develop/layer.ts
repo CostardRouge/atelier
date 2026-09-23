@@ -115,6 +115,27 @@ export function drawingLayers(layers: readonly AdjustLayer[] | null | undefined)
   return (layers ?? []).filter(layerDraws);
 }
 
+/** One SUBJECT layer's request to the model: which layer, which model, where the author tapped. */
+export interface SubjectRequest {
+  id: string;
+  model: string;
+  points: readonly (readonly [number, number])[];
+}
+
+/**
+ * The subject layers that need a raster from the model — drawing, and tapped at
+ * least once. ONE answer for the stage (`use-subject-masks.ts`) and the export
+ * (`roll-render.ts`): a layer the stage segments and the file does not is
+ * exactly the fault this exists to prevent.
+ */
+export function subjectRequests(layers: readonly AdjustLayer[] | null | undefined): SubjectRequest[] {
+  return drawingLayers(layers).flatMap((l) =>
+    l.mask?.kind === 'subject' && l.mask.points.length > 0
+      ? [{ id: l.id, model: l.mask.model, points: l.mask.points }]
+      : [],
+  );
+}
+
 export function sameLayer(a: AdjustLayer, b: AdjustLayer): boolean {
   return (
     a.id === b.id &&

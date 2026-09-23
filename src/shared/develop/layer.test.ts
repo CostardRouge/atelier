@@ -14,6 +14,7 @@ import {
   removeLayer,
   readLayers,
   sameLayers,
+  subjectRequests,
   type AdjustLayer,
 } from './layer';
 import { DEFAULT_LUMA, DEFAULT_RADIAL } from '../render/mask';
@@ -59,6 +60,21 @@ describe('what draws', () => {
     const off = layer({ id: 'b', enabled: false, develop: { ...DEFAULT_DEVELOP, contrast: 20 } });
     expect(drawingLayers([on, off]).map((l) => l.id)).toEqual(['a']);
     expect(drawingLayers(null)).toEqual([]);
+  });
+
+  it('asks the model only for a drawing subject that was tapped — the stage and the export read this one list', () => {
+    const lift = { ...DEFAULT_DEVELOP, exposure: 0.5 };
+    const subject = (id: string, points: [number, number][], over: Partial<AdjustLayer> = {}) =>
+      layer({ id, develop: lift, mask: { kind: 'subject', model: 'magic_touch', points }, ...over });
+    expect(
+      subjectRequests([
+        subject('tapped', [[0.2, 0.3], [0.5, 0.5]]),
+        subject('untapped', []),
+        subject('parked', [[0.1, 0.1]], { enabled: false }),
+        layer({ id: 'linear', develop: lift }),
+      ]),
+    ).toEqual([{ id: 'tapped', model: 'magic_touch', points: [[0.2, 0.3], [0.5, 0.5]] }]);
+    expect(subjectRequests(null)).toEqual([]);
   });
 });
 

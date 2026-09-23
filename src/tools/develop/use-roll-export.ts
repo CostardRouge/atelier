@@ -475,7 +475,16 @@ export function useRollExport({
             calibration,
             hdr,
             stamp,
+            onSubjects: () => setExporting(`Finding the subject ${step}…`),
           });
+          // A subject layer the model did not answer draws nothing — in the
+          // file as on the stage — so the run says which picture left without it.
+          if (out.subjects.resolved < out.subjects.asked) {
+            const lost = out.subjects.asked - out.subjects.resolved;
+            failures.push(
+              `${picture.ref.name} left without ${lost === 1 ? 'its subject mask' : `${lost} subject masks`}: the model could not be loaded or did not answer`,
+            );
+          }
           if (hdrRun && out.hdr) {
             if (out.hdr.ultra) {
               hdrRun.ultra += 1;
