@@ -50,7 +50,7 @@ import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache'
 import { pictureAspectRatio } from '../../shared/develop/crop-aspect';
 import { WORKBENCH_TABS, editorKeyAction, sameDevelop, type WorkbenchTab } from '../../shared/develop/roll-editor';
 import { framedThumbnail } from '../../shared/develop/roll-thumb';
-import type { RollGrade, RollPicture } from '../../shared/develop/roll-types';
+import { pictureLabel, type RollGrade, type RollPicture } from '../../shared/develop/roll-types';
 import { useDevelopDraft, useTold } from '../../shared/develop/use-develop-draft';
 import { useWriteThrough } from '../../shared/develop/use-write-through';
 import { useDevelopPicture, type DevelopFrame } from '../../shared/develop/use-develop-picture';
@@ -250,6 +250,7 @@ export default function PictureWorkbench({
   deliveryTable = null,
   onWords,
   onSettings,
+  onVariant,
   onPasteSettings,
   onLook,
   emptyText = 'This picture is not in the Library — open its folder, or take it from its day on your Winnow. Its numbers can still be set.',
@@ -319,6 +320,8 @@ export default function PictureWorkbench({
   onSettings: () => void;
   /** Paste the copied sections onto this picture; ⌘⇧V. False when nothing is held. */
   onPasteSettings: () => boolean;
+  /** Make a variant of this picture as it stands (item 30); ⌘'. */
+  onVariant?: () => void;
   /** Dress this picture in a look — a preset's (`DevelopPreset.look`). */
   onLook: (look: RollGrade) => void;
   /** What the stage says while the picture's bytes are not in hand. */
@@ -976,8 +979,8 @@ export default function PictureWorkbench({
   // copy changes the stored value without this editor's doing, and a draft that
   // ignored it would keep showing numbers the roll no longer holds — and write
   // them back over the step at the next nudge.
-  const callbacks = useRef({ onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings });
-  callbacks.current = { onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings };
+  const callbacks = useRef({ onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant });
+  callbacks.current = { onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant };
   const { replace } = draft;
   useWriteThrough<DevelopSettings>({
     stored: entry.develop,
@@ -1233,6 +1236,11 @@ export default function PictureWorkbench({
         case 'copy-settings':
           e.preventDefault();
           callbacks.current.onSettings();
+          return;
+        case 'variant':
+          if (!callbacks.current.onVariant) return;
+          e.preventDefault();
+          callbacks.current.onVariant();
           return;
         case 'paste-settings':
           if (!callbacks.current.onPasteSettings()) return;
@@ -1575,7 +1583,7 @@ export default function PictureWorkbench({
           <div className="flex-1 min-w-0 flex items-baseline gap-2">
             <DevelopBaseMenu
               className="min-w-0"
-              name={entry.ref.name}
+              name={pictureLabel(entry)}
               chip={fidelity.chip}
               rows={rows}
               current={current}
@@ -1763,7 +1771,7 @@ export default function PictureWorkbench({
         compactAs="drawer"
         open={sheetOpen}
         onClose={() => onSheetOpen(false)}
-        title={`${tabLabel} · ${entry.ref.name}`}
+        title={`${tabLabel} · ${pictureLabel(entry)}`}
         // The docked inspector wears the frame both editors' inspectors wear
         // (`frontend.md`): the tab strip pinned, the sections scrolling under it.
         className="col-start-2 row-start-1 row-span-2 min-h-0 flex flex-col gap-3 border border-line rounded-paper bg-surface p-3"

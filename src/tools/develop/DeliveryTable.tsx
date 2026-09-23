@@ -4,6 +4,7 @@ import {
   delivers,
   isIgnored,
   matchesDeliveryFilter,
+  pictureLabel,
   type DeliveryFilter,
   type RollPicture,
 } from '../../shared/develop/roll-types';
@@ -166,11 +167,13 @@ function Row({
   const exported = mark ? exportState(picture, marks) : null;
   const ignored = state === 'ignore';
   const on = delivers(picture);
-  const name = picture.ref.name;
-  // The plan's line starts with the name the row already shows: `name ← …`
-  // or `name — …`. The arrow says something (where the pixels come from) and
-  // stays; the dash only joined the name.
-  const said = line?.startsWith(`${name} `) ? line.slice(name.length + 1).replace(/^— /, '') : line;
+  const file = picture.ref.name;
+  // A variant's row says which (`a.jpg · 2`); the plan's line names the FILE.
+  const name = pictureLabel(picture);
+  // The plan's line starts with the file's name, which the row already shows:
+  // `name ← …` or `name — …`. The arrow says something (where the pixels
+  // come from) and stays; the dash only joined the name.
+  const said = line?.startsWith(`${file} `) ? line.slice(file.length + 1).replace(/^— /, '') : line;
   // An ignored row brings the picture back into the work; any other gives the other answer.
   const act = () => onDeliver(picture.id, ignored ? 'ignore' : 'toggle');
   const onKey = (e: KeyboardEvent) => {

@@ -178,6 +178,31 @@ removed on one left the other's; a fast ←/→ sweep over look / no look / look
 moved nothing; the verb dressed the bare one; an export of a black & white
 picture and a bare one delivered 133,133,133 and 200,122,60.
 
+## A VARIANT is a whole picture sharing a file; it leaves into a folder, never under a new name (2026-09-23, item 30)
+
+His YES (`docs/lightroom-gaps.md` §8): Capture One's variants. **Decisions**:
+(1) `RollPicture.variant` — absent for the first, 2, 3… for copies, numbered
+one past the highest of the capture so a number is never reused while a higher
+one stands; a variant is a WHOLE `RollPicture` (its own id, develop, crop,
+look, words, delivery), not a diff over the first. (2) `addPictures`' dedupe
+STAYS: a variant is MADE (`addVariant`, placed after the last entry of its
+capture), never added from a file. (3) Two starts: `clone` (⌘', Lightroom's
+virtual copy — everything, delivery back to `auto`) and `fresh` (Capture One's
+New Variant — only what belongs to the FILE: `rendition`, the RAW base with its
+measured `rawGain`, `lensProfile`; never `rawWb`, which is a choice). (4) THE
+NAME: Winnow's `reconcile` pairs a final with its capture on the exact basename
++ capture time (read in `winnow/src/lib/reconcile.ts`), and his Gallery pairs
+by name — so a copy leaves as `Variant 2/DJI_0101.jpg` (`variantFolder`), a
+second target as `Web/Variant 2/…`, a download as `Variant 2-DJI_0101.jpg`; a
+`_v2` suffix was rejected for breaking both. `deliverFilesTo` walks a `/` path.
+(5) The bytes are the capture's: `use-roll-media` fetches once for a family
+(`mates`, only built when a variant exists), `use-roll-previews` keeps one
+working preview, the local count counts files. **How to apply**: anything keyed
+by picture id stays per variant (thumbs, export marks, the draft); anything
+keyed by the FILE must go through `sameMediaRef` or it doubles per variant; a
+list that names a picture uses `pictureLabel`, a message about the file may
+keep `ref.name`.
+
 ## Winnow's culling is READ live, never stored and never written (2026-09-23, item 33)
 
 His answer (`docs/lightroom-gaps.md` §8): picks and stars SHOWN and FILTERED

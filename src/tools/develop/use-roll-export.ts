@@ -9,7 +9,7 @@ import {
   type PictureSize,
 } from '../../shared/develop/roll-export';
 import { measurePicture, renderRollPicture, type MeasuredPicture } from '../../shared/develop/roll-render';
-import { delivers, type RollDoc, type RollPicture } from '../../shared/develop/roll-types';
+import { delivers, variantFolder, type RollDoc, type RollPicture } from '../../shared/develop/roll-types';
 import type { Interpolation } from '../../shared/lut/interpolate';
 import { rollCubes } from './roll-cubes';
 import { WORKING_PREVIEW_EDGE, isWorkingPreview } from '../../shared/develop/working-preview';
@@ -332,6 +332,9 @@ export function useRollExport({
     const foldered: FolderedFile[] = [];
     // The picture each file was rendered from, parallel to `rendered`.
     const renderedFrom: RollPicture[] = [];
+    // And the sub-folder it goes to, parallel too: '' for a picture, `Variant
+    // 2` for a copy (item 30), whose file keeps the capture's exact name.
+    const renderedFolder: string[] = [];
     const assetIds: (string | null)[] = [];
     const sourceIds = new Set<string>();
     const failures: string[] = [];
@@ -617,8 +620,12 @@ export function useRollExport({
             failures.push(`${picture.ref.name} carries no camera EXIF — nothing is known about the picture it came from, only the signature is written`);
           }
           const blob = out.blob;
-          const name = uniqueName(exportName(picture.ref.name), (c) => named.has(c.toLowerCase()));
-          named.add(name.toLowerCase());
+          // Unique within its own folder: a variant's `Variant 2/DJI_0101.jpg`
+          // does not collide with the first's `DJI_0101.jpg`.
+          const variantDir = variantFolder(picture);
+          const inDir = (n: string) => `${variantDir}/${n}`.toLowerCase();
+          const name = uniqueName(exportName(picture.ref.name), (c) => named.has(inDir(c)));
+          named.add(inDir(name));
           rendered.push(
             new File([blob], name, {
               type: 'image/jpeg',
@@ -627,12 +634,14 @@ export function useRollExport({
             }),
           );
           out.outputs.slice(1).forEach((o, k) => {
+            const targetDir = targetFolder(r.export.targets[k + 1].name, k + 1);
             foldered.push({
-              folder: targetFolder(r.export.targets[k + 1].name, k + 1),
+              folder: variantDir ? `${targetDir}/${variantDir}` : targetDir,
               file: new File([o.blob], name, { type: 'image/jpeg', lastModified: file.lastModified }),
             });
           });
           renderedFrom.push(picture);
+          renderedFolder.push(variantDir);
           assetIds.push(identity?.assetId ?? null);
           if (origin) sourceIds.add(origin.sourceId);
         } catch (err) {
@@ -649,7 +658,8 @@ export function useRollExport({
       // A cancelled run keeps what it rendered: written, and said as such.
       setExporting('Writing…');
       task.update({ label: 'Writing the pictures', progress: 0, detail: null });
-      const delivery = await deliverFilesTo(target, [...rendered, ...foldered], {
+      const mains = rendered.map((file, i) => (renderedFolder[i] ? { file, folder: renderedFolder[i] } : file));
+      const delivery = await deliverFilesTo(target, [...mains, ...foldered], {
         replace: r.export.replace,
         onProgress: (done, total) => {
           setExporting(`Writing ${done}/${total}…`);
@@ -660,7 +670,7 @@ export function useRollExport({
       // What LANDED is what gets marked: a file the folder refused was not delivered.
       const refused = new Set(delivery.method === 'folder' ? delivery.failed : []);
       latest.current.onDelivered?.(
-        renderedFrom.filter((_, i) => !refused.has(rendered[i].name)),
+        renderedFrom.filter((_, i) => !refused.has(renderedFolder[i] ? `${renderedFolder[i]}/${rendered[i].name}` : rendered[i].name)),
         Date.now(),
       );
       const renamed = delivery.method === 'folder' ? delivery.renamed : 0;

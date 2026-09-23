@@ -97,6 +97,14 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'm', targetTypes: true }))).toBeNull();
   });
 
+  it("makes a variant on ⌘' — Lightroom's virtual copy — once per press, never while typing", () => {
+    expect(editorKeyAction(press({ key: "'", metaKey: true }))).toBe('variant');
+    expect(editorKeyAction(press({ key: "'", ctrlKey: true }))).toBe('variant');
+    expect(editorKeyAction(press({ key: "'", metaKey: true, repeat: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: "'", metaKey: true, targetTypes: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: "'" }))).toBeNull();
+  });
+
   it('opens the sections on ⌘⇧C and pastes them on ⌘⇧V, never over a text selection', () => {
     expect(editorKeyAction(press({ key: 'C', metaKey: true, shiftKey: true }))).toBe('copy-settings');
     expect(editorKeyAction(press({ key: 'v', ctrlKey: true, shiftKey: true }))).toBe('paste-settings');

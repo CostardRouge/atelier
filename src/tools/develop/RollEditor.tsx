@@ -33,6 +33,10 @@ import { formatBytes } from '../../shared/lib/format';
 import { pictureThumbnail } from '../../shared/develop/roll-thumb';
 import {
   addPictures,
+  addVariant,
+  variantNumber,
+  newRollId,
+  pictureLabel,
   copyBorderTo,
   copyCropTo,
   copyGradeTo,
@@ -50,6 +54,7 @@ import {
   type RollDoc,
   type RollExport,
   type RollPicture,
+  type VariantStart,
 } from '../../shared/develop/roll-types';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { fileBaseName } from '../../shared/library/assets';
@@ -278,7 +283,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [siblingsByBase],
   );
   const openSiblings = useMemo(() => (openFile ? siblingsFor(openFile) : []), [openFile, siblingsFor]);
-  const localCount = roll.pictures.filter((p) => !p.ref.assetId).length;
+  // Files, not entries: a variant (item 30) is the same file, previewed once.
+  const localCount = roll.pictures.filter((p) => !p.ref.assetId && variantNumber(p) < 2).length;
   const reach = summarizeAvailability(
     roll.pictures.map((p) => p.id),
     availability,
@@ -520,6 +526,26 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [onOpenPicture, shownByCull],
   );
 
+  // A VARIANT of the open picture (item 30): Lightroom's virtual copy when it
+  // is cloned, Capture One's New Variant when it starts as shot. It is opened
+  // at once — making a copy is always to work on it — and wears the source's
+  // thumbnail until its own is taken.
+  const makeVariant = useCallback(
+    (start: VariantStart) => {
+      const from = openIdRef.current;
+      if (!from) return;
+      const id = newRollId();
+      update((r) => addVariant(r, from, start, id));
+      if (!latest.current.pictures.some((p) => p.id === id)) return;
+      setThumbs((cur) => {
+        const blob = cur.get(from);
+        return blob && start === 'clone' ? new Map(cur).set(id, blob) : cur;
+      });
+      onOpenPicture(id);
+    },
+    [update, onOpenPicture],
+  );
+
   const handleDevelop = useCallback(
     (id: string, develop: DevelopSettings | null) =>
       update((r) => {
@@ -589,8 +615,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       const after = { ...picture, deliver: next };
       setNotice(
         next === 'ignore'
-          ? `${picture.ref.name} ignored — the arrows step over it`
-          : `${picture.ref.name} ${delivers(after) ? 'will be exported' : 'stays out of the export'}${next === 'auto' ? ' (the roll’s rule)' : ''}`,
+          ? `${pictureLabel(picture)} ignored — the arrows step over it`
+          : `${pictureLabel(picture)} ${delivers(after) ? 'will be exported' : 'stays out of the export'}${next === 'auto' ? ' (the roll’s rule)' : ''}`,
       );
     },
     [update],
@@ -700,7 +726,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     const id = openIdRef.current;
     if (!held || !id) return false;
     update((r) => applySections(r, held.from, [id], held.sections));
-    setNotice(`pasted ${sectionNames(held.sections)} from ${held.from.ref.name}`);
+    setNotice(`pasted ${sectionNames(held.sections)} from ${pictureLabel(held.from)}`);
     return true;
   }, [update]);
   const resetSectionsOf = useCallback(
@@ -895,6 +921,24 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       ? [{ id: 'winnow', label: `A day on ${connection.id}…`, onSelect: () => setPickingDay(true) }]
       : []),
     { id: 'folder', label: 'A folder on this computer…', onSelect: () => void addFolder() },
+    // A variant is MADE from the picture on the stage, never added from a
+    // file (item 30): the roll still refuses a file it holds.
+    ...(open
+      ? [
+          {
+            id: 'variant-clone',
+            label: `A variant of ${pictureLabel(open)}, as edited`,
+            title: "Lightroom's virtual copy — the same file with its own develop, crop, look and words (⌘')",
+            onSelect: () => makeVariant('clone'),
+          },
+          {
+            id: 'variant-fresh',
+            label: `A variant of ${pictureLabel(open)}, as shot`,
+            title: 'The same file, started again from as shot — its RAW base and lens profile kept',
+            onSelect: () => makeVariant('fresh'),
+          },
+        ]
+      : []),
   ];
   const addButtonLabel: Record<string, string> = {
     library: addLabel,
@@ -1044,6 +1088,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onDeliver={(action) => handleDeliver(open.id, action)}
               onWords={(words) => handleWords(open.id, words)}
               onSettings={() => setSettingsOpen(true)}
+              onVariant={() => makeVariant('clone')}
               onLook={(look) => update((r) => copyGradeTo(r, [open.id], look))}
               onPasteSettings={pasteSections}
               deliveryTable={
@@ -1259,7 +1304,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       )}
       {confirmRemove && (
         <ConfirmDialog
-          title={`Take ${confirmRemove.ref.name} off the roll?`}
+          title={`Take ${pictureLabel(confirmRemove)} off the roll?`}
           confirmLabel="Remove"
           danger
           onCancel={() => setConfirmRemove(null)}

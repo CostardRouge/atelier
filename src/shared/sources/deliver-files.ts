@@ -68,9 +68,11 @@ export async function pickDeliveryTarget(): Promise<DeliveryTarget | null> {
 
 /**
  * A file bound for a SUB-FOLDER of the chosen one — a second export target
- * (`develop/export-targets.ts`): the file keeps its own name, the folder says
- * which target it is. A download cannot make a folder, so there the folder's
- * name goes before the file's instead (`Web-DJI_0101.jpg`).
+ * (`develop/export-targets.ts`), a picture's variant (`Variant 2`), or both
+ * (`Web/Variant 2`, one `/` per level): the file keeps its own name, the
+ * folder says which target or variant it is. A download cannot make a folder,
+ * so there the folders' names go before the file's instead
+ * (`Web-Variant 2-DJI_0101.jpg`).
  */
 export interface FolderedFile {
   file: File;
@@ -95,7 +97,9 @@ export async function deliverFilesTo(
       let dir = target.dir;
       if (folder) {
         try {
-          dir = await target.dir.getDirectoryHandle(folder, { create: true });
+          for (const level of folder.split('/').filter(Boolean)) {
+            dir = await dir.getDirectoryHandle(level, { create: true });
+          }
         } catch (e) {
           const message = e instanceof Error ? e.message : String(e);
           for (const i of these) {
@@ -124,7 +128,7 @@ export async function deliverFilesTo(
     return { method: 'folder', ...result };
   }
   for (const [i, f] of items.entries()) {
-    downloadBlob(f.file, f.folder ? `${f.folder}-${f.file.name}` : f.file.name);
+    downloadBlob(f.file, f.folder ? `${f.folder.split('/').filter(Boolean).join('-')}-${f.file.name}` : f.file.name);
     onProgress?.(i + 1, total);
   }
   return { method: 'download', written: total };

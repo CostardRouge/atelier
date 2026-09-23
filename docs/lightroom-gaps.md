@@ -103,7 +103,7 @@ repeated here.
 | # | Missing | Today | Size |
 |---|---|---|---|
 | 29 | **A grid of the roll**, sort, drag to reorder | strip in import order; `movePicture` has no UI | M |
-| 30 | **Virtual copies** (one frame in colour AND in B&W) | refused by `addPictures`' dedupe | M |
+| 30 | **Virtual copies** (one frame in colour AND in B&W) | **BUILT (pass 5)** — `RollPicture.variant`, ⌘' clones, *as shot* starts bare; a copy leaves into `Variant N/` under the capture's exact name (`develop-roll.md`) | M |
 | 31 | **Snapshots, a per-picture history panel** | roll-wide undo, lost on reload | M |
 | 32 | **Title, caption, keywords, copyright/creator** written into the file | none | M |
 | 33 | **Culling signals where one edits** — Winnow's picks/stars shown read-only, filter on them | **BUILT (pass 5)** — read live from the rows Winnow sends, never stored or written; a mark on each strip cell and table row, the strip filtered by picks / not rejected / stars (`develop-roll.md`) | S/M |
@@ -133,7 +133,8 @@ repeated here.
   26 is NO by his answer; 25's wide gamut is measured and briefed in §11
   (four questions) — pass 4 waits on him for that one.
 - **Pass 5 — workflow:** 29, 30, 31, 33, 32, 34. Started 2026-09-23: 32 came
-  with M2 (title, caption, rights); 33 (Winnow's culling, read-only) is BUILT.
+  with M2 (title, caption, rights); 33 (Winnow's culling, read-only) and 30
+  (variants) are BUILT.
 - Later, and each its own brief: 19, 20, 22, 24, 35.
 
 ## 7. His to decide

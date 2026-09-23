@@ -9,6 +9,9 @@ import {
   DEFAULT_ROLL_EXPORT,
   ROLL_DOC_VERSION,
   addPictures,
+  addVariant,
+  pictureLabel,
+  variantFolder,
   createRollDoc,
   migrateRollDoc,
   movePicture,
@@ -433,5 +436,65 @@ describe('a picture’s words (M2)', () => {
     expect([p.title, p.caption]).toEqual(['T', 'C']);
     const old = readRollDoc(JSON.parse(JSON.stringify(roll(['b.jpg']))))!;
     expect('title' in old.pictures[0] || 'caption' in old.pictures[0]).toBe(false);
+  });
+});
+
+describe('variants (item 30)', () => {
+  const ref = (name: string) => ({ name, size: 10, lastModified: 1 });
+  const ids = () => {
+    let n = 0;
+    return () => `p${++n}`;
+  };
+  const base = () => {
+    let roll = addPictures(createRollDoc('R', 'local', 1, 'r1'), [ref('a.jpg'), ref('b.jpg')], 2, ids());
+    roll = patchPicture(roll, 'p1', { develop: { ...DEFAULT_DEVELOP, exposure: 1 }, deliver: 'no' });
+    roll = setPictureWords(roll, 'p1', { title: 'Dawn' });
+    return roll;
+  };
+
+  it('clones a picture right after it, numbered 2, its delivery back on the rule', () => {
+    const roll = addVariant(base(), 'p1', 'clone', 'v1', 5);
+    expect(roll.pictures.map((p) => p.id)).toEqual(['p1', 'v1', 'p2']);
+    const v = roll.pictures[1];
+    expect(v.variant).toBe(2);
+    expect(v.develop?.exposure).toBe(1);
+    expect(v.title).toBe('Dawn');
+    expect(v.deliver).toBe('auto');
+    expect(v.ref).toEqual(roll.pictures[0].ref);
+    expect(v.develop).not.toBe(roll.pictures[0].develop);
+    expect(pictureLabel(v)).toBe('a.jpg · 2');
+    expect(pictureLabel(roll.pictures[0])).toBe('a.jpg');
+    expect(variantFolder(v)).toBe('Variant 2');
+    expect(variantFolder(roll.pictures[0])).toBe('');
+  });
+
+  it('starts a fresh variant as shot, keeping what belongs to the file', () => {
+    let roll = patchPicture(base(), 'p1', {
+      develop: { ...DEFAULT_DEVELOP, exposure: 1, base: 'gain', rawGain: 1.5, rawWb: { kelvin: 3000, tint: 0, matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1] } },
+      rendition: 'delivered:a.jpg',
+    });
+    roll = addVariant(roll, 'p1', 'fresh', 'v1');
+    const v = roll.pictures[1];
+    expect(v.develop).toEqual({ ...DEFAULT_DEVELOP, base: 'gain', rawGain: 1.5 });
+    expect(v.rendition).toBe('delivered:a.jpg');
+    expect(v.title).toBeUndefined();
+    expect(isEdited(addVariant(base(), 'p1', 'fresh', 'v2').pictures[1])).toBe(false);
+  });
+
+  it('numbers past the highest of its capture and goes after the last of them', () => {
+    let roll = addVariant(base(), 'p1', 'clone', 'v1');
+    roll = addVariant(roll, 'p1', 'fresh', 'v2');
+    expect(roll.pictures.map((p) => `${p.id}:${p.variant ?? 1}`)).toEqual(['p1:1', 'v1:2', 'v2:3', 'p2:1']);
+    roll = removePictures(roll, ['v1']);
+    roll = addVariant(roll, 'v2', 'clone', 'v3');
+    expect(roll.pictures.find((p) => p.id === 'v3')?.variant).toBe(4);
+  });
+
+  it('never lets a file be ADDED twice, and survives being read back', () => {
+    const roll = addVariant(base(), 'p1', 'clone', 'v1');
+    expect(addPictures(roll, [ref('a.jpg')])).toBe(roll);
+    const read = readRollDoc(JSON.parse(JSON.stringify(roll)));
+    expect(read?.pictures.map((p) => p.variant)).toEqual([undefined, 2, undefined]);
+    expect(addVariant(roll, 'nope', 'clone')).toBe(roll);
   });
 });

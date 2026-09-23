@@ -7,7 +7,7 @@ import {
   type CopiedSettings,
   type PictureSection,
 } from '../../shared/develop/picture-sections';
-import type { RollPicture } from '../../shared/develop/roll-types';
+import { pictureLabel, type RollPicture } from '../../shared/develop/roll-types';
 import Button from '../../shared/ui/Button';
 import { Icons } from '../../shared/ui/icons';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
@@ -98,7 +98,7 @@ export default function SettingsSheet({
     >
       <div className="w-full max-w-[30rem] max-h-[min(90dvh,44rem)] overflow-y-auto overscroll-contain flex flex-col gap-3 bg-surface border border-line rounded-paper-lg shadow-paper p-4 max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:max-h-none max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <div className="flex-none flex items-center gap-2.5 min-w-0">
-          <h2 className="m-0 font-serif text-lg min-w-0 truncate">Settings of {picture.ref.name}</h2>
+          <h2 className="m-0 font-serif text-lg min-w-0 truncate">Settings of {pictureLabel(picture)}</h2>
           <span className="flex-1" />
           <button
             type="button"
@@ -113,7 +113,7 @@ export default function SettingsSheet({
         {pasteFrom && (
           <div className="flex items-center gap-2 min-w-0 p-2 rounded-control border border-line bg-paper-2">
             <span className="flex-1 min-w-0 font-mono text-2xs text-ink-soft leading-snug">
-              Copied from <span className="text-ink">{pasteFrom.from.ref.name}</span>:{' '}
+              Copied from <span className="text-ink">{pictureLabel(pasteFrom.from)}</span>:{' '}
               {pasteFrom.sections.map((id) => PICTURE_SECTIONS.find((s) => s.id === id)?.label).join(', ')}
             </span>
             <Button size="sm" icon={Icons.paste} onClick={act(onPaste)} title="Paste ⌘⇧V — these sections onto this picture">

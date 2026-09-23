@@ -24,7 +24,7 @@ import { detailOrNull, isDefaultDetail, type DetailSettings } from '../render/de
 import { isDefaultPostVignette, postVignetteOrNull, type PostCropVignette } from '../render/post-vignette';
 import { readPatches, type Patch } from '../render/repair';
 import { readLayers, type AdjustLayer } from './layer';
-import { developOrNull, isDefaultDevelop, type DevelopSettings } from './develop';
+import { DEFAULT_DEVELOP, developOrNull, isDefaultDevelop, isRawDevelop, type DevelopSettings } from './develop';
 import { filmTextureOrNull, type FilmTexture } from '../film/film-texture';
 import { isDefaultFraming, normaliseFraming, type Framing } from '../media/framing';
 import { type SavedMediaRef } from '../projects/project-types';
@@ -221,6 +221,18 @@ export interface RollPicture {
    * `render-core.md` for why that order was chosen over the brief's.
    */
   layers?: AdjustLayer[];
+  /**
+   * Which VARIANT of its capture this entry is (2026-09-23, item 30 of
+   * `docs/lightroom-gaps.md`, his YES — Capture One's variants, Lightroom's
+   * virtual copies): absent for the first, 2, 3… for a copy made from a
+   * picture already on the roll (`addVariant`). Every variant is a whole
+   * `RollPicture` of its own — its develop, crop, look, words, delivery —
+   * sharing only the file. Adding a file the roll holds is still refused
+   * (`addPictures`); a variant is MADE, never added. A copy leaves into a
+   * sub-folder named after it (`variantFolder`) so the file keeps the
+   * capture's exact name, the one Winnow's `reconcile` pairs on.
+   */
+  variant?: number;
 }
 
 export interface RollDoc {
@@ -430,6 +442,8 @@ function readPicture(raw: unknown, rollGrade: RollGrade | null = null): RollPict
     vignette: postVignetteOrNull(raw.vignette),
     repair: readPatches(raw.repair),
     layers: readLayers(raw.layers),
+    // Absent is the first variant — every roll written before copies existed.
+    ...(Number.isInteger(raw.variant) && (raw.variant as number) >= 2 ? { variant: raw.variant as number } : {}),
   };
 }
 
@@ -499,6 +513,85 @@ export function addPictures(
     pictures.push(createRollPicture(ref, makeId()));
   }
   return pictures.length === roll.pictures.length ? roll : { ...roll, pictures, updatedAt: now };
+}
+
+// --- variants (item 30) --------------------------------------------------------
+
+/** 1 for the first entry of a capture, 2, 3… for its copies. */
+export function variantNumber(p: Pick<RollPicture, 'variant'>): number {
+  return p.variant && p.variant >= 2 ? p.variant : 1;
+}
+
+/** `DJI_0101.JPG` for the first, `DJI_0101.JPG · 2` for a copy — the name every list shows. */
+export function pictureLabel(p: Pick<RollPicture, 'ref' | 'variant'>): string {
+  const n = variantNumber(p);
+  return n > 1 ? `${p.ref.name} · ${n}` : p.ref.name;
+}
+
+/**
+ * The sub-folder a copy's file leaves into — `Variant 2` — or '' for the
+ * first. A FOLDER and not a suffix: the delivered name stays exactly the
+ * capture's (`exportName`), which is what pairs his Gallery with his source
+ * folder by eye and what Winnow's `reconcile` matches on (basename + capture
+ * time). A `_v2` would have broken both.
+ */
+export function variantFolder(p: Pick<RollPicture, 'variant'>): string {
+  const n = variantNumber(p);
+  return n > 1 ? `Variant ${n}` : '';
+}
+
+/** How a variant starts: as the source picture stands, or as shot. */
+export type VariantStart = 'clone' | 'fresh';
+
+/**
+ * A new variant of picture `fromId`, placed right after the last entry of
+ * its capture and numbered one past the highest there (a number is never
+ * reused while a higher one stands, so `Variant 3` names one picture's files
+ * for as long as it exists).
+ *
+ * - `clone` — Lightroom's virtual copy, Capture One's *Clone Variant*: every
+ *   field of the source, its words included (the author edits them apart),
+ *   and its delivery back on the roll's rule.
+ * - `fresh` — Capture One's *New Variant*: the picture AS SHOT. What is kept
+ *   is what belongs to the FILE, never an edit: which rendition it is
+ *   developed from, the RAW base with its measured gain (never its white
+ *   balance, which is a choice), and the lens's measured profile.
+ *
+ * Returns the roll unchanged when `fromId` names nothing.
+ */
+export function addVariant(
+  roll: RollDoc,
+  fromId: string,
+  start: VariantStart,
+  newId: string = newRollId(),
+  now: number = Date.now(),
+): RollDoc {
+  const from = roll.pictures.find((p) => p.id === fromId);
+  if (!from) return roll;
+  const family = roll.pictures.filter((p) => sameMediaRef(p.ref, from.ref));
+  const number = Math.max(...family.map(variantNumber)) + 1;
+  let made: RollPicture;
+  if (start === 'clone') {
+    const { deliver: _deliver, variant: _variant, ...rest } = structuredClone(from);
+    void _deliver;
+    void _variant;
+    made = { ...rest, id: newId, deliver: 'auto', variant: number };
+  } else {
+    const base = from.develop && isRawDevelop(from.develop)
+      ? { ...DEFAULT_DEVELOP, base: from.develop.base, rawGain: from.develop.rawGain ?? null }
+      : null;
+    made = {
+      ...createRollPicture(from.ref, newId),
+      develop: base,
+      rendition: from.rendition ?? null,
+      ...(from.lensProfile !== undefined ? { lensProfile: structuredClone(from.lensProfile) } : {}),
+      variant: number,
+    };
+  }
+  const last = roll.pictures.reduce((at, p, i) => (sameMediaRef(p.ref, from.ref) ? i : at), -1);
+  const pictures = [...roll.pictures];
+  pictures.splice(last + 1, 0, made);
+  return { ...roll, pictures, updatedAt: now };
 }
 
 export function removePictures(roll: RollDoc, ids: readonly string[], now: number = Date.now()): RollDoc {

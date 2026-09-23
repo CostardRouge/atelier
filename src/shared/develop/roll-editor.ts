@@ -152,6 +152,7 @@ export type EditorKeyAction =
   | 'paste-settings'
   | 'clipping'
   | 'mono'
+  | 'variant'
   | null;
 
 /**
@@ -197,6 +198,9 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
       return null;
     }
     const k = press.key.toLowerCase();
+    // ⌘' — Lightroom's virtual copy: a variant of the picture as it stands
+    // (item 30). The apostrophe is unshifted on QWERTY and on AZERTY (its 4).
+    if (k === "'") return press.repeat ? null : 'variant';
     if (k === 'c') return press.hasSelection ? null : 'copy';
     if (k === 'v') return 'paste';
     return null;

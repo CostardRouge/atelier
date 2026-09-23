@@ -53,6 +53,7 @@ const GROUPS: readonly Group[] = [
       { keys: '⇧C · the crop pill', what: 'zoomed in, make what the screen shows the crop — the view goes back to the fit' },
       { keys: '⌘/Ctrl C · V', what: 'copy this develop, paste it onto another — and the three verbs above the picture' },
       { keys: '⌘/Ctrl ⇧C · ⇧V', what: 'the picture’s settings in sections — copy the ticked ones, paste them here, or apply them to others' },
+      { keys: '⌘/Ctrl \'', what: 'a variant of this picture as it stands — the same file with its own edits; Add → as shot starts one bare' },
       { keys: '⌘/Ctrl Z', what: 'undo — and ⇧ to put it back' },
       { keys: 'P', what: 'on the Layers tab, Pick (a subject) or Paint (a painted mask) on and off' },
       { keys: 'M', what: 'on the Layers tab, the mask hidden, as its outline, or filled in red' },

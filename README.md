@@ -1321,6 +1321,19 @@ were never exported or changed since, the status line counts them, and
 device beside the roll, not in it, so an export is never an undo step and an
 undo never forgets one.
 
+**Variants.** One frame, developed two ways — cropped square and 4:5, or in
+colour and in black and white — is two **variants** of it, Lightroom's virtual
+copies and Capture One's variants. **⌘'** (or **Add → a variant of … as
+edited**) makes a copy of the picture on the stage with everything done to
+it; **Add → … as shot** starts one bare, keeping only what belongs to the
+file (the RAW base, the lens profile). Each variant is a picture of its own
+on the roll — its develop, crop, look, title and whether it leaves — and the
+strip numbers it (`DJI_0101.JPG · 2`); the file is fetched and previewed once
+for all of them. A variant leaves into a sub-folder named after it,
+`Variant 2/DJI_0101.jpg`, so every delivered file keeps the capture's exact
+name (`Web/Variant 2/…` for a second target). Adding the same file to the roll
+twice is still refused: a variant is made from a picture already there.
+
 **Winnow's culling, where you edit.** A picture that came from a Winnow
 instance wears what you decided about it there — a flag for a **pick** or a
 **reject**, its **stars**, and a colour dot if it has a label — on its

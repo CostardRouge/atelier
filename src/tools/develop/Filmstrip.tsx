@@ -7,6 +7,8 @@ import {
   delivers,
   isIgnored,
   pictureEdits,
+  pictureLabel,
+  variantNumber,
   type PictureEdit,
   type RollPicture,
 } from '../../shared/develop/roll-types';
@@ -145,6 +147,8 @@ function Cell({
   const edits = pictureEdits(picture);
   const developed = edits.length > 0;
   const kind = availability?.kind ?? 'local';
+  const label = pictureLabel(picture);
+  const variant = variantNumber(picture);
   const fetching = kind === 'fetching';
   const unreachable = kind === 'failed' || kind === 'gone' || kind === 'unconnected' || kind === 'local';
   return (
@@ -160,10 +164,10 @@ function Cell({
         }}
         aria-current={open ? 'true' : undefined}
         aria-selected={selected ? 'true' : undefined}
-        aria-label={`${picture.ref.name}${developed ? ', developed' : ''}${selected ? ', selected' : ''}${
+        aria-label={`${label}${developed ? ', developed' : ''}${selected ? ', selected' : ''}${
           fetching ? ', fetching' : unreachable ? ', not available' : ''
         }`}
-        title={`${picture.ref.name}${developed ? ` — ${editSummary(picture.develop, edits)}` : ' — as shot'}${
+        title={`${label}${variant > 1 ? ' (a variant)' : ''}${developed ? ` — ${editSummary(picture.develop, edits)}` : ' — as shot'}${
           culling && describeCulling(culling) ? ` — Winnow: ${describeCulling(culling)}` : ''
         } — Shift or ⌘/Ctrl-click to select for a batch`}
         className={`relative block ${size} p-0 rounded-paper overflow-hidden bg-frame cursor-pointer border-2 ${
@@ -196,8 +200,21 @@ function Cell({
             !
           </span>
         )}
+        {/* A variant says its number where the edited dot sits, the dot
+            beside it — a copy of a picture is read as a copy at a glance. */}
+        {variant > 1 && (
+          <span
+            className="absolute left-1 bottom-1 min-w-4 h-4 px-1 grid place-items-center rounded-full bg-surface/85 font-mono text-3xs leading-none text-ink"
+            aria-hidden="true"
+          >
+            {variant}
+          </span>
+        )}
         {developed && (
-          <span className="absolute left-1 bottom-1 w-1.5 h-1.5 rounded-full bg-accent ring-1 ring-[rgba(20,18,15,0.6)]" aria-hidden="true" />
+          <span
+            className={`absolute w-1.5 h-1.5 rounded-full bg-accent ring-1 ring-[rgba(20,18,15,0.6)] ${variant > 1 ? 'left-6 bottom-2.5' : 'left-1 bottom-1'}`}
+            aria-hidden="true"
+          />
         )}
         {/* Winnow's word, between the two top corners (the selection check
             and the unreachable mark own those). Read-only: not a target. */}
@@ -213,7 +230,7 @@ function Cell({
           </span>
         )}
       </button>
-      <DeliveryBadge picture={picture} onDeliver={onDeliver} />
+      <DeliveryBadge picture={picture} name={label} onDeliver={onDeliver} />
       {/* Hover reveals it where a pointer can hover; a touch screen shows it
           always, a size larger. It used to be `max-[820px]:hidden`, which
           took the roll's only way to drop a picture off the phone — and on
@@ -222,7 +239,7 @@ function Cell({
         type="button"
         onClick={onRemove}
         className="absolute -top-1 -right-1 w-5 h-5 grid place-items-center rounded-full border border-line-strong bg-surface font-mono text-2xs leading-none text-muted cursor-pointer opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-danger pointer-coarse:opacity-100 pointer-coarse:w-7 pointer-coarse:h-7 pointer-coarse:text-sm"
-        aria-label={`Take ${picture.ref.name} off the roll`}
+        aria-label={`Take ${label} off the roll`}
         title="Take it off the roll — the file stays where it is"
       >
         ×
@@ -259,11 +276,18 @@ const HOLD_MS = 550;
  * shows its badge only under the pointer (always on a touch screen), so the
  * strip does not wear a hundred grey rings.
  */
-function DeliveryBadge({ picture, onDeliver }: { picture: RollPicture; onDeliver: (action: DeliverAction) => void }) {
+function DeliveryBadge({
+  picture,
+  name,
+  onDeliver,
+}: {
+  picture: RollPicture;
+  name: string;
+  onDeliver: (action: DeliverAction) => void;
+}) {
   const state = deliverState(picture);
   const ignored = state === 'ignore';
   const leaves = delivers(picture);
-  const name = picture.ref.name;
   const held = useRef<{ timer: number | null; fired: boolean }>({ timer: null, fired: false });
   const clear = () => {
     if (held.current.timer !== null) window.clearTimeout(held.current.timer);
