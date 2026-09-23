@@ -20,6 +20,7 @@ import { DevelopAutoSection, DevelopLevelsSection } from './DevelopAuto';
 import { whiteBalanceFor } from './auto-develop';
 import DevelopHistogram from './DevelopHistogram';
 import DevelopMixer from './DevelopMixer';
+import DevelopGrading from './DevelopGrading';
 import DevelopSliders from './DevelopSliders';
 import DevelopViewport, { DevelopCaption } from './DevelopViewport';
 import { useDevelopDraft, useTold } from './use-develop-draft';
@@ -266,6 +267,7 @@ export default function DevelopSheet({
               onChange={(curves) => draft.patch({ curves })}
             />
             <DevelopMixer value={draft.draft.mixer} onChange={(mixer) => draft.patch({ mixer })} />
+            <DevelopGrading value={draft.draft.grading} onChange={(grading) => draft.patch({ grading })} />
             <DevelopPresetsSection
               presets={presets}
               draft={draft.draft}

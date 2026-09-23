@@ -11,6 +11,7 @@ import { DevelopAutoSection, DevelopLevelsSection } from '../../shared/develop/D
 import { whiteBalanceFor } from '../../shared/develop/auto-develop';
 import DevelopHistogram from '../../shared/develop/DevelopHistogram';
 import DevelopMixer from '../../shared/develop/DevelopMixer';
+import DevelopGrading from '../../shared/develop/DevelopGrading';
 import DevelopSliders from '../../shared/develop/DevelopSliders';
 import DevelopViewport from '../../shared/develop/DevelopViewport';
 import {
@@ -1679,6 +1680,7 @@ export default function PictureWorkbench({
                 onChange={(curves) => draft.patch({ curves })}
               />
               <DevelopMixer value={draft.draft.mixer} onChange={(mixer) => draft.patch({ mixer })} />
+              <DevelopGrading value={draft.draft.grading} onChange={(grading) => draft.patch({ grading })} />
               <DevelopPresetsSection
                 presets={presets}
                 draft={draft.draft}

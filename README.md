@@ -979,7 +979,13 @@ keeps a grey grey; only temperature and tint tint. Under the curve, the
 **colour mixer** moves eight bands of colour on their own — the hue, the
 saturation and the luminance of red, orange, yellow, green, aqua, blue,
 purple and magenta — so a blue sky can be darkened or a lawn calmed without
-touching a face; a grey is never moved, and a hue shift keeps its light. On a JPEG or a Winnow proxy
+touching a face; a grey is never moved, and a hue shift keeps its light.
+Under it, **colour grading** has Lightroom's wheels: a colour and a light for
+the shadows, the midtones, the highlights and the whole picture — drag in a
+wheel (the angle is the hue, the distance how strongly it tints; the arrow
+keys work too), and **Balance** and **Blending** say where the ranges meet
+and how far they overlap. A wheel colours without brightening; only the
+**Light** slider under it moves the light. On a JPEG or a Winnow proxy
 the sheet says so — an 8-bit picture has nothing above white to give back;
 developing a RAW is what the next phases are for (`docs/photo-develop.md`).
 

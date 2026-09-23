@@ -367,6 +367,32 @@ Verified headless: blue luminance −100 took a `70,130,220` sky to `43,83,144`
 with a red and a grey unmoved; red hue +100 turned `220,60,40` orange at the
 same luminance; ⌘Z undid it.
 
+## Colour grading is the stage after the mixer, three ranges that sum to 1 (2026-09-23, audit item 14)
+
+`grading.ts` (pure, tested) + `DevelopGrading.tsx`: `DevelopSettings.grading`
+— four wheels (shadows · midtones · highlights · global: hue 0..360,
+saturation 0..100, luminance −100..100) plus `blending` (0..100, 50) and
+`balance` (−100..100) — optional, null for none, wired into the record like
+the mixer and run AFTER it in `developLinear` (Lightroom's order), so it bakes
+into the cube and reaches both sheets, layers, presets and the clipboard.
+Rules: the three ranges are a PARTITION OF UNITY over the encoded luma
+(`zoneWeights`: shadows fall from black to a pivot, highlights rise from it,
+midtones are the rest and peak AT it; balance moves the pivot ±0.25,
+blending is a gamma `2^((50 − b)/50)` on the two ramps); weights are read at
+the luma the pixel ENTERS with, so a wheel's own light cannot move it into
+another range; a tint is a per-channel gain of luminance 1 (`hueGain`)
+pulled by the saturation (×0.25 at 100), and the pixel is brought back to its
+own luminance before the zone's stops (±1) apply — a wheel colours and never
+brightens, black stays black. Hue is kept while the saturation is 0, so the
+colour is found again. Blending and balance with no wheel moved are "none" and
+do not survive a reload — they shape nothing. The wheel is a `role="slider"`
+div over a CSS conic gradient (0° at the right, clockwise — `wheelPoint` /
+`pointOnWheel` are the geometry, in the spec), arrows turn/strengthen it,
+double-click clears its colour. Verified headless on a 30/128/230 grey ramp:
+shadows 220°·70 gave `27,29,43` with the 128 midtone untouched; highlights
+40°·40 by keyboard `238,228,222`; global light +50 lifted all three; ⌘Z
+undid the last move.
+
 ## Slider reset: a dot, bold and a dimmed ↺ — never hover-only (2026-09-20)
 
 **Decision (maintainer, from an artifact proposal comparing five variants).**

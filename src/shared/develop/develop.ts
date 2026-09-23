@@ -46,6 +46,15 @@ import {
   type ToneCurves,
 } from './curves';
 import { cloneMixer, describeMixer, isDefaultMixer, mixLinear, mixerOrNull, sameMixer, type ColourMixer } from './mixer';
+import {
+  cloneGrading,
+  describeGrading,
+  gradeLinear,
+  gradingOrNull,
+  isDefaultGrading,
+  sameGrading,
+  type ColourGrading,
+} from './grading';
 
 export interface DevelopSettings {
   /** Stops, −3..+3. A linear gain in scene light. */
@@ -94,6 +103,12 @@ export interface DevelopSettings {
    */
   mixer?: ColourMixer | null;
   /**
+   * Colour grading (`grading.ts`): a colour and a light for the shadows, the
+   * midtones, the highlights and the whole picture — Lightroom's wheels —
+   * after the mixer, as there. Optional, so nothing migrates.
+   */
+  grading?: ColourGrading | null;
+  /**
    * The MATERIAL the numbers act on, as a LADDER of four rungs — each a real
    * and nameable amount of the camera's own calibration (2026-09-20,
    * `docs/develop-originals.md` §7 decision 1, `raw.md`):
@@ -127,7 +142,7 @@ export interface DevelopSettings {
 }
 
 /** The NUMERIC fields — a key a panel can draw as a slider. */
-export type DevelopKey = Exclude<keyof DevelopSettings, 'curves' | 'levels' | 'mixer' | 'base' | 'rawGain'>;
+export type DevelopKey = Exclude<keyof DevelopSettings, 'curves' | 'levels' | 'mixer' | 'grading' | 'base' | 'rawGain'>;
 
 /**
  * The rungs of the material ladder, lowest first. `proxy` is never stored —
@@ -252,6 +267,7 @@ export const DEFAULT_DEVELOP: Readonly<DevelopSettings> = Object.freeze({
   curves: null,
   levels: null,
   mixer: null,
+  grading: null,
   base: null,
   rawGain: null,
 });
@@ -268,7 +284,8 @@ export function isDefaultDevelop(d: DevelopSettings | null | undefined): boolean
     DEVELOP_KEYS.every((k) => d[k] === 0) &&
     isDefaultCurves(d.curves) &&
     isDefaultLevels(d.levels) &&
-    isDefaultMixer(d.mixer)
+    isDefaultMixer(d.mixer) &&
+    isDefaultGrading(d.grading)
   );
 }
 
@@ -285,6 +302,7 @@ export function cloneDevelop(d: DevelopSettings | null | undefined): DevelopSett
   out.curves = cloneCurves(src.curves);
   out.levels = cloneLevels(src.levels);
   out.mixer = cloneMixer(src.mixer);
+  out.grading = cloneGrading(src.grading);
   return out;
 }
 
@@ -301,6 +319,7 @@ export function sameDevelop(a: DevelopSettings | null | undefined, b: DevelopSet
     sameCurves(x.curves, y.curves) &&
     sameLevels(x.levels, y.levels) &&
     sameMixer(x.mixer, y.mixer) &&
+    sameGrading(x.grading, y.grading) &&
     isRawDevelop(x) === isRawDevelop(y) &&
     rawGainOf(x) === rawGainOf(y)
   );
@@ -323,6 +342,7 @@ export function normaliseDevelop(raw: unknown): DevelopSettings {
   out.curves = curvesOrNull(normaliseCurves(src.curves));
   out.levels = levelsOrNull(normaliseLevels(src.levels));
   out.mixer = mixerOrNull(src.mixer);
+  out.grading = gradingOrNull(src.grading);
   const base = normaliseBase(src.base);
   if (base) {
     out.base = base;
@@ -493,7 +513,8 @@ function shapeChannel(lin: number, channel: 0 | 1 | 2, shape: ChannelShaper): nu
  *
  * Order: white balance → exposure → the luminance curve as one ratio → the
  * luma curve, also as a ratio → levels and the per-channel curves → saturation
- * and vibrance around the new luminance → the colour mixer (`mixer.ts`).
+ * and vibrance around the new luminance → the colour mixer (`mixer.ts`) →
+ * colour grading (`grading.ts`).
  *
  * `shapers` is the resolved curve/level maps. Pass it in any loop —
  * `developStage` does; omitting it resolves them per pixel, which is only
@@ -590,6 +611,8 @@ export function developLinear(
   // The colour mixer last, as in Lightroom: a band is picked on the colour
   // the pixel HAS once every global move is made.
   if (d.mixer && !isDefaultMixer(d.mixer)) [r, g, b] = mixLinear([r, g, b], d.mixer);
+  // Then the wheels, which colour the RANGES of the picture as it now is.
+  if (d.grading && !isDefaultGrading(d.grading)) [r, g, b] = gradeLinear([r, g, b], d.grading);
 
   return [r, g, b];
 }
@@ -681,6 +704,8 @@ export function developLines(d: DevelopSettings | null | undefined): string[] {
   if (curves) parts.push(curves);
   const mixer = describeMixer(d.mixer);
   if (mixer) parts.push(mixer);
+  const grading = describeGrading(d.grading);
+  if (grading) parts.push(grading);
   return parts;
 }
 
