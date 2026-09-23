@@ -902,7 +902,9 @@ export default function PostEditor({
       const target = describeKeyTarget(e.target);
       const k = keys.current;
       if (e.code === 'Space' || e.key === ' ') {
-        if (e.repeat || e.shiftKey || targetOwnsSpace(target)) return;
+        // `defaultPrevented`: the band answers the key itself when the keyboard
+        // is on it (`DeckStrip`), and its handler runs first.
+        if (e.repeat || e.shiftKey || e.defaultPrevented || targetOwnsSpace(target)) return;
         e.preventDefault();
         k.togglePlay();
         return;

@@ -30,6 +30,34 @@ describe('targetOwnsSpace', () => {
     expect(targetOwnsSpace(t('VIDEO'))).toBe(true);
   });
 
+  it('takes space back from a control a CLICK merely left focused', () => {
+    // The whole point: after clicking a tab, a pill or the play button, the
+    // next space means the transport — not that control pressed again.
+    const clicked = { focusedByKeyboard: false };
+    expect(targetOwnsSpace(t('BUTTON', clicked))).toBe(false);
+    expect(targetOwnsSpace(t('DIV', { role: 'tab', ...clicked }))).toBe(false);
+    expect(targetOwnsSpace(t('DIV', { role: 'slider', ...clicked }))).toBe(false);
+    expect(targetOwnsSpace(t('INPUT', { inputType: 'range', ...clicked }))).toBe(false);
+    expect(targetOwnsSpace(t('INPUT', { inputType: 'checkbox', ...clicked }))).toBe(false);
+  });
+
+  it('keeps space on a field whatever moved the focus there', () => {
+    // Typing is never worth a transport: a space in a text field is a space.
+    const clicked = { focusedByKeyboard: false };
+    expect(targetOwnsSpace(t('INPUT', clicked))).toBe(true);
+    expect(targetOwnsSpace(t('INPUT', { inputType: 'text', ...clicked }))).toBe(true);
+    expect(targetOwnsSpace(t('INPUT', { inputType: 'number', ...clicked }))).toBe(true);
+    expect(targetOwnsSpace(t('TEXTAREA', clicked))).toBe(true);
+    expect(targetOwnsSpace(t('SELECT', clicked))).toBe(true);
+    expect(targetOwnsSpace(t('DIV', { isContentEditable: true, ...clicked }))).toBe(true);
+  });
+
+  it('leaves a control the KEYBOARD is on alone', () => {
+    const tabbed = { focusedByKeyboard: true };
+    expect(targetOwnsSpace(t('BUTTON', tabbed))).toBe(true);
+    expect(targetOwnsSpace(t('DIV', { role: 'slider', ...tabbed }))).toBe(true);
+  });
+
   it('recognises ARIA widgets built out of divs', () => {
     expect(targetOwnsSpace(t('DIV', { role: 'button' }))).toBe(true);
     expect(targetOwnsSpace(t('DIV', { role: 'Slider' }))).toBe(true);
