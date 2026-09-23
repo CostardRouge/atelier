@@ -69,6 +69,13 @@ export interface VariantRenderOptions {
    */
   framing?: Framing | null;
   /**
+   * The framing at a moment, for a picture that MOVES in its frame
+   * (`framing-motion.ts`): asked every frame with the same clock the
+   * painters below read, so a pan burned into a re-timed clip keeps pace
+   * with the badge over it. Absent, `framing` holds for the whole clip.
+   */
+  framingAt?: ((sinceStartSeconds: number) => Framing) | null;
+  /**
    * The project's outro — a closing card appended after the footage, drawn at
    * the variant's own output frame like every overlay. Rides only variants
    * that carry the overlays: a clean master stays truly clean.
@@ -217,12 +224,6 @@ export async function exportVariantVideo(
           // carries the grain of the frame it really is.
           const source = grade ? grade.render(videoFrame, tMicros / 1_000_000) : videoFrame;
           drawRotatedFrame(uctx, source, codedWidth, codedHeight, rotation, displayW, displayH);
-          // Frame the upright picture into the variant's canvas. With no
-          // framing given this is the centred cover-crop it has always been —
-          // the frame fills it fully, the excess cropped symmetrically — and
-          // with one it is the author's pan, zoom and rotation. Same maths as
-          // the badge preview, so a hook burns in where it was composed.
-          drawFramed(ctx, upright, displayW, displayH, out.w, out.h, framing);
           const t = tMicros / 1_000_000;
           // The ONE clock every per-frame callback below reads. Source: since
           // the first exported frame, unscaled (the Studio's own re-time
@@ -233,6 +234,21 @@ export async function exportVariantVideo(
           const sinceStart = delivered
             ? Math.max(0, t - origin) / speed
             : t - origin;
+          // Frame the upright picture into the variant's canvas. With no
+          // framing given this is the centred cover-crop it has always been —
+          // the frame fills it fully, the excess cropped symmetrically — and
+          // with one it is the author's pan, zoom and rotation. Same maths as
+          // the badge preview, so a hook burns in where it was composed; a
+          // picture that moves is framed at this frame's own instant.
+          drawFramed(
+            ctx,
+            upright,
+            displayW,
+            displayH,
+            out.w,
+            out.h,
+            opts.framingAt ? opts.framingAt(sinceStart) : framing,
+          );
           opts.paintUnderOverlays?.(ctx, out.w, out.h, sinceStart);
           if (variant.overlays) {
             const elements = opts.elementsAt ? opts.elementsAt(sinceStart) : opts.elements;

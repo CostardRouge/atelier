@@ -15,6 +15,7 @@ import { extractRawPreview } from '../exif/raw-probe';
 import type { CubeLut } from '../lib/cube-parser';
 import { drawLayout, type LayoutPicture } from '../media/cell-paint';
 import { DEFAULT_FRAMING, drawFramed, type Framing } from '../media/framing';
+import { framingAt, framingOnClock, type FramingMotion, type MotionClock } from '../media/framing-motion';
 import { fitPhotoForRender } from '../media/photo-frame';
 import type { HalfImage } from '../render/half-image';
 import type { SavedMediaRef } from '../projects/project-types';
@@ -309,6 +310,14 @@ export interface RenderBadgeOptions {
    */
   framing?: Framing | null;
   /**
+   * The picture's MOTION and the slide's clock, for a surface that shows it
+   * moving — the stage, a painted video. `framing` is then read at
+   * `timeSeconds` (`framing-motion.ts`). A surface that draws the slide
+   * settled (the PNG deck, the rail) hands none, and draws `framing`: the
+   * rest, which is what a still of a moving picture is.
+   */
+  motion?: MotionClock | null;
+  /**
    * Several pictures in the frame instead of `source` + `framing`: the
    * collage's cells, each with its own decoded picture, framing and (caller-
    * owned) grader. When set, `source`, `framing` and `grader` are not read —
@@ -328,6 +337,8 @@ export interface RenderBadgeOptions {
 export interface CollageItem {
   source: BadgeSource | null;
   framing: Framing;
+  /** How this cell's picture moves — read only under a {@link CollageRender.clock}. */
+  motion?: FramingMotion | null;
   /** This cell's own cube as a grader the CALLER owns — see `grader` above. */
   grader?: FrameGrader | null;
 }
@@ -341,11 +352,22 @@ export interface CollageRender {
    * (a still, a surface with no clock) means the cells never leave.
    */
   seconds?: number | null;
+  /**
+   * The clock the cells' pictures MOVE on, when this surface shows them
+   * moving — the slide's screen time and the opener's own length. Absent,
+   * every cell is drawn at its rest, whatever its motion.
+   */
+  clock?: { seconds: number; openerSeconds?: number } | null;
 }
 
 /** A collage's decoded pictures, cell by cell, and one call to free them all. */
 export interface CollageSources {
-  items: { source: BadgeSource | null; framing: Framing; develop: DevelopSettings | null }[];
+  items: {
+    source: BadgeSource | null;
+    framing: Framing;
+    develop: DevelopSettings | null;
+    motion: FramingMotion | null;
+  }[];
   release: () => void;
 }
 
@@ -375,7 +397,7 @@ export async function loadCollageSources(
         source = null;
       }
     }
-    items.push({ source, framing: cell.framing, develop: cell.develop });
+    items.push({ source, framing: cell.framing, develop: cell.develop, motion: cell.motion });
   }
   return {
     items,
@@ -410,9 +432,17 @@ function paintCollage(
       height: item.source.height,
     };
   });
+  const clock = render.clock ?? null;
   drawLayout(ctx, w, h, cells, {
     picture: (i) => pictures[i] ?? null,
-    framing: (i) => render.items[i]?.framing ?? DEFAULT_FRAMING,
+    framing: (i) => {
+      const item = render.items[i];
+      if (!item) return DEFAULT_FRAMING;
+      // A cell's picture moves only where this surface shows motion.
+      return clock
+        ? framingAt(item.framing, item.motion, timeSeconds, clock.seconds, clock.openerSeconds ?? 0)
+        : item.framing;
+    },
     spacing: render.collage.spacing,
     motion: motions ? (i) => motions[i] ?? null : undefined,
   });
@@ -544,7 +574,7 @@ export async function renderBadge(
       opts.source.height,
       w,
       h,
-      opts.framing ?? DEFAULT_FRAMING,
+      framingOnClock(opts.framing ?? DEFAULT_FRAMING, opts.motion, opts.timeSeconds ?? 0),
     );
   }
 

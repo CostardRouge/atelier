@@ -14,12 +14,13 @@ import {
   resolveCollage,
   retemplateCollage,
   swapCollageCells,
+  collageCellsMove,
   withCollageCell,
   type CollageLead,
 } from './collage';
 
 const ref = (name: string) => ({ name, size: 1, lastModified: 1 });
-const lead: CollageLead = { media: ref('lead.jpg'), framing: { ...DEFAULT_FRAMING }, develop: null };
+const lead: CollageLead = { media: ref('lead.jpg'), framing: { ...DEFAULT_FRAMING }, develop: null, motion: null };
 
 describe('createCollage / readCollage', () => {
   it('starts a collage with empty cells after the lead', () => {
@@ -136,6 +137,25 @@ describe('cells', () => {
     expect(out.collage.cells[0].media?.name).toBe('lead.jpg');
     expect(out.collage.cells[0].place).toEqual({ dx: 0.1, dy: 0, rotation: 3 });
     expect(out.collage.place).toEqual({ dx: 0, dy: 0, rotation: 0 });
+  });
+
+  it('carries a picture’s motion with it when two cells swap', () => {
+    const moving = { keys: [{ at: 0, scale: 2, x: 0, y: 0 }], easing: 'linear' as const, start: 'slide' as const };
+    const c = withCollageCell(lead, createCollage('grid-2x2')!, 1, { media: ref('b.jpg'), motion: moving }).collage;
+    const out = swapCollageCells(lead, c, 0, 1);
+    expect(out.lead.motion).toEqual(moving);
+    expect(out.collage.cells[0].motion).toBeNull();
+    expect(withCollageCell(lead, c, 0, { motion: moving }).lead.motion).toEqual(moving);
+  });
+
+  it('moves the slide only when a DRAWN cell moves', () => {
+    const moving = { keys: [{ at: 0, scale: 2, x: 0, y: 0 }], easing: 'linear' as const, start: 'slide' as const };
+    let c = createCollage('bento-six')!;
+    c = withCollageCell(lead, c, 5, { media: ref('six.jpg'), motion: moving }).collage;
+    expect(collageCellsMove(c)).toBe(true);
+    // Six down to four: cell 6 is kept and draws nothing, so nothing moves.
+    expect(collageCellsMove(retemplateCollage(c, 'grid-2x2'))).toBe(false);
+    expect(readCollage(c)?.cells[4].motion).toEqual(moving);
   });
 
   it('keeps pictures past a smaller template and pads up to a bigger one', () => {
