@@ -529,8 +529,8 @@ export function useRollExport({
           });
           // A subject layer the model did not answer draws nothing — in the
           // file as on the stage — so the run says which picture left without it.
-          if (out.subjects.resolved < out.subjects.asked) {
-            const lost = out.subjects.asked - out.subjects.resolved;
+          const lost = out.subjects ? out.subjects.asked - out.subjects.resolved : 0;
+          if (lost > 0) {
             failures.push(
               `${picture.ref.name} left without ${lost === 1 ? 'its subject mask' : `${lost} subject masks`}: the model could not be loaded or did not answer`,
             );

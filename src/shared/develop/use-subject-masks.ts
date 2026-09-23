@@ -8,7 +8,7 @@ import {
   type SegmentSource,
   type SegmenterState,
 } from '../segment/segmenter';
-import { subjectRequests, type AdjustLayer } from './layer';
+import { subjectLayersToSegment, type AdjustLayer } from './layer';
 
 /**
  * The alpha map for every SUBJECT layer on the open picture, resolved by the
@@ -39,6 +39,13 @@ export interface SubjectMasks {
   /** A layer whose mask is being segmented right now, or null. */
   working: string | null;
   state: SegmenterState;
+  /**
+   * The region of the point the author has JUST added, once the model has
+   * answered it — a new object per answer, so the host can blink it
+   * (2026-09-23). Only a point tapped on this picture while it was open: a
+   * picture re-opened, whose points are segmented again, blinks nothing.
+   */
+  fresh: { layerId: string; raster: BrushRaster } | null;
 }
 
 /** How many points' masks are kept — ~50 MB at the model's input size, at most. */
@@ -84,6 +91,13 @@ export function useSubjectMasks({
   const [rasters, setRasters] = useState<ReadonlyMap<string, BrushRaster>>(new Map());
   const [working, setWorking] = useState<string | null>(null);
   const [state, setState] = useState<SegmenterState>(segmenterState());
+  const [fresh, setFresh] = useState<SubjectMasks['fresh']>(null);
+  // Every subject layer's points as they stood at the last commit, for this
+  // picture — what tells a TAPPED point from one merely segmented again.
+  const known = useRef<{ picture: string; points: Map<string, Set<string>> }>({
+    picture: pictureKey,
+    points: new Map(),
+  });
   // Point key → its mask, for the session, bounded. Never cleared on a layer
   // change: an undo that brings a subject back must not pay for it twice.
   const cache = useRef(new Map<string, BrushRaster>());
@@ -94,13 +108,24 @@ export function useSubjectMasks({
   const runId = useRef(0);
 
   // The requests, as a string, so the effect below runs when they really change
-  // and not when a slider moves.
-  const wanted = subjectRequests(layers);
+  // and not when a slider moves. Every visible subject with a point, drawing
+  // or not (`subjectLayersToSegment`): the model runs on the tap, and the
+  // raster is what "show the mask" paints before the layer has a develop.
+  const wanted = subjectLayersToSegment(layers)
+    .map((l) => {
+      const mask = l.mask as { points: readonly Point[]; model: string };
+      return { id: l.id, model: mask.model, points: mask.points };
+    });
   const signature = wanted
     .map((w) => `${w.id}=${w.points.map((p) => pointKey(pictureKey, w.model, p)).join(';')}`)
     .join('|');
 
   useEffect(() => {
+    // A point is NEW when its layer was already known on this picture and the
+    // point was not: the one the author just tapped. Read before the effect
+    // below records the current points.
+    const before = known.current.picture === pictureKey ? known.current.points : null;
+    const isNew = (layerId: string, key: string) => Boolean(before?.get(layerId) && !before.get(layerId)?.has(key));
     if (!source) return;
     const run = ++runId.current;
     let cancelled = false;
@@ -113,14 +138,20 @@ export function useSubjectMasks({
     for (const want of wanted) {
       let union: BrushRaster | null = null;
       let complete = true;
+      let added: BrushRaster | null = null;
       for (const point of want.points) {
-        const hit = lruGet(cache.current, pointKey(pictureKey, want.model, point));
+        const key = pointKey(pictureKey, want.model, point);
+        const hit = lruGet(cache.current, key);
         if (!hit) {
           complete = false;
           break;
         }
+        if (isNew(want.id, key)) added = hit;
         union = unionMasks(union, hit);
       }
+      // A point tapped again where one was taken off: its answer is cached,
+      // and it blinks all the same — it is still what the tap added.
+      if (complete && added) setFresh({ layerId: want.id, raster: added });
       if (complete && union) ready.set(want.id, union);
       else missing.push(want);
     }
@@ -152,6 +183,9 @@ export function useSubjectMasks({
             setState(segmenterState());
             if (mask) lruSet(cache.current, key, mask, POINT_CACHE_SIZE);
           }
+          if (mask && isNew(want.id, key) && !cancelled && runId.current === run) {
+            setFresh({ layerId: want.id, raster: mask });
+          }
           union = unionMasks(union, mask);
         }
         if (cancelled || runId.current !== run) return;
@@ -174,6 +208,27 @@ export function useSubjectMasks({
     // itself would re-run this on every render, and a re-run is an inference.
   }, [signature, source]);
 
+  // Record every subject layer's points — those with none included, which is
+  // what makes the FIRST tap on a fresh layer a new point — after the effect
+  // above has read what stood before.
+  const everySubject = (layers ?? [])
+    .filter((l) => l.mask?.kind === 'subject')
+    .map((l) => {
+      const mask = l.mask as { points: readonly Point[]; model: string };
+      // A point key holds `|` itself, so lines and tabs part the entries.
+      return `${l.id}\t${mask.points.map((p) => pointKey(pictureKey, mask.model, p)).join('\t')}`;
+    })
+    .join('\n');
+  useEffect(() => {
+    const points = new Map<string, Set<string>>();
+    for (const entry of everySubject ? everySubject.split('\n') : []) {
+      const [id, ...keys] = entry.split('\t');
+      points.set(id, new Set(keys.filter(Boolean)));
+    }
+    known.current = { picture: pictureKey, points };
+    // Keyed on the string, for the reason the effect above is.
+  }, [everySubject, pictureKey]);
+
   // The shown copy goes with the hook.
   useEffect(
     () => () => {
@@ -184,7 +239,7 @@ export function useSubjectMasks({
     [],
   );
 
-  return { rasters, working, state };
+  return { rasters, working, state, fresh };
 }
 
 function sameMaps(a: ReadonlyMap<string, BrushRaster>, b: ReadonlyMap<string, BrushRaster>): boolean {

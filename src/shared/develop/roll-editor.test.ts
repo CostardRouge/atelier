@@ -88,7 +88,7 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'V', ctrlKey: true }))).toBe('paste');
   });
 
-  it('maps the delivery keys: P sends ↔ holds, U back to the rule, M ignores', () => {
+  it('maps the delivery keys off the Layers tab: P sends ↔ holds, U back to the rule, M ignores', () => {
     expect(editorKeyAction(press({ key: 'p' }))).toBe('deliver');
     expect(editorKeyAction(press({ key: 'U' }))).toBe('deliver-auto');
     expect(editorKeyAction(press({ key: 'm' }))).toBe('ignore');
@@ -104,6 +104,17 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'ArrowRight', shiftKey: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'c', metaKey: true, shiftKey: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'q' }))).toBeNull();
+  });
+
+  it('on the Layers tab, steps the mask view on M and turns Pick on P — U stays the delivery’s', () => {
+    const layers = { layersTab: true };
+    expect(editorKeyAction(press({ key: 'm', ...layers }))).toBe('mask');
+    expect(editorKeyAction(press({ key: 'M', ...layers }))).toBe('mask');
+    expect(editorKeyAction(press({ key: 'p', ...layers }))).toBe('pick');
+    expect(editorKeyAction(press({ key: 'u', ...layers }))).toBe('deliver-auto');
+    // A slider or a field keeps its letters.
+    expect(editorKeyAction(press({ key: 'm', targetTypes: true, ...layers }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'p', repeat: true, ...layers }))).toBeNull();
   });
 
   it('removes the selection on Delete or Backspace and lets go on Escape, never from a field', () => {

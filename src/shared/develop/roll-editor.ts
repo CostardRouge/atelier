@@ -125,6 +125,8 @@ export interface EditorKeyPress {
   targetTypes: boolean;
   /** Text is selected on the page: ⌘C copies THAT, not the develop. */
   hasSelection: boolean;
+  /** The Layers tab is open — where `P` and `M` are the mask's keys, not the delivery's. */
+  layersTab?: boolean;
 }
 
 export type EditorKeyAction =
@@ -139,6 +141,8 @@ export type EditorKeyAction =
   | 'crop-view'
   | 'help'
   | 'facts'
+  | 'mask'
+  | 'pick'
   | 'remove'
   | 'escape'
   | 'deliver'
@@ -165,7 +169,8 @@ const TAB_KEYS: Readonly<Record<string, WorkbenchTab>> = {
  * caller's), `Z` goes closer or back to the fit, a tab's own initial opens it
  * (`TAB_KEYS`, answered as `{ tab }`), `X` swaps the crop's orientation, ⇧C
  * crops to the zoomed view (the caller decides whether there is one), `H`
- * (or `?`) the shortcuts and `I` the facts over the picture, ⌘/Ctrl-C and -V
+ * (or `?`) the shortcuts, `I` the facts over the picture, `M` the mask's view
+ * and `P` Pick / Paint (both on the Layers tab, the caller's rule), ⌘/Ctrl-C and -V
  * copy and paste the develop — the chord is read first, so ⌘C stays copy while
  * a bare `C` opens the crop. Delete or Backspace REMOVES what is selected on
  * the picture (a repair patch) and Escape lets go of it — what each applies
@@ -203,11 +208,16 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   if (press.key === 'x' || press.key === 'X') return 'swap';
   if (press.key === 'h' || press.key === 'H') return 'help';
   if (press.key === 'i' || press.key === 'I') return 'facts';
-  // The delivery state (`docs/lightroom-gaps.md` §10): `P` sends ↔ holds,
-  // `U` puts the picture back on the roll's rule, `M` ignores it — letters,
-  // so an AZERTY board presses the same ones.
-  if (press.key === 'p' || press.key === 'P') return 'deliver';
+  // `P` and `M` mean two things, by where the author is (2026-09-23, the
+  // maintainer's merge of #183 and #185): on the LAYERS tab they are the
+  // mask's — `M` steps its view (hidden, outline, fill), `P` turns Pick or
+  // Paint on and off, so a hand on the picture never reaches for the
+  // inspector; everywhere else they are the delivery state's
+  // (`docs/lightroom-gaps.md` §10) — `P` sends ↔ holds, `M` ignores. `U`
+  // puts the picture back on the roll's rule on every tab. Letters, so an
+  // AZERTY board presses the same ones.
+  if (press.key === 'p' || press.key === 'P') return press.layersTab ? 'pick' : 'deliver';
+  if (press.key === 'm' || press.key === 'M') return press.layersTab ? 'mask' : 'ignore';
   if (press.key === 'u' || press.key === 'U') return 'deliver-auto';
-  if (press.key === 'm' || press.key === 'M') return 'ignore';
   return null;
 }

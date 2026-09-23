@@ -31,7 +31,44 @@ import type { RenderPass } from './graph';
 /** What `u_maskKind` means. 0 is "no mask", which covers the whole picture. */
 const KIND = { none: 0, linear: 1, radial: 2, luma: 3, brush: 4, subject: 4 } as const;
 
-const FRAGMENT = `${GLSL_VERSION}
+/**
+ * How the pass finishes. `grade` is a layer: the develop mixed in by the mask.
+ * `outline` is show-the-mask as a LINE: where the mask crosses one half, drawn
+ * in dashes of ink and paper so it reads over any picture — the maintainer's
+ * pick for the view while picking (2026-09-23), because a fill hides the very
+ * colour being set. Both read the SAME `maskValue`, so the line is drawn where
+ * the render really cuts.
+ */
+const MAIN_GRADE = `
+void main() {
+  vec4 src = texture(u_src, v_uv);
+  // Nothing here is a no-op by luck: at m = 0 the mix returns src exactly.
+  outColor = vec4(mix(src.rgb, gradeThroughLut(src.rgb), coverage(v_uv)), src.a);
+}`;
+
+const MAIN_OUTLINE = `
+uniform vec2 u_texel;
+void main() {
+  vec4 src = texture(u_src, v_uv);
+  // The weight without the opacity: a layer at 30 % still has its edge where
+  // its mask is.
+  float c = coverage(v_uv) / max(u_opacity, 1e-6);
+  vec2 d = u_texel * 1.5;
+  float a = coverage(v_uv + vec2(d.x, 0.0)) / max(u_opacity, 1e-6);
+  float b = coverage(v_uv - vec2(d.x, 0.0)) / max(u_opacity, 1e-6);
+  float e = coverage(v_uv + vec2(0.0, d.y)) / max(u_opacity, 1e-6);
+  float f = coverage(v_uv - vec2(0.0, d.y)) / max(u_opacity, 1e-6);
+  float hi = max(max(max(a, b), max(e, f)), c);
+  float lo = min(min(min(a, b), min(e, f)), c);
+  float edge = (lo < 0.5 && hi >= 0.5) ? 1.0 : 0.0;
+  // Dashes in the render's own pixels, ink and paper, so the line holds over
+  // a white sky and a black coat alike.
+  float dash = mod(floor((gl_FragCoord.x + gl_FragCoord.y) / 6.0), 2.0);
+  vec3 ink = mix(vec3(0.08), vec3(0.97), dash);
+  outColor = vec4(mix(src.rgb, ink, edge), src.a);
+}`;
+
+const fragment = (finish: string) => `${GLSL_VERSION}
 precision highp float;
 precision highp sampler3D;
 
@@ -56,6 +93,10 @@ uniform float u_opacity;
 // The painted mask's alpha map, on unit 2. Bound even when unused, for the same
 // reason the cube is: an unset sampler defaults to unit 0.
 uniform sampler2D u_maskTex;
+// The SUBTRACTED subject's alpha map, on unit 3 (AdjustLayer.except), and
+// whether there is one: the same raster a subject layer draws with, taken out.
+uniform sampler2D u_exceptTex;
+uniform float u_hasExcept;
 
 // Mirrors maskAt in mask.ts. GLSL's smoothstep IS s*s*(3-2s) clamped, which is
 // the same ramp the pure module uses -- do not "improve" one without the other.
@@ -95,15 +136,18 @@ float maskValue(vec2 img, float luma) {
   return smoothstep(0.0, 1.0, (1.0 + u_maskFeather - e) / u_maskFeather);
 }
 
-void main() {
-  vec4 src = texture(u_src, v_uv);
+// Mirrors layerWeight in layer.ts: turned by the invert, THEN holed by the
+// subtracted subject, then scaled -- the hole stays a hole either way round.
+float coverage(vec2 uv) {
+  vec4 src = texture(u_src, uv);
   float luma = dot(src.rgb, vec3(${REC709_LUMA[0]}, ${REC709_LUMA[1]}, ${REC709_LUMA[2]}));
-  float m = maskValue(imageUv(v_uv), luma);
+  vec2 img = imageUv(uv);
+  float m = maskValue(img, luma);
   m = mix(m, 1.0 - m, u_invert);
-  m *= u_opacity;
-  // Nothing here is a no-op by luck: at m = 0 the mix returns src exactly.
-  outColor = vec4(mix(src.rgb, gradeThroughLut(src.rgb), m), src.a);
-}`;
+  m *= 1.0 - u_hasExcept * texture(u_exceptTex, img).r;
+  return m * u_opacity;
+}
+${finish}`;
 
 export interface LayerPassOptions {
   /** The layer's develop, already baked — `composeLutStack([], 'none', …, develop)`. */
@@ -124,6 +168,14 @@ export interface LayerPassOptions {
    * is an empty map. Ignored for every other kind.
    */
   raster?: BrushRaster | null;
+  /**
+   * The alpha map of the subject SUBTRACTED from this layer
+   * (`AdjustLayer.except`), or null for none — a subject whose answer has not
+   * arrived subtracts nothing yet, rather than blanking the layer.
+   */
+  except?: BrushRaster | null;
+  /** `grade` (default) is a layer; `outline` draws where the mask crosses one half. */
+  finish?: 'grade' | 'outline';
   /**
    * Distinguishes this pass from the other layers' in the graph's program
    * cache — programs are keyed by `id`, and every layer shares one shader, so
@@ -147,7 +199,9 @@ export function makeLayerPass(options: LayerPassOptions): RenderPass | null {
     aspectRatio = 1,
     interpolation = 'tetrahedral',
     id = 'layer',
+    finish = 'grade',
   } = options;
+  const except = options.except ?? null;
   if (!lut || opacity <= 0) return null;
 
   const ar = Number.isFinite(aspectRatio) && aspectRatio > 0 ? aspectRatio : 1;
@@ -179,10 +233,11 @@ export function makeLayerPass(options: LayerPassOptions): RenderPass | null {
 
   let uploaded: { gl: WebGL2RenderingContext; tex: WebGLTexture } | null = null;
   let maskTex: { gl: WebGL2RenderingContext; tex: WebGLTexture } | null = null;
+  let exceptTex: { gl: WebGL2RenderingContext; tex: WebGLTexture } | null = null;
 
   return {
     id,
-    fragment: FRAGMENT,
+    fragment: finish === 'outline' ? fragment(MAIN_OUTLINE) : fragment(MAIN_GRADE),
     setUniforms(gl, program) {
       const at = (name: string) => gl.getUniformLocation(program, name);
       if (!uploaded || uploaded.gl !== gl) {
@@ -205,34 +260,17 @@ export function makeLayerPass(options: LayerPassOptions): RenderPass | null {
 
       // Unit 2, for the same reason the cube takes unit 1: an unset sampler
       // defaults to unit 0, where the source already is.
-      if (!maskTex || maskTex.gl !== gl) {
-        const tex = gl.createTexture();
-        if (tex) {
-          gl.activeTexture(gl.TEXTURE2);
-          gl.bindTexture(gl.TEXTURE_2D, tex);
-          // NOT flipped: row 0 of the map is the top of the picture, which is
-          // what `imageUv` hands the sampler.
-          gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-          gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-          if (raster) {
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, raster.width, raster.height, 0, gl.RED, gl.UNSIGNED_BYTE, raster.data);
-          } else {
-            // One EMPTY texel. Zero rather than one, because a brush mask with
-            // no strokes reads this and must cover nothing — an empty shape is
-            // empty, and 255 here would make a fresh brush layer apply to the
-            // whole picture. Every other kind never samples it.
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 1, 1, 0, gl.RED, gl.UNSIGNED_BYTE, new Uint8Array([0]));
-          }
-          maskTex = { gl, tex };
-        }
-      }
+      if (!maskTex || maskTex.gl !== gl) maskTex = alphaTexture(gl, raster, gl.TEXTURE2);
       gl.activeTexture(gl.TEXTURE2);
       gl.bindTexture(gl.TEXTURE_2D, maskTex?.tex ?? null);
       gl.uniform1i(at('u_maskTex'), 2);
+      // Unit 3: the subtracted subject. Bound even when there is none, like
+      // every sampler here — an unbound one reads unit 0.
+      if (!exceptTex || exceptTex.gl !== gl) exceptTex = alphaTexture(gl, except, gl.TEXTURE3);
+      gl.activeTexture(gl.TEXTURE3);
+      gl.bindTexture(gl.TEXTURE_2D, exceptTex?.tex ?? null);
+      gl.uniform1i(at('u_exceptTex'), 3);
+      gl.uniform1f(at('u_hasExcept'), except ? 1 : 0);
       gl.activeTexture(gl.TEXTURE0);
 
       // A painted mask with no strokes covers NOTHING, unlike every other kind
@@ -267,8 +305,42 @@ export function makeLayerPass(options: LayerPassOptions): RenderPass | null {
       // leaked one per step would fill a GPU in seconds.
       if (uploaded?.gl === gl) gl.deleteTexture(uploaded.tex);
       if (maskTex?.gl === gl) gl.deleteTexture(maskTex.tex);
+      if (exceptTex?.gl === gl) gl.deleteTexture(exceptTex.tex);
       uploaded = null;
       maskTex = null;
+      exceptTex = null;
     },
   };
+}
+
+/**
+ * An alpha map as an R8 texture on `unit`, or one EMPTY texel. Zero rather
+ * than one, because a brush mask with no strokes reads this and must cover
+ * nothing — an empty shape is empty, and 255 here would make a fresh brush
+ * layer apply to the whole picture — and an absent subtraction takes nothing
+ * out. NOT flipped: row 0 of the map is the top of the picture, which is what
+ * `imageUv` hands the sampler.
+ */
+function alphaTexture(
+  gl: WebGL2RenderingContext,
+  raster: BrushRaster | null,
+  unit: GLenum,
+): { gl: WebGL2RenderingContext; tex: WebGLTexture } | null {
+  const tex = gl.createTexture();
+  if (!tex) return null;
+  gl.activeTexture(unit);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  if (raster) {
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, raster.width, raster.height, 0, gl.RED, gl.UNSIGNED_BYTE, raster.data);
+  } else {
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 1, 1, 0, gl.RED, gl.UNSIGNED_BYTE, new Uint8Array([0]));
+  }
+  gl.activeTexture(gl.TEXTURE0);
+  return { gl, tex };
 }

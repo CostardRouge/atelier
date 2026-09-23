@@ -193,7 +193,9 @@ a click), left out of every Apply-to-ALL (`otherIds`; an explicit selection
 still reaches it), out of both numbers of `rollProgress` (counted apart as
 `ignored`). (5) The roll's verb is *Export N pictures* over `delivers`, and the
 run plan counts only those. Keys `P` / `U` / `M` — letters, so AZERTY presses
-the same. An output instruction, never a rating: nothing goes to Winnow.
+the same; on the LAYERS tab `P` and `M` are the mask's instead (Pick, mask
+view — #185, `subject-picking.md`), `U` stays the delivery's everywhere, one
+flag on the pure key map (`layersTab`) so the rule is written once. An output instruction, never a rating: nothing goes to Winnow.
 **E2, the Export tab's *Pictures* table** (`DeliveryTable.tsx`): one row per
 picture, the WHOLE row the target at 48 px (his words — a box alone is too
 small, on a phone above all), a click giving `toggledDelivery`, `↺` back to

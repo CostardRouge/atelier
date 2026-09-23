@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_DEVELOP } from './develop';
 import { createLayer, type AdjustLayer } from './layer';
-import { makeLayerPassCache } from './layer-render';
+import { exceptRaster, makeLayerPassCache } from './layer-render';
+import type { BrushRaster } from '../render/brush-raster';
 import type { BrushStroke } from '../render/mask';
 
 const stroke: BrushStroke = { points: [[0.3, 0.3], [0.6, 0.5]], radius: 0.15, hardness: 0.5, erase: false };
@@ -80,5 +81,47 @@ describe('makeLayerPassCache', () => {
     expect(cache.overlay({ ...a }, 1.5)).toBe(first);
     expect(cache.overlay({ ...a, invert: true }, 1.5)).not.toBe(first);
     expect(cache.overlay(layer({ mask: null }), 1.5)).toBeNull();
+  });
+
+  it('rebuilds a pass when the subtracted subject arrives, and keeps it after', () => {
+    const cache = makeLayerPassCache();
+    const whole = layer({ mask: null, except: 's' });
+    const [before] = cache.passes([whole], 1.5, new Map());
+    const cut: BrushRaster = { data: new Uint8Array(4).fill(255), width: 2, height: 2 };
+    const rasters = new Map([['s', cut]]);
+    const [after] = cache.passes([whole], 1.5, rasters);
+    expect(after).not.toBe(before);
+    expect(cache.passes([whole], 1.5, rasters)[0]).toBe(after);
+  });
+
+  it('draws the outline and the fill as two passes, and shows a hole on a whole layer', () => {
+    const cache = makeLayerPassCache();
+    const a = layer();
+    const fill = cache.overlay(a, 1.5, null, 'fill');
+    const outline = cache.overlay(a, 1.5, null, 'outline');
+    expect(outline).not.toBe(fill);
+    expect(outline?.id).toBe('mask-outline:a');
+    const cut: BrushRaster = { data: new Uint8Array(4), width: 2, height: 2 };
+    // No mask of its own, but a subject taken out: the hole is worth showing.
+    expect(cache.overlay(layer({ mask: null, except: 's' }), 1.5, null, 'outline', cut)).not.toBeNull();
+  });
+
+  it('keeps the blink for the same raster and lets it go with none', () => {
+    const cache = makeLayerPassCache();
+    const r: BrushRaster = { data: new Uint8Array(4), width: 2, height: 2 };
+    const first = cache.flash(r, 1.5);
+    expect(first).not.toBeNull();
+    expect(cache.flash(r, 1.5)).toBe(first);
+    expect(cache.flash(null, 1.5)).toBeNull();
+  });
+});
+
+describe('exceptRaster', () => {
+  it('is the subtracted subject’s map, or nothing', () => {
+    const r: BrushRaster = { data: new Uint8Array(1), width: 1, height: 1 };
+    const rasters = new Map([['s', r]]);
+    expect(exceptRaster(layer({ except: 's' }), rasters)).toBe(r);
+    expect(exceptRaster(layer({ except: 'gone' }), rasters)).toBeNull();
+    expect(exceptRaster(layer(), rasters)).toBeNull();
   });
 });

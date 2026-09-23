@@ -24,8 +24,10 @@ import { makeFrameGrader } from '../lut/frame-grader';
 import type { Keystone } from '../render/geometry';
 import type { LensCorrection } from '../render/lens';
 import { geometryPasses, hasGeometry } from '../render/picture-geometry';
-import { drawingLayers, subjectRequests, type AdjustLayer } from './layer';
+import { drawingLayers, subjectLayersForRender, type AdjustLayer } from './layer';
 import { layerPasses } from './layer-render';
+import { needsSubjectRasters, resolveSubjectRasters } from './subject-rasters';
+import type { BrushRaster } from '../render/brush-raster';
 import { DEFAULT_FRAMING, type Framing } from '../media/framing';
 import { decodePhoto, decodePhotoSource, fitPhotoForRender } from '../media/photo-frame';
 import { decodeRaw } from '../raw/raw-decoder';
@@ -44,8 +46,6 @@ import { makeGainMapPass } from '../render/gain-map-pass';
 import type { GainField } from '../render/gain-map';
 import type { CameraWarp } from '../render/camera-warp';
 import { encodeUltraHdr, type UltraHdrResult } from '../hdr/ultra-hdr-export';
-import type { BrushRaster } from '../render/brush-raster';
-import { segmentSubject } from '../segment/segmenter';
 
 export interface RollRenderOptions {
   /** The run's cancel: a RAW's decode drops its turn on it (the render is one draw and never looks). */
@@ -113,10 +113,7 @@ export interface RollRenderOptions {
    * and the delivered size, and runs before the container is written.
    */
   stamp?: ((jpeg: Blob, delivered: PictureSize) => Promise<Blob>) | null;
-  /**
-   * Called before a SUBJECT mask is asked of the model — seconds per tap, the
-   * one step of a render long enough to need saying.
-   */
+  /** Called once, before the model is asked for this picture's subjects — the run's progress line says so. */
   onSubjects?: (() => void) | null;
 }
 
@@ -144,39 +141,22 @@ export interface RollRendered {
   sensor: PictureSize | null;
   capped: 'device' | 'gpu' | null;
   /**
-   * The subject layers the picture asked the model for, and how many it
-   * answered. A layer left unanswered draws nothing — on the stage as in the
-   * file — so a run that lost one SAYS so rather than delivering a picture
-   * without the adjustment the author made.
+   * The subject masks this delivery asked the model for, and how many it
+   * answered (`subject-rasters.ts`). A layer left unanswered draws nothing in
+   * the file, and the run says which picture lost one.
    */
-  subjects: { asked: number; resolved: number };
+  subjects?: { asked: number; resolved: number };
 }
 
-const NO_SUBJECTS = { asked: 0, resolved: 0 } as const;
-
-/**
- * The alpha map of every subject layer, segmented from `image` — the SAME
- * decode the stage shows the model (the render, or a RAW's as-shot picture),
- * so the mask lands in the frame it was tapped in. The model works at 1024 on
- * the long edge whatever it is handed, so the file's mask is the stage's.
- */
-async function resolveSubjects(
-  layers: readonly AdjustLayer[] | null | undefined,
-  image: TexImageSource | null,
-  onSubjects: (() => void) | null | undefined,
-): Promise<{ rasters: ReadonlyMap<string, BrushRaster>; asked: number; resolved: number }> {
-  const requests = subjectRequests(layers);
-  const rasters = new Map<string, BrushRaster>();
-  if (requests.length === 0 || !image) return { rasters, asked: requests.length, resolved: 0 };
-  onSubjects?.();
-  for (const r of requests) {
-    const raster = await segmentSubject(
-      image,
-      r.points.map(([x, y]) => ({ x, y })),
-    ).catch(() => null);
-    if (raster) rasters.set(r.id, raster);
-  }
-  return { rasters, asked: requests.length, resolved: rasters.size };
+/** The subjects of a delivery, segmented on `image`, and the count the run reports. */
+async function segmentFor(
+  opts: RollRenderOptions,
+  image: () => TexImageSource,
+): Promise<{ rasters: Map<string, BrushRaster> | null; subjects: { asked: number; resolved: number } }> {
+  if (!needsSubjectRasters(opts.layers)) return { rasters: null, subjects: { asked: 0, resolved: 0 } };
+  opts.onSubjects?.();
+  const rasters = await resolveSubjectRasters(opts.layers, image());
+  return { rasters, subjects: { asked: subjectLayersForRender(opts.layers).length, resolved: rasters.size } };
 }
 
 /** A measured picture: the pixels, and whether they are a RAW's own render. */
@@ -226,7 +206,6 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
     const ar = source.width / source.height;
     const stack = drawingLayers(opts.layers);
     const patches = opts.repair ?? [];
-    const subjects = await resolveSubjects(opts.layers, bitmap, opts.onSubjects);
     const needsGpu =
       Boolean(opts.lut) ||
       hasGeometry(opts) ||
@@ -243,19 +222,22 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
     const { pre: detailPre, post } = detailPasses(opts.detail, gradedAt.width / source.width);
     const repairPass = makeRepairPass(patches, ar);
     const pre = [...(repairPass ? [repairPass] : []), ...detailPre];
-    const passes = [...geometryPasses(opts, ar), ...layerPasses(stack, ar, undefined, subjects.rasters), ...post];
+    // The subjects, segmented on the picture being delivered — an export
+    // built without them dropped every Subject layer from the file.
+    const { rasters, subjects } = await segmentFor(opts, () => bitmap);
+    const passes = [...geometryPasses(opts, ar), ...layerPasses(opts.layers, ar, undefined, rasters), ...post];
     const grader = needsGpu && fit
       ? makeFrameGrader(opts.lut as CubeLut, fit.width, fit.height, 1, passes, pre, opts.film ?? null)
       : null;
     // The darker render for the gain map takes a grader of its own with
     // fresh passes: a pass holds textures on the context it first drew on.
     const darkGrader = opts.hdr && fit
-      ? makeFrameGrader(opts.hdr.lut as CubeLut, fit.width, fit.height, 1, freshPasses(opts, ar, stack, gradedAt.width / source.width, subjects.rasters), freshPre(opts, ar, patches, gradedAt.width / source.width), opts.film ?? null)
+      ? makeFrameGrader(opts.hdr.lut as CubeLut, fit.width, fit.height, 1, freshPasses(opts, ar, rasters, gradedAt.width / source.width), freshPre(opts, ar, patches, gradedAt.width / source.width), opts.film ?? null)
       : null;
     try {
       const graded = grader && fit ? grader.render(fit.image) : bitmap;
       const darker = darkGrader && fit ? copyOf(darkGrader.render(fit.image)) : null;
-      return { ...(await deliver(graded, source, gradedAt, opts, darker)), subjects: { asked: subjects.asked, resolved: subjects.resolved } };
+      return { ...(await deliver(graded, source, gradedAt, opts, darker)), subjects };
     } finally {
       grader?.dispose();
       darkGrader?.dispose();
@@ -276,9 +258,6 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
 async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRenderOptions): Promise<RollRendered> {
   const klass = deviceClass();
   const gpuMax = maxRenderSize();
-  // A subject mask is segmented from the as-shot 2D picture, which is what
-  // the stage showed the model: made only when a layer needs it.
-  const wantsSubjects = subjectRequests(opts.layers).length > 0;
   const decoded = await decodeRaw(raw.file, {
     minLongEdge: opts.longEdge ? opts.longEdge * 2 : null,
     gain: raw.gain,
@@ -290,11 +269,9 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
     signal: opts.signal,
     quiet: true,
     // The 2D as-shot picture is the stage's; a delivery grades the half image
-    // and never draws it — four bytes a pixel not made, unless the model has
-    // to be shown it.
-    withBytes: wantsSubjects,
+    // and never draws it — four bytes a pixel not made.
+    withBytes: false,
   });
-  const subjects = await resolveSubjects(opts.layers, decoded.bytes, opts.onSubjects);
   const source = { width: decoded.width, height: decoded.height };
   const sensor = { width: decoded.sourceWidth, height: decoded.sourceHeight };
   // Fewer pixels than the sensor has, and not because the delivery asked for
@@ -305,7 +282,6 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
   const askedLess = Boolean(opts.longEdge) && decodedEdge >= (opts.longEdge ?? 0);
   const capped = decodedEdge < sensorEdge && !askedLess ? rawDecodeCap(sensorEdge, 'export', klass, gpuMax) : null;
   const ar = source.width / source.height;
-  const stack = drawingLayers(opts.layers);
   // The decode may be half the sensor: a kernel stated in sensor pixels scales with it.
   const { pre: detailPre, post } = detailPasses(opts.detail, source.width / decoded.sourceWidth);
   const repairPass = makeRepairPass(opts.repair, ar);
@@ -313,24 +289,31 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
   // `render-gain-map.md`'s order, the same one the stage runs.
   const gainPass = makeGainMapPass(opts.calibration?.gain);
   const pre = [...(gainPass ? [gainPass] : []), ...(repairPass ? [repairPass] : []), ...detailPre];
-  const passes = [...geometryPasses(withCalibration(opts), ar), ...layerPasses(stack, ar, undefined, subjects.rasters), ...post];
+  // A half-float picture is not something the model can be shown: it sees the
+  // picture through its own cube, as the author does, rendered once apart.
+  const shown = needsSubjectRasters(opts.layers)
+    ? makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, [], [], null)
+    : null;
+  let segmented: Awaited<ReturnType<typeof segmentFor>>;
+  try {
+    segmented = await segmentFor(opts, () => copyOf(shown!.render(decoded.half)));
+  } finally {
+    shown?.dispose();
+  }
+  const { rasters, subjects } = segmented;
+  const passes = [...geometryPasses(withCalibration(opts), ar), ...layerPasses(opts.layers, ar, undefined, rasters), ...post];
   // A RAW is never drawn without the GPU: its half-floats have no 2D form,
   // and its develop is never default (the gain alone is a stage).
   const grader = makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, passes, pre, opts.film ?? null);
   const darkGrader = opts.hdr
-    ? makeFrameGrader(opts.hdr.lut as CubeLut, source.width, source.height, 1, freshPasses(opts, ar, stack, source.width / decoded.sourceWidth, subjects.rasters), freshPre(opts, ar, opts.repair ?? [], source.width / decoded.sourceWidth), opts.film ?? null)
+    ? makeFrameGrader(opts.hdr.lut as CubeLut, source.width, source.height, 1, freshPasses(opts, ar, rasters, source.width / decoded.sourceWidth), freshPre(opts, ar, opts.repair ?? [], source.width / decoded.sourceWidth), opts.film ?? null)
     : null;
   try {
     // Copied out: two graders' canvases are two contexts, but the SDR one is
     // read by `deliver` after the darker has drawn, and a grader's canvas is
     // only its LAST render.
     const darker = darkGrader ? copyOf(darkGrader.render(decoded.half)) : null;
-    return {
-      ...(await deliver(grader.render(decoded.half), source, source, opts, darker)),
-      sensor,
-      capped,
-      subjects: { asked: subjects.asked, resolved: subjects.resolved },
-    };
+    return { ...(await deliver(grader.render(decoded.half), source, source, opts, darker)), sensor, capped, subjects };
   } finally {
     grader.dispose();
     darkGrader?.dispose();
@@ -350,15 +333,10 @@ function withCalibration(opts: RollRenderOptions) {
 function freshPasses(
   opts: RollRenderOptions,
   ar: number,
-  stack: readonly AdjustLayer[],
+  rasters: ReadonlyMap<string, BrushRaster> | null,
   scale: number,
-  rasters: ReadonlyMap<string, BrushRaster>,
 ) {
-  return [
-    ...geometryPasses(withCalibration(opts), ar),
-    ...layerPasses(stack, ar, undefined, rasters),
-    ...detailPasses(opts.detail, scale).post,
-  ];
+  return [...geometryPasses(withCalibration(opts), ar), ...layerPasses(opts.layers, ar, undefined, rasters), ...detailPasses(opts.detail, scale).post];
 }
 
 /** The passes before the cube, built anew for a second grader. */
@@ -421,11 +399,10 @@ async function deliver(
       hdr: { ultra: result.ultra, headroom: result.headroom, checked: result.checked, reason: result.reason },
       sensor: null,
       capped: null,
-      subjects: { ...NO_SUBJECTS },
     };
   }
   const encoded = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', opts.quality));
   if (!encoded) throw new Error('The browser could not encode this picture.');
   const blob = opts.stamp ? await opts.stamp(encoded, { width: out.w, height: out.h }) : encoded;
-  return { blob, width: out.w, height: out.h, source, gradedAt, hdr: null, sensor: null, capped: null, subjects: { ...NO_SUBJECTS } };
+  return { blob, width: out.w, height: out.h, source, gradedAt, hdr: null, sensor: null, capped: null };
 }

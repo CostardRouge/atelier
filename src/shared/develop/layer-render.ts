@@ -65,6 +65,7 @@ export function layerPasses(
       aspectRatio,
       interpolation,
       raster: rasters?.get(layer.id) ?? null,
+      except: exceptRaster(layer, rasters),
       // Keyed by the LAYER's id: the graph caches programs by pass id, and two
       // layers sharing one would share a program and, through it, one uploaded
       // cube — the second layer would then grade with the first one's numbers.
@@ -73,6 +74,22 @@ export function layerPasses(
     return pass ? [pass] : [];
   });
 }
+
+/**
+ * The map of the subject a layer SUBTRACTS, from the same rasters its own
+ * subject would come from — null when it subtracts nothing, or when that
+ * subject's answer has not arrived (the layer then applies whole for the
+ * moment the model thinks, rather than vanishing).
+ */
+export function exceptRaster(
+  layer: AdjustLayer,
+  rasters: ReadonlyMap<string, BrushRaster> | null | undefined,
+): BrushRaster | null {
+  return layer.except ? (rasters?.get(layer.except) ?? null) : null;
+}
+
+/** How show-the-mask draws: a red wash, or the line where the mask crosses one half. */
+export type MaskOverlayStyle = 'fill' | 'outline';
 
 /**
  * Every colour to the same vermilion — the suite's accent, so the overlay reads
@@ -112,19 +129,60 @@ export function maskOverlayPass(
   layer: AdjustLayer | null | undefined,
   aspectRatio: number,
   raster?: BrushRaster | null,
+  style: MaskOverlayStyle = 'fill',
+  except: BrushRaster | null = null,
 ): RenderPass | null {
-  if (!layer?.mask) return null;
+  // A layer with no mask of its own is still worth showing once it subtracts
+  // a subject: the hole IS its shape.
+  if (!layer?.mask && !except) return null;
+  if (!layer) return null;
   return makeLayerPass({
     lut: RED_CUBE,
     mask: layer.mask,
     raster: raster ?? null,
+    except,
     invert: layer.invert,
-    opacity: OVERLAY_STRENGTH,
+    opacity: style === 'outline' ? 1 : OVERLAY_STRENGTH,
+    finish: style === 'outline' ? 'outline' : 'grade',
     aspectRatio,
     // Trilinear: a 2-point cube of one colour, where the lookup cannot matter,
     // and this way the overlay never waits on a tetrahedral branch.
     interpolation: 'trilinear',
-    id: `mask-overlay:${layer.id}`,
+    // The style is in the id: the two draw with different programs.
+    id: `mask-${style}:${layer.id}`,
+  });
+}
+
+/** Brighter than the overlay's wash, so a blink reads over it. */
+const FLASH_CUBE: CubeLut = {
+  ...RED_CUBE,
+  title: 'mask flash',
+  data: (() => {
+    const data = new Float32Array(2 * 2 * 2 * 3);
+    for (let i = 0; i < 8; i += 1) {
+      data[i * 3] = 0.94;
+      data[i * 3 + 1] = 0.34;
+      data[i * 3 + 2] = 0.22;
+    }
+    return data;
+  })(),
+};
+
+/**
+ * One point's own region, washed — what BLINKS when the model answers a tap
+ * (the maintainer's pick, 2026-09-23: twice, like a macOS menu item). The
+ * point's raster alone, never the layer's union: the blink says what this tap
+ * ADDED.
+ */
+export function maskFlashPass(raster: BrushRaster, aspectRatio: number): RenderPass | null {
+  return makeLayerPass({
+    lut: FLASH_CUBE,
+    mask: { kind: 'subject', points: [], model: 'flash' },
+    raster,
+    opacity: 0.7,
+    aspectRatio,
+    interpolation: 'trilinear',
+    id: 'mask-flash',
   });
 }
 
@@ -171,7 +229,11 @@ export interface LayerPassCache {
     layer: AdjustLayer | null | undefined,
     aspectRatio: number,
     raster?: BrushRaster | null,
+    style?: MaskOverlayStyle,
+    except?: BrushRaster | null,
   ): RenderPass | null;
+  /** The blink over one point's region, kept while it is the same raster. */
+  flash(raster: BrushRaster | null, aspectRatio: number): RenderPass | null;
 }
 
 interface Held {
@@ -188,6 +250,7 @@ interface Held {
   opacity: number;
   aspectRatio: number;
   passRaster: BrushRaster | null;
+  passExcept: BrushRaster | null;
   pass: RenderPass | null;
 }
 
@@ -196,12 +259,15 @@ interface HeldOverlay {
   invert: boolean;
   aspectRatio: number;
   raster: BrushRaster | null;
+  style: MaskOverlayStyle;
+  except: BrushRaster | null;
   pass: RenderPass | null;
 }
 
 export function makeLayerPassCache(): LayerPassCache {
   const held = new Map<string, Held>();
   let overlay: { id: string; held: HeldOverlay } | null = null;
+  let flash: { raster: BrushRaster; aspectRatio: number; pass: RenderPass | null } | null = null;
 
   return {
     passes(layers, aspectRatio, rasters = null, interpolation = getDefaultLutInterpolation()) {
@@ -233,10 +299,12 @@ export function makeLayerPassCache(): LayerPassCache {
           raster = null;
         }
 
+        const except = exceptRaster(layer, rasters);
         const reusable =
           prev?.pass &&
           prev.cube === cube &&
           prev.passRaster === raster &&
+          prev.passExcept === except &&
           prev.invert === layer.invert &&
           prev.opacity === layer.opacity &&
           prev.aspectRatio === aspectRatio &&
@@ -252,6 +320,7 @@ export function makeLayerPassCache(): LayerPassCache {
                 aspectRatio,
                 interpolation,
                 raster,
+                except,
                 id: `layer:${layer.id}`,
               })
             : null;
@@ -268,6 +337,7 @@ export function makeLayerPassCache(): LayerPassCache {
           opacity: layer.opacity,
           aspectRatio,
           passRaster: raster,
+          passExcept: except,
           pass,
         });
         if (pass) out.push(pass);
@@ -276,8 +346,8 @@ export function makeLayerPassCache(): LayerPassCache {
       return out;
     },
 
-    overlay(layer, aspectRatio, raster = null) {
-      if (!layer?.mask) {
+    overlay(layer, aspectRatio, raster = null, style = 'fill', except = null) {
+      if (!layer || (!layer.mask && !except)) {
         overlay = null;
         return null;
       }
@@ -285,18 +355,30 @@ export function makeLayerPassCache(): LayerPassCache {
       if (
         prev?.pass &&
         prev.raster === raster &&
+        prev.style === style &&
+        prev.except === except &&
         prev.invert === layer.invert &&
         prev.aspectRatio === aspectRatio &&
         sameMask(prev.mask, layer.mask)
       ) {
         return prev.pass;
       }
-      const pass = maskOverlayPass(layer, aspectRatio, raster);
+      const pass = maskOverlayPass(layer, aspectRatio, raster, style, except);
       overlay = {
         id: layer.id,
-        held: { mask: cloneMask(layer.mask), invert: layer.invert, aspectRatio, raster, pass },
+        held: { mask: cloneMask(layer.mask), invert: layer.invert, aspectRatio, raster, style, except, pass },
       };
       return pass;
+    },
+
+    flash(raster, aspectRatio) {
+      if (!raster) {
+        flash = null;
+        return null;
+      }
+      if (flash && flash.raster === raster && flash.aspectRatio === aspectRatio) return flash.pass;
+      flash = { raster, aspectRatio, pass: maskFlashPass(raster, aspectRatio) };
+      return flash.pass;
     },
   };
 }
