@@ -87,7 +87,7 @@ export default function ExportPanel({
         info={
           <>
             <p>
-              Each picture is decoded at its own size, developed under the roll’s look, cropped as the
+              Each picture is decoded at its own size, developed under its own look, cropped as the
               Crop tab shows it and written as a JPEG. The size is a ceiling on the long edge — a
               picture is never upscaled to reach it.
             </p>

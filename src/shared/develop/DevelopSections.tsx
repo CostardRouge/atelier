@@ -374,12 +374,15 @@ export function DevelopApplySection({
 export function DevelopLookSection({
   stack,
   header,
+  legend,
   previewHeight = null,
   previewImage = null,
   previewLabel = null,
 }: {
   stack: LutStack;
   header?: ReactNode;
+  /** What the ⓘ says about whose look this is — a host whose look is not the piece's says so. */
+  legend?: ReactNode;
   /** The stage's real height in pixels — what tells the texture section whether its grain can be SEEN. */
   previewHeight?: number | null;
   /**
@@ -394,10 +397,12 @@ export function DevelopLookSection({
     <div className="flex flex-col gap-2 pt-3 border-t border-line">
       <span className="flex items-center gap-2">
         <SectionLegend label="Look">
-          <p>
-            The same grade the piece already wears, applied AFTER this correction — set both in one
-            place. Looks apply top to bottom and the output transform last.
-          </p>
+          {legend ?? (
+            <p>
+              The same grade the piece already wears, applied AFTER this correction — set both in one
+              place. Looks apply top to bottom and the output transform last.
+            </p>
+          )}
         </SectionLegend>
       </span>
       {header}

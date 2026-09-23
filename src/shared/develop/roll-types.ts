@@ -1,7 +1,7 @@
 /**
  * A ROLL — the Develop tool's document (`docs/develop-tool.md` §3): a named set
- * of pictures, each with its own develop and crop, plus the roll's look and how
- * it exports. What a developer keeps, not what an editor composes: no deck, no
+ * of pictures, each with its own develop, look and crop, plus how the roll
+ * exports. What a developer keeps, not what an editor composes: no deck, no
  * badge, no timeline.
  *
  * A picture is a REF (`SavedMediaRef`, hash-carrying), never bytes: the file is
@@ -44,10 +44,14 @@ import { DEFAULT_SOURCE_ID } from '../sources/source';
  * leaves from is the picture's own rendition (`docs/capture-renditions.md`
  * §13.2), and "proxies only, this run" is a run-time choice that never
  * touches the document. No block: the reader simply stops reading the key.
+ * v5 (2026-09-23): the look is the PICTURE's (`RollPicture.grade`), never the
+ * roll's — the maintainer's call: *"c'est le média qui décide"*. A roll written
+ * before v5 hands its one look to every picture that has none (`readRollDoc`),
+ * so nothing changes on screen; `RollDoc.grade` is gone.
  */
-export const ROLL_DOC_VERSION = 4;
+export const ROLL_DOC_VERSION = 5;
 
-/** The roll's look, after every picture's develop — Trips' `TripGrade` shape. */
+/** A picture's look, after its own develop — Trips' `TripGrade` shape. */
 export interface RollGrade {
   layers: SavedLutLayer[];
   output: OutputTransform;
@@ -101,6 +105,12 @@ export interface RollPicture {
   ref: SavedMediaRef;
   /** Null is as shot. Never inherited by the next picture. */
   develop: DevelopSettings | null;
+  /**
+   * The look — LUTs, output transform, grain — applied after the develop, or
+   * null for none (v5). The picture's own, like its develop: never inherited
+   * by the next picture, and written onto others only by an Apply-to verb.
+   */
+  grade?: RollGrade | null;
   /** Null is uncropped. Crop · straighten · flip (`shared/media/framing.ts`). */
   framing: Framing | null;
   aspect: RollAspect;
@@ -162,7 +172,6 @@ export interface RollDoc {
   updatedAt: number;
   /** The filmstrip's order. */
   pictures: RollPicture[];
-  grade: RollGrade | null;
   export: RollExport;
 }
 
@@ -186,7 +195,6 @@ export function createRollDoc(
     createdAt: now,
     updatedAt: now,
     pictures: [],
-    grade: null,
     export: { ...DEFAULT_ROLL_EXPORT },
   };
 }
@@ -196,6 +204,7 @@ export function createRollPicture(ref: SavedMediaRef, id: string = newRollId()):
     id,
     ref: { ...ref },
     develop: null,
+    grade: null,
     framing: null,
     aspect: 'original',
     border: null,
@@ -284,7 +293,13 @@ function readFraming(raw: unknown): Framing | null {
   return isDefaultFraming(f) ? null : f;
 }
 
-function readPicture(raw: unknown): RollPicture | null {
+/**
+ * A stored picture. `rollGrade` is the look a roll written before v5 held for
+ * every picture: it is handed to a picture that carries no `grade` key of its
+ * own, which is every picture of such a roll — so the migration is part of
+ * reading, and idempotent.
+ */
+function readPicture(raw: unknown, rollGrade: RollGrade | null = null): RollPicture | null {
   if (!isRecord(raw)) return null;
   const ref = readMediaRef(raw.ref);
   if (!ref) return null;
@@ -303,6 +318,7 @@ function readPicture(raw: unknown): RollPicture | null {
     id: typeof raw.id === 'string' && raw.id ? raw.id : newRollId(),
     ref,
     develop: developOrNull(raw.develop),
+    grade: 'grade' in raw ? readRollGrade(raw.grade) : rollGrade ? structuredClone(rollGrade) : null,
     framing,
     aspect,
     border,
@@ -326,10 +342,15 @@ function readPicture(raw: unknown): RollPicture | null {
  */
 export function readRollDoc(raw: unknown, fallbackSourceId: string = DEFAULT_SOURCE_ID): RollDoc | null {
   if (!isRecord(raw) || typeof raw.id !== 'string' || !raw.id || !Array.isArray(raw.pictures)) return null;
+  // v4 → v5: the roll's one look becomes every picture's own. Only a roll
+  // that PREDATES v5 is read for it — a v5 roll never writes the key, and one
+  // that somehow carried it must not dress pictures their author left bare.
+  const version = finite(raw.version, 1);
+  const rollGrade = version < 5 ? readRollGrade(raw.grade) : null;
   const seen = new Set<string>();
   const pictures: RollPicture[] = [];
   for (const item of raw.pictures) {
-    const picture = readPicture(item);
+    const picture = readPicture(item, rollGrade);
     if (!picture || seen.has(picture.id)) continue;
     seen.add(picture.id);
     pictures.push(picture);
@@ -343,7 +364,6 @@ export function readRollDoc(raw: unknown, fallbackSourceId: string = DEFAULT_SOU
     createdAt: finite(raw.createdAt, now),
     updatedAt: finite(raw.updatedAt, now),
     pictures,
-    grade: readRollGrade(raw.grade),
     export: readRollExport(raw.export),
   };
 }
@@ -406,7 +426,17 @@ export function patchPicture(
   patch: Partial<
     Pick<
       RollPicture,
-      'develop' | 'framing' | 'aspect' | 'border' | 'rendition' | 'keystone' | 'lens' | 'detail' | 'repair' | 'layers'
+      | 'develop'
+      | 'grade'
+      | 'framing'
+      | 'aspect'
+      | 'border'
+      | 'rendition'
+      | 'keystone'
+      | 'lens'
+      | 'detail'
+      | 'repair'
+      | 'layers'
     >
   >,
   now: number = Date.now(),
@@ -442,6 +472,27 @@ export function copyCropTo(
 }
 
 /**
+ * One picture's LOOK written onto others, each as its own copy — never the
+ * develop, the crop or anything else: a look is chosen per picture, and this
+ * is the one gesture that dresses several with it. `null` takes the look off.
+ */
+export function copyGradeTo(
+  roll: RollDoc,
+  ids: readonly string[],
+  grade: RollGrade | null,
+  now: number = Date.now(),
+): RollDoc {
+  const key = JSON.stringify(grade ?? null);
+  let changed = false;
+  const pictures = roll.pictures.map((p) => {
+    if (!ids.includes(p.id) || JSON.stringify(p.grade ?? null) === key) return p;
+    changed = true;
+    return { ...p, grade: grade ? structuredClone(grade) : null };
+  });
+  return changed ? { ...roll, pictures, updatedAt: now } : roll;
+}
+
+/**
  * One picture's BORDER written onto others, each as its own copy — never the
  * crop: the maintainer asked for the two apart (2026-09-19), so a roll can wear
  * one border over crops that each differ. `null` takes the border off.
@@ -462,8 +513,8 @@ export function copyBorderTo(
 }
 
 /**
- * What the gallery card says: "18 of 42 developed" — a develop or a crop
- * counts, and an ASPECT other than the picture's own is a crop on its own:
+ * What the gallery card says: "18 of 42 developed" — a develop, a look or a
+ * crop counts, and an ASPECT other than the picture's own is a crop on its own:
  * drawing a free zone with the frame's corners leaves the framing untouched
  * (nothing was panned or zoomed), and a picture that was plainly cropped must
  * not read as one nobody has looked at.
@@ -472,7 +523,8 @@ export function rollProgress(roll: RollDoc): { total: number; developed: number 
   return {
     total: roll.pictures.length,
     developed: roll.pictures.filter(
-      (p) => p.develop !== null || p.framing !== null || p.aspect !== 'original' || p.border !== null,
+      (p) =>
+        p.develop !== null || (p.grade ?? null) !== null || p.framing !== null || p.aspect !== 'original' || p.border !== null,
     ).length,
   };
 }

@@ -16,14 +16,22 @@ function sample(): RollDoc {
   let n = 0;
   let doc = createRollDoc('Islande — jour 3', 'winnow.example', 1000, 'r1');
   doc = addPictures(doc, [{ name: 'a.dng', size: 5, lastModified: 1, hash: 'h1', assetId: 'winnow.example/7' }], 2000, () => `p${++n}`);
-  doc = patchPicture(doc, 'p1', { develop: { ...DEFAULT_DEVELOP, highlights: -40 }, aspect: '4:5' }, 3000);
+  doc = patchPicture(
+    doc,
+    'p1',
+    {
+      develop: { ...DEFAULT_DEVELOP, highlights: -40 },
+      aspect: '4:5',
+      grade: {
+        layers: [{ id: 'l1', source: 'custom', name: 'Mine', customText: 'LUT_3D_SIZE 2', intensity: 0.6, enabled: true }],
+        output: 'rec709-to-srgb',
+        film: { ...DEFAULT_FILM_TEXTURE, grain: 0.35, halation: 0.2 },
+      },
+    },
+    3000,
+  );
   return {
     ...doc,
-    grade: {
-      layers: [{ id: 'l1', source: 'custom', name: 'Mine', customText: 'LUT_3D_SIZE 2', intensity: 0.6, enabled: true }],
-      output: 'rec709-to-srgb',
-      film: { ...DEFAULT_FILM_TEXTURE, grain: 0.35, halation: 0.2 },
-    },
     export: { longEdge: 2048, quality: 0.85, replace: true, hdr: true, hdrStops: 3 },
   };
 }
@@ -38,7 +46,7 @@ describe('the roll file', () => {
     const file = toRollFile(sample(), 0);
     expect(file.kind).toBe(ROLL_FILE_KIND);
     expect(file.version).toBe(ROLL_DOC_VERSION);
-    expect(Object.keys(file).sort()).toEqual(['export', 'exportedAt', 'grade', 'kind', 'name', 'pictures', 'version']);
+    expect(Object.keys(file).sort()).toEqual(['export', 'exportedAt', 'kind', 'name', 'pictures', 'version']);
     expect(file.pictures[0].ref.hash).toBe('h1');
   });
 
@@ -50,9 +58,26 @@ describe('the roll file', () => {
     const imported = rollDocFromFile(parsed.file, 9000, 'local');
     expect(imported.id).not.toBe(original.id);
     expect(imported).toMatchObject({ sourceId: 'local', createdAt: 9000, updatedAt: 9000, name: original.name });
+    // Each picture's look travels with it.
     expect(imported.pictures).toEqual(original.pictures);
-    expect(imported.grade).toEqual(original.grade);
+    expect(imported.pictures[0].grade?.output).toBe('rec709-to-srgb');
     expect(imported.export).toEqual(original.export);
+  });
+
+  it('hands a pre-v5 file’s one look to every picture', () => {
+    const parsed = parseRollFile(
+      JSON.stringify({
+        kind: ROLL_FILE_KIND,
+        version: 4,
+        name: 'Old',
+        pictures: [{ id: 'a', ref: { name: 'a.jpg', size: 1 } }, { id: 'b', ref: { name: 'b.jpg', size: 1 } }],
+        grade: { layers: [], output: 'rec709-to-srgb' },
+      }),
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.file.pictures.map((p) => p.grade?.output)).toEqual(['rec709-to-srgb', 'rec709-to-srgb']);
+    expect('grade' in parsed.file).toBe(false);
   });
 
   it('refuses what it cannot read, saying why', () => {

@@ -11,8 +11,8 @@ the tool's shell and its editor are in `develop-roll.md`.
 
 **Decision (maintainer).** A third official tool beside the Studio and Trips,
 "with about the same interface as the modal". Four choices, all his: it opens
-a **roll** (a document of pictures, each with its develop and crop, plus the
-roll's look and export — not a Library view, which would lose its numbers on
+a **roll** (a document of pictures, each with its develop, crop and — since
+roll v5, 2026-09-23 — its own look, plus the roll's export — not a Library view, which would lose its numbers on
 reload, and not a hash-keyed catalogue, which would break never-inherit);
 **presets are one personal book** shared by the tool and both modals, synced
 like a document, trips' lists merged in once and never written again; **v1**

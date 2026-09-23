@@ -129,6 +129,7 @@ function RollCard({
   const compact = useIsCompact();
   const [confirming, setConfirming] = useState<{ kind: 'delete' } | { kind: 'move'; to: SourceInfo } | null>(null);
   const { total, developed } = rollProgress(roll);
+  const withLook = roll.pictures.filter((p) => p.grade).length;
 
   // The whole card opens the roll (the trip and project cards' rule); the rest
   // is behind the ⋯, the destructive verb apart.
@@ -203,10 +204,10 @@ function RollCard({
           </span>
           <span className="text-faint">·</span>
           <span>{formatWhen(roll.updatedAt)}</span>
-          {roll.grade && (
+          {withLook > 0 && (
             <>
               <span className="text-faint">·</span>
-              <span>a look</span>
+              <span>{withLook === total ? 'each with a look' : `${withLook} with a look`}</span>
             </>
           )}
         </p>
@@ -231,7 +232,7 @@ function RollCard({
             onDelete();
           }}
         >
-          <p>Every picture's develop and the roll's look go with it. The files stay where they are.</p>
+          <p>Every picture's develop and look go with it. The files stay where they are.</p>
         </ConfirmDialog>
       )}
       {confirming?.kind === 'move' && (
