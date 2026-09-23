@@ -375,6 +375,16 @@ shared block. Rules a later phase must keep:
   XMP is ONE packet — `withXmpPacket` replaces, and `wrapUltraHdr` takes the
   stamp's packet OUT of the base and folds its `rdf:Description` into the
   container's, since two packets in one file is what readers disagree about.
+- **A picture's title and caption are the PICTURE's** (2026-09-23, M2):
+  `RollPicture.title` / `caption`, stored trimmed and absent when empty
+  (`wordsOf`, `setPictureWords` — the same roll back when nothing changed, so
+  a blur is no undo step). Carried by no preset, paste or Apply-to (two frames
+  of one scene are captioned apart), but by the `.roll.json` backup. The
+  caption is written as `ImageDescription` too (Lightroom's and Capture One's
+  Caption); a title is XMP only — EXIF's `XPTitle` is Windows-only UTF-16 and
+  not worth a tag. A picture with no caption keeps the capture's own
+  `ImageDescription`. Typed into drafts committed on blur, in the Export tab's
+  Metadata section; text fields keep P/U/M (the editor's keys yield to typing).
 - **The workbench holds TWO files since 2026-09-21: the picture's, and the one
   on the stage** (`renditions.md`, «R3a is BUILT»). `file` stays what the
   picture IS — its identity, its origin, its EXIF, what the export hook

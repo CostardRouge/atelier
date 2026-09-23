@@ -146,6 +146,27 @@ describe('exportExifBlock', () => {
   });
 });
 
+describe('exportExifBlock — the picture’s words', () => {
+  it('writes the caption as ImageDescription and both words in the XMP, on every account', () => {
+    const words = { title: 'Pinnacles', caption: 'Nambung, at dawn — “limestone” & sand' };
+    for (const chosen of [
+      exportExifBlock(cameraJpeg({ ...capture, imageDescription: 'SONY DSC' }), null, delivered, words),
+      exportExifBlock(dngHead(capture), null, delivered, words),
+      exportExifBlock(null, null, delivered, words),
+    ]) {
+      expect(parseExif(chosen.block!.buffer).imageDescription).toBe(words.caption);
+      expect(chosen.xmp).toContain('<dc:title><rdf:Alt><rdf:li xml:lang="x-default">Pinnacles</rdf:li></rdf:Alt></dc:title>');
+      expect(chosen.xmp).toContain('<dc:description><rdf:Alt><rdf:li xml:lang="x-default">Nambung, at dawn — “limestone” &amp; sand</rdf:li></rdf:Alt></dc:description>');
+    }
+  });
+
+  it('keeps the capture’s own description when the picture has no caption', () => {
+    const chosen = exportExifBlock(cameraJpeg({ ...capture, imageDescription: 'from the body' }), null, delivered, { caption: '  ' });
+    expect(parseExif(chosen.block!.buffer).imageDescription).toBe('from the body');
+    expect(chosen.xmp).not.toContain('dc:description');
+  });
+});
+
 describe('stampExif', () => {
   it('hands back a JPEG the reader finds the capture in', async () => {
     const chosen = exportExifBlock(cameraJpeg(capture), null, delivered);
@@ -173,7 +194,7 @@ describe('stampExif', () => {
     huge.set(buildExifBlock(capture), 0);
     const out = await stampExif(
       new Blob([canvasJpeg()], { type: 'image/jpeg' }),
-      { block: huge, account: 'block', rights: { creator: null, copyright: null }, xmp: '' },
+      { block: huge, account: 'block', rights: { creator: null, copyright: null }, caption: null, xmp: '' },
       delivered,
     );
     const read = parseExif(await out.arrayBuffer());

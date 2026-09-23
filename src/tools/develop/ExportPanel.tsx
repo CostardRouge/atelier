@@ -1,5 +1,5 @@
 import { LONG_EDGE_CHOICES, longEdgeChoiceId, type DeliverySummary } from '../../shared/develop/roll-export';
-import { ROLL_EXPORT_LIMITS, type RollExport } from '../../shared/develop/roll-types';
+import { ROLL_EXPORT_LIMITS, type RollExport, type RollPicture } from '../../shared/develop/roll-types';
 import type { RunPlan } from '../../shared/develop/run-plan';
 import Button from '../../shared/ui/Button';
 import { FieldRow, InspectorSection, RangeField, SelectField, SwitchRow } from '../../shared/ui/Inspector';
@@ -68,6 +68,8 @@ export default function ExportPanel({
   hdrRun = null,
   pictures = null,
   openExif = null,
+  picture = null,
+  onWords,
 }: {
   settings: RollExport;
   onSettings: (patch: Partial<RollExport>) => void;
@@ -87,6 +89,9 @@ export default function ExportPanel({
   pictures?: ReactNode;
   /** The open picture's effective EXIF — the Metadata section previews against it. */
   openExif?: ExifData | null;
+  /** The open picture, whose title and caption the Metadata section edits. */
+  picture?: RollPicture | null;
+  onWords?: (words: { title?: string; caption?: string }) => void;
 }) {
   const { quality } = ROLL_EXPORT_LIMITS;
   const identity = useDeliveryIdentity();
@@ -212,7 +217,13 @@ export default function ExportPanel({
         </InspectorSection>
       )}
 
-      <MetadataSection identity={identity} onIdentity={(next) => void setDeliveryIdentity(next)} openExif={openExif} />
+      <MetadataSection
+        identity={identity}
+        onIdentity={(next) => void setDeliveryIdentity(next)}
+        openExif={openExif}
+        picture={picture}
+        onWords={onWords}
+      />
 
       <InspectorSection
         id="develop.hdr"

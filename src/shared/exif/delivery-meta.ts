@@ -19,6 +19,12 @@
  *   Nothing is written until a name is set: the site is public, so no
  *   person's name is anybody's default.
  *
+ * - **The words**, the PICTURE's own (M2, `RollPicture.title` / `caption`):
+ *   a title as `dc:title`, a caption as `dc:description` and EXIF
+ *   `ImageDescription` — the field Lightroom and Capture One call Caption.
+ *   EXIF has no title tag worth writing (Windows' `XPTitle` is UTF-16 in a
+ *   BYTE array and read by Explorer alone), so a title lives in the XMP.
+ *
  * Written twice, EXIF and XMP, because readers split: a camera-minded viewer
  * reads the EXIF, Lightroom and every DAM prefer the XMP, and only the XMP
  * holds Unicode by definition. The XMP is ONE packet — a second one in the
@@ -93,6 +99,10 @@ export function resolveRights(identity: DeliveryIdentity | null, year: number): 
 export interface DeliveryText {
   creator?: string | null;
   copyright?: string | null;
+  /** The picture's own title — `dc:title` (M2). */
+  title?: string | null;
+  /** The picture's caption — `dc:description`, and EXIF `ImageDescription` beside it (M2). */
+  caption?: string | null;
 }
 
 const NS = {
@@ -125,6 +135,8 @@ export function deliveryDescription(text: DeliveryText): string {
     attrs.push('xmpRights:Marked="True"');
     children.push(alt('dc:rights', text.copyright));
   }
+  if (text.title) children.push(alt('dc:title', text.title));
+  if (text.caption) children.push(alt('dc:description', text.caption));
   return (
     `<rdf:Description rdf:about="" xmlns:xmp="${NS.xmp}" xmlns:dc="${NS.dc}" xmlns:xmpRights="${NS.xmpRights}" ${attrs.join(' ')}>` +
     children.join('') +

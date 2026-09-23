@@ -52,6 +52,8 @@ export interface ExportExif {
   account: ExifAccount;
   /** The rights written, resolved against the capture's year. */
   rights: DeliveryRights;
+  /** The caption written as `ImageDescription`, or null to keep the capture's. */
+  caption: string | null;
   /** The XMP packet the file carries: the signature, and the rights where there are some. */
   xmp: string;
 }
@@ -62,6 +64,9 @@ export interface AuthorMeta {
   identity?: DeliveryIdentity | null;
   /** The year for a picture whose capture time is unknown — the export's own. */
   fallbackYear?: number;
+  /** The picture's own title and caption (`RollPicture`), or none. */
+  title?: string | null;
+  caption?: string | null;
 }
 
 export interface DeliveredSize {
@@ -83,11 +88,14 @@ export function exportExifBlock(
   author: AuthorMeta = {},
 ): ExportExif {
   const fallbackYear = author.fallbackYear ?? new Date().getFullYear();
+  const caption = author.caption?.trim() || null;
+  const title = author.title?.trim() || null;
   const signed = (block: Uint8Array<ArrayBuffer>, account: ExifAccount, rights: DeliveryRights): ExportExif => ({
     block,
     account,
     rights,
-    xmp: deliveryXmp(rights),
+    caption,
+    xmp: deliveryXmp({ ...rights, title, caption }),
   });
   const rightsOf = (exif: ExifData | null) => resolveRights(author.identity ?? null, captureYear(exif?.dateTimeOriginal, fallbackYear));
 
@@ -104,6 +112,7 @@ export function exportExifBlock(
         pixelHeight: delivered.height,
         software: ATELIER_SOFTWARE,
         ...(rights.creator ? { artist: rights.creator, copyright: rights.copyright } : {}),
+        ...(caption ? { description: caption } : {}),
       });
       return signed(block, 'block', rights);
     }
@@ -111,23 +120,24 @@ export function exportExifBlock(
     const merged = mergeExif(isEmptyExif(fields) ? null : fields, vouched);
     if (merged && !isEmptyExif(merged)) {
       const rights = rightsOf(merged);
-      return signed(build(merged, delivered, rights), 'fields', rights);
+      return signed(build(merged, delivered, rights, caption), 'fields', rights);
     }
   }
   if (vouched && !isEmptyExif(vouched)) {
     const rights = rightsOf(vouched);
-    return signed(build(vouched, delivered, rights), 'vouched', rights);
+    return signed(build(vouched, delivered, rights, caption), 'vouched', rights);
   }
   const rights = rightsOf(null);
-  return signed(build({}, delivered, rights), 'none', rights);
+  return signed(build({}, delivered, rights, caption), 'none', rights);
 }
 
-function build(exif: ExifData, delivered: DeliveredSize, rights: DeliveryRights): Uint8Array<ArrayBuffer> {
+function build(exif: ExifData, delivered: DeliveredSize, rights: DeliveryRights, caption: string | null): Uint8Array<ArrayBuffer> {
   return buildExifBlock(exif, {
     software: ATELIER_SOFTWARE,
     pixelWidth: delivered.width,
     pixelHeight: delivered.height,
     ...(rights.creator ? { artist: rights.creator, copyright: rights.copyright } : {}),
+    ...(caption ? { description: caption } : {}),
   });
 }
 
@@ -145,7 +155,7 @@ export async function stampExif(jpeg: Blob, exif: ExportExif, delivered: Deliver
       bytes = withExifBlock(bytes, exif.block);
     } catch {
       const fields = parseExif(exif.block.buffer.slice(exif.block.byteOffset));
-      bytes = withExifBlock(bytes, build(fields, delivered, exif.rights));
+      bytes = withExifBlock(bytes, build(fields, delivered, exif.rights, exif.caption));
     }
   }
   try {

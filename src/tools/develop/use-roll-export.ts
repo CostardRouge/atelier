@@ -465,7 +465,11 @@ export function useRollExport({
           // its account is kept here for the run's sentence.
           const stamped: { account: ExifAccount } = { account: 'none' };
           const stamp = async (jpeg: Blob, delivered: PictureSize) => {
-            const exif = exportExifBlock(head, origin?.exif ?? null, delivered, { identity: latest.current.identity });
+            const exif = exportExifBlock(head, origin?.exif ?? null, delivered, {
+              identity: latest.current.identity,
+              title: picture.title,
+              caption: picture.caption,
+            });
             stamped.account = exif.account;
             return stampExif(jpeg, exif, delivered);
           };

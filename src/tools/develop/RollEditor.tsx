@@ -40,6 +40,7 @@ import {
   setDelivery,
   toggledDelivery,
   patchPicture,
+  setPictureWords,
   pictureEdits,
   removePictures,
   rollProgress,
@@ -521,6 +522,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     (id: string, rendition: string | null) => update((r) => patchPicture(r, id, { rendition })),
     [update],
   );
+  const handleWords = useCallback(
+    (id: string, words: { title?: string; caption?: string }) => update((r) => setPictureWords(r, id, words)),
+    [update],
+  );
   const handleBorder = useCallback(
     (id: string, border: RollBorder | null) => update((r) => copyBorderTo(r, [id], border)),
     [update],
@@ -912,6 +917,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onSnapshot={(blob) => handleSnapshot(open.id, blob)}
               onStep={step}
               onDeliver={(action) => handleDeliver(open.id, action)}
+              onWords={(words) => handleWords(open.id, words)}
               deliveryTable={
                 <DeliveryTable
                   pictures={roll.pictures}

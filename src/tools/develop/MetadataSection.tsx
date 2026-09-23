@@ -7,6 +7,7 @@ import {
   type DeliveryIdentity,
 } from '../../shared/exif/delivery-meta';
 import type { ExifData } from '../../shared/exif/exif-parser';
+import type { RollPicture } from '../../shared/develop/roll-types';
 import { ATELIER_SOFTWARE } from '../../shared/exif/software-mark';
 import { FieldRow, InspectorSection, fieldClass } from '../../shared/ui/Inspector';
 import { Icons } from '../../shared/ui/icons';
@@ -23,11 +24,16 @@ export default function MetadataSection({
   identity,
   onIdentity,
   openExif,
+  picture = null,
+  onWords,
 }: {
   identity: DeliveryIdentity;
   onIdentity: (identity: DeliveryIdentity) => void;
   /** The open picture's effective EXIF — what the preview's year is read from. */
   openExif: ExifData | null;
+  /** The open picture, whose own title and caption are edited here (M2). */
+  picture?: RollPicture | null;
+  onWords?: (words: { title?: string; caption?: string }) => void;
 }) {
   const [draft, setDraft] = useState(identity);
   // The book loads after mount, and another device may write it: follow it
@@ -64,6 +70,12 @@ export default function MetadataSection({
             Atelier recognises its own exports beside the originals, so it is not a switch.
           </p>
           <p>
+            A picture’s <strong>title</strong> and <strong>caption</strong> are its own — written as
+            XMP <code>dc:title</code> and <code>dc:description</code>, the caption also as EXIF{' '}
+            <code>ImageDescription</code>, which Lightroom and Capture One show as the caption.
+            No preset, paste or “apply to” carries them.
+          </p>
+          <p>
             Your <strong>name</strong> and <strong>copyright</strong> are written into every file as
             EXIF <code>Artist</code> / <code>Copyright</code> and XMP <code>dc:creator</code> /{' '}
             <code>dc:rights</code>, over whatever the camera carried. They are kept with your presets,
@@ -74,6 +86,7 @@ export default function MetadataSection({
         </>
       }
     >
+      {picture && onWords && <PictureWords key={picture.id} picture={picture} onWords={onWords} />}
       <FieldRow label="Signature" hint="written into every file — it is how Atelier knows its own exports">
         <span className="inline-flex items-center gap-1.5 font-mono text-sm text-ink">
           <span className="inline-flex text-xs text-accent-ink" aria-hidden="true">
@@ -124,5 +137,63 @@ export default function MetadataSection({
         />
       </FieldRow>
     </InspectorSection>
+  );
+}
+
+/** The two words that are the PICTURE's, drafted and written on blur — one undo step per field left. */
+function PictureWords({
+  picture,
+  onWords,
+}: {
+  picture: RollPicture;
+  onWords: (words: { title?: string; caption?: string }) => void;
+}) {
+  const [title, setTitle] = useState(picture.title ?? '');
+  const [caption, setCaption] = useState(picture.caption ?? '');
+  const [editing, setEditing] = useState(false);
+  // An undo, or another device, moves the stored words: follow them when idle.
+  useEffect(() => {
+    if (editing) return;
+    setTitle(picture.title ?? '');
+    setCaption(picture.caption ?? '');
+  }, [picture.title, picture.caption, editing]);
+  const titleId = useId();
+  const captionId = useId();
+  const commit = () => {
+    setEditing(false);
+    onWords({ title, caption });
+  };
+  return (
+    <>
+      <FieldRow label="Title" htmlFor={titleId}>
+        <input
+          id={titleId}
+          type="text"
+          value={title}
+          maxLength={200}
+          placeholder="This picture’s title"
+          onFocus={() => setEditing(true)}
+          onChange={(e) => setTitle(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur();
+          }}
+          className={fieldClass}
+        />
+      </FieldRow>
+      <FieldRow label="Caption" htmlFor={captionId} align="start">
+        <textarea
+          id={captionId}
+          value={caption}
+          maxLength={2000}
+          rows={3}
+          placeholder="What it shows, where, who"
+          onFocus={() => setEditing(true)}
+          onChange={(e) => setCaption(e.target.value)}
+          onBlur={commit}
+          className={`${fieldClass} h-auto py-1.5 leading-snug resize-y`}
+        />
+      </FieldRow>
+    </>
   );
 }

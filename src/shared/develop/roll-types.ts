@@ -144,6 +144,15 @@ export interface RollPicture {
    */
   deliver?: DeliverState;
   /**
+   * The picture's own WORDS, written into the delivered file (2026-09-23, M2
+   * of `docs/lightroom-gaps.md` §9): a title (`dc:title`) and a caption
+   * (`dc:description` and EXIF `ImageDescription`). The picture's, never the
+   * roll's — two frames of one scene are captioned apart — and carried by no
+   * preset, paste or Apply-to. Absent or empty mean none, one spelling.
+   */
+  title?: string;
+  caption?: string;
+  /**
    * The perspective correction (`shared/render/geometry.ts`), or null for
    * none. It is applied BEFORE the crop frames the result: a keystone takes
    * the converging verticals out of the picture, and the crop then decides
@@ -303,6 +312,38 @@ export function readRollExport(raw: unknown): RollExport {
   };
 }
 
+/**
+ * The roll with one picture's words replaced — trimmed, an emptied one taken
+ * off the picture rather than stored blank. The same roll back when nothing
+ * changed, so a blur that edited nothing is no undo step.
+ */
+export function setPictureWords(
+  roll: RollDoc,
+  id: string,
+  words: { title?: string; caption?: string },
+  now: number = Date.now(),
+): RollDoc {
+  const picture = roll.pictures.find((p) => p.id === id);
+  if (!picture) return roll;
+  const next = wordsOf({ title: words.title ?? picture.title, caption: words.caption ?? picture.caption });
+  if ((next.title ?? '') === (picture.title ?? '') && (next.caption ?? '') === (picture.caption ?? '')) return roll;
+  const pictures = roll.pictures.map((p) => {
+    if (p.id !== id) return p;
+    const { title: _t, caption: _c, ...rest } = p;
+    void _t;
+    void _c;
+    return { ...rest, ...next };
+  });
+  return { ...roll, pictures, updatedAt: now };
+}
+
+/** A picture's words as stored: a title and a caption, trimmed, an empty one left out. */
+export function wordsOf(raw: { title?: unknown; caption?: unknown }): Pick<RollPicture, 'title' | 'caption'> {
+  const title = typeof raw.title === 'string' ? raw.title.trim() : '';
+  const caption = typeof raw.caption === 'string' ? raw.caption.trim() : '';
+  return { ...(title ? { title } : {}), ...(caption ? { caption } : {}) };
+}
+
 /** A stored crop, or null when there is none — an untouched framing is no crop, one spelling. */
 function readFraming(raw: unknown): Framing | null {
   if (raw == null) return null;
@@ -342,6 +383,7 @@ function readPicture(raw: unknown, rollGrade: RollGrade | null = null): RollPict
     rendition: typeof raw.rendition === 'string' && raw.rendition ? raw.rendition : null,
     // Absent — every roll written before it existed — and anything unknown read as `auto`.
     deliver: typeof raw.deliver === 'string' && DELIVER_STATES.has(raw.deliver) ? (raw.deliver as DeliverState) : 'auto',
+    ...wordsOf(raw),
     // Absent on every roll written before the warp existed, and `null` there
     // means exactly what it means now — so there is no migration to run.
     keystone: keystoneOrNull(raw.keystone),

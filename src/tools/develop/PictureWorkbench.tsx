@@ -227,6 +227,7 @@ export default function PictureWorkbench({
   onStep,
   onDeliver,
   deliveryTable = null,
+  onWords,
   emptyText = 'This picture is not in the Library — open its folder, or take it from its day on your Winnow. Its numbers can still be set.',
 }: {
   picture: RollPicture;
@@ -285,6 +286,8 @@ export default function PictureWorkbench({
   onDeliver: (action: DeliverAction) => void;
   /** The Export tab's Pictures table — built by the editor, which holds the roll. */
   deliveryTable?: ReactNode;
+  /** The picture's title and caption, written into its delivered file (M2). */
+  onWords: (words: { title?: string; caption?: string }) => void;
   /** What the stage says while the picture's bytes are not in hand. */
   emptyText?: string;
 }) {
@@ -1773,6 +1776,8 @@ export default function PictureWorkbench({
               hdrRun={exports.lastRun?.hdr ?? null}
               pictures={deliveryTable}
               openExif={shotExif}
+              picture={entry}
+              onWords={onWords}
             />
           ) : null}
         </div>

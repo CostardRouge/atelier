@@ -21,6 +21,7 @@ import {
   matchesDeliveryFilter,
   patchPicture,
   setDelivery,
+  setPictureWords,
   toggledDelivery,
   pictureEdits,
   readRollDoc,
@@ -394,5 +395,32 @@ describe('reading a stored roll', () => {
   it('migrates a stored roll onto the current shape without changing what it holds', () => {
     const doc = patchPicture(roll(['a', 'b']), 'p1', { develop: { ...DEFAULT_DEVELOP, blacks: -8 } }, 3000);
     expect(migrateRollDoc(doc)).toEqual(doc);
+  });
+});
+
+describe('a picture’s words (M2)', () => {
+  it('are the picture’s own, trimmed, an emptied one taken off', () => {
+    const doc = roll(['a.jpg', 'b.jpg']);
+    const [a, b] = doc.pictures;
+    const titled = setPictureWords(doc, a.id, { title: '  Pinnacles  ', caption: 'At dawn, Nambung.' }, 5);
+    expect(titled.pictures[0]).toMatchObject({ title: 'Pinnacles', caption: 'At dawn, Nambung.' });
+    expect(titled.pictures[1]).toBe(doc.pictures[1]);
+    expect(titled.updatedAt).toBe(5);
+    // Nothing changed: the same roll, so a blur is no undo step.
+    expect(setPictureWords(titled, a.id, { title: 'Pinnacles' })).toBe(titled);
+    const cleared = setPictureWords(titled, a.id, { caption: '  ' });
+    expect(cleared.pictures[0].title).toBe('Pinnacles');
+    expect('caption' in cleared.pictures[0]).toBe(false);
+    expect(setPictureWords(doc, 'nope', { title: 'x' })).toBe(doc);
+    void b;
+  });
+
+  it('survive a round trip, and a roll written before them reads with none', () => {
+    const doc = setPictureWords(roll(['a.jpg']), 'p' + String(n), { title: 'T', caption: 'C' });
+    const back = readRollDoc(JSON.parse(JSON.stringify(doc)))!;
+    const p = back.pictures[back.pictures.length - 1];
+    expect([p.title, p.caption]).toEqual(['T', 'C']);
+    const old = readRollDoc(JSON.parse(JSON.stringify(roll(['b.jpg']))))!;
+    expect('title' in old.pictures[0] || 'caption' in old.pictures[0]).toBe(false);
   });
 });

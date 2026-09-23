@@ -1165,8 +1165,12 @@ recognises its own exports beside the originals, so it is not a switch. Give a
 **copyright** line (`© {year} {creator}. All rights reserved.` by default,
 `{year}` being the year the picture was TAKEN) as `Copyright` / `dc:rights`,
 over whatever the camera wrote. Both are kept with your presets, so another
-device signs the same way; nothing is written until a name is given. The file
-holds ONE XMP packet — an Ultra HDR export folds these into its own.
+device signs the same way; nothing is written until a name is given. Each
+picture also takes its own **title** and **caption** there (`dc:title`,
+`dc:description`, and the caption as EXIF `ImageDescription`, which Lightroom
+and Capture One show as the caption) — the picture's alone, carried by no
+preset, paste or "apply to". The file holds ONE XMP packet — an Ultra HDR
+export folds these into its own.
 
 **Exporting.** The **Export** tab writes JPEGs — this picture, the marked
 ones, or every picture that leaves — into a folder you choose (downloaded one
