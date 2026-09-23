@@ -776,6 +776,9 @@ export default function BadgeStage({
         media: null,
         framing: framing ?? DEFAULT_FRAMING,
         develop: null,
+        // The editor hands the stage each picture's framing AT THE NEEDLE, so
+        // the stage draws what it is given and moves nothing itself.
+        motion: null,
       };
       const items: CollageItem[] = rects.map((_, i) => {
         const source = i === 0 ? sourceRef.current : (cellSourcesRef.current[i] ?? null);

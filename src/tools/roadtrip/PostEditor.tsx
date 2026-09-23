@@ -269,8 +269,8 @@ export default function PostEditor({
     setCellBaseline(activeFileRef.current);
   }, []);
   const lead: CollageLead = useMemo(
-    () => ({ media: slide.media, framing: slide.framing, develop: slide.develop }),
-    [slide.media, slide.framing, slide.develop],
+    () => ({ media: slide.media, framing: slide.framing, develop: slide.develop, motion: slide.motion }),
+    [slide.media, slide.framing, slide.develop, slide.motion],
   );
   const cell = collage ? collageCellAt(lead, collage, cellIndex) : null;
 
@@ -285,6 +285,7 @@ export default function PostEditor({
         media: next.lead.media,
         framing: next.lead.framing,
         develop: next.lead.develop,
+        motion: next.lead.motion,
         collage: next.collage,
       };
       if (slide.kind === 'hook') {
@@ -312,6 +313,7 @@ export default function PostEditor({
             media: patch.media !== undefined ? patch.media : lead.media,
             framing: patch.framing ?? lead.framing,
             develop: patch.develop !== undefined ? patch.develop : lead.develop,
+            motion: patch.motion !== undefined ? patch.motion : lead.motion,
           },
           collage: null,
         });
