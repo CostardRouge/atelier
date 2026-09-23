@@ -101,21 +101,36 @@ and checks the spot really rose.
   propagation so the paint seam cannot place a new patch under it, hands back
   source points UNBOUNDED (`pointAt(x, y, true)`) so a hand past the edge
   still moves the patch to the edge, and gives every ring a hit disc of at
-  least 11 px. Nothing on the picture REMOVES a patch any more: removal is
-  ⌫ on the selected one, or the panel's Remove — a press can never throw away
-  what it meant to move. Selection is `selectedPatchId` derived against the
-  list each render (a patch that went cannot stay selected), cleared on
-  leaving the tab; the panel's Size, Feather and Heal/Clone edit the SELECTED
-  patch (`adjustPatch`) or else the next patch's tool; a patch just placed
-  is selected (tap, then size it). `editorKeyAction` gained `'remove'`
-  (Delete/Backspace) and `'escape'`, both refused from a field, the workbench
-  applying them to what is selected and Escape then putting Repair down.
+  least 11 px. **A CLICK on the solid ring takes the patch off** (his first
+  test: *"j'aurais préféré que l'on puisse simplement cliquer sur la zone…
+  forte préférence pour le clic"*, a double-click his fallback) — the 3 px
+  slop is what tells it from a move —, the ring wears a NATIVE minus cursor
+  (`REMOVE_CURSOR`, an SVG data URI with its hotspot at the centre, `pointer`
+  as the fallback) and draws the same `−` in the ring under the pointer, as
+  the subject markers do; a click on the DASHED ring selects without
+  removing, and ⌫ still takes the selected one off. **The zoom machine must
+  be told to leave the ring alone**: `use-zoom-gestures.ts` listens NATIVELY
+  in the capture phase on the viewport, so React's `stopPropagation` on the
+  ring never reaches it and a zoomed view panned under every drag of a patch
+  (his: *"ça essaie de faire un drag and drop de tout le viewport"*) —
+  `wipeClaims` now answers true for a target inside `[data-ring]`, which is
+  the machine's `claim` and refuses the pan. Selection is `selectedPatchId`
+  derived against the list each render (a patch that went cannot stay
+  selected), cleared on leaving the tab; the panel's Size, Feather and
+  Heal/Clone edit the SELECTED patch (`adjustPatch`) or else the next patch's
+  tool; a patch just placed is selected (tap, then size it).
+  `editorKeyAction` gained `'remove'` (Delete/Backspace) and `'escape'`, both
+  refused from a field, the workbench applying them to what is selected and
+  Escape then putting Repair down.
   Driven headless: a 10 px drag inside a 15 px disc put the source UP
   (dy −0.049, dx 0.007); a ring drag moved the patch and kept its offset; a
-  source drag moved the source alone; a click selected; two arrow steps on
-  the focused slider grew that patch; ⌫ on the focused slider did NOT
-  remove; Escape let go; ⌫ removed; the scan proposed 4, gentle 2, keen 4; a
-  tap healed one and *Heal all* the rest, the texture's blob untouched.
+  source drag moved the source alone; ZOOMED, a ring drag moved the patch
+  and the canvas transform did not change; a click on the dashed ring
+  selected; two arrow steps on the focused slider grew that patch; ⌫ on the
+  focused slider did NOT remove; Escape let go; the solid ring's computed
+  cursor was the data-URI one and a click on it removed; the scan proposed
+  4, gentle 2, keen 4; a tap healed one and *Heal all* the rest, the
+  texture's blob untouched.
 
 **Where it lives**: `RollPicture.repair` (additive, `readPatches` on read —
 junk dropped, the list capped, a repeated id dropped —, no migration), the

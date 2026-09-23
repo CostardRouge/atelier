@@ -54,6 +54,10 @@ const TOUCH_SLOP = 6;
 function wipeClaims(target: EventTarget | null, zoomed: boolean): boolean {
   const el = target as Element | null;
   if (el?.closest?.('button')) return false;
+  // A press on a repair ring is the RING's: the zoom machine listens natively
+  // in the capture phase, so the ring's own stopPropagation never reaches it,
+  // and a zoomed view panned under every drag of a patch until this said no.
+  if (el?.closest?.('[data-ring]')) return true;
   return !zoomed || Boolean(el?.closest?.('[data-wipe-handle]'));
 }
 

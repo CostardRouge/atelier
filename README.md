@@ -1111,9 +1111,10 @@ edge — **Heal** matches the borrowed texture to the spot's own surroundings,
 borrows from beside itself; a drag from the spot points at where to borrow
 from, at any distance, the source turning round the spot as your hand does.
 Every ring on the picture stays alive afterwards: drag a solid ring to move
-its patch, drag its dashed ring to change where it borrows from, click either
-to select it — **Size**, **Feather** and Heal / Clone then edit that patch —
-and **⌫** takes it off. **Find spots** looks over the picture for the marks a
+its patch and **click it to take the patch off** (the cursor shows a −), drag
+its dashed ring to change where it borrows from and click that one to edit
+the patch — **Size**, **Feather** and Heal / Clone then apply to it, and
+**⌫** takes it off too. **Find spots** looks over the picture for the marks a
 sensor leaves: it draws the photograph as a **map** of what falls below its
 surroundings, where a mark a screen hides at the fit reads as a bright disc,
 and *proposes* the small round ones as dotted rings at the **sensitivity** you

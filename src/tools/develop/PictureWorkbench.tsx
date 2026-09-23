@@ -478,8 +478,15 @@ export default function PictureWorkbench({
         }
         setRepairDraft((list) => list.map((p) => (p.id === moved.id ? moved : p)));
       },
-      onEnd: () => {
+      onEnd: (travelled) => {
+        const d = ringDragRef.current;
         ringDragRef.current = null;
+        // A tap on the solid ring takes the patch off (his call: a click,
+        // never only a key); a tap on the dashed one has selected it.
+        if (!travelled && d?.part === 'patch') {
+          setRepairDraft((list) => list.filter((p) => p.id !== d.id));
+          setSelectedPatchId(null);
+        }
       },
     }),
     [pictureAspect],

@@ -30,8 +30,9 @@ export type RingPart = 'patch' | 'source';
 /**
  * A drag on a ring, in the source's own [0,1] — UNBOUNDED, so a hand that
  * strays past the picture's edge still moves the patch to the edge. `onEnd`
- * says whether the pointer travelled at all: a press that did not is a tap,
- * which selects without moving.
+ * says whether the pointer travelled at all: a press that did not is a TAP,
+ * and a tap on the solid ring takes the patch off (the host's call) — the
+ * maintainer's strong preference over a key, the ring's cursor saying so.
  */
 export interface RingGesture {
   onStart: (id: string, part: RingPart, point: [number, number]) => void;
@@ -55,6 +56,15 @@ const RING_HIT = 11;
 const RING_INK = 'rgba(251,248,241,0.92)';
 const CLONE_INK = 'rgba(255,220,120,0.92)';
 const RING_HALO = 'rgba(20,18,14,0.55)';
+/**
+ * The cursor over a solid ring: a native cursor drawn from an SVG — a disc
+ * with a minus in it, the same glyph the ring shows under the pointer — so
+ * the hand is told what a click does before it clicks. Falls back to the
+ * pointer where a data-URI cursor is refused.
+ */
+const REMOVE_CURSOR = `url("data:image/svg+xml;utf8,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="8.5" fill="rgba(251,248,241,0.96)" stroke="rgba(20,18,14,0.8)" stroke-width="1.4"/><path d="M6.5 11h9" stroke="rgba(20,18,14,0.9)" stroke-width="2" stroke-linecap="round"/></svg>',
+)}") 11 11, pointer`;
 
 /**
  * The picture being developed: the canvas, the before/after divider and its
@@ -98,9 +108,10 @@ export default function DevelopViewport({
   /**
    * Given, a ring answers its own press: a drag on the destination MOVES the
    * patch (its source travelling with it), a drag on the dashed source moves
-   * where it borrows from, and a tap on either selects it. Nothing here
-   * removes a patch — that is a key or a verb, once it is selected — so a
-   * press can never throw away what it meant to move.
+   * where it borrows from, a press on either selects it, and a TAP on the
+   * solid ring takes the patch off — a click, the maintainer's preference
+   * over a key, with a minus cursor over the ring saying so. The slop that
+   * tells a tap from a drag is what keeps a move from throwing a patch away.
    */
   onRing?: RingGesture | null;
   /**
@@ -209,7 +220,10 @@ export default function DevelopViewport({
           onPointerMove: ringMove,
           onPointerUp: ringRelease,
           onPointerCancel: ringRelease,
-          style: { pointerEvents: 'all' as const, cursor: 'move' },
+          // `data-ring` is what the zoom machine reads to leave the press
+          // alone (`use-develop-picture.ts`, `wipeClaims`).
+          'data-ring': part,
+          style: { pointerEvents: 'all' as const, cursor: part === 'patch' ? REMOVE_CURSOR : 'move' },
         }
       : {};
   // A tap-gesture mask tool is armed: the pointer ADDS a point, and the native
@@ -454,7 +468,7 @@ export default function DevelopViewport({
             const ink = ring.kind === 'heal' ? RING_INK : CLONE_INK;
             const stroke = ring.selected ? 'var(--color-accent)' : ink;
             return (
-              <g key={ring.id}>
+              <g key={ring.id} className="group">
                 {from && (
                   <>
                     <line x1={at.x} y1={at.y} x2={from.x} y2={from.y} stroke={stroke} strokeWidth={1} strokeDasharray="2 3" opacity={0.7} />
@@ -475,15 +489,27 @@ export default function DevelopViewport({
                       fill="rgba(251,248,241,0.001)"
                       {...ringHandlers(ring, 'source')}
                     >
-                      {onRing && <title>Drag to change where this patch borrows from</title>}
+                      {onRing && <title>Drag to change where this patch borrows from · click to edit the patch</title>}
                     </circle>
                   </>
                 )}
                 <circle cx={at.x} cy={at.y} r={r} fill="none" stroke={RING_HALO} strokeWidth={3} />
                 <circle cx={at.x} cy={at.y} r={r} fill="none" stroke={stroke} strokeWidth={ring.selected ? 2 : 1.4} />
                 {ring.selected && <circle cx={at.x} cy={at.y} r={1.6} fill={stroke} />}
+                {onRing && (
+                  // The `−` the cursor also carries, drawn in the ring under
+                  // the pointer: the ring says what the click will do, as the
+                  // subject markers do.
+                  <path
+                    d={`M${at.x - 3.5} ${at.y}h7`}
+                    stroke={stroke}
+                    strokeWidth={1.8}
+                    strokeLinecap="round"
+                    className="opacity-0 transition-opacity group-hover:opacity-100"
+                  />
+                )}
                 <circle cx={at.x} cy={at.y} r={Math.max(r, RING_HIT)} fill="rgba(251,248,241,0.001)" {...ringHandlers(ring, 'patch')}>
-                  {onRing && <title>Drag to move this patch · click to select it</title>}
+                  {onRing && <title>Click to take this patch off · drag to move it</title>}
                 </circle>
               </g>
             );

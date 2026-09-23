@@ -15,7 +15,7 @@ import {
 } from '../../shared/render/repair';
 
 const HINT =
-  'A patch replaces a disc of the picture with another disc’s pixels, feathered at its edge. Heal copies the source’s TEXTURE and shifts it to the destination’s own tone — measured on the surroundings of each disc, never on the spot itself — so a sensor mark disappears into a sky that is not quite the same blue where it was borrowed from. Clone copies the source exactly, for a thing that must be moved rather than blended. With Repair on, a tap places a patch and takes its source from beside it; a DRAG from the spot points at where to borrow from, at any distance — the source turns round the spot as the hand does. Every ring on the picture stays alive: drag a solid ring to move its patch, drag its dashed ring to change where it borrows from, click either to select it and the sliders below edit that patch; ⌫ takes the selected one off. Find spots draws the picture as a map of what falls below its surroundings — the marks a monitor hides at the fit read as bright discs — and proposes the small round ones as dotted rings: tap one to heal it, or heal them all. Patches are numbers on the roll, never pixels: they follow a crop and a full-size export.';
+  'A patch replaces a disc of the picture with another disc’s pixels, feathered at its edge. Heal copies the source’s TEXTURE and shifts it to the destination’s own tone — measured on the surroundings of each disc, never on the spot itself — so a sensor mark disappears into a sky that is not quite the same blue where it was borrowed from. Clone copies the source exactly, for a thing that must be moved rather than blended. With Repair on, a tap places a patch and takes its source from beside it; a DRAG from the spot points at where to borrow from, at any distance — the source turns round the spot as the hand does. Every ring on the picture stays alive: drag a solid ring to move its patch, CLICK it to take the patch off (the cursor shows a −), drag its dashed ring to change where it borrows from and click that one to edit the patch with the sliders below; ⌫ also takes the edited one off. Find spots draws the picture as a map of what falls below its surroundings — the marks a monitor hides at the fit read as bright discs — and proposes the small round ones as dotted rings: tap one to heal it, or heal them all. Patches are numbers on the roll, never pixels: they follow a crop and a full-size export.';
 
 export interface RepairTool {
   kind: PatchKind;
@@ -142,7 +142,7 @@ export default function RepairPanel({
       {selected ? (
         <div className="flex items-center gap-2">
           <span className="font-mono text-3xs text-faint min-w-0">
-            patch {at} of {patches.length} · drag its ring to move it, the dashed one to change its source
+            patch {at} of {patches.length} · drag its ring to move it, click it to take it off, drag the dashed one to change its source
           </span>
           <span className="flex-1" />
           <button type="button" className={developLinkClass} onClick={onDeselect} title="Let go of this patch (Esc)">
@@ -155,7 +155,7 @@ export default function RepairPanel({
       ) : (
         patches.length > 0 && (
           <span className="font-mono text-3xs text-faint">
-            {full ? `${MAX_PATCHES} patches, the most a picture holds` : 'drag a ring on the picture to move it · click one to edit it'}
+            {full ? `${MAX_PATCHES} patches, the most a picture holds` : 'drag a ring to move it · click a solid ring to take it off · click a dashed one to edit it'}
           </span>
         )
       )}
