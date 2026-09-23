@@ -236,7 +236,10 @@ and returned a mask covering 19 % of the frame against the ~21 % actually drawn.
 ## The subject, wired (2026-09-19, P9 second commit)
 
 A `Subject` mask kind in both panels, tap-to-pick on the stage, and the rasters
-reaching every renderer.
+reaching the STAGE's renderers. **Not the Develop export** (found 2026-09-23,
+`docs/lightroom-gaps.md` §1): `roll-render.ts` calls `layerPasses` with no
+rasters, and a subject layer without one draws nothing — the file leaves
+without the adjustment the stage shows, until the run segments too.
 
 **The two hooks need each other**, so the rasters come back through state: the
 stage decodes the picture the model segments, and the model produces the map the
