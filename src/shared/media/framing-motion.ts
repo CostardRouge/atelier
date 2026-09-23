@@ -399,3 +399,15 @@ export function flipMotion(motion: FramingMotion | null, axis: 'x' | 'y'): Frami
     keys: motion.keys.map((k) => (axis === 'x' ? { ...k, x: -k.x || 0 } : { ...k, y: -k.y || 0 })),
   };
 }
+
+/**
+ * The framing at its DEEPEST zoom over the whole motion — what a delivery
+ * must be able to fill. Asking the rest alone would let a slide that starts
+ * at ×2 over a proxy come to rest at ×1 and be judged sharp: the pixels a
+ * move needs are the ones its closest frame shows.
+ */
+export function deepestFraming(framing: Framing, motion: FramingMotion | null | undefined): Framing {
+  if (!hasMotion(motion)) return framing;
+  const scale = motion.keys.reduce((deepest, k) => Math.max(deepest, k.scale), framing.scale);
+  return scale === framing.scale ? framing : { ...framing, scale };
+}

@@ -3,6 +3,7 @@ import { DEFAULT_FRAMING, flipFraming, framePoint, framingTransform, unframePoin
 import {
   KEY_SNAP_SECONDS,
   STARTER_ZOOM,
+  deepestFraming,
   flipMotion,
   framingAt,
   framingAtNeedle,
@@ -269,5 +270,14 @@ describe('starting and mirroring', () => {
     const b = framingAtProgress(flippedRest, flipped, 0.4);
     expect(b.x).toBeCloseTo(-a.x);
     expect(flipMotion(null, 'y')).toBeNull();
+  });
+});
+
+describe('deepestFraming', () => {
+  it('judges a move by its closest frame, not by where it rests', () => {
+    const rest: Framing = { ...DEFAULT_FRAMING, scale: 1.1 };
+    expect(deepestFraming(rest, motion([{ at: 0, scale: 2.4, x: 0, y: 0 }])).scale).toBe(2.4);
+    expect(deepestFraming(rest, motion([{ at: 0, scale: 1, x: 0, y: 0 }]))).toBe(rest);
+    expect(deepestFraming(rest, null)).toBe(rest);
   });
 });

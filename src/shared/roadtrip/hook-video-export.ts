@@ -12,7 +12,8 @@
  */
 
 import type { CubeLut } from '../lib/cube-parser';
-import type { Framing } from '../media/framing';
+import { DEFAULT_FRAMING, type Framing } from '../media/framing';
+import { framingOnClock, type MotionClock } from '../media/framing-motion';
 import { exportVariantVideo } from '../media/export-variant';
 import { encodeFrames, paintedOutputSize } from '../media/render-video';
 import type { ExportProgress } from '../media/webcodecs-export';
@@ -48,6 +49,11 @@ export interface HookVideoOptions {
   range: TrimRange | null;
   /** How the hook's picture sits in the frame — the same one the preview drew. */
   framing?: Framing | null;
+  /**
+   * How that picture MOVES over the clip, on the clip's delivered clock — the
+   * slide's screen time and the opener's own length. Null holds `framing`.
+   */
+  motion?: MotionClock | null;
   shades?: readonly Shade[];
   /** The badge block's extent, for a shade that follows the hook. */
   block?: HookBlock | null;
@@ -103,6 +109,9 @@ export function exportHookVideo(opts: HookVideoOptions): Promise<Blob> {
       srcHeight: opts.srcHeight,
       trim: opts.range,
       framing: opts.framing ?? null,
+      framingAt: opts.motion
+        ? (t) => framingOnClock(opts.framing ?? DEFAULT_FRAMING, opts.motion, t)
+        : null,
       // The badge's windows count from the first exported frame, and at the
       // DELIVERED pace: the entrance plays on frame one of the clip and takes
       // the seconds it was composed to take whatever speed the clip plays at
@@ -154,6 +163,11 @@ export interface HookStillVideoOptions {
   /** Delivery cadence; the encoder's own default when absent. */
   fps?: number;
   framing?: Framing | null;
+  /**
+   * How the picture moves — see {@link HookVideoOptions.motion}. On a collage
+   * each cell carries its own motion; this clock is what sets them moving.
+   */
+  motion?: MotionClock | null;
   shades?: readonly Shade[];
   block?: HookBlock | null;
   lut?: CubeLut | null;
@@ -257,6 +271,7 @@ export async function exportHookStillVideo(opts: HookStillVideoOptions): Promise
           shades: opts.shades,
           block: opts.block ?? null,
           framing: opts.framing ?? null,
+          motion: opts.motion ?? null,
           grader: null,
         });
         return canvas;
@@ -286,7 +301,7 @@ async function exportCollageStillVideo(
     const items: CollageItem[] = [];
     for (const [i, item] of collage.render.items.entries()) {
       if (!item.source) {
-        items.push({ source: null, framing: item.framing });
+        items.push({ source: null, framing: item.framing, motion: item.motion });
         continue;
       }
       const bitmap = await gradedOnce(item.source, collage.luts[i] ?? null, opts.film ?? null);
@@ -296,6 +311,7 @@ async function exportCollageStillVideo(
           ? { image: bitmap, width: item.source.width, height: item.source.height, release: () => {} }
           : item.source,
         framing: item.framing,
+        motion: item.motion,
       });
     }
     // A nominal source of the frame's own shape, large enough never to cap
@@ -327,7 +343,14 @@ async function exportCollageStillVideo(
       draw: async (tSeconds) => {
         await renderBadge(canvas, {
           source: null,
-          collage: { ...collage.render, items, seconds: opts.seconds },
+          collage: {
+            ...collage.render,
+            items,
+            seconds: opts.seconds,
+            clock: opts.motion
+              ? { seconds: opts.motion.seconds, openerSeconds: opts.motion.openerSeconds ?? 0 }
+              : null,
+          },
           elements: opts.elements,
           elementsAt: opts.elementsAt ?? null,
           hook: opts.hook ?? null,
