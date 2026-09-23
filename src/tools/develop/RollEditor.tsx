@@ -63,6 +63,7 @@ import PageBar from '../../shared/ui/PageBar';
 import { Icons } from '../../shared/ui/icons';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
+import { useLocalFlag } from '../../shared/ui/use-local-flag';
 import type { ExportVerb } from './ExportPanel';
 import Filmstrip from './Filmstrip';
 import type { CropApplyVerb } from './CropPanel';
@@ -117,6 +118,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // Which inspector tab is open — kept here, not in the workbench, so it
   // survives stepping to another picture (the workbench remounts per picture).
   const [tab, setTab] = useState<WorkbenchTab>('adjust');
+  // Ignored pictures in the strip: dimmed (the default) or left out — a view
+  // preference of this browser, never the roll's.
+  const [showIgnored, setShowIgnored] = useLocalFlag('atelier.develop.showIgnored', true);
   // The brush and the heal disc are TOOLS, not the picture's: held here with
   // the tab, so the size set on one picture is the size on the next.
   const [brush, setBrush] = useState<BrushTool>({ ...DEFAULT_BRUSH_TOOL });
@@ -924,7 +928,20 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               <p className="m-0 font-mono text-2xs text-muted tabular-nums">
                 {progress.developed} of {progress.total} developed
                 {leavingCount > 0 && <span className="text-faint"> · {leavingCount} to export</span>}
-                {progress.ignored > 0 && <span className="text-faint"> · {progress.ignored} ignored</span>}
+                {progress.ignored > 0 && (
+                  <span className="text-faint">
+                    {' '}
+                    · {progress.ignored} ignored{' '}
+                    <button
+                      type="button"
+                      onClick={() => setShowIgnored(!showIgnored)}
+                      className="underline underline-offset-2 cursor-pointer"
+                      title={showIgnored ? 'Leave the ignored pictures out of the strip' : 'Show the ignored pictures in the strip, dimmed'}
+                    >
+                      {showIgnored ? 'Hide' : 'Show'}
+                    </button>
+                  </span>
+                )}
                 {withLook > 0 && (
                   <span className="text-faint">
                     {' '}
@@ -1060,6 +1077,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                 onOpen={(id) => onOpenPicture(id)}
                 onSelectClick={handleSelectClick}
                 onRemove={(p) => (isEdited(p) ? setConfirmRemove(p) : remove(p))}
+                onDeliver={handleDeliver}
+                hideIgnored={!showIgnored}
               />
             </div>
           </div>

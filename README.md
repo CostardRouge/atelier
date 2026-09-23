@@ -1143,9 +1143,22 @@ device goes* instead. A browser cannot ask a phone how much memory a tab may
 take, so the rule is coarse: iPhone, iPad and Android count as phones, and
 `localStorage['atelier.device']` (`constrained` or `roomy`) overrides it.
 
+**Which pictures leave.** Every picture says whether it leaves: by default the
+ones you **edited** do, and you decide otherwise per picture — send one you did
+not touch, hold back one you did. The **Pictures** table in the Export tab
+lists the roll one row per picture (the whole row is the click, with what the
+picture would leave from and at what size), filtered by *Edited*, *Leaving* or
+*Held*; the badge at the corner of each filmstrip cell does the same without
+leaving the photograph. **P** sends or holds the picture on the stage, **U**
+puts it back on the rule. A picture you do not want to work on at all can be
+**ignored** (**M**, or a right-click / a held finger on its badge): it never
+leaves, **←/→** step over it, "apply to the other pictures" leaves it alone,
+the strip dims it or hides it, and a click still opens it. None of this is a
+rating — culling stays Winnow's.
+
 **Exporting.** The **Export** tab writes JPEGs — this picture, the marked
-ones, or the whole roll — into a folder you choose (downloaded one by one
-where the browser has no folder picker). Each is decoded at its own size,
+ones, or every picture that leaves — into a folder you choose (downloaded one
+by one where the browser has no folder picker). Each is decoded at its own size,
 developed under its own look and cropped as the stage showed it — a crop
 leaves at the picture's own density, so a small zone makes a small file, never
 one blown up to fill its aspect; the **Size** is a ceiling on the long edge and

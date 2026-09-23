@@ -205,6 +205,16 @@ is one. Each row says the RUN PLAN's own line for that picture — so
 for the *Delivers* sentence — and the old read-only "picture by picture" list
 is gone, the table being that list made operable. The table is built by
 `RollEditor` (it holds the roll) and handed to `ExportPanel` as a node.
+**E3, the filmstrip badge**: bottom-right of each cell (the "unreachable" `!`
+moved to the top-right to make room); a click toggles, a right-click or a
+550 ms touch hold ignores ↔ brings back, and the click that ends a hold is
+swallowed so it is not a second gesture. Filled = the author decided, dashed =
+the rule answers; a picture on the rule that stays OUT (a big roll's untouched
+majority) shows its badge only under the pointer — always on a touch screen —
+so the strip does not wear a hundred grey rings. Ignored cells are dimmed, or
+left out by the status line's Hide (`atelier.develop.showIgnored`, a
+`localStorage` view pref, never the roll's), the OPEN picture always staying
+in the strip.
 
 ## The filmstrip's batch is a Shift/⌘-click selection, apart from the open picture (2026-09-16, D7)
 
