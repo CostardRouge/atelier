@@ -14,12 +14,12 @@
  * build wrote is left behind rather than trusted. Pure and DOM-free.
  */
 
-import { keystoneOrNull, type Keystone } from '../render/geometry';
-import { lensOrNull, type LensCorrection } from '../render/lens';
-import { detailOrNull, type DetailSettings } from '../render/detail';
+import { isDefaultKeystone, keystoneOrNull, type Keystone } from '../render/geometry';
+import { isDefaultLens, lensOrNull, type LensCorrection } from '../render/lens';
+import { detailOrNull, isDefaultDetail, type DetailSettings } from '../render/detail';
 import { readPatches, type Patch } from '../render/repair';
 import { readLayers, type AdjustLayer } from './layer';
-import { developOrNull, type DevelopSettings } from './develop';
+import { developOrNull, isDefaultDevelop, type DevelopSettings } from './develop';
 import { filmTextureOrNull, type FilmTexture } from '../film/film-texture';
 import { isDefaultFraming, normaliseFraming, type Framing } from '../media/framing';
 import { type SavedMediaRef } from '../projects/project-types';
@@ -512,19 +512,46 @@ export function copyBorderTo(
   return changed ? { ...roll, pictures, updatedAt: now } : roll;
 }
 
+/** What was done to a picture, in the inspector's own words — `edited` is this list being non-empty. */
+export type PictureEdit =
+  | 'develop'
+  | 'look'
+  | 'crop'
+  | 'border'
+  | 'perspective'
+  | 'lens'
+  | 'detail'
+  | 'repair'
+  | 'layers';
+
 /**
- * What the gallery card says: "18 of 42 developed" — a develop, a look or a
- * crop counts, and an ASPECT other than the picture's own is a crop on its own:
- * drawing a free zone with the frame's corners leaves the framing untouched
- * (nothing was panned or zoomed), and a picture that was plainly cropped must
- * not read as one nobody has looked at.
+ * Everything the author did to ONE picture — the one answer to "is it edited?"
+ * that the filmstrip's dot, the roll's progress and the remove confirmation all
+ * read (2026-09-23: three different tests had it three ways, and an hour of
+ * heal spots was removed without a word). A value dragged back to its default
+ * is no edit; an ASPECT other than the picture's own is a crop on its own —
+ * drawing a free zone with the frame's corners pans nothing. WHICH FILE the
+ * picture is developed from (`rendition`) is a choice of bytes, not an edit.
  */
+export function pictureEdits(p: RollPicture): PictureEdit[] {
+  const out: PictureEdit[] = [];
+  if (!isDefaultDevelop(p.develop)) out.push('develop');
+  if (p.grade) out.push('look');
+  if ((p.framing && !isDefaultFraming(p.framing)) || p.aspect !== 'original') out.push('crop');
+  if (p.border) out.push('border');
+  if (!isDefaultKeystone(p.keystone)) out.push('perspective');
+  if (!isDefaultLens(p.lens)) out.push('lens');
+  if (!isDefaultDetail(p.detail)) out.push('detail');
+  if ((p.repair ?? []).length > 0) out.push('repair');
+  if ((p.layers ?? []).length > 0) out.push('layers');
+  return out;
+}
+
+export function isEdited(p: RollPicture): boolean {
+  return pictureEdits(p).length > 0;
+}
+
+/** What the gallery card says: "18 of 42 developed" — `isEdited`, counted. */
 export function rollProgress(roll: RollDoc): { total: number; developed: number } {
-  return {
-    total: roll.pictures.length,
-    developed: roll.pictures.filter(
-      (p) =>
-        p.develop !== null || (p.grade ?? null) !== null || p.framing !== null || p.aspect !== 'original' || p.border !== null,
-    ).length,
-  };
+  return { total: roll.pictures.length, developed: roll.pictures.filter(isEdited).length };
 }

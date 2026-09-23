@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { describeDevelop } from '../../shared/develop/develop';
 import type { SelectionModifiers } from '../../shared/develop/roll-editor';
 import type { PictureAvailability } from '../../shared/develop/roll-media';
-import type { RollPicture } from '../../shared/develop/roll-types';
+import { pictureEdits, type PictureEdit, type RollPicture } from '../../shared/develop/roll-types';
 import { useObjectUrl } from '../../shared/media/use-object-url';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import WinnowThumb from '../../shared/sources/winnow/WinnowThumb';
@@ -101,7 +101,10 @@ function Cell({
   onRemove: () => void;
 }) {
   const url = useObjectUrl(thumb);
-  const developed = picture.develop !== null || picture.framing !== null;
+  // The roll's one answer (`pictureEdits`): the dot, the progress line and the
+  // remove confirmation cannot disagree about what counts.
+  const edits = pictureEdits(picture);
+  const developed = edits.length > 0;
   const kind = availability?.kind ?? 'local';
   const fetching = kind === 'fetching';
   const unreachable = kind === 'failed' || kind === 'gone' || kind === 'unconnected' || kind === 'local';
@@ -121,7 +124,7 @@ function Cell({
         aria-label={`${picture.ref.name}${developed ? ', developed' : ''}${selected ? ', selected' : ''}${
           fetching ? ', fetching' : unreachable ? ', not available' : ''
         }`}
-        title={`${picture.ref.name}${developed ? ` — ${describeDevelop(picture.develop) || 'cropped'}` : ' — as shot'} — Shift or ⌘/Ctrl-click to select for a batch`}
+        title={`${picture.ref.name}${developed ? ` — ${editSummary(picture.develop, edits)}` : ' — as shot'} — Shift or ⌘/Ctrl-click to select for a batch`}
         className={`relative block ${size} p-0 rounded-paper overflow-hidden bg-frame cursor-pointer border-2 ${
           open ? 'border-accent' : 'border-transparent hover:border-line-strong'
         }`}
@@ -192,3 +195,8 @@ const CELL_WORDS: Record<PictureAvailability['kind'], string> = {
   unconnected: 'not connected',
   local: 'not open',
 };
+
+/** `+1.2 EV · contrast +10 · look · crop` — the develop's own numbers, then every other kind of edit by name. */
+function editSummary(develop: RollPicture['develop'], edits: readonly PictureEdit[]): string {
+  return [describeDevelop(develop), ...edits.filter((e) => e !== 'develop')].filter(Boolean).join(' · ');
+}

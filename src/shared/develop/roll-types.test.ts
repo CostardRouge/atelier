@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_DEVELOP } from './develop';
 import { DEFAULT_FRAMING } from '../media/framing';
+import { DEFAULT_KEYSTONE } from '../render/geometry';
+import { DEFAULT_LENS } from '../render/lens';
+import { DEFAULT_DETAIL } from '../render/detail';
+import { createLayer } from './layer';
 import {
   DEFAULT_ROLL_EXPORT,
   ROLL_DOC_VERSION,
@@ -11,7 +15,9 @@ import {
   copyBorderTo,
   copyCropTo,
   copyGradeTo,
+  isEdited,
   patchPicture,
+  pictureEdits,
   readRollDoc,
   readRollExport,
   readRollGrade,
@@ -178,6 +184,45 @@ describe('editing the strip', () => {
     // A shape alone is a crop: a free zone drawn with the corners pans nothing.
     doc = patchPicture(doc, 'p4', { aspect: 'free:1.5' });
     expect(rollProgress(doc)).toEqual({ total: 5, developed: 4 });
+  });
+});
+
+describe('pictureEdits — the one answer to “is it edited?”', () => {
+  it('names every kind of edit, and nothing on a picture as it came', () => {
+    const doc = roll(['a']);
+    const bare = doc.pictures[0];
+    expect(pictureEdits(bare)).toEqual([]);
+    expect(isEdited(bare)).toBe(false);
+    const all = {
+      ...bare,
+      develop: { ...DEFAULT_DEVELOP, exposure: 1 },
+      grade: { layers: [], output: 'rec709-to-srgb' as const, film: null },
+      aspect: '4:5',
+      border: { aspect: null, fill: '#ffffff', margin: { x: 0.1, y: 0.1 } },
+      keystone: { ...DEFAULT_KEYSTONE, vertical: 20 },
+      lens: { ...DEFAULT_LENS, distortion: 10 },
+      detail: { ...DEFAULT_DETAIL, sharpen: 40 },
+      repair: [{ id: 'h1', kind: 'heal' as const, x: 0.5, y: 0.5, radius: 0.02, feather: 0.5, dx: 0.05, dy: 0 }],
+      layers: [createLayer('radial', 'l1')],
+    };
+    expect(pictureEdits(all as RollDoc['pictures'][number])).toEqual([
+      'develop', 'look', 'crop', 'border', 'perspective', 'lens', 'detail', 'repair', 'layers',
+    ]);
+  });
+
+  it('does not count a value dragged back to its default, nor which file the picture is developed from', () => {
+    const bare = roll(['a']).pictures[0];
+    expect(
+      isEdited({
+        ...bare,
+        develop: { ...DEFAULT_DEVELOP },
+        framing: { ...DEFAULT_FRAMING },
+        keystone: { ...DEFAULT_KEYSTONE },
+        lens: { ...DEFAULT_LENS },
+        detail: { ...DEFAULT_DETAIL },
+        rendition: 'delivered:a.JPG',
+      }),
+    ).toBe(false);
   });
 });
 

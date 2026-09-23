@@ -646,7 +646,12 @@ Rules a later agent must keep:
 - **Apply to is TWO verbs** (the maintainer's one change to the prototype):
   `copyCropTo` never touches the border, `copyBorderTo` (pure, tested) never
   the crop, so a roll can wear one border over crops that each differ.
-- `rollProgress` counts a border as looked at.
+- **"Edited" has ONE answer, `pictureEdits`** (`roll-types.ts`, 2026-09-23):
+  develop, look, crop (an aspect alone counts), border, perspective, lens,
+  detail, repair, layers — a value dragged back to its default is none, and
+  the `rendition` is a choice of bytes, never an edit. The filmstrip's dot and
+  tooltip, `rollProgress` and the remove confirmation all read it: they had
+  three different tests, and an hour of heal spots was removed without asking.
 
 Verified in the pane through the app's own `renderRollPicture` on a 3000×2000
 half-blue/half-green JPEG: a 10 % vermilion border on a 1:1 file → 3400×3400,

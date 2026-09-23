@@ -34,7 +34,9 @@ import {
   copyBorderTo,
   copyCropTo,
   copyGradeTo,
+  isEdited,
   patchPicture,
+  pictureEdits,
   removePictures,
   rollProgress,
   sameMediaRef,
@@ -1001,7 +1003,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                 compact={compact}
                 onOpen={(id) => onOpenPicture(id)}
                 onSelectClick={handleSelectClick}
-                onRemove={(p) => (p.develop || p.grade || p.framing ? setConfirmRemove(p) : remove(p))}
+                onRemove={(p) => (isEdited(p) ? setConfirmRemove(p) : remove(p))}
               />
             </div>
           </div>
@@ -1028,7 +1030,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
             setConfirmRemove(null);
           }}
         >
-          <p>Its develop and its look go with it. The file stays where it is.</p>
+          <p>
+            What was done to it goes with it — {pictureEdits(confirmRemove).join(', ')}. The file stays where it
+            is.
+          </p>
         </ConfirmDialog>
       )}
     </div>
