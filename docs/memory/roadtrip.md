@@ -450,7 +450,7 @@ Two halves, and both are needed. The record-back compares the tick against **the
 
 **The sheet shows its working**: the day and where the day came from (`readCapture`'s three rungs — the camera's EXIF, the instance that vouched for it, the file's own date said to be a weak guess), the coordinates, the city with its country and how far away it is. A name with no working shown is a name nobody can weigh, and the country is a hint here precisely because it is not fit to store.
 
-**`MediaActions` carries ONE heading for the whole row**, so the heading says both jobs — «Start a piece on 3 Nov 2025 · or locate it» — rather than letting the piece sentence claim a verb that is about the picture's OWN day. If a second heading is ever wanted, that is a change to the seam (`media-scope.tsx`), not to this tool.
+**`MediaActions` carries ONE heading for the whole row**, so the heading says both jobs — «start a piece on 3 Nov 2025 · or locate it» — rather than letting the piece sentence claim a verb that is about the picture's OWN day. If a second heading is ever wanted, that is a change to the seam (`media-scope.tsx`), not to this tool.
 
 **Two traps paid here, both measured in the browser:**
 

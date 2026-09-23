@@ -835,32 +835,37 @@ export default function AssetSidebar({
           taskScope={viewedAsset?.id ?? null}
           footer={
             <>
-              <div className="flex items-center gap-3 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => {
-                    activate(viewable[viewing].id);
-                    setViewing(null);
-                  }}
-                  className="font-mono text-2xs tracking-[0.1em] uppercase px-3 py-1.5 rounded-full bg-ink text-paper cursor-pointer"
-                >
-                  Use in {tool.label}
-                </button>
-                <span className="text-xs text-muted min-w-0 truncate">
-                  read from your disk — nothing uploaded
-                </span>
-              </div>
               {/* The picture is already here: making it active is all a verb
                   needs, and it is what carries it onto the new piece — with
-                  the file of the capture that was on screen. */}
-              <MediaActionRow
-                offer={offer}
-                onRun={(action) => {
-                  activate(viewable[viewing].id);
-                  setViewing(null);
-                  action.run(captureView.view);
-                }}
-              />
+                  the file of the capture that was on screen. Where the tool
+                  publishes verbs, its first one IS the call to action and the
+                  generic "Use in" goes: activating alone changes nothing on
+                  a screen that publishes them (Enter still does it). */}
+              {offer && offer.actions.length > 0 ? (
+                <MediaActionRow
+                  offer={offer}
+                  lead
+                  onRun={(action) => {
+                    activate(viewable[viewing].id);
+                    setViewing(null);
+                    action.run(captureView.view);
+                  }}
+                />
+              ) : (
+                <div className="flex items-center gap-3 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      activate(viewable[viewing].id);
+                      setViewing(null);
+                    }}
+                    className="font-mono text-2xs tracking-[0.1em] uppercase px-3 py-1.5 rounded-full bg-ink text-paper cursor-pointer transition-colors hover:bg-accent"
+                  >
+                    Use in {tool.label}
+                  </button>
+                </div>
+              )}
+              <span className="text-2xs text-faint">read from your disk — nothing uploaded</span>
             </>
           }
           onConfirm={() => {
