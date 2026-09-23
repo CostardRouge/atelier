@@ -141,7 +141,7 @@ function Cell({
         )}
         {fetching && (
           <span className="absolute inset-0 grid place-items-center bg-[rgba(13,12,10,0.5)]" aria-hidden="true">
-            <span className="w-4 h-4 rounded-full border-2 border-[rgba(251,248,241,0.3)] border-t-[rgba(251,248,241,0.95)] animate-spin motion-reduce:animate-none" />
+            <span className="w-4 h-4 rounded-full border-2 border-on-media/30 border-t-on-media/95 animate-spin motion-reduce:animate-none" />
           </span>
         )}
         {unreachable && url && (

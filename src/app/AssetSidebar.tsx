@@ -1141,7 +1141,7 @@ function cadenceSentence(
  * shares the fixed 80×56 thumbnail with up to one other corner chip.
  */
 function scrim(corner: string): string {
-  return `absolute ${corner} left-[3px] z-[2] font-mono text-3xs tracking-[0.06em] uppercase text-paper bg-[rgba(20,18,15,0.62)] px-[0.25rem] py-px rounded-[4px] leading-[1.35] whitespace-nowrap backdrop-blur-[3px]`;
+  return `absolute ${corner} left-[3px] z-[2] font-mono text-3xs tracking-[0.06em] uppercase text-on-media bg-[rgba(20,18,15,0.62)] px-[0.25rem] py-px rounded-[4px] leading-[1.35] whitespace-nowrap backdrop-blur-[3px]`;
 }
 
 /**
@@ -1415,7 +1415,7 @@ function AssetTile({
       </button>
       {/* The tile is the picture's name here, so the name goes on the tile —
           quietly, and only where it does not cover the frame's subject. */}
-      <span className="absolute inset-x-0 bottom-0 px-1 pb-[2px] pt-2 bg-gradient-to-b from-transparent to-[rgba(16,15,13,0.6)] font-mono text-3xs text-paper truncate pointer-events-none">
+      <span className="absolute inset-x-0 bottom-0 px-1 pb-[2px] pt-2 bg-gradient-to-b from-transparent to-[rgba(16,15,13,0.6)] font-mono text-3xs text-on-media truncate pointer-events-none">
         {asset.baseName}
       </span>
       {active && (
@@ -1430,7 +1430,7 @@ function AssetTile({
           onClick={onPreview}
           aria-label={`Look at ${asset.baseName}`}
           title={`Look at ${asset.baseName}`}
-          className="absolute top-[2px] right-[2px] w-6 h-6 grid place-items-center rounded-md border-0 bg-[rgba(251,248,241,0.85)] text-ink-soft text-2xs cursor-pointer hover:bg-surface"
+          className="absolute top-[2px] right-[2px] w-6 h-6 grid place-items-center rounded-md border-0 bg-surface/85 text-ink-soft text-2xs cursor-pointer hover:bg-surface"
         >
           ⤢
         </button>
@@ -1507,7 +1507,7 @@ function Cover({
       {/* The affordance only on hover: a magnifier on every row would read as
           a badge the cover carries, not as something to press. */}
       <span
-        className="absolute inset-0 grid place-items-center bg-[rgba(20,18,15,0.35)] text-paper text-xs opacity-0 group-hover/cover:opacity-100 transition-opacity"
+        className="absolute inset-0 grid place-items-center bg-[rgba(20,18,15,0.35)] text-on-media text-xs opacity-0 group-hover/cover:opacity-100 transition-opacity"
         aria-hidden="true"
       >
         ⤢

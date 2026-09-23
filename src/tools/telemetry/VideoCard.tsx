@@ -105,7 +105,7 @@ export default function VideoCard({
     >
       <div className="relative bg-frame leading-[0]">
         {index != null && (
-          <span className="absolute top-[0.7rem] left-[0.7rem] z-[2] font-mono text-2xs tracking-[0.12em] px-2 py-[0.22rem] rounded-full bg-[rgba(20,18,15,0.55)] text-paper backdrop-blur-[4px] leading-[1.4]">
+          <span className="absolute top-[0.7rem] left-[0.7rem] z-[2] font-mono text-2xs tracking-[0.12em] px-2 py-[0.22rem] rounded-full bg-[rgba(20,18,15,0.55)] text-on-media backdrop-blur-[4px] leading-[1.4]">
             NO. {String(index + 1).padStart(2, '0')}
           </span>
         )}

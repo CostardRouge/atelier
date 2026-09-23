@@ -59,7 +59,7 @@ export default function TelemetryPlayer({
       {videoUrl && cues.length === 0 && (
         <p className="my-4 px-4 py-[0.85rem] rounded-paper bg-accent-wash border border-danger-line text-danger-ink text-sm leading-[1.55]">
           No telemetry loaded yet — select the matching{' '}
-          <code className="font-mono text-[0.85em] bg-[rgba(124,46,28,0.1)] px-[0.35em] py-[0.05em] rounded-[4px]">
+          <code className="font-mono text-[0.85em] bg-accent/10 px-[0.35em] py-[0.05em] rounded-[4px]">
             .srt
           </code>{' '}
           file.

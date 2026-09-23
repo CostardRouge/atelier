@@ -545,7 +545,7 @@ const MonthBlockView = memo(forwardRef<HTMLDivElement, MonthBlockViewProps>(func
                     aria-selected={isSelected}
                     className={`relative p-0 box-border rounded-[8px] font-mono text-xs tabular-nums cursor-pointer overflow-hidden transition-[box-shadow] duration-150 ease-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-ink ${
                       picture
-                        ? `border ${picture.published ? 'border-accent-ink' : 'border-dashed border-line-strong'} text-paper`
+                        ? `border ${picture.published ? 'border-accent-ink' : 'border-dashed border-line-strong'} text-on-media`
                         : `border-0 ${level >= 3 ? 'text-paper' : level === 0 ? 'text-muted' : 'text-ink-soft'}`
                     }`}
                     style={{

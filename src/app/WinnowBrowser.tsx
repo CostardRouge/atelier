@@ -758,7 +758,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
                             label={r.ext || (r.media_type === 'video' ? 'video' : 'photo')}
                             box="w-full h-[90px] max-[820px]:h-[120px]"
                           />
-                          <span className="absolute bottom-0 inset-x-0 px-1.5 py-1 font-mono text-3xs text-paper bg-[rgba(20,18,15,0.62)] truncate">
+                          <span className="absolute bottom-0 inset-x-0 px-1.5 py-1 font-mono text-3xs text-on-media bg-[rgba(20,18,15,0.62)] truncate">
                             {r.filename}
                             {r.media_type === 'video' && ' ▶'}
                             {r.has_telemetry && ' · srt'}

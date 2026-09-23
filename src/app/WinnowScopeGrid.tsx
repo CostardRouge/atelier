@@ -153,7 +153,7 @@ export default function WinnowScopeGrid({
                 />
                 {r.media_type === 'video' && (
                   <span
-                    className="absolute top-1 left-1 font-mono text-3xs text-paper bg-[rgba(20,18,15,0.62)] px-1 rounded-[3px] leading-[1.4]"
+                    className="absolute top-1 left-1 font-mono text-3xs text-on-media bg-[rgba(20,18,15,0.62)] px-1 rounded-[3px] leading-[1.4]"
                     aria-hidden="true"
                   >
                     ▶{r.has_telemetry ? ' srt' : ''}
@@ -178,7 +178,7 @@ export default function WinnowScopeGrid({
                   </span>
                 )}
                 {fetching === r.id && (
-                  <span className="absolute inset-0 grid place-items-center bg-[rgba(20,18,15,0.55)] font-mono text-3xs text-paper">
+                  <span className="absolute inset-0 grid place-items-center bg-[rgba(20,18,15,0.55)] font-mono text-3xs text-on-media">
                     fetching…
                   </span>
                 )}

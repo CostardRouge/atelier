@@ -136,7 +136,7 @@ export default function ElementList({
                 key={el.id}
                 ref={active ? activeRow : undefined}
                 className={`group flex items-center gap-2 px-2 py-1.5 rounded-[10px] cursor-pointer ${
-                  active ? 'bg-accent-wash' : 'hover:bg-white'
+                  active ? 'bg-accent-wash' : 'hover:bg-paper-2'
                 }`}
                 onClick={() => onSelect(el.id)}
               >

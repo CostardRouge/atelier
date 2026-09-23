@@ -164,7 +164,7 @@ export default function WinnowDaySheet({
                         {!onRoll && (
                           <span
                             className={`absolute left-1.5 top-1.5 w-5 h-5 grid place-items-center rounded-full border text-3xs ${
-                              on ? 'bg-accent border-accent text-paper' : 'bg-[rgba(251,248,241,0.8)] border-line-strong text-transparent'
+                              on ? 'bg-accent border-accent text-paper' : 'bg-surface/80 border-line-strong text-transparent'
                             }`}
                             aria-hidden="true"
                           >
@@ -172,7 +172,7 @@ export default function WinnowDaySheet({
                           </span>
                         )}
                         {onRoll && (
-                          <span className="absolute inset-x-0 bottom-0 px-1.5 py-1 bg-[rgba(13,12,10,0.7)] font-mono text-3xs text-paper text-left">
+                          <span className="absolute inset-x-0 bottom-0 px-1.5 py-1 bg-[rgba(13,12,10,0.7)] font-mono text-3xs text-on-media text-left">
                             on the roll
                           </span>
                         )}

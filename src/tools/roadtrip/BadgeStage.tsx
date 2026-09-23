@@ -1454,7 +1454,7 @@ export default function BadgeStage({
           )}
         </div>
         {loading && (
-          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-mono text-2xs text-paper bg-[rgba(20,18,15,0.7)] px-3 py-1.5 rounded-full">
+          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-mono text-2xs text-on-media bg-[rgba(20,18,15,0.7)] px-3 py-1.5 rounded-full">
             decoding…
           </span>
         )}

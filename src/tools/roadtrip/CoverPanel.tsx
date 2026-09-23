@@ -202,7 +202,7 @@ export default function CoverPanel({ trip, value, onChange }: CoverPanelProps) {
                     </b>
                   )}
                   {day !== null && (
-                    <span className="absolute inset-x-0 bottom-0 py-[1px] font-mono text-3xs text-paper bg-[rgba(16,15,13,0.45)]">
+                    <span className="absolute inset-x-0 bottom-0 py-[1px] font-mono text-3xs text-on-media bg-[rgba(16,15,13,0.45)]">
                       {day}
                     </span>
                   )}

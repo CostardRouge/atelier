@@ -506,13 +506,13 @@ export default function CropStage({
         <>
           <canvas ref={canvasRef} aria-hidden className="absolute inset-0 w-full h-full" />
           {levelling && !line && (
-            <span className="absolute left-1/2 top-3 -translate-x-1/2 pointer-events-none rounded-sm bg-ink/80 px-2 py-1 font-mono text-2xs text-paper whitespace-nowrap">
+            <span className="absolute left-1/2 top-3 -translate-x-1/2 pointer-events-none rounded-sm bg-frame/80 px-2 py-1 font-mono text-2xs text-on-media whitespace-nowrap">
               draw a line along the horizon, or along an upright
             </span>
           )}
           {tag && (
             <span
-              className="absolute pointer-events-none rounded-sm bg-ink/80 px-1.5 py-0.5 font-mono text-2xs tabular-nums text-paper whitespace-nowrap"
+              className="absolute pointer-events-none rounded-sm bg-frame/80 px-1.5 py-0.5 font-mono text-2xs tabular-nums text-on-media whitespace-nowrap"
               style={{ left: tag.x, top: tag.y }}
             >
               {tag.text}

@@ -609,7 +609,7 @@ function Tile({
       >
         ⤢
       </button>
-      <span className="pointer-events-none absolute bottom-0 inset-x-0 px-1.5 py-0.5 font-mono text-3xs text-paper bg-[rgba(20,18,15,0.62)] truncate">
+      <span className="pointer-events-none absolute bottom-0 inset-x-0 px-1.5 py-0.5 font-mono text-3xs text-on-media bg-[rgba(20,18,15,0.62)] truncate">
         {leftOff ? 'left off · ' : candidate.origin === 'instance' ? '◇ ' : ''}
         {candidate.ref.name}
       </span>

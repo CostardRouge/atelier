@@ -32,7 +32,7 @@ export default function DevelopHistogram({ histogram }: { histogram: Histogram |
             <svg
               viewBox="0 0 1 1"
               preserveAspectRatio="none"
-              className="block w-full h-full text-[rgba(251,248,241,0.62)]"
+              className="block w-full h-full text-on-media/62"
               aria-hidden="true"
             >
               <path d={path} fill="currentColor" />
