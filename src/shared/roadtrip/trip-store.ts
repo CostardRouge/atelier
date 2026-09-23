@@ -94,15 +94,6 @@ export async function listTrips(): Promise<TripDoc[]> {
   }
 }
 
-export async function getTrip(id: string): Promise<TripDoc | null> {
-  try {
-    const doc = await withStore('readonly', (s) => s.get(id) as IDBRequest<TripDoc | undefined>);
-    return doc ? migrateTripDoc(doc) : null;
-  } catch {
-    return null;
-  }
-}
-
 /** Returns false when the write failed (quota, eviction, private window). */
 export async function putTrip(doc: TripDoc): Promise<boolean> {
   try {

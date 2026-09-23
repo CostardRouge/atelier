@@ -84,7 +84,11 @@ export function useTripGrade(
   const stack = useLutStack();
   const scope = gradeScopeOf(post, picture);
   const source = gradeShownBy(trip, post, picture);
-  const sourceKey = JSON.stringify(source);
+  // Memoised on the grade's identity: the editor renders on every frame of
+  // the deck's clock, and a stored grade is stringified once per render
+  // otherwise — with a legacy upload's whole `.cube` inlined in it, once a
+  // frame was the drag.
+  const sourceKey = useMemo(() => JSON.stringify(source), [source]);
 
   // What the stack last agreed with, as stored text.
   const agreed = useRef<string | null>(null);

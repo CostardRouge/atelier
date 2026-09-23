@@ -163,9 +163,14 @@ export default function ElementList({
                 <span className="flex-none font-mono text-3xs uppercase tracking-[0.1em] text-muted">
                   {shape ? shape.tag : el.kind === 'text' ? 'TXT' : el.field}
                 </span>
+                {/* Shown on hover where there is a pointer to hover with,
+                    and ALWAYS on a touch screen, at a finger's size: a
+                    hover-only × on a phone left no visible way to delete
+                    an element, and the panel's "Delete removes it" named
+                    a key the phone does not have. */}
                 <button
                   type="button"
-                  className="flex-none w-4 text-center text-muted opacity-0 group-hover:opacity-100 hover:text-accent"
+                  className="flex-none w-4 text-center text-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-accent pointer-coarse:opacity-100 pointer-coarse:w-8 pointer-coarse:h-8 pointer-coarse:-my-1 pointer-coarse:text-base"
                   onClick={(e) => {
                     e.stopPropagation();
                     onRemove(el.id);

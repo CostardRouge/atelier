@@ -280,10 +280,6 @@ export function normaliseCellPlace(v: unknown): CellPlace {
   };
 }
 
-export function isDefaultCellPlace(p: CellPlace | null | undefined): boolean {
-  return !p || (p.dx === 0 && p.dy === 0 && p.rotation === 0);
-}
-
 /**
  * Which cell a point (frame pixels) lands in — the LAST drawn wins, since a
  * later print lies over an earlier one. -1 for none.

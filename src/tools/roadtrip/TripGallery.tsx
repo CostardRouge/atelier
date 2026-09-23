@@ -390,7 +390,7 @@ function TripRow({
   onMove: (targetSourceId: string) => void;
   onChooseCover: () => void;
 }) {
-  const coverage = tripCoverage(trip);
+  const coverage = useMemo(() => tripCoverage(trip), [trip]);
   const route = tripRouteLabel(trip);
   return (
     <div
@@ -480,7 +480,7 @@ function ResumeBand({
   onMove: (targetSourceId: string) => void;
   onChooseCover: () => void;
 }) {
-  const coverage = tripCoverage(trip);
+  const coverage = useMemo(() => tripCoverage(trip), [trip]);
   const tiles = coverTiles(trip, coverage, hasThumb);
   const lead = tiles[0] ? urls.get(tiles[0].postId) : undefined;
   const gap = coverage.longestGap;
@@ -594,7 +594,7 @@ function TripCard({
   onChooseCover: () => void;
 }) {
   const compact = useIsCompact();
-  const coverage = tripCoverage(trip);
+  const coverage = useMemo(() => tripCoverage(trip), [trip]);
   const route = tripRouteLabel(trip);
   const total = coverage.totalDays;
   const pct = total > 0 ? Math.round((coverage.toldDays / total) * 100) : 0;

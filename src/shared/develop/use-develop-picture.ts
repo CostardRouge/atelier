@@ -628,11 +628,19 @@ export function useDevelopPicture({
     [],
   );
 
+  // The calibration's two FIELDS, never the wrapper: `calibrationAt` hands the
+  // host a fresh `{ gain, warp }` per call, and keying anything below on that
+  // object made the histogram effect re-run on every render — and it SETS
+  // state, so a RAW on the gain-map rung rendered, read the GPU back and
+  // rendered again at frame rate for as long as it was open. The grid and the
+  // warp themselves come from the probe's one record and stand still.
+  const gainField = calibration?.gain ?? null;
+  const warpField = calibration?.warp ?? null;
   // The two warps as one record, memoised by VALUE — every effect below takes
   // it as a dep, and the panels hand down a fresh object per slider step.
   const geometry = useMemo<PictureGeometry>(
-    () => ({ cameraWarp: calibration?.warp ?? null, lens, keystone }),
-    [calibration, lens, keystone],
+    () => ({ cameraWarp: warpField, lens, keystone }),
+    [warpField, lens, keystone],
   );
   // Only the layers that DRAW: a parked one must not rebuild the grader, and
   // must not cost a pass.
@@ -694,7 +702,7 @@ export function useDevelopPicture({
     }
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const grader = holding ? null : graderFor(cube, source, geometry, stack, showMaskOf, subjectMasks, detail, pixelScale, repair, film, calibration?.gain ?? null);
+    const grader = holding ? null : graderFor(cube, source, geometry, stack, showMaskOf, subjectMasks, detail, pixelScale, repair, film, gainField);
     const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
     const layout = delivered1 && framing ? scaleLayout(delivered1, w / delivered1.w) : null;
     if (layout && framing) {
@@ -739,8 +747,11 @@ export function useDevelopPicture({
     repair,
     // The TEXTURE is a dep like any other: `graderFor` is a stable callback,
     // so a value only it reads would never repaint the stage — the trap
-    // `render-geometry.md` records for the keystone's own callback.
+    // `render-geometry.md` records for the keystone's own callback. The gain
+    // grid likewise: a rung climbed from `gain` to `gain map` changes it and
+    // nothing else.
     film,
+    gainField,
     graderFor,
   ]);
 
@@ -770,7 +781,7 @@ export function useDevelopPicture({
       const ctx = sample.getContext('2d', { willReadFrequently: true });
       if (!ctx) return;
       try {
-        const grader = graderFor(cube, source, geometry, stack, null, subjectMasks, detail, pixelScale, repair, film, calibration?.gain ?? null);
+        const grader = graderFor(cube, source, geometry, stack, null, subjectMasks, detail, pixelScale, repair, film, gainField);
         const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
         ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
         setHistogram(luminanceHistogram(ctx.getImageData(0, 0, w, h).data));
@@ -787,7 +798,7 @@ export function useDevelopPicture({
       cancelAnimationFrame(raf);
       window.clearTimeout(fallback);
     };
-  }, [source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, graderFor]);
+  }, [source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gainField, graderFor]);
 
   // The AS-SHOT measurement Auto reads. Keyed on the source alone — no cube,
   // no grader — so it is one read per picture and is unmoved by anything the
@@ -921,7 +932,6 @@ export function useDevelopPicture({
   // callback that never changed left the crop stage showing a warp-less
   // picture until the cube or the crop moved. Fresh values through the ref,
   // a new function when what it would draw changes — both, not either.
-  const gainField = calibration?.gain ?? null;
   const latest = useRef({ source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gain: gainField });
   latest.current = { source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gain: gainField };
   const delivered = useCallback((): CanvasImageSource | null => {
@@ -931,7 +941,7 @@ export function useDevelopPicture({
     // looking, like the wipe.
     const grader = graderFor(lut, s, geo, ly, null, rs, dt, sc, rp, fx, gn);
     return grader ? grader.render(s.gpu ?? s.image) : s.image;
-  }, [graderFor, source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, calibration]);
+  }, [graderFor, source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gainField]);
   const snapshot = useCallback(
     async (longEdge = THUMB_LONG_EDGE): Promise<Blob | null> => {
       const { source: s, cube: lut, geometry: geo, stack: ly, subjectMasks: rs, detail: dt, pixelScale: sc, repair: rp, film: fx, gain: gn } = latest.current;
@@ -952,7 +962,7 @@ export function useDevelopPicture({
       }
       return new Promise((resolve) => out.toBlob(resolve, 'image/jpeg', THUMB_QUALITY));
     },
-    [graderFor, source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film],
+    [graderFor, source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gainField],
   );
 
   const dragging = useRef<{ startX: number; live: boolean } | null>(null);
@@ -1015,6 +1025,10 @@ export function useDevelopPicture({
         })
       : decodePhoto(file).then(async (bitmap) => {
           const fit = await fitPhotoForRender(bitmap);
+          // Read BEFORE the close: a closed bitmap reports 0, and the kernel
+          // scale below then divided by it, so a picture the GPU had to shrink
+          // was denoised and sharpened at the stage's strength, not its own.
+          const fileWidth = bitmap.width;
           if (fit.resampled) bitmap.close();
           return {
             source: {
@@ -1023,7 +1037,7 @@ export function useDevelopPicture({
               height: fit.height,
               release: () => (fit.resampled ? fit.release() : bitmap.close()),
             },
-            fileWidth: bitmap.width,
+            fileWidth,
           };
         });
     void load
@@ -1074,11 +1088,15 @@ export function useDevelopPicture({
     [],
   );
   useEffect(() => {
-    // The decode belongs to one file: a step to the next picture drops it.
+    // The decode belongs to one file: a step to the next picture drops it —
+    // and the full-density grader built over it, whose WebGL2 context the
+    // release timer above never reaches once the state is back to idle.
     setFull((prev) => {
       prev?.source.release();
       return null;
     });
+    loupeSlot.current.current?.grader.dispose();
+    loupeSlot.current.current = null;
     setLoupeState('idle');
   }, [file, rawFile]);
   const loupeActive = loupeWanted && loupeState !== 'idle';
@@ -1113,7 +1131,7 @@ export function useDevelopPicture({
     const f = full.source;
     const grader = holding
       ? null
-      : graderFrom(loupeSlot.current, cube, f, geometry, stack, null, subjectMasks, detail, f.width / full.fileWidth, repair, film);
+      : graderFrom(loupeSlot.current, cube, f, geometry, stack, null, subjectMasks, detail, f.width / full.fileWidth, repair, film, gainField);
     const graded = grader ? grader.render(f.gpu ?? f.image) : f.image;
     // The stage canvas (w×h) sits at `rect` in the viewport: the same picture
     // is drawn from the file's pixels under that very transform, in device
@@ -1150,6 +1168,7 @@ export function useDevelopPicture({
     detail,
     repair,
     film,
+    gainField,
     holding,
     shownWipe,
     pixelView,

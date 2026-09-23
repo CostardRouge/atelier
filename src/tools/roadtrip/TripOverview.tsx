@@ -351,6 +351,12 @@ export default function TripOverview({
   // and the seam carries ONE heading for the whole row — so the heading says
   // both jobs rather than letting the piece sentence claim the fourth verb,
   // and the sheet it opens states the day it measured before writing anything.
+  // The verbs read `startPiece` through a ref: keyed on it, the offer was
+  // rebuilt on every trip edit (a keystroke in a leg's name, a day of a
+  // ruler drag), and each rebuild published null then the new record — two
+  // provider updates that re-rendered the Library and the lightbox each time.
+  const startPieceRef = useRef(startPiece);
+  startPieceRef.current = startPiece;
   const offer = useMemo<MediaActions | null>(
     () =>
       selected
@@ -361,7 +367,7 @@ export default function TripOverview({
                 id: k.id,
                 label: k.label,
                 hint: `${k.hint} — from this picture`,
-                run: () => startPiece(k.id),
+                run: () => startPieceRef.current(k.id),
               })),
               {
                 id: 'locate',
@@ -372,7 +378,7 @@ export default function TripOverview({
             ],
           }
         : null,
-    [selected, startPiece],
+    [selected],
   );
   usePublishMediaActions(offer);
 
@@ -432,6 +438,16 @@ export default function TripOverview({
     });
     return map;
   }, [trip]);
+
+  // Stable while the legs are: the calendar's month blocks are memoised on
+  // it, and an inline arrow handed them a new identity whenever this screen
+  // re-rendered — on every month scrolled past, through `onVisible`.
+  const stageOf = useCallback((date: IsoDate) => dayStages.get(date) ?? null, [dayStages]);
+  /** The phone's way into a leg: mark it and raise the sheet. */
+  const openLegSheet = useCallback((id: string) => {
+    setStageId(id);
+    setLegsOpen(true);
+  }, []);
 
   const openLegById = useCallback(
     (id: string) => {
@@ -820,12 +836,9 @@ export default function TripOverview({
           adjust={adjust}
           pictures={pictures}
           onVisible={onVisible}
-          stageOf={(date) => dayStages.get(date) ?? null}
+          stageOf={stageOf}
           menuFor={menuFor}
-          onOpenLeg={(id) => {
-            setStageId(id);
-            setLegsOpen(true);
-          }}
+          onOpenLeg={openLegSheet}
           selectedLegId={selectedStageId}
         />
 
@@ -1025,7 +1038,7 @@ export default function TripOverview({
             days={coverage.days}
             selected={selected}
             onSelect={selectDate}
-            stageOf={(date) => dayStages.get(date) ?? null}
+            stageOf={stageOf}
             menuFor={menuFor}
             onOpenLeg={openLegById}
             selectedLegId={selectedStageId}

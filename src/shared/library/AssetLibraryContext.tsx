@@ -5,14 +5,27 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from 'react';
 import { assetFiles, buildAssets, fileIdentity, type Asset } from './assets';
 import { loadClipMeta } from '../media/video-metadata';
 import { imageTypeLabel, loadImageMeta } from '../media/image-meta';
 import { transcodeStore } from '../media/transcode-store';
+import { makeDecodeQueue } from '../lib/decode-queue';
 import { probeSrtTiming } from '../telemetry/srt-probe';
 import type { TimeScaleReading } from '../telemetry/time-scale';
+
+/**
+ * How many covers decode at once. Every row that scrolled into view used to
+ * start its own decode the same instant, and a fast scroll over a folder of
+ * two hundred stills ran them all together — each holding a bitmap and, for
+ * a clip, a `<video>` element, for up to four seconds. Three keeps the list
+ * filling at the speed a scroll reveals it; the queue is newest first, so the
+ * rows on screen are drawn before the ones already scrolled past.
+ */
+const COVER_SLOTS = 3;
+const covers = makeDecodeQueue(COVER_SLOTS);
 
 /**
  * The global asset library — a thin, app-wide store of `File` handles plus a
@@ -67,8 +80,15 @@ export interface AssetLibrary {
   activeId: string | null;
   /** Focus an asset (or clear with null) — the tool's active item follows. */
   setActive: (id: string | null) => void;
-  /** Lazily-built cover metadata, keyed by asset id. */
-  meta: ReadonlyMap<string, MediaMeta>;
+  /**
+   * Read an asset's cover metadata NOW, without subscribing — for a handler
+   * (an export reading the source size). A render reads it through
+   * {@link useAssetMeta}, which re-renders that one consumer when the cover
+   * lands; the map itself is deliberately not in this value, because every
+   * cover that landed used to re-render every consumer of the library — the
+   * shell, and through it the whole open editor.
+   */
+  getMeta: (id: string) => MediaMeta | undefined;
   /** Request an asset's cover metadata (no-op if already built/pending). */
   ensureMeta: (id: string) => void;
   /** Add files (from any source); duplicates are ignored, new assets selected. */
@@ -94,6 +114,25 @@ export interface AssetLibrary {
 
 const AssetLibraryContext = createContext<AssetLibrary | null>(null);
 
+/**
+ * The covers, as a store OUTSIDE the context value (2026-09-22).
+ *
+ * They used to be a `Map` in the value, replaced on every cover or cadence
+ * that landed — so adding a folder of two hundred photographs re-rendered
+ * every consumer of the library two hundred times, `App` among them, and
+ * through `<Active />` the whole open editor. A subscriber reads ONE entry
+ * (`useAssetMeta(id)`) and is re-rendered only when that entry changes; the
+ * few readers that want the whole map subscribe to a version instead. The
+ * entries are held immutably (a patch makes a new object), so `getSnapshot`
+ * is stable between changes as `useSyncExternalStore` requires.
+ */
+interface MetaStore {
+  subscribe: (listener: () => void) => () => void;
+  get: (id: string) => MediaMeta | undefined;
+  version: () => number;
+}
+const MetaStoreContext = createContext<MetaStore | null>(null);
+
 export function AssetLibraryProvider({ children }: { children: ReactNode }) {
   const [files, setFiles] = useState<File[]>([]);
   const [selection, setSelection] = useState<ReadonlySet<string>>(
@@ -108,46 +147,65 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
 
   // --- cover metadata (lazy, with managed thumbnail lifetimes) -------------
   const metaRef = useRef<Map<string, MediaMeta>>(new Map());
-  const [meta, setMeta] = useState<ReadonlyMap<string, MediaMeta>>(
-    metaRef.current,
-  );
-
-  const commitMeta = useCallback((id: string, m: MediaMeta) => {
-    const next = new Map(metaRef.current);
-    next.set(id, m);
-    metaRef.current = next;
-    setMeta(next);
+  const metaVersion = useRef(0);
+  const listeners = useRef(new Set<() => void>());
+  const notify = useCallback(() => {
+    metaVersion.current += 1;
+    for (const l of listeners.current) l();
   }, []);
+  const metaStore = useMemo<MetaStore>(
+    () => ({
+      subscribe: (listener) => {
+        listeners.current.add(listener);
+        return () => {
+          listeners.current.delete(listener);
+        };
+      },
+      get: (id) => metaRef.current.get(id),
+      version: () => metaVersion.current,
+    }),
+    [],
+  );
+  const getMeta = metaStore.get;
+
+  const commitMeta = useCallback(
+    (id: string, m: MediaMeta) => {
+      metaRef.current.set(id, m);
+      notify();
+    },
+    [notify],
+  );
 
   /**
    * Merge into an existing entry. The cover and the cadence are two independent
    * async reads of the same asset; whichever lands second must not erase the
    * first, so neither writes a whole fresh object.
    */
-  const patchMeta = useCallback((id: string, patch: Partial<MediaMeta>) => {
-    const current = metaRef.current.get(id);
-    if (!current) return;
-    const next = new Map(metaRef.current);
-    next.set(id, { ...current, ...patch });
-    metaRef.current = next;
-    setMeta(next);
-  }, []);
+  const patchMeta = useCallback(
+    (id: string, patch: Partial<MediaMeta>) => {
+      const current = metaRef.current.get(id);
+      if (!current) return;
+      metaRef.current.set(id, { ...current, ...patch });
+      notify();
+    },
+    [notify],
+  );
 
-  const dropMeta = useCallback((ids: Iterable<string>) => {
-    const next = new Map(metaRef.current);
-    let changed = false;
-    for (const id of ids) {
-      const m = next.get(id);
-      if (m) {
-        if (m.thumbUrl) URL.revokeObjectURL(m.thumbUrl);
-        next.delete(id);
-        changed = true;
+  const dropMeta = useCallback(
+    (ids: Iterable<string>) => {
+      let changed = false;
+      for (const id of ids) {
+        const m = metaRef.current.get(id);
+        if (m) {
+          if (m.thumbUrl) URL.revokeObjectURL(m.thumbUrl);
+          metaRef.current.delete(id);
+          changed = true;
+        }
       }
-    }
-    if (!changed) return;
-    metaRef.current = next;
-    setMeta(next);
-  }, []);
+      if (changed) notify();
+    },
+    [notify],
+  );
 
   const ensureMeta = useCallback(
     (id: string) => {
@@ -157,7 +215,8 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
       const { video, image, srt } = asset.parts;
       commitMeta(id, { status: 'pending', isVideo: !!video });
       if (video) {
-        loadClipMeta(video)
+        covers
+          .enqueue(() => loadClipMeta(video))
           .then((r) =>
             patchMeta(id, {
               status: 'ready',
@@ -175,7 +234,8 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
           probeSrtTiming(srt).then((timing) => patchMeta(id, { timing }));
         }
       } else if (image) {
-        loadImageMeta(image)
+        covers
+          .enqueue(() => loadImageMeta(image))
           .then((r) =>
             patchMeta(id, {
               status: 'ready',
@@ -259,14 +319,14 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
     for (const m of metaRef.current.values()) {
       if (m.thumbUrl) URL.revokeObjectURL(m.thumbUrl);
     }
-    metaRef.current = new Map();
-    setMeta(metaRef.current);
+    metaRef.current.clear();
+    notify();
     // Drop any cached/in-flight transcodes — their source files are leaving.
     transcodeStore.clear();
     setFiles([]);
     setSelection(new Set());
     setActiveId(null);
-  }, []);
+  }, [notify]);
 
   const toggle = useCallback((id: string) => {
     setSelection((sel) => {
@@ -300,7 +360,7 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
       selection,
       activeId,
       setActive,
-      meta,
+      getMeta,
       ensureMeta,
       addFiles,
       remove,
@@ -316,7 +376,7 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
       selection,
       activeId,
       setActive,
-      meta,
+      getMeta,
       ensureMeta,
       addFiles,
       remove,
@@ -331,7 +391,7 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
 
   return (
     <AssetLibraryContext.Provider value={value}>
-      {children}
+      <MetaStoreContext.Provider value={metaStore}>{children}</MetaStoreContext.Provider>
     </AssetLibraryContext.Provider>
   );
 }
@@ -343,4 +403,38 @@ export function useAssetLibrary(): AssetLibrary {
     throw new Error('useAssetLibrary must be used within an AssetLibraryProvider');
   }
   return ctx;
+}
+
+function useMetaStore(): MetaStore {
+  const store = useContext(MetaStoreContext);
+  if (!store) {
+    throw new Error('useAssetMeta must be used within an AssetLibraryProvider');
+  }
+  return store;
+}
+
+/**
+ * ONE asset's cover metadata, live: the component re-renders when that
+ * entry changes and for no other cover. `null`/`undefined` reads nothing.
+ */
+export function useAssetMeta(id: string | null | undefined): MediaMeta | undefined {
+  const store = useMetaStore();
+  return useSyncExternalStore(store.subscribe, () => (id ? store.get(id) : undefined));
+}
+
+const NO_SUBSCRIPTION = () => () => {};
+
+/**
+ * A number that changes whenever ANY cover changes — for the few readers
+ * that look at many entries at once (a lightbox deck, a picker's tiles) and
+ * read them through `getMeta`. List it as a memo dep beside the ids.
+ *
+ * `enabled` is the seam that keeps it cheap: a store update re-renders its
+ * subscribers SYNCHRONOUSLY and unbatched, so a list that subscribed while
+ * its deck was closed re-rendered whole once per cover — measured slower
+ * than the context it replaced. Subscribe only while the reading matters.
+ */
+export function useAssetMetaVersion(enabled = true): number {
+  const store = useMetaStore();
+  return useSyncExternalStore(enabled ? store.subscribe : NO_SUBSCRIPTION, store.version);
 }

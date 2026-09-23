@@ -69,6 +69,9 @@ import { useRollMedia } from './use-roll-media';
 import { useRollPreviews } from './use-roll-previews';
 import WinnowDaySheet from './WinnowDaySheet';
 
+/** One empty answer, so a memo keyed on it holds. */
+const NO_SIBLINGS: readonly File[] = [];
+
 interface RollEditorProps {
   roll: RollDoc;
   /** The picture the route names; the first when it names none. */
@@ -195,13 +198,25 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [mediaFileFor, previewFiles],
   );
   const openFile = openId ? (files.get(openId) ?? null) : null;
+  // Indexed once per sibling list: the export plan asks for every picture's
+  // siblings on every roll change, and a filter over the whole folder per
+  // picture was rows × folder each time.
+  const siblingsByBase = useMemo(() => {
+    const map = new Map<string, File[]>();
+    for (const s of localSiblings) {
+      const base = fileBaseName(s.name).toLowerCase();
+      const list = map.get(base);
+      if (list) list.push(s);
+      else map.set(base, [s]);
+    }
+    return map;
+  }, [localSiblings]);
   const siblingsFor = useCallback(
     (file: File): readonly File[] => {
-      if (mediaOrigin(file)) return [];
-      const base = fileBaseName(file.name).toLowerCase();
-      return localSiblings.filter((s) => fileBaseName(s.name).toLowerCase() === base);
+      if (mediaOrigin(file)) return NO_SIBLINGS;
+      return siblingsByBase.get(fileBaseName(file.name).toLowerCase()) ?? NO_SIBLINGS;
     },
-    [localSiblings],
+    [siblingsByBase],
   );
   const openSiblings = useMemo(() => (openFile ? siblingsFor(openFile) : []), [openFile, siblingsFor]);
   const localCount = roll.pictures.filter((p) => !p.ref.assetId).length;

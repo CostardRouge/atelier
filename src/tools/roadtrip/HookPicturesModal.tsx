@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
+import { useAssetLibrary, useAssetMetaVersion } from '../../shared/library/AssetLibraryContext';
 import { classifyPart, fileIdentity, isRawImage, type Asset } from '../../shared/library/assets';
 import { useObjectUrls } from '../../shared/lib/use-object-urls';
 import { pickFiles } from '../../shared/sources/file-sources';
@@ -202,6 +202,9 @@ export default function HookPicturesModal({
   onConfirm,
 }: HookPicturesModalProps) {
   const lib = useAssetLibrary();
+  // The Library's covers land after the modal opened: the version is the
+  // one subscription that redraws the tiles as they do.
+  useAssetMetaVersion();
   const { connection, client } = useWinnowConnection();
   const calendar = useMemo(() => ctx.calendar ?? [], [ctx.calendar]);
   // The dates reach the whole trip; only a piece dated outside it has none.
@@ -496,7 +499,7 @@ export default function HookPicturesModal({
                           on={!excluded.has(c.key)}
                           leftOff={leftOff(c.date)}
                           client={client}
-                          thumbUrl={c.origin === 'library' ? lib.meta.get(c.asset.id)?.thumbUrl : undefined}
+                          thumbUrl={c.origin === 'library' ? lib.getMeta(c.asset.id)?.thumbUrl : undefined}
                           onToggle={() => toggle([c.key], excluded.has(c.key))}
                           onLook={() => setLooking(pool.indexOf(c))}
                         />
@@ -536,7 +539,7 @@ export default function HookPicturesModal({
           onClose={() => setLooking(null)}
           client={client}
           from={connection ? `from the Library and ${connection.id}` : 'from the Library'}
-          thumbFor={(c) => (c.origin === 'library' ? lib.meta.get(c.asset.id)?.thumbUrl : undefined)}
+          thumbFor={(c) => (c.origin === 'library' ? lib.getMeta(c.asset.id)?.thumbUrl : undefined)}
           on={!excluded.has(pool[looking].key)}
           onToggle={() => toggle([pool[looking].key], excluded.has(pool[looking].key))}
         />
