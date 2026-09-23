@@ -9,7 +9,7 @@ import {
   type PictureSize,
 } from '../../shared/develop/roll-export';
 import { measurePicture, renderRollPicture, type MeasuredPicture } from '../../shared/develop/roll-render';
-import type { RollDoc, RollPicture } from '../../shared/develop/roll-types';
+import { delivers, type RollDoc, type RollPicture } from '../../shared/develop/roll-types';
 import type { Interpolation } from '../../shared/lut/interpolate';
 import { rollCubes } from './roll-cubes';
 import { WORKING_PREVIEW_EDGE, isWorkingPreview } from '../../shared/develop/working-preview';
@@ -146,7 +146,9 @@ export function useRollExport({
             : null,
       };
     };
-    return planRun(roll.pictures, factsFor, proxiesOnly, formatBytes);
+    // The run the roll's own verb makes: the pictures that LEAVE
+    // (`delivers`) — the sentence must not count one held or ignored.
+    return planRun(roll.pictures.filter(delivers), factsFor, proxiesOnly, formatBytes);
   }, [roll.pictures, files, siblingsOf, proxiesOnly, held]);
 
   // --- the open picture's own size, measured once per file, for the Delivers line

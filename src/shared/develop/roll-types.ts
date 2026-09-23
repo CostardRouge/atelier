@@ -96,6 +96,11 @@ export const ROLL_EXPORT_LIMITS = {
   hdrStops: { min: 1, max: 4 },
 } as const;
 
+/** Whether a picture leaves in an export — `RollPicture.deliver`. */
+export type DeliverState = 'auto' | 'yes' | 'no' | 'ignore';
+
+const DELIVER_STATES: ReadonlySet<string> = new Set(['auto', 'yes', 'no', 'ignore']);
+
 /** A picture's crop shape: its own, or one of the suite's aspect presets. */
 export type RollAspect = 'original' | string;
 
@@ -127,6 +132,17 @@ export interface RollPicture {
    * carries either.
    */
   rendition?: string | null;
+  /**
+   * Whether the picture LEAVES in an export (2026-09-23, `docs/lightroom-gaps.md`
+   * §10): `auto` follows the roll's rule — it leaves when it is edited
+   * (`pictureEdits`) —, `yes` and `no` are the author's own call, and `ignore`
+   * takes the picture out of the roll's WORK: never exported, skipped by the
+   * arrows and by every "apply to the others", left out of the progress count,
+   * still opened by a click. ONE field, so no two answers can contradict each
+   * other. Absent reads as `auto`, so no roll needs migrating. An output
+   * instruction, never a rating: culling stays Winnow's.
+   */
+  deliver?: DeliverState;
   /**
    * The perspective correction (`shared/render/geometry.ts`), or null for
    * none. It is applied BEFORE the crop frames the result: a keystone takes
@@ -209,6 +225,7 @@ export function createRollPicture(ref: SavedMediaRef, id: string = newRollId()):
     aspect: 'original',
     border: null,
     rendition: null,
+    deliver: 'auto',
     keystone: null,
     lens: null,
     detail: null,
@@ -323,6 +340,8 @@ function readPicture(raw: unknown, rollGrade: RollGrade | null = null): RollPict
     aspect,
     border,
     rendition: typeof raw.rendition === 'string' && raw.rendition ? raw.rendition : null,
+    // Absent — every roll written before it existed — and anything unknown read as `auto`.
+    deliver: typeof raw.deliver === 'string' && DELIVER_STATES.has(raw.deliver) ? (raw.deliver as DeliverState) : 'auto',
     // Absent on every roll written before the warp existed, and `null` there
     // means exactly what it means now — so there is no migration to run.
     keystone: keystoneOrNull(raw.keystone),
@@ -432,6 +451,7 @@ export function patchPicture(
       | 'aspect'
       | 'border'
       | 'rendition'
+      | 'deliver'
       | 'keystone'
       | 'lens'
       | 'detail'
@@ -551,7 +571,56 @@ export function isEdited(p: RollPicture): boolean {
   return pictureEdits(p).length > 0;
 }
 
-/** What the gallery card says: "18 of 42 developed" — `isEdited`, counted. */
-export function rollProgress(roll: RollDoc): { total: number; developed: number } {
-  return { total: roll.pictures.length, developed: roll.pictures.filter(isEdited).length };
+/**
+ * What the gallery card says: "18 of 42 developed" — `isEdited`, counted over
+ * the pictures still in the roll's work: an ignored picture is in neither
+ * number, and `ignored` says how many were set aside.
+ */
+export function rollProgress(roll: RollDoc): { total: number; developed: number; ignored: number } {
+  const live = roll.pictures.filter((p) => !isIgnored(p));
+  return { total: live.length, developed: live.filter(isEdited).length, ignored: roll.pictures.length - live.length };
+}
+
+// --- delivery ---------------------------------------------------------------
+
+export function deliverState(p: Pick<RollPicture, 'deliver'>): DeliverState {
+  return p.deliver ?? 'auto';
+}
+
+export function isIgnored(p: Pick<RollPicture, 'deliver'>): boolean {
+  return deliverState(p) === 'ignore';
+}
+
+/** Whether the picture leaves in an export: the author's call, else the roll's rule — edited ones leave. */
+export function delivers(p: RollPicture): boolean {
+  const state = deliverState(p);
+  return state === 'yes' || (state === 'auto' && isEdited(p));
+}
+
+/**
+ * The state after one "send ↔ hold" gesture (the `P` key, a row, a badge):
+ * the OTHER answer, stored as `auto` when that is what the rule already says —
+ * so a picture toggled twice is back on the rule, not pinned. An ignored
+ * picture comes back into the work on `auto`.
+ */
+export function toggledDelivery(p: RollPicture): DeliverState {
+  if (isIgnored(p)) return 'auto';
+  const leaving = !delivers(p);
+  return leaving === isEdited(p) ? 'auto' : leaving ? 'yes' : 'no';
+}
+
+/** One delivery state written onto several pictures; the same roll back when nothing changes. */
+export function setDelivery(
+  roll: RollDoc,
+  ids: readonly string[],
+  state: DeliverState,
+  now: number = Date.now(),
+): RollDoc {
+  let changed = false;
+  const pictures = roll.pictures.map((p) => {
+    if (!ids.includes(p.id) || deliverState(p) === state) return p;
+    changed = true;
+    return { ...p, deliver: state };
+  });
+  return changed ? { ...roll, pictures, updatedAt: now } : roll;
 }

@@ -21,11 +21,34 @@ export function openPictureId(pictures: readonly { id: string }[], routeId: stri
   return pictures[0]?.id ?? null;
 }
 
-/** The picture `step` away along the strip, held at its ends (never wrapping: the end of a roll is a place). */
-export function stepPicture(pictures: readonly { id: string }[], currentId: string | null, step: number): string | null {
+/**
+ * The picture `step` away along the strip, held at its ends (never wrapping:
+ * the end of a roll is a place). A picture `skip` answers true for — an
+ * IGNORED one — is stepped over, from wherever the step starts: opened by a
+ * click, an ignored picture still hands the arrows on to the next that is not.
+ * With nothing further in that direction, the step stays where it is.
+ */
+export function stepPicture<T extends { id: string }>(
+  pictures: readonly T[],
+  currentId: string | null,
+  step: number,
+  skip: (picture: T) => boolean = () => false,
+): string | null {
   if (pictures.length === 0) return null;
   const at = Math.max(0, pictures.findIndex((p) => p.id === currentId));
-  return pictures[Math.max(0, Math.min(pictures.length - 1, at + step))].id;
+  if (step === 0) return pictures[at].id;
+  const dir = Math.sign(step);
+  let left = Math.abs(step);
+  let i = at;
+  let landed = at;
+  while (left > 0) {
+    i += dir;
+    if (i < 0 || i >= pictures.length) break;
+    if (skip(pictures[i])) continue;
+    landed = i;
+    left -= 1;
+  }
+  return pictures[landed].id;
 }
 
 /**
@@ -118,6 +141,9 @@ export type EditorKeyAction =
   | 'facts'
   | 'remove'
   | 'escape'
+  | 'deliver'
+  | 'deliver-auto'
+  | 'ignore'
   | null;
 
 /**
@@ -177,5 +203,11 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   if (press.key === 'x' || press.key === 'X') return 'swap';
   if (press.key === 'h' || press.key === 'H') return 'help';
   if (press.key === 'i' || press.key === 'I') return 'facts';
+  // The delivery state (`docs/lightroom-gaps.md` §10): `P` sends ↔ holds,
+  // `U` puts the picture back on the roll's rule, `M` ignores it — letters,
+  // so an AZERTY board presses the same ones.
+  if (press.key === 'p' || press.key === 'P') return 'deliver';
+  if (press.key === 'u' || press.key === 'U') return 'deliver-auto';
+  if (press.key === 'm' || press.key === 'M') return 'ignore';
   return null;
 }

@@ -15,8 +15,12 @@ import {
   copyBorderTo,
   copyCropTo,
   copyGradeTo,
+  delivers,
   isEdited,
+  isIgnored,
   patchPicture,
+  setDelivery,
+  toggledDelivery,
   pictureEdits,
   readRollDoc,
   readRollExport,
@@ -183,7 +187,9 @@ describe('editing the strip', () => {
     doc = patchPicture(doc, 'p3', { framing: { ...DEFAULT_FRAMING, scale: 1.4 } });
     // A shape alone is a crop: a free zone drawn with the corners pans nothing.
     doc = patchPicture(doc, 'p4', { aspect: 'free:1.5' });
-    expect(rollProgress(doc)).toEqual({ total: 5, developed: 4 });
+    expect(rollProgress(doc)).toEqual({ total: 5, developed: 4, ignored: 0 });
+    // An ignored picture is out of both numbers, and counted apart.
+    expect(rollProgress(setDelivery(doc, ['p1', 'p2'], 'ignore'))).toEqual({ total: 3, developed: 3, ignored: 2 });
   });
 });
 
@@ -223,6 +229,44 @@ describe('pictureEdits — the one answer to “is it edited?”', () => {
         rendition: 'delivered:a.JPG',
       }),
     ).toBe(false);
+  });
+});
+
+describe('delivery — which pictures leave', () => {
+  const edited = () => patchPicture(roll(['a', 'b']), 'p1', { develop: { ...DEFAULT_DEVELOP, exposure: 1 } });
+
+  it('leaves when edited by default, and the author’s call wins', () => {
+    const doc = edited();
+    expect(doc.pictures.map(delivers)).toEqual([true, false]);
+    const flipped = setDelivery(setDelivery(doc, ['p1'], 'no'), ['p2'], 'yes');
+    expect(flipped.pictures.map(delivers)).toEqual([false, true]);
+    const gone = setDelivery(doc, ['p1'], 'ignore');
+    expect(delivers(gone.pictures[0])).toBe(false);
+    expect(isIgnored(gone.pictures[0])).toBe(true);
+  });
+
+  it('toggles to the other answer, stored as auto when the rule already says it', () => {
+    const [ed, bare] = edited().pictures;
+    // Edited → hold (pinned); held edited → back to the rule.
+    expect(toggledDelivery(ed)).toBe('no');
+    expect(toggledDelivery({ ...ed, deliver: 'no' })).toBe('auto');
+    // Bare → send (pinned); sent bare → back to the rule.
+    expect(toggledDelivery(bare)).toBe('yes');
+    expect(toggledDelivery({ ...bare, deliver: 'yes' })).toBe('auto');
+    // Ignored → back into the work on the rule.
+    expect(toggledDelivery({ ...ed, deliver: 'ignore' })).toBe('auto');
+  });
+
+  it('writes a state onto several pictures, the same roll when nothing changes', () => {
+    const doc = roll(['a', 'b']);
+    expect(setDelivery(doc, ['p1'], 'auto')).toBe(doc);
+    expect(setDelivery(doc, ['p1', 'p2'], 'ignore', 9).pictures.map((p) => p.deliver)).toEqual(['ignore', 'ignore']);
+  });
+
+  it('reads an absent or unknown state as auto, and is never an edit', () => {
+    const doc = readRollDoc({ id: 'r', pictures: [{ id: 'a', ref: ref('a.jpg') }, { id: 'b', ref: ref('b.jpg'), deliver: 'maybe' }, { id: 'c', ref: ref('c.jpg'), deliver: 'ignore' }] })!;
+    expect(doc.pictures.map((p) => p.deliver)).toEqual(['auto', 'auto', 'ignore']);
+    expect(isEdited(doc.pictures[2])).toBe(false);
   });
 });
 

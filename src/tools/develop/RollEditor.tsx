@@ -34,7 +34,11 @@ import {
   copyBorderTo,
   copyCropTo,
   copyGradeTo,
+  delivers,
   isEdited,
+  isIgnored,
+  setDelivery,
+  toggledDelivery,
   patchPicture,
   pictureEdits,
   removePictures,
@@ -64,7 +68,7 @@ import Filmstrip from './Filmstrip';
 import type { CropApplyVerb } from './CropPanel';
 import type { BorderApplyVerb } from './BorderSection';
 import type { RollBorder } from '../../shared/develop/border-layout';
-import PictureWorkbench, { DEFAULT_BRUSH_TOOL, type BrushTool, type LookApplyVerb } from './PictureWorkbench';
+import PictureWorkbench, { DEFAULT_BRUSH_TOOL, type BrushTool, type DeliverAction, type LookApplyVerb } from './PictureWorkbench';
 import { DEFAULT_REPAIR_TOOL, type RepairTool } from './RepairPanel';
 import { useLutInterpolation } from '../../shared/lut/use-lut-interpolation';
 import { useRollExport } from './use-roll-export';
@@ -464,7 +468,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
 
   const step = useCallback(
     (by: number) => {
-      const next = stepPicture(latest.current.pictures, openIdRef.current, by);
+      // The arrows walk the roll's WORK: an ignored picture is stepped over.
+      const next = stepPicture(latest.current.pictures, openIdRef.current, by, isIgnored);
       if (next && next !== openIdRef.current) onOpenPicture(next);
     },
     [onOpenPicture],
@@ -515,6 +520,24 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     (id: string, border: RollBorder | null) => update((r) => copyBorderTo(r, [id], border)),
     [update],
   );
+  // The delivery keys, answered from the roll as it stands (the state depends on
+  // whether the picture is edited), and said in the status line.
+  const handleDeliver = useCallback(
+    (id: string, action: DeliverAction) => {
+      const picture = latest.current.pictures.find((p) => p.id === id);
+      if (!picture) return;
+      const next =
+        action === 'toggle' ? toggledDelivery(picture) : action === 'auto' ? 'auto' : isIgnored(picture) ? 'auto' : 'ignore';
+      update((r) => setDelivery(r, [id], next));
+      const after = { ...picture, deliver: next };
+      setNotice(
+        next === 'ignore'
+          ? `${picture.ref.name} ignored — the arrows step over it`
+          : `${picture.ref.name} ${delivers(after) ? 'will be exported' : 'stays out of the export'}${next === 'auto' ? ' (the roll’s rule)' : ''}`,
+      );
+    },
+    [update],
+  );
   const handleExportSettings = useCallback(
     (patch: Partial<RollExport>) => update((r) => ({ ...r, export: { ...r.export, ...patch }, updatedAt: Date.now() })),
     [update],
@@ -543,12 +566,15 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         run: () => void exportPictures(ids),
       });
     }
-    if (roll.pictures.length > 1) {
+    // What LEAVES: the edited pictures, and those marked to send — never an
+    // ignored one, never one marked to hold (`docs/lightroom-gaps.md` §10).
+    const leaving = roll.pictures.filter(delivers).map((p) => p.id);
+    if (leaving.length > 0) {
       verbs.push({
         id: 'roll',
-        label: `Export the roll · ${roll.pictures.length}`,
-        hint: 'every picture on the roll, in the strip’s order',
-        run: () => void exportPictures(roll.pictures.map((p) => p.id)),
+        label: `Export ${leaving.length} picture${leaving.length === 1 ? '' : 's'}`,
+        hint: 'the pictures that leave — edited ones, and those marked to send — in the strip’s order',
+        run: () => void exportPictures(leaving),
       });
     }
     return verbs;
@@ -574,7 +600,14 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [update],
   );
   const canPaste = useSyncExternalStore(subscribeDevelopClipboard, hasCopiedDevelop);
-  const others = roll.pictures.length - 1;
+  // "The others" are the pictures still in the roll's WORK: an ignored one is
+  // never written by an Apply-to-all (`docs/lightroom-gaps.md` §10) — a picture
+  // the author marked explicitly still is.
+  const otherIds = useMemo(
+    () => roll.pictures.filter((p) => p.id !== openId && !isIgnored(p)).map((p) => p.id),
+    [roll.pictures, openId],
+  );
+  const others = otherIds.length;
   const applyTo = useMemo<DevelopApplyVerb[]>(() => {
     if (!openId) return [];
     if (selectionTargets.length > 0) {
@@ -607,13 +640,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         label: `Apply to ${others} other picture${others === 1 ? '' : 's'}`,
         hint: 'the rest of this roll, each as its own copy',
         run: (settings: DevelopSettings) =>
-          writeDevelopTo(
-            roll.pictures.filter((p) => p.id !== openId).map((p) => p.id),
-            settings,
-          ),
+          writeDevelopTo(otherIds, settings),
       },
     ];
-  }, [openId, others, roll.pictures, selectionTargets, canPaste, writeDevelopTo]);
+  }, [openId, others, otherIds, selectionTargets, canPaste, writeDevelopTo]);
 
   const cropApplyTo = useMemo<CropApplyVerb[]>(() => {
     if (!openId) return [];
@@ -636,10 +666,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         id: 'roll',
         label: `Apply crop to ${others} other picture${others === 1 ? '' : 's'}`,
         hint: 'the rest of this roll, each as its own copy',
-        run: write(roll.pictures.filter((p) => p.id !== openId).map((p) => p.id)),
+        run: write(otherIds),
       },
     ];
-  }, [openId, others, roll.pictures, selectionTargets, update]);
+  }, [openId, others, otherIds, selectionTargets, update]);
 
   // The look's own verbs, apart from the develop's: a look is chosen per
   // picture, and this is the one gesture that dresses others with it. They
@@ -665,10 +695,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         id: 'roll',
         label: `Apply look to ${others} other picture${others === 1 ? '' : 's'}`,
         hint: 'this picture’s look onto the rest of the roll, each as its own copy, their develops untouched',
-        run: write(roll.pictures.filter((p) => p.id !== openId).map((p) => p.id)),
+        run: write(otherIds),
       },
     ];
-  }, [openId, others, roll.pictures, selectionTargets, update]);
+  }, [openId, others, otherIds, selectionTargets, update]);
 
   // The border's own verbs, apart from the crop's: a roll can wear ONE border
   // over crops that each differ (the maintainer's change to the prototype).
@@ -693,10 +723,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         id: 'roll',
         label: `Apply borders to ${others} other picture${others === 1 ? '' : 's'}`,
         hint: 'the whole roll, each keeping its own crop',
-        run: write(roll.pictures.filter((p) => p.id !== openId).map((p) => p.id)),
+        run: write(otherIds),
       },
     ];
-  }, [openId, others, roll.pictures, selectionTargets, update]);
+  }, [openId, others, otherIds, selectionTargets, update]);
 
   // On a phone the inspector is a sheet, opened from the shell's bottom bar;
   // picking a section is also what raises it — the Studio's own convention.
@@ -720,6 +750,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
 
   const progress = rollProgress(roll);
   const withLook = roll.pictures.filter((p) => p.grade).length;
+  const leavingCount = roll.pictures.filter(delivers).length;
   const addLabel =
     newPhotos.length === 0 ? 'Add from Library' : `Add ${newPhotos.length} from the Library`;
   // The ways a picture gets onto the roll. One is a button; two are a menu.
@@ -875,11 +906,14 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               exportVerbs={exportVerbs}
               onSnapshot={(blob) => handleSnapshot(open.id, blob)}
               onStep={step}
+              onDeliver={(action) => handleDeliver(open.id, action)}
               emptyText={availabilityText(open.ref.name, availability.get(open.id))}
             />
             <div className={`flex flex-col gap-1 min-w-0 ${compact ? 'flex-none' : 'col-start-1 row-start-2'}`}>
               <p className="m-0 font-mono text-2xs text-muted tabular-nums">
                 {progress.developed} of {progress.total} developed
+                {leavingCount > 0 && <span className="text-faint"> · {leavingCount} to export</span>}
+                {progress.ignored > 0 && <span className="text-faint"> · {progress.ignored} ignored</span>}
                 {withLook > 0 && (
                   <span className="text-faint">
                     {' '}

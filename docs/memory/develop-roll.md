@@ -178,6 +178,23 @@ removed on one left the other's; a fast ←/→ sweep over look / no look / look
 moved nothing; the verb dressed the bare one; an export of a black & white
 picture and a bare one delivered 133,133,133 and 200,122,60.
 
+## Which pictures LEAVE is one field on the picture (2026-09-23, E1)
+
+`RollPicture.deliver`: `auto · yes · no · ignore` (`docs/lightroom-gaps.md` §10,
+his call). **Rules**: (1) ONE field — *ignored* is its fourth value, never a
+flag beside it, so no two answers contradict; absent reads `auto`, so no roll
+migrated. (2) `auto` leaves when `pictureEdits` is non-empty (`delivers`); `yes`
+/ `no` are the author's and win. (3) A toggle (`toggledDelivery`: `P`, a row, a
+badge) gives the OTHER answer and stores `auto` when the rule already says it —
+two toggles are back on the rule, never pinned. (4) *Ignored* = out of the
+roll's WORK everywhere at once: never exported, stepped over by ←/→
+(`stepPicture`'s `skip`, which also hands on from an ignored picture opened by
+a click), left out of every Apply-to-ALL (`otherIds`; an explicit selection
+still reaches it), out of both numbers of `rollProgress` (counted apart as
+`ignored`). (5) The roll's verb is *Export N pictures* over `delivers`, and the
+run plan counts only those. Keys `P` / `U` / `M` — letters, so AZERTY presses
+the same. An output instruction, never a rating: nothing goes to Winnow.
+
 ## The filmstrip's batch is a Shift/⌘-click selection, apart from the open picture (2026-09-16, D7)
 
 `roll-editor.ts` gained `pictureRange` and `selectionAfterClick` (pure, tested):

@@ -159,6 +159,9 @@ export const DEFAULT_BRUSH_TOOL: Readonly<BrushTool> = Object.freeze({
   erase: false,
 });
 
+/** What a delivery key asks for — `RollEditor` turns it into a state. */
+export type DeliverAction = 'toggle' | 'auto' | 'ignore';
+
 /** A look batch verb, naming its count ("Apply look to 3 selected"): the host copies the open picture's stored look. */
 export interface LookApplyVerb {
   id: string;
@@ -222,6 +225,7 @@ export default function PictureWorkbench({
   exportVerbs,
   onSnapshot,
   onStep,
+  onDeliver,
   emptyText = 'This picture is not in the Library — open its folder, or take it from its day on your Winnow. Its numbers can still be set.',
 }: {
   picture: RollPicture;
@@ -272,6 +276,12 @@ export default function PictureWorkbench({
   exportVerbs: readonly ExportVerb[];
   onSnapshot: (thumb: Blob) => void;
   onStep: (step: number) => void;
+  /**
+   * The delivery keys (`P` send ↔ hold, `U` back to the rule, `M` ignore ↔
+   * un-ignore): the editor answers from the roll as it stands, since the
+   * state depends on whether the picture is edited.
+   */
+  onDeliver: (action: DeliverAction) => void;
   /** What the stage says while the picture's bytes are not in hand. */
   emptyText?: string;
 }) {
@@ -860,8 +870,8 @@ export default function PictureWorkbench({
   // copy changes the stored value without this editor's doing, and a draft that
   // ignored it would keep showing numbers the roll no longer holds — and write
   // them back over the step at the next nudge.
-  const callbacks = useRef({ onDevelop, onFraming, onKeystone, onLens, onDetail, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange });
-  callbacks.current = { onDevelop, onFraming, onKeystone, onLens, onDetail, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange };
+  const callbacks = useRef({ onDevelop, onFraming, onKeystone, onLens, onDetail, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver });
+  callbacks.current = { onDevelop, onFraming, onKeystone, onLens, onDetail, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver };
   const { replace } = draft;
   useWriteThrough<DevelopSettings>({
     stored: entry.develop,
@@ -1113,6 +1123,12 @@ export default function PictureWorkbench({
           // The same key closes it: a sheet opened by a letter that then does
           // nothing is a sheet you have to reach for the mouse to be rid of.
           setHelpOpen((was) => !was);
+          return;
+        case 'deliver':
+        case 'deliver-auto':
+        case 'ignore':
+          e.preventDefault();
+          callbacks.current.onDeliver(action === 'deliver' ? 'toggle' : action === 'deliver-auto' ? 'auto' : 'ignore');
           return;
         case 'facts':
           e.preventDefault();

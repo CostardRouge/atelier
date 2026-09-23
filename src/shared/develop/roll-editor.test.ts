@@ -50,6 +50,18 @@ describe('which picture is open', () => {
     expect(stepPicture([], 'a', 1)).toBeNull();
   });
 
+  it('steps over an ignored picture, and hands on from one opened by a click', () => {
+    const roll = [{ id: 'a' }, { id: 'x', ignored: true }, { id: 'y', ignored: true }, { id: 'b' }, { id: 'z', ignored: true }];
+    const skip = (p: { ignored?: boolean }) => Boolean(p.ignored);
+    expect(stepPicture(roll, 'a', 1, skip)).toBe('b');
+    expect(stepPicture(roll, 'b', -1, skip)).toBe('a');
+    // Nothing further that way: it stays.
+    expect(stepPicture(roll, 'b', 1, skip)).toBe('b');
+    // Opened by hand, an ignored picture lets the arrows go on to the next live one.
+    expect(stepPicture(roll, 'x', 1, skip)).toBe('b');
+    expect(stepPicture(roll, 'y', -1, skip)).toBe('a');
+  });
+
   it('opens the picture that takes the removed one’s place', () => {
     expect(openAfterRemoval(strip, 'a', 'b')).toBe('b');
     expect(openAfterRemoval(strip, 'b', 'b')).toBe('c');
@@ -74,6 +86,14 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'z' }))).toBe('zoom');
     expect(editorKeyAction(press({ key: 'c', metaKey: true }))).toBe('copy');
     expect(editorKeyAction(press({ key: 'V', ctrlKey: true }))).toBe('paste');
+  });
+
+  it('maps the delivery keys: P sends ↔ holds, U back to the rule, M ignores', () => {
+    expect(editorKeyAction(press({ key: 'p' }))).toBe('deliver');
+    expect(editorKeyAction(press({ key: 'U' }))).toBe('deliver-auto');
+    expect(editorKeyAction(press({ key: 'm' }))).toBe('ignore');
+    expect(editorKeyAction(press({ key: 'p', repeat: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'm', targetTypes: true }))).toBeNull();
   });
 
   it('yields to a field, a selection, a held key and other chords', () => {
