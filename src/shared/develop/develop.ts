@@ -45,6 +45,7 @@ import {
   type Levels,
   type ToneCurves,
 } from './curves';
+import { cloneMixer, describeMixer, isDefaultMixer, mixLinear, mixerOrNull, sameMixer, type ColourMixer } from './mixer';
 
 export interface DevelopSettings {
   /** Stops, −3..+3. A linear gain in scene light. */
@@ -87,6 +88,12 @@ export interface DevelopSettings {
   /** Levels per channel (`curves.ts`), or null for none. The same, coarser. */
   levels?: Levels | null;
   /**
+   * The colour mixer (`mixer.ts`): hue, saturation and luminance for eight
+   * bands of hue, or null for none — Lightroom's HSL. Last of the stages, as
+   * there. Optional like the curves, so nothing stored before it migrates.
+   */
+  mixer?: ColourMixer | null;
+  /**
    * The MATERIAL the numbers act on, as a LADDER of four rungs — each a real
    * and nameable amount of the camera's own calibration (2026-09-20,
    * `docs/develop-originals.md` §7 decision 1, `raw.md`):
@@ -120,7 +127,7 @@ export interface DevelopSettings {
 }
 
 /** The NUMERIC fields — a key a panel can draw as a slider. */
-export type DevelopKey = Exclude<keyof DevelopSettings, 'curves' | 'levels' | 'base' | 'rawGain'>;
+export type DevelopKey = Exclude<keyof DevelopSettings, 'curves' | 'levels' | 'mixer' | 'base' | 'rawGain'>;
 
 /**
  * The rungs of the material ladder, lowest first. `proxy` is never stored —
@@ -244,6 +251,7 @@ export const DEFAULT_DEVELOP: Readonly<DevelopSettings> = Object.freeze({
   vibrance: 0,
   curves: null,
   levels: null,
+  mixer: null,
   base: null,
   rawGain: null,
 });
@@ -259,7 +267,8 @@ export function isDefaultDevelop(d: DevelopSettings | null | undefined): boolean
     !isRawDevelop(d) &&
     DEVELOP_KEYS.every((k) => d[k] === 0) &&
     isDefaultCurves(d.curves) &&
-    isDefaultLevels(d.levels)
+    isDefaultLevels(d.levels) &&
+    isDefaultMixer(d.mixer)
   );
 }
 
@@ -275,6 +284,7 @@ export function cloneDevelop(d: DevelopSettings | null | undefined): DevelopSett
   const out = { ...DEFAULT_DEVELOP, ...src };
   out.curves = cloneCurves(src.curves);
   out.levels = cloneLevels(src.levels);
+  out.mixer = cloneMixer(src.mixer);
   return out;
 }
 
@@ -290,6 +300,7 @@ export function sameDevelop(a: DevelopSettings | null | undefined, b: DevelopSet
     DEVELOP_KEYS.every((k) => x[k] === y[k]) &&
     sameCurves(x.curves, y.curves) &&
     sameLevels(x.levels, y.levels) &&
+    sameMixer(x.mixer, y.mixer) &&
     isRawDevelop(x) === isRawDevelop(y) &&
     rawGainOf(x) === rawGainOf(y)
   );
@@ -311,6 +322,7 @@ export function normaliseDevelop(raw: unknown): DevelopSettings {
   }
   out.curves = curvesOrNull(normaliseCurves(src.curves));
   out.levels = levelsOrNull(normaliseLevels(src.levels));
+  out.mixer = mixerOrNull(src.mixer);
   const base = normaliseBase(src.base);
   if (base) {
     out.base = base;
@@ -481,7 +493,7 @@ function shapeChannel(lin: number, channel: 0 | 1 | 2, shape: ChannelShaper): nu
  *
  * Order: white balance → exposure → the luminance curve as one ratio → the
  * luma curve, also as a ratio → levels and the per-channel curves → saturation
- * and vibrance around the new luminance.
+ * and vibrance around the new luminance → the colour mixer (`mixer.ts`).
  *
  * `shapers` is the resolved curve/level maps. Pass it in any loop —
  * `developStage` does; omitting it resolves them per pixel, which is only
@@ -575,6 +587,10 @@ export function developLinear(
     }
   }
 
+  // The colour mixer last, as in Lightroom: a band is picked on the colour
+  // the pixel HAS once every global move is made.
+  if (d.mixer && !isDefaultMixer(d.mixer)) [r, g, b] = mixLinear([r, g, b], d.mixer);
+
   return [r, g, b];
 }
 
@@ -663,6 +679,8 @@ export function developLines(d: DevelopSettings | null | undefined): string[] {
   if (levels) parts.push(levels);
   const curves = describeCurves(d.curves);
   if (curves) parts.push(curves);
+  const mixer = describeMixer(d.mixer);
+  if (mixer) parts.push(mixer);
   return parts;
 }
 

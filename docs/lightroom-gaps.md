@@ -75,7 +75,7 @@ repeated here.
 
 | # | Missing / partial | Today | Size |
 |---|---|---|---|
-| 12 | **HSL / colour mixer** (8 bands × H/S/L, targeted tool) | absent | M — it is a cube stage, `developStage` |
+| 12 | **HSL / colour mixer** (8 bands × H/S/L, targeted tool) | **BUILT (pass 3)** — `mixer.ts`, last stage of the develop, in the Develop tool and both sheets; the targeted tool (drag on the picture) is not built | M — it is a cube stage, `developStage` |
 | 13 | **Texture · clarity · dehaze** | absent | M — local contrast needs a neighbourhood: a pass like `detail-pass` |
 | 14 | **Colour grading wheels** (shadows/mids/highlights, balance) | absent | S/M — a cube stage |
 | 15 | **Clipping overlay on the picture, RGB histogram, readout under the cursor** | **BUILT (pass 2)** — J or the strip's end words paint the clipping; R/G/B strip; 8-bit readout under the strip | S |
@@ -123,6 +123,7 @@ repeated here.
   and 15 (the clipping view, the RGB strip, the readout) are BUILT — pass 2
   is DONE.
 - **Pass 3 — the tools a daily edit reaches for:** 12, 13, 14, 18, 21, 17, 16.
+  Started 2026-09-23: 12 (the colour mixer) is BUILT.
 - **Pass 4 — output:** 28, 26, 25 (wide gamut).
 - **Pass 5 — workflow:** 29, 30, 31, 33, 32, 34.
 - Later, and each its own brief: 19, 20, 22, 24, 35.

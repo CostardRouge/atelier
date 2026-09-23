@@ -342,6 +342,31 @@ and a real 960 × 540 canvas JPEG as the render — the recipe is in
 the Export tab's row read `Camera render 960 px → 960 · exact` where it used
 to read `—`. An ordinary JPEG beside it read `JPEG · 8-bit · 1600 × 1200`.
 
+## The colour mixer is a develop STAGE, last, in every host (2026-09-23, audit item 12)
+
+`mixer.ts` (pure, tested) + `DevelopMixer.tsx`: `DevelopSettings.mixer`, three
+arrays of eight (hue · saturation · luminance, −100..100, Lightroom's bands at
+0/30/60/120/180/225/270/315°), null for none — optional, so nothing migrated,
+and wired into `isDefault`/`clone`/`same`/`normalise`/`developLines` like the
+curves. It runs LAST in `developLinear` (after saturation and vibrance, as in
+Lightroom), so it bakes into the one cube and reaches the stage, every export,
+every layer and the presets/clipboard for nothing. Rules: the bands are a
+PARTITION OF UNITY (a raised cosine between neighbouring centres — equal moves
+on all bands equal one global move, no hole between two); every move is
+weighted by the pixel's HSV saturation on the ENCODED values (0 at grey, full
+by 0.5 — `chromaWeight`), so a grey is bit-identical whatever the bands say;
+a hue shift (±30°, never past the next band) is rescaled to the luminance it
+had, so hue does not double as luminance; luminance is a gain (±1.5 stops at
+full colour); headroom above white is read on its colour and scaled back. It
+is in the Trips/Studio SHEET too, not only the tool: it is a global number of
+the develop record like the curve, and a mixer pasted or preset into a sheet
+that could not show it would render with no control to undo it — "the modals
+gain rendering, not panels" is about layers, masks and repair. Not built: the
+targeted tool (drag on the picture to move the band under the pointer).
+Verified headless: blue luminance −100 took a `70,130,220` sky to `43,83,144`
+with a red and a grey unmoved; red hue +100 turned `220,60,40` orange at the
+same luminance; ⌘Z undid it.
+
 ## Slider reset: a dot, bold and a dimmed ↺ — never hover-only (2026-09-20)
 
 **Decision (maintainer, from an artifact proposal comparing five variants).**

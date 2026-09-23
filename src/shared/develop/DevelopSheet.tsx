@@ -19,6 +19,7 @@ import DevelopCurve from './DevelopCurve';
 import { DevelopAutoSection, DevelopLevelsSection } from './DevelopAuto';
 import { whiteBalanceFor } from './auto-develop';
 import DevelopHistogram from './DevelopHistogram';
+import DevelopMixer from './DevelopMixer';
 import DevelopSliders from './DevelopSliders';
 import DevelopViewport, { DevelopCaption } from './DevelopViewport';
 import { useDevelopDraft, useTold } from './use-develop-draft';
@@ -264,6 +265,7 @@ export default function DevelopSheet({
               histogram={picture.histogram}
               onChange={(curves) => draft.patch({ curves })}
             />
+            <DevelopMixer value={draft.draft.mixer} onChange={(mixer) => draft.patch({ mixer })} />
             <DevelopPresetsSection
               presets={presets}
               draft={draft.draft}

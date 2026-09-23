@@ -10,6 +10,7 @@ import { developButtonClass } from '../../shared/develop/develop-classes';
 import { DevelopAutoSection, DevelopLevelsSection } from '../../shared/develop/DevelopAuto';
 import { whiteBalanceFor } from '../../shared/develop/auto-develop';
 import DevelopHistogram from '../../shared/develop/DevelopHistogram';
+import DevelopMixer from '../../shared/develop/DevelopMixer';
 import DevelopSliders from '../../shared/develop/DevelopSliders';
 import DevelopViewport from '../../shared/develop/DevelopViewport';
 import {
@@ -1676,6 +1677,7 @@ export default function PictureWorkbench({
                 histogram={picture.histogram}
                 onChange={(curves) => draft.patch({ curves })}
               />
+              <DevelopMixer value={draft.draft.mixer} onChange={(mixer) => draft.patch({ mixer })} />
               <DevelopPresetsSection
                 presets={presets}
                 draft={draft.draft}

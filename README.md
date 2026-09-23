@@ -975,7 +975,11 @@ same single LUT the grade already goes through, so the stage, the slide rail,
 the PNG deck and the hook clip all pick it up with nothing else to do. It
 belongs to **that slide**, like its framing: it is never inherited by the next
 picture, and ↺ puts it back to as shot. Every luminance move keeps hue and
-keeps a grey grey; only temperature and tint tint. On a JPEG or a Winnow proxy
+keeps a grey grey; only temperature and tint tint. Under the curve, the
+**colour mixer** moves eight bands of colour on their own — the hue, the
+saturation and the luminance of red, orange, yellow, green, aqua, blue,
+purple and magenta — so a blue sky can be darkened or a lawn calmed without
+touching a face; a grey is never moved, and a hue shift keeps its light. On a JPEG or a Winnow proxy
 the sheet says so — an 8-bit picture has nothing above white to give back;
 developing a RAW is what the next phases are for (`docs/photo-develop.md`).
 
