@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assetFiles, buildAssets } from './assets';
+import { assetFiles, buildAssets, captureFileType, hasRawSibling, siblingTypes } from './assets';
 import {
   assetUsableBy,
   selectedUsableAssets,
@@ -59,6 +59,22 @@ describe('buildAssets', () => {
     expect(assets[0].parts.siblings?.map((s) => s.name)).toEqual(['DJI_0001.DNG', 'DJI_0001.HIF']);
     expect(assets[0].size).toBe(80);
     expect(assetFiles(assets[0].parts).map((x) => x.name)).toEqual(['DJI_0001.JPG', 'DJI_0001.DNG', 'DJI_0001.HIF']);
+  });
+
+  it('says the capture’s other files by type, so a RAW beside its JPEG is never silent', () => {
+    const [dji] = buildAssets([f('DJI_0101.JPG'), f('DJI_0101.DNG')]);
+    expect(siblingTypes(dji.parts)).toEqual(['DNG']);
+    expect(hasRawSibling(dji.parts)).toBe(true);
+    // Added later, apart from its twin: still one asset, and still said.
+    const [sony] = buildAssets([f('DSC00200.JPG'), f('DSC00200.ARW'), f('DSC00200.HIF')]);
+    expect(siblingTypes(sony.parts)).toEqual(['ARW', 'HIF']);
+    const [heifOnly] = buildAssets([f('DSC00300.JPG'), f('DSC00300.HIF')]);
+    expect(hasRawSibling(heifOnly.parts)).toBe(false);
+    const [lone] = buildAssets([f('DSC00123.ARW')]);
+    expect(siblingTypes(lone.parts)).toEqual([]);
+    expect(captureFileType('a.jpeg')).toBe('JPEG');
+    expect(captureFileType('a.dng')).toBe('DNG');
+    expect(captureFileType('noext')).toBe('file');
   });
 
   it('has no siblings on a lone picture', () => {

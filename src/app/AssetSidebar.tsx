@@ -16,7 +16,7 @@ import { overrideTo, viewedSpan, type DayOverride } from '../shared/sources/scop
 import MediaActionRow from '../shared/ui/MediaActionRow';
 import { shortHost } from '../shared/sources/source-ledger';
 import { useAssetLibrary, type MediaMeta, useAssetMeta, useAssetMetaVersion } from '../shared/library/AssetLibraryContext';
-import { isRawImage, type Asset, type AssetKind } from '../shared/library/assets';
+import { hasRawSibling, isRawImage, siblingTypes, type Asset, type AssetKind } from '../shared/library/assets';
 import type { AssetDragItem } from '../shared/library/asset-drag';
 import { useAssetDragSource } from '../shared/library/use-asset-drag';
 import { assetRemoteId, splitAssetsBySource } from '../shared/library/asset-source';
@@ -1099,11 +1099,27 @@ function metaFacts(asset: Asset, meta: MediaMeta | undefined): string {
   const facts: string[] = [];
   if (meta.width && meta.height) facts.push(`${meta.width}×${meta.height}`);
   if (meta.isVideo && meta.duration) facts.push(formatDuration(meta.duration));
-  if (!meta.isVideo && meta.imageType) facts.push(meta.imageType);
+  // The capture's other files ride on its type — `JPEG + DNG` — because the
+  // RAW beside a JPEG is filed as the JPEG's sibling, and a row naming the
+  // JPEG alone made that RAW look ignored (`siblingTypes`).
+  if (!meta.isVideo && meta.imageType) facts.push([meta.imageType, ...siblingTypes(asset.parts)].join(' + '));
   const fps = fpsText(meta);
   if (fps) facts.push(fps);
   facts.push(formatBytes(asset.size));
   return facts.join(' · ');
+}
+
+/**
+ * The chip a picture's cover wears when a camera RAW sits beside it — `+DNG`,
+ * `+ARW` — so a capture shot RAW + JPEG says both halves at a glance, in the
+ * list and on a tile alike. Null for a lone file and for a JPEG + HEIF pair,
+ * whose second half is no material of its own.
+ */
+function pairTag(asset: Asset): string | null {
+  if (!hasRawSibling(asset.parts)) return null;
+  const raws = (asset.parts.siblings ?? []).filter((f) => isRawImage(f.name));
+  const types = siblingTypes({ siblings: raws });
+  return types.length ? `+${types.join('+')}` : null;
 }
 
 /**
@@ -1288,7 +1304,7 @@ function AssetRow({
         label={asset.baseName}
         fallback={isPhoto ? (meta?.imageType ?? '◇') : '▶'}
         thumbUrl={meta?.thumbUrl}
-        cadenceTag={cadenceTag}
+        cadenceTag={cadenceTag ?? (isPhoto ? pairTag(asset) : null)}
         fpsLabel={fpsLabel}
       />
       {/* The text column focuses this asset in the tool. Disabled for assets
@@ -1418,6 +1434,11 @@ function AssetTile({
       <span className="absolute inset-x-0 bottom-0 px-1 pb-[2px] pt-2 bg-gradient-to-b from-transparent to-[rgba(16,15,13,0.6)] font-mono text-3xs text-on-media truncate pointer-events-none">
         {asset.baseName}
       </span>
+      {!asset.parts.video && pairTag(asset) && (
+        <span className={`${scrim('top-[3px]')} pointer-events-none`} aria-hidden="true">
+          {pairTag(asset)}
+        </span>
+      )}
       {active && (
         <span
           className="absolute inset-0 rounded-[10px] border-2 border-accent pointer-events-none"

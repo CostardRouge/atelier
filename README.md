@@ -151,7 +151,9 @@ same variant rows — reframed, capped, overlays in or out
 A RAW file the browser cannot decode is kept in the library and says so in
 words, pointing at the JPEG or TIFF your developer can produce; where a RAW
 and its sidecar JPEG share a name, the pair is one photo and the decodable
-half is the one you see, whichever the folder happened to list first.
+half is the one you see, whichever the folder happened to list first. The row
+still names both — `JPEG + DNG`, and a `+DNG` chip on the cover — so a RAW
+added beside its JPEG is visibly there, and Develop opens it as the sensor.
 
 **Trim.** The scrub bar carries two handles: everything before the in point
 and after the out point greys out, and the playhead can only travel between
