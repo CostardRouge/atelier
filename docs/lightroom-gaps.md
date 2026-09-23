@@ -166,3 +166,45 @@ Two asks that came with the answers, both awaiting a proposal:
   the suite refuses to offer its own exports as a capture's rendition); and a
   checklist of what leaves — GPS, place, the camera's EXIF, the exposure
   triangle — grouped. He asked for a strategy.
+
+## 9. The proposal for those two asks (2026-09-23, awaiting his five answers)
+
+Interactive lab: <https://claude.ai/artifact/SgJpjQtNXF62Quott5ahkk> (*Delivery
+Lab*). Nothing below is decided.
+
+- **Which pictures leave** — a DELIVERY STATE stored on the picture:
+  `auto · yes · no`. `auto` follows a roll rule, recommended *edited pictures
+  leave* (`pictureEdits`); an explicit choice always wins. It is an output
+  instruction, not a rating: culling stays Winnow's. Set from a table in the
+  Export tab — the existing *picture by picture* run plan with a tick per row
+  and filters (all · edited · leaving · not yet exported) — plus a badge on
+  each filmstrip cell for the glance. A separate export sheet (Lightroom's
+  dialog) was drawn and not recommended: it hides the picture and doubles the
+  tab. Shift/⌘ marks gain *send / hold the marked*.
+- **What a file says** — the signature stays ALWAYS ON, decided here at his
+  invitation: `Software` is the conventional home (Lightroom writes its name
+  there) and `software-mark.ts` READS it to refuse the suite's own exports as
+  a capture's rendition, so a checkbox would reopen that bug. It is added to a
+  picture that carries no EXIF today (it leaves unsigned) and mirrored as
+  `xmp:CreatorTool`. Author and copyright are his IDENTITY, set once and
+  synced (`{year}` = the capture's year), written as `Artist` / `Copyright`
+  and `dc:creator` / `dc:rights`; title and caption are the PICTURE's
+  (`dc:title`, `dc:description`, `ImageDescription`; a variant has its own).
+  What leaves is a grouped checklist on the roll with three presets (All ·
+  Share online — no GPS, no serials · Minimal — rights only): camera · exposure
+  triangle · capture time · GPS · place · identifiers · title/caption ·
+  rights · signature (locked). **Place** is new and offline: the city from the
+  GPS through `public/geo/cities.json`, written as XMP even when the GPS stays.
+- **Two constraints the build must keep**: a block with every camera group kept
+  is COPIED whole (MakerNotes included); dropping one REBUILDS it from its
+  fields and the MakerNotes are lost — said in the panel. And a JPEG carries
+  ONE XMP packet: the Ultra HDR container already writes one, so the new
+  properties merge into it.
+- **Commits**: E1 the state + badge + rule, E2 the table, E3 (later) *changed
+  since last export*; M1 signature everywhere + rights, M2 title/caption + the
+  XMP merge, M3 the groups and presets, M4 the place.
+- **His five questions**: what leaves by default (edited, recommended · all ·
+  none); GPS by default (kept, recommended — he finds a picture by its
+  position); the copyright text; the signature (`Atelier` · with a version ·
+  with the site's address, which belongs in XMP rather than `Software`); and
+  where the state is set (table + badge recommended · table alone · sheet).
