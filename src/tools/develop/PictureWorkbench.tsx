@@ -11,6 +11,7 @@ import { DevelopAutoSection, DevelopLevelsSection } from '../../shared/develop/D
 import { whiteBalanceFor } from '../../shared/develop/auto-develop';
 import DevelopHistogram from '../../shared/develop/DevelopHistogram';
 import DevelopMixer from '../../shared/develop/DevelopMixer';
+import { straightMono } from '../../shared/develop/mixer';
 import DevelopGrading from '../../shared/develop/DevelopGrading';
 import DevelopSliders from '../../shared/develop/DevelopSliders';
 import DevelopViewport from '../../shared/develop/DevelopViewport';
@@ -1169,6 +1170,12 @@ export default function PictureWorkbench({
           copyDevelop(d.draft);
           say('copied');
           return;
+        case 'mono':
+          // Lightroom's V: the treatment flips; the colour mixer is kept either way.
+          e.preventDefault();
+          d.patch({ mono: d.draft.mono ? null : straightMono() });
+          say(d.draft.mono ? 'colour' : 'black and white');
+          return;
         case 'copy-settings':
           e.preventDefault();
           callbacks.current.onSettings();
@@ -1679,7 +1686,12 @@ export default function PictureWorkbench({
                 histogram={picture.histogram}
                 onChange={(curves) => draft.patch({ curves })}
               />
-              <DevelopMixer value={draft.draft.mixer} onChange={(mixer) => draft.patch({ mixer })} />
+              <DevelopMixer
+                value={draft.draft.mixer}
+                onChange={(mixer) => draft.patch({ mixer })}
+                mono={draft.draft.mono}
+                onMono={(mono) => draft.patch({ mono })}
+              />
               <DevelopGrading value={draft.draft.grading} onChange={(grading) => draft.patch({ grading })} />
               <DevelopPresetsSection
                 presets={presets}

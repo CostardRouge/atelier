@@ -45,7 +45,21 @@ import {
   type Levels,
   type ToneCurves,
 } from './curves';
-import { cloneMixer, describeMixer, isDefaultMixer, mixLinear, mixerOrNull, sameMixer, type ColourMixer } from './mixer';
+import {
+  cloneMixer,
+  cloneMono,
+  describeMixer,
+  describeMono,
+  isDefaultMixer,
+  mixLinear,
+  mixerOrNull,
+  monoLinear,
+  monoOrNull,
+  sameMixer,
+  sameMono,
+  type ColourMixer,
+  type MonoMix,
+} from './mixer';
 import {
   cloneGrading,
   describeGrading,
@@ -103,6 +117,13 @@ export interface DevelopSettings {
    */
   mixer?: ColourMixer | null;
   /**
+   * The BLACK-AND-WHITE treatment and its mix (`mixer.ts`, `MonoMix`): null
+   * is colour. While set, it takes the colour mixer's place — the mixer is
+   * kept, not applied — and colour grading still tints the grey after it,
+   * which is how a split tone is made.
+   */
+  mono?: MonoMix | null;
+  /**
    * Colour grading (`grading.ts`): a colour and a light for the shadows, the
    * midtones, the highlights and the whole picture — Lightroom's wheels —
    * after the mixer, as there. Optional, so nothing migrates.
@@ -142,7 +163,7 @@ export interface DevelopSettings {
 }
 
 /** The NUMERIC fields — a key a panel can draw as a slider. */
-export type DevelopKey = Exclude<keyof DevelopSettings, 'curves' | 'levels' | 'mixer' | 'grading' | 'base' | 'rawGain'>;
+export type DevelopKey = Exclude<keyof DevelopSettings, 'curves' | 'levels' | 'mixer' | 'mono' | 'grading' | 'base' | 'rawGain'>;
 
 /**
  * The rungs of the material ladder, lowest first. `proxy` is never stored —
@@ -267,6 +288,7 @@ export const DEFAULT_DEVELOP: Readonly<DevelopSettings> = Object.freeze({
   curves: null,
   levels: null,
   mixer: null,
+  mono: null,
   grading: null,
   base: null,
   rawGain: null,
@@ -285,6 +307,7 @@ export function isDefaultDevelop(d: DevelopSettings | null | undefined): boolean
     isDefaultCurves(d.curves) &&
     isDefaultLevels(d.levels) &&
     isDefaultMixer(d.mixer) &&
+    !d.mono &&
     isDefaultGrading(d.grading)
   );
 }
@@ -302,6 +325,7 @@ export function cloneDevelop(d: DevelopSettings | null | undefined): DevelopSett
   out.curves = cloneCurves(src.curves);
   out.levels = cloneLevels(src.levels);
   out.mixer = cloneMixer(src.mixer);
+  out.mono = cloneMono(src.mono);
   out.grading = cloneGrading(src.grading);
   return out;
 }
@@ -319,6 +343,7 @@ export function sameDevelop(a: DevelopSettings | null | undefined, b: DevelopSet
     sameCurves(x.curves, y.curves) &&
     sameLevels(x.levels, y.levels) &&
     sameMixer(x.mixer, y.mixer) &&
+    sameMono(x.mono, y.mono) &&
     sameGrading(x.grading, y.grading) &&
     isRawDevelop(x) === isRawDevelop(y) &&
     rawGainOf(x) === rawGainOf(y)
@@ -342,6 +367,7 @@ export function normaliseDevelop(raw: unknown): DevelopSettings {
   out.curves = curvesOrNull(normaliseCurves(src.curves));
   out.levels = levelsOrNull(normaliseLevels(src.levels));
   out.mixer = mixerOrNull(src.mixer);
+  out.mono = monoOrNull(src.mono);
   out.grading = gradingOrNull(src.grading);
   const base = normaliseBase(src.base);
   if (base) {
@@ -610,7 +636,10 @@ export function developLinear(
 
   // The colour mixer last, as in Lightroom: a band is picked on the colour
   // the pixel HAS once every global move is made.
-  if (d.mixer && !isDefaultMixer(d.mixer)) [r, g, b] = mixLinear([r, g, b], d.mixer);
+  // Black and white takes the mixer's PLACE: its eight bands become eight
+  // lights in grey, and the colour mixer waits, kept, for the colour to come back.
+  if (d.mono) [r, g, b] = monoLinear([r, g, b], d.mono);
+  else if (d.mixer && !isDefaultMixer(d.mixer)) [r, g, b] = mixLinear([r, g, b], d.mixer);
   // Then the wheels, which colour the RANGES of the picture as it now is.
   if (d.grading && !isDefaultGrading(d.grading)) [r, g, b] = gradeLinear([r, g, b], d.grading);
 
@@ -702,7 +731,9 @@ export function developLines(d: DevelopSettings | null | undefined): string[] {
   if (levels) parts.push(levels);
   const curves = describeCurves(d.curves);
   if (curves) parts.push(curves);
-  const mixer = describeMixer(d.mixer);
+  const mono = describeMono(d.mono);
+  const mixer = mono ? null : describeMixer(d.mixer);
+  if (mono) parts.push(mono);
   if (mixer) parts.push(mixer);
   const grading = describeGrading(d.grading);
   if (grading) parts.push(grading);

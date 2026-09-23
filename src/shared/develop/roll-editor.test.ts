@@ -148,6 +148,13 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'j', targetTypes: true }))).toBeNull();
   });
 
+  it('flips black and white on V, and leaves ⌘V to the paste', () => {
+    expect(editorKeyAction(press({ key: 'v' }))).toBe('mono');
+    expect(editorKeyAction(press({ key: 'V' }))).toBe('mono');
+    expect(editorKeyAction(press({ key: 'v', metaKey: true }))).toBe('paste');
+    expect(editorKeyAction(press({ key: 'v', repeat: true }))).toBeNull();
+  });
+
   it('answers `?` although it is a shifted key — every other shift chord is not ours', () => {
     // On most layouts `?` cannot be pressed WITHOUT shift, so the blanket
     // refusal would have made the help key unreachable.

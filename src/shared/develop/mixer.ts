@@ -259,3 +259,86 @@ export function describeMixer(m: ColourMixer | null | undefined): string | null 
   const used = MIXER_CHANNELS.filter((c) => m![c].some((v) => v !== 0)).map((c) => short[c]);
   return `mixer ${used.join('+')}`;
 }
+
+// --- black and white ----------------------------------------------------------
+
+/**
+ * BLACK AND WHITE with a channel mixer (audit item 18) — Lightroom's B&W
+ * treatment, whose mixer is the colour mixer's eight bands turned into eight
+ * LIGHTS: how bright each colour becomes in grey. A red shirt can go dark and
+ * a blue sky darker, the way a red filter on a film camera did.
+ *
+ * `mono` on a develop IS the treatment: null is colour, `{ mix }` is black and
+ * white, even with every band at 0 (a straight luminance conversion). While
+ * it is on, the colour mixer is kept but not applied — Lightroom's own
+ * behaviour, so switching back finds the colour work where it was.
+ */
+export interface MonoMix {
+  /** One per band in `MIXER_BANDS` order, −100..100: that colour's light in grey. */
+  mix: number[];
+}
+
+/** A band at ±100 moves its colour ±1.5 stops in grey — a red filter's worth. */
+export const MONO_REACH = 1.5;
+
+export function straightMono(): MonoMix {
+  return { mix: Array(8).fill(0) };
+}
+
+/** A stored treatment, read back safely: null for colour, a mix of eight clamped numbers otherwise. */
+export function monoOrNull(raw: unknown): MonoMix | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const list = (raw as Record<string, unknown>).mix;
+  const out = straightMono();
+  if (Array.isArray(list)) {
+    for (let i = 0; i < 8; i++) {
+      const v = list[i];
+      if (typeof v === 'number' && Number.isFinite(v)) out.mix[i] = Math.max(-100, Math.min(100, v));
+    }
+  }
+  return out;
+}
+
+export function cloneMono(m: MonoMix | null | undefined): MonoMix | null {
+  return m ? { mix: [...m.mix] } : null;
+}
+
+export function sameMono(a: MonoMix | null | undefined, b: MonoMix | null | undefined): boolean {
+  if (!a || !b) return !a && !b;
+  return a.mix.every((v, i) => v === b.mix[i]);
+}
+
+/** `mono` with one band's light set. */
+export function withMonoValue(m: MonoMix | null | undefined, band: MixerBand, value: number): MonoMix {
+  const next = cloneMono(m) ?? straightMono();
+  next.mix[MIXER_BANDS.indexOf(band)] = value;
+  return next;
+}
+
+/**
+ * One pixel in LINEAR light to grey: its luminance, times the light of the
+ * bands its hue sits in — weighted by how coloured it is, so a grey is its
+ * own luminance whatever the mix says, and a value above white is read on
+ * its colour like the mixer's.
+ */
+export function monoLinear(rgb: readonly [number, number, number], m: MonoMix): [number, number, number] {
+  const [r, g, b] = rgb;
+  const Y = LUM[0] * r + LUM[1] * g + LUM[2] * b;
+  const top = Math.max(r, g, b);
+  const scale = top > 1 ? top : 1;
+  const { hue, sat } = hueSat(fromLinear(r / scale, 'srgb'), fromLinear(g / scale, 'srgb'), fromLinear(b / scale, 'srgb'));
+  const reach = chromaWeight(sat);
+  let stops = 0;
+  if (reach > 0) {
+    const w = bandWeights(hue);
+    for (let i = 0; i < 8; i++) if (w[i]) stops += w[i] * m.mix[i];
+  }
+  const out = stops ? Y * Math.pow(2, (stops / 100) * MONO_REACH * reach) : Y;
+  return [out, out, out];
+}
+
+/** "B&W" or "B&W mix" — the treatment, and whether its mixer was touched. */
+export function describeMono(m: MonoMix | null | undefined): string | null {
+  if (!m) return null;
+  return m.mix.some((v) => v !== 0) ? 'B&W mix' : 'B&W';
+}

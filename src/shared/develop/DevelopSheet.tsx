@@ -266,7 +266,12 @@ export default function DevelopSheet({
               histogram={picture.histogram}
               onChange={(curves) => draft.patch({ curves })}
             />
-            <DevelopMixer value={draft.draft.mixer} onChange={(mixer) => draft.patch({ mixer })} />
+            <DevelopMixer
+              value={draft.draft.mixer}
+              onChange={(mixer) => draft.patch({ mixer })}
+              mono={draft.draft.mono}
+              onMono={(mono) => draft.patch({ mono })}
+            />
             <DevelopGrading value={draft.draft.grading} onChange={(grading) => draft.patch({ grading })} />
             <DevelopPresetsSection
               presets={presets}

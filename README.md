@@ -979,7 +979,10 @@ keeps a grey grey; only temperature and tint tint. Under the curve, the
 **colour mixer** moves eight bands of colour on their own — the hue, the
 saturation and the luminance of red, orange, yellow, green, aqua, blue,
 purple and magenta — so a blue sky can be darkened or a lawn calmed without
-touching a face; a grey is never moved, and a hue shift keeps its light.
+touching a face; a grey is never moved, and a hue shift keeps its light. Its
+**B&W** switch (or **V** in the Develop tool) turns the picture black and white
+and the same eight bands into eight lights in grey — a red filter's dark sky
+is blue −100 — while the colour mixer is kept for when colour comes back.
 Under it, **colour grading** has Lightroom's wheels: a colour and a light for
 the shadows, the midtones, the highlights and the whole picture — drag in a
 wheel (the angle is the hue, the distance how strongly it tints; the arrow

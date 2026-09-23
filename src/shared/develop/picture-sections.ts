@@ -25,7 +25,7 @@ export type PictureSection = PictureEdit;
 
 /** The sections in the inspector's own order, with what each carries. */
 export const PICTURE_SECTIONS: readonly { id: PictureSection; label: string; hint: string }[] = [
-  { id: 'develop', label: 'Develop', hint: 'exposure, tone, colour, curves, levels' },
+  { id: 'develop', label: 'Develop', hint: 'exposure, tone, colour, curves, levels, mixer, B&W, grading' },
   { id: 'look', label: 'Look', hint: 'LUTs, output transform, grain' },
   { id: 'crop', label: 'Crop', hint: 'aspect, framing, straighten, flip' },
   { id: 'border', label: 'Border', hint: 'the margin round the delivered picture' },

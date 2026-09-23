@@ -151,6 +151,7 @@ export type EditorKeyAction =
   | 'copy-settings'
   | 'paste-settings'
   | 'clipping'
+  | 'mono'
   | null;
 
 /**
@@ -173,7 +174,7 @@ const TAB_KEYS: Readonly<Record<string, WorkbenchTab>> = {
  * (`TAB_KEYS`, answered as `{ tab }`), `X` swaps the crop's orientation, ⇧C
  * crops to the zoomed view (the caller decides whether there is one), `H`
  * (or `?`) the shortcuts, `I` the facts over the picture, `J` the clipping
- * painted on it, `M` the mask's view
+ * painted on it, `V` black and white, `M` the mask's view
  * and `P` Pick / Paint (both on the Layers tab, the caller's rule), ⌘/Ctrl-C and -V
  * copy and paste the develop — the chord is read first, so ⌘C stays copy while
  * a bare `C` opens the crop. Delete or Backspace REMOVES what is selected on
@@ -223,6 +224,8 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   // `J` paints what is clipped over the picture — Lightroom's own letter, so
   // a hand that learnt it there finds it here.
   if (press.key === 'j' || press.key === 'J') return 'clipping';
+  // `V` flips colour ↔ black and white — Lightroom's letter again.
+  if (press.key === 'v' || press.key === 'V') return 'mono';
   // `P` and `M` mean two things, by where the author is (2026-09-23, the
   // maintainer's merge of #183 and #185): on the LAYERS tab they are the
   // mask's — `M` steps its view (hidden, outline, fill), `P` turns Pick or

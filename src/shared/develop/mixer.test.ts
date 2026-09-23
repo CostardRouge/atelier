@@ -10,6 +10,10 @@ import {
   isDefaultMixer,
   mixLinear,
   mixerOrNull,
+  monoLinear,
+  monoOrNull,
+  straightMono,
+  withMonoValue,
   withMixerValue,
   withoutMixerChannel,
   type ColourMixer,
@@ -121,5 +125,41 @@ describe('the develop record', () => {
     expect(m?.hue[0]).toBe(20);
     expect(withMixerValue(m, 'hue', 'red', 0)).toBeNull();
     expect(isDefaultMixer(withoutMixerChannel(m, 'hue'))).toBe(true);
+  });
+});
+
+describe('black and white', () => {
+  it('turns a picture grey at its own luminance with a straight mix', () => {
+    const out = monoLinear(sky, straightMono());
+    expect(out[0]).toBe(out[1]);
+    expect(out[1]).toBe(out[2]);
+    expect(out[0]).toBeCloseTo(Y(sky), 12);
+  });
+
+  it('darkens a blue sky in grey like a red filter, and leaves a grey as it was', () => {
+    const redFilter = withMonoValue(withMonoValue(null, 'blue', -100), 'red', 60);
+    expect(monoLinear(sky, redFilter)[0]).toBeLessThan(Y(sky) * 0.6);
+    const red = lin(220, 40, 30);
+    expect(monoLinear(red, redFilter)[0]).toBeGreaterThan(Y(red));
+    const grey = lin(128, 128, 128);
+    expect(monoLinear(grey, redFilter)[0]).toBeCloseTo(grey[0], 12);
+  });
+
+  it('is the treatment itself: a straight mix is NOT as shot, and the colour mixer waits', () => {
+    const colourWork = mixer('luminance', 'blue', -100);
+    const bw = { ...DEFAULT_DEVELOP, mixer: colourWork, mono: straightMono() };
+    expect(developOrNull({ ...DEFAULT_DEVELOP, mono: straightMono() })).not.toBeNull();
+    // Grey at the sky's OWN luminance: the blue −100 of the kept mixer is not applied.
+    expect(developLinear(sky, bw)[2]).toBeCloseTo(Y(sky), 12);
+    expect(describeDevelop(bw)).toBe('B&W');
+    expect(describeDevelop({ ...bw, mono: withMonoValue(null, 'red', 20) })).toBe('B&W mix');
+    expect(sameDevelop(bw, { ...bw, mono: null })).toBe(false);
+    expect(cloneDevelop(bw).mono).not.toBe(bw.mono);
+  });
+
+  it('reads a stored treatment safely', () => {
+    expect(monoOrNull(null)).toBeNull();
+    expect(monoOrNull({})).toEqual(straightMono());
+    expect(monoOrNull({ mix: [500, NaN, -3] })?.mix.slice(0, 3)).toEqual([100, 0, -3]);
   });
 });

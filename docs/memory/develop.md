@@ -367,6 +367,22 @@ Verified headless: blue luminance −100 took a `70,130,220` sky to `43,83,144`
 with a red and a grey unmoved; red hue +100 turned `220,60,40` orange at the
 same luminance; ⌘Z undid it.
 
+## Black and white takes the mixer's PLACE, and the mixer waits (2026-09-23, audit item 18)
+
+`DevelopSettings.mono` (`MonoMix` in `mixer.ts`): null is colour, `{ mix }`
+IS the treatment — a straight conversion at all zeros is NOT as shot
+(`isDefaultDevelop` says so, a document stores it). While set, `monoLinear`
+replaces `mixLinear` in `developLinear`: the pixel's luminance times the light
+of the bands its hue sits in (the mixer's `bandWeights` and `chromaWeight`,
+±1.5 stops), so a grey stays its own grey; the colour mixer is KEPT, not
+applied (Lightroom's behaviour — switching back finds the colour work), and
+grading runs after, so the wheels tint the grey (a split tone). UI: the
+Colour / B&W switch heads the mixer section, which then draws the eight
+lights; `V` flips it in the Develop tool (⌘V stays paste). Verified headless:
+V turned a `70,130,220` sky to `130` grey at its own luminance, red +60 /
+blue −100 took it to `84` and a red to `154`, a shadows wheel tinted the
+grey, Colour gave the picture back untouched.
+
 ## Colour grading is the stage after the mixer, three ranges that sum to 1 (2026-09-23, audit item 14)
 
 `grading.ts` (pure, tested) + `DevelopGrading.tsx`: `DevelopSettings.grading`

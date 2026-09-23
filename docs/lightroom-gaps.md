@@ -81,7 +81,7 @@ repeated here.
 | 15 | **Clipping overlay on the picture, RGB histogram, readout under the cursor** | **BUILT (pass 2)** — J or the strip's end words paint the clipping; R/G/B strip; 8-bit readout under the strip | S |
 | 16 | **Masks combined** (add / subtract / intersect), **colour range**, sky/background | one mask per layer; linear, radial, luma, brush, subject | M/L |
 | 17 | **White balance in Kelvin on a RAW** + presets (daylight, cloudy, shade…) | gains ±100, eyedropper | M — the decode knows the as-shot multipliers |
-| 18 | **B&W with a channel mixer** | a fixed film stock only | S |
+| 18 | **B&W with a channel mixer** | **BUILT (pass 3)** — `MonoMix` in `mixer.ts`, the treatment switch at the head of the mixer, `V`; the wheels tint the grey | S |
 | 19 | **Camera profiles** (DCP/ICC input, "camera matching") | absent; RAW colour is LibRaw's matrix | L |
 | 20 | **Lens profiles, auto Upright** | manual sliders, no profile *by decision* | M/L — see §7 |
 | 21 | **Sharpening detail + masking**, post-crop vignette | amount/radius only; lens vignette or a radial layer | S |
@@ -124,7 +124,8 @@ repeated here.
   is DONE.
 - **Pass 3 — the tools a daily edit reaches for:** 12, 13, 14, 18, 21, 17, 16.
   Started 2026-09-23: 12 (the colour mixer), 13 (texture, clarity,
-  dehaze) and 14 (the colour grading wheels) are BUILT.
+  dehaze), 14 (the colour grading wheels) and 18 (black and white with a
+  mixer) are BUILT.
 - **Pass 4 — output:** 28, 26, 25 (wide gamut).
 - **Pass 5 — workflow:** 29, 30, 31, 33, 32, 34.
 - Later, and each its own brief: 19, 20, 22, 24, 35.
