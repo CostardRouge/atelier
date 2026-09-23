@@ -39,10 +39,10 @@ repeated here.
    framing, aspect, border) and the remove confirm (`RollEditor.tsx`: develop,
    look, framing). An hour of heal spots or masks is removed without asking and
    the strip calls it as shot. One `isEdited(picture)` over every field. S.
-4. **Copy/paste carries the develop only** (`develop-clipboard.ts`). Look,
+4. **BUILT (pass 2)** — **Copy/paste carries the develop only** (`develop-clipboard.ts`). Look,
    crop, lens, keystone, detail, repair, layers: never. Lightroom's ⌘⇧C is a
    dialog of sections. M.
-5. **Batch verbs exist for four of nine groups** — develop, look, crop,
+5. **BUILT (pass 2, with 4)** — **Batch verbs exist for four of nine groups** — develop, look, crop,
    border. Lens, keystone and detail are exactly what is shared across a roll
    (one body, one lens, one sensor) and cannot be synced; the Crop tab's
    "Apply crop" leaves the keystone beside it behind. The sections picker of
@@ -117,7 +117,8 @@ repeated here.
   2026-09-23; 11 withdrawn.
 - **Pass 2 — the obvious for a Lightroom hand:** 4 + 5 (one sections picker
   for ⌘⇧C/⌘⇧V and every Apply-to), 6, 7, 8, 15, 27, 25 (sRGB tag). Started
-  2026-09-23: 27 came with M3, 25 (the sRGB tag) is BUILT.
+  2026-09-23: 27 came with M3, 25 (the sRGB tag) and 4+5 (the sections sheet,
+  ⌘⇧C / ⌘⇧V, apply to selected / others) are BUILT.
 - **Pass 3 — the tools a daily edit reaches for:** 12, 13, 14, 18, 21, 17, 16.
 - **Pass 4 — output:** 28, 26, 25 (wide gamut).
 - **Pass 5 — workflow:** 29, 30, 31, 33, 32, 34.

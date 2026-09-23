@@ -387,6 +387,22 @@ shared block. Rules a later phase must keep:
   exact identity against LittleCMS's own sRGB (Pillow's ImageCms, 2 197
   colours, 0 codes apart): check a profile change the same way. Wide gamut
   (P3, Adobe RGB) is pass 4 and needs a P3 canvas, not a tag.
+- **Copy, paste and Apply-to go through ONE picker of SECTIONS**
+  (2026-09-23, audit items 4+5, `develop/picture-sections.ts`,
+  `SettingsSheet.tsx`). The sections ARE `PictureEdit` — "edited" and "what can
+  be copied" one vocabulary. ⌘C/⌘V stay the develop numbers (shared with the
+  Trips/Studio modals); ⌘⇧C opens the sheet (and a ⚙ glyph in the stage-bar
+  well), ⌘⇧V pastes what was copied. The clipboard holds a SNAPSHOT of the
+  source picture, so pasting back onto that same picture restores it
+  (`applySections` skips the source only by IDENTITY, i.e. an apply-to).
+  Defaults: develop, look, lens, detail — what one body shares; crop, border,
+  perspective, repair and layers belong to one frame. Ticks remembered in
+  `localStorage` (a convenience). Never carried: rendition, RAW base
+  (`developOnto` keeps the TARGET's), words, delivery state. A ticked section
+  that is as shot at the source RESETS it on the targets — said in the sheet,
+  and each row marks `edited` / `as shot`. The per-tab Apply-to verbs stay for
+  the one-section gesture. ⌘⇧C replaced a test pinning it to nothing: ⇧C alone
+  is still crop-to-view.
 - **A picture's title and caption are the PICTURE's** (2026-09-23, M2):
   `RollPicture.title` / `caption`, stored trimmed and absent when empty
   (`wordsOf`, `setPictureWords` — the same roll back when nothing changed, so

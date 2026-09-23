@@ -92,6 +92,8 @@ import { DEFAULT_FRAMING, isDefaultFraming, sameFraming, type Framing } from '..
 import { describeKeyTarget, targetOwnsTyping } from '../../shared/media/transport-keys';
 import PanelHost from '../../shared/ui/PanelHost';
 import Segmented from '../../shared/ui/Segmented';
+import IconButton from '../../shared/ui/IconButton';
+import { Icons } from '../../shared/ui/icons';
 import type { OverflowItem } from '../../shared/ui/OverflowMenu';
 import StageZoomControl from '../../shared/ui/StageZoomControl';
 import { usePixelView } from '../../shared/ui/use-pixel-view';
@@ -232,6 +234,8 @@ export default function PictureWorkbench({
   onDeliver,
   deliveryTable = null,
   onWords,
+  onSettings,
+  onPasteSettings,
   emptyText = 'This picture is not in the Library — open its folder, or take it from its day on your Winnow. Its numbers can still be set.',
 }: {
   picture: RollPicture;
@@ -292,6 +296,10 @@ export default function PictureWorkbench({
   deliveryTable?: ReactNode;
   /** The picture's title and caption, written into its delivered file (M2). */
   onWords: (words: { title?: string; caption?: string }) => void;
+  /** Open the sections sheet — copy, paste, apply to others (`picture-sections.ts`); ⌘⇧C. */
+  onSettings: () => void;
+  /** Paste the copied sections onto this picture; ⌘⇧V. False when nothing is held. */
+  onPasteSettings: () => boolean;
   /** What the stage says while the picture's bytes are not in hand. */
   emptyText?: string;
 }) {
@@ -910,8 +918,8 @@ export default function PictureWorkbench({
   // copy changes the stored value without this editor's doing, and a draft that
   // ignored it would keep showing numbers the roll no longer holds — and write
   // them back over the step at the next nudge.
-  const callbacks = useRef({ onDevelop, onFraming, onKeystone, onLens, onDetail, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver });
-  callbacks.current = { onDevelop, onFraming, onKeystone, onLens, onDetail, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver };
+  const callbacks = useRef({ onDevelop, onFraming, onKeystone, onLens, onDetail, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings });
+  callbacks.current = { onDevelop, onFraming, onKeystone, onLens, onDetail, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings };
   const { replace } = draft;
   useWriteThrough<DevelopSettings>({
     stored: entry.develop,
@@ -1150,6 +1158,14 @@ export default function PictureWorkbench({
           e.preventDefault();
           copyDevelop(d.draft);
           say('copied');
+          return;
+        case 'copy-settings':
+          e.preventDefault();
+          callbacks.current.onSettings();
+          return;
+        case 'paste-settings':
+          if (!callbacks.current.onPasteSettings()) return;
+          e.preventDefault();
           return;
         case 'paste': {
           const pasted = pasteDevelop();
@@ -1506,6 +1522,16 @@ export default function PictureWorkbench({
             onReplace={draft.setDraft}
             onTold={tell}
           >
+            {!cropping && (
+              <IconButton
+                label="Copy, paste or apply settings"
+                title="Settings ⌘⇧C — copy this picture’s sections, paste them, or apply them to other pictures"
+                size={compact ? 'md' : 'sm'}
+                onClick={onSettings}
+              >
+                {Icons.settings}
+              </IconButton>
+            )}
             {source && !cropping && (
               <button
                 type="button"

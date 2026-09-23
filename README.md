@@ -1066,7 +1066,15 @@ as shot, **Z** goes closer and back, **⌘C / ⌘V** copy a develop from one
 picture to the next, and **Apply to N other pictures** writes it onto the rest
 of the roll, each as its own copy. **Shift-click** marks a range of the strip
 and **⌘/Ctrl-click** one picture, and the batch verbs then read the marks —
-*Apply to N selected*, *Paste to N selected*. A filmstrip cell shows the
+*Apply to N selected*, *Paste to N selected*. For more than the develop,
+**⌘⇧C** (or the ⚙ glyph above the picture) opens the picture's settings as
+**sections** — develop, look, crop, border, perspective, lens, detail, repair,
+layers — ticked like Lightroom's Copy Settings: **Copy** holds them, **⌘⇧V**
+pastes them onto the picture on screen, and *Apply to N selected / N other
+pictures* writes them across the roll. The develop, the look, the lens and the
+detail are ticked to start — what a roll shot with one body shares — and the
+ticks are remembered. A picture's file, its RAW base, its title and caption and
+whether it leaves are never carried. A filmstrip cell shows the
 picture as it was last seen in the editor — developed and cropped — and a dot
 marks what is developed. On a phone the picture and the strip share the
 screen and the three tabs open from the bottom bar.

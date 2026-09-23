@@ -75,6 +75,15 @@ import PictureWorkbench, { DEFAULT_BRUSH_TOOL, type BrushTool, type DeliverActio
 import { DEFAULT_REPAIR_TOOL, type RepairTool } from './RepairPanel';
 import { useLutInterpolation } from '../../shared/lut/use-lut-interpolation';
 import { useExportMarks } from './use-export-marks';
+import SettingsSheet from './SettingsSheet';
+import {
+  PICTURE_SECTIONS,
+  applySections,
+  copiedSettings,
+  copySettings,
+  subscribeCopiedSettings,
+  type PictureSection,
+} from '../../shared/develop/picture-sections';
 import { exportState, needsExport } from '../../shared/develop/export-marks';
 import { useRollExport } from './use-roll-export';
 import { useRollGrade } from './use-roll-grade';
@@ -636,6 +645,37 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [update],
   );
   const canPaste = useSyncExternalStore(subscribeDevelopClipboard, hasCopiedDevelop);
+  // --- the sections: ⌘⇧C / ⌘⇧V and "apply to others" for any part of a picture
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const copied = useSyncExternalStore(subscribeCopiedSettings, copiedSettings);
+  const sectionNames = (sections: readonly PictureSection[]) =>
+    sections.map((id) => PICTURE_SECTIONS.find((x) => x.id === id)?.label.toLowerCase()).join(', ');
+  const copySectionsOf = useCallback(
+    (sections: PictureSection[]) => {
+      const p = latest.current.pictures.find((x) => x.id === openIdRef.current);
+      if (!p) return;
+      copySettings(p, sections);
+      setNotice(`copied ${sectionNames(sections)}`);
+    },
+    [],
+  );
+  const pasteSections = useCallback((): boolean => {
+    const held = copiedSettings();
+    const id = openIdRef.current;
+    if (!held || !id) return false;
+    update((r) => applySections(r, held.from, [id], held.sections));
+    setNotice(`pasted ${sectionNames(held.sections)} from ${held.from.ref.name}`);
+    return true;
+  }, [update]);
+  const applySectionsTo = useCallback(
+    (ids: readonly string[], sections: PictureSection[]) => {
+      const source = latest.current.pictures.find((x) => x.id === openIdRef.current);
+      if (!source) return;
+      update((r) => applySections(r, r.pictures.find((x) => x.id === source.id) ?? source, ids, sections));
+      setNotice(`${sectionNames(sections)} applied to ${ids.length} picture${ids.length === 1 ? '' : 's'}`);
+    },
+    [update],
+  );
   // "The others" are the pictures still in the roll's WORK: an ignored one is
   // never written by an Apply-to-all (`docs/lightroom-gaps.md` §10) — a picture
   // the author marked explicitly still is.
@@ -946,6 +986,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onStep={step}
               onDeliver={(action) => handleDeliver(open.id, action)}
               onWords={(words) => handleWords(open.id, words)}
+              onSettings={() => setSettingsOpen(true)}
+              onPasteSettings={pasteSections}
               deliveryTable={
                 <DeliveryTable
                   pictures={roll.pictures}
@@ -1130,6 +1172,18 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         />
       )}
 
+      {settingsOpen && open && (
+        <SettingsSheet
+          picture={open}
+          copied={copied}
+          selectedIds={selectionTargets.filter((id) => !roll.pictures.find((p) => p.id === id && isIgnored(p)))}
+          otherIds={otherIds}
+          onCopy={copySectionsOf}
+          onPaste={() => void pasteSections()}
+          onApply={applySectionsTo}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
       {confirmRemove && (
         <ConfirmDialog
           title={`Take ${confirmRemove.ref.name} off the roll?`}

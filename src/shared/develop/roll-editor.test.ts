@@ -96,13 +96,20 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'm', targetTypes: true }))).toBeNull();
   });
 
+  it('opens the sections on ⌘⇧C and pastes them on ⌘⇧V, never over a text selection', () => {
+    expect(editorKeyAction(press({ key: 'C', metaKey: true, shiftKey: true }))).toBe('copy-settings');
+    expect(editorKeyAction(press({ key: 'v', ctrlKey: true, shiftKey: true }))).toBe('paste-settings');
+    expect(editorKeyAction(press({ key: 'c', metaKey: true, shiftKey: true, hasSelection: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'c', metaKey: true, shiftKey: true, targetTypes: true }))).toBeNull();
+  });
+
   it('yields to a field, a selection, a held key and other chords', () => {
     expect(editorKeyAction(press({ key: 'ArrowLeft', targetTypes: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'c', metaKey: true, hasSelection: true }))).toBeNull();
     expect(editorKeyAction(press({ key: '\\', repeat: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'z', metaKey: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'ArrowRight', shiftKey: true }))).toBeNull();
-    expect(editorKeyAction(press({ key: 'c', metaKey: true, shiftKey: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'x', metaKey: true, shiftKey: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'q' }))).toBeNull();
   });
 
@@ -148,7 +155,8 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'C', shiftKey: true }))).toBe('crop-view');
     expect(editorKeyAction(press({ key: 'c', shiftKey: true }))).toBe('crop-view');
     expect(editorKeyAction(press({ key: 'C', shiftKey: true, repeat: true }))).toBeNull();
-    expect(editorKeyAction(press({ key: 'C', shiftKey: true, metaKey: true }))).toBeNull();
+    // With ⌘ it is the settings' copy, never the crop.
+    expect(editorKeyAction(press({ key: 'C', shiftKey: true, metaKey: true }))).toBe('copy-settings');
     expect(editorKeyAction(press({ key: 'C', shiftKey: true, targetTypes: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'c' }))).toEqual({ tab: 'crop' });
   });

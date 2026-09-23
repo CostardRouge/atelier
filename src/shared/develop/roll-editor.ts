@@ -148,6 +148,8 @@ export type EditorKeyAction =
   | 'deliver'
   | 'deliver-auto'
   | 'ignore'
+  | 'copy-settings'
+  | 'paste-settings'
   | null;
 
 /**
@@ -182,7 +184,15 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   if (press.targetTypes || press.altKey) return null;
   const mod = press.metaKey || press.ctrlKey;
   if (mod) {
-    if (press.shiftKey) return null;
+    if (press.shiftKey) {
+      // ⌘⇧C / ⌘⇧V: the SECTIONS, Lightroom's chord (`picture-sections.ts`) —
+      // ⌘C / ⌘V below stay the develop numbers, shared with the modals.
+      const k = press.key.toLowerCase();
+      if (press.repeat) return null;
+      if (k === 'c') return press.hasSelection ? null : 'copy-settings';
+      if (k === 'v') return 'paste-settings';
+      return null;
+    }
     const k = press.key.toLowerCase();
     if (k === 'c') return press.hasSelection ? null : 'copy';
     if (k === 'v') return 'paste';
