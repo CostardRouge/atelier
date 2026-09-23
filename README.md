@@ -1156,6 +1156,18 @@ leaves, **←/→** step over it, "apply to the other pictures" leaves it alone,
 the strip dims it or hides it, and a click still opens it. None of this is a
 rating — culling stays Winnow's.
 
+**What a file says.** A delivered JPEG carries the original's EXIF (below), and
+the **Metadata** section of the Export tab adds what is yours. Every file is
+**signed** — `Software` in its EXIF and `xmp:CreatorTool` in its XMP say
+*Atelier*, even a picture nothing else is known about; it is also how the suite
+recognises its own exports beside the originals, so it is not a switch. Give a
+**creator** once and every file carries it as `Artist` / `dc:creator`, with a
+**copyright** line (`© {year} {creator}. All rights reserved.` by default,
+`{year}` being the year the picture was TAKEN) as `Copyright` / `dc:rights`,
+over whatever the camera wrote. Both are kept with your presets, so another
+device signs the same way; nothing is written until a name is given. The file
+holds ONE XMP packet — an Ultra HDR export folds these into its own.
+
 **Exporting.** The **Export** tab writes JPEGs — this picture, the marked
 ones, or every picture that leaves — into a folder you choose (downloaded one
 by one where the browser has no folder picker). Each is decoded at its own size,

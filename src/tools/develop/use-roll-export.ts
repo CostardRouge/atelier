@@ -19,6 +19,7 @@ import { deliverFilesTo, pickDeliveryTarget } from '../../shared/sources/deliver
 import { uniqueName } from '../../shared/sources/unique-name';
 import { EXIF_SLICE_BYTES } from '../../shared/exif/exif-parser';
 import { exportExifBlock, stampExif, type ExifAccount } from '../../shared/exif/stamp-exif';
+import { useDeliveryIdentity } from '../../shared/develop/use-preset-book';
 import { heldOriginal, heldVersion, holdOriginal, subscribeHeld } from '../../shared/sources/original-cache';
 import { formatBytes } from '../../shared/lib/format';
 import {
@@ -122,8 +123,11 @@ export function useRollExport({
   const [exporting, setExporting] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [lastRun, setLastRun] = useState<RollRun | null>(null);
-  const latest = useRef({ roll, files, fileFor, interpolation, siblingsOf, proxiesOnly });
-  latest.current = { roll, files, fileFor, interpolation, siblingsOf, proxiesOnly };
+  // Who signs the files (`exif/delivery-meta.ts`), read at the moment a run
+  // stamps each one — the book it lives in may still be loading at mount.
+  const identity = useDeliveryIdentity();
+  const latest = useRef({ roll, files, fileFor, interpolation, siblingsOf, proxiesOnly, identity });
+  latest.current = { roll, files, fileFor, interpolation, siblingsOf, proxiesOnly, identity };
 
   // What the run will deliver, picture by picture, before a byte is fetched.
   // Re-planned whenever the session holds something new — the stage fetching
@@ -461,7 +465,7 @@ export function useRollExport({
           // its account is kept here for the run's sentence.
           const stamped: { account: ExifAccount } = { account: 'none' };
           const stamp = async (jpeg: Blob, delivered: PictureSize) => {
-            const exif = exportExifBlock(head, origin?.exif ?? null, delivered);
+            const exif = exportExifBlock(head, origin?.exif ?? null, delivered, { identity: latest.current.identity });
             stamped.account = exif.account;
             return stampExif(jpeg, exif, delivered);
           };
@@ -526,7 +530,7 @@ export function useRollExport({
               `${picture.ref.name} took its EXIF from ${origin?.sourceId ?? 'the source'}’s record — the original was out of reach, so no body or lens`,
             );
           } else if (stamped.account === 'none') {
-            failures.push(`${picture.ref.name} carries no EXIF — nothing is known about the picture it came from`);
+            failures.push(`${picture.ref.name} carries no camera EXIF — nothing is known about the picture it came from, only the signature is written`);
           }
           const blob = out.blob;
           const name = uniqueName(exportName(picture.ref.name), (c) => named.has(c.toLowerCase()));

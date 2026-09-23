@@ -359,6 +359,22 @@ shared block. Rules a later phase must keep:
   says `Software: Atelier` (since 2026-09-21, the copied one included) — the
   mark that keeps an export sitting beside its original from being offered as
   the camera's file (`renditions.md`, R1b).
+- **Every delivered file is SIGNED, and carries the author's rights**
+  (2026-09-23, M1 of `docs/lightroom-gaps.md` §9). The signature is not a
+  switch: `software-mark.ts` READS it to refuse the suite's own exports as a
+  capture's rendition, so a picture with NO account now leaves with a block of
+  the signature alone (it used to leave bare) plus `xmp:CreatorTool`. The
+  identity (`creator` + a copyright TEMPLATE, `exif/delivery-meta.ts`) lives on
+  the PRESET BOOK (`PresetBook.identity`), because the book is the one personal
+  document every device already finds; `mergeBooks` keeps the edited copy's.
+  No default name — the site is public, so his name is nobody's default; the
+  template's `{year}` is the CAPTURE year (`captureYear`, the export's own
+  when unknown). Written over the camera's `Artist`/`Copyright` (an in-camera
+  owner string is not the author), in EXIF AND XMP: EXIF ASCII is now written
+  and read as UTF-8 (a `©` came out `)` through the old 7-bit mask), and the
+  XMP is ONE packet — `withXmpPacket` replaces, and `wrapUltraHdr` takes the
+  stamp's packet OUT of the base and folds its `rdf:Description` into the
+  container's, since two packets in one file is what readers disagree about.
 - **The workbench holds TWO files since 2026-09-21: the picture's, and the one
   on the stage** (`renditions.md`, «R3a is BUILT»). `file` stays what the
   picture IS — its identity, its origin, its EXIF, what the export hook

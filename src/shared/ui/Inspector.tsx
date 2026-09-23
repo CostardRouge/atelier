@@ -304,7 +304,7 @@ export function ToggleField({ checked, onChange, label, children }: ToggleFieldP
 // inspector in the suite is a `position: fixed` sheet, the one place a raw
 // breakpoint still belongs — and because these are recipe strings, not
 // components.
-const fieldClass =
+export const fieldClass =
   'w-full min-w-0 font-sans text-sm max-[820px]:text-base h-[2.125rem] px-3 border border-line-strong rounded-control bg-surface text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-45';
 const selectClass =
   'w-full appearance-none font-sans text-sm max-[820px]:text-base h-[2.125rem] pl-3 pr-9 border border-line-strong rounded-control bg-surface text-ink truncate cursor-pointer focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20';

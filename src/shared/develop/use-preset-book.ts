@@ -20,8 +20,10 @@ import {
   mergeTripPresets,
   removePresetFromBook,
   savePresetInBook,
+  withIdentity,
   type PresetBook,
 } from './preset-book';
+import { EMPTY_IDENTITY, type DeliveryIdentity } from '../exif/delivery-meta';
 import {
   PRESET_BOOK_KIND,
   bookRemoteFor,
@@ -239,6 +241,14 @@ export async function removeFromPresetBook(id: string) {
   if (next !== state.book) await commit(next);
 }
 
+/** Sign delivered pictures as `identity` — written to the book, and so to every device that finds it. */
+export async function setDeliveryIdentity(identity: DeliveryIdentity) {
+  await ensurePresetBook();
+  if (!state.book) return;
+  const next = withIdentity(state.book, identity);
+  if (next !== state.book) await commit(next);
+}
+
 /**
  * Keep the book on another source — the person's gesture, never automatic.
  * Onto an instance that already holds this account's book (another device put
@@ -338,4 +348,10 @@ export function usePresetBookHost(): DevelopPresets {
       },
     };
   }, [book, record, connections]);
+}
+
+/** Who signs a delivered picture, live — the empty identity until the book has loaded or one is written. */
+export function useDeliveryIdentity(): DeliveryIdentity {
+  const { book } = usePresetBook();
+  return book?.identity ?? EMPTY_IDENTITY;
 }

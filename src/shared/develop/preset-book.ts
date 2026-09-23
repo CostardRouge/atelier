@@ -19,6 +19,7 @@
 import { normaliseDevelopPresets, type DevelopPreset, type DevelopSettings } from './develop';
 import { removePresetFrom, savePresetIn } from './develop-presets';
 import { DEFAULT_SOURCE_ID } from '../sources/source';
+import { readIdentity, type DeliveryIdentity } from '../exif/delivery-meta';
 
 export const PRESET_BOOK_VERSION = 1;
 
@@ -35,6 +36,13 @@ export interface PresetBook {
    * merge runs once per trip, on whichever device meets the trip first.
    */
   mergedTripIds: string[];
+  /**
+   * Who signs a delivered picture (`exif/delivery-meta.ts`): the name and the
+   * copyright line, set once and kept HERE because the book is the one
+   * personal document every device already finds — so a phone's export signs
+   * the way the desktop's does. Absent until the person writes one.
+   */
+  identity?: DeliveryIdentity;
 }
 
 export function createPresetBook(id: string, now: number = Date.now(), sourceId: string = DEFAULT_SOURCE_ID): PresetBook {
@@ -61,7 +69,16 @@ export function readPresetBook(raw: unknown, fallbackSourceId: string = DEFAULT_
     updatedAt: typeof b.updatedAt === 'number' && Number.isFinite(b.updatedAt) ? b.updatedAt : 0,
     presets,
     mergedTripIds: Array.isArray(b.mergedTripIds) ? b.mergedTripIds.filter((x): x is string => typeof x === 'string') : [],
+    ...(b.identity !== undefined && b.identity !== null ? { identity: readIdentity(b.identity) } : {}),
   };
+}
+
+/** The book signing with `identity`; the same book back when nothing changed. */
+export function withIdentity(book: PresetBook, identity: DeliveryIdentity, now: number = Date.now()): PresetBook {
+  const next = readIdentity(identity);
+  const current = book.identity;
+  if (current && current.creator === next.creator && current.copyright === next.copyright) return book;
+  return { ...book, identity: next, updatedAt: now };
 }
 
 /** Save under a name — the list rules are `savePresetIn`'s; the same book back when nothing changed. */
@@ -144,6 +161,8 @@ export function mergeBooks(local: PresetBook, server: PresetBook, now: number = 
     updatedAt: now,
     presets,
     mergedTripIds: [...new Set([...server.mergedTripIds, ...local.mergedTripIds])],
+    // One identity, not a list: the copy being edited wins, as a same-named preset does.
+    ...((local.identity ?? server.identity) ? { identity: local.identity ?? server.identity } : {}),
   };
 }
 

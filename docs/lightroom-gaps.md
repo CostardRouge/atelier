@@ -226,6 +226,12 @@ checkbox alone — his words: a box is too small a target, on a phone above all.
 its keys, the Export tab's table, the filmstrip badges (`develop-roll.md`,
 «Which pictures LEAVE is one field on the picture»). M1–M4 and E4 are next.
 
+**M1 BUILT 2026-09-23** — every file signed (a picture with no EXIF included,
+EXIF + `xmp:CreatorTool`), the creator and copyright an identity on the preset
+book with no default name (the site is public), `{year}` the capture's year,
+EXIF text in UTF-8, and ONE XMP packet folded into the Ultra HDR container's
+(`develop-roll.md`, «Every delivered file is SIGNED»).
+
 **Proposed then, accepted as drawn** (his idea, drawn in the lab): an **ignored** state.
 Recommended as the FOURTH value of the one delivery field —
 `auto · yes · no · ignore` — never a second flag beside it, so no combination

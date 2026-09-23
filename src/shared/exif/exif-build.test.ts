@@ -149,3 +149,21 @@ describe('buildOrientationBlock — the one block that does NOT say 1', () => {
     expect(jpeg.length).toBe(bareJpeg().length + 26 + 6 + 2 + 2);
   });
 });
+
+describe('buildExifBlock — the author’s text', () => {
+  it('writes UTF-8 and reads it back, a © included', () => {
+    const block = buildExifBlock({ make: 'DJI' }, { artist: 'Stéeve', copyright: '© 2026 Stéeve. All rights reserved.', description: 'Été' });
+    const read = parseExif(block.buffer);
+    expect(read.artist).toBe('Stéeve');
+    expect(read.copyright).toBe('© 2026 Stéeve. All rights reserved.');
+    expect(read.imageDescription).toBe('Été');
+  });
+
+  it('keeps the capture’s own values unless told otherwise, and clears them on null', () => {
+    const exif = { make: 'DJI', artist: 'owner', copyright: 'owner ©' };
+    expect(parseExif(buildExifBlock(exif).buffer).copyright).toBe('owner ©');
+    const cleared = parseExif(buildExifBlock(exif, { artist: null, copyright: null }).buffer);
+    expect(cleared.artist).toBeUndefined();
+    expect(cleared.copyright).toBeUndefined();
+  });
+});

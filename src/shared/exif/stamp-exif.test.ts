@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { buildExifBlock } from './exif-build';
-import { withExifBlock } from './exif-block';
+import { readXmpPacket, withExifBlock } from './exif-block';
 import { parseExif, type ExifData } from './exif-parser';
 import { exifAccountText, exportExifBlock, stampExif } from './stamp-exif';
+
+const me = { creator: 'Steeve Pommier', copyright: '© {year} {creator}. All rights reserved.' };
 
 const delivered = { width: 1920, height: 1440 };
 
@@ -97,10 +99,50 @@ describe('exportExifBlock', () => {
     expect(read.make).toBeUndefined();
   });
 
-  it('writes nothing for a picture nothing is known about', () => {
-    expect(exportExifBlock(null, null, delivered)).toEqual({ block: null, account: 'none' });
+  it('still SIGNS a picture nothing is known about — a block of the signature alone', () => {
+    const none = exportExifBlock(null, null, delivered);
+    expect(none.account).toBe('none');
+    const read = parseExif(none.block!.buffer);
+    expect(read.software).toBe('Atelier');
+    expect(read.make).toBeUndefined();
+    expect(read.gps).toBeUndefined();
+    expect(none.xmp).toContain('xmp:CreatorTool="Atelier"');
     expect(exportExifBlock(canvasJpeg(), null, delivered).account).toBe('none');
     expect(exportExifBlock(new Uint8Array(0), {}, delivered).account).toBe('none');
+  });
+
+  it('writes no rights until the author has a name', () => {
+    const chosen = exportExifBlock(cameraJpeg(capture), null, delivered, { identity: { creator: '  ', copyright: me.copyright } });
+    expect(chosen.rights).toEqual({ creator: null, copyright: null });
+    expect(parseExif(chosen.block!.buffer).copyright).toBeUndefined();
+    expect(chosen.xmp).not.toContain('dc:rights');
+  });
+
+  it('signs with the CAPTURE’s year, on every account', () => {
+    const author = { identity: me, fallbackYear: 2031 };
+    for (const chosen of [
+      exportExifBlock(cameraJpeg(capture), null, delivered, author),
+      exportExifBlock(dngHead(capture), null, delivered, author),
+      exportExifBlock(null, capture, delivered, author),
+    ]) {
+      const read = parseExif(chosen.block!.buffer);
+      expect(read.artist).toBe('Steeve Pommier');
+      expect(read.copyright).toBe('© 2026 Steeve Pommier. All rights reserved.');
+      expect(chosen.xmp).toContain('<dc:creator><rdf:Seq><rdf:li>Steeve Pommier</rdf:li></rdf:Seq></dc:creator>');
+      expect(chosen.xmp).toContain('© 2026 Steeve Pommier. All rights reserved.');
+    }
+    // No capture time: the export's own year.
+    const none = exportExifBlock(null, null, delivered, author);
+    expect(parseExif(none.block!.buffer).copyright).toBe('© 2031 Steeve Pommier. All rights reserved.');
+  });
+
+  it('writes the author over the camera’s own owner setting, and keeps the maker’s block around it', () => {
+    const owned = cameraJpeg({ ...capture, artist: 'CAMERA OWNER', copyright: 'x' });
+    const read = parseExif(exportExifBlock(owned, null, delivered, { identity: me }).block!.buffer);
+    expect(read.artist).toBe('Steeve Pommier');
+    expect(read.copyright).toBe('© 2026 Steeve Pommier. All rights reserved.');
+    expect(read.model).toBe('FC8482');
+    expect(read.software).toBe('Atelier');
   });
 });
 
@@ -114,10 +156,14 @@ describe('stampExif', () => {
     expect(out.type).toBe('image/jpeg');
   });
 
-  it('leaves a picture with nothing to say untouched', async () => {
+  it('signs a picture with nothing else to say, in the EXIF and the XMP', async () => {
     const jpeg = new Blob([canvasJpeg()], { type: 'image/jpeg' });
-    const out = await stampExif(jpeg, { block: null, account: 'none' }, delivered);
-    expect(out).toBe(jpeg);
+    const out = new Uint8Array(await (await stampExif(jpeg, exportExifBlock(null, null, delivered, { identity: me }), delivered)).arrayBuffer());
+    expect(parseExif(out.buffer).software).toBe('Atelier');
+    expect(parseExif(out.buffer).artist).toBe('Steeve Pommier');
+    const xmp = readXmpPacket(out)!;
+    expect(xmp).toContain('xmp:CreatorTool="Atelier"');
+    expect(xmp).toContain('<rdf:li>Steeve Pommier</rdf:li>');
   });
 
   it('rebuilds rather than drops a block no segment could hold', async () => {
@@ -127,7 +173,7 @@ describe('stampExif', () => {
     huge.set(buildExifBlock(capture), 0);
     const out = await stampExif(
       new Blob([canvasJpeg()], { type: 'image/jpeg' }),
-      { block: huge, account: 'block' },
+      { block: huge, account: 'block', rights: { creator: null, copyright: null }, xmp: '' },
       delivered,
     );
     const read = parseExif(await out.arrayBuffer());
@@ -141,6 +187,6 @@ describe('exifAccountText', () => {
     expect(exifAccountText('block')).toMatch(/copied whole/);
     expect(exifAccountText('fields')).toMatch(/rebuilt/);
     expect(exifAccountText('vouched')).toMatch(/the source knows/);
-    expect(exifAccountText('none')).toMatch(/no EXIF/);
+    expect(exifAccountText('none')).toMatch(/no camera EXIF/);
   });
 });

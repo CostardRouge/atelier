@@ -9,6 +9,9 @@ import { formatBytes } from '../../shared/lib/format';
 import { heldCeilingBytes } from '../../shared/sources/original-cache';
 import type { RollRun } from './use-roll-export';
 import type { ReactNode } from 'react';
+import MetadataSection from './MetadataSection';
+import type { ExifData } from '../../shared/exif/exif-parser';
+import { useDeliveryIdentity, setDeliveryIdentity } from '../../shared/develop/use-preset-book';
 
 const HDR_STOPS: readonly { id: string; label: string }[] = [
   { id: '1', label: '1 stop' },
@@ -64,6 +67,7 @@ export default function ExportPanel({
   note,
   hdrRun = null,
   pictures = null,
+  openExif = null,
 }: {
   settings: RollExport;
   onSettings: (patch: Partial<RollExport>) => void;
@@ -81,8 +85,11 @@ export default function ExportPanel({
   hdrRun?: RollRun['hdr'];
   /** Which pictures leave, one row each (`DeliveryTable`) — the editor builds it, since it holds the roll. */
   pictures?: ReactNode;
+  /** The open picture's effective EXIF — the Metadata section previews against it. */
+  openExif?: ExifData | null;
 }) {
   const { quality } = ROLL_EXPORT_LIMITS;
+  const identity = useDeliveryIdentity();
   return (
     <>
       <InspectorSection
@@ -98,8 +105,9 @@ export default function ExportPanel({
             <p>
               A picture leaves carrying the ORIGINAL’s EXIF — its position, its body, its lens, the
               hour it was taken — whatever its pixels were taken from, so a file developed on a proxy
-              still reads like the capture. Only three tags are corrected: the way up, the size, and
-              the thumbnail, which would otherwise show the picture before you developed it.
+              still reads like the capture. Only a few tags are corrected: the way up, the size, the
+              thumbnail, which would otherwise show the picture before you developed it — and what
+              the Metadata section below writes.
             </p>
             <p>
               Which pixels a picture leaves from is the picture’s own answer, chosen above the
@@ -203,6 +211,8 @@ export default function ExportPanel({
           {pictures}
         </InspectorSection>
       )}
+
+      <MetadataSection identity={identity} onIdentity={(next) => void setDeliveryIdentity(next)} openExif={openExif} />
 
       <InspectorSection
         id="develop.hdr"

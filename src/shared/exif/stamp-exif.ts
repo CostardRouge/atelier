@@ -24,14 +24,18 @@
  *
  * Whichever account, the block says `Software: Atelier` — the mark
  * `software-mark.ts` reads, so a file this suite wrote is never taken for the
- * camera's own rendition of the picture it sits beside.
+ * camera's own rendition of the picture it sits beside. Since M1 (2026-09-23)
+ * that holds with NO account too: a picture nobody knows anything about still
+ * leaves signed, in a block of its own and in an XMP packet, and the author's
+ * rights (`delivery-meta.ts`) are written over whatever the capture said.
  *
  * Only `stampExif` touches a `Blob`; the choice itself is pure.
  */
 
 import { buildExifBlock } from './exif-build';
-import { readExifBlock, retagExifBlock, withExifBlock } from './exif-block';
+import { readExifBlock, retagExifBlock, withExifBlock, withXmpPacket } from './exif-block';
 import { isEmptyExif, parseExif, type ExifData } from './exif-parser';
+import { captureYear, deliveryXmp, resolveRights, type DeliveryIdentity, type DeliveryRights } from './delivery-meta';
 import { mergeExif } from './merge-exif';
 import { ATELIER_SOFTWARE } from './software-mark';
 
@@ -39,9 +43,25 @@ import { ATELIER_SOFTWARE } from './software-mark';
 export type ExifAccount = 'block' | 'fields' | 'vouched' | 'none';
 
 export interface ExportExif {
-  /** What to write, or null when nothing is known about the picture. */
+  /**
+   * What to write. Never null since every file is signed: with no account it
+   * is a block holding the signature and the rights alone.
+   */
   block: Uint8Array<ArrayBuffer> | null;
+  /** Where the CAPTURE's metadata came from — `none` still leaves signed. */
   account: ExifAccount;
+  /** The rights written, resolved against the capture's year. */
+  rights: DeliveryRights;
+  /** The XMP packet the file carries: the signature, and the rights where there are some. */
+  xmp: string;
+}
+
+/** The author's half of what a delivered picture says (`delivery-meta.ts`). */
+export interface AuthorMeta {
+  /** Who signs; null or no name writes no rights. */
+  identity?: DeliveryIdentity | null;
+  /** The year for a picture whose capture time is unknown — the export's own. */
+  fallbackYear?: number;
 }
 
 export interface DeliveredSize {
@@ -60,49 +80,80 @@ export function exportExifBlock(
   head: Uint8Array | null,
   vouched: ExifData | null,
   delivered: DeliveredSize,
+  author: AuthorMeta = {},
 ): ExportExif {
-  // Every account names the software: it is the one mark that tells this
-  // export from the camera's own file once the rest is a copy (`software-mark.ts`).
-  const retag = { pixelWidth: delivered.width, pixelHeight: delivered.height, software: ATELIER_SOFTWARE };
+  const fallbackYear = author.fallbackYear ?? new Date().getFullYear();
+  const signed = (block: Uint8Array<ArrayBuffer>, account: ExifAccount, rights: DeliveryRights): ExportExif => ({
+    block,
+    account,
+    rights,
+    xmp: deliveryXmp(rights),
+  });
+  const rightsOf = (exif: ExifData | null) => resolveRights(author.identity ?? null, captureYear(exif?.dateTimeOriginal, fallbackYear));
+
   if (head && head.length > 0) {
     const copied = readExifBlock(head);
-    if (copied) return { block: retagExifBlock(copied, retag), account: 'block' };
+    if (copied) {
+      const rights = rightsOf(parseExif(copied.buffer));
+      // Every account names the software: it is the one mark that tells this
+      // export from the camera's own file once the rest is a copy
+      // (`software-mark.ts`). The rights go over the camera's own only where
+      // the author has a name to sign with.
+      const block = retagExifBlock(copied, {
+        pixelWidth: delivered.width,
+        pixelHeight: delivered.height,
+        software: ATELIER_SOFTWARE,
+        ...(rights.creator ? { artist: rights.creator, copyright: rights.copyright } : {}),
+      });
+      return signed(block, 'block', rights);
+    }
     const fields = parseExif(head.buffer.slice(head.byteOffset, head.byteOffset + head.byteLength));
     const merged = mergeExif(isEmptyExif(fields) ? null : fields, vouched);
     if (merged && !isEmptyExif(merged)) {
-      return { block: build(merged, delivered), account: 'fields' };
+      const rights = rightsOf(merged);
+      return signed(build(merged, delivered, rights), 'fields', rights);
     }
   }
   if (vouched && !isEmptyExif(vouched)) {
-    return { block: build(vouched, delivered), account: 'vouched' };
+    const rights = rightsOf(vouched);
+    return signed(build(vouched, delivered, rights), 'vouched', rights);
   }
-  return { block: null, account: 'none' };
+  const rights = rightsOf(null);
+  return signed(build({}, delivered, rights), 'none', rights);
 }
 
-function build(exif: ExifData, delivered: DeliveredSize): Uint8Array<ArrayBuffer> {
+function build(exif: ExifData, delivered: DeliveredSize, rights: DeliveryRights): Uint8Array<ArrayBuffer> {
   return buildExifBlock(exif, {
     software: ATELIER_SOFTWARE,
     pixelWidth: delivered.width,
     pixelHeight: delivered.height,
+    ...(rights.creator ? { artist: rights.creator, copyright: rights.copyright } : {}),
   });
 }
 
 /**
- * The same JPEG carrying `block`. A block the format cannot hold — a copied
- * one can be larger than a segment — is REBUILT from what can be read of it
- * rather than dropped, so the position and the body still travel; a picture
- * that has nothing to say comes back untouched.
+ * The same JPEG carrying `block` and the XMP packet. A block the format cannot
+ * hold — a copied one can be larger than a segment — is REBUILT from what can
+ * be read of it rather than dropped, so the position and the body still
+ * travel. A packet too large for its segment (a caption of tens of kilobytes)
+ * is left out rather than failing the picture; the EXIF still signs it.
  */
 export async function stampExif(jpeg: Blob, exif: ExportExif, delivered: DeliveredSize): Promise<Blob> {
-  if (!exif.block) return jpeg;
-  const bytes = new Uint8Array(await jpeg.arrayBuffer());
-  try {
-    return new Blob([withExifBlock(bytes, exif.block)], { type: 'image/jpeg' });
-  } catch {
-    const fields = parseExif(exif.block.buffer.slice(exif.block.byteOffset));
-    if (isEmptyExif(fields)) return jpeg;
-    return new Blob([withExifBlock(bytes, build(fields, delivered))], { type: 'image/jpeg' });
+  let bytes: Uint8Array<ArrayBuffer> = new Uint8Array(await jpeg.arrayBuffer());
+  if (exif.block) {
+    try {
+      bytes = withExifBlock(bytes, exif.block);
+    } catch {
+      const fields = parseExif(exif.block.buffer.slice(exif.block.byteOffset));
+      bytes = withExifBlock(bytes, build(fields, delivered, exif.rights));
+    }
   }
+  try {
+    if (exif.xmp) bytes = withXmpPacket(bytes, exif.xmp);
+  } catch {
+    // Signed in the EXIF alone.
+  }
+  return new Blob([bytes], { type: 'image/jpeg' });
 }
 
 /** Where a picture's metadata came from, for the sentence a panel says. */
@@ -115,6 +166,6 @@ export function exifAccountText(account: ExifAccount): string {
     case 'vouched':
       return 'what the source knows of the capture';
     default:
-      return 'no EXIF — nothing is known about this picture';
+      return 'no camera EXIF — nothing is known about this picture, only the signature is written';
   }
 }

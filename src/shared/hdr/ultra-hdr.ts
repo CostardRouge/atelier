@@ -129,9 +129,16 @@ function xmpPacket(description: string): string {
   );
 }
 
-/** The base image's XMP: the container directory and the version. */
-export function primaryXmp(gainMapLength: number): string {
+/**
+ * The base image's XMP: the container directory and the version, and —
+ * folded in beside them — the `rdf:Description`s a packet already in the base
+ * carried (`extra`): the signature and the author's words a delivered picture
+ * is stamped with before the container is written (`delivery-meta.ts`). One
+ * packet, because two in one file is what readers disagree about.
+ */
+export function primaryXmp(gainMapLength: number, extra = ''): string {
   return xmpPacket(
+    extra +
     `<rdf:Description rdf:about="" xmlns:Container="${CONTAINER_NS}" xmlns:Item="${ITEM_NS}" xmlns:hdrgm="${HDRGM_NS}" hdrgm:Version="1.0">` +
       `<Container:Directory><rdf:Seq>` +
       `<rdf:li rdf:parseType="Resource"><Container:Item Item:Semantic="Primary" Item:Mime="image/jpeg"/></rdf:li>` +
@@ -229,16 +236,28 @@ function insertionPoint(bytes: Uint8Array): number {
   return at;
 }
 
+/** The `rdf:Description`s of an XMP packet, verbatim, or '' — what is folded into the container's own. */
+function descriptionsOf(packet: string): string {
+  const open = /<rdf:RDF\b[^>]*>/.exec(packet);
+  const close = packet.lastIndexOf('</rdf:RDF>');
+  if (!open || close < open.index) return '';
+  return packet.slice(open.index + open[0].length, close).trim();
+}
+
 /**
  * The file: the base with its XMP and MPF inserted, then the gain map with
- * its own XMP, back to back. A base that already carries an XMP packet keeps
- * it — a second APP1 is legal and viewers read the one with the directory.
+ * its own XMP, back to back. A base that already carries an XMP packet — the
+ * stamp's, written before the container — is TAKEN OUT and its descriptions
+ * folded into the container's packet, so the file carries one.
  */
-export function wrapUltraHdr(primary: Uint8Array, gainMap: Uint8Array, meta: GainMapMeta): Uint8Array {
+export function wrapUltraHdr(primaryIn: Uint8Array, gainMap: Uint8Array, meta: GainMapMeta): Uint8Array {
   const mapAt = insertionPoint(gainMap);
   const mapOut = concat([gainMap.subarray(0, mapAt), xmpSegment(gainMapXmp(meta)), gainMap.subarray(mapAt)]);
+  const own = (jpegSegments(primaryIn) ?? []).find((s) => s.marker === MARKER_APP1 && startsWith(s.data, XMP_HEADER)) ?? null;
+  const primary = own ? concat([primaryIn.subarray(0, own.start), primaryIn.subarray(own.start + own.length)]) : primaryIn;
+  const extra = own ? descriptionsOf(text(own.data.subarray(XMP_HEADER.length))) : '';
   const at = insertionPoint(primary);
-  const xmp = xmpSegment(primaryXmp(mapOut.length));
+  const xmp = xmpSegment(primaryXmp(mapOut.length, extra));
   // The MPF offset is counted from its own endian field, so the base's final
   // length is known before the segment is written.
   const primaryLength = primary.length + xmp.length + MPF_SEGMENT_LENGTH;

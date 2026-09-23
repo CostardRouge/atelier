@@ -1772,6 +1772,7 @@ export default function PictureWorkbench({
               note={exports.note}
               hdrRun={exports.lastRun?.hdr ?? null}
               pictures={deliveryTable}
+              openExif={shotExif}
             />
           ) : null}
         </div>

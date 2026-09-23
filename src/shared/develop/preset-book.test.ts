@@ -8,6 +8,7 @@ import {
   readPresetBook,
   removePresetFromBook,
   savePresetInBook,
+  withIdentity,
 } from './preset-book';
 
 const light = (exposure: number) => ({ ...DEFAULT_DEVELOP, exposure });
@@ -87,5 +88,22 @@ describe('mergeBooks — two copies that both moved', () => {
       ['Night', 3],
     ]);
     expect(merged.mergedTripIds.sort()).toEqual(['t1', 't2']);
+  });
+});
+
+describe('the identity on the book', () => {
+  it('is read, written once, and survives a merge — the edited copy winning', () => {
+    const book = createPresetBook('b', 1);
+    expect(readPresetBook({ ...book })!.identity).toBeUndefined();
+    const signed = withIdentity(book, { creator: ' Steeve Pommier ', copyright: '' }, 2);
+    expect(signed.identity).toEqual({ creator: 'Steeve Pommier', copyright: '© {year} {creator}. All rights reserved.' });
+    expect(signed.updatedAt).toBe(2);
+    expect(withIdentity(signed, { creator: 'Steeve Pommier', copyright: '© {year} {creator}. All rights reserved.' })).toBe(signed);
+    expect(readPresetBook(JSON.parse(JSON.stringify(signed)))!.identity).toEqual(signed.identity);
+
+    const other = withIdentity(createPresetBook('s', 1), { creator: 'Other', copyright: 'x' }, 1);
+    expect(mergeBooks(signed, other).identity?.creator).toBe('Steeve Pommier');
+    expect(mergeBooks(book, other).identity?.creator).toBe('Other');
+    expect(mergeBooks(book, createPresetBook('s', 1)).identity).toBeUndefined();
   });
 });
