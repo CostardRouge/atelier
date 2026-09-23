@@ -12,8 +12,10 @@ import {
 } from '../../shared/develop/roll-types';
 import { useObjectUrl } from '../../shared/media/use-object-url';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
+import { describeCulling, type Culling } from '../../shared/sources/winnow/culling';
 import WinnowThumb from '../../shared/sources/winnow/WinnowThumb';
 import { Icons } from '../../shared/ui/icons';
+import CullMark from './CullMark';
 import type { DeliverAction } from './PictureWorkbench';
 
 /**
@@ -28,6 +30,11 @@ import type { DeliverAction } from './PictureWorkbench';
  * §10): a click sends ↔ holds, a right-click or a held finger ignores, and an
  * ignored cell is dimmed — or left out entirely when the author hides them
  * (never the open one: the stage must stay in the strip).
+ *
+ * And Winnow's CULLING, read-only (item 33 of `docs/lightroom-gaps.md`): a
+ * pick flag, the stars and a label dot along the cell's top edge, and a
+ * `shows` filter the roll's status line sets — a picture that fails it leaves
+ * the strip, the open one excepted.
  */
 export default function Filmstrip({
   pictures,
@@ -42,6 +49,8 @@ export default function Filmstrip({
   onRemove,
   onDeliver,
   hideIgnored = false,
+  culling,
+  shows = () => true,
 }: {
   pictures: readonly RollPicture[];
   openId: string | null;
@@ -59,6 +68,10 @@ export default function Filmstrip({
   onDeliver: (id: string, action: DeliverAction) => void;
   /** Leave ignored pictures out of the strip (the open one always stays). */
   hideIgnored?: boolean;
+  /** Winnow's word on each picture it answered for (`use-roll-culling.ts`). */
+  culling?: ReadonlyMap<string, Culling>;
+  /** Whether a picture passes the strip's filter — Winnow's, today. The open one always stays. */
+  shows?: (picture: RollPicture) => boolean;
 }) {
   const stripRef = useRef<HTMLOListElement>(null);
   useEffect(() => {
@@ -77,7 +90,7 @@ export default function Filmstrip({
       // where the badge is always shown, its top was sliced flat.
       className="m-0 p-0 pt-1.5 pr-1.5 pb-1 list-none flex gap-1.5 overflow-x-auto overscroll-x-contain touch-pan-x [scrollbar-width:thin]"
     >
-      {pictures.filter((p) => !hideIgnored || !isIgnored(p) || p.id === openId).map((p) => (
+      {pictures.filter((p) => p.id === openId || ((!hideIgnored || !isIgnored(p)) && shows(p))).map((p) => (
         <Cell
           key={p.id}
           picture={p}
@@ -85,6 +98,7 @@ export default function Filmstrip({
           selected={selectedIds.has(p.id)}
           thumb={thumbs.get(p.id) ?? null}
           availability={availability.get(p.id)}
+          culling={culling?.get(p.id)}
           remote={thumbs.has(p.id) ? null : remoteThumb(p)}
           size={size}
           onOpen={() => onOpen(p.id)}
@@ -103,6 +117,7 @@ function Cell({
   selected,
   thumb,
   availability,
+  culling,
   remote,
   size,
   onOpen,
@@ -115,6 +130,7 @@ function Cell({
   selected: boolean;
   thumb: Blob | null;
   availability: PictureAvailability | undefined;
+  culling: Culling | undefined;
   remote: { client: WinnowClient; id: number } | null;
   size: string;
   onOpen: () => void;
@@ -147,7 +163,9 @@ function Cell({
         aria-label={`${picture.ref.name}${developed ? ', developed' : ''}${selected ? ', selected' : ''}${
           fetching ? ', fetching' : unreachable ? ', not available' : ''
         }`}
-        title={`${picture.ref.name}${developed ? ` — ${editSummary(picture.develop, edits)}` : ' — as shot'} — Shift or ⌘/Ctrl-click to select for a batch`}
+        title={`${picture.ref.name}${developed ? ` — ${editSummary(picture.develop, edits)}` : ' — as shot'}${
+          culling && describeCulling(culling) ? ` — Winnow: ${describeCulling(culling)}` : ''
+        } — Shift or ⌘/Ctrl-click to select for a batch`}
         className={`relative block ${size} p-0 rounded-paper overflow-hidden bg-frame cursor-pointer border-2 ${
           open ? 'border-accent' : 'border-transparent hover:border-line-strong'
         }`}
@@ -181,6 +199,11 @@ function Cell({
         {developed && (
           <span className="absolute left-1 bottom-1 w-1.5 h-1.5 rounded-full bg-accent ring-1 ring-[rgba(20,18,15,0.6)]" aria-hidden="true" />
         )}
+        {/* Winnow's word, between the two top corners (the selection check
+            and the unreachable mark own those). Read-only: not a target. */}
+        <span className="absolute left-1/2 -translate-x-1/2 top-1 pointer-events-none">
+          <CullMark culling={culling} onMedia />
+        </span>
         {selected && (
           <span
             className="absolute left-1 top-1 w-4 h-4 grid place-items-center rounded-full bg-accent text-paper text-3xs"

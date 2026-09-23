@@ -10,10 +10,15 @@ import {
 import { exportState, needsExport, type ExportMarks } from '../../shared/develop/export-marks';
 import { useObjectUrl } from '../../shared/media/use-object-url';
 import { Icons } from '../../shared/ui/icons';
+import type { Culling } from '../../shared/sources/winnow/culling';
+import CullMark from './CullMark';
 import type { DeliverAction } from './PictureWorkbench';
 
-/** The table's filters: the roll's four, and E4's — what leaves and was never exported, or changed since. */
-type TableFilter = DeliveryFilter | 'changed';
+/**
+ * The table's filters: the roll's four, E4's — what leaves and was never
+ * exported, or changed since — and Winnow's picks where Winnow answered.
+ */
+type TableFilter = DeliveryFilter | 'changed' | 'picks';
 
 const FILTERS: readonly { id: TableFilter; label: string; title?: string }[] = [
   { id: 'all', label: 'All' },
@@ -23,7 +28,10 @@ const FILTERS: readonly { id: TableFilter; label: string; title?: string }[] = [
   { id: 'changed', label: 'Changed', title: 'Leaving, and never exported from this device or edited since' },
 ];
 
-function matches(p: RollPicture, filter: TableFilter, marks: ExportMarks): boolean {
+const PICKS = { id: 'picks' as const, label: 'Picks', title: 'Winnow’s picks — its culling, read-only' };
+
+function matches(p: RollPicture, filter: TableFilter, marks: ExportMarks, culling?: ReadonlyMap<string, Culling>): boolean {
+  if (filter === 'picks') return culling?.get(p.id)?.verdict === 'pick';
   if (filter === 'changed') return matchesDeliveryFilter(p, 'leaving') && needsExport(p, marks);
   return matchesDeliveryFilter(p, filter);
 }
@@ -58,6 +66,7 @@ export default function DeliveryTable({
   onDeliver,
   onOpen,
   marks = {},
+  culling,
 }: {
   pictures: readonly RollPicture[];
   openId: string | null;
@@ -68,10 +77,15 @@ export default function DeliveryTable({
   onOpen: (id: string) => void;
   /** When each picture last left from this device (`export-marks.ts`, E4). */
   marks?: ExportMarks;
+  /** Winnow's word on each picture, when the roll has any on an instance — `use-roll-culling.ts`. */
+  culling?: ReadonlyMap<string, Culling>;
 }) {
   const [filter, setFilter] = useState<TableFilter>('all');
   const [ignoredOpen, setIgnoredOpen] = useState(false);
-  const shown = pictures.filter((p) => matches(p, filter, marks));
+  const filters = culling ? [...FILTERS, PICKS] : FILTERS;
+  // A Winnow filter left on for a roll that no longer answers shows everything, not nothing.
+  const active = filters.some((f) => f.id === filter) ? filter : 'all';
+  const shown = pictures.filter((p) => matches(p, active, marks, culling));
   const ignored = pictures.filter(isIgnored);
   const openIgnored = ignored.some((p) => p.id === openId);
   const unfolded = ignoredOpen || openIgnored;
@@ -80,15 +94,15 @@ export default function DeliveryTable({
   return (
     <div className="flex flex-col gap-2 min-w-0">
       <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Show">
-        {FILTERS.map((f) => (
+        {filters.map((f) => (
           <button
             key={f.id}
             type="button"
-            aria-pressed={filter === f.id}
+            aria-pressed={active === f.id}
             title={f.title}
             onClick={() => setFilter(f.id)}
             className={`px-2 py-0.5 rounded-full border font-mono text-3xs cursor-pointer ${
-              filter === f.id ? 'border-accent text-accent-ink' : 'border-line-strong text-muted hover:text-ink'
+              active === f.id ? 'border-accent text-accent-ink' : 'border-line-strong text-muted hover:text-ink'
             }`}
           >
             {f.label}
@@ -100,10 +114,10 @@ export default function DeliveryTable({
       </div>
       <div className="flex flex-col border-t border-line">
         {shown.map((p) => (
-          <Row key={p.id} picture={p} open={p.id === openId} line={lines.get(p.id)} thumb={thumbs.get(p.id) ?? null} marks={marks} onDeliver={onDeliver} onOpen={onOpen} />
+          <Row key={p.id} picture={p} open={p.id === openId} line={lines.get(p.id)} thumb={thumbs.get(p.id) ?? null} marks={marks} culling={culling?.get(p.id)} onDeliver={onDeliver} onOpen={onOpen} />
         ))}
         {shown.length === 0 && (
-          <p className="m-0 py-3 font-mono text-3xs text-faint">No picture on this roll answers “{FILTERS.find((f) => f.id === filter)?.label}”.</p>
+          <p className="m-0 py-3 font-mono text-3xs text-faint">No picture on this roll answers “{filters.find((f) => f.id === active)?.label}”.</p>
         )}
         {ignored.length > 0 && (
           <>
@@ -117,7 +131,7 @@ export default function DeliveryTable({
             </button>
             {unfolded &&
               ignored.map((p) => (
-                <Row key={p.id} picture={p} open={p.id === openId} line={lines.get(p.id)} thumb={thumbs.get(p.id) ?? null} marks={marks} onDeliver={onDeliver} onOpen={onOpen} />
+                <Row key={p.id} picture={p} open={p.id === openId} line={lines.get(p.id)} thumb={thumbs.get(p.id) ?? null} marks={marks} culling={culling?.get(p.id)} onDeliver={onDeliver} onOpen={onOpen} />
               ))}
           </>
         )}
@@ -132,6 +146,7 @@ function Row({
   line,
   thumb,
   marks,
+  culling,
   onDeliver,
   onOpen,
 }: {
@@ -140,6 +155,7 @@ function Row({
   line: string | undefined;
   thumb: Blob | null;
   marks: ExportMarks;
+  culling: Culling | undefined;
   onDeliver: (id: string, action: DeliverAction) => void;
   onOpen: (id: string) => void;
 }) {
@@ -191,6 +207,7 @@ function Row({
       <span className="flex-1 min-w-0 flex flex-col">
         <span className="flex items-center gap-1.5 min-w-0">
           <span className={`font-mono text-2xs truncate ${on ? 'text-ink' : ''}`}>{name}</span>
+          <CullMark culling={culling} />
           {PINNED[state] && (
             <span className="flex-none px-1.5 rounded-full border border-line-strong font-mono text-3xs text-ink-soft">{PINNED[state]}</span>
           )}

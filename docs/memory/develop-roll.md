@@ -178,6 +178,28 @@ removed on one left the other's; a fast ←/→ sweep over look / no look / look
 moved nothing; the verb dressed the bare one; an export of a black & white
 picture and a bare one delivered 133,133,133 and 200,122,60.
 
+## Winnow's culling is READ live, never stored and never written (2026-09-23, item 33)
+
+His answer (`docs/lightroom-gaps.md` §8): picks and stars SHOWN and FILTERED
+on in Develop, culling staying Winnow's. **Decisions**: (1) the source is the
+row Winnow already sends — `GRID_SELECT` joins `ratings` as `verdict` (`pick ·
+reject · skip · unrated`, migrations 0001 + 0016), `star` 0–5 and a free-text
+`color_label` no Winnow screen sets — read from ITS code, not guessed (the
+timeline's lesson); `culling.ts` reads it, `use-roll-culling.ts` asks
+`assetsByIds` per connected host in chunks of 200. (2) NEVER on the roll: a
+copy would go stale while he culls in Winnow and would read as the roll's own
+rating; it is a session cache keyed `host/id`, re-asked on `visibilitychange`
+after 60 s and by *Refresh*. (3) A picture Winnow said nothing of (local, not
+connected) has NO culling, not "unrated": it passes *all* and *not rejected*,
+fails *picks* and *★ and up*. (4) The filter is the sitting's (React state),
+and filters the strip the way *ignored* does — the open picture stays, ←/→
+skip what it hides (`stepPicture`'s `skip`), and `otherIds` (every *Apply to N
+other pictures*) follows the STRIP: Lightroom's "filter picks, then sync", the
+count on the verb saying it. The Pictures table gains *Picks*, drawn only when
+the roll has an instance to ask. **How to apply**: never add a verb that
+WRITES a verdict or a star from Atelier; a colour label is shown only for the
+five shared names (`labelColour`).
+
 ## Which pictures LEAVE is one field on the picture (2026-09-23, E1)
 
 `RollPicture.deliver`: `auto · yes · no · ignore` (`docs/lightroom-gaps.md` §10,

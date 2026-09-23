@@ -1321,6 +1321,21 @@ were never exported or changed since, the status line counts them, and
 device beside the roll, not in it, so an export is never an undo step and an
 undo never forgets one.
 
+**Winnow's culling, where you edit.** A picture that came from a Winnow
+instance wears what you decided about it there — a flag for a **pick** or a
+**reject**, its **stars**, and a colour dot if it has a label — on its
+filmstrip cell and on its row in the Pictures table. The status line counts
+the picks and rejects and **filters the strip** on them: *picks*, *not
+rejected*, or *★★★ and up*. A filtered picture leaves the strip (the one on
+the stage stays), **←/→** step over it, and "apply to the other pictures"
+writes only to the ones still shown, so *show picks* then *Apply to N other
+pictures* develops your picks alike. The Pictures table has a *Picks* filter
+too. It is **read-only**: nothing here writes to Winnow, and nothing of it is
+kept in the roll — it is asked again when you come back to the tab, so a pick
+made in Winnow meanwhile shows up, and **Refresh** asks at once. A picture
+from this computer has no culling to show, and only *show all* or *not
+rejected* keep it in the strip.
+
 **What a file says.** A delivered JPEG carries the original's EXIF (below), and
 the **Metadata** section of the Export tab adds what is yours. Every file is
 **signed** — `Software` in its EXIF and `xmp:CreatorTool` in its XMP say

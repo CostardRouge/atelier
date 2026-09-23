@@ -92,6 +92,17 @@ import { useRollExport } from './use-roll-export';
 import { useRollGrade } from './use-roll-grade';
 import { useRollFolders } from './use-roll-folders';
 import { useRollMedia } from './use-roll-media';
+import { useRollCulling } from './use-roll-culling';
+import {
+  CULL_FILTERS,
+  NO_CULL_FILTER,
+  countCulling,
+  cullFilterKey,
+  cullFilterLabel,
+  passesCull,
+  readCullFilter,
+  type CullFilter,
+} from '../../shared/sources/winnow/culling';
 import { useRollPreviews } from './use-roll-previews';
 import WinnowDaySheet from './WinnowDaySheet';
 
@@ -212,6 +223,19 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [lib.assets, folders.siblings],
   );
   const media = useRollMedia({ pictures: roll.pictures, openId, localPhotos });
+  // Winnow's picks and stars, read-only (item 33): shown on the strip and
+  // filtered on — the filter is this sitting's, never the roll's.
+  const culling = useRollCulling(roll.pictures);
+  const [cullFilter, setCullFilter] = useState<CullFilter>(NO_CULL_FILTER);
+  const filtering = culling.reachable && cullFilter.kind !== 'all';
+  const cullingRef = useRef(culling.byPicture);
+  cullingRef.current = culling.byPicture;
+  const cullFilterRef = useRef(cullFilter);
+  cullFilterRef.current = filtering ? cullFilter : NO_CULL_FILTER;
+  const shownByCull = useCallback(
+    (p: RollPicture) => passesCull(cullingRef.current.get(p.id), cullFilterRef.current),
+    [],
+  );
   const { retryFailed, remoteThumb } = media;
   // A local picture whose file is away is developed from its working preview
   // when the roll keeps them (F5); the real file always wins.
@@ -488,11 +512,12 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
 
   const step = useCallback(
     (by: number) => {
-      // The arrows walk the roll's WORK: an ignored picture is stepped over.
-      const next = stepPicture(latest.current.pictures, openIdRef.current, by, isIgnored);
+      // The arrows walk the roll's WORK: an ignored picture is stepped over,
+      // and so is one Winnow's filter has taken off the strip.
+      const next = stepPicture(latest.current.pictures, openIdRef.current, by, (p) => isIgnored(p) || !shownByCull(p));
       if (next && next !== openIdRef.current) onOpenPicture(next);
     },
-    [onOpenPicture],
+    [onOpenPicture, shownByCull],
   );
 
   const handleDevelop = useCallback(
@@ -698,10 +723,20 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   );
   // "The others" are the pictures still in the roll's WORK: an ignored one is
   // never written by an Apply-to-all (`docs/lightroom-gaps.md` §10) — a picture
-  // the author marked explicitly still is.
+  // the author marked explicitly still is. With Winnow's filter on, they are
+  // the others IN THE STRIP — Lightroom's "filter the picks, then sync": the
+  // verbs count what they will write, so the number says it.
   const otherIds = useMemo(
-    () => roll.pictures.filter((p) => p.id !== openId && !isIgnored(p)).map((p) => p.id),
-    [roll.pictures, openId],
+    () =>
+      roll.pictures
+        .filter(
+          (p) =>
+            p.id !== openId &&
+            !isIgnored(p) &&
+            (!filtering || passesCull(culling.byPicture.get(p.id), cullFilter)),
+        )
+        .map((p) => p.id),
+    [roll.pictures, openId, filtering, culling.byPicture, cullFilter],
   );
   const others = otherIds.length;
   const applyTo = useMemo<DevelopApplyVerb[]>(() => {
@@ -1020,6 +1055,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                   onDeliver={handleDeliver}
                   onOpen={onOpenPicture}
                   marks={exportMarks}
+                  culling={culling.reachable ? culling.byPicture : undefined}
                 />
               }
               emptyText={availabilityText(open.ref.name, availability.get(open.id))}
@@ -1042,6 +1078,17 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                       {showIgnored ? 'Hide' : 'Show'}
                     </button>
                   </span>
+                )}
+                {culling.reachable && (
+                  <CullLine
+                    counts={countCulling(roll.pictures.map((p) => culling.byPicture.get(p.id)))}
+                    filter={cullFilter}
+                    onFilter={setCullFilter}
+                    shown={filtering ? roll.pictures.filter((p) => !isIgnored(p) && shownByCull(p)).length : null}
+                    asking={culling.asking}
+                    problem={culling.problem}
+                    onRefresh={culling.refresh}
+                  />
                 )}
                 {withLook > 0 && (
                   <span className="text-faint">
@@ -1180,6 +1227,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                 onRemove={(p) => (isEdited(p) ? setConfirmRemove(p) : remove(p))}
                 onDeliver={handleDeliver}
                 hideIgnored={!showIgnored}
+                culling={culling.byPicture}
+                shows={filtering ? shownByCull : undefined}
               />
             </div>
           </div>
@@ -1226,6 +1275,76 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         </ConfirmDialog>
       )}
     </div>
+  );
+}
+
+/**
+ * Winnow's word on the roll, in the status line: how many picks and rejects
+ * it answered, and the strip's filter on them. Read-only — the filter shows
+ * and hides, it never writes to Winnow (item 33 of `docs/lightroom-gaps.md`).
+ */
+function CullLine({
+  counts,
+  filter,
+  onFilter,
+  shown,
+  asking,
+  problem,
+  onRefresh,
+}: {
+  counts: ReturnType<typeof countCulling>;
+  filter: CullFilter;
+  onFilter: (f: CullFilter) => void;
+  /** How many pictures the filter leaves in the strip, or null with none on. */
+  shown: number | null;
+  asking: boolean;
+  problem: string | null;
+  onRefresh: () => void;
+}) {
+  const said = [
+    counts.picks > 0 && `${counts.picks} pick${counts.picks === 1 ? '' : 's'}`,
+    counts.rejects > 0 && `${counts.rejects} rejected`,
+    counts.starred > 0 && `${counts.starred} starred`,
+  ].filter(Boolean);
+  return (
+    <span className="text-faint">
+      {' '}
+      · Winnow{' '}
+      {problem ? (
+        <span className="text-danger">{problem}</span>
+      ) : asking && counts.known === 0 ? (
+        'asking…'
+      ) : said.length ? (
+        said.join(', ')
+      ) : (
+        'nothing culled'
+      )}{' '}
+      <select
+        value={cullFilterKey(filter)}
+        onChange={(e) => onFilter(readCullFilter(e.target.value))}
+        aria-label="Show in the strip, by Winnow's culling"
+        title="Show in the strip, by Winnow's culling — read-only: culling stays Winnow's"
+        className={`bg-transparent border-0 border-b border-dotted font-mono text-2xs cursor-pointer ${
+          filter.kind === 'all' ? 'border-line-strong text-muted' : 'border-accent text-accent-ink'
+        }`}
+      >
+        {CULL_FILTERS.map((f) => (
+          <option key={cullFilterKey(f)} value={cullFilterKey(f)}>
+            {f.kind === 'all' ? 'show all' : `show ${cullFilterLabel(f).toLowerCase()}`}
+          </option>
+        ))}
+      </select>
+      {shown !== null && <> ({shown} shown)</>}{' '}
+      <button
+        type="button"
+        onClick={onRefresh}
+        disabled={asking}
+        className="underline underline-offset-2 cursor-pointer disabled:cursor-default disabled:no-underline"
+        title="Ask Winnow again — it is asked by itself when you come back to this tab"
+      >
+        {asking ? 'asking…' : 'Refresh'}
+      </button>
+    </span>
   );
 }
 
