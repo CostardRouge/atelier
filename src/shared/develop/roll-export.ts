@@ -18,7 +18,7 @@
 import { isDrawableImage, isRawImage } from '../library/assets';
 import { DEFAULT_FRAMING, framingTransform, type Framing } from '../media/framing';
 import { borderLayout, scaleLayout, type BorderLayout, type RollBorder } from './border-layout';
-import type { RollExport } from './roll-types';
+import { longEdgeFor, type ExportSize } from './export-targets';
 
 /**
  * How a delivery weighs the original against the file in hand: `auto` fetches
@@ -333,10 +333,29 @@ export interface DeliverySummary {
  * that cannot fill it is what `Auto` fetches the original for. Without one,
  * the file delivers what it has and the line says what was asked.
  */
-/** What ONE delivery is decided against: the roll's cap, and the door's mode for this run. */
+/**
+ * What ONE delivery is decided against: the size its target asks, and the
+ * door's mode for this run. A size is resolved against EACH source it is
+ * weighed on (`longEdgeFor`), since a short edge, an area or a percentage
+ * means a different long edge on the proxy and on the original; a plain
+ * `longEdge` is the same cap everywhere, as it always was.
+ */
 export interface DeliverySettings {
-  longEdge: RollExport['longEdge'];
+  longEdge?: number | null;
+  size?: ExportSize | null;
   pixels: PixelsMode;
+}
+
+/** The long edge `settings` caps a delivery of `src` at — the target's size read against the picture's own frame. */
+export function capFor(
+  settings: Pick<DeliverySettings, 'longEdge' | 'size'>,
+  src: PictureSize,
+  aspectRatio: number,
+  framing: Framing | null,
+  border: RollBorder | null,
+): number | null {
+  if (settings.size === undefined) return settings.longEdge ?? null;
+  return longEdgeFor(settings.size, deliveredLayout(src, aspectRatio, framing, border, null).out);
 }
 
 export function deliverySummary(
@@ -352,7 +371,7 @@ export function deliverySummary(
   // it, and only once its head has said how big that render is.
   const known = fileIsProxy && original ? originalPixels(original) : null;
   const best = known ?? file;
-  const asked = deliveredLayout(best, aspectRatio, framing, border, settings.longEdge);
+  const asked = deliveredLayout(best, aspectRatio, framing, border, capFor(settings, best, aspectRatio, framing, border));
   const bordered = border !== null;
   const fileHeadroom = deliveryHeadroom(file, aspectRatio, framing, asked);
   const choice = choosePixels(settings.pixels, fileHeadroom, fileIsProxy ? original : null, file);
@@ -368,7 +387,7 @@ export function deliverySummary(
       reason: choice.reason,
     };
   }
-  const own = deliveredLayout(file, aspectRatio, framing, border, settings.longEdge);
+  const own = deliveredLayout(file, aspectRatio, framing, border, capFor(settings, file, aspectRatio, framing, border));
   const headroom = deliveryHeadroom(file, aspectRatio, framing, own);
   const label = sourceLabel(fileIsProxy, file);
   return {
@@ -444,20 +463,6 @@ export function exportName(refName: string): string {
   return `${base}.jpg`;
 }
 
-/** The choices the Size select offers: the source's own, or a long edge. */
-export const LONG_EDGE_CHOICES: readonly { id: string; label: string; longEdge: number | null }[] = [
-  { id: 'source', label: 'Source size', longEdge: null },
-  { id: '4096', label: '4096 px', longEdge: 4096 },
-  { id: '2560', label: '2560 px', longEdge: 2560 },
-  { id: '2048', label: '2048 px', longEdge: 2048 },
-  { id: '1920', label: '1920 px', longEdge: 1920 },
-  { id: '1080', label: '1080 px', longEdge: 1080 },
-];
-
-export function longEdgeChoiceId(longEdge: number | null): string {
-  return LONG_EDGE_CHOICES.find((c) => c.longEdge === longEdge)?.id ?? 'source';
-}
-
 /**
  * The run's outcome in one sentence: what was written, what was numbered
  * around a file already there, and what could not be written at all.
@@ -467,11 +472,16 @@ export function describeRun(
   method: 'folder' | 'download',
   failures: readonly string[],
   renamed = 0,
+  /** Several targets: `written` counts FILES, and the sentence says how many pictures they are. */
+  run: { pictures: number; targets: number } | null = null,
 ): string {
+  const verb = method === 'folder' ? 'written' : 'downloaded';
   const head =
     written === 0
       ? 'Nothing was written'
-      : `${written} picture${written === 1 ? '' : 's'} ${method === 'folder' ? 'written' : 'downloaded'}`;
+      : run && run.targets > 1
+        ? `${run.pictures} picture${run.pictures === 1 ? '' : 's'} × ${run.targets} targets — ${written} file${written === 1 ? '' : 's'} ${verb}`
+        : `${written} picture${written === 1 ? '' : 's'} ${verb}`;
   const kept =
     renamed > 0
       ? ` · ${renamed} numbered, the folder already held ${renamed === 1 ? 'that name' : 'those names'}`

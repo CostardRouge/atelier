@@ -1,8 +1,9 @@
-import { LONG_EDGE_CHOICES, longEdgeChoiceId, type DeliverySummary } from '../../shared/develop/roll-export';
-import { ROLL_EXPORT_LIMITS, type RollExport, type RollPicture } from '../../shared/develop/roll-types';
+import type { DeliverySummary } from '../../shared/develop/roll-export';
+import type { RollExport, RollPicture } from '../../shared/develop/roll-types';
+import ExportTargets from './ExportTargets';
 import type { RunPlan } from '../../shared/develop/run-plan';
 import Button from '../../shared/ui/Button';
-import { FieldRow, InspectorSection, RangeField, SelectField, SwitchRow } from '../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, SelectField, SwitchRow } from '../../shared/ui/Inspector';
 import { Icons } from '../../shared/ui/icons';
 import { hdrSupport } from '../../shared/hdr/hdr-display';
 import { formatBytes } from '../../shared/lib/format';
@@ -93,7 +94,6 @@ export default function ExportPanel({
   picture?: RollPicture | null;
   onWords?: (words: { title?: string; caption?: string }) => void;
 }) {
-  const { quality } = ROLL_EXPORT_LIMITS;
   const identity = useDeliveryIdentity();
   return (
     <>
@@ -104,8 +104,20 @@ export default function ExportPanel({
           <>
             <p>
               Each picture is decoded at its own size, developed under its own look, cropped as the
-              Crop tab shows it and written as a JPEG. The size is a ceiling on the long edge — a
-              picture is never upscaled to reach it.
+              Crop tab shows it and written as a JPEG. A size is a ceiling — a long edge, a short
+              edge, an area in megapixels or a share of the picture — and a picture is never
+              upscaled to reach it.
+            </p>
+            <p>
+              One run can write several <strong>targets</strong>: the full picture for the archive
+              and a 2048 px set for the web, say. Each picture is rendered once and cut to every
+              target. The first writes into the folder you choose; each other one into a folder
+              inside it, named after the target — the files keep their pictures’ own names, so{' '}
+              <code>DJI_0101.jpg</code> and <code>Web/DJI_0101.jpg</code> are the same photograph.
+              A browser with no folder picker downloads instead, and there the target’s name goes
+              before the file’s (<code>Web-DJI_0101.jpg</code>). <strong>Sharpen</strong> is for a
+              screen, applied to the file after its resize: a picture brought down to 2048 px is
+              softer than it was at its own size, and how much to bring back depends on the size.
             </p>
             <p>
               A picture leaves carrying the ORIGINAL’s EXIF — its position, its body, its lens, the
@@ -144,25 +156,7 @@ export default function ExportPanel({
           </>
         }
       >
-        <FieldRow label="Size">
-          <SelectField
-            label="Long edge"
-            value={longEdgeChoiceId(settings.longEdge)}
-            options={LONG_EDGE_CHOICES.map((c) => ({ id: c.id, label: c.label }))}
-            onChange={(id) => onSettings({ longEdge: LONG_EDGE_CHOICES.find((c) => c.id === id)?.longEdge ?? null })}
-          />
-        </FieldRow>
-        <FieldRow label="Quality">
-          <RangeField
-            label="JPEG quality"
-            min={quality.min}
-            max={quality.max}
-            step={0.01}
-            value={settings.quality}
-            onChange={(q) => onSettings({ quality: q })}
-            format={(v) => `${Math.round(v * 100)} %`}
-          />
-        </FieldRow>
+        <ExportTargets targets={settings.targets} onTargets={(targets) => onSettings({ targets })} />
         <FieldRow label="Delivers" align="start">
           {/* The run's sentence. Every picture's own line is in the Pictures
               table below, where it is also where a picture is sent or held. */}

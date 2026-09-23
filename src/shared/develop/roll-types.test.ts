@@ -316,7 +316,14 @@ describe('reading a stored roll', () => {
     expect(doc.pictures[1].framing?.scale).toBe(2);
     expect(doc.pictures.map((p) => p.grade)).toEqual([null, null]);
     // `originals`, written by v1–v3, is left behind: which pixels is the picture's own (v4).
-    expect(doc.export).toEqual({ longEdge: 16384, quality: 1, replace: false, hdr: false, hdrStops: 2, metadata: DEFAULT_ROLL_EXPORT.metadata });
+    // v5's one long edge and quality become the one target (v6), through their limits.
+    expect(doc.export).toEqual({
+      targets: [{ name: '', size: { mode: 'long', value: 16384 }, quality: 1, sharpen: 'off' }],
+      replace: false,
+      hdr: false,
+      hdrStops: 2,
+      metadata: DEFAULT_ROLL_EXPORT.metadata,
+    });
     expect(doc.sourceId).toBe('winnow.example');
     expect('future' in doc).toBe(false);
   });
@@ -363,8 +370,7 @@ describe('reading a stored roll', () => {
 
   it('reads the export through its limits, and the source size as null', () => {
     expect(readRollExport({ longEdge: 1920.4, quality: 0.8, originals: 'proxies', replace: true })).toEqual({
-      longEdge: 1920,
-      quality: 0.8,
+      targets: [{ name: '', size: { mode: 'long', value: 1920 }, quality: 0.8, sharpen: 'off' }],
       replace: true,
       hdr: false,
       hdrStops: 2,

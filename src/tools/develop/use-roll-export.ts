@@ -15,7 +15,8 @@ import { rollCubes } from './roll-cubes';
 import { WORKING_PREVIEW_EDGE, isWorkingPreview } from '../../shared/develop/working-preview';
 import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
 import { isProxyOverRaw, originalOf, rawRenderOf } from '../../shared/develop/delivery-source';
-import { deliverFilesTo, pickDeliveryTarget } from '../../shared/sources/deliver-files';
+import { deliverFilesTo, pickDeliveryTarget, type FolderedFile } from '../../shared/sources/deliver-files';
+import { largestSize, targetFolder } from '../../shared/develop/export-targets';
 import { uniqueName } from '../../shared/sources/unique-name';
 import { EXIF_SLICE_BYTES, type GpsCoord } from '../../shared/exif/exif-parser';
 import { exportExifBlock, stampExif, type ExifAccount } from '../../shared/exif/stamp-exif';
@@ -239,7 +240,8 @@ export function useRollExport({
       open.framing,
       pictureAspectRatio(open.aspect, openSize.size.width, openSize.size.height),
       open.border,
-      { longEdge: roll.export.longEdge, pixels: proxiesOnly ? 'proxies' : 'auto' },
+      // The FIRST target's size: the one this folder itself receives.
+      { size: roll.export.targets[0]?.size ?? null, pixels: proxiesOnly ? 'proxies' : 'auto' },
     );
     const chosen = proxiesOnly
       ? null
@@ -306,6 +308,9 @@ export function useRollExport({
       cancel: () => controller.abort(),
     });
     const rendered: File[] = [];
+    // The other targets' files, each bound for its own sub-folder under the
+    // SAME name as the picture's file in the chosen folder.
+    const foldered: FolderedFile[] = [];
     // The picture each file was rendered from, parallel to `rendered`.
     const renderedFrom: RollPicture[] = [];
     const assetIds: (string | null)[] = [];
@@ -433,7 +438,9 @@ export function useRollExport({
               picture.framing,
               pictureAspectRatio(picture.aspect, size.width, size.height),
               picture.border,
-              { longEdge: r.export.longEdge, pixels: onlyProxies ? 'proxies' : 'auto' },
+              // The LARGEST target decides whether the original is worth
+              // fetching: every target is cut from the one render.
+              { size: largestSize(r.export.targets), pixels: onlyProxies ? 'proxies' : 'auto' },
             );
             if (summary.from === 'original') {
               const held = identity?.assetId ? heldOriginal(identity.assetId) : null;
@@ -511,8 +518,7 @@ export function useRollExport({
             aspect: picture.aspect,
             border: picture.border,
             lut: await cubeFor(picture.grade ?? null, develop),
-            longEdge: r.export.longEdge,
-            quality: r.export.quality,
+            targets: r.export.targets,
             keystone: picture.keystone ?? null,
             lens: picture.lens ?? null,
             layers: picture.layers ?? null,
@@ -581,6 +587,12 @@ export function useRollExport({
               lastModified: file.lastModified,
             }),
           );
+          out.outputs.slice(1).forEach((o, k) => {
+            foldered.push({
+              folder: targetFolder(r.export.targets[k + 1].name, k + 1),
+              file: new File([o.blob], name, { type: 'image/jpeg', lastModified: file.lastModified }),
+            });
+          });
           renderedFrom.push(picture);
           assetIds.push(identity?.assetId ?? null);
           if (origin) sourceIds.add(origin.sourceId);
@@ -598,7 +610,7 @@ export function useRollExport({
       // A cancelled run keeps what it rendered: written, and said as such.
       setExporting('Writing…');
       task.update({ label: 'Writing the pictures', progress: 0, detail: null });
-      const delivery = await deliverFilesTo(target, rendered, {
+      const delivery = await deliverFilesTo(target, [...rendered, ...foldered], {
         replace: r.export.replace,
         onProgress: (done, total) => {
           setExporting(`Writing ${done}/${total}…`);
@@ -615,7 +627,10 @@ export function useRollExport({
       const renamed = delivery.method === 'folder' ? delivery.renamed : 0;
       setNote(
         (cancelled ? `Cancelled after ${rendered.length} of ${targets.length} — ` : '') +
-          describeRun(delivery.written, delivery.method, [...failures, ...placeNote(unplaced), ...errors], renamed),
+          describeRun(delivery.written, delivery.method, [...failures, ...placeNote(unplaced), ...errors], renamed, {
+            pictures: rendered.length,
+            targets: r.export.targets.length,
+          }),
       );
       // Only the files from ONE instance, so a future send-home plan refuses
       // nothing it did not have to.

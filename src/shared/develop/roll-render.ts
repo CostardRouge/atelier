@@ -42,6 +42,8 @@ import { pictureAspectRatio } from './crop-aspect';
 import { drawDelivered } from './border-paint';
 import type { RollBorder } from './border-layout';
 import { deliveredLayout, type PictureSize } from './roll-export';
+import { decodeEdgeFor, longEdgeFor, type ExportTarget } from './export-targets';
+import { OUTPUT_SHARPEN_AMOUNT, SHARPEN_BAND_ROWS, sharpenRows } from './output-sharpen';
 import { makeGainMapPass } from '../render/gain-map-pass';
 import type { GainField } from '../render/gain-map';
 import type { CameraWarp } from '../render/camera-warp';
@@ -58,9 +60,12 @@ export interface RollRenderOptions {
   border: RollBorder | null;
   /** The picture's own cube — its develop under its own look — or null as shot. */
   lut: CubeLut | null;
-  longEdge: number | null;
-  /** JPEG quality 0..1. */
-  quality: number;
+  /**
+   * Where the file goes, at what size and quality — one or more
+   * (`export-targets.ts`). The picture is decoded and graded ONCE; each
+   * target is a cut, a resize, a sharpen and an encode of that one render.
+   */
+  targets: readonly DeliverTarget[];
   /**
    * The perspective correction, warped in BEFORE the crop frames the result —
    * the stage's own order, so the file is what was on screen.
@@ -121,7 +126,23 @@ export interface RollRenderOptions {
   onSubjects?: (() => void) | null;
 }
 
+/** What `deliver` needs of a target: its size, its quality, its screen sharpening. */
+export type DeliverTarget = Pick<ExportTarget, 'size' | 'quality' | 'sharpen'>;
+
+/** One target's file. */
+export interface RollOutput {
+  blob: Blob;
+  width: number;
+  height: number;
+  hdr: Pick<UltraHdrResult, 'ultra' | 'headroom' | 'checked' | 'reason'> | null;
+}
+
 export interface RollRendered {
+  /**
+   * Every target's file, in the targets' order. The fields below repeat the
+   * FIRST one's, which is what a run reports about the picture.
+   */
+  outputs: RollOutput[];
   blob: Blob;
   /** What the HDR delivery came to, when one was asked — `ultra` false means the plain JPEG left, with the reason. */
   hdr: Pick<UltraHdrResult, 'ultra' | 'headroom' | 'checked' | 'reason'> | null;
@@ -262,9 +283,12 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
  */
 async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRenderOptions): Promise<RollRendered> {
   const klass = deviceClass();
+  // Known before the decode only when every target asks a long edge: a short
+  // edge, an area or a percentage waits for the picture's own shape.
+  const decodeEdge = decodeEdgeFor(opts.targets.map((t) => ({ ...t, name: '' })));
   const gpuMax = maxRenderSize();
   const decoded = await decodeRaw(raw.file, {
-    minLongEdge: opts.longEdge ? opts.longEdge * 2 : null,
+    minLongEdge: decodeEdge ? decodeEdge * 2 : null,
     gain: raw.gain,
     // The GPU's cap and, on a phone, the device's own export ceiling
     // (`raw-budget.ts`): a whole sensor is what a phone's tab dies of.
@@ -284,7 +308,7 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
   // limits was met, and the run says which.
   const sensorEdge = Math.max(sensor.width, sensor.height);
   const decodedEdge = Math.max(source.width, source.height);
-  const askedLess = Boolean(opts.longEdge) && decodedEdge >= (opts.longEdge ?? 0);
+  const askedLess = Boolean(decodeEdge) && decodedEdge >= (decodeEdge ?? 0);
   const capped = decodedEdge < sensorEdge && !askedLess ? rawDecodeCap(sensorEdge, 'export', klass, gpuMax) : null;
   const ar = source.width / source.height;
   // The decode may be half the sensor: a kernel stated in sensor pixels scales with it.
@@ -381,7 +405,7 @@ function copyOf(image: CanvasImageSource): HTMLCanvasElement {
   return canvas;
 }
 
-/** Cut, border and encode a graded picture — the one place the file's frame is made. */
+/** Cut, border and encode a graded picture for every target — the one place the file's frame is made. */
 async function deliver(
   graded: CanvasImageSource,
   source: PictureSize,
@@ -389,42 +413,75 @@ async function deliver(
   opts: RollRenderOptions,
   darker: HTMLCanvasElement | null = null,
 ): Promise<RollRendered> {
+  if (opts.targets.length === 0) throw new Error('This export has no target.');
+  const outputs: RollOutput[] = [];
+  for (const target of opts.targets) outputs.push(await deliverOne(graded, source, gradedAt, opts, target, darker));
+  const first = outputs[0];
+  return { outputs, blob: first.blob, width: first.width, height: first.height, source, gradedAt, hdr: first.hdr, sensor: null, capped: null };
+}
+
+async function deliverOne(
+  graded: CanvasImageSource,
+  source: PictureSize,
+  gradedAt: PictureSize,
+  opts: RollRenderOptions,
+  target: DeliverTarget,
+  darker: HTMLCanvasElement | null,
+): Promise<RollOutput> {
   const ratio = pictureAspectRatio(opts.aspect, source.width, source.height);
   const framing = opts.framing ?? DEFAULT_FRAMING;
-  const { out, layout } = deliveredLayout(source, ratio, opts.framing, opts.border, opts.longEdge);
+  // The target's size read against this picture's own delivered frame.
+  const cap = longEdgeFor(target.size, deliveredLayout(source, ratio, opts.framing, opts.border, null).out);
+  const { out, layout } = deliveredLayout(source, ratio, opts.framing, opts.border, cap);
   if (out.w <= 0 || out.h <= 0) throw new Error('This picture has no pixels to deliver.');
   const canvas = document.createElement('canvas');
   canvas.width = out.w;
   canvas.height = out.h;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', target.sharpen === 'off' ? undefined : { willReadFrequently: true });
   if (!ctx) throw new Error('Could not create a 2D canvas for export.');
   ctx.imageSmoothingQuality = 'high';
   drawDelivered(ctx, graded, gradedAt.width, gradedAt.height, framing, layout, opts.border);
+  // Sharpened for the SCREEN after the resize — the resize is what softened it.
+  sharpenCanvas(ctx, out.w, out.h, OUTPUT_SHARPEN_AMOUNT[target.sharpen]);
   if (darker && opts.hdr) {
-    // The darker render, framed and bordered the same, so the map lines up
-    // with the base pixel for pixel.
+    // The darker render, framed, bordered and sharpened the same, so the map
+    // lines up with the base pixel for pixel and edge for edge.
     const dark = document.createElement('canvas');
     dark.width = out.w;
     dark.height = out.h;
-    const dctx = dark.getContext('2d');
+    const dctx = dark.getContext('2d', target.sharpen === 'off' ? undefined : { willReadFrequently: true });
     if (!dctx) throw new Error('Could not create a 2D canvas for the HDR export.');
     dctx.imageSmoothingQuality = 'high';
     drawDelivered(dctx, darker, gradedAt.width, gradedAt.height, framing, layout, opts.border);
+    sharpenCanvas(dctx, out.w, out.h, OUTPUT_SHARPEN_AMOUNT[target.sharpen]);
     const delivered = { width: out.w, height: out.h };
-    const result = await encodeUltraHdr(canvas, dark, opts.hdr.stops, opts.quality, opts.stamp ? (b) => opts.stamp!(b, delivered) : null);
+    const result = await encodeUltraHdr(canvas, dark, opts.hdr.stops, target.quality, opts.stamp ? (b) => opts.stamp!(b, delivered) : null);
     return {
       blob: result.blob,
       width: out.w,
       height: out.h,
-      source,
-      gradedAt,
       hdr: { ultra: result.ultra, headroom: result.headroom, checked: result.checked, reason: result.reason },
-      sensor: null,
-      capped: null,
     };
   }
-  const encoded = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', opts.quality));
+  const encoded = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', target.quality));
   if (!encoded) throw new Error('The browser could not encode this picture.');
   const blob = opts.stamp ? await opts.stamp(encoded, { width: out.w, height: out.h }) : encoded;
-  return { blob, width: out.w, height: out.h, source, gradedAt, hdr: null, sensor: null, capped: null };
+  return { blob, width: out.w, height: out.h, hdr: null };
+}
+
+/**
+ * The output sharpening, in bands of rows read with one row either side —
+ * the same pixels as the whole canvas done at once, without a second copy of
+ * a 60-megapixel file in memory.
+ */
+function sharpenCanvas(ctx: CanvasRenderingContext2D, w: number, h: number, amount: number): void {
+  if (amount <= 0) return;
+  for (let y0 = 0; y0 < h; y0 += SHARPEN_BAND_ROWS) {
+    const y1 = Math.min(h, y0 + SHARPEN_BAND_ROWS);
+    const top = Math.max(0, y0 - 1);
+    const bottom = Math.min(h, y1 + 1);
+    const band = ctx.getImageData(0, top, w, bottom - top);
+    const done = sharpenRows(band.data, w, bottom - top, y0 - top, y1 - top, amount);
+    ctx.putImageData(new ImageData(done, w, y1 - y0), 0, y0);
+  }
 }

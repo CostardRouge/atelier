@@ -33,7 +33,7 @@ function sample(): RollDoc {
   );
   return {
     ...doc,
-    export: { longEdge: 2048, quality: 0.85, replace: true, hdr: true, hdrStops: 3, metadata: { ...ALL_META, position: false } },
+    export: { targets: [{ name: '', size: { mode: 'long', value: 2048 }, quality: 0.85, sharpen: 'off' }, { name: 'Web', size: { mode: 'short', value: 1080 }, quality: 0.8, sharpen: 'standard' }], replace: true, hdr: true, hdrStops: 3, metadata: { ...ALL_META, position: false } },
   };
 }
 

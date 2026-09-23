@@ -14,6 +14,7 @@
  * build wrote is left behind rather than trusted. Pure and DOM-free.
  */
 
+import { DEFAULT_TARGET, readTargets, type ExportTarget } from './export-targets';
 import { ALL_META, readMetaChoice, type MetaChoice } from '../exif/meta-groups';
 import { isDefaultKeystone, keystoneOrNull, type Keystone } from '../render/geometry';
 import { isDefaultLens, lensOrNull, type LensCorrection } from '../render/lens';
@@ -50,8 +51,12 @@ import { DEFAULT_SOURCE_ID } from '../sources/source';
  * roll's — the maintainer's call: *"c'est le média qui décide"*. A roll written
  * before v5 hands its one look to every picture that has none (`readRollDoc`),
  * so nothing changes on screen; `RollDoc.grade` is gone.
+ * v6 (2026-09-23): the export writes to TARGETS (`export-targets.ts`, audit
+ * item 28) — `RollExport.longEdge` and `quality` became the first target's
+ * size and quality, read back by `readTargets`, so a roll exports exactly as
+ * it did.
  */
-export const ROLL_DOC_VERSION = 5;
+export const ROLL_DOC_VERSION = 6;
 
 /** A picture's look, after its own develop — Trips' `TripGrade` shape. */
 export interface RollGrade {
@@ -62,10 +67,13 @@ export interface RollGrade {
 }
 
 export interface RollExport {
-  /** The delivered long edge in pixels, or null for the source's own size. */
-  longEdge: number | null;
-  /** JPEG quality, 0.5..1. */
-  quality: number;
+  /**
+   * Where the run writes and at what size (`export-targets.ts`, v6): the
+   * first target into the folder chosen at the click, each other one into a
+   * sub-folder of it named after the target — the files' own names never
+   * change. Never empty.
+   */
+  targets: ExportTarget[];
   /**
    * Replace a file the chosen folder already holds under the export's name,
    * or number the incoming one (`DJI_0101-1.jpg`). OFF by default: an export
@@ -91,8 +99,7 @@ export interface RollExport {
 }
 
 export const DEFAULT_ROLL_EXPORT: Readonly<RollExport> = Object.freeze({
-  longEdge: null,
-  quality: 0.92,
+  targets: [{ ...DEFAULT_TARGET }],
   replace: false,
   hdr: false,
   hdrStops: 2,
@@ -100,8 +107,6 @@ export const DEFAULT_ROLL_EXPORT: Readonly<RollExport> = Object.freeze({
 });
 
 export const ROLL_EXPORT_LIMITS = {
-  longEdge: { min: 256, max: 16384 },
-  quality: { min: 0.5, max: 1 },
   hdrStops: { min: 1, max: 4 },
 } as const;
 
@@ -308,14 +313,11 @@ export function readRollGrade(raw: unknown): RollGrade | null {
 }
 
 export function readRollExport(raw: unknown): RollExport {
-  if (!isRecord(raw)) return { ...DEFAULT_ROLL_EXPORT, metadata: { ...ALL_META } };
-  const { longEdge, quality } = ROLL_EXPORT_LIMITS;
-  const edge = typeof raw.longEdge === 'number' && Number.isFinite(raw.longEdge)
-    ? Math.round(Math.min(longEdge.max, Math.max(longEdge.min, raw.longEdge)))
-    : null;
+  if (!isRecord(raw)) return { ...DEFAULT_ROLL_EXPORT, targets: [{ ...DEFAULT_TARGET }], metadata: { ...ALL_META } };
   return {
-    longEdge: edge,
-    quality: Math.min(quality.max, Math.max(quality.min, finite(raw.quality, DEFAULT_ROLL_EXPORT.quality))),
+    // v5 and earlier held one long edge and one quality: they become the
+    // only target, so an old roll exports exactly as it did.
+    targets: readTargets(raw.targets, { longEdge: raw.longEdge, quality: raw.quality }),
     // `originals`, written by v1–v3, is left behind on purpose (v4).
     // Anything but a stored `true` reads as off, so a roll written before the
     // choice existed keeps what is in its folder.

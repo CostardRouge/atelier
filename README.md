@@ -1302,8 +1302,19 @@ ones, or every picture that leaves — into a folder you choose (downloaded one
 by one where the browser has no folder picker). Each is decoded at its own size,
 developed under its own look and cropped as the stage showed it — a crop
 leaves at the picture's own density, so a small zone makes a small file, never
-one blown up to fill its aspect; the **Size** is a ceiling on the long edge and
-never upscales. Each picture leaves from the file you chose above the
+one blown up to fill its aspect; the **Size** is a ceiling and never upscales
+— a long edge, a short edge (a feed that wants 1080 px across), an area in
+megapixels, or a share of the picture. One run can write up to four
+**targets**: the full picture for the archive and a 2048 px set for the web,
+say, each with its own size, quality and **screen sharpening** (applied to
+the file after its resize, since a picture brought down to 2048 px is softer
+than it was). Each picture is rendered once and cut to every target. The
+first target writes into the folder you choose, each other one into a folder
+inside it named after the target, and every file keeps its picture's name —
+`DJI_0101.jpg` and `Web/DJI_0101.jpg` are the same photograph (a download,
+where there is no folder picker, becomes `Web-DJI_0101.jpg`). A new target
+starts from a preset — Full size, Web · 2048 px, Feed · 1080 px across,
+Mail · 2 MP, Half · 50 %. Each picture leaves from the file you chose above the
 photograph — its RAW when you developed it on the sensor, the camera's own
 JPEG when you picked it, else where it opened, and there the full-size
 original is fetched only where the proxy could not fill the frame asked for.

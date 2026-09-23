@@ -66,28 +66,66 @@ export async function pickDeliveryTarget(): Promise<DeliveryTarget | null> {
   }
 }
 
+/**
+ * A file bound for a SUB-FOLDER of the chosen one — a second export target
+ * (`develop/export-targets.ts`): the file keeps its own name, the folder says
+ * which target it is. A download cannot make a folder, so there the folder's
+ * name goes before the file's instead (`Web-DJI_0101.jpg`).
+ */
+export interface FolderedFile {
+  file: File;
+  folder: string;
+}
+
 /** Write the files where `pickDeliveryTarget` said. */
 export async function deliverFilesTo(
   target: DeliveryTarget,
-  files: readonly File[],
+  files: readonly (File | FolderedFile)[],
   { replace, onProgress }: DeliverOptions,
 ): Promise<Delivery> {
+  const items = files.map((f) => (f instanceof File ? { file: f, folder: '' } : f));
+  const total = items.length;
   if (target.kind === 'folder') {
-    const res = await writeItems(target.dir, files.map((f) => ({ name: f.name, file: f })), {
-      replace,
-      onProgress: (done, total) => onProgress?.(done, total),
-    });
-    return {
-      method: 'folder',
-      written: res.written,
-      renamed: res.renamed,
-      errors: res.errors.map((e) => `${e.name}: ${e.message}`),
-      failed: res.errors.map((e) => e.name),
-    };
+    let done = 0;
+    const result = { written: 0, renamed: 0, errors: [] as string[], failed: [] as string[] };
+    // One folder at a time, the chosen one first, in the order they came.
+    const folders = [...new Set(items.map((i) => i.folder))];
+    for (const folder of folders) {
+      const these = items.filter((i) => i.folder === folder);
+      let dir = target.dir;
+      if (folder) {
+        try {
+          dir = await target.dir.getDirectoryHandle(folder, { create: true });
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          for (const i of these) {
+            result.errors.push(`${folder}/${i.file.name}: ${message}`);
+            result.failed.push(`${folder}/${i.file.name}`);
+          }
+          done += these.length;
+          onProgress?.(done, total);
+          continue;
+        }
+      }
+      const base = done;
+      const res = await writeItems(dir, these.map((i) => ({ name: i.file.name, file: i.file })), {
+        replace,
+        onProgress: (n) => onProgress?.(base + n, total),
+      });
+      done += these.length;
+      result.written += res.written;
+      result.renamed += res.renamed;
+      // A sub-folder's names carry the folder, so a caller counting what
+      // landed in the chosen folder itself never mistakes one for the other.
+      const at = (name: string) => (folder ? `${folder}/${name}` : name);
+      result.errors.push(...res.errors.map((e) => `${at(e.name)}: ${e.message}`));
+      result.failed.push(...res.errors.map((e) => at(e.name)));
+    }
+    return { method: 'folder', ...result };
   }
-  for (const [i, f] of files.entries()) {
-    downloadBlob(f, f.name);
-    onProgress?.(i + 1, files.length);
+  for (const [i, f] of items.entries()) {
+    downloadBlob(f.file, f.folder ? `${f.folder}-${f.file.name}` : f.file.name);
+    onProgress?.(i + 1, total);
   }
-  return { method: 'download', written: files.length };
+  return { method: 'download', written: total };
 }
