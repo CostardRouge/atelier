@@ -79,12 +79,13 @@ samples each channel at its own scale of it and multiplies by the gain there.
 Three passes would resample three times, and every resample after the first is
 blur paid for nothing.
 
-- **No profile database ships, and that is a decision, not a gap.** A lens
+- **No profile database SHIPS, and no coefficient is invented.** A lens
   profile is MEASURED calibration data; inventing k1/k2 for a camera nobody
   measured is a fabricated correction that looks authoritative — the battery
   gauge's `—` again. The manual sliders correct by eye against a straight edge
-  and work on any lens. A profile, when there is real data, sets those same
-  numbers; it is not a second code path.
+  and work on any lens. **Rev. 2026-09-23**: measured profiles now come from
+  LENSFUN, fetched per lens on request and kept locally (his YES) — a second
+  set of terms in the SAME pass, under the sliders — `lens-profiles.md`.
 - **The reaches are bounded by MONOTONICITY, not by taste.** `f'(r) = 1 + 3k1r²
   + 5k2r⁴`, so the worst case is both sliders at −100 at the corner. At the
   0.25/0.12 this started with that is −0.35 and the map turns back on itself
@@ -92,8 +93,11 @@ blur paid for nothing.
   frame at every extreme; that is how it was found, and it is why the pair
   cannot be raised casually. 18 % at the corner is already far more than a real
   lens asks.
-- **The radius is normalised to half the DIAGONAL** (Lensfun's convention), so
-  one number means the same on a 3:2 frame and on a 4:5 crop of it.
+- **The radius is normalised to half the DIAGONAL**, so one number means the
+  same on a 3:2 frame and on a 4:5 crop of it. This was once written down as
+  "Lensfun's convention" — it is NOT (Lensfun's distortion puts r = 1 at half
+  the calibration sensor's SHORT side, its vignetting at the corner;
+  `lens-profiles.md`).
 - **Green never moves.** A fringe is red and blue landing at the wrong size, so
   those are what get rescaled; a channel whose scale took it off the picture
   keeps green's value rather than going black and painting a coloured edge of

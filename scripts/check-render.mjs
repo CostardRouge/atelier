@@ -291,6 +291,60 @@ const out = await page.evaluate(async () => {
     // The full lift from the centre out, on a dark frame: where a gain on the
     // code and a gain on the light are furthest apart.
     results.vignetteDark = vignetteRow('#404040', 100, 0);
+
+    // A MEASURED profile (Lensfun, `LensProfileTerms`): a picture whose red is
+    // its x and whose green is its y, so each channel reads back WHERE it was
+    // sampled — green through the profile's distortion (odd terms included,
+    // which the sliders never had), red through the distortion AND its own
+    // TCA. Then a flat grey through the profile's vignetting alone.
+    {
+      const profile = {
+        distortion: [0.06, -0.25, 0.1, 0.03],
+        tcaRed: [1.004, 0, 0.002],
+        tcaBlue: [0.997, 0, -0.001],
+        vignette: [0, 0, 0],
+      };
+      const ramp = draw((g) => {
+        const img = g.createImageData(S, S);
+        for (let y = 0; y < S; y += 1) for (let x = 0; x < S; x += 1) {
+          const i = (y * S + x) * 4;
+          img.data[i] = Math.round((255 * x) / (S - 1));
+          img.data[i + 1] = Math.round((255 * y) / (S - 1));
+          img.data[i + 2] = 128;
+          img.data[i + 3] = 255;
+        }
+        g.putImageData(img, 0, 0);
+      });
+      const pData = run(ramp, makeLensPass(null, 1, profile));
+      const span = Math.SQRT2; // a square frame: (ar / diag) * 2
+      const codeAt = (uv) => (255 * (uv * S - 0.5)) / (S - 1);
+      let worstG = 0, worstR = 0, probes = 0, moved = 0;
+      for (const fx of [0.12, 0.3, 0.5, 0.7, 0.88]) for (const fy of [0.15, 0.4, 0.62, 0.85]) {
+        const x = Math.floor(fx * S), y = Math.floor(fy * S);
+        const u = (x + 0.5) / S, v = (y + 0.5) / S;
+        const dx = (u - 0.5) * span, dy = (v - 0.5) * span;
+        const r = Math.hypot(dx, dy);
+        if (!r) continue;
+        const rs = lens.profileSourceRadius(r, profile.distortion);
+        const rr = lens.profileChannelRadius(rs, profile.tcaRed);
+        const gv = (dy / r) * rs / span + 0.5;
+        const ru = (dx / r) * rr / span + 0.5;
+        if (gv <= 0.01 || gv >= 0.99 || ru <= 0.01 || ru >= 0.99) continue;
+        probes += 1;
+        const i = (y * S + x) * 4;
+        worstG = Math.max(worstG, Math.abs(pData[i + 1] - codeAt(gv)));
+        worstR = Math.max(worstR, Math.abs(pData[i] - codeAt(ru)));
+        moved = Math.max(moved, Math.abs(codeAt(gv) - codeAt(v)));
+      }
+      const flat = draw((g) => { g.fillStyle = '#808080'; g.fillRect(0, 0, S, S); });
+      const k = [-0.9, 0.3, -0.1];
+      const vData = run(flat, makeLensPass(null, 1, { ...profile, distortion: [0, 0, 0, 0], tcaRed: [1, 0, 0], tcaBlue: [1, 0, 0], vignette: k }));
+      const centre = vData[((S >> 1) * S + (S >> 1)) * 4];
+      const corner = vData[((S >> 1) * S + OUT) * 4];
+      const { fromLinear, toLinear } = await import('/atelier/src/shared/lut/transfer.ts');
+      const expected = Math.round(255 * Math.min(1, fromLinear(toLinear(centre / 255, 'srgb') * lens.profileVignetteGain(toRadius(OUT), k), 'srgb')));
+      results.lensProfile = { probes, worstG: Number(worstG.toFixed(2)), worstR: Number(worstR.toFixed(2)), moved: Number(moved.toFixed(1)), centre, corner, expected };
+    }
   }
 
   // --- the mask: does the shader agree with maskAt, point for point? --------
@@ -1516,6 +1570,16 @@ for (const [name, vig] of [['mid grey', out.vignette], ['dark grey', out.vignett
   } else {
     console.log(`  ok    within ${Math.abs(vig.out - vig.expected)} code(s) of it, in light`);
   }
+}
+
+{
+  const p = out.lensProfile;
+  const ok = p.probes >= 12 && p.worstG <= 1.6 && p.worstR <= 1.6 && p.moved > 3 && Math.abs(p.corner - p.expected) <= 2 && p.corner > p.centre + 10;
+  if (!ok) bad += 1;
+  console.log(
+    `  ${ok ? 'ok  ' : 'FAIL'}  a measured lens profile: green (distortion) worst ${p.worstG} codes, red (distortion + TCA) worst ${p.worstR} ` +
+      `over ${p.probes} probes, moving up to ${p.moved}; its vignetting lifts ${p.centre} → ${p.corner} against ${p.expected}`,
+  );
 }
 
 const mask = out.mask;

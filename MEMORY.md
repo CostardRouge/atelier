@@ -265,6 +265,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 | `docs/memory/render-detail.md` | `render/detail.ts`, `detail-pass.ts`, the Detail tab — denoise, defringe, sharpen, any pass reading a NEIGHBOURHOOD |
 | `docs/memory/mask-parts.md` | a layer's combined masks (`AdjustLayer.parts`, `combineMask`), the colour range and its sample (`sampleColour`) |
 | `docs/memory/develop-output.md` | what a Develop export WRITES: `RollExport.targets` (v6), size modes, screen sharpening, sub-folders — pass 4 of `docs/lightroom-gaps.md` |
+| `docs/memory/lens-profiles.md` | `src/shared/lens/` (Lensfun: reading, matching, interpolating, converting units, fetching), `LensProfileTerms`, the profile half of the lens pass |
 | `docs/memory/subject-picking.md` | the Subject mask on the stage (`use-subject-masks.ts`), `AdjustLayer.except`, the mask's outline/fill view, the blink, and a subject reaching the EXPORT (`subject-rasters.ts`) |
 | `docs/memory/render-repair.md` | `render/repair.ts`, `repair-pass.ts`, `RollPicture.repair`, the Repair section — heal, clone, dust, anything that COPIES pixels from one place to another |
 | `docs/memory/render-film.md` | `render/film-pass.ts`, `shared/film/film-texture.ts` / `film-noise.ts` / `film-grain.ts` — grain, halation, `RenderPass.prepare`, any spatial effect belonging to a LOOK |
