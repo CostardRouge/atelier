@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { useActiveAsset } from '../../shared/library/use-active-asset';
-import type { AssetKind } from '../../shared/library/assets';
+import { classifyPart, type AssetKind } from '../../shared/library/assets';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import type { SavedMediaRef } from '../../shared/projects/project-types';
 import { hashedMediaRef } from '../../shared/projects/media-identity';
@@ -24,13 +24,18 @@ import { flipFraming, normaliseFraming, type Framing } from '../../shared/media/
 import {
   MOTION_PRESETS,
   applyPreset,
+  arrivalMarks,
   deepestFraming,
+  framingWindow,
+  motionOffset,
+  tourFrames,
+  tourMotion,
+  tourOf,
   flipMotion,
   framingAtNeedle,
   framingAtProgress,
   hasMotion,
   keySeconds,
-  motionMarks,
   motionProgress,
   needleTarget,
   placeAtNeedle,
@@ -40,6 +45,7 @@ import {
   type FramingMotion,
   type MotionPreset,
   type PictureBox,
+  type TourPlan,
 } from '../../shared/media/framing-motion';
 import { badgeContent, type BadgePiece } from '../../shared/roadtrip/day-badge';
 import {
@@ -1015,12 +1021,33 @@ export default function PostEditor({
     },
     [cellFraming, cellMotion, presetBox, holdTheNeedle, patchCell, cellIndex],
   );
+  // The TOUR over the selected picture: read out of its frames every render,
+  // since a tour is only a way of writing them (`framing-motion.ts`).
+  const tourSpan = slideSeconds - (hasMotion(cellMotion) ? motionOffset(cellMotion, slideSeconds, openerSeconds) : 0);
+  const tour = useMemo(() => {
+    if (!presetBox) return null;
+    const plan = tourOf(cellFraming, cellMotion, presetBox, tourSpan);
+    return {
+      plan,
+      windows: tourFrames(cellFraming, cellMotion).map((f) => framingWindow(f, presetBox)),
+    };
+  }, [cellFraming, cellMotion, presetBox, tourSpan]);
+  const writeTour = useCallback(
+    (plan: TourPlan) => {
+      const out = tourMotion(cellFraming, cellMotion, plan, presetBox, tourSpan);
+      if (!out) return;
+      holdTheNeedle();
+      patchCell(cellIndex, { framing: out.framing, motion: out.motion });
+    },
+    [cellFraming, cellMotion, presetBox, tourSpan, holdTheNeedle, patchCell, cellIndex],
+  );
   /** Move the needle between the selected picture's frames. */
   const jumpNeedle = useCallback(
     (to: NeedleJump) => {
       if (!hasMotion(cellMotion)) return;
       holdTheNeedle();
-      const marks = motionMarks(cellMotion, slideSeconds, openerSeconds);
+      // Arrivals only: the end of a pause is the same frame again.
+      const marks = arrivalMarks(cellFraming, cellMotion, slideSeconds, openerSeconds);
       const here = deck.local;
       const at =
         to === 'first'
@@ -1034,7 +1061,7 @@ export default function PostEditor({
       // shows the composition, and the needle would not be on the frame asked for.
       deck.goTo(slideIndex, Math.min(slideSeconds, Math.max(NEEDLE_NUDGE_SECONDS, at)));
     },
-    [cellMotion, holdTheNeedle, slideSeconds, openerSeconds, deck, slideIndex],
+    [cellFraming, cellMotion, holdTheNeedle, slideSeconds, openerSeconds, deck, slideIndex],
   );
 
   // The opener's ticks, heard while whichever transport is actually driving
@@ -1803,6 +1830,18 @@ export default function PostEditor({
                       onJump: jumpNeedle,
                       presets,
                       onPreset: writePreset,
+                      tour:
+                        tour && presetBox
+                          ? {
+                              file: cellFile,
+                              isVideo: Boolean(cellFile && classifyPart(cellFile.name) === 'video'),
+                              videoSeconds: cellIndex === 0 ? slide.videoTimeSeconds : 0,
+                              aspect: presetBox.srcW / presetBox.srcH,
+                              plan: tour.plan,
+                              windows: tour.windows,
+                              onPlan: writeTour,
+                            }
+                          : null,
                     }
               }
               grade={grade}

@@ -1,16 +1,20 @@
+import { useState } from 'react';
 import { DEFAULT_STEPS, MAX_STEPS, MIN_STEPS } from '../../../shared/motion/easing';
 import {
   hasMotion,
   keepEnds,
+  MAX_TOUR_STOPS,
   starterMotion,
   type FramingMotion,
   type MotionPreset,
+  type TourPlan,
 } from '../../../shared/media/framing-motion';
 import type { Framing } from '../../../shared/media/framing';
 import Button from '../../../shared/ui/Button';
 import { FieldRow, InspectorSection, RangeField, Readout, SelectField, ToggleField } from '../../../shared/ui/Inspector';
 import Segmented from '../../../shared/ui/Segmented';
 import { EASINGS } from '../PieceStylePanel';
+import TourMap from './TourMap';
 
 /** Where the needle sends the arrows: the first frame, a neighbour, the rest. */
 export type NeedleJump = 'first' | 'prev' | 'next' | 'rest';
@@ -34,6 +38,21 @@ export interface PanZoomSectionProps {
   /** The one-tap moves, each with the reason it cannot be written here, if any. */
   presets: readonly { id: MotionPreset; problem: string | null }[];
   onPreset: (preset: MotionPreset) => void;
+  /** The tour over the selected picture, read out of its frames; null until its shape is known. */
+  tour: TourProps | null;
+}
+
+/** What the tour's map needs, and where it writes. */
+export interface TourProps {
+  file: File | null;
+  isVideo: boolean;
+  videoSeconds: number;
+  /** The picture's width over its height. */
+  aspect: number;
+  plan: TourPlan;
+  /** What each stop really shows, four corners in 0..1 of the picture. */
+  windows: readonly (readonly [number, number][])[];
+  onPlan: (plan: TourPlan) => void;
 }
 
 /** What each preset is called, and what it does, from the camera's side. */
@@ -80,8 +99,11 @@ export default function PanZoomSection({
   onJump,
   presets,
   onPreset,
+  tour,
 }: PanZoomSectionProps) {
   const moving = hasMotion(motion);
+  const [touring, setTouring] = useState(false);
+  const [stop, setStop] = useState(0);
   return (
     <InspectorSection
       id="piece.panzoom"
@@ -105,6 +127,12 @@ export default function PanZoomSection({
             A <strong>quick move</strong> writes a whole move in one tap — a pan from one edge
             of the picture to the other, a push in or a pull out — over your framing. It
             replaces the frames placed so far and keeps the easing; refine it at the needle.
+          </p>
+          <p>
+            A <strong>tour</strong> visits points of the picture in order: open the map of the
+            whole picture, tap where the view should go, drag a stop to move it. Every stop is
+            seen at one zoom and held for the pause you set; the glides share the rest of the
+            slide by how far they travel, and the last stop is where the picture rests.
           </p>
           <p>
             A slide that moves leaves as a video under Auto. The zoom it reaches decides
@@ -138,6 +166,25 @@ export default function PanZoomSection({
           ))}
         </div>
       </FieldRow>
+      <FieldRow label="Tour">
+        <Button
+          size="sm"
+          variant={touring ? 'default' : 'ghost'}
+          onClick={() => setTouring((open) => !open)}
+          disabled={!tour}
+          title={tour ? 'Visit points of the picture one after the other' : 'The picture is still being read'}
+        >
+          {touring ? 'Close the map' : 'Plan a tour…'}
+        </Button>
+        {tour && (
+          <Readout muted>
+            {tour.plan.stops.length} {tour.plan.stops.length === 1 ? 'stop' : 'stops'}
+          </Readout>
+        )}
+      </FieldRow>
+      {touring && tour && (
+        <TourRows tour={tour} selected={Math.min(stop, tour.plan.stops.length - 1)} onSelect={setStop} />
+      )}
       {moving && (
         <>
           <FieldRow label="Placing" hint="A drag or a zoom on the stage writes this frame.">
@@ -221,5 +268,83 @@ export default function PanZoomSection({
         </>
       )}
     </InspectorSection>
+  );
+}
+
+/**
+ * The open tour: the map, then the zoom and the pause every stop shares, and
+ * the verbs on the selected stop. Every change rewrites the whole tour — the
+ * frames placed at the needle included, since a tour IS those frames.
+ */
+function TourRows({ tour, selected, onSelect }: { tour: TourProps; selected: number; onSelect: (i: number) => void }) {
+  const { plan, onPlan } = tour;
+  const write = (patch: Partial<TourPlan>) => onPlan({ ...plan, ...patch });
+  return (
+    <>
+      {/* The whole picture, as wide as the section: a map the width of a
+          field's control column leaves stops too small to take hold of. */}
+      <div className="grid gap-1.5">
+        <TourMap
+          file={tour.file}
+          isVideo={tour.isVideo}
+          videoSeconds={tour.videoSeconds}
+          aspect={tour.aspect}
+          stops={plan.stops}
+          windows={tour.windows}
+          selected={selected}
+          onSelect={onSelect}
+          onChange={(stops) => write({ stops })}
+        />
+        <p className="m-0 text-xs leading-relaxed text-muted">
+          Tap the picture to add a stop ({MAX_TOUR_STOPS} at most), drag one to move it. A stop sits
+          where the view can really centre at this zoom; the last is where the picture rests.
+        </p>
+      </div>
+      <FieldRow label="Zoom">
+        <RangeField
+          label="The zoom every stop is seen at"
+          min={1}
+          max={4}
+          step={0.05}
+          value={plan.zoom}
+          onChange={(zoom) => write({ zoom })}
+          format={(v) => `${v.toFixed(2)}×`}
+        />
+      </FieldRow>
+      {/* A pause is written as two equal frames, so it exists only between
+          stops: with one stop there is nowhere to keep it. */}
+      <FieldRow label="Pause" hint={plan.stops.length < 2 ? 'Pauses start with a second stop.' : undefined}>
+        <RangeField
+          label="How long the view rests on each stop"
+          min={0}
+          max={2}
+          step={0.05}
+          value={plan.holdSeconds}
+          onChange={(holdSeconds) => write({ holdSeconds })}
+          format={(v) => `${v.toFixed(2)} s`}
+          disabled={plan.stops.length < 2}
+        />
+      </FieldRow>
+      <FieldRow label="Stop">
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => write({ stops: plan.stops.filter((_, i) => i !== selected) })}
+          disabled={plan.stops.length < 2}
+          title={`Take off stop ${selected + 1}`}
+        >
+          Remove {selected + 1}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => write({ stops: plan.stops.slice(-1) })}
+          disabled={plan.stops.length < 2}
+          title="Keep only the last stop — the picture holds still where it rests"
+        >
+          Clear
+        </Button>
+      </FieldRow>
+    </>
   );
 }

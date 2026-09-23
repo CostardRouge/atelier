@@ -37,7 +37,15 @@
  */
 
 import { clampSteps, easeAt, isEasingId, type EasingId } from '../motion/easing';
-import { MAX_FRAMING_SCALE, framingTransform, zoomFramingAbout, type Framing } from './framing';
+import {
+  MAX_FRAMING_SCALE,
+  framePoint,
+  framingTransform,
+  panBy,
+  unframePoint,
+  zoomFramingAbout,
+  type Framing,
+} from './framing';
 
 /** One placed frame: where the picture sits at `at` of the motion's span. */
 export interface FramingKey {
@@ -538,4 +546,186 @@ export function applyPreset(
   const wider = Math.max(1, framing.scale / PRESET_ZOOM);
   if (framing.scale / wider >= 1.15) return moved(zoomedAbout(framing, wider, box), framing);
   return moved(framing, zoomedAbout(framing, Math.min(MAX_FRAMING_SCALE, framing.scale * PRESET_ZOOM), box));
+}
+
+/**
+ * A TOUR: the view visits points of the picture in order, at one zoom,
+ * pausing at each — a panorama read spot by spot. It is written as ordinary
+ * keys (a pause is two equal frames) whose last stop is the rest, so it needs
+ * no field of its own, and a tour is READ BACK out of any motion's frames
+ * (`tourOf`): every move is a sequence of stops.
+ */
+export interface TourStop {
+  /** A point of the picture, 0..1 of its width and height. */
+  x: number;
+  y: number;
+}
+
+export interface TourPlan {
+  stops: TourStop[];
+  /** The zoom every stop is seen at. */
+  zoom: number;
+  /** How long the view rests on each stop, in seconds. */
+  holdSeconds: number;
+}
+
+/** More stops than this and a slide becomes a slideshow of blurs. */
+export const MAX_TOUR_STOPS = 8;
+
+/** The least a glide between two stops may take, in seconds, before the pauses give way. */
+export const MIN_GLIDE_SECONDS = 0.35;
+
+/**
+ * The framing that looks at `stop` at `zoom` — the point in the middle of the
+ * frame, or as near as the picture's edges allow: the pan goes through
+ * `panBy`, which clamps, so a stop near an edge never opens a gap.
+ */
+export function framingOn(framing: Framing, stop: TourStop, zoom: number, box: PictureBox): Framing {
+  const base: Framing = { ...framing, scale: clamp(zoom, 1, MAX_FRAMING_SCALE), x: 0, y: 0 };
+  if (!boxKnown(box)) return base;
+  const [px, py] = framePoint(stop.x * box.srcW, stop.y * box.srcH, box.srcW, box.srcH, box.dstW, box.dstH, base);
+  return panBy(base, box.srcW, box.srcH, box.dstW, box.dstH, box.dstW / 2 - px, box.dstH / 2 - py);
+}
+
+/** The point of the picture in the middle of the frame, as a stop. */
+function stopOf(framing: Framing, box: PictureBox): TourStop {
+  const [sx, sy] = unframePoint(box.dstW / 2, box.dstH / 2, box.srcW, box.srcH, box.dstW, box.dstH, framing);
+  return { x: clamp(sx / box.srcW, 0, 1), y: clamp(sy / box.srcH, 0, 1) };
+}
+
+/**
+ * The part of the picture a framing shows, as four corners in 0..1 of the
+ * picture — what a map of the whole picture outlines for each stop. Four
+ * corners, not a rectangle: a turned picture shows a turned window.
+ */
+export function framingWindow(framing: Framing, box: PictureBox): [number, number][] {
+  if (!boxKnown(box)) return [];
+  const corners: [number, number][] = [
+    [0, 0],
+    [box.dstW, 0],
+    [box.dstW, box.dstH],
+    [0, box.dstH],
+  ];
+  return corners.map(([cx, cy]) => {
+    const [sx, sy] = unframePoint(cx, cy, box.srcW, box.srcH, box.dstW, box.dstH, framing);
+    return [sx / box.srcW, sy / box.srcH];
+  });
+}
+
+function sameFrame(a: { scale: number; x: number; y: number }, b: { scale: number; x: number; y: number }): boolean {
+  return Math.abs(a.scale - b.scale) < 1e-6 && Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6;
+}
+
+/**
+ * Read a motion as a tour: its frames, the rest last, one stop per run of
+ * equal frames; the zoom the rest is seen at; the first pause found, in
+ * seconds of the span. With no motion, the tour is the one stop the picture
+ * rests on. What a tour editor opens on, whoever wrote the frames.
+ */
+export function tourOf(
+  framing: Framing,
+  motion: FramingMotion | null | undefined,
+  box: PictureBox | null | undefined,
+  spanSeconds: number,
+): TourPlan {
+  const plan: TourPlan = { stops: [], zoom: framing.scale, holdSeconds: 0 };
+  if (!boxKnown(box)) return plan;
+  const frames = [...(hasMotion(motion) ? motion.keys : []), restKey(framing)];
+  frames.forEach((f, i) => {
+    const prev = frames[i - 1];
+    if (prev && sameFrame(prev, f) && !plan.holdSeconds) {
+      plan.holdSeconds = (f.at - prev.at) * Math.max(0, spanSeconds);
+    }
+  });
+  plan.stops = tourFrames(framing, motion).map((f) => stopOf(f, box));
+  return plan;
+}
+
+/**
+ * The frames a motion stops on, in order, the rest last — one per run of
+ * equal frames. What a map of the picture outlines, as they really are
+ * (each at its own zoom), rather than as a rewrite would make them.
+ */
+export function tourFrames(framing: Framing, motion: FramingMotion | null | undefined): Framing[] {
+  const frames = [...(hasMotion(motion) ? motion.keys : []), restKey(framing)];
+  return frames.filter((f, i) => i === 0 || !sameFrame(frames[i - 1], f)).map((f) => keyFraming(framing, f));
+}
+
+/**
+ * Write a tour over the picture: the first stop at the start, the last at
+ * the rest, each held `holdSeconds`, the glides between them sharing what is
+ * left of the span by how far each travels — so the view keeps one pace
+ * rather than rushing the long hops. A span too short for the pauses shrinks
+ * them before any glide drops under {@link MIN_GLIDE_SECONDS}. One stop is no
+ * move at all: the picture rests on it. Easing and start are kept.
+ */
+export function tourMotion(
+  framing: Framing,
+  motion: FramingMotion | null | undefined,
+  plan: TourPlan,
+  box: PictureBox | null | undefined,
+  spanSeconds: number,
+): { framing: Framing; motion: FramingMotion | null } | null {
+  if (!boxKnown(box) || plan.stops.length === 0) return null;
+  const stops = plan.stops.slice(0, MAX_TOUR_STOPS).map((s) => framingOn(framing, s, plan.zoom, box));
+  const rest = stops[stops.length - 1];
+  if (stops.length === 1) return { framing: rest, motion: null };
+
+  const span = Math.max(0.1, spanSeconds);
+  const hops = stops.length - 1;
+  let hold = Math.max(0, finite(plan.holdSeconds) ? plan.holdSeconds : 0);
+  const glideFloor = Math.min(MIN_GLIDE_SECONDS, span / hops);
+  if (span - stops.length * hold < hops * glideFloor) {
+    hold = Math.max(0, (span - hops * glideFloor) / stops.length);
+  }
+  const glideTotal = Math.max(0, span - stops.length * hold);
+  // How far each hop travels on screen, the zoom being the same at both ends.
+  const reach = stops.slice(1).map((b, i) => {
+    const a = stops[i];
+    return Math.hypot(b.x - a.x, b.y - a.y) + 1e-3;
+  });
+  const total = reach.reduce((sum, d) => sum + d, 0);
+
+  const keys: FramingKey[] = [];
+  const push = (seconds: number, f: Framing) => {
+    const at = seconds / span;
+    if (at < LAST_AT) keys.push({ at, scale: f.scale, x: f.x, y: f.y });
+  };
+  let t = 0;
+  stops.forEach((stop, i) => {
+    push(t, stop);
+    if (i < hops) {
+      if (hold > 0) push(t + hold, stop);
+      t += hold + (glideTotal * reach[i]) / total;
+    }
+  });
+  // The last stop's pause runs to the end of the span, where the rest sits:
+  // its arrival was pushed above, and a stop reached at the very end has none.
+  return {
+    framing: { ...framing, scale: rest.scale, x: rest.x, y: rest.y },
+    motion: {
+      keys: sortKeys(keys),
+      easing: motion?.easing ?? DEFAULT_MOTION_EASING,
+      ...(motion?.easing === 'steps' ? { steps: motion.steps } : {}),
+      start: motion?.start ?? 'slide',
+    },
+  };
+}
+
+/**
+ * Where the view ARRIVES at each distinct frame, in the slide's seconds —
+ * what «previous / next frame» steps through. A pause is two equal frames,
+ * and stepping onto the end of one would show nothing new.
+ */
+export function arrivalMarks(
+  framing: Framing,
+  motion: FramingMotion | null | undefined,
+  seconds: number,
+  openerSeconds = 0,
+): number[] {
+  if (!hasMotion(motion)) return [];
+  const frames = [...motion.keys, restKey(framing)];
+  return frames
+    .filter((f, i) => i === 0 || !sameFrame(frames[i - 1], f))
+    .map((f) => keySeconds(motion, f.at, seconds, openerSeconds));
 }

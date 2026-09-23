@@ -5,6 +5,12 @@ import {
   STARTER_ZOOM,
   PRESET_ZOOM,
   applyPreset,
+  arrivalMarks,
+  framingOn,
+  framingWindow,
+  tourMotion,
+  tourOf,
+  MIN_GLIDE_SECONDS,
   presetProblem,
   deepestFraming,
   flipMotion,
@@ -351,5 +357,107 @@ describe('presets', () => {
     const out = applyPreset('pull-out', rest, before, box)!;
     expect(out.motion.keys).toHaveLength(1);
     expect(out.motion).toMatchObject({ easing: 'steps', steps: 6, start: 'after-opener' });
+  });
+});
+
+describe('the tour', () => {
+  const box = { srcW: SRC.w, srcH: SRC.h, dstW: DST.w, dstH: DST.h };
+  const rest: Framing = { ...DEFAULT_FRAMING };
+  const centre = (f: Framing) => {
+    const [x, y] = unframePoint(DST.w / 2, DST.h / 2, SRC.w, SRC.h, DST.w, DST.h, f);
+    return { x: x / SRC.w, y: y / SRC.h };
+  };
+  const stops = [
+    { x: 0.3, y: 0.45 },
+    { x: 0.55, y: 0.6 },
+    { x: 0.7, y: 0.4 },
+  ];
+
+  it('looks at a stop in the middle of the frame, and clamps one near an edge', () => {
+    const f = framingOn(rest, { x: 0.4, y: 0.55 }, 2, box);
+    expect(centre(f).x).toBeCloseTo(0.4, 6);
+    expect(centre(f).y).toBeCloseTo(0.55, 6);
+    const edge = framingOn(rest, { x: 0.01, y: 0.5 }, 2, box);
+    const t = framingTransform(SRC.w, SRC.h, DST.w, DST.h, edge);
+    expect(Math.abs(t.panX)).toBeLessThanOrEqual(t.slackX + 1e-6);
+    expect(centre(edge).x).toBeGreaterThan(0.01);
+  });
+
+  it('holds on each stop, glides between them, and rests on the last', () => {
+    const out = tourMotion(rest, null, { stops, zoom: 2, holdSeconds: 0.5 }, box, 6)!;
+    const m = out.motion!;
+    // Stop 1 at 0 and 0.5 s, stop 2 arriving and leaving, stop 3 arriving 0.5 s before the end.
+    expect(m.keys).toHaveLength(5);
+    expect(m.keys[0].at).toBe(0);
+    expect(m.keys[1].at).toBeCloseTo(0.5 / 6);
+    expect(m.keys[4].at).toBeCloseTo(1 - 0.5 / 6);
+    expect(m.keys[3].at - m.keys[2].at).toBeCloseTo(0.5 / 6);
+    // Every stop is looked at where it was tapped; the rest is the last one.
+    expect(centre(framingAtProgress(out.framing, m, 0.01)).x).toBeCloseTo(0.3, 6);
+    expect(centre(framingAtProgress(out.framing, m, (m.keys[2].at + m.keys[3].at) / 2)).x).toBeCloseTo(0.55, 6);
+    expect(centre(out.framing).x).toBeCloseTo(0.7, 6);
+    expect(out.framing.scale).toBe(2);
+  });
+
+  it('shares the glides by distance, so the pace holds on a long hop', () => {
+    const far = [
+      { x: 0.3, y: 0.5 },
+      { x: 0.35, y: 0.5 },
+      { x: 0.75, y: 0.5 },
+    ];
+    const m = tourMotion(rest, null, { stops: far, zoom: 2, holdSeconds: 0 }, box, 6)!.motion!;
+    const first = m.keys[1].at - m.keys[0].at;
+    const second = 1 - m.keys[1].at;
+    expect(second / first).toBeCloseTo(8, 0);
+  });
+
+  it('shrinks the pauses before a glide gets too short', () => {
+    const m = tourMotion(rest, null, { stops, zoom: 2, holdSeconds: 5 }, box, 3)!.motion!;
+    const glide = (m.keys[2].at - m.keys[1].at) * 3;
+    expect(glide).toBeGreaterThanOrEqual(MIN_GLIDE_SECONDS - 1e-6);
+  });
+
+  it('is no move with one stop, and nothing with none', () => {
+    const one = tourMotion(rest, null, { stops: [{ x: 0.6, y: 0.5 }], zoom: 1.5, holdSeconds: 0 }, box, 4)!;
+    expect(one.motion).toBeNull();
+    expect(centre(one.framing).x).toBeCloseTo(0.6, 6);
+    expect(tourMotion(rest, null, { stops: [], zoom: 1.5, holdSeconds: 0 }, box, 4)).toBeNull();
+  });
+
+  it('reads a written tour back as the same stops, zoom and pause', () => {
+    const out = tourMotion(rest, null, { stops, zoom: 2, holdSeconds: 0.5 }, box, 6)!;
+    const back = tourOf(out.framing, out.motion, box, 6);
+    expect(back.stops).toHaveLength(3);
+    back.stops.forEach((s, i) => {
+      expect(s.x).toBeCloseTo(stops[i].x, 6);
+      expect(s.y).toBeCloseTo(stops[i].y, 6);
+    });
+    expect(back.zoom).toBe(2);
+    expect(back.holdSeconds).toBeCloseTo(0.5, 6);
+    // A picture that holds still is a tour of the one stop it rests on.
+    expect(tourOf(rest, null, box, 6).stops).toEqual([{ x: 0.5, y: 0.5 }]);
+  });
+
+  it('outlines what a frame shows, turned with the picture', () => {
+    const w = framingWindow(framingOn(rest, { x: 0.5, y: 0.5 }, 2, box), box);
+    expect(w).toHaveLength(4);
+    // 9:16 over 3:2 at ×2: a window 0.1875 of the width, the full height / 2.
+    expect(w[1][0] - w[0][0]).toBeCloseTo(0.1875, 6);
+    expect(w[3][1] - w[0][1]).toBeCloseTo(0.5, 6);
+    const turned = framingWindow({ ...framingOn(rest, { x: 0.5, y: 0.5 }, 2, box), rotation: 10 }, box);
+    expect(turned[1][1]).not.toBeCloseTo(turned[0][1], 3);
+  });
+});
+
+describe('arrivalMarks', () => {
+  it('steps from stop to stop, over the end of each pause', () => {
+    const rest: Framing = { ...DEFAULT_FRAMING };
+    const m = motion([
+      { at: 0, scale: 2, x: 0, y: 0 },
+      { at: 0.1, scale: 2, x: 0, y: 0 },
+      { at: 0.5, scale: 1.5, x: 0.1, y: 0 },
+    ]);
+    expect(arrivalMarks(rest, m, 10)).toEqual([0, 5, 10]);
+    expect(arrivalMarks(rest, null, 10)).toEqual([]);
   });
 });
