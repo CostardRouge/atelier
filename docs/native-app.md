@@ -225,6 +225,11 @@ changes. §7 is the answer to that.
 
 ## 7. The one structural decision: where the kernel lives
 
+**Revised 2026-09-23 by `docs/native-stack.md`**, which weighs the stacks
+themselves (Swift, Expo / React Native, Flutter, Rust, KMP): the three options
+below assume a Swift UI. Under Expo the kernel needs **no port at all** and
+option B buys nothing; under Swift or Flutter, B stands as written.
+
 Three options for the 33 221 DOM-free lines.
 
 **A — a Swift package.** Simplest, one language, tests run on Linux. Thrown away
@@ -331,7 +336,9 @@ native app cannot replace my desktop" objection entirely.
 1. **What happens to the web app?** Frozen, retired, or kept as a second client
    of the same Winnow documents. This is the biggest question in the document
    and everything else bends around it.
-2. **Kernel in Rust or in Swift?** Rust only pays if Flutter is real — but it
+2. **Kernel in Rust or in Swift — or not ported at all?** `docs/native-stack.md`
+   adds the third answer (Expo keeps it as TypeScript) and the stack question
+   it belongs to. Rust only pays if Flutter is real — but it
    also buys the WASM twin that lets the port start here, today, provably
    (§7). That second argument stands even if Flutter never happens.
 3. **How far does the port go?** Develop alone is a complete, defensible
