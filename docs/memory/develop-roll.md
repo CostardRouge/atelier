@@ -28,7 +28,10 @@ only), so an instance without Winnow's `43f01e9` hides rolls instead of a 400
 on the first push. The trip and project drivers still call `remoteFor(id)`
 without a kind — unchanged, since every bucket keeps them. (5) the file is a
 BACKUP (fresh id, importing source, refs and custom `.cube` text travel), the
-trip file's rule, and a newer version is refused. Verified: 19 specs, and the
+trip file's rule, and a newer version is refused. **Every PICTURE gets a fresh
+id on import too** (2026-09-23): thumbnails and working previews are keyed by
+picture id alone, so one file imported twice made two rolls overwrite each
+other's cells and deleting one deleted the other's. Verified: 19 specs, and the
 store round-tripped in the Browser pane (put/get/list, a thumbnail written and
 pruned, a sync record, the four stores present). **Winnow's side was committed
 without its typecheck**: that checkout has no `node_modules`.

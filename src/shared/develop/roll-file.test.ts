@@ -58,10 +58,23 @@ describe('the roll file', () => {
     const imported = rollDocFromFile(parsed.file, 9000, 'local');
     expect(imported.id).not.toBe(original.id);
     expect(imported).toMatchObject({ sourceId: 'local', createdAt: 9000, updatedAt: 9000, name: original.name });
-    // Each picture's look travels with it.
-    expect(imported.pictures).toEqual(original.pictures);
+    // Each picture's look travels with it — under a fresh id (below).
+    const withoutId = (pictures: RollDoc['pictures']) => pictures.map((p) => ({ ...p, id: '' }));
+    expect(withoutId(imported.pictures)).toEqual(withoutId(original.pictures));
+    expect(imported.pictures[0].id).not.toBe(original.pictures[0].id);
     expect(imported.pictures[0].grade?.output).toBe('rec709-to-srgb');
     expect(imported.export).toEqual(original.export);
+  });
+
+  it('gives every picture a fresh id, so one file imported twice is two rolls that share nothing', () => {
+    const parsed = parseRollFile(serializeRollFile(toRollFile(sample(), 0)));
+    if (!parsed.ok) throw new Error(parsed.error);
+    let n = 0;
+    const first = rollDocFromFile(parsed.file, 1, 'local', () => `a${++n}`);
+    const second = rollDocFromFile(parsed.file, 2, 'local', () => `b${++n}`);
+    expect(first.pictures.map((p) => p.id)).toEqual(['a1']);
+    expect(second.pictures.map((p) => p.id)).toEqual(['b2']);
+    expect(parsed.file.pictures[0].id).toBe('p1');
   });
 
   it('hands a pre-v5 file’s one look to every picture', () => {
