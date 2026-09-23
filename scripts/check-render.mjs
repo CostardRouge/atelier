@@ -717,6 +717,70 @@ const out = await page.evaluate(async () => {
     results.detail = rows;
   }
 
+  // --- presence: dehaze, clarity, texture against presence.ts --------------
+  //
+  // Big enough (400×300) that each blur's taps are spaced PAST a pixel and
+  // read between texels — the branch the small detail picture never reaches —
+  // and each pair of passes (the X blur into alpha, then the Y blur and the
+  // move) is held to the pure twin at a grid of probes.
+  {
+    const { createRenderGraph } = await import('/atelier/src/shared/render/graph.ts');
+    const pm = await import('/atelier/src/shared/render/presence.ts');
+    const pp = await import('/atelier/src/shared/render/presence-pass.ts');
+    const PW = 400, PH = 300;
+    let seed = 777;
+    const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    const rgb = new Float32Array(PW * PH * 3);
+    const pc = document.createElement('canvas'); pc.width = PW; pc.height = PH;
+    const pctx = pc.getContext('2d');
+    const bytes = pctx.createImageData(PW, PH);
+    for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++) {
+      // A hazy gradient, a dark block, a bright block and noise over all of it.
+      const haze = 0.3 + 0.4 * (y / PH);
+      let px = [haze * 0.9, haze, haze * 1.1];
+      if (x > 60 && x < 160 && y > 60 && y < 200) px = [0.15, 0.25, 0.1];
+      if (x > 230 && x < 330 && y > 100 && y < 170) px = [0.85, 0.8, 0.7];
+      px = px.map((v) => Math.round(Math.max(0, Math.min(1, v + (rnd() - 0.5) * 0.06)) * 255) / 255);
+      rgb.set(px, (y * PW + x) * 3);
+      const i = (y * PW + x) * 4;
+      bytes.data[i] = Math.round(px[0] * 255); bytes.data[i + 1] = Math.round(px[1] * 255); bytes.data[i + 2] = Math.round(px[2] * 255); bytes.data[i + 3] = 255;
+    }
+    pctx.putImageData(bytes, 0, 0);
+    const img = { width: PW, height: PH, data: rgb };
+    const through = (passes) => {
+      const cv = document.createElement('canvas');
+      const graph = createRenderGraph(cv);
+      graph.resize(PW, PH);
+      graph.render(pc, passes);
+      const o = document.createElement('canvas'); o.width = PW; o.height = PH;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(cv, 0, 0);
+      const d = oc.getImageData(0, 0, PW, PH).data;
+      graph.dispose();
+      return d;
+    };
+    const probes = [];
+    for (let y = 5; y < PH - 5; y += 23) for (let x = 5; x < PW - 5; x += 29) probes.push([x, y]);
+    const compare = (gpu, pure) => {
+      let worst = 0;
+      for (const [x, y] of probes) {
+        for (let c = 0; c < 3; c++) {
+          const want = Math.round(Math.max(0, Math.min(1, pure.data[(y * PW + x) * 3 + c])) * 255);
+          worst = Math.max(worst, Math.abs(gpu[(y * PW + x) * 4 + c] - want));
+        }
+      }
+      return worst;
+    };
+    const moved = (pure) => { let m = 0; for (let i = 0; i < rgb.length; i++) m = Math.max(m, Math.abs(pure.data[i] - rgb[i])); return m; };
+    const rows = {};
+    for (const [op, amount] of [['dehaze', 0.8], ['dehaze', -0.6], ['clarity', 1], ['clarity', -1], ['texture', 1], ['texture', -0.7]]) {
+      const amounts = { dehaze: 0, clarity: 0, texture: 0, [op]: amount };
+      const pure = pm.applyPresence(img, amounts);
+      rows[`${op} ${amount > 0 ? '+' : ''}${amount}`] = { worst: compare(through(pp.presencePasses(amounts)), pure), moved: moved(pure) };
+    }
+    results.presence = rows;
+  }
+
   // --- repair: heal and clone against repair.ts, from BOTH source kinds ----
   //
   // A patch is a function of WHERE, so like the keystone it must be checked
@@ -1420,6 +1484,17 @@ for (const name of ['chroma', 'denoise', 'defringe', 'sharpen']) {
 if (det.movedDenoise < 0.01 || det.movedSharpen < 0.01) {
   bad += 1;
   console.log('  FAIL  a pass moved nothing, so its row proves nothing');
+}
+
+const pres = out.presence;
+console.log('\n  presence, against presence.ts on 400×300 at 156 probes (taps spaced past a pixel, read bilinearly):');
+for (const [name, row] of Object.entries(pres)) {
+  const ok = row.worst <= 2 && row.moved > 0.01;
+  if (!ok) bad += 1;
+  console.log(
+    `  ${ok ? 'ok  ' : 'FAIL'}  ${name.padEnd(12)} worst ${row.worst} code${row.worst === 1 ? '' : 's'} (allowed 2)` +
+      (row.moved > 0.01 ? '' : ' — and it MOVED NOTHING, so the row proves nothing'),
+  );
 }
 
 const rep = out.repair;

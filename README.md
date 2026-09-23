@@ -1067,7 +1067,15 @@ a click on its *blacks* / *whites* — paints on the picture what has gone to
 white (red) and to black (blue), and the pixel under the pointer is read
 under the strip as the file will hold it (`R 212 · G 180 · B 96`, or
 *clipped to white*). The Trips and Studio sheets have the same strip and the
-same click. Every setting belongs to the
+same click. Under the colour sliders, **Presence** has Lightroom's three:
+**Texture** (local contrast at a small scale — pores, bark, fabric — and a
+smoothing below zero), **Clarity** (the same at a large scale, on the
+midtones only) and **Dehaze** (the haze read from the darkest channel around
+each place, in light, and taken out — or added below zero; a bright sky
+darkens with it, as haze removal does). Each looks around the pixel, so its
+scale is a share of the picture and the stage shows what the file will get;
+they are the Develop tool's, like the Detail tab, and not in the Trips and
+Studio sheets. Every setting belongs to the
 picture it was made on — the develop, the look, the crop, the masks — so the
 next picture keeps its own; **Apply look to N other pictures** (or to the
 marked ones) is how one look dresses several. There is no Done: what you set is saved on

@@ -31,7 +31,7 @@ export const PICTURE_SECTIONS: readonly { id: PictureSection; label: string; hin
   { id: 'border', label: 'Border', hint: 'the margin round the delivered picture' },
   { id: 'perspective', label: 'Perspective', hint: 'the keystone' },
   { id: 'lens', label: 'Lens', hint: 'distortion, fringing, vignetting' },
-  { id: 'detail', label: 'Detail', hint: 'denoise, defringe, sharpen' },
+  { id: 'detail', label: 'Detail', hint: 'denoise, defringe, sharpen — and texture, clarity, dehaze' },
   { id: 'repair', label: 'Repair', hint: 'heal and clone spots — for dust on the sensor, the same place on every frame' },
   { id: 'layers', label: 'Layers', hint: 'masks and their adjustments' },
 ];

@@ -49,6 +49,16 @@ export interface DetailSettings {
   sharpen: number;
   /** 0.5..3 source pixels. The unsharp mask's Gaussian sigma. */
   sharpenRadius: number;
+  /**
+   * −100..100 each: PRESENCE (`presence.ts`, audit item 13) — local contrast
+   * at a small scale, at a large one weighted to the midtones, and the haze.
+   * They live here because they are what is AROUND a pixel too, and ride the
+   * same passes, the same section of a copy and the same record; the panel
+   * that draws them is the Adjust tab's, where Lightroom has them.
+   */
+  texture: number;
+  clarity: number;
+  dehaze: number;
 }
 
 export const DEFAULT_DETAIL: Readonly<DetailSettings> = Object.freeze({
@@ -57,6 +67,9 @@ export const DEFAULT_DETAIL: Readonly<DetailSettings> = Object.freeze({
   defringe: 0,
   sharpen: 0,
   sharpenRadius: 1,
+  texture: 0,
+  clarity: 0,
+  dehaze: 0,
 });
 
 export const DETAIL_RANGES = {
@@ -65,6 +78,9 @@ export const DETAIL_RANGES = {
   defringe: { min: 0, max: 100, step: 1 },
   sharpen: { min: 0, max: 100, step: 1 },
   sharpenRadius: { min: 0.5, max: 3, step: 0.1 },
+  texture: { min: -100, max: 100, step: 1 },
+  clarity: { min: -100, max: 100, step: 1 },
+  dehaze: { min: -100, max: 100, step: 1 },
 } as const;
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -74,7 +90,15 @@ function clamp(v: number, lo: number, hi: number): number {
 /** Nothing here changes the picture: every amount at 0 (the radius alone is not an operation). */
 export function isDefaultDetail(d: DetailSettings | null | undefined): boolean {
   if (!d) return true;
-  return d.luminance === 0 && d.colour === 0 && d.defringe === 0 && d.sharpen === 0;
+  return (
+    d.luminance === 0 &&
+    d.colour === 0 &&
+    d.defringe === 0 &&
+    d.sharpen === 0 &&
+    !d.texture &&
+    !d.clarity &&
+    !d.dehaze
+  );
 }
 
 export function sameDetail(a: DetailSettings | null | undefined, b: DetailSettings | null | undefined): boolean {
@@ -85,7 +109,10 @@ export function sameDetail(a: DetailSettings | null | undefined, b: DetailSettin
     x.colour === y.colour &&
     x.defringe === y.defringe &&
     x.sharpen === y.sharpen &&
-    x.sharpenRadius === y.sharpenRadius
+    x.sharpenRadius === y.sharpenRadius &&
+    x.texture === y.texture &&
+    x.clarity === y.clarity &&
+    x.dehaze === y.dehaze
   );
 }
 
@@ -99,6 +126,9 @@ export function normaliseDetail(raw: unknown): DetailSettings {
     defringe: clamp(num(src.defringe, 0), r.defringe.min, r.defringe.max),
     sharpen: clamp(num(src.sharpen, 0), r.sharpen.min, r.sharpen.max),
     sharpenRadius: clamp(num(src.sharpenRadius, DEFAULT_DETAIL.sharpenRadius), r.sharpenRadius.min, r.sharpenRadius.max),
+    texture: clamp(num(src.texture, 0), r.texture.min, r.texture.max),
+    clarity: clamp(num(src.clarity, 0), r.clarity.min, r.clarity.max),
+    dehaze: clamp(num(src.dehaze, 0), r.dehaze.min, r.dehaze.max),
   };
 }
 
@@ -112,6 +142,10 @@ export function detailOrNull(raw: unknown): DetailSettings | null {
 export function describeDetail(d: DetailSettings | null | undefined): string {
   if (!d || isDefaultDetail(d)) return '';
   const parts: string[] = [];
+  const signed = (n: number) => (n > 0 ? `+${n}` : `−${Math.abs(n)}`);
+  if (d.dehaze) parts.push(`dehaze ${signed(d.dehaze)}`);
+  if (d.clarity) parts.push(`clarity ${signed(d.clarity)}`);
+  if (d.texture) parts.push(`texture ${signed(d.texture)}`);
   if (d.luminance) parts.push(`denoise ${d.luminance}`);
   if (d.colour) parts.push(`colour noise ${d.colour}`);
   if (d.defringe) parts.push(`defringe ${d.defringe}`);

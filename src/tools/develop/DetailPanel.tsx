@@ -17,6 +17,52 @@ const SCALE_NOTE =
 
 type Key = keyof DetailSettings;
 
+/** The keys this TAB owns — presence shares the record and is drawn on the Adjust tab. */
+const DETAIL_TAB_KEYS: readonly Key[] = ['luminance', 'colour', 'defringe', 'sharpen', 'sharpenRadius'];
+
+const PRESENCE_HINT =
+  'Texture is local contrast at a small scale — pores, bark, fabric — and smooths them below zero. Clarity is the same at a large scale, on the midtones only, so shapes and clouds gain body while the ends are spared. Dehaze reads the haze from the darkest channel around each place and takes it out (or adds one below zero); a bright sky darkens with it, as haze removal does. All three look around the pixel, so their scale is a share of the picture — the stage and the file see the same thing.';
+
+const PRESENCE: readonly { key: Key; label: string }[] = [
+  { key: 'texture', label: 'Texture' },
+  { key: 'clarity', label: 'Clarity' },
+  { key: 'dehaze', label: 'Dehaze' },
+];
+
+/**
+ * Presence — texture, clarity, dehaze — drawn on the ADJUST tab, where a
+ * Lightroom hand looks for them, over the detail record they share
+ * (`shared/render/presence.ts`).
+ */
+export function PresencePanel({
+  value,
+  onChange,
+}: {
+  value: DetailSettings | null;
+  onChange: (detail: DetailSettings | null) => void;
+}) {
+  const detail: DetailSettings = value ?? { ...DEFAULT_DETAIL };
+  return (
+    <div className="flex flex-col gap-2">
+      <SectionLegend label="Presence">
+        <p>{PRESENCE_HINT}</p>
+      </SectionLegend>
+      {PRESENCE.map(({ key, label }) => (
+        <RangeSlider
+          key={key}
+          label={label}
+          value={detail[key]}
+          range={{ ...DETAIL_RANGES[key], unit: '' }}
+          onChange={(v) => {
+            const next: DetailSettings = { ...detail, [key]: v };
+            onChange(isDefaultDetail(next) ? null : next);
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 const NOISE: readonly { key: Key; label: string }[] = [
   { key: 'luminance', label: 'Luminance' },
   { key: 'colour', label: 'Colour' },
@@ -39,6 +85,8 @@ export default function DetailPanel({
     // Stored as null the moment it does nothing — a radius alone is not an operation.
     onChange(isDefaultDetail(next) ? null : next);
   };
+  const tabOnly: DetailSettings = { ...detail, texture: 0, clarity: 0, dehaze: 0 };
+  const tabTouched = !isDefaultDetail(tabOnly);
   const slider = (key: Key, label: string, reset = 0) => (
     <RangeSlider
       key={key}
@@ -73,13 +121,23 @@ export default function DetailPanel({
         {slider('sharpen', 'Amount')}
         {slider('sharpenRadius', 'Radius', DEFAULT_DETAIL.sharpenRadius)}
       </div>
-      {!isDefaultDetail(value) && (
+      {tabTouched && (
         <div className="flex items-center gap-2">
-          <span className="font-mono text-3xs text-faint truncate" title={describeDetail(value)}>
-            {describeDetail(value)}
+          <span className="font-mono text-3xs text-faint truncate" title={describeDetail(tabOnly)}>
+            {describeDetail(tabOnly)}
           </span>
           <span className="flex-1" />
-          <button type="button" className={developLinkClass} onClick={() => onChange(null)}>
+          <button
+            type="button"
+            className={developLinkClass}
+            // This tab's keys only: texture, clarity and dehaze belong to the
+            // Adjust tab and a Reset here must not reach them.
+            onClick={() => {
+              const next: DetailSettings = { ...detail };
+              for (const k of DETAIL_TAB_KEYS) next[k] = DEFAULT_DETAIL[k];
+              onChange(isDefaultDetail(next) ? null : next);
+            }}
+          >
             Reset
           </button>
         </div>

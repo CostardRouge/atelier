@@ -51,7 +51,7 @@ describe('the record', () => {
     expect(sameDetail(null, { ...DEFAULT_DETAIL })).toBe(true);
     expect(sameDetail({ ...DEFAULT_DETAIL, colour: 10 }, { ...DEFAULT_DETAIL, colour: 11 })).toBe(false);
     const read = normaliseDetail({ luminance: 400, colour: -5, sharpen: 'x', sharpenRadius: 9 });
-    expect(read).toEqual({ luminance: 100, colour: 0, defringe: 0, sharpen: 0, sharpenRadius: 3 });
+    expect(read).toEqual({ luminance: 100, colour: 0, defringe: 0, sharpen: 0, sharpenRadius: 3, texture: 0, clarity: 0, dehaze: 0 });
     expect(detailOrNull({ sharpenRadius: 2 })).toBeNull();
     expect(detailOrNull({ sharpen: 30 })).toEqual({ ...DEFAULT_DETAIL, sharpen: 30 });
     expect(describeDetail({ ...DEFAULT_DETAIL, luminance: 40, sharpen: 50, sharpenRadius: 1.2 })).toBe('denoise 40 · sharpen 50 @ 1.2 px');

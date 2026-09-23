@@ -105,7 +105,7 @@ import type { RollExport } from '../../shared/develop/roll-types';
 import CropPanel, { type CropApplyVerb } from './CropPanel';
 import KeystonePanel from './KeystonePanel';
 import LensPanel from './LensPanel';
-import DetailPanel from './DetailPanel';
+import DetailPanel, { PresencePanel } from './DetailPanel';
 import RepairPanel, { DEFAULT_DUST, type DustState, type RepairTool } from './RepairPanel';
 import { describeDetail, sameDetail, type DetailImage, type DetailSettings } from '../../shared/render/detail';
 import {
@@ -1671,6 +1671,7 @@ export default function PictureWorkbench({
                 onPicking={picture.setPicking}
               />
               <DevelopSliders value={draft.draft} onChange={draft.set} />
+              <PresencePanel value={detailDraft} onChange={setDetailDraft} />
               <DevelopLevelsSection value={draft.draft.levels} onChange={(levels) => draft.patch({ levels })} />
               <DevelopCurve
                 value={draft.draft.curves}

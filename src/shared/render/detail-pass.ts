@@ -22,6 +22,7 @@ import type { RenderPass } from './graph';
 import {
   BILATERAL_RADIUS,
   CHROMA_MAX_RADIUS,
+  DEFAULT_DETAIL,
   DEFRINGE_EDGE,
   DEFRINGE_PURPLE,
   SHARPEN_MAX_RADIUS,
@@ -30,6 +31,7 @@ import {
   type DetailSettings,
   type DetailTerms,
 } from './detail';
+import { presencePasses } from './presence-pass';
 
 /** The BT.709 split and its inverse, exactly `toYcc` / `fromYcc`. */
 const YCC = `
@@ -202,7 +204,7 @@ export function makeSharpenPass(terms: DetailTerms): RenderPass {
 export interface DetailPasses {
   /** Before the cube, on the source: colour noise (two passes), luminance noise, defringe. */
   pre: RenderPass[];
-  /** After every warp and layer: sharpen. */
+  /** After every warp and layer: dehaze, clarity, texture (`presence-pass.ts`), then sharpen. */
   post: RenderPass[];
 }
 
@@ -214,7 +216,8 @@ export function detailPasses(detail: DetailSettings | null | undefined, pixelSca
   if (terms.chromaSigma > 0) pre.push(makeChromaBlurPass(terms, 'x'), makeChromaBlurPass(terms, 'y'));
   if (terms.rangeSigma > 0) pre.push(makeBilateralPass(terms));
   if (terms.defringe > 0) pre.push(makeDefringePass(terms));
-  const post: RenderPass[] = [];
+  const s = { ...DEFAULT_DETAIL, ...(detail ?? {}) };
+  const post: RenderPass[] = presencePasses({ dehaze: s.dehaze / 100, clarity: s.clarity / 100, texture: s.texture / 100 });
   if (terms.sharpenGain > 0) post.push(makeSharpenPass(terms));
   return { pre, post };
 }
