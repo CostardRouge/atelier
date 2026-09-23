@@ -5,6 +5,10 @@ picture (fixed in roll v5): *"le but du jeu, c'est que j'arrête de me servir de
 ces outils externes et que je commence à me servir de mon outil"* — find what
 was forgotten, what is obvious, and what is missing.
 
+**Status (2026-09-23): pass 1 is BUILT** — items 1, 2, 3 and 9, one commit
+each; item 11 was withdrawn (below). His answers to §7 are in §8, with the two
+things he asked for on the way.
+
 This is an **audit, not a set of decisions**. §1 and §2 are verified in the code
 (file:line as of `b35c744`); §3–§5 are an inventory against Lightroom Classic's
 Develop/Library and Capture One, each item checked for existence, not guessed;
@@ -15,14 +19,14 @@ repeated here.
 
 ## 1. Bugs — the stage and the file disagree, or data is shared by accident
 
-1. **A subject mask is not in the exported file.** `roll-render.ts:204,269,299`
+1. **BUILT** — **A subject mask is not in the exported file.** `roll-render.ts:204,269,299`
    call `layerPasses(stack, ar)` with no `rasters`; `layer-render.ts:45-53`
    says a subject layer without its raster "draws NOTHING". Only the stage runs
    `use-subject-masks.ts`. The picture on screen has the local adjustment, the
    JPEG does not. `render-layers.md` ("the rasters reaching every renderer") is
    wrong for the export. Fix: segment in the run (same model, same points) and
    hand the rasters to `renderRollPicture`. M.
-2. **Importing one `.roll.json` twice makes two rolls share picture ids.**
+2. **BUILT** — **Importing one `.roll.json` twice makes two rolls share picture ids.**
    `rollDocFromFile` (`roll-file.ts:122`) clones `pictures` with their ids;
    thumbnails and working previews are keyed by picture id alone, so the two
    rolls overwrite each other's cells and deleting one deletes the other's.
@@ -30,7 +34,7 @@ repeated here.
 
 ## 2. Consistency gaps — the same class as the look
 
-3. **Three answers to "is this picture edited?"** — the filmstrip dot
+3. **BUILT** (`pictureEdits`) — **Three answers to "is this picture edited?"** — the filmstrip dot
    (`Filmstrip.tsx:104`: develop or framing), `rollProgress` (develop, look,
    framing, aspect, border) and the remove confirm (`RollEditor.tsx`: develop,
    look, framing). An hour of heal spots or masks is removed without asking and
@@ -53,15 +57,19 @@ repeated here.
    memory): ⌘Z after stepping undoes the previous picture — or an Apply-to on
    others — with nothing visible changing. At least: a restore opens the
    picture it changed. S/M.
-9. **Brush and heal sizes reset on every step** (`PictureWorkbench.tsx`
+9. **BUILT** — **Brush and heal sizes reset on every step** (`PictureWorkbench.tsx`
    state, remounted per picture) while the tab survives. Lift them beside the
    tab. S.
 10. **Cells go stale** after Apply-to, undo, a pull from an instance or an
     import (known limit, `develop-roll.md`). A background re-bake of the cells
     a write touched. M.
-11. **The lattice interpolation is a browser pref that changes the FILE**
-    (`roll-cubes.ts`): one roll exports differently on two devices. Tiny
-    numerically, but it is a document fact living in `localStorage`. S.
+11. **WITHDRAWN** — *The lattice interpolation is a browser pref that
+    changes the file.* True, and DECIDED that way on 2026-08-21
+    (`media-pipeline.md`, «Tetrahedral LUT interpolation»): the mode changes
+    how faithfully a grade is READ, not what the grade is, so it is a
+    `localStorage` preference and never a document field. Tetrahedral is the
+    default everywhere; a roll only exports differently on a device where he
+    chose trilinear by hand.
 
 ## 3. Editing tools — by daily impact
 
@@ -105,8 +113,8 @@ repeated here.
 
 ## 6. Proposed order, in commits
 
-- **Pass 1 — correctness (this week's kind of bug):** 1, 2, 3, 9, 11. Five
-  commits, each S except 1.
+- **Pass 1 — correctness (this week's kind of bug):** 1, 2, 3, 9 — BUILT
+  2026-09-23; 11 withdrawn.
 - **Pass 2 — the obvious for a Lightroom hand:** 4 + 5 (one sections picker
   for ⌘⇧C/⌘⇧V and every Apply-to), 6, 7, 8, 15, 27, 25 (sRGB tag).
 - **Pass 3 — the tools a daily edit reaches for:** 12, 13, 14, 18, 21, 17, 16.
@@ -126,3 +134,35 @@ repeated here.
   none; a batch verb dresses them)?
 - **Virtual copies** break "a picture is added once" — accept two entries of
   one ref, marked as copies (30)?
+
+## 8. His answers (2026-09-23)
+
+- **Winnow's picks and stars, read-only in Develop: YES** (33) — shown and
+  filtered on, never written: culling stays Winnow's.
+- **TIFF: NO for now** (26) — he does not see what it would serve; JPEG (and
+  Ultra HDR) stays the one format.
+- **Lensfun: YES** (20). Profiles are fetched ON DEMAND — the lens a picture
+  was shot with, when it is first asked for — and KEPT locally; never the
+  whole database in `dist/`, which he does not want to weigh. Automatic is
+  preferred; a profile file picked by hand is an accepted fallback if a fetch
+  cannot be made to work. It is a network request to a third party (the
+  Lensfun data, CC BY-SA 3.0), so it joins `local-first.md`'s list and the
+  README's callout, and says what it fetches.
+- **A roll default look: NO** (v5 confirmed) — *"la photo, une fois qu'elle a
+  été rajoutée, il faut qu'elle soit vraiment nature"*.
+- **Virtual copies: YES** (30) — Capture One's *variants*: one frame cropped
+  two ways, or in colour and in black and white. `addPictures`' dedupe stays
+  for ADDING; a variant is made from a picture already on the roll.
+
+Two asks that came with the answers, both awaiting a proposal:
+
+- **Choosing which pictures an export takes**, explicitly — today the Export
+  tab offers this picture, the Shift/⌘-marked ones, or the whole roll; he
+  wants a clearer state per picture (a tick, an `export / skip` tag, a grid in
+  the Export tab, or a modal) and asked for options.
+- **Metadata written into the delivered file**: title, caption, copyright set
+  in the Export tab; the tool's own signature (already `Software: Atelier` in
+  every export that carries EXIF — and load-bearing: `software-mark.ts` is how
+  the suite refuses to offer its own exports as a capture's rendition); and a
+  checklist of what leaves — GPS, place, the camera's EXIF, the exposure
+  triangle — grouped. He asked for a strategy.
