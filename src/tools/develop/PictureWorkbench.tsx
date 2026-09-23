@@ -99,21 +99,31 @@ import CropPanel, { type CropApplyVerb } from './CropPanel';
 import KeystonePanel from './KeystonePanel';
 import LensPanel from './LensPanel';
 import DetailPanel from './DetailPanel';
-import RepairPanel, { DEFAULT_REPAIR_TOOL, type RepairTool } from './RepairPanel';
+import RepairPanel, { DEFAULT_DUST, DEFAULT_REPAIR_TOOL, type DustState, type RepairTool } from './RepairPanel';
 import { describeDetail, sameDetail, type DetailImage, type DetailSettings } from '../../shared/render/detail';
 import {
   DUST_SCAN_EDGE,
   MAX_PATCHES,
+  adjustPatch,
+  defaultSource,
   describePatches,
-  detectDust,
+  dustField,
+  dustPatch,
+  dustSpots,
+  dustThreshold,
+  dustVeil,
+  movePatch,
   newPatchId,
   patchCoverageAt,
   patchExtent,
   patchSource,
+  placeSource,
+  radiusExtent,
   samePatches,
+  type DustField,
   type Patch,
 } from '../../shared/render/repair';
-import type { RepairRing } from '../../shared/develop/DevelopViewport';
+import type { RepairRing, RingGesture, RingPart, SpotRing } from '../../shared/develop/DevelopViewport';
 import LayersPanel from './LayersPanel';
 import MaskPanel from './MaskPanel';
 import type { BorderApplyVerb } from './BorderSection';
@@ -259,7 +269,13 @@ export default function PictureWorkbench({
   const [repairDraft, setRepairDraft] = useState<Patch[]>(entry.repair ?? []);
   const [repairTool, setRepairTool] = useState<RepairTool>({ ...DEFAULT_REPAIR_TOOL });
   const [repairing, setRepairing] = useState(false);
-  const [finding, setFinding] = useState<string | null>(null);
+  // The patch whose ring was last taken hold of: the panel's sliders edit it,
+  // ⌫ removes it. Derived from the list each render, so a patch that went
+  // (Undo last, Clear, an undo) cannot stay selected.
+  const [selectedPatchId, setSelectedPatchId] = useState<string | null>(null);
+  const selectedPatch = selectedPatchId ? (repairDraft.find((p) => p.id === selectedPatchId) ?? null) : null;
+  // The dust scan's controls — session state, never the roll's.
+  const [dust, setDust] = useState<DustState>({ ...DEFAULT_DUST });
   // The FILE's own width, for the kernels: a RAW's sensor once decoded, else
   // the measured file; the stage's width follows the decode one render later.
   const [rawSize, setRawSize] = useState<{ w: number; h: number } | null>(null);
@@ -399,24 +415,24 @@ export default function PictureWorkbench({
                 dx: 0,
                 dy: 0,
               };
-              const { ru } = patchExtent(seed, pictureAspect);
-              // Two and a half radii to the right keeps the discs apart; a
-              // patch near the right edge borrows from its left instead.
-              const dx = point[0] + ru * 2.5 + ru <= 1 ? ru * 2.5 : -ru * 2.5;
-              const made = { ...seed, dx };
+              const made = { ...seed, ...defaultSource(seed, pictureAspect) };
               liveRepairRef.current = made;
               setRepairDraft((list) => (list.length >= MAX_PATCHES ? list : [...list, made]));
+              // The patch just placed is the one the sliders edit: tap, then
+              // size it, is the gesture every darkroom teaches.
+              setSelectedPatchId(made.id);
             },
             onMove: (point: [number, number]) => {
               const live = liveRepairRef.current;
               if (!live) return;
-              const { ru, rv } = patchExtent(live, pictureAspect);
-              const dx = point[0] - live.x;
-              const dy = point[1] - live.y;
-              // Inside its own disc the source would copy the defect onto
-              // itself: the default stays until the drag clears it.
-              if (Math.hypot(dx / ru, dy / rv) < 1) return;
-              const moved = { ...live, dx, dy };
+              // The source turns round the spot as the hand does, at any
+              // distance — inside the disc too — and never nearer than the
+              // discs touching (`placeSource`). The first version waited for
+              // the hand to clear the disc, which read as a drag that did not
+              // follow.
+              const placed = placeSource(live, point, pictureAspect);
+              if (!placed) return;
+              const moved = { ...live, ...placed };
               liveRepairRef.current = moved;
               setRepairDraft((list) => list.map((p) => (p.id === moved.id ? moved : p)));
             },
@@ -428,6 +444,59 @@ export default function PictureWorkbench({
         : null,
     [repairActive, pictureAspect],
   );
+  // --- the rings: a patch already placed is moved, never re-made ---------------
+  // A drag on a solid ring moves the patch (its source with it); a drag on
+  // the dashed one moves where it borrows from; a tap on either selects it.
+  // The viewport hands back source points UNBOUNDED, so a hand past the edge
+  // still moves the patch to the edge. Read through a ref: the pointermove
+  // closure would see the list a frame behind.
+  const repairDraftRef = useRef(repairDraft);
+  repairDraftRef.current = repairDraft;
+  const ringDragRef = useRef<{ id: string; part: RingPart; start: [number, number]; patch: Patch } | null>(null);
+  const ringGesture = useMemo<RingGesture>(
+    () => ({
+      onStart: (id, part, point) => {
+        const held = repairDraftRef.current.find((p) => p.id === id);
+        if (!held) return;
+        ringDragRef.current = { id, part, start: point, patch: held };
+        setSelectedPatchId(id);
+      },
+      onMove: (point) => {
+        const d = ringDragRef.current;
+        if (!d) return;
+        const dx = point[0] - d.start[0];
+        const dy = point[1] - d.start[1];
+        let moved: Patch;
+        if (d.part === 'patch') {
+          moved = movePatch(d.patch, d.patch.x + dx, d.patch.y + dy);
+        } else {
+          // The source's new centre, held to the same rule as a placed one:
+          // never on the patch, never off the picture.
+          const placed = placeSource(d.patch, [d.patch.x + d.patch.dx + dx, d.patch.y + d.patch.dy + dy], pictureAspect, 0);
+          if (!placed) return;
+          moved = { ...d.patch, ...placed };
+        }
+        setRepairDraft((list) => list.map((p) => (p.id === moved.id ? moved : p)));
+      },
+      onEnd: (travelled) => {
+        const d = ringDragRef.current;
+        ringDragRef.current = null;
+        // A tap on the solid ring takes the patch off (his call: a click,
+        // never only a key); a tap on the dashed one has selected it.
+        if (!travelled && d?.part === 'patch') {
+          setRepairDraft((list) => list.filter((p) => p.id !== d.id));
+          setSelectedPatchId(null);
+        }
+      },
+    }),
+    [pictureAspect],
+  );
+  // Only on the Detail tab, where the panel that explains them is: a ring on
+  // another tab is a fact about the picture, not a handle.
+  const ringsLive = tab === 'detail';
+  useEffect(() => {
+    if (!ringsLive) setSelectedPatchId(null);
+  }, [ringsLive]);
   const paint = repairPaint ?? layerPaint;
   // --- the RAW base ----------------------------------------------------------
   // Where the sensor's data would come from — the file itself, a RAW beside
@@ -660,6 +729,33 @@ export default function PictureWorkbench({
   const measured = shownFile === file ? exports.openSize : shownSize?.file === shownFile ? shownSize.size : null;
 
   const fullWidth = (wantsRaw ? rawSize?.w : null) ?? measured?.width ?? null;
+  // The dust scan's FIELD (measured below, once the picture is decoded) and
+  // the veil drawn from it — declared ahead of the stage, which takes the
+  // veil as an input and hands back the picture the field is measured on.
+  const [field, setField] = useState<DustField | null>(null);
+  const threshold = dustThreshold(dust.sensitivity);
+  /** The map: what falls below its surroundings, white on black, at the scan's size. */
+  const veil = useMemo(() => {
+    if (!field || !dust.map) return null;
+    const { width: w, height: h } = field;
+    const values = dustVeil(field, threshold);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    const pixels = ctx.createImageData(w, h);
+    const out = pixels.data;
+    for (let i = 0, j = 0; i < values.length; i += 1, j += 4) {
+      const v = Math.round(values[i] * 255);
+      out[j] = v;
+      out[j + 1] = v;
+      out[j + 2] = v;
+      out[j + 3] = 255;
+    }
+    ctx.putImageData(pixels, 0, 0);
+    return { image: canvas as CanvasImageSource, width: w, height: h };
+  }, [field, dust.map, threshold]);
   const picture = useDevelopPicture({
     file: shownFile,
     cube: stack.composed,
@@ -676,6 +772,9 @@ export default function PictureWorkbench({
     raw: wantsRaw && rawFile ? { file: rawFile, gain: rawGain } : null,
     detail: detailDraft,
     repair: repairDraft,
+    // The dust map, when the scan shows it: drawn through the stage's own
+    // crop so a proposed ring lands on the mark it names.
+    veil,
     // The roll's texture, drawn by the node after everything: the stage is
     // where grain is DIALLED and the loupe is where it is judged, since a
     // cell finer than the stage can resolve fades out rather than aliasing.
@@ -812,12 +911,15 @@ export default function PictureWorkbench({
   useEffect(() => setPictureAspect(source && source.height > 0 ? source.width / source.height : 1), [source]);
 
   // --- finding dust ------------------------------------------------------------
-  // The stage's own decode, read back once at the scan's edge and walked by
-  // the pure module. Nothing is stored but the patches it answers; a spot
-  // already under a patch is not answered twice.
-  const findDust = useCallback(() => {
-    if (!source) {
-      setFinding('the picture is not decoded yet');
+  // The stage's own decode, read back ONCE at the scan's edge into a field
+  // (`dustField`) the moment the scan is turned on; the sensitivity slider
+  // then reads the field and never the picture. The spots are PROPOSED —
+  // dotted rings the author accepts one by one or all at once — and the map
+  // is a veil over the picture, drawn through the stage's own crop. Nothing
+  // of it is stored but the patches that are taken.
+  useEffect(() => {
+    if (!dust.on || !source) {
+      setField(null);
       return;
     }
     const k = Math.min(1, DUST_SCAN_EDGE / Math.max(source.width, source.height));
@@ -828,8 +930,14 @@ export default function PictureWorkbench({
     canvas.height = h;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
-    ctx.drawImage(source.image, 0, 0, source.width, source.height, 0, 0, w, h);
-    const bytes = ctx.getImageData(0, 0, w, h).data;
+    let bytes: Uint8ClampedArray;
+    try {
+      ctx.drawImage(source.image, 0, 0, source.width, source.height, 0, 0, w, h);
+      bytes = ctx.getImageData(0, 0, w, h).data;
+    } catch {
+      setField(null);
+      return;
+    }
     const data = new Float32Array(w * h * 3);
     for (let i = 0, j = 0; i < bytes.length; i += 4, j += 3) {
       data[j] = bytes[i] / 255;
@@ -837,41 +945,67 @@ export default function PictureWorkbench({
       data[j + 2] = bytes[i + 2] / 255;
     }
     const img: DetailImage = { width: w, height: h, data };
-    const ar = source.width / source.height;
-    const found = detectDust(img, { makeId: newPatchId });
+    setField(dustField(img));
+  }, [dust.on, source]);
+  /** The spots the scan proposes at this sensitivity, less those already under a patch. */
+  const spots = useMemo(() => {
+    if (!field) return null;
+    return dustSpots(field, { threshold }).filter((spot) => !repairDraft.some((have) => patchCoverageAt(have, spot.x, spot.y, pictureAspect) > 0));
+  }, [field, threshold, repairDraft, pictureAspect]);
+  const spotRings = useMemo<readonly SpotRing[] | null>(
+    () => (spots ? spots.map((spot) => ({ x: spot.x, y: spot.y, ru: radiusExtent(spot.radius, pictureAspect).ru })) : null),
+    [spots, pictureAspect],
+  );
+  const healSpot = useCallback(
+    (index: number) => {
+      const spot = spots?.[index];
+      if (!spot || !field) return;
+      const made = dustPatch(field, spot, newPatchId, repairToolRef.current.feather);
+      if (!made) {
+        tell('that spot sits where no neighbour can be borrowed from — place a patch by hand');
+        return;
+      }
+      setRepairDraft((list) => (list.length >= MAX_PATCHES ? list : [...list, made]));
+    },
+    [spots, field, tell],
+  );
+  const healAllSpots = useCallback(() => {
+    if (!spots || !field) return;
+    const made = spots.map((spot) => dustPatch(field, spot, newPatchId, repairToolRef.current.feather)).filter((p): p is Patch => p !== null);
     setRepairDraft((list) => {
-      const fresh = found.filter((p) => !list.some((have) => patchCoverageAt(have, p.x, p.y, ar) > 0));
       const room = Math.max(0, MAX_PATCHES - list.length);
-      const added = fresh.slice(0, room);
-      setFinding(
-        found.length === 0
-          ? 'no dust found'
-          : added.length === 0
-            ? room === 0
-              ? `${found.length} found, no room left`
-              : `${found.length} found, already patched`
-            : `${added.length} spot${added.length === 1 ? '' : 's'} healed`,
+      const added = made.slice(0, room);
+      tell(
+        added.length === 0
+          ? room === 0
+            ? `${made.length} found, no room left`
+            : 'no spot could be healed from a neighbour'
+          : `${added.length} spot${added.length === 1 ? '' : 's'} healed${added.length < made.length ? ` · ${made.length - added.length} left, no room` : ''}`,
       );
       return added.length ? [...list, ...added] : list;
     });
-  }, [source]);
-  useEffect(() => {
-    if (!finding) return;
-    const t = window.setTimeout(() => setFinding(null), 4000);
-    return () => window.clearTimeout(t);
-  }, [finding]);
-  /** The patches as rings on the picture: the destination solid, its source dashed. */
+  }, [spots, field, tell]);
+  /** The patches as rings on the picture: the destination solid, its source dashed, the selected one in the accent. */
   const rings = useMemo<readonly RepairRing[] | null>(() => {
     if (!repairDraft.length) return null;
     return repairDraft.map((p) => {
       const from = patchSource(p);
       const { ru, rv } = patchExtent(p, pictureAspect);
-      return { x: p.x, y: p.y, sx: from.x, sy: from.y, ru, rv, kind: p.kind };
+      return { id: p.id, x: p.x, y: p.y, sx: from.x, sy: from.y, ru, rv, kind: p.kind, selected: p.id === selectedPatchId };
     });
-  }, [repairDraft, pictureAspect]);
-  const unring = useCallback((index: number) => {
-    setRepairDraft((list) => list.filter((_, i) => i !== index));
-  }, []);
+  }, [repairDraft, pictureAspect, selectedPatchId]);
+  const changeSelectedPatch = useCallback(
+    (change: Partial<Pick<Patch, 'kind' | 'radius' | 'feather'>>) => {
+      if (!selectedPatchId) return;
+      setRepairDraft((list) => list.map((p) => (p.id === selectedPatchId ? adjustPatch(p, change) : p)));
+    },
+    [selectedPatchId],
+  );
+  const removeSelectedPatch = useCallback(() => {
+    if (!selectedPatchId) return;
+    setRepairDraft((list) => list.filter((p) => p.id !== selectedPatchId));
+    setSelectedPatchId(null);
+  }, [selectedPatchId]);
   // The Crop tab's zone, measured on the decoded picture and written back as
   // the aspect (to the roll, at once) and the framing (through its draft).
   // Memoised on the source: a fresh `{ width, height }` per render recomputed
@@ -898,8 +1032,8 @@ export default function PictureWorkbench({
   }, [source, cube, delivered, aspectRatio, framingDraft, border]);
 
   // --- keys --------------------------------------------------------------------
-  const keyState = useRef({ draft, picture, tell, crop, tab, factsOn, setFactsOn });
-  keyState.current = { draft, picture, tell, crop, tab, factsOn, setFactsOn };
+  const keyState = useRef({ draft, picture, tell, crop, tab, factsOn, setFactsOn, selectedPatchId, removeSelectedPatch, repairing });
+  keyState.current = { draft, picture, tell, crop, tab, factsOn, setFactsOn, selectedPatchId, removeSelectedPatch, repairing };
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
@@ -975,6 +1109,26 @@ export default function PictureWorkbench({
           if (!cropToViewRef.current) return;
           e.preventDefault();
           cropToViewRef.current();
+          return;
+        case 'remove':
+          // What is selected on the picture — a repair patch. Nothing
+          // selected, the key is somebody else's.
+          if (!keyState.current.selectedPatchId) return;
+          e.preventDefault();
+          keyState.current.removeSelectedPatch();
+          return;
+        case 'escape':
+          // Let go of the selected patch first; then put the Repair tool
+          // down. An Escape with nothing to release is left to the page.
+          if (keyState.current.selectedPatchId) {
+            e.preventDefault();
+            setSelectedPatchId(null);
+            return;
+          }
+          if (keyState.current.repairing) {
+            e.preventDefault();
+            setRepairing(false);
+          }
           return;
       }
     };
@@ -1315,9 +1469,12 @@ export default function PictureWorkbench({
           // is on, so a settled mask cannot be edited by a stray click.
           onUnmark={paintKind === 'subject' ? unmarkSubject : undefined}
           // The rings show on every tab — a patch is a fact about the
-          // picture — and come off only while Repair is armed.
+          // picture — and answer the hand on the Detail tab, where the panel
+          // that explains them is. The proposed spots belong to the scan.
           rings={rings}
-          onUnring={repairActive ? unring : undefined}
+          onRing={ringsLive ? ringGesture : undefined}
+          spots={ringsLive ? spotRings : null}
+          onSpot={ringsLive ? healSpot : undefined}
           onCropToView={cropToView ?? undefined}
           className={cropping ? 'hidden' : 'flex-1'}
           onPick={(linear) => {
@@ -1436,10 +1593,16 @@ export default function PictureWorkbench({
                 patches={repairDraft}
                 tool={repairTool}
                 onTool={(patch) => setRepairTool((t) => ({ ...t, ...patch }))}
+                selected={selectedPatch}
+                onSelectedChange={changeSelectedPatch}
+                onRemoveSelected={removeSelectedPatch}
+                onDeselect={() => setSelectedPatchId(null)}
                 repairing={repairing}
                 onRepairing={setRepairing}
-                onFindDust={findDust}
-                finding={finding}
+                dust={dust}
+                onDust={(change) => setDust((d) => ({ ...d, ...change }))}
+                spotsFound={spots ? spots.length : null}
+                onHealAll={healAllSpots}
                 onRemoveLast={() => setRepairDraft((list) => list.slice(0, -1))}
                 onClear={() => setRepairDraft([])}
               />
