@@ -365,7 +365,7 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
   usePublishMediaActions(
     useMemo<MediaActions>(
       () => ({
-        heading: 'Develop',
+        heading: 'starts a new roll with this picture',
         actions: [
           {
             id: 'new-roll',

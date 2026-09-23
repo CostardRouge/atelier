@@ -340,7 +340,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   }, [pendingAdd, activeFile, update, onOpenPicture]);
   const offer = useMemo<MediaActions>(
     () => ({
-      heading: `Develop on ${roll.name || 'this roll'}`,
+      heading: `on ${roll.name || 'this roll'}`,
       actions: [
         {
           id: 'develop',

@@ -361,7 +361,7 @@ export default function TripOverview({
     () =>
       selected
         ? {
-            heading: `Start a piece on ${formatIsoDate(selected)} · or locate it`,
+            heading: `start a piece on ${formatIsoDate(selected)} · or locate it`,
             actions: [
               ...POST_KINDS.map((k) => ({
                 id: k.id,
