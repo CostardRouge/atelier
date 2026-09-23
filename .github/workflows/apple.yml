@@ -1,0 +1,43 @@
+name: Apple
+
+# The native app's gate. The kernel (`apple/Packages/AtelierKit`) is pure Swift
+# and is tested on Linux — the platform this project is written from, where no
+# Xcode exists — and again on macOS, where Foundation is Apple's own. The app
+# itself only builds on a macOS runner; the repository is public, so the runner
+# is free. Nothing here runs for a change that leaves `apple/` alone.
+on:
+  push:
+    branches: [main]
+    paths: ['apple/**', '.github/workflows/apple.yml']
+  pull_request:
+    paths: ['apple/**', '.github/workflows/apple.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: apple-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kernel-linux:
+    name: AtelierKit · swift test (Linux)
+    runs-on: ubuntu-latest
+    container: swift:5.10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Test the kernel
+        run: swift test --package-path apple/Packages/AtelierKit
+
+  kernel-macos:
+    name: AtelierKit · swift test (macOS)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: swift --version && xcodebuild -version
+
+      - name: Test the kernel
+        run: swift test --package-path apple/Packages/AtelierKit
