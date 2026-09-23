@@ -418,6 +418,18 @@ pointerdown and nothing needs observing.
 its stage and its panel together and the filmstrip belongs to the screen
 between them.
 
+**The drawer is the sheet's sibling in every gesture (2026-09-22, after his
+Develop screenshot).** It runs EDGE TO EDGE — `-mx-2` undoes the compact
+shell's `px-2`, the only place it is drawn — with the sheet's rounded top, side
+borders and shadow, because inset by the gutter its corners stopped 8px short
+of the screen and read as cut (the Trips day strip's fault, R1 in
+`roadtrip.md`). Its whole HEAD (12px grip + title row, 45px) drags and taps,
+the ✕ excluded by `stopPropagation`. And it RISES and FALLS: it mounts at 0 and
+grows to its rest two frames later (one frame is not enough — a discrete event
+flushes effects before paint, so the 0 is never drawn), and a close shrinks it
+to 0 before `onClose` unmounts it, on `transitionend` with a 260 ms guard. A
+host that closes it itself (the bar cell toggled) still cuts.
+
 **Prose is what the picture's half was being spent on.** With the drawer up,
 the caption under the stage and the roll's working-previews line are hidden on
 a compact shell — both wrap to three lines at 390px, and nobody reads a
