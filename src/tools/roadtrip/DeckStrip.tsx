@@ -91,6 +91,11 @@ interface DeckStripProps {
   /** The opener's ticks, when it has any to hear. */
   sound: { on: boolean; onToggle: () => void } | null;
   compact: boolean;
+  /**
+   * Where slide `i`'s pictures have frames placed, in that slide's seconds —
+   * drawn as marks along its cell, so a slide that moves reads as one.
+   */
+  marksFor?: (i: number) => readonly number[];
 }
 
 /** Shortest cut the handles may leave — the floor `clipSlice` keeps. */
@@ -152,6 +157,7 @@ export default function DeckStrip({
   onTrimming,
   sound,
   compact,
+  marksFor,
 }: DeckStripProps) {
   const pxPerSecond = compact ? 30 : 42;
   const layout = useMemo(() => stripLayout(lengths, pxPerSecond, MIN_CELL_PX, GAP_PX), [lengths, pxPerSecond]);
@@ -544,6 +550,18 @@ export default function DeckStrip({
                   <span className="absolute left-1 right-1 top-0.5 truncate font-mono text-3xs leading-tight text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.85)]">
                     {label}
                   </span>
+                  {(marksFor?.(i) ?? []).map((at) => {
+                    const length = lengths[i] ?? 0;
+                    if (!(length > 0)) return null;
+                    const x = Math.max(0, Math.min(1, at / length)) * cell.width;
+                    return (
+                      <span
+                        key={at}
+                        className="absolute bottom-0.5 w-1.5 h-1.5 -translate-x-1/2 rotate-45 bg-accent ring-1 ring-white/80"
+                        style={{ left: Math.max(4, Math.min(cell.width - 4, x)) }}
+                      />
+                    );
+                  })}
                   {slideLoop && i === index && (
                     <span className="absolute right-0.5 bottom-0.5 grid place-items-center w-4 h-4 rounded-full bg-accent text-white [&>svg]:w-3 [&>svg]:h-3">
                       {Icons.loopOne}

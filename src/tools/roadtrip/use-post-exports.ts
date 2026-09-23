@@ -4,6 +4,7 @@ import type { CubeLut } from '../../shared/lib/cube-parser';
 import type { OverlayElement } from '../../shared/overlay/overlay-types';
 import { classifyPart } from '../../shared/library/assets';
 import { loadClipMeta } from '../../shared/media/video-metadata';
+import { deepestFraming } from '../../shared/media/framing-motion';
 import { downloadBlob } from '../../shared/media/save';
 import { contentSlideElements, deckSlides, type DeckSlide } from '../../shared/roadtrip/deck';
 import { frameSize, loadCollageSources } from '../../shared/roadtrip/badge-render';
@@ -190,7 +191,8 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       const file = base(slide.media);
       if (!file || swap.has(file) || classifyPart(file.name) === 'video') continue;
       try {
-        const chosen = await deliveryFor(file, slide.framing, out, (line) => setExporting(line));
+        // A picture that moves needs the pixels of its CLOSEST frame, not of its rest.
+        const chosen = await deliveryFor(file, deepestFraming(slide.framing, slide.motion), out, (line) => setExporting(line));
         if (chosen.file !== file) swap.set(file, chosen.file);
       } catch {
         // Knowing nothing about a picture is never a reason to drop it: the
@@ -286,6 +288,12 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         // The hook's own framing, so the burned-in picture is cropped where
         // the preview showed it — the PNG deck goes through the same value.
         framing: post.badge.framing,
+        // And how it moves over the hook, on the clock the stage plays it on.
+        motion: {
+          motion: post.badge.motion ?? null,
+          seconds: inputs.hookLength,
+          openerSeconds: inputs.hook?.seconds ?? 0,
+        },
         lut: inputs.lutFor(inputs.hookSlide),
         film: inputs.filmFor(inputs.hookSlide),
         onProgress,
@@ -378,6 +386,12 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       shades: isHook ? post.badge.shades : undefined,
       block: isHook ? inputs.block : null,
       framing: slide.framing,
+      // A picture that moves in its frame moves on this slide's own clock.
+      motion: {
+        motion: slide.motion,
+        seconds: item.seconds,
+        openerSeconds: isHook ? (inputs.hook?.seconds ?? 0) : 0,
+      },
       lut: inputs.lutFor(slide),
       film: inputs.filmFor(slide),
       onProgress,

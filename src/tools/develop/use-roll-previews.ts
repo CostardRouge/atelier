@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { deleteRollPreviews, getRollPreviews, putRollPreview } from '../../shared/develop/roll-store';
 import { pictureThumbnail } from '../../shared/develop/roll-thumb';
-import type { RollPicture } from '../../shared/develop/roll-types';
+import { sameMediaRef, variantNumber, type RollPicture } from '../../shared/develop/roll-types';
 import {
   WORKING_PREVIEW_EDGE,
   WORKING_PREVIEW_QUALITY,
@@ -82,6 +82,8 @@ export function useRollPreviews({
     if (!enabled || !loaded) return;
     const due = pictures.filter(
       (p) =>
+        // A variant (item 30) is the same file: its first keeps the one preview.
+        variantNumber(p) < 2 &&
         localIds.has(p.id) &&
         realFiles.has(p.id) &&
         !isWorkingPreview(realFiles.get(p.id)) &&
@@ -148,13 +150,18 @@ export function useRollPreviews({
       }
       out.set(p.id, entry.file);
     }
+    for (const p of pictures) {
+      if (out.has(p.id) || variantNumber(p) < 2) continue;
+      const twin = pictures.find((q) => q.id !== p.id && out.has(q.id) && sameMediaRef(q.ref, p.ref));
+      if (twin) out.set(p.id, out.get(twin.id)!);
+    }
     return out;
   }, [blobs, pictures]);
 
   let bytes = 0;
   for (const b of blobs.values()) bytes += b.size;
   const pending = enabled
-    ? pictures.filter((p) => localIds.has(p.id) && realFiles.has(p.id) && !blobs.has(p.id)).length
+    ? pictures.filter((p) => variantNumber(p) < 2 && localIds.has(p.id) && realFiles.has(p.id) && !blobs.has(p.id)).length
     : 0;
 
   return { enabled, setEnabled, files, bytes, pending, forget };

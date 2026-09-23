@@ -20,6 +20,7 @@
 import { isIsoDate, isWithin, type IsoDate } from './trip-days';
 import { defaultHookSeconds } from './hook-video';
 import { DEFAULT_FRAMING, normaliseFraming, type Framing } from '../media/framing';
+import { readMotion, type FramingMotion } from '../media/framing-motion';
 import {
   developOrNull,
   normaliseDevelopPresets,
@@ -60,7 +61,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 27;
+export const TRIP_DOC_VERSION = 28;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers, the
@@ -288,6 +289,14 @@ export interface PostBadge {
    */
   framing: Framing;
   /**
+   * How the hook's picture MOVES in its frame over the slide — a pan and a
+   * zoom placed at the needle — or null to hold still. `framing` is where it
+   * comes to REST, so every surface that draws the slide settled draws it
+   * unchanged (`shared/media/framing-motion.ts`). About this photograph like
+   * the framing, so never inherited either.
+   */
+  motion: FramingMotion | null;
+  /**
    * The hook picture's own CORRECTION — exposure, tone, colour
    * (`shared/develop/develop.ts`), applied before the trip's look. Null is
    * "as shot". Beside `framing` and for the same reason: it is about THIS
@@ -439,6 +448,8 @@ export function defaultPostBadge(
     // Never inherited, like the frame: a speed is about the clip in hand.
     videoSpeed: 1,
     framing: { ...DEFAULT_FRAMING },
+    // Never inherited, like the frame it moves.
+    motion: null,
     develop: null,
     grade: null,
     collage: null,
@@ -467,6 +478,8 @@ export interface PostSlide {
   videoSpeed: number;
   /** How this picture sits in the frame — see `PostBadge.framing`. */
   framing: Framing;
+  /** How it moves in the frame over the slide, or null — see `PostBadge.motion`. */
+  motion: FramingMotion | null;
   /** This picture's own correction, or null for as shot — see `PostBadge.develop`. */
   develop: DevelopSettings | null;
   /** This picture's own grade, or null to follow the piece — see `PostBadge.grade`. */
@@ -488,6 +501,7 @@ export function createPostSlide(media: SavedMediaRef | null = null): PostSlide {
     videoTimeSeconds: 0,
     videoSpeed: 1,
     framing: { ...DEFAULT_FRAMING },
+    motion: null,
     develop: null,
     grade: null,
     collage: null,
@@ -833,6 +847,11 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * duration (an exit animation had nothing to land on without it), the picture
  * backdrop, the place marker and the reference day. A post that had the
  * boolean on lands on `auto` — the intent kept, the untrue anniversary dropped.
+ *
+ * v27 → v28 lets a picture MOVE in its frame over its slide (`motion` on the
+ * hook, on each slide and on each collage cell): a pan and a zoom whose rest
+ * is the framing already stored. Every stored picture holds still — `motion`
+ * starts null — so nothing a trip already draws changes.
  *
  * v20 → v21 REPAIRS the car. The Itinerary branch numbered its Route
  * conversion v19 while `main` took v19 for the car, and a trip opened on that
@@ -1307,6 +1326,27 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
     // went. Deleted rather than left lying in the record — a stored key no
     // type names is what a later reader mistakes for a fact.
     delete (migrated as { destination?: string }).destination;
+  }
+
+  if (migrated.version < 28) {
+    // A picture may move in its frame. Every stored one holds still: `motion`
+    // starts null on the hook, the slides and — through `readCollage`, which
+    // reads a cell's motion — every collage cell. A value that IS there (a
+    // newer build, a hand edit) is read through `readMotion`, junk landing as
+    // no motion rather than a move nobody placed.
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      badge: {
+        ...post.badge,
+        motion: readMotion(post.badge?.motion),
+        collage: readCollage(post.badge?.collage),
+      },
+      slides: (post.slides ?? []).map((slide) => ({
+        ...slide,
+        motion: readMotion(slide.motion),
+        collage: readCollage(slide.collage),
+      })),
+    }));
   }
 
   migrated.version = TRIP_DOC_VERSION;

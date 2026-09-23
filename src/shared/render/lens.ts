@@ -15,15 +15,17 @@
  * walking the output and asking where each pixel came from — the same direction
  * `geometry.ts` works in, for the same reason.
  *
- * The radius is normalised to HALF THE DIAGONAL, Lensfun's own convention, so a
- * number means the same thing on a 3:2 frame and on a 4:5 crop of it.
+ * The radius is normalised to HALF THE DIAGONAL, so a number means the same
+ * thing on a 3:2 frame and on a 4:5 crop of it. (Lensfun's distortion models
+ * put r = 1 at half the SHORT side of their calibration sensor, and its
+ * vignetting at the corner — `shared/lens/lensfun.ts` converts both.)
  *
- * **What is NOT here, deliberately: a profile database.** A lens profile is
- * MEASURED calibration data, and inventing coefficients for a camera nobody
- * measured would be a fabricated correction — worse than none, because it looks
- * authoritative. The sliders below correct by eye against a straight edge, which
- * is honest and works on any lens; a profile, when there is real data for one,
- * sets the same numbers automatically.
+ * **No coefficient here is invented.** A lens profile is MEASURED calibration
+ * data, and inventing coefficients for a camera nobody measured would be a
+ * fabricated correction — worse than none, because it looks authoritative. The
+ * sliders correct by eye against a straight edge, which works on any lens; a
+ * MEASURED profile from Lensfun (`LensProfileTerms`, below) is applied under
+ * them when the picture's lens is in that database.
  *
  * Pure and DOM-free.
  */
@@ -212,6 +214,69 @@ export function vignetteTerms(l: LensCorrection): { amount: number; start: numbe
     amount: (clamp(l.vignette, -100, 100) / 100) * VIGNETTE_REACH,
     start: clamp(l.vignetteMidpoint, 0, 100) / 100,
   };
+}
+
+// --- a MEASURED profile (Lensfun, `shared/lens/lensfun.ts`) ---------------------
+
+/**
+ * A lens profile in THIS module's units — r = 1 at the corner of the picture —
+ * composed after the manual sliders, which then correct what the profile
+ * leaves (`lensfun.ts` converts a Lensfun calibration into these):
+ *
+ *     m   = lensSampleRadius(r)                          the manual map
+ *     r_s = m · (1 + d1·m + d2·m² + d3·m³ + d4·m⁴)       distortion
+ *     r_c = r_s · (v + c·r_s + b·r_s²)                   red and blue, TCA
+ *     light = observed / (1 + k1·r_s² + k2·r_s⁴ + k3·r_s⁶)   vignetting, at r_s
+ *
+ * A distortion polynomial with ODD terms, unlike the sliders': Lensfun's
+ * `ptlens` model has them, and dropping them would be a different lens.
+ * Vignetting is read at the SOURCE radius because Lensfun corrects it on the
+ * picture as it came off the sensor, before any geometry.
+ */
+export interface LensProfileTerms {
+  distortion: [number, number, number, number];
+  tcaRed: [number, number, number];
+  tcaBlue: [number, number, number];
+  vignette: [number, number, number];
+}
+
+export const NO_PROFILE_TERMS: Readonly<LensProfileTerms> = Object.freeze({
+  distortion: [0, 0, 0, 0] as [number, number, number, number],
+  tcaRed: [1, 0, 0] as [number, number, number],
+  tcaBlue: [1, 0, 0] as [number, number, number],
+  vignette: [0, 0, 0] as [number, number, number],
+});
+
+export function isIdentityProfile(p: LensProfileTerms | null | undefined): boolean {
+  if (!p) return true;
+  return (
+    p.distortion.every((v) => v === 0) &&
+    p.tcaRed[0] === 1 && p.tcaRed[1] === 0 && p.tcaRed[2] === 0 &&
+    p.tcaBlue[0] === 1 && p.tcaBlue[1] === 0 && p.tcaBlue[2] === 0 &&
+    p.vignette.every((v) => v === 0)
+  );
+}
+
+export function sameProfileTerms(a: LensProfileTerms | null | undefined, b: LensProfileTerms | null | undefined): boolean {
+  if (isIdentityProfile(a) || isIdentityProfile(b)) return isIdentityProfile(a) && isIdentityProfile(b);
+  const eq = (x: readonly number[], y: readonly number[]) => x.every((v, i) => v === y[i]);
+  return eq(a!.distortion, b!.distortion) && eq(a!.tcaRed, b!.tcaRed) && eq(a!.tcaBlue, b!.tcaBlue) && eq(a!.vignette, b!.vignette);
+}
+
+/** The profile's source radius for a manual-mapped radius `m` — Horner's form, the shader's own. */
+export function profileSourceRadius(m: number, d: readonly number[]): number {
+  return m * (1 + m * (d[0] + m * (d[1] + m * (d[2] + m * d[3]))));
+}
+
+/** One channel's radius against green's source radius `rs` — `[v, c, b]`. */
+export function profileChannelRadius(rs: number, t: readonly number[]): number {
+  return rs * (t[0] + rs * (t[1] + rs * t[2]));
+}
+
+/** The gain on LIGHT that undoes the measured vignetting at source radius `rs`. */
+export function profileVignetteGain(rs: number, k: readonly number[]): number {
+  const r2 = rs * rs;
+  return 1 / (1 + r2 * (k[0] + r2 * (k[1] + r2 * k[2])));
 }
 
 /** `barrel −40 · CA red +12 · vignette +30`, or an empty string when it does nothing. */

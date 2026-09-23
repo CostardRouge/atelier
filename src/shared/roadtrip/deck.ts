@@ -21,12 +21,13 @@ import {
 import { charBudget, wrapText } from '../lib/wrap-text';
 import { classifyPart } from '../library/assets';
 import { DEFAULT_FRAMING, normaliseFraming, type Framing } from '../media/framing';
+import { hasMotion, type FramingMotion } from '../media/framing-motion';
 import type { DevelopSettings } from '../develop/develop';
 import { OUTRO_SECONDS_DEFAULT } from '../overlay/outro-card';
 import type { SavedMediaRef } from '../projects/project-types';
 import type { BadgeCascade, BadgePieceStyles } from './badge-layout';
 import { clipSpeed } from './hook-video';
-import { collageAnimates, type SlideCollage } from './collage';
+import { collageAnimates, collageCellsMove, type SlideCollage } from './collage';
 import type { SlideMedium, TripDoc, TripGrade, TripPost } from './trip-types';
 import { hookMoves } from './hooks/hook-context';
 
@@ -63,6 +64,11 @@ export interface DeckSlide {
   videoTimeSeconds: number;
   /** How this slide's picture sits in the frame. The closing card has none. */
   framing: Framing;
+  /**
+   * How it MOVES in the frame over the slide — `framing` is where it rests —
+   * or null. A surface that draws the slide settled never reads it.
+   */
+  motion: FramingMotion | null;
   /**
    * This picture's own correction, applied before the grade; null is as
    * shot. Per SLIDE, like the framing — a renderer composes its cube with
@@ -159,6 +165,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       media: post.media,
       videoTimeSeconds: post.badge.videoTimeSeconds,
       framing: normaliseFraming(post.badge.framing),
+      motion: post.badge.motion ?? null,
       develop: post.badge.develop ?? null,
       grade: post.badge.grade ?? null,
       collage: post.badge.collage ?? null,
@@ -169,7 +176,10 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
         // animated piece does: left as `auto`, it must leave as a video.
         hookAnimates(post.badge.pieceStyles, post.badge.cascade) ||
           hookMoves(trip, post) ||
-          collageAnimates(post.badge.collage),
+          collageAnimates(post.badge.collage) ||
+          // A picture that moves in its frame moves the slide.
+          hasMotion(post.badge.motion) ||
+          collageCellsMove(post.badge.collage),
         post.media?.name ?? null,
       ),
       chosen: post.badge.medium,
@@ -186,13 +196,19 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       media: slide.media,
       videoTimeSeconds: slide.videoTimeSeconds,
       framing: normaliseFraming(slide.framing),
+      motion: slide.motion ?? null,
       develop: slide.develop ?? null,
       grade: slide.grade ?? null,
       collage: slide.collage ?? null,
       caption: slide.caption,
-      // A content slide moves only when its collage's cells do; when a caption
-      // gains an animation, this flag is the only thing that changes here.
-      ...resolveSlideMedium(slide.medium, collageAnimates(slide.collage), slide.media?.name ?? null),
+      // A content slide moves when its collage's cells do, or when a picture
+      // moves in its frame; when a caption gains an animation, this flag is
+      // the only thing that changes here.
+      ...resolveSlideMedium(
+        slide.medium,
+        collageAnimates(slide.collage) || hasMotion(slide.motion) || collageCellsMove(slide.collage),
+        slide.media?.name ?? null,
+      ),
       chosen: slide.medium,
       seconds: slide.seconds,
       speed: isClip(slide.media?.name) ? clipSpeed(slide.videoSpeed) : 1,
@@ -211,6 +227,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       media: null,
       videoTimeSeconds: 0,
       framing: { ...DEFAULT_FRAMING },
+      motion: null,
       develop: null,
       // The closing card is drawn, not photographed: nothing to grade.
       grade: null,

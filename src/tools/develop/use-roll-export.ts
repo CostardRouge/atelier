@@ -9,16 +9,47 @@ import {
   type PictureSize,
 } from '../../shared/develop/roll-export';
 import { measurePicture, renderRollPicture, type MeasuredPicture } from '../../shared/develop/roll-render';
-import type { RollDoc, RollPicture } from '../../shared/develop/roll-types';
+import { delivers, variantFolder, type RollDoc, type RollPicture } from '../../shared/develop/roll-types';
 import type { Interpolation } from '../../shared/lut/interpolate';
 import { rollCubes } from './roll-cubes';
 import { WORKING_PREVIEW_EDGE, isWorkingPreview } from '../../shared/develop/working-preview';
 import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
 import { isProxyOverRaw, originalOf, rawRenderOf } from '../../shared/develop/delivery-source';
-import { deliverFilesTo, pickDeliveryTarget } from '../../shared/sources/deliver-files';
+import { deliverFilesTo, pickDeliveryTarget, type FolderedFile } from '../../shared/sources/deliver-files';
+import { largestSize, targetFolder } from '../../shared/develop/export-targets';
+import { profileInEffect } from '../../shared/lens/lens-profile';
 import { uniqueName } from '../../shared/sources/unique-name';
-import { EXIF_SLICE_BYTES } from '../../shared/exif/exif-parser';
+import { EXIF_SLICE_BYTES, parseExif, type ExifData, type GpsCoord } from '../../shared/exif/exif-parser';
+import { captureYear } from '../../shared/exif/delivery-meta';
+import { resolveWatermarkText, type Watermark } from '../../shared/develop/watermark';
 import { exportExifBlock, stampExif, type ExifAccount } from '../../shared/exif/stamp-exif';
+import { keepsCapture } from '../../shared/exif/meta-groups';
+import { PLACE_MAX_KM, placeFor, type DeliveryPlace } from '../../shared/exif/delivery-place';
+import { gazetteerOrEmpty } from '../../shared/roadtrip/load-gazetteer';
+
+/** The pictures whose watermark said nothing — said once, with what would fill it. */
+function markNote(names: readonly string[]): string[] {
+  if (names.length === 0) return [];
+  const who = names.length === 1 ? names[0] : `${names.length} pictures`;
+  return [`${who} left without a watermark: its line says nothing yet — set a creator in Metadata, or write the line out`];
+}
+
+/** A capture's EXIF read from the head of its original, or null when it will not parse. */
+function exifOf(head: Uint8Array): ExifData | null {
+  try {
+    return parseExif(head.buffer.slice(head.byteOffset, head.byteOffset + head.byteLength));
+  } catch {
+    return null;
+  }
+}
+
+/** The pictures that had a position and no place near enough to name — said once, not per file. */
+function placeNote(names: readonly string[]): string[] {
+  if (names.length === 0) return [];
+  const who = names.length === 1 ? names[0] : `${names.length} pictures`;
+  return [`${who} had no named town within ${PLACE_MAX_KM} km of its position — no city was written`];
+}
+import { useDeliveryIdentity } from '../../shared/develop/use-preset-book';
 import { heldOriginal, heldVersion, holdOriginal, subscribeHeld } from '../../shared/sources/original-cache';
 import { formatBytes } from '../../shared/lib/format';
 import {
@@ -75,6 +106,8 @@ export interface RollExports {
   openSize: MeasuredPicture | null;
   /** What the whole run will deliver, picture by picture, and the bytes it costs — before a byte is fetched. */
   plan: RunPlan;
+  /** Every picture's run-plan line by id, leaving or not — the Export tab's table. */
+  lines: ReadonlyMap<string, string>;
   /** Render the pictures named and hand them over. */
   exportPictures: (ids: readonly string[]) => Promise<void>;
 }
@@ -99,6 +132,7 @@ export function useRollExport({
   interpolation,
   siblingsOf,
   proxiesOnly = false,
+  onDelivered,
 }: {
   roll: RollDoc;
   files: ReadonlyMap<string, File>;
@@ -116,18 +150,27 @@ export function useRollExport({
    * connection" is about this machine, not about the roll.
    */
   proxiesOnly?: boolean;
+  /**
+   * The pictures whose files LANDED, as they were rendered, and when — what
+   * the export marks record (`export-marks.ts`). A file the folder refused is
+   * not among them.
+   */
+  onDelivered?: (pictures: readonly RollPicture[], at: number) => void;
 }): RollExports {
   const [exporting, setExporting] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [lastRun, setLastRun] = useState<RollRun | null>(null);
-  const latest = useRef({ roll, files, fileFor, interpolation, siblingsOf, proxiesOnly });
-  latest.current = { roll, files, fileFor, interpolation, siblingsOf, proxiesOnly };
+  // Who signs the files (`exif/delivery-meta.ts`), read at the moment a run
+  // stamps each one — the book it lives in may still be loading at mount.
+  const identity = useDeliveryIdentity();
+  const latest = useRef({ roll, files, fileFor, interpolation, siblingsOf, proxiesOnly, identity, onDelivered });
+  latest.current = { roll, files, fileFor, interpolation, siblingsOf, proxiesOnly, identity, onDelivered };
 
   // What the run will deliver, picture by picture, before a byte is fetched.
   // Re-planned whenever the session holds something new — the stage fetching
   // a file is what turns "to fetch" into "in hand".
   const held = useSyncExternalStore(subscribeHeld, heldVersion);
-  const plan = useMemo<RunPlan>(() => {
+  const { plan, lines } = useMemo<{ plan: RunPlan; lines: ReadonlyMap<string, string> }>(() => {
     const factsFor = (picture: RollPicture): PictureFacts => {
       const file = files.get(picture.id) ?? null;
       if (!file) return { file: null, proxy: false, sensor: null, delivered: null, original: null };
@@ -146,7 +189,15 @@ export function useRollExport({
             : null,
       };
     };
-    return planRun(roll.pictures, factsFor, proxiesOnly, formatBytes);
+    // The run the roll's own verb makes: the pictures that LEAVE
+    // (`delivers`) — the sentence must not count one held or ignored.
+    // Every picture's own line, for the Export tab's table: a picture held
+    // back still says what it WOULD leave from, which is what decides it.
+    const every = planRun(roll.pictures, factsFor, proxiesOnly, formatBytes);
+    return {
+      plan: planRun(roll.pictures.filter(delivers), factsFor, proxiesOnly, formatBytes),
+      lines: new Map(every.pictures.map((p) => [p.id, p.line])),
+    };
   }, [roll.pictures, files, siblingsOf, proxiesOnly, held]);
 
   // --- the open picture's own size, measured once per file, for the Delivers line
@@ -208,7 +259,8 @@ export function useRollExport({
       open.framing,
       pictureAspectRatio(open.aspect, openSize.size.width, openSize.size.height),
       open.border,
-      { longEdge: roll.export.longEdge, pixels: proxiesOnly ? 'proxies' : 'auto' },
+      // The FIRST target's size: the one this folder itself receives.
+      { size: roll.export.targets[0]?.size ?? null, pixels: proxiesOnly ? 'proxies' : 'auto' },
     );
     const chosen = proxiesOnly
       ? null
@@ -275,10 +327,30 @@ export function useRollExport({
       cancel: () => controller.abort(),
     });
     const rendered: File[] = [];
+    // The other targets' files, each bound for its own sub-folder under the
+    // SAME name as the picture's file in the chosen folder.
+    const foldered: FolderedFile[] = [];
+    // The picture each file was rendered from, parallel to `rendered`.
+    const renderedFrom: RollPicture[] = [];
+    // And the sub-folder it goes to, parallel too: '' for a picture, `Variant
+    // 2` for a copy (item 30), whose file keeps the capture's exact name.
+    const renderedFolder: string[] = [];
     const assetIds: (string | null)[] = [];
     const sourceIds = new Set<string>();
     const failures: string[] = [];
     const hdrRun = r.export.hdr ? { asked: 0, ultra: 0, headroom: 0, checked: null as number | null } : null;
+    // The place index (`delivery-place.ts`), loaded once per run and only when
+    // the roll writes a place: 2 MB from our own origin, never at boot. An
+    // index that will not load names nothing, and the run says so below.
+    let placeOf: ((gps: GpsCoord) => DeliveryPlace | null) | undefined;
+    const unplaced: string[] = [];
+    // Pictures whose watermark line came out empty — no creator set, no title.
+    const unmarked: string[] = [];
+    if (r.export.metadata.place) {
+      setExporting('Loading the place index…');
+      const cities = await gazetteerOrEmpty();
+      placeOf = (gps) => placeFor(cities, gps);
+    }
     // A run names each file after its picture, so two crops of ONE picture
     // want one name: the second is numbered here, before the folder is even
     // chosen. Case-folded, like the volume it will land on.
@@ -390,7 +462,9 @@ export function useRollExport({
               picture.framing,
               pictureAspectRatio(picture.aspect, size.width, size.height),
               picture.border,
-              { longEdge: r.export.longEdge, pixels: onlyProxies ? 'proxies' : 'auto' },
+              // The LARGEST target decides whether the original is worth
+              // fetching: every target is cut from the one render.
+              { size: largestSize(r.export.targets), pixels: onlyProxies ? 'proxies' : 'auto' },
             );
             if (summary.from === 'original') {
               const held = identity?.assetId ? heldOriginal(identity.assetId) : null;
@@ -451,22 +525,47 @@ export function useRollExport({
           // its account is kept here for the run's sentence.
           const stamped: { account: ExifAccount } = { account: 'none' };
           const stamp = async (jpeg: Blob, delivered: PictureSize) => {
-            const exif = exportExifBlock(head, origin?.exif ?? null, delivered);
+            const exif = exportExifBlock(head, origin?.exif ?? null, delivered, {
+              identity: latest.current.identity,
+              title: picture.title,
+              caption: picture.caption,
+              keep: r.export.metadata,
+              placeOf,
+            });
             stamped.account = exif.account;
+            if (placeOf && exif.located && !exif.place?.city) unplaced.push(picture.ref.name);
             return stampExif(jpeg, exif, delivered);
           };
+          // The watermark's line for THIS picture: the identity, the year it
+          // was taken, its own title. Resolved only when a target draws it.
+          let watermark: { text: string; style: Watermark } | null = null;
+          if (r.export.targets.some((t) => t.watermark)) {
+            const capture = head ? exifOf(head) : null;
+            const year = captureYear(capture?.dateTimeOriginal ?? origin?.exif?.dateTimeOriginal, new Date().getFullYear());
+            const text = resolveWatermarkText(r.export.watermark.text, {
+              creator: latest.current.identity?.creator ?? null,
+              year,
+              title: picture.title ?? null,
+            });
+            if (text) watermark = { text, style: r.export.watermark };
+            else unmarked.push(picture.ref.name);
+          }
           const out = await renderRollPicture(source, {
+            watermark,
             signal: controller.signal,
             framing: picture.framing,
             aspect: picture.aspect,
             border: picture.border,
             lut: await cubeFor(picture.grade ?? null, develop),
-            longEdge: r.export.longEdge,
-            quality: r.export.quality,
+            targets: r.export.targets,
             keystone: picture.keystone ?? null,
             lens: picture.lens ?? null,
+            // On the sensor by itself; on a camera render only where the
+            // author said so — a body's JPEG is often corrected already.
+            lensProfile: profileInEffect(picture.lensProfile, Boolean(raw)),
             layers: picture.layers ?? null,
             detail: picture.detail ?? null,
+            vignette: picture.vignette ?? null,
             repair: picture.repair ?? null,
             // The picture's own texture, part of its look (roll v5). The
             // document's copy, which the write-through keeps level with the stack.
@@ -475,7 +574,16 @@ export function useRollExport({
             calibration,
             hdr,
             stamp,
+            onSubjects: () => setExporting(`Finding the subject ${step}…`),
           });
+          // A subject layer the model did not answer draws nothing — in the
+          // file as on the stage — so the run says which picture left without it.
+          const lost = out.subjects ? out.subjects.asked - out.subjects.resolved : 0;
+          if (lost > 0) {
+            failures.push(
+              `${picture.ref.name} left without ${lost === 1 ? 'its subject mask' : `${lost} subject masks`}: the model could not be loaded or did not answer`,
+            );
+          }
           if (hdrRun && out.hdr) {
             if (out.hdr.ultra) {
               hdrRun.ultra += 1;
@@ -502,16 +610,22 @@ export function useRollExport({
           }
           // Said, not hidden: a file that lost its position is worth knowing
           // about before it is filed away.
-          if (stamped.account === 'vouched') {
+          // Only where the choice asked for what was missing: a Minimal run
+          // never wanted the body, so its absence is no news.
+          if (stamped.account === 'vouched' && r.export.metadata.camera) {
             failures.push(
               `${picture.ref.name} took its EXIF from ${origin?.sourceId ?? 'the source'}’s record — the original was out of reach, so no body or lens`,
             );
-          } else if (stamped.account === 'none') {
-            failures.push(`${picture.ref.name} carries no EXIF — nothing is known about the picture it came from`);
+          } else if (stamped.account === 'none' && keepsCapture(r.export.metadata)) {
+            failures.push(`${picture.ref.name} carries no camera EXIF — nothing is known about the picture it came from, only the signature is written`);
           }
           const blob = out.blob;
-          const name = uniqueName(exportName(picture.ref.name), (c) => named.has(c.toLowerCase()));
-          named.add(name.toLowerCase());
+          // Unique within its own folder: a variant's `Variant 2/DJI_0101.jpg`
+          // does not collide with the first's `DJI_0101.jpg`.
+          const variantDir = variantFolder(picture);
+          const inDir = (n: string) => `${variantDir}/${n}`.toLowerCase();
+          const name = uniqueName(exportName(picture.ref.name), (c) => named.has(inDir(c)));
+          named.add(inDir(name));
           rendered.push(
             new File([blob], name, {
               type: 'image/jpeg',
@@ -519,6 +633,15 @@ export function useRollExport({
               lastModified: file.lastModified,
             }),
           );
+          out.outputs.slice(1).forEach((o, k) => {
+            const targetDir = targetFolder(r.export.targets[k + 1].name, k + 1);
+            foldered.push({
+              folder: variantDir ? `${targetDir}/${variantDir}` : targetDir,
+              file: new File([o.blob], name, { type: 'image/jpeg', lastModified: file.lastModified }),
+            });
+          });
+          renderedFrom.push(picture);
+          renderedFolder.push(variantDir);
           assetIds.push(identity?.assetId ?? null);
           if (origin) sourceIds.add(origin.sourceId);
         } catch (err) {
@@ -535,7 +658,8 @@ export function useRollExport({
       // A cancelled run keeps what it rendered: written, and said as such.
       setExporting('Writing…');
       task.update({ label: 'Writing the pictures', progress: 0, detail: null });
-      const delivery = await deliverFilesTo(target, rendered, {
+      const mains = rendered.map((file, i) => (renderedFolder[i] ? { file, folder: renderedFolder[i] } : file));
+      const delivery = await deliverFilesTo(target, [...mains, ...foldered], {
         replace: r.export.replace,
         onProgress: (done, total) => {
           setExporting(`Writing ${done}/${total}…`);
@@ -543,10 +667,19 @@ export function useRollExport({
         },
       });
       const errors = delivery.method === 'folder' ? delivery.errors : [];
+      // What LANDED is what gets marked: a file the folder refused was not delivered.
+      const refused = new Set(delivery.method === 'folder' ? delivery.failed : []);
+      latest.current.onDelivered?.(
+        renderedFrom.filter((_, i) => !refused.has(renderedFolder[i] ? `${renderedFolder[i]}/${rendered[i].name}` : rendered[i].name)),
+        Date.now(),
+      );
       const renamed = delivery.method === 'folder' ? delivery.renamed : 0;
       setNote(
         (cancelled ? `Cancelled after ${rendered.length} of ${targets.length} — ` : '') +
-          describeRun(delivery.written, delivery.method, [...failures, ...errors], renamed),
+          describeRun(delivery.written, delivery.method, [...failures, ...placeNote(unplaced), ...markNote(unmarked), ...errors], renamed, {
+            pictures: rendered.length,
+            targets: r.export.targets.length,
+          }),
       );
       // Only the files from ONE instance, so a future send-home plan refuses
       // nothing it did not have to.
@@ -561,5 +694,5 @@ export function useRollExport({
   }, []);
 
   const measuredOpen = openFile && openSize && openSize.file === openFile ? openSize.size : null;
-  return { exporting, note, lastRun, openDelivery, openSize: measuredOpen, plan, exportPictures };
+  return { exporting, note, lastRun, openDelivery, openSize: measuredOpen, plan, lines, exportPictures };
 }

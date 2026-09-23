@@ -241,6 +241,13 @@ interface BadgeStageProps {
   cellLabels?: readonly (string | null)[];
   onSourceLoaded?: (info: { width: number; height: number; duration: number }) => void;
   /**
+   * The size of each picture as decoded — the lead first, then every cell; null
+   * for one not decoded. Only their SHAPES are meant: the stage bounds a big
+   * picture's pixels, never its aspect. What a motion preset measures a pan's
+   * room against.
+   */
+  onPictureSizes?: (sizes: readonly ({ width: number; height: number } | null)[]) => void;
+  /**
    * The width the picture wants from the height it was given (height ×
    * aspect), reported on every measure. The editor caps the stage column with
    * it so a portrait frame on a wide screen does not leave the slide rail
@@ -307,6 +314,7 @@ export default function BadgeStage({
   onDropAsset,
   cellLabels,
   onSourceLoaded,
+  onPictureSizes,
   onRendered,
   onFit,
 }: BadgeStageProps) {
@@ -361,6 +369,7 @@ export default function BadgeStage({
         }
         sourceRef.current = source;
         onSourceLoaded?.(natural);
+        setLeadSeq((n) => n + 1);
       })
       .catch((e: unknown) => {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
@@ -380,7 +389,18 @@ export default function BadgeStage({
   // the lead, and released together. Keyed on the files' identities: a cell
   // whose file did not change is not re-decoded when another cell's does.
   const cellSourcesRef = useRef<(BadgeSource | null)[]>([]);
+  const [leadSeq, setLeadSeq] = useState(0);
+  const onPictureSizesRef = useRef(onPictureSizes);
+  onPictureSizesRef.current = onPictureSizes;
   const [cellSeq, setCellSeq] = useState(0);
+  // Reported after either decode lands: the lead's, or a round of the cells'.
+  useEffect(() => {
+    const report = onPictureSizesRef.current;
+    if (!report) return;
+    const cells = cellSourcesRef.current;
+    const pictures = cells.length ? cells.map((src, i) => (i === 0 ? sourceRef.current : src)) : [sourceRef.current];
+    report(pictures.map((src) => (src && src.width > 0 && src.height > 0 ? { width: src.width, height: src.height } : null)));
+  }, [cellSeq, leadSeq]);
   const cellFileKey = collage
     ? (collageFiles ?? []).map((f) => (f ? `${f.name}|${f.size}|${f.lastModified}` : '')).join('\u0001')
     : '';
@@ -834,6 +854,9 @@ export default function BadgeStage({
         media: null,
         framing: framing ?? DEFAULT_FRAMING,
         develop: null,
+        // The editor hands the stage each picture's framing AT THE NEEDLE, so
+        // the stage draws what it is given and moves nothing itself.
+        motion: null,
       };
       const items: CollageItem[] = rects.map((_, i) => {
         const source = i === 0 ? sourceRef.current : (cellSourcesRef.current[i] ?? null);

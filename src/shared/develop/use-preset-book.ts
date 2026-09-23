@@ -13,6 +13,7 @@ import { DEFAULT_SOURCE_ID } from '../sources/source';
 import { listWinnowConnections, subscribeWinnowConnections } from '../sources/winnow/store';
 import { listTrips } from '../roadtrip/trip-store';
 import type { DevelopSettings } from './develop';
+import type { SavedGrade } from '../lut/saved-grade';
 import type { DevelopPresets } from './develop-host';
 import {
   createPresetBook,
@@ -20,8 +21,10 @@ import {
   mergeTripPresets,
   removePresetFromBook,
   savePresetInBook,
+  withIdentity,
   type PresetBook,
 } from './preset-book';
+import { EMPTY_IDENTITY, type DeliveryIdentity } from '../exif/delivery-meta';
 import {
   PRESET_BOOK_KIND,
   bookRemoteFor,
@@ -225,10 +228,10 @@ export function ensurePresetBook(): Promise<void> {
   return loading;
 }
 
-export async function saveToPresetBook(name: string, settings: DevelopSettings) {
+export async function saveToPresetBook(name: string, settings: DevelopSettings, look: SavedGrade | null = null) {
   await ensurePresetBook();
   if (!state.book) return;
-  const next = savePresetInBook(state.book, name, settings, newRollId());
+  const next = savePresetInBook(state.book, name, settings, newRollId(), Date.now(), look);
   if (next !== state.book) await commit(next);
 }
 
@@ -236,6 +239,14 @@ export async function removeFromPresetBook(id: string) {
   await ensurePresetBook();
   if (!state.book) return;
   const next = removePresetFromBook(state.book, id);
+  if (next !== state.book) await commit(next);
+}
+
+/** Sign delivered pictures as `identity` — written to the book, and so to every device that finds it. */
+export async function setDeliveryIdentity(identity: DeliveryIdentity) {
+  await ensurePresetBook();
+  if (!state.book) return;
+  const next = withIdentity(state.book, identity);
   if (next !== state.book) await commit(next);
 }
 
@@ -326,7 +337,7 @@ export function usePresetBookHost(): DevelopPresets {
     const sources = documentSourcesFor(PRESET_BOOK_KIND);
     return {
       list: book?.presets ?? [],
-      onSave: (name: string, settings: DevelopSettings) => void saveToPresetBook(name, settings),
+      onSave: (name: string, settings: DevelopSettings, look?: SavedGrade | null) => void saveToPresetBook(name, settings, look ?? null),
       onRemove: (id: string) => void removeFromPresetBook(id),
       keptOn: 'in your own book, shared by every Develop sheet and tool',
       place: {
@@ -338,4 +349,10 @@ export function usePresetBookHost(): DevelopPresets {
       },
     };
   }, [book, record, connections]);
+}
+
+/** Who signs a delivered picture, live — the empty identity until the book has loaded or one is written. */
+export function useDeliveryIdentity(): DeliveryIdentity {
+  const { book } = usePresetBook();
+  return book?.identity ?? EMPTY_IDENTITY;
 }

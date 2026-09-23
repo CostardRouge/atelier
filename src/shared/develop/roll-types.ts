@@ -14,12 +14,17 @@
  * build wrote is left behind rather than trusted. Pure and DOM-free.
  */
 
-import { keystoneOrNull, type Keystone } from '../render/geometry';
-import { lensOrNull, type LensCorrection } from '../render/lens';
-import { detailOrNull, type DetailSettings } from '../render/detail';
+import { readLensProfile, type LensProfileApplied } from '../lens/lens-profile';
+import { DEFAULT_TARGET, readTargets, type ExportTarget } from './export-targets';
+import { DEFAULT_WATERMARK, readWatermark, type Watermark } from './watermark';
+import { ALL_META, readMetaChoice, type MetaChoice } from '../exif/meta-groups';
+import { isDefaultKeystone, keystoneOrNull, type Keystone } from '../render/geometry';
+import { isDefaultLens, lensOrNull, type LensCorrection } from '../render/lens';
+import { detailOrNull, isDefaultDetail, type DetailSettings } from '../render/detail';
+import { isDefaultPostVignette, postVignetteOrNull, type PostCropVignette } from '../render/post-vignette';
 import { readPatches, type Patch } from '../render/repair';
 import { readLayers, type AdjustLayer } from './layer';
-import { developOrNull, type DevelopSettings } from './develop';
+import { DEFAULT_DEVELOP, developOrNull, isDefaultDevelop, isRawDevelop, type DevelopSettings } from './develop';
 import { filmTextureOrNull, type FilmTexture } from '../film/film-texture';
 import { isDefaultFraming, normaliseFraming, type Framing } from '../media/framing';
 import { type SavedMediaRef } from '../projects/project-types';
@@ -48,8 +53,12 @@ import { DEFAULT_SOURCE_ID } from '../sources/source';
  * roll's — the maintainer's call: *"c'est le média qui décide"*. A roll written
  * before v5 hands its one look to every picture that has none (`readRollDoc`),
  * so nothing changes on screen; `RollDoc.grade` is gone.
+ * v6 (2026-09-23): the export writes to TARGETS (`export-targets.ts`, audit
+ * item 28) — `RollExport.longEdge` and `quality` became the first target's
+ * size and quality, read back by `readTargets`, so a roll exports exactly as
+ * it did.
  */
-export const ROLL_DOC_VERSION = 5;
+export const ROLL_DOC_VERSION = 6;
 
 /** A picture's look, after its own develop — Trips' `TripGrade` shape. */
 export interface RollGrade {
@@ -60,10 +69,13 @@ export interface RollGrade {
 }
 
 export interface RollExport {
-  /** The delivered long edge in pixels, or null for the source's own size. */
-  longEdge: number | null;
-  /** JPEG quality, 0.5..1. */
-  quality: number;
+  /**
+   * Where the run writes and at what size (`export-targets.ts`, v6): the
+   * first target into the folder chosen at the click, each other one into a
+   * sub-folder of it named after the target — the files' own names never
+   * change. Never empty.
+   */
+  targets: ExportTarget[];
   /**
    * Replace a file the chosen folder already holds under the export's name,
    * or number the incoming one (`DJI_0101-1.jpg`). OFF by default: an export
@@ -80,21 +92,36 @@ export interface RollExport {
   hdr: boolean;
   /** How far above white the map may reach, in stops: the RAW is developed this much darker to find them. */
   hdrStops: number;
+  /**
+   * Which groups of metadata leave (`exif/meta-groups.ts`, M3): the roll's,
+   * because "this set goes online without its position" is said of a
+   * delivery. Absent reads as All — the GPS leaves by default, his call.
+   */
+  metadata: MetaChoice;
+  /**
+   * The watermark's STYLE (`watermark.ts`): one look for the set, drawn only
+   * on the targets that ask for it. Absent reads as the default.
+   */
+  watermark: Watermark;
 }
 
 export const DEFAULT_ROLL_EXPORT: Readonly<RollExport> = Object.freeze({
-  longEdge: null,
-  quality: 0.92,
+  targets: [{ ...DEFAULT_TARGET }],
   replace: false,
   hdr: false,
   hdrStops: 2,
+  metadata: ALL_META,
+  watermark: DEFAULT_WATERMARK,
 });
 
 export const ROLL_EXPORT_LIMITS = {
-  longEdge: { min: 256, max: 16384 },
-  quality: { min: 0.5, max: 1 },
   hdrStops: { min: 1, max: 4 },
 } as const;
+
+/** Whether a picture leaves in an export — `RollPicture.deliver`. */
+export type DeliverState = 'auto' | 'yes' | 'no' | 'ignore';
+
+const DELIVER_STATES: ReadonlySet<string> = new Set(['auto', 'yes', 'no', 'ignore']);
 
 /** A picture's crop shape: its own, or one of the suite's aspect presets. */
 export type RollAspect = 'original' | string;
@@ -128,6 +155,26 @@ export interface RollPicture {
    */
   rendition?: string | null;
   /**
+   * Whether the picture LEAVES in an export (2026-09-23, `docs/lightroom-gaps.md`
+   * §10): `auto` follows the roll's rule — it leaves when it is edited
+   * (`pictureEdits`) —, `yes` and `no` are the author's own call, and `ignore`
+   * takes the picture out of the roll's WORK: never exported, skipped by the
+   * arrows and by every "apply to the others", left out of the progress count,
+   * still opened by a click. ONE field, so no two answers can contradict each
+   * other. Absent reads as `auto`, so no roll needs migrating. An output
+   * instruction, never a rating: culling stays Winnow's.
+   */
+  deliver?: DeliverState;
+  /**
+   * The picture's own WORDS, written into the delivered file (2026-09-23, M2
+   * of `docs/lightroom-gaps.md` §9): a title (`dc:title`) and a caption
+   * (`dc:description` and EXIF `ImageDescription`). The picture's, never the
+   * roll's — two frames of one scene are captioned apart — and carried by no
+   * preset, paste or Apply-to. Absent or empty mean none, one spelling.
+   */
+  title?: string;
+  caption?: string;
+  /**
    * The perspective correction (`shared/render/geometry.ts`), or null for
    * none. It is applied BEFORE the crop frames the result: a keystone takes
    * the converging verticals out of the picture, and the crop then decides
@@ -142,11 +189,25 @@ export interface RollPicture {
    */
   lens?: LensCorrection | null;
   /**
+   * The MEASURED profile of the lens that took it (Lensfun,
+   * `shared/lens/lens-profile.ts`), resolved to terms for its focal length and
+   * aperture. CALIBRATION, not an edit: never copied to another picture, not
+   * cleared by Reset, not what makes a picture "edited". `undefined` is never
+   * decided (an automatic lookup may apply one), `null` is taken off by the
+   * author (nothing puts it back by itself).
+   */
+  lensProfile?: LensProfileApplied | null;
+  /**
    * Denoise, defringe and sharpen (`shared/render/detail.ts`), or null for
    * none. The noise passes run FIRST, on the source before the develop; the
    * sharpen LAST, after every warp and layer — `detail.ts` states why.
    */
   detail?: DetailSettings | null;
+  /**
+   * The post-crop vignette (`shared/render/post-vignette.ts`), or null for
+   * none — shaped in the DELIVERED frame, so it follows the crop.
+   */
+  vignette?: PostCropVignette | null;
   /**
    * Heal and clone patches (`shared/render/repair.ts`), in order, drawn as
    * ONE pass on the source before everything else. Absent and empty mean the
@@ -160,6 +221,18 @@ export interface RollPicture {
    * `render-core.md` for why that order was chosen over the brief's.
    */
   layers?: AdjustLayer[];
+  /**
+   * Which VARIANT of its capture this entry is (2026-09-23, item 30 of
+   * `docs/lightroom-gaps.md`, his YES — Capture One's variants, Lightroom's
+   * virtual copies): absent for the first, 2, 3… for a copy made from a
+   * picture already on the roll (`addVariant`). Every variant is a whole
+   * `RollPicture` of its own — its develop, crop, look, words, delivery —
+   * sharing only the file. Adding a file the roll holds is still refused
+   * (`addPictures`); a variant is MADE, never added. A copy leaves into a
+   * sub-folder named after it (`variantFolder`) so the file keeps the
+   * capture's exact name, the one Winnow's `reconcile` pairs on.
+   */
+  variant?: number;
 }
 
 export interface RollDoc {
@@ -209,9 +282,11 @@ export function createRollPicture(ref: SavedMediaRef, id: string = newRollId()):
     aspect: 'original',
     border: null,
     rendition: null,
+    deliver: 'auto',
     keystone: null,
     lens: null,
     detail: null,
+    vignette: null,
     repair: [],
     layers: [],
   };
@@ -267,14 +342,11 @@ export function readRollGrade(raw: unknown): RollGrade | null {
 }
 
 export function readRollExport(raw: unknown): RollExport {
-  if (!isRecord(raw)) return { ...DEFAULT_ROLL_EXPORT };
-  const { longEdge, quality } = ROLL_EXPORT_LIMITS;
-  const edge = typeof raw.longEdge === 'number' && Number.isFinite(raw.longEdge)
-    ? Math.round(Math.min(longEdge.max, Math.max(longEdge.min, raw.longEdge)))
-    : null;
+  if (!isRecord(raw)) return { ...DEFAULT_ROLL_EXPORT, targets: [{ ...DEFAULT_TARGET }], metadata: { ...ALL_META }, watermark: { ...DEFAULT_WATERMARK } };
   return {
-    longEdge: edge,
-    quality: Math.min(quality.max, Math.max(quality.min, finite(raw.quality, DEFAULT_ROLL_EXPORT.quality))),
+    // v5 and earlier held one long edge and one quality: they become the
+    // only target, so an old roll exports exactly as it did.
+    targets: readTargets(raw.targets, { longEdge: raw.longEdge, quality: raw.quality }),
     // `originals`, written by v1–v3, is left behind on purpose (v4).
     // Anything but a stored `true` reads as off, so a roll written before the
     // choice existed keeps what is in its folder.
@@ -283,7 +355,41 @@ export function readRollExport(raw: unknown): RollExport {
     hdrStops: Math.round(
       Math.min(ROLL_EXPORT_LIMITS.hdrStops.max, Math.max(ROLL_EXPORT_LIMITS.hdrStops.min, finite(raw.hdrStops, DEFAULT_ROLL_EXPORT.hdrStops))),
     ),
+    metadata: readMetaChoice(raw.metadata),
+    watermark: readWatermark(raw.watermark),
   };
+}
+
+/**
+ * The roll with one picture's words replaced — trimmed, an emptied one taken
+ * off the picture rather than stored blank. The same roll back when nothing
+ * changed, so a blur that edited nothing is no undo step.
+ */
+export function setPictureWords(
+  roll: RollDoc,
+  id: string,
+  words: { title?: string; caption?: string },
+  now: number = Date.now(),
+): RollDoc {
+  const picture = roll.pictures.find((p) => p.id === id);
+  if (!picture) return roll;
+  const next = wordsOf({ title: words.title ?? picture.title, caption: words.caption ?? picture.caption });
+  if ((next.title ?? '') === (picture.title ?? '') && (next.caption ?? '') === (picture.caption ?? '')) return roll;
+  const pictures = roll.pictures.map((p) => {
+    if (p.id !== id) return p;
+    const { title: _t, caption: _c, ...rest } = p;
+    void _t;
+    void _c;
+    return { ...rest, ...next };
+  });
+  return { ...roll, pictures, updatedAt: now };
+}
+
+/** A picture's words as stored: a title and a caption, trimmed, an empty one left out. */
+export function wordsOf(raw: { title?: unknown; caption?: unknown }): Pick<RollPicture, 'title' | 'caption'> {
+  const title = typeof raw.title === 'string' ? raw.title.trim() : '';
+  const caption = typeof raw.caption === 'string' ? raw.caption.trim() : '';
+  return { ...(title ? { title } : {}), ...(caption ? { caption } : {}) };
 }
 
 /** A stored crop, or null when there is none — an untouched framing is no crop, one spelling. */
@@ -323,13 +429,21 @@ function readPicture(raw: unknown, rollGrade: RollGrade | null = null): RollPict
     aspect,
     border,
     rendition: typeof raw.rendition === 'string' && raw.rendition ? raw.rendition : null,
+    // Absent — every roll written before it existed — and anything unknown read as `auto`.
+    deliver: typeof raw.deliver === 'string' && DELIVER_STATES.has(raw.deliver) ? (raw.deliver as DeliverState) : 'auto',
+    ...wordsOf(raw),
     // Absent on every roll written before the warp existed, and `null` there
     // means exactly what it means now — so there is no migration to run.
     keystone: keystoneOrNull(raw.keystone),
     lens: lensOrNull(raw.lens),
+    // Absent stays absent: "never decided" and "taken off" are two answers.
+    ...('lensProfile' in raw ? { lensProfile: readLensProfile(raw.lensProfile) ?? null } : {}),
     detail: detailOrNull(raw.detail),
+    vignette: postVignetteOrNull(raw.vignette),
     repair: readPatches(raw.repair),
     layers: readLayers(raw.layers),
+    // Absent is the first variant — every roll written before copies existed.
+    ...(Number.isInteger(raw.variant) && (raw.variant as number) >= 2 ? { variant: raw.variant as number } : {}),
   };
 }
 
@@ -401,6 +515,85 @@ export function addPictures(
   return pictures.length === roll.pictures.length ? roll : { ...roll, pictures, updatedAt: now };
 }
 
+// --- variants (item 30) --------------------------------------------------------
+
+/** 1 for the first entry of a capture, 2, 3… for its copies. */
+export function variantNumber(p: Pick<RollPicture, 'variant'>): number {
+  return p.variant && p.variant >= 2 ? p.variant : 1;
+}
+
+/** `DJI_0101.JPG` for the first, `DJI_0101.JPG · 2` for a copy — the name every list shows. */
+export function pictureLabel(p: Pick<RollPicture, 'ref' | 'variant'>): string {
+  const n = variantNumber(p);
+  return n > 1 ? `${p.ref.name} · ${n}` : p.ref.name;
+}
+
+/**
+ * The sub-folder a copy's file leaves into — `Variant 2` — or '' for the
+ * first. A FOLDER and not a suffix: the delivered name stays exactly the
+ * capture's (`exportName`), which is what pairs his Gallery with his source
+ * folder by eye and what Winnow's `reconcile` matches on (basename + capture
+ * time). A `_v2` would have broken both.
+ */
+export function variantFolder(p: Pick<RollPicture, 'variant'>): string {
+  const n = variantNumber(p);
+  return n > 1 ? `Variant ${n}` : '';
+}
+
+/** How a variant starts: as the source picture stands, or as shot. */
+export type VariantStart = 'clone' | 'fresh';
+
+/**
+ * A new variant of picture `fromId`, placed right after the last entry of
+ * its capture and numbered one past the highest there (a number is never
+ * reused while a higher one stands, so `Variant 3` names one picture's files
+ * for as long as it exists).
+ *
+ * - `clone` — Lightroom's virtual copy, Capture One's *Clone Variant*: every
+ *   field of the source, its words included (the author edits them apart),
+ *   and its delivery back on the roll's rule.
+ * - `fresh` — Capture One's *New Variant*: the picture AS SHOT. What is kept
+ *   is what belongs to the FILE, never an edit: which rendition it is
+ *   developed from, the RAW base with its measured gain (never its white
+ *   balance, which is a choice), and the lens's measured profile.
+ *
+ * Returns the roll unchanged when `fromId` names nothing.
+ */
+export function addVariant(
+  roll: RollDoc,
+  fromId: string,
+  start: VariantStart,
+  newId: string = newRollId(),
+  now: number = Date.now(),
+): RollDoc {
+  const from = roll.pictures.find((p) => p.id === fromId);
+  if (!from) return roll;
+  const family = roll.pictures.filter((p) => sameMediaRef(p.ref, from.ref));
+  const number = Math.max(...family.map(variantNumber)) + 1;
+  let made: RollPicture;
+  if (start === 'clone') {
+    const { deliver: _deliver, variant: _variant, ...rest } = structuredClone(from);
+    void _deliver;
+    void _variant;
+    made = { ...rest, id: newId, deliver: 'auto', variant: number };
+  } else {
+    const base = from.develop && isRawDevelop(from.develop)
+      ? { ...DEFAULT_DEVELOP, base: from.develop.base, rawGain: from.develop.rawGain ?? null }
+      : null;
+    made = {
+      ...createRollPicture(from.ref, newId),
+      develop: base,
+      rendition: from.rendition ?? null,
+      ...(from.lensProfile !== undefined ? { lensProfile: structuredClone(from.lensProfile) } : {}),
+      variant: number,
+    };
+  }
+  const last = roll.pictures.reduce((at, p, i) => (sameMediaRef(p.ref, from.ref) ? i : at), -1);
+  const pictures = [...roll.pictures];
+  pictures.splice(last + 1, 0, made);
+  return { ...roll, pictures, updatedAt: now };
+}
+
 export function removePictures(roll: RollDoc, ids: readonly string[], now: number = Date.now()): RollDoc {
   const drop = new Set(ids);
   const pictures = roll.pictures.filter((p) => !drop.has(p.id));
@@ -432,9 +625,12 @@ export function patchPicture(
       | 'aspect'
       | 'border'
       | 'rendition'
+      | 'deliver'
+      | 'lensProfile'
       | 'keystone'
       | 'lens'
       | 'detail'
+      | 'vignette'
       | 'repair'
       | 'layers'
     >
@@ -512,19 +708,114 @@ export function copyBorderTo(
   return changed ? { ...roll, pictures, updatedAt: now } : roll;
 }
 
+/** What was done to a picture, in the inspector's own words — `edited` is this list being non-empty. */
+export type PictureEdit =
+  | 'develop'
+  | 'look'
+  | 'crop'
+  | 'border'
+  | 'perspective'
+  | 'lens'
+  | 'detail'
+  | 'vignette'
+  | 'repair'
+  | 'layers';
+
 /**
- * What the gallery card says: "18 of 42 developed" — a develop, a look or a
- * crop counts, and an ASPECT other than the picture's own is a crop on its own:
- * drawing a free zone with the frame's corners leaves the framing untouched
- * (nothing was panned or zoomed), and a picture that was plainly cropped must
- * not read as one nobody has looked at.
+ * Everything the author did to ONE picture — the one answer to "is it edited?"
+ * that the filmstrip's dot, the roll's progress and the remove confirmation all
+ * read (2026-09-23: three different tests had it three ways, and an hour of
+ * heal spots was removed without a word). A value dragged back to its default
+ * is no edit; an ASPECT other than the picture's own is a crop on its own —
+ * drawing a free zone with the frame's corners pans nothing. WHICH FILE the
+ * picture is developed from (`rendition`) is a choice of bytes, not an edit.
  */
-export function rollProgress(roll: RollDoc): { total: number; developed: number } {
-  return {
-    total: roll.pictures.length,
-    developed: roll.pictures.filter(
-      (p) =>
-        p.develop !== null || (p.grade ?? null) !== null || p.framing !== null || p.aspect !== 'original' || p.border !== null,
-    ).length,
-  };
+export function pictureEdits(p: RollPicture): PictureEdit[] {
+  const out: PictureEdit[] = [];
+  if (!isDefaultDevelop(p.develop)) out.push('develop');
+  if (p.grade) out.push('look');
+  if ((p.framing && !isDefaultFraming(p.framing)) || p.aspect !== 'original') out.push('crop');
+  if (p.border) out.push('border');
+  if (!isDefaultKeystone(p.keystone)) out.push('perspective');
+  if (!isDefaultLens(p.lens)) out.push('lens');
+  if (!isDefaultDetail(p.detail)) out.push('detail');
+  if (!isDefaultPostVignette(p.vignette)) out.push('vignette');
+  if ((p.repair ?? []).length > 0) out.push('repair');
+  if ((p.layers ?? []).length > 0) out.push('layers');
+  return out;
+}
+
+export function isEdited(p: RollPicture): boolean {
+  return pictureEdits(p).length > 0;
+}
+
+/**
+ * What the gallery card says: "18 of 42 developed" — `isEdited`, counted over
+ * the pictures still in the roll's work: an ignored picture is in neither
+ * number, and `ignored` says how many were set aside.
+ */
+export function rollProgress(roll: RollDoc): { total: number; developed: number; ignored: number } {
+  const live = roll.pictures.filter((p) => !isIgnored(p));
+  return { total: live.length, developed: live.filter(isEdited).length, ignored: roll.pictures.length - live.length };
+}
+
+// --- delivery ---------------------------------------------------------------
+
+export function deliverState(p: Pick<RollPicture, 'deliver'>): DeliverState {
+  return p.deliver ?? 'auto';
+}
+
+export function isIgnored(p: Pick<RollPicture, 'deliver'>): boolean {
+  return deliverState(p) === 'ignore';
+}
+
+/** Whether the picture leaves in an export: the author's call, else the roll's rule — edited ones leave. */
+export function delivers(p: RollPicture): boolean {
+  const state = deliverState(p);
+  return state === 'yes' || (state === 'auto' && isEdited(p));
+}
+
+/**
+ * The state after one "send ↔ hold" gesture (the `P` key, a row, a badge):
+ * the OTHER answer, stored as `auto` when that is what the rule already says —
+ * so a picture toggled twice is back on the rule, not pinned. An ignored
+ * picture comes back into the work on `auto`.
+ */
+export function toggledDelivery(p: RollPicture): DeliverState {
+  if (isIgnored(p)) return 'auto';
+  const leaving = !delivers(p);
+  return leaving === isEdited(p) ? 'auto' : leaving ? 'yes' : 'no';
+}
+
+/** The Export tab's table filters. An ignored picture answers none of them: it has a group of its own. */
+export type DeliveryFilter = 'all' | 'edited' | 'leaving' | 'held';
+
+export function matchesDeliveryFilter(p: RollPicture, filter: DeliveryFilter): boolean {
+  if (isIgnored(p)) return false;
+  switch (filter) {
+    case 'all':
+      return true;
+    case 'edited':
+      return isEdited(p);
+    case 'leaving':
+      return delivers(p);
+    case 'held':
+      return !delivers(p);
+  }
+}
+
+/** One delivery state written onto several pictures; the same roll back when nothing changes. */
+export function setDelivery(
+  roll: RollDoc,
+  ids: readonly string[],
+  state: DeliverState,
+  now: number = Date.now(),
+): RollDoc {
+  let changed = false;
+  const pictures = roll.pictures.map((p) => {
+    if (!ids.includes(p.id) || deliverState(p) === state) return p;
+    changed = true;
+    return { ...p, deliver: state };
+  });
+  return changed ? { ...roll, pictures, updatedAt: now } : roll;
 }

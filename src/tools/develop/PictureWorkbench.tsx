@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   DevelopActionsGroup,
   DevelopApplySection,
@@ -10,6 +10,9 @@ import { developButtonClass } from '../../shared/develop/develop-classes';
 import { DevelopAutoSection, DevelopLevelsSection } from '../../shared/develop/DevelopAuto';
 import { whiteBalanceFor } from '../../shared/develop/auto-develop';
 import DevelopHistogram from '../../shared/develop/DevelopHistogram';
+import DevelopMixer from '../../shared/develop/DevelopMixer';
+import { straightMono } from '../../shared/develop/mixer';
+import DevelopGrading from '../../shared/develop/DevelopGrading';
 import DevelopSliders from '../../shared/develop/DevelopSliders';
 import DevelopViewport from '../../shared/develop/DevelopViewport';
 import {
@@ -47,7 +50,7 @@ import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache'
 import { pictureAspectRatio } from '../../shared/develop/crop-aspect';
 import { WORKBENCH_TABS, editorKeyAction, sameDevelop, type WorkbenchTab } from '../../shared/develop/roll-editor';
 import { framedThumbnail } from '../../shared/develop/roll-thumb';
-import type { RollPicture } from '../../shared/develop/roll-types';
+import { pictureLabel, type RollGrade, type RollPicture } from '../../shared/develop/roll-types';
 import { useDevelopDraft, useTold } from '../../shared/develop/use-develop-draft';
 import { useWriteThrough } from '../../shared/develop/use-write-through';
 import { useDevelopPicture, type DevelopFrame } from '../../shared/develop/use-develop-picture';
@@ -56,8 +59,10 @@ import { sameLens, type LensCorrection } from '../../shared/render/lens';
 import {
   DEFAULT_BRUSH_HARDNESS,
   DEFAULT_BRUSH_RADIUS,
+  MAX_COLOUR_SAMPLES,
   MAX_STROKES,
   type BrushStroke,
+  type Mask,
   type MaskKind,
 } from '../../shared/render/mask';
 import { useSubjectMasks } from '../../shared/develop/use-subject-masks';
@@ -78,8 +83,10 @@ const FLASH_STEP_MS = 90;
 const SUBJECT_HIT_RADIUS = 0.04;
 import {
   addLayer,
+  componentMask,
   createLayer,
   drawingLayers,
+  withComponentMask,
   moveLayer,
   patchLayer,
   removeLayer,
@@ -92,6 +99,8 @@ import { DEFAULT_FRAMING, isDefaultFraming, sameFraming, type Framing } from '..
 import { describeKeyTarget, targetOwnsTyping } from '../../shared/media/transport-keys';
 import PanelHost from '../../shared/ui/PanelHost';
 import Segmented from '../../shared/ui/Segmented';
+import IconButton from '../../shared/ui/IconButton';
+import { Icons } from '../../shared/ui/icons';
 import type { OverflowItem } from '../../shared/ui/OverflowMenu';
 import StageZoomControl from '../../shared/ui/StageZoomControl';
 import { usePixelView } from '../../shared/ui/use-pixel-view';
@@ -102,8 +111,14 @@ import type { RollExport } from '../../shared/develop/roll-types';
 import CropPanel, { type CropApplyVerb } from './CropPanel';
 import KeystonePanel from './KeystonePanel';
 import LensPanel from './LensPanel';
-import DetailPanel from './DetailPanel';
-import RepairPanel, { DEFAULT_DUST, DEFAULT_REPAIR_TOOL, type DustState, type RepairTool } from './RepairPanel';
+import { lensKey, profileInEffect, type LensProfileApplied } from '../../shared/lens/lens-profile';
+import { lookUpLens, profileFor, setLensfunAllowed, useLensfunAllowed, type LookUp, type ShotLens } from '../../shared/lens/lensfun-store';
+import DetailPanel, { PresencePanel } from './DetailPanel';
+import VignettePanel from './VignettePanel';
+import WhiteBalancePanel from './WhiteBalancePanel';
+import type { RawWhite } from '../../shared/raw/white-balance';
+import { describePostVignette, samePostVignette, type PostCropVignette } from '../../shared/render/post-vignette';
+import RepairPanel, { DEFAULT_DUST, type DustState, type RepairTool } from './RepairPanel';
 import { describeDetail, sameDetail, type DetailImage, type DetailSettings } from '../../shared/render/detail';
 import {
   DUST_SCAN_EDGE,
@@ -145,6 +160,27 @@ const SNAPSHOT_DELAY_MS = 700;
 
 const NO_FILES: readonly File[] = [];
 
+/**
+ * What the NEXT stroke is painted with. Kept beside the layer rather than on
+ * it: a brush is a tool, and each stroke keeps the settings it was made with
+ * so a soft edge and a hard one can live in the same mask. Held by the EDITOR,
+ * like the open tab: a size set on one picture is the size on the next.
+ */
+export interface BrushTool {
+  radius: number;
+  hardness: number;
+  erase: boolean;
+}
+
+export const DEFAULT_BRUSH_TOOL: Readonly<BrushTool> = Object.freeze({
+  radius: DEFAULT_BRUSH_RADIUS,
+  hardness: DEFAULT_BRUSH_HARDNESS,
+  erase: false,
+});
+
+/** What a delivery key asks for — `RollEditor` turns it into a state. */
+export type DeliverAction = 'toggle' | 'auto' | 'ignore';
+
 /** A look batch verb, naming its count ("Apply look to 3 selected"): the host copies the open picture's stored look. */
 export interface LookApplyVerb {
   id: string;
@@ -181,6 +217,10 @@ export default function PictureWorkbench({
   onSheetOpen,
   tab,
   onTabChange,
+  brush,
+  onBrush,
+  repairTool,
+  onRepairTool,
   applyTo,
   lookApplyTo,
   cropApplyTo,
@@ -190,7 +230,9 @@ export default function PictureWorkbench({
   onFraming,
   onKeystone,
   onLens,
+  onLensProfile,
   onDetail,
+  onVignette,
   onRepair,
   onLayers,
   onAspect,
@@ -204,6 +246,13 @@ export default function PictureWorkbench({
   exportVerbs,
   onSnapshot,
   onStep,
+  onDeliver,
+  deliveryTable = null,
+  onWords,
+  onSettings,
+  onVariant,
+  onPasteSettings,
+  onLook,
   emptyText = 'This picture is not in the Library — open its folder, or take it from its day on your Winnow. Its numbers can still be set.',
 }: {
   picture: RollPicture;
@@ -221,6 +270,12 @@ export default function PictureWorkbench({
   /** Which inspector tab is open — lifted to the editor so it survives stepping to another picture. */
   tab: WorkbenchTab;
   onTabChange: (tab: WorkbenchTab) => void;
+  /** What the next stroke is painted with — the editor's, so it survives stepping to another picture. */
+  brush: BrushTool;
+  onBrush: (patch: Partial<BrushTool>) => void;
+  /** The heal/clone disc — the editor's, like the brush. */
+  repairTool: RepairTool;
+  onRepairTool: (patch: Partial<RepairTool>) => void;
   applyTo: readonly DevelopApplyVerb[];
   /** The look's batch verbs — this picture's look written onto others, never its develop. */
   lookApplyTo: readonly LookApplyVerb[];
@@ -233,7 +288,10 @@ export default function PictureWorkbench({
   onFraming: (framing: Framing | null) => void;
   onKeystone: (keystone: Keystone | null) => void;
   onLens: (lens: LensCorrection | null) => void;
+  /** The lens's measured profile put on the picture, or taken off (`null`). */
+  onLensProfile: (profile: LensProfileApplied | null) => void;
   onDetail: (detail: DetailSettings | null) => void;
+  onVignette: (vignette: PostCropVignette | null) => void;
   onRepair: (repair: Patch[]) => void;
   onLayers: (layers: AdjustLayer[]) => void;
   onAspect: (aspect: string) => void;
@@ -248,6 +306,24 @@ export default function PictureWorkbench({
   exportVerbs: readonly ExportVerb[];
   onSnapshot: (thumb: Blob) => void;
   onStep: (step: number) => void;
+  /**
+   * The delivery keys (`P` send ↔ hold, `U` back to the rule, `M` ignore ↔
+   * un-ignore): the editor answers from the roll as it stands, since the
+   * state depends on whether the picture is edited.
+   */
+  onDeliver: (action: DeliverAction) => void;
+  /** The Export tab's Pictures table — built by the editor, which holds the roll. */
+  deliveryTable?: ReactNode;
+  /** The picture's title and caption, written into its delivered file (M2). */
+  onWords: (words: { title?: string; caption?: string }) => void;
+  /** Open the sections sheet — copy, paste, apply to others (`picture-sections.ts`); ⌘⇧C. */
+  onSettings: () => void;
+  /** Paste the copied sections onto this picture; ⌘⇧V. False when nothing is held. */
+  onPasteSettings: () => boolean;
+  /** Make a variant of this picture as it stands (item 30); ⌘'. */
+  onVariant?: () => void;
+  /** Dress this picture in a look — a preset's (`DevelopPreset.look`). */
+  onLook: (look: RollGrade) => void;
   /** What the stage says while the picture's bytes are not in hand. */
   emptyText?: string;
 }) {
@@ -268,10 +344,10 @@ export default function PictureWorkbench({
   const [keystoneDraft, setKeystoneDraft] = useState<Keystone | null>(entry.keystone ?? null);
   const [lensDraft, setLensDraft] = useState<LensCorrection | null>(entry.lens ?? null);
   const [detailDraft, setDetailDraft] = useState<DetailSettings | null>(entry.detail ?? null);
+  const [vignetteDraft, setVignetteDraft] = useState<PostCropVignette | null>(entry.vignette ?? null);
   // The patch list, a draft like the rest: a drag setting a source fires per
   // pointermove, and each move must not be a document write.
   const [repairDraft, setRepairDraft] = useState<Patch[]>(entry.repair ?? []);
-  const [repairTool, setRepairTool] = useState<RepairTool>({ ...DEFAULT_REPAIR_TOOL });
   const [repairing, setRepairing] = useState(false);
   // The patch whose ring was last taken hold of: the panel's sliders edit it,
   // ⌫ removes it. Derived from the list each render, so a patch that went
@@ -283,6 +359,8 @@ export default function PictureWorkbench({
   // The FILE's own width, for the kernels: a RAW's sensor once decoded, else
   // the measured file; the stage's width follows the decode one render later.
   const [rawSize, setRawSize] = useState<{ w: number; h: number } | null>(null);
+  // The camera's white from the last RAW decode — what a Kelvin white balance is read against.
+  const [rawWhite, setRawWhite] = useState<RawWhite | null>(null);
   const [stageWidth, setStageWidth] = useState(0);
   // The stack is a draft like the rest, so a slider drag is one write-through
   // rather than one document write per step.
@@ -302,6 +380,14 @@ export default function PictureWorkbench({
   // maintainer does not want the numbers in front of him while he works, and
   // when he does they belong over the photograph, not under it.
   const [factsOn, setFactsOn] = useLocalFlag('atelier.develop.facts', false);
+  // The clipping view (J, or the histogram's end words). Never remembered
+  // past the session: a red wash met on the next visit would be taken for
+  // the picture — the rule the mask's own wash follows.
+  const [clipping, setClipping] = useState(false);
+  // The sharpen's Masking weight painted on the stage — only while the
+  // Detail tab is where the author is: a white-and-black picture met on
+  // another tab would read as a broken render.
+  const [sharpenMaskView, setSharpenMaskView] = useState(false);
   // The before/after split, as a switch. On by default — it is what the editor
   // has always done — but a divider is a second thing on the picture, and the
   // hours spent on a mask are exactly the hours it is in the way.
@@ -312,14 +398,6 @@ export default function PictureWorkbench({
   // produces the map the stage draws. One extra commit per answer, which is
   // once per tap rather than once per frame.
   const [subjectRasters, setSubjectRasters] = useState<SubjectRasters>(EMPTY_RASTERS);
-  // What the NEXT stroke is painted with. Kept beside the layer rather than on
-  // it: a brush is a tool, and each stroke keeps the settings it was made with
-  // so a soft edge and a hard one can live in the same mask.
-  const [brush, setBrush] = useState({
-    radius: DEFAULT_BRUSH_RADIUS,
-    hardness: DEFAULT_BRUSH_HARDNESS,
-    erase: false,
-  });
   const [painting, setPainting] = useState(false);
   const selectedLayer = layersDraft.find((l) => l.id === selectedLayerId) ?? null;
   const drawingCount = drawingLayers(layersDraft).length;
@@ -330,73 +408,88 @@ export default function PictureWorkbench({
   // one frame behind and would drop points (the same trap the curve editor's
   // drag wore). Each move rewrites the LAST stroke rather than adding one.
   const strokeRef = useRef<BrushStroke | null>(null);
-  const paintKind = painting ? selectedLayer?.mask?.kind : undefined;
-  const paintId = paintKind === 'brush' || paintKind === 'subject' ? (selectedLayer?.id ?? null) : null;
+  // WHICH of the open layer's masks the stage's gestures act on: null is its
+  // own, 0.. its combined parts (item 16). Back to its own whenever another
+  // layer opens, and whenever the part it pointed at is gone.
+  const [selectedPart, setSelectedPart] = useState<number | null>(null);
+  useEffect(() => setSelectedPart(null), [selectedLayerId]);
+  const partIndex = selectedPart !== null && selectedLayer?.parts?.[selectedPart] ? selectedPart : null;
+  const activeMask = selectedLayer ? componentMask(selectedLayer, partIndex) : null;
+  const paintKind = painting ? activeMask?.kind : undefined;
+  const paintId =
+    paintKind === 'brush' || paintKind === 'subject' || paintKind === 'colour' ? (selectedLayer?.id ?? null) : null;
   const brushRef = useRef(brush);
   brushRef.current = brush;
-  const layerPaint = useMemo(
-    () =>
-      paintId
-        ? {
-            onStart: (point: [number, number]) => {
-              if (paintKind === 'subject') {
-                // A tap ADDS a point, and a tap on one REMOVES it — the
-                // click-a-marker-to-unpick gesture, which is how a subject is
-                // narrowed after the model took in too much.
-                setLayersDraft((list) =>
-                  list.map((l) => {
-                    if (l.id !== paintId || l.mask?.kind !== 'subject') return l;
-                    const hit = l.mask.points.findIndex(
-                      ([x, y]) => Math.hypot(x - point[0], y - point[1]) < SUBJECT_HIT_RADIUS,
-                    );
-                    const points =
-                      hit >= 0
-                        ? l.mask.points.filter((_, i) => i !== hit)
-                        : [...l.mask.points, point];
-                    return { ...l, mask: { ...l.mask, points } };
-                  }),
-                );
-                return;
-              }
-              const made: BrushStroke = { points: [point], ...brushRef.current };
-              strokeRef.current = made;
-              setLayersDraft((list) =>
-                list.map((l) => {
-                  if (l.id !== paintId || l.mask?.kind !== 'brush') return l;
-                  if (l.mask.strokes.length >= MAX_STROKES) return l;
-                  return { ...l, mask: { kind: 'brush', strokes: [...l.mask.strokes, made] } };
-                }),
-              );
-            },
-            onMove: (point: [number, number]) => {
-              // A subject is TAPPED, never dragged: the model answers a point.
-              if (paintKind === 'subject') return;
-              const live = strokeRef.current;
-              if (!live) return;
-              const last = live.points[live.points.length - 1];
-              // Points closer than this add nothing the radius does not already
-              // cover, and every one of them is rasterised again.
-              const step = Math.max(0.004, live.radius * 0.12);
-              if (Math.hypot(point[0] - last[0], point[1] - last[1]) < step) return;
-              const grown: BrushStroke = { ...live, points: [...live.points, point] };
-              strokeRef.current = grown;
-              setLayersDraft((list) =>
-                list.map((l) => {
-                  if (l.id !== paintId || l.mask?.kind !== 'brush' || l.mask.strokes.length === 0) return l;
-                  const strokes = [...l.mask.strokes];
-                  strokes[strokes.length - 1] = grown;
-                  return { ...l, mask: { kind: 'brush', strokes } };
-                }),
-              );
-            },
-            onEnd: () => {
-              strokeRef.current = null;
-            },
-            gesture: paintKind === 'subject' ? ('tap' as const) : ('drag' as const),
-          }
-        : null,
-    [paintId, paintKind],
-  );
+  // The picture's own sampler, read at the tap: the hook is made further down.
+  const sampleColourRef = useRef<((point: readonly [number, number], layerId: string) => [number, number, number] | null) | null>(null);
+  const layerPaint = useMemo(() => {
+    if (!paintId) return null;
+    // Every write goes to the ONE mask open in the panel, through the pure
+    // helpers, so a painted part and the layer's own brush cannot be confused.
+    const edit = (fn: (m: Mask | null) => Mask | null) =>
+      setLayersDraft((list) =>
+        list.map((l) => {
+          if (l.id !== paintId) return l;
+          const next = fn(componentMask(l, partIndex));
+          return next ? withComponentMask(l, partIndex, next) : l;
+        }),
+      );
+    return {
+      onStart: (point: [number, number]) => {
+        if (paintKind === 'subject') {
+          // A tap ADDS a point, and a tap on one REMOVES it — the
+          // click-a-marker-to-unpick gesture, which is how a subject is
+          // narrowed after the model took in too much.
+          edit((m) => {
+            if (m?.kind !== 'subject') return null;
+            const hit = m.points.findIndex(([x, y]) => Math.hypot(x - point[0], y - point[1]) < SUBJECT_HIT_RADIUS);
+            const points = hit >= 0 ? m.points.filter((_, i) => i !== hit) : [...m.points, point];
+            return { ...m, points };
+          });
+          return;
+        }
+        if (paintKind === 'colour') {
+          // The same gesture for a colour range: a tap SAMPLES the colour
+          // there — as this layer sees it — and a tap on a marker removes it.
+          const rgb = sampleColourRef.current?.(point, paintId) ?? null;
+          edit((m) => {
+            if (m?.kind !== 'colour') return null;
+            const hit = m.samples.findIndex((c) => Math.hypot(c.x - point[0], c.y - point[1]) < SUBJECT_HIT_RADIUS);
+            if (hit >= 0) return { ...m, samples: m.samples.filter((_, i) => i !== hit) };
+            if (!rgb || m.samples.length >= MAX_COLOUR_SAMPLES) return null;
+            return { ...m, samples: [...m.samples, { x: point[0], y: point[1], r: rgb[0], g: rgb[1], b: rgb[2] }] };
+          });
+          return;
+        }
+        const made: BrushStroke = { points: [point], ...brushRef.current };
+        strokeRef.current = made;
+        edit((m) => (m?.kind === 'brush' && m.strokes.length < MAX_STROKES ? { kind: 'brush', strokes: [...m.strokes, made] } : null));
+      },
+      onMove: (point: [number, number]) => {
+        // A subject and a colour are TAPPED, never dragged.
+        if (paintKind !== 'brush') return;
+        const live = strokeRef.current;
+        if (!live) return;
+        const last = live.points[live.points.length - 1];
+        // Points closer than this add nothing the radius does not already
+        // cover, and every one of them is rasterised again.
+        const step = Math.max(0.004, live.radius * 0.12);
+        if (Math.hypot(point[0] - last[0], point[1] - last[1]) < step) return;
+        const grown: BrushStroke = { ...live, points: [...live.points, point] };
+        strokeRef.current = grown;
+        edit((m) => {
+          if (m?.kind !== 'brush' || m.strokes.length === 0) return null;
+          const strokes = [...m.strokes];
+          strokes[strokes.length - 1] = grown;
+          return { kind: 'brush', strokes };
+        });
+      },
+      onEnd: () => {
+        strokeRef.current = null;
+      },
+      gesture: paintKind === 'brush' ? ('drag' as const) : ('tap' as const),
+    };
+  }, [paintId, paintKind, partIndex]);
   // --- repairing -------------------------------------------------------------
   // The same seam, and the same rule as a stroke: the patch being placed rides
   // a ref, because the pointermove closure reads state one frame behind. A
@@ -532,6 +625,9 @@ export default function PictureWorkbench({
   const sensorName = sensor?.name ?? null;
   const wantsRaw = baseRung(draft.draft.base) > 0 && sensor !== null;
   const [rawFile, setRawFile] = useState<File | null>(null);
+  // Developed from the sensor's own data right now — where a measured lens
+  // profile applies by itself (`lens-profile.ts`).
+  const onSensor = wantsRaw && Boolean(rawFile);
   const { patch: patchDraft } = draft;
   const sensorRef = useRef(sensor);
   sensorRef.current = sensor;
@@ -774,10 +870,16 @@ export default function PictureWorkbench({
     frame,
     keystone: keystoneDraft,
     lens: lensDraft,
+    // The measured profile on the SENSOR by itself; on a camera render only
+    // where the author asked — a body's JPEG is often corrected in camera.
+    lensProfile: profileInEffect(entry.lensProfile, onSensor),
     layers: layersDraft,
     subjectMasks: subjectRasters,
     paint,
     compare: compareOn,
+    clipping,
+    sharpenMask: sharpenMaskView && tab === 'detail',
+    vignette: vignetteDraft,
     // Only while the layer is open, and then by itself while Pick or Paint is
     // on — the moment the mask is what is being made — else only when pinned:
     // a red wash left on by accident would be mistaken for the picture.
@@ -809,11 +911,12 @@ export default function PictureWorkbench({
     // Cancelled from the pill: back on the render, and said — a base whose
     // data never arrived is not a base.
     onRawAborted: () => {
-      patchDraft({ base: null, rawGain: null });
+      patchDraft({ base: null, rawGain: null, rawWb: null });
       tell('Opening the RAW was cancelled — back on the render');
     },
     onRawDecoded: (info) => {
       setRawSize({ w: info.sourceWidth, h: info.sourceHeight });
+      setRawWhite(info.meta.white);
       if (rawGain === null) {
         patchDraft({ base: developBase(draft.draft) === 'proxy' ? 'gain' : draft.draft.base, rawGain: info.gain });
         const ev = Math.log2(info.gain);
@@ -821,6 +924,7 @@ export default function PictureWorkbench({
       }
     },
   });
+  sampleColourRef.current = picture.sampleColour;
   // What the picture IS, with the pixels it really has: the file's own,
   // measured for the *Delivers* row, or the sensor's once the RAW is decoded —
   // and, beside them, what the file holds and the screen is not showing (the
@@ -875,8 +979,8 @@ export default function PictureWorkbench({
   // copy changes the stored value without this editor's doing, and a draft that
   // ignored it would keep showing numbers the roll no longer holds — and write
   // them back over the step at the next nudge.
-  const callbacks = useRef({ onDevelop, onFraming, onKeystone, onLens, onDetail, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange });
-  callbacks.current = { onDevelop, onFraming, onKeystone, onLens, onDetail, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange };
+  const callbacks = useRef({ onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant });
+  callbacks.current = { onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant };
   const { replace } = draft;
   useWriteThrough<DevelopSettings>({
     stored: entry.develop,
@@ -912,6 +1016,13 @@ export default function PictureWorkbench({
     same: sameDetail,
     onWrite: (value) => callbacks.current.onDetail(value),
     onReseed: (value) => setDetailDraft(value),
+  });
+  useWriteThrough<PostCropVignette>({
+    stored: entry.vignette ?? null,
+    draft: vignetteDraft,
+    same: samePostVignette,
+    onWrite: (value) => callbacks.current.onVignette(value),
+    onReseed: (value) => setVignetteDraft(value),
   });
   useWriteThrough<Patch[]>({
     stored: entry.repair?.length ? entry.repair : null,
@@ -1066,8 +1177,8 @@ export default function PictureWorkbench({
   }, [source, cube, delivered, aspectRatio, framingDraft, border]);
 
   // --- keys --------------------------------------------------------------------
-  const keyState = useRef({ draft, picture, tell, crop, tab, factsOn, setFactsOn, selectedLayer, painting, selectedPatchId, removeSelectedPatch, repairing });
-  keyState.current = { draft, picture, tell, crop, tab, factsOn, setFactsOn, selectedLayer, painting, selectedPatchId, removeSelectedPatch, repairing };
+  const keyState = useRef({ draft, picture, tell, crop, tab, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing });
+  keyState.current = { draft, picture, tell, crop, tab, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing };
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
@@ -1082,6 +1193,7 @@ export default function PictureWorkbench({
         shiftKey: e.shiftKey,
         targetTypes: targetOwnsTyping(describeKeyTarget(e.target)),
         hasSelection: Boolean(window.getSelection()?.toString()),
+        layersTab: keyState.current.tab === 'layers',
       });
       if (!action) return;
       const { draft: d, picture: pic, tell: say, crop: c, tab: open } = keyState.current;
@@ -1115,6 +1227,25 @@ export default function PictureWorkbench({
           copyDevelop(d.draft);
           say('copied');
           return;
+        case 'mono':
+          // Lightroom's V: the treatment flips; the colour mixer is kept either way.
+          e.preventDefault();
+          d.patch({ mono: d.draft.mono ? null : straightMono() });
+          say(d.draft.mono ? 'colour' : 'black and white');
+          return;
+        case 'copy-settings':
+          e.preventDefault();
+          callbacks.current.onSettings();
+          return;
+        case 'variant':
+          if (!callbacks.current.onVariant) return;
+          e.preventDefault();
+          callbacks.current.onVariant();
+          return;
+        case 'paste-settings':
+          if (!callbacks.current.onPasteSettings()) return;
+          e.preventDefault();
+          return;
         case 'paste': {
           const pasted = pasteDevelop();
           if (!pasted) return;
@@ -1129,9 +1260,19 @@ export default function PictureWorkbench({
           // nothing is a sheet you have to reach for the mouse to be rid of.
           setHelpOpen((was) => !was);
           return;
+        case 'deliver':
+        case 'deliver-auto':
+        case 'ignore':
+          e.preventDefault();
+          callbacks.current.onDeliver(action === 'deliver' ? 'toggle' : action === 'deliver-auto' ? 'auto' : 'ignore');
+          return;
         case 'facts':
           e.preventDefault();
           keyState.current.setFactsOn(!keyState.current.factsOn);
+          return;
+        case 'clipping':
+          e.preventDefault();
+          keyState.current.setClipping((on) => !on);
           return;
         case 'mask': {
           // The Layers tab, with a layer open: anywhere else there is no mask.
@@ -1141,8 +1282,8 @@ export default function PictureWorkbench({
           return;
         }
         case 'pick': {
-          const kind = keyState.current.selectedLayer?.mask?.kind;
-          if (open !== 'layers' || (kind !== 'subject' && kind !== 'brush')) return;
+          const kind = keyState.current.activeMask?.kind;
+          if (open !== 'layers' || (kind !== 'subject' && kind !== 'brush' && kind !== 'colour')) return;
           e.preventDefault();
           setPainting(!keyState.current.painting);
           return;
@@ -1250,20 +1391,27 @@ export default function PictureWorkbench({
    * see"*.
    */
   const subjectMarks = useMemo<readonly (readonly [number, number])[] | null>(
-    () => (selectedLayer?.mask?.kind === 'subject' ? selectedLayer.mask.points : null),
-    [selectedLayer],
+    () =>
+      activeMask?.kind === 'subject'
+        ? activeMask.points
+        : activeMask?.kind === 'colour'
+          ? activeMask.samples.map((c) => [c.x, c.y] as const)
+          : null,
+    [activeMask],
   );
   const unmarkSubject = useCallback(
     (index: number) => {
       setLayersDraft((list) =>
-        list.map((l) =>
-          l.id === paintId && l.mask?.kind === 'subject'
-            ? { ...l, mask: { ...l.mask, points: l.mask.points.filter((_, i) => i !== index) } }
-            : l,
-        ),
+        list.map((l) => {
+          if (l.id !== paintId) return l;
+          const m = componentMask(l, partIndex);
+          if (m?.kind === 'subject') return withComponentMask(l, partIndex, { ...m, points: m.points.filter((_, i) => i !== index) });
+          if (m?.kind === 'colour') return withComponentMask(l, partIndex, { ...m, samples: m.samples.filter((_, i) => i !== index) });
+          return l;
+        }),
       );
     },
-    [paintId],
+    [paintId, partIndex],
   );
 
   /**
@@ -1277,10 +1425,11 @@ export default function PictureWorkbench({
     const lines = developLines(draft.draft);
     if (drawingCount) lines.push(`${drawingCount} layer${drawingCount === 1 ? '' : 's'}`);
     if (detailDraft) lines.push(describeDetail(detailDraft));
+    if (vignetteDraft) lines.push(describePostVignette(vignetteDraft));
     if (repairDraft.length) lines.push(describePatches(repairDraft));
     if (fidelity.note) lines.push(fidelity.note);
     return lines;
-  }, [factsOn, draft.draft, drawingCount, detailDraft, repairDraft, fidelity.note]);
+  }, [factsOn, draft.draft, drawingCount, detailDraft, vignetteDraft, repairDraft, fidelity.note]);
 
   /**
    * What the CAMERA did, drawn above those facts under the same key — the
@@ -1294,6 +1443,53 @@ export default function PictureWorkbench({
    * it always did.
    */
   const shotExif = useEffectiveExif(shownFile);
+
+  // --- the lens's measured profile (Lensfun, `lens-profiles.md`) --------------
+  // Looked up from what the picture says about its glass; kept on this device
+  // once found. On the sensor, a picture that never decided gets it by itself;
+  // anywhere else it is offered, never applied.
+  const lensfunOn = useLensfunAllowed();
+  const shot = useMemo<ShotLens | null>(
+    () =>
+      shotExif?.make && shotExif.model
+        ? {
+            make: shotExif.make,
+            model: shotExif.model,
+            lensModel: shotExif.lensModel,
+            focalLength: shotExif.focalLength,
+            focalLength35: shotExif.focalLength35,
+            fNumber: shotExif.fNumber,
+          }
+        : null,
+    [shotExif],
+  );
+  const shotKey = shot ? `${lensKey(shot.make ?? '', shot.model ?? '', shot.lensModel)}|${shot.focalLength ?? ''}|${shot.fNumber ?? ''}` : '';
+  const [lensLookup, setLensLookup] = useState<{ key: string; result: LookUp } | null>(null);
+  const profileState = useRef({ undecided: entry.lensProfile === undefined, onSensor });
+  profileState.current = { undecided: entry.lensProfile === undefined, onSensor };
+  useEffect(() => {
+    if (!shot || !shotKey) {
+      setLensLookup(null);
+      return;
+    }
+    const ctrl = new AbortController();
+    let alive = true;
+    void lookUpLens(shot, ctrl.signal).then((result) => {
+      if (!alive) return;
+      setLensLookup({ key: shotKey, result });
+      if (result.kind === 'found' && profileState.current.onSensor && profileState.current.undecided) {
+        const found = profileFor(result.camera, result.lens, shot);
+        if (found) callbacks.current.onLensProfile(found);
+      }
+    });
+    return () => {
+      alive = false;
+      ctrl.abort();
+    };
+    // `shot` is keyed by `shotKey`; consent and the sensor are what re-ask.
+  }, [shotKey, lensfunOn, onSensor]);
+  const lookup = lensLookup?.key === shotKey ? lensLookup.result : null;
+  const candidate = lookup?.kind === 'found' && shot ? profileFor(lookup.camera, lookup.lens, shot, !onSensor) : null;
   const shotLine = useMemo(() => (factsOn ? captureLine(shotExif) || null : null), [factsOn, shotExif]);
 
   /**
@@ -1387,7 +1583,7 @@ export default function PictureWorkbench({
           <div className="flex-1 min-w-0 flex items-baseline gap-2">
             <DevelopBaseMenu
               className="min-w-0"
-              name={entry.ref.name}
+              name={pictureLabel(entry)}
               chip={fidelity.chip}
               rows={rows}
               current={current}
@@ -1464,6 +1660,16 @@ export default function PictureWorkbench({
             onReplace={draft.setDraft}
             onTold={tell}
           >
+            {!cropping && (
+              <IconButton
+                label="Copy, paste or apply settings"
+                title="Settings ⌘⇧C — copy this picture’s sections, paste them, or apply them to other pictures"
+                size={compact ? 'md' : 'sm'}
+                onClick={onSettings}
+              >
+                {Icons.settings}
+              </IconButton>
+            )}
             {source && !cropping && (
               <button
                 type="button"
@@ -1515,7 +1721,7 @@ export default function PictureWorkbench({
           // Shown whenever the subject layer is open — a picked point is a fact
           // about the layer, not about the tool — but removable only while Pick
           // is on, so a settled mask cannot be edited by a stray click.
-          onUnmark={paintKind === 'subject' ? unmarkSubject : undefined}
+          onUnmark={paintKind === 'subject' || paintKind === 'colour' ? unmarkSubject : undefined}
           // The rings show on every tab — a patch is a fact about the
           // picture — and answer the hand on the Detail tab, where the panel
           // that explains them is. The proposed spots belong to the scan.
@@ -1565,7 +1771,7 @@ export default function PictureWorkbench({
         compactAs="drawer"
         open={sheetOpen}
         onClose={() => onSheetOpen(false)}
-        title={`${tabLabel} · ${entry.ref.name}`}
+        title={`${tabLabel} · ${pictureLabel(entry)}`}
         // The docked inspector wears the frame both editors' inspectors wear
         // (`frontend.md`): the tab strip pinned, the sections scrolling under it.
         className="col-start-2 row-start-1 row-span-2 min-h-0 flex flex-col gap-3 border border-line rounded-paper bg-surface p-3"
@@ -1573,10 +1779,21 @@ export default function PictureWorkbench({
         {!compact && (
           <Segmented fill size="sm" label="Inspector" value={tab} onChange={onTabChange} options={WORKBENCH_TABS} className="flex-none" />
         )}
-        <div className={compact ? 'flex flex-col gap-4' : 'flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain flex flex-col gap-4 -mr-3 pr-3'}>
+        {/* Adjust and Detail are a column of folding sections, each with its
+            own rule and padding — a gap on top of that is the air twice. */}
+        <div
+          className={`${
+            compact ? 'flex flex-col' : 'flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain flex flex-col -mr-3 pr-3'
+          } ${tab === 'adjust' || tab === 'detail' ? 'gap-0' : 'gap-4'}`}
+        >
           {tab === 'adjust' ? (
             <>
-              <DevelopHistogram histogram={picture.histogram} />
+              <DevelopHistogram
+                histogram={picture.histogram}
+                clipping={clipping}
+                onClipping={() => setClipping((on) => !on)}
+                readout={picture.readout}
+              />
               <DevelopAutoSection
                 stats={picture.stats}
                 onPatch={draft.patch}
@@ -1584,19 +1801,37 @@ export default function PictureWorkbench({
                 picking={picture.picking}
                 onPicking={picture.setPicking}
               />
+              {wantsRaw && rawWhite && (
+                <WhiteBalancePanel
+                  white={rawWhite}
+                  value={draft.draft.rawWb ?? null}
+                  onChange={(rawWb) => draft.patch({ rawWb })}
+                />
+              )}
               <DevelopSliders value={draft.draft} onChange={draft.set} />
+              <PresencePanel value={detailDraft} onChange={setDetailDraft} />
               <DevelopLevelsSection value={draft.draft.levels} onChange={(levels) => draft.patch({ levels })} />
               <DevelopCurve
                 value={draft.draft.curves}
                 histogram={picture.histogram}
                 onChange={(curves) => draft.patch({ curves })}
               />
+              <DevelopMixer
+                value={draft.draft.mixer}
+                onChange={(mixer) => draft.patch({ mixer })}
+                mono={draft.draft.mono}
+                onMono={(mono) => draft.patch({ mono })}
+              />
+              <DevelopGrading value={draft.draft.grading} onChange={(grading) => draft.patch({ grading })} />
+              <VignettePanel value={vignetteDraft} onChange={setVignetteDraft} />
               <DevelopPresetsSection
                 presets={presets}
                 draft={draft.draft}
                 asShot={draft.asShot}
                 onApply={draft.setDraft}
                 onTold={tell}
+                look={entry.grade ?? null}
+                onApplyLook={onLook}
               />
               <DevelopApplySection verbs={applyTo} draft={draft.draft} onTold={tell} />
               <DevelopLookSection
@@ -1640,7 +1875,7 @@ export default function PictureWorkbench({
               <RepairPanel
                 patches={repairDraft}
                 tool={repairTool}
-                onTool={(patch) => setRepairTool((t) => ({ ...t, ...patch }))}
+                onTool={onRepairTool}
                 selected={selectedPatch}
                 onSelectedChange={changeSelectedPatch}
                 onRemoveSelected={removeSelectedPatch}
@@ -1654,7 +1889,12 @@ export default function PictureWorkbench({
                 onRemoveLast={() => setRepairDraft((list) => list.slice(0, -1))}
                 onClear={() => setRepairDraft([])}
               />
-              <DetailPanel value={detailDraft} onChange={setDetailDraft} />
+              <DetailPanel
+                value={detailDraft}
+                onChange={setDetailDraft}
+                maskView={sharpenMaskView}
+                onMaskView={setSharpenMaskView}
+              />
             </>
           ) : tab === 'layers' ? (
             <>
@@ -1672,7 +1912,7 @@ export default function PictureWorkbench({
                   setSelectedLayerId(made.id);
                   // A fresh subject's only use is to be tapped: Pick comes on
                   // with it rather than being one more thing to find.
-                  setPainting(kind === 'subject');
+                  setPainting(kind === 'subject' || kind === 'colour');
                 }}
                 onRemove={(id) => {
                   setLayersDraft((list) => removeLayer(list, id));
@@ -1687,15 +1927,17 @@ export default function PictureWorkbench({
                   <MaskPanel
                     layer={selectedLayer}
                     layers={layersDraft}
+                    part={partIndex}
+                    onPart={setSelectedPart}
                     onPatch={(patch) =>
                       setLayersDraft((list) => patchLayer(list, selectedLayer.id, patch))
                     }
                     brush={brush}
-                    onBrush={(patch) => setBrush((b) => ({ ...b, ...patch }))}
+                    onBrush={onBrush}
                     painting={painting}
                     onPainting={setPainting}
                     subject={
-                      selectedLayer.mask?.kind === 'subject'
+                      partIndex === null && selectedLayer.mask?.kind === 'subject'
                         ? {
                             working: subject.working === selectedLayer.id,
                             state: subject.state,
@@ -1703,38 +1945,12 @@ export default function PictureWorkbench({
                           }
                         : null
                     }
-                    onClearSubject={() =>
-                      setLayersDraft((list) =>
-                        list.map((l) =>
-                          l.id === selectedLayer.id && l.mask?.kind === 'subject'
-                            ? { ...l, mask: { ...l.mask, points: [] } }
-                            : l,
-                        ),
-                      )
-                    }
-                    onUndoStroke={() =>
-                      setLayersDraft((list) =>
-                        list.map((l) =>
-                          l.id === selectedLayer.id && l.mask?.kind === 'brush'
-                            ? { ...l, mask: { kind: 'brush', strokes: l.mask.strokes.slice(0, -1) } }
-                            : l,
-                        ),
-                      )
-                    }
-                    onClearStrokes={() =>
-                      setLayersDraft((list) =>
-                        list.map((l) =>
-                          l.id === selectedLayer.id && l.mask?.kind === 'brush'
-                            ? { ...l, mask: { kind: 'brush', strokes: [] } }
-                            : l,
-                        ),
-                      )
-                    }
                   />
                   {/* The SAME sliders the global develop uses, because a
                       layer's adjustment IS a DevelopSettings — one maths, one
                       panel, and a local exposure behaves like a global one. */}
                   <DevelopSliders
+                    foldPrefix="layer."
                     value={selectedLayer.develop}
                     onChange={(key, v) =>
                       setLayersDraft((list) =>
@@ -1745,6 +1961,7 @@ export default function PictureWorkbench({
                     }
                   />
                   <DevelopCurve
+                    foldPrefix="layer."
                     value={selectedLayer.develop.curves}
                     histogram={picture.histogram}
                     onChange={(curves) =>
@@ -1774,7 +1991,22 @@ export default function PictureWorkbench({
           {tab === 'crop' ? (
             <>
               <KeystonePanel value={keystoneDraft} onChange={setKeystoneDraft} />
-              <LensPanel value={lensDraft} onChange={setLensDraft} />
+              <LensPanel
+                value={lensDraft}
+                onChange={setLensDraft}
+                profile={{
+                  applied: entry.lensProfile,
+                  inEffect: profileInEffect(entry.lensProfile, onSensor) !== null,
+                  lookup,
+                  looking: Boolean(shot) && !lookup,
+                  allowed: lensfunOn,
+                  onSensor,
+                  candidate,
+                  onApply: () => candidate && onLensProfile(candidate),
+                  onRemove: () => onLensProfile(null),
+                  onAllow: () => setLensfunAllowed(true),
+                }}
+              />
             </>
           ) : tab === 'export' ? (
             <ExportPanel
@@ -1788,6 +2020,10 @@ export default function PictureWorkbench({
               exporting={exports.exporting}
               note={exports.note}
               hdrRun={exports.lastRun?.hdr ?? null}
+              pictures={deliveryTable}
+              openExif={shotExif}
+              picture={entry}
+              onWords={onWords}
             />
           ) : null}
         </div>
