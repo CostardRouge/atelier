@@ -13,6 +13,7 @@ import {
   deleteRoll,
   deleteRollFolders,
   deleteRollPreviews,
+  deleteExportMarks,
   deleteRollThumbs,
   deleteSyncRecord,
   getSyncRecord,
@@ -113,6 +114,7 @@ export default function DevelopTool() {
         await deleteRollThumbs(doc.pictures.map((p) => p.id));
         await deleteRollFolders(doc.id);
         await deleteRollPreviews(doc.pictures.map((p) => p.id));
+        await deleteExportMarks(doc.id);
       },
       push: pushOnce,
       pull: (remote, id, etag) => pullRoll(remote, id, etag),

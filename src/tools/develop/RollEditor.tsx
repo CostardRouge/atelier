@@ -74,6 +74,8 @@ import DeliveryTable from './DeliveryTable';
 import PictureWorkbench, { DEFAULT_BRUSH_TOOL, type BrushTool, type DeliverAction, type LookApplyVerb } from './PictureWorkbench';
 import { DEFAULT_REPAIR_TOOL, type RepairTool } from './RepairPanel';
 import { useLutInterpolation } from '../../shared/lut/use-lut-interpolation';
+import { useExportMarks } from './use-export-marks';
+import { exportState, needsExport } from '../../shared/develop/export-marks';
 import { useRollExport } from './use-roll-export';
 import { useRollGrade } from './use-roll-grade';
 import { useRollFolders } from './use-roll-folders';
@@ -560,7 +562,20 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // "Proxies only, for this run": the editor's, reset with it, never written
   // to the roll — which pixels is otherwise each picture's own choice.
   const [proxiesOnly, setProxiesOnly] = useState(false);
-  const exports = useRollExport({ roll, files, fileFor, openId, interpolation, siblingsOf: siblingsFor, proxiesOnly });
+  // When each picture last LEFT, on this device (`export-marks.ts`): read
+  // beside the roll and written when a run lands — never an edit, never undone.
+  const pictureIds = useMemo(() => roll.pictures.map((p) => p.id), [roll.pictures]);
+  const { marks: exportMarks, record: recordExported } = useExportMarks(roll.id, pictureIds);
+  const exports = useRollExport({
+    roll,
+    files,
+    fileFor,
+    openId,
+    interpolation,
+    siblingsOf: siblingsFor,
+    proxiesOnly,
+    onDelivered: recordExported,
+  });
   const { exportPictures } = exports;
   const exportVerbs = useMemo<ExportVerb[]>(() => {
     if (!openId) return [];
@@ -586,9 +601,20 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         hint: 'the pictures that leave — edited ones, and those marked to send — in the strip’s order',
         run: () => void exportPictures(leaving),
       });
+      // E4: of those, the ones never delivered from here or changed since —
+      // offered only when it is a real subset, else it is the verb above.
+      const due = roll.pictures.filter((p) => delivers(p) && needsExport(p, exportMarks)).map((p) => p.id);
+      if (due.length > 0 && due.length < leaving.length) {
+        verbs.push({
+          id: 'changed',
+          label: `Export ${due.length} new or changed`,
+          hint: 'the pictures that leave and were never exported from this device, or were edited since',
+          run: () => void exportPictures(due),
+        });
+      }
     }
     return verbs;
-  }, [openId, visibleSelected, roll.pictures, exportPictures]);
+  }, [openId, visibleSelected, roll.pictures, exportPictures, exportMarks]);
 
   const writeDevelopTo = useCallback(
     (targets: readonly string[], develop: DevelopSettings | null) => {
@@ -761,6 +787,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const progress = rollProgress(roll);
   const withLook = roll.pictures.filter((p) => p.grade).length;
   const leavingCount = roll.pictures.filter(delivers).length;
+  // Delivered from here once, and edited since — the ones a re-export is for.
+  const changedCount = roll.pictures.filter((p) => !isIgnored(p) && exportState(p, exportMarks) === 'changed').length;
   const addLabel =
     newPhotos.length === 0 ? 'Add from Library' : `Add ${newPhotos.length} from the Library`;
   // The ways a picture gets onto the roll. One is a button; two are a menu.
@@ -926,6 +954,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                   thumbs={thumbs}
                   onDeliver={handleDeliver}
                   onOpen={onOpenPicture}
+                  marks={exportMarks}
                 />
               }
               emptyText={availabilityText(open.ref.name, availability.get(open.id))}
@@ -934,6 +963,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               <p className="m-0 font-mono text-2xs text-muted tabular-nums">
                 {progress.developed} of {progress.total} developed
                 {leavingCount > 0 && <span className="text-faint"> · {leavingCount} to export</span>}
+                {changedCount > 0 && <span className="text-faint"> · {changedCount} changed since exported</span>}
                 {progress.ignored > 0 && (
                   <span className="text-faint">
                     {' '}

@@ -414,6 +414,23 @@ shared block. Rules a later phase must keep:
   pictures that got no town. Trap met building it: the run built `placeOf`
   and never handed it to `exportExifBlock` — every unit test passed, only
   reading the delivered file back caught it.
+- **"Changed since last export" is a MARK kept BESIDE the roll, never on it**
+  (2026-09-23, E4, `develop/export-marks.ts`, store `exports` v4 in
+  `atelier-develop`). On the document it would be a write the undo stack
+  records — every export an undo step, and an undo un-marking what WAS
+  delivered — and the fact is this DEVICE's (the files landed in a folder
+  here), like a folder handle; it does not travel with a synced roll or the
+  `.roll.json`. A mark is `{at, key}`, `key` a fingerprint of the picture AS
+  RENDERED (develop, look, crop/aspect/border, rendition, geometry, detail,
+  repair, layers, title, caption — absent, `null` and `[]` one spelling at
+  every depth, keys sorted); the roll's export settings, the delivery state
+  and the identity are deliberately OUT (a new size is a knowing choice for a
+  run, not a change to find). Only files that LANDED are marked
+  (`Delivery.failed` names the refused ones). Undoing the edit brings the
+  picture back to exported, because the key matches again — measured, as is
+  a look restored after a reload keeping its key. Surfaces: a `✓ time` /
+  `changed` chip per row, a *Changed* filter, the status line's count, and
+  *Export N new or changed* only when it is a real subset of what leaves.
 - **The workbench holds TWO files since 2026-09-21: the picture's, and the one
   on the stage** (`renditions.md`, «R3a is BUILT»). `file` stays what the
   picture IS — its identity, its origin, its EXIF, what the export hook

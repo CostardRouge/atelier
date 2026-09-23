@@ -112,6 +112,7 @@ export function useRollExport({
   interpolation,
   siblingsOf,
   proxiesOnly = false,
+  onDelivered,
 }: {
   roll: RollDoc;
   files: ReadonlyMap<string, File>;
@@ -129,6 +130,12 @@ export function useRollExport({
    * connection" is about this machine, not about the roll.
    */
   proxiesOnly?: boolean;
+  /**
+   * The pictures whose files LANDED, as they were rendered, and when — what
+   * the export marks record (`export-marks.ts`). A file the folder refused is
+   * not among them.
+   */
+  onDelivered?: (pictures: readonly RollPicture[], at: number) => void;
 }): RollExports {
   const [exporting, setExporting] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -136,8 +143,8 @@ export function useRollExport({
   // Who signs the files (`exif/delivery-meta.ts`), read at the moment a run
   // stamps each one — the book it lives in may still be loading at mount.
   const identity = useDeliveryIdentity();
-  const latest = useRef({ roll, files, fileFor, interpolation, siblingsOf, proxiesOnly, identity });
-  latest.current = { roll, files, fileFor, interpolation, siblingsOf, proxiesOnly, identity };
+  const latest = useRef({ roll, files, fileFor, interpolation, siblingsOf, proxiesOnly, identity, onDelivered });
+  latest.current = { roll, files, fileFor, interpolation, siblingsOf, proxiesOnly, identity, onDelivered };
 
   // What the run will deliver, picture by picture, before a byte is fetched.
   // Re-planned whenever the session holds something new — the stage fetching
@@ -299,6 +306,8 @@ export function useRollExport({
       cancel: () => controller.abort(),
     });
     const rendered: File[] = [];
+    // The picture each file was rendered from, parallel to `rendered`.
+    const renderedFrom: RollPicture[] = [];
     const assetIds: (string | null)[] = [];
     const sourceIds = new Set<string>();
     const failures: string[] = [];
@@ -571,6 +580,7 @@ export function useRollExport({
               lastModified: file.lastModified,
             }),
           );
+          renderedFrom.push(picture);
           assetIds.push(identity?.assetId ?? null);
           if (origin) sourceIds.add(origin.sourceId);
         } catch (err) {
@@ -595,6 +605,12 @@ export function useRollExport({
         },
       });
       const errors = delivery.method === 'folder' ? delivery.errors : [];
+      // What LANDED is what gets marked: a file the folder refused was not delivered.
+      const refused = new Set(delivery.method === 'folder' ? delivery.failed : []);
+      latest.current.onDelivered?.(
+        renderedFrom.filter((_, i) => !refused.has(rendered[i].name)),
+        Date.now(),
+      );
       const renamed = delivery.method === 'folder' ? delivery.renamed : 0;
       setNote(
         (cancelled ? `Cancelled after ${rendered.length} of ${targets.length} — ` : '') +

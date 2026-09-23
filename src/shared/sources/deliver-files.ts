@@ -21,7 +21,14 @@ import { downloadBlob } from '../media/save';
 import { canWriteToDisk, pickWritableDirectory, writeItems } from './write-files';
 
 export type Delivery =
-  | { method: 'folder'; written: number; renamed: number; errors: string[] }
+  | {
+      method: 'folder';
+      written: number;
+      renamed: number;
+      errors: string[];
+      /** The names of the files that could NOT be written — what a caller must not count as delivered. */
+      failed: string[];
+    }
   | { method: 'download'; written: number };
 
 /** Where a run will land, decided before it renders. */
@@ -75,6 +82,7 @@ export async function deliverFilesTo(
       written: res.written,
       renamed: res.renamed,
       errors: res.errors.map((e) => `${e.name}: ${e.message}`),
+      failed: res.errors.map((e) => e.name),
     };
   }
   for (const [i, f] of files.entries()) {

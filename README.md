@@ -1155,7 +1155,14 @@ puts it back on the rule. A picture you do not want to work on at all can be
 **ignored** (**M**, or a right-click / a held finger on its badge): it never
 leaves, **←/→** step over it, "apply to the other pictures" leaves it alone,
 the strip dims it or hides it, and a click still opens it. None of this is a
-rating — culling stays Winnow's.
+rating — culling stays Winnow's. Once a picture has been exported, its row
+says when (`✓ 14:32`), and says **changed** if you edited it since — its
+develop, look, crop, geometry, repairs, layers or words; a new export size or
+quality does not count. The *Changed* filter lists the pictures that leave and
+were never exported or changed since, the status line counts them, and
+**Export N new or changed** delivers just those. The record is kept on this
+device beside the roll, not in it, so an export is never an undo step and an
+undo never forgets one.
 
 **What a file says.** A delivered JPEG carries the original's EXIF (below), and
 the **Metadata** section of the Export tab adds what is yours. Every file is

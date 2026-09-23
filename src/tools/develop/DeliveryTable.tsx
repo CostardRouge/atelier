@@ -7,16 +7,35 @@ import {
   type DeliveryFilter,
   type RollPicture,
 } from '../../shared/develop/roll-types';
+import { exportState, needsExport, type ExportMarks } from '../../shared/develop/export-marks';
 import { useObjectUrl } from '../../shared/media/use-object-url';
 import { Icons } from '../../shared/ui/icons';
 import type { DeliverAction } from './PictureWorkbench';
 
-const FILTERS: readonly { id: DeliveryFilter; label: string }[] = [
+/** The table's filters: the roll's four, and E4's — what leaves and was never exported, or changed since. */
+type TableFilter = DeliveryFilter | 'changed';
+
+const FILTERS: readonly { id: TableFilter; label: string; title?: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'edited', label: 'Edited' },
   { id: 'leaving', label: 'Leaving' },
   { id: 'held', label: 'Held' },
+  { id: 'changed', label: 'Changed', title: 'Leaving, and never exported from this device or edited since' },
 ];
+
+function matches(p: RollPicture, filter: TableFilter, marks: ExportMarks): boolean {
+  if (filter === 'changed') return matchesDeliveryFilter(p, 'leaving') && needsExport(p, marks);
+  return matchesDeliveryFilter(p, filter);
+}
+
+/** When a picture last left, as a reader says it: a time today, else a date. */
+function when(at: number, now: number = Date.now()): string {
+  const d = new Date(at);
+  const today = new Date(now);
+  return d.toDateString() === today.toDateString()
+    ? d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
 
 /** What a stored state says, beside the name — only when the author, not the rule, decided. */
 const PINNED: Record<string, string> = { yes: 'send', no: 'hold' };
@@ -38,6 +57,7 @@ export default function DeliveryTable({
   thumbs,
   onDeliver,
   onOpen,
+  marks = {},
 }: {
   pictures: readonly RollPicture[];
   openId: string | null;
@@ -46,10 +66,12 @@ export default function DeliveryTable({
   thumbs: ReadonlyMap<string, Blob>;
   onDeliver: (id: string, action: DeliverAction) => void;
   onOpen: (id: string) => void;
+  /** When each picture last left from this device (`export-marks.ts`, E4). */
+  marks?: ExportMarks;
 }) {
-  const [filter, setFilter] = useState<DeliveryFilter>('all');
+  const [filter, setFilter] = useState<TableFilter>('all');
   const [ignoredOpen, setIgnoredOpen] = useState(false);
-  const shown = pictures.filter((p) => matchesDeliveryFilter(p, filter));
+  const shown = pictures.filter((p) => matches(p, filter, marks));
   const ignored = pictures.filter(isIgnored);
   const openIgnored = ignored.some((p) => p.id === openId);
   const unfolded = ignoredOpen || openIgnored;
@@ -63,6 +85,7 @@ export default function DeliveryTable({
             key={f.id}
             type="button"
             aria-pressed={filter === f.id}
+            title={f.title}
             onClick={() => setFilter(f.id)}
             className={`px-2 py-0.5 rounded-full border font-mono text-3xs cursor-pointer ${
               filter === f.id ? 'border-accent text-accent-ink' : 'border-line-strong text-muted hover:text-ink'
@@ -77,7 +100,7 @@ export default function DeliveryTable({
       </div>
       <div className="flex flex-col border-t border-line">
         {shown.map((p) => (
-          <Row key={p.id} picture={p} open={p.id === openId} line={lines.get(p.id)} thumb={thumbs.get(p.id) ?? null} onDeliver={onDeliver} onOpen={onOpen} />
+          <Row key={p.id} picture={p} open={p.id === openId} line={lines.get(p.id)} thumb={thumbs.get(p.id) ?? null} marks={marks} onDeliver={onDeliver} onOpen={onOpen} />
         ))}
         {shown.length === 0 && (
           <p className="m-0 py-3 font-mono text-3xs text-faint">No picture on this roll answers “{FILTERS.find((f) => f.id === filter)?.label}”.</p>
@@ -94,7 +117,7 @@ export default function DeliveryTable({
             </button>
             {unfolded &&
               ignored.map((p) => (
-                <Row key={p.id} picture={p} open={p.id === openId} line={lines.get(p.id)} thumb={thumbs.get(p.id) ?? null} onDeliver={onDeliver} onOpen={onOpen} />
+                <Row key={p.id} picture={p} open={p.id === openId} line={lines.get(p.id)} thumb={thumbs.get(p.id) ?? null} marks={marks} onDeliver={onDeliver} onOpen={onOpen} />
               ))}
           </>
         )}
@@ -108,6 +131,7 @@ function Row({
   open,
   line,
   thumb,
+  marks,
   onDeliver,
   onOpen,
 }: {
@@ -115,11 +139,15 @@ function Row({
   open: boolean;
   line: string | undefined;
   thumb: Blob | null;
+  marks: ExportMarks;
   onDeliver: (id: string, action: DeliverAction) => void;
   onOpen: (id: string) => void;
 }) {
   const url = useObjectUrl(thumb);
   const state = deliverState(picture);
+  // E4: said only once a picture has left from here — a roll never exported says nothing.
+  const mark = marks[picture.id];
+  const exported = mark ? exportState(picture, marks) : null;
   const ignored = state === 'ignore';
   const on = delivers(picture);
   const name = picture.ref.name;
@@ -165,6 +193,19 @@ function Row({
           <span className={`font-mono text-2xs truncate ${on ? 'text-ink' : ''}`}>{name}</span>
           {PINNED[state] && (
             <span className="flex-none px-1.5 rounded-full border border-line-strong font-mono text-3xs text-ink-soft">{PINNED[state]}</span>
+          )}
+          {mark && exported === 'changed' && (
+            <span
+              className="flex-none px-1.5 rounded-full border border-accent font-mono text-3xs text-accent-ink"
+              title={`Exported ${when(mark.at)} — edited since`}
+            >
+              changed
+            </span>
+          )}
+          {mark && exported === 'current' && (
+            <span className="flex-none font-mono text-3xs text-faint" title="Exported from this device, unchanged since">
+              ✓ {when(mark.at)}
+            </span>
           )}
         </span>
         {said && <span className="font-mono text-3xs leading-snug line-clamp-2 break-words">{said}</span>}

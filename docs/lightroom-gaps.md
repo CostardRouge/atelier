@@ -244,8 +244,13 @@ whole only while every capture group and the maker notes stay (`develop-roll.md`
 **M4 BUILT 2026-09-23** — the place name from the capture's own GPS through the
 offline city index, its own group (kept by *Share online*, which drops the
 position), a town within 30 km, else the country alone (`develop-roll.md`,
-«The place is named OFFLINE»). The metadata plan M1–M4 is complete; E4
-(*changed since last export*) is what remains of §9–§10.
+«The place is named OFFLINE»). The metadata plan M1–M4 is complete.
+
+**E4 BUILT 2026-09-23** — a per-device mark per picture, written when its file
+lands and compared with a fingerprint of the picture: a row says when it left
+or that it changed since, a *Changed* filter, a count in the status line, and
+*Export N new or changed* (`develop-roll.md`, «"Changed since last export" is a
+MARK»). §9–§10 are complete.
 
 **Proposed then, accepted as drawn** (his idea, drawn in the lab): an **ignored** state.
 Recommended as the FOURTH value of the one delivery field —
