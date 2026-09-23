@@ -8,7 +8,7 @@ import {
   type SegmentSource,
   type SegmenterState,
 } from '../segment/segmenter';
-import { drawingLayers, type AdjustLayer } from './layer';
+import { subjectLayersToSegment, type AdjustLayer } from './layer';
 
 /**
  * The alpha map for every SUBJECT layer on the open picture, resolved by the
@@ -94,9 +94,10 @@ export function useSubjectMasks({
   const runId = useRef(0);
 
   // The requests, as a string, so the effect below runs when they really change
-  // and not when a slider moves.
-  const wanted = drawingLayers(layers)
-    .filter((l) => l.mask?.kind === 'subject' && l.mask.points.length > 0)
+  // and not when a slider moves. Every visible subject with a point, drawing
+  // or not (`subjectLayersToSegment`): the model runs on the tap, and the
+  // raster is what "show the mask" paints before the layer has a develop.
+  const wanted = subjectLayersToSegment(layers)
     .map((l) => {
       const mask = l.mask as { points: readonly Point[]; model: string };
       return { id: l.id, model: mask.model, points: mask.points };

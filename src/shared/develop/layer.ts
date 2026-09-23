@@ -115,6 +115,19 @@ export function drawingLayers(layers: readonly AdjustLayer[] | null | undefined)
   return (layers ?? []).filter(layerDraws);
 }
 
+/**
+ * The layers whose SUBJECT the model must find: every visible one with a point,
+ * whether or not it draws yet. Deliberately not `drawingLayers` — a fresh
+ * subject has its sliders at zero, and waiting for it to draw meant a tap
+ * segmented nothing until a slider moved, a pick that looked as if it had not
+ * taken. The mask is found on the tap; the layer uses it once it has a develop.
+ */
+export function subjectLayersToSegment(layers: readonly AdjustLayer[] | null | undefined): AdjustLayer[] {
+  return (layers ?? []).filter(
+    (l) => l.enabled && l.mask?.kind === 'subject' && l.mask.points.length > 0,
+  );
+}
+
 export function sameLayer(a: AdjustLayer, b: AdjustLayer): boolean {
   return (
     a.id === b.id &&

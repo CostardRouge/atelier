@@ -11,6 +11,7 @@ import {
   type MaskKind,
 } from '../../shared/render/mask';
 import type { AdjustLayer } from '../../shared/develop/layer';
+import { isDefaultDevelop } from '../../shared/develop/develop';
 
 const KIND_OPTIONS: readonly { id: string; label: string }[] = [
   { id: 'none', label: 'Whole' },
@@ -288,7 +289,11 @@ export default function MaskPanel({
                 : subject?.working
                   ? `finding it… (${mask.points.length} point${mask.points.length === 1 ? '' : 's'})`
                   : subject?.resolved
-                    ? `${mask.points.length} point${mask.points.length === 1 ? '' : 's'} · tap a marker to remove it`
+                    ? `${mask.points.length} point${mask.points.length === 1 ? '' : 's'} · tap a marker to remove it${
+                        // Found, and still doing nothing: said, or a subject
+                        // that the model answered reads as a pick that failed.
+                        isDefaultDevelop(layer.develop) ? ' · found — move a slider below to act on it' : ''
+                      }`
                     : 'the model is loading — 17 MB, once per visit'}
           </span>
         </>

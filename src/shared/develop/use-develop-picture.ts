@@ -22,7 +22,7 @@ import {
   sameGeometry,
   type PictureGeometry,
 } from '../render/picture-geometry';
-import { cloneLayers, drawingLayers, sameLayers, type AdjustLayer } from './layer';
+import { cloneLayer, cloneLayers, drawingLayers, sameLayer, sameLayers, type AdjustLayer } from './layer';
 import { makeLayerPassCache, type LayerPassCache } from './layer-render';
 import type { BrushRaster } from '../render/brush-raster';
 import { decodePhoto, fitPhotoForRender } from '../media/photo-frame';
@@ -70,7 +70,7 @@ interface GraderRecord {
   lut: CubeLut | null;
   geometry: PictureGeometry;
   layers: AdjustLayer[];
-  overlay: string | null;
+  overlay: AdjustLayer | null;
   rasters: ReadonlyMap<string, BrushRaster> | null;
   detail: DetailSettings | null;
   repair: Patch[];
@@ -81,6 +81,10 @@ interface GraderRecord {
   w: number;
   h: number;
   grader: HeldGrader;
+}
+
+function sameOverlay(a: AdjustLayer | null, b: AdjustLayer | null): boolean {
+  return a && b ? sameLayer(a, b) : a === b;
 }
 
 /**
@@ -105,7 +109,13 @@ function graderFrom(
   s: BadgeSource,
   geometry: PictureGeometry,
   stack: readonly AdjustLayer[],
-  overlay: string | null,
+  /**
+   * The layer whose mask is painted over the picture, resolved from the WHOLE
+   * list and not from `stack`: a layer that does not draw yet — a fresh
+   * subject, its sliders still at zero — is exactly the one whose mask the
+   * author needs to see before giving it anything to do.
+   */
+  overlayOf: AdjustLayer | null,
   rasters: ReadonlyMap<string, BrushRaster> | null,
   detail: DetailSettings | null,
   scale: number,
@@ -118,7 +128,6 @@ function graderFrom(
     // Geometry or a layer with NO look still needs the GPU: both are passes,
     // not cubes, so "no lut" stopped meaning "nothing to render" the day
     // geometry arrived.
-    const overlayOf = overlay ? (stack.find((l) => l.id === overlay) ?? null) : null;
     const patches = repair ?? [];
     const needsGpu =
       Boolean(lut) ||
@@ -142,7 +151,7 @@ function graderFrom(
     const sized = cur && cur.lut === lut && cur.w === s.width && cur.h === s.height;
     if (
       sized &&
-      cur.overlay === overlay &&
+      sameOverlay(cur.overlay, overlayOf) &&
       cur.rasters === rasters &&
       sameGeometry(cur.geometry, geometry) &&
       sameLayers(cur.layers, stack) &&
@@ -191,7 +200,7 @@ function graderFrom(
       cur.film = film;
       cur.geometry = cloneGeometry(geometry);
       cur.layers = cloneLayers(stack);
-      cur.overlay = overlay;
+      cur.overlay = overlayOf ? cloneLayer(overlayOf) : null;
       cur.rasters = rasters;
       cur.detail = detail ? { ...detail } : null;
       cur.repair = patches.map((p) => ({ ...p }));
@@ -210,7 +219,7 @@ function graderFrom(
       lut,
       geometry: cloneGeometry(geometry),
       layers: cloneLayers(stack),
-      overlay,
+      overlay: overlayOf ? cloneLayer(overlayOf) : null,
       rasters,
       detail: detail ? { ...detail } : null,
       repair: patches.map((p) => ({ ...p })),
@@ -660,6 +669,12 @@ export function useDevelopPicture({
   // Only the layers that DRAW: a parked one must not rebuild the grader, and
   // must not cost a pass.
   const stack = useMemo(() => drawingLayers(layers), [layers]);
+  // The layer whose mask is shown, from the whole list: `stack` holds only the
+  // layers that draw, and a subject still at zero is the one to look at.
+  const overlayLayer = useMemo(
+    () => (showMaskOf ? ((layers ?? []).find((l) => l.id === showMaskOf && l.mask) ?? null) : null),
+    [layers, showMaskOf],
+  );
 
   // The layer passes, remembered between changes: a cube, a raster and a pass
   // are kept per layer while the values they were built from stand still, so
@@ -672,7 +687,7 @@ export function useDevelopPicture({
       s: BadgeSource,
       geometry: PictureGeometry,
       stack: readonly AdjustLayer[],
-      overlay: string | null,
+      overlay: AdjustLayer | null,
       rasters: ReadonlyMap<string, BrushRaster> | null,
       detail: DetailSettings | null,
       scale: number,
@@ -717,7 +732,7 @@ export function useDevelopPicture({
     }
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const grader = holding ? null : graderFor(cube, source, geometry, stack, showMaskOf, subjectMasks, detail, pixelScale, repair, film, gainField);
+    const grader = holding ? null : graderFor(cube, source, geometry, stack, overlayLayer, subjectMasks, detail, pixelScale, repair, film, gainField);
     const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
     const layout = delivered1 && framing ? scaleLayout(delivered1, w / delivered1.w) : null;
     if (layout && framing) {
@@ -755,7 +770,7 @@ export function useDevelopPicture({
     holding,
     geometry,
     stack,
-    showMaskOf,
+    overlayLayer,
     subjectMasks,
     detail,
     pixelScale,

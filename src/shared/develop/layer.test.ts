@@ -14,9 +14,10 @@ import {
   removeLayer,
   readLayers,
   sameLayers,
+  subjectLayersToSegment,
   type AdjustLayer,
 } from './layer';
-import { DEFAULT_LUMA, DEFAULT_RADIAL } from '../render/mask';
+import { DEFAULT_LUMA, DEFAULT_RADIAL, SUBJECT_MODEL } from '../render/mask';
 
 const layer = (over: Partial<AdjustLayer> = {}): AdjustLayer => ({
   ...createLayer('linear', 'l1'),
@@ -59,6 +60,29 @@ describe('what draws', () => {
     const off = layer({ id: 'b', enabled: false, develop: { ...DEFAULT_DEVELOP, contrast: 20 } });
     expect(drawingLayers([on, off]).map((l) => l.id)).toEqual(['a']);
     expect(drawingLayers(null)).toEqual([]);
+  });
+});
+
+describe('which subjects the model is asked for', () => {
+  const subject = (id: string, points: [number, number][], over: Partial<AdjustLayer> = {}): AdjustLayer => ({
+    ...createLayer('subject', id),
+    ...over,
+    mask: { kind: 'subject', points, model: SUBJECT_MODEL },
+  });
+
+  it('segments a fresh subject whose sliders are still at zero', () => {
+    // The maintainer's report: a tap picked nothing until a slider moved.
+    const fresh = subject('s', [[0.5, 0.5]]);
+    expect(layerDraws(fresh)).toBe(false);
+    expect(subjectLayersToSegment([fresh]).map((l) => l.id)).toEqual(['s']);
+  });
+
+  it('skips a hidden subject, one with no point yet, and every other kind', () => {
+    const hidden = subject('h', [[0.5, 0.5]], { enabled: false });
+    const empty = subject('e', []);
+    const whole = layer({ id: 'w', mask: null, develop: { ...DEFAULT_DEVELOP, exposure: -1 } });
+    expect(subjectLayersToSegment([hidden, empty, whole])).toEqual([]);
+    expect(subjectLayersToSegment(null)).toEqual([]);
   });
 });
 
