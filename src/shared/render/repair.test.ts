@@ -2,15 +2,27 @@ import { describe, expect, it } from 'vitest';
 import type { DetailImage } from './detail';
 import {
   DEFAULT_PATCH_FEATHER,
+  DEFAULT_SOURCE_RADII,
+  DUST_THRESHOLD_RANGE,
   MAX_PATCHES,
+  MIN_SOURCE_RADII,
   PATCH_RADIUS_RANGE,
+  adjustPatch,
+  defaultSource,
   describePatches,
   detectDust,
+  dustField,
+  dustPatch,
+  dustSpots,
+  dustThreshold,
+  dustVeil,
+  movePatch,
   normalisePatch,
   patchCoverageAt,
   patchExtent,
   patchMeans,
   patchSource,
+  placeSource,
   readPatches,
   repairAt,
   sampleAt,
@@ -52,6 +64,55 @@ describe('the record', () => {
     expect(samePatches(null, [])).toBe(true);
     expect(describePatches([patch(), patch({ id: 'p2', kind: 'clone' })])).toBe('2 patches · 1 healed, 1 cloned');
     expect(describePatches([])).toBe('');
+  });
+});
+
+describe('placing a patch and its source', () => {
+  it('moves a patch clamped to the frame, its source travelling with it', () => {
+    const moved = movePatch(patch({ dx: 0.2, dy: 0.1 }), 0.8, 1.4);
+    expect(moved.x).toBe(0.8);
+    expect(moved.y).toBe(1);
+    expect(moved.dx).toBe(0.2);
+    expect(moved.dy).toBe(0.1);
+    const changed = adjustPatch(patch(), { kind: 'clone', radius: 9, feather: -1 });
+    expect(changed.kind).toBe('clone');
+    expect(changed.radius).toBe(PATCH_RADIUS_RANGE.max);
+    expect(changed.feather).toBe(0);
+    expect(adjustPatch(patch(), {})).toEqual(patch());
+  });
+
+  it('gives a default source to the right, mirrored at the right edge', () => {
+    const p = patch({ x: 0.5, y: 0.5, radius: 0.1 });
+    const { ru } = patchExtent(p, 1.5);
+    expect(defaultSource(p, 1.5)).toEqual({ dx: ru * DEFAULT_SOURCE_RADII, dy: 0 });
+    expect(defaultSource(patch({ x: 0.95, y: 0.5, radius: 0.1 }), 1.5).dx).toBeLessThan(0);
+  });
+
+  it('reads the angle from the hand INSIDE the disc, and holds the source to the touching distance', () => {
+    const p = patch({ x: 0.5, y: 0.5, radius: 0.1 });
+    const { ru, rv } = patchExtent(p, 1.5);
+    // A pointer half a radius above the centre — well inside the disc.
+    const up = placeSource(p, [0.5, 0.5 - rv * 0.5], 1.5)!;
+    expect(up.dx).toBeCloseTo(0, 9);
+    expect(up.dy).toBeCloseTo(-rv * MIN_SOURCE_RADII, 9);
+    // Diagonal, still inside: the direction is kept, the distance is the minimum.
+    const diag = placeSource(p, [0.5 + ru * 0.3, 0.5 + rv * 0.3], 1.5)!;
+    expect(diag.dx / ru).toBeCloseTo(diag.dy / rv, 9);
+    expect(Math.hypot(diag.dx / ru, diag.dy / rv)).toBeCloseTo(MIN_SOURCE_RADII, 9);
+    // Past the minimum the source is exactly where the hand is.
+    const far = placeSource(p, [0.5 + ru * 3, 0.5], 1.5)!;
+    expect(far.dx).toBeCloseTo(ru * 3, 9);
+    expect(far.dy).toBeCloseTo(0, 9);
+    // A press with no direction yet says nothing.
+    expect(placeSource(p, [0.5 + ru * 0.05, 0.5], 1.5)).toBeNull();
+  });
+
+  it('keeps the source disc inside the frame', () => {
+    const p = patch({ x: 0.9, y: 0.5, radius: 0.1 });
+    const { ru } = patchExtent(p, 1.5);
+    const out = placeSource(p, [1.2, 0.5], 1.5)!;
+    expect(p.x + out.dx + ru).toBeLessThanOrEqual(1 + 1e-9);
+    expect(p.x + out.dx - ru).toBeGreaterThanOrEqual(0);
   });
 });
 
@@ -156,5 +217,62 @@ describe('detectDust', () => {
     const fixed = repairAt(img, 100 / W, 100 / H, spots, W / H);
     expect(fixed[0]).toBeGreaterThan(0.62);
     expect(detectDust(picture(200, 100, () => [0.5, 0.5, 0.5]))).toEqual([]);
+  });
+
+  it('is a field measured once, read at any sensitivity', () => {
+    const W = 400;
+    const H = 300;
+    const img = picture(W, H, (x, y) => {
+      let v = 0.7;
+      if (Math.hypot(x - 100, y - 100) < 4) v = 0.4; // deep
+      if (Math.hypot(x - 300, y - 200) < 4) v = 0.62; // shallow: 0.08 below
+      return [v, v, v];
+    });
+    const field = dustField(img)!;
+    expect(field.width).toBe(W);
+    expect(field.aspectRatio).toBeCloseTo(W / H, 9);
+    expect(dustThreshold(0)).toBeCloseTo(DUST_THRESHOLD_RANGE.gentle, 12);
+    expect(dustThreshold(1)).toBeCloseTo(DUST_THRESHOLD_RANGE.keen, 12);
+    // Gentle finds the deep one alone, keen finds both, darkest first.
+    expect(dustSpots(field, { threshold: dustThreshold(0) }).length).toBe(1);
+    const keen = dustSpots(field, { threshold: dustThreshold(1) });
+    expect(keen.length).toBe(2);
+    expect(keen[0].depth).toBeGreaterThan(keen[1].depth);
+    expect(keen[0].x).toBeCloseTo(100 / W, 2);
+    // The veil reads the same measure: 1 at a spot the threshold finds, 0 on the field.
+    const veil = dustVeil(field, 0.2);
+    expect(veil[100 * W + 100]).toBe(1);
+    expect(veil[10 * W + 10]).toBe(0);
+    expect(veil[200 * W + 300]).toBeGreaterThan(0.25);
+    expect(veil[200 * W + 300]).toBeLessThan(1);
+    // A spot becomes a heal sourced from a clean neighbour; a source is never on another spot.
+    const p = dustPatch(field, keen[0], () => 'd1')!;
+    expect(p.kind).toBe('heal');
+    expect(p.x).toBeCloseTo(100 / W, 2);
+    expect(Math.hypot(p.dx, p.dy)).toBeGreaterThan(0);
+  });
+
+  it('ignores a dark blob on restless ground, and a wire at any angle', () => {
+    const W = 600;
+    const H = 400;
+    // A pseudo-random texture on the right half, a smooth sky on the left.
+    let seed = 7;
+    const rnd = () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 4294967296;
+    };
+    const noise = new Float32Array(W * H);
+    for (let i = 0; i < W * H; i += 1) noise[i] = (rnd() - 0.5) * 0.3;
+    const img = picture(W, H, (x, y) => {
+      let v = x < 300 ? 0.7 : 0.6 + noise[y * W + x];
+      if (Math.hypot(x - 100, y - 100) < 4) v = 0.45; // dust, in the sky
+      if (Math.hypot(x - 450, y - 100) < 4) v = 0.45; // the same blob, in the texture
+      if (Math.abs(x - y - 50) < 1.5 && x > 60 && x < 260) v = 0.2; // a diagonal wire in the sky
+      return [v, v, v];
+    });
+    const field = dustField(img)!;
+    const spots = dustSpots(field, { threshold: dustThreshold(0.5) });
+    expect(spots.length).toBe(1);
+    expect(spots[0].x).toBeCloseTo(100 / W, 2);
   });
 });

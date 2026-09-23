@@ -118,6 +118,8 @@ export type EditorKeyAction =
   | 'facts'
   | 'mask'
   | 'pick'
+  | 'remove'
+  | 'escape'
   | null;
 
 /**
@@ -142,9 +144,11 @@ const TAB_KEYS: Readonly<Record<string, WorkbenchTab>> = {
  * (or `?`) the shortcuts, `I` the facts over the picture, `M` the mask's view
  * and `P` Pick / Paint (both on the Layers tab, the caller's rule), ⌘/Ctrl-C and -V
  * copy and paste the develop — the chord is read first, so ⌘C stays copy while
- * a bare `C` opens the crop. A field or a slider keeps every key it could use;
- * a held arrow does step (it is how a strip is swept), a held `\` does not
- * re-press.
+ * a bare `C` opens the crop. Delete or Backspace REMOVES what is selected on
+ * the picture (a repair patch) and Escape lets go of it — what each applies
+ * to is the caller's, which knows what is selected. A field or a slider keeps
+ * every key it could use; a held arrow does step (it is how a strip is
+ * swept), a held `\` does not re-press.
  */
 export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   if (press.targetTypes || press.altKey) return null;
@@ -166,6 +170,8 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   if (press.key === 'ArrowLeft') return 'previous';
   if (press.key === 'ArrowRight') return 'next';
   if (press.repeat) return null;
+  if (press.key === 'Delete' || press.key === 'Backspace') return 'remove';
+  if (press.key === 'Escape') return 'escape';
   if (press.key === '\\') return 'hold';
   if (press.key === 'z' || press.key === 'Z') return 'zoom';
   const tab = TAB_KEYS[press.key.toLowerCase()];

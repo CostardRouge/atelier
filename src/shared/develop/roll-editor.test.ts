@@ -95,6 +95,15 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'p', repeat: true }))).toBeNull();
   });
 
+  it('removes the selection on Delete or Backspace and lets go on Escape, never from a field', () => {
+    expect(editorKeyAction(press({ key: 'Delete' }))).toBe('remove');
+    expect(editorKeyAction(press({ key: 'Backspace' }))).toBe('remove');
+    expect(editorKeyAction(press({ key: 'Backspace', targetTypes: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'Backspace', repeat: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'Escape' }))).toBe('escape');
+    expect(editorKeyAction(press({ key: 'Escape', metaKey: true }))).toBeNull();
+  });
+
   it('opens the shortcuts on H and the facts on I', () => {
     expect(editorKeyAction(press({ key: 'h' }))).toBe('help');
     expect(editorKeyAction(press({ key: 'H' }))).toBe('help');
